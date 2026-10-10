@@ -57,6 +57,15 @@ pub(in crate::app) enum LevelFillState {
     Failed,
 }
 
+/// Entry caps for the two largest browse caches (`album_tracks_cache`,
+/// `series_detail_cache`, issue #917). Neither cache had a bound or an
+/// eviction pass, so a long browse session kept every fetched payload
+/// reachable for the life of the process. Each insert of a fresh id evicts
+/// the oldest entry once the cap is reached; revisiting an evicted entry
+/// refetches it.
+pub(in crate::app) const MAX_ALBUM_TRACKS_CACHE: usize = 128;
+pub(in crate::app) const MAX_SERIES_DETAIL_CACHE: usize = 128;
+
 /// The single "should a level fill start?" decision both fill entry points
 /// consume — `start_or_supersede_music_grouping`'s dedupe and
 /// `spawn_level_artist_fetch`'s guard — so the two interpretations of a
@@ -383,9 +392,14 @@ pub struct App {
     /// Track lists for the album currently highlighted in the
     /// album-folder listing, fetched proactively so the inline album detail
     /// pane (#145) has data without requiring the user to drill in first.
-    /// Keyed by album id, mirroring `album_artist_cache`'s never-evicted
-    /// lifetime.
+    /// Keyed by album id. Bounded at `MAX_ALBUM_TRACKS_CACHE` (issue #917):
+    /// insertions of fresh ids evict the oldest entry so a long music
+    /// session cannot keep every fetched list reachable.
     pub(in crate::app) album_tracks_cache: std::collections::HashMap<String, Vec<EmbyItem>>,
+    /// First-insertion order of `album_tracks_cache`'s keys, for
+    /// oldest-first eviction. One entry per unique id; a replaced insert
+    /// keeps its original slot.
+    pub(in crate::app) album_tracks_cache_order: std::collections::VecDeque<String>,
     pub(in crate::app) album_tracks_loading: std::collections::HashSet<String>,
     /// Fallback artist per-album track fetches waiting for a bounded slot
     /// (design D7, task 6.3). A fallback root's scope can be the whole
@@ -417,7 +431,14 @@ pub struct App {
     /// TV series detail cache for inline rendering.
     /// When a Series is selected, we proactively fetch seasons and episodes
     /// so the inline detail pane can render without drilling in.
+    /// Bounded at `MAX_SERIES_DETAIL_CACHE` (issue #917): these are the
+    /// heaviest cached payloads (a series' seasons plus each expanded
+    /// season's full episode list), so insertions of fresh ids evict the
+    /// oldest entry.
     pub(in crate::app) series_detail_cache: std::collections::HashMap<String, SeriesDetail>,
+    /// First-insertion order of `series_detail_cache`'s keys, for
+    /// oldest-first eviction. One entry per unique id.
+    pub(in crate::app) series_detail_cache_order: std::collections::VecDeque<String>,
     pub(in crate::app) series_detail_loading: std::collections::HashSet<String>,
     pub(in crate::app) series_season_loading: std::collections::HashSet<(String, String)>,
     /// Season expansions received before their show's detail has arrived.

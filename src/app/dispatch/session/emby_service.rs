@@ -52,6 +52,7 @@ impl App {
         self.pending_level_artist_warmups.clear();
         self.level_artist_warmups_in_flight.clear();
         self.album_tracks_cache.clear();
+        self.album_tracks_cache_order.clear();
         self.album_tracks_loading.clear();
         self.pending_artist_album_track_fetches.clear();
         self.artist_album_track_fetches_in_flight.clear();
@@ -60,6 +61,7 @@ impl App {
         self.artist_artwork_requests.clear();
         self.artist_artwork_status.clear();
         self.series_detail_cache.clear();
+        self.series_detail_cache_order.clear();
         self.series_detail_loading.clear();
         self.series_season_loading.clear();
         self.pending_series_season_expansions.clear();

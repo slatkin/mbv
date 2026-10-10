@@ -1,3 +1,4 @@
+use crate::app::state::app_struct::MAX_SERIES_DETAIL_CACHE;
 use crate::app::state::events::{PendingSeriesHandoff, PendingSeriesLanding};
 use crate::app::{App, SeriesDetail};
 use mbv_emby_model::EmbyItem;
@@ -275,6 +276,27 @@ impl App {
         self.fetch_series_detail(&item.id);
     }
 
+    /// Inserts a fetched series detail on the same cache-the-late-arrival
+    /// contract as before (a completion must not replace a newer cached
+    /// projection) and keeps the cache bounded (issue #917): inserting a
+    /// fresh id evicts the oldest cached id past `MAX_SERIES_DETAIL_CACHE`.
+    /// Revisiting an evicted series refetches its detail.
+    pub(in crate::app) fn cache_series_detail(&mut self, series_id: &str, detail: SeriesDetail) {
+        if self.series_detail_cache.contains_key(series_id) {
+            return;
+        }
+        self.series_detail_cache_order
+            .push_back(series_id.to_string());
+        self.series_detail_cache
+            .insert(series_id.to_string(), detail);
+        while self.series_detail_cache.len() > MAX_SERIES_DETAIL_CACHE {
+            let Some(oldest) = self.series_detail_cache_order.pop_front() else {
+                break;
+            };
+            self.series_detail_cache.remove(&oldest);
+        }
+    }
+
     pub(in crate::app) fn handle_series_detail_fetched(
         &mut self,
         series_id: &str,
@@ -282,9 +304,7 @@ impl App {
     ) {
         // A late completion must not replace a newer cached projection (for
         // example, a refresh that completed while this request was in flight).
-        self.series_detail_cache
-            .entry(series_id.to_string())
-            .or_insert(detail);
+        self.cache_series_detail(series_id, detail);
         self.series_detail_loading.remove(series_id);
         let pending_seasons = self
             .pending_series_season_expansions
