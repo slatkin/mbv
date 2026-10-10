@@ -93,15 +93,6 @@
 - [x] 4.3 Run `cargo fmt` and `cargo clippy --workspace --all-targets -- -D warnings`. Both must
   be clean. Run `cargo nextest run --workspace`, which must be green. Commit group 4.
 
-## 5. Integration check
-
-- [x] 5.1 (waived by the user, not run) The user runs the manual live checks (the agent asks first and never runs these
-  itself): (a) start mbv, `kill -9` the Local owner, run `mbv -q`; expect "no running
-  instance" and no signal sent. (b) With mbv running, run `mbvd --quit` from a desktop shell;
-  expect mbv to keep running. (c) Run `env -u XDG_RUNTIME_DIR mbv`; expect `/tmp/mbv-<uid>`
-  with mode 0700. (d) Open a raw connection to the ctrl socket and send nothing; expect it to
-  close after about 10 s. Done when the user confirms.
-
 ## Workflow follow-up
 
 - Run `make check-code-file-lines` before pushing.
