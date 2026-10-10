@@ -104,7 +104,10 @@ missing_errors_doc = { level = "allow" }
 # packages that legitimately own a terminal stream mirror this block instead of
 # inheriting it: the `mbv` TUI binary, the `mbvd` daemon, and `mbv-core` (its
 # examples are standalone CLI probes). Keep those mirrors in sync with this
-# block.
+# block. `dbg!` is forbidden separately in clippy.toml (`disallowed-macros`,
+# issue #923). Direct `io::stdout()`/`io::stderr()` writes are the deliberate
+# escape hatch for the applog stderr sink and failure notice (mbv-core) and the
+# palette.json maintainer hint (mbv-theme); keep that set minimal.
 print_stdout = "deny"
 print_stderr = "deny"
 
@@ -140,7 +143,10 @@ default-run = "mbv"
 # and error/crash notices before the shell owns the screen. Cargo rejects
 # `workspace = true` combined with per-crate overrides, so this must stay a
 # full copy. Grep for this header to keep each copy in sync with the root
-# block.
+# block. `dbg!` is forbidden separately in clippy.toml (`disallowed-macros`,
+# issue #923). Direct `io::stdout()`/`io::stderr()` writes from library crates
+# outside this package are sanctioned only for the applog stderr sink and
+# failure notice (mbv-core) and the palette.json maintainer hint (mbv-theme).
 [lints.clippy]
 mod_module_files = "deny"
 # Cannot be overridden by an inline allow/expect: params structs, not

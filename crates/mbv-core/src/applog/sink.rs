@@ -3,7 +3,10 @@
 //! `FileSink` appends one rendered log line at a time and shifts numbered
 //! generations when the active file reaches its configured size. Open, rotate,
 //! and write failures are reported to stderr at most once per sink; failed
-//! writes are counted and dropped.
+//! writes are counted and dropped. The one-shot failure notice below is one of
+//! the sanctioned direct-stderr-write paths (with the applog stderr sink layer
+//! and the palette.json maintainer hint), the deliberate escape hatch where the
+//! print macros are denied (issue #908, documented in the lint headers).
 
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;

@@ -1,3 +1,10 @@
 too-many-arguments-threshold = 10
 cognitive-complexity-threshold = 25
 excessive-nesting-threshold = 5
+
+# Stray terminal writes corrupt the TUI screen; `print_stderr` cannot catch
+# `dbg!`, the likeliest leftover (issue #923). Use the project's applog
+# telemetry instead.
+disallowed-macros = [
+    { path = "std::dbg", reason = "stray terminal write; use applog (issue #923)" },
+]
