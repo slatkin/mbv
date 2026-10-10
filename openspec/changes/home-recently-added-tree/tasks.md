@@ -58,7 +58,7 @@
 
 - [x] 8.1 Update `CONTEXT.md`. "Home view" becomes the Continue watching plus Recently added tree. Add a `Recently added` term (its 14-day age branches; avoid "Home Latest"). In "Destination Latest", remove "without Home duplicates" and note that Latest loads lazily. Verify: `qmd query "Recently added"` returns the new term.
 - [x] 8.2 Run the gates: `cargo fmt --all`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run --workspace`. All pass.
-- [ ] 8.3 Just before push, run `make check-code-file-lines`. Split any governed file over 800 lines along responsibility seams. The check passes.
+- [x] 8.3 Just before push, run `make check-code-file-lines`. Split any governed file over 800 lines along responsibility seams. The check passes.
 
 ## Workflow follow-up
 
