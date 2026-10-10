@@ -224,7 +224,22 @@ fn tick_queue_only_wheel_excludes_unpainted_library_and_keeps_keyboard() {
             .downcast_mut::<QueueComponent>()
             .unwrap()
             .test_cursor(),
-        1
+        0,
+        "the wheel scrolls the viewport and leaves the queue selection unchanged \
+         (wheel-scrolls-viewport 6.1)"
+    );
+    assert_eq!(
+        harness
+            .model_mut()
+            .application
+            .get_component_mut(&queue_id)
+            .unwrap()
+            .as_any_mut()
+            .downcast_mut::<QueueComponent>()
+            .unwrap()
+            .test_scroll(),
+        3,
+        "the wheel moved the queue viewport by the uniform step, not one row"
     );
     assert!(outcome
         .raw_messages
