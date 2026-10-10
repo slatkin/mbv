@@ -79,18 +79,18 @@
 
 ## 4. Warm-up bounds and single state directory (design D6–D7)
 
-- [ ] 4.1 In `src/app/infra/image_fetch/fetch/level_warmup.rs`, build the agent with
+- [x] 4.1 In `src/app/infra/image_fetch/fetch/level_warmup.rs`, build the agent with
   `native_tls_agent(HttpService::Emby, Some(5s), Some(30s))` and parse the body through
   `into_body().into_reader().take(64 * 1024 * 1024)` → `serde_json::from_reader`, keeping the
   existing `.ok()` → empty-result → `Failed` path. Verify: `cargo check -p mbv`; reading the
   diff shows no `None, None` agent left in that file.
-- [ ] 4.2 Delete `state_dir()` from `src/main.rs`. Replace its callers (`crash_log_path`, the
+- [x] 4.2 Delete `state_dir()` from `src/main.rs`. Replace its callers (`crash_log_path`, the
   applog `mbv.log` path in `main.rs`, `src/local_daemon.rs:236`,
   `src/app/dispatch/session/player_event.rs:524`) with `mbv_config::state_dir()`. Before the
   `OpenOptions` in `write_crash_log` and in `src/pin.rs`'s crash-log opener, call
   `create_dir_all` on the parent and ignore its error, as the open does. Verify: `cargo check
   -p mbv`; `rg 'fn state_dir' src` is empty.
-- [ ] 4.3 Run `cargo fmt` and `cargo clippy --workspace --all-targets -- -D warnings`. Both must
+- [x] 4.3 Run `cargo fmt` and `cargo clippy --workspace --all-targets -- -D warnings`. Both must
   be clean. Run `cargo nextest run --workspace`, which must be green. Commit group 4.
 
 ## 5. Integration check
