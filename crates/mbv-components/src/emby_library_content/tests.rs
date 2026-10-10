@@ -113,12 +113,29 @@ fn restore_applies_only_a_latest_selector() {
         Some(LaunchSelector::EmbyLatest)
     );
     // ...and a legacy letter selector in an old snapshot applies nothing,
-    // leaving the library default.
+    // leaving the library default. The absent-scope case (folder teardown)
+    // is owned by `restore_applies_latest_when_the_recorded_scope_is_absent`.
     assert_eq!(
         owner.launch_selector(&launch_state(Some(SelectorIdentity::Emby {
             key: EmbySelectorKey::Letter(EmbyLetterBucket::from_index(0).expect("bucket 0")),
         }))),
         None
+    );
+}
+
+/// 2026-10-10 user amendment to change `latest-pill-restart-default`
+/// (spec `tui-launch-state`, restore requirement): a teardown inside a
+/// folder paints no selector row, so the exit snapshot recorded no scope —
+/// a Latest-bearing destination still restarts on Latest instead of its
+/// first-load default pill.
+#[test]
+fn restore_applies_latest_when_the_recorded_scope_is_absent() {
+    let mut owner = EmbyLibraryContent::new(LibraryKind::Movies);
+    owner.set_content(push_with_letters());
+
+    assert_eq!(
+        owner.launch_selector(&launch_state(None)),
+        Some(LaunchSelector::EmbyLatest)
     );
 }
 

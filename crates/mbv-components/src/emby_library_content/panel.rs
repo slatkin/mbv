@@ -192,17 +192,24 @@ impl LibraryContentOwner for EmbyLibraryContent {
     /// a destination with no pills, or an empty list, reports absence. No
     /// pill index, group display name, or row position crosses.
     fn launch_selector(&self, state: &mbv_config::TuiLaunchState) -> Option<LaunchSelector> {
-        // Only the persisted scope applies: every library with a painted
-        // selector row restarts on Latest. Legacy letter/group/unfiltered
-        // selectors in an old snapshot decode but resolve to the library
-        // default (the Home precedent), and a pill-less owner (no selector
-        // row at this position) is never forced into Latest mode.
-        if !matches!(
-            state.selector.as_ref(),
-            Some(SelectorIdentity::Emby {
-                key: EmbySelectorKey::Latest
-            })
-        ) {
+        // Only the persisted scope applies: every Latest-bearing library
+        // restarts on Latest (2026-10-10 user amendment to the
+        // latest-pill-restart-default change). An absent recorded scope is a
+        // teardown outside the pill-bearing view — inside a folder the
+        // selector row is not painted, so the exit still recorded no scope —
+        // and the destination restarts on Latest all the same. A recorded
+        // non-Latest scope is a legacy letter/group/unfiltered selector: it
+        // decodes but SHALL NOT restore, leaving the library default (the
+        // Home precedent). A pill-less owner (no selector row at this
+        // position) is never forced into Latest mode.
+        let scope_bears_latest = match state.selector.as_ref() {
+            None
+            | Some(SelectorIdentity::Emby {
+                key: EmbySelectorKey::Latest,
+            }) => true,
+            Some(_) => false,
+        };
+        if !scope_bears_latest {
             return None;
         }
         if self.selector_mode == super::EmbySelectorMode::None {

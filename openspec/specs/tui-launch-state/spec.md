@@ -26,6 +26,7 @@ The snapshot SHALL NOT contain state for unselected tabs, a selected Queue item,
 #### Scenario: The selected tab has no main Selector pills or selectable items
 - **WHEN** the selected tab presents no main Selector pill and no selectable library item at exit
 - **THEN** the snapshot SHALL represent the absent pill without substituting a Queue selection or nested Workspace selection
+- **THEN** a Library destination whose Selector offers a Latest pill SHALL still restore on Latest, whether or not the exit view painted its pill row
 
 ### Requirement: Launch state is written only at orderly TUI exit
 
@@ -76,7 +77,7 @@ Explicit configuration changes, playback lifecycle and progress, queue persisten
 
 ### Requirement: Launch restoration follows stable identities with ordered fallbacks
 
-At startup, mbv SHALL restore the saved tab if that tab still exists. If it does not, mbv SHALL select the first guaranteed tab in presentation order. Within the restored tab, mbv SHALL apply the recorded persisted pill scope: the `Latest` pill for every destination whose main Selector offers one, the recorded group for a Grouped Music library, and the recorded bucket for an Audiobookshelf book library. A recorded Music group or book bucket that no longer exists SHALL fall back to the first guaranteed pill in that destination's presentation order. Within the restored scope's list, mbv SHALL select the first selectable item in presentation order; an empty list SHALL have no selected item. A saved library item, letter range, show, watched filter, or other non-scope pill in a snapshot written by an older version SHALL NOT restore.
+At startup, mbv SHALL restore the saved tab if that tab still exists. If it does not, mbv SHALL select the first guaranteed tab in presentation order. Within the restored tab, mbv SHALL apply the recorded persisted pill scope: the `Latest` pill for every destination whose main Selector offers one — whether or not the exit view painted that destination's selector row — the recorded group for a Grouped Music library, and the recorded bucket for an Audiobookshelf book library. A recorded Music group or book bucket that no longer exists SHALL fall back to the first guaranteed pill in that destination's presentation order. Within the restored scope's list, mbv SHALL select the first selectable item in presentation order; an empty list SHALL have no selected item. A saved library item, letter range, show, watched filter, or other non-scope pill in a snapshot written by an older version SHALL NOT restore and SHALL leave the destination default.
 
 If the restored tab presents no main Selector pills, mbv SHALL treat its unfiltered view as the restored scope and apply the item rule directly. Every fallback SHALL be resolved against current content, never by clamping or reusing a stale persisted index.
 

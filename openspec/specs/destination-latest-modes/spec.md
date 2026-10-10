@@ -33,6 +33,11 @@ Every visible Emby library except Music libraries, regardless of collection kind
 - **THEN** that destination's selector SHALL open on `Latest` when it is the restored tab
 - **THEN** the non-Latest pill selection SHALL NOT reappear in any later session
 
+#### Scenario: Exit outside the pill-bearing view
+- **WHEN** a session ends while a Latest-bearing Emby library stands inside one of its folders, so its selector row is not painted and the exit snapshot records no pill scope
+- **WHEN** mbv restarts
+- **THEN** that library's selector SHALL still open on `Latest` when it is the restored tab
+
 #### Scenario: Music and book pills keep persisting
 - **WHEN** mbv restarts after a session in which a Grouped Music group or an Audiobookshelf book bucket was selected on the exit tab
 - **THEN** the recorded group or bucket SHALL restore through the launch snapshot

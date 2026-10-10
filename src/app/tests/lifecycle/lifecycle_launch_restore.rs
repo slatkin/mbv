@@ -391,3 +391,30 @@ fn restart_after_a_letter_pill_session_selects_latest() {
     );
     assert!(model.app.libs[0].nav_stack[0].letter_filter.is_none());
 }
+
+/// 2026-10-10 user amendment to change `latest-pill-restart-default`
+/// (spec `destination-latest-modes`, scenario "Exit outside the
+/// pill-bearing view"): a teardown inside a folder paints no selector row,
+/// so the exit snapshot records no scope — the restored library still
+/// opens on Latest instead of its first-load default pill (the first
+/// letter range).
+#[test]
+fn restart_with_an_absent_recorded_scope_selects_latest() {
+    let mut app = crate::app::tests::render_fixtures::make_movie_app();
+    app.libs[0].library_total = Some(400);
+    app.launch_restore = crate::app::state::app_struct::LaunchRestore::TabSettled {
+        state: launch_state(
+            ServiceKind::Emby,
+            "lib-movies",
+            mbv_config::LaunchPanelFocus::Library,
+        ),
+        tab: TabSelection::EmbyLibrary(0),
+    };
+    let mut model = Model::new(app);
+    model.sync_mounted_surfaces();
+
+    assert!(
+        model.active_emby_library_owner_is_latest(),
+        "an absent recorded scope still restores Latest"
+    );
+}
