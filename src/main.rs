@@ -336,7 +336,7 @@ fn pre_config_startup() -> Option<StartupArgs> {
 
 fn stop_running_instance() {
     let lock = single_instance::lock_path();
-    match single_instance::terminate_owner(&lock) {
+    match mbv_daemon::owner_lock::signal_owner(&lock) {
         Ok(pid) => println!("mbv: quit signal sent (pid {pid})"),
         Err(error) => {
             eprintln!("mbv: {error}");
@@ -538,7 +538,7 @@ fn run_local_instance(
                         }
                         owner_restart::Choice::Restart => {
                             if let Err(terminate_error) =
-                                single_instance::terminate_owner(&lock_path)
+                                mbv_daemon::owner_lock::signal_owner(&lock_path)
                             {
                                 eprintln!("mbv: failed to stop Owner process: {terminate_error}");
                                 std::process::exit(1);
@@ -585,7 +585,7 @@ fn attach_owner_process(
 }
 
 fn refuse_local_owner(lock_path: &std::path::Path) -> ! {
-    let pid = match single_instance::read_pid(lock_path) {
+    let pid = match mbv_daemon::owner_lock::locked_owner_pid(lock_path) {
         Some(pid) => format!(
             "mbv: owner process PID is {pid} (per {}).",
             lock_path.display()

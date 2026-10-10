@@ -7,7 +7,7 @@
 //! another descriptor still holds the flock on the same file.
 
 use std::fs::File;
-use std::io;
+use std::io::{self, Seek, Write};
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -37,6 +37,43 @@ pub fn locked_owner_pid(path: &Path) -> Option<u32> {
         return std::fs::read_to_string(path).ok()?.trim().parse().ok();
     }
     None
+}
+
+/// The exclusive `flock` guard on the PID record, held for the lifetime of
+/// the packaged Owner's run (harden-owner-process-boundaries D2). The PID
+/// is written only after the lock is acquired, so the file's PID is the
+/// live lock holder the guard represents. Dropping it releases the flock
+/// (which also happens automatically on any process death).
+pub type PidFileLock = nix::fcntl::Flock<File>;
+
+/// Acquire the exclusive non-blocking flock on `path` and write this
+/// process's PID into it. Fails when another Owner process already holds
+/// the lock or the file cannot be opened; the returned `PidFileLock` then
+/// keeps the flock for the run's lifetime.
+pub fn lock_pid_file(path: &Path) -> io::Result<PidFileLock> {
+    // Intentionally not truncated: the file may hold a previous PID; it
+    // is truncated below, once this process holds the lock.
+    let file = std::fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(false)
+        .open(path)?;
+    let mut file = match nix::fcntl::Flock::lock(file, nix::fcntl::FlockArg::LockExclusiveNonblock)
+    {
+        Ok(file) => file,
+        Err((_, nix::errno::Errno::EWOULDBLOCK)) => {
+            return Err(io::Error::new(
+                io::ErrorKind::WouldBlock,
+                "another Owner process holds the lock",
+            ));
+        }
+        Err((_, errno)) => return Err(io::Error::from_raw_os_error(errno as i32)),
+    };
+    file.set_len(0)?;
+    file.seek(io::SeekFrom::Start(0))?;
+    write!(file, "{}", std::process::id())?;
+    file.flush()?;
+    Ok(file)
 }
 
 /// Why an Owner process could not be signalled.

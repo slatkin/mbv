@@ -86,57 +86,6 @@ pub fn resolve(socket: &Path, lock: &Path) -> io::Result<Resolution> {
     Ok(Resolution::Fresh(LockGuard { file }))
 }
 
-/// Read the PID out of the lock file (best-effort, used by `mbv -q`).
-pub fn read_pid(lock: &Path) -> Option<u32> {
-    std::fs::read_to_string(lock).ok()?.trim().parse().ok()
-}
-
-/// Why `mbv -q` could not stop the Owner process.
-#[derive(Debug)]
-pub enum TerminateOwnerError {
-    /// The lock file held no PID, so there is no Owner to signal.
-    NoOwnerPid,
-    /// `SIGTERM` to the lock file's PID failed.
-    Signal { pid: u32, error: io::Error },
-}
-
-impl std::fmt::Display for TerminateOwnerError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::NoOwnerPid => {
-                write!(
-                    f,
-                    "no running instance found; if one just started, try again in a moment"
-                )
-            }
-            Self::Signal { pid, error } => write!(f, "failed to signal pid {pid}: {error}"),
-        }
-    }
-}
-
-impl std::error::Error for TerminateOwnerError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            Self::NoOwnerPid => None,
-            Self::Signal { error, .. } => Some(error),
-        }
-    }
-}
-
-pub fn terminate_owner(lock: &Path) -> Result<u32, TerminateOwnerError> {
-    let pid = read_pid(lock).ok_or(TerminateOwnerError::NoOwnerPid)?;
-    // SAFETY: sending SIGTERM to the PID read from the single-instance lock is intentional.
-    let ok = unsafe { libc::kill(pid as libc::pid_t, libc::SIGTERM) } == 0;
-    if ok {
-        Ok(pid)
-    } else {
-        Err(TerminateOwnerError::Signal {
-            pid,
-            error: io::Error::last_os_error(),
-        })
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -163,8 +112,9 @@ mod tests {
         }
     }
 
-    /// `Fresh` + PID round-trip: a free lock is acquired and `mbv -q`'s
-    /// `read_pid` must then recover this process's id.
+    /// `Fresh` + PID round-trip: a free lock is acquired and, while that
+    /// guard still holds the flock, `locked_owner_pid` (the `mbv -q`
+    /// probe) must recover this process's id.
     #[test]
     fn fresh_lock_round_trips_the_pid() {
         let dir = TempDir::new();
@@ -175,7 +125,10 @@ mod tests {
             panic!("expected a fresh lock on an unused path");
         };
         guard.write_pid().expect("write pid under the held lock");
-        assert_eq!(read_pid(&lock), Some(std::process::id()));
+        assert_eq!(
+            mbv_daemon::owner_lock::locked_owner_pid(&lock),
+            Some(std::process::id())
+        );
     }
 
     /// Held lock: `Attach` iff the socket actually connects. A plain file at

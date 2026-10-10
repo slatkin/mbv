@@ -7,6 +7,7 @@ use super::{
     start_queue_enrichment,
 };
 use crate::PinSwapState;
+use crate::owner_lock::{PidFileLock, lock_pid_file};
 use crate::{ClientRegistry, CtrlClients};
 use mbv_ctrl::player::PlayerEvent;
 use mbv_ctrl::{CtrlEvent, PlaybackGeneration};
@@ -144,6 +145,9 @@ struct DaemonStarted {
     ws_send_tx: Option<mbv_ws::WsSender>,
     owner_settings: crate::OwnerSettingsReader,
     tray: TrayState,
+    /// Signal-truth PID record lock, held for the daemon's whole run
+    /// (design D2). `None` for the Local role, which owns no `mbv.pid`.
+    pid_lock: Option<PidFileLock>,
     pin_swap: PinSwapState,
     /// Shared between the Pin-swap machine and the ctrl admission path
     /// (tray-pin-swap design D4).
@@ -199,8 +203,20 @@ fn start_daemon(startup: DaemonStartupContext, hooks: DaemonRuntimeHooks) -> Dae
     let owner_settings = crate::owner_settings::reader(role, &config);
     let emby_runtime = startup.emby;
     let audiobookshelf_runtime = startup.audiobookshelf;
-    std::fs::write(pid_file(), std::process::id().to_string())
-        .expect("mbv daemon: failed to write PID file");
+    // Only the packaged Owner records its PID in `mbv.pid`; the Local
+    // role's PID record is its single-instance lock file (design D2).
+    // The flock is taken first and the guard held for the whole run, so
+    // whoever locks the file first is the daemon and the recorded PID is
+    // always the live lock holder.
+    let pid_lock = (role == DaemonRole::Packaged).then(|| {
+        let path = pid_file();
+        lock_pid_file(&path).unwrap_or_else(|error| {
+            panic!(
+                "mbv daemon: could not take the owner PID lock at {}: {error}",
+                path.display()
+            )
+        })
+    });
 
     let (shutdown_signal_tx, shutdown_signal_rx) = setup_shutdown_signal();
     let client = emby_runtime.as_ref().map_or_else(
@@ -303,6 +319,7 @@ fn start_daemon(startup: DaemonStartupContext, hooks: DaemonRuntimeHooks) -> Dae
         ws_send_tx,
         owner_settings,
         tray,
+        pid_lock,
         pin_swap,
         pending_swap,
         pinned_client_attached,
@@ -568,6 +585,9 @@ pub fn run_with_options(
         ws_send_tx,
         owner_settings,
         tray,
+        // Held past every later move, so the owner's flock stays up for
+        // the whole run (the loop below never returns).
+        pid_lock: _pid_lock,
         pin_swap,
         pending_swap,
         pinned_client_attached,
@@ -649,7 +669,11 @@ fn run_daemon_loop(daemon_loop: &mut DaemonLoop, merged_rx: &mpsc::Receiver<Daem
         match merged_rx.recv_timeout(Duration::from_millis(25)) {
             Ok(ev) => {
                 if daemon_loop.handle_event(ev) == LoopFlow::Shutdown {
-                    let _ = std::fs::remove_file(pid_file());
+                    // Only the packaged Owner owns the `mbv.pid` record and
+                    // only it may remove the file (design D2).
+                    if daemon_loop.role == DaemonRole::Packaged {
+                        let _ = std::fs::remove_file(pid_file());
+                    }
                     std::process::exit(0);
                 }
             }
