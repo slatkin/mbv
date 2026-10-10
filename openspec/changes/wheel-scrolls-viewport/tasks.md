@@ -13,7 +13,7 @@
 
 ## 3. Shell paging request (design D4)
 
-- [ ] 3.1 Add `ShellRequest::LibraryViewportReach { index: usize }` in `crates/mbv-ui-msg/src/shell.rs` with a doc comment naming the index space (the surface's own cursor-report index). Give it an exhaustive arm in `src/app/shell/messages.rs` that sets Library panel focus and calls `self.app.maybe_fetch_next_page(lib_idx, index)` with no navigation-idle gate. The request carries no library index: resolve `lib_idx` from `self.app.tab.emby_library_index()`, the same resolution `handle_music_album_cursor` uses; do not add a field. Verify: one shell test owns mouse-input "Scrolling toward the loaded edge fetches the next page" (a not-fully-loaded level plus a reach index within `PREFETCH_AHEAD` of the loaded edge arms a page fetch), and `cargo check -p mbv` passes.
+- [x] 3.1 Add `ShellRequest::LibraryViewportReach { index: usize }` in `crates/mbv-ui-msg/src/shell.rs` with a doc comment naming the index space (the surface's own cursor-report index). Give it an exhaustive arm in `src/app/shell/messages.rs` that sets Library panel focus and calls `self.app.maybe_fetch_next_page(lib_idx, index)` with no navigation-idle gate. The request carries no library index: resolve `lib_idx` from `self.app.tab.emby_library_index()`, the same resolution `handle_music_album_cursor` uses; do not add a field. Verify: one shell test owns mouse-input "Scrolling toward the loaded edge fetches the next page" (a not-fully-loaded level plus a reach index within `PREFETCH_AHEAD` of the loaded edge arms a page fetch), and `cargo check -p mbv` passes.
 
 ## 4. Library surfaces adopt viewport wheel
 
