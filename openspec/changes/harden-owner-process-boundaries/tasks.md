@@ -95,7 +95,7 @@
 
 ## 5. Integration check
 
-- [ ] 5.1 The user runs the manual live checks (the agent asks first and never runs these
+- [x] 5.1 (waived by the user, not run) The user runs the manual live checks (the agent asks first and never runs these
   itself): (a) start mbv, `kill -9` the Local owner, run `mbv -q`; expect "no running
   instance" and no signal sent. (b) With mbv running, run `mbvd --quit` from a desktop shell;
   expect mbv to keep running. (c) Run `env -u XDG_RUNTIME_DIR mbv`; expect `/tmp/mbv-<uid>`
