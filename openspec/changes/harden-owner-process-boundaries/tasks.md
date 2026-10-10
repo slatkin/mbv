@@ -37,27 +37,27 @@
 
 ## 2. Private runtime directory (design D4)
 
-- [ ] 2.1 Add `libc.workspace = true` to `crates/mbv-config/Cargo.toml`. In
+- [x] 2.1 Add `libc.workspace = true` to `crates/mbv-config/Cargo.toml`. In
   `crates/mbv-config/src/paths.rs`, change the `runtime_dir()` fallback to
   `/tmp/mbv-<getuid()>`, and add `pub fn owner_lock_path() -> PathBuf` (`<runtime>/mbv.lock`)
   next to `control_socket_path()`. Verify: `cargo check -p mbv-config`.
-- [ ] 2.2 Add `pub fn ensure_runtime_dir() -> Result<(), RuntimeDirError>` plus a private
+- [x] 2.2 Add `pub fn ensure_runtime_dir() -> Result<(), RuntimeDirError>` plus a private
   `check_private_dir(path, uid)` using `symlink_metadata` (symlink, not-a-dir, foreign owner,
   mode `& 0o077`), and a hand-written `RuntimeDirError` naming the path and the reason. It does
   nothing when `XDG_RUNTIME_DIR` is set or the instance is a system instance. Verify with
   `src`-side tests for the private `check_private_dir` as one `#[case]` table: own 0700 dir →
   Ok; 0755 → Permissive; symlink to an own 0700 dir → Symlink; regular file → NotADirectory;
   own dir checked with `uid + 1` → ForeignOwner. Pass: `cargo nextest run -p mbv-config`.
-- [ ] 2.3 Delete `single_instance::runtime_dir()` and `lock_path()`. Replace every
+- [x] 2.3 Delete `single_instance::runtime_dir()` and `lock_path()`. Replace every
   `single_instance::lock_path()` caller (`src/main.rs`, `src/local_daemon.rs`,
   `src/app/dispatch/session/daemon_restart.rs`, `src/app/dispatch/session/switch.rs`) with
   `mbv_config::owner_lock_path()`. Update the module doc comment's `$XDG_RUNTIME_DIR/mbv.lock`
   wording. Verify: `cargo check -p mbv`; `rg 'fn runtime_dir' src` is empty.
-- [ ] 2.4 Call `mbv_config::ensure_runtime_dir()` at the start of `main` in `src/main.rs`
+- [x] 2.4 Call `mbv_config::ensure_runtime_dir()` at the start of `main` in `src/main.rs`
   (before the `-q` branch and single-instance resolution), in `run_local_daemon_main`
   (`src/local_daemon.rs`), and on mbvd's `Serve` path before `daemon_running()`. Each prints
   the error and exits non-zero. Verify: `cargo check -p mbv -p mbvd`.
-- [ ] 2.5 Run `cargo fmt` and `cargo clippy --workspace --all-targets -- -D warnings`. Both must
+- [x] 2.5 Run `cargo fmt` and `cargo clippy --workspace --all-targets -- -D warnings`. Both must
   be clean. Commit group 2.
 
 ## 3. Bounded ctrl connections (design D5)
