@@ -59,3 +59,10 @@ pub fn home_age_group(timestamp: Option<u64>, now_secs: u64) -> Option<FeedAgeGr
         }
     }
 }
+
+/// Whether one provider timestamp is inside Home's `Recently added` cutoff.
+/// Every Home cutoff asks this question, so the 14-day rule has one owner.
+#[must_use]
+pub fn is_home_recent(timestamp: Option<u64>, now_secs: u64) -> bool {
+    home_age_group(timestamp, now_secs).is_some()
+}

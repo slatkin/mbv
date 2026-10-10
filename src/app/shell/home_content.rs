@@ -35,33 +35,20 @@ impl Model {
     /// empties the catalog). Feeds is derived at push time and never stored.
     /// Returns whether anything was evicted; the caller re-projects.
     pub(in crate::app) fn evict_gone_home_recently_added(&mut self) -> bool {
-        let emby_ids: std::collections::HashSet<String> = self
-            .app
-            .libs
-            .iter()
-            .map(|library| library.library.id.clone())
-            .collect();
-        let audiobookshelf_ids: std::collections::HashSet<String> = self
-            .app
-            .audiobookshelf_libraries
-            .iter()
-            .map(|library| library.id.clone())
-            .collect();
-        let mut evicted = false;
-        self.home_recently_added.retain(|source, _| {
-            let keep = match source {
-                DestinationLatestSource::Emby(library_id) => emby_ids.contains(library_id),
-                DestinationLatestSource::Audiobookshelf(library_id) => {
-                    audiobookshelf_ids.contains(library_id)
-                }
-                DestinationLatestSource::Feeds => true,
-            };
-            if !keep {
-                evicted = true;
-            }
-            keep
+        let before = self.home_recently_added.len();
+        let app = &self.app;
+        self.home_recently_added.retain(|source, _| match source {
+            DestinationLatestSource::Emby(library_id) => app
+                .libs
+                .iter()
+                .any(|library| library.library.id == *library_id),
+            DestinationLatestSource::Audiobookshelf(library_id) => app
+                .audiobookshelf_libraries
+                .iter()
+                .any(|library| library.id == *library_id),
+            DestinationLatestSource::Feeds => true,
         });
-        evicted
+        self.home_recently_added.len() != before
     }
 
     pub(in crate::app) fn update_emby_latest_snapshot(
@@ -70,18 +57,15 @@ impl Model {
         title: String,
         items: Vec<QueueItem>,
     ) {
-        let snapshot = self
-            .tv_latest_snapshots
-            .entry(library_id.to_string())
-            .or_insert_with(|| DestinationLatestSnapshot::new(title.clone(), items.clone()));
-        snapshot.title = title;
-        snapshot.items = items;
-        let items = snapshot
-            .items
+        let emby_items = items
             .iter()
             .filter_map(QueueItem::as_emby)
             .cloned()
             .collect::<Vec<_>>();
+        self.tv_latest_snapshots.insert(
+            library_id.to_string(),
+            DestinationLatestSnapshot::new(title, items),
+        );
         for library in &mut self.app.libs {
             if library.library.id != library_id || library.library.collection_type != "tvshows" {
                 continue;
@@ -92,8 +76,8 @@ impl Model {
             if level.tv_content_mode != Some(mbv_queue::TvContentMode::Latest) {
                 continue;
             }
-            level.items.clone_from(&items);
-            level.rows = ServerRows::complete(items.len());
+            level.items.clone_from(&emby_items);
+            level.rows = ServerRows::complete(emby_items.len());
             level.loading = false;
         }
         self.push_active_emby_library_owner_content();
@@ -145,11 +129,10 @@ impl Model {
         let items = items
             .into_iter()
             .filter(|item| {
-                mbv_ui_model::home_latest::home_age_group(
+                mbv_ui_model::home_latest::is_home_recent(
                     mbv_ui_model::home_latest::provider_timestamp_secs(item),
                     now_secs,
                 )
-                .is_some()
             })
             .collect();
         self.home_recently_added.insert(source, items);
@@ -194,7 +177,7 @@ impl Model {
             .iter()
             .find(|entry| {
                 matches!(content_id, mbv_queue::QueueItemContentId::Feed(guid) if *guid == entry.guid)
-                    && mbv_ui_model::home_latest::home_age_group(entry.pub_date_secs, now_secs).is_some()
+                    && mbv_ui_model::home_latest::is_home_recent(entry.pub_date_secs, now_secs)
             })
             .cloned()
             .map(QueueItem::Feed)
@@ -264,6 +247,15 @@ impl Model {
         self.acknowledged_home_latest_sources.insert(source);
     }
 
+    /// Selecting a podcast library's Latest view acknowledges its Home marker
+    /// and fetches the full Latest list (spec `destination-latest-modes`).
+    pub(in crate::app) fn select_audiobookshelf_latest(&mut self, library_id: &str) {
+        self.record_home_latest_acknowledgement(DestinationLatestSource::Audiobookshelf(
+            library_id.to_owned(),
+        ));
+        self.spawn_audiobookshelf_latest_shelves(library_id);
+    }
+
     /// Whether one destination's Latest surface carries the Iris
     /// new-content marker (`openspec/specs/destination-latest-modes`): any
     /// item in that source's Home `Recently added` rows — the per-source
@@ -292,17 +284,15 @@ impl Model {
             }
             // Feeds has no store entry: its rows derive from `all_entries`
             // at push time, filtered to the same 14-day cutoff.
-            DestinationLatestSource::Feeds => self.app.feed_tab.all_entries.iter().any(|entry| {
-                mbv_ui_model::home_latest::home_age_group(
-                    entry.pub_date_secs,
-                    mbv_render::screens::feeds_model::current_time_secs(),
-                )
-                .is_some()
-                    && mbv_ui_model::home_latest::timestamp_in_launch_window(
+            DestinationLatestSource::Feeds => {
+                let now_secs = mbv_render::screens::feeds_model::current_time_secs();
+                self.app.feed_tab.all_entries.iter().any(|entry| {
+                    mbv_ui_model::home_latest::timestamp_in_launch_window(
                         entry.pub_date_secs,
                         window,
-                    )
-            }),
+                    ) && mbv_ui_model::home_latest::is_home_recent(entry.pub_date_secs, now_secs)
+                })
+            }
         }
     }
 }

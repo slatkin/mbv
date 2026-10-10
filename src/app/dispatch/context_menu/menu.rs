@@ -7,6 +7,14 @@ use mbv_ui_model::context_menu::BulkRemoveTarget;
 use mbv_ui_model::context_menu::ContextMenu;
 use mbv_ui_model::overlay::OverlayRequest;
 
+/// The anchor a context menu opens at: the pointer when one is given,
+/// otherwise the selected row of `focus`.
+fn menu_anchor(anchor: Option<(u16, u16)>, focus: PanelFocus) -> ContextMenuAnchor {
+    anchor.map_or(ContextMenuAnchor::SelectedItem(focus), |(x, y)| {
+        ContextMenuAnchor::Pointer { x, y }
+    })
+}
+
 impl App {
     // --- Context menu framing (formerly `input_context_menu.rs`) -----------
     //
@@ -138,10 +146,7 @@ impl App {
         else {
             return;
         };
-        menu.anchor = anchor.map_or(
-            ContextMenuAnchor::SelectedItem(mbv_ui_model::settings::PanelFocus::Library),
-            |(x, y)| ContextMenuAnchor::Pointer { x, y },
-        );
+        menu.anchor = menu_anchor(anchor, mbv_ui_model::settings::PanelFocus::Library);
         self.pending_overlay = Some(OverlayRequest::ContextMenu(menu));
     }
 
@@ -170,10 +175,7 @@ impl App {
             ContextAction::HomeEnqueueSelection(items),
         );
         self.pending_overlay = Some(OverlayRequest::ContextMenu(ContextMenu {
-            anchor: anchor.map_or(
-                ContextMenuAnchor::SelectedItem(PanelFocus::Library),
-                |(x, y)| ContextMenuAnchor::Pointer { x, y },
-            ),
+            anchor: menu_anchor(anchor, PanelFocus::Library),
             cursor: ContextMenu::first_selectable(&entries),
             entries,
         }));
@@ -391,10 +393,7 @@ impl App {
             );
         }
         let menu = ContextMenu {
-            anchor: anchor.map_or(
-                ContextMenuAnchor::SelectedItem(PanelFocus::Library),
-                |(x, y)| ContextMenuAnchor::Pointer { x, y },
-            ),
+            anchor: menu_anchor(anchor, PanelFocus::Library),
             cursor: 0,
             entries: menu_entries,
         };
@@ -460,10 +459,7 @@ impl App {
             );
         }
         let menu = ContextMenu {
-            anchor: anchor.map_or(
-                ContextMenuAnchor::SelectedItem(PanelFocus::Library),
-                |(x, y)| ContextMenuAnchor::Pointer { x, y },
-            ),
+            anchor: menu_anchor(anchor, PanelFocus::Library),
             cursor: ContextMenu::first_selectable(&menu_entries),
             entries: menu_entries,
         };
@@ -583,9 +579,7 @@ impl App {
             return;
         }
         self.pending_overlay = Some(OverlayRequest::ContextMenu(ContextMenu {
-            anchor: anchor.map_or(ContextMenuAnchor::SelectedItem(focus), |(x, y)| {
-                ContextMenuAnchor::Pointer { x, y }
-            }),
+            anchor: menu_anchor(anchor, focus),
             cursor: 0,
             entries,
         }));

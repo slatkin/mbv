@@ -481,12 +481,6 @@ impl App {
     /// Player owner own live progress.
     fn spawn_home_audiobookshelf_recently_added(&self) {
         let generation = self.audiobookshelf_runtime.generation();
-        let config = self.config.lock().unwrap().clone();
-        let Ok((client, key)) =
-            crate::app::dispatch::session::service_startup::audiobookshelf_client(&config)
-        else {
-            return;
-        };
         let libraries: Vec<String> = self
             .audiobookshelf_libraries
             .iter()
@@ -500,8 +494,14 @@ impl App {
         if libraries.is_empty() {
             return;
         }
+        let config = self.config.lock().unwrap().clone();
         let tx = self.channels.lib_tx.clone();
         std::thread::spawn(move || {
+            let Ok((client, key)) =
+                crate::app::dispatch::session::service_startup::audiobookshelf_client(&config)
+            else {
+                return;
+            };
             for library_id in libraries {
                 let shelves = client
                     .shelves_bounded(

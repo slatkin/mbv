@@ -74,17 +74,19 @@ impl HomeContent {
         }
     }
 
-    /// Replace the shell-owned Continue Watching snapshot. The carrier
-    /// preserves the selected target when it remains in the content.
-    pub fn set_content(&mut self, continue_items: Vec<QueueItem>, loading: bool) {
+    /// Replace the shell-owned snapshot: Continue Watching, the `Recently
+    /// added` rows, and the time their age groups are measured from. Projects
+    /// once. The carrier preserves the selected target when it remains in the
+    /// content.
+    pub fn set_snapshot(
+        &mut self,
+        continue_items: Vec<QueueItem>,
+        loading: bool,
+        recent_rows: Vec<HomeRecentRow>,
+        now_secs: u64,
+    ) {
         self.continue_items = continue_items;
         self.loading = loading;
-        self.project_rows(self.now_secs);
-    }
-
-    /// Replace the shell-owned `Recently added` rows and the time their age
-    /// groups are measured from.
-    pub fn set_recent_rows(&mut self, recent_rows: Vec<HomeRecentRow>, now_secs: u64) {
         self.recent_rows = recent_rows;
         self.now_secs = now_secs;
         self.project_rows(now_secs);

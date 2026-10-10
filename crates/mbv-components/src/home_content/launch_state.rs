@@ -15,7 +15,6 @@ impl HomeContent {
         // Home's former Latest sections remain decodable in old launch
         // snapshots. A saved item never restores (spec: every restart lands
         // on the first item), so a legacy snapshot's item is ignored here too.
-        self.project_rows(self.now_secs);
         self.carrier.select_first();
         true
     }
@@ -51,8 +50,12 @@ mod tests {
     /// `Continue watching` holds alpha and beta; `New` holds gamma.
     fn owner_with_rows() -> HomeContent {
         let mut owner = HomeContent::new();
-        owner.set_content(vec![continue_item("alpha"), continue_item("beta")], false);
-        owner.set_recent_rows(vec![recent_row("gamma", 1)], NOW);
+        owner.set_snapshot(
+            vec![continue_item("alpha"), continue_item("beta")],
+            false,
+            vec![recent_row("gamma", 1)],
+            NOW,
+        );
         owner
     }
 

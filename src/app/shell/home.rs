@@ -77,10 +77,7 @@ impl Model {
             .iter()
             .filter_map(|target| Some((self.home_stable_target(target)?, target.is_continue())))
             .collect();
-        if resolved
-            .iter()
-            .any(|(item, _)| !matches!(item, QueueItem::Emby(_)))
-        {
+        if resolved.iter().any(|(item, _)| !item.is_emby()) {
             let mixed_items = resolved.into_iter().map(|(item, _)| item).collect();
             self.app.open_home_mixed_context_menu(mixed_items, anchor);
             return;
@@ -96,10 +93,7 @@ impl Model {
             .collect();
         let items: Vec<mbv_emby_model::EmbyItem> = resolved
             .into_iter()
-            .filter_map(|(item, _)| match item {
-                QueueItem::Emby(item) => Some(*item),
-                _ => None,
-            })
+            .filter_map(|(item, _)| item.as_emby().cloned())
             .collect();
         let capabilities = items
             .iter()
@@ -131,10 +125,7 @@ impl Model {
         };
         if target.is_continue() {
             // A Continue row is always Emby content (`openspec/specs/home-latest-sections`).
-            let item = match item {
-                QueueItem::Emby(item) => Some(*item),
-                QueueItem::Feed(_) | QueueItem::Audiobookshelf(_) => None,
-            };
+            let item = item.as_emby().cloned();
             self.home_context_item.clone_from(&item);
             if let Some((x, y)) = anchor {
                 self.app.open_context_menu_at(x, y, true, item);
@@ -213,11 +204,10 @@ impl Model {
             .map(|item| QueueItem::Emby(Box::new(item)))
             .collect();
         let loading = self.home_content.loading;
-        let recent_rows = self.home_recent_rows();
         let now_secs = mbv_render::screens::feeds_model::current_time_secs();
+        let recent_rows = self.home_recent_rows(now_secs);
         self.update_home_owner(|home| {
-            home.set_content(continue_items, loading);
-            home.set_recent_rows(recent_rows, now_secs);
+            home.set_snapshot(continue_items, loading, recent_rows, now_secs);
         });
     }
 
@@ -226,10 +216,12 @@ impl Model {
     /// from `all_entries`, filtered to the same 14-day cutoff, with the
     /// subscription name resolved by the shell. A merged row without a valid
     /// date has no age branch, so it can never appear.
-    pub(in crate::app) fn home_recent_rows(&self) -> Vec<mbv_ui_model::home_latest::HomeRecentRow> {
-        use mbv_ui_model::home_latest::{HomeRecentRow, home_age_group, provider_timestamp_secs};
+    pub(in crate::app) fn home_recent_rows(
+        &self,
+        now_secs: u64,
+    ) -> Vec<mbv_ui_model::home_latest::HomeRecentRow> {
+        use mbv_ui_model::home_latest::{HomeRecentRow, is_home_recent, provider_timestamp_secs};
         use std::cmp::Reverse;
-        let now_secs = mbv_render::screens::feeds_model::current_time_secs();
         let mut rows: Vec<HomeRecentRow> = self
             .home_recently_added
             .values()
@@ -244,7 +236,7 @@ impl Model {
                 .feed_tab
                 .all_entries
                 .iter()
-                .filter(|entry| home_age_group(entry.pub_date_secs, now_secs).is_some())
+                .filter(|entry| is_home_recent(entry.pub_date_secs, now_secs))
                 .map(|entry| {
                     let feed_name = entry.feed_id.as_deref().and_then(|feed_id| {
                         self.app

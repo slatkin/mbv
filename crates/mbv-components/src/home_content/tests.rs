@@ -44,7 +44,9 @@ fn labels(owner: &HomeContent) -> Vec<String> {
 #[test]
 fn recent_rows_group_by_feeds_age_and_omit_empty_headers() {
     let mut owner = HomeContent::new();
-    owner.set_recent_rows(
+    owner.set_snapshot(
+        Vec::new(),
+        false,
         vec![
             recent_row("fresh", 1),
             recent_row("week", 13),
@@ -57,7 +59,7 @@ fn recent_rows_group_by_feeds_age_and_omit_empty_headers() {
         ["# Recently added", "# New", "fresh", "# Recent", "week"]
     );
 
-    owner.set_recent_rows(vec![recent_row("stale", 14)], NOW);
+    owner.set_snapshot(Vec::new(), false, vec![recent_row("stale", 14)], NOW);
     assert_eq!(labels(&owner), Vec::<String>::new());
 }
 
@@ -77,7 +79,7 @@ fn ctrl_enter_emits_marked_items_in_display_order() {
     let (first, second) = (recent_row("first", 0), recent_row("second", 1));
     let expected = vec![recent_target(&first), recent_target(&second)];
     let mut owner = HomeContent::new();
-    owner.set_recent_rows(vec![first, second], NOW);
+    owner.set_snapshot(Vec::new(), false, vec![first, second], NOW);
     owner.carrier.select_target(&expected[1]);
     owner.carrier.toggle_selection(&expected[1]);
     owner.carrier.toggle_selection(&expected[0]);
@@ -97,8 +99,7 @@ fn same_item_under_both_sections_has_two_targets() {
     use tuirealm::event::{Key, KeyModifiers};
     let recent = recent_row("dup", 1);
     let mut owner = HomeContent::new();
-    owner.set_content(vec![recent.item.clone()], false);
-    owner.set_recent_rows(vec![recent.clone()], NOW);
+    owner.set_snapshot(vec![recent.item.clone()], false, vec![recent.clone()], NOW);
 
     let first = owner.selected_item_target();
     owner.handle_key(&key(Key::Down, KeyModifiers::NONE));

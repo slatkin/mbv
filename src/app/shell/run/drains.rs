@@ -386,11 +386,14 @@ impl Model {
         while let Ok(ev) = self.app.ws_rx.try_recv() {
             had_events = true;
             self.app.handle_ws_event(ev);
-            // `UserDataChanged` refetches Continue Watching inside the handler.
-            self.push_home_content();
             // Emby browser content may have changed (5.3d.15/M2).
             self.push_active_emby_library_owner_content();
             self.push_music_workspace_content();
+        }
+        // `UserDataChanged` refetches Continue Watching inside the handler.
+        // Home projects once per drain, not once per event.
+        if had_events {
+            self.push_home_content();
         }
         had_events
     }

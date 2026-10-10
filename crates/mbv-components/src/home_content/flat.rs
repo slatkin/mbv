@@ -44,20 +44,37 @@ fn item_row(
     }
 }
 
-/// The `Recently added` item rows of one age group, in the order they arrive.
-fn group_rows(recent_rows: &[HomeRecentRow], now_secs: u64, group: FeedAgeGroup) -> Vec<HomeRow> {
-    recent_rows
-        .iter()
-        .filter(|row| home_age_group(provider_timestamp_secs(&row.item), now_secs) == Some(group))
-        .map(|row| {
-            item_row(
-                HomeItemTarget::Recent(row.item.content_id()),
-                &row.item,
-                row.feed_name.as_deref(),
-                provider_timestamp_secs(&row.item).map(fmt_publish_date_short),
-            )
-        })
-        .collect()
+/// The non-empty `Recently added` age groups, `New` then `Recent`, each with
+/// its item rows in the order they arrive. One pass parses each date once.
+fn grouped_rows(recent_rows: &[HomeRecentRow], now_secs: u64) -> Vec<(FeedAgeGroup, Vec<HomeRow>)> {
+    let mut new_rows = Vec::new();
+    let mut recent = Vec::new();
+    for row in recent_rows {
+        let timestamp = provider_timestamp_secs(&row.item);
+        let bucket = match home_age_group(timestamp, now_secs) {
+            Some(FeedAgeGroup::New) => &mut new_rows,
+            Some(FeedAgeGroup::Recent) => &mut recent,
+            None
+            | Some(
+                FeedAgeGroup::OlderThanTwoWeeks
+                | FeedAgeGroup::OlderThanMonth
+                | FeedAgeGroup::Unknown,
+            ) => continue,
+        };
+        bucket.push(item_row(
+            HomeItemTarget::Recent(row.item.content_id()),
+            &row.item,
+            row.feed_name.as_deref(),
+            timestamp.map(fmt_publish_date_short),
+        ));
+    }
+    [
+        (FeedAgeGroup::New, new_rows),
+        (FeedAgeGroup::Recent, recent),
+    ]
+    .into_iter()
+    .filter(|(_, rows)| !rows.is_empty())
+    .collect()
 }
 
 /// The complete Home projection: `Continue watching`, a spacer, then
@@ -77,11 +94,7 @@ pub(super) fn flat_rows(
                 .map(|item| item_row(HomeItemTarget::continue_item(item.id()), item, None, None)),
         );
     }
-    let groups: Vec<(FeedAgeGroup, Vec<HomeRow>)> = [FeedAgeGroup::New, FeedAgeGroup::Recent]
-        .into_iter()
-        .map(|group| (group, group_rows(recent_rows, now_secs, group)))
-        .filter(|(_, group_rows)| !group_rows.is_empty())
-        .collect();
+    let groups = grouped_rows(recent_rows, now_secs);
     if !groups.is_empty() {
         if !rows.is_empty() {
             rows.push(MediaListRow::Spacer);

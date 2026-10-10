@@ -244,12 +244,7 @@ impl super::super::Model {
                     .and_then(|index| self.app.audiobookshelf_libraries.get(index))
                     .map(|library| library.id.clone());
                 if let Some(library_id) = library_id {
-                    self.record_home_latest_acknowledgement(
-                        crate::app::DestinationLatestSource::Audiobookshelf(library_id.clone()),
-                    );
-                    // Selecting the Latest pill fetches the full Latest
-                    // list (spec `destination-latest-modes`).
-                    self.spawn_audiobookshelf_latest_shelves(&library_id);
+                    self.select_audiobookshelf_latest(&library_id);
                 }
                 self.push_audiobookshelf_podcast_content();
             }
