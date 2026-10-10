@@ -213,6 +213,30 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
         self.visible_flow_rows().len()
     }
 
+    /// The stable targets, in flow order, of the node rows the latest
+    /// painted viewport window covers: flow rows from the viewport offset
+    /// through the offset plus the painted content height. Structural rows
+    /// are never targets, so this is the destination's read path for a
+    /// range reported over the painted frame alone (wheel-scrolls-viewport
+    /// D4): a paging reach resolves only from rows the frame could draw.
+    /// An unpainted or zero-height window is an empty result.
+    pub fn painted_window_targets(&self) -> Vec<Target> {
+        let visible = self.visible_flow_rows();
+        let end = self
+            .viewport_offset
+            .saturating_add(self.viewport_height().unwrap_or(0));
+        visible
+            .into_iter()
+            .enumerate()
+            .skip(self.viewport_offset)
+            .take_while(|(index, _)| *index < end)
+            .filter_map(|(_, row)| match row {
+                VisibleRow::Node(id) => self.arena.get(&id).map(|entry| entry.node.target.clone()),
+                VisibleRow::Structural(_, _) => None,
+            })
+            .collect()
+    }
+
     pub fn current_flow(&self) -> RowFlow<Target> {
         RowFlow::new(
             self.visible_flow_rows()

@@ -4,6 +4,87 @@ use super::*;
 use crate::list::tree_browser::TreeConsumed;
 use mbv_emby_model::test_support::make_item;
 use mbv_render::LibraryListRenderCtx;
+use ratatui::Terminal;
+use ratatui::backend::TestBackend;
+use ratatui::layout::{Position, Rect};
+use tuirealm::component::Component;
+
+/// Complete one painted tree frame so the wheel resolves its claim and its
+/// reach from retained geometry, mirroring the shared tree-owner paint seam.
+fn paint_tree(owner: &mut MusicContent, height: u16) {
+    let mut terminal = Terminal::new(TestBackend::new(20, height)).unwrap();
+    terminal
+        .draw(|frame| Component::view(&mut owner.browser, frame, Rect::new(0, 0, 18, height)))
+        .unwrap();
+}
+
+/// Wheel-scrolls-viewport task 4.2 (D4): the Grouped Music wheel scrolls the
+/// tree viewport, never the selection, and reports the album display index
+/// of the last painted album-or-later row as the shell reach request.
+#[test]
+fn wheel_scrolls_the_viewport_and_reports_the_last_painted_album_reach() {
+    // The uniform wheel step is three rows (mouse-input wheel contract).
+    const WHEEL_STEP: i64 = 3;
+    let mut owner = tree_owner(&[("Alpha", &["a-0", "a-1", "a-2", "a-3"])]);
+    // Expand the single artist root: the settled flow is the root plus four
+    // album leaves, and the selection rests on the first visible node.
+    owner.browser.apply(TreeOperation::ToggleExpansionTarget(
+        MusicTreeTarget::Artist(mbv_ui_model::music_grouping::ArtistKey::Service(
+            "artist-Alpha".into(),
+        )),
+    ));
+    let selection_before = owner.browser.selected_target().cloned();
+    // A three-row viewport: before the wheel the window holds the root and
+    // the first two albums.
+    paint_tree(&mut owner, 3);
+
+    let message = owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::Wheel {
+        at: Position::new(1, 1),
+        delta: WHEEL_STEP,
+    }));
+
+    // After the step the painted window holds a-2 and a-3: the last painted
+    // album-or-later row is a-3, album display index 3 — not a cursor move.
+    assert_eq!(
+        message,
+        Some(Msg::Shell(Box::new(ShellRequest::LibraryViewportReach {
+            index: 3
+        })))
+    );
+    assert_eq!(
+        owner.browser.selected_target().cloned(),
+        selection_before,
+        "the wheel never moves the selected node"
+    );
+}
+
+/// Wheel-scrolls-viewport task 4.2: the tree spec's claimed-wheel focus
+/// contract holds for a painted window whose rows carry no album-or-later
+/// node (a collapsed artist root also clamps the wheel at the boundary) — the
+/// focus-only request takes the reach report's place.
+#[test]
+fn wheel_over_a_painted_artist_root_still_focuses_library() {
+    let mut owner = tree_owner(&[("Alpha", &["a-0"])]);
+    // The artist root is collapsed: the only painted node is the root,
+    // which resolves to no album display index.
+    let selection_before = owner.browser.selected_target().cloned();
+    paint_tree(&mut owner, 2);
+
+    let message = owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::Wheel {
+        at: Position::new(1, 0),
+        delta: 3,
+    }));
+
+    assert_eq!(
+        message,
+        Some(Msg::Shell(Box::new(ShellRequest::LibraryPanelFocus)))
+    );
+    assert_eq!(
+        owner.browser.selected_target().cloned(),
+        selection_before,
+        "the wheel never moves the selected node"
+    );
+}
 
 #[test]
 fn filter_escape_closes_search_and_tree_navigation_returns_selection() {
