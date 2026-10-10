@@ -82,10 +82,11 @@ pub(in crate::app) struct AudiobookshelfMarkReceiver {
 }
 
 /// Resolves the configured Audiobookshelf setup, loads its Bearer secret,
-/// and constructs a client. Shared by the startup paths below; the missing-
-/// setup and missing-secret error classes match `start_audiobookshelf`'s
-/// established precedent (`Protocol` / `Unavailable`).
-fn audiobookshelf_client(
+/// and constructs a client. Shared by the startup paths below and by Home's
+/// fetch; the missing-setup and missing-secret error classes match
+/// `start_audiobookshelf`'s established precedent (`Protocol` /
+/// `Unavailable`).
+pub(in crate::app) fn audiobookshelf_client(
     config: &crate::config::Config,
 ) -> Result<(AudiobookshelfClient, String), mbv_audiobookshelf::AudiobookshelfError> {
     let setup = config.audiobookshelf_setup.as_ref().ok_or(

@@ -1,5 +1,6 @@
 use super::*;
 use crate::app::AudiobookshelfEvent;
+use crate::app::ModelContentEvent;
 use crate::app::SessionEvent;
 use crate::app::dispatch::session::service_startup::AudiobookshelfSetupCompletion;
 use crate::app::state::events::LibEvent;
@@ -607,4 +608,79 @@ fn drain_resize_responses_respawns_the_worker_after_it_exits() {
         ),
         "the drain must respawn a live worker after the old one exited"
     );
+}
+
+fn home_recently_added_feed_row(pub_date_secs: Option<u64>) -> mbv_queue::QueueItem {
+    mbv_queue::QueueItem::Feed(mbv_queue::FeedEntry {
+        guid: "guid".into(),
+        title: "Entry".into(),
+        enclosure_url: None,
+        link: None,
+        mime_type: None,
+        duration_ticks: None,
+        pub_date_secs,
+        feed_kind: None,
+        feed_id: None,
+        position_ticks: 0,
+        played: false,
+    })
+}
+
+/// Design D3 of `home-recently-added-tree`: an event from a retired Service
+/// generation (removed or re-setup) never reaches the store.
+#[test]
+fn home_recently_added_event_with_a_stale_service_generation_is_dropped() {
+    let mut model = Model::new(make_app_stub());
+    let stale = model.app.emby_runtime.generation();
+    model.app.emby_runtime.begin_setup();
+    model
+        .app
+        .channels
+        .lib_tx
+        .send(LibEvent::ModelContent(
+            ModelContentEvent::HomeRecentlyAddedFetched {
+                source: crate::app::DestinationLatestSource::Emby("lib".into()),
+                generation: stale,
+                items: vec![home_recently_added_feed_row(Some(0))],
+            },
+        ))
+        .expect("lib event channel");
+
+    model.drain_lib_events();
+
+    assert!(model.home_recently_added.is_empty());
+}
+
+/// Design D2: the shell filters each source's items to the 14-day cutoff
+/// when they are stored; in-window items are kept, items older than the
+/// cutoff and items without a valid date are omitted.
+#[test]
+fn home_recently_added_store_keeps_only_items_inside_the_14_day_cutoff() {
+    let mut model = Model::new(make_app_stub());
+    let current = model.app.home_latest_launch_window.current;
+    let day = 24 * 60 * 60;
+    model
+        .app
+        .channels
+        .lib_tx
+        .send(LibEvent::ModelContent(
+            ModelContentEvent::HomeRecentlyAddedFetched {
+                source: crate::app::DestinationLatestSource::Emby("lib".into()),
+                generation: model.app.emby_runtime.generation(),
+                items: vec![
+                    home_recently_added_feed_row(Some(current - day)),
+                    home_recently_added_feed_row(Some(current - 20 * day)),
+                    home_recently_added_feed_row(None),
+                ],
+            },
+        ))
+        .expect("lib event channel");
+
+    model.drain_lib_events();
+
+    let rows = model
+        .home_recently_added
+        .get(&crate::app::DestinationLatestSource::Emby("lib".into()))
+        .expect("live generation stores under its source");
+    assert_eq!(rows.len(), 1);
 }

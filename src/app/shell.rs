@@ -174,6 +174,13 @@ pub struct Model {
     /// One authoritative TV Latest section snapshot per Emby library view.
     pub(in crate::app) tv_latest_snapshots:
         std::collections::HashMap<String, DestinationLatestSnapshot>,
+    /// Home's per-source Recently added rows (design D2 of
+    /// `home-recently-added-tree`): each Service's fetch items already
+    /// filtered to the 14-day cutoff at store time. Feeds has no entry; its
+    /// rows are derived at push time. Nothing re-uses destination Latest
+    /// data, and a destination fetch never fills Home.
+    pub(in crate::app) home_recently_added:
+        std::collections::HashMap<DestinationLatestSource, Vec<mbv_queue::QueueItem>>,
     pub(in crate::app) home_context_item: Option<mbv_emby_model::EmbyItem>,
     /// The last terminal size the sync pass applied resize side effects for
     /// (task 1.2). Initialized from the App's size so fixtures that pre-set a
@@ -298,6 +305,7 @@ impl Model {
             home_content: HomeContent::new(),
             acknowledged_home_latest_sources: std::collections::HashSet::new(),
             tv_latest_snapshots: std::collections::HashMap::new(),
+            home_recently_added: std::collections::HashMap::new(),
             home_context_item: None,
             handled_terminal_size: initial_terminal_size,
             pending_terminal_resize: false,

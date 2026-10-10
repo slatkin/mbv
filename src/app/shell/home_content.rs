@@ -9,6 +9,7 @@ use crate::app::state::playback::{
 use mbv_components::home_content::HomeContent as HomeOwner;
 #[cfg(test)]
 use mbv_components::library_panel::LibraryPanel;
+use mbv_core::service_runtime::SetupGeneration;
 use mbv_queue::QueueItem;
 use mbv_ui_model::browse::ServerRows;
 #[cfg(test)]
@@ -74,6 +75,53 @@ impl Model {
     pub(in crate::app) fn clear_home_content(&mut self) {
         self.home_content.continue_items.clear();
         self.push_home_content();
+    }
+
+    /// Accepts one fetched library's Home Recently added items (design D3):
+    /// the stale-generation drop matches the `ShelfFetched` App arm — a
+    /// completion from a removed or re-setup Service never reaches the
+    /// store — and the live-generation items are stored under their source
+    /// filtered to the 14-day cutoff. Fetches never produce a Feeds source
+    /// (Feeds rows are derived at push time), so a Feeds event stores
+    /// nothing.
+    pub(in crate::app) fn accept_home_recently_added(
+        &mut self,
+        source: DestinationLatestSource,
+        generation: SetupGeneration,
+        items: Vec<QueueItem>,
+    ) {
+        let accepts = match &source {
+            DestinationLatestSource::Emby(_) => self.app.emby_runtime.accepts(generation),
+            DestinationLatestSource::Audiobookshelf(_) => {
+                self.app.audiobookshelf_runtime.accepts(generation)
+            }
+            DestinationLatestSource::Feeds => false,
+        };
+        if accepts {
+            self.store_home_recently_added(source, items);
+        }
+    }
+
+    /// Stores one fetched library's Home Recently added items (design D3):
+    /// filtered to the 14-day cutoff on arrival, keyed by the source. An
+    /// item without a valid date gets no age branch and is omitted.
+    pub(in crate::app) fn store_home_recently_added(
+        &mut self,
+        source: DestinationLatestSource,
+        items: Vec<QueueItem>,
+    ) {
+        let window = self.app.home_latest_launch_window;
+        let items = items
+            .into_iter()
+            .filter(|item| {
+                mbv_ui_model::home_latest::recent_age(
+                    mbv_ui_model::home_latest::provider_timestamp_secs(item),
+                    window,
+                )
+                .is_some()
+            })
+            .collect();
+        self.home_recently_added.insert(source, items);
     }
 
     pub(in crate::app) fn home_stable_target(

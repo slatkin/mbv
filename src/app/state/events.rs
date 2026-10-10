@@ -1,6 +1,7 @@
-use crate::app::state::playback::HomeContent;
+use crate::app::state::playback::{DestinationLatestSource, HomeContent};
 use mbv_core::service_runtime::SetupGeneration;
 use mbv_emby_model::EmbyItem;
+use mbv_queue::QueueItem;
 use mbv_ui_model::browse::{AlbumPathPart, AlbumSearchEntry, BrowseLevel};
 use mbv_ui_model::feed::FeedHomeVideoGroup;
 
@@ -300,6 +301,17 @@ pub enum ModelContentEvent {
         library_id: String,
         title: String,
         items: Vec<EmbyItem>,
+    },
+    /// One eligible library's Home Recently added items (design D3 of
+    /// `home-recently-added-tree`): Emby through its Latest rules,
+    /// Audiobookshelf through the podcast `Newest Episodes` shelf, Feeds
+    /// derived at push time (never fetched). The shell accepts the event
+    /// only under the source's live Service generation and stores the items
+    /// against the source.
+    HomeRecentlyAddedFetched {
+        source: DestinationLatestSource,
+        generation: SetupGeneration,
+        items: Vec<QueueItem>,
     },
     /// A freshly computed Continue Watching snapshot delivered by an
     /// App-internal writer. App-internal callers cannot touch Model-owned

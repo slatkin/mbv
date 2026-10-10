@@ -28,6 +28,12 @@ fn handle_model_content_event(ev: ModelContentEvent) {
             title,
             items,
         } => drop((library_id, title, items)),
+        // The shell drain stores the fetched items under their source.
+        ModelContentEvent::HomeRecentlyAddedFetched {
+            source,
+            generation,
+            items,
+        } => drop((source, generation, items)),
         // The shell drain applies the Model-owned refreshed content.
         ModelContentEvent::HomeContentRefreshed(content) => drop(content),
         // Clearing Model-owned content is handled by the shell drain.

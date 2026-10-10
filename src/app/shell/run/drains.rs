@@ -181,6 +181,11 @@ impl Model {
                             .collect(),
                     );
                 }
+                LibEvent::ModelContent(ModelContentEvent::HomeRecentlyAddedFetched {
+                    source,
+                    generation,
+                    items,
+                }) => self.accept_home_recently_added(source, generation, items),
                 LibEvent::Browse(BrowseEvent::Loaded {
                     lib_idx,
                     parent_id,
