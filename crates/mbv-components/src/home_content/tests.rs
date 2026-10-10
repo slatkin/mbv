@@ -4,9 +4,10 @@
 use super::*;
 use mbv_emby_model::test_support::make_item;
 use mbv_render::components::media_list::MediaListRow;
+use mbv_ui_msg::ShellRequest;
 
 const DAY: u64 = 24 * 60 * 60;
-const NOW: u64 = 1_500_000_000;
+pub(super) const NOW: u64 = 1_500_000_000;
 
 fn iso_secs(secs: u64) -> String {
     use time::format_description::well_known::Iso8601;
@@ -16,7 +17,7 @@ fn iso_secs(secs: u64) -> String {
         .expect("ISO-8601 formatting always succeeds")
 }
 
-fn recent_row(name: &str, days_old: u64) -> HomeRecentRow {
+pub(super) fn recent_row(name: &str, days_old: u64) -> HomeRecentRow {
     let mut item = make_item(name, "Movie");
     item.id = name.to_string();
     item.date_added = iso_secs(NOW - days_old * DAY);
@@ -57,5 +58,51 @@ fn recent_rows_group_by_feeds_age_and_omit_empty_headers() {
     );
 
     owner.set_recent_rows(vec![recent_row("stale", 14)], NOW);
-    assert!(labels(&owner).is_empty());
+    assert_eq!(labels(&owner), Vec::<String>::new());
+}
+
+fn key(code: tuirealm::event::Key, modifiers: tuirealm::event::KeyModifiers) -> KeyEvent {
+    KeyEvent { code, modifiers }
+}
+
+fn recent_target(row: &HomeRecentRow) -> HomeItemTarget {
+    HomeItemTarget::Recent(row.item.content_id())
+}
+
+/// "Home actions resolve the row's own section and Service identity":
+/// marks made out of order act in display order.
+#[test]
+fn ctrl_enter_emits_marked_items_in_display_order() {
+    use tuirealm::event::{Key, KeyModifiers};
+    let (first, second) = (recent_row("first", 0), recent_row("second", 1));
+    let expected = vec![recent_target(&first), recent_target(&second)];
+    let mut owner = HomeContent::new();
+    owner.set_recent_rows(vec![first, second], NOW);
+    owner.carrier.select_target(&expected[1]);
+    owner.carrier.toggle_selection(&expected[1]);
+    owner.carrier.toggle_selection(&expected[0]);
+
+    let msg = owner.handle_key(&key(Key::Enter, KeyModifiers::CONTROL));
+
+    assert!(matches!(
+        msg,
+        Some(Msg::Shell(request))
+            if *request == ShellRequest::HomeEnqueue(expected)
+    ));
+}
+
+/// The same item under both sections is two separately selectable rows.
+#[test]
+fn same_item_under_both_sections_has_two_targets() {
+    use tuirealm::event::{Key, KeyModifiers};
+    let recent = recent_row("dup", 1);
+    let mut owner = HomeContent::new();
+    owner.set_content(vec![recent.item.clone()], false);
+    owner.set_recent_rows(vec![recent.clone()], NOW);
+
+    let first = owner.selected_item_target();
+    owner.handle_key(&key(Key::Down, KeyModifiers::NONE));
+
+    assert_eq!(first, Some(HomeItemTarget::continue_item("dup")));
+    assert_eq!(owner.selected_item_target(), Some(recent_target(&recent)));
 }
