@@ -9,6 +9,7 @@ use crate::app::state::playback::{
 use mbv_components::home_content::HomeContent as HomeOwner;
 #[cfg(test)]
 use mbv_components::library_panel::LibraryPanel;
+use mbv_core::service_runtime::SetupGeneration;
 use mbv_queue::QueueItem;
 use mbv_ui_model::browse::ServerRows;
 #[cfg(test)]
@@ -20,40 +21,50 @@ use std::time::Instant;
 impl Model {
     pub(in crate::app) fn assign_home_content(&mut self, content: HomeContent) {
         self.home_content = content;
+        // A bootstrap or refresh may carry a rebuilt library set that dropped
+        // a previously fetched source's library; evict it before projecting
+        // (see `openspec/specs/home-latest-sections`).
+        self.evict_gone_home_recently_added();
         self.push_home_content();
+    }
+
+    /// Evict fetched `Recently added` sources whose Service library no
+    /// longer exists: an Emby source without a surviving library tab (a
+    /// rebuilt or replaced setup dropped it), or an Audiobookshelf source
+    /// without a surviving podcast library (a teardown or replacement
+    /// empties the catalog). Feeds is derived at push time and never stored.
+    /// Returns whether anything was evicted; the caller re-projects.
+    pub(in crate::app) fn evict_gone_home_recently_added(&mut self) -> bool {
+        let before = self.home_recently_added.len();
+        let app = &self.app;
+        self.home_recently_added.retain(|source, _| match source {
+            DestinationLatestSource::Emby(library_id) => app
+                .libs
+                .iter()
+                .any(|library| library.library.id == *library_id),
+            DestinationLatestSource::Audiobookshelf(library_id) => app
+                .audiobookshelf_libraries
+                .iter()
+                .any(|library| library.id == *library_id),
+            DestinationLatestSource::Feeds => true,
+        });
+        self.home_recently_added.len() != before
     }
 
     pub(in crate::app) fn update_emby_latest_snapshot(
         &mut self,
         library_id: &str,
-        title: String,
         items: Vec<QueueItem>,
     ) {
-        let source = DestinationLatestSource::Emby(library_id.to_string());
-        let snapshot = self
-            .tv_latest_snapshots
-            .entry(library_id.to_string())
-            .or_insert_with(|| {
-                DestinationLatestSnapshot::new_with_launch_window(
-                    title.clone(),
-                    source,
-                    items.clone(),
-                    self.app.home_latest_launch_window,
-                )
-            });
-        snapshot.title = title;
-        snapshot.items = items;
-        recompute_destination_latest_marker(
-            snapshot,
-            self.app.home_latest_launch_window,
-            &self.acknowledged_home_latest_sources,
-        );
-        let items = snapshot
-            .items
+        let emby_items = items
             .iter()
             .filter_map(QueueItem::as_emby)
             .cloned()
             .collect::<Vec<_>>();
+        self.tv_latest_snapshots.insert(
+            library_id.to_string(),
+            DestinationLatestSnapshot::new(items),
+        );
         for library in &mut self.app.libs {
             if library.library.id != library_id || library.library.collection_type != "tvshows" {
                 continue;
@@ -64,8 +75,8 @@ impl Model {
             if level.tv_content_mode != Some(mbv_queue::TvContentMode::Latest) {
                 continue;
             }
-            level.items.clone_from(&items);
-            level.rows = ServerRows::complete(items.len());
+            level.items.clone_from(&emby_items);
+            level.rows = ServerRows::complete(emby_items.len());
             level.loading = false;
         }
         self.push_active_emby_library_owner_content();
@@ -73,23 +84,102 @@ impl Model {
 
     pub(in crate::app) fn clear_home_content(&mut self) {
         self.home_content.continue_items.clear();
+        // `HomeContentCleared` is the Service teardown arm: a removed or
+        // replaced setup also drops its fetched `Recently added` sources
+        // (review P2).
+        self.evict_gone_home_recently_added();
         self.push_home_content();
+    }
+
+    /// Accepts one fetched library's Home Recently added items (`openspec/specs/home-latest-sections`):
+    /// the stale-generation drop matches the `ShelfFetched` App arm — a
+    /// completion from a removed or re-setup Service never reaches the
+    /// store — and the live-generation items are stored under their source
+    /// filtered to the 14-day cutoff. Fetches never produce a Feeds source
+    /// (Feeds rows are derived at push time), so a Feeds event stores
+    /// nothing.
+    pub(in crate::app) fn accept_home_recently_added(
+        &mut self,
+        source: DestinationLatestSource,
+        generation: SetupGeneration,
+        items: Vec<QueueItem>,
+    ) {
+        let accepts = match &source {
+            DestinationLatestSource::Emby(_) => self.app.emby_runtime.accepts(generation),
+            DestinationLatestSource::Audiobookshelf(_) => {
+                self.app.audiobookshelf_runtime.accepts(generation)
+            }
+            DestinationLatestSource::Feeds => false,
+        };
+        if accepts {
+            self.store_home_recently_added(source, items);
+        }
+    }
+
+    /// Stores one fetched library's Home Recently added items (`openspec/specs/home-latest-sections`):
+    /// filtered to the 14-day cutoff on arrival, keyed by the source. An
+    /// item without a valid date gets no age branch and is omitted.
+    pub(in crate::app) fn store_home_recently_added(
+        &mut self,
+        source: DestinationLatestSource,
+        items: Vec<QueueItem>,
+    ) {
+        let now_secs = mbv_render::screens::feeds_model::current_time_secs();
+        let items = items
+            .into_iter()
+            .filter(|item| {
+                mbv_ui_model::home_latest::is_home_recent(
+                    mbv_ui_model::home_latest::provider_timestamp_secs(item),
+                    now_secs,
+                )
+            })
+            .collect();
+        self.home_recently_added.insert(source, items);
     }
 
     pub(in crate::app) fn home_stable_target(
         &self,
-        target: &mbv_ui_model::targets::HomeRowTarget,
-    ) -> Option<(QueueItem, bool)> {
-        if !target.from_continue_watching {
-            return None;
+        target: &mbv_ui_model::targets::HomeItemTarget,
+    ) -> Option<QueueItem> {
+        // `Continue` is Emby-only, so it resolves through the shell-owned
+        // Continue Watching snapshot. `Recent` looks up one row by content id
+        // in the stored sources and the Feeds entries, without building the
+        // merged list (`openspec/specs/home-latest-sections`).
+        match target {
+            mbv_ui_model::targets::HomeItemTarget::Continue(item_id) => self
+                .home_content
+                .continue_items
+                .iter()
+                .find(|item| item.id == item_id.as_str())
+                .cloned()
+                .map(|item| QueueItem::Emby(Box::new(item))),
+            mbv_ui_model::targets::HomeItemTarget::Recent(content_id) => self
+                .home_recently_added
+                .values()
+                .flatten()
+                .find(|item| item.content_id() == *content_id)
+                .cloned()
+                .or_else(|| self.home_recent_feed_entry(content_id)),
         }
-        let item_id = target.item_id.as_deref()?;
-        self.home_content
-            .continue_items
+    }
+
+    /// The Feeds `Recently added` row with this content id, if its entry is
+    /// inside the 14-day cutoff (Feeds rows are derived, never stored).
+    fn home_recent_feed_entry(
+        &self,
+        content_id: &mbv_queue::QueueItemContentId,
+    ) -> Option<QueueItem> {
+        let now_secs = mbv_render::screens::feeds_model::current_time_secs();
+        self.app
+            .feed_tab
+            .all_entries
             .iter()
-            .find(|item| item.id == item_id)
+            .find(|entry| {
+                matches!(content_id, mbv_queue::QueueItemContentId::Feed(guid) if *guid == entry.guid)
+                    && mbv_ui_model::home_latest::is_home_recent(entry.pub_date_secs, now_secs)
+            })
             .cloned()
-            .map(|item| (QueueItem::Emby(Box::new(item)), true))
+            .map(QueueItem::Feed)
     }
 
     pub(in crate::app) fn fetch_home_at_startup(&mut self) {
@@ -153,58 +243,55 @@ impl Model {
         &mut self,
         source: DestinationLatestSource,
     ) {
-        self.acknowledged_home_latest_sources.insert(source.clone());
-        if let DestinationLatestSource::Emby(library_id) = source
-            && let Some(snapshot) = self.tv_latest_snapshots.get_mut(&library_id)
-        {
-            snapshot.has_new_content = false;
-        }
+        self.acknowledged_home_latest_sources.insert(source);
     }
 
+    /// Selecting a podcast library's Latest view acknowledges its Home marker
+    /// and fetches the full Latest list (spec `destination-latest-modes`).
+    pub(in crate::app) fn select_audiobookshelf_latest(&mut self, library_id: &str) {
+        self.record_home_latest_acknowledgement(DestinationLatestSource::Audiobookshelf(
+            library_id.to_owned(),
+        ));
+        self.spawn_audiobookshelf_latest_shelves(library_id);
+    }
+
+    /// Whether one destination's Latest surface carries the Iris
+    /// new-content marker (`openspec/specs/destination-latest-modes`): any
+    /// item in that source's Home `Recently added` rows — the per-source
+    /// store, or the derived Feeds rows — dated inside the frozen launch
+    /// window, while the source is not acknowledged. The marker is
+    /// evaluated from Home's data even while another tab is active and
+    /// before the destination's Latest list has loaded.
     pub(in crate::app) fn destination_latest_marker(
         &self,
         source: &DestinationLatestSource,
     ) -> bool {
-        let has_new_content = match source {
-            DestinationLatestSource::Emby(library_id) => self
-                .tv_latest_snapshots
-                .get(library_id)
-                .is_some_and(|snapshot| snapshot.has_new_content),
-            DestinationLatestSource::Audiobookshelf(library_id) => self
-                .app
-                .audiobookshelf_shelf_cache
-                .get(library_id)
-                .is_some_and(|items| {
+        if self.acknowledged_home_latest_sources.contains(source) {
+            return false;
+        }
+        let window = self.app.home_latest_launch_window;
+        match source {
+            // Stored rows are already filtered to the 14-day cutoff on
+            // arrival, so the launch window is the remaining test: an item
+            // dated after the launch instant never marks.
+            DestinationLatestSource::Emby(_) | DestinationLatestSource::Audiobookshelf(_) => {
+                self.home_recently_added.get(source).is_some_and(|items| {
                     items.iter().any(|item| {
-                        mbv_ui_model::home_latest::timestamp_in_launch_window(
-                            item.pub_date_secs,
-                            self.app.home_latest_launch_window,
-                        )
+                        mbv_ui_model::home_latest::is_new_in_launch_window(item, window)
                     })
-                }),
-            DestinationLatestSource::Feeds => self.app.feed_tab.all_entries.iter().any(|entry| {
-                self.app
-                    .home_latest_launch_window
-                    .previous
-                    .is_some_and(|previous| {
-                        entry.pub_date_secs.is_some_and(|timestamp| {
-                            previous < timestamp
-                                && timestamp <= self.app.home_latest_launch_window.current
-                        })
-                    })
-            }),
-        };
-        has_new_content && !self.acknowledged_home_latest_sources.contains(source)
-    }
-}
-
-fn recompute_destination_latest_marker(
-    snapshot: &mut DestinationLatestSnapshot,
-    launch_window: mbv_ui_model::home_latest::HomeLatestLaunchWindow,
-    acknowledged: &std::collections::HashSet<DestinationLatestSource>,
-) {
-    snapshot.recompute_new_content(launch_window);
-    if acknowledged.contains(&snapshot.source) {
-        snapshot.has_new_content = false;
+                })
+            }
+            // Feeds has no store entry: its rows derive from `all_entries`
+            // at push time, filtered to the same 14-day cutoff.
+            DestinationLatestSource::Feeds => {
+                let now_secs = mbv_render::screens::feeds_model::current_time_secs();
+                self.app.feed_tab.all_entries.iter().any(|entry| {
+                    mbv_ui_model::home_latest::timestamp_in_launch_window(
+                        entry.pub_date_secs,
+                        window,
+                    ) && mbv_ui_model::home_latest::is_home_recent(entry.pub_date_secs, now_secs)
+                })
+            }
+        }
     }
 }

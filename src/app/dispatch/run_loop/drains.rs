@@ -363,6 +363,11 @@ impl App {
         &self,
         generation: mbv_core::service_runtime::SetupGeneration,
     ) {
+        // Home fetches each podcast library's `Recently added` rows here
+        // (spec `home-latest-sections`); the destination Latest shelf is
+        // lazy (spec `destination-latest-modes`, "Destination Latest lists
+        // load lazily") and fetches only while its Latest pill is selected.
+        self.spawn_home_recently_added(mbv_queue::ServiceKind::Audiobookshelf);
         for (index, library) in self.audiobookshelf_libraries.iter().enumerate() {
             let book_kind =
                 mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseKind::from_media_type(
@@ -376,12 +381,6 @@ impl App {
                         self.audiobookshelf_browse[index].catalog_request,
                         library.id.clone(),
                         0,
-                        self.channels.lib_tx.clone(),
-                    );
-                    crate::app::dispatch::session::service_startup::start_audiobookshelf_shelves(
-                        self.config.lock().unwrap().clone(),
-                        generation,
-                        library.id.clone(),
                         self.channels.lib_tx.clone(),
                     );
                 }

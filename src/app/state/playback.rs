@@ -3,7 +3,6 @@ use mbv_ctrl::player::PlayerEvent;
 use mbv_emby_model::EmbyItem;
 use mbv_player::PlayerProxy;
 use mbv_queue::{QueueItem, QueueSlotId};
-use mbv_ui_model::home_latest::{HomeLatestLaunchWindow, is_new_in_launch_window};
 use mbv_ui_model::playback::QueueScope;
 use std::collections::VecDeque;
 use std::sync::mpsc;
@@ -74,40 +73,20 @@ pub(in crate::app) enum DestinationLatestSource {
     Feeds,
 }
 
-/// The shell-owned snapshot of one destination's Latest items. Its new-content
-/// marker is evaluated against the frozen launch window, never by the component.
+/// The shell-owned snapshot of one Emby destination's Latest items. It feeds
+/// only the destination Latest projection; the new-content marker is
+/// evaluated from Home's `Recently added` rows (spec
+/// `destination-latest-modes`, "Latest markers follow their destination
+/// pills"), never from this snapshot.
 #[derive(Clone, Debug)]
 pub(in crate::app) struct DestinationLatestSnapshot {
-    pub title: String,
-    pub source: DestinationLatestSource,
     pub items: Vec<QueueItem>,
-    pub has_new_content: bool,
 }
 
 impl DestinationLatestSnapshot {
     #[must_use]
-    pub fn new_with_launch_window(
-        title: String,
-        source: DestinationLatestSource,
-        items: Vec<QueueItem>,
-        window: HomeLatestLaunchWindow,
-    ) -> Self {
-        let has_new_content = items
-            .iter()
-            .any(|item| is_new_in_launch_window(item, window));
-        Self {
-            title,
-            source,
-            items,
-            has_new_content,
-        }
-    }
-
-    pub fn recompute_new_content(&mut self, window: HomeLatestLaunchWindow) {
-        self.has_new_content = self
-            .items
-            .iter()
-            .any(|item| is_new_in_launch_window(item, window));
+    pub fn new(items: Vec<QueueItem>) -> Self {
+        Self { items }
     }
 }
 

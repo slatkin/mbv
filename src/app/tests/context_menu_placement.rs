@@ -90,15 +90,11 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout() {
     model.app.panel_focus = PanelFocus::Library;
     model.home_content.continue_items = make_items(5);
     model.handle_terminal_message(
-        Msg::Shell(Box::new(mbv_ui_msg::ShellRequest::RowContextMenu(
-            mbv_ui_model::context_menu::ContextMenuTargets::Home(vec![
-                mbv_ui_model::targets::HomeRowTarget {
-                    item_id: Some("id0".into()),
-                    source: None,
-                    from_continue_watching: true,
-                },
-            ]),
-            None,
+        Msg::Shell(Box::new(mbv_ui_msg::ShellRequest::Home(
+            mbv_ui_msg::HomeRequest::ContextMenu(
+                vec![mbv_ui_model::targets::HomeItemTarget::continue_item("id0")],
+                None,
+            ),
         ))),
         &mut false,
         &mut false,
@@ -199,15 +195,11 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout_narrow()
     model.app.panel_focus = PanelFocus::Library;
     model.home_content.continue_items = make_items(5);
     model.handle_terminal_message(
-        Msg::Shell(Box::new(mbv_ui_msg::ShellRequest::RowContextMenu(
-            mbv_ui_model::context_menu::ContextMenuTargets::Home(vec![
-                mbv_ui_model::targets::HomeRowTarget {
-                    item_id: Some("id0".into()),
-                    source: None,
-                    from_continue_watching: true,
-                },
-            ]),
-            None,
+        Msg::Shell(Box::new(mbv_ui_msg::ShellRequest::Home(
+            mbv_ui_msg::HomeRequest::ContextMenu(
+                vec![mbv_ui_model::targets::HomeItemTarget::continue_item("id0")],
+                None,
+            ),
         ))),
         &mut false,
         &mut false,

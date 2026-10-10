@@ -6,6 +6,36 @@ use crate::app::{ModelContentEvent, PlaylistEvent};
 use mbv_emby_model::EmbyItem;
 use std::collections::HashMap;
 
+/// Binds one podcast library's `Newest Episodes` shelf catalogs to queue
+/// items. The shelf fetch path builds no progress-resumed state, so each
+/// episode starts not-started; the browse state and the Player owner own
+/// live progress.
+fn home_shelf_items(
+    catalogs: Vec<mbv_queue::AudiobookshelfEpisodeCatalog>,
+) -> Vec<mbv_queue::QueueItem> {
+    catalogs
+        .into_iter()
+        .map(|catalog| {
+            mbv_queue::QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Episode(
+                mbv_queue::AudiobookshelfQueueItem::from_catalog(
+                    catalog,
+                    mbv_queue::EpisodeResume::NOT_STARTED,
+                ),
+            ))
+        })
+        .collect()
+}
+
+/// Whether one Emby library's Latest items belong in the Home `Recently added`
+/// root (spec `home-latest-sections`): the destination's own
+/// Latest rules minus Music and Playlists, with TV included (it fetches
+/// through `get_latest_episodes`). Only `tvshows` uses the episode query; the
+/// `tvshows | playlists | music` guard in `spawn_destination_latest_snapshot`
+/// is the separate library-snapshot guard and stays unchanged.
+fn home_emby_latest_eligible(collection_type: &str) -> bool {
+    !matches!(collection_type, "music" | "playlists")
+}
+
 impl App {
     pub(in crate::app) fn refresh_lib(&mut self, lib_idx: usize) {
         // Defensive bounds check: the dispatch front door normalizes a stale
@@ -25,10 +55,7 @@ impl App {
         if self.libs[lib_idx].library.collection_type != "tvshows"
             && self.libs[lib_idx].library.collection_type != "playlists"
         {
-            self.spawn_emby_latest_snapshot(
-                self.libs[lib_idx].library.id.clone(),
-                self.libs[lib_idx].library.name.clone(),
-            );
+            self.spawn_emby_latest_snapshot(self.libs[lib_idx].library.id.clone());
         }
         if self.libs[lib_idx].library.collection_type == "tvshows"
             && self.libs[lib_idx].nav_stack.len() == 1
@@ -65,14 +92,22 @@ impl App {
     /// the Library panel is painted. A stale selected library index normalizes
     /// to Home and stops without a fetch. This is a data refresh only: it never
     /// resets presentation state, writes preferences, or clears a saved
-    /// library position (#745).
-    pub(in crate::app) fn refresh_current_view(&mut self) {
+    /// library position (#745). `podcast_latest_selected` is the active
+    /// podcast owner's pill answer: the destination Latest shelf is fetched
+    /// only while that pill is selected (spec `destination-latest-modes`,
+    /// "Destination Latest lists load lazily").
+    pub(in crate::app) fn refresh_current_view(&mut self, podcast_latest_selected: bool) {
         self.force_clear = true;
         if self.normalize_stale_browse_destination() {
             return;
         }
         match self.tab {
             TabSelection::Home => {
+                // A Home refresh refetches both Services' `Recently added`
+                // data in the background (spec `home-latest-sections`). A failing Service contributes
+                // nothing; Continue Watching still refreshes below.
+                self.spawn_home_recently_added(mbv_queue::ServiceKind::Emby);
+                self.spawn_home_recently_added(mbv_queue::ServiceKind::Audiobookshelf);
                 match self.fetch_home() {
                     Ok(content) => {
                         // The fetch runs synchronously (its App-side
@@ -94,7 +129,7 @@ impl App {
                     Some(mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseKind::Book) => {
                         self.audiobookshelf_book_refresh();
                     }
-                    _ => self.audiobookshelf_refresh(),
+                    _ => self.audiobookshelf_refresh(podcast_latest_selected),
                 }
             }
             TabSelection::Feeds => self.refresh_feeds(),
@@ -322,7 +357,7 @@ impl App {
                         return Err(error);
                     }
                 };
-                (client.get_continue_watching(20).unwrap_or_default(), views)
+                (client.get_continue_watching(10).unwrap_or_default(), views)
             }
             _ => (Vec::new(), Vec::new()),
         };
@@ -363,4 +398,142 @@ impl App {
             })
             .unwrap_or_default()
     }
+
+    /// Dispatches one Service's Home Recently added fetch (spec
+    /// `home-latest-sections`). Triggered when a Service becomes ready,
+    /// in the Emby bootstrap, in `start_audiobookshelf_catalog_fetches`, and
+    /// on every Home refresh.
+    pub(in crate::app) fn spawn_home_recently_added(&self, service: mbv_queue::ServiceKind) {
+        match service {
+            mbv_queue::ServiceKind::Emby => self.spawn_home_emby_recently_added(),
+            mbv_queue::ServiceKind::Audiobookshelf => {
+                self.spawn_home_audiobookshelf_recently_added();
+            }
+        }
+    }
+
+    /// Emby's Home fetch: one background thread per Service, one event per
+    /// eligible library — TV through `get_latest_episodes`, every other
+    /// eligible library through `get_latest`. A failing library logs and
+    /// contributes nothing; the other libraries still land.
+    fn spawn_home_emby_recently_added(&self) {
+        let Some(client) = self.emby_snapshot() else {
+            return;
+        };
+        let generation = self.emby_runtime.generation();
+        let libraries: Vec<(String, bool)> = self
+            .libs
+            .iter()
+            .filter(|library| home_emby_latest_eligible(&library.library.collection_type))
+            .map(|library| {
+                (
+                    library.library.id.clone(),
+                    library.library.collection_type == "tvshows",
+                )
+            })
+            .collect();
+        if libraries.is_empty() {
+            return;
+        }
+        let tx = self.channels.lib_tx.clone();
+        std::thread::spawn(move || {
+            for (library_id, tvshows) in libraries {
+                let latest = if tvshows {
+                    client.get_latest_episodes(&library_id, 30)
+                } else {
+                    client.get_latest(&library_id, 30)
+                };
+                match latest {
+                    Ok(items) => {
+                        let _ = tx.send(LibEvent::ModelContent(
+                            ModelContentEvent::HomeRecentlyAddedFetched {
+                                source: crate::app::DestinationLatestSource::Emby(
+                                    library_id.clone(),
+                                ),
+                                generation,
+                                items: items
+                                    .into_iter()
+                                    .map(|item| mbv_queue::QueueItem::Emby(Box::new(item)))
+                                    .collect(),
+                            },
+                        ));
+                    }
+                    Err(error) => {
+                        tracing::warn!(
+                            name: "home.emby.recently_added_fetch_failed",
+                            target: "home",
+                            library_id = %library_id,
+                            error = %error,
+                            "Home Recently added fetch failed"
+                        );
+                    }
+                }
+            }
+        });
+    }
+
+    /// Audiobookshelf's Home fetch: every podcast library's `Newest Episodes`
+    /// shelf, bound to queue items. The shelf path builds no progress-resumed
+    /// state, so each episode starts not-started; the browse state and the
+    /// Player owner own live progress.
+    fn spawn_home_audiobookshelf_recently_added(&self) {
+        let generation = self.audiobookshelf_runtime.generation();
+        let libraries: Vec<String> = self
+            .audiobookshelf_libraries
+            .iter()
+            .filter(|library| {
+                mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseKind::from_media_type(
+                    &library.media_type,
+                ) == mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseKind::Podcast
+            })
+            .map(|library| library.id.clone())
+            .collect();
+        if libraries.is_empty() {
+            return;
+        }
+        let config = self.config.lock().unwrap().clone();
+        let tx = self.channels.lib_tx.clone();
+        std::thread::spawn(move || {
+            let Ok((client, key)) =
+                crate::app::dispatch::session::service_startup::audiobookshelf_client(&config)
+            else {
+                return;
+            };
+            for library_id in libraries {
+                let shelves = client
+                    .shelves_bounded(
+                        &key,
+                        &library_id,
+                        mbv_audiobookshelf::AudiobookshelfClient::REQUEST_HARD_BOUND,
+                    )
+                    .map(App::newest_episodes_items)
+                    .map(home_shelf_items);
+                match shelves {
+                    Ok(items) => {
+                        let _ = tx.send(LibEvent::ModelContent(
+                            ModelContentEvent::HomeRecentlyAddedFetched {
+                                source: crate::app::DestinationLatestSource::Audiobookshelf(
+                                    library_id,
+                                ),
+                                generation,
+                                items,
+                            },
+                        ));
+                    }
+                    Err(error) => {
+                        tracing::warn!(
+                            name: "home.audiobookshelf.recently_added_fetch_failed",
+                            target: "home",
+                            library_id = %library_id,
+                            error = %error,
+                            "Home Recently added fetch failed"
+                        );
+                    }
+                }
+            }
+        });
+    }
 }
+
+#[cfg(test)]
+mod tests;

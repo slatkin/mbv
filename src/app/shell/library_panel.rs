@@ -15,7 +15,6 @@ use ratatui::layout::Rect;
 use super::Model;
 use super::{PanelFocus, PanelMode, TabSelection};
 use crate::app::state::app_struct::LaunchRestore;
-use crate::app::state::playback::DestinationLatestSource;
 use mbv_components::book_content::BookContent;
 use mbv_components::library_panel::owner::LaunchSelector;
 use mbv_components::library_panel::{LibraryContentOwner, LibraryPanel};
@@ -170,12 +169,13 @@ impl Model {
                 self.app.commit_audiobookshelf_podcast_state_scope();
             }
             LaunchSelector::AudiobookshelfLatest => {
-                self.record_home_latest_acknowledgement(DestinationLatestSource::Audiobookshelf(
-                    match key {
-                        LibraryKey::Service { library_id, .. } => library_id.clone(),
-                        _ => unreachable!(),
-                    },
-                ));
+                let library_id = match key {
+                    LibraryKey::Service { library_id, .. } => library_id.clone(),
+                    _ => unreachable!(),
+                };
+                // Launch restoration on Latest fetches the full Latest list
+                // (design D4).
+                self.select_audiobookshelf_latest(&library_id);
             }
         }
         match key {

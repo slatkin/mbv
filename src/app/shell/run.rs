@@ -243,7 +243,6 @@ impl Model {
             .then(|| {
                 (
                     lib.library.id.clone(),
-                    lib.library.name.clone(),
                     level
                         .items
                         .iter()
@@ -253,12 +252,12 @@ impl Model {
                 )
             })
         });
-        if let Some((library_id, title, items)) = latest {
+        if let Some((library_id, items)) = latest {
             let items = self
                 .tv_latest_snapshots
                 .get(&library_id)
                 .map_or(items, |snapshot| snapshot.items.clone());
-            self.update_emby_latest_snapshot(&library_id, title, items);
+            self.update_emby_latest_snapshot(&library_id, items);
         }
     }
 
@@ -344,6 +343,14 @@ impl Model {
                 self.push_audiobookshelf_podcast_content();
                 self.push_audiobookshelf_book_content();
                 self.push_music_workspace_content();
+                // ABS teardown, replacement, and catalog rebuilds restructure
+                // `audiobookshelf_libraries` inside the App-side drain; evict
+                // fetched Home rows whose podcast library is gone (review P2
+                // of Unit C). Only an actual eviction re-projects Home; once
+                // the rebuild lands, the Home fetch refills the sources.
+                if self.evict_gone_home_recently_added() {
+                    self.push_home_content();
+                }
             }
             had_events |= self.drain_suspended_home_events();
             if self.drain_player_events(&mut had_events) {
@@ -431,6 +438,10 @@ impl Model {
         if self.app.drain_feed_tab_results() {
             *had_events = true;
             self.push_active_emby_library_owner_content();
+            // Feeds rows are derived from `all_entries` at Home-push time
+            // (spec `home-latest-sections`), so a feed refresh
+            // re-projects Home.
+            self.push_home_content();
         }
 
         *had_events |= self.drain_feed_add_results();

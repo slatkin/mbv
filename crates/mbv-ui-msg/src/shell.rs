@@ -11,6 +11,7 @@ use mbv_emby_model::EmbyItem;
 use mbv_queue::FeedEntry;
 
 use super::hit_regions::TvHit;
+use super::home::HomeRequest;
 use super::intents::{
     AlbumCursorKind, AudiobookshelfBookIntent, AudiobookshelfBookMove, ConfirmIntent,
     ContextMenuIntent, DaemonLostIntent, FeedsManageIntent, PodcastEpisodeIntent,
@@ -19,7 +20,7 @@ use super::intents::{
 use super::queue::QueueIntent;
 use mbv_ui_model::context_menu::ContextMenuTargets;
 use mbv_ui_model::media_list::SelectionOrigin;
-use mbv_ui_model::targets::{HomeRowTarget, MusicArtistTarget};
+use mbv_ui_model::targets::MusicArtistTarget;
 
 // TODO(migrate-tui-to-tuirealm): flesh out (mount/dismiss overlay, change
 // focus, toast) as overlay routing converts (task 5.2).
@@ -192,8 +193,7 @@ pub enum ShellRequest {
     FeedsEnqueue(Vec<FeedEntry>),
     /// A row the user single-clicked in the Feeds list. The component has
     /// already moved its own selection to the resolved row; the shell only
-    /// pulls panel focus to the Library (design.md D4/D5). Mirrors
-    /// `HomeRowClick`.
+    /// pulls panel focus to the Library. Mirrors `HomeRequest::RowClick`.
     FeedsRowClick,
     /// Commit the component-owned Multiselect choices through the legacy App
     /// action path.
@@ -207,10 +207,9 @@ pub enum ShellRequest {
     LibraryRoutesEsc,
     /// Semantic feed-management action; local form edits stay in the component.
     FeedsManageIntent(FeedsManageIntent),
-    /// Play the Home item at the component-owned flat cursor (task 3.4).
-    HomePlay(HomeRowTarget),
-    /// Enqueue the Home item at the component-owned flat cursor.
-    HomeEnqueue(HomeRowTarget),
+    /// A Home-owned request (play, enqueue, delete, toggle watched, context
+    /// menu, row click and activate).
+    Home(HomeRequest),
     /// Open a destination row context menu at an optional pointer anchor.
     ///
     /// The anchor remains a raw pointer-coordinate tuple because the shell
@@ -218,25 +217,6 @@ pub enum ShellRequest {
     /// boundary; keyboard requests use `None` and resolve placement from the
     /// freshly painted selection geometry.
     RowContextMenu(ContextMenuTargets, Option<(u16, u16)>),
-    /// Remove the Home item at the component-owned flat cursor from
-    /// Continue Watching (Delete), keeping the cw-range guard the legacy
-    /// Delete arm applied.
-    HomeDelete(HomeRowTarget),
-    /// Toggle watched state for the component-resolved Continue Watching row.
-    /// The shell resolves this stable identity and never consults a cursor.
-    HomeToggleWatched(HomeRowTarget),
-    /// A row the user single-clicked in the Home list or Library Hero overlay. The
-    /// component has already moved its own selection to the resolved row; the
-    /// shell only pulls panel focus to the Library (design.md D4/D5).
-    HomeRowClick {
-        target: HomeRowTarget,
-    },
-    /// A row the user double-clicked; `target` is the component-resolved flat
-    /// index and the shell activates it (design.md D3/D4).
-    HomeRowActivate {
-        target: HomeRowTarget,
-    },
-
     /// Request shell-owned data for a newly expanded TV tree branch. The TV
     /// owner carries its stable target; the shell resolves the Service IDs and
     /// reuses its existing detail/season fetch guards. The mounted-tree intent

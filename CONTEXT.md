@@ -301,11 +301,15 @@ One fixed alphabetical range of author surnames as a selectable pill in an Audio
 _Avoid_: author group (the bucket is a range, not one author)
 
 Home view:
-The Home destination content, with the tab labelled `Continue`. It is Continue Watching across libraries. Home has no Latest pills or rows and no Selector row or pill bar. Latest lives at each eligible destination. The section keeps its own cursor and scroll.
+The Home destination content, with the tab labelled `Continue`. It is one flat list with the group headers `Continue watching` and `Recently added`, plus the hero. The headers use the style of the TV and Feeds group headers and are not selectable. Home has no roots, branches, or collapse. It has no Latest pills or rows and no Selector row or pill bar. Latest lives at each eligible destination. The list keeps its own cursor and scroll.
 _Avoid_: home screen, dashboard, landing, Home tab label (the tab reads `Continue`)
 
+Recently added:
+The second group header of the Home view. It combines the Latest content of every Latest-bearing destination, newest first. It holds only items dated within 14 days before now, shown as one flat list with no age sub-headings. Age does not depend on the previous launch. It is data of the Home view only. A Destination Latest mode never reads it.
+_Avoid_: Home Latest, Home new content, home feed
+
 Destination Latest mode:
-The `Latest` pill and content mode at an eligible destination. Every visible Emby library except Music libraries, each Audiobookshelf podcast library, and the Feeds tab are eligible. It shows the newest additions of that destination from its own source, without Home duplicates. It follows `destination-latest-modes`.
+The `Latest` pill and content mode at an eligible destination. Every visible Emby library except Music libraries, each Audiobookshelf podcast library, and the Feeds tab are eligible. It shows the newest additions of that destination from its own source. Emby and Audiobookshelf load it lazily, only when the mode is selected and on refresh while it is selected. Feeds derives it from the entries already loaded for the Feeds tab. It follows `destination-latest-modes`.
 _Avoid_: Home Latest, Latest section (for the destination mode)
 
 Launch cutoff / launch window:

@@ -164,22 +164,29 @@ impl Model {
     /// Drain pending library events. Returns whether any event was drained.
     pub(super) fn drain_lib_events(&mut self) -> bool {
         let mut had_events = false;
+        let mut fetched_recently_added = false;
         while let Ok(ev) = self.app.channels.lib_rx.try_recv() {
             had_events = true;
             match ev {
                 LibEvent::ModelContent(ModelContentEvent::EmbyLatestSnapshotFetched {
                     library_id,
-                    title,
                     items,
                 }) => {
                     self.update_emby_latest_snapshot(
                         &library_id,
-                        title,
                         items
                             .into_iter()
                             .map(|item| mbv_queue::QueueItem::Emby(Box::new(item)))
                             .collect(),
                     );
+                }
+                LibEvent::ModelContent(ModelContentEvent::HomeRecentlyAddedFetched {
+                    source,
+                    generation,
+                    items,
+                }) => {
+                    self.accept_home_recently_added(source, generation, items);
+                    fetched_recently_added = true;
                 }
                 LibEvent::Browse(BrowseEvent::Loaded {
                     lib_idx,
@@ -199,7 +206,6 @@ impl Model {
                         .map(|lib| {
                             (
                                 lib.library.id.clone(),
-                                lib.library.name.clone(),
                                 level
                                     .items
                                     .iter()
@@ -215,8 +221,8 @@ impl Model {
                             parent_id,
                             level,
                         }));
-                    if let Some((library_id, title, items)) = latest {
-                        self.update_emby_latest_snapshot(&library_id, title, items);
+                    if let Some((library_id, items)) = latest {
+                        self.update_emby_latest_snapshot(&library_id, items);
                     }
                 }
                 // Recursive album activation used to write `Some(0)` on
@@ -265,16 +271,31 @@ impl Model {
                 }
                 ev => self.handle_inline_search_lib_event(ev),
             }
-            self.push_audiobookshelf_podcast_content();
-            // Emby browser content may have changed (5.3d.15/M2).
-            self.push_active_emby_library_owner_content();
-            // ABS book async completions (BooksFetched / BookDetailFetched)
-            // and saved-position restore arrive via lib events; re-project (5.3d).
-            self.push_audiobookshelf_book_content();
-            self.push_music_workspace_content();
-            self.push_tv_workspace_content();
+            self.reproject_drained_lib_content();
+        }
+        if fetched_recently_added {
+            // Stored `Recently added` rows only reach the Home owner through
+            // a projection, and the loop tail never re-projects Home: one
+            // push covers every acceptance in this drain.
+            self.push_home_content();
         }
         had_events
+    }
+
+    /// The per-event content tail of `drain_lib_events`: a drained lib event
+    /// may have changed any of these owners, so the drain re-projects them
+    /// once per event. Home is separate: only a fetched `Recently added`
+    /// acceptance needs a projection (see `drain_lib_events`'s own tail),
+    /// and assignment arms project themselves.
+    fn reproject_drained_lib_content(&mut self) {
+        self.push_audiobookshelf_podcast_content();
+        // Emby browser content may have changed (5.3d.15/M2).
+        self.push_active_emby_library_owner_content();
+        // ABS book async completions (BooksFetched / BookDetailFetched)
+        // and saved-position restore arrive via lib events; re-project (5.3d).
+        self.push_audiobookshelf_book_content();
+        self.push_music_workspace_content();
+        self.push_tv_workspace_content();
     }
 
     /// Drain idle-feed items and trigger the 30-minute refetch.
@@ -362,11 +383,14 @@ impl Model {
         while let Ok(ev) = self.app.ws_rx.try_recv() {
             had_events = true;
             self.app.handle_ws_event(ev);
-            // `UserDataChanged` refetches Continue Watching inside the handler.
-            self.push_home_content();
             // Emby browser content may have changed (5.3d.15/M2).
             self.push_active_emby_library_owner_content();
             self.push_music_workspace_content();
+        }
+        // `UserDataChanged` refetches Continue Watching inside the handler.
+        // Home projects once per drain, not once per event.
+        if had_events {
+            self.push_home_content();
         }
         had_events
     }

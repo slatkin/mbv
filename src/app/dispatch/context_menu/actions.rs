@@ -121,6 +121,27 @@ impl App {
                 }
                 None
             }
+            // Home mixed-Service selection actions (spec `home-latest-sections`,
+            // "Home actions resolve the row's own section and Service
+            // identity"): the first resolved item plays — replacing the queue and
+            // starting — and the rest append in display order, through the
+            // same per-item effects `HomePlay`/`HomeEnqueue` use.
+            Some(ContextAction::HomePlaySelection(items)) => {
+                let mut items = items.into_iter();
+                if let Some(first) = items.next() {
+                    self.home_play_target(first, false);
+                }
+                for item in items {
+                    self.home_enqueue_target(item, false);
+                }
+                None
+            }
+            Some(ContextAction::HomeEnqueueSelection(items)) => {
+                for item in items {
+                    self.home_enqueue_target(item, false);
+                }
+                None
+            }
             action => action,
         }
     }
@@ -369,7 +390,9 @@ impl App {
                 | ContextAction::AudiobookshelfShuffle(_)
                 | ContextAction::AudiobookshelfEnqueue(_)
                 | ContextAction::AudiobookshelfMarkPlayed(_)
-                | ContextAction::AudiobookshelfMarkUnplayed(_),
+                | ContextAction::AudiobookshelfMarkUnplayed(_)
+                | ContextAction::HomePlaySelection(_)
+                | ContextAction::HomeEnqueueSelection(_),
             ) => {}
         }
     }
@@ -539,6 +562,25 @@ impl App {
                 format!("Couldn't update play status: {e}"),
                 ToastSeverity::Error,
             ),
+        }
+    }
+
+    /// The played-state action a `Recently added` row's context menu offers
+    /// (spec `home-latest-sections`, "Home actions resolve the row's own
+    /// section and Service identity"): for each Service, the one
+    /// mark entry its destination menu builds from the item's cached state —
+    /// mark played when unfinished, mark unplayed when finished.
+    pub(in crate::app) fn toggle_recent_item_played_state(&mut self, item: &QueueItem) {
+        match item {
+            QueueItem::Emby(item) => self.toggle_watched_home_item(item),
+            QueueItem::Feed(entry) => {
+                self.set_feed_entries_played(std::slice::from_ref(entry), !entry.played);
+            }
+            QueueItem::Audiobookshelf(item) => {
+                let target = AudiobookshelfMenuTarget::for_item(item);
+                let finished = self.audiobookshelf_target_finished(&target);
+                self.start_audiobookshelf_mark(vec![target], !finished);
+            }
         }
     }
 

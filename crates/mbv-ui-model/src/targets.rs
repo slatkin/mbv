@@ -1,9 +1,24 @@
-/// Identity of one row in the Home content list.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct HomeRowTarget {
-    pub item_id: Option<String>,
-    pub source: Option<String>,
-    pub from_continue_watching: bool,
+/// One Home item row's Service-qualified identity. A `Continue` row is Emby
+/// content addressed by item id; a `Recently added` row is any Service's item
+/// addressed by its queue-item content id.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum HomeItemTarget {
+    Continue(mbv_ids::ItemId),
+    Recent(mbv_queue::QueueItemContentId),
+}
+
+impl HomeItemTarget {
+    /// Build the `Continue` target for one Emby item id.
+    #[must_use]
+    pub fn continue_item(item_id: impl Into<String>) -> Self {
+        Self::Continue(mbv_ids::ItemId::new(item_id))
+    }
+
+    /// Whether this target is a Continue Watching row (not a `Recently added` row).
+    #[must_use]
+    pub fn is_continue(&self) -> bool {
+        matches!(self, Self::Continue(_))
+    }
 }
 
 /// Stable, component-resolved identity for one focused Grouped Music artist.

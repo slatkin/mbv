@@ -241,24 +241,40 @@ fn tree_row_spans(
     };
     spans.push(pad_span(prefix_width));
     let title_ref: &str = &title;
+    // One title policy for every row, from the flat media list: a full-width
+    // bar row carries the bar foreground, as the flat list's selected-bar
+    // recolor does. The marquee runs over the same parts.
+    let parts = crate::components::media_list::media_list_title_parts(
+        title_ref,
+        None,
+        &row.semantic_state,
+        title_color,
+        full_width,
+    );
     if context.focused && row.selected {
+        let marquee_key: Cow<'_, str> = Cow::Borrowed(title_ref);
+        let borrowed: Vec<(&str, ratatui::style::Color)> = parts
+            .iter()
+            .map(|(text, color)| (text.as_str(), *color))
+            .collect();
         spans.extend(marquee_spans(
-            title_ref,
-            &[(title_ref, title_color)],
+            marquee_key.as_ref(),
+            &borrowed,
             budget,
             context.marquee_text,
             context.marquee_started_at,
             false,
         ));
     } else if row.kind != TreePaintRowKind::Spacer {
-        let mut title_style = Style::default().fg(title_color);
-        if row.kind == TreePaintRowKind::Heading {
-            title_style = title_style.add_modifier(ratatui::style::Modifier::BOLD);
-        }
-        spans.push(Span::styled(
-            mbv_ui_model::ui_util::trunc_str(title_ref, budget),
-            title_style,
+        let title_start = spans.len();
+        spans.extend(crate::components::media_list::truncated_title_spans(
+            &parts, budget,
         ));
+        if row.kind == TreePaintRowKind::Heading {
+            for span in &mut spans[title_start..] {
+                span.style = span.style.add_modifier(ratatui::style::Modifier::BOLD);
+            }
+        }
     }
     let painted = spans.iter().map(|span| span.content.width()).sum::<usize>();
     let target_width = context

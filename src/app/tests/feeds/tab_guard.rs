@@ -250,7 +250,7 @@ fn f5_on_feeds_tab_invokes_feed_refresh() {
     app.tab = TabSelection::Feeds;
     app.panel_focus = PanelFocus::Library;
 
-    app.refresh_current_view();
+    app.refresh_current_view(false);
 
     assert!(app.feed_tab.loading, "Feeds F5 must start a feed refresh");
     assert_eq!(

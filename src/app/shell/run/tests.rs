@@ -1,5 +1,6 @@
 use super::*;
 use crate::app::AudiobookshelfEvent;
+use crate::app::ModelContentEvent;
 use crate::app::SessionEvent;
 use crate::app::dispatch::session::service_startup::AudiobookshelfSetupCompletion;
 use crate::app::state::events::LibEvent;
@@ -251,7 +252,9 @@ fn drain_audiobookshelf_events_auth_rejection_needs_authentication_and_clears_cr
 /// Task 3.5: under the stub config the catalog success path builds browse for
 /// every library, routes podcast progress to the podcast map and book progress
 /// to the book map, and dispatches the per-kind library fetch: a podcast
-/// library requests shows and shelves, a book library requests books.
+/// library requests shows and a book library requests books. The destination
+/// Latest shelf is lazy (spec `destination-latest-modes`, "Destination Latest lists load lazily"): the startup
+/// catalog loop fetches no shelf.
 #[test]
 fn drain_audiobookshelf_events_catalog_success_builds_browse_and_dispatches() {
     let mut app = make_app_stub();
@@ -323,9 +326,8 @@ fn drain_audiobookshelf_events_catalog_success_builds_browse_and_dispatches() {
 
 fn assert_catalog_fetches(app: &mut App, generation: mbv_core::service_runtime::SetupGeneration) {
     let mut podcast_shows = 0;
-    let mut podcast_shelves = 0;
     let mut book_fetches = 0;
-    for event in collect_library_events(app, 3) {
+    for event in collect_library_events(app, 2) {
         match event {
             LibEvent::Audiobookshelf(AudiobookshelfEvent::ShowsFetched {
                 generation: event_generation,
@@ -335,15 +337,6 @@ fn assert_catalog_fetches(app: &mut App, generation: mbv_core::service_runtime::
                 assert_eq!(event_generation, generation);
                 assert_eq!(library_id, "pod-1");
                 podcast_shows += 1;
-            }
-            LibEvent::Audiobookshelf(AudiobookshelfEvent::ShelfFetched {
-                generation: event_generation,
-                library_id,
-                ..
-            }) => {
-                assert_eq!(event_generation, generation);
-                assert_eq!(library_id, "pod-1");
-                podcast_shelves += 1;
             }
             LibEvent::Audiobookshelf(AudiobookshelfEvent::BooksFetched {
                 generation: event_generation,
@@ -358,9 +351,13 @@ fn assert_catalog_fetches(app: &mut App, generation: mbv_core::service_runtime::
         }
     }
     assert_eq!(
-        (podcast_shows, podcast_shelves, book_fetches),
-        (1, 1, 1),
-        "a podcast library requests shows and shelves; a book library requests books"
+        (podcast_shows, book_fetches),
+        (1, 1),
+        "a podcast library requests shows and a book library requests books"
+    );
+    assert!(
+        app.channels.lib_rx.try_recv().is_err(),
+        "the startup catalog loop must not fetch the destination Latest shelf"
     );
 }
 
@@ -606,5 +603,157 @@ fn drain_resize_responses_respawns_the_worker_after_it_exits() {
             Err(std::sync::mpsc::TryRecvError::Empty)
         ),
         "the drain must respawn a live worker after the old one exited"
+    );
+}
+
+fn home_recently_added_feed_row(pub_date_secs: Option<u64>) -> mbv_queue::QueueItem {
+    mbv_queue::QueueItem::Feed(mbv_queue::FeedEntry {
+        guid: "guid".into(),
+        title: "Entry".into(),
+        enclosure_url: None,
+        link: None,
+        mime_type: None,
+        duration_ticks: None,
+        pub_date_secs,
+        feed_kind: None,
+        feed_id: None,
+        position_ticks: 0,
+        played: false,
+    })
+}
+
+/// Spec `home-latest-sections`, "Recently added loads at launch independent
+/// of destinations": an event from a retired Service
+/// generation (removed or re-setup) never reaches the store.
+#[test]
+fn home_recently_added_event_with_a_stale_service_generation_is_dropped() {
+    let mut model = Model::new(make_app_stub());
+    let stale = model.app.emby_runtime.generation();
+    model.app.emby_runtime.begin_setup();
+    model
+        .app
+        .channels
+        .lib_tx
+        .send(LibEvent::ModelContent(
+            ModelContentEvent::HomeRecentlyAddedFetched {
+                source: crate::app::DestinationLatestSource::Emby("lib".into()),
+                generation: stale,
+                items: vec![home_recently_added_feed_row(Some(0))],
+            },
+        ))
+        .expect("lib event channel");
+
+    model.drain_lib_events();
+
+    assert!(model.home_recently_added.is_empty());
+}
+
+/// Design D2: the shell filters each source's items to the 14-day cutoff
+/// when they are stored; in-window items are kept, items older than the
+/// cutoff and items without a valid date are omitted.
+#[test]
+fn home_recently_added_store_keeps_only_items_inside_the_14_day_cutoff() {
+    let mut model = Model::new(make_app_stub());
+    let current = model.app.home_latest_launch_window.current;
+    let day = 24 * 60 * 60;
+    model
+        .app
+        .channels
+        .lib_tx
+        .send(LibEvent::ModelContent(
+            ModelContentEvent::HomeRecentlyAddedFetched {
+                source: crate::app::DestinationLatestSource::Emby("lib".into()),
+                generation: model.app.emby_runtime.generation(),
+                items: vec![
+                    home_recently_added_feed_row(Some(current - day)),
+                    home_recently_added_feed_row(Some(current - 20 * day)),
+                    home_recently_added_feed_row(None),
+                ],
+            },
+        ))
+        .expect("lib event channel");
+
+    model.drain_lib_events();
+
+    let rows = model
+        .home_recently_added
+        .get(&crate::app::DestinationLatestSource::Emby("lib".into()))
+        .expect("live generation stores under its source");
+    assert_eq!(rows.len(), 1);
+}
+
+/// Review P1 (Unit C): a fetched Home Recently
+/// added event reaches the Home owner from its own drain -- the owner keeps
+/// the rows, and no unrelated projection has to run first.
+#[test]
+fn a_fetched_home_recently_added_event_reaches_the_home_owner_on_its_own_drain() {
+    let mut model = Model::new(make_app_stub());
+    let current = model.app.home_latest_launch_window.current;
+    model
+        .app
+        .channels
+        .lib_tx
+        .send(LibEvent::ModelContent(
+            ModelContentEvent::HomeRecentlyAddedFetched {
+                source: crate::app::DestinationLatestSource::Emby("lib".into()),
+                generation: model.app.emby_runtime.generation(),
+                items: vec![home_recently_added_feed_row(Some(current - 24 * 60 * 60))],
+            },
+        ))
+        .expect("lib event channel");
+
+    model.drain_lib_events();
+
+    assert!(
+        !model
+            .home_owner_shared()
+            .expect("Home destination owner mounted")
+            .recent_rows()
+            .is_empty()
+    );
+}
+
+/// Review P2 (Unit C): an assignment carrying a
+/// rebuilt library set that dropped the source's library evicts its stored
+/// rows, so they leave the Home owner instead of showing as stale.
+#[test]
+fn a_dropped_librarys_recently_added_rows_leave_the_home_owner() {
+    let mut model = Model::new(make_app_stub());
+    let current = model.app.home_latest_launch_window.current;
+    model
+        .app
+        .channels
+        .lib_tx
+        .send(LibEvent::ModelContent(
+            ModelContentEvent::HomeRecentlyAddedFetched {
+                source: crate::app::DestinationLatestSource::Emby("lib".into()),
+                generation: model.app.emby_runtime.generation(),
+                items: vec![home_recently_added_feed_row(Some(current - 24 * 60 * 60))],
+            },
+        ))
+        .expect("lib event channel");
+    model.drain_lib_events();
+    assert_eq!(
+        model
+            .home_owner_shared()
+            .expect("Home destination owner mounted")
+            .recent_rows()
+            .len(),
+        1,
+        "the fetched rows reached the owner before the library dropped"
+    );
+
+    model.app.libs.clear();
+    model.assign_home_content(crate::app::state::playback::HomeContent {
+        continue_items: Vec::new(),
+        loading: false,
+    });
+
+    assert!(
+        model
+            .home_owner_shared()
+            .expect("Home destination owner mounted")
+            .recent_rows()
+            .is_empty()
     );
 }

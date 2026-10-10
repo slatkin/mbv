@@ -210,7 +210,7 @@ fn audiobookshelf_f5_stages_a_replacement_without_clearing_the_catalog() {
     app.panel_focus = PanelFocus::Library;
     app.tab = TabSelection::AudiobookshelfLibrary(0);
 
-    app.refresh_current_view();
+    app.refresh_current_view(false);
 
     let state = &app.audiobookshelf_browse[0];
     assert_eq!(
@@ -251,7 +251,7 @@ fn audiobookshelf_f5_commits_the_staged_replacement_on_completion() {
     app.panel_focus = PanelFocus::Library;
     app.tab = TabSelection::AudiobookshelfLibrary(0);
 
-    app.refresh_current_view();
+    app.refresh_current_view(false);
     let request = app.audiobookshelf_browse[0].catalog_request;
     app.handle_lib_event(LibEvent::Audiobookshelf(
         AudiobookshelfEvent::ShowsFetched {

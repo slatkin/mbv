@@ -1,5 +1,5 @@
 use mbv_emby_model::EmbyItem;
-use mbv_queue::{FeedEntry, QueueSlotId};
+use mbv_queue::{FeedEntry, QueueItem, QueueSlotId};
 
 #[derive(Clone, Debug)]
 pub enum BulkRemoveTarget {
@@ -9,7 +9,7 @@ pub enum BulkRemoveTarget {
 use ratatui::layout::Rect;
 
 use crate::media_list::SelectionOrigin;
-use crate::targets::HomeRowTarget;
+use crate::targets::HomeItemTarget;
 
 /// Values resolved when a context menu opens. The overlay never re-resolves
 /// these values after focus changes.
@@ -22,7 +22,7 @@ pub struct ContextActionSnapshot<T> {
 /// Destination-qualified targets supplied by row context-menu requests.
 #[derive(Clone, Debug, PartialEq)]
 pub enum ContextMenuTargets {
-    Home(Vec<HomeRowTarget>),
+    Home(Vec<HomeItemTarget>),
     Emby(Vec<EmbyItem>),
     Queue(Vec<QueueSlotId>),
     Feeds(Vec<FeedEntry>),
@@ -42,6 +42,24 @@ pub enum AudiobookshelfMenuTarget {
     Book {
         library_item_id: String,
     },
+}
+
+impl AudiobookshelfMenuTarget {
+    /// The menu target for one Audiobookshelf queue item's provider-native
+    /// identity. Shared by the destination menu builders and the Home
+    /// `Recently added` paths so the episode/book mapping lives in one place.
+    #[must_use]
+    pub fn for_item(item: &mbv_queue::AudiobookshelfItem) -> Self {
+        match item {
+            mbv_queue::AudiobookshelfItem::Episode(episode) => Self::Episode {
+                library_item_id: episode.library_item_id.clone(),
+                episode_id: episode.episode_id.clone(),
+            },
+            mbv_queue::AudiobookshelfItem::Book(book) => Self::Book {
+                library_item_id: book.library_item_id.clone(),
+            },
+        }
+    }
 }
 use unicode_width::UnicodeWidthStr;
 
@@ -93,6 +111,14 @@ pub enum ContextAction {
     AudiobookshelfEnqueue(Vec<AudiobookshelfMenuTarget>),
     AudiobookshelfMarkPlayed(Vec<AudiobookshelfMenuTarget>),
     AudiobookshelfMarkUnplayed(Vec<AudiobookshelfMenuTarget>),
+    /// Home mixed-Service selection play (spec `home-latest-sections`,
+    /// "Home actions resolve the row's own section and Service identity"): a
+    /// multi-selection spanning Services offers only Play and Add to Queue,
+    /// and both carry the shell-resolved queue items in display order.
+    HomePlaySelection(Vec<QueueItem>),
+    /// Home mixed-Service selection enqueue (same terms as
+    /// [`ContextAction::HomePlaySelection`]).
+    HomeEnqueueSelection(Vec<QueueItem>),
 }
 
 #[derive(Clone, Debug)]
@@ -110,7 +136,12 @@ pub fn is_bulk_action(action: Option<&ContextAction>) -> bool {
             | ContextAction::EnqueueSelection(_)
             | ContextAction::RemoveSelection(_)
             | ContextAction::MarkPlayedSelection(_)
-            | ContextAction::MarkUnplayedSelection(_),
+            | ContextAction::MarkUnplayedSelection(_)
+            // A Home mixed-Service action is always a multi-selection
+            // action (spec `home-latest-sections`); it is never built
+            // for one row.
+            | ContextAction::HomePlaySelection(_)
+            | ContextAction::HomeEnqueueSelection(_),
         ) => true,
         // A Feeds or Audiobookshelf action is bulk when it carries more
         // than one entry (standard-media-context-menus design D2).
