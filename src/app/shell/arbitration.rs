@@ -399,6 +399,14 @@ impl Model {
                 self.mount_help();
                 false
             }
+            // The podcast Latest pill is component-local state; the refresh
+            // carries the owner's pill answer so the destination shelf is
+            // fetched only while Latest is selected (design D4).
+            Command::RefreshCurrentView => {
+                let podcast_latest_selected = self.abs_podcast_latest_selected();
+                self.app.refresh_current_view(podcast_latest_selected);
+                false
+            }
             _ => self.app.dispatch(command),
         }
     }

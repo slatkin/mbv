@@ -216,7 +216,7 @@ impl App {
         self.start_audiobookshelf_podcast_fan_out(index);
     }
 
-    pub(in crate::app) fn audiobookshelf_refresh(&mut self) {
+    pub(in crate::app) fn audiobookshelf_refresh(&mut self, podcast_latest_selected: bool) {
         let Some(index) = self.tab.audiobookshelf_index() else {
             return;
         };
@@ -264,13 +264,16 @@ impl App {
             0,
             self.channels.lib_tx.clone(),
         );
-        // Latest shelf behavior is unchanged.
-        crate::app::dispatch::session::service_startup::start_audiobookshelf_shelves(
-            self.config.lock().unwrap().clone(),
-            generation,
-            library_id,
-            self.channels.lib_tx.clone(),
-        );
+        // Destination Latest is lazy (design D4): the full Latest shelf is
+        // fetched only while the podcast Latest pill is selected.
+        if podcast_latest_selected {
+            crate::app::dispatch::session::service_startup::start_audiobookshelf_shelves(
+                self.config.lock().unwrap().clone(),
+                generation,
+                library_id,
+                self.channels.lib_tx.clone(),
+            );
+        }
         // The bounded fan-out consumes the armed refresh marks, re-requesting
         // the required shows while their old episodes stay published.
         self.start_audiobookshelf_podcast_fan_out(index);

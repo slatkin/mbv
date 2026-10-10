@@ -170,12 +170,16 @@ impl Model {
                 self.app.commit_audiobookshelf_podcast_state_scope();
             }
             LaunchSelector::AudiobookshelfLatest => {
+                let library_id = match key {
+                    LibraryKey::Service { library_id, .. } => library_id.clone(),
+                    _ => unreachable!(),
+                };
                 self.record_home_latest_acknowledgement(DestinationLatestSource::Audiobookshelf(
-                    match key {
-                        LibraryKey::Service { library_id, .. } => library_id.clone(),
-                        _ => unreachable!(),
-                    },
+                    library_id.clone(),
                 ));
+                // Launch restoration on Latest fetches the full Latest list
+                // (design D4).
+                self.spawn_audiobookshelf_latest_shelves(&library_id);
             }
         }
         match key {

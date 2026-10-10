@@ -81,7 +81,7 @@ fn refresh_current_view_targets_the_selected_emby_library_only() {
     app.list_pane_width = Some(64);
     app.replace_saved_library_position(0, mbv_queue::LibraryPosition::default());
 
-    app.refresh_current_view();
+    app.refresh_current_view(false);
 
     assert!(
         app.libs[0].nav_stack[0].loading,
@@ -122,7 +122,7 @@ fn refresh_current_view_with_queue_focus_refreshes_the_selected_destination() {
     app.tab = TabSelection::EmbyLibrary(0);
     app.panel_focus = PanelFocus::Queue;
 
-    app.refresh_current_view();
+    app.refresh_current_view(false);
 
     assert!(
         app.libs[0].nav_stack[0].loading,

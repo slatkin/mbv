@@ -95,8 +95,10 @@ impl App {
     /// the Library panel is painted. A stale selected library index normalizes
     /// to Home and stops without a fetch. This is a data refresh only: it never
     /// resets presentation state, writes preferences, or clears a saved
-    /// library position (#745).
-    pub(in crate::app) fn refresh_current_view(&mut self) {
+    /// library position (#745). `podcast_latest_selected` is the active
+    /// podcast owner's pill answer: the destination Latest shelf is fetched
+    /// only while that pill is selected (design D4).
+    pub(in crate::app) fn refresh_current_view(&mut self, podcast_latest_selected: bool) {
         self.force_clear = true;
         if self.normalize_stale_browse_destination() {
             return;
@@ -130,7 +132,7 @@ impl App {
                     Some(mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseKind::Book) => {
                         self.audiobookshelf_book_refresh();
                     }
-                    _ => self.audiobookshelf_refresh(),
+                    _ => self.audiobookshelf_refresh(podcast_latest_selected),
                 }
             }
             TabSelection::Feeds => self.refresh_feeds(),

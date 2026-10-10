@@ -237,12 +237,19 @@ impl super::super::Model {
                 self.push_audiobookshelf_podcast_content();
             }
             ShellRequest::AudiobookshelfPodcastLatestSelected => {
-                if let Some(index) = self.app.tab.audiobookshelf_index()
-                    && let Some(library) = self.app.audiobookshelf_libraries.get(index)
-                {
+                let library_id = self
+                    .app
+                    .tab
+                    .audiobookshelf_index()
+                    .and_then(|index| self.app.audiobookshelf_libraries.get(index))
+                    .map(|library| library.id.clone());
+                if let Some(library_id) = library_id {
                     self.record_home_latest_acknowledgement(
-                        crate::app::DestinationLatestSource::Audiobookshelf(library.id.clone()),
+                        crate::app::DestinationLatestSource::Audiobookshelf(library_id.clone()),
                     );
+                    // Selecting the Latest pill fetches the full Latest
+                    // list (design D4).
+                    self.spawn_audiobookshelf_latest_shelves(&library_id);
                 }
                 self.push_audiobookshelf_podcast_content();
             }

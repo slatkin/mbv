@@ -363,10 +363,10 @@ impl App {
         &self,
         generation: mbv_core::service_runtime::SetupGeneration,
     ) {
-        // Home fetches each podcast library's Recently added rows at this
-        // very point (design D3 of `home-recently-added-tree`). Row 7.1
-        // removes the destination shelf fetch below once Home's data owns
-        // the marker.
+        // Home fetches each podcast library's `Recently added` rows here
+        // (design D3 of `home-recently-added-tree`); the destination Latest
+        // shelf is lazy (design D4) and fetches only while its Latest pill
+        // is selected.
         self.spawn_home_recently_added(mbv_queue::ServiceKind::Audiobookshelf);
         for (index, library) in self.audiobookshelf_libraries.iter().enumerate() {
             let book_kind =
@@ -381,12 +381,6 @@ impl App {
                         self.audiobookshelf_browse[index].catalog_request,
                         library.id.clone(),
                         0,
-                        self.channels.lib_tx.clone(),
-                    );
-                    crate::app::dispatch::session::service_startup::start_audiobookshelf_shelves(
-                        self.config.lock().unwrap().clone(),
-                        generation,
-                        library.id.clone(),
                         self.channels.lib_tx.clone(),
                     );
                 }

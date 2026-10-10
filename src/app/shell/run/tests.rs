@@ -252,7 +252,9 @@ fn drain_audiobookshelf_events_auth_rejection_needs_authentication_and_clears_cr
 /// Task 3.5: under the stub config the catalog success path builds browse for
 /// every library, routes podcast progress to the podcast map and book progress
 /// to the book map, and dispatches the per-kind library fetch: a podcast
-/// library requests shows and shelves, a book library requests books.
+/// library requests shows and a book library requests books. The destination
+/// Latest shelf is lazy (design D4 of `home-recently-added-tree`): the startup
+/// catalog loop fetches no shelf.
 #[test]
 fn drain_audiobookshelf_events_catalog_success_builds_browse_and_dispatches() {
     let mut app = make_app_stub();
@@ -324,9 +326,8 @@ fn drain_audiobookshelf_events_catalog_success_builds_browse_and_dispatches() {
 
 fn assert_catalog_fetches(app: &mut App, generation: mbv_core::service_runtime::SetupGeneration) {
     let mut podcast_shows = 0;
-    let mut podcast_shelves = 0;
     let mut book_fetches = 0;
-    for event in collect_library_events(app, 3) {
+    for event in collect_library_events(app, 2) {
         match event {
             LibEvent::Audiobookshelf(AudiobookshelfEvent::ShowsFetched {
                 generation: event_generation,
@@ -336,15 +337,6 @@ fn assert_catalog_fetches(app: &mut App, generation: mbv_core::service_runtime::
                 assert_eq!(event_generation, generation);
                 assert_eq!(library_id, "pod-1");
                 podcast_shows += 1;
-            }
-            LibEvent::Audiobookshelf(AudiobookshelfEvent::ShelfFetched {
-                generation: event_generation,
-                library_id,
-                ..
-            }) => {
-                assert_eq!(event_generation, generation);
-                assert_eq!(library_id, "pod-1");
-                podcast_shelves += 1;
             }
             LibEvent::Audiobookshelf(AudiobookshelfEvent::BooksFetched {
                 generation: event_generation,
@@ -359,9 +351,13 @@ fn assert_catalog_fetches(app: &mut App, generation: mbv_core::service_runtime::
         }
     }
     assert_eq!(
-        (podcast_shows, podcast_shelves, book_fetches),
-        (1, 1, 1),
-        "a podcast library requests shows and shelves; a book library requests books"
+        (podcast_shows, book_fetches),
+        (1, 1),
+        "a podcast library requests shows and a book library requests books"
+    );
+    assert!(
+        app.channels.lib_rx.try_recv().is_err(),
+        "the startup catalog loop must not fetch the destination Latest shelf"
     );
 }
 

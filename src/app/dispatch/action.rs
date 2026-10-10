@@ -200,12 +200,18 @@ impl App {
             | Command::SetLibraryTab(_)
             | Command::ForceClear
             | Command::RequestClearQueue
-            | Command::RefreshCurrentView
             | Command::ToggleSettings
             | Command::OpenSessions
             | Command::OpenPlaylists
             | Command::OpenSearch
             | Command::OpenHelp => self.dispatch_navigation_command(command),
+            // Model handles this shell-only command before delegating the
+            // remaining commands to App::dispatch: the podcast Latest pill
+            // is component-local state, so the refresh carries the owner's
+            // pill answer for the lazy destination shelf fetch (design D4).
+            Command::RefreshCurrentView => {
+                unreachable!("RefreshCurrentView is dispatched by Model")
+            }
             Command::FocusPanel(_) | Command::CyclePanelMode | Command::TogglePinnedWidth => {
                 self.dispatch_panel_command(command);
             }
@@ -260,7 +266,6 @@ impl App {
             }
             Command::ForceClear => self.force_clear = true,
             Command::RequestClearQueue => self.request_clear_queue(),
-            Command::RefreshCurrentView => self.refresh_current_view(),
             Command::ToggleSettings => {
                 self.request_sidebar_toggle(mbv_ui_model::overlay::SidebarId::Settings);
             }
