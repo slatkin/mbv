@@ -6,6 +6,16 @@ use crate::app::{ModelContentEvent, PlaylistEvent};
 use mbv_emby_model::EmbyItem;
 use std::collections::HashMap;
 
+/// Whether one Emby library's Latest items belong in the Home `Recently added`
+/// root (design D3 of `home-recently-added-tree`): the destination's own
+/// Latest rules minus Music and Playlists, with TV included (it fetches
+/// through `get_latest_episodes`). Only `tvshows` uses the episode query; the
+/// `tvshows | playlists | music` guard in `spawn_destination_latest_snapshot`
+/// is the separate library-snapshot guard and stays unchanged.
+fn home_emby_latest_eligible(collection_type: &str) -> bool {
+    !matches!(collection_type, "music" | "playlists")
+}
+
 impl App {
     pub(in crate::app) fn refresh_lib(&mut self, lib_idx: usize) {
         // Defensive bounds check: the dispatch front door normalizes a stale
