@@ -107,11 +107,8 @@ impl TvContent {
                 if !self.carrier.claims_current_point(at) {
                     return None;
                 }
-                self.carrier.delegate_operation(
-                    MediaListSurfaceInput::Wheel { at, delta }
-                        .into_operation(None)
-                        .expect("wheel converts without a target"),
-                );
+                self.carrier
+                    .delegate_operation(MediaListOperation::Scroll(delta));
                 // Return a framework-visible claim after mutating local
                 // state; dropping the message would let the framework's
                 // mutation be discarded by the mouse fold.

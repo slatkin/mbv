@@ -356,20 +356,15 @@ impl PlaylistsComponent {
                 // The painted row index selects the row's stable target
                 // (design D6): one carrier row per `EmbyItem`, in slice
                 // order.
-                let rows = if open {
-                    self.open_list.rows()
-                } else {
-                    self.list.rows()
-                };
-                let Some(MediaListRow::Item { target, .. }) = rows.get(index) else {
-                    return None;
-                };
-                let target = target.clone();
                 let list = if open {
                     &mut self.open_list
                 } else {
                     &mut self.list
                 };
+                let Some(MediaListRow::Item { target, .. }) = list.rows().get(index) else {
+                    return None;
+                };
+                let target = target.clone();
                 list.delegate_operation(MediaListOperation::Select(target));
                 let playlists_target = if open {
                     PlaylistsTarget::Row(index)

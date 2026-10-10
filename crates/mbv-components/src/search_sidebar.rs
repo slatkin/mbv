@@ -309,12 +309,14 @@ impl SearchSidebarComponent {
     /// The stable target of the painted row a gesture points at
     /// (`wheel-scrolls-viewport` 5.4a, design D6). The carrier carries one
     /// row per filtered result in `filtered_results()` order, so the painted
-    /// row index maps to that result's item id.
+    /// row index maps to that row's target (the result's item id) without
+    /// re-filtering the results.
     fn resolve_gesture_row(&self, at: Position) -> Option<String> {
         let &index = self.hit_results.resolve(at)?;
-        let filtered = self.sidebar.filtered_results();
-        let item = filtered.get(index)?;
-        Some(item.id.clone())
+        let Some(MediaListRow::Item { target, .. }) = self.results.rows().get(index) else {
+            return None;
+        };
+        Some(target.clone())
     }
 
     /// Sweep the debounce deadline using the shell's wall clock. Called by
