@@ -10,13 +10,13 @@
 
 ## 2. Remove the tree secondary title (design D7)
 
-- [ ] 2.1 Delete `TreeNode.secondary`, `with_secondary`, its search-text use, the tree painter's split-title branch, and the painter test from row 2.2 of the archived change. Fix every literal the compiler flags. Verify: `cargo check --workspace --all-targets`, and `cargo nextest run -p mbv-render -p mbv-components` with Music and TV tree tests green.
+- [x] 2.1 Delete `TreeNode.secondary`, `with_secondary`, its search-text use, the tree painter's split-title branch, and the painter test from row 2.2 of the archived change. Fix every literal the compiler flags. Verify: `cargo check --workspace --all-targets`, and `cargo nextest run -p mbv-render -p mbv-components` with Music and TV tree tests green.
 
 ## 3. Standards findings (design D8)
 
 - [ ] 3.1 Replace the `_` arm in `handle_home_request` (`src/app/shell/home.rs`) with the remaining `ShellRequest` variants, or a documented no-op arm per AGENTS.md. Verify: `cargo check -p mbv`.
-- [ ] 3.2 Move the inline test module in `src/app/dispatch/library/load.rs` to `src/app/dispatch/library/load/tests.rs`. Verify: `cargo nextest run -p mbv -E 'test(load)'` passes with the same tests.
-- [ ] 3.3 In the Home files this change touches (`home_content.rs`, `home_content/*.rs`, `src/app/shell/home*.rs`, their tests), retarget comments that cite the archived change's design numbers or task rows to `openspec/specs/home-latest-sections` or `destination-latest-modes`. Verify: `rg "design D[0-9]|row [0-9]\.[0-9]" crates/mbv-components/src/home_content* src/app/shell/home*` returns nothing.
+- [x] 3.2 Move the inline test module in `src/app/dispatch/library/load.rs` to `src/app/dispatch/library/load/tests.rs`. Verify: `cargo nextest run -p mbv -E 'test(load)'` passes with the same tests.
+- [x] 3.3 In the Home files this change touches (`home_content.rs`, `home_content/*.rs`, `src/app/shell/home*.rs`, their tests), retarget comments that cite the archived change's design numbers or task rows to `openspec/specs/home-latest-sections` or `destination-latest-modes`. Verify: `rg "design D[0-9]|row [0-9]\.[0-9]" crates/mbv-components/src/home_content* src/app/shell/home*` returns nothing.
 
 ## 4. Docs and gates
 
