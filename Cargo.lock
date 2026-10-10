@@ -2025,6 +2025,7 @@ dependencies = [
 name = "mbv-config"
 version = "0.24.0"
 dependencies = [
+ "libc",
  "mbv-keybinds",
  "mbv-queue",
  "rstest",

@@ -3,7 +3,8 @@
 
 use super::{cache_dir, config_dir, is_system_instance, state_dir};
 use std::env;
-use std::path::PathBuf;
+use std::io;
+use std::path::{Path, PathBuf};
 
 pub fn data_dir_system_or_local() -> PathBuf {
     if is_system_instance() {
@@ -129,7 +130,135 @@ pub(super) fn runtime_dir() -> String {
     if is_system_instance() {
         return "/run/mbv".to_string();
     }
-    env::var("XDG_RUNTIME_DIR").unwrap_or_else(|_| "/tmp".to_string())
+    if let Ok(dir) = env::var("XDG_RUNTIME_DIR") {
+        return dir;
+    }
+    // SAFETY: `getuid` is a plain, marker syscall with no preconditions.
+    let uid = unsafe { libc::getuid() };
+    format!("/tmp/mbv-{uid}")
+}
+
+/// The owner-lock file in the runtime directory (harden-owner-process-
+/// boundaries D4). One rule for where the Owner-process lock lives, shared
+/// by single-instance resolution, daemon restart, and `mbv -q`.
+#[must_use]
+pub fn owner_lock_path() -> PathBuf {
+    PathBuf::from(runtime_dir()).join("mbv.lock")
+}
+
+/// Why a per-user runtime directory is refused.
+#[derive(Debug)]
+pub enum RuntimeDirErrorReason {
+    /// The path is a symlink: never follow a planted symlink.
+    Symlink,
+    /// The path exists but is not a directory.
+    NotADirectory,
+    /// The directory is owned by another user.
+    ForeignOwner { owner_uid: u32 },
+    /// The directory grants group or other access (`mode & 0o077` nonzero).
+    Permissive,
+    /// The directory could not be created or inspected.
+    Io(io::Error),
+}
+
+/// Why a fallback runtime directory could not be made private to this user.
+/// It names the directory and the reason (harden-owner-process-boundaries
+/// D4); the entry point that calls `ensure_runtime_dir` prints it and exits
+/// non-zero.
+#[derive(Debug)]
+pub struct RuntimeDirError {
+    /// The runtime directory that was refused or failed.
+    pub path: PathBuf,
+    /// Why it cannot be used.
+    pub reason: RuntimeDirErrorReason,
+}
+
+impl std::fmt::Display for RuntimeDirError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "runtime directory {}: ", self.path.display())?;
+        match &self.reason {
+            RuntimeDirErrorReason::Symlink => f.write_str("it is a symlink"),
+            RuntimeDirErrorReason::NotADirectory => f.write_str("it is not a directory"),
+            RuntimeDirErrorReason::ForeignOwner { owner_uid } => {
+                write!(f, "it is owned by uid {owner_uid}")
+            }
+            RuntimeDirErrorReason::Permissive => f.write_str("it grants group or other access"),
+            RuntimeDirErrorReason::Io(error) => write!(f, "{error}"),
+        }
+    }
+}
+
+impl std::error::Error for RuntimeDirError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match &self.reason {
+            RuntimeDirErrorReason::Io(error) => Some(error),
+            _ => None,
+        }
+    }
+}
+
+/// Guarantee that the fallback runtime directory is private to this user
+/// (harden-owner-process-boundaries D4). Nothing to do when the session
+/// provides `$XDG_RUNTIME_DIR` or the instance is a system instance. The
+/// fallback `/tmp/mbv-<uid>` is created owner-only when missing. An existing
+/// directory is checked, never repaired: a symlink, a plain file, another
+/// user's directory, or one granting group or other access is refused
+/// before any lock or socket is taken.
+pub fn ensure_runtime_dir() -> Result<(), RuntimeDirError> {
+    if is_system_instance() || env::var_os("XDG_RUNTIME_DIR").is_some() {
+        return Ok(());
+    }
+    let path = PathBuf::from(runtime_dir());
+    match std::fs::create_dir(&path) {
+        Ok(()) => {
+            use std::os::unix::fs::PermissionsExt;
+            // A fresh directory carries the process umask; the created
+            // directory must be owner-only regardless of the umask's
+            // group/other bits. A failed chmod is caught by the check.
+            let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o700));
+        }
+        // An existing directory is fine; its shape is checked below.
+        Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {}
+        Err(error) => {
+            return Err(RuntimeDirError {
+                path,
+                reason: RuntimeDirErrorReason::Io(error),
+            });
+        }
+    }
+    // SAFETY: `getuid` is a plain, marker syscall with no preconditions.
+    check_private_dir(&path, unsafe { libc::getuid() })
+}
+
+/// Check (via `lstat`, which never follows a planted symlink) that `path`
+/// is a plain directory owned by `uid` with no group or other access.
+/// `uid` is a parameter so a test can cover the foreign-owner case without
+/// a second account (harden-owner-process-boundaries D4).
+fn check_private_dir(path: &Path, uid: u32) -> Result<(), RuntimeDirError> {
+    use std::os::unix::fs::MetadataExt;
+    let metadata = std::fs::symlink_metadata(path).map_err(|error| RuntimeDirError {
+        path: path.to_path_buf(),
+        reason: RuntimeDirErrorReason::Io(error),
+    })?;
+    let refused = |reason| RuntimeDirError {
+        path: path.to_path_buf(),
+        reason,
+    };
+    if metadata.file_type().is_symlink() {
+        return Err(refused(RuntimeDirErrorReason::Symlink));
+    }
+    if !metadata.is_dir() {
+        return Err(refused(RuntimeDirErrorReason::NotADirectory));
+    }
+    if metadata.uid() != uid {
+        return Err(refused(RuntimeDirErrorReason::ForeignOwner {
+            owner_uid: metadata.uid(),
+        }));
+    }
+    if metadata.mode() & 0o077 != 0 {
+        return Err(refused(RuntimeDirErrorReason::Permissive));
+    }
+    Ok(())
 }
 
 #[must_use]
@@ -155,4 +284,117 @@ pub fn token_cache_path() -> PathBuf {
 #[must_use]
 pub fn config_path() -> PathBuf {
     config_dir().join("config.toml")
+}
+
+#[cfg(test)]
+impl RuntimeDirErrorReason {
+    /// Stable short names for one table row's expected refusal reason.
+    fn test_name(&self) -> &'static str {
+        match self {
+            Self::Symlink => "symlink",
+            Self::NotADirectory => "not-a-directory",
+            Self::ForeignOwner { .. } => "foreign-owner",
+            Self::Permissive => "permissive",
+            Self::Io(_) => "io",
+        }
+    }
+}
+
+#[cfg(test)]
+mod check_private_dir_tests {
+    use super::check_private_dir;
+    use rstest::rstest;
+    use std::os::unix::fs::PermissionsExt;
+    use std::path::PathBuf;
+
+    /// The on-disk fixture one table row builds, materialized inside a
+    /// unique temp root so parallel tests never collide.
+    enum Kind {
+        /// Our own 0700 directory.
+        PrivateDir,
+        /// Our own directory left group/other-accessible.
+        PermissiveDir,
+        /// A symlink planted at the check path that points at our own
+        /// 0700 directory: the symlink is refused, the target is fine.
+        SymlinkToPrivateDir,
+        /// A plain file at the check path.
+        RegularFile,
+        /// Our own 0700 directory re-checked as if by another user: the
+        /// expected uid is a `check_private_dir` parameter, so the
+        /// foreign-owner row needs no second account.
+        PrivateDirAnotherUid,
+    }
+
+    struct Fixture {
+        path: PathBuf,
+        uid: u32,
+        root: PathBuf,
+    }
+
+    fn make_private_dir(root: &std::path::Path, name: &str, mode: u32) -> PathBuf {
+        let dir = root.join(name);
+        std::fs::create_dir(&dir).unwrap();
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(mode)).unwrap();
+        dir
+    }
+
+    fn this_uid() -> u32 {
+        // SAFETY: `getuid` is a plain, marker syscall with no preconditions.
+        unsafe { libc::getuid() }
+    }
+
+    impl Fixture {
+        fn materialize(kind: &Kind) -> Self {
+            let root =
+                std::env::temp_dir().join(format!("mbv-runtime-dir-{}", uuid::Uuid::new_v4()));
+            std::fs::create_dir(&root).unwrap();
+            let (path, uid) = match kind {
+                Kind::PrivateDir => (make_private_dir(&root, "dir", 0o700), this_uid()),
+                Kind::PermissiveDir => (make_private_dir(&root, "dir", 0o755), this_uid()),
+                Kind::SymlinkToPrivateDir => {
+                    let dir = make_private_dir(&root, "dir", 0o700);
+                    let link = root.join("entry");
+                    std::os::unix::fs::symlink(&dir, &link).unwrap();
+                    (link, this_uid())
+                }
+                Kind::RegularFile => {
+                    let file = root.join("file");
+                    std::fs::write(&file, b"payload").unwrap();
+                    (file, this_uid())
+                }
+                Kind::PrivateDirAnotherUid => {
+                    (make_private_dir(&root, "dir", 0o700), this_uid() + 1)
+                }
+            };
+            Self { path, uid, root }
+        }
+    }
+
+    impl Drop for Fixture {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.root);
+        }
+    }
+
+    #[rstest]
+    #[case::own_private_dir(Kind::PrivateDir, "ok")]
+    #[case::group_or_other_access(Kind::PermissiveDir, "permissive")]
+    #[case::planted_symlink(Kind::SymlinkToPrivateDir, "symlink")]
+    #[case::regular_file(Kind::RegularFile, "not-a-directory")]
+    #[case::foreign_owner(Kind::PrivateDirAnotherUid, "foreign-owner")]
+    fn check_private_dir_refusal_reasons(#[case] kind: Kind, #[case] expected: &'static str) {
+        let fixture = Fixture::materialize(&kind);
+        let (path, uid) = (fixture.path.clone(), fixture.uid);
+        let outcome = check_private_dir(&path, uid);
+        match (outcome, expected) {
+            (Ok(()), "ok") => {}
+            (Err(error), name) => {
+                assert_eq!(error.reason.test_name(), name);
+                assert_eq!(error.path, path);
+            }
+            (Ok(()), name) => {
+                panic!("expected {name}, and check_private_dir passed the check")
+            }
+        }
+    }
 }

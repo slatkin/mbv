@@ -17,6 +17,7 @@ test = []
 workspace = true
 
 [dependencies]
+libc.workspace = true
 mbv-keybinds = { path = "../mbv-keybinds" }
 mbv-queue = { path = "../mbv-queue" }
 serde = { workspace = true, features = ["derive"] }
