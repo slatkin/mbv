@@ -3,7 +3,9 @@
 //! [`WideMediaList`] is the fixed-row presentation over one [`MediaList`]
 //! owner. Painting lives in `mbv_render::components::media_list`.
 
-use crate::list::{Cursored, MarkSelection, MarkSelectionState, Row, RowFlow, Viewported};
+use crate::list::{
+    Cursored, MarkSelection, MarkSelectionState, Row, RowFlow, ViewportAnchor, Viewported,
+};
 use mbv_ui_msg::SelectionSummary;
 use std::time::Instant;
 
@@ -64,6 +66,8 @@ pub struct MediaList<Target> {
     title_reveal: MediaListTitleReveal,
     marquee_text: String,
     marquee_started_at: Instant,
+    /// Whether the viewport follows the selection or was freely scrolled.
+    viewport_anchor: ViewportAnchor,
 }
 
 impl<Target> Default for MediaList<Target> {
@@ -88,6 +92,7 @@ impl<Target> MediaList<Target> {
             title_reveal: MediaListTitleReveal::Always,
             marquee_text: String::new(),
             marquee_started_at: Instant::now(),
+            viewport_anchor: ViewportAnchor::default(),
         }
     }
 
@@ -475,6 +480,14 @@ impl<Target: Clone + Eq> Viewported<Target> for MediaList<Target> {
 
     fn set_viewport_offset(&mut self, offset: usize) {
         self.set_scroll(offset);
+    }
+
+    fn viewport_anchor(&self) -> ViewportAnchor {
+        self.viewport_anchor
+    }
+
+    fn set_viewport_anchor(&mut self, anchor: ViewportAnchor) {
+        self.viewport_anchor = anchor;
     }
 
     /// A grouped flat list keeps the selection's group heading or spacer

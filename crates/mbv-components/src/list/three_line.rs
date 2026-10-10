@@ -1,4 +1,6 @@
-use super::{Cursored, PaintRetained, PaintRetainedState, Row, RowFlow, Viewported};
+use super::{
+    Cursored, PaintRetained, PaintRetainedState, Row, RowFlow, ViewportAnchor, Viewported,
+};
 use mbv_render::components::three_line_flat_list::ThreeLineItem;
 use ratatui::Frame;
 use ratatui::layout::{Position, Rect};
@@ -13,6 +15,7 @@ pub struct ThreeLineFlatList<Target> {
     items: Vec<ThreeLineItem<Target>>,
     selected: Option<Target>,
     offset: usize,
+    anchor: ViewportAnchor,
     gap: u16,
     focused: bool,
     paint: PaintRetainedState<Target>,
@@ -25,6 +28,7 @@ impl<Target> ThreeLineFlatList<Target> {
             items: Vec::new(),
             selected: None,
             offset: 0,
+            anchor: ViewportAnchor::default(),
             gap,
             focused: false,
             paint: PaintRetainedState::new(),
@@ -127,6 +131,12 @@ impl<Target: Clone + Eq> Viewported<Target> for ThreeLineFlatList<Target> {
     }
     fn set_viewport_offset(&mut self, offset: usize) {
         self.offset = offset;
+    }
+    fn viewport_anchor(&self) -> ViewportAnchor {
+        self.anchor
+    }
+    fn set_viewport_anchor(&mut self, anchor: ViewportAnchor) {
+        self.anchor = anchor;
     }
 }
 

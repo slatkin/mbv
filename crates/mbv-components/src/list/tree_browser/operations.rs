@@ -7,7 +7,7 @@ use ratatui::layout::Rect;
 
 use crate::list::{
     AggregateMarkState, Cursored, MarkSelection, MarkSelectionState, PagingPolicy, Row, RowFlow,
-    Viewported,
+    ViewportAnchor, Viewported,
 };
 // The full-width bar is paint policy, so its predicate lives with the shared
 // tree painter and is imported through the app-level render seam.
@@ -45,6 +45,14 @@ impl<Target: Clone + Eq + Hash> Viewported<Target> for TreeState<'_, Target> {
 
     fn set_viewport_offset(&mut self, offset: usize) {
         self.browser.viewport_offset = offset;
+    }
+
+    fn viewport_anchor(&self) -> ViewportAnchor {
+        self.browser.viewport_anchor
+    }
+
+    fn set_viewport_anchor(&mut self, anchor: ViewportAnchor) {
+        self.browser.viewport_anchor = anchor;
     }
 }
 
