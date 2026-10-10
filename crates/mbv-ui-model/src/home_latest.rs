@@ -3,6 +3,11 @@ use mbv_queue::QueueItem;
 #[cfg(test)]
 mod tests;
 
+/// The `Recently added` root's shared maximum age: items older than 14 days
+/// before the current launch are cut, in both the shell's fetch filter
+/// (design D2/D3) and the projection's branch assignment.
+pub const RECENTLY_ADDED_CUTOFF_SECS: u64 = 14 * 24 * 60 * 60;
+
 /// The launch-relative interval used by destination Latest markers.
 /// `previous` is intentionally immutable and separate from exit-only UI state.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -35,4 +40,42 @@ pub fn timestamp_in_launch_window(timestamp: Option<u64>, window: HomeLatestLaun
 #[must_use]
 pub fn is_new_in_launch_window(item: &QueueItem, window: HomeLatestLaunchWindow) -> bool {
     timestamp_in_launch_window(provider_timestamp_secs(item), window)
+}
+
+/// An age branch under the Home `Recently added` root. The branches do not
+/// overlap: `New` wins whenever the item is dated after the previous client
+/// launch, then the remaining in-window items split by their age.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RecentAge {
+    /// Dated after the previous client launch (`New`).
+    New,
+    /// Remaining items up to 7 days old (`Last 7 days`).
+    Last7Days,
+    /// Remaining items up to the 14-day cutoff (`Last 14 days`).
+    Last14Days,
+}
+
+/// Assign the `Recently added` age branch for one provider timestamp.
+///
+/// Branch assignment follows the spec's three branches: `New` holds items
+/// dated after the previous client launch, `Last 7 days` holds the remaining
+/// items up to 7 days old, and `Last 14 days` holds the remaining items; an
+/// item older than `RECENTLY_ADDED_CUTOFF_SECS` before the current launch
+/// gets `None`, as does a missing timestamp. A first launch (`previous` is
+/// `None`) never yields `New`.
+#[must_use]
+pub fn recent_age(timestamp: Option<u64>, window: HomeLatestLaunchWindow) -> Option<RecentAge> {
+    let timestamp = timestamp?;
+    if timestamp < window.current.saturating_sub(RECENTLY_ADDED_CUTOFF_SECS) {
+        return None;
+    }
+    if window.previous.is_some_and(|previous| timestamp > previous) {
+        return Some(RecentAge::New);
+    }
+    let last_7_days_cutoff = window.current.saturating_sub(7 * 24 * 60 * 60);
+    if timestamp >= last_7_days_cutoff {
+        Some(RecentAge::Last7Days)
+    } else {
+        RecentAge::Last14Days.into()
+    }
 }
