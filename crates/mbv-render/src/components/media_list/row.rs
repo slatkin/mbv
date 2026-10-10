@@ -322,23 +322,31 @@ fn secondary_title_color(semantic_state: &MediaSemanticState) -> Color {
 /// shared with the tree painter so the two row surfaces cannot drift: the
 /// primary part paints the playback-context role, the secondary the
 /// playback-title role, and a played row mutes only the secondary. The
-/// parts paint with one separating space and truncate as a unit within
-/// `budget`. `title_color` is the single-part context colour the caller
-/// resolved; a split row replaces it with the canonical split roles.
-pub(crate) fn media_list_title_spans(
+/// parts paint with one separating space. `title_color` is the single-part
+/// context colour the caller resolved; a split row replaces it with the
+/// canonical split roles. `selection_bar` carries the selected-bar
+/// foreground on every part of a full-width bar row, as the flat list's
+/// selected-bar recolor does over its painted title.
+pub(crate) fn media_list_title_parts(
     primary: &str,
     secondary: Option<&str>,
     semantic_state: &MediaSemanticState,
     title_color: Color,
-    budget: usize,
-) -> Vec<Span<'static>> {
-    let parts = title_parts(
+    selection_bar: bool,
+) -> Vec<(String, Color)> {
+    let mut parts = title_parts(
         primary,
         secondary,
         title_color,
         secondary_title_color(semantic_state),
     );
-    truncated_title_spans(&parts, budget)
+    if selection_bar {
+        let fg = selected_row_foreground();
+        for part in &mut parts {
+            part.1 = fg;
+        }
+    }
+    parts
 }
 
 fn title_parts(
@@ -409,7 +417,10 @@ fn marquee_spans_for(
     )
 }
 
-fn truncated_title_spans(painted: &[(String, Color)], title_width: usize) -> Vec<Span<'static>> {
+pub(crate) fn truncated_title_spans(
+    painted: &[(String, Color)],
+    title_width: usize,
+) -> Vec<Span<'static>> {
     // Whole-row truncation: the title parts (context,
     // separator, item title) are one string cut as a unit —
     // full parts while they fit, then the part that crosses

@@ -127,3 +127,30 @@ fn a_played_split_node_mutes_only_its_secondary() {
         );
     }
 }
+
+/// A full-width split row — the focused selected row and a directly marked
+/// row — carries the selection-bar foreground on every part (primary,
+/// separator, secondary) exactly as the flat media list's selected-bar
+/// recolor does, and both parts stay painted (marquee or not).
+#[test]
+fn a_full_width_split_row_carries_the_bar_on_both_parts() {
+    let mut selected = split_node("Show", "Episode", 0, MediaSemanticState::Ordinary);
+    selected.selected = true;
+    let mut marked = split_node("Show", "Episode", 0, MediaSemanticState::Ordinary);
+    marked.marked = true;
+    let buffer = draw_rows(&[selected, marked]);
+    let bar = palette::Role::SelectedRowFg.color();
+
+    assert_eq!(buffer[(0, 0)].symbol(), "S");
+    assert_eq!(buffer[(5, 0)].symbol(), "E");
+    assert_eq!(
+        buffer[(5, 0)].style().fg,
+        Some(bar),
+        "the selected split row paints its secondary in the bar foreground"
+    );
+    assert_eq!(
+        buffer[(11, 1)].style().fg,
+        Some(bar),
+        "the marked split row paints its secondary in the bar foreground"
+    );
+}
