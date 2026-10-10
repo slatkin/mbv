@@ -7,33 +7,37 @@ Defines Home's tab content as a Continue Watching destination: Home presents Con
 ## Requirements
 
 ### Requirement: Home is presented as Continue with no Selector row
-The Home destination's tab SHALL be labelled `Continue`. It presents one tree list with two collapsible roots, `Continue watching` and `Recently added`, plus the hero. It has no Latest selector, no Selector row, and no pill bar. A root with no items is omitted. When both roots are empty, the list shows its empty placeholder. A previously saved Home Latest selection falls back to the Home tree on launch. Missing Recently added content does not hide the Continue tab or prevent Emby Continue Watching from loading.
+The Home destination's tab SHALL be labelled `Continue`. It presents one flat list with group headers, plus the hero. The headers are `Continue watching` and `Recently added`, and under `Recently added`, the age headers `New` and `Recent`. Headers use the same style as the group headers of the TV and Feeds lists. Headers are not selectable. Home has no tree, no expand or collapse, no Latest selector, no Selector row, and no pill bar. A header with no items beneath it is omitted. When there are no items at all, the list shows its empty placeholder. A previously saved Home Latest selection falls back to the first Home item on launch. Missing Recently added content does not hide the Continue tab or prevent Emby Continue Watching from loading.
 
 #### Scenario: Home after migration
 - **WHEN** the user opens the Continue tab with eligible libraries and feed subscriptions
-- **THEN** the tab is labelled `Continue`, shows the `Continue watching` and `Recently added` roots, and has no Latest pills, Selector row, or pill bar
+- **THEN** the tab is labelled `Continue`, shows the `Continue watching` header over its items and the `Recently added` header over its age groups, and has no Latest pills, Selector row, pill bar, or tree indentation
 
 #### Scenario: Legacy Home selection
 - **WHEN** the saved launch location names a Home Latest section
-- **THEN** the Continue tab opens on the Home tree without failing or selecting another destination
+- **THEN** the Continue tab opens on its first item without failing or selecting another destination
 
 #### Scenario: Only one root has items
 - **WHEN** Emby is unavailable and Feeds has entries from the last 14 days
-- **THEN** Home shows only the `Recently added` root and no empty `Continue watching` root
+- **THEN** Home shows only the `Recently added` header with its age groups and no empty `Continue watching` header
+
+#### Scenario: Cursor skips headers
+- **WHEN** the user moves the cursor down past the last `Continue watching` item
+- **THEN** the cursor lands on the first item under `Recently added`, not on a header
 
 ### Requirement: Continue watching holds at most ten items
-The `Continue watching` root SHALL list at most 10 Emby resumable items, in the order Emby returns them.
+The `Continue watching` group SHALL list at most 10 Emby resumable items, in the order Emby returns them.
 
 #### Scenario: More than ten resumable items
 - **WHEN** Emby has 15 resumable items
 - **THEN** `Continue watching` lists the first 10
 
 ### Requirement: Recently added combines every Latest-bearing destination
-The `Recently added` root SHALL combine items from every destination that offers a `Latest` pill. Each source SHALL use that destination's own Latest rules. The root SHALL interleave items from all sources newest first by provider added or published date. An item without a valid date SHALL be omitted. A destination with no Latest pill, such as an Emby Music library or an Audiobookshelf book library, SHALL contribute nothing.
+The `Recently added` group SHALL combine items from every destination that offers a `Latest` pill. Each source SHALL use that destination's own Latest rules. The group SHALL interleave items from all sources newest first by provider added or published date, inside each age group. An item without a valid date SHALL be omitted. A destination with no Latest pill, such as an Emby Music library or an Audiobookshelf book library, SHALL contribute nothing.
 
 #### Scenario: Items from three Services interleave
-- **WHEN** an Emby movie was added two days ago, a podcast episode published one day ago, and a feed entry published three days ago
-- **THEN** `Recently added` lists the podcast episode, then the movie, then the feed entry
+- **WHEN** an Emby movie was added three days ago, a podcast episode published four days ago, and a feed entry published five days ago
+- **THEN** `Recent` lists the movie, then the podcast episode, then the feed entry
 
 #### Scenario: Ineligible library contributes nothing
 - **WHEN** an Emby Music library received an album yesterday
@@ -43,21 +47,6 @@ The `Recently added` root SHALL combine items from every destination that offers
 - **WHEN** a TV library has a newly added episode that the user already played
 - **THEN** that episode does not appear under `Recently added`, as it does not appear in that library's Latest
 
-### Requirement: Recently added is limited to fourteen days and grouped by age
-`Recently added` SHALL hold only items dated within 14 days before the current client launch, or later. It SHALL group them into child branches that do not overlap, in this order: `New`, `Last 7 days`, `Last 14 days`. `New` holds items dated after the previous client launch. `Last 7 days` holds the remaining items up to 7 days old. `Last 14 days` holds the remaining items. An empty branch SHALL be omitted. On the first launch, which has no previous launch, there SHALL be no `New` branch.
-
-#### Scenario: Branch assignment
-- **WHEN** the previous launch was 2 days ago and items are dated 1, 4, 10, and 20 days ago
-- **THEN** the 1-day item is under `New`, the 4-day item under `Last 7 days`, the 10-day item under `Last 14 days`, and the 20-day item is absent
-
-#### Scenario: Previous launch older than fourteen days
-- **WHEN** the previous launch was 30 days ago
-- **THEN** `New` holds every item from the last 14 days and `Last 7 days` and `Last 14 days` are omitted
-
-#### Scenario: First launch
-- **WHEN** mbv has no recorded previous launch
-- **THEN** `Recently added` shows only `Last 7 days` and `Last 14 days`
-
 ### Requirement: Recently added rows show date and container context
 Each `Recently added` item row SHALL show its provider date in the canonical right gutter. It SHALL show its container context and title in the shared split title-parts format. Feed entries SHALL use the configured subscription display name when one is available. These are the same facts the row shows on its destination's Latest list.
 
@@ -65,23 +54,12 @@ Each `Recently added` item row SHALL show its provider date in the canonical rig
 - **WHEN** a TV episode added on 9 October appears under `Recently added`
 - **THEN** its row shows the show name as context, the episode title, and `Oct 09` in the gutter
 
-### Requirement: Home branches collapse and items act
-Every Home root and age branch SHALL be selectable and expandable, and SHALL start expanded at launch. Activating a root or branch SHALL toggle its expansion. Activating an item SHALL play it. Collapse state SHALL last only for the current run. Marking a root or branch SHALL mark the items beneath it.
-
-#### Scenario: Collapse a branch
-- **WHEN** the user activates the expanded `Last 14 days` branch
-- **THEN** its items are hidden and the branch stays selected
-
-#### Scenario: Mark a branch and enqueue
-- **WHEN** the user marks the `New` branch and enqueues the selection
-- **THEN** every item under `New` is added to the queue in display order
-
 ### Requirement: Home actions resolve the row's own section and Service identity
-Every Home action SHALL address the selected row by its section and its Service-qualified identity. The same item SHALL be able to appear under both roots, and each occurrence SHALL be separately selectable. A `Recently added` row's play, enqueue, and played-state actions and its single-row context menu SHALL behave as the same item's row on its destination's Latest list. Remove from Continue Watching SHALL apply only to `Continue watching` rows.
+Every Home action SHALL address the selected row by its section and its Service-qualified identity. The same item SHALL be able to appear under both `Continue watching` and `Recently added`, and each occurrence SHALL be separately selectable. A `Recently added` row's play, enqueue, and played-state actions and its single-row context menu SHALL behave as the same item's row on its destination's Latest list. Remove from Continue Watching SHALL apply only to `Continue watching` rows. Activating an item SHALL play it. Marking items SHALL work as in other flat lists, and acting on the marks SHALL use display order.
 
 #### Scenario: Same item in both roots
 - **WHEN** an in-progress episode is also newly added
-- **THEN** it appears under both roots, and selecting one occurrence does not select the other
+- **THEN** it appears under both `Continue watching` and `Recently added`, and selecting one occurrence does not select the other
 
 #### Scenario: Podcast row context menu
 - **WHEN** the user opens the context menu on a podcast episode under `Recently added`
@@ -95,6 +73,10 @@ Every Home action SHALL address the selected row by its section and its Service-
 - **WHEN** a multi-selection holds an Emby movie and a feed entry
 - **THEN** the context menu offers Play and Add to Queue only
 
+#### Scenario: Marked items act in display order
+- **WHEN** the user marks two items under `New` and enqueues the selection
+- **THEN** both items are added to the queue in the order the list shows them
+
 ### Requirement: Recently added loads at launch independent of destinations
 Home SHALL load each Service's `Recently added` items when that Service becomes ready and on Home refresh. This SHALL not require visiting any destination or loading its full Latest list. Each Service's items SHALL appear when they arrive. A failing or absent Service SHALL contribute nothing without blocking the others. Arriving content SHALL keep the selected row when it is still present.
 
@@ -107,8 +89,23 @@ Home SHALL load each Service's `Recently added` items when that Service becomes 
 - **THEN** the same item stays selected
 
 ### Requirement: Home restoration lands on the first item
-On launch, Home SHALL select the first item row of the tree, not a root or branch row. It SHALL NOT restore a previously selected row.
+On launch, Home SHALL select the first item row of the list, not a header. It SHALL NOT restore a previously selected row.
 
 #### Scenario: Restart on Home
 - **WHEN** mbv restarts with Home as the restored tab and Continue Watching has items
 - **THEN** the first `Continue watching` item is selected
+
+### Requirement: Recently added is grouped by age with the Feeds rule
+`Recently added` SHALL group its items by their age now, with the same rule as the Feeds list. An item 0 or 1 days old SHALL be under `New`. An item 2 to 13 days old SHALL be under `Recent`. An item 14 days old or older SHALL NOT be shown. The groups do not overlap and appear in this order: `New`, `Recent`. An empty group header SHALL be omitted. Age SHALL NOT depend on the previous client launch.
+
+#### Scenario: Group assignment
+- **WHEN** items are dated 1, 4, 10, and 20 days ago
+- **THEN** the 1-day item is under `New`, the 4-day and 10-day items are under `Recent`, and the 20-day item is absent
+
+#### Scenario: First launch
+- **WHEN** mbv has no recorded previous launch and an item was added yesterday
+- **THEN** that item is under `New`
+
+#### Scenario: Only New has items
+- **WHEN** every item is 0 or 1 days old
+- **THEN** `Recently added` shows the `New` header and no `Recent` header
