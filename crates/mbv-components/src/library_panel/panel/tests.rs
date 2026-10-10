@@ -47,6 +47,11 @@ struct FixtureOwner {
     carrier: MediaListCarrier<String>,
     log: Rc<RefCell<FixtureLog>>,
     link: bool,
+    overview: Option<String>,
+    /// The owner's own prose-viewport offset, moved only by its
+    /// `hero_scroll` (design D7: no `ViewportAnchor` for document
+    /// viewports).
+    hero_scroll: usize,
 }
 
 impl FixtureOwner {
@@ -57,11 +62,21 @@ impl FixtureOwner {
             carrier,
             log,
             link: false,
+            overview: None,
+            hero_scroll: 0,
         }
     }
 
     fn with_link(mut self) -> Self {
         self.link = true;
+        self
+    }
+
+    /// Give the fixture's hero an overview text; with one long enough to
+    /// wrap beyond the overview box's viewport, the box paints and can
+    /// scroll.
+    fn with_overview(mut self, overview: impl Into<String>) -> Self {
+        self.overview = Some(overview.into());
         self
     }
 
@@ -73,6 +88,25 @@ impl FixtureOwner {
 }
 
 impl LibraryContentOwner for FixtureOwner {
+    fn hero_scroll_offset(&self) -> usize {
+        self.hero_scroll
+    }
+
+    // The owner owns its own offset; the panel only delivers the recognized
+    // delta and the box's own clamp (same shape as the real destinations).
+    fn hero_scroll(&mut self, delta: i16, max_offset: usize) -> bool {
+        let step = usize::from(delta.unsigned_abs());
+        let next = if delta < 0 {
+            self.hero_scroll.saturating_sub(step)
+        } else {
+            self.hero_scroll.saturating_add(step)
+        }
+        .min(max_offset);
+        let changed = next != self.hero_scroll;
+        self.hero_scroll = next;
+        changed
+    }
+
     fn reset_presentation(&mut self) {
         self.reset_presentation();
     }
@@ -110,7 +144,7 @@ impl LibraryContentOwner for FixtureOwner {
                         image: mbv_render::components::tv_wide::HeroImageState::None,
                     },
                 },
-                overview: None,
+                overview: self.overview.clone(),
                 overview_title: None,
                 credits: None,
                 workspace: None,

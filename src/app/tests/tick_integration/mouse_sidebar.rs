@@ -145,7 +145,11 @@ fn tick_help_sidebar_scrolls_immediately_after_open_without_click() {
         .as_any_mut()
         .downcast_mut::<HelpComponent>()
         .unwrap();
-    assert_eq!(help.test_scroll(), 1);
+    assert_eq!(
+        help.test_scroll(),
+        3,
+        "one wheel step = three lines (wheel-scrolls-viewport 5.5, design D1)"
+    );
 }
 
 fn mounted_library_cursor(harness: &mut TickHarness) -> usize {

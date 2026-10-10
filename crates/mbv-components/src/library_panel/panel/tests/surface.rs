@@ -209,3 +209,70 @@ fn unpainted_frame_after_a_painted_one_arms_nothing() {
     );
     assert!(panel.test_split_gap().is_none());
 }
+
+/// The Wide hero pane's overview box is a prose viewport with no selection
+/// (design D7): a recognized wheel inside the painted box moves the owner's
+/// own offset one full gesture step (`delta` ±3); a wheel inside the hero
+/// pane but outside the box is the owner's delegated input, never a box
+/// scroll. Contract: mouse-input "Wheel behavior is verified for each
+/// scrollable surface" (task 5.5).
+#[test]
+fn overview_wheel_steps_inside_the_painted_box_and_not_outside() {
+    let log = Rc::new(RefCell::new(FixtureLog::default()));
+    let mut panel = LibraryPanel::new();
+    panel.set_active(Some(LibraryKey::Home));
+    panel.insert_owner(
+        LibraryKey::Home,
+        Box::new(FixtureOwner::new(Rc::clone(&log)).with_overview("word ".repeat(400))),
+    );
+    let _ = draw_panel(&mut panel);
+    let geometry = panel
+        .test_wide_geometry()
+        .expect("a Wide frame paints its geometry");
+    let overview_box = geometry
+        .overview_box
+        .expect("a long overview paints its box");
+    assert!(
+        geometry.overview_content_length > geometry.overview_viewport,
+        "the fixture overview wraps beyond the box viewport"
+    );
+    let owner_hero_scroll =
+        |panel: &mut LibraryPanel| fixture_owner_mut(panel, &LibraryKey::Home).hero_scroll;
+
+    let inside = panel.on(&mouse_event(
+        MouseEventKind::ScrollDown,
+        overview_box.x,
+        overview_box.y,
+    ));
+    assert!(matches!(
+        inside,
+        Some(Msg::TerminalEvent(
+            mbv_ui_msg::TerminalObserverEvent::MouseClaimed
+        ))
+    ));
+    assert_eq!(
+        owner_hero_scroll(&mut panel),
+        3,
+        "one wheel step = three lines"
+    );
+
+    // The hero pane's header area (above the overview box) is not the box.
+    let hero = geometry.hero;
+    let outside = panel.on(&mouse_event(
+        MouseEventKind::ScrollDown,
+        overview_box.x,
+        hero.y,
+    ));
+    assert_eq!(
+        outside,
+        Some(Msg::TerminalEvent(
+            mbv_ui_msg::TerminalObserverEvent::MouseClaimed
+        )),
+        "the hero pane still receives its delegated input"
+    );
+    assert_eq!(
+        owner_hero_scroll(&mut panel),
+        3,
+        "a wheel outside the overview box does not scroll it"
+    );
+}

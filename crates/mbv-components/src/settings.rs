@@ -376,7 +376,8 @@ impl SettingsComponent {
     /// `HitRegions` (D6). Behaviour unchanged from the ad-hoc handler: a
     /// click outside the panel dismisses, a click on a cursor-activatable
     /// row selects and activates it (the Enter/Space equivalent), and the
-    /// focused overlay's wheel scrolls by one document line per throttled step.
+    /// focused overlay's wheel scrolls the document by one step (three
+    /// document lines; wheel-scrolls-viewport D1, design.md D7).
     fn handle_mouse(&mut self, mouse: MouseEvent) -> Option<Msg> {
         if matches!(mouse.kind, MouseEventKind::Moved) {
             return None;
