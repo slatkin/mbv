@@ -18,6 +18,11 @@ impl Model {
             ) => self.home_context_menu_request(targets, anchor),
             ShellRequest::HomeDelete(targets) => self.home_delete_request(targets),
             ShellRequest::HomeToggleWatched(targets) => self.home_toggle_watched_request(targets),
+            // Documented no-op: `handle_shell_request` and
+            // `handle_row_context_menu_request` in `messages.rs` forward only the
+            // four Home variants and Home-target `RowContextMenu` here. Any other
+            // `ShellRequest` belongs to another owner, and listing all ~95 of
+            // them breaks the crate's `too_many_lines` limit.
             _ => {}
         }
     }
@@ -58,8 +63,7 @@ impl Model {
         }
     }
 
-    /// The multi-selection Home context menu (design D7 of
-    /// `home-recently-added-tree`): an all-Emby selection — Continue rows,
+    /// The multi-selection Home context menu (`openspec/specs/home-latest-sections`): an all-Emby selection — Continue rows,
     /// `Recently added` rows, or both — keeps the Emby multi menu, with
     /// Continue rows the only Remove targets (Remove is Continue-only);
     /// any non-Emby row makes the selection span Services, and that menu
@@ -107,8 +111,7 @@ impl Model {
         );
     }
 
-    /// The single-row Home context menu (design D7 of
-    /// `home-recently-added-tree`): a Continue row keeps today's Continue
+    /// The single-row Home context menu (`openspec/specs/home-latest-sections`): a Continue row keeps today's Continue
     /// Watching menu; a `Recently added` row opens its Service's destination
     /// menu — the same entries the row offers on that Service's Latest list.
     /// An absent or unresolved target opens nothing.
@@ -124,7 +127,7 @@ impl Model {
             return;
         };
         if target.is_continue() {
-            // A Continue row is always Emby content (design D1).
+            // A Continue row is always Emby content (`openspec/specs/home-latest-sections`).
             let item = match item {
                 QueueItem::Emby(item) => Some(*item),
                 QueueItem::Feed(_) | QueueItem::Audiobookshelf(_) => None,
@@ -166,7 +169,7 @@ impl Model {
                         self.app.remove_from_continue_watching(&item);
                     }
                 }
-                // Design D7 of `home-recently-added-tree`: Delete is a
+                // `openspec/specs/home-latest-sections`: Delete is a
                 // documented no-op on a `Recently added` row; it never
                 // removes from Continue Watching.
                 HomeItemTarget::Recent(_) => {}
@@ -216,8 +219,7 @@ impl Model {
     }
 
     /// The merged, newest-first `Recently added` rows, built at push time
-    /// from the per-source store plus Feeds (design D2 of
-    /// `home-recently-added-tree`). Feeds has no store entry: its rows derive
+    /// from the per-source store plus Feeds (`openspec/specs/home-latest-sections`). Feeds has no store entry: its rows derive
     /// from `all_entries`, filtered to the same 14-day cutoff, with the
     /// subscription name resolved by the shell. A merged row without a valid
     /// date has no age branch, so it can never appear.
@@ -368,7 +370,7 @@ mod tests {
             .expect("ISO-8601 formatting always succeeds")
     }
 
-    /// Row 4.4 (`home-recently-added-tree`): `push_home_content` sends the
+    /// (`openspec/specs/home-latest-sections`) `push_home_content` sends the
     /// merged `Recently added` projection to the Home owner — Emby and
     /// Audiobookshelf fetch events plus feed entries, interleaved newest
     /// first by provider date, with feed entry names resolved from the

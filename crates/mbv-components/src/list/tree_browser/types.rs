@@ -46,10 +46,6 @@ pub struct TreeNode<Target> {
     pub target: Target,
     pub parent: Option<Target>,
     pub title: String,
-    /// Optional secondary title part of a split node (e.g. an episode
-    /// title). The shared tree painter paints it with the flat media
-    /// list's split-row role policy.
-    pub secondary: Option<String>,
     pub search_text: String,
     pub title_role: TreeTitleRole,
     pub trailing: Option<TreeTrailing>,
@@ -72,7 +68,6 @@ impl<Target> TreeNode<Target> {
             target,
             parent,
             title: title.into(),
-            secondary: None,
             search_text: search_text.into(),
             title_role: TreeTitleRole::Standard,
             trailing: None,
@@ -85,16 +80,6 @@ impl<Target> TreeNode<Target> {
     #[must_use]
     pub fn with_trailing(mut self, trailing: impl Into<String>) -> Self {
         self.trailing = Some(TreeTrailing::new(trailing));
-        self
-    }
-
-    /// Adds the secondary title part of a split node and folds it into the
-    /// filter match text, so a split node is searchable by either part.
-    #[must_use]
-    pub fn with_secondary(mut self, secondary: impl Into<String>) -> Self {
-        let secondary = secondary.into();
-        self.search_text = format!("{} {}", self.search_text, secondary);
-        self.secondary = Some(secondary);
         self
     }
 

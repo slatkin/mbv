@@ -137,18 +137,7 @@ fn render_tree_browser_row(
         .trailing
         .as_deref()
         .map_or(0, tree_metadata_gutter_width);
-    // A split node reserves one column between the title and its
-    // secondary part, as the flat media list's title budget does.
-    let separator_reserve = usize::from(
-        row.kind == TreePaintRowKind::Node
-            && row
-                .secondary
-                .as_deref()
-                .is_some_and(|text| !text.is_empty()),
-    );
-    let budget = context
-        .content_width
-        .saturating_sub(prefix_width + gutter + separator_reserve);
+    let budget = context.content_width.saturating_sub(prefix_width + gutter);
     let title_color = if full_width {
         palette::Role::SelectedRowFg.color()
     } else if row.kind == TreePaintRowKind::Heading {
@@ -252,26 +241,18 @@ fn tree_row_spans(
     };
     spans.push(pad_span(prefix_width));
     let title_ref: &str = &title;
-    // One title policy for every row, from the flat media list: a split
-    // node paints the playback-context primary and playback-title secondary
-    // (a played row muting only the secondary), and a full-width bar row
-    // carries the bar foreground on every part, as the flat list's
-    // selected-bar recolor does. The marquee runs over the same parts.
-    let split_secondary = row.secondary.as_deref().filter(|text| !text.is_empty());
+    // One title policy for every row, from the flat media list: a full-width
+    // bar row carries the bar foreground, as the flat list's selected-bar
+    // recolor does. The marquee runs over the same parts.
     let parts = crate::components::media_list::media_list_title_parts(
         title_ref,
-        split_secondary,
+        None,
         &row.semantic_state,
         title_color,
         full_width,
     );
     if context.focused && row.selected {
-        // The flat list keys its marquee clock on the row's full split
-        // title text, so a selected split node keys on both parts.
-        let marquee_key: Cow<'_, str> = match split_secondary {
-            Some(sec) => Cow::Owned(format!("{title_ref} {sec}")),
-            None => Cow::Borrowed(title_ref),
-        };
+        let marquee_key: Cow<'_, str> = Cow::Borrowed(title_ref);
         let borrowed: Vec<(&str, ratatui::style::Color)> = parts
             .iter()
             .map(|(text, color)| (text.as_str(), *color))
@@ -370,10 +351,6 @@ pub enum TreePaintRowKind {
 pub struct TreePaintRow {
     pub kind: TreePaintRowKind,
     pub title: String,
-    /// Optional secondary part of a split node (e.g. an episode title).
-    /// Painted after `title` with the flat media list's split-row role
-    /// policy, replacing the depth-colour fallback.
-    pub secondary: Option<String>,
     pub title_role: TreeTitleRole,
     pub trailing: Option<String>,
     pub depth: usize,

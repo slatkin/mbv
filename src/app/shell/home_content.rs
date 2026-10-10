@@ -23,7 +23,7 @@ impl Model {
         self.home_content = content;
         // A bootstrap or refresh may carry a rebuilt library set that dropped
         // a previously fetched source's library; evict it before projecting
-        // (review P2 of Unit C, `home-recently-added-tree`).
+        // (see `openspec/specs/home-latest-sections`).
         self.evict_gone_home_recently_added();
         self.push_home_content();
     }
@@ -108,7 +108,7 @@ impl Model {
         self.push_home_content();
     }
 
-    /// Accepts one fetched library's Home Recently added items (design D3):
+    /// Accepts one fetched library's Home Recently added items (`openspec/specs/home-latest-sections`):
     /// the stale-generation drop matches the `ShelfFetched` App arm — a
     /// completion from a removed or re-setup Service never reaches the
     /// store — and the live-generation items are stored under their source
@@ -133,7 +133,7 @@ impl Model {
         }
     }
 
-    /// Stores one fetched library's Home Recently added items (design D3):
+    /// Stores one fetched library's Home Recently added items (`openspec/specs/home-latest-sections`):
     /// filtered to the 14-day cutoff on arrival, keyed by the source. An
     /// item without a valid date gets no age branch and is omitted.
     pub(in crate::app) fn store_home_recently_added(
@@ -162,7 +162,7 @@ impl Model {
         // `Continue` is Emby-only, so it resolves through the shell-owned
         // Continue Watching snapshot. `Recent` looks up one row by content id
         // in the stored sources and the Feeds entries, without building the
-        // merged list (design D7 of `home-recently-added-tree`).
+        // merged list (`openspec/specs/home-latest-sections`).
         match target {
             mbv_ui_model::targets::HomeItemTarget::Continue(item_id) => self
                 .home_content
@@ -265,7 +265,7 @@ impl Model {
     }
 
     /// Whether one destination's Latest surface carries the Iris
-    /// new-content marker (design D5 of `home-recently-added-tree`): any
+    /// new-content marker (`openspec/specs/destination-latest-modes`): any
     /// item in that source's Home `Recently added` rows — the per-source
     /// store, or the derived Feeds rows — dated inside the frozen launch
     /// window, while the source is not acknowledged. The marker is

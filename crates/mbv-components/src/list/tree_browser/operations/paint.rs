@@ -50,7 +50,6 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
                     rows.push(TreePaintRow {
                         kind,
                         title,
-                        secondary: None,
                         title_role: TreeTitleRole::Standard,
                         trailing: None,
                         depth: 0,
@@ -96,7 +95,6 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
             rows.push(TreePaintRow {
                 kind: TreePaintRowKind::Node,
                 title: entry.node.title.clone(),
-                secondary: entry.node.secondary.clone(),
                 title_role: entry.node.title_role,
                 trailing: entry
                     .node

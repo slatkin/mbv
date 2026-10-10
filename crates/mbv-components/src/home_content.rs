@@ -9,7 +9,7 @@
 //!
 //! The selected item's hero comes from the shared `hero_content` producer for
 //! its content type (Emby, ABS or Feeds), and its image state is the shell
-//! projection's (task 5.10): this owner never fetches.
+//! projection's: this owner never fetches.
 
 use tuirealm::event::KeyEvent;
 
@@ -33,7 +33,7 @@ mod launch_state;
 #[cfg(test)]
 mod tests;
 
-/// The embedded content owner for the Home destination (design D2). Plain
+/// The embedded content owner for the Home destination (`openspec/specs/home-latest-sections`). Plain
 /// type; the mounted `LibraryPanel` borrows it for content and slot events.
 #[derive(Debug)]
 pub struct HomeContent {
@@ -49,7 +49,7 @@ pub struct HomeContent {
     loading: bool,
     /// The selection origin the panel records (status-bar summary only).
     selection_origin: Option<SelectionOrigin>,
-    /// The projection's image state for the current hero (task 5.10): set by
+    /// The projection's image state for the current hero: set by
     /// the shell, read by the painters through the panel content.
     hero_image: HeroImageState,
 }
@@ -130,7 +130,7 @@ impl HomeContent {
     }
 
     /// The hero item's content from the shared producer for its content type
-    /// (design D5): Emby, ABS and Feeds items all flow through the one
+    /// (`openspec/specs/home-latest-sections`): Emby, ABS and Feeds items all flow through the one
     /// producer, so Home's row and its source tab render one set of facts.
     fn hero_content_data(&self) -> Option<HeroContentData> {
         self.current_item().as_ref().map(hero_content_queue)
@@ -138,7 +138,7 @@ impl HomeContent {
 }
 
 impl LibraryContentOwner for HomeContent {
-    /// Forwards to the inherent content-preserving reset (design D3).
+    /// Forwards to the inherent content-preserving reset (`openspec/specs/home-latest-sections`).
     fn reset_presentation(&mut self) {
         self.reset_presentation();
     }
@@ -220,8 +220,7 @@ impl LibraryContentOwner for HomeContent {
         self.launch_snapshot_impl()
     }
 
-    /// The current hero's content data, for the shell's image projection
-    /// (task 5.10).
+    /// The current hero's content data, for the shell's image projection.
     fn hero_data(&mut self) -> Option<HeroContentData> {
         self.hero_content_data()
     }
