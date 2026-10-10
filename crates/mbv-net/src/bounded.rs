@@ -48,30 +48,6 @@ where
     }
 }
 
-/// Like [`run_with_hard_bound`], but keeps successful result ownership on the
-/// worker until the receiver explicitly accepts it. If the bound wins the race
-/// with result delivery, dropping the unaccepted guard runs `cleanup` on the
-/// worker (or while the disconnected channel is being destroyed).
-pub fn run_with_hard_bound_or_cleanup<T, F, E, C>(
-    f: F,
-    cleanup: C,
-    hard_bound: Duration,
-) -> Result<T, E>
-where
-    T: Send + 'static,
-    E: From<String> + Send + 'static,
-    F: FnOnce() -> Result<T, E> + Send + 'static,
-    C: FnOnce(T) + Send + 'static,
-{
-    let timeout_message = format!("timed out after {}s", hard_bound.as_secs());
-    run_with_hard_bound_or_cleanup_with_error(
-        f,
-        cleanup,
-        move || E::from(timeout_message),
-        hard_bound,
-    )
-}
-
 /// Cleanup-capable bounded operation with an owning-crate timeout constructor.
 pub fn run_with_hard_bound_or_cleanup_with_error<T, F, E, C, X>(
     f: F,
@@ -154,22 +130,5 @@ mod tests {
             Duration::from_millis(10),
         );
         assert_eq!(result, Err("timed out after 0s".to_string()));
-    }
-
-    #[test]
-    fn late_success_is_cleaned_up_when_receiver_times_out() {
-        let (release_tx, release_rx) = std::sync::mpsc::channel();
-        let (cleaned_tx, cleaned_rx) = std::sync::mpsc::channel();
-        let result = run_with_hard_bound_or_cleanup(
-            move || {
-                release_rx.recv().unwrap();
-                Ok::<_, String>(42)
-            },
-            move |value| cleaned_tx.send(value).unwrap(),
-            Duration::from_millis(10),
-        );
-        assert_eq!(result, Err("timed out after 0s".to_string()));
-        release_tx.send(()).unwrap();
-        assert_eq!(cleaned_rx.recv_timeout(Duration::from_secs(1)), Ok(42));
     }
 }
