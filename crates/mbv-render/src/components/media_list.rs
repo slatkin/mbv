@@ -1,6 +1,9 @@
 mod row;
 mod wide;
 
+/// The shared split-row title policy of `row`, reused by the tree painter.
+pub(crate) use row::media_list_title_spans;
+
 use mbv_emby_model::EmbyItem;
 use mbv_queue::QueueItem;
 use mbv_theme as palette;

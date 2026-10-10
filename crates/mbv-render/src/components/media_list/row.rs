@@ -318,6 +318,29 @@ fn secondary_title_color(semantic_state: &MediaSemanticState) -> Color {
     }
 }
 
+/// The flat media list's split-row title policy for one row's title parts,
+/// shared with the tree painter so the two row surfaces cannot drift: the
+/// primary part paints the playback-context role, the secondary the
+/// playback-title role, and a played row mutes only the secondary. The
+/// parts paint with one separating space and truncate as a unit within
+/// `budget`. `title_color` is the single-part context colour the caller
+/// resolved; a split row replaces it with the canonical split roles.
+pub(crate) fn media_list_title_spans(
+    primary: &str,
+    secondary: Option<&str>,
+    semantic_state: &MediaSemanticState,
+    title_color: Color,
+    budget: usize,
+) -> Vec<Span<'static>> {
+    let parts = title_parts(
+        primary,
+        secondary,
+        title_color,
+        secondary_title_color(semantic_state),
+    );
+    truncated_title_spans(&parts, budget)
+}
+
 fn title_parts(
     primary: &str,
     secondary: Option<&str>,

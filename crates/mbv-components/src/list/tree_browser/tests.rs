@@ -36,6 +36,14 @@ fn paint(browser: &mut TreeBrowser<Target>) {
 mod selection;
 mod structure;
 
+/// A split node's secondary part joins the search text, so the tree filter
+/// matches either part of the row (home-recently-added-tree 2.1).
+#[test]
+fn a_secondary_title_part_joins_the_search_text() {
+    let node = node(Target::Leaf, None).with_secondary("Episode");
+    assert_eq!(node.search_text, "row Episode");
+}
+
 fn named_node(
     target: Target,
     parent: Option<Target>,

@@ -137,7 +137,18 @@ fn render_tree_browser_row(
         .trailing
         .as_deref()
         .map_or(0, tree_metadata_gutter_width);
-    let budget = context.content_width.saturating_sub(prefix_width + gutter);
+    // A split node reserves one column between the title and its
+    // secondary part, as the flat media list's title budget does.
+    let separator_reserve = usize::from(
+        row.kind == TreePaintRowKind::Node
+            && row
+                .secondary
+                .as_deref()
+                .is_some_and(|text| !text.is_empty()),
+    );
+    let budget = context
+        .content_width
+        .saturating_sub(prefix_width + gutter + separator_reserve);
     let title_color = if full_width {
         palette::Role::SelectedRowFg.color()
     } else if row.kind == TreePaintRowKind::Heading {
@@ -251,14 +262,33 @@ fn tree_row_spans(
             false,
         ));
     } else if row.kind != TreePaintRowKind::Spacer {
-        let mut title_style = Style::default().fg(title_color);
-        if row.kind == TreePaintRowKind::Heading {
-            title_style = title_style.add_modifier(ratatui::style::Modifier::BOLD);
+        if row
+            .secondary
+            .as_deref()
+            .is_some_and(|text| !text.is_empty())
+        {
+            // A split node paints the flat media list's split-row role
+            // policy (playback-context primary, playback-title secondary,
+            // a played row muting only the secondary), replacing the
+            // depth-colour fallback. The policy and the unit truncation
+            // are reused so the two row surfaces cannot drift.
+            spans.extend(crate::components::media_list::media_list_title_spans(
+                title_ref,
+                row.secondary.as_deref(),
+                &row.semantic_state,
+                title_color,
+                budget,
+            ));
+        } else {
+            let mut title_style = Style::default().fg(title_color);
+            if row.kind == TreePaintRowKind::Heading {
+                title_style = title_style.add_modifier(ratatui::style::Modifier::BOLD);
+            }
+            spans.push(Span::styled(
+                mbv_ui_model::ui_util::trunc_str(title_ref, budget),
+                title_style,
+            ));
         }
-        spans.push(Span::styled(
-            mbv_ui_model::ui_util::trunc_str(title_ref, budget),
-            title_style,
-        ));
     }
     let painted = spans.iter().map(|span| span.content.width()).sum::<usize>();
     let target_width = context
@@ -335,6 +365,10 @@ pub enum TreePaintRowKind {
 pub struct TreePaintRow {
     pub kind: TreePaintRowKind,
     pub title: String,
+    /// Optional secondary part of a split node (e.g. an episode title).
+    /// Painted after `title` with the flat media list's split-row role
+    /// policy, replacing the depth-colour fallback.
+    pub secondary: Option<String>,
     pub title_role: TreeTitleRole,
     pub trailing: Option<String>,
     pub depth: usize,

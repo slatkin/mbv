@@ -1,9 +1,12 @@
 use super::*;
+use ratatui::Terminal;
+use ratatui::backend::TestBackend;
 
 fn paint_row(kind: TreePaintRowKind, title: &str, depth: usize) -> TreePaintRow {
     TreePaintRow {
         kind,
         title: String::from(title),
+        secondary: None,
         title_role: TreeTitleRole::Standard,
         trailing: None,
         depth,
@@ -15,6 +18,42 @@ fn paint_row(kind: TreePaintRowKind, title: &str, depth: usize) -> TreePaintRow 
         aggregate_mark: TreeAggregateMark::None,
         semantic_state: MediaSemanticState::Ordinary,
     }
+}
+
+fn split_node(
+    title: &str,
+    secondary: &str,
+    depth: usize,
+    semantic_state: MediaSemanticState,
+) -> TreePaintRow {
+    let mut row = paint_row(TreePaintRowKind::Node, title, depth);
+    row.secondary = Some(String::from(secondary));
+    row.semantic_state = semantic_state;
+    row
+}
+
+/// Paints one focused buffer with `rows` and returns it.
+fn draw_rows(rows: &[TreePaintRow]) -> ratatui::buffer::Buffer {
+    let mut terminal = Terminal::new(TestBackend::new(40, 4)).unwrap();
+    let mut marquee_text = String::new();
+    let mut marquee_started_at = Instant::now();
+    terminal
+        .draw(|frame| {
+            render_tree_browser(
+                frame,
+                Rect::new(0, 0, 40, 4),
+                Rect::new(0, 0, 40, 4),
+                rows,
+                rows.len(),
+                0,
+                true,
+                true,
+                &mut marquee_text,
+                &mut marquee_started_at,
+            );
+        })
+        .unwrap();
+    terminal.backend().buffer().clone()
 }
 
 /// `tree_row_title` returns the indent width with the node title unchanged,
@@ -34,4 +73,57 @@ fn tree_row_title_outputs_match_legacy_rows_issue_896() {
     let (prefix_width, title) = tree_row_title(&spacer);
     assert_eq!(prefix_width, 0);
     assert_eq!(&*title, "");
+}
+
+/// A split node paints the flat media list's split-row role policy instead
+/// of the depth-colour fallback (home-recently-added-tree 2.2, D9): the
+/// primary part in the playback-context role, the secondary in the
+/// playback-title role. Depth two would otherwise paint aqua (`Accent`).
+#[test]
+fn a_split_node_paints_the_flat_split_row_roles() {
+    let buffer = draw_rows(&[split_node(
+        "Show",
+        "Episode",
+        2,
+        MediaSemanticState::Ordinary,
+    )]);
+    assert_eq!(buffer[(4, 0)].symbol(), "S");
+
+    for x in 4..8 {
+        assert_eq!(
+            buffer[(x, 0)].style().fg,
+            Some(palette::Role::SplitRowContextFg.color()),
+            "the primary part paints the playback-context role"
+        );
+    }
+    assert_eq!(buffer[(8, 0)].symbol(), " ");
+    for x in 9..16 {
+        assert_eq!(
+            buffer[(x, 0)].style().fg,
+            Some(palette::Role::SplitRowTitleFg.color()),
+            "the secondary part paints the playback-title role"
+        );
+    }
+}
+
+/// A played split node mutes only the secondary part; the primary keeps the
+/// playback-context role (home-recently-added-tree 2.2, D9).
+#[test]
+fn a_played_split_node_mutes_only_its_secondary() {
+    let buffer = draw_rows(&[split_node("Show", "Episode", 2, MediaSemanticState::Played)]);
+
+    for x in 4..8 {
+        assert_eq!(
+            buffer[(x, 0)].style().fg,
+            Some(palette::Role::SplitRowContextFg.color()),
+            "the primary part keeps the playback-context role"
+        );
+    }
+    for x in 9..16 {
+        assert_eq!(
+            buffer[(x, 0)].style().fg,
+            Some(palette::Role::TextMuted.color()),
+            "the secondary part paints muted"
+        );
+    }
 }
