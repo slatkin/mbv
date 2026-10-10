@@ -77,6 +77,27 @@ impl<Target> ThreeLineFlatList<Target> {
         self.invalidate();
     }
 
+    /// Scroll the viewport by the normalized wheel gesture delta and release
+    /// it from following the selection (wheel-scrolls-viewport D3): the
+    /// selection and its facts stay untouched. `painted_height` is the
+    /// content-area height from which the visible-item capacity is derived;
+    /// an unpainted or too-short area clamps at the minimal one-item
+    /// viewport guarantee until the next frame's resolve applies the real
+    /// height.
+    pub fn scroll_viewport(&mut self, delta: i64, painted_height: u16)
+    where
+        Target: Clone + Eq,
+    {
+        let flow = self.flow();
+        Viewported::scroll_viewport(
+            self,
+            &flow,
+            self.visible_items(painted_height).max(1),
+            delta,
+        );
+        self.invalidate();
+    }
+
     pub fn select_target(&mut self, target: &Target) -> bool
     where
         Target: Clone + Eq,
