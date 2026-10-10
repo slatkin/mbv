@@ -1,3 +1,4 @@
+use crate::targets::RecentAge;
 use mbv_queue::QueueItem;
 
 #[cfg(test)]
@@ -40,19 +41,6 @@ pub fn timestamp_in_launch_window(timestamp: Option<u64>, window: HomeLatestLaun
 #[must_use]
 pub fn is_new_in_launch_window(item: &QueueItem, window: HomeLatestLaunchWindow) -> bool {
     timestamp_in_launch_window(provider_timestamp_secs(item), window)
-}
-
-/// An age branch under the Home `Recently added` root. The branches do not
-/// overlap: `New` wins whenever the item is dated after the previous client
-/// launch, then the remaining in-window items split by their age.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum RecentAge {
-    /// Dated after the previous client launch (`New`).
-    New,
-    /// Remaining items up to 7 days old (`Last 7 days`).
-    Last7Days,
-    /// Remaining items up to the 14-day cutoff (`Last 14 days`).
-    Last14Days,
 }
 
 /// Assign the `Recently added` age branch for one provider timestamp.
