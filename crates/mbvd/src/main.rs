@@ -35,33 +35,16 @@ fn print_usage() {
 }
 
 fn daemon_running() -> bool {
-    let Ok(s) = std::fs::read_to_string(mbv_daemon::pid_file()) else {
-        return false;
-    };
-    let Ok(pid) = s.trim().parse::<u32>() else {
-        return false;
-    };
-    std::path::Path::new(&format!("/proc/{pid}")).exists()
+    mbv_daemon::locked_owner_pid(&mbv_daemon::pid_file()).is_some()
 }
 
 fn stop_daemon() -> Result<String, DaemonError> {
-    let path = mbv_daemon::pid_file();
-    let pid = std::fs::read_to_string(&path)
-        .map_err(|error| DaemonError::failure_context("mbvd: no daemon running", error))?
-        .trim()
-        .to_string();
-    let ok = std::process::Command::new("kill")
-        .arg(&pid)
-        .status()
-        .is_ok_and(|s| s.success());
-    if ok {
-        let _ = std::fs::remove_file(&path);
-        Ok(format!("mbvd: daemon stopped (pid {pid})"))
-    } else {
-        Err(DaemonError::failure(format!(
-            "mbvd: failed to stop daemon (pid {pid})"
-        )))
-    }
+    // The packaged command always uses the daemon's system-instance paths.
+    // SAFETY: This CLI action runs synchronously before the daemon or worker threads start.
+    unsafe { std::env::set_var("MBV_SYSTEM", "1") };
+    let pid = mbv_daemon::signal_owner(&mbv_daemon::pid_file())
+        .map_err(|error| DaemonError::failure_context("mbvd: failed to stop daemon", error))?;
+    Ok(format!("mbvd: daemon stopped (pid {pid})"))
 }
 
 #[derive(Debug, PartialEq, Eq)]
