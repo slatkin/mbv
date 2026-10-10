@@ -210,7 +210,7 @@ interaction policy or require a shell wheel handler.
 
 ### Requirement: Wheel scrolling loads further library pages
 
-A lazily paged library list SHALL treat the last row painted in its viewport as a paging position, in addition to its selection. When a wheel scroll brings that last painted row within the list's existing prefetch distance of the loaded edge, the next page SHALL be requested, exactly as a selection at that row would request it.
+A lazily paged library list SHALL treat the last row painted in its viewport as a paging position, in addition to its selection. When a wheel scroll brings that last painted row within the list's existing prefetch distance of the loaded edge, the next page SHALL be requested immediately, with no navigation-idle gate.
 
 #### Scenario: Scrolling toward the loaded edge fetches the next page
 

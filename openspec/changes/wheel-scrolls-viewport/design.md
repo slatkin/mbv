@@ -43,7 +43,9 @@ pub enum ViewportAnchor { FollowSelection, Free }
 scroll_viewport(flow, viewport_len, delta)  -> offset := clamp(offset + delta); anchor := Free
 ```
 
-`resolved_viewport_offset` applies the selection pull only when the anchor is `FollowSelection`. With `Free` it only clamps to the flow bounds. Every write that sets or moves the selection sets the anchor back to `FollowSelection`: `move_selection`, page, first/last, `select_target`, restore/anchor. The re-anchor then happens in the existing resolve path with no new code.
+`resolved_viewport_offset` applies the selection pull only when the anchor is `FollowSelection`. With `Free` it only clamps to the flow bounds. The reset to `FollowSelection` belongs to the **operations**, not to the `Cursored` primitives: the `delegate_operation` arms for move, page, first/last, `Select`, `Toggle`, `Range`, `Activate`, `ActivateCurrent` and `ContextCurrent`; the matching `TreeOperation` arms (including `AnchorSelection` restore); and the explicit shell re-anchor seams (`QueueCursorUpdate::Set`, restore). The re-anchor then happens in the existing resolve path with no new code.
+
+The `Cursored` primitives (`select_target`, `move_selection`) must **not** reset the anchor, because content replacement reuses them. `MediaList::set_content` (`media_list.rs:426`) re-resolves the preserved stable target through `Cursored::select_target` on every row push, and the geometry clamp paths (`clamp_viewport`) run on every resize. Both must keep `Free`. Otherwise a queue projection during playback, a library refresh or a corpus arrival would snap a scrolled list back to the selection.
 
 *Alternative:* a `bool detached`. Rejected under the types-over-flags rule: the enum names the state machine, and `match` keeps later readers honest.
 
@@ -71,7 +73,7 @@ The Emby library wheel stops sending `EmbyLibraryCursorIndex`, and the Music whe
 ### D6: Overlay painters
 
 - **Playlists:** the component owns `playlists_scroll`/`open_scroll` plus one `ViewportAnchor` per list. The wheel scrolls the offset (clamped to the row count minus the painted height) and sets `Free`. Cursor moves set `FollowSelection`. The painter's cursor clamp (`playlists.rs:221`) runs only when its params say the anchor is `FollowSelection`; it always clamps to the bounds.
-- **Global Search sidebar:** the wheel adds `delta` to `sidebar.scroll`, clamped to `filtered_count - list_height`, and leaves the cursor alone. `move_cursor` already re-anchors on the next key, and nothing else writes `scroll`, so no anchor field is needed.
+- **Global Search sidebar:** the wheel adds `delta` to `sidebar.scroll`, clamped to `filtered_count - list_height`, and leaves the cursor alone. `move_cursor` already re-anchors on the next key. The only other writes to `scroll` are the type-filter resets (`search_sidebar.rs:199`, `:253`), which set both `cursor` and `scroll` to 0. Those are content resets, not anchor writes, so no anchor field is needed.
 
 ## Risks / Trade-offs
 
