@@ -29,6 +29,10 @@ enum PlayerErrorKind {
         source: io::Error,
     },
     PipeNotFifo(String),
+    UnsafeFifo {
+        path: String,
+        detail: String,
+    },
     PipePath(NulError),
     MakePipe {
         path: String,
@@ -93,6 +97,16 @@ impl PlayerError {
         }
     }
 
+    pub(crate) fn unsafe_fifo(path: &str, detail: String) -> Self {
+        Self {
+            kind: PlayerErrorKind::UnsafeFifo {
+                path: path.to_owned(),
+                detail,
+            },
+            backtrace: Backtrace::capture(),
+        }
+    }
+
     pub(crate) fn make_pipe(path: &str, source: io::Error) -> Self {
         Self {
             kind: PlayerErrorKind::MakePipe {
@@ -129,6 +143,7 @@ impl PlayerError {
             PlayerErrorKind::CreateDirectory { .. } => "player.create_config_directory",
             PlayerErrorKind::WriteConfig { .. } => "player.write_config",
             PlayerErrorKind::PipeNotFifo(_) => "player.pipe_not_fifo",
+            PlayerErrorKind::UnsafeFifo { .. } => "player.unsafe_fifo",
             PlayerErrorKind::PipePath(_) => "player.pipe_path",
             PlayerErrorKind::MakePipe { .. } => "player.make_pipe",
             PlayerErrorKind::SetAudioDevice { .. } => "player.set_audio_device",
@@ -170,6 +185,12 @@ impl fmt::Display for PlayerError {
             PlayerErrorKind::PipeNotFifo(path) => {
                 write!(f, "audio pipe path '{path}' exists and is not a FIFO")
             }
+            PlayerErrorKind::UnsafeFifo { path, detail } => {
+                write!(
+                    f,
+                    "refusing audio pipe path '{path}': existing FIFO {detail}"
+                )
+            }
             PlayerErrorKind::PipePath(source) => source.fmt(f),
             PlayerErrorKind::MakePipe { path, source } => {
                 write!(f, "mkfifo({path}) failed: {source}")
@@ -196,7 +217,7 @@ impl Error for PlayerError {
             PlayerErrorKind::PipePath(source) => Some(source),
             PlayerErrorKind::SetAudioDevice { source, .. }
             | PlayerErrorKind::MpvInit { source, .. } => Some(source),
-            PlayerErrorKind::PipeNotFifo(_) => None,
+            PlayerErrorKind::PipeNotFifo(_) | PlayerErrorKind::UnsafeFifo { .. } => None,
         }
     }
 }

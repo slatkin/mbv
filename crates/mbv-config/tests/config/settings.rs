@@ -50,7 +50,9 @@ audio_pipe_playout_delay_ms = 1250
 fn parse_audio_pipe_defaults() {
     let cfg = parse_config("").unwrap();
     assert!(!cfg.audio_pipe_enabled);
-    assert_eq!(cfg.audio_pipe_path, "/tmp/mbv-pipe");
+    // Default now names a per-user runtime directory (issue #918), so it is
+    // asserted against the helper, not a fixed /tmp path.
+    assert_eq!(cfg.audio_pipe_path, mbv_config::default_audio_pipe_path());
     assert_eq!(cfg.audio_pipe_samplerate, 192_000);
     assert_eq!(cfg.audio_pipe_bitdepth, 32);
     assert_eq!(cfg.audio_pipe_playout_delay_ms, None);

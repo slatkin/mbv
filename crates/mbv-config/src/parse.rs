@@ -1,8 +1,8 @@
 use super::{
     AudiobookshelfSetup, Config, ConfigError, DEFAULT_VIDEO_CACHE_BACK_MB,
     DEFAULT_VIDEO_CACHE_FORWARD_MB, EmbySetup, FeedKind, FeedSubscription, PANEL_COLS_MIN,
-    PanelAccentColor, PanelConfig, PanelSide, config_path, default_daemon_server_tcp_listen,
-    is_valid_audio_device,
+    PanelAccentColor, PanelConfig, PanelSide, config_path, default_audio_pipe_path,
+    default_daemon_server_tcp_listen, is_valid_audio_device,
 };
 use std::num::NonZeroU16;
 
@@ -160,8 +160,7 @@ fn mpv_cache_size(misc: Option<&toml::Value>, key: &str, default: u32) -> u32 {
 fn mpv_audio_pipe_path(misc: Option<&toml::Value>) -> String {
     misc.and_then(|m| m.get("audio_pipe_path"))
         .and_then(toml::Value::as_str)
-        .unwrap_or("/tmp/mbv-pipe")
-        .to_string()
+        .map_or_else(default_audio_pipe_path, str::to_string)
 }
 
 fn mpv_audio_pipe_samplerate(misc: Option<&toml::Value>) -> u32 {

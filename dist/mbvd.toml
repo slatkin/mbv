@@ -10,7 +10,10 @@ show_audio_window = false
 video_cache_forward_mb = 50
 video_cache_back_mb = 100
 audio_pipe_enabled = false
-audio_pipe_path = "/tmp/mbv-pipe"
+# Audio-pipe FIFO path. Default: a private per-user <runtime dir>/mbv-pipe,
+# created owner-only (0600). Override only when a downstream consumer (e.g. a
+# snapserver) needs a specific shared path.
+# audio_pipe_path = "/tmp/mbv-pipe"
 audio_pipe_samplerate = 44100
 audio_pipe_bitdepth = 16
 

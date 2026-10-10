@@ -3,6 +3,7 @@ use super::*;
 mod active_file;
 mod basic;
 mod decisions;
+mod pipe;
 mod proxy;
 mod resume_refresh;
 mod session;

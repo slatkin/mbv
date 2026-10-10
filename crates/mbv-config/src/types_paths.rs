@@ -137,7 +137,7 @@ impl Default for Config {
             video_cache_forward_mb: DEFAULT_VIDEO_CACHE_FORWARD_MB,
             video_cache_back_mb: DEFAULT_VIDEO_CACHE_BACK_MB,
             audio_pipe_enabled: false,
-            audio_pipe_path: "/tmp/mbv-pipe".to_string(),
+            audio_pipe_path: super::default_audio_pipe_path(),
             audio_pipe_samplerate: 192_000,
             audio_pipe_bitdepth: 32,
             audio_pipe_playout_delay_ms: None,

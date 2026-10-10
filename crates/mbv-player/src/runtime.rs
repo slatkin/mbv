@@ -167,17 +167,23 @@ fn prepare_mpv_config_dir(use_mpv_config: bool, ipc_path: &str) -> Result<PathBu
     Ok(private_dir)
 }
 
-// Ensures `path` exists as a FIFO, creating it via mkfifo(3) if it doesn't
-// already exist. Refuses to touch a path that exists but isn't a FIFO.
-fn ensure_pipe(path: &str) -> Result<(), PlayerError> {
+// Ensures `path` exists as a FIFO this user may use exclusively: creates it
+// owner-only (mkfifo 0600) when missing, and refuses to use an existing FIFO
+// owned by another uid or granting group or other access (issue #918 — mpv
+// then writes raw PCM of this session only into its own private pipe).
+// Refuses to touch a path that exists but isn't a FIFO, without repairing it.
+pub(crate) fn ensure_pipe(path: &str) -> Result<(), PlayerError> {
     use std::os::unix::fs::FileTypeExt;
     match std::fs::metadata(path) {
-        Ok(meta) if meta.file_type().is_fifo() => Ok(()),
+        Ok(meta) if meta.file_type().is_fifo() => {
+            // SAFETY: `libc::getuid` has no precondition beyond FFI itself.
+            check_private_fifo(path, &meta, unsafe { libc::getuid() })
+        }
         Ok(_) => Err(PlayerError::pipe_not_fifo(path)),
         Err(_) => {
             let cpath = std::ffi::CString::new(path)?;
             // SAFETY: `cpath` is NUL-terminated and remains alive for the call.
-            let rc = unsafe { libc::mkfifo(cpath.as_ptr(), 0o644) };
+            let rc = unsafe { libc::mkfifo(cpath.as_ptr(), 0o600) };
             if rc != 0 {
                 Err(PlayerError::make_pipe(
                     path,
@@ -188,6 +194,32 @@ fn ensure_pipe(path: &str) -> Result<(), PlayerError> {
             }
         }
     }
+}
+
+/// Refuses an existing FIFO this user must not attach mpv to: one owned by
+/// another `uid`, or one granting group or other access. `uid` is a
+/// parameter so a test can cover the foreign-owner case without a second
+/// account (mirrors `check_private_dir` in mbv-config).
+pub(crate) fn check_private_fifo(
+    path: &str,
+    meta: &std::fs::Metadata,
+    uid: u32,
+) -> Result<(), PlayerError> {
+    use std::os::unix::fs::MetadataExt;
+    let owned_by = meta.uid();
+    if owned_by != uid {
+        return Err(PlayerError::unsafe_fifo(
+            path,
+            format!("owned by uid {owned_by}, expected {uid}"),
+        ));
+    }
+    if meta.mode() & 0o077 != 0 {
+        return Err(PlayerError::unsafe_fifo(
+            path,
+            "grants group or other access".to_string(),
+        ));
+    }
+    Ok(())
 }
 
 /// Resolve the chosen mpv overlay script and warn about an ignored leftover

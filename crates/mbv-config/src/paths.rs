@@ -264,6 +264,14 @@ fn check_private_dir(path: &Path, uid: u32) -> Result<(), RuntimeDirError> {
     Ok(())
 }
 
+/// The default audio-pipe FIFO path: a private name in the per-user runtime
+/// directory (issue #918), beside the mpv IPC socket and the control socket.
+/// An explicitly configured `audio_pipe_path` in config.toml overrides it.
+#[must_use]
+pub fn default_audio_pipe_path() -> String {
+    format!("{}/mbv-pipe", runtime_dir())
+}
+
 #[must_use]
 pub fn mpv_ipc_path() -> String {
     format!("{}/mbv-mpv.sock", runtime_dir())

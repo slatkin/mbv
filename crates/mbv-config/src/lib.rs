@@ -44,7 +44,7 @@ mod paths;
 #[doc(inline)]
 pub use paths::{
     RuntimeDirError, RuntimeDirErrorReason, ScriptSource, config_path, control_socket_path,
-    data_dir_system_or_local, ensure_runtime_dir, home_latest_launch_path,
+    data_dir_system_or_local, default_audio_pipe_path, ensure_runtime_dir, home_latest_launch_path,
     library_position_state_path, mpv_config_dir, mpv_ipc_path, osc_fonts_dir, osc_fonts_source,
     osc_script_source, owner_lock_path, prefs_path, queue_state_path, resolve_script_source,
     stay_alive_queue_state_path, token_cache_path,
