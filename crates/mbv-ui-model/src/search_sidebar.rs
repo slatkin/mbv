@@ -4,13 +4,9 @@ use mbv_emby_model::EmbyItem;
 pub struct SearchSidebar {
     pub query: String,
     pub results: Vec<EmbyItem>,
-    pub cursor: usize,
-    pub scroll: usize,
     pub loading: bool,
     pub type_filter: usize,
     pub last_drain_error: Option<String>,
-    /// Visible list rows; written by the renderer, read by cursor movement.
-    pub list_height: usize,
 }
 
 fn is_navigable_type(item_type: &str) -> bool {
@@ -32,36 +28,36 @@ impl SearchSidebar {
         Self {
             query: String::new(),
             results: Vec::new(),
-            cursor: 0,
-            scroll: 0,
             loading: false,
             type_filter: 0,
             last_drain_error: None,
-            list_height: 0,
         }
     }
 
     pub fn on_query_changed(&mut self) {
         self.loading = true;
         self.results.clear();
-        self.cursor = 0;
-        self.scroll = 0;
         self.type_filter = 0;
         self.last_drain_error = None;
     }
 
-    pub fn apply_drain(&mut self, query: &str, result: Result<Vec<EmbyItem>, crate::UiModelError>) {
+    /// Apply one drained search response. Returns whether it applied
+    /// (wheel-scrolls-viewport 5.4a): `false` for the stale-query discard,
+    /// with the filtered view untouched.
+    pub fn apply_drain(
+        &mut self,
+        query: &str,
+        result: Result<Vec<EmbyItem>, crate::UiModelError>,
+    ) -> bool {
         // A faster keystroke can dispatch a newer query while an older one
         // is still in flight; responses race on arrival order, not send
         // order. Discard anything that isn't answering the live query,
         // and leave `loading` untouched -- a request for the current query
         // may still be in flight.
         if query != self.query {
-            return;
+            return false;
         }
         self.loading = false;
-        self.cursor = 0;
-        self.scroll = 0;
         self.type_filter = 0;
         match result {
             Ok(items) => {
@@ -75,6 +71,7 @@ impl SearchSidebar {
                 self.last_drain_error = Some(error.to_string());
             }
         }
+        true
     }
 
     #[must_use]
@@ -106,11 +103,6 @@ impl SearchSidebar {
             .collect()
     }
 
-    #[must_use]
-    pub fn filtered_count(&self) -> usize {
-        self.filtered_results().len()
-    }
-
     fn type_sort_key(t: &str) -> u8 {
         match t {
             "Movie" => 0,
@@ -133,10 +125,9 @@ mod tests {
     #[test]
     fn global_drain_replaces_results_and_resets_state() {
         let mut sidebar = SearchSidebar::new();
-        sidebar.cursor = 5;
-        sidebar.scroll = 4;
         sidebar.type_filter = 2;
         sidebar.loading = true;
+        sidebar.results = vec![make_item("Stale", "Movie")];
 
         let items = vec![
             make_item("Movie 1", "Movie"),
@@ -145,8 +136,6 @@ mod tests {
         sidebar.apply_drain("", Ok(items));
 
         assert!(!sidebar.loading);
-        assert_eq!(sidebar.cursor, 0);
-        assert_eq!(sidebar.scroll, 0);
         assert_eq!(sidebar.type_filter, 0);
         assert_eq!(sidebar.results.len(), 2);
     }
@@ -224,20 +213,18 @@ mod tests {
         let mut sidebar = SearchSidebar::new();
         sidebar.query = "a".into();
         sidebar.loading = true;
-        sidebar.cursor = 5;
+        sidebar.results = vec![make_item("Older", "Movie")];
         // A newer keystroke arrives before the "a" response does.
         sidebar.query = "ab".into();
 
-        sidebar.apply_drain("a", Ok(vec![make_item("Stale", "Movie")]));
+        assert!(!sidebar.apply_drain("a", Ok(vec![make_item("Stale", "Movie")])));
 
         assert!(sidebar.loading, "stale response must not touch loading");
-        assert_eq!(sidebar.cursor, 5);
-        assert_eq!(sidebar.results, [] as [mbv_emby_model::EmbyItem; 0]);
+        assert_eq!(sidebar.results, [make_item("Older", "Movie")]);
 
-        sidebar.apply_drain("ab", Ok(vec![make_item("Fresh", "Movie")]));
+        assert!(sidebar.apply_drain("ab", Ok(vec![make_item("Fresh", "Movie")])));
 
         assert!(!sidebar.loading);
-        assert_eq!(sidebar.cursor, 0);
         assert_eq!(sidebar.results.len(), 1);
         assert_eq!(sidebar.results[0].name, "Fresh");
     }

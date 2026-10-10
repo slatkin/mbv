@@ -188,8 +188,9 @@ impl Model {
     //
     // The Search sidebar is a non-blocking overlay mounted by a shell
     // request. The component owns the
-    // sidebar state (query, cursor, scroll, type_filter, loading, results)
-    // and the 300 ms debounce (driven by `UserEvent::Clock`); the shell owns
+    // sidebar state (query, type_filter, loading, results) and the shared
+    // row-flow carrier, and the 300 ms debounce (driven by
+    // `UserEvent::Clock`); the shell owns
     // the Emby client and spawns the search thread (design D4/D5).
 
     fn search_id() -> ComponentId {

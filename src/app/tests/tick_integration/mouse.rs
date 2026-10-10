@@ -33,11 +33,13 @@ fn search_sidebar_with_painted_results() -> (TickHarness, Vec<(Rect, usize)>) {
     {
         let component = search_component_mut(&mut harness);
         component.sidebar.query = "clip".into();
-        component.sidebar.results = vec![
-            make_item("Birthday Clip", "Movie"),
-            make_item("Other Clip", "Series"),
-        ];
-        component.sidebar.list_height = 10;
+        component.apply_drain(
+            "clip",
+            Ok(vec![
+                make_item("Birthday Clip", "Movie"),
+                make_item("Other Clip", "Series"),
+            ]),
+        );
     };
     let mut terminal = Terminal::new(TestBackend::new(40, 16)).unwrap();
     terminal
@@ -78,8 +80,8 @@ fn assert_blocking_modal_suppresses_sidebar_clicks(
     );
     {
         let component = search_component_mut(harness);
-        assert_eq!(component.sidebar.cursor, 0, "underlying cursor untouched");
-        assert_eq!(component.sidebar.scroll, 0, "underlying scroll untouched");
+        assert_eq!(component.test_cursor(), 0, "underlying cursor untouched");
+        assert_eq!(component.test_scroll(), 0, "underlying scroll untouched");
         assert_eq!(component.sidebar.type_filter, 0);
     };
 
@@ -96,7 +98,7 @@ fn assert_blocking_modal_suppresses_sidebar_clicks(
         only_the_blocking_modals_own_messages(&outcome.raw_messages),
         "the sidebar's dismiss click must not surface beneath a blocking modal"
     );
-    assert_eq!(search_component_mut(harness).sidebar.cursor, 0);
+    assert_eq!(search_component_mut(harness).test_cursor(), 0);
 }
 
 /// The modal's own `ConfirmIntent` (a click outside it cancels, issue #855)

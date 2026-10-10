@@ -43,10 +43,16 @@ fn badge_for(item_type: &str) -> &'static str {
 /// Extracted from `App::render_search_sidebar` as a free function so
 /// the Interactive Component (`SearchSidebarComponent`) can call it in
 /// `view()` without `App` access. The sidebar state is passed directly.
+/// The painter owns no list state (wheel-scrolls-viewport 5.4a, design D6):
+/// the selected filtered index arrives by value and the viewport offset
+/// comes back through `resolve_offset`, which resolves it from the shared
+/// carrier (painted list height → offset).
 pub fn render_search_sidebar(
     f: &mut Frame,
     area: Option<Rect>,
-    sidebar: &mut SearchSidebar,
+    sidebar: &SearchSidebar,
+    selected: usize,
+    resolve_offset: &mut dyn FnMut(usize) -> usize,
 ) -> SearchSidebarRenderGeometry {
     let frame = area.unwrap_or_else(|| chrome::panel_shell_rect(f.area(), SEARCH_PANEL_W));
     let content = chrome::render_panel_shell_at(f, frame, "SEARCH", HINTS);
@@ -100,7 +106,7 @@ pub fn render_search_sidebar(
         width: content.width,
         height: content.height - 2,
     };
-    let result_rows = render_results(f, list_area, sidebar);
+    let result_rows = render_results(f, list_area, sidebar, selected, resolve_offset);
     SearchSidebarRenderGeometry {
         frame,
         result_rows,
@@ -172,9 +178,15 @@ fn render_type_chips(f: &mut Frame, area: Rect, sidebar: &SearchSidebar) -> Vec<
     chip_rects
 }
 
-fn render_results(f: &mut Frame, area: Rect, sidebar: &mut SearchSidebar) -> Vec<(Rect, usize)> {
+fn render_results(
+    f: &mut Frame,
+    area: Rect,
+    sidebar: &SearchSidebar,
+    selected: usize,
+    resolve_offset: &mut dyn FnMut(usize) -> usize,
+) -> Vec<(Rect, usize)> {
     let list_h = area.height as usize;
-    sidebar.list_height = list_h;
+    let scroll = resolve_offset(list_h);
     let filtered: Vec<&EmbyItem> = sidebar.filtered_results();
     if filtered.is_empty() {
         render_empty_state(f, area, sidebar);
@@ -182,13 +194,13 @@ fn render_results(f: &mut Frame, area: Rect, sidebar: &mut SearchSidebar) -> Vec
     }
     let mut rows = Vec::new();
 
-    for (vi, item) in filtered.iter().skip(sidebar.scroll).enumerate() {
+    for (vi, item) in filtered.iter().skip(scroll).enumerate() {
         if vi >= list_h {
             break;
         }
-        let abs_idx = sidebar.scroll + vi;
-        let selected = abs_idx == sidebar.cursor;
-        let fg = if selected {
+        let abs_idx = scroll + vi;
+        let is_selected = abs_idx == selected;
+        let fg = if is_selected {
             palette::Role::AccentActive.color()
         } else {
             palette::Role::TextPrimary.color()
@@ -203,11 +215,11 @@ fn render_results(f: &mut Frame, area: Rect, sidebar: &mut SearchSidebar) -> Vec
             area.x,
             row_y,
             area.width,
-            selected,
+            is_selected,
             vec![
                 Span::styled(
                     badge_str,
-                    Style::default().fg(if selected {
+                    Style::default().fg(if is_selected {
                         palette::Role::PillSelectedFg.color()
                     } else {
                         palette::Role::Accent.color()
@@ -230,7 +242,7 @@ fn render_results(f: &mut Frame, area: Rect, sidebar: &mut SearchSidebar) -> Vec
             abs_idx,
         ));
     }
-    chrome::render_sidebar_scrollbar(f, area, filtered.len(), sidebar.scroll);
+    chrome::render_sidebar_scrollbar(f, area, filtered.len(), scroll);
     rows
 }
 

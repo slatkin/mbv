@@ -110,10 +110,12 @@ fn search_row_label(item: &mbv_emby_model::EmbyItem) -> String {
     }
 }
 
-/// One canonical row for a scored result (design.md D2): stable item-id
+/// (design.md D2): stable item-id
 /// target, legacy label parity, a trailing year on playable leaves, no
 /// secondary/duration. A played result paints the one played-row colour.
-fn search_result_row(item: &mbv_emby_model::EmbyItem) -> MediaListRow<String> {
+/// `pub(crate)`: the global Search sidebar's carrier reuses the same row
+/// rule for its filtered results (wheel-scrolls-viewport 5.4a).
+pub(crate) fn search_result_row(item: &mbv_emby_model::EmbyItem) -> MediaListRow<String> {
     MediaListRow::Item {
         target: item.id.clone(),
         primary: search_row_label(item),
