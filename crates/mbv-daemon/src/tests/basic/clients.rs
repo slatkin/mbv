@@ -158,3 +158,19 @@ fn gated_broadcast_on_an_empty_registry_emits_nothing() {
         Err(mpsc::TryRecvError::Empty)
     ));
 }
+
+/// #920 regression for #915 item 3 (the stalled-ctrl-client daemon-memory
+/// growth): a broadcast must prune exactly the client whose receiving side
+/// is gone — its send fails — and must not touch the live peer.
+#[test]
+fn broadcast_to_all_prunes_only_the_client_whose_receiver_was_dropped() {
+    let mut clients = CtrlClients::default();
+    let (dead_id, dead_rx) = connect_client(&mut clients);
+    let (live_id, _live_rx) = connect_client(&mut clients);
+    drop(dead_rx);
+
+    clients.broadcast_to_all("{}");
+
+    assert!(!clients.has_client(dead_id));
+    assert!(clients.has_client(live_id));
+}

@@ -1,9 +1,11 @@
 //! `locked_owner_pid` contract (harden-owner-process-boundaries task 1.1,
 //! decision D1): the probe reports a PID only while some other descriptor
-//! holds a real `flock` on the file. `signal_owner` sends a real SIGTERM and
-//! gets no test of its own.
+//! holds a real `flock` on the file. `signal_owner` sends a real SIGTERM
+//! (needs a live-kill target, so not hermetically assertable); its
+//! stale-record refusal — the `mbv -q` destructive path from #915 — is
+//! covered below (#920).
 
-use mbv_daemon::{lock_pid_file, locked_owner_pid};
+use mbv_daemon::{SignalOwnerError, lock_pid_file, locked_owner_pid, signal_owner};
 use nix::fcntl::{Flock, FlockArg};
 use std::fs::File;
 use std::io::Write;
@@ -95,4 +97,21 @@ fn missing_lock_reports_no_owner() {
 
     assert_eq!(locked_owner_pid(&lock), None);
     assert!(!lock.exists(), "the probe must not create the PID file");
+}
+
+/// #920 regression for #915 item 1 (the stale-PID `mbv -q` signal): a PID
+/// record nobody holds must name no owner even when the record contains a
+/// live PID — here the test process itself — because liveness truth is the
+/// flock, never the recorded number. `signal_owner` must refuse with
+/// `NoOwner` instead of signalling; signalling the recorded PID would kill
+/// this test process outright, so a regression is self-demonstrating.
+#[test]
+fn signal_owner_refuses_a_stale_record_instead_of_signalling() {
+    let dir = TempDir::new();
+    let lock = dir.path().join("mbv.pid");
+    std::fs::write(&lock, std::process::id().to_string()).expect("write a live but unheld pid");
+
+    let refused = signal_owner(&lock).expect_err("a record nobody holds names no owner");
+
+    assert!(matches!(refused, SignalOwnerError::NoOwner));
 }

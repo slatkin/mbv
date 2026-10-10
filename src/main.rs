@@ -687,6 +687,24 @@ mod tests {
         assert_eq!(client.user_id, "the-user-id");
     }
 
+    /// #920 regression for #915 item 5: the TUI's crash-log helper and
+    /// `mbv_config::state_dir()` must resolve the same directory for a
+    /// system instance (`MBV_SYSTEM=1`), so the duplicated helper cannot
+    /// silently diverge from the config crate's path source of truth.
+    /// Functions of the environment, so one assertion does it. The env
+    /// mutation follows the `SYS_ENV_LOCK` / `set_test_env_var` contract
+    /// (`crates/mbv-config/src/tests/paths_env.rs`).
+    #[test]
+    fn crash_log_path_sits_in_mbv_config_state_dir_for_system_instances() {
+        let _sys_env = crate::config::tests::SYS_ENV_LOCK.lock().unwrap();
+        mbv_config::set_test_env_var("MBV_SYSTEM", "1");
+        let log_dir = crash_log_path().parent().map(std::path::Path::to_path_buf);
+        let state_dir = mbv_config::state_dir();
+        mbv_config::remove_test_env_var("MBV_SYSTEM");
+
+        assert_eq!(log_dir, Some(state_dir));
+    }
+
     #[test]
     fn config_diagnostic_summary_is_sorted_and_sanitized() {
         let mut config = config::Config {
