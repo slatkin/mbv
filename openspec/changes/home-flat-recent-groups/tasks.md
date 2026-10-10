@@ -21,8 +21,8 @@
 ## 4. Docs and gates
 
 - [x] 4.1 Update `CONTEXT.md`: "Home view" is one flat list with group headers `Continue watching` and `Recently added`; "Recently added" has the age groups `New` (0–1 days) and `Recent` (2–13 days), by the Feeds rule, and no roots, branches, or collapse. Verify: `qmd query "Recently added"` returns the updated term.
-- [ ] 4.2 Run the gates: `cargo fmt --all`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run --workspace`. All pass.
-- [ ] 4.3 Just before push, run `make check-code-file-lines`. Split any governed file over 800 lines along responsibility seams. The check passes.
+- [x] 4.2 Run the gates: `cargo fmt --all`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run --workspace`. All pass.
+- [x] 4.3 Just before push, run `make check-code-file-lines`. Split any governed file over 800 lines along responsibility seams. The check passes.
 
 ## Workflow follow-up
 
