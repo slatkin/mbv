@@ -7,6 +7,13 @@ use mbv_net::stream::SocketStream;
 use std::io::{BufRead, BufReader, Write};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
+
+/// Deadline for an accepted Client to deliver its protocol Hello.
+const CTRL_HELLO_DEADLINE: Duration = Duration::from_secs(10);
+
+/// Interval the accepted stream allows between individual command writes.
+const CTRL_WRITE_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// What one decoded Hello classifies into for admission and registration
 /// (tray-pin-swap design D7).
@@ -280,12 +287,19 @@ impl CtrlClientSession {
             role,
             owner_settings,
         } = self;
-        let reader = BufReader::new(stream);
-        let mut lines = reader.lines();
-        let Some(Ok(line)) = lines.next() else {
+        let mut reader = BufReader::new(stream);
+        let mut hello_line = String::new();
+        let Ok(read) = reader.read_line(&mut hello_line) else {
             return;
         };
-        let Some(hello) = ctrl_client_capabilities(&line, control_credential.as_deref()) else {
+        if read == 0 {
+            return;
+        }
+        // Admitted Clients may be idle indefinitely.
+        let _ = reader.get_ref().set_read_timeout(None);
+        let Some(hello) =
+            ctrl_client_capabilities(hello_line.trim(), control_credential.as_deref())
+        else {
             return;
         };
         if owner_action_refused_over_tcp(transport, hello.role) {
@@ -330,7 +344,7 @@ impl CtrlClientSession {
         drop(clients);
         log_ctrl_client_connected(client_id, peer);
 
-        for line in lines {
+        for line in reader.lines() {
             let Ok(line) = line else { break };
             if line.is_empty() {
                 continue;
@@ -383,6 +397,8 @@ pub(crate) fn spawn_ctrl_client(
     owner_settings: OwnerSettingsReader,
 ) {
     let peer = ctrl_peer_identity(&stream);
+    let _ = stream.set_read_timeout(Some(CTRL_HELLO_DEADLINE));
+    let _ = stream.set_write_timeout(Some(CTRL_WRITE_TIMEOUT));
     let Ok(writer_stream) = stream.try_clone() else {
         return;
     };
