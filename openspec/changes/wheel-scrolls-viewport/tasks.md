@@ -82,10 +82,10 @@
 
 ## 6. Shell-level tests and docs
 
-- [ ] 6.1 Update the tick-integration wheel tests under `src/app/tests/tick_integration/` (`mouse.rs`, `mouse_sidebar.rs`, `prefix_mode.rs`) and `src/app/tests/narrow_browse_migration.rs` that assert wheel-driven cursor movement: rewrite each to assert the new contract it owns, or delete it where a component test from groups 2–5 already owns the claim. The Playlists, Search sidebar and Help tick tests are handled in 5.3a–5.5; leave them as those rows left them. Verify: `cargo nextest run -p mbv` passes.
-- [ ] 6.2 Update the wheel rows in `docs/architecture/interactive-surface-ledger.md` to match the mouse-input verification table (viewport step, semantic boundaries, test names). Verify: every row in the spec table has a ledger row naming its test.
-- [ ] 6.3 Add the new domain terms to `CONTEXT.md`: viewport anchor (`FollowSelection` / `Free`), wheel step, and viewport reach (`LibraryViewportReach`). Verify: each term has a definition and no collision with an existing *Avoid* entry.
-- [ ] 6.4 Run `cargo fmt --all` and `cargo clippy --workspace --all-targets -- -D warnings`; both clean. Commit.
+- [x] 6.1 Update the tick-integration wheel tests under `src/app/tests/tick_integration/` (`mouse.rs`, `mouse_sidebar.rs`, `prefix_mode.rs`) and `src/app/tests/narrow_browse_migration.rs` that assert wheel-driven cursor movement: rewrite each to assert the new contract it owns, or delete it where a component test from groups 2–5 already owns the claim. The Playlists, Search sidebar and Help tick tests are handled in 5.3a–5.5; leave them as those rows left them. Verify: `cargo nextest run -p mbv` passes.
+- [x] 6.2 Update the wheel rows in `docs/architecture/interactive-surface-ledger.md` to match the mouse-input verification table (viewport step, semantic boundaries, test names). Verify: every row in the spec table has a ledger row naming its test.
+- [x] 6.3 Add the new domain terms to `CONTEXT.md`: viewport anchor (`FollowSelection` / `Free`), wheel step, and viewport reach (`LibraryViewportReach`). Verify: each term has a definition and no collision with an existing *Avoid* entry.
+- [x] 6.4 Run `cargo fmt --all` and `cargo clippy --workspace --all-targets -- -D warnings`; both clean. Commit.
 
 ## Workflow follow-up
 
