@@ -649,6 +649,12 @@ fn run() -> Result<(), DaemonError> {
             notify: Box::new(|_| {}),
         },
     )
+    // `Ok` is unreachable: the daemon loop never returns — shutdown always
+    // ends in `process::exit`. Only a startup failure yields `Err`; the
+    // lock-held refusal is an already-running failure (harden-owner-process-
+    // boundaries 1.3).
+    .map(|never| match never {})
+    .map_err(|error| DaemonError::failure(format!("mbvd: {error}")))
 }
 
 fn main() {

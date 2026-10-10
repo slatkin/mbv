@@ -3,7 +3,7 @@
 //! holds a real `flock` on the file. `signal_owner` sends a real SIGTERM and
 //! gets no test of its own.
 
-use mbv_daemon::owner_lock::locked_owner_pid;
+use mbv_daemon::owner_lock::{lock_pid_file, locked_owner_pid};
 use nix::fcntl::{Flock, FlockArg};
 use std::fs::File;
 use std::io::Write;
@@ -49,6 +49,31 @@ fn held_lock_reports_its_pid() {
     let _guard = seed_held_lock(&lock);
 
     assert_eq!(locked_owner_pid(&lock), Some(4242));
+}
+
+/// A held owner lock refuses the packaged Owner's start with an error
+/// naming the record (harden-owner-process-boundaries task 1.3): a second
+/// `lock_pid_file` hits the already-held flock, fails with `WouldBlock`,
+/// and the `OwnerLockError` carrying it names the PID record in its
+/// `Display` just as the entry point's printed message must.
+#[test]
+fn held_lock_refuses_the_second_start_naming_the_path() {
+    let dir = TempDir::new();
+    let lock = dir.path().join("mbv.pid");
+    let _guard = seed_held_lock(&lock);
+
+    let refused = lock_pid_file(&lock).expect_err("a held lock must refuse the second acquisition");
+    let message = refused.to_string();
+
+    assert!(matches!(
+        refused.error.kind(),
+        std::io::ErrorKind::WouldBlock
+    ));
+    assert_eq!(refused.path, lock);
+    assert!(
+        message.contains(lock.to_string_lossy().as_ref()),
+        "the refusal must name the PID record: {message}"
+    );
 }
 
 /// An unlocked PID record is stale or empty: the probe takes its own flock

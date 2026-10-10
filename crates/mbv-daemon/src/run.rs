@@ -7,7 +7,7 @@ use super::{
     start_queue_enrichment,
 };
 use crate::PinSwapState;
-use crate::owner_lock::{PidFileLock, lock_pid_file};
+use crate::owner_lock::{OwnerLockError, PidFileLock, lock_pid_file};
 use crate::{ClientRegistry, CtrlClients};
 use mbv_ctrl::player::PlayerEvent;
 use mbv_ctrl::{CtrlEvent, PlaybackGeneration};
@@ -16,6 +16,7 @@ use mbv_emby_model::EmbyItem;
 use mbv_net::stream::SocketStream;
 use mbv_player::{Player, PlayerOwnerState};
 use mbv_queue::{PlaybackQueue, ProgressObservation, QueueSlotId};
+use std::convert::Infallible;
 use std::net::TcpListener;
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc;
@@ -197,7 +198,10 @@ fn prewarm_player(player: &Player, config: &mbv_config::Config) {
     );
 }
 
-fn start_daemon(startup: DaemonStartupContext, hooks: DaemonRuntimeHooks) -> DaemonStarted {
+fn start_daemon(
+    startup: DaemonStartupContext,
+    hooks: DaemonRuntimeHooks,
+) -> Result<DaemonStarted, OwnerLockError> {
     let role = startup.role;
     let config = startup.config;
     let owner_settings = crate::owner_settings::reader(role, &config);
@@ -207,16 +211,14 @@ fn start_daemon(startup: DaemonStartupContext, hooks: DaemonRuntimeHooks) -> Dae
     // role's PID record is its single-instance lock file (design D2).
     // The flock is taken first and the guard held for the whole run, so
     // whoever locks the file first is the daemon and the recorded PID is
-    // always the live lock holder.
-    let pid_lock = (role == DaemonRole::Packaged).then(|| {
+    // always the live lock holder. A held lock refuses the start with an
+    // error naming the record (harden-owner-process-boundaries 1.3).
+    let pid_lock = if role == DaemonRole::Packaged {
         let path = pid_file();
-        lock_pid_file(&path).unwrap_or_else(|error| {
-            panic!(
-                "mbv daemon: could not take the owner PID lock at {}: {error}",
-                path.display()
-            )
-        })
-    });
+        Some(lock_pid_file(&path)?)
+    } else {
+        None
+    };
 
     let (shutdown_signal_tx, shutdown_signal_rx) = setup_shutdown_signal();
     let client = emby_runtime.as_ref().map_or_else(
@@ -306,7 +308,7 @@ fn start_daemon(startup: DaemonStartupContext, hooks: DaemonRuntimeHooks) -> Dae
     // acknowledged-progress sender into the daemon event loop.
     install_daemon_audiobookshelf_context(&player, audiobookshelf_runtime.as_ref(), &merged_tx);
 
-    DaemonStarted {
+    Ok(DaemonStarted {
         config,
         role,
         emby_runtime,
@@ -323,7 +325,7 @@ fn start_daemon(startup: DaemonStartupContext, hooks: DaemonRuntimeHooks) -> Dae
         pin_swap,
         pending_swap,
         pinned_client_attached,
-    }
+    })
 }
 
 /// Forwards the player, Emby-ws, and shutdown-signal sources onto the
@@ -570,8 +572,8 @@ pub fn run_with_options(
     startup: DaemonStartupContext,
     audio_only: bool,
     hooks: DaemonRuntimeHooks,
-) -> ! {
-    let started = start_daemon(startup, hooks);
+) -> Result<Infallible, OwnerLockError> {
+    let started = start_daemon(startup, hooks)?;
     let DaemonStarted {
         config,
         role,

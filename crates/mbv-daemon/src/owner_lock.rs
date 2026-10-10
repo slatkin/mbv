@@ -46,33 +46,80 @@ pub fn locked_owner_pid(path: &Path) -> Option<u32> {
 /// (which also happens automatically on any process death).
 pub type PidFileLock = nix::fcntl::Flock<File>;
 
+/// Why a packaged Owner process could not take its PID record and start.
+///
+/// The record's flock is already held by another Owner process (so a
+/// daemon is already running), or the record itself could not be opened,
+/// truncated, or written. The entry point that starts the daemon prints
+/// this error and exits non-zero (harden-owner-process-boundaries 1.3).
+#[derive(Debug)]
+pub struct OwnerLockError {
+    /// The PID record whose flock could not be taken.
+    pub path: PathBuf,
+    /// The acquisition error; a `WouldBlock` kind names a live lock holder.
+    pub error: io::Error,
+}
+
+impl std::fmt::Display for OwnerLockError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "could not take the owner PID lock at {}: {}",
+            self.path.display(),
+            self.error
+        )
+    }
+}
+
+impl std::error::Error for OwnerLockError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(&self.error)
+    }
+}
+
+/// An `OwnerLockError` naming the record `error` occurred at.
+fn held_error(path: &Path, error: io::Error) -> OwnerLockError {
+    OwnerLockError {
+        path: path.to_path_buf(),
+        error,
+    }
+}
+
 /// Acquire the exclusive non-blocking flock on `path` and write this
-/// process's PID into it. Fails when another Owner process already holds
-/// the lock or the file cannot be opened; the returned `PidFileLock` then
-/// keeps the flock for the run's lifetime.
-pub fn lock_pid_file(path: &Path) -> io::Result<PidFileLock> {
+/// process's PID into it. Fails with `OwnerLockError` when another Owner
+/// process already holds the lock or the record cannot be opened, truncated,
+/// or written; the returned `PidFileLock` otherwise keeps the flock for the
+/// run's lifetime.
+pub fn lock_pid_file(path: &Path) -> Result<PidFileLock, OwnerLockError> {
     // Intentionally not truncated: the file may hold a previous PID; it
     // is truncated below, once this process holds the lock.
     let file = std::fs::OpenOptions::new()
         .create(true)
         .write(true)
         .truncate(false)
-        .open(path)?;
+        .open(path)
+        .map_err(|error| held_error(path, error))?;
     let mut file = match nix::fcntl::Flock::lock(file, nix::fcntl::FlockArg::LockExclusiveNonblock)
     {
         Ok(file) => file,
         Err((_, nix::errno::Errno::EWOULDBLOCK)) => {
-            return Err(io::Error::new(
-                io::ErrorKind::WouldBlock,
-                "another Owner process holds the lock",
+            return Err(held_error(
+                path,
+                io::Error::new(
+                    io::ErrorKind::WouldBlock,
+                    "another Owner process holds the lock",
+                ),
             ));
         }
-        Err((_, errno)) => return Err(io::Error::from_raw_os_error(errno as i32)),
+        Err((_, errno)) => {
+            return Err(held_error(path, io::Error::from_raw_os_error(errno as i32)));
+        }
     };
-    file.set_len(0)?;
-    file.seek(io::SeekFrom::Start(0))?;
-    write!(file, "{}", std::process::id())?;
-    file.flush()?;
+    file.set_len(0).map_err(|error| held_error(path, error))?;
+    file.seek(io::SeekFrom::Start(0))
+        .map_err(|error| held_error(path, error))?;
+    write!(file, "{}", std::process::id()).map_err(|error| held_error(path, error))?;
+    file.flush().map_err(|error| held_error(path, error))?;
     Ok(file)
 }
 

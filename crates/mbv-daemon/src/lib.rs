@@ -37,7 +37,7 @@ pub(crate) use core::{
 pub use core::{DaemonPlayerHandle, DaemonRuntimeHooks, SwapDirection};
 pub mod owner_lock;
 #[doc(inline)]
-pub use owner_lock::{SignalOwnerError, locked_owner_pid, pid_file, signal_owner};
+pub use owner_lock::{OwnerLockError, SignalOwnerError, locked_owner_pid, pid_file, signal_owner};
 mod core_ctrl_spawn;
 pub(crate) use core_ctrl_spawn::spawn_ctrl_client;
 mod run_shutdown;

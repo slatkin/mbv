@@ -284,7 +284,7 @@ pub fn run_local_daemon_main() -> ! {
         std::sync::Arc::new(std::sync::Mutex::new(None));
     let player_handle_for_tray = std::sync::Arc::clone(&player_handle);
 
-    mbv_daemon::run_with_options(
+    match mbv_daemon::run_with_options(
         mbv_daemon::DaemonStartupContext::new(config, mbv_daemon::DaemonRole::Local),
         false,
         mbv_daemon::DaemonRuntimeHooks {
@@ -321,7 +321,16 @@ pub fn run_local_daemon_main() -> ! {
             }),
             notify: Box::new(crate::pin::notify),
         },
-    )
+    ) {
+        // `Ok` is unreachable: the daemon loop never returns — shutdown
+        // always ends in `process::exit`. Only a startup failure takes
+        // the `Err` path, reported here like every other startup error.
+        Ok(never) => match never {},
+        Err(error) => {
+            eprintln!("mbv: local daemon: {error}");
+            std::process::exit(1);
+        }
+    }
 }
 
 #[cfg(test)]
