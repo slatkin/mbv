@@ -5,23 +5,47 @@ TBD - created by archiving change daemon-multi-connection. Update Purpose after 
 
 ## Requirements
 
-### Requirement: Protocol version 11
+### Requirement: Protocol version 10 is current
 
-The ctrl protocol version SHALL be 11. Clients and daemons SHALL negotiate protocol version 11 during the hello handshake and SHALL reject a peer reporting any other version before the client sends credential-bearing or command messages. Version 11 SHALL change `PlayerEvent::Stopped` and `PlayerEvent::TrackCompleted` to carry `run_identity` as a single generation value instead of a `(request_id, generation)` pair. This non-additive version bump is required by the ctrl wire rule because it changes the wire shape of an existing event field; the capability rule continues to apply to additive changes.
+The ctrl protocol version SHALL be 10. Clients and daemons SHALL negotiate
+protocol version 10 during the hello handshake and SHALL reject a peer
+reporting any other version before the client sends credential-bearing or
+command messages. Peer compatibility is exact equality with 10; there is no
+range negotiation and no backward-compatibility path for a different version.
 
-#### Scenario: v11 client connects to v11 daemon
+The version number changes only with a deliberate protocol bump. A bump is
+non-additive by definition and requires explicit user approval: every bump
+kills all running daemons and clients until the user restarts them (`mbv -q`),
+so a bump is never a ride-along with a refactor. The capability rule (additive
+changes advertise themselves without a version change) continues to apply.
 
-- **WHEN** a client and daemon both report protocol version 11
-- **THEN** the connection SHALL proceed with v11 semantics
+Version history the next person to touch the handshake should know:
 
-#### Scenario: older client connects to a v11 daemon
+- Version 10 bumped for the `EmbyItem` wire-shape change: the required
+  `director`/`genre` fields on v9 peers were replaced by defaultable
+  `genres`/`people`/`external_urls`. A v9 peer silently drops every
+  `UnifiedQueue*` command from a v10 client because the removed required
+  fields fail deserialization; undeserializable ctrl lines are skipped
+  without a log.
+- Version 11 was briefly reserved for the `run_identity` tuple→scalar
+  wire-shape change in `PlayerEvent::Stopped`/`TrackCompleted`, but that bump
+  was withdrawn: the dropped tuple slot was a hardcoded `PlaybackRequestId`
+  of 0, i.e. dead data, so the wire keeps the protocol-10 pair shape and
+  version 10 stays current. A bare scalar remains accepted on decode.
 
-- **WHEN** a client reporting any version other than 11 connects to a daemon requiring version 11
-- **THEN** the daemon SHALL reject the protocol mismatch
+#### Scenario: v10 client connects to v10 daemon
 
-#### Scenario: v11 client connects to an older daemon
+- **WHEN** a client and daemon both report protocol version 10
+- **THEN** the connection SHALL proceed with current semantics
 
-- **WHEN** a v11 client receives a daemon hello reporting any version other than 11
+#### Scenario: peer reporting any other version is rejected
+
+- **WHEN** a peer reports any version other than 10 during the hello handshake
+- **THEN** the peer SHALL be rejected for a protocol-version mismatch
+
+#### Scenario: client receiving a mismatched daemon hello refuses without credentials
+
+- **WHEN** a version-10 client receives a daemon hello reporting any other version
 - **THEN** the client SHALL refuse the connection without sending a Remote Service credential
 - **THEN** the failure message SHALL identify a protocol-version mismatch
 
