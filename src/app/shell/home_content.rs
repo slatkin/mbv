@@ -21,7 +21,47 @@ use std::time::Instant;
 impl Model {
     pub(in crate::app) fn assign_home_content(&mut self, content: HomeContent) {
         self.home_content = content;
+        // A bootstrap or refresh may carry a rebuilt library set that dropped
+        // a previously fetched source's library; evict it before projecting
+        // (review P2 of Unit C, `home-recently-added-tree`).
+        self.evict_gone_home_recently_added();
         self.push_home_content();
+    }
+
+    /// Evict fetched `Recently added` sources whose Service library no
+    /// longer exists: an Emby source without a surviving library tab (a
+    /// rebuilt or replaced setup dropped it), or an Audiobookshelf source
+    /// without a surviving podcast library (a teardown or replacement
+    /// empties the catalog). Feeds is derived at push time and never stored.
+    /// Returns whether anything was evicted; the caller re-projects.
+    pub(in crate::app) fn evict_gone_home_recently_added(&mut self) -> bool {
+        let emby_ids: std::collections::HashSet<String> = self
+            .app
+            .libs
+            .iter()
+            .map(|library| library.library.id.clone())
+            .collect();
+        let audiobookshelf_ids: std::collections::HashSet<String> = self
+            .app
+            .audiobookshelf_libraries
+            .iter()
+            .map(|library| library.id.clone())
+            .collect();
+        let mut evicted = false;
+        self.home_recently_added.retain(|source, _| {
+            let keep = match source {
+                DestinationLatestSource::Emby(library_id) => emby_ids.contains(library_id),
+                DestinationLatestSource::Audiobookshelf(library_id) => {
+                    audiobookshelf_ids.contains(library_id)
+                }
+                DestinationLatestSource::Feeds => true,
+            };
+            if !keep {
+                evicted = true;
+            }
+            keep
+        });
+        evicted
     }
 
     pub(in crate::app) fn update_emby_latest_snapshot(
@@ -74,6 +114,10 @@ impl Model {
 
     pub(in crate::app) fn clear_home_content(&mut self) {
         self.home_content.continue_items.clear();
+        // `HomeContentCleared` is the Service teardown arm: a removed or
+        // replaced setup also drops its fetched `Recently added` sources
+        // (review P2).
+        self.evict_gone_home_recently_added();
         self.push_home_content();
     }
 

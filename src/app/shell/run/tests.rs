@@ -684,3 +684,79 @@ fn home_recently_added_store_keeps_only_items_inside_the_14_day_cutoff() {
         .expect("live generation stores under its source");
     assert_eq!(rows.len(), 1);
 }
+
+/// Review P1 (Unit C, `home-recently-added-tree`): a fetched Home Recently
+/// added event reaches the Home owner from its own drain -- the owner keeps
+/// the rows, and no unrelated projection has to run first.
+#[test]
+fn a_fetched_home_recently_added_event_reaches_the_home_owner_on_its_own_drain() {
+    let mut model = Model::new(make_app_stub());
+    let current = model.app.home_latest_launch_window.current;
+    model
+        .app
+        .channels
+        .lib_tx
+        .send(LibEvent::ModelContent(
+            ModelContentEvent::HomeRecentlyAddedFetched {
+                source: crate::app::DestinationLatestSource::Emby("lib".into()),
+                generation: model.app.emby_runtime.generation(),
+                items: vec![home_recently_added_feed_row(Some(current - 24 * 60 * 60))],
+            },
+        ))
+        .expect("lib event channel");
+
+    model.drain_lib_events();
+
+    assert!(
+        !model
+            .home_owner_shared()
+            .expect("Home destination owner mounted")
+            .recent_rows()
+            .is_empty()
+    );
+}
+
+/// Review P2 (Unit C, `home-recently-added-tree`): an assignment carrying a
+/// rebuilt library set that dropped the source's library evicts its stored
+/// rows, so they leave the Home owner instead of showing as stale.
+#[test]
+fn a_dropped_librarys_recently_added_rows_leave_the_home_owner() {
+    let mut model = Model::new(make_app_stub());
+    let current = model.app.home_latest_launch_window.current;
+    model
+        .app
+        .channels
+        .lib_tx
+        .send(LibEvent::ModelContent(
+            ModelContentEvent::HomeRecentlyAddedFetched {
+                source: crate::app::DestinationLatestSource::Emby("lib".into()),
+                generation: model.app.emby_runtime.generation(),
+                items: vec![home_recently_added_feed_row(Some(current - 24 * 60 * 60))],
+            },
+        ))
+        .expect("lib event channel");
+    model.drain_lib_events();
+    assert_eq!(
+        model
+            .home_owner_shared()
+            .expect("Home destination owner mounted")
+            .recent_rows()
+            .len(),
+        1,
+        "the fetched rows reached the owner before the library dropped"
+    );
+
+    model.app.libs.clear();
+    model.assign_home_content(crate::app::state::playback::HomeContent {
+        continue_items: Vec::new(),
+        loading: false,
+    });
+
+    assert!(
+        model
+            .home_owner_shared()
+            .expect("Home destination owner mounted")
+            .recent_rows()
+            .is_empty()
+    );
+}

@@ -344,6 +344,14 @@ impl Model {
                 self.push_audiobookshelf_podcast_content();
                 self.push_audiobookshelf_book_content();
                 self.push_music_workspace_content();
+                // ABS teardown, replacement, and catalog rebuilds restructure
+                // `audiobookshelf_libraries` inside the App-side drain; evict
+                // fetched Home rows whose podcast library is gone (review P2
+                // of Unit C). Only an actual eviction re-projects Home; once
+                // the rebuild lands, the Home fetch refills the sources.
+                if self.evict_gone_home_recently_added() {
+                    self.push_home_content();
+                }
             }
             had_events |= self.drain_suspended_home_events();
             if self.drain_player_events(&mut had_events) {
