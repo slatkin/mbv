@@ -14,9 +14,11 @@ impl Model {
                     self.app.home_play_target(item, from_cw);
                 }
             }
-            ShellRequest::HomeEnqueue(target) => {
-                if let Some((item, from_cw)) = self.home_stable_target(&target) {
-                    self.app.home_enqueue_target(item, from_cw);
+            ShellRequest::HomeEnqueue(targets) => {
+                for target in targets {
+                    if let Some((item, from_cw)) = self.home_stable_target(&target) {
+                        self.app.home_enqueue_target(item, from_cw);
+                    }
                 }
             }
             ShellRequest::RowContextMenu(
@@ -76,14 +78,18 @@ impl Model {
                     self.app.open_context_menu(cw_selected, item);
                 }
             }
-            ShellRequest::HomeDelete(target) => {
-                if let Some((QueueItem::Emby(item), true)) = self.home_stable_target(&target) {
-                    self.app.remove_from_continue_watching(&item);
+            ShellRequest::HomeDelete(targets) => {
+                for target in targets {
+                    if let Some((QueueItem::Emby(item), true)) = self.home_stable_target(&target) {
+                        self.app.remove_from_continue_watching(&item);
+                    }
                 }
             }
-            ShellRequest::HomeToggleWatched(target) => {
-                if let Some((QueueItem::Emby(item), true)) = self.home_stable_target(&target) {
-                    self.app.cw_toggle_watched(&item);
+            ShellRequest::HomeToggleWatched(targets) => {
+                for target in targets {
+                    if let Some((QueueItem::Emby(item), true)) = self.home_stable_target(&target) {
+                        self.app.cw_toggle_watched(&item);
+                    }
                 }
             }
             _ => {}
@@ -179,7 +185,7 @@ mod tests {
         let mut model = Model::new(app);
         model.home_content.continue_items = make_items(3);
 
-        model.handle_home_request(ShellRequest::HomeEnqueue(target("id2")));
+        model.handle_home_request(ShellRequest::HomeEnqueue(vec![target("id2")]));
         let appended: Vec<String> = cmd_rx
             .try_iter()
             .filter_map(|command| match command {

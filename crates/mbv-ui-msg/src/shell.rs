@@ -207,10 +207,13 @@ pub enum ShellRequest {
     LibraryRoutesEsc,
     /// Semantic feed-management action; local form edits stay in the component.
     FeedsManageIntent(FeedsManageIntent),
-    /// Play the Home item at the component-owned flat cursor (task 3.4).
+    /// Play the Home item the owner selected (design D6): `Enter` on an item
+    /// row.
     HomePlay(HomeItemTarget),
-    /// Enqueue the Home item at the component-owned flat cursor.
-    HomeEnqueue(HomeItemTarget),
+    /// Enqueue the Home item targets the owner resolved (design D6): the
+    /// marked item targets in display order, or the single selected item
+    /// target. The shell applies the targets in the carried order.
+    HomeEnqueue(Vec<HomeItemTarget>),
     /// Open a destination row context menu at an optional pointer anchor.
     ///
     /// The anchor remains a raw pointer-coordinate tuple because the shell
@@ -218,13 +221,16 @@ pub enum ShellRequest {
     /// boundary; keyboard requests use `None` and resolve placement from the
     /// freshly painted selection geometry.
     RowContextMenu(ContextMenuTargets, Option<(u16, u16)>),
-    /// Remove the Home item at the component-owned flat cursor from
-    /// Continue Watching (Delete), keeping the cw-range guard the legacy
-    /// Delete arm applied.
-    HomeDelete(HomeItemTarget),
-    /// Toggle watched state for the component-resolved Continue Watching row.
-    /// The shell resolves this stable identity and never consults a cursor.
-    HomeToggleWatched(HomeItemTarget),
+    /// Remove the Home Continue Watching item targets the owner resolved
+    /// (design D6/D7): the marked item targets in display order, or the
+    /// single selected item target. The shell keeps the cw-range guard per
+    /// target and drops every non-`Continue` target.
+    HomeDelete(Vec<HomeItemTarget>),
+    /// Toggle watched state for the Home Continue Watching item targets the
+    /// owner resolved (design D6): the marked item targets in display order,
+    /// or the single selected item target. The shell resolves each stable
+    /// identity and never consults a cursor.
+    HomeToggleWatched(Vec<HomeItemTarget>),
     /// A row the user single-clicked in the Home list or Library Hero overlay. The
     /// component has already moved its own selection to the resolved row; the
     /// shell only pulls panel focus to the Library (design.md D4/D5).

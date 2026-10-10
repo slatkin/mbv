@@ -6,35 +6,36 @@
 //! `Recently added` rows, and the launch window; the owner projects them
 //! into the shared tree (`home_content/tree.rs`) and translates the panel's
 //! slot events and forwarded chords into the same typed `Msg`s the mounted
-//! `HomeComponent` emitted (rows 5.2 and 5.3 finish the port: the visual-mode
-//! chords the flat carrier interpreted, the marked-selection requests, and
-//! the restoration/hero landing rules still live here as stated seams).
+//! `HomeComponent` emitted (`home_content/keyboard.rs` holds the input
+//! translation, row 5.2; row 5.3 owns the restoration/hero landing rules).
 //!
 //! The selected item's hero comes from the shared `hero_content` producer for
 //! its content type (Emby, ABS or Feeds), and its image state is the shell
 //! projection's (task 5.10): this owner never fetches.
 
-use tuirealm::event::{Key, KeyEvent, KeyModifiers};
+use tuirealm::event::KeyEvent;
 
 use super::library_panel::HeroContentData;
 use super::library_panel::content::{HeroContent, LibraryPanelContent, ListSlot};
 use super::library_panel::hero::hero_content_queue;
 use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
-use super::list::tree_browser::{TreeBrowser, TreeExternalIntent, TreeOperation};
-use super::media_list::MediaListSurfaceInput;
+use super::list::tree_browser::{TreeBrowser, TreeOperation};
 use mbv_config::{LibraryItemIdentity, SelectorIdentity};
 use mbv_queue::QueueItem;
 use mbv_render::components::tv_wide::HeroImageState;
-use mbv_ui_model::context_menu::ContextMenuTargets;
 use mbv_ui_model::home_latest::{HomeLatestLaunchWindow, HomeRecentRow};
 use mbv_ui_model::media_list::SelectionOrigin;
 use mbv_ui_model::targets::{HomeItemTarget, HomeTreeTarget};
-use mbv_ui_msg::{LeafKeyResult, Msg, ShellRequest};
+use mbv_ui_msg::{LeafKeyResult, Msg};
 
+mod keyboard;
 mod launch_state;
 mod tree;
 
 use tree::TREE_STEMS;
+
+#[cfg(test)]
+mod tests;
 
 /// The embedded content owner for the Home destination (design D2). Plain
 /// type; the mounted `LibraryPanel` borrows it for content and slot events.
@@ -158,6 +159,17 @@ impl HomeContent {
         }
     }
 
+    /// The typed effect target for Home's current selection, resolved
+    /// locally (design D1): `Root`/`Age` targets never cross the boundary,
+    /// so only the selected item target is emitted. The action chords read
+    /// the marked set through `keyboard.rs` (`action_item_targets`).
+    pub(super) fn selected_item_target(&self) -> Option<HomeItemTarget> {
+        match self.tree.selected_target()? {
+            HomeTreeTarget::Item(target) => Some(target.clone()),
+            HomeTreeTarget::Root(_) | HomeTreeTarget::Age(_) => None,
+        }
+    }
+
     /// Reset Home's local presentation without replacing its content: drop
     /// marks and any filter state, re-expand every root and branch, and let
     /// the tree return its selection to the first visible row.
@@ -215,196 +227,6 @@ impl HomeContent {
     /// producer, so Home's row and its source tab render one set of facts.
     fn hero_content_data(&self) -> Option<HeroContentData> {
         self.current_item().as_ref().map(hero_content_queue)
-    }
-
-    /// The typed effect target for Home's current selection, resolved
-    /// locally (design D1): `Root`/`Age` targets never cross the boundary,
-    /// so only the selected item target is emitted. 5.2 replaces the
-    /// selection-only reads with the marked-in-display-order reads.
-    fn selected_item_target(&self) -> Option<HomeItemTarget> {
-        match self.tree.selected_target()? {
-            HomeTreeTarget::Item(target) => Some(target.clone()),
-            HomeTreeTarget::Root(_) | HomeTreeTarget::Age(_) => None,
-        }
-    }
-
-    /// The item targets a resolved activate or context intent carries:
-    /// an `Item` resolves to its section-scoped target; a `Root`/`Age`
-    /// target stays local to the owner (no request crosses the boundary).
-    fn item_targets(intent: Option<TreeExternalIntent<HomeTreeTarget>>) -> Vec<HomeItemTarget> {
-        let Some(intent) = intent else {
-            return Vec::new();
-        };
-        match intent {
-            TreeExternalIntent::Activate(HomeTreeTarget::Item(target))
-            | TreeExternalIntent::Context(HomeTreeTarget::Item(target)) => {
-                vec![target]
-            }
-            TreeExternalIntent::ContextSelection(targets) => targets
-                .into_iter()
-                .filter_map(|target| match target {
-                    HomeTreeTarget::Item(item_target) => Some(item_target),
-                    _ => None,
-                })
-                .collect(),
-            TreeExternalIntent::Activate(_) | TreeExternalIntent::Context(_) => Vec::new(),
-        }
-    }
-
-    /// Home's local key interpretation, forwarded by the focused panel (the
-    /// mounted `HomeComponent::handle_key` contract, unchanged — the router
-    /// owns every global chord and keeps precedence). 5.2 ports the
-    /// visual-mode chords (`Ctrl+A`, Esc, Space) to the tree's mark surface;
-    /// they stay unhandled here.
-    fn handle_key(&mut self, key: &KeyEvent) -> Option<Msg> {
-        if key.modifiers.contains(KeyModifiers::ALT)
-            && matches!(key.code, Key::Left | Key::Right | Key::Up | Key::Down)
-        {
-            return None;
-        }
-        match key.code {
-            Key::Up => {
-                self.handle_tree_operation(TreeOperation::Move(-1));
-                None
-            }
-            Key::Down => {
-                self.handle_tree_operation(TreeOperation::Move(1));
-                None
-            }
-            Key::PageUp => {
-                self.handle_tree_operation(TreeOperation::Page(-1));
-                None
-            }
-            Key::PageDown => {
-                self.handle_tree_operation(TreeOperation::Page(1));
-                None
-            }
-            Key::Home => {
-                self.handle_tree_operation(TreeOperation::First);
-                None
-            }
-            Key::End => {
-                self.handle_tree_operation(TreeOperation::Last);
-                None
-            }
-            Key::Left => {
-                self.handle_tree_operation(TreeOperation::Parent);
-                None
-            }
-            // Right never activates or collapses (design D6): the tree's
-            // expanded-root `Activate` intent is consumed and dropped.
-            Key::Right => {
-                self.tree.apply(TreeOperation::Right);
-                None
-            }
-            // Ctrl+A multi-select (visual mode) is a row-5.2 port: the
-            // aggregate marking surface replaces the carrier's visual mode.
-            Key::Char('a') if key.modifiers.contains(KeyModifiers::CONTROL) => None,
-            Key::Char('.') => {
-                let targets =
-                    Self::item_targets(self.tree.apply(TreeOperation::Context).external_intent);
-                Some(Self::context_menu(targets, None))
-            }
-            Key::Enter if key.modifiers.contains(KeyModifiers::CONTROL) => self
-                .selected_item_target()
-                .map(|target| Msg::Shell(Box::new(ShellRequest::HomeEnqueue(target)))),
-            Key::Enter => self.activate_selected_row(),
-            Key::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => self
-                .selected_item_target()
-                .map(|target| Msg::Shell(Box::new(ShellRequest::HomeToggleWatched(target)))),
-            Key::Delete => self
-                .selected_item_target()
-                .map(|target| Msg::Shell(Box::new(ShellRequest::HomeDelete(target)))),
-            _ => None,
-        }
-    }
-
-    fn activate_selected_row(&mut self) -> Option<Msg> {
-        // Design D6: Enter applies `Activate`; on a `Root`/`Age` target the
-        // owner resolves it locally into an expansion toggle.
-        match self.tree.selected_target() {
-            Some(HomeTreeTarget::Item(item_target)) => {
-                let target = item_target.clone();
-                self.tree.apply(TreeOperation::Activate);
-                Some(Msg::Shell(Box::new(ShellRequest::HomePlay(target))))
-            }
-            Some(root_or_age @ (HomeTreeTarget::Root(_) | HomeTreeTarget::Age(_))) => {
-                let root_or_age = root_or_age.clone();
-                self.tree
-                    .apply(TreeOperation::ToggleExpansionTarget(root_or_age));
-                None
-            }
-            None => None,
-        }
-    }
-
-    fn handle_tree_operation(&mut self, operation: TreeOperation<HomeTreeTarget>) {
-        self.tree.apply(operation);
-    }
-
-    fn context_menu(targets: Vec<HomeItemTarget>, anchor: Option<(u16, u16)>) -> Msg {
-        Msg::Shell(Box::new(ShellRequest::RowContextMenu(
-            ContextMenuTargets::Home(targets),
-            anchor,
-        )))
-    }
-
-    fn on_list_slot_event(&mut self, input: MediaListSurfaceInput) -> Option<Msg> {
-        match input {
-            MediaListSurfaceInput::Wheel { at, delta } => {
-                // The wheel scrolls the viewport, not the selection
-                // (wheel-scrolls-viewport D4); a claimed wheel still focuses
-                // Library.
-                if !self.tree.claims_current_point(at) {
-                    return None;
-                }
-                self.tree.apply(TreeOperation::Scroll(delta));
-                Some(Msg::TerminalEvent(
-                    mbv_ui_msg::TerminalObserverEvent::MouseClaimed,
-                ))
-            }
-            MediaListSurfaceInput::Click(at) | MediaListSurfaceInput::RangeClick(at) => {
-                let target = self.tree.resolve_current_point(at).cloned()?;
-                self.tree.apply(TreeOperation::Select(target.clone()));
-                match target {
-                    HomeTreeTarget::Item(item_target) => {
-                        Some(Msg::Shell(Box::new(ShellRequest::HomeRowClick {
-                            target: item_target,
-                        })))
-                    }
-                    _ => None,
-                }
-            }
-            MediaListSurfaceInput::ToggleClick(at) => {
-                self.tree.resolve_current_point(at)?;
-                self.tree.apply(TreeOperation::PointerToggleMark(at));
-                None
-            }
-            MediaListSurfaceInput::DoubleClick(at) => {
-                let target = self.tree.resolve_current_point(at).cloned()?;
-                self.tree.apply(TreeOperation::Select(target.clone()));
-                match target {
-                    HomeTreeTarget::Item(item_target) => {
-                        Some(Msg::Shell(Box::new(ShellRequest::HomeRowActivate {
-                            target: item_target,
-                        })))
-                    }
-                    root_or_age @ (HomeTreeTarget::Root(_) | HomeTreeTarget::Age(_)) => {
-                        self.tree
-                            .apply(TreeOperation::ToggleExpansionTarget(root_or_age));
-                        None
-                    }
-                }
-            }
-            MediaListSurfaceInput::ContextClick(at) => {
-                let target = self.tree.resolve_current_point(at).cloned()?;
-                self.tree.apply(TreeOperation::Select(target));
-                let intent = self.tree.apply(TreeOperation::Context).external_intent;
-                let targets = Self::item_targets(intent);
-                Some(Self::context_menu(targets, Some((at.x, at.y))))
-            }
-            _ => None,
-        }
     }
 }
 
@@ -482,25 +304,7 @@ impl LibraryContentOwner for HomeContent {
     }
 
     fn on_key_result(&mut self, key: &KeyEvent) -> LeafKeyResult {
-        match self.handle_key(key) {
-            Some(message) => LeafKeyResult::Consumed(Some(Box::new(message))),
-            None if matches!(
-                key.code,
-                Key::Up
-                    | Key::Down
-                    | Key::Left
-                    | Key::Right
-                    | Key::Home
-                    | Key::End
-                    | Key::PageUp
-                    | Key::PageDown
-                    | Key::Enter
-            ) =>
-            {
-                LeafKeyResult::Consumed(None)
-            }
-            None => LeafKeyResult::Unhandled,
-        }
+        self.on_key_result(key)
     }
 
     /// Bounded read-only Continue Watching launch state.
@@ -528,45 +332,5 @@ impl LibraryContentOwner for HomeContent {
 
     fn as_any(&self) -> &dyn std::any::Any {
         self
-    }
-}
-
-/// Task 3.2 (`home-rows-playback-palette`): the Home row projection applies
-/// the now-playing title-parts mapping — the container/context part is the
-/// primary, the item's own title the secondary, and title-only rows carry no
-/// secondary part. The tree rows reuse the same split through
-/// `home_content/tree.rs`; the interactive tests against the tree land in
-/// rows 5.2 and 5.3 (the carrier tests they replaced exercised the flat
-/// list's own selection contract, which the shared tree owns its own tests
-/// for in `mbv-components::list::tree_browser`).
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use mbv_emby_model::test_support::make_item;
-
-    fn owner_with_items(items: Vec<QueueItem>) -> HomeContent {
-        let mut owner = HomeContent::new();
-        owner.set_content(items, false);
-        owner
-    }
-
-    #[test]
-    fn key_intents_use_selected_home_item_and_ctrl_enter_enqueues() {
-        let item = QueueItem::Emby(Box::new(make_item("Film", "Movie")));
-        let mut owner = owner_with_items(vec![item]);
-        // Launch restoration (design D8) lands the selection on the first
-        // item row, so the interactive keys read the same target the
-        // restored run shows.
-        owner.select_first_item_target();
-        let key = |code, modifiers| KeyEvent { code, modifiers };
-
-        assert!(matches!(
-            owner.handle_key(&key(Key::Enter, KeyModifiers::NONE)),
-            Some(Msg::Shell(request)) if matches!(request.as_ref(), ShellRequest::HomePlay(_))
-        ));
-        assert!(matches!(
-            owner.handle_key(&key(Key::Enter, KeyModifiers::CONTROL)),
-            Some(Msg::Shell(request)) if matches!(request.as_ref(), ShellRequest::HomeEnqueue(_))
-        ));
     }
 }
