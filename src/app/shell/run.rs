@@ -431,6 +431,10 @@ impl Model {
         if self.app.drain_feed_tab_results() {
             *had_events = true;
             self.push_active_emby_library_owner_content();
+            // Feeds rows are derived from `all_entries` at Home-push time
+            // (design D2 of `home-recently-added-tree`), so a feed refresh
+            // re-projects Home.
+            self.push_home_content();
         }
 
         *had_events |= self.drain_feed_add_results();

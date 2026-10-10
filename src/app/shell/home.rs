@@ -106,7 +106,55 @@ impl Model {
             .map(|item| QueueItem::Emby(Box::new(item)))
             .collect();
         let loading = self.home_content.loading;
-        self.update_home_owner(|home| home.set_content(continue_items, loading));
+        let recent_rows = self.home_recent_rows();
+        let launch_window = self.app.home_latest_launch_window;
+        self.update_home_owner(|home| {
+            home.set_content(continue_items, loading);
+            home.set_recent_rows(recent_rows, launch_window);
+        });
+    }
+
+    /// The merged, newest-first `Recently added` rows, built at push time
+    /// from the per-source store plus Feeds (design D2 of
+    /// `home-recently-added-tree`). Feeds has no store entry: its rows derive
+    /// from `all_entries`, filtered to the same 14-day cutoff, with the
+    /// subscription name resolved by the shell. A merged row without a valid
+    /// date has no age branch, so it can never appear.
+    pub(in crate::app) fn home_recent_rows(&self) -> Vec<mbv_ui_model::home_latest::HomeRecentRow> {
+        use mbv_ui_model::home_latest::{HomeRecentRow, provider_timestamp_secs, recent_age};
+        let window = self.app.home_latest_launch_window;
+        let mut rows: Vec<HomeRecentRow> = self
+            .home_recently_added
+            .values()
+            .flatten()
+            .map(|item| HomeRecentRow {
+                item: item.clone(),
+                feed_name: None,
+            })
+            .collect();
+        rows.extend(
+            self.app
+                .feed_tab
+                .all_entries
+                .iter()
+                .map(|entry| {
+                    let feed_name = entry.feed_id.as_deref().and_then(|feed_id| {
+                        self.app
+                            .feed_tab
+                            .subscriptions
+                            .iter()
+                            .find(|subscription| subscription.url == feed_id)
+                            .map(|subscription| subscription.name.clone())
+                    });
+                    (QueueItem::Feed(entry.clone()), feed_name)
+                })
+                .filter(|(item, _)| recent_age(provider_timestamp_secs(item), window).is_some())
+                .map(|(item, feed_name)| HomeRecentRow { item, feed_name }),
+        );
+        rows.sort_by(|a, b| {
+            provider_timestamp_secs(&b.item).cmp(&provider_timestamp_secs(&a.item))
+        });
+        rows
     }
 }
 
@@ -169,5 +217,118 @@ mod tests {
                 .as_ref()
                 .is_some_and(|action| matches!(action, crate::app::ContextAction::Play))
         }));
+    }
+
+    fn date_added_iso(secs: i64) -> String {
+        use time::format_description::well_known::Iso8601;
+        time::OffsetDateTime::from_unix_timestamp(secs)
+            .expect("in-range timestamp")
+            .format(&Iso8601::DEFAULT)
+            .expect("ISO-8601 formatting always succeeds")
+    }
+
+    /// Row 4.4 (`home-recently-added-tree`): `push_home_content` sends the
+    /// merged `Recently added` projection to the Home owner — Emby and
+    /// Audiobookshelf fetch events plus feed entries, interleaved newest
+    /// first by provider date, with feed entry names resolved from the
+    /// subscriptions — where a fetched item older than the 14-day cutoff
+    /// contributes nothing and the launch window rides along.
+    #[test]
+    fn home_pushes_merged_recently_added_rows_newest_first_inside_14_days() {
+        let mut model = Model::new(make_app_stub());
+        let current = model.app.home_latest_launch_window.current;
+        let day = 24 * 60 * 60;
+
+        let mut movie = make_item("Movie", "Movie");
+        movie.id = "movie".into();
+        movie.date_added = date_added_iso(i64::try_from(current - 3 * day).unwrap());
+        let mut old_movie = make_item("OldMovie", "Movie");
+        old_movie.id = "movie-old".into();
+        old_movie.date_added = date_added_iso(i64::try_from(current - 20 * day).unwrap());
+        let episode = mbv_queue::AudiobookshelfQueueItem {
+            library_item_id: "pod-lib".into(),
+            episode_id: "episode".into(),
+            title: "Episode".into(),
+            show_title: None,
+            author: None,
+            description: None,
+            duration_ticks: None,
+            position_ticks: 0,
+            played: false,
+            pub_date_secs: Some(current - 2 * day),
+            is_finished: false,
+            cover_path: None,
+        };
+        model.accept_home_recently_added(
+            crate::app::DestinationLatestSource::Emby("lib".into()),
+            model.app.emby_runtime.generation(),
+            vec![
+                QueueItem::Emby(Box::new(movie)),
+                QueueItem::Emby(Box::new(old_movie)),
+            ],
+        );
+        model.accept_home_recently_added(
+            crate::app::DestinationLatestSource::Audiobookshelf("pod-lib".into()),
+            model.app.audiobookshelf_runtime.generation(),
+            vec![QueueItem::Audiobookshelf(
+                mbv_queue::AudiobookshelfItem::Episode(episode),
+            )],
+        );
+        let url = "https://feeds.test/latest.xml".to_string();
+        model.app.feed_tab.subscriptions = vec![mbv_config::FeedSubscription {
+            name: "Feedly".into(),
+            url: url.clone(),
+            kind: mbv_queue::FeedKind::Video,
+        }];
+        model.app.feed_tab.all_entries = vec![mbv_queue::FeedEntry {
+            guid: "entry".into(),
+            title: "Entry".into(),
+            enclosure_url: None,
+            link: None,
+            mime_type: None,
+            duration_ticks: None,
+            pub_date_secs: Some(current - day),
+            feed_kind: Some(mbv_queue::FeedKind::Video),
+            feed_id: Some(url),
+            position_ticks: 0,
+            played: false,
+        }];
+
+        model.push_home_content();
+
+        let owner = model
+            .home_owner_shared()
+            .expect("Home destination owner mounted");
+        let titles: Vec<String> = owner
+            .recent_rows()
+            .iter()
+            .map(|row| match &row.item {
+                QueueItem::Emby(item) => item.name.clone(),
+                QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Episode(episode)) => {
+                    episode.title.clone()
+                }
+                QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Book(book)) => {
+                    book.title.clone()
+                }
+                QueueItem::Feed(entry) => entry.title.clone(),
+            })
+            .collect();
+        assert_eq!(titles, vec!["Entry", "Episode", "Movie"]);
+        assert_eq!(
+            owner.recent_rows()[0].feed_name.as_deref(),
+            Some("Feedly"),
+            "feed rows carry the subscription display name"
+        );
+        let feeds_named_rows = owner
+            .recent_rows()
+            .iter()
+            .filter(|row| row.feed_name.is_some())
+            .count();
+        assert_eq!(feeds_named_rows, 1, "Service rows carry no feed name");
+        assert!(
+            !titles.contains(&"OldMovie".to_string()),
+            "fetched row older than the 14-day cutoff is absent"
+        );
+        assert_eq!(owner.launch_window(), model.app.home_latest_launch_window);
     }
 }

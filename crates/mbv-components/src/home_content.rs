@@ -28,6 +28,7 @@ use mbv_ui_model::targets::HomeItemTarget;
 
 use mbv_config::{LibraryItemIdentity, SelectorIdentity};
 use mbv_queue::QueueItem;
+use mbv_ui_model::home_latest::{HomeLatestLaunchWindow, HomeRecentRow};
 use mbv_ui_msg::{LeafKeyResult, Msg, ShellRequest};
 
 mod launch_state;
@@ -39,6 +40,12 @@ pub struct HomeContent {
     continue_items: Vec<QueueItem>,
     /// The shared canonical owner of Continue Watching rows.
     carrier: MediaListCarrier<String>,
+    /// Shell-owned Home launch window; the `Recently added` projection
+    /// branches and cut against it (design D2).
+    launch_window: HomeLatestLaunchWindow,
+    /// Shell-owned `Recently added` rows, merged and interleaved newest
+    /// first (design D2); the tree projection reads them (section 5).
+    recent_rows: Vec<HomeRecentRow>,
     loading: bool,
     /// The projection's image state for the current hero (task 5.10): set by
     /// the shell, read by the painters through the panel content.
@@ -57,6 +64,11 @@ impl HomeContent {
         Self {
             continue_items: Vec::new(),
             carrier: MediaListCarrier::new(),
+            launch_window: HomeLatestLaunchWindow {
+                previous: None,
+                current: 0,
+            },
+            recent_rows: Vec::new(),
             loading: false,
             hero_image: HeroImageState::None,
         }
@@ -68,6 +80,32 @@ impl HomeContent {
         self.continue_items = continue_items;
         self.loading = loading;
         self.project_continue_rows();
+    }
+
+    /// Replace the shell-owned `Recently added` rows and the launch window
+    /// they were merged against (design D2). Owner-local storage only for
+    /// now; the tree projection reads them (section 5 of
+    /// `home-recently-added-tree`), so rendering stays unchanged (row 4.4).
+    pub fn set_recent_rows(
+        &mut self,
+        recent_rows: Vec<HomeRecentRow>,
+        launch_window: HomeLatestLaunchWindow,
+    ) {
+        self.recent_rows = recent_rows;
+        self.launch_window = launch_window;
+    }
+
+    /// The shell-merged `Recently added` rows in the order they arrive from
+    /// the shell (newest first).
+    #[must_use]
+    pub fn recent_rows(&self) -> &[HomeRecentRow] {
+        &self.recent_rows
+    }
+
+    /// The shell-owned launch window the rows were merged against.
+    #[must_use]
+    pub fn launch_window(&self) -> HomeLatestLaunchWindow {
+        self.launch_window
     }
 
     /// Reset Home's local presentation without replacing its Continue
