@@ -23,8 +23,8 @@
 
 ## 5. Home tree owner (design D6, D8)
 
-- [ ] 5.1 Replace `MediaListCarrier<String>` in `HomeContent` with `TreeBrowser<HomeTreeTarget>`. Project roots, age branches (using `recent_age`), and item nodes. Items use split titles and date gutters through `provider_timestamp_secs` and `fmt_publish_date_short`. Omit empty roots and branches. Roots and branches use `expandable(true)` and `Aggregate`, start expanded, and keep their state through reconciliation. Move projection into `home_content/tree.rs`. Verify: `cargo check -p mbv-components`.
-- [ ] 5.2 Port Home's key and pointer translation to the tree, following design D6:
+- [x] 5.1 Replace `MediaListCarrier<String>` in `HomeContent` with `TreeBrowser<HomeTreeTarget>`. Project roots, age branches (using `recent_age`), and item nodes. Items use split titles and date gutters through `provider_timestamp_secs` and `fmt_publish_date_short`. Omit empty roots and branches. Roots and branches use `expandable(true)` and `Aggregate`, start expanded, and keep their state through reconciliation. Move projection into `home_content/tree.rs`. Verify: `cargo check -p mbv-components`.
+- [x] 5.2 Port Home's key and pointer translation to the tree, following design D6:
   - Enter toggles a root or branch and plays an item.
   - Right on an expanded root does nothing.
   - Ctrl+Enter, Ctrl+W, Delete, and `.` emit `HomeItemTarget`s, or marked items in display order.
@@ -36,7 +36,7 @@
   - one item under both roots yields two separately selectable targets.
 
   Verify: `cargo nextest run -p mbv-components`.
-- [ ] 5.3 Hero: an item row uses `hero_content_queue`, and a root or branch row uses its first descendant item. Restoration: `reanchor_launch_state_impl` selects the first item target. `reset_presentation` re-expands every branch and selects the first item. Rewrite the `home_content/launch_state.rs` tests against the tree: a legacy Latest selector lands on the first Continue item. Verify: `cargo nextest run -p mbv-components`.
+- [x] 5.3 Hero: an item row uses `hero_content_queue`, and a root or branch row uses its first descendant item. Restoration: `reanchor_launch_state_impl` selects the first item target. `reset_presentation` re-expands every branch and selects the first item. Rewrite the `home_content/launch_state.rs` tests against the tree: a legacy Latest selector lands on the first Continue item. Verify: `cargo nextest run -p mbv-components`.
 
 ## 6. Recently added row actions (design D7)
 
