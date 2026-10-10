@@ -77,12 +77,16 @@ fn playlist_rows(playlists: &[EmbyItem]) -> Vec<MediaListRow<String>> {
 }
 
 /// One shared-owner row per open-playlist item, targeted by
-/// `playlist_item_id` (design D6).
+/// `playlist_item_id` (design D6). A row whose item lacks a
+/// `playlist_item_id` (the Emby parse defaults the field to "") gets a
+/// fallback target derived from the item id and its row position, so
+/// targets never collide and click-Select cannot land on the wrong row.
 fn item_rows(items: &[EmbyItem]) -> Vec<MediaListRow<String>> {
     items
         .iter()
-        .map(|item| MediaListRow::Item {
-            target: item.playlist_item_id.clone(),
+        .enumerate()
+        .map(|(index, item)| MediaListRow::Item {
+            target: row_target(item, index),
             primary: item.display_name(),
             secondary: None,
             trailing: None,
@@ -91,6 +95,19 @@ fn item_rows(items: &[EmbyItem]) -> Vec<MediaListRow<String>> {
             semantic_state: MediaSemanticState::Ordinary,
         })
         .collect()
+}
+
+/// The open-playlist row's stable target: the server-assigned
+/// `playlist_item_id` when present, else a per-row fallback. Two rows can
+/// share an empty `playlist_item_id`, so the fallback also carries the row
+/// position; the `playlist-row:` prefix keeps it distinguishable from a
+/// server-assigned id.
+fn row_target(item: &EmbyItem, index: usize) -> String {
+    if item.playlist_item_id.is_empty() {
+        format!("playlist-row:{index}:{}", item.id)
+    } else {
+        item.playlist_item_id.clone()
+    }
 }
 
 impl PlaylistsComponent {
@@ -467,7 +484,7 @@ mod tests {
     use super::*;
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
-    use tuirealm::event::KeyModifiers;
+    use tuirealm::event::{KeyModifiers, MouseButton};
 
     fn key(code: Key) -> KeyEvent {
         KeyEvent {
@@ -627,6 +644,41 @@ mod tests {
         ));
 
         assert_eq!(component.open_list.cursor(), 0);
+    }
+
+    /// Contract: open-playlist row targets never collide (review P2 fix,
+    /// wheel-scrolls-viewport unit 5) — two rows with an empty
+    /// `playlist_item_id` (the parse default) must publish distinct targets,
+    /// or click-Select's first-match would land on the wrong row. Clicking
+    /// the second row moves the cursor to that row.
+    #[test]
+    fn click_on_the_second_row_with_an_empty_playlist_item_id_lands_on_the_second_row() {
+        let mut component = PlaylistsComponent::new();
+        component.set_content(content(
+            Vec::new(),
+            Some(item("p1", "Playlist", "")),
+            vec![item("a", "Film", ""), item("b", "Show", "")],
+        ));
+        let mut terminal = Terminal::new(TestBackend::new(40, 12)).unwrap();
+        terminal
+            .draw(|frame| component.view(frame, frame.area()))
+            .unwrap();
+        let &(rect, _) = component
+            .geometry
+            .open_rows
+            .iter()
+            .find(|&(_, index)| *index == 1)
+            .expect("painted second open-playlist row");
+
+        let click = MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: rect.x,
+            row: rect.y,
+            modifiers: KeyModifiers::NONE,
+        };
+        assert_eq!(component.handle_mouse(click), None);
+
+        assert_eq!(component.open_list.cursor(), 1);
     }
 
     /// Contract: mouse-input "The Playlists overlay wheel scrolls the visible
