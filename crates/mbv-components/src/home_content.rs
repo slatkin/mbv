@@ -119,12 +119,11 @@ impl HomeContent {
     fn project_tree(&mut self) {
         // Expansion bookkeeping (design D6): a stem the tree did not hold
         // before this reconciliation starts expanded; a stem it already held
-        // keeps whatever expansion state the user left it in. The tree's own
-        // reconciliation preserves its expanded set for surviving nodes, so
-        // only the newly projected stems need a toggle here.
-        let held_before: Vec<bool> = TREE_STEMS
+        // keeps whatever expansion state the user left it in.
+        let newly_projected: Vec<HomeTreeTarget> = TREE_STEMS
             .iter()
-            .map(|target| self.tree.node(target).is_some())
+            .filter(|target| self.tree.node(target).is_none())
+            .cloned()
             .collect();
         let entries =
             tree::tree_entries(&self.continue_items, &self.recent_rows, self.launch_window);
@@ -138,20 +137,14 @@ impl HomeContent {
             "home tree projection rejected: {:?}",
             reconciled.as_ref().err()
         );
-        for (held_before, target) in held_before.iter().zip(TREE_STEMS.iter()) {
-            if !held_before && self.tree.node(target).is_some() && !self.tree.is_expanded(target) {
-                self.tree
-                    .apply(TreeOperation::ToggleExpansionTarget(target.clone()));
-            }
-        }
+        self.expand_collapsed_stems(&newly_projected);
     }
 
-    /// Re-expand every projected root and age branch (the
-    /// `reset_presentation` rule user 5.3 refines): the tree reset clears
-    /// the expanded set, so the stems re-open and the first item stays the
-    /// presentation default.
-    fn expand_projected_stems(&mut self) {
-        for target in &TREE_STEMS {
+    /// Open every listed root and age branch that is projected and collapsed.
+    /// `reset_presentation` passes every stem (the tree reset clears the
+    /// expanded set); `project_tree` passes only the newly projected ones.
+    fn expand_collapsed_stems(&mut self, stems: &[HomeTreeTarget]) {
+        for target in stems {
             if self.tree.node(target).is_some() && !self.tree.is_expanded(target) {
                 self.tree
                     .apply(TreeOperation::ToggleExpansionTarget(target.clone()));
@@ -176,7 +169,7 @@ impl HomeContent {
     /// presentation, never a structural row.
     pub fn reset_presentation(&mut self) {
         self.tree.reset_presentation();
-        self.expand_projected_stems();
+        self.expand_collapsed_stems(&TREE_STEMS);
         self.select_first_item_target();
     }
 
@@ -253,6 +246,9 @@ impl LibraryContentOwner for HomeContent {
         // The tree keeps membership locally; expose only the count over the
         // marked items, the same read-only projection the Grouped Music
         // tree reports (the status bar never reconstructs membership).
+        if self.tree.marked_targets().is_empty() {
+            return None;
+        }
         let count = self.tree.action_targets().len();
         let origin = self.selection_origin.clone()?;
         (count > 0).then_some(mbv_ui_msg::SelectionSummary { count, origin })

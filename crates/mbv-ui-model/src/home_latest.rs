@@ -52,6 +52,12 @@ pub fn is_new_in_launch_window(item: &QueueItem, window: HomeLatestLaunchWindow)
     timestamp_in_launch_window(provider_timestamp_secs(item), window)
 }
 
+/// The `Recently added` age branch of one item, from its provider timestamp.
+#[must_use]
+pub fn recent_age_of(item: &QueueItem, window: HomeLatestLaunchWindow) -> Option<RecentAge> {
+    recent_age(provider_timestamp_secs(item), window)
+}
+
 /// Assign the `Recently added` age branch for one provider timestamp.
 ///
 /// Branch assignment follows the spec's three branches: `New` holds items
@@ -73,6 +79,6 @@ pub fn recent_age(timestamp: Option<u64>, window: HomeLatestLaunchWindow) -> Opt
     if timestamp >= last_7_days_cutoff {
         Some(RecentAge::Last7Days)
     } else {
-        RecentAge::Last14Days.into()
+        Some(RecentAge::Last14Days)
     }
 }

@@ -5,6 +5,7 @@
 //! action chords (`Ctrl+Enter`, `Ctrl+W`, Delete, `.`) carry the marked item
 //! targets in display order, or the single selected item target.
 
+use ratatui::layout::Position;
 use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
 use super::super::list::tree_browser::{TreeExternalIntent, TreeOperation};
@@ -28,24 +29,27 @@ impl HomeContent {
             | TreeExternalIntent::Context(HomeTreeTarget::Item(target)) => {
                 vec![target]
             }
-            TreeExternalIntent::ContextSelection(targets) => targets
-                .into_iter()
-                .filter_map(|target| match target {
-                    HomeTreeTarget::Item(item_target) => Some(item_target),
-                    _ => None,
-                })
-                .collect(),
+            TreeExternalIntent::ContextSelection(targets) => Self::marked_item_targets(targets),
             TreeExternalIntent::Activate(_) | TreeExternalIntent::Context(_) => Vec::new(),
         }
+    }
+
+    /// The item targets among resolved tree targets, in the order given.
+    fn marked_item_targets(targets: Vec<HomeTreeTarget>) -> Vec<HomeItemTarget> {
+        targets
+            .into_iter()
+            .filter_map(|target| match target {
+                HomeTreeTarget::Item(item_target) => Some(item_target),
+                _ => None,
+            })
+            .collect()
     }
 
     /// The action chords' targets (design D6): the marked item targets in
     /// display order — the shared mark set expands an aggregate root or
     /// branch to its item descendants — or the single selected item target.
     fn action_item_targets(&self) -> Vec<HomeItemTarget> {
-        let marked = Self::item_targets(Some(TreeExternalIntent::ContextSelection(
-            self.tree.action_targets(),
-        )));
+        let marked = Self::marked_item_targets(self.tree.action_targets());
         if marked.is_empty() {
             self.selected_item_target().into_iter().collect()
         } else {
@@ -53,20 +57,11 @@ impl HomeContent {
         }
     }
 
-    fn enqueue_request(&self) -> Option<Msg> {
+    /// The shell request for an action chord over its item targets, or no
+    /// request when there are none.
+    fn action_request(&self, make: fn(Vec<HomeItemTarget>) -> ShellRequest) -> Option<Msg> {
         let targets = self.action_item_targets();
-        (!targets.is_empty()).then(|| Msg::Shell(Box::new(ShellRequest::HomeEnqueue(targets))))
-    }
-
-    fn toggle_watched_request(&self) -> Option<Msg> {
-        let targets = self.action_item_targets();
-        (!targets.is_empty())
-            .then(|| Msg::Shell(Box::new(ShellRequest::HomeToggleWatched(targets))))
-    }
-
-    fn delete_request(&self) -> Option<Msg> {
-        let targets = self.action_item_targets();
-        (!targets.is_empty()).then(|| Msg::Shell(Box::new(ShellRequest::HomeDelete(targets))))
+        (!targets.is_empty()).then(|| Msg::Shell(Box::new(make(targets))))
     }
 
     /// Home's local key interpretation, forwarded by the focused panel (the
@@ -83,31 +78,31 @@ impl HomeContent {
         }
         match key.code {
             Key::Up => {
-                self.handle_tree_operation(TreeOperation::Move(-1));
+                self.tree.apply(TreeOperation::Move(-1));
                 None
             }
             Key::Down => {
-                self.handle_tree_operation(TreeOperation::Move(1));
+                self.tree.apply(TreeOperation::Move(1));
                 None
             }
             Key::PageUp => {
-                self.handle_tree_operation(TreeOperation::Page(-1));
+                self.tree.apply(TreeOperation::Page(-1));
                 None
             }
             Key::PageDown => {
-                self.handle_tree_operation(TreeOperation::Page(1));
+                self.tree.apply(TreeOperation::Page(1));
                 None
             }
             Key::Home => {
-                self.handle_tree_operation(TreeOperation::First);
+                self.tree.apply(TreeOperation::First);
                 None
             }
             Key::End => {
-                self.handle_tree_operation(TreeOperation::Last);
+                self.tree.apply(TreeOperation::Last);
                 None
             }
             Key::Left => {
-                self.handle_tree_operation(TreeOperation::Parent);
+                self.tree.apply(TreeOperation::Parent);
                 None
             }
             // Right never activates or collapses (design D6): the tree's
@@ -120,12 +115,14 @@ impl HomeContent {
             // tree's aggregate mark surface; Home keeps no select-all.
             Key::Char('a') if key.modifiers.contains(KeyModifiers::CONTROL) => None,
             Key::Char('.') => self.context_menu_request(None),
-            Key::Enter if key.modifiers.contains(KeyModifiers::CONTROL) => self.enqueue_request(),
+            Key::Enter if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.action_request(ShellRequest::HomeEnqueue)
+            }
             Key::Enter => self.activate_selected_row(),
             Key::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                self.toggle_watched_request()
+                self.action_request(ShellRequest::HomeToggleWatched)
             }
-            Key::Delete => self.delete_request(),
+            Key::Delete => self.action_request(ShellRequest::HomeDelete),
             _ => None,
         }
     }
@@ -147,10 +144,6 @@ impl HomeContent {
             }
             None => None,
         }
-    }
-
-    fn handle_tree_operation(&mut self, operation: TreeOperation<HomeTreeTarget>) {
-        self.tree.apply(operation);
     }
 
     /// The `.` request: the selected item target, or the marked item targets
@@ -185,8 +178,7 @@ impl HomeContent {
                 ))
             }
             MediaListSurfaceInput::Click(at) | MediaListSurfaceInput::RangeClick(at) => {
-                let target = self.tree.resolve_current_point(at).cloned()?;
-                self.tree.apply(TreeOperation::Select(target.clone()));
+                let target = self.select_at(at)?;
                 match target {
                     HomeTreeTarget::Item(item_target) => {
                         Some(Msg::Shell(Box::new(ShellRequest::HomeRowClick {
@@ -202,8 +194,7 @@ impl HomeContent {
                 None
             }
             MediaListSurfaceInput::DoubleClick(at) => {
-                let target = self.tree.resolve_current_point(at).cloned()?;
-                self.tree.apply(TreeOperation::Select(target.clone()));
+                let target = self.select_at(at)?;
                 match target {
                     HomeTreeTarget::Item(item_target) => {
                         Some(Msg::Shell(Box::new(ShellRequest::HomeRowActivate {
@@ -218,12 +209,19 @@ impl HomeContent {
                 }
             }
             MediaListSurfaceInput::ContextClick(at) => {
-                let target = self.tree.resolve_current_point(at).cloned()?;
-                self.tree.apply(TreeOperation::Select(target));
+                self.select_at(at)?;
                 self.context_menu_request(Some((at.x, at.y)))
             }
             _ => None,
         }
+    }
+
+    /// Selects the tree row under a pointer position and returns its target,
+    /// or `None` when the position resolves to no row.
+    fn select_at(&mut self, at: Position) -> Option<HomeTreeTarget> {
+        let target = self.tree.resolve_current_point(at).cloned()?;
+        self.tree.apply(TreeOperation::Select(target.clone()));
+        Some(target)
     }
 
     /// The shared `LeafKeyResult` disposition: movement and activation keys

@@ -13,7 +13,7 @@ use crate::list::tree_browser::{TreeEntry, TreeMarkPolicy, TreeNode};
 use mbv_queue::QueueItem;
 use mbv_render::components::media_list::MediaSemanticState;
 use mbv_ui_model::home_latest::{
-    HomeLatestLaunchWindow, HomeRecentRow, provider_timestamp_secs, recent_age,
+    HomeLatestLaunchWindow, HomeRecentRow, provider_timestamp_secs, recent_age_of,
 };
 use mbv_ui_model::targets::{HomeItemTarget, HomeRoot, HomeTreeTarget, RecentAge};
 use mbv_ui_model::ui_util::fmt_publish_date_short;
@@ -130,25 +130,18 @@ fn recent_item_node(row: &HomeRecentRow, parent: HomeTreeTarget) -> TreeNode<Hom
     node
 }
 
-/// The `Recently added` rows bucketed into the three age branches in display
-/// order. A row without a valid date (or older than the cutoff) is in no
-/// bucket and is therefore omitted from the projection.
-fn age_buckets(
+/// The `Recently added` rows in one age branch, in the order they arrive. A
+/// row without a valid date (or older than the cutoff) is in no branch and is
+/// therefore omitted from the projection.
+fn age_rows(
     recent_rows: &[HomeRecentRow],
     window: HomeLatestLaunchWindow,
-) -> [Vec<&HomeRecentRow>; 3] {
-    let mut new = Vec::new();
-    let mut last_7_days = Vec::new();
-    let mut last_14_days = Vec::new();
-    for row in recent_rows {
-        match recent_age(provider_timestamp_secs(&row.item), window) {
-            Some(RecentAge::New) => new.push(row),
-            Some(RecentAge::Last7Days) => last_7_days.push(row),
-            Some(RecentAge::Last14Days) => last_14_days.push(row),
-            None => {}
-        }
-    }
-    [new, last_7_days, last_14_days]
+    age: RecentAge,
+) -> Vec<&HomeRecentRow> {
+    recent_rows
+        .iter()
+        .filter(|row| recent_age_of(&row.item, window) == Some(age))
+        .collect()
 }
 
 /// The complete Home projection: the `Continue watching` root with its item
@@ -169,23 +162,18 @@ pub(super) fn tree_entries(
                 .map(|item| TreeEntry::Node(continue_item_node(item))),
         );
     }
-    let buckets = age_buckets(recent_rows, window);
-    if buckets.iter().any(|bucket| !bucket.is_empty()) {
+    let branches: Vec<(RecentAge, Vec<&HomeRecentRow>)> = RecentAge::ALL
+        .into_iter()
+        .map(|age| (age, age_rows(recent_rows, window, age)))
+        .filter(|(_, rows)| !rows.is_empty())
+        .collect();
+    if !branches.is_empty() {
         entries.push(root_node(HomeRoot::RecentlyAdded).into());
-        for (age, index) in [
-            (RecentAge::New, 0),
-            (RecentAge::Last7Days, 1),
-            (RecentAge::Last14Days, 2),
-        ] {
-            let bucket = &buckets[index];
-            if bucket.is_empty() {
-                continue;
-            }
+        for (age, rows) in branches {
             let parent = HomeTreeTarget::Age(age);
             entries.push(TreeEntry::Node(age_node(age)));
             entries.extend(
-                bucket
-                    .iter()
+                rows.into_iter()
                     .map(|row| TreeEntry::Node(recent_item_node(row, parent.clone()))),
             );
         }

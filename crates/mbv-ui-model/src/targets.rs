@@ -15,6 +15,11 @@ pub enum RecentAge {
     Last14Days,
 }
 
+impl RecentAge {
+    /// Every age branch, in display order under the `Recently added` root.
+    pub const ALL: [Self; 3] = [Self::New, Self::Last7Days, Self::Last14Days];
+}
+
 /// One Home tree node's target. The section is part of the identity, so one
 /// item under both roots yields two distinct [`Self::Item`] targets.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -38,6 +43,12 @@ impl HomeItemTarget {
     #[must_use]
     pub fn continue_item(item_id: impl Into<String>) -> Self {
         Self::Continue(mbv_ids::ItemId::new(item_id))
+    }
+
+    /// Whether this target is a Continue Watching row (not a `Recently added` row).
+    #[must_use]
+    pub fn is_continue(&self) -> bool {
+        matches!(self, Self::Continue(_))
     }
 }
 

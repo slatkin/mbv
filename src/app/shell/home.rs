@@ -23,15 +23,15 @@ impl Model {
     }
 
     fn home_play_request(&mut self, target: &HomeItemTarget) {
-        if let Some((item, from_cw)) = self.home_stable_target(target) {
-            self.app.home_play_target(item, from_cw);
+        if let Some(item) = self.home_stable_target(target) {
+            self.app.home_play_target(item, target.is_continue());
         }
     }
 
     fn home_enqueue_request(&mut self, targets: Vec<HomeItemTarget>) {
         for target in targets {
-            if let Some((item, from_cw)) = self.home_stable_target(&target) {
-                self.app.home_enqueue_target(item, from_cw);
+            if let Some(item) = self.home_stable_target(&target) {
+                self.app.home_enqueue_target(item, target.is_continue());
             }
         }
     }
@@ -66,36 +66,34 @@ impl Model {
     /// offers Play and Add to Queue only. An unresolved target contributes
     /// nothing, as in enqueue.
     fn home_multi_context_menu(&mut self, targets: &[HomeItemTarget], anchor: Option<(u16, u16)>) {
-        let mut items: Vec<mbv_emby_model::EmbyItem> = Vec::new();
-        let mut mixed_items: Vec<QueueItem> = Vec::new();
-        let mut removes: Vec<mbv_ui_model::context_menu::BulkRemoveTarget> = Vec::new();
-        let mut spans_services = false;
-        for target in targets {
-            let Some((item, from_cw)) = self.home_stable_target(target) else {
-                continue;
-            };
-            match item {
-                QueueItem::Emby(item) => {
-                    if from_cw {
-                        removes.push(
-                            mbv_ui_model::context_menu::BulkRemoveTarget::ContinueWatching(
-                                item.clone(),
-                            ),
-                        );
-                    }
-                    mixed_items.push(QueueItem::Emby(item.clone()));
-                    items.push(*item);
-                }
-                other => {
-                    spans_services = true;
-                    mixed_items.push(other);
-                }
-            }
-        }
-        if spans_services {
+        let resolved: Vec<(QueueItem, bool)> = targets
+            .iter()
+            .filter_map(|target| Some((self.home_stable_target(target)?, target.is_continue())))
+            .collect();
+        if resolved
+            .iter()
+            .any(|(item, _)| !matches!(item, QueueItem::Emby(_)))
+        {
+            let mixed_items = resolved.into_iter().map(|(item, _)| item).collect();
             self.app.open_home_mixed_context_menu(mixed_items, anchor);
             return;
         }
+        let removes: Vec<mbv_ui_model::context_menu::BulkRemoveTarget> = resolved
+            .iter()
+            .filter_map(|(item, from_cw)| match item {
+                QueueItem::Emby(item) if *from_cw => Some(
+                    mbv_ui_model::context_menu::BulkRemoveTarget::ContinueWatching(item.clone()),
+                ),
+                _ => None,
+            })
+            .collect();
+        let items: Vec<mbv_emby_model::EmbyItem> = resolved
+            .into_iter()
+            .filter_map(|(item, _)| match item {
+                QueueItem::Emby(item) => Some(*item),
+                _ => None,
+            })
+            .collect();
         let capabilities = items
             .iter()
             .map(crate::app::state::context_menu_capabilities::emby_item_capabilities)
@@ -119,11 +117,13 @@ impl Model {
         target: Option<HomeItemTarget>,
         anchor: Option<(u16, u16)>,
     ) {
-        let Some((item, from_cw)) = target.and_then(|target| self.home_stable_target(&target))
-        else {
+        let Some(target) = target else {
             return;
         };
-        if from_cw {
+        let Some(item) = self.home_stable_target(&target) else {
+            return;
+        };
+        if target.is_continue() {
             // A Continue row is always Emby content (design D1).
             let item = match item {
                 QueueItem::Emby(item) => Some(*item),
@@ -162,7 +162,7 @@ impl Model {
         for target in targets {
             match target {
                 HomeItemTarget::Continue(_) => {
-                    if let Some((QueueItem::Emby(item), _)) = self.home_stable_target(&target) {
+                    if let Some(QueueItem::Emby(item)) = self.home_stable_target(&target) {
                         self.app.remove_from_continue_watching(&item);
                     }
                 }
@@ -178,12 +178,12 @@ impl Model {
         for target in targets {
             match target {
                 HomeItemTarget::Continue(_) => {
-                    if let Some((QueueItem::Emby(item), _)) = self.home_stable_target(&target) {
+                    if let Some(QueueItem::Emby(item)) = self.home_stable_target(&target) {
                         self.app.cw_toggle_watched(&item);
                     }
                 }
                 HomeItemTarget::Recent(_) => {
-                    if let Some((item, _)) = self.home_stable_target(&target) {
+                    if let Some(item) = self.home_stable_target(&target) {
                         self.app.toggle_recent_item_played_state(&item);
                     }
                 }
@@ -223,6 +223,7 @@ impl Model {
     /// date has no age branch, so it can never appear.
     pub(in crate::app) fn home_recent_rows(&self) -> Vec<mbv_ui_model::home_latest::HomeRecentRow> {
         use mbv_ui_model::home_latest::{HomeRecentRow, provider_timestamp_secs, recent_age};
+        use std::cmp::Reverse;
         let window = self.app.home_latest_launch_window;
         let mut rows: Vec<HomeRecentRow> = self
             .home_recently_added
@@ -238,6 +239,7 @@ impl Model {
                 .feed_tab
                 .all_entries
                 .iter()
+                .filter(|entry| recent_age(entry.pub_date_secs, window).is_some())
                 .map(|entry| {
                     let feed_name = entry.feed_id.as_deref().and_then(|feed_id| {
                         self.app
@@ -247,14 +249,13 @@ impl Model {
                             .find(|subscription| subscription.url == feed_id)
                             .map(|subscription| subscription.name.clone())
                     });
-                    (QueueItem::Feed(entry.clone()), feed_name)
-                })
-                .filter(|(item, _)| recent_age(provider_timestamp_secs(item), window).is_some())
-                .map(|(item, feed_name)| HomeRecentRow { item, feed_name }),
+                    HomeRecentRow {
+                        item: QueueItem::Feed(entry.clone()),
+                        feed_name,
+                    }
+                }),
         );
-        rows.sort_by(|a, b| {
-            provider_timestamp_secs(&b.item).cmp(&provider_timestamp_secs(&a.item))
-        });
+        rows.sort_by_cached_key(|row| Reverse(provider_timestamp_secs(&row.item)));
         rows
     }
 }
@@ -385,20 +386,7 @@ mod tests {
         let mut old_movie = make_item("OldMovie", "Movie");
         old_movie.id = "movie-old".into();
         old_movie.date_added = date_added_iso(i64::try_from(current - 20 * day).unwrap());
-        let episode = mbv_queue::AudiobookshelfQueueItem {
-            library_item_id: "pod-lib".into(),
-            episode_id: "episode".into(),
-            title: "Episode".into(),
-            show_title: None,
-            author: None,
-            description: None,
-            duration_ticks: None,
-            position_ticks: 0,
-            played: false,
-            pub_date_secs: Some(current - 2 * day),
-            is_finished: false,
-            cover_path: None,
-        };
+        let episode = podcast_episode("episode", current - 2 * day);
         model.accept_home_recently_added(
             crate::app::DestinationLatestSource::Emby("lib".into()),
             model.app.emby_runtime.generation(),

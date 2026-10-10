@@ -144,13 +144,7 @@ impl Model {
         let window = self.app.home_latest_launch_window;
         let items = items
             .into_iter()
-            .filter(|item| {
-                mbv_ui_model::home_latest::recent_age(
-                    mbv_ui_model::home_latest::provider_timestamp_secs(item),
-                    window,
-                )
-                .is_some()
-            })
+            .filter(|item| mbv_ui_model::home_latest::recent_age_of(item, window).is_some())
             .collect();
         self.home_recently_added.insert(source, items);
     }
@@ -158,12 +152,11 @@ impl Model {
     pub(in crate::app) fn home_stable_target(
         &self,
         target: &mbv_ui_model::targets::HomeItemTarget,
-    ) -> Option<(QueueItem, bool)> {
+    ) -> Option<QueueItem> {
         // `Continue` is Emby-only, so it resolves through the shell-owned
-        // Continue Watching snapshot. `Recent` searches the merged
-        // `Recently added` rows by content id (design D7 of
-        // `home-recently-added-tree`); a `Recent` row is never a Continue
-        // Watching row, so `from_cw` is false.
+        // Continue Watching snapshot. `Recent` looks up one row by content id
+        // in the stored sources and the Feeds entries, without building the
+        // merged list (design D7 of `home-recently-added-tree`).
         match target {
             mbv_ui_model::targets::HomeItemTarget::Continue(item_id) => self
                 .home_content
@@ -171,13 +164,34 @@ impl Model {
                 .iter()
                 .find(|item| item.id == item_id.as_str())
                 .cloned()
-                .map(|item| (QueueItem::Emby(Box::new(item)), true)),
+                .map(|item| QueueItem::Emby(Box::new(item))),
             mbv_ui_model::targets::HomeItemTarget::Recent(content_id) => self
-                .home_recent_rows()
-                .into_iter()
-                .find(|row| row.item.content_id() == *content_id)
-                .map(|row| (row.item, false)),
+                .home_recently_added
+                .values()
+                .flatten()
+                .find(|item| item.content_id() == *content_id)
+                .cloned()
+                .or_else(|| self.home_recent_feed_entry(content_id)),
         }
+    }
+
+    /// The Feeds `Recently added` row with this content id, if its entry is
+    /// inside the 14-day cutoff (Feeds rows are derived, never stored).
+    fn home_recent_feed_entry(
+        &self,
+        content_id: &mbv_queue::QueueItemContentId,
+    ) -> Option<QueueItem> {
+        let window = self.app.home_latest_launch_window;
+        self.app
+            .feed_tab
+            .all_entries
+            .iter()
+            .find(|entry| {
+                matches!(content_id, mbv_queue::QueueItemContentId::Feed(guid) if *guid == entry.guid)
+                    && mbv_ui_model::home_latest::recent_age(entry.pub_date_secs, window).is_some()
+            })
+            .cloned()
+            .map(QueueItem::Feed)
     }
 
     pub(in crate::app) fn fetch_home_at_startup(&mut self) {

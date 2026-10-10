@@ -197,8 +197,8 @@ impl Model {
             ShellRequest::HomeRowActivate { target } => {
                 self.app
                     .set_panel_focus(mbv_ui_model::settings::PanelFocus::Library);
-                if let Some((item, from_cw)) = self.home_stable_target(&target) {
-                    self.app.home_play_target(item, from_cw);
+                if let Some(item) = self.home_stable_target(&target) {
+                    self.app.home_play_target(item, target.is_continue());
                 }
             }
             ShellRequest::QueueRowClick { slot_id } => {
