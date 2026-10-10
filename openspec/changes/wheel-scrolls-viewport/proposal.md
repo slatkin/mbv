@@ -12,7 +12,7 @@ The mouse wheel moves a list's selection one row at a time. It also passes throu
 - A list's viewport has two anchor states: it follows the selection, or it was scrolled freely by the wheel. Any selection-changing operation (keyboard move, page, first/last, click, select, restore, shell re-anchor) returns it to following the selection. A key pressed after a scroll therefore first brings the selection back into view, then acts on it. This is the GUI convention.
 - A wheel scroll never extends a live range selection.
 - Lazy library paging (Emby library lists, Grouped Music) also triggers when the bottom of the viewport nears the loaded edge, not only when the cursor does. This keeps a wheel scroll from stopping on unloaded rows.
-- The Playlists and Global Search sidebar overlays get the same viewport scroll. Their painters stop pulling the offset back to the cursor while the viewport is scrolled freely.
+- The Playlists overlay and the Global Search sidebar move their lists onto the shared list owner (`MediaList`). Their wheel then uses the same scroll operation and viewport anchor as every other list, not an anchor or clamp of their own. Their painters paint the offset the shared owner resolved and stop clamping it to the cursor. The shell's Playlists cursor/scroll mirror is removed.
 
 ## Capabilities
 
@@ -23,7 +23,7 @@ None.
 ### Modified Capabilities
 
 - `mouse-input`: The uniform wheel policy changes from a one-row selection step to a fixed 3-row/line viewport scroll. Gesture recognition loses the wheel throttle. The pointed-list wheel scenario and the per-surface verification rule change to match.
-- `shared-list-components`: "The viewport keeps the selection visible" becomes "visible unless the user scrolled the viewport freely". It adds the follow/free anchor states and the rule for returning to follow.
+- `shared-list-components`: "The viewport keeps the selection visible" becomes "visible unless the user scrolled the viewport freely". It adds the follow/free anchor states and the rule for returning to follow. It also requires list-shaped overlays to hold their list in the shared owner.
 - `canonical-media-lists`: Search-result wheel input scrolls the results viewport instead of moving the cursor. The window-raise requirement no longer says the wheel keeps its old meaning.
 
 ## Impact
@@ -33,6 +33,6 @@ None.
 - `crates/mbv-components/src/media_list/selection.rs`, `media_list.rs`: `Wheel` maps to a new scroll operation, not `Move`.
 - Wheel handlers in Home, Emby library, TV (episodes and show tree), Music tree, Queue, Podcast/Feeds, Audiobookshelf books, Sessions, Playlists, Search sidebar, Settings, Help, and the library hero overview.
 - `crates/mbv-ui-msg/src/shell.rs` and `src/app/shell/`: a typed viewport-reach request feeds `maybe_fetch_next_page`; the Emby library wheel stops sending `EmbyLibraryCursorIndex`; the Music wheel stops sending an album-cursor move.
-- `crates/mbv-render/src/components/playlists.rs`, `search_sidebar.rs`: painters respect a free viewport.
+- `crates/mbv-components/src/playlists.rs`, `search_sidebar.rs`: lists move onto `MediaListCarrier`. `crates/mbv-render/src/components/playlists.rs`, `search_sidebar.rs`: painters take a resolved offset and write none back. `crates/mbv-ui-model/src/search_sidebar.rs`: `cursor`, `scroll` and `list_height` leave the model. `src/app/`: the Playlists cursor/scroll mirror (`PlaylistsContent` fields and the `App` fields behind them) is deleted.
 - `docs/architecture/interactive-surface-ledger.md`: wheel rows updated.
 - No dependency, config or protocol changes.

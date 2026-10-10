@@ -159,6 +159,23 @@ A migrated canonical media list SHALL accept a wheel gesture only when its embed
 - **THEN** the sidebar scrolls its local viewport by one step
 - **AND** focus does not follow the pointer
 
+#### Scenario: The Playlists overlay wheel scrolls the visible list
+
+This scenario changes meaning. Before this change, the Playlists wheel moved the visible list's cursor by one row.
+
+- **WHEN** the Playlists overlay is the focused sole eligible overlay, showing either the saved-playlists list or an open playlist, and the user turns the wheel
+- **THEN** the visible list's viewport scrolls by one step through the shared list owner
+- **AND** that list's cursor is unchanged
+
+#### Scenario: The Global Search sidebar wheel scrolls the results
+
+This scenario changes meaning. Before this change, the wheel over a result row moved the result cursor by one row.
+
+- **WHEN** the user turns the wheel over a painted Global Search sidebar result row
+- **THEN** the results viewport scrolls by one step through the shared list owner
+- **AND** the selected result is unchanged
+- **AND** a wheel over the query row, the type-filter chips or blank space changes nothing
+
 ## MODIFIED Requirements
 
 ### Requirement: Wheel behavior is verified for each scrollable surface
@@ -194,11 +211,11 @@ the listed painted region, and retains only the stated semantic boundary:
 | Audiobookshelf podcast | `PodcastContent` over the Library panel's canonical list; painted episode-row geometry | Wide and Normal/Narrow | none for wheel |
 | Audiobookshelf books | `AudiobookshelfBookComponent`; painted book- or chapter-row geometry | Wide and Normal/Narrow | panel focus only |
 | Inline Search | active host component; painted results `left_area`, first refusal | Emby library, Music, and TV host paths | local results viewport only |
-| Global Search sidebar | `SearchSidebarComponent`; painter-published result-row hit regions | fixed overlay geometry (breakpoint-invariant) | local results viewport only |
+| Global Search sidebar | `SearchSidebarComponent`'s shared list owner (`MediaListCarrier`) over the filtered results; claim through painter-published result-row hit regions | fixed overlay geometry (breakpoint-invariant) | local results viewport only |
 | Settings | `SettingsComponent`; focus-owned wheel while sole eligible overlay | fixed overlay geometry (breakpoint-invariant) | none for wheel |
 | Help | `HelpComponent`; focus-owned wheel while sole eligible overlay | fixed overlay geometry (breakpoint-invariant) | none for wheel |
 | Sessions | `SessionsComponent`; focus-owned wheel while sole eligible overlay | fixed overlay geometry (breakpoint-invariant) | none for wheel |
-| Playlists | `PlaylistsComponent`; focus-owned wheel while sole eligible overlay | fixed overlay geometry (breakpoint-invariant) | none for wheel |
+| Playlists | `PlaylistsComponent`'s shared list owners (`MediaListCarrier`, one for the saved playlists and one for the open playlist); focus-owned wheel while sole eligible overlay scrolls the visible list | fixed overlay geometry (breakpoint-invariant) | none for wheel |
 
 Focused verification names and geometry evidence are maintained with the rows in
 `docs/architecture/interactive-surface-ledger.md`; canonical-list proofs retain
