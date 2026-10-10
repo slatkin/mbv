@@ -1,3 +1,1 @@
-mod daemon {
-    mod owner_lock;
-}
+mod owner_lock;

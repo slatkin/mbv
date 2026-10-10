@@ -375,9 +375,24 @@ mod check_private_dir_tests {
         #[case] expected: Option<RuntimeDirErrorReason>,
     ) {
         let fixture = Fixture::materialize(&kind);
-        let refusal = check_private_dir(&fixture.path, fixture.uid)
-            .err()
-            .map(|error| discriminant(&error.reason));
-        assert_eq!(refusal, expected.as_ref().map(discriminant));
+        let refusal = check_private_dir(&fixture.path, fixture.uid).err();
+
+        // The same discriminant is not enough for the foreign-owner case:
+        // the reported uid must name the file's real on-disk owner, not the
+        // uid the check was imposed against.
+        if let Some(RuntimeDirErrorReason::ForeignOwner { owner_uid }) =
+            refusal.as_ref().map(|e| &e.reason)
+        {
+            use std::os::unix::fs::MetadataExt;
+            let on_disk_owner = std::fs::symlink_metadata(&fixture.path)
+                .expect("a refused fixture must still exist")
+                .uid();
+            assert_eq!(*owner_uid, on_disk_owner);
+        }
+
+        assert_eq!(
+            refusal.as_ref().map(|error| discriminant(&error.reason)),
+            expected.as_ref().map(discriminant)
+        );
     }
 }
