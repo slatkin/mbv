@@ -4,14 +4,14 @@
 //! heading with no rows below it is omitted. Item rows use the flat lists'
 //! split title-parts (`provider` context, item title as secondary);
 //! `Recently added` item rows carry the provider date in the right gutter.
-//! Age groups follow `openspec/specs/home-latest-sections` (the Feeds rule).
+//! `Recently added` is one flat list with no age sub-headings
+//! (`openspec/specs/home-latest-sections`); the 14-day cutoff still applies.
 
 use mbv_queue::QueueItem;
 use mbv_render::components::media_list::{
     MediaKind, MediaListRow, MediaListTrailing, MediaSemanticState,
 };
-use mbv_ui_model::feed_age::FeedAgeGroup;
-use mbv_ui_model::home_latest::{HomeRecentRow, home_age_group, provider_timestamp_secs};
+use mbv_ui_model::home_latest::{HomeRecentRow, is_home_recent, provider_timestamp_secs};
 use mbv_ui_model::targets::HomeItemTarget;
 use mbv_ui_model::ui_util::fmt_publish_date_short;
 
@@ -44,42 +44,28 @@ fn item_row(
     }
 }
 
-/// The non-empty `Recently added` age groups, `New` then `Recent`, each with
-/// its item rows in the order they arrive. One pass parses each date once.
-fn grouped_rows(recent_rows: &[HomeRecentRow], now_secs: u64) -> Vec<(FeedAgeGroup, Vec<HomeRow>)> {
-    let mut new_rows = Vec::new();
-    let mut recent = Vec::new();
-    for row in recent_rows {
-        let timestamp = provider_timestamp_secs(&row.item);
-        let bucket = match home_age_group(timestamp, now_secs) {
-            Some(FeedAgeGroup::New) => &mut new_rows,
-            Some(FeedAgeGroup::Recent) => &mut recent,
-            None
-            | Some(
-                FeedAgeGroup::OlderThanTwoWeeks
-                | FeedAgeGroup::OlderThanMonth
-                | FeedAgeGroup::Unknown,
-            ) => continue,
-        };
-        bucket.push(item_row(
-            HomeItemTarget::Recent(row.item.content_id()),
-            &row.item,
-            row.feed_name.as_deref(),
-            timestamp.map(fmt_publish_date_short),
-        ));
-    }
-    [
-        (FeedAgeGroup::New, new_rows),
-        (FeedAgeGroup::Recent, recent),
-    ]
-    .into_iter()
-    .filter(|(_, rows)| !rows.is_empty())
-    .collect()
+/// The `Recently added` item rows inside the 14-day cutoff, in the order they
+/// arrive. One date parse per row.
+fn recent_item_rows(recent_rows: &[HomeRecentRow], now_secs: u64) -> Vec<HomeRow> {
+    recent_rows
+        .iter()
+        .filter_map(|row| {
+            let timestamp = provider_timestamp_secs(&row.item);
+            is_home_recent(timestamp, now_secs).then(|| {
+                item_row(
+                    HomeItemTarget::Recent(row.item.content_id()),
+                    &row.item,
+                    row.feed_name.as_deref(),
+                    timestamp.map(fmt_publish_date_short),
+                )
+            })
+        })
+        .collect()
 }
 
 /// The complete Home projection: `Continue watching`, a spacer, then
-/// `Recently added` with its non-empty `New` and `Recent` groups. Empty
-/// inputs project no rows (the panel then renders its empty placeholder).
+/// `Recently added` as one flat list. Empty inputs project no rows (the panel
+/// then renders its empty placeholder).
 pub(super) fn flat_rows(
     continue_items: &[QueueItem],
     recent_rows: &[HomeRecentRow],
@@ -94,16 +80,13 @@ pub(super) fn flat_rows(
                 .map(|item| item_row(HomeItemTarget::continue_item(item.id()), item, None, None)),
         );
     }
-    let groups = grouped_rows(recent_rows, now_secs);
-    if !groups.is_empty() {
+    let recent = recent_item_rows(recent_rows, now_secs);
+    if !recent.is_empty() {
         if !rows.is_empty() {
             rows.push(MediaListRow::Spacer);
         }
         rows.push(heading("Recently added"));
-        for (group, group_rows) in groups {
-            rows.push(heading(group.label()));
-            rows.extend(group_rows);
-        }
+        rows.extend(recent);
     }
     rows
 }

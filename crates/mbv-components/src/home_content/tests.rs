@@ -1,5 +1,5 @@
 //! Home flat projection contract (`openspec/specs/home-latest-sections`:
-//! "Recently added is grouped by age with the Feeds rule").
+//! "Recently added is one flat list within the 14-day cutoff").
 
 use super::*;
 use mbv_emby_model::test_support::make_item;
@@ -42,7 +42,7 @@ fn labels(owner: &HomeContent) -> Vec<String> {
 }
 
 #[test]
-fn recent_rows_group_by_feeds_age_and_omit_empty_headers() {
+fn recent_rows_form_one_flat_list_and_omit_stale_items() {
     let mut owner = HomeContent::new();
     owner.set_snapshot(
         Vec::new(),
@@ -54,10 +54,7 @@ fn recent_rows_group_by_feeds_age_and_omit_empty_headers() {
         ],
         NOW,
     );
-    assert_eq!(
-        labels(&owner),
-        ["# Recently added", "# New", "fresh", "# Recent", "week"]
-    );
+    assert_eq!(labels(&owner), ["# Recently added", "fresh", "week"]);
 
     owner.set_snapshot(Vec::new(), false, vec![recent_row("stale", 14)], NOW);
     assert_eq!(labels(&owner), Vec::<String>::new());

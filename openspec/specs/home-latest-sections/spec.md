@@ -7,11 +7,11 @@ Defines Home's tab content as a Continue Watching destination: Home presents Con
 ## Requirements
 
 ### Requirement: Home is presented as Continue with no Selector row
-The Home destination's tab SHALL be labelled `Continue`. It presents one flat list with group headers, plus the hero. The headers are `Continue watching` and `Recently added`, and under `Recently added`, the age headers `New` and `Recent`. Headers use the same style as the group headers of the TV and Feeds lists. Headers are not selectable. Home has no tree, no expand or collapse, no Latest selector, no Selector row, and no pill bar. A header with no items beneath it is omitted. When there are no items at all, the list shows its empty placeholder. A previously saved Home Latest selection falls back to the first Home item on launch. Missing Recently added content does not hide the Continue tab or prevent Emby Continue Watching from loading.
+The Home destination's tab SHALL be labelled `Continue`. It presents one flat list with group headers, plus the hero. The headers are `Continue watching` and `Recently added`. `Recently added` has no age sub-headers. Headers use the same style as the group headers of the TV and Feeds lists. Headers are not selectable. Home has no tree, no expand or collapse, no Latest selector, no Selector row, and no pill bar. A header with no items beneath it is omitted. When there are no items at all, the list shows its empty placeholder. A previously saved Home Latest selection falls back to the first Home item on launch. Missing Recently added content does not hide the Continue tab or prevent Emby Continue Watching from loading.
 
 #### Scenario: Home after migration
 - **WHEN** the user opens the Continue tab with eligible libraries and feed subscriptions
-- **THEN** the tab is labelled `Continue`, shows the `Continue watching` header over its items and the `Recently added` header over its age groups, and has no Latest pills, Selector row, pill bar, or tree indentation
+- **THEN** the tab is labelled `Continue`, shows the `Continue watching` header over its items and the `Recently added` header over its items in one flat list, and has no Latest pills, Selector row, pill bar, or tree indentation
 
 #### Scenario: Legacy Home selection
 - **WHEN** the saved launch location names a Home Latest section
@@ -19,7 +19,7 @@ The Home destination's tab SHALL be labelled `Continue`. It presents one flat li
 
 #### Scenario: Only one root has items
 - **WHEN** Emby is unavailable and Feeds has entries from the last 14 days
-- **THEN** Home shows only the `Recently added` header with its age groups and no empty `Continue watching` header
+- **THEN** Home shows only the `Recently added` header over its items and no empty `Continue watching` header
 
 #### Scenario: Cursor skips headers
 - **WHEN** the user moves the cursor down past the last `Continue watching` item
@@ -33,11 +33,11 @@ The `Continue watching` group SHALL list at most 10 Emby resumable items, in the
 - **THEN** `Continue watching` lists the first 10
 
 ### Requirement: Recently added combines every Latest-bearing destination
-The `Recently added` group SHALL combine items from every destination that offers a `Latest` pill. Each source SHALL use that destination's own Latest rules. The group SHALL interleave items from all sources newest first by provider added or published date, inside each age group. An item without a valid date SHALL be omitted. A destination with no Latest pill, such as an Emby Music library or an Audiobookshelf book library, SHALL contribute nothing.
+The `Recently added` group SHALL combine items from every destination that offers a `Latest` pill. Each source SHALL use that destination's own Latest rules. The group SHALL interleave items from all sources newest first by provider added or published date. An item without a valid date SHALL be omitted. A destination with no Latest pill, such as an Emby Music library or an Audiobookshelf book library, SHALL contribute nothing.
 
 #### Scenario: Items from three Services interleave
 - **WHEN** an Emby movie was added three days ago, a podcast episode published four days ago, and a feed entry published five days ago
-- **THEN** `Recent` lists the movie, then the podcast episode, then the feed entry
+- **THEN** `Recently added` lists the movie, then the podcast episode, then the feed entry
 
 #### Scenario: Ineligible library contributes nothing
 - **WHEN** an Emby Music library received an album yesterday
@@ -74,7 +74,7 @@ Every Home action SHALL address the selected row by its section and its Service-
 - **THEN** the context menu offers Play and Add to Queue only
 
 #### Scenario: Marked items act in display order
-- **WHEN** the user marks two items under `New` and enqueues the selection
+- **WHEN** the user marks two items under `Recently added` and enqueues the selection
 - **THEN** both items are added to the queue in the order the list shows them
 
 ### Requirement: Recently added loads at launch independent of destinations
@@ -95,17 +95,17 @@ On launch, Home SHALL select the first item row of the list, not a header. It SH
 - **WHEN** mbv restarts with Home as the restored tab and Continue Watching has items
 - **THEN** the first `Continue watching` item is selected
 
-### Requirement: Recently added is grouped by age with the Feeds rule
-`Recently added` SHALL group its items by their age now, with the same rule as the Feeds list. An item 0 or 1 days old SHALL be under `New`. An item 2 to 13 days old SHALL be under `Recent`. An item 14 days old or older SHALL NOT be shown. The groups do not overlap and appear in this order: `New`, `Recent`. An empty group header SHALL be omitted. Age SHALL NOT depend on the previous client launch.
+### Requirement: Recently added is one flat list within the 14-day cutoff
+`Recently added` SHALL show its items as one flat list under a single header, with no age sub-headers. An item 0 to 13 days old SHALL be shown. An item 14 days old or older SHALL NOT be shown. The header SHALL be omitted when no item is shown. Age SHALL NOT depend on the previous client launch.
 
-#### Scenario: Group assignment
+#### Scenario: Cutoff
 - **WHEN** items are dated 1, 4, 10, and 20 days ago
-- **THEN** the 1-day item is under `New`, the 4-day and 10-day items are under `Recent`, and the 20-day item is absent
+- **THEN** the 1-day, 4-day, and 10-day items are shown in one list under `Recently added`, and the 20-day item is absent
 
 #### Scenario: First launch
 - **WHEN** mbv has no recorded previous launch and an item was added yesterday
-- **THEN** that item is under `New`
+- **THEN** that item is shown under `Recently added`
 
-#### Scenario: Only New has items
-- **WHEN** every item is 0 or 1 days old
-- **THEN** `Recently added` shows the `New` header and no `Recent` header
+#### Scenario: Only stale items
+- **WHEN** every item is 14 or more days old
+- **THEN** `Recently added` shows no header and no items

@@ -44,7 +44,7 @@ pub struct HomeContent {
     /// Shell-owned `Recently added` rows, merged and interleaved newest
     /// first; the projection reads them.
     recent_rows: Vec<HomeRecentRow>,
-    /// The time the `Recently added` age groups were last measured from.
+    /// The time the `Recently added` 14-day cutoff was last measured from.
     now_secs: u64,
     loading: bool,
     /// The selection origin the panel records (status-bar summary only).
@@ -75,7 +75,7 @@ impl HomeContent {
     }
 
     /// Replace the shell-owned snapshot: Continue Watching, the `Recently
-    /// added` rows, and the time their age groups are measured from. Projects
+    /// added` rows, and the time the 14-day cutoff is measured from. Projects
     /// once. The carrier preserves the selected target when it remains in the
     /// content.
     pub fn set_snapshot(

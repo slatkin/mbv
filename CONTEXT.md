@@ -305,7 +305,7 @@ The Home destination content, with the tab labelled `Continue`. It is one flat l
 _Avoid_: home screen, dashboard, landing, Home tab label (the tab reads `Continue`)
 
 Recently added:
-The second group header of the Home view. It combines the Latest content of every Latest-bearing destination, newest first. It holds only items dated within 14 days before now. It groups them by age with the Feeds rule into the non-overlapping age groups `New` (0-1 days) and `Recent` (2-13 days). An empty group is omitted. Age does not depend on the previous launch. It is data of the Home view only. A Destination Latest mode never reads it.
+The second group header of the Home view. It combines the Latest content of every Latest-bearing destination, newest first. It holds only items dated within 14 days before now, shown as one flat list with no age sub-headings. Age does not depend on the previous launch. It is data of the Home view only. A Destination Latest mode never reads it.
 _Avoid_: Home Latest, Home new content, home feed
 
 Destination Latest mode:
