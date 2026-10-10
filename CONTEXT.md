@@ -301,11 +301,11 @@ One fixed alphabetical range of author surnames as a selectable pill in an Audio
 _Avoid_: author group (the bucket is a range, not one author)
 
 Home view:
-The Home destination content, with the tab labelled `Continue`. It is one tree list with two collapsible roots, `Continue watching` and `Recently added`, plus the hero. Home has no Latest pills or rows and no Selector row or pill bar. Latest lives at each eligible destination. The section keeps its own cursor and scroll. Collapse state lasts only for the current run.
+The Home destination content, with the tab labelled `Continue`. It is one flat list with the group headers `Continue watching` and `Recently added`, plus the hero. The headers use the style of the TV and Feeds group headers and are not selectable. Home has no roots, branches, or collapse. It has no Latest pills or rows and no Selector row or pill bar. Latest lives at each eligible destination. The list keeps its own cursor and scroll.
 _Avoid_: home screen, dashboard, landing, Home tab label (the tab reads `Continue`)
 
 Recently added:
-The second Home view root. It combines the Latest content of every Latest-bearing destination, newest first. It holds only items dated within 14 days before the current launch. It groups them into the non-overlapping branches `New`, `Last 7 days`, and `Last 14 days`. An empty branch is omitted. It is data of the Home view only. A Destination Latest mode never reads it.
+The second group header of the Home view. It combines the Latest content of every Latest-bearing destination, newest first. It holds only items dated within 14 days before now. It groups them by age with the Feeds rule into the non-overlapping age groups `New` (0-1 days) and `Recent` (2-13 days). An empty group is omitted. Age does not depend on the previous launch. It is data of the Home view only. A Destination Latest mode never reads it.
 _Avoid_: Home Latest, Home new content, home feed
 
 Destination Latest mode:
