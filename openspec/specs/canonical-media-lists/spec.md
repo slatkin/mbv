@@ -579,7 +579,7 @@ Result rows SHALL be selectable `Item` rows with stable opaque targets (the matc
 
 Selection SHALL reset to the first result whenever the scored results re-fire for a changed query. A corpus or pool refresh with an unchanged query SHALL preserve the selected stable target through the shared owner's ordinary refresh rule. A responsive presentation transition SHALL keep the session open, reuse the same shared owner, and clamp the viewport, per the shared owner's geometry-change rule.
 
-Pointer input against search result rows SHALL flow through the panel's normalized media-list surface path like every other list: a click selects the row, a double-click activates it, a wheel gesture moves the local cursor, and a right-click resolves the row's ordinary item-based context-menu intent. The search results SHALL NOT carry a private raw-event mouse path.
+Pointer input against search result rows SHALL flow through the panel's normalized media-list surface path like every other list: a click selects the row, a double-click activates it, a wheel gesture scrolls the results viewport without moving the selection, and a right-click resolves the row's ordinary item-based context-menu intent. The search results SHALL NOT carry a private raw-event mouse path.
 
 #### Scenario: Search results render through the fixed-row presentation
 
@@ -610,14 +610,21 @@ Pointer input against search result rows SHALL flow through the panel's normaliz
 - **WHEN** the user right-clicks a painted search result row
 - **THEN** the row's ordinary item-based context-menu intent SHALL resolve through the standard media-list row-intent path
 
+#### Scenario: Wheel over search results scrolls without selecting
+
+- **WHEN** the user turns the wheel over painted search result rows
+- **THEN** the results viewport scrolls by one wheel step
+- **AND** the selected result is unchanged
+
 ### Requirement: The window raise keeps a group's label visible
 
 When the shared media-list owner raises the visible window to bring the selection back into view,
 it SHALL continue raising over the contiguous non-selectable rows (`Heading`/`Spacer`) directly
 above the selection, so the `Heading` that labels the group containing the selection stays painted.
 The raise SHALL NOT continue past the first selectable row above that label run. No other window
-behaviour SHALL change: the wheel, `PgUp`/`PgDn`, cursor chords, restore, and clamping keep their
-current meaning, and the window has no writer besides the existing selection-following rule.
+behaviour SHALL change: `PgUp`/`PgDn`, cursor chords, restore, and clamping keep their
+current meaning, and the window's only writers are the selection-following rule and the wheel's
+viewport scroll, which does not raise over label rows.
 
 #### Scenario: Scrolling back up re-shows the group heading
 
