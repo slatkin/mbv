@@ -208,10 +208,10 @@ impl Model {
             .collect();
         let loading = self.home_content.loading;
         let recent_rows = self.home_recent_rows();
-        let launch_window = self.app.home_latest_launch_window;
+        let now_secs = mbv_render::screens::feeds_model::current_time_secs();
         self.update_home_owner(|home| {
             home.set_content(continue_items, loading);
-            home.set_recent_rows(recent_rows, launch_window);
+            home.set_recent_rows(recent_rows, now_secs);
         });
     }
 
@@ -222,7 +222,7 @@ impl Model {
     /// subscription name resolved by the shell. A merged row without a valid
     /// date has no age branch, so it can never appear.
     pub(in crate::app) fn home_recent_rows(&self) -> Vec<mbv_ui_model::home_latest::HomeRecentRow> {
-        use mbv_ui_model::home_latest::{HomeRecentRow, provider_timestamp_secs, recent_age};
+        use mbv_ui_model::home_latest::{HomeRecentRow, home_age_group, provider_timestamp_secs};
         use std::cmp::Reverse;
         let window = self.app.home_latest_launch_window;
         let mut rows: Vec<HomeRecentRow> = self
@@ -239,7 +239,7 @@ impl Model {
                 .feed_tab
                 .all_entries
                 .iter()
-                .filter(|entry| recent_age(entry.pub_date_secs, window).is_some())
+                .filter(|entry| home_age_group(entry.pub_date_secs, window.current).is_some())
                 .map(|entry| {
                     let feed_name = entry.feed_id.as_deref().and_then(|feed_id| {
                         self.app
@@ -457,7 +457,6 @@ mod tests {
             !titles.contains(&"OldMovie".to_string()),
             "fetched row older than the 14-day cutoff is absent"
         );
-        assert_eq!(owner.launch_window(), model.app.home_latest_launch_window);
     }
 
     /// Spec scenario "Podcast row context menu" (`home-latest-sections`): a

@@ -1,4 +1,4 @@
-use crate::targets::RecentAge;
+use crate::feed_age::{FeedAgeGroup, feed_age_group};
 use mbv_queue::QueueItem;
 
 #[cfg(test)]
@@ -52,33 +52,14 @@ pub fn is_new_in_launch_window(item: &QueueItem, window: HomeLatestLaunchWindow)
     timestamp_in_launch_window(provider_timestamp_secs(item), window)
 }
 
-/// The `Recently added` age branch of one item, from its provider timestamp.
+/// The Home age group of one provider timestamp, by the Feeds rule: `Some`
+/// only for `New` and `Recent`. Older and undated items belong to no group.
 #[must_use]
-pub fn recent_age_of(item: &QueueItem, window: HomeLatestLaunchWindow) -> Option<RecentAge> {
-    recent_age(provider_timestamp_secs(item), window)
-}
-
-/// Assign the `Recently added` age branch for one provider timestamp.
-///
-/// Branch assignment follows the spec's three branches: `New` holds items
-/// dated after the previous client launch, `Last 7 days` holds the remaining
-/// items up to 7 days old, and `Last 14 days` holds the remaining items; an
-/// item older than `RECENTLY_ADDED_CUTOFF_SECS` before the current launch
-/// gets `None`, as does a missing timestamp. A first launch (`previous` is
-/// `None`) never yields `New`.
-#[must_use]
-pub fn recent_age(timestamp: Option<u64>, window: HomeLatestLaunchWindow) -> Option<RecentAge> {
-    let timestamp = timestamp?;
-    if timestamp < window.current.saturating_sub(RECENTLY_ADDED_CUTOFF_SECS) {
-        return None;
-    }
-    if window.previous.is_some_and(|previous| timestamp > previous) {
-        return Some(RecentAge::New);
-    }
-    let last_7_days_cutoff = window.current.saturating_sub(7 * 24 * 60 * 60);
-    if timestamp >= last_7_days_cutoff {
-        Some(RecentAge::Last7Days)
-    } else {
-        Some(RecentAge::Last14Days)
+pub fn home_age_group(timestamp: Option<u64>, now_secs: u64) -> Option<FeedAgeGroup> {
+    match feed_age_group(timestamp, now_secs) {
+        group @ (FeedAgeGroup::New | FeedAgeGroup::Recent) => Some(group),
+        FeedAgeGroup::OlderThanTwoWeeks | FeedAgeGroup::OlderThanMonth | FeedAgeGroup::Unknown => {
+            None
+        }
     }
 }

@@ -104,39 +104,3 @@ fn launch_window_uses_a_closed_upper_bound(#[case] item: QueueItem, #[case] expe
     };
     assert_eq!(is_new_in_launch_window(&item, window), expected);
 }
-
-/// Branch assignment follows the spec's three branches (`home-latest-sections`:
-/// "Recently added is limited to fourteen days and grouped by age"), one case
-/// per distinct outcome, with the previous launch two days before the current
-/// one (the spec's branch-assignment scenario).
-const DAY_SECS: u64 = 24 * 60 * 60;
-
-#[rstest]
-#[case::after_previous_launch(Some(DAY_SECS), Some(2 * DAY_SECS), Some(RecentAge::New))]
-#[case::up_to_7_days(
-    Some(4 * DAY_SECS),
-    Some(2 * DAY_SECS),
-    Some(RecentAge::Last7Days)
-)]
-#[case::up_to_14_days(
-    Some(10 * DAY_SECS),
-    Some(2 * DAY_SECS),
-    Some(RecentAge::Last14Days)
-)]
-#[case::older_than_cutoff(Some(20 * DAY_SECS), Some(2 * DAY_SECS), None)]
-#[case::no_timestamp(None, Some(2 * DAY_SECS), None)]
-// A first launch has no previous launch, so no item is ever `New`.
-#[case::first_launch_no_new_branch(Some(DAY_SECS), None, Some(RecentAge::Last7Days))]
-fn recent_age_assigns_the_spec_branches(
-    #[case] age: Option<u64>,
-    #[case] previous_age: Option<u64>,
-    #[case] expected: Option<RecentAge>,
-) {
-    let current = 1_000_000_000;
-    let window = HomeLatestLaunchWindow {
-        previous: previous_age.map(|previous| current - previous),
-        current,
-    };
-    let timestamp = age.map(|age| current - age);
-    assert_eq!(recent_age(timestamp, window), expected);
-}
