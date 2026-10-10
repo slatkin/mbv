@@ -396,9 +396,10 @@ pub struct App {
     /// insertions of fresh ids evict the oldest entry so a long music
     /// session cannot keep every fetched list reachable.
     pub(in crate::app) album_tracks_cache: std::collections::HashMap<String, Vec<EmbyItem>>,
-    /// First-insertion order of `album_tracks_cache`'s keys, for
-    /// oldest-first eviction. One entry per unique id; a replaced insert
-    /// keeps its original slot.
+    /// Eviction order of `album_tracks_cache`'s keys, oldest first. One
+    /// entry per unique id; a re-fetched id moves to the back (fresh
+    /// eviction age), as `refetching_a_cached_album_moves_to_the_back_of_the_eviction_order`
+    /// pins.
     pub(in crate::app) album_tracks_cache_order: std::collections::VecDeque<String>,
     pub(in crate::app) album_tracks_loading: std::collections::HashSet<String>,
     /// Fallback artist per-album track fetches waiting for a bounded slot
