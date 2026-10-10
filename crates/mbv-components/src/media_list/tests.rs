@@ -1,4 +1,5 @@
-use super::{MediaListCarrier, WideMediaList};
+use super::{MediaList, MediaListCarrier, MediaListOperation, WideMediaList};
+use crate::list::{ViewportAnchor, Viewported};
 use mbv_render::components::media_list::{
     MediaKind, MediaListRow, MediaListTitleReveal, MediaSemanticState, WideMediaListPaintPolicy,
 };
@@ -134,6 +135,46 @@ fn from_progress_is_the_one_state_derivation() {
         MediaSemanticState::active(Some(100)),
         "the percentage is bounded at 100"
     );
+}
+
+/// D2 (shared-list-components): a keyboard move after a free scroll
+/// re-anchors the viewport to the selection — the key advances the selection
+/// by one and the resolved offset pulls that row back into view.
+#[test]
+fn a_key_after_a_free_scroll_bring_the_selection_back_into_view() {
+    let mut list = MediaList::new();
+    list.set_content(vec![item("a"), item("b"), item("c"), item("d"), item("e")]);
+    let flow = list.row_flow();
+    Viewported::scroll_viewport(&mut list, &flow, 3, 100);
+    assert_eq!(list.viewport_anchor(), ViewportAnchor::Free);
+    assert_eq!(
+        list.viewport_offset(),
+        2,
+        "the scroll clamped past 'a', so it is out of view"
+    );
+
+    let transition = list.delegate_operation(MediaListOperation::Move(1));
+
+    assert_eq!(transition.selected_target, Some("b".to_string()));
+    assert_eq!(list.viewport_anchor(), ViewportAnchor::FollowSelection);
+    assert_eq!(list.resolve_viewport(3).offset, 1);
+}
+
+/// D2 (shared-list-components): refreshed content that still holds the
+/// selected target keeps a freely scrolled viewport exactly where it is.
+#[test]
+fn refreshed_content_keeps_a_freely_scrolled_viewport() {
+    let rows = vec![item("a"), item("b"), item("c"), item("d"), item("e")];
+    let mut list = MediaList::new();
+    list.set_content(rows.clone());
+    let flow = list.row_flow();
+    Viewported::scroll_viewport(&mut list, &flow, 3, 2);
+
+    list.set_content(rows);
+
+    assert_eq!(list.selected_target(), Some(&"a".to_string()));
+    assert_eq!(list.viewport_anchor(), ViewportAnchor::Free);
+    assert_eq!(list.scroll(), 2);
 }
 
 /// The item-level derivation: music (track, album, artist) never carries its

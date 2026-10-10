@@ -117,6 +117,14 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
         action(&mut TreeState { browser: self })
     }
 
+    /// D2: point this browser's viewport back at the selection before the
+    /// operation's own resolve path runs.
+    fn re_anchor_following(&mut self) {
+        self.with_state(|state| {
+            state.set_viewport_anchor(ViewportAnchor::FollowSelection);
+        });
+    }
+
     pub fn filter_matches_for_query(&self) -> Vec<Target> {
         if !self.filter_active || self.filter_query.trim().is_empty() {
             return self
@@ -373,6 +381,7 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
         let mut external_intent = None;
         match operation {
             super::TreeOperation::Move(delta) => {
+                self.re_anchor_following();
                 self.with_state(|state| {
                     Cursored::move_by(
                         state,
@@ -387,6 +396,7 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
                 self.reconcile_selection();
             }
             super::TreeOperation::Page(direction) => {
+                self.re_anchor_following();
                 if !self.apply_page(direction, flow) {
                     return None;
                 }
@@ -404,11 +414,16 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
                 target,
                 flow_offset,
             } => {
+                // D2: a restore sets the selection, so it re-anchors the
+                // viewport to follow it (the persisted offset afterwards only
+                // clamps the first resolve).
+                self.re_anchor_following();
                 if !self.anchor_selection_to(&target, flow_offset) {
                     disposition = TreeConsumed::Unhandled;
                 }
             }
             super::TreeOperation::Select(target) => {
+                self.re_anchor_following();
                 if !self.with_state(|state| Cursored::select_target(state, flow, &target)) {
                     disposition = TreeConsumed::Unhandled;
                 }
@@ -420,9 +435,13 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
                 }
             }
             super::TreeOperation::Activate => {
+                // Keyboard activate/context on the selection re-anchors the
+                // viewport, like MediaList's `ActivateCurrent`/`ContextCurrent`.
+                self.re_anchor_following();
                 (disposition, external_intent) = self.apply_activate();
             }
             super::TreeOperation::Context => {
+                self.re_anchor_following();
                 (disposition, external_intent) = self.apply_context();
             }
             operation @ (super::TreeOperation::EditFilter(_)
@@ -437,6 +456,9 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
         operation: &super::TreeOperation<Target>,
         flow: &RowFlow<Target>,
     ) {
+        // D2: First/Last/Parent are keyboard cursor moves, so they restore
+        // a freely scrolled viewport to following the selection.
+        self.re_anchor_following();
         match operation {
             super::TreeOperation::First => {
                 self.with_state(|state| Cursored::first(state, flow));

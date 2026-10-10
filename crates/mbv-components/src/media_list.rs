@@ -252,6 +252,25 @@ impl<Target> MediaList<Target> {
                 | MediaListOperation::First
                 | MediaListOperation::Last
         );
+        // D2: keyboard and selection operations re-anchor a freely scrolled
+        // viewport to the selection, so the existing resolve path pulls the
+        // selected row back into view. Pointer right-click (`Context`) keeps
+        // the user's free scroll instead of jumping the view.
+        if matches!(
+            operation,
+            MediaListOperation::Move(_)
+                | MediaListOperation::Page(_)
+                | MediaListOperation::First
+                | MediaListOperation::Last
+                | MediaListOperation::Select(_)
+                | MediaListOperation::Toggle(_)
+                | MediaListOperation::Range(_)
+                | MediaListOperation::Activate(_)
+                | MediaListOperation::ActivateCurrent
+                | MediaListOperation::ContextCurrent
+        ) {
+            self.set_viewport_anchor(ViewportAnchor::FollowSelection);
+        }
         let external_intent = match operation {
             MediaListOperation::Move(delta) => {
                 self.move_selection(delta);
