@@ -257,6 +257,39 @@ impl LibraryContentOwner for EmbyLibraryContent {
 }
 
 impl EmbyLibraryContent {
+    /// The wheel's paging reach report (wheel-scrolls-viewport D4, task
+    /// 4.1): the last painted selectable row of the retained frame resolved
+    /// to an item index — the same index space this owner's
+    /// `EmbyLibraryCursorIndex` reports use (structural rows never reach it).
+    /// Nothing painted resolves to nothing: with no frame the wheel scrolls
+    /// locally and reports no reach.
+    fn wheel_reach_message(&self) -> Option<Msg> {
+        Some(Msg::Shell(Box::new(ShellRequest::LibraryViewportReach {
+            index: self.last_painted_reach_index()?,
+        })))
+    }
+
+    fn last_painted_reach_index(&self) -> Option<usize> {
+        let rect = self.carrier.current_content_rect()?;
+        if rect.height == 0 || rect.width == 0 {
+            return None;
+        }
+        // Resolve over the viewport the frame actually painted, then take
+        // the last selectable flow row the frame could have drawn.
+        let viewport = self
+            .carrier
+            .wide()
+            .resolve_viewport(usize::from(rect.height));
+        let last_flow_row = (viewport.offset + viewport.height)
+            .saturating_sub(1)
+            .min(self.carrier.rows().len().saturating_sub(1));
+        let target = self.carrier.rows()[..=last_flow_row]
+            .iter()
+            .rev()
+            .find_map(|row| row.selectable_target())?;
+        self.items().iter().position(|item| &item.id == target)
+    }
+
     fn on_list_event(&mut self, input: MediaListSurfaceInput) -> Option<Msg> {
         if self.inline_search.is_active() {
             return self.handle_search_pointer(input);
@@ -283,19 +316,16 @@ impl EmbyLibraryContent {
         target: Option<String>,
     ) -> Option<Msg> {
         match input {
-            MediaListSurfaceInput::Wheel { .. } => {
-                // The resolved wheel echo drives the shell's
-                // `video_cursor`/resting-cursor write and pagination
-                // through the same typed arm as keyboard movement
-                // (`shell/emby_library.rs::handle_emby_library_request`).
+            MediaListSurfaceInput::Wheel { delta, .. } => {
+                // wheel-scrolls-viewport D4, task 4.1: the wheel scrolls the
+                // viewport freely inside the embedded control and never
+                // moves the selection, so the shell's cursor-echo effects
+                // (the resting `video_cursor` write and pagination from the
+                // cursor) do not run. Pagination takes the post-scroll reach
+                // report from the last painted selectable row instead.
                 self.carrier
-                    .delegate_operation(MediaListOperation::Move(match input {
-                        MediaListSurfaceInput::Wheel { delta, .. } => delta,
-                        _ => 0,
-                    }));
-                Some(Msg::Shell(Box::new(ShellRequest::EmbyLibraryCursorIndex {
-                    index: self.cursor(),
-                })))
+                    .delegate_operation(MediaListOperation::Scroll(delta));
+                self.wheel_reach_message()
             }
             MediaListSurfaceInput::Click(_at)
             | MediaListSurfaceInput::ToggleClick(_at)
