@@ -15,7 +15,7 @@
 
 ## 3. Remove the mini-view auto-open (design D6)
 
-- [ ] 3.1 Delete `Model::sync_tv_mini_view_hero` and its call in `src/app/shell/run.rs`, `LibraryPanel::sync_mini_view_hero_overlay`, the `mini_view_hero_auto_open` field and its reads, the `mini_view_hero_available` trait method and TV's override, and `tv_content/tests/mini_view_hero_tests.rs` with its `mod` line. Keep the `#[expect(clippy::struct_excessive_bools)]` on `LibraryPanel` (5 bools remain, above the default threshold of 3). Remove only `mini_view_hero_auto_open` from its reason. Verify: `cargo clippy --workspace --all-targets -- -D warnings` is clean and `rg mini_view_hero src crates` finds nothing.
+- [x] 3.1 Delete `Model::sync_tv_mini_view_hero` and its call in `src/app/shell/run.rs`, `LibraryPanel::sync_mini_view_hero_overlay`, the `mini_view_hero_auto_open` field and its reads, the `mini_view_hero_available` trait method and TV's override, and `tv_content/tests/mini_view_hero_tests.rs` with its `mod` line. Keep the `#[expect(clippy::struct_excessive_bools)]` on `LibraryPanel` (5 bools remain, above the default threshold of 3). Remove only `mini_view_hero_auto_open` from its reason. Verify: `cargo clippy --workspace --all-targets -- -D warnings` is clean and `rg mini_view_hero src crates` finds nothing.
 
 ## 4. Latest rows play on narrow Enter and double-click (design D5)
 
