@@ -26,8 +26,8 @@
 
 ## 6. Integration gates
 
-- [ ] 6.1 Run `cargo fmt --all`, then `cargo clippy --workspace --all-targets -- -D warnings`, and verify both are clean.
-- [ ] 6.2 Run `cargo nextest run --workspace` and verify it passes.
+- [x] 6.1 Run `cargo fmt --all`, then `cargo clippy --workspace --all-targets -- -D warnings`, and verify both are clean.
+- [x] 6.2 Run `cargo nextest run --workspace` and verify it passes.
 
 ## Workflow follow-up
 
