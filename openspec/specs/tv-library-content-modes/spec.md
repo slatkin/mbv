@@ -71,11 +71,11 @@ the grouping requirement below); the list SHALL NOT nest.
 
 ### Requirement: Upcoming rows are grouped and identified by series (ADDED 2026-09-22)
 
-`Upcoming` rows SHALL be grouped under `Heading` rows derived from `PremiereDate` with relative labels (mirroring Emby web). Each row SHALL render `SeriesName` as primary and `"Sxx:Eyy — episode title"` (from `ParentIndexNumber`/`IndexNumber`/`Name`) as subtitle. Each row SHALL carry a stable per-row target keyed by series + season/episode identity; no two rows SHALL share a target.
+`Upcoming` rows SHALL be grouped under `Heading` rows derived from `PremiereDate` with relative labels (mirroring Emby web). Each row SHALL render `SeriesName` as primary and `"Sxx:Eyy — episode title"` (from `ParentIndexNumber`/`IndexNumber`/`Name`) as subtitle. The notice may lack one or both numbers. Then the row renders a fallback in place of the full `Sxx:Eyy` label: a season without an episode renders `Sxx`; an episode without a season renders `Eyy`; a notice with neither renders `no number`. The subtitle stays `<label> — episode title` in every case. Each row SHALL carry a stable per-row target keyed by series + season/episode identity; no two rows SHALL share a target.
 
 #### Scenario: Upcoming groups by date with series context
 - **WHEN** the user selects the `Upcoming` mode and the feed carries `PremiereDate`s, `SeriesName`s, and season/episode numbers
-- **THEN** rows appear under relative-date headings with the series name and `Sxx:Eyy — title` on each row
+- **THEN** rows appear under relative-date headings with the series name and a `Sxx:Eyy — title`-shaped subtitle on each row, where the number label falls back to `Sxx`, `Eyy`, or `no number` when the notice lacks one or both numbers
 - **AND** two rows in one list resolve independently
 
 ### Requirement: Latest rows play and show the shared Wide hero
