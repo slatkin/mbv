@@ -13,6 +13,8 @@ For an item, artist root, or album leaf with a Workspace, opening the overlay SH
 
 Audiobookshelf podcast episodes are not hero-bearing browser rows: the podcast tab lists downloaded episodes directly, its hero has no Workspace and no inline or overlay presentation, and Enter on a selected episode performs its play activation immediately.
 
+Rows of any destination's `Latest` list are not hero-bearing browser rows in non-Wide geometry: Enter or a double-click on one performs its play activation immediately and SHALL NOT open the overlay. TV `Upcoming` rows are premiere notices, not media items, and SHALL NOT open the overlay.
+
 #### Scenario: Parent with constituent media opens focused Workspace
 
 - **WHEN** the user presses Enter on a selected series, album, or audiobook book in non-Wide geometry
@@ -59,6 +61,12 @@ Audiobookshelf podcast episodes are not hero-bearing browser rows: the podcast t
 
 - **WHEN** the user presses Enter on a selected Audiobookshelf podcast episode in non-Wide geometry
 - **THEN** the episode performs its play activation
+- **AND** no Library Hero overlay opens
+
+#### Scenario: Latest row plays without an overlay
+
+- **WHEN** the user presses Enter on, or double-clicks, a selected row of any destination's `Latest` list in non-Wide geometry
+- **THEN** the row performs its play activation
 - **AND** no Library Hero overlay opens
 
 ### Requirement: The overlay is confined to the Library pane
