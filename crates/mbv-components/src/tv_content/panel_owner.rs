@@ -8,6 +8,13 @@ use super::{
 use mbv_render::components::tv_wide::HeroImageState;
 
 impl TvContent {
+    fn latest_mode(&self) -> bool {
+        matches!(
+            self.context.tv_content_mode,
+            Some(mbv_queue::TvContentMode::Latest)
+        )
+    }
+
     /// The series-mode hero with the Workspace selection overlay, plus the
     /// selected episode's title for the overview box's title row: the
     /// workspace's own focus bit decides whether the rows, overview, artwork,
@@ -43,10 +50,8 @@ impl TvContent {
         // Hero facts first: reading the projected snapshot and image state
         // ends before the Workspace borrows the episode carrier mutably.
         let flat_episode_mode = self.flat_episode_mode();
-        let hero_item = if flat_episode_mode
-            && self.display_mode == TvDisplayMode::Narrow
-            && self.hero_overlay_open
-        {
+        let latest_mode = self.latest_mode();
+        let hero_item = if latest_mode {
             self.selected_episode_item()
         } else {
             None
@@ -94,10 +99,9 @@ impl TvContent {
         } else {
             ListSlot::Media(&mut self.browser)
         };
-        // Flat Latest/Upcoming rows are not a hero-bearing list, so the panel
-        // paints no Hero pane for them (design D2). The only flat hero left is
-        // the mini-view overlay's, which the slot carries as a pane.
-        let hero = if flat_episode_mode && hero.is_none() {
+        // Upcoming rows are premiere notices, not media: the panel paints no
+        // Hero pane for them (design D2). Latest carries the episode hero.
+        let hero = if flat_episode_mode && !latest_mode {
             HeroSlot::Absent
         } else {
             HeroSlot::pane(hero)
@@ -179,10 +183,6 @@ impl LibraryContentOwner for TvContent {
                 Some(mbv_queue::TvContentMode::Latest)
             )
             && self.selected_episode_item().is_some()
-    }
-
-    fn browser_rows_are_hero_bearing(&mut self) -> bool {
-        !self.flat_episode_mode()
     }
 
     fn inline_search_session(&mut self) -> Option<&mut dyn InlineSearchHost> {
@@ -294,7 +294,7 @@ impl LibraryContentOwner for TvContent {
 
     fn hero_data(&mut self) -> Option<HeroContentData> {
         if self.flat_episode_mode() {
-            (self.hero_overlay_open && self.display_mode == TvDisplayMode::Narrow)
+            self.latest_mode()
                 .then(|| self.selected_episode_item())
                 .flatten()
                 .map(|episode| hero_content_emby(&episode))

@@ -44,3 +44,54 @@ fn narrow_latest_activation_addresses_the_displayed_row() {
         "Ctrl+P must play the displayed newest-first row"
     );
 }
+
+/// A Wide TV owner in Latest with the newest-first rows Zeta, Alpha.
+fn wide_latest_owner() -> TvContent {
+    let items = vec![
+        tv_episode("Zeta", "episode-zeta"),
+        tv_episode("Alpha", "episode-alpha"),
+    ];
+    let mut owner = TvContent::new();
+    let mut context = tv_tree_context(items, None, None, false);
+    context.set_tv_content_mode(Some(TvContentMode::Latest));
+    owner.set_content(context);
+    owner.set_is_wide(true);
+    owner.set_focused(true);
+    owner
+}
+
+/// Contract: tv-library-content-modes "Latest rows play and show the shared
+/// Wide hero". A Wide Latest owner returns the selected episode's hero.
+#[test]
+fn wide_latest_returns_the_selected_episode_hero() {
+    let mut owner = wide_latest_owner();
+
+    assert_eq!(
+        owner.hero_data(),
+        Some(hero_content_emby(&tv_episode("Zeta", "episode-zeta")))
+    );
+}
+
+/// Contract: design Risks "Wide Latest key routing". Enter on a Wide Latest
+/// owner addresses the displayed newest-first row through `TvEpisodeActivate`,
+/// not `TvActivate`.
+#[test]
+fn wide_latest_enter_activates_the_displayed_episode_row() {
+    let mut owner = wide_latest_owner();
+
+    let message = owner.on_key(&KeyEvent {
+        code: Key::Enter,
+        modifiers: KeyModifiers::NONE,
+    });
+
+    let Some(Msg::Shell(shell)) = message else {
+        panic!("Enter must emit a shell request, got {message:?}");
+    };
+    assert!(
+        matches!(
+            shell.as_ref(),
+            ShellRequest::TvEpisodeActivate { episode } if episode.id == "episode-zeta"
+        ),
+        "Enter must emit TvEpisodeActivate for the displayed row, got {shell:?}"
+    );
+}
