@@ -41,7 +41,7 @@
 
 ## 7. Docs and gates
 
-- [ ] 7.1 Add the *Upcoming premiere* term to `CONTEXT.md` under "Browsing and tabs": an Emby announcement of a future episode, shown in TV `Upcoming`. It is not a media item. It cannot play, enqueue, or show a hero, and its only action opens its series. *Avoid*: upcoming episode, placeholder episode. In the *TV content mode* entry, replace "`Latest` and `Upcoming` rows are flat episode lists that play directly." with: `Latest` is a flat episode list that plays directly. `Upcoming` is a flat list of *Upcoming premieres* that open their series. Verify: `rg -n "Upcoming premiere" CONTEXT.md` finds the entry.
+- [x] 7.1 Add the *Upcoming premiere* term to `CONTEXT.md` under "Browsing and tabs": an Emby announcement of a future episode, shown in TV `Upcoming`. It is not a media item. It cannot play, enqueue, or show a hero, and its only action opens its series. *Avoid*: upcoming episode, placeholder episode. In the *TV content mode* entry, replace "`Latest` and `Upcoming` rows are flat episode lists that play directly." with: `Latest` is a flat episode list that plays directly. `Upcoming` is a flat list of *Upcoming premieres* that open their series. Verify: `rg -n "Upcoming premiere" CONTEXT.md` finds the entry.
 - [ ] 7.2 Run `cargo fmt --all`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run --workspace`. Verify: all three are clean.
 
 ## Workflow follow-up
