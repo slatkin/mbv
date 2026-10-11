@@ -48,7 +48,7 @@ Key files (the compiler finds the rest of the `HeroSlot` sites):
 Checklist mirrors `tasks.md`; tick both places as work completes.
 
 - [x] 1. Hero slot type in the Library panel (tasks 1.1–1.3). `HeroSlot`, all constructors/readers, one panel test for "non-media rows have no Hero pane".
-- [ ] 2. One breakpoint source + TV Latest Wide hero (tasks 2.1–2.4). `wide_tv_show_area`, geometry-only `set_is_wide`, Latest hero in every geometry, owner test for Wide Latest hero + keyboard addressing.
+- [x] 2. One breakpoint source + TV Latest Wide hero (tasks 2.1–2.4). `wide_tv_show_area`, geometry-only `set_is_wide`, Latest hero in every geometry, owner test for Wide Latest hero + keyboard addressing.
 - [ ] 3. Remove the mini-view auto-open (task 3.1). Delete `sync_tv_mini_view_hero` chain; handle the `struct_excessive_bools` expectation correctly (remove the attribute if unfulfilled; never add a suppression).
 - [ ] 4. Latest rows play on narrow Enter/double-click (tasks 4.1–4.2). `latest_list_active` trait method, panel-side refusal, one `#[case]` table test.
 - [ ] 5. Upcoming premiere type and storage (tasks 5.1–5.3). Confirm `SeriesId` first; `UpcomingPremiere`, client-boundary mapping with drop+log, snapshot/event/selection retyping.
