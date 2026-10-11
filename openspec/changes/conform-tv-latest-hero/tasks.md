@@ -1,0 +1,45 @@
+# Tasks
+
+## 1. Hero slot type in the Library panel (design D2)
+
+- [ ] 1.1 In `crates/mbv-components/src/library_panel/content.rs`, replace `LibraryPanelContent::hero: Option<HeroContent>` with a closed `HeroSlot { Pane(Option<HeroContent>), Absent }`. Update every constructor (7 owners) and every reader (`workspace_focused`, `panel/view.rs` painted links, `render_wide_skeleton`, the overlay painter, the `hero_overlay_available` default). Use no wildcard arm. Verify: `cargo check -p mbv-components` passes.
+- [ ] 1.2 In `library_panel/panel/view.rs`, delete `flat_tv_list` and the `show_hero_pane` expression. Derive the skeleton's `show_hero_pane` from the slot variant. `HeroSlot::Absent` never lets the overlay open (`can_open_hero_overlay`, `sync_overlay_state`). `TvContent` returns `Absent` in both flat modes for now, so behavior does not change in this group. Verify: `cargo nextest run -p mbv-components` passes.
+- [ ] 1.3 Add one panel test (contract: library-panel "A list of non-media rows has no Hero pane"; layer: panel). A stub owner returns `HeroSlot::Absent` in Wide geometry, and the painted frame has no Hero pane: the retained Wide geometry reports no hero image, no overview box, and an empty hero rect. Assert no coordinates. Verify: the test passes and fails when `Absent` maps to `show_hero_pane = true`.
+
+## 2. One breakpoint source and the TV Latest Wide hero (design D1, D4)
+
+- [ ] 2.1 In `src/app/state/projection/tv_wide.rs`, delete `is_wide_tv_library`. Rename `wide_tv_library_area` to `wide_tv_show_area`: Wide geometry and the current level's `tv_content_mode` is `All` or a `Range` (fall back to the library's `tv_content_mode` exactly as `push_tv_workspace_content` does). Update its callers in `input/browse_dispatch.rs`, `shell/tv_workspace.rs`, and `shell/overlays/menus.rs`. Verify: `cargo check -p mbv` passes and `rg is_wide_tv_library src` finds nothing.
+- [ ] 2.2 In `shell/tv_workspace.rs` `push_tv_workspace_content`, push `self.app.is_right_panel_wide()` to `TvContent::set_is_wide` (geometry only). Update the `TvContent::display_mode` doc comment to say so. Verify: `cargo check -p mbv`.
+- [ ] 2.3 In `crates/mbv-components/src/tv_content/panel_owner.rs`, in Latest mode return `HeroSlot::Pane(Some(hero_content_emby(selected episode)))` with the projected hero image in every geometry, and the same from `hero_data`. Delete the flat-mode `hero_overlay_open && display_mode == Narrow` gates. Upcoming still returns `Absent`. Verify: `cargo nextest run -p mbv-components -p mbv` passes. Delete tests that assert "no episode hero outside mini view". Do not rework them.
+- [ ] 2.4 Add one owner test (contract: tv-library-content-modes "Wide Latest shows the episode hero"; layer: owner). A Wide TV owner in Latest with a selected episode returns that episode's hero from `hero_data`. Extend the existing "Keyboard actions address the displayed row" owner test with one `#[case]` for Wide geometry, if it has no Wide case yet. Verify: both pass.
+
+## 3. Remove the mini-view auto-open (design D6)
+
+- [ ] 3.1 Delete `Model::sync_tv_mini_view_hero` and its call in `src/app/shell/run.rs`, `LibraryPanel::sync_mini_view_hero_overlay`, the `mini_view_hero_auto_open` field and its reads, the `mini_view_hero_available` trait method and TV's override, and `tv_content/tests/mini_view_hero_tests.rs` with its `mod` line. If the `#[expect(clippy::struct_excessive_bools)]` on `LibraryPanel` becomes unfulfilled, remove the attribute. Otherwise, remove only `mini_view_hero_auto_open` from its reason. Verify: `cargo clippy --workspace --all-targets -- -D warnings` is clean and `rg mini_view_hero src crates` finds nothing.
+
+## 4. Latest rows play on narrow Enter and double-click (design D5)
+
+- [ ] 4.1 Add `LibraryContentOwner::latest_list_active(&self) -> bool` (default `false`). In `panel/view.rs` (Enter) and `panel/mouse.rs` (double-click), refuse the overlay when it is true, so the event reaches the owner. Return true from `EmbyLibraryContent` when `latest_mode`, `FeedsContent` when `latest_selected`, `TvContent` in Latest, and `PodcastContent` when on Latest. Verify: `cargo nextest run -p mbv-components` passes. Update or delete tests that expect a Latest row to open the overlay in non-Wide geometry.
+- [ ] 4.2 Add one panel test with a `#[case]` table of Enter and double-click (contract: destination-latest-modes "Latest rows play directly in non-Wide geometry"; layer: panel). A narrow panel over an `EmbyLibraryContent` in Latest gives the owner's activation message and the overlay stays closed. Add one case where `latest_mode` is off and the overlay opens. Verify: the test passes.
+
+## 5. Upcoming premiere type and storage (design D3, part 1)
+
+- [ ] 5.1 Confirm that `get_upcoming` requests `SeriesId` (its `Fields` parameter and the DTO) before you drop rows. If `SeriesId` is not requested or not parsed, stop and report. Do not guess.
+- [ ] 5.2 Add `UpcomingPremiere` to `crates/mbv-emby-model` (`series_id: ItemId`, `series_name`, `season: Option<u32>`, `episode: Option<u32>`, `title`, `premiere_date`) with a `stable_key()` from those fields. `MbvEmby::get_upcoming` returns `Vec<UpcomingPremiere>`. Map at the client boundary and drop rows with no `SeriesId`, with one log line per fetch that gives the count. Verify: `cargo nextest run -p mbv-emby -p mbv-emby-model` passes. Add one test in the crate's `tests/` binary for the mapping (contract: a notice without `SeriesId` is dropped).
+- [ ] 5.3 Change `App::tv_upcoming_snapshots`, the `TvUpcomingSnapshotFetched` event, the refresh path in `event/browse_loads.rs`, the selection path in `dispatch/music.rs`, and `accept_tv_upcoming_snapshot` to `Vec<UpcomingPremiere>`. The Upcoming `BrowseLevel` keeps `items` empty and sets only `rows` and `loading`. Add `upcoming: Vec<UpcomingPremiere>` to `TvWideRenderCtx` and fill it in `push_tv_workspace_content` from the snapshot. Verify: `cargo check -p mbv`. Fix `dispatch/actions/letter_tests.rs` to build premieres.
+
+## 6. Upcoming rows, activation, and media-action removal (design D3, part 2)
+
+- [ ] 6.1 In `tv_content/episode_rows.rs`, build Upcoming rows from `context.upcoming` with `UpcomingPremiere::stable_key()` as target. Delete `upcoming_episode_target` and the `id.is_empty()` fallbacks in `tree_projection.rs` and `interaction.rs`. Upcoming returns `HeroSlot::Absent` in every list state, including loading and empty. Verify: `cargo nextest run -p mbv-components` passes.
+- [ ] 6.2 Add `ShellRequest::TvOpenUpcomingSeries { series_id: ItemId, series_name: String }` in `mbv-ui-msg`. The TV owner emits it for keyboard Enter and mouse activation of an Upcoming row. In Upcoming mode, `selected_episode_item` and `selected_item` return `None`, and the owner emits no play, enqueue, watched, or context-menu request. In the shell, handle the request with the reveal logic of `App::open_series_for_unplayable_episode`, which now takes the series reference. Delete the Upcoming branch of `TvActivate`. Verify: `cargo nextest run -p mbv-components -p mbv` passes. Update `shell/tv_workspace/tests/activation.rs` and the `open_series_for_unplayable_episode` tests to use premieres. Delete the tests for "an Upcoming row with an id plays".
+- [ ] 6.3 Add one owner test with a `#[case]` table of Enter and Ctrl+P on a selected Upcoming row (contract: tv-library-content-modes "Upcoming rows are premiere notices that open their series"; layer: owner). Enter emits `TvOpenUpcomingSeries` with the row's series. Ctrl+P emits nothing that plays. Verify: the test passes.
+
+## 7. Docs and gates
+
+- [ ] 7.1 Add the *Upcoming premiere* term to `CONTEXT.md` under "Browsing and tabs": an Emby announcement of a future episode, shown in TV `Upcoming`. It is not a media item. It cannot play, enqueue, or show a hero, and its only action opens its series. *Avoid*: upcoming episode, placeholder episode. Update the *TV show tree* entry if it calls Upcoming rows episodes. Verify: `rg -n "Upcoming premiere" CONTEXT.md` finds the entry.
+- [ ] 7.2 Run `cargo fmt --all`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run --workspace`. Verify: all three are clean.
+
+## Workflow follow-up
+
+- Run `make check-code-file-lines` before push.
+- Sync the delta specs and archive the change after review.
