@@ -305,10 +305,9 @@ impl AppComponent<Msg, UserEvent> for LibraryPanel {
                     && key.code == tuirealm::event::Key::Enter
                     && !self.hero_overlay_open
                     && self.narrow_geometry.is_some()
-                    && self
-                        .owners
-                        .active_mut()
-                        .is_some_and(|owner| owner.hero_overlay_enter_available())
+                    && self.owners.active_mut().is_some_and(|owner| {
+                        !owner.latest_list_active() && owner.hero_overlay_enter_available()
+                    })
                     && let Some(message) = self.open_hero_from_browser(None)
                 {
                     return Some(message);

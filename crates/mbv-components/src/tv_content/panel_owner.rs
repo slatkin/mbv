@@ -161,6 +161,10 @@ impl LibraryContentOwner for TvContent {
         self.carrier.clear_owner_selection();
     }
 
+    fn latest_list_active(&self) -> bool {
+        self.latest_mode()
+    }
+
     fn hero_overlay_target_available(&mut self) -> bool {
         !self.flat_episode_mode() && self.selected_item().is_some()
     }

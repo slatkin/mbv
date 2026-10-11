@@ -39,6 +39,10 @@ impl LibraryContentOwner for EmbyLibraryContent {
         self.hero_item().is_some()
     }
 
+    fn latest_list_active(&self) -> bool {
+        self.latest_mode()
+    }
+
     fn inline_search_session(&mut self) -> Option<&mut dyn InlineSearchHost> {
         Some(self)
     }

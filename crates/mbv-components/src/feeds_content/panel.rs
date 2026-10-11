@@ -94,6 +94,10 @@ impl FeedsContent {
 }
 
 impl LibraryContentOwner for FeedsContent {
+    fn latest_list_active(&self) -> bool {
+        self.latest_selected()
+    }
+
     fn reanchor_launch_state(&mut self, _state: &mbv_config::TuiLaunchState) -> bool {
         if self.loading && self.visible_entries.is_empty() && !self.subscriptions.is_empty() {
             return false;

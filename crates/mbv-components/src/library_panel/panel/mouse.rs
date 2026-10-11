@@ -269,10 +269,9 @@ impl LibraryPanel {
                 // resolved row directly, and its first click's message was
                 // already delivered by its own gesture.
                 let overlay_attempt = self.narrow_geometry.is_some()
-                    && self
-                        .owners
-                        .active_mut()
-                        .is_some_and(|owner| owner.double_click_opens_hero_overlay());
+                    && self.owners.active_mut().is_some_and(|owner| {
+                        !owner.latest_list_active() && owner.double_click_opens_hero_overlay()
+                    });
                 if overlay_attempt && let Some(message) = self.open_hero_from_browser(Some(at)) {
                     return Some(message);
                 }

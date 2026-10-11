@@ -134,6 +134,13 @@ pub trait LibraryContentOwner {
         self.browser_rows_are_hero_bearing()
     }
 
+    /// Whether this destination currently shows its Latest list. In non-Wide
+    /// geometry the panel never opens the Library Hero overlay then: Enter and
+    /// double-click reach the owner, which plays the row.
+    fn latest_list_active(&self) -> bool {
+        false
+    }
+
     fn inline_search_active(&self) -> bool {
         false
     }

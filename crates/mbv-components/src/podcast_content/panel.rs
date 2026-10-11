@@ -15,6 +15,10 @@ impl LibraryContentOwner for PodcastContent {
         self.reset_presentation();
     }
 
+    fn latest_list_active(&self) -> bool {
+        self.latest_selected()
+    }
+
     fn launch_selector(&self, state: &mbv_config::TuiLaunchState) -> Option<LaunchSelector> {
         // Only the persisted scope applies: a podcast library restarts on
         // Latest. Legacy filter/show selectors in an old snapshot decode but
