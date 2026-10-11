@@ -134,7 +134,8 @@ fn swap_argv(
     }
 }
 
-/// The binary path a launch starts from (tray-open-terminal design D4).
+/// The binary path a launch starts from (spec pin-swap "Launches start the
+/// Owner's own build after its binary file changes").
 ///
 /// After the started file is unlinked, Linux `current_exe()` ends in
 /// ` (deleted)` and spawn fails with ENOENT. Then start from the Owner's

@@ -518,9 +518,10 @@ mod tests {
         assert_eq!(clients.authority, AuthorityHolder::None);
     }
 
-    /// Contract: task 2.2 — the shared state is `Pinned` while a pinned
-    /// Client is attached and `None` when it leaves (spec pin-swap "The Tray
-    /// offers one Pin swap action": the label flips back to **Pin**).
+    /// Contract: spec pin-swap "The Tray offers Open while no Client is
+    /// attached" — the shared state is `Pinned` while a pinned Client is
+    /// attached and `None` when it leaves (the Open item shows only for
+    /// `None`).
     #[test]
     fn pinned_state_clears_when_the_pinned_client_leaves() {
         let mut clients = clients();
@@ -537,9 +538,10 @@ mod tests {
         assert_eq!(clients.attached_clients.load(), AttachedClients::None);
     }
 
-    /// Contract: task 2.2 / design D1 — a local Client with no pinned
-    /// surface reports `Unpinned` (whether or not it advertises `pin-swap`),
-    /// while an Owner-action-role connection alone reports `None`.
+    /// Contract: spec pin-swap "The Tray offers Open while no Client is
+    /// attached" — a local Client with no pinned surface reports `Unpinned`
+    /// (whether or not it advertises `pin-swap`), while an Owner-action-role
+    /// connection alone reports `None`.
     #[test]
     fn unpinned_local_clients_report_unpinned_and_owner_action_roles_report_none() {
         let mut registry = clients();

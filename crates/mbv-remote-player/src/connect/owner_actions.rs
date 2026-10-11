@@ -122,7 +122,7 @@ pub fn run_local_owner_action(action: OwnerAction) -> Result<(), crate::RemotePl
 
 /// The restart error for an Owner that cannot run `action`: the pre-send
 /// capability check and the post-send `CommandRejected` reply share this text
-/// (tray-open-terminal design D2).
+/// (spec owner-actions "Owner does not support this action").
 fn restart_required_too_old(action: OwnerAction) -> crate::RemotePlayerError {
     crate::RemotePlayerError::restart_required(format!(
         "the running mbv is too old for {}; restart it",
@@ -178,7 +178,7 @@ pub(super) fn send_owner_action(
 /// `OwnerAction` connection can send only `RunOwnerAction`, so a
 /// `CommandRejected` there means the Owner cannot run the action (it predates
 /// it); that reports the same restart requirement as the capability check
-/// (tray-open-terminal design D2).
+/// (spec owner-actions "Owner does not support this action").
 fn await_owner_action_reply(
     reader: &mut BufReader<SocketStream>,
     action: OwnerAction,

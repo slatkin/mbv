@@ -252,10 +252,10 @@ fn owner_action_refused_reply_surfaces_the_owner_reason() {
     );
 }
 
-/// Spec `owner-actions` "older Owner with the capability": an Owner that
-/// advertises `owner-action` but predates `OpenTerminal` replies
-/// `CommandRejected`; the CLI must report a restart requirement without
-/// waiting for the 6 s read timeout (tray-open-terminal task 3.3, design D2).
+/// Contract: spec owner-actions "Owner does not support this action" — an
+/// Owner that advertises `owner-action` but predates `OpenTerminal` replies
+/// `CommandRejected`; the CLI reports a restart requirement without waiting
+/// for the 6 s read timeout.
 #[test]
 fn owner_action_command_rejected_reply_reports_a_restart_requirement() {
     use mbv_ctrl::CTRL_CAP_OWNER_ACTION;

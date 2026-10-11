@@ -2,8 +2,9 @@ use std::sync::atomic::{AtomicU8, Ordering};
 
 /// Which kinds of local Client are attached to the Owner process, computed
 /// by the ctrl registry on every connect and disconnect
-/// (tray-open-terminal design D1). Owner-action and admin roles, and
-/// connections over TCP, never count as attached Clients.
+/// (spec pin-swap "The Tray offers Open while no Client is attached").
+/// Owner-action and admin roles, and connections over TCP, never count as
+/// attached Clients.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AttachedClients {
     /// No local Client is attached.
@@ -26,14 +27,15 @@ impl AttachedClients {
 
     /// Inverse of [`AttachedClients::to_u8`]. Only [`AttachedClientsCell::
     /// store`] writes the shared value, and it writes only the three tags
-    /// above, so the catch-all arm is unreachable in practice; mapping it
-    /// to [`AttachedClients::None`] keeps `load` total without inventing a
-    /// fourth state.
+    /// above, so any other tag is a programming bug (M-PANIC-ON-BUG).
     fn from_u8(value: u8) -> Self {
         match value {
+            0 => Self::None,
             1 => Self::Unpinned,
             2 => Self::Pinned,
-            _ => Self::None,
+            _ => unreachable!(
+                "AttachedClientsCell holds {value}, which no AttachedClients variant writes"
+            ),
         }
     }
 }
