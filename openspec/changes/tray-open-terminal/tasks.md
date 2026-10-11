@@ -22,7 +22,7 @@
 
 ## 5. Domain docs (AGENTS.md "Add new terms with the change")
 
-- [ ] 5.1 In `CONTEXT.md`, update the *Tray* entry (it "carries one Pin or Unpin item"; add the **Open** item that shows while no local Client is attached), the *Owner action* entry ("Pin swap is the first Owner action"; name Open as the second), and check the *Avoid* lists for a clash with "Open". Ask before any rename.
+- [x] 5.1 In `CONTEXT.md`, update the *Tray* entry (it "carries one Pin or Unpin item"; add the **Open** item that shows while no local Client is attached), the *Owner action* entry ("Pin swap is the first Owner action"; name Open as the second), and check the *Avoid* lists for a clash with "Open". Ask before any rename.
 
 ## 6. Integration gates
 
