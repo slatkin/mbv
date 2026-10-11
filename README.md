@@ -8,7 +8,7 @@ Full Emby client session remote control is also supported. `mbv` can control (an
 
 If you use Wayland, it comes with a small Smithay/libghostty-vt panel that allows you to pin the app as a layer that can be hidden as necessary. This is the kind of bloat and scope creep that AI makes so easy!
 
-You can download it. It's a vibe-coded funtime hobby though. I don't even care enough about licencing to type "MIT" on this! Danger.
+You can download it. It's a vibe-coded funtime hobby though. And I probably have ADHD. I don't even care enough about licencing to type "MIT" on this! Danger.
 
 It requires mpv, obviously.
 
