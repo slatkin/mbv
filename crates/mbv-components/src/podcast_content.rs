@@ -13,7 +13,9 @@ use mbv_emby_model::{TICKS_PER_SECOND_F64, saturating_i64_from_f64, ticks_to_sec
 use mbv_queue::{AudiobookshelfEpisodeCatalog, AudiobookshelfQueueItem};
 
 use super::library_panel::HeroContentData;
-use super::library_panel::content::{HeroContent, LibraryPanelContent, ListSlot, SelectorRow};
+use super::library_panel::content::{
+    HeroContent, HeroSlot, LibraryPanelContent, ListSlot, SelectorRow,
+};
 use super::library_panel::hero::hero_content_abs_episode;
 use super::library_panel::owner::{LaunchSelector, LibraryContentOwner, LibrarySlotEvent};
 use super::media_list::{
@@ -604,7 +606,7 @@ impl PodcastContent {
         LibraryPanelContent {
             selector,
             list,
-            hero,
+            hero: HeroSlot::Pane(hero.map(Box::new)),
         }
     }
 }

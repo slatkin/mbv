@@ -1,5 +1,5 @@
 use super::*;
-use crate::library_panel::content::{ArtworkShape, ListSlot};
+use crate::library_panel::content::{ArtworkShape, HeroSlot, ListSlot};
 use crate::library_panel::owner::LibraryContentOwner;
 use mbv_queue::FeedKind;
 
@@ -125,7 +125,9 @@ fn selected_podcast_entry_hero_is_square_with_the_placeholder() {
         &[subscription("A")],
         vec![entry("episode", FeedKind::Audio, false)],
     );
-    let hero = owner.content().hero.expect("selected entry hero");
+    let HeroSlot::Pane(Some(hero)) = owner.content().hero else {
+        panic!("selected entry hero");
+    };
     assert_eq!(hero.facts.artwork.shape, ArtworkShape::Square);
     assert!(hero.facts.artwork.source.is_none());
     assert_eq!(hero.facts.title, "episode");

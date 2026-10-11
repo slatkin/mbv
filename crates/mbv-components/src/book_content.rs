@@ -17,7 +17,7 @@ use mbv_config::{
 
 use super::library_panel::HeroContentData;
 use super::library_panel::content::{
-    HeroContent, LibraryPanelContent, ListSlot, SelectorRow, Workspace,
+    HeroContent, HeroSlot, LibraryPanelContent, ListSlot, SelectorRow, Workspace,
 };
 use super::library_panel::hero::hero_content_queue;
 use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
@@ -380,7 +380,7 @@ impl BookContent {
         LibraryPanelContent {
             selector,
             list,
-            hero,
+            hero: HeroSlot::Pane(hero.map(Box::new)),
         }
     }
 }

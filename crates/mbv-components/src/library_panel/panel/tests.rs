@@ -1,4 +1,6 @@
-use crate::library_panel::content::{HeroContent, LibraryPanelContent, ListSlot, SelectorRow};
+use crate::library_panel::content::{
+    HeroContent, HeroSlot, LibraryPanelContent, ListSlot, SelectorRow,
+};
 use crate::library_panel::{LibraryContentOwner, LibraryPanel, LibrarySlotEvent};
 use crate::media_list::{MediaListCarrier, MediaListSurfaceInput};
 use mbv_render::components::media_list::{MediaKind, MediaListRow, MediaSemanticState};
@@ -48,6 +50,9 @@ struct FixtureOwner {
     log: Rc<RefCell<FixtureLog>>,
     link: bool,
     overview: Option<String>,
+    /// When true the owner reports non-media rows: no Hero pane, no
+    /// overlay — the `HeroSlot::Absent` contract probe.
+    absent_hero: bool,
     /// The owner's own prose-viewport offset, moved only by its
     /// `hero_scroll` (design D7: no `ViewportAnchor` for document
     /// viewports).
@@ -63,12 +68,20 @@ impl FixtureOwner {
             log,
             link: false,
             overview: None,
+            absent_hero: false,
             hero_scroll: 0,
         }
     }
 
     fn with_link(mut self) -> Self {
         self.link = true;
+        self
+    }
+
+    /// Report non-media rows: the content slot is `Absent`, so Wide paints
+    /// no Hero pane and the overlay can never open.
+    fn without_hero(mut self) -> Self {
+        self.absent_hero = true;
         self
     }
 
@@ -119,36 +132,40 @@ impl LibraryContentOwner for FixtureOwner {
                 active: Some(0),
             }),
             list: ListSlot::Media(&mut self.carrier),
-            hero: Some(HeroContent {
-                facts: crate::library_panel::HeroFacts {
-                    title: "Dune".into(),
-                    meta_rows: if self.link {
-                        vec!["2021".into(), "IMDb".into()]
-                    } else {
-                        vec!["2021".into()]
+            hero: if self.absent_hero {
+                HeroSlot::Absent
+            } else {
+                HeroSlot::Pane(Some(Box::new(HeroContent {
+                    facts: crate::library_panel::HeroFacts {
+                        title: "Dune".into(),
+                        meta_rows: if self.link {
+                            vec!["2021".into(), "IMDb".into()]
+                        } else {
+                            vec!["2021".into()]
+                        },
+                        links: if self.link {
+                            vec![crate::library_panel::HeroLink {
+                                name: "IMDb".into(),
+                                url: "https://imdb.test/dune".into(),
+                            }]
+                        } else {
+                            Vec::new()
+                        },
+                        duration_row: None,
+                        progress_row: None,
+                        artwork: crate::library_panel::HeroArtwork {
+                            shape: crate::library_panel::ArtworkShape::Landscape,
+                            source: None,
+                            decoration: None,
+                            image: mbv_render::components::tv_wide::HeroImageState::None,
+                        },
                     },
-                    links: if self.link {
-                        vec![crate::library_panel::HeroLink {
-                            name: "IMDb".into(),
-                            url: "https://imdb.test/dune".into(),
-                        }]
-                    } else {
-                        Vec::new()
-                    },
-                    duration_row: None,
-                    progress_row: None,
-                    artwork: crate::library_panel::HeroArtwork {
-                        shape: crate::library_panel::ArtworkShape::Landscape,
-                        source: None,
-                        decoration: None,
-                        image: mbv_render::components::tv_wide::HeroImageState::None,
-                    },
-                },
-                overview: self.overview.clone(),
-                overview_title: None,
-                credits: None,
-                workspace: None,
-            }),
+                    overview: self.overview.clone(),
+                    overview_title: None,
+                    credits: None,
+                    workspace: None,
+                })))
+            },
         }
     }
 

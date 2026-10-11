@@ -248,6 +248,22 @@ pub struct HeroContent<'a> {
     pub workspace: Option<Workspace<'a>>,
 }
 
+/// The Hero pane's slot for one frame (design D2): whether the list
+/// carries media (and so owns a Hero pane) or carries non-media rows (and
+/// so owns none). The panel derives the Wide Hero pane — and every overlay
+/// gate — from the variant, never from the destination key.
+#[derive(Debug)]
+pub enum HeroSlot<'a> {
+    /// The list carries media. Wide paints the Hero pane, empty when the
+    /// selection has no hero. The hero is boxed: the pane owns a large
+    /// content value while `Absent` owns none.
+    Pane(Option<Box<HeroContent<'a>>>),
+    /// The list carries no media (TV Upcoming premiere notices). Wide
+    /// paints no Hero pane and the list takes the whole content area; the
+    /// Library Hero overlay can never open.
+    Absent,
+}
+
 /// The Library panel's only paint input for one frame (design D3). Plain
 /// content plus `&mut` views into the active owner's media-list flow and
 /// search session; no rect, surface, style, focus-kind, header-arm or
@@ -259,8 +275,9 @@ pub struct LibraryPanelContent<'a> {
     pub selector: Option<SelectorRow>,
     /// The list box's content.
     pub list: ListSlot<'a>,
-    /// The Hero pane's content, if the destination shows one.
-    pub hero: Option<HeroContent<'a>>,
+    /// The Hero pane's slot: media lists own a Hero pane, non-media row
+    /// lists own none.
+    pub hero: HeroSlot<'a>,
 }
 
 impl LibraryPanelContent<'_> {
@@ -269,10 +286,13 @@ impl LibraryPanelContent<'_> {
     /// re-deriving it from `hero`/`workspace` at each call site.
     #[must_use]
     pub fn workspace_focused(&self) -> bool {
-        self.hero
-            .as_ref()
-            .and_then(|hero| hero.workspace.as_ref())
-            .is_some_and(|workspace| workspace.focused)
+        match &self.hero {
+            HeroSlot::Pane(Some(hero)) => hero
+                .workspace
+                .as_ref()
+                .is_some_and(|workspace| workspace.focused),
+            HeroSlot::Pane(None) | HeroSlot::Absent => false,
+        }
     }
 }
 

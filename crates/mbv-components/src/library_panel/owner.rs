@@ -19,7 +19,7 @@ use mbv_ui_model::library::LibraryKey;
 use mbv_ui_msg::SelectionSummary;
 use mbv_ui_msg::{LeafKeyResult, Msg};
 
-use super::content::LibraryPanelContent;
+use super::content::{HeroSlot, LibraryPanelContent};
 use super::hero::HeroContentData;
 use mbv_render::components::tv_wide::HeroImageState;
 
@@ -90,7 +90,7 @@ pub trait LibraryContentOwner {
     }
 
     fn hero_overlay_available(&mut self) -> bool {
-        self.content().hero.is_some()
+        matches!(self.content().hero, HeroSlot::Pane(Some(_)))
     }
 
     /// Whether the selected parent can own a Hero overlay before its Hero

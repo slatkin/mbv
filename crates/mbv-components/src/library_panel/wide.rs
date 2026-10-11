@@ -22,7 +22,7 @@ use mbv_render::{
 };
 use mbv_theme as palette;
 
-use super::content::{LibraryPanelContent, ListSlot, PanelList, PanelListPaintPolicy};
+use super::content::{HeroSlot, LibraryPanelContent, ListSlot, PanelList, PanelListPaintPolicy};
 use super::hero_composition::{full_width_claim, paint_library_hero_content};
 use super::slots::{paint_pill_row_gap, paint_selector_row};
 
@@ -446,7 +446,7 @@ pub fn render_wide_skeleton(
         selected: browser.selected,
     };
 
-    if let Some(hero) = content.hero.as_mut() {
+    if let HeroSlot::Pane(Some(hero)) = &mut content.hero {
         let composition = paint_library_hero_content(
             f,
             hero_area,

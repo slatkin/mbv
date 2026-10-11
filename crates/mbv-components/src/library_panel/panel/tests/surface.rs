@@ -276,3 +276,37 @@ fn overview_wheel_steps_inside_the_painted_box_and_not_outside() {
         "a wheel outside the overview box does not scroll it"
     );
 }
+
+/// The library-panel contract "A list of non-media rows has no Hero pane"
+/// (panel layer): an owner whose slot is `Absent` paints no Hero pane in
+/// Wide geometry — no hero image, no overview box, and an empty hero rect.
+#[test]
+fn absent_hero_slot_paints_no_hero_pane() {
+    let log = Rc::new(RefCell::new(FixtureLog::default()));
+    let mut panel = LibraryPanel::new();
+    panel.set_active(Some(LibraryKey::Home));
+    panel.insert_owner(
+        LibraryKey::Home,
+        Box::new(FixtureOwner::new(Rc::clone(&log)).without_hero()),
+    );
+    let buf = draw_panel(&mut panel);
+    assert!(
+        (0..30).any(|row| line_text(&buf, row).contains("alpha")),
+        "the non-media list still paints its rows"
+    );
+    let geometry = panel
+        .test_wide_geometry()
+        .expect("a Wide frame paints its geometry");
+    assert!(
+        geometry.hero_image.is_none(),
+        "no hero image without a Hero pane"
+    );
+    assert!(
+        geometry.overview_box.is_none(),
+        "no overview box without a Hero pane"
+    );
+    assert!(
+        geometry.hero.is_empty(),
+        "the hero rect is empty without a Hero pane"
+    );
+}

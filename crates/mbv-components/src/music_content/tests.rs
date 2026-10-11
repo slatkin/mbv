@@ -390,7 +390,7 @@ fn a_stale_artist_detail_never_paints_under_the_new_root() {
     {
         let content = owner.content();
         assert!(
-            content.hero.is_none(),
+            matches!(content.hero, HeroSlot::Pane(None)),
             "no stale Beta Hero paints under Alpha"
         );
     };

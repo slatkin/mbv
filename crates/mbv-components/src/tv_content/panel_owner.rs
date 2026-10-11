@@ -1,5 +1,5 @@
 use super::{
-    EmbyItem, HeroContent, HeroContentData, InlineSearch, InlineSearchHost, KeyEvent,
+    EmbyItem, HeroContent, HeroContentData, HeroSlot, InlineSearch, InlineSearchHost, KeyEvent,
     LeafKeyResult, LetterFilter, LetterFilterKind, LibraryContentOwner, LibraryItemIdentity,
     LibraryPanelContent, LibrarySlotEvent, ListSlot, Msg, Pane, SelectorIdentity, SelectorRow,
     TvContent, TvDisplayMode, TvTreeTarget, Workspace, hero_content_emby,
@@ -97,7 +97,13 @@ impl TvContent {
         LibraryPanelContent {
             selector,
             list,
-            hero,
+            // Flat Latest/Upcoming rows are premiere-or-episode leaves, not
+            // a hero-bearing browser: the flat list owns no Hero pane.
+            hero: if flat_episode_mode {
+                HeroSlot::Absent
+            } else {
+                HeroSlot::Pane(hero.map(Box::new))
+            },
         }
     }
 

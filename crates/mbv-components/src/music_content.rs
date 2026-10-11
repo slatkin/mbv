@@ -15,8 +15,8 @@ use self::workspace::WorkspaceOwner;
 use super::inline_search::{InlineSearch, InlineSearchHost};
 use super::library_panel::HeroContentData;
 use super::library_panel::content::{
-    ArtworkShape, HeroArtwork, HeroContent, HeroFacts, LibraryPanelContent, ListSlot, SelectorRow,
-    Workspace, WorkspaceHeader,
+    ArtworkShape, HeroArtwork, HeroContent, HeroFacts, HeroSlot, LibraryPanelContent, ListSlot,
+    SelectorRow, Workspace, WorkspaceHeader,
 };
 use super::library_panel::hero::{hero_content_music_album, music_album_artwork};
 use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};

@@ -2,6 +2,7 @@ use super::{
     LeafKeyResult, LibraryKey, LibraryPanel, SkeletonHits, SkeletonPillWindows,
     WideSkeletonPaintParams, render_narrow_skeleton, render_wide_skeleton, wide_hero_fits,
 };
+use crate::library_panel::content::HeroSlot;
 
 use crate::mini_palette_suppressed;
 use ratatui::Frame;
@@ -11,7 +12,6 @@ use tuirealm::event::Event;
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use mbv_ui_model::library::LibraryKind;
 use mbv_ui_msg::Msg;
 use mbv_ui_msg::UserEvent;
 
@@ -126,20 +126,23 @@ fn paint_library_hero_overlay(
         overlay_rect,
         hints,
     );
-    let hero = content.hero.as_mut().map(|hero| {
-        super::super::hero_composition::paint_library_hero_content(
-            frame,
-            inner,
-            hero,
-            overview_scroll,
-            state.hovered_link,
-            &mut state.hit_regions.links,
-            &mut state.hit_regions.workspace_selector,
-            &mut state.windows.workspace_selector,
-            mbv_render::components::library_hero_overlay::OVERLAY_SHEET_SURFACE,
-            state.terminal_height,
-        )
-    });
+    let hero = match &mut content.hero {
+        HeroSlot::Pane(Some(hero)) => {
+            Some(super::super::hero_composition::paint_library_hero_content(
+                frame,
+                inner,
+                hero,
+                overview_scroll,
+                state.hovered_link,
+                &mut state.hit_regions.links,
+                &mut state.hit_regions.workspace_selector,
+                &mut state.windows.workspace_selector,
+                mbv_render::components::library_hero_overlay::OVERLAY_SHEET_SURFACE,
+                state.terminal_height,
+            ))
+        }
+        HeroSlot::Pane(None) | HeroSlot::Absent => None,
+    };
     let composition = hero.unwrap_or(super::super::hero_composition::HeroCompositionGeometry {
         workspace: None,
         hero_image: None,
@@ -171,23 +174,16 @@ impl Component for LibraryPanel {
         } else {
             &["ESC:Back"]
         };
-        let flat_tv_list = matches!(
-            self.owners.active_key(),
-            Some(LibraryKey::Service {
-                kind: LibraryKind::TvShows,
-                ..
-            })
-        );
         let Some(owner) = self.owners.active_mut() else {
             self.reset_split_gesture();
             return;
         };
         let overview_scroll = owner.hero_scroll_offset();
-        // Flat Latest/Upcoming TV rows are leaves, not a hero-bearing browser.
-        // The Library panel owns this Wide skeleton policy; other destinations
-        // and TV series/workspace modes retain the shared split.
-        let show_hero_pane = !flat_tv_list || owner.browser_rows_are_hero_bearing();
         let mut content = owner.content();
+        // The Wide skeleton policy: a media list owns the Hero pane, a
+        // non-media row list owns none. TV flat lists report `Absent`, so
+        // the TV branch they replaced is gone with this expression.
+        let show_hero_pane = matches!(content.hero, HeroSlot::Pane(_));
         #[cfg(any(test, feature = "test"))]
         {
             self.projected_selector_markers = content
@@ -196,17 +192,15 @@ impl Component for LibraryPanel {
                 .map(|selector| selector.markers.clone())
                 .unwrap_or_default();
         };
-        self.painted_link_urls = content
-            .hero
-            .as_ref()
-            .map(|hero| {
-                hero.facts
-                    .links
-                    .iter()
-                    .map(|link| link.url.clone())
-                    .collect()
-            })
-            .unwrap_or_default();
+        self.painted_link_urls = match &content.hero {
+            HeroSlot::Pane(Some(hero)) => hero
+                .facts
+                .links
+                .iter()
+                .map(|link| link.url.clone())
+                .collect(),
+            HeroSlot::Pane(None) | HeroSlot::Absent => Vec::new(),
+        };
         let mut hit_regions = std::mem::take(&mut self.hits);
         let mut windows = self.pill_windows;
         let overlay_area = paint_skeleton(

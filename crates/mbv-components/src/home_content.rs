@@ -14,7 +14,7 @@
 use tuirealm::event::KeyEvent;
 
 use super::library_panel::HeroContentData;
-use super::library_panel::content::{HeroContent, LibraryPanelContent, ListSlot};
+use super::library_panel::content::{HeroContent, HeroSlot, LibraryPanelContent, ListSlot};
 use super::library_panel::hero::hero_content_queue;
 use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::media_list::MediaListCarrier;
@@ -188,7 +188,7 @@ impl LibraryContentOwner for HomeContent {
         LibraryPanelContent {
             selector,
             list,
-            hero,
+            hero: HeroSlot::Pane(hero.map(Box::new)),
         }
     }
 

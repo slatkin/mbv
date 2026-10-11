@@ -28,7 +28,7 @@ pub mod wide;
 pub use content::HeroLink;
 #[doc(inline)]
 pub use content::{
-    ArtworkShape, HeroArtwork, HeroContent, HeroFacts, LibraryPanelContent, ListSlot,
+    ArtworkShape, HeroArtwork, HeroContent, HeroFacts, HeroSlot, LibraryPanelContent, ListSlot,
     PanelHeroImagePaint, SelectorRow, Workspace,
 };
 #[doc(inline)]
