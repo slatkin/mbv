@@ -214,21 +214,19 @@ fn selector_pill_fg(selected: bool, hovered: bool) -> Color {
     }
 }
 
-/// The joined pill shell's display width: `◢ label[•] ◤` = label width plus
-/// the optional marker, chip's inner pads, and edge glyphs it actually paints.
-fn pill_shell_width(label: &str, marked: bool, inner_pad: usize, leading: bool) -> usize {
-    label.width() + usize::from(marked) + inner_pad * 2 + usize::from(leading) + 1
+/// The pill shell's display width: ` label[•] ` = label width plus the
+/// optional marker and the chip's inner pads. The shell paints no edge
+/// glyphs; a chip is its padded label over its own fill, so adjacent chips
+/// abut directly at a fill-color change.
+fn pill_shell_width(label: &str, marked: bool, inner_pad: usize) -> usize {
+    label.width() + usize::from(marked) + inner_pad * 2
 }
 
-/// Push one joined pill shell (`◢ label[•] ◤`) as spans. The edge glyphs take
-/// the chip's own surface as their foreground and either the row's or the
-/// neighbouring chip's surface behind them. `inner_pad` is the blank columns
-/// between the label and each edge glyph (0 when the slanted border alone is
-/// the separation). `leading` is `None` for a chip that continues an
-/// already-drawn seam: its leading column is dropped rather than painted flat,
-/// which would otherwise read as a blank column of the chip's own fill (shared
-/// by the interactive pill bar and the display-only hint bar so their shell
-/// cannot drift apart).
+/// Push one pill shell (` label[•] `) as spans. The chip is the padded label
+/// over its own fill; there are no edge glyphs, so a chip's boundary with the
+/// row or its neighbour is the fill-color change alone (shared by the
+/// interactive pill bar and the display-only hint bar so their shell cannot
+/// drift apart).
 fn push_pill_shell(
     spans: &mut Vec<Span>,
     label: &str,
@@ -236,12 +234,7 @@ fn push_pill_shell(
     fg: Color,
     fill: Color,
     inner_pad: usize,
-    leading: Option<Color>,
-    trailing_bg: Color,
 ) {
-    if let Some(leading_bg) = leading {
-        spans.push(Span::styled("◢", Style::default().fg(fill).bg(leading_bg)));
-    }
     let pad = " ".repeat(inner_pad);
     spans.push(Span::styled(
         format!("{pad}{label}"),
@@ -261,7 +254,6 @@ fn push_pill_shell(
         " ".repeat(inner_pad),
         Style::default().bg(fill),
     ));
-    spans.push(Span::styled("◤", Style::default().fg(fill).bg(trailing_bg)));
 }
 
 /// A horizontally-scrolling row of selector pills, shared by every
@@ -307,12 +299,7 @@ fn pill_widths(bar: &PillBar<'_>) -> Vec<usize> {
         .iter()
         .enumerate()
         .map(|(idx, label)| {
-            pill_shell_width(
-                label,
-                bar.markers.get(idx).copied().unwrap_or(false),
-                1,
-                true,
-            )
+            pill_shell_width(label, bar.markers.get(idx).copied().unwrap_or(false), 1)
         })
         .collect()
 }
@@ -434,7 +421,6 @@ fn render_visible_pills(
     scroll_end: usize,
     mut x_cursor: u16,
 ) -> (Vec<Span<'static>>, Vec<(Rect, usize)>, u16) {
-    let n = bar.labels.len();
     let mut spans = Vec::new();
     let mut selector_tabs = Vec::new();
     for (offset, (label, &id)) in bar.labels[scroll_start..scroll_end]
@@ -444,7 +430,6 @@ fn render_visible_pills(
     {
         let abs_idx = scroll_start + offset;
         let selected = abs_idx == bar.selected_pos;
-        let is_last_pill = abs_idx + 1 == n;
         let hovered = bar.hovered == Some(abs_idx);
         let marked = bar.markers.get(abs_idx).copied().unwrap_or(false);
         let chip = if selected {
@@ -453,7 +438,7 @@ fn render_visible_pills(
             palette::Surface::PillChip
         };
         let fill = palette::surface_colors(chip, selected).fill;
-        let pill_w = u16::try_from(pill_shell_width(label, marked, 1, true)).unwrap_or(u16::MAX);
+        let pill_w = u16::try_from(pill_shell_width(label, marked, 1)).unwrap_or(u16::MAX);
         selector_tabs.push((
             Rect {
                 x: x_cursor,
@@ -463,24 +448,6 @@ fn render_visible_pills(
             },
             id,
         ));
-        let leading_bg = palette::surface_colors(
-            if abs_idx == 0 {
-                palette::Surface::PillRow
-            } else {
-                palette::Surface::PillChip
-            },
-            false,
-        )
-        .fill;
-        let trailing_bg = palette::surface_colors(
-            if is_last_pill {
-                palette::Surface::PillRow
-            } else {
-                palette::Surface::PillChip
-            },
-            false,
-        )
-        .fill;
         push_pill_shell(
             &mut spans,
             label,
@@ -488,8 +455,6 @@ fn render_visible_pills(
             selector_pill_fg(selected, hovered),
             fill,
             1,
-            Some(leading_bg),
-            trailing_bg,
         );
         x_cursor += pill_w;
     }
@@ -497,7 +462,7 @@ fn render_visible_pills(
 }
 
 /// Renders `bar` into `area`, painting the canonical pill-selector row
-/// background, drawing joined angled pills with the selected choice kept on
+/// background, drawing joined pills with the selected choice kept on
 /// screen (with `‹`/`›` chevrons when the pills overflow), and returning the
 /// on-screen pill hitboxes as `(rect, id)` pairs for `layout.selector_tabs`.
 /// This is the sole renderer for interactive pill selectors; callers do not
@@ -608,7 +573,7 @@ pub fn render_pill_bar(
 }
 
 /// Paints the display-only hint row used by the Library Hero overlay: the
-/// canonical pill bar's row surface and joined chip shell (`◢ label[•] ◤`), with
+/// canonical pill bar's row surface and joined chip shell (` label[•] `), with
 /// every chip filled from `HINT_CHIPS` in rotation (foam,
 /// yellow, orange, repeating) and soft-white text over the fill. Nothing here
 /// is interactive — no hitboxes, no sticky window, no chevrons, no selection —
@@ -629,8 +594,7 @@ pub fn render_hint_pill_bar(f: &mut Frame, area: Rect, hints: &[&str]) {
         |idx: usize| palette::surface_colors(HINT_CHIPS[idx % HINT_CHIPS.len()], false).fill;
     let widths: Vec<usize> = hints
         .iter()
-        .enumerate()
-        .map(|(idx, hint)| pill_shell_width(hint, false, 0, idx == 0))
+        .map(|hint| pill_shell_width(hint, false, 1))
         .collect();
     // The chips are centered on the row: the group is a fixed set of hints, not
     // a scrollable selector, so it has no reason to hug the left edge. When the
@@ -646,29 +610,7 @@ pub fn render_hint_pill_bar(f: &mut Frame, area: Rect, hints: &[&str]) {
     }
     for (idx, hint) in hints.iter().enumerate() {
         let fill = fill_of(idx);
-        // Chip boundaries are ONE diagonal, not two: a chip's trailing edge
-        // paints its own fill above-left with the next chip's fill behind it,
-        // and the next chip emits no leading glyph at all, so the two chips sit
-        // directly side by side. Painting a flat leading glyph instead would
-        // read as a blank column of the chip's own fill, i.e. a second space
-        // before the label. Only the row's first chip keeps an angled end (and
-        // every chip's trailing end) against the row surface.
-        let leading = (idx == 0).then_some(row_bg);
-        let trailing_bg = if idx + 1 == hints.len() {
-            row_bg
-        } else {
-            fill_of(idx + 1)
-        };
-        push_pill_shell(
-            &mut spans,
-            hint,
-            false,
-            Role::TextOnAccent.color(),
-            fill,
-            0,
-            leading,
-            trailing_bg,
-        );
+        push_pill_shell(&mut spans, hint, false, Role::TextOnAccent.color(), fill, 1);
     }
     // Clear the rest of the row with the row background so the hint bar reads
     // as the same surface as a pill bar.
