@@ -6,7 +6,7 @@ Full Emby client session remote control is also supported. `mbv` can control (an
 
 `mbvd` uses Emby client protocols to act as a headless server that can be reached over the network; I use it on a small machine attached to my stereo amp like it was mbd but serving from my Emby library. 
 
-If you use Wayland, it comes with a small Smithay/libghostty-vt panel that allows you to pin the app as a layer that can be hidden as necessary.
+If you use Wayland, it comes with a small Smithay/libghostty-vt panel that allows you to pin the app as a layer that can be hidden as necessary. This is the kind of bloat and scope creep that AI makes so easy!
 
 You can download it. It's a vibe-coded funtime hobby though. I don't even care enough about licencing to type "MIT" on this! Danger.
 
