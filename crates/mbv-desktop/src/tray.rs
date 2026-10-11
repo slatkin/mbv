@@ -203,6 +203,7 @@ impl ksni::Tray for MbvTray {
         // Client is attached; Owner-action, admin, and TCP-only attachments
         // keep it hidden because the registry does not count them as
         // attached Clients.
+        items.push(MenuItem::Separator);
         items.extend(open_and_pin_swap_items(self.attached_clients.load()));
 
         items.push(MenuItem::Separator);
