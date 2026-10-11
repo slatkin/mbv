@@ -19,8 +19,8 @@
 
 ## 4. Latest rows play on narrow Enter and double-click (design D5)
 
-- [ ] 4.1 Add `LibraryContentOwner::latest_list_active(&self) -> bool` (default `false`). In `panel/view.rs` (Enter) and `panel/mouse.rs` (double-click), refuse the overlay when it is true, so the event reaches the owner. Return true from `EmbyLibraryContent` when `latest_mode`, `FeedsContent` when `latest_selected`, `TvContent` in Latest, and `PodcastContent` when on Latest. Verify: `cargo nextest run -p mbv-components` passes. Update or delete tests that expect a Latest row to open the overlay in non-Wide geometry.
-- [ ] 4.2 Add one panel test with a `#[case]` table of Enter and double-click (contract: destination-latest-modes "Latest rows play directly in non-Wide geometry"; layer: panel). A narrow panel over an `EmbyLibraryContent` in Latest gives the owner's activation message and the overlay stays closed. Add one case where `latest_mode` is off and the overlay opens. Verify: the test passes.
+- [x] 4.1 Add `LibraryContentOwner::latest_list_active(&self) -> bool` (default `false`). In `panel/view.rs` (Enter) and `panel/mouse.rs` (double-click), refuse the overlay when it is true, so the event reaches the owner. Return true from `EmbyLibraryContent` when `latest_mode`, `FeedsContent` when `latest_selected`, `TvContent` in Latest, and `PodcastContent` when on Latest. Verify: `cargo nextest run -p mbv-components` passes. Update or delete tests that expect a Latest row to open the overlay in non-Wide geometry.
+- [x] 4.2 Add one panel test with a `#[case]` table of Enter and double-click (contract: destination-latest-modes "Latest rows play directly in non-Wide geometry"; layer: panel). A narrow panel over an `EmbyLibraryContent` in Latest gives the owner's activation message and the overlay stays closed. Add one case where `latest_mode` is off and the overlay opens. Verify: the test passes.
 
 ## 5. Upcoming premiere type and storage (design D3, part 1)
 
