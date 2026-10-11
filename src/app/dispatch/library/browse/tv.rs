@@ -205,9 +205,18 @@ impl App {
         }
     }
 
+    /// Build one TV mode root level off-thread and send it as `Loaded`. A build
+    /// that also fetched the Upcoming snapshot returns it: it lands before the
+    /// level so the projection that follows the level's `Loaded` already has
+    /// its rows.
     fn spawn_tv_content<F>(&self, lib_idx: usize, parent_id: String, title: String, build: F)
     where
-        F: FnOnce(&EmbyClient, String, String) -> Result<BrowseLevel, mbv_emby::EmbyError>
+        F: FnOnce(
+                &EmbyClient,
+                String,
+                String,
+            )
+                -> Result<(BrowseLevel, Option<Vec<UpcomingPremiere>>), mbv_emby::EmbyError>
             + Send
             + 'static,
     {
@@ -216,7 +225,15 @@ impl App {
         };
         let tx = self.channels.lib_tx.clone();
         std::thread::spawn(move || match build(&client, parent_id.clone(), title) {
-            Ok(level) => {
+            Ok((level, premieres)) => {
+                if let Some(items) = premieres {
+                    let _ = tx.send(LibEvent::ModelContent(
+                        ModelContentEvent::TvUpcomingSnapshotFetched {
+                            library_id: parent_id.clone(),
+                            items,
+                        },
+                    ));
+                }
                 let _ = tx.send(LibEvent::Browse(BrowseEvent::Loaded {
                     lib_idx,
                     parent_id,
@@ -242,12 +259,9 @@ impl App {
         {
             align_level_to_tv_mode(level, &mbv_queue::TvContentMode::Latest);
         }
-        self.spawn_tv_content(
-            lib_idx,
-            parent_id,
-            title,
-            build_tv_latest_level::<EmbyClient>,
-        );
+        self.spawn_tv_content(lib_idx, parent_id, title, |client, parent_id, title| {
+            build_tv_latest_level(client, parent_id, title).map(|level| (level, None))
+        });
     }
 
     pub(in crate::app) fn spawn_destination_latest_snapshot(&self, lib_idx: usize) {
@@ -398,31 +412,9 @@ impl App {
         {
             align_level_to_tv_mode(level, &mbv_queue::TvContentMode::Upcoming);
         }
-        let Some(client) = self.emby_snapshot() else {
-            return;
-        };
-        let tx = self.channels.lib_tx.clone();
-        std::thread::spawn(move || {
-            match build_tv_upcoming_level(&client, parent_id.clone(), title) {
-                Ok((level, premieres)) => {
-                    // The snapshot lands before the level so the projection
-                    // that follows the level's `Loaded` already has its rows.
-                    let _ = tx.send(LibEvent::ModelContent(
-                        ModelContentEvent::TvUpcomingSnapshotFetched {
-                            library_id: parent_id.clone(),
-                            items: premieres,
-                        },
-                    ));
-                    let _ = tx.send(LibEvent::Browse(BrowseEvent::Loaded {
-                        lib_idx,
-                        parent_id,
-                        level: Box::new(level),
-                    }));
-                }
-                Err(e) => {
-                    let _ = tx.send(LibEvent::Error(e.to_string()));
-                }
-            }
+        self.spawn_tv_content(lib_idx, parent_id, title, |client, parent_id, title| {
+            build_tv_upcoming_level(client, parent_id, title)
+                .map(|(level, premieres)| (level, Some(premieres)))
         });
     }
 }

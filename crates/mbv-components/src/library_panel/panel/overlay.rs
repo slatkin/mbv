@@ -75,7 +75,9 @@ impl LibraryPanel {
 
 /// Whether the owner has a Hero for the overlay. An `Absent` hero slot (a list
 /// of non-media rows) never has one, whatever the owner's own target hooks say.
+/// The default `hero_overlay_available` already reads the slot, so `content()`
+/// is built a second time only when a target hook claims a Hero.
 fn overlay_hero_available(owner: &mut dyn LibraryContentOwner) -> bool {
-    owner.content().hero.shows_pane()
-        && (owner.hero_overlay_available() || owner.hero_overlay_target_available())
+    owner.hero_overlay_available()
+        || (owner.hero_overlay_target_available() && owner.content().hero.shows_pane())
 }

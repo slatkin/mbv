@@ -88,12 +88,11 @@ impl App {
                 return;
             };
             let title = self.libs[lib_idx].library.name.clone();
-            let spawn = if latest {
-                Self::spawn_tv_latest
+            if latest {
+                self.spawn_tv_latest(lib_idx, parent_id, title);
             } else {
-                Self::spawn_tv_upcoming
-            };
-            spawn(self, lib_idx, parent_id, title);
+                self.spawn_tv_upcoming(lib_idx, parent_id, title);
+            }
             return;
         }
         if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut() {

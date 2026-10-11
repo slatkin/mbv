@@ -254,6 +254,10 @@ impl TvContent {
             .cloned()
     }
 
+    pub(super) fn latest_mode(&self) -> bool {
+        self.context.tv_content_mode == Some(mbv_queue::TvContentMode::Latest)
+    }
+
     #[must_use]
     pub fn upcoming_mode(&self) -> bool {
         self.context.tv_content_mode == Some(mbv_queue::TvContentMode::Upcoming)

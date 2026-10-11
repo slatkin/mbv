@@ -7,11 +7,13 @@ use super::{
 use mbv_render::components::tv_wide::HeroImageState;
 
 impl TvContent {
-    fn latest_mode(&self) -> bool {
-        matches!(
-            self.context.tv_content_mode,
-            Some(mbv_queue::TvContentMode::Latest)
-        )
+    /// The flat Latest hero: the selected episode's facts. `None` for Upcoming,
+    /// whose notices are not media and carry no hero.
+    fn latest_hero_data(&self) -> Option<HeroContentData> {
+        self.latest_mode()
+            .then(|| self.selected_episode_item())
+            .flatten()
+            .map(|episode| hero_content_emby(&episode))
     }
 
     /// The series-mode hero with the Workspace selection overlay, plus the
@@ -49,15 +51,10 @@ impl TvContent {
         // Hero facts first: reading the projected snapshot and image state
         // ends before the Workspace borrows the episode carrier mutably.
         let flat_episode_mode = self.flat_episode_mode();
-        let latest_mode = self.latest_mode();
-        let hero_item = if latest_mode {
-            self.selected_episode_item()
-        } else {
-            None
-        };
+        let upcoming_mode = self.upcoming_mode();
         let workspace_focused = self.context.focused && self.pane == Pane::Episodes;
         let (hero_data, overview_title) = if flat_episode_mode {
-            (hero_item.map(|episode| hero_content_emby(&episode)), None)
+            (self.latest_hero_data(), None)
         } else {
             self.workspace_hero()
         };
@@ -100,7 +97,7 @@ impl TvContent {
         };
         // Upcoming rows are premiere notices, not media: the panel paints no
         // Hero pane for them (design D2). Latest carries the episode hero.
-        let hero = if flat_episode_mode && !latest_mode {
+        let hero = if upcoming_mode {
             HeroSlot::Absent
         } else {
             HeroSlot::pane(hero)
@@ -283,10 +280,7 @@ impl LibraryContentOwner for TvContent {
 
     fn hero_data(&mut self) -> Option<HeroContentData> {
         if self.flat_episode_mode() {
-            self.latest_mode()
-                .then(|| self.selected_episode_item())
-                .flatten()
-                .map(|episode| hero_content_emby(&episode))
+            self.latest_hero_data()
         } else {
             self.workspace_hero().0
         }

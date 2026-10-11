@@ -92,22 +92,20 @@ fn is_owner_activation(message: Option<Msg>) -> bool {
 /// overlay on a Latest list, so the owner's activation reaches the shell.
 /// Other pills keep the overlay entry.
 #[rstest]
-#[case::enter_on_latest(press_enter, true, true, false)]
-#[case::double_click_on_latest(double_click_row, true, true, false)]
-#[case::enter_off_latest(press_enter, false, false, true)]
-#[case::double_click_off_latest(double_click_row, false, false, true)]
+#[case::enter_on_latest(press_enter, true)]
+#[case::double_click_on_latest(double_click_row, true)]
+#[case::enter_off_latest(press_enter, false)]
+#[case::double_click_off_latest(double_click_row, false)]
 fn narrow_latest_row_plays_and_other_pills_open_the_overlay(
     #[case] activate: fn(&mut LibraryPanel, Position) -> Option<Msg>,
     #[case] latest: bool,
-    #[case] owner_activates: bool,
-    #[case] overlay_open: bool,
 ) {
     let (mut panel, row) = movies_panel(latest);
 
     let message = activate(&mut panel, row);
 
-    assert_eq!(is_owner_activation(message), owner_activates);
-    assert_eq!(panel.test_hero_overlay_open(), overlay_open);
+    assert_eq!(is_owner_activation(message), latest);
+    assert_eq!(panel.test_hero_overlay_open(), !latest);
 }
 
 /// An unpainted frame (hidden library column, no owner) arms nothing:
