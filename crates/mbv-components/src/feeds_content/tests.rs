@@ -55,8 +55,14 @@ fn content_has_one_selector_row_for_filter_and_groups() {
         selector.pills,
         ["Latest", "All", "Played", "Unplayed", "A", "B"]
     );
+    // A fresh owner opens on Latest (user rule, 2026-10-11).
+    assert_eq!(selector.active, Some(0));
+    drop(content);
+
     // The ungrouped scope highlights its watched-filter pill.
-    assert_eq!(selector.active, Some(1));
+    owner.on_slot_event(crate::library_panel::owner::LibrarySlotEvent::SelectorPicked(1));
+    let content = owner.content();
+    assert_eq!(content.selector.as_ref().expect("pills").active, Some(1));
     // The panel's no-secondary-row contract is owned by the shared
     // `narrow_skeleton_keeps_fixed_rows_and_panel_slots` test.
     drop(content);

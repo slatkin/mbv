@@ -170,8 +170,7 @@ impl App {
             self.default_library_level_fields(idx);
         // The TV content mode is shell-pushed (`context.tv_content_mode`); a
         // TV reset must resolve the existing count-dependent default here, not
-        // only in the owner. Small libraries default to `All`, large to
-        // `Latest`.
+        // only in the owner. Every library defaults to `Latest`.
         let tv_mode = is_tv.then(|| {
             mbv_ui_model::sort_filter::resolve_tv_content_mode(
                 self.libs[idx].library_total.unwrap_or_default(),

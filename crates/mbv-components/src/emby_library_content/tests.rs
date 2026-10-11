@@ -106,6 +106,7 @@ fn restore_applies_only_a_latest_selector() {
     // Latest applies while the owner is not already in Latest mode...
     let mut owner = EmbyLibraryContent::new(LibraryKind::Movies);
     owner.set_content(push_with_letters());
+    owner.set_latest_mode(false);
     assert_eq!(
         owner.launch_selector(&launch_state(Some(SelectorIdentity::Emby {
             key: EmbySelectorKey::Latest,
@@ -132,6 +133,7 @@ fn restore_applies_only_a_latest_selector() {
 fn restore_applies_latest_when_the_recorded_scope_is_absent() {
     let mut owner = EmbyLibraryContent::new(LibraryKind::Movies);
     owner.set_content(push_with_letters());
+    owner.set_latest_mode(false);
 
     assert_eq!(
         owner.launch_selector(&launch_state(None)),
@@ -160,6 +162,7 @@ fn feed_group_video_row_menu_key_emits_the_painted_item() {
         feed_group_ids: vec!["group-a".into()],
         feed_group_cursor: 0,
     });
+    owner.set_latest_mode(false);
 
     assert_eq!(
         owner.handle_key(&key(Key::Char('.'))),

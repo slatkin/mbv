@@ -125,6 +125,9 @@ pub struct App {
     /// call — and the shelf-fetch handler refreshes it (Task 6.3).
     pub(in crate::app) audiobookshelf_shelf_cache:
         std::collections::HashMap<String, Vec<mbv_queue::AudiobookshelfEpisodeCatalog>>,
+    /// Podcast libraries whose default-Latest shelf fetch was already
+    /// spawned, so repeated content pushes never re-request it.
+    pub(in crate::app) audiobookshelf_shelf_requested: std::collections::HashSet<String>,
     pub(in crate::app) audiobookshelf_browse:
         Vec<mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseState>,
     pub(in crate::app) audiobookshelf_book_browse:

@@ -91,7 +91,7 @@ impl FeedsContent {
             carrier: MediaListCarrier::new(),
             watched_filter: WatchedFilter::default(),
             selected_group: 0,
-            latest_selected: false,
+            latest_selected: true,
             latest_marker: false,
             loading: false,
             last_subscription_urls: Vec::new(),
@@ -111,11 +111,15 @@ impl FeedsContent {
             .collect();
         let subscriptions_changed = self.last_subscription_urls != subscription_urls;
         self.last_subscription_urls = subscription_urls;
+        let had_subscriptions = !self.subscriptions.is_empty();
         self.subscriptions = push.subscriptions;
         self.entries = push.entries;
         self.all_entries = push.all_entries;
         if self.subscriptions.is_empty() {
             self.latest_selected = false;
+        } else if !had_subscriptions {
+            // Latest is the default pill once subscriptions exist.
+            self.latest_selected = true;
         }
         self.selected_group = self
             .selected_group
@@ -137,7 +141,7 @@ impl FeedsContent {
     pub fn reset_presentation(&mut self) {
         self.watched_filter = WatchedFilter::default();
         self.selected_group = 0;
-        self.latest_selected = false;
+        self.latest_selected = true;
         self.rebuild_visible_entries();
         self.carrier.reset_presentation();
     }

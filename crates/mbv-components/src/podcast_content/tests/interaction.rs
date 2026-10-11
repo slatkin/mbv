@@ -16,6 +16,7 @@ fn scoped_loading_projection_follows_the_active_pill() {
     let mut owner = PodcastContent::new();
     owner.set_now_secs(NOW);
     owner.set_content(&state, false);
+    owner.set_pill(PillSelection::State(AudiobookshelfEpisodeFilter::All));
     assert!(matches!(
         owner.content().list,
         ListSlot::Empty { loading: true, .. }
@@ -29,6 +30,7 @@ fn scoped_loading_projection_follows_the_active_pill() {
     let mut owner = PodcastContent::new();
     owner.set_now_secs(NOW);
     owner.set_content(&state, false);
+    owner.set_pill(PillSelection::State(AudiobookshelfEpisodeFilter::All));
     assert!(matches!(owner.content().list, ListSlot::Media(_)));
 
     // Show pill for a fetched show: not loading, its rows paint.

@@ -109,7 +109,9 @@ pub fn resolve_tv_content_mode(
         Some(mbv_queue::TvContentMode::All) | None if large => mbv_queue::TvContentMode::Latest,
         Some(mbv_queue::TvContentMode::Range(_)) if !large => mbv_queue::TvContentMode::All,
         Some(mode) => mode.clone(),
-        None => mbv_queue::TvContentMode::All,
+        // Every TV library offers a Latest pill, so Latest is the default at
+        // any size (user rule, 2026-10-11).
+        None => mbv_queue::TvContentMode::Latest,
     }
 }
 

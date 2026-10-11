@@ -88,6 +88,8 @@ fn owner() -> PodcastContent {
     let mut owner = PodcastContent::new();
     owner.set_now_secs(NOW);
     owner.set_content(&fixture_state(), false);
+    // The fixture exercises the state/show pills; a new owner starts on Latest.
+    owner.set_pill(PillSelection::State(AudiobookshelfEpisodeFilter::All));
     owner
 }
 

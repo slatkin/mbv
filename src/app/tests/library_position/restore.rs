@@ -165,12 +165,10 @@ fn stale_restore_is_ignored_after_saved_position_is_cleared() {
 /// Spec `destination-latest-modes`, scenario "TV keeps its established
 /// default" (change `latest-pill-restart-default`): a restart no longer
 /// carries a saved TV mode (the position document's mode is cleared on
-/// load), so the restored TV library resolves its count-dependent default
-/// from the library's total — Latest above the pill threshold, All at or
-/// below it.
+/// load), so the restored TV library opens on Latest at any size (user rule,
+/// 2026-10-11: Latest is the default pill wherever a Latest pill exists).
 #[rstest]
-#[case::large_library_opens_on_latest(673, mbv_queue::TvContentMode::Latest)]
-#[case::small_library_opens_on_all(12, mbv_queue::TvContentMode::All)]
+#[case::small_library_opens_on_latest(12, mbv_queue::TvContentMode::Latest)]
 fn restoring_a_tv_position_without_a_saved_mode_resolves_the_count_dependent_default(
     #[case] total: usize,
     #[case] expected: mbv_queue::TvContentMode,

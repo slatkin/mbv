@@ -29,12 +29,12 @@ SHALL be `All`.
 #### Scenario: A small TV library opens on All
 - **WHEN** a TV library's top-level show count is at or below the pill threshold and the user opens the library
 - **THEN** the pill row shows `Latest`, `Upcoming`, `All`
-- **AND** `All` is selected without any user action
+- **AND** `Latest` is selected without any user action (user rule, 2026-10-11)
 
 #### Scenario: The first open resolves the default mode from the captured show count
 - **WHEN** a TV library is opened for the first time and no show count is known yet
 - **THEN** the top level loads unfiltered once to capture the show count, and the mode row is not painted until the count lands
-- **AND** the default mode for the captured count (`Latest` above the pill threshold, `All` at or below it) is then selected without user action, replacing the unfiltered load's content when the default is `Latest`
+- **AND** `Latest` is then selected without user action, whatever the count, replacing the unfiltered load's content
 
 #### Scenario: All is not offered alongside the alphabet ranges
 - **WHEN** a TV library's top-level show count exceeds the pill threshold
@@ -104,19 +104,19 @@ Activating a `Latest` or `Upcoming` row that carries a playable episode id SHALL
 
 ### Requirement: The content mode is part of the sticky library position
 
-The selected TV content mode SHALL be saved with the library's navigation position and restored when the library is reopened within the same session. The mode SHALL NOT persist across a restart: after a restart the library resolves its count-dependent default mode (`Latest` above the pill threshold, `All` at or below it) before the row is painted or any fetch is issued, regardless of the mode selected in the previous session. A saved mode that the reopened library's current show count no longer offers SHALL be replaced by the count's default mode before the row is painted or any fetch is issued. Keyboard cycling SHALL move the selection across every mode in row order and SHALL wrap from the last mode to the first and from the first to the last. Mouse selection SHALL select the clicked mode.
+The selected TV content mode SHALL be saved with the library's navigation position and restored when the library is reopened within the same session. The mode SHALL NOT persist across a restart: after a restart the library opens on `Latest` before the row is painted or any fetch is issued, regardless of the mode selected in the previous session. A saved mode that the reopened library's current show count no longer offers SHALL be replaced by the count's default mode before the row is painted or any fetch is issued. Keyboard cycling SHALL move the selection across every mode in row order and SHALL wrap from the last mode to the first and from the first to the last. Mouse selection SHALL select the clicked mode.
 
 #### Scenario: The mode is restored on reopen
 - **WHEN** the user selects a TV content mode, leaves the library's tab, and later reopens that library's saved position without restarting
 - **THEN** the same mode is selected and its content is loaded
 
-#### Scenario: Restart resolves the count-dependent default
+#### Scenario: Restart opens on Latest
 - **WHEN** mbv restarts after a session in which a TV library's `Upcoming`, `All`, or alphabet-range mode was selected
-- **THEN** the library resolves its count-dependent default mode (`Latest` above the pill threshold, `All` at or below it) instead of the previously selected mode
+- **THEN** the library opens on `Latest` instead of the previously selected mode
 
 #### Scenario: A saved mode the current count no longer offers is re-clamped
 - **WHEN** the user reopens a TV library whose saved position selected a mode the library's current show count no longer offers, because the count crossed the pill threshold between runs
-- **THEN** the count's default mode (`Latest` above the threshold, `All` at or below it) is selected instead, before the row is painted or any fetch is issued
+- **THEN** `Latest` is selected instead, before the row is painted or any fetch is issued
 - **AND** no pill is highlighted over content it does not select
 
 #### Scenario: Cycling wraps across modes

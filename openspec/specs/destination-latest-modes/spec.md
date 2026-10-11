@@ -8,7 +8,7 @@ Defines a Latest content mode at each eligible media destination so new addition
 
 ### Requirement: Every eligible destination offers Latest beside its existing selector choices
 
-Every visible Emby library except Music libraries, regardless of collection kind or size, every Audiobookshelf podcast library, and the Feeds tab SHALL offer a `Latest` pill alongside its existing selector choices. Audiobookshelf book libraries and Emby Music libraries SHALL NOT gain a Latest pill. On launch restoration, every destination whose selector offers a `Latest` pill SHALL select `Latest`; its other pill selections are session memory and SHALL NOT persist across a restart. A Grouped Music library's selected group and an Audiobookshelf book library's selected bucket SHALL keep persisting across restart. The selector SHALL support keyboard cycling and mouse selection over the displayed choices.
+Every visible Emby library except Music libraries, regardless of collection kind or size, every Audiobookshelf podcast library, and the Feeds tab SHALL offer a `Latest` pill alongside its existing selector choices. Audiobookshelf book libraries and Emby Music libraries SHALL NOT gain a Latest pill. Every destination whose selector offers a `Latest` pill SHALL open on `Latest` whenever it first opens, whether it is the restored tab or not, and whatever its size; `Latest` is never replaced by `All` or a letter range as the default (user rule, 2026-10-11, after three requests). On launch restoration, every such destination SHALL select `Latest`; its other pill selections are session memory and SHALL NOT persist across a restart. A Grouped Music library's selected group and an Audiobookshelf book library's selected bucket SHALL keep persisting across restart. The selector SHALL support keyboard cycling and mouse selection over the displayed choices.
 
 #### Scenario: Emby libraries retain their choices
 - **WHEN** a user opens a Movie, Home Videos, or other visible Emby library
@@ -24,9 +24,13 @@ Every visible Emby library except Music libraries, regardless of collection kind
 - **THEN** its selector contains Latest alongside the existing podcast state/show or Feeds group/filter choices
 - **THEN** a book library has no Latest choice
 
-#### Scenario: TV keeps its established default
-- **WHEN** mbv restarts with a TV library as the restored tab
-- **THEN** the library resolves its established count-dependent default (`Latest` above the pill threshold, `All` at or below it) instead of the mode selected in the previous session
+#### Scenario: TV opens on Latest at any size
+- **WHEN** a TV library opens for the first time in a session, or mbv restarts with it as the restored tab
+- **THEN** the library opens on `Latest`, whatever its show count and whatever mode was selected in the previous session
+
+#### Scenario: A library that is not the restored tab opens on Latest
+- **WHEN** the user opens, for the first time in a session, an Emby library (non-Music), a podcast library, or Feeds with subscriptions
+- **THEN** its selector opens on `Latest`, not on `All` or its first letter range
 
 #### Scenario: Restart selects Latest
 - **WHEN** mbv restarts after a session in which a Latest-bearing destination's letter range, state pill, show pill, or Feeds filter or group was selected
@@ -110,7 +114,7 @@ The launch window SHALL remain the interval strictly after the previous client l
 - **THEN** an ordinary configuration save omits the obsolete key
 
 ### Requirement: Destination Latest lists load lazily
-Every eligible destination SHALL fetch its full Latest list only when that list is selected, and on refresh while it is selected. This includes restoring a destination at launch on its `Latest` pill. No Service SHALL fetch a destination's full Latest list at startup for a destination that is not selected. Feeds Latest makes no fetch of its own, because it is derived from the Feeds entries already loaded for the Feeds tab.
+Every eligible destination SHALL fetch its full Latest list only when that list is selected, and on refresh while it is selected. This includes restoring a destination at launch on its `Latest` pill and opening a destination on its default `Latest` pill. No Service SHALL fetch a destination's full Latest list at startup for a destination that is not selected. Feeds Latest makes no fetch of its own, because it is derived from the Feeds entries already loaded for the Feeds tab.
 
 #### Scenario: Podcast library not opened
 - **WHEN** mbv starts with two Audiobookshelf podcast libraries and Home as the restored tab

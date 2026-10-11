@@ -89,6 +89,15 @@ impl Model {
             .cloned()
             .unwrap_or_default();
         let selected_latest = self.abs_podcast_latest_selected();
+        // Latest is the default pill, so its shelf loads on first view.
+        if selected_latest
+            && self
+                .app
+                .audiobookshelf_shelf_requested
+                .insert(library_id.clone())
+        {
+            self.spawn_audiobookshelf_latest_shelves(&library_id);
+        }
         let source = crate::app::state::playback::DestinationLatestSource::Audiobookshelf(
             library_id.clone(),
         );

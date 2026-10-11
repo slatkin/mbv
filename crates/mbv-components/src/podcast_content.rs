@@ -89,10 +89,10 @@ impl PodcastContent {
             }),
             latest_items: Vec::new(),
             latest_marker: false,
-            // The remembered pill starts at `All` and survives tab switches
-            // for the session (design D3; mbv restart resets it because the
-            // owner is reconstructed).
-            pill: PillSelection::State(AudiobookshelfEpisodeFilter::All),
+            // The remembered pill starts at `Latest` (user rule, 2026-10-11)
+            // and survives tab switches for the session (design D3; mbv
+            // restart resets it because the owner is reconstructed).
+            pill: PillSelection::Latest,
             initialized: false,
             focused: false,
             episodes: {
@@ -463,12 +463,12 @@ impl PodcastContent {
 
     /// Reset the podcast destination's local presentation without replacing
     /// its loaded catalog, episode cache or Latest shelf (design D3): the
-    /// default `All` state pill, the active view's first episode, no
+    /// default `Latest` pill, the active view's first episode, no
     /// multi-selection or prior viewport, and the hero overview back at its
     /// top. `initialized` is retained, so a later refresh push preserves this
     /// selection instead of adopting a pre-reset one (#745).
     pub fn reset_presentation(&mut self) {
-        self.pill = PillSelection::State(AudiobookshelfEpisodeFilter::All);
+        self.pill = PillSelection::Latest;
         self.rebuild_rows();
         self.episodes.reset_presentation();
         self.sync_hero_scroll();

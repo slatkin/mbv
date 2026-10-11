@@ -82,6 +82,24 @@ fn owner_cursor(model: &mut Model) -> usize {
         .expect("browser owner installed")
 }
 
+/// Leaves the owner's default Latest pill so the fixture's browse rows paint.
+fn leave_latest(model: &mut Model) {
+    let (_, key, _) = model
+        .active_emby_library_owner()
+        .expect("the active library's owner has migrated");
+    model
+        .application
+        .get_component_mut(&ComponentId::Library)
+        .expect("Library panel mounted")
+        .as_any_mut()
+        .downcast_mut::<LibraryPanel>()
+        .expect("Library panel type")
+        .owner_mut(&key)
+        .and_then(|owner| owner.as_any_mut().downcast_mut::<BrowserOwner>())
+        .expect("browser owner installed")
+        .set_latest_mode(false);
+}
+
 /// The embedded owner's free viewport offset (scroll), read through the
 /// mounted `LibraryPanel` — the wheel-scrolls-viewport viewport contract.
 fn owner_scroll(model: &mut Model) -> usize {
@@ -277,6 +295,7 @@ fn feed_home_video_group_browser_wheel_scrolls_viewport_and_reports_reach() {
     }
     let mut model = Model::new(app);
     model.sync_mounted_surfaces();
+    leave_latest(&mut model);
     // The wide fixed-row control gives a durable one-row-per-item geometry.
     let mut term = Terminal::new(TestBackend::new(140, 40)).unwrap();
     draw(&mut model, &mut term);

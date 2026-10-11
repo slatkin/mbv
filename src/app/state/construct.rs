@@ -92,6 +92,7 @@ impl App {
             channels: init.channels,
             audiobookshelf_libraries: Vec::new(),
             audiobookshelf_shelf_cache: std::collections::HashMap::new(),
+            audiobookshelf_shelf_requested: std::collections::HashSet::new(),
             audiobookshelf_browse: Vec::new(),
             audiobookshelf_book_browse: Vec::new(),
             player: init.player,

@@ -214,14 +214,14 @@ impl App {
         }
         if is_tv {
             let mode = mbv_ui_model::sort_filter::resolve_tv_content_mode(total, None);
-            let large = total > mbv_render::LIBRARY_PILL_THRESHOLD;
+            let latest = mode == mbv_queue::TvContentMode::Latest;
             if let Some(lib) = self.libs.get_mut(lib_idx) {
                 lib.tv_content_mode = Some(mode.clone());
                 if let Some(level) = lib.nav_stack.last_mut() {
                     level.tv_content_mode = Some(mode);
                 }
             }
-            if large {
+            if latest {
                 if let Some(last) = self.libs[lib_idx].nav_stack.last_mut() {
                     last.loading = true;
                     last.items.clear();

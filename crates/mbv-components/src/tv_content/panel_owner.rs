@@ -117,17 +117,10 @@ impl TvContent {
             pills.push("All".to_string());
         }
         let active = match self.context.tv_content_mode.as_ref() {
-            Some(mbv_queue::TvContentMode::Latest) => 0,
+            Some(mbv_queue::TvContentMode::Latest) | None => 0,
             Some(mbv_queue::TvContentMode::Upcoming) => 1,
             Some(mbv_queue::TvContentMode::All) => 2,
             Some(mbv_queue::TvContentMode::Range(index)) => index + 2,
-            None => {
-                if large {
-                    0
-                } else {
-                    2
-                }
-            }
         };
         Some(SelectorRow {
             markers: std::iter::once(self.latest_marker)

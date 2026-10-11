@@ -168,7 +168,7 @@ impl EmbyLibraryContent {
             kind,
             browse_items: Vec::new(),
             latest_items: Vec::new(),
-            latest_mode: false,
+            latest_mode: true,
             latest_marker: false,
             saved_browse_position: None,
             total_count: 0,
@@ -188,8 +188,15 @@ impl EmbyLibraryContent {
         }
     }
 
+    /// Latest is the default pill (user rule, 2026-10-11), but it applies
+    /// only where the selector row offers it: inside a folder, or before the
+    /// library total is captured, the owner shows browse rows.
+    fn on_latest(&self) -> bool {
+        self.latest_mode && self.selector_mode != EmbySelectorMode::None
+    }
+
     fn items(&self) -> &[EmbyItem] {
-        if self.latest_mode {
+        if self.on_latest() {
             &self.latest_items
         } else {
             &self.browse_items
@@ -221,7 +228,7 @@ impl EmbyLibraryContent {
         self.feed_groups = push.feed_groups;
         self.feed_group_ids = push.feed_group_ids;
         self.feed_group_cursor = push.feed_group_cursor;
-        let restore_browse_position = if self.latest_mode {
+        let restore_browse_position = if self.on_latest() {
             None
         } else {
             self.saved_browse_position.take()
@@ -235,7 +242,7 @@ impl EmbyLibraryContent {
 
     #[must_use]
     pub fn latest_mode(&self) -> bool {
-        self.latest_mode
+        self.on_latest()
     }
 
     pub fn set_latest_marker(&mut self, marker: bool) {
@@ -286,11 +293,11 @@ impl EmbyLibraryContent {
     }
 
     /// Reset this destination's local presentation without replacing its
-    /// content (design D3): back to the default library pill (not Latest, no
-    /// letter filter, first feed group), the first row and top of the list,
-    /// no `saved_browse_position`, no Hero scroll and no Inline Search.
+    /// content (design D3): back to the default Latest pill (no letter
+    /// filter, first feed group underneath), the first row and top of the
+    /// list, no `saved_browse_position`, no Hero scroll and no Inline Search.
     pub fn reset_presentation(&mut self) {
-        self.latest_mode = false;
+        self.latest_mode = true;
         self.letter_filter = None;
         self.feed_group_cursor = 0;
         self.saved_browse_position = None;
@@ -325,7 +332,7 @@ impl EmbyLibraryContent {
     /// the former `BrowserComponent`'s row projection).
     fn feed_owner(&mut self) {
         let grouped =
-            !self.latest_mode && (self.true_total() >= 50 || self.letter_filter.is_some());
+            !self.on_latest() && (self.true_total() >= 50 || self.letter_filter.is_some());
         let rows: Vec<MediaListRow<String>> = if grouped {
             let pairs: Vec<(String, MediaListRow<String>)> = self
                 .items()
@@ -336,7 +343,7 @@ impl EmbyLibraryContent {
         } else {
             self.items()
                 .iter()
-                .map(|item| row_for(item, self.latest_mode))
+                .map(|item| row_for(item, self.on_latest()))
                 .collect()
         };
         // Ordinary refresh (design D3): an unchanged projection preserves

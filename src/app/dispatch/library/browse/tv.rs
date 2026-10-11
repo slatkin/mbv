@@ -476,6 +476,9 @@ mod tv_pill_stale_key_tests {
                 music_grouping: None,
             }],
             tv_content_mode: Some(mbv_queue::TvContentMode::Latest),
+            // A captured total keeps the first-capture default-pill refetch
+            // out of this stale-key contract.
+            library_total: Some(1),
             ..LibraryTab::new(mbv_emby_model::test_support::make_item(
                 "unused",
                 "CollectionFolder",
