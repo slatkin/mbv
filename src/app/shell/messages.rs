@@ -122,6 +122,7 @@ impl Model {
             | ShellRequest::TvJumpCursor { .. }
             | ShellRequest::TvActivate { .. }
             | ShellRequest::TvEpisodeActivate { .. }
+            | ShellRequest::TvOpenUpcomingSeries { .. }
             | ShellRequest::TvBack
             | ShellRequest::TvCycleLetterPill { .. }
             | ShellRequest::TvEpisodeMove { .. }
@@ -329,6 +330,7 @@ impl Model {
             | ShellRequest::TvJumpCursor { .. }
             | ShellRequest::TvActivate { .. }
             | ShellRequest::TvEpisodeActivate { .. }
+            | ShellRequest::TvOpenUpcomingSeries { .. }
             | ShellRequest::TvBack
             | ShellRequest::TvCycleLetterPill { .. }
             | ShellRequest::TvEpisodeMove { .. }

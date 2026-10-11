@@ -46,17 +46,16 @@ impl Model {
             }
             // The owner resolved the episode from its own season detail and
             // carried the stable item (design.md D4); the shell plays it
-            // directly without reading any owner cursor. An id-less
-            // `/Shows/Upcoming` placeholder carries a `series_id` instead of
-            // a playable episode id: navigate to that series' Workspace
-            // rather than submitting an empty-id item to playback.
-            ShellRequest::TvEpisodeActivate { episode } => {
-                if !self
-                    .app
-                    .open_series_for_unplayable_episode(lib_idx, &episode)
-                {
-                    self.app.play_item(episode);
-                }
+            // directly without reading any owner cursor.
+            ShellRequest::TvEpisodeActivate { episode } => self.app.play_item(episode),
+            // A premiere notice is not media: open its series' Workspace.
+            ShellRequest::TvOpenUpcomingSeries {
+                series_id,
+                series_name,
+            } => {
+                self.app
+                    .open_series_for_premiere(lib_idx, &series_id, &series_name);
+                self.push_tv_workspace_content();
             }
             // Activation, back, and letter-pill effects resolve the
             // owner's selection directly (item-targeted) or from the App
@@ -91,27 +90,14 @@ impl Model {
     fn handle_tv_navigation_request(&mut self, lib_idx: usize, request: ShellRequest) {
         match request {
             ShellRequest::TvActivate { item } => {
-                // Flat Latest/Upcoming rows are leaf episodes. Keep a
-                // defensive item-kind gate here so a stale or legacy
-                // request can never enter the Series workspace -- an
-                // id-less Upcoming placeholder is the one exception
-                // and routes to its series' Workspace.
-                if item.item_type == "Episode" {
-                    if !self.app.open_series_for_unplayable_episode(lib_idx, &item) {
-                        self.app.play_item(item);
-                    }
-                } else {
-                    let owner_has_target = self
-                        .tv_owner()
-                        .and_then(TvContent::selected_tree_show)
-                        .is_some_and(|selected| {
-                            selected.id == item.id && selected.name == item.name
-                        });
-                    if self.app.wide_tv_show_area(lib_idx).is_some() {
-                        self.app.activate_selected_series_item(lib_idx, &item);
-                    } else if owner_has_target {
-                        self.open_library_hero_overlay();
-                    }
+                let owner_has_target = self
+                    .tv_owner()
+                    .and_then(TvContent::selected_tree_show)
+                    .is_some_and(|selected| selected.id == item.id && selected.name == item.name);
+                if self.app.wide_tv_show_area(lib_idx).is_some() {
+                    self.app.activate_selected_series_item(lib_idx, &item);
+                } else if owner_has_target {
+                    self.open_library_hero_overlay();
                 }
             }
             ShellRequest::TvBack => self.app.go_back(lib_idx),

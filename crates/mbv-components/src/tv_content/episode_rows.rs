@@ -1,6 +1,6 @@
 use super::{
     Date, EmbyItem, MediaKind, MediaListRow, MediaListTrailing, MediaSemanticState, Pane,
-    QueueItem, TICKS_PER_SECOND, TvContent, UpcomingPremiere, fmt_duration_gutter,
+    QueueItem, ShellRequest, TICKS_PER_SECOND, TvContent, UpcomingPremiere, fmt_duration_gutter,
     fmt_publish_date_short,
 };
 use mbv_render::effective_sort_str;
@@ -231,6 +231,11 @@ impl TvContent {
     /// stable episode identity; the shell never reads the cursor).
     #[must_use]
     pub fn selected_episode_item(&self) -> Option<EmbyItem> {
+        // A premiere notice is not media: no play, enqueue, watched, or
+        // context-menu path can resolve one.
+        if self.upcoming_mode() {
+            return None;
+        }
         if self.flat_episode_mode() {
             return self
                 .carrier
@@ -247,6 +252,34 @@ impl TvContent {
         self.current_season_episodes()
             .get(self.episodes.cursor())
             .cloned()
+    }
+
+    #[must_use]
+    pub fn upcoming_mode(&self) -> bool {
+        self.context.tv_content_mode == Some(mbv_queue::TvContentMode::Upcoming)
+    }
+
+    /// Open the series of the Upcoming notice whose row target is `target`.
+    pub(super) fn open_upcoming_series_request(&self, target: &str) -> Option<ShellRequest> {
+        self.context
+            .upcoming
+            .iter()
+            .find(|premiere| premiere.stable_key() == target)
+            .map(|premiere| ShellRequest::TvOpenUpcomingSeries {
+                series_id: premiere.series_id.clone(),
+                series_name: premiere.series_name.clone(),
+            })
+    }
+
+    /// Activation of the selected flat row: Latest plays its episode,
+    /// Upcoming opens the notice's series.
+    pub(super) fn flat_activation_request(&self) -> Option<ShellRequest> {
+        if self.upcoming_mode() {
+            let target = self.carrier.selected_target()?;
+            return self.open_upcoming_series_request(target);
+        }
+        self.selected_episode_item()
+            .map(|episode| ShellRequest::TvEpisodeActivate { episode })
     }
 
     #[must_use]

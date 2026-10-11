@@ -330,6 +330,12 @@ pub enum ShellRequest {
     TvEpisodeActivate {
         episode: EmbyItem,
     },
+    /// Enter or double-click on a TV Upcoming premiere notice opens its
+    /// series. A notice is not media: it carries the series reference only.
+    TvOpenUpcomingSeries {
+        series_id: mbv_ids::ItemId,
+        series_name: String,
+    },
     /// Esc/Backspace leaves TV selection/back-navigates the App browse stack.
     TvBack,
     /// Series-root `[`/`]` cycle the App-owned letter pill.

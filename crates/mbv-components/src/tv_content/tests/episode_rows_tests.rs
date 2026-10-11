@@ -91,3 +91,76 @@ fn upcoming_owner_rows_come_from_context_premieres_keyed_by_stable_key() {
         Some(&second.stable_key())
     );
 }
+
+/// What the user does to the selected Upcoming row.
+#[derive(Clone, Copy)]
+enum Gesture {
+    Enter,
+    DoubleClick,
+    CtrlP,
+}
+
+/// A Wide owner in Upcoming mode with one painted notice row selected.
+fn upcoming_owner_with_painted_row() -> TvContent {
+    let mut context = TvWideRenderCtx::new(
+        LibraryListRenderCtx::from_items(Vec::new(), 0),
+        None,
+        None,
+        0,
+        None,
+        false,
+    );
+    context.set_tv_content_mode(Some(mbv_queue::TvContentMode::Upcoming));
+    context.upcoming = vec![premiere("Example Show", "")];
+    let mut owner = TvContent::new();
+    owner.set_content(context);
+    owner.set_is_wide(true);
+    owner.set_focused(true);
+    let list = ratatui::layout::Rect::new(0, 0, 40, 3);
+    let geometry = owner.carrier.wide().row_geometry(3);
+    owner
+        .carrier
+        .wide_mut()
+        .finish_view(list, list, &geometry, None);
+    owner
+}
+
+fn drive(owner: &mut TvContent, gesture: Gesture) -> Option<Msg> {
+    match gesture {
+        Gesture::Enter => owner.handle_key(&KeyEvent {
+            code: Key::Enter,
+            modifiers: tuirealm::event::KeyModifiers::NONE,
+        }),
+        Gesture::DoubleClick => owner.handle_slot_event(LibrarySlotEvent::List(
+            MediaListSurfaceInput::DoubleClick(Position::new(1, 0)),
+        )),
+        Gesture::CtrlP => owner.handle_key(&KeyEvent {
+            code: Key::Char('p'),
+            modifiers: tuirealm::event::KeyModifiers::CONTROL,
+        }),
+    }
+}
+
+fn open_example_series() -> Msg {
+    Msg::Shell(Box::new(ShellRequest::TvOpenUpcomingSeries {
+        series_id: mbv_ids::ItemId::new("Example Show-id"),
+        series_name: "Example Show".into(),
+    }))
+}
+
+/// Contract: tv-library-content-modes "Upcoming rows are premiere notices
+/// that open their series". Enter and a double-click open the row's series;
+/// Ctrl+P emits nothing that plays.
+#[rstest::rstest]
+#[case::enter(Gesture::Enter, Some(open_example_series()))]
+// Regression guard for 1bc51eacb, "Fix Upcoming placeholder mouse activation".
+#[case::double_click(Gesture::DoubleClick, Some(open_example_series()))]
+#[case::ctrl_p(Gesture::CtrlP, None)]
+fn selected_upcoming_row_opens_its_series_and_never_plays(
+    #[case] gesture: Gesture,
+    #[case] expected: Option<Msg>,
+) {
+    let mut owner = upcoming_owner_with_painted_row();
+
+    assert_eq!(drive(&mut owner, gesture), expected);
+}

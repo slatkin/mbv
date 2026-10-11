@@ -177,10 +177,7 @@ impl App {
 
     fn resolve_tv_episode_target(&self, lib_idx: usize, target: &str) -> Option<EmbyItem> {
         let level = self.libs.get(lib_idx)?.nav_stack.last()?;
-        if matches!(
-            level.tv_content_mode,
-            Some(mbv_queue::TvContentMode::Latest | mbv_queue::TvContentMode::Upcoming)
-        ) {
+        if level.tv_content_mode == Some(mbv_queue::TvContentMode::Latest) {
             return level.items.iter().find(|item| item.id == target).cloned();
         }
 
@@ -231,14 +228,12 @@ impl App {
                 self.activate_selected_series_item(lib_idx, &item);
             }
         } else if let TvHit::EpisodeRow(target) = hit {
-            // Resolve an episode row as an episode, never as a series row by
-            // its (possibly empty) item ID. Flat Upcoming placeholders use
-            // their synthesized stable target; Workspace episodes use the
-            // season-detail cache. Both then take the same activation path.
+            // Resolve an episode row as an episode, never as a series row.
+            // Latest rows resolve from the level; Workspace episodes use the
+            // season-detail cache. Upcoming notices never reach this path:
+            // the owner emits `TvOpenUpcomingSeries` for them.
             let item = self.resolve_tv_episode_target(lib_idx, &target);
-            if let Some(item) = item.filter(|item| item.item_type == "Episode")
-                && !self.open_series_for_unplayable_episode(lib_idx, &item)
-            {
+            if let Some(item) = item.filter(|item| item.item_type == "Episode") {
                 self.play_item(item);
             }
         }

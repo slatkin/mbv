@@ -2326,6 +2326,7 @@ name = "mbv-ui-msg"
 version = "0.24.4"
 dependencies = [
  "mbv-emby-model",
+ "mbv-ids",
  "mbv-queue",
  "mbv-ui-model",
  "tuirealm",

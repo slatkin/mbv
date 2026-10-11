@@ -2,6 +2,7 @@ use crate::app::state::app_struct::{MAX_SERIES_DETAIL_CACHE, insert_capped};
 use crate::app::state::events::{PendingSeriesHandoff, PendingSeriesLanding};
 use crate::app::{App, SeriesDetail};
 use mbv_emby_model::EmbyItem;
+use mbv_ids::ItemId;
 use mbv_render::{LIBRARY_PILL_THRESHOLD, LetterFilter, LetterFilterKind, effective_sort_str};
 use mbv_ui_model::browse::ServerRows;
 
@@ -190,39 +191,25 @@ impl App {
         true
     }
 
-    /// Navigate a flat TV episode row that carries no playable episode id to
-    /// its owning series' Workspace. Emby's `GET /Shows/Upcoming` returns
-    /// placeholders (`Type: Episode`, no `Id`, `series_id` set) for
-    /// unaired/not-downloaded rows; the flat `Latest`/`Upcoming` level holds
-    /// episodes only, so its corpus can never satisfy a Series landing.
-    /// Switch the library to its series-bearing mode through the existing
-    /// `select_letter_pill` level machinery (the letter range the series
-    /// sorts into, or `All`), then arm the shared ensure-then-land path
-    /// (`PendingSeriesLanding`): the series corpus drain lands the reveal and
-    /// the shell's hand-off opens the Wide Workspace / Narrow Library Hero
-    /// overlay. Returns false when `item` is not such a placeholder, so the
-    /// caller keeps the ordinary play path.
-    pub(in crate::app) fn open_series_for_unplayable_episode(
+    /// Open the series named by a TV Upcoming premiere notice in its
+    /// Workspace. The flat `Latest`/`Upcoming` level holds no series, so its
+    /// corpus can never satisfy a Series landing. Switch the library to its
+    /// series-bearing mode through the existing `select_letter_pill` level
+    /// machinery (the letter range the series sorts into, or `All`), then arm
+    /// the shared ensure-then-land path (`PendingSeriesLanding`): the series
+    /// corpus drain lands the reveal and the shell's hand-off opens the Wide
+    /// Workspace / Narrow Library Hero overlay.
+    pub(in crate::app) fn open_series_for_premiere(
         &mut self,
         lib_idx: usize,
-        item: &EmbyItem,
-    ) -> bool {
-        if item.item_type != "Episode" || !item.id.is_empty() || item.series_id.is_empty() {
-            return false;
-        }
-        // The Series reveal carries the placeholder's series back-reference;
-        // the episode-only identity must not leak into the Series item.
-        let mut reveal = item.clone();
+        series_id: &ItemId,
+        series_name: &str,
+    ) {
+        // The reveal's letter range comes from its name (`SortName` stays
+        // empty), so it sorts like the series itself.
+        let mut reveal =
+            EmbyItem::folder(series_id.to_string(), series_name.to_owned(), String::new());
         reveal.item_type = "Series".into();
-        reveal.id.clone_from(&item.series_id);
-        reveal.is_folder = true;
-        reveal.series_id.clear();
-        if !item.series_name.is_empty() {
-            reveal.name.clone_from(&item.series_name);
-        }
-        // The episode's `SortName` (often "Show S01E05") must not decide the
-        // series' letter range; fall back to the article-stripped series name.
-        reveal.sort_name.clear();
         if self.should_show_letter_pills(lib_idx) {
             let large = self.libs[lib_idx]
                 .library_total
@@ -245,7 +232,7 @@ impl App {
             // first load): no pill row exists to switch, so force the
             // unfiltered series fetch the landing needs.
             let Some(level) = self.libs[lib_idx].nav_stack.last_mut() else {
-                return false;
+                return;
             };
             let mut key = mbv_ui_model::browse::LevelFetchKey::from_level(level);
             key.item_types = Some("Series".into());
@@ -261,10 +248,9 @@ impl App {
             self.libs[lib_idx].tv_content_mode = Some(mbv_queue::TvContentMode::All);
             self.spawn_refresh(lib_idx, 0, key);
         }
-        // The placeholder never plays: report handled even if the landing is
-        // somehow already unsatisfiable, so no empty-id item reaches playback.
+        // A notice never plays; a landing that is already unsatisfiable
+        // simply leaves the level on the series-bearing mode.
         let _ = self.arm_pending_series_landing(lib_idx, Box::new(reveal), false, None);
-        true
     }
 
     /// Ensures the series detail is fetched for the wide TV component.
