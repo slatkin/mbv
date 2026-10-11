@@ -1,17 +1,16 @@
 use ksni::blocking::TrayMethods;
 use mbv_ctrl::player::{PlayerCommand, PlayerStatus};
-use mbv_ctrl::{Direction, OwnerAction, TransportCommand};
-use std::sync::atomic::{AtomicBool, Ordering};
+use mbv_ctrl::{AttachedClients, AttachedClientsCell, Direction, OwnerAction, TransportCommand};
 use std::sync::mpsc::{Sender, SyncSender};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 const TRAY_ICON: &[u8] = include_bytes!("../../../assets/tray_icon.bin");
 
-/// How often the pinned-flag watcher re-reads the shared "pinned Client
-/// attached" flag to push a menu rebuild, mirroring the daemon event loop's
-/// 1 s `TrayState::poll` cadence for tray reconciliation.
-const PINNED_FLAG_WATCH_INTERVAL: Duration = Duration::from_secs(1);
+/// How often the attached-Clients watcher re-reads the shared state to push a
+/// menu rebuild, mirroring the daemon event loop's 1 s `TrayState::poll`
+/// cadence for tray reconciliation.
+const ATTACHED_CLIENTS_WATCH_INTERVAL: Duration = Duration::from_secs(1);
 
 /// Whether the now-playing rows (`Playing` / `<Title>`) should be shown.
 ///
@@ -33,9 +32,9 @@ fn play_pause_label(status: &PlayerStatus) -> &'static str {
 
 /// Label for the one Pin swap item: the direction the Owner's swap machine
 /// will pick is derived from the registry at click time; this label only
-/// mirrors the shared "pinned Client attached" flag (tray-pin-swap D3).
-fn pin_swap_label(pinned_client_attached: bool) -> &'static str {
-    if pinned_client_attached {
+/// mirrors the shared attached-Clients state (tray-open-terminal D1).
+fn pin_swap_label(attached_clients: AttachedClients) -> &'static str {
+    if attached_clients == AttachedClients::Pinned {
         "Unpin"
     } else {
         "Pin"
@@ -49,10 +48,10 @@ struct MbvTray {
     status: Arc<Mutex<PlayerStatus>>,
     /// Owner transport channel; relative steps are resolved by the daemon owner.
     transport_tx: Sender<TransportCommand>,
-    /// "A pinned Client is attached", refreshed by the ctrl registry on
-    /// connect and disconnect (tray-pin-swap D3) -- read fresh each time the
-    /// menu is opened, like `status`.
-    pinned_client_attached: Arc<AtomicBool>,
+    /// Which local Clients are attached, refreshed by the ctrl registry on
+    /// connect and disconnect (tray-open-terminal D1) -- read fresh each
+    /// time the menu is opened, like `status`.
+    attached_clients: Arc<AttachedClientsCell>,
 }
 
 impl MbvTray {
@@ -78,6 +77,46 @@ impl MbvTray {
             .transport_tx
             .send(TransportCommand::Step(Direction::Next));
     }
+}
+
+/// Builds the **Open** item (only when no local Client is attached) and the
+/// Pin swap item, in menu order, from one snapshot of the attached-Clients
+/// state.
+fn open_and_pin_swap_items(attached_clients: AttachedClients) -> Vec<ksni::MenuItem<MbvTray>> {
+    use ksni::menu::StandardItem;
+
+    let mut items: Vec<ksni::MenuItem<MbvTray>> = Vec::new();
+    if attached_clients == AttachedClients::None {
+        items.push(
+            StandardItem {
+                label: "Open".into(),
+                activate: Box::new(|tray: &mut MbvTray| {
+                    let _ = tray
+                        .transport_tx
+                        .send(TransportCommand::OwnerAction(OwnerAction::OpenTerminal));
+                }),
+                ..Default::default()
+            }
+            .into(),
+        );
+    }
+    items.push(
+        StandardItem {
+            label: pin_swap_label(attached_clients).into(),
+            activate: Box::new(|tray: &mut MbvTray| {
+                // Owner actions route through the same transport channel
+                // as the player commands; the daemon owner resolves the
+                // swap direction and target from its registry, not from
+                // this label (tray-pin-swap D3/D7).
+                let _ = tray
+                    .transport_tx
+                    .send(TransportCommand::OwnerAction(OwnerAction::SwapPanel));
+            }),
+            ..Default::default()
+        }
+        .into(),
+    );
+    items
 }
 
 impl ksni::Tray for MbvTray {
@@ -159,23 +198,13 @@ impl ksni::Tray for MbvTray {
             );
         }
 
+        // Spec tray-open-terminal pin-swap "No Client attached": **Open**
+        // sits directly above the Pin swap item and only while no local
+        // Client is attached; Owner-action, admin, and TCP-only attachments
+        // keep it hidden because the registry does not count them as
+        // attached Clients.
         items.push(MenuItem::Separator);
-        items.push(
-            StandardItem {
-                label: pin_swap_label(self.pinned_client_attached.load(Ordering::SeqCst)).into(),
-                activate: Box::new(|tray: &mut Self| {
-                    // Owner actions route through the same transport channel
-                    // as the player commands; the daemon owner resolves the
-                    // swap direction and target from its registry, not from
-                    // this label (tray-pin-swap D3/D7).
-                    let _ = tray
-                        .transport_tx
-                        .send(TransportCommand::OwnerAction(OwnerAction::SwapPanel));
-                }),
-                ..Default::default()
-            }
-            .into(),
-        );
+        items.extend(open_and_pin_swap_items(self.attached_clients.load()));
 
         items.push(MenuItem::Separator);
         items.push(
@@ -216,18 +245,18 @@ pub fn spawn(
     shutdown_tx: SyncSender<()>,
     status: Arc<Mutex<PlayerStatus>>,
     transport_tx: Sender<TransportCommand>,
-    pinned_client_attached: Arc<AtomicBool>,
+    attached_clients: Arc<AttachedClientsCell>,
 ) -> Option<Box<dyn Send>> {
-    let flag_for_watcher = Arc::clone(&pinned_client_attached);
+    let state_for_watcher = Arc::clone(&attached_clients);
     MbvTray {
         shutdown_tx,
         status,
         transport_tx,
-        pinned_client_attached,
+        attached_clients,
     }
     .spawn()
     .map(|handle| {
-        spawn_pinned_flag_watcher(handle.clone(), flag_for_watcher);
+        spawn_attached_clients_watcher(handle.clone(), state_for_watcher);
         Box::new(RunningTray(Some(handle))) as Box<dyn Send>
     })
     .map_err(|e| {
@@ -241,8 +270,8 @@ pub fn spawn(
     .ok()
 }
 
-/// Pushes a menu rebuild shortly after the shared "pinned Client attached"
-/// flag changes, so the Pin swap label is correct the next time the menu
+/// Pushes a menu rebuild shortly after the shared attached-Clients state
+/// changes, so the Open and Pin swap items are correct the next time the menu
 /// opens (spec pin-swap: "The label SHALL reflect the attached Clients each
 /// time the menu opens").
 ///
@@ -250,31 +279,31 @@ pub fn spawn(
 /// something asks for an update: a click, an `AboutToShow` from hosts that
 /// signal one, or [`ksni::blocking::Handle::update`]. Nothing here can rely
 /// on the host signaling `AboutToShow`, so the change is pushed instead: a
-/// watcher thread polls the shared flag -- the same shape as the daemon
+/// watcher thread polls the shared state -- the same shape as the daemon
 /// event loop's 1 s `TrayState::poll`, but with its real clock, because the
 /// injected-instant test seam cannot cross the ksni service boundary. The
 /// rebuild diffs against the cached items, so a poll that finds no change
 /// emits no D-Bus traffic. The thread ends within one interval of the tray
 /// service stopping (`RunningTray` drop), and process exit reclaims it
 /// regardless.
-fn spawn_pinned_flag_watcher(
+fn spawn_attached_clients_watcher(
     handle: ksni::blocking::Handle<MbvTray>,
-    pinned_client_attached: Arc<AtomicBool>,
+    attached_clients: Arc<AttachedClientsCell>,
 ) {
     let _ = std::thread::Builder::new()
-        .name("mbv-tray-flag-watch".into())
+        .name("mbv-tray-clients-watch".into())
         .spawn(move || {
-            let mut attached = pinned_client_attached.load(Ordering::SeqCst);
+            let mut attached = attached_clients.load();
             loop {
                 if handle.is_closed() {
                     return;
                 }
-                let now = pinned_client_attached.load(Ordering::SeqCst);
+                let now = attached_clients.load();
                 if now != attached {
                     attached = now;
                     handle.update(|_| {});
                 }
-                std::thread::sleep(PINNED_FLAG_WATCH_INTERVAL);
+                std::thread::sleep(ATTACHED_CLIENTS_WATCH_INTERVAL);
             }
         });
 }
@@ -328,20 +357,20 @@ mod tests {
     }
 
     /// Builds a tray wired to a fresh command channel, so tests can assert
-    /// on what `toggle_play_pause`/`next`/`previous` actually send without a
-    /// real mpv thread. Mirrors `PlayerProxy::spy_on_commands`
+    /// on what `toggle_play_pause`/`next`/`activate_item_labelled` actually
+    /// send without a real mpv thread. Mirrors `PlayerProxy::spy_on_commands`
     /// (crates/mbv-player/src/proxy.rs).
     fn spy_tray(
         st: PlayerStatus,
-        pinned_client_attached: bool,
+        attached_clients: AttachedClients,
     ) -> (MbvTray, std::sync::mpsc::Receiver<TransportCommand>) {
-        spy_tray_with_flag(Arc::new(AtomicBool::new(pinned_client_attached)), st)
+        spy_tray_with_cell(Arc::new(AttachedClientsCell::new(attached_clients)), st)
     }
 
-    /// Like [`spy_tray`], but the caller keeps the shared flag `Arc`, so a
+    /// Like [`spy_tray`], but the caller keeps the shared cell `Arc`, so a
     /// test can flip it after construction.
-    fn spy_tray_with_flag(
-        pinned_client_attached: Arc<AtomicBool>,
+    fn spy_tray_with_cell(
+        attached_clients: Arc<AttachedClientsCell>,
         st: PlayerStatus,
     ) -> (MbvTray, std::sync::mpsc::Receiver<TransportCommand>) {
         let (transport_tx, cmd_rx) = std::sync::mpsc::channel();
@@ -350,7 +379,7 @@ mod tests {
             shutdown_tx,
             status: Arc::new(Mutex::new(st)),
             transport_tx,
-            pinned_client_attached,
+            attached_clients,
         };
         (tray, cmd_rx)
     }
@@ -366,11 +395,11 @@ mod tests {
             .collect()
     }
 
-    /// Activates the menu's Pin swap item (matched by label) on `tray`.
-    fn activate_pin_swap_item(tray: &mut MbvTray) {
+    /// Activates the menu's standard item with `label` on `tray`.
+    fn activate_item_labelled(tray: &mut MbvTray, label: &str) {
         for item in tray.menu() {
             if let ksni::menu::MenuItem::Standard(item) = item
-                && (item.label == "Pin" || item.label == "Unpin")
+                && item.label == label
             {
                 (item.activate)(tray);
             }
@@ -384,7 +413,7 @@ mod tests {
     // "paused" cases -- the only two states a user would ever click it in.
     #[test]
     fn toggle_play_pause_sends_toggle_pause_while_playing() {
-        let (tray, rx) = spy_tray(status(true, false, "A Song"), false);
+        let (tray, rx) = spy_tray(status(true, false, "A Song"), AttachedClients::None);
         tray.toggle_play_pause();
         assert!(matches!(
             rx.try_recv(),
@@ -394,7 +423,7 @@ mod tests {
 
     #[test]
     fn next_emits_relative_next_command() {
-        let (tray, rx) = spy_tray(status(true, false, "A Song"), false);
+        let (tray, rx) = spy_tray(status(true, false, "A Song"), AttachedClients::None);
         tray.next();
         assert!(matches!(
             rx.try_recv(),
@@ -402,32 +431,33 @@ mod tests {
         ));
     }
 
-    /// tray-pin-swap spec "Pinned Client attached" / "No pinned Client
-    /// attached": exactly one Pin swap item, labelled from the shared flag,
-    /// sitting before the Quit separator; activating it sends
-    /// `OwnerAction(SwapPanel)`, the same Owner action the CLI flag runs.
+    /// Tray-open-terminal pin-swap spec "No Client attached" / "A terminal
+    /// Client is attached" / "A pinned Client is attached": exactly one Pin
+    /// swap item, labelled from the attached-Clients state, and **Open** only
+    /// in the `None` state, directly above it; activating the Pin swap item
+    /// sends `OwnerAction(SwapPanel)`, the same Owner action the CLI flag
+    /// runs.
     #[rstest]
-    #[case::no_pinned_client(false, "Pin")]
-    #[case::pinned_client_attached(true, "Unpin")]
-    fn pin_swap_item_label_and_activation_follow_the_pinned_flag(
-        #[case] pinned_client_attached: bool,
-        #[case] expected_label: &str,
+    #[case::no_client(AttachedClients::None, &["Open", "Pin"], "Pin")]
+    #[case::unpinned_client_attached(AttachedClients::Unpinned, &["Pin"], "Pin")]
+    #[case::pinned_client_attached(AttachedClients::Pinned, &["Unpin"], "Unpin")]
+    fn pin_swap_item_label_and_activation_follow_the_attached_clients(
+        #[case] attached_clients: AttachedClients,
+        #[case] expected_swap_items: &[&str],
+        #[case] pin_swap_label: &str,
     ) {
-        let (mut tray, rx) = spy_tray(status(true, false, "A Song"), pinned_client_attached);
+        let (mut tray, rx) = spy_tray(status(true, false, "A Song"), attached_clients);
 
         let labels = menu_labels(&tray);
         assert_eq!(labels.last().map(String::as_str), Some("Quit"));
-        assert_eq!(
-            labels.get(labels.len() - 2).map(String::as_str),
-            Some(expected_label)
-        );
-        assert!(
-            !labels
-                .iter()
-                .any(|label| (label == "Pin" || label == "Unpin") && label != expected_label)
-        );
+        let swap_items: Vec<&str> = labels
+            .iter()
+            .map(String::as_str)
+            .filter(|label| matches!(*label, "Open" | "Pin" | "Unpin"))
+            .collect();
+        assert_eq!(swap_items, expected_swap_items);
 
-        activate_pin_swap_item(&mut tray);
+        activate_item_labelled(&mut tray, pin_swap_label);
         assert!(matches!(
             rx.try_recv(),
             Ok(TransportCommand::OwnerAction(OwnerAction::SwapPanel))
@@ -436,20 +466,34 @@ mod tests {
 
     /// Contract: tray-pin-swap spec "The label SHALL reflect the attached
     /// Clients each time the menu opens" -- the label is computed from the
-    /// shared flag at each menu build, not captured at construction. This
+    /// shared state at each menu build, not captured at construction. This
     /// pins the read side of the fix; the write side (pushing a rebuild when
-    /// the flag flips) is `spawn_pinned_flag_watcher`, whose polling loop
-    /// needs the real ksni service and is exercised only live.
+    /// the state changes) is `spawn_attached_clients_watcher`, whose polling
+    /// loop needs the real ksni service and is exercised only live.
     #[test]
-    fn pin_swap_label_follows_a_flag_flip_after_construction() {
-        let flag = Arc::new(AtomicBool::new(false));
-        let (tray, _rx) = spy_tray_with_flag(Arc::clone(&flag), status(true, false, "A Song"));
+    fn pin_swap_label_follows_a_state_change_after_construction() {
+        let state = Arc::new(AttachedClientsCell::default());
+        let (tray, _rx) = spy_tray_with_cell(Arc::clone(&state), status(true, false, "A Song"));
 
         assert_eq!(pin_swap_label_of(&tray), "Pin");
-        flag.store(true, Ordering::SeqCst);
+        state.store(AttachedClients::Pinned);
         assert_eq!(pin_swap_label_of(&tray), "Unpin");
-        flag.store(false, Ordering::SeqCst);
+        state.store(AttachedClients::None);
         assert_eq!(pin_swap_label_of(&tray), "Pin");
+    }
+
+    /// Tray-open-terminal pin-swap spec "No Client attached": activating the
+    /// **Open** item sends `OwnerAction(OpenTerminal)`, the Owner action the
+    /// `--open` CLI flag runs.
+    #[test]
+    fn activating_open_sends_open_terminal() {
+        let (mut tray, rx) = spy_tray(status(true, false, "A Song"), AttachedClients::None);
+
+        activate_item_labelled(&mut tray, "Open");
+        assert!(matches!(
+            rx.try_recv(),
+            Ok(TransportCommand::OwnerAction(OwnerAction::OpenTerminal))
+        ));
     }
 
     /// The Pin swap item's label of the current menu build (the item sits

@@ -9,18 +9,23 @@ pub enum OwnerAction {
     /// one Client with another; the Owner keeps playing.
     #[serde(rename = "swap-panel")]
     SwapPanel,
+    /// Start a fresh terminal Client (a new terminal window) attached to
+    /// this Owner, with no effect on any attached Client.
+    #[serde(rename = "open-terminal")]
+    OpenTerminal,
 }
 
 impl OwnerAction {
     /// Every Owner action, in help-listing order. Hand-kept: a variant
     /// missing from this list has no flag and no help row.
-    pub const ALL: &'static [OwnerAction] = &[OwnerAction::SwapPanel];
+    pub const ALL: &'static [OwnerAction] = &[OwnerAction::SwapPanel, OwnerAction::OpenTerminal];
 
     /// The one `mbv` CLI flag that runs this action.
     #[must_use]
     pub fn cli_flag(self) -> &'static str {
         match self {
             OwnerAction::SwapPanel => "--swap-panel",
+            OwnerAction::OpenTerminal => "--open",
         }
     }
 
@@ -29,6 +34,7 @@ impl OwnerAction {
     pub fn help(self) -> &'static str {
         match self {
             OwnerAction::SwapPanel => "move the session between the pinned panel and a terminal",
+            OwnerAction::OpenTerminal => "open mbv in a new terminal",
         }
     }
 

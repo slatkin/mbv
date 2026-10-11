@@ -4,11 +4,14 @@
 //! here. The canonical queue itself lives in `mbv-queue` and is held by the Player
 //! owner; this crate defines the vocabulary and never drives playback.
 
+mod attached_clients;
 mod commands;
 mod events;
 mod owner_action;
 mod protocol;
 
+#[doc(inline)]
+pub use attached_clients::{AttachedClients, AttachedClientsCell};
 #[doc(inline)]
 pub use commands::{
     CtrlCmd, Direction, OwnerGate, OwnerGateRejection, PlaybackIntent, PlaybackIntentAction,

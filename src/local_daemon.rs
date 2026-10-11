@@ -17,6 +17,7 @@ use std::ffi::OsStr;
 use std::io::{self, Read};
 use std::os::unix::net::UnixStream;
 use std::os::unix::process::CommandExt;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
@@ -125,13 +126,25 @@ fn swap_argv(
                     Ok(argv)
                 }
                 (None, Some(terminal)) => Ok(vec![terminal.to_string(), "-e".to_string(), exe]),
-                (None, None) => Err(
-                    "cannot start a terminal Client to unpin: neither [panel] terminal \
+                (None, None) => Err("cannot start a terminal Client: neither [panel] terminal \
                      (config) nor TERMINAL (environment) is set"
-                        .to_string(),
-                ),
+                    .to_string()),
             }
         }
+    }
+}
+
+/// The binary path a launch starts from (spec pin-swap "Launches start the
+/// Owner's own build after its binary file changes").
+///
+/// After the started file is unlinked, Linux `current_exe()` ends in
+/// ` (deleted)` and spawn fails with ENOENT. Then start from the Owner's
+/// `/proc/{owner_pid}/exe`, which names the same build while the Owner runs.
+fn launch_exe(current: &Path, owner_pid: u32) -> PathBuf {
+    if current.to_string_lossy().ends_with(" (deleted)") {
+        PathBuf::from(format!("/proc/{owner_pid}/exe"))
+    } else {
+        current.to_path_buf()
     }
 }
 
@@ -299,12 +312,13 @@ pub fn run_local_daemon_main() -> ! {
                     shutdown_tx,
                     handle.status,
                     handle.transport_tx,
-                    handle.pinned_client_attached,
+                    handle.attached_clients,
                 )
             }),
             swap_command: Box::new(move |direction| {
-                let exe = std::env::current_exe()
+                let current = std::env::current_exe()
                     .map_err(|e| format!("cannot locate the mbv binary: {e}"))?;
+                let exe = launch_exe(&current, std::process::id());
                 // The `[panel] terminal` value is re-read from the config file
                 // on every swap (design D5), like `owner_settings::reader`:
                 // a config edit reaches the next Unpin without a restart.
@@ -421,5 +435,27 @@ mod tests {
         )
         .expect_err("Unpin without a terminal must fail");
         assert!(error.contains(named), "error must name the source");
+    }
+
+    /// Regression for the Owner log `daemon.pin_swap.spawn_failed …
+    /// "… (deleted)"` (2026-10-10 and 2026-10-11): when `current_exe()` ends
+    /// in ` (deleted)` the started file is gone, so the launch falls back to
+    /// the Owner's `/proc/<pid>/exe`; a live path is returned unchanged.
+    #[rstest]
+    #[case::live_path_is_returned_unchanged("/usr/bin/mbv", 4242, "/usr/bin/mbv")]
+    #[case::deleted_suffix_falls_back_to_owner_proc_exe(
+        "/home/u/target/debug/mbv (deleted)",
+        4242,
+        "/proc/4242/exe"
+    )]
+    fn launch_exe_falls_back_to_the_owner_binary_when_current_is_deleted(
+        #[case] current: &str,
+        #[case] owner_pid: u32,
+        #[case] expected: &str,
+    ) {
+        assert_eq!(
+            launch_exe(Path::new(current), owner_pid),
+            PathBuf::from(expected)
+        );
     }
 }

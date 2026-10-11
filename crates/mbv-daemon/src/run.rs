@@ -10,7 +10,7 @@ use crate::PinSwapState;
 use crate::owner_lock::{OwnerLockError, PidFileLock, lock_pid_file};
 use crate::{ClientRegistry, CtrlClients};
 use mbv_ctrl::player::PlayerEvent;
-use mbv_ctrl::{CtrlEvent, PlaybackGeneration};
+use mbv_ctrl::{AttachedClientsCell, CtrlEvent, PlaybackGeneration};
 use mbv_emby::{EmbyClient, mbv_direct_tcp_port_command};
 use mbv_emby_model::EmbyItem;
 use mbv_net::stream::SocketStream;
@@ -18,7 +18,6 @@ use mbv_player::{Player, PlayerOwnerState};
 use mbv_queue::{PlaybackQueue, ProgressObservation, QueueSlotId};
 use std::convert::Infallible;
 use std::net::TcpListener;
-use std::sync::atomic::AtomicBool;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -153,8 +152,8 @@ struct DaemonStarted {
     /// Shared between the Pin-swap machine and the ctrl admission path
     /// (tray-pin-swap design D4).
     pending_swap: Arc<crate::PendingSwapToken>,
-    /// Shared with the ctrl registry, which keeps it current (design D3).
-    pinned_client_attached: Arc<AtomicBool>,
+    /// Shared with the ctrl registry, which keeps it current (design D1).
+    attached_clients: Arc<AttachedClientsCell>,
 }
 
 fn spawn_queue_persistence_worker(
@@ -274,12 +273,12 @@ fn start_daemon(
     let player_status = Arc::clone(&player.status);
     let (transport_tx, transport_rx) = mpsc::channel();
     // Created here, before the registry exists, so the handle and the
-    // registry share one flag (design D3).
-    let pinned_client_attached = Arc::new(AtomicBool::new(false));
+    // registry share one cell (design D1).
+    let attached_clients = Arc::new(AttachedClientsCell::default());
     (hooks.on_player_ready)(DaemonPlayerHandle {
         status: player_status,
         transport_tx,
-        pinned_client_attached: Arc::clone(&pinned_client_attached),
+        attached_clients: Arc::clone(&attached_clients),
     });
 
     // Tray ownership lives in the loop (design D4): one startup reconcile in
@@ -324,7 +323,7 @@ fn start_daemon(
         pid_lock,
         pin_swap,
         pending_swap,
-        pinned_client_attached,
+        attached_clients,
     })
 }
 
@@ -592,7 +591,7 @@ pub fn run_with_options(
         pid_lock: _pid_lock,
         pin_swap,
         pending_swap,
-        pinned_client_attached,
+        attached_clients,
     } = started;
     let (owner, shared_queue) = initialize_queue(role, &player);
     // Owner restore runs the same progress refresh as cold adoption and a
@@ -607,7 +606,7 @@ pub fn run_with_options(
     );
     let ctrl_clients: ClientRegistry = Arc::new(Mutex::new(CtrlClients::new(
         merged_tx.clone(),
-        pinned_client_attached,
+        attached_clients,
         pending_swap,
     )));
     start_local_control_server(

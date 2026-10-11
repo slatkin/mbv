@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::os::unix::net::UnixListener;
-use std::sync::atomic::AtomicBool;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -668,10 +667,10 @@ pub(crate) type NotifyHook = Box<dyn Fn(&str) + Send>;
 pub struct DaemonPlayerHandle {
     pub status: Arc<Mutex<mbv_ctrl::player::PlayerStatus>>,
     pub transport_tx: mpsc::Sender<mbv_ctrl::TransportCommand>,
-    /// "A pinned Client is attached" — shared with the ctrl registry, which
-    /// refreshes it on connect and disconnect (design D3). The Tray reads it
-    /// to label its one Pin swap item.
-    pub pinned_client_attached: Arc<AtomicBool>,
+    /// Which local Clients are attached — shared with the ctrl registry,
+    /// which refreshes it on connect and disconnect (design D1). The Tray
+    /// reads it to label its Pin swap item.
+    pub attached_clients: Arc<mbv_ctrl::AttachedClientsCell>,
 }
 
 type OnPlayerReady = Box<dyn FnOnce(DaemonPlayerHandle)>;

@@ -120,6 +120,16 @@ pub fn run_local_owner_action(action: OwnerAction) -> Result<(), crate::RemotePl
     send_owner_action(&mut reader, action)
 }
 
+/// The restart error for an Owner that cannot run `action`: the pre-send
+/// capability check and the post-send `CommandRejected` reply share this text
+/// (spec owner-actions "Owner does not support this action").
+fn restart_required_too_old(action: OwnerAction) -> crate::RemotePlayerError {
+    crate::RemotePlayerError::restart_required(format!(
+        "the running mbv is too old for {}; restart it",
+        action.cli_flag()
+    ))
+}
+
 /// The Owner-action handshake: reads the server Hello, refuses an Owner
 /// without the `owner-action` capability before anything is sent, sends the
 /// Client Hello with the [`HandshakeRole::OwnerAction`] role, and consumes
@@ -134,10 +144,7 @@ where
 {
     let compatibility = read_server_hello(reader, PeerBuild::Any)?;
     if !compatibility.supports_owner_action {
-        return Err(crate::RemotePlayerError::restart_required(format!(
-            "the running mbv is too old for {}; restart it",
-            action.cli_flag()
-        )));
+        return Err(restart_required_too_old(action));
     }
     send_client_hello(
         reader,
@@ -161,15 +168,20 @@ pub(super) fn send_owner_action(
         .map_err(|error| {
             crate::RemotePlayerError::connection(format!("cannot send the owner action: {error}"))
         })?;
-    await_owner_action_reply(reader)
+    await_owner_action_reply(reader, action)
 }
 
 /// Awaits `OwnerActionAccepted` / `OwnerActionRefused` on the reply path,
 /// under the 6 s read timeout `run_local_owner_action` set on the stream.
 /// Other events (an Owner pushing state between the handshake and the reply)
-/// are skipped, mirroring `await_service_setup_acknowledgement`.
+/// are skipped, mirroring `await_service_setup_acknowledgement`. An
+/// `OwnerAction` connection can send only `RunOwnerAction`, so a
+/// `CommandRejected` there means the Owner cannot run the action (it predates
+/// it); that reports the same restart requirement as the capability check
+/// (spec owner-actions "Owner does not support this action").
 fn await_owner_action_reply(
     reader: &mut BufReader<SocketStream>,
+    action: OwnerAction,
 ) -> Result<(), crate::RemotePlayerError> {
     for next in reader.lines() {
         let line = next.map_err(|_error| {
@@ -184,6 +196,7 @@ fn await_owner_action_reply(
                     "the Owner refused the action: {reason}"
                 )));
             }
+            CtrlEvent::CommandRejected(_) => return Err(restart_required_too_old(action)),
             _ => {}
         }
     }
