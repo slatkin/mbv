@@ -10,7 +10,7 @@ use crate::PinSwapState;
 use crate::owner_lock::{OwnerLockError, PidFileLock, lock_pid_file};
 use crate::{ClientRegistry, CtrlClients};
 use mbv_ctrl::player::PlayerEvent;
-use mbv_ctrl::{AttachedClients, AttachedClientsCell, CtrlEvent, PlaybackGeneration};
+use mbv_ctrl::{AttachedClientsCell, CtrlEvent, PlaybackGeneration};
 use mbv_emby::{EmbyClient, mbv_direct_tcp_port_command};
 use mbv_emby_model::EmbyItem;
 use mbv_net::stream::SocketStream;
@@ -274,7 +274,7 @@ fn start_daemon(
     let (transport_tx, transport_rx) = mpsc::channel();
     // Created here, before the registry exists, so the handle and the
     // registry share one cell (design D1).
-    let attached_clients = Arc::new(AttachedClientsCell::new(AttachedClients::None));
+    let attached_clients = Arc::new(AttachedClientsCell::default());
     (hooks.on_player_ready)(DaemonPlayerHandle {
         status: player_status,
         transport_tx,

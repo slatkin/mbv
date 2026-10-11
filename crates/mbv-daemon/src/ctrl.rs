@@ -419,7 +419,7 @@ mod tests {
         let (tx, _rx) = mpsc::channel();
         CtrlClients::new(
             tx,
-            Arc::new(AttachedClientsCell::new(AttachedClients::None)),
+            Arc::new(AttachedClientsCell::default()),
             Arc::new(crate::PendingSwapToken::default()),
         )
     }

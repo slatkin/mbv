@@ -498,9 +498,7 @@ mod tests {
     #[test]
     fn a_pinned_surface_only_client_sets_the_pinned_state() {
         let (merged_tx, _merged_rx) = mpsc::channel::<DaemonEvent>();
-        let state = Arc::new(mbv_ctrl::AttachedClientsCell::new(
-            mbv_ctrl::AttachedClients::None,
-        ));
+        let state = Arc::new(mbv_ctrl::AttachedClientsCell::default());
         let mut clients = CtrlClients::new(
             merged_tx,
             Arc::clone(&state),
@@ -531,9 +529,7 @@ mod tests {
         let (merged_tx, _merged_rx) = mpsc::channel::<DaemonEvent>();
         let mut clients = CtrlClients::new(
             merged_tx,
-            Arc::new(mbv_ctrl::AttachedClientsCell::new(
-                mbv_ctrl::AttachedClients::None,
-            )),
+            Arc::new(mbv_ctrl::AttachedClientsCell::default()),
             Arc::new(crate::PendingSwapToken::default()),
         );
         let (client_tx, client_rx) = mpsc::channel::<CtrlOutbound>();

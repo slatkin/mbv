@@ -136,14 +136,9 @@ fn swap_argv(
 
 /// The binary path a launch starts from (tray-open-terminal design D4).
 ///
-/// On Linux `current_exe()` reads `/proc/self/exe`; after the started file is
-/// unlinked (worktree removed, rebuild replaced) the kernel appends
-/// ` (deleted)`, and `Command::spawn` fails with ENOENT
-/// (Owner log `daemon.pin_swap.spawn_failed … (deleted)`, 2026-10-10 and
-/// 2026-10-11). In that case start from the Owner's `/proc/{owner_pid}/exe`:
-/// it names the same build and stays valid while the Owner runs, and it also
-/// works through a terminal emulator because the path names the Owner's pid,
-/// not self.
+/// After the started file is unlinked, Linux `current_exe()` ends in
+/// ` (deleted)` and spawn fails with ENOENT. Then start from the Owner's
+/// `/proc/{owner_pid}/exe`, which names the same build while the Owner runs.
 fn launch_exe(current: &Path, owner_pid: u32) -> PathBuf {
     if current.to_string_lossy().ends_with(" (deleted)") {
         PathBuf::from(format!("/proc/{owner_pid}/exe"))

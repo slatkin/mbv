@@ -7,10 +7,10 @@ use std::time::Duration;
 
 const TRAY_ICON: &[u8] = include_bytes!("../../../assets/tray_icon.bin");
 
-/// How often the pinned-flag watcher re-reads the shared "pinned Client
-/// attached" flag to push a menu rebuild, mirroring the daemon event loop's
-/// 1 s `TrayState::poll` cadence for tray reconciliation.
-const PINNED_FLAG_WATCH_INTERVAL: Duration = Duration::from_secs(1);
+/// How often the attached-Clients watcher re-reads the shared state to push a
+/// menu rebuild, mirroring the daemon event loop's 1 s `TrayState::poll`
+/// cadence for tray reconciliation.
+const ATTACHED_CLIENTS_WATCH_INTERVAL: Duration = Duration::from_secs(1);
 
 /// Whether the now-playing rows (`Playing` / `<Title>`) should be shown.
 ///
@@ -256,7 +256,7 @@ pub fn spawn(
     }
     .spawn()
     .map(|handle| {
-        spawn_pinned_flag_watcher(handle.clone(), state_for_watcher);
+        spawn_attached_clients_watcher(handle.clone(), state_for_watcher);
         Box::new(RunningTray(Some(handle))) as Box<dyn Send>
     })
     .map_err(|e| {
@@ -270,8 +270,8 @@ pub fn spawn(
     .ok()
 }
 
-/// Pushes a menu rebuild shortly after the shared "pinned Client attached"
-/// flag changes, so the Pin swap label is correct the next time the menu
+/// Pushes a menu rebuild shortly after the shared attached-Clients state
+/// changes, so the Open and Pin swap items are correct the next time the menu
 /// opens (spec pin-swap: "The label SHALL reflect the attached Clients each
 /// time the menu opens").
 ///
@@ -279,19 +279,19 @@ pub fn spawn(
 /// something asks for an update: a click, an `AboutToShow` from hosts that
 /// signal one, or [`ksni::blocking::Handle::update`]. Nothing here can rely
 /// on the host signaling `AboutToShow`, so the change is pushed instead: a
-/// watcher thread polls the shared flag -- the same shape as the daemon
+/// watcher thread polls the shared state -- the same shape as the daemon
 /// event loop's 1 s `TrayState::poll`, but with its real clock, because the
 /// injected-instant test seam cannot cross the ksni service boundary. The
 /// rebuild diffs against the cached items, so a poll that finds no change
 /// emits no D-Bus traffic. The thread ends within one interval of the tray
 /// service stopping (`RunningTray` drop), and process exit reclaims it
 /// regardless.
-fn spawn_pinned_flag_watcher(
+fn spawn_attached_clients_watcher(
     handle: ksni::blocking::Handle<MbvTray>,
     attached_clients: Arc<AttachedClientsCell>,
 ) {
     let _ = std::thread::Builder::new()
-        .name("mbv-tray-flag-watch".into())
+        .name("mbv-tray-clients-watch".into())
         .spawn(move || {
             let mut attached = attached_clients.load();
             loop {
@@ -303,7 +303,7 @@ fn spawn_pinned_flag_watcher(
                     attached = now;
                     handle.update(|_| {});
                 }
-                std::thread::sleep(PINNED_FLAG_WATCH_INTERVAL);
+                std::thread::sleep(ATTACHED_CLIENTS_WATCH_INTERVAL);
             }
         });
 }
@@ -364,12 +364,12 @@ mod tests {
         st: PlayerStatus,
         attached_clients: AttachedClients,
     ) -> (MbvTray, std::sync::mpsc::Receiver<TransportCommand>) {
-        spy_tray_with_flag(Arc::new(AttachedClientsCell::new(attached_clients)), st)
+        spy_tray_with_cell(Arc::new(AttachedClientsCell::new(attached_clients)), st)
     }
 
     /// Like [`spy_tray`], but the caller keeps the shared cell `Arc`, so a
     /// test can flip it after construction.
-    fn spy_tray_with_flag(
+    fn spy_tray_with_cell(
         attached_clients: Arc<AttachedClientsCell>,
         st: PlayerStatus,
     ) -> (MbvTray, std::sync::mpsc::Receiver<TransportCommand>) {
@@ -438,37 +438,26 @@ mod tests {
     /// sends `OwnerAction(SwapPanel)`, the same Owner action the CLI flag
     /// runs.
     #[rstest]
-    #[case::no_client(AttachedClients::None, "Pin", true)]
-    #[case::unpinned_client_attached(AttachedClients::Unpinned, "Pin", false)]
-    #[case::pinned_client_attached(AttachedClients::Pinned, "Unpin", false)]
-    fn pin_swap_item_label_and_activation_follow_the_pinned_flag(
+    #[case::no_client(AttachedClients::None, &["Open", "Pin"], "Pin")]
+    #[case::unpinned_client_attached(AttachedClients::Unpinned, &["Pin"], "Pin")]
+    #[case::pinned_client_attached(AttachedClients::Pinned, &["Unpin"], "Unpin")]
+    fn pin_swap_item_label_and_activation_follow_the_attached_clients(
         #[case] attached_clients: AttachedClients,
-        #[case] expected_label: &str,
-        #[case] open_present: bool,
+        #[case] expected_swap_items: &[&str],
+        #[case] pin_swap_label: &str,
     ) {
         let (mut tray, rx) = spy_tray(status(true, false, "A Song"), attached_clients);
 
         let labels = menu_labels(&tray);
         assert_eq!(labels.last().map(String::as_str), Some("Quit"));
-        assert_eq!(
-            labels.get(labels.len() - 2).map(String::as_str),
-            Some(expected_label)
-        );
-        if open_present {
-            assert_eq!(
-                labels.get(labels.len() - 3).map(String::as_str),
-                Some("Open")
-            );
-        } else {
-            assert!(!labels.iter().any(|label| label == "Open"));
-        }
-        assert!(
-            !labels
-                .iter()
-                .any(|label| (label == "Pin" || label == "Unpin") && label != expected_label)
-        );
+        let swap_items: Vec<&str> = labels
+            .iter()
+            .map(String::as_str)
+            .filter(|label| matches!(*label, "Open" | "Pin" | "Unpin"))
+            .collect();
+        assert_eq!(swap_items, expected_swap_items);
 
-        activate_item_labelled(&mut tray, expected_label);
+        activate_item_labelled(&mut tray, pin_swap_label);
         assert!(matches!(
             rx.try_recv(),
             Ok(TransportCommand::OwnerAction(OwnerAction::SwapPanel))
@@ -477,14 +466,14 @@ mod tests {
 
     /// Contract: tray-pin-swap spec "The label SHALL reflect the attached
     /// Clients each time the menu opens" -- the label is computed from the
-    /// shared flag at each menu build, not captured at construction. This
+    /// shared state at each menu build, not captured at construction. This
     /// pins the read side of the fix; the write side (pushing a rebuild when
-    /// the flag flips) is `spawn_pinned_flag_watcher`, whose polling loop
-    /// needs the real ksni service and is exercised only live.
+    /// the state changes) is `spawn_attached_clients_watcher`, whose polling
+    /// loop needs the real ksni service and is exercised only live.
     #[test]
-    fn pin_swap_label_follows_a_flag_flip_after_construction() {
-        let state = Arc::new(AttachedClientsCell::new(AttachedClients::None));
-        let (tray, _rx) = spy_tray_with_flag(Arc::clone(&state), status(true, false, "A Song"));
+    fn pin_swap_label_follows_a_state_change_after_construction() {
+        let state = Arc::new(AttachedClientsCell::default());
+        let (tray, _rx) = spy_tray_with_cell(Arc::clone(&state), status(true, false, "A Song"));
 
         assert_eq!(pin_swap_label_of(&tray), "Pin");
         state.store(AttachedClients::Pinned);
