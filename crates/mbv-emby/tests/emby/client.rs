@@ -163,9 +163,27 @@ fn upcoming_request_scopes_to_library_and_parses_episodes() {
     assert!(request.contains("Limit=30"));
     assert!(request.contains("Fields="));
     assert_eq!(episodes.len(), 1);
-    assert_eq!(episodes[0].id, "episode-1");
-    assert_eq!(episodes[0].item_type, "Episode");
-    assert_eq!(episodes[0].series_id, "series-1");
+    assert_eq!(episodes[0].series_id.as_str(), "series-1");
+    assert_eq!(episodes[0].season, Some(1));
+    assert_eq!(episodes[0].episode, Some(2));
+    assert_eq!(episodes[0].title, "Episode One");
+}
+
+/// conform-tv-latest-hero D3: a notice with no `SeriesId` cannot open a
+/// series, so the client boundary drops it.
+#[test]
+fn upcoming_drops_notice_without_series_id() {
+    let (mut client, http) = mock_client(TEST_URL);
+    client.user_id = "user".into();
+    http.respond(
+        200,
+        r#"{"Items":[{"Id":"a","Name":"No Series","Type":"Episode","SeriesName":"Orphan"},{"Id":"b","Name":"Kept","Type":"Episode","SeriesId":"series-2","SeriesName":"Series Two"}]}"#,
+    );
+
+    let premieres = client.get_upcoming("library-7", 30).unwrap();
+
+    assert_eq!(premieres.len(), 1);
+    assert_eq!(premieres[0].series_id.as_str(), "series-2");
 }
 
 #[test]

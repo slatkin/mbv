@@ -350,5 +350,39 @@ impl EmbyItem {
     }
 }
 
+/// An announced episode premiere from Emby's Upcoming feed. A notice is not
+/// media: it has no item id, no media sources, and no conversion into
+/// [`EmbyItem`]. Its only action is to open its series.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UpcomingPremiere {
+    pub series_id: mbv_ids::ItemId,
+    pub series_name: String,
+    pub season: Option<u32>,
+    pub episode: Option<u32>,
+    pub title: String,
+    pub premiere_date: String,
+}
+
+impl UpcomingPremiere {
+    /// A row target that is unique per notice. Text fields carry a length
+    /// prefix, so no field value can imitate a field boundary.
+    #[must_use]
+    pub fn stable_key(&self) -> String {
+        let number = |n: Option<u32>| n.map_or_else(|| "-".to_owned(), |n| n.to_string());
+        format!(
+            "upcoming:{}:{}:{}:{}:{}:{}:{}:{}:{}",
+            self.series_id.as_str().len(),
+            self.series_id,
+            number(self.season),
+            number(self.episode),
+            self.title.len(),
+            self.title,
+            self.premiere_date.len(),
+            self.premiere_date,
+            self.series_name,
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests;

@@ -17,6 +17,7 @@ test = []
 workspace = true
 
 [dependencies]
+mbv-ids = { path = "../mbv-ids" }
 serde = { workspace = true, features = ["derive"] }
 
 [dev-dependencies]

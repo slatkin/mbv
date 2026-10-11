@@ -2160,6 +2160,7 @@ dependencies = [
 name = "mbv-emby-model"
 version = "0.24.4"
 dependencies = [
+ "mbv-ids",
  "rstest",
  "serde",
  "serde_json",
