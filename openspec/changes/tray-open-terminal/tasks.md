@@ -3,7 +3,7 @@
 ## 1. Binary lookup for launches (design D4)
 
 - [ ] 1.1 In `src/local_daemon.rs`, add `launch_exe(current, owner_pid)` next to `swap_argv` and call it from the `swap_command` hook in place of the raw `std::env::current_exe()` path. Add one `#[case]` table in that file's tests with two rows: a live path is returned unchanged; `<p> (deleted)` returns `/proc/<pid>/exe`. Name it for the regression it guards (Owner log `daemon.pin_swap.spawn_failed … (deleted)`, 2026-10-10 and 2026-10-11). Verify: `cargo nextest run -p mbv launch_exe`.
-- [ ] 1.2 In `swap_argv`, change the Unpin error text to "cannot start a terminal Client: neither [panel] terminal (config) nor TERMINAL (environment) is set". Update the existing assertion in `swap_argv_without_a_terminal_names_the_missing_source` (`src/local_daemon.rs`). Verify: `cargo nextest run -p mbv swap_argv`.
+- [ ] 1.2 In `swap_argv`, change the Unpin error text to "cannot start a terminal Client: neither [panel] terminal (config) nor TERMINAL (environment) is set". `swap_argv_without_a_terminal_names_the_missing_source` (`src/local_daemon.rs`) only checks that the text names `[panel] terminal` and `TERMINAL`, so it needs no edit. Verify: `cargo nextest run -p mbv swap_argv`.
 
 ## 2. Three-state attached Clients (design D1)
 
