@@ -90,7 +90,7 @@ pub trait LibraryContentOwner {
     }
 
     fn hero_overlay_available(&mut self) -> bool {
-        self.content().hero.is_some()
+        self.content().hero.content().is_some()
     }
 
     /// Whether the selected parent can own a Hero overlay before its Hero

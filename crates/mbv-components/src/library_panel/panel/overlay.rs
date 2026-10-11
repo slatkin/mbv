@@ -1,6 +1,7 @@
 //! The Library-local Hero overlay lifecycle: opening, dismissal, and sync against the active destination owner.
 
 use super::LibraryPanel;
+use crate::library_panel::owner::LibraryContentOwner;
 
 impl LibraryPanel {
     /// Open the Library-local Hero overlay for the active Hero, retaining the
@@ -60,9 +61,10 @@ impl LibraryPanel {
     }
 
     pub fn sync_overlay_state(&mut self) {
-        let hero_available = self.owners.active_mut().is_some_and(|owner| {
-            owner.hero_overlay_available() || owner.hero_overlay_target_available()
-        });
+        let hero_available = self
+            .owners
+            .active_mut()
+            .is_some_and(|owner| overlay_hero_available(owner.as_mut()));
         if self.hero_overlay_open && !hero_available {
             self.dismiss_hero_overlay();
         }
@@ -90,8 +92,14 @@ impl LibraryPanel {
 
     fn can_open_hero_overlay(&mut self) -> bool {
         self.owners.active_mut().is_some_and(|owner| {
-            !owner.inline_search_active()
-                && (owner.hero_overlay_available() || owner.hero_overlay_target_available())
+            !owner.inline_search_active() && overlay_hero_available(owner.as_mut())
         })
     }
+}
+
+/// Whether the owner has a Hero for the overlay. An `Absent` hero slot (a list
+/// of non-media rows) never has one, whatever the owner's own target hooks say.
+fn overlay_hero_available(owner: &mut dyn LibraryContentOwner) -> bool {
+    owner.content().hero.shows_pane()
+        && (owner.hero_overlay_available() || owner.hero_overlay_target_available())
 }

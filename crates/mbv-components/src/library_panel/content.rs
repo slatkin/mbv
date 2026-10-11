@@ -259,8 +259,57 @@ pub struct LibraryPanelContent<'a> {
     pub selector: Option<SelectorRow>,
     /// The list box's content.
     pub list: ListSlot<'a>,
-    /// The Hero pane's content, if the destination shows one.
-    pub hero: Option<HeroContent<'a>>,
+    /// The Hero pane's slot: whether the list carries media, and the hero.
+    pub hero: HeroSlot<'a>,
+}
+
+/// Whether the Hero pane exists for the current list (design D2). The panel
+/// reads "no Hero pane" from this type, never from the destination's key.
+#[derive(Debug)]
+pub enum HeroSlot<'a> {
+    /// The list carries media. Wide paints the Hero pane, empty when the
+    /// selection has no hero.
+    ///
+    /// The hero is boxed to keep the enum small; build the variant with
+    /// [`HeroSlot::pane`].
+    Pane(Option<Box<HeroContent<'a>>>),
+    /// The list carries no media. Wide paints no Hero pane, the list takes the
+    /// whole content area, and the overlay never opens.
+    Absent,
+}
+
+impl<'a> HeroSlot<'a> {
+    /// A Hero pane holding `hero`, empty when the selection has none.
+    #[must_use]
+    pub fn pane(hero: Option<HeroContent<'a>>) -> Self {
+        Self::Pane(hero.map(Box::new))
+    }
+
+    /// Whether the Hero pane participates in the Wide layout.
+    #[must_use]
+    pub fn shows_pane(&self) -> bool {
+        match self {
+            Self::Pane(_) => true,
+            Self::Absent => false,
+        }
+    }
+
+    /// The hero content, if the slot holds any.
+    #[must_use]
+    pub fn content(&self) -> Option<&HeroContent<'a>> {
+        match self {
+            Self::Pane(hero) => hero.as_deref(),
+            Self::Absent => None,
+        }
+    }
+
+    /// The hero content for painting, if the slot holds any.
+    pub fn content_mut(&mut self) -> Option<&mut HeroContent<'a>> {
+        match self {
+            Self::Pane(hero) => hero.as_deref_mut(),
+            Self::Absent => None,
+        }
+    }
 }
 
 impl LibraryPanelContent<'_> {
@@ -270,7 +319,7 @@ impl LibraryPanelContent<'_> {
     #[must_use]
     pub fn workspace_focused(&self) -> bool {
         self.hero
-            .as_ref()
+            .content()
             .and_then(|hero| hero.workspace.as_ref())
             .is_some_and(|workspace| workspace.focused)
     }

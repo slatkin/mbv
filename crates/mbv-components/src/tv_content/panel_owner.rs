@@ -1,5 +1,5 @@
 use super::{
-    EmbyItem, HeroContent, HeroContentData, InlineSearch, InlineSearchHost, KeyEvent,
+    EmbyItem, HeroContent, HeroContentData, HeroSlot, InlineSearch, InlineSearchHost, KeyEvent,
     LeafKeyResult, LetterFilter, LetterFilterKind, LibraryContentOwner, LibraryItemIdentity,
     LibraryPanelContent, LibrarySlotEvent, ListSlot, Msg, Pane, SelectorIdentity, SelectorRow,
     TvContent, TvDisplayMode, TvTreeTarget, Workspace, hero_content_emby,
@@ -93,6 +93,14 @@ impl TvContent {
             ListSlot::Media(&mut self.carrier)
         } else {
             ListSlot::Media(&mut self.browser)
+        };
+        // Flat Latest/Upcoming rows are not a hero-bearing list, so the panel
+        // paints no Hero pane for them (design D2). The only flat hero left is
+        // the mini-view overlay's, which the slot carries as a pane.
+        let hero = if flat_episode_mode && hero.is_none() {
+            HeroSlot::Absent
+        } else {
+            HeroSlot::pane(hero)
         };
         LibraryPanelContent {
             selector,

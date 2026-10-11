@@ -1,6 +1,6 @@
 use super::super::library_panel::HeroContentData;
 use super::super::library_panel::content::{
-    HeroContent, LibraryPanelContent, ListSlot, SelectorRow,
+    HeroContent, HeroSlot, LibraryPanelContent, ListSlot, SelectorRow,
 };
 use super::super::library_panel::hero::hero_content_feed;
 use super::super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
@@ -210,7 +210,7 @@ impl LibraryContentOwner for FeedsContent {
         LibraryPanelContent {
             selector,
             list,
-            hero,
+            hero: HeroSlot::pane(hero),
         }
     }
 
