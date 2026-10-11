@@ -203,7 +203,7 @@ impl PlaybackRun {
         // active slot, so a QueueMove/QueueRemove drained before the
         // deferred Stopped emit cannot rename the occurrence (D2).
         self.stop_slot = self.active_slot_id();
-        self.stop_runtime = self.active_item().map(QueueItem::runtime_ticks);
+        self.pin_stop_runtime();
     }
 
     /// Emit the final `Stopped` after the quit timeout elapsed.

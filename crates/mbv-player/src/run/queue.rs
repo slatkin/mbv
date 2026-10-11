@@ -167,6 +167,21 @@ impl PlaybackRun {
         s.queue_len = self.queue_len();
     }
 
+    /// Pins the stopping occurrence's runtime for the final stop report. The
+    /// queue item's own runtime wins; an item without one (the server omitted
+    /// `RunTimeTicks`) falls back to the mpv-adopted status runtime, so the
+    /// near-end mark-played check still sees a real duration.
+    pub(crate) fn pin_stop_runtime(&mut self) {
+        self.stop_runtime = self
+            .active_item()
+            .map(QueueItem::runtime_ticks)
+            .filter(|ticks| *ticks > 0)
+            .or_else(|| {
+                let runtime = self.status.lock().unwrap().runtime_ticks;
+                (runtime > 0).then_some(runtime)
+            });
+    }
+
     pub(crate) fn observe_reporting(&mut self, force_sync: bool) {
         let (active, paused, position_ticks) = {
             let status = self.status.lock().unwrap();

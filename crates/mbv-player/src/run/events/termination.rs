@@ -75,7 +75,7 @@ impl PlaybackRun {
         progress: &mut ProgressGuard,
     ) -> bool {
         if reason == mpv_end_file_reason::Quit {
-            self.stop_runtime = Some(self.active_item().map_or(0, QueueItem::runtime_ticks));
+            self.pin_stop_runtime();
         }
         let runtime = self.status.lock().unwrap().runtime_ticks;
         let natural_end = reason == mpv_end_file_reason::Eof && runtime > 0;

@@ -73,6 +73,23 @@ impl PlaybackRun {
 
     pub(crate) fn on_time_pos(&mut self, pos_secs: f64, mpv: &Mpv) {
         let ticks = mbv_emby_model::seconds_to_ticks(pos_secs);
+        // mpv's own duration is the loaded file's truth. The server's
+        // RunTimeTicks can be absent on some items (unprobed home-video
+        // entries) and is omitted by trimmed payloads (Latest, /Sessions),
+        // which stranded the seekbar at 0:00 for an otherwise playing file.
+        let mpv_runtime_ticks = adopted_runtime(
+            self.status.lock().unwrap().runtime_ticks,
+            mpv.get_property::<f64>("duration").ok(),
+        );
+        if let Some(runtime) = mpv_runtime_ticks {
+            tracing::info!(
+                name: "player.runtime.adopted_from_mpv",
+                target: "player",
+                runtime_ticks = runtime,
+                "adopted mpv duration as the active file's runtime"
+            );
+            self.status.lock().unwrap().runtime_ticks = runtime;
+        }
         {
             let mut st = self.status.lock().unwrap();
             st.position_ticks = ticks;
@@ -100,5 +117,43 @@ impl PlaybackRun {
             mpv,
             &self.event_tx,
         );
+    }
+}
+
+/// The runtime the active file should report, given the queue item's stored
+/// runtime and mpv's own `duration` property. mpv's measurement wins: the
+/// server's `RunTimeTicks` is missing outright on some items (unprobed
+/// home-video entries) and is dropped by trimmed payloads (`Latest`,
+/// `/Sessions`), and a stranded zeroRuntime strands the seekbar at 0:00.
+/// Returns the adopted tick count, or `None` when nothing should change.
+fn adopted_runtime(current_ticks: i64, mpv_duration_secs: Option<f64>) -> Option<i64> {
+    let ticks = mpv_duration_secs
+        .filter(|secs| *secs > 0.0)
+        .map(mbv_emby_model::seconds_to_ticks)
+        .filter(|ticks| *ticks > 0)
+        .filter(|ticks| *ticks != current_ticks)?;
+    Some(ticks)
+}
+
+#[cfg(test)]
+mod runtime_adoption_tests {
+    use super::adopted_runtime;
+    use rstest::rstest;
+
+    /// The contract: mpv's duration, when mpv reports a positive one, becomes
+    /// the active file's runtime — and nothing else writes. The first case is
+    /// the reported bug: the server omitted `RunTimeTicks`, the queue item
+    /// carried runtime 0, and the seekbar stayed stranded at 0:00.
+    #[rstest]
+    #[case::repairs_zero_runtime(0, Some(1845.9), Some(18_459_000_000))]
+    #[case::absent_duration_writes_nothing(0, None, None)]
+    #[case::non_positive_duration_writes_nothing(0, Some(0.0), None)]
+    #[case::matching_runtime_writes_nothing(18_459_000_000, Some(1845.9), None)]
+    fn only_a_positive_mpv_duration_is_adopted(
+        #[case] current_ticks: i64,
+        #[case] mpv_duration_secs: Option<f64>,
+        #[case] expected: Option<i64>,
+    ) {
+        assert_eq!(adopted_runtime(current_ticks, mpv_duration_secs), expected);
     }
 }
