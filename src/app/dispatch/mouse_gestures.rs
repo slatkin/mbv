@@ -181,17 +181,7 @@ impl App {
             level.tv_content_mode,
             Some(mbv_queue::TvContentMode::Latest | mbv_queue::TvContentMode::Upcoming)
         ) {
-            return level
-                .items
-                .iter()
-                .find(|item| {
-                    if item.id.is_empty() {
-                        mbv_components::tv_content::upcoming_episode_target(item) == target
-                    } else {
-                        item.id == target
-                    }
-                })
-                .cloned();
+            return level.items.iter().find(|item| item.id == target).cloned();
         }
 
         self.series_detail_cache

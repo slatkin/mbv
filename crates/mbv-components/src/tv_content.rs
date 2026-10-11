@@ -23,7 +23,7 @@ use super::library_panel::{
 use super::list::tree_browser::{TreeBrowser, TreeOperation};
 use super::media_list::{MediaListCarrier, MediaListOperation, MediaListSurfaceInput, RowIntent};
 use mbv_config::{LibraryItemIdentity, SelectorIdentity};
-use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND};
+use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND, UpcomingPremiere};
 use mbv_queue::QueueItem;
 use mbv_render::components::media_list::{
     MediaKind, MediaListRow, MediaListTrailing, MediaSemanticState,
@@ -47,8 +47,6 @@ mod tree_projection;
 
 #[cfg(test)]
 use episode_rows::build_episode_rows;
-#[doc(inline)]
-pub use episode_rows::upcoming_episode_target;
 use episode_rows::{build_latest_episode_rows, upcoming_episode_rows};
 #[derive(Clone, Copy, Eq, PartialEq, Debug)]
 enum Pane {
@@ -224,7 +222,7 @@ impl TvContent {
                 build_latest_episode_rows(&context.list.items)
             }
             Some(mbv_queue::TvContentMode::Upcoming) => {
-                upcoming_episode_rows(&context.list.items, time::OffsetDateTime::now_utc().date())
+                upcoming_episode_rows(&context.upcoming, time::OffsetDateTime::now_utc().date())
             }
             Some(mbv_queue::TvContentMode::All | mbv_queue::TvContentMode::Range(_)) | None => {
                 Self::series_rows(context, inline_search_active)

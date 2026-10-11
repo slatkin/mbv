@@ -3,7 +3,7 @@ use super::KeyEvent;
 use super::{
     EmbyItem, LibrarySlotEvent, MediaListOperation, MediaListSurfaceInput, Msg, Pane, Position,
     RowIntent, ShellRequest, TerminalObserverEvent, TreeOperation, TvContent, TvDisplayMode, TvHit,
-    TvTreeTarget, upcoming_episode_target,
+    TvTreeTarget,
 };
 
 impl TvContent {
@@ -506,12 +506,8 @@ impl TvContent {
                     .get(season)?
                     .iter()
                     .filter(|item| {
-                        let id = if item.id.is_empty() {
-                            upcoming_episode_target(item)
-                        } else {
-                            item.id.clone()
-                        };
-                        id == *episode && (item.series_id.is_empty() || item.series_id == show.id)
+                        item.id == *episode
+                            && (item.series_id.is_empty() || item.series_id == show.id)
                     })
                     .nth(*occurrence)
                     .cloned()

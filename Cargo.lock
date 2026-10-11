@@ -2033,6 +2033,7 @@ dependencies = [
  "mbv-audiobookshelf",
  "mbv-config",
  "mbv-emby-model",
+ "mbv-ids",
  "mbv-images",
  "mbv-keybinds",
  "mbv-queue",

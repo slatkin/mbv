@@ -1,6 +1,5 @@
 use super::super::list::tree_browser::{TreeEntry, TreeMarkPolicy, TreeNode, TreeOperation};
 use super::TvContent;
-use super::episode_rows::upcoming_episode_target;
 use mbv_emby_model::EmbyItem;
 use mbv_render::components::media_list::MediaSemanticState;
 use mbv_render::{TvWideRenderCtx, effective_sort_str, letter_bucket};
@@ -112,11 +111,7 @@ impl TvContent {
         entries.reserve(episodes.len());
         let mut episode_occurrences = std::collections::HashMap::with_capacity(episodes.len());
         for (index, episode) in episodes.iter().enumerate() {
-            let episode_id = if episode.id.is_empty() {
-                upcoming_episode_target(episode)
-            } else {
-                episode.id.clone()
-            };
+            let episode_id = episode.id.clone();
             let episode_occurrence = episode_occurrences
                 .entry(episode_id.clone())
                 .or_insert(0usize);
