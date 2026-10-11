@@ -252,6 +252,69 @@ fn owner_action_refused_reply_surfaces_the_owner_reason() {
     );
 }
 
+/// Spec `owner-actions` "older Owner with the capability": an Owner that
+/// advertises `owner-action` but predates `OpenTerminal` replies
+/// `CommandRejected`; the CLI must report a restart requirement without
+/// waiting for the 6 s read timeout (tray-open-terminal task 3.3, design D2).
+#[test]
+fn owner_action_command_rejected_reply_reports_a_restart_requirement() {
+    use mbv_ctrl::CTRL_CAP_OWNER_ACTION;
+
+    let (client, daemon) = UnixStream::pair().unwrap();
+    let peer = std::thread::spawn(move || {
+        let mut writer = daemon.try_clone().unwrap();
+        let mut reader = BufReader::new(daemon);
+        let mut hello = CtrlHello::current();
+        hello.capabilities.push(CTRL_CAP_OWNER_ACTION.to_string());
+        writeln!(
+            writer,
+            "{}",
+            serde_json::to_string(&CtrlEvent::Hello(hello)).unwrap()
+        )
+        .unwrap();
+        let mut client_hello = String::new();
+        reader.read_line(&mut client_hello).unwrap();
+        writeln!(
+            writer,
+            "{}",
+            serde_json::to_string(&CtrlEvent::UnifiedQueueState(UnifiedQueueStateData {
+                status: PlayerStatus::default(),
+                slots: Vec::new(),
+                active_slot: None,
+                revision: 0,
+                source: QueueSource::Unknown,
+                lineage: mbv_queue::QueueLineage::default(),
+                in_flight_transition: None,
+                queued_latest_transition: None,
+            }))
+            .unwrap()
+        )
+        .unwrap();
+        let mut request = String::new();
+        reader.read_line(&mut request).unwrap();
+        writeln!(
+            writer,
+            "{}",
+            serde_json::to_string(&CtrlEvent::CommandRejected(
+                "unknown command open-terminal".to_string()
+            ))
+            .unwrap()
+        )
+        .unwrap();
+    });
+    let mut reader = BufReader::new(SocketStream::Unix(client));
+    run_owner_action_handshake(&mut reader, OwnerAction::OpenTerminal, || {
+        Ok("owner-action-token".to_string())
+    })
+    .unwrap();
+    let error = send_owner_action(&mut reader, OwnerAction::OpenTerminal).unwrap_err();
+    peer.join().unwrap();
+    assert_eq!(
+        error.to_string(),
+        "the running mbv is too old for --open; restart it"
+    );
+}
+
 #[test]
 fn connect_endpoint_maps_owner_admission_refusals() {
     let exclusive = admission_error(DisconnectReason::ExclusiveOwner { pid: 1234 });
