@@ -14,12 +14,14 @@
 
 use super::TabSelection;
 use super::{Model, PendingEpisodeSelection};
+#[cfg(test)]
 use mbv_components::library_panel::LibraryPanel;
 use mbv_components::tv_content::TvContent;
 use mbv_emby_model::EmbyItem;
 use mbv_queue::ServiceKind;
 use mbv_render::components::tv_wide::TvWideRenderCtx;
 use mbv_ui_model::library::{LibraryKey, LibraryKind};
+#[cfg(test)]
 use mbv_ui_msg::ComponentId;
 use mbv_ui_msg::ShellRequest;
 
@@ -390,22 +392,6 @@ impl Model {
     /// owner map.
     pub(in crate::app) fn sync_tv_content(&mut self) {
         self.push_tv_workspace_content();
-    }
-
-    /// The compact mini-view is the one presentation where a selected flat
-    /// TV episode gets the existing Library Hero overlay. It is synchronized
-    /// after the panel points at the active owner, so opening it never targets
-    /// the previous tab's owner.
-    pub(in crate::app) fn sync_tv_mini_view_hero(&mut self) {
-        let mini_view = self.app.terminal_width < mbv_render::layout::MINI_VIEW_THRESHOLD
-            && matches!(self.app.effective_panel_focus(), super::PanelFocus::Library);
-        if let Some(panel) = self
-            .application
-            .get_component_mut(&ComponentId::Library)
-            .and_then(|component| component.as_any_mut().downcast_mut::<LibraryPanel>())
-        {
-            panel.sync_mini_view_hero_overlay(mini_view);
-        }
     }
 
     pub(in crate::app) fn push_tv_workspace_content(&mut self) {

@@ -64,7 +64,7 @@ struct SplitGeometry {
 /// are never mounted, focused, subscribed, or given a `ComponentId`.
 #[expect(
     clippy::struct_excessive_bools,
-    reason = "focused, split_changed, hero_overlay_open, and mini_view_hero_auto_open are independent panel interaction/lifecycle flags, not one mode (design analysis, issue #804)"
+    reason = "focused, split_changed, and hero_overlay_open are independent panel interaction/lifecycle flags, not one mode (design analysis, issue #804)"
 )]
 #[derive(Debug)]
 pub struct LibraryPanel {
@@ -125,11 +125,6 @@ pub struct LibraryPanel {
     deferred_msg: Option<Msg>,
     focused_summary: Option<SelectionSummary>,
     hero_overlay_open: bool,
-    /// Whether the current overlay was opened automatically for a compact
-    /// flat-episode hero. This remains armed after an explicit dismissal so
-    /// the mini-view sync pass does not immediately reopen the overlay.
-    /// Explicit series overlays are never closed by that pass.
-    mini_view_hero_auto_open: bool,
     overlay_geometry: Option<OverlayGeometry>,
 }
 
@@ -161,7 +156,6 @@ impl LibraryPanel {
             deferred_msg: None,
             focused_summary: None,
             hero_overlay_open: false,
-            mini_view_hero_auto_open: false,
             overlay_geometry: None,
         }
     }
@@ -204,7 +198,6 @@ impl LibraryPanel {
     pub fn reset_presentation(&mut self) {
         self.owners.reset_presentation();
         self.dismiss_hero_overlay();
-        self.mini_view_hero_auto_open = false;
         self.reset_split_gesture();
         self.gestures = MouseGestureState::new();
         self.hovered_selector = None;
@@ -221,7 +214,6 @@ impl LibraryPanel {
         let identity_changed = self.owners.active_key() != key.as_ref();
         if identity_changed {
             self.dismiss_hero_overlay();
-            self.mini_view_hero_auto_open = false;
             if let Some(previous) = self.owners.active_key().cloned()
                 && let Some(owner) = self.owners.get_mut(&previous)
             {

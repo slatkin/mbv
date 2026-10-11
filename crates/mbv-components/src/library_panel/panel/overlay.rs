@@ -18,30 +18,6 @@ impl LibraryPanel {
         true
     }
 
-    /// Synchronize the compact mini-view episode hero. This overlay is a
-    /// presentation of the selected flat episode, not an activation route;
-    /// ordinary Enter handling remains owned by the destination.
-    pub fn sync_mini_view_hero_overlay(&mut self, mini_view: bool) {
-        let available = mini_view
-            && self
-                .owners
-                .active_mut()
-                .is_some_and(|owner| owner.mini_view_hero_available());
-        if available {
-            if !self.hero_overlay_open && !self.mini_view_hero_auto_open {
-                if let Some(owner) = self.owners.active_mut() {
-                    owner.focus_hero_workspace();
-                    owner.set_hero_overlay_open(true);
-                }
-                self.hero_overlay_open = true;
-                self.mini_view_hero_auto_open = true;
-            }
-        } else if self.mini_view_hero_auto_open {
-            self.dismiss_hero_overlay();
-            self.mini_view_hero_auto_open = false;
-        }
-    }
-
     /// Open the Library-local Hero overlay for tests that construct a panel
     /// without an active owner.
     #[cfg(any(test, feature = "test"))]

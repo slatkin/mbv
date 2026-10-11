@@ -2,8 +2,7 @@ use super::{
     EmbyItem, HeroContent, HeroContentData, HeroSlot, InlineSearch, InlineSearchHost, KeyEvent,
     LeafKeyResult, LetterFilter, LetterFilterKind, LibraryContentOwner, LibraryItemIdentity,
     LibraryPanelContent, LibrarySlotEvent, ListSlot, Msg, Pane, SelectorIdentity, SelectorRow,
-    TvContent, TvDisplayMode, TvTreeTarget, Workspace, hero_content_emby,
-    hero_content_series_with_episode,
+    TvContent, TvTreeTarget, Workspace, hero_content_emby, hero_content_series_with_episode,
 };
 use mbv_render::components::tv_wide::HeroImageState;
 
@@ -169,20 +168,6 @@ impl LibraryContentOwner for TvContent {
     fn hero_overlay_enter_available(&mut self) -> bool {
         !self.flat_episode_mode()
             && matches!(self.browser.selected_target(), Some(TvTreeTarget::Show(_)))
-    }
-
-    /// The mini-view hero presents a selected flat episode that exists and is
-    /// playable. That is the Latest contract only: Upcoming rows are premiere
-    /// placeholders for episodes that do not exist yet, so Upcoming never
-    /// offers the overlay — neither auto-open nor a stale Latest selection
-    /// carried across a pill switch keeps it alive.
-    fn mini_view_hero_available(&mut self) -> bool {
-        self.display_mode == TvDisplayMode::Narrow
-            && matches!(
-                self.context.tv_content_mode,
-                Some(mbv_queue::TvContentMode::Latest)
-            )
-            && self.selected_episode_item().is_some()
     }
 
     fn inline_search_session(&mut self) -> Option<&mut dyn InlineSearchHost> {
