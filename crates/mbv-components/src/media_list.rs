@@ -5,6 +5,7 @@
 
 use crate::list::{
     Cursored, MarkSelection, MarkSelectionState, Row, RowFlow, ViewportAnchor, Viewported,
+    scrolled_viewport_offset,
 };
 use mbv_ui_msg::SelectionSummary;
 use std::time::Instant;
@@ -237,6 +238,19 @@ impl<Target> MediaList<Target> {
 }
 
 impl<Target: Clone + Eq> MediaList<Target> {
+    /// D3: the wheel releases the viewport to free following and leaves every
+    /// selection fact — cursor, multi-selection, live range — untouched. The
+    /// canonical owner has no painted geometry, so clamping uses the minimal
+    /// viewport guarantee; the presentation's resolve applies the real height
+    /// on the next frame it paints. #926: the offset arithmetic needs only
+    /// the row count, so the wheel's hot path never builds a row flow.
+    fn scroll_wheel(&mut self, delta: i64) {
+        let offset =
+            scrolled_viewport_offset(Viewported::viewport_offset(self), delta, self.rows.len(), 1);
+        self.set_scroll(offset);
+        Viewported::set_viewport_anchor(self, ViewportAnchor::Free);
+    }
+
     /// D2: restore a freely scrolled viewport to following the selection for
     /// the keyboard and selection operations that own it. Pointer right-click
     /// (`Context`) keeps the user's free scroll instead of jumping the view.
@@ -294,14 +308,7 @@ impl<Target: Clone + Eq> MediaList<Target> {
                 None
             }
             MediaListOperation::Scroll(delta) => {
-                // D3: the wheel releases the viewport to free following
-                // through `scroll_viewport` and leaves every selection fact
-                // — cursor, multi-selection, live range — untouched. The
-                // canonical owner has no painted geometry, so clamping uses
-                // the minimal viewport guarantee; the presentation's resolve
-                // applies the real height on the next frame it paints.
-                let flow = self.row_flow();
-                Viewported::scroll_viewport(self, &flow, 1, delta);
+                self.scroll_wheel(delta);
                 None
             }
             MediaListOperation::First => {

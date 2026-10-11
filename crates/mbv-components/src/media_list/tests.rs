@@ -287,3 +287,55 @@ fn reset_presentation_keeps_rows_and_restores_initial_selection_and_viewport() {
         "the pre-reset painted geometry is invalidated"
     );
 }
+
+/// A target whose clones the test counts: the old wheel path cloned every
+/// selectable target through `row_flow()` (#926), so a large list floods the
+/// counter while a length-only scroll stays constant.
+#[derive(Debug, PartialEq, Eq)]
+struct Counted(u32);
+
+thread_local! {
+    static TARGET_CLONES: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+impl Clone for Counted {
+    fn clone(&self) -> Self {
+        TARGET_CLONES.with(|count| count.set(count.get() + 1));
+        Self(self.0)
+    }
+}
+
+fn counted_row(target: u32) -> MediaListRow<Counted> {
+    MediaListRow::Item {
+        target: Counted(target),
+        primary: String::new(),
+        secondary: None,
+        trailing: None,
+        duration: None,
+        kind: MediaKind::Media,
+        semantic_state: MediaSemanticState::Ordinary,
+    }
+}
+
+/// Regression (#926): the wheel's `Scroll` arm must never build the row
+/// flow — the offset needs only the row count. Over 1,000 rows a notch
+/// clones a bounded handful of targets (the transition's before/after
+/// selection reads), where a flow build would clone all of them.
+#[test]
+fn a_wheel_scroll_never_builds_the_row_flow() {
+    let mut list = MediaList::new();
+    list.set_content((0..1000).map(counted_row).collect());
+    TARGET_CLONES.with(|count| count.set(0));
+
+    let transition = list.delegate_operation(MediaListOperation::Scroll(1));
+
+    assert_eq!(transition.disposition, MediaListDisposition::Consumed);
+    assert_eq!(list.viewport_offset(), 1);
+    TARGET_CLONES.with(|count| {
+        let clones = count.get();
+        assert!(
+            clones <= 4,
+            "the scroll built the row flow: {clones} target clones"
+        );
+    });
+}

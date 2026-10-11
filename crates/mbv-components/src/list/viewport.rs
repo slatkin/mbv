@@ -36,6 +36,32 @@ fn leading_structural_offset<Target: Eq>(flow: &RowFlow<Target>, mut offset: usi
     offset
 }
 
+/// Maximum legal offset for a flow-row count and viewport geometry. The
+/// length-only form of [`Viewported::max_viewport_offset`] for owners that
+/// can report their flow length without building a flow (#926).
+#[must_use]
+pub fn max_viewport_offset_for_len(len: usize, viewport_len: usize) -> usize {
+    len.saturating_sub(viewport_len.max(1))
+}
+
+/// The offset after scrolling `delta` flow rows from `current`, clamped at
+/// flow bounds. The length-only arithmetic of [`Viewported::scroll_viewport`]
+/// for owners that can report their flow length without building a flow
+/// (#926): a wheel scroll never reads a selectable target.
+#[must_use]
+pub fn scrolled_viewport_offset(
+    current: usize,
+    delta: i64,
+    len: usize,
+    viewport_len: usize,
+) -> usize {
+    let max_offset = max_viewport_offset_for_len(len, viewport_len);
+    let current = i64::try_from(current.min(max_offset)).unwrap_or(i64::from(delta.is_negative()));
+    let max = i64::try_from(max_offset).unwrap_or(i64::MAX);
+    let offset = current.saturating_add(delta).clamp(0, max);
+    usize::try_from(offset).unwrap_or(0)
+}
+
 /// Primitive viewport state and shared visibility arithmetic.
 ///
 /// A shape supplies only offset access and its [`Cursored`] target hooks. The
@@ -62,12 +88,8 @@ pub trait Viewported<Target: Eq>: Cursored<Target> {
         viewport_len: usize,
         delta: i64,
     ) -> usize {
-        let max_offset = Self::max_viewport_offset(flow, viewport_len);
-        let current = i64::try_from(self.viewport_offset().min(max_offset))
-            .unwrap_or(i64::from(delta.is_negative()));
-        let max = i64::try_from(max_offset).unwrap_or(i64::MAX);
-        let offset = current.saturating_add(delta).clamp(0, max);
-        let offset = usize::try_from(offset).unwrap_or(0);
+        let offset =
+            scrolled_viewport_offset(self.viewport_offset(), delta, flow.len(), viewport_len);
         self.set_viewport_offset(offset);
         self.set_viewport_anchor(ViewportAnchor::Free);
         offset
@@ -76,7 +98,7 @@ pub trait Viewported<Target: Eq>: Cursored<Target> {
     /// Maximum legal offset for a flow and viewport geometry.
     #[must_use]
     fn max_viewport_offset(flow: &RowFlow<Target>, viewport_len: usize) -> usize {
-        flow.len().saturating_sub(viewport_len.max(1))
+        max_viewport_offset_for_len(flow.len(), viewport_len)
     }
 
     /// Clamp the existing offset in place, preserving it whenever geometry

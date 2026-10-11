@@ -8,7 +8,7 @@ use mbv_text::fuzzy_match::{WordMatcher, word_match_score};
 
 use crate::list::{
     AggregateMarkState, Cursored, MarkSelection, MarkSelectionState, PagingPolicy, Row, RowFlow,
-    ViewportAnchor, Viewported,
+    ViewportAnchor, Viewported, scrolled_viewport_offset,
 };
 
 use super::{
@@ -378,6 +378,18 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
     pub fn apply(&mut self, operation: super::TreeOperation<Target>) -> TreeTransition<Target> {
         let previous = self.selected.clone();
         let previous_marks = self.selected_summary();
+        // #926: the wheel's offset arithmetic needs only the visible row
+        // count, so the scroll skips the full flow build every other
+        // operation resolves its targets through.
+        if let super::TreeOperation::Scroll(delta) = operation {
+            let disposition = if self.apply_wheel_scroll(delta) {
+                TreeConsumed::Consumed
+            } else {
+                TreeConsumed::Unhandled
+            };
+            self.invalidate_paint();
+            return self.transition(previous.as_ref(), &previous_marks, disposition, None);
+        }
         let flow = self.current_flow();
         let Some((disposition, external_intent)) = self.apply_operation(operation, &flow) else {
             return self.transition(
@@ -394,6 +406,21 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
             disposition,
             external_intent,
         )
+    }
+
+    /// The wheel's length-only scroll (#926): the offset arithmetic needs
+    /// only the visible row count, never a selectable target. Returns
+    /// whether the offset moved; a boundary notch does not.
+    fn apply_wheel_scroll(&mut self, delta: i64) -> bool {
+        let height = self.viewport_height().unwrap_or(1);
+        let len = self.visible_len();
+        self.with_state(|state| {
+            let offset_before = Viewported::viewport_offset(state);
+            let offset_after = scrolled_viewport_offset(offset_before, delta, len, height);
+            state.set_viewport_offset(offset_after);
+            state.set_viewport_anchor(ViewportAnchor::Free);
+            offset_before != offset_after
+        })
     }
 
     fn apply_operation(
@@ -430,16 +457,12 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
             | super::TreeOperation::Parent) => self.apply_cursor_operation(&operation, flow),
             super::TreeOperation::Scroll(delta) => {
                 // D3: the wheel releases the viewport to free following
-                // through `scroll_viewport` and leaves the selection and
-                // marks untouched. At a boundary the offset does not move,
-                // which is the explicit `Unhandled` result.
-                let height = self.viewport_height().unwrap_or(1);
-                let moved = self.with_state(|state| {
-                    let offset_before = Viewported::viewport_offset(state);
-                    let offset_after = Viewported::scroll_viewport(state, flow, height, delta);
-                    offset_before != offset_after
-                });
-                if !moved {
+                // and leaves the selection and marks untouched. The scroll
+                // is length-only (#926): `apply` routes it here without
+                // building the flow, and the arm shares the same helper so
+                // a direct call stays correct. At a boundary the offset
+                // does not move, which is the explicit `Unhandled` result.
+                if !self.apply_wheel_scroll(delta) {
                     return None;
                 }
             }

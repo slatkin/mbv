@@ -362,6 +362,63 @@ fn a_wheel_scroll_moves_the_viewport_and_keeps_the_selected_node() {
     assert_eq!(browser.selected_target(), Some(&Target::Branch));
 }
 
+/// A target whose clones the test counts: the old wheel path built the full
+/// flow through `current_flow()` (#926), so a large tree flooded the counter
+/// while a length-only scroll stays constant.
+#[derive(Debug, PartialEq, Eq, Hash)]
+struct Counted(u32);
+
+impl Clone for Counted {
+    fn clone(&self) -> Self {
+        COUNTED_CLONES.with(|count| count.set(count.get() + 1));
+        Self(self.0)
+    }
+}
+
+thread_local! {
+    static COUNTED_CLONES: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+fn counted_node(target: Counted) -> TreeNode<Counted> {
+    TreeNode::new(
+        target,
+        None,
+        "row",
+        "row",
+        MediaSemanticState::Ordinary,
+        TreeMarkPolicy::Direct,
+    )
+}
+
+/// Regression (#926): the tree wheel scroll is length-only — over 1,000
+/// visible rows a notch clones a bounded handful of targets (the
+/// transition's selection reads), where a flow build would clone all of
+/// them.
+#[test]
+fn a_tree_wheel_scroll_never_builds_the_flow() {
+    let mut browser = TreeBrowser::new();
+    browser
+        .reconcile(
+            (0..1000)
+                .map(|i| counted_node(Counted(i)))
+                .collect::<Vec<_>>(),
+        )
+        .unwrap();
+    COUNTED_CLONES.with(|count| count.set(0));
+
+    let transition = browser.apply(TreeOperation::Scroll(1));
+
+    assert_eq!(transition.disposition, super::super::TreeConsumed::Consumed);
+    assert_eq!(browser.viewport_offset, 1);
+    COUNTED_CLONES.with(|count| {
+        let clones = count.get();
+        assert!(
+            clones <= 8,
+            "the scroll built the flow: {clones} target clones"
+        );
+    });
+}
+
 #[rstest]
 #[case::declaration_retained(true, false, true)]
 #[case::children_arrived(false, true, true)]

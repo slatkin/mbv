@@ -289,13 +289,18 @@ impl EmbyLibraryContent {
         if rows.is_empty() {
             return None;
         }
-        // Resolve over the viewport the frame actually painted, then take
-        // the last selectable flow row the frame could have drawn.
-        let viewport = self
+        // #926: the wheel delegation just stored the resting offset, so the
+        // painted window resolves from it and the row count — no second row
+        // flow build. The scroll anchor is always Free after a wheel scroll,
+        // so the resolve is the plain geometry clamp; the selection-pull
+        // branch of a full viewport resolve can never run on this path.
+        let height = usize::from(rect.height).max(1);
+        let offset = self
             .carrier
-            .wide()
-            .resolve_viewport(usize::from(rect.height));
-        let last_flow_row = (viewport.offset + viewport.height)
+            .scroll()
+            .min(crate::list::max_viewport_offset_for_len(rows.len(), height));
+        // Take the last selectable flow row the frame could have drawn.
+        let last_flow_row = (offset + height)
             .saturating_sub(1)
             .min(rows.len().saturating_sub(1));
         let target = rows[..=last_flow_row]

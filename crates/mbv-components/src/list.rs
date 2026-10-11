@@ -27,7 +27,9 @@ pub use self::row_flow::{Row, RowFlow};
 #[doc(inline)]
 pub use self::three_line::ThreeLineFlatList;
 #[doc(inline)]
-pub use self::viewport::{PagingPolicy, ViewportAnchor, Viewported};
+pub use self::viewport::{
+    PagingPolicy, ViewportAnchor, Viewported, max_viewport_offset_for_len, scrolled_viewport_offset,
+};
 
 #[cfg(test)]
 #[derive(Default, Debug)]
