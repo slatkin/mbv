@@ -24,6 +24,10 @@ const SWAP_DEADLINE: Duration = Duration::from_secs(10);
 /// pin-swap "Second click during a swap").
 const BUSY_MESSAGE: &str = "a panel swap is already running";
 
+/// The reason a second `open` returns while an Open launch is in flight
+/// (tray-open-terminal design D3).
+const OPEN_BUSY_MESSAGE: &str = "mbv is already opening";
+
 /// The one-shot admission token of the swap currently `Awaiting` its
 /// replacement (tray-pin-swap design D4). The machine publishes it when it
 /// spawns the replacement and clears it whenever the swap leaves `Awaiting`;
@@ -57,6 +61,53 @@ impl PendingSwapToken {
     }
 }
 
+/// What the launch in flight is for. `Preparing` is always a swap (it has a
+/// target and waits for `SwapPrepared`), so `LaunchKind` lives on `Awaiting`
+/// only (tray-open-terminal design D3).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum LaunchKind {
+    /// Replace one Client with another (the Pin swap).
+    Swap,
+    /// Start a fresh terminal Client with no effect on any attached Client.
+    Open,
+}
+
+impl LaunchKind {
+    /// The busy refusal for a second request while this kind is in flight.
+    fn busy(self) -> &'static str {
+        match self {
+            LaunchKind::Swap => BUSY_MESSAGE,
+            LaunchKind::Open => OPEN_BUSY_MESSAGE,
+        }
+    }
+
+    /// The abandon reason when the deadline passes before the launch
+    /// attaches.
+    fn timed_out(self) -> &'static str {
+        match self {
+            LaunchKind::Swap => "panel swap timed out; the old client stays attached",
+            LaunchKind::Open => "opening mbv timed out",
+        }
+    }
+
+    /// The abandon reason when the replacement process could not start.
+    fn spawn_failed(self, program: &str, error: &std::io::Error) -> String {
+        match self {
+            LaunchKind::Swap => format!("panel swap could not start {program}: {error}"),
+            LaunchKind::Open => format!("could not open mbv: could not start {program}: {error}"),
+        }
+    }
+
+    /// The abandon reason when the replacement process exited before it
+    /// attached.
+    fn child_failed(self) -> &'static str {
+        match self {
+            LaunchKind::Swap => "panel swap abandoned: the new client exited before attaching",
+            LaunchKind::Open => "opening mbv failed: the new client exited before attaching",
+        }
+    }
+}
+
 /// One swap in flight, from the click to the replacement Client's attach or
 /// the abandon (design D3).
 enum Phase {
@@ -73,6 +124,7 @@ enum Phase {
         target: Option<CtrlClientId>,
         token: String,
         deadline: Instant,
+        kind: LaunchKind,
     },
 }
 
@@ -116,7 +168,7 @@ impl PinSwapState {
         ctrl_clients: &ClientRegistry,
     ) -> Result<(), String> {
         if !matches!(self.phase, Phase::Idle) {
-            return Err(BUSY_MESSAGE.to_string());
+            return Err(self.busy_message().to_string());
         }
         let deadline = now + SWAP_DEADLINE;
         let clients = ctrl_clients.lock().unwrap();
@@ -149,8 +201,40 @@ impl PinSwapState {
                     deadline,
                 };
             }
-            None => self.spawn_replacement(command, None, deadline),
+            None => self.spawn_replacement(command, None, deadline, LaunchKind::Swap),
         }
+        Ok(())
+    }
+
+    /// The busy refusal for a request while the machine is not `Idle`. The
+    /// text names the kind that is in flight: `Preparing` is always a swap.
+    fn busy_message(&self) -> &'static str {
+        match &self.phase {
+            Phase::Idle => BUSY_MESSAGE,
+            Phase::Preparing { .. } => LaunchKind::Swap.busy(),
+            Phase::Awaiting { kind, .. } => kind.busy(),
+        }
+    }
+
+    /// Opens a fresh terminal Client from an Owner action (tray-open-terminal
+    /// design D3). It reuses the swap launch machine with no target: no
+    /// `SwapPrepare` is sent, the registry is not read, and no attached Client
+    /// is affected. The replacement attaches with the one-shot token and the
+    /// admission path completes the launch as it completes a swap.
+    pub(crate) fn open(&mut self, now: Instant) -> Result<(), String> {
+        if !matches!(self.phase, Phase::Idle) {
+            return Err(self.busy_message().to_string());
+        }
+        let deadline = now + SWAP_DEADLINE;
+        let command = match (self.swap_command)(SwapDirection::Unpin) {
+            Ok(command) => command,
+            Err(reason) => {
+                tracing::warn!(name: "daemon.pin_swap.unresolvable", target: "pin_swap", reason = %reason, "terminal client command unresolvable");
+                (self.notify)(&reason);
+                return Err(reason);
+            }
+        };
+        self.spawn_replacement(command, None, deadline, LaunchKind::Open);
         Ok(())
     }
 
@@ -167,7 +251,7 @@ impl PinSwapState {
                 deadline,
             } if target == client_id => {
                 tracing::info!(name: "daemon.pin_swap.prepared", target: "pin_swap", client = %target, "swap target saved launch state; spawning the replacement");
-                self.spawn_replacement(command, Some(target), deadline);
+                self.spawn_replacement(command, Some(target), deadline, LaunchKind::Swap);
             }
             other => self.phase = other,
         }
@@ -197,13 +281,18 @@ impl PinSwapState {
     /// a non-success exit while `Awaiting` abandons the swap: a terminal
     /// emulator that forks and exits 0 is normal and is ignored (design D5).
     pub(crate) fn on_child_exited(&mut self, token: &str, success: bool) {
-        let Phase::Awaiting { token: pending, .. } = &self.phase else {
+        let Phase::Awaiting {
+            token: pending,
+            kind,
+            ..
+        } = &self.phase
+        else {
             return;
         };
         if pending != token || success {
             return;
         }
-        let reason = "panel swap abandoned: the new client exited before attaching";
+        let reason = kind.child_failed();
         tracing::warn!(name: "daemon.pin_swap.child_failed", target: "pin_swap", reason);
         self.abandon(reason);
     }
@@ -211,14 +300,14 @@ impl PinSwapState {
     /// Abandons the swap when the deadline passes without the replacement
     /// attaching (checked with the injected `now`, so tests need no sleep).
     pub(crate) fn poll(&mut self, now: Instant) {
-        let deadline = match &self.phase {
+        let (deadline, reason) = match &self.phase {
             Phase::Idle => return,
-            Phase::Preparing { deadline, .. } | Phase::Awaiting { deadline, .. } => *deadline,
+            Phase::Preparing { deadline, .. } => (*deadline, LaunchKind::Swap.timed_out()),
+            Phase::Awaiting { deadline, kind, .. } => (*deadline, kind.timed_out()),
         };
         if now < deadline {
             return;
         }
-        let reason = "panel swap timed out; the old client stays attached";
         tracing::warn!(name: "daemon.pin_swap.timeout", target: "pin_swap", reason);
         self.abandon(reason);
     }
@@ -261,6 +350,7 @@ impl PinSwapState {
         mut command: Command,
         target: Option<CtrlClientId>,
         deadline: Instant,
+        kind: LaunchKind,
     ) {
         let token = uuid::Uuid::new_v4().to_string();
         command.env(SWAP_TOKEN_ENV, &token);
@@ -281,11 +371,12 @@ impl PinSwapState {
                     target,
                     token,
                     deadline,
+                    kind,
                 };
             }
             Err(error) => {
                 let program = command.get_program().to_string_lossy();
-                let reason = format!("panel swap could not start {program}: {error}");
+                let reason = kind.spawn_failed(&program, &error);
                 tracing::warn!(name: "daemon.pin_swap.spawn_failed", target: "pin_swap", program = %program, error = %error, "panel swap spawn failed");
                 self.abandon(&reason);
             }
@@ -303,9 +394,16 @@ mod tests {
 
     /// A swap-command hook that never runs: the returned command is only
     /// carried through the `Preparing` phase, never spawned (no real process
-    /// in any test).
+    /// in the tests that use this hook).
     fn fake_command() -> SwapCommandHook {
         Box::new(|_direction| Ok(Command::new("mbv-test-never-spawned")))
+    }
+
+    /// A swap-command hook whose command spawns a real, instantly exiting
+    /// process, so a launch reaches `Awaiting` for real. Used only by the
+    /// `open` tests, which exercise the no-target spawn path.
+    fn spawning_command() -> SwapCommandHook {
+        Box::new(|_direction| Ok(Command::new("true")))
     }
 
     fn unresolvable_command() -> SwapCommandHook {
@@ -454,6 +552,7 @@ mod tests {
             target,
             token: "token-1".to_string(),
             deadline: Instant::now(),
+            kind: LaunchKind::Swap,
         };
 
         swap.on_swap_admitted("token-1", &clients);
@@ -485,6 +584,7 @@ mod tests {
             target,
             token: "token-live".to_string(),
             deadline: Instant::now(),
+            kind: LaunchKind::Swap,
         };
         pending.publish("token-live".to_string());
 
@@ -497,5 +597,69 @@ mod tests {
         assert!(pending.take_matching(Some("token-live")));
         assert!(client_rx.try_recv().is_err());
         assert_eq!(notified(&calls), Vec::<String>::new());
+    }
+
+    /// Contract: tray-open-terminal design D3 / tasks 3.2 — `open` launches
+    /// the replacement with no target and no `SwapPrepare` to any attached
+    /// Client, and the admit of its one-shot token completes the launch
+    /// without a `SwapQuit` (nothing is being replaced).
+    #[test]
+    fn open_spawns_without_swap_prepare_and_admit_sends_no_swap_quit() {
+        let (clients, client_rx) = registry_with_terminal_client();
+        let (notify, calls) = notify_recorder();
+        let (merged_tx, _merged_rx) = mpsc::channel::<DaemonEvent>();
+        let pending = pending_token();
+        let mut swap =
+            PinSwapState::new(spawning_command(), notify, merged_tx, Arc::clone(&pending));
+        let now = Instant::now();
+
+        swap.open(now).unwrap();
+
+        assert!(
+            client_rx.try_recv().is_err(),
+            "open must not send SwapPrepare"
+        );
+        assert!(
+            matches!(
+                &swap.phase,
+                Phase::Awaiting {
+                    target: None,
+                    kind: LaunchKind::Open,
+                    ..
+                }
+            ),
+            "open must reach Awaiting with kind Open and no target"
+        );
+        let Phase::Awaiting { token, .. } = &swap.phase else {
+            panic!("open did not reach Awaiting");
+        };
+        let token = token.clone();
+        assert_eq!(notified(&calls), Vec::<String>::new());
+
+        swap.on_swap_admitted(&token, &clients);
+
+        assert!(
+            client_rx.try_recv().is_err(),
+            "admit must not send SwapQuit"
+        );
+        assert!(matches!(swap.phase, Phase::Idle));
+        assert_eq!(notified(&calls), Vec::<String>::new());
+    }
+
+    /// Contract: tray-open-terminal design D3 / tasks 3.2 — past the deadline
+    /// without the replacement attaching, the Open launch abandons with the
+    /// Open timeout text and the machine returns to `Idle`.
+    #[test]
+    fn open_deadline_notifies_opening_timed_out() {
+        let (notify, calls) = notify_recorder();
+        let (merged_tx, _merged_rx) = mpsc::channel::<DaemonEvent>();
+        let mut swap = PinSwapState::new(spawning_command(), notify, merged_tx, pending_token());
+        let start = Instant::now();
+
+        swap.open(start).unwrap();
+        swap.poll(start + SWAP_DEADLINE);
+
+        assert_eq!(notified(&calls), vec!["opening mbv timed out".to_string()]);
+        assert!(matches!(swap.phase, Phase::Idle));
     }
 }
