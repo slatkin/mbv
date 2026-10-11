@@ -1,6 +1,6 @@
 use crate::app::{App, BrowseEvent, BrowseLevel, LibEvent, ModelContentEvent};
 use mbv_emby::EmbyClient;
-use mbv_emby_model::EmbyItem;
+use mbv_emby_model::{EmbyItem, UpcomingPremiere};
 use mbv_ui_model::browse::{BrowseResting, ServerRows};
 
 type BrowseRefresh = (
@@ -32,7 +32,7 @@ trait TvUpcomingSource {
         &self,
         parent_id: &str,
         limit: usize,
-    ) -> Result<Vec<EmbyItem>, mbv_emby::EmbyError>;
+    ) -> Result<Vec<UpcomingPremiere>, mbv_emby::EmbyError>;
 }
 
 impl TvUpcomingSource for EmbyClient {
@@ -40,7 +40,7 @@ impl TvUpcomingSource for EmbyClient {
         &self,
         parent_id: &str,
         limit: usize,
-    ) -> Result<Vec<EmbyItem>, mbv_emby::EmbyError> {
+    ) -> Result<Vec<UpcomingPremiere>, mbv_emby::EmbyError> {
         EmbyClient::get_upcoming(self, parent_id, limit)
     }
 }
@@ -102,19 +102,21 @@ fn build_tv_latest_level<S: TvLatestSource>(
     })
 }
 
+/// The Upcoming level holds no items: premieres are not media, so they travel
+/// beside the level and live in `App::tv_upcoming_snapshots`.
 fn build_tv_upcoming_level<S: TvUpcomingSource>(
     source: &S,
     parent_id: String,
     title: String,
-) -> Result<BrowseLevel, mbv_emby::EmbyError> {
-    let items = source.get_upcoming(&parent_id, 30)?;
-    let total_count = items.len();
+) -> Result<(BrowseLevel, Vec<UpcomingPremiere>), mbv_emby::EmbyError> {
+    let premieres = source.get_upcoming(&parent_id, 30)?;
+    let total_count = premieres.len();
     let (item_types, sort_by, sort_order) =
         tv_mode_fetch_fields(&mbv_queue::TvContentMode::Upcoming);
-    Ok(BrowseLevel {
+    let level = BrowseLevel {
         parent_id,
         title,
-        items,
+        items: Vec::new(),
         rows: ServerRows::complete(total_count),
         resting: BrowseResting::new(0, 0),
         item_types: item_types.map(str::to_string),
@@ -126,7 +128,8 @@ fn build_tv_upcoming_level<S: TvUpcomingSource>(
         letter_filter: None,
         tv_content_mode: None,
         music_grouping: None,
-    })
+    };
+    Ok((level, premieres))
 }
 
 impl App {
@@ -337,10 +340,11 @@ impl App {
     pub(in crate::app) fn accept_tv_upcoming_snapshot(
         &mut self,
         library_id: &str,
-        items: Vec<EmbyItem>,
+        premieres: Vec<UpcomingPremiere>,
     ) {
+        let total_count = premieres.len();
         self.tv_upcoming_snapshots
-            .insert(library_id.to_string(), items.clone());
+            .insert(library_id.to_string(), premieres);
         let Some(lib) = self
             .libs
             .iter_mut()
@@ -355,8 +359,7 @@ impl App {
             return;
         }
         align_level_to_tv_mode(level, &mbv_queue::TvContentMode::Upcoming);
-        level.items = items;
-        level.rows = ServerRows::complete(level.items.len());
+        level.rows = ServerRows::complete(total_count);
         level.loading = false;
     }
 
@@ -395,12 +398,32 @@ impl App {
         {
             align_level_to_tv_mode(level, &mbv_queue::TvContentMode::Upcoming);
         }
-        self.spawn_tv_content(
-            lib_idx,
-            parent_id,
-            title,
-            build_tv_upcoming_level::<EmbyClient>,
-        );
+        let Some(client) = self.emby_snapshot() else {
+            return;
+        };
+        let tx = self.channels.lib_tx.clone();
+        std::thread::spawn(move || {
+            match build_tv_upcoming_level(&client, parent_id.clone(), title) {
+                Ok((level, premieres)) => {
+                    // The snapshot lands before the level so the projection
+                    // that follows the level's `Loaded` already has its rows.
+                    let _ = tx.send(LibEvent::ModelContent(
+                        ModelContentEvent::TvUpcomingSnapshotFetched {
+                            library_id: parent_id.clone(),
+                            items: premieres,
+                        },
+                    ));
+                    let _ = tx.send(LibEvent::Browse(BrowseEvent::Loaded {
+                        lib_idx,
+                        parent_id,
+                        level: Box::new(level),
+                    }));
+                }
+                Err(e) => {
+                    let _ = tx.send(LibEvent::Error(e.to_string()));
+                }
+            }
+        });
     }
 }
 

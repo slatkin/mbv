@@ -308,7 +308,7 @@ pub enum ModelContentEvent {
     /// active Upcoming root level that is waiting for them.
     TvUpcomingSnapshotFetched {
         library_id: String,
-        items: Vec<EmbyItem>,
+        items: Vec<mbv_emby_model::UpcomingPremiere>,
     },
     /// The eager TV Upcoming fetch failed: the shell clears the per-session
     /// request mark so a later pill selection can retry, and unsets the

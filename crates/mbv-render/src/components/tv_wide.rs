@@ -8,7 +8,7 @@
 //! read.
 
 use crate::components::list_rows::LibraryListRenderCtx;
-use mbv_emby_model::EmbyItem;
+use mbv_emby_model::{EmbyItem, UpcomingPremiere};
 use mbv_ui_model::browse::SeriesDetail;
 
 /// All App-derived data needed to paint the wide TV workspace.
@@ -28,6 +28,9 @@ pub struct TvWideRenderCtx {
     pub focused: bool,
     pub show_letter_pills: bool,
     pub tv_content_mode: Option<mbv_queue::TvContentMode>,
+    /// The library's Upcoming premieres from the per-session snapshot. Empty
+    /// outside Upcoming mode; the Upcoming level itself keeps no items.
+    pub upcoming: Vec<UpcomingPremiere>,
     /// The shell-projected hero image state (design D9/D16): the panel's
     /// shared `EmbyItem` producer reads it; painting never fetches.
     pub hero_image: HeroImageState,
@@ -63,6 +66,7 @@ impl TvWideRenderCtx {
             focused: false,
             show_letter_pills,
             tv_content_mode: None,
+            upcoming: Vec::new(),
             hero_image: HeroImageState::None,
         }
     }

@@ -481,6 +481,14 @@ impl Model {
         );
         context.set_tv_content_mode(tv_content_mode.clone());
         context.set_series_details(series_details);
+        if tv_content_mode == Some(mbv_queue::TvContentMode::Upcoming) {
+            context.upcoming = self
+                .app
+                .tv_upcoming_snapshots
+                .get(&library_id)
+                .cloned()
+                .unwrap_or_default();
+        }
         let latest_source =
             crate::app::state::playback::DestinationLatestSource::Emby(library_id.clone());
         if tv_content_mode == Some(mbv_queue::TvContentMode::Latest)

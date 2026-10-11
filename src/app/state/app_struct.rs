@@ -132,7 +132,8 @@ pub struct App {
     /// the eager fetch runs once when the TV tab loads, pill selection
     /// materializes the root level from here instead of refetching, and only
     /// the focused manual refresh replaces the snapshot.
-    pub(in crate::app) tv_upcoming_snapshots: std::collections::HashMap<String, Vec<EmbyItem>>,
+    pub(in crate::app) tv_upcoming_snapshots:
+        std::collections::HashMap<String, Vec<mbv_emby_model::UpcomingPremiere>>,
     /// TV libraries whose eager Upcoming fetch was already requested this
     /// session, so tab re-entry never re-requests it. Cleared when that one
     /// fetch fails, so a later selection can retry.

@@ -37,6 +37,20 @@ fn home_emby_latest_eligible(collection_type: &str) -> bool {
 }
 
 impl App {
+    /// Whether `lib_idx` is a TV library root whose selected content mode is
+    /// `mode` (the level's mode, else the library's).
+    fn is_tv_root_in_mode(&self, lib_idx: usize, mode: &mbv_queue::TvContentMode) -> bool {
+        let lib = &self.libs[lib_idx];
+        lib.library.collection_type == "tvshows"
+            && lib.nav_stack.len() == 1
+            && (lib.tv_content_mode.as_ref() == Some(mode)
+                || lib
+                    .nav_stack
+                    .last()
+                    .and_then(|level| level.tv_content_mode.as_ref())
+                    == Some(mode))
+    }
+
     pub(in crate::app) fn refresh_lib(&mut self, lib_idx: usize) {
         // Defensive bounds check: the dispatch front door normalizes a stale
         // destination first, but async Service removal can invalidate the
@@ -57,15 +71,12 @@ impl App {
         {
             self.spawn_emby_latest_snapshot(self.libs[lib_idx].library.id.clone());
         }
-        if self.libs[lib_idx].library.collection_type == "tvshows"
-            && self.libs[lib_idx].nav_stack.len() == 1
-            && (self.libs[lib_idx].tv_content_mode == Some(mbv_queue::TvContentMode::Latest)
-                || self.libs[lib_idx]
-                    .nav_stack
-                    .last()
-                    .and_then(|level| level.tv_content_mode.as_ref())
-                    == Some(&mbv_queue::TvContentMode::Latest))
-        {
+        // Latest and Upcoming rows are not a ranged library listing: their
+        // refresh is the mode's own fetch. The Upcoming one replaces the
+        // per-session snapshot (user rule, 2026-10-11: F5 is the only
+        // re-fetch while Upcoming is focused).
+        let latest = self.is_tv_root_in_mode(lib_idx, &mbv_queue::TvContentMode::Latest);
+        if latest || self.is_tv_root_in_mode(lib_idx, &mbv_queue::TvContentMode::Upcoming) {
             let parent_id = self.libs[lib_idx]
                 .nav_stack
                 .last()
@@ -73,10 +84,16 @@ impl App {
             if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
                 level.loading = true;
             }
-            if let Some(parent_id) = parent_id {
-                let title = self.libs[lib_idx].library.name.clone();
-                self.spawn_tv_latest(lib_idx, parent_id, title);
-            }
+            let Some(parent_id) = parent_id else {
+                return;
+            };
+            let title = self.libs[lib_idx].library.name.clone();
+            let spawn = if latest {
+                Self::spawn_tv_latest
+            } else {
+                Self::spawn_tv_upcoming
+            };
+            spawn(self, lib_idx, parent_id, title);
             return;
         }
         if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut() {

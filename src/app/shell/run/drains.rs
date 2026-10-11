@@ -318,26 +318,17 @@ impl Model {
     }
 
     /// Applies one captured TV root completion to its per-session snapshot:
-    /// the Latest arm refreshes the shell-owned latest snapshot, the Upcoming
-    /// arm the App-owned per-session Upcoming store.
+    /// the Latest arm refreshes the shell-owned latest snapshot. An Upcoming
+    /// completion carries no items: its premieres arrive as
+    /// `TvUpcomingSnapshotFetched`.
     fn apply_tv_root_completion(
         &mut self,
         library_id: &str,
         mode: Option<&mbv_queue::TvContentMode>,
         items: Vec<mbv_queue::QueueItem>,
     ) {
-        match mode {
-            Some(mbv_queue::TvContentMode::Latest) => {
-                self.update_emby_latest_snapshot(library_id, items);
-            }
-            Some(mbv_queue::TvContentMode::Upcoming) => {
-                let items = items
-                    .into_iter()
-                    .filter_map(|item| item.as_emby().cloned())
-                    .collect();
-                self.app.accept_tv_upcoming_snapshot(library_id, items);
-            }
-            _ => {}
+        if mode == Some(&mbv_queue::TvContentMode::Latest) {
+            self.update_emby_latest_snapshot(library_id, items);
         }
     }
 

@@ -1,5 +1,5 @@
-use crate::app::{App, BrowseEvent, BrowseLevel, LibEvent, PAGE_SIZE};
-use mbv_emby_model::EmbyItem;
+use crate::app::{App, BrowseEvent, BrowseLevel, LibEvent, ModelContentEvent, PAGE_SIZE};
+use mbv_emby_model::{EmbyItem, UpcomingPremiere};
 use mbv_ui_model::browse::{BrowseResting, ServerRows};
 
 fn restored_tv_content_mode(
@@ -13,6 +13,34 @@ fn restored_tv_content_mode(
             saved_mode,
         )
     })
+}
+
+/// One restored Upcoming level: the level keeps no items, so the premieres go
+/// to `upcoming` for the per-session snapshot.
+fn restore_upcoming_level(
+    client: &mbv_emby::EmbyClient,
+    saved_level: &mbv_queue::LibraryPositionLevel,
+    upcoming: &mut Option<(String, Vec<UpcomingPremiere>)>,
+) -> Result<(Vec<EmbyItem>, usize, usize), mbv_ui_model::UiModelError> {
+    let premieres = client
+        .get_upcoming(&saved_level.parent_id, 30)
+        .map_err(mbv_ui_model::UiModelError::operation_source)?;
+    let total_count = premieres.len();
+    *upcoming = Some((saved_level.parent_id.clone(), premieres));
+    Ok((Vec::new(), total_count, total_count))
+}
+
+/// Delivers the premieres a restore fetched; the snapshot lands before the
+/// restored position so the projection that follows already has its rows.
+fn send_restored_upcoming(
+    tx: &std::sync::mpsc::Sender<LibEvent>,
+    upcoming: Option<(String, Vec<UpcomingPremiere>)>,
+) {
+    if let Some((library_id, items)) = upcoming {
+        let _ = tx.send(LibEvent::ModelContent(
+            ModelContentEvent::TvUpcomingSnapshotFetched { library_id, items },
+        ));
+    }
 }
 
 fn restored_letter_filter(
@@ -178,6 +206,7 @@ impl App {
             self.libs[lib_idx].library.collection_type.as_str(),
         );
         std::thread::spawn(move || {
+            let mut upcoming = None;
             let restored = crate::app::restore_library_position_with_fetched_rows_for_kind(
                 &saved,
                 visible_rows,
@@ -196,11 +225,7 @@ impl App {
                         return Ok((items, total_count, total_count));
                     }
                     if matches!(tv_mode, Some(mbv_queue::TvContentMode::Upcoming)) {
-                        let items = client
-                            .get_upcoming(&saved_level.parent_id, 30)
-                            .map_err(mbv_ui_model::UiModelError::operation_source)?;
-                        let total_count = items.len();
-                        return Ok((items, total_count, total_count));
+                        return restore_upcoming_level(&client, saved_level, &mut upcoming);
                     }
                     let letter_filter = match tv_mode {
                         Some(mbv_queue::TvContentMode::Range(index)) => {
@@ -256,6 +281,7 @@ impl App {
             );
             match restored {
                 Ok(Some((position, nav_stack))) => {
+                    send_restored_upcoming(&tx, upcoming);
                     let _ = tx.send(LibEvent::Browse(BrowseEvent::RestoreLibraryPosition {
                         lib_idx,
                         requested_position: saved,
