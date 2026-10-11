@@ -316,7 +316,7 @@ pub fn run_local_daemon_main() -> ! {
                     shutdown_tx,
                     handle.status,
                     handle.transport_tx,
-                    handle.pinned_client_attached,
+                    handle.attached_clients,
                 )
             }),
             swap_command: Box::new(move |direction| {

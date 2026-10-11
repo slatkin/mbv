@@ -87,7 +87,7 @@ pub fn connect_client(clients: &mut CtrlClients) -> (u64, mpsc::Receiver<CtrlOut
 pub fn test_clients(merged_tx: mpsc::Sender<crate::DaemonEvent>) -> CtrlClients {
     CtrlClients::new(
         merged_tx,
-        Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        Arc::new(mbv_ctrl::AttachedClientsCell::default()),
         Arc::new(crate::PendingSwapToken::default()),
     )
 }

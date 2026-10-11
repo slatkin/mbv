@@ -115,7 +115,7 @@ fn test_loop_with_queue(role: crate::DaemonRole, items: Vec<QueueItem>, active: 
         shared_queue: shared_queue_state(),
         ctrl_clients: Arc::new(Mutex::new(CtrlClients::new(
             merged_tx.clone(),
-            Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            Arc::new(mbv_ctrl::AttachedClientsCell::default()),
             Arc::new(crate::PendingSwapToken::default()),
         ))),
         client: Arc::new(Mutex::new(EmbyClient::new(Config::default()))),

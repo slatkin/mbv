@@ -1,7 +1,6 @@
 use ksni::blocking::TrayMethods;
 use mbv_ctrl::player::{PlayerCommand, PlayerStatus};
-use mbv_ctrl::{Direction, OwnerAction, TransportCommand};
-use std::sync::atomic::{AtomicBool, Ordering};
+use mbv_ctrl::{AttachedClients, AttachedClientsCell, Direction, OwnerAction, TransportCommand};
 use std::sync::mpsc::{Sender, SyncSender};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -33,9 +32,9 @@ fn play_pause_label(status: &PlayerStatus) -> &'static str {
 
 /// Label for the one Pin swap item: the direction the Owner's swap machine
 /// will pick is derived from the registry at click time; this label only
-/// mirrors the shared "pinned Client attached" flag (tray-pin-swap D3).
-fn pin_swap_label(pinned_client_attached: bool) -> &'static str {
-    if pinned_client_attached {
+/// mirrors the shared attached-Clients state (tray-open-terminal D1).
+fn pin_swap_label(attached_clients: AttachedClients) -> &'static str {
+    if attached_clients == AttachedClients::Pinned {
         "Unpin"
     } else {
         "Pin"
@@ -49,10 +48,10 @@ struct MbvTray {
     status: Arc<Mutex<PlayerStatus>>,
     /// Owner transport channel; relative steps are resolved by the daemon owner.
     transport_tx: Sender<TransportCommand>,
-    /// "A pinned Client is attached", refreshed by the ctrl registry on
-    /// connect and disconnect (tray-pin-swap D3) -- read fresh each time the
-    /// menu is opened, like `status`.
-    pinned_client_attached: Arc<AtomicBool>,
+    /// Which local Clients are attached, refreshed by the ctrl registry on
+    /// connect and disconnect (tray-open-terminal D1) -- read fresh each
+    /// time the menu is opened, like `status`.
+    attached_clients: Arc<AttachedClientsCell>,
 }
 
 impl MbvTray {
@@ -162,7 +161,7 @@ impl ksni::Tray for MbvTray {
         items.push(MenuItem::Separator);
         items.push(
             StandardItem {
-                label: pin_swap_label(self.pinned_client_attached.load(Ordering::SeqCst)).into(),
+                label: pin_swap_label(self.attached_clients.load()).into(),
                 activate: Box::new(|tray: &mut Self| {
                     // Owner actions route through the same transport channel
                     // as the player commands; the daemon owner resolves the
@@ -216,18 +215,18 @@ pub fn spawn(
     shutdown_tx: SyncSender<()>,
     status: Arc<Mutex<PlayerStatus>>,
     transport_tx: Sender<TransportCommand>,
-    pinned_client_attached: Arc<AtomicBool>,
+    attached_clients: Arc<AttachedClientsCell>,
 ) -> Option<Box<dyn Send>> {
-    let flag_for_watcher = Arc::clone(&pinned_client_attached);
+    let state_for_watcher = Arc::clone(&attached_clients);
     MbvTray {
         shutdown_tx,
         status,
         transport_tx,
-        pinned_client_attached,
+        attached_clients,
     }
     .spawn()
     .map(|handle| {
-        spawn_pinned_flag_watcher(handle.clone(), flag_for_watcher);
+        spawn_pinned_flag_watcher(handle.clone(), state_for_watcher);
         Box::new(RunningTray(Some(handle))) as Box<dyn Send>
     })
     .map_err(|e| {
@@ -259,17 +258,17 @@ pub fn spawn(
 /// regardless.
 fn spawn_pinned_flag_watcher(
     handle: ksni::blocking::Handle<MbvTray>,
-    pinned_client_attached: Arc<AtomicBool>,
+    attached_clients: Arc<AttachedClientsCell>,
 ) {
     let _ = std::thread::Builder::new()
         .name("mbv-tray-flag-watch".into())
         .spawn(move || {
-            let mut attached = pinned_client_attached.load(Ordering::SeqCst);
+            let mut attached = attached_clients.load();
             loop {
                 if handle.is_closed() {
                     return;
                 }
-                let now = pinned_client_attached.load(Ordering::SeqCst);
+                let now = attached_clients.load();
                 if now != attached {
                     attached = now;
                     handle.update(|_| {});
@@ -335,13 +334,18 @@ mod tests {
         st: PlayerStatus,
         pinned_client_attached: bool,
     ) -> (MbvTray, std::sync::mpsc::Receiver<TransportCommand>) {
-        spy_tray_with_flag(Arc::new(AtomicBool::new(pinned_client_attached)), st)
+        let state = if pinned_client_attached {
+            AttachedClients::Pinned
+        } else {
+            AttachedClients::None
+        };
+        spy_tray_with_flag(Arc::new(AttachedClientsCell::new(state)), st)
     }
 
-    /// Like [`spy_tray`], but the caller keeps the shared flag `Arc`, so a
+    /// Like [`spy_tray`], but the caller keeps the shared cell `Arc`, so a
     /// test can flip it after construction.
     fn spy_tray_with_flag(
-        pinned_client_attached: Arc<AtomicBool>,
+        attached_clients: Arc<AttachedClientsCell>,
         st: PlayerStatus,
     ) -> (MbvTray, std::sync::mpsc::Receiver<TransportCommand>) {
         let (transport_tx, cmd_rx) = std::sync::mpsc::channel();
@@ -350,7 +354,7 @@ mod tests {
             shutdown_tx,
             status: Arc::new(Mutex::new(st)),
             transport_tx,
-            pinned_client_attached,
+            attached_clients,
         };
         (tray, cmd_rx)
     }
@@ -442,13 +446,13 @@ mod tests {
     /// needs the real ksni service and is exercised only live.
     #[test]
     fn pin_swap_label_follows_a_flag_flip_after_construction() {
-        let flag = Arc::new(AtomicBool::new(false));
-        let (tray, _rx) = spy_tray_with_flag(Arc::clone(&flag), status(true, false, "A Song"));
+        let state = Arc::new(AttachedClientsCell::new(AttachedClients::None));
+        let (tray, _rx) = spy_tray_with_flag(Arc::clone(&state), status(true, false, "A Song"));
 
         assert_eq!(pin_swap_label_of(&tray), "Pin");
-        flag.store(true, Ordering::SeqCst);
+        state.store(AttachedClients::Pinned);
         assert_eq!(pin_swap_label_of(&tray), "Unpin");
-        flag.store(false, Ordering::SeqCst);
+        state.store(AttachedClients::None);
         assert_eq!(pin_swap_label_of(&tray), "Pin");
     }
 

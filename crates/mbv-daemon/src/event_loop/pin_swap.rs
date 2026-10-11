@@ -335,7 +335,7 @@ mod tests {
         let (merged_tx, _merged_rx) = mpsc::channel::<DaemonEvent>();
         let clients = Arc::new(Mutex::new(CtrlClients::new(
             merged_tx,
-            Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            Arc::new(mbv_ctrl::AttachedClientsCell::default()),
             Arc::new(PendingSwapToken::default()),
         )));
         let (client_tx, client_rx) = mpsc::channel::<CtrlOutbound>();

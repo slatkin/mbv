@@ -1,11 +1,13 @@
 //! Ctrl transport registry shared by the daemon event-loop modules.
 
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use mbv_ctrl::{CtrlAudiobookshelfCapabilities, CtrlEvent, DisconnectReason};
+use mbv_ctrl::{
+    AttachedClients, AttachedClientsCell, CtrlAudiobookshelfCapabilities, CtrlEvent,
+    DisconnectReason,
+};
 
 pub(crate) type CtrlClientId = u64;
 pub(crate) type CtrlSender = mpsc::Sender<CtrlOutbound>;
@@ -35,9 +37,9 @@ pub(crate) struct CtrlClients {
     pub(crate) shutting_down: bool,
     pub(crate) authority: AuthorityHolder,
     /// Shared with the [`DaemonPlayerHandle`](crate::DaemonPlayerHandle) so
-    /// the Tray label can read "pinned Client attached" without touching the
-    /// registry. Refreshed on connect and disconnect (design D3).
-    pinned_client_attached: Arc<AtomicBool>,
+    /// the Tray can read which local Clients are attached without touching
+    /// the registry. Refreshed on connect and disconnect (design D1).
+    attached_clients: Arc<AttachedClientsCell>,
     /// The one-shot admission token of a Pin swap waiting for its
     /// replacement (tray-pin-swap design D4), shared with the
     /// [`PinSwapState`](crate::event_loop::PinSwapState) machine, which
@@ -105,12 +107,12 @@ pub(crate) fn serialize_ctrl_event(event: &CtrlEvent) -> Option<String> {
 impl CtrlClients {
     pub(crate) fn new(
         merged_tx: mpsc::Sender<crate::DaemonEvent>,
-        pinned_client_attached: Arc<AtomicBool>,
+        attached_clients: Arc<AttachedClientsCell>,
         pending_swap: Arc<crate::PendingSwapToken>,
     ) -> Self {
         Self {
             merged_tx: Some(merged_tx),
-            pinned_client_attached,
+            attached_clients,
             pending_swap,
             ..Self::default()
         }
@@ -138,7 +140,7 @@ impl CtrlClients {
         self.connection.retain(keep);
         self.notify_last_client_gone(before > 0);
         if self.connection.len() != before {
-            self.refresh_pinned_client_attached();
+            self.refresh_attached_clients();
         }
     }
 
@@ -178,18 +180,29 @@ impl CtrlClients {
         if role == CtrlConnectionRole::Client && self.authority == AuthorityHolder::None {
             self.authority = AuthorityHolder::Ctrl;
         }
-        self.refresh_pinned_client_attached();
+        self.refresh_attached_clients();
         id
     }
 
-    /// Recomputes the shared "pinned Client attached" flag from the current
-    /// connection set. Called on connect and on every disconnect path
-    /// (`remove` and dropped-peer pruning both funnel through
+    /// Recomputes the shared attached-Clients state from the current
+    /// connection set (design D1): `Pinned` when a local Client runs the
+    /// pinned surface, otherwise `Unpinned` when at least one local
+    /// connection has the `Client` role (whether or not it advertises
+    /// `pin-swap`), otherwise `None`. Owner-action and admin roles and TCP
+    /// connections never count. Called on connect and on every disconnect
+    /// path (`remove` and dropped-peer pruning both funnel through
     /// `retain_clients`).
-    fn refresh_pinned_client_attached(&mut self) {
-        let attached = self.newest_swap_client(SwapSurface::Pinned).is_some();
-        self.pinned_client_attached
-            .store(attached, Ordering::SeqCst);
+    fn refresh_attached_clients(&mut self) {
+        let attached = if self.newest_swap_client(SwapSurface::Pinned).is_some() {
+            AttachedClients::Pinned
+        } else if self.connection.iter().any(|client| {
+            client.role == CtrlConnectionRole::Client && client.transport == CtrlTransport::Local
+        }) {
+            AttachedClients::Unpinned
+        } else {
+            AttachedClients::None
+        };
+        self.attached_clients.store(attached);
     }
 
     /// The newest local-transport Client whose swap surface is `surface`
@@ -406,7 +419,7 @@ mod tests {
         let (tx, _rx) = mpsc::channel();
         CtrlClients::new(
             tx,
-            Arc::new(AtomicBool::new(false)),
+            Arc::new(AttachedClientsCell::new(AttachedClients::None)),
             Arc::new(crate::PendingSwapToken::default()),
         )
     }
@@ -472,11 +485,8 @@ mod tests {
 
         assert_eq!(clients.newest_swap_client(SwapSurface::Terminal), None);
         assert_eq!(clients.newest_swap_client(SwapSurface::Pinned), None);
-        assert!(
-            !clients
-                .pinned_client_attached
-                .load(std::sync::atomic::Ordering::SeqCst)
-        );
+        // Two TCP Clients never count as attached local Clients (design D1).
+        assert_eq!(clients.attached_clients.load(), AttachedClients::None);
     }
 
     /// Contract: spec owner-actions "An Owner action request is not a
@@ -508,11 +518,11 @@ mod tests {
         assert_eq!(clients.authority, AuthorityHolder::None);
     }
 
-    /// Contract: task 3.1 — the shared flag is set while a pinned Client is
-    /// attached and cleared when it leaves (spec pin-swap "The Tray offers
-    /// one Pin swap action": the label flips back to **Pin**).
+    /// Contract: task 2.2 — the shared state is `Pinned` while a pinned
+    /// Client is attached and `None` when it leaves (spec pin-swap "The Tray
+    /// offers one Pin swap action": the label flips back to **Pin**).
     #[test]
-    fn pinned_flag_clears_when_the_pinned_client_leaves() {
+    fn pinned_state_clears_when_the_pinned_client_leaves() {
         let mut clients = clients();
         let pinned = connect_surface(
             &mut clients,
@@ -520,10 +530,32 @@ mod tests {
             Some(SwapSurface::Pinned),
         );
 
-        assert!(clients.pinned_client_attached.load(Ordering::SeqCst));
+        assert_eq!(clients.attached_clients.load(), AttachedClients::Pinned);
 
         clients.remove(pinned);
 
-        assert!(!clients.pinned_client_attached.load(Ordering::SeqCst));
+        assert_eq!(clients.attached_clients.load(), AttachedClients::None);
+    }
+
+    /// Contract: task 2.2 / design D1 — a local Client with no pinned
+    /// surface reports `Unpinned` (whether or not it advertises `pin-swap`),
+    /// while an Owner-action-role connection alone reports `None`.
+    #[test]
+    fn unpinned_local_clients_report_unpinned_and_owner_action_roles_report_none() {
+        let mut registry = clients();
+        connect_surface(&mut registry, CtrlTransport::Local, None);
+        assert_eq!(registry.attached_clients.load(), AttachedClients::Unpinned);
+
+        let mut admin_only = clients();
+        let (tx, _rx) = mpsc::channel();
+        admin_only.connect_with_role(
+            tx,
+            CtrlTransport::Local,
+            CtrlAudiobookshelfCapabilities::default(),
+            false,
+            None,
+            CtrlConnectionRole::OwnerAction,
+        );
+        assert_eq!(admin_only.attached_clients.load(), AttachedClients::None);
     }
 }

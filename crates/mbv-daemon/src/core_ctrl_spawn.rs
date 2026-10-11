@@ -460,11 +460,10 @@ pub(crate) fn spawn_ctrl_client(
 mod tests {
     use super::*;
     use crate::ctrl::CtrlClients;
-    use std::sync::atomic::AtomicBool;
 
     /// Contract: spec pin-swap "Attached pinned Client does not support Pin
     /// swap" — a pinned-surface-only Hello (a pre-upgrade pinned Client) is
-    /// a Pinned swap target, so the shared flag flips and Unpin targets it;
+    /// a Pinned swap target, so the shared state flips and Unpin targets it;
     /// the swap then abandons at the deadline. A Terminal surface still
     /// requires `pin-swap`, and a Client with neither capability has no
     /// surface.
@@ -494,15 +493,17 @@ mod tests {
     }
 
     /// A pinned-surface-only Hello registered as a Client sets the shared
-    /// "pinned Client attached" flag, so the Tray shows **Unpin** while that
-    /// pre-upgrade Client is attached.
+    /// attached-Clients state to `Pinned`, so the Tray shows **Unpin** while
+    /// that pre-upgrade Client is attached.
     #[test]
-    fn a_pinned_surface_only_client_sets_the_pinned_flag() {
+    fn a_pinned_surface_only_client_sets_the_pinned_state() {
         let (merged_tx, _merged_rx) = mpsc::channel::<DaemonEvent>();
-        let flag = Arc::new(AtomicBool::new(false));
+        let state = Arc::new(mbv_ctrl::AttachedClientsCell::new(
+            mbv_ctrl::AttachedClients::None,
+        ));
         let mut clients = CtrlClients::new(
             merged_tx,
-            Arc::clone(&flag),
+            Arc::clone(&state),
             Arc::new(crate::PendingSwapToken::default()),
         );
         let (client_tx, _client_rx) = mpsc::channel::<CtrlOutbound>();
@@ -515,7 +516,7 @@ mod tests {
             CtrlConnectionRole::Client,
         );
 
-        assert!(flag.load(std::sync::atomic::Ordering::SeqCst));
+        assert_eq!(state.load(), mbv_ctrl::AttachedClients::Pinned);
     }
 
     fn hello_with_caps(caps: &[&str]) -> CtrlHello {
@@ -530,7 +531,9 @@ mod tests {
         let (merged_tx, _merged_rx) = mpsc::channel::<DaemonEvent>();
         let mut clients = CtrlClients::new(
             merged_tx,
-            Arc::new(AtomicBool::new(false)),
+            Arc::new(mbv_ctrl::AttachedClientsCell::new(
+                mbv_ctrl::AttachedClients::None,
+            )),
             Arc::new(crate::PendingSwapToken::default()),
         );
         let (client_tx, client_rx) = mpsc::channel::<CtrlOutbound>();
