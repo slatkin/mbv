@@ -14,6 +14,7 @@ readme = "../../README.md"
 workspace = true
 
 [dependencies]
+mbv-ids = { path = "../mbv-ids" }
 mbv-ui-model = { path = "../mbv-ui-model" }
 mbv-emby-model = { path = "../mbv-emby-model" }
 mbv-queue = { path = "../mbv-queue" }

@@ -60,12 +60,12 @@ Show activation SHALL retain the TV show-detail interaction, season activation S
 - **THEN** the existing show detail/Workspace interaction remains available
 
 ### Requirement: Episode content modes and search retain their own presentation
-`Latest` and `Upcoming` SHALL remain flat episode lists with direct episode activation and their existing Hero rules; they SHALL NOT acquire show/season nesting or group headings. Inline Search SHALL remain a separate result list, without changing the show-tree's settled expansion or selection when it is opened and dismissed.
+`Latest` and `Upcoming` SHALL remain flat lists outside the show tree; they SHALL NOT acquire show/season nesting. Their activation and hero rules are those of `tv-library-content-modes`. Inline Search SHALL remain a separate result list, without changing the show-tree's settled expansion or selection when it is opened and dismissed.
 
 #### Scenario: Latest stays flat
 - **WHEN** `Latest` or `Upcoming` is selected
-- **THEN** its episode rows remain flat and activate directly
-- **AND** no show-tree hierarchy or show Hero Workspace is opened for the episode
+- **THEN** its rows remain flat
+- **AND** no show-tree hierarchy is shown for them
 
 #### Scenario: Dismiss search
 - **WHEN** the user enters and then dismisses Inline Search from a show mode

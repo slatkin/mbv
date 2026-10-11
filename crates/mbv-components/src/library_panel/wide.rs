@@ -357,8 +357,6 @@ pub struct WideSkeletonPaintParams<'a> {
     pub windows: &'a mut SkeletonPillWindows,
     /// Terminal height, feeding the hero overview's viewport math.
     pub terminal_height: u16,
-    /// Whether the hero pane participates in this breakpoint's layout.
-    pub show_hero_pane: bool,
 }
 
 pub fn render_wide_skeleton(
@@ -377,8 +375,10 @@ pub fn render_wide_skeleton(
         hits,
         windows,
         terminal_height,
-        show_hero_pane,
     } = params;
+    // The slot variant decides whether the Hero pane exists. See the
+    // `library-panel` requirement "A list of non-media rows has no Hero pane".
+    let show_hero_pane = content.hero.shows_pane();
     let WideLibraryPanes {
         pills_area,
         spacer_area,
@@ -423,8 +423,8 @@ pub fn render_wide_skeleton(
     // the list box above flips with the panel's focus. A focused Workspace
     // still shows through its own content-box tint. It is fed the band-reduced
     // `content_area` (D2), so the hero starts below the full-width Selector
-    // band instead of at the raw panel top. Flat TV episode modes omit the
-    // pane in the arrangement, giving their list the entire content area.
+    // band instead of at the raw panel top. An `Absent` slot omits the pane
+    // in the arrangement, giving its list the entire content area.
     let hero_area = if show_hero_pane {
         wide_hero_hero_pane(f, content_area, false, override_width)
     } else {
@@ -446,7 +446,7 @@ pub fn render_wide_skeleton(
         selected: browser.selected,
     };
 
-    if let Some(hero) = content.hero.as_mut() {
+    if let Some(hero) = content.hero.content_mut() {
         let composition = paint_library_hero_content(
             f,
             hero_area,

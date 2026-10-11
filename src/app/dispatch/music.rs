@@ -373,11 +373,11 @@ impl App {
                 // completion fills it; without a request this spawn is the
                 // fallback (and its completion fills the snapshot).
                 let library_id = self.libs[lib_idx].library.id.clone();
-                if let Some(items) = self.tv_upcoming_snapshots.get(&library_id) {
+                if let Some(premieres) = self.tv_upcoming_snapshots.get(&library_id) {
                     if let Some(last) = self.libs[lib_idx].nav_stack.last_mut() {
                         align_level_to_tv_mode(last, &mbv_queue::TvContentMode::Upcoming);
-                        last.items.clone_from(items);
-                        last.rows = ServerRows::complete(items.len());
+                        last.items.clear();
+                        last.rows = ServerRows::complete(premieres.len());
                         last.loading = false;
                     }
                 } else if !self.tv_upcoming_requested.contains(&library_id) {

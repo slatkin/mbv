@@ -1,22 +1,13 @@
 use crate::app::{App, PanelMode};
+use mbv_queue::TvContentMode;
 use mbv_render::arrangements::wide_hero;
 use mbv_render::components::widgets;
 use ratatui::layout::Rect;
 
 impl App {
-    pub(in crate::app) fn is_wide_tv_library(&self, lib_idx: usize) -> bool {
-        self.libs.get(lib_idx).is_some_and(|lib| {
-            lib.library.collection_type == "tvshows"
-                && lib.nav_stack.last().is_some_and(|level| {
-                    level.items.is_empty()
-                        || level.items.iter().all(|item| item.item_type == "Series")
-                })
-        })
-    }
-
     /// The right panel's content area for the current terminal size and
     /// panel state, paint-free — `None` when the right panel is not visible
-    /// (e.g. Queue-only panel mode). Factored out of `wide_tv_library_area`
+    /// (e.g. Queue-only panel mode). Factored out of `wide_tv_show_area`
     /// so every paint-free breakpoint consumer shares one pipeline.
     fn right_panel_lib_area(&self) -> Option<Rect> {
         let chrome = mbv_render::arrangements::chrome::chrome_geometry(
@@ -49,16 +40,25 @@ impl App {
             .is_some_and(wide_hero::wide_hero_fits)
     }
 
-    /// The finalized library content rect when the wide Wide hero TV
-    /// workspace owns `lib_idx`, computed paint-free from the current
-    /// terminal size — `None` when the library is not a wide-TV series list
-    /// or the breakpoint is narrow. Mirrors the exact library-panel gate
-    /// applies (`is_wide_tv_library` + `wide_hero_fits` on the
-    /// finalized area), so component mount/focus can be routed a frame
-    /// earlier than the deleted previous-frame paint signal this predicate
-    /// replaced, which used to flash the narrow browser on entry.
-    pub(in crate::app) fn wide_tv_library_area(&self, lib_idx: usize) -> Option<Rect> {
-        if !self.is_wide_tv_library(lib_idx) {
+    /// The finalized library content rect when the Wide TV series Workspace
+    /// owns `lib_idx`, computed paint-free from the current terminal size.
+    /// `None` when the library is not a TV library, the breakpoint is
+    /// narrow, or the content mode is `Latest` or `Upcoming`. The mode is the
+    /// level's `tv_content_mode`, else the library's (the Upcoming level
+    /// stores `None`); `None` for both counts as a show mode. Computed a
+    /// frame earlier than a painted rect, so mount and focus do not flash
+    /// the narrow browser on entry.
+    pub(in crate::app) fn wide_tv_show_area(&self, lib_idx: usize) -> Option<Rect> {
+        let lib = self.libs.get(lib_idx)?;
+        if lib.library.collection_type != "tvshows" {
+            return None;
+        }
+        let mode = lib
+            .nav_stack
+            .last()
+            .and_then(|level| level.tv_content_mode.as_ref())
+            .or(lib.tv_content_mode.as_ref());
+        if matches!(mode, Some(TvContentMode::Latest | TvContentMode::Upcoming)) {
             return None;
         }
         let lib_area = self.right_panel_lib_area()?;

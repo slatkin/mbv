@@ -16,13 +16,14 @@
 //! `ShellRequest::TvHit*` messages the deleted component emitted.
 use super::inline_search::{InlineSearch, InlineSearchHost};
 use super::library_panel::{
-    HeroContent, HeroContentData, LibraryContentOwner, LibraryPanelContent, LibrarySlotEvent,
-    ListSlot, SelectorRow, Workspace, hero_content_emby, hero_content_series_with_episode,
+    HeroContent, HeroContentData, HeroSlot, LibraryContentOwner, LibraryPanelContent,
+    LibrarySlotEvent, ListSlot, SelectorRow, Workspace, hero_content_emby,
+    hero_content_series_with_episode,
 };
 use super::list::tree_browser::{TreeBrowser, TreeOperation};
 use super::media_list::{MediaListCarrier, MediaListOperation, MediaListSurfaceInput, RowIntent};
 use mbv_config::{LibraryItemIdentity, SelectorIdentity};
-use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND};
+use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND, UpcomingPremiere};
 use mbv_queue::QueueItem;
 use mbv_render::components::media_list::{
     MediaKind, MediaListRow, MediaListTrailing, MediaSemanticState,
@@ -46,9 +47,7 @@ mod tree_projection;
 
 #[cfg(test)]
 use episode_rows::build_episode_rows;
-#[doc(inline)]
-pub use episode_rows::upcoming_episode_target;
-use episode_rows::{build_latest_episode_rows, upcoming_episode_rows};
+use episode_rows::{build_latest_episode_rows, upcoming_premiere_rows};
 #[derive(Clone, Copy, Eq, PartialEq, Debug)]
 enum Pane {
     Series,
@@ -97,8 +96,10 @@ pub struct TvContent {
     /// `EmbyLibraryContent::inline_search` for the migration-phase notes.
     inline_search: InlineSearch,
     /// The breakpoint the shell pushed for this frame (`App::
-    /// wide_tv_library_area`): `true` paints the pane-based Wide workspace,
-    /// `false` paints the flat Narrow series list. Defaults to `true` so an
+    /// is_right_panel_wide`, geometry only, the same fact the panel uses):
+    /// `true` is the Wide geometry, `false` is Narrow. It does not depend on
+    /// the content mode, so a Latest or Upcoming list in a wide terminal is
+    /// `Wide` too. Defaults to `true` so an
     /// owner built and viewed without an explicit push (existing unit
     /// tests) keeps painting the Wide workspace.
     display_mode: TvDisplayMode,
@@ -221,7 +222,7 @@ impl TvContent {
                 build_latest_episode_rows(&context.list.items)
             }
             Some(mbv_queue::TvContentMode::Upcoming) => {
-                upcoming_episode_rows(&context.list.items, time::OffsetDateTime::now_utc().date())
+                upcoming_premiere_rows(&context.upcoming, time::OffsetDateTime::now_utc().date())
             }
             Some(mbv_queue::TvContentMode::All | mbv_queue::TvContentMode::Range(_)) | None => {
                 Self::series_rows(context, inline_search_active)

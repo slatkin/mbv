@@ -45,38 +45,6 @@ fn tv_content_mode_save_restore_round_trip_keeps_mode_and_content(
 }
 
 #[test]
-fn restoring_upcoming_position_loads_upcoming_episode_content() {
-    let saved = mbv_queue::LibraryPosition {
-        levels: vec![mbv_queue::LibraryPositionLevel {
-            parent_id: "lib-tv".into(),
-            title: "TV".into(),
-            item_types: Some("Episode".into()),
-            sort_by: "SortName".into(),
-            sort_order: "Ascending".into(),
-            tv_content_mode: Some(mbv_queue::TvContentMode::Upcoming),
-            library_total: Some(301),
-            ..Default::default()
-        }],
-        ..Default::default()
-    };
-
-    let episode = make_item("Upcoming episode", "Episode");
-    let restored = restore_library_position_with_fetched_rows_for_kind(
-        &saved,
-        10,
-        mbv_ui_model::sort_filter::LetterFilterKind::Tv,
-        |_| Ok((vec![episode.clone()], 1, 1)),
-    )
-    .expect("restore result")
-    .expect("restored position");
-    assert_eq!(
-        restored.1[0].tv_content_mode,
-        Some(mbv_queue::TvContentMode::Upcoming)
-    );
-    assert_eq!(restored.1[0].items, vec![episode]);
-}
-
-#[test]
 fn library_position_snapshot_captures_path_focus_and_feed_group() {
     let mut lib = LibraryTab {
         nav_stack: vec![BrowseLevel {

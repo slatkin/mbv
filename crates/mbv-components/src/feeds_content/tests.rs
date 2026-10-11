@@ -125,7 +125,8 @@ fn selected_podcast_entry_hero_is_square_with_the_placeholder() {
         &[subscription("A")],
         vec![entry("episode", FeedKind::Audio, false)],
     );
-    let hero = owner.content().hero.expect("selected entry hero");
+    let mut content = owner.content();
+    let hero = content.hero.content_mut().expect("selected entry hero");
     assert_eq!(hero.facts.artwork.shape, ArtworkShape::Square);
     assert!(hero.facts.artwork.source.is_none());
     assert_eq!(hero.facts.title, "episode");

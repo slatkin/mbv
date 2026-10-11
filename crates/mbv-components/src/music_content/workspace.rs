@@ -1,8 +1,8 @@
 // The module's documentation and shared imports live in the parent module.
 use super::{
     ArtworkShape, EmbyItem, HeroArtwork, HeroContent, HeroContentData, HeroFacts, HeroImageState,
-    LibraryPanelContent, ListSlot, MediaKind, MediaListRow, MediaListTrailing, MediaSemanticState,
-    Msg, MusicArtistTarget, MusicContent, MusicTreeAction, MusicTreeTarget,
+    HeroSlot, LibraryPanelContent, ListSlot, MediaKind, MediaListRow, MediaListTrailing,
+    MediaSemanticState, Msg, MusicArtistTarget, MusicContent, MusicTreeAction, MusicTreeTarget,
     NEIGHBOUR_PREFETCH_AHEAD, NEIGHBOUR_PREFETCH_BEHIND, SelectorRow, ShellRequest,
     TICKS_PER_SECOND, Workspace, WorkspaceHeader, fmt_duration_gutter, hero_content_music_album,
     music_album_artwork, trunc_str, wide_album_metadata,
@@ -619,7 +619,7 @@ impl MusicContent {
         LibraryPanelContent {
             selector,
             list,
-            hero,
+            hero: HeroSlot::pane(hero),
         }
     }
 }

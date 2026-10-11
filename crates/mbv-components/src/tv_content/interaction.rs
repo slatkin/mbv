@@ -3,13 +3,16 @@ use super::KeyEvent;
 use super::{
     EmbyItem, LibrarySlotEvent, MediaListOperation, MediaListSurfaceInput, Msg, Pane, Position,
     RowIntent, ShellRequest, TerminalObserverEvent, TreeOperation, TvContent, TvDisplayMode, TvHit,
-    TvTreeTarget, upcoming_episode_target,
+    TvTreeTarget,
 };
 
 impl TvContent {
     /// # Panics
     /// Panics if the internally generated context input cannot be converted to a media-list operation.
     pub fn context_menu_request(&mut self) -> Option<ShellRequest> {
+        if self.upcoming_mode() {
+            return None;
+        }
         let outcome = self.carrier.delegate_operation(
             MediaListSurfaceInput::Context
                 .into_operation(None)
@@ -76,11 +79,9 @@ impl TvContent {
             // The Browser pane's series list.
             LibrarySlotEvent::List(input) => self.series_list_event(input),
             LibrarySlotEvent::HeroActivate => match self.pane {
-                Pane::Series if self.flat_episode_mode() => {
-                    self.selected_episode_item().map(|episode| {
-                        Msg::Shell(Box::new(ShellRequest::TvEpisodeActivate { episode }))
-                    })
-                }
+                Pane::Series if self.flat_episode_mode() => self
+                    .flat_activation_request()
+                    .map(|request| Msg::Shell(Box::new(request))),
                 Pane::Series => self
                     .selected_item()
                     .map(|item| Msg::Shell(Box::new(ShellRequest::TvActivate { item }))),
@@ -125,6 +126,15 @@ impl TvContent {
             MediaListSurfaceInput::DoubleClick(at) => {
                 let hit = self.resolve_series_hit(at)?;
                 self.apply_pane_click(hit.clone(), at, MediaListSurfaceInput::Click(at));
+                // A premiere notice opens its series; it never reaches the
+                // shell as an episode row.
+                if self.upcoming_mode()
+                    && let TvHit::EpisodeRow(target) = &hit
+                {
+                    return self
+                        .open_upcoming_series_request(target)
+                        .map(|request| Msg::Shell(Box::new(request)));
+                }
                 Some(Msg::Shell(Box::new(ShellRequest::TvHitDoubleClick { hit })))
             }
             MediaListSurfaceInput::ContextClick(at) => {
@@ -506,12 +516,8 @@ impl TvContent {
                     .get(season)?
                     .iter()
                     .filter(|item| {
-                        let id = if item.id.is_empty() {
-                            upcoming_episode_target(item)
-                        } else {
-                            item.id.clone()
-                        };
-                        id == *episode && (item.series_id.is_empty() || item.series_id == show.id)
+                        item.id == *episode
+                            && (item.series_id.is_empty() || item.series_id == show.id)
                     })
                     .nth(*occurrence)
                     .cloned()

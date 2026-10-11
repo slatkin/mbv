@@ -2033,6 +2033,7 @@ dependencies = [
  "mbv-audiobookshelf",
  "mbv-config",
  "mbv-emby-model",
+ "mbv-ids",
  "mbv-images",
  "mbv-keybinds",
  "mbv-queue",
@@ -2160,6 +2161,7 @@ dependencies = [
 name = "mbv-emby-model"
 version = "0.24.4"
 dependencies = [
+ "mbv-ids",
  "rstest",
  "serde",
  "serde_json",
@@ -2324,6 +2326,7 @@ name = "mbv-ui-msg"
 version = "0.24.4"
 dependencies = [
  "mbv-emby-model",
+ "mbv-ids",
  "mbv-queue",
  "mbv-ui-model",
  "tuirealm",

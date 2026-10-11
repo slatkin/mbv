@@ -24,7 +24,8 @@ A slot a destination does not fill SHALL render as absent in the same way on eve
 
 #### Scenario: The breakpoint is crossed
 - **WHEN** the terminal crosses the shared Wide conditions in either direction
-- **THEN** every library destination switches between the Wide two-pane panel and the non-Wide standard-list panel at the same width and height
+- **THEN** every library destination switches between the Wide panel and the non-Wide standard-list panel at the same width and height
+- **AND** the Wide panel has two panes, except for a list of non-media rows, which has no Hero pane
 - **AND** no selected row changes height during that transition
 
 ### Requirement: Emby screens are the reference presentation
@@ -584,4 +585,15 @@ fixed-column arm.
 - **THEN** the library pane resolves the same `LibraryColumn` pair against the panel's focus bit as
   Narrow, and the same `LibraryPanel`/`LibraryColumn` list-box pair
 - **AND** there is no Mini-specific paint bit or resting-only override
+
+### Requirement: A list of non-media rows has no Hero pane
+In Wide geometry, when a destination's current list rows are not media items, the Library panel SHALL paint no Hero pane and the list SHALL span the whole content area. Every other list SHALL keep the Hero pane, empty when its selection has no hero. The panel SHALL decide this from the destination's content, never from which destination it is.
+
+#### Scenario: TV Upcoming spans the content area
+- **WHEN** a TV library shows `Upcoming` in Wide geometry
+- **THEN** no Hero pane is painted and the list fills the content area below the Selector band
+
+#### Scenario: A media list without a selected hero keeps its pane
+- **WHEN** a media list in Wide geometry has a selection that produces no hero
+- **THEN** the Hero pane is still painted, empty, at its usual geometry
 

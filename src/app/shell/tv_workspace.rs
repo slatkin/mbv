@@ -14,12 +14,14 @@
 
 use super::TabSelection;
 use super::{Model, PendingEpisodeSelection};
+#[cfg(test)]
 use mbv_components::library_panel::LibraryPanel;
 use mbv_components::tv_content::TvContent;
 use mbv_emby_model::EmbyItem;
 use mbv_queue::ServiceKind;
 use mbv_render::components::tv_wide::TvWideRenderCtx;
 use mbv_ui_model::library::{LibraryKey, LibraryKind};
+#[cfg(test)]
 use mbv_ui_msg::ComponentId;
 use mbv_ui_msg::ShellRequest;
 
@@ -44,17 +46,16 @@ impl Model {
             }
             // The owner resolved the episode from its own season detail and
             // carried the stable item (design.md D4); the shell plays it
-            // directly without reading any owner cursor. An id-less
-            // `/Shows/Upcoming` placeholder carries a `series_id` instead of
-            // a playable episode id: navigate to that series' Workspace
-            // rather than submitting an empty-id item to playback.
-            ShellRequest::TvEpisodeActivate { episode } => {
-                if !self
-                    .app
-                    .open_series_for_unplayable_episode(lib_idx, &episode)
-                {
-                    self.app.play_item(episode);
-                }
+            // directly without reading any owner cursor.
+            ShellRequest::TvEpisodeActivate { episode } => self.app.play_item(episode),
+            // A premiere notice is not media: open its series' Workspace.
+            ShellRequest::TvOpenUpcomingSeries {
+                series_id,
+                series_name,
+            } => {
+                self.app
+                    .open_series_for_premiere(lib_idx, &series_id, &series_name);
+                self.push_tv_workspace_content();
             }
             // Activation, back, and letter-pill effects resolve the
             // owner's selection directly (item-targeted) or from the App
@@ -89,27 +90,14 @@ impl Model {
     fn handle_tv_navigation_request(&mut self, lib_idx: usize, request: ShellRequest) {
         match request {
             ShellRequest::TvActivate { item } => {
-                // Flat Latest/Upcoming rows are leaf episodes. Keep a
-                // defensive item-kind gate here so a stale or legacy
-                // request can never enter the Series workspace -- an
-                // id-less Upcoming placeholder is the one exception
-                // and routes to its series' Workspace.
-                if item.item_type == "Episode" {
-                    if !self.app.open_series_for_unplayable_episode(lib_idx, &item) {
-                        self.app.play_item(item);
-                    }
-                } else {
-                    let owner_has_target = self
-                        .tv_owner()
-                        .and_then(TvContent::selected_tree_show)
-                        .is_some_and(|selected| {
-                            selected.id == item.id && selected.name == item.name
-                        });
-                    if self.app.wide_tv_library_area(lib_idx).is_some() {
-                        self.app.activate_selected_series_item(lib_idx, &item);
-                    } else if owner_has_target {
-                        self.open_library_hero_overlay();
-                    }
+                let owner_has_target = self
+                    .tv_owner()
+                    .and_then(TvContent::selected_tree_show)
+                    .is_some_and(|selected| selected.id == item.id && selected.name == item.name);
+                if self.app.wide_tv_show_area(lib_idx).is_some() {
+                    self.app.activate_selected_series_item(lib_idx, &item);
+                } else if owner_has_target {
+                    self.open_library_hero_overlay();
                 }
             }
             ShellRequest::TvBack => self.app.go_back(lib_idx),
@@ -155,7 +143,7 @@ impl Model {
         // prior stable target).
         self.reanchor_tv_owner_selection(&item.id);
         self.push_tv_workspace_content();
-        if self.app.wide_tv_library_area(lib_idx).is_some() {
+        if self.app.wide_tv_show_area(lib_idx).is_some() {
             self.app.activate_selected_series_item(lib_idx, item);
             // The workspace is active: episode selection takes the local
             // focus, like music's track-selection mode.
@@ -392,22 +380,6 @@ impl Model {
         self.push_tv_workspace_content();
     }
 
-    /// The compact mini-view is the one presentation where a selected flat
-    /// TV episode gets the existing Library Hero overlay. It is synchronized
-    /// after the panel points at the active owner, so opening it never targets
-    /// the previous tab's owner.
-    pub(in crate::app) fn sync_tv_mini_view_hero(&mut self) {
-        let mini_view = self.app.terminal_width < mbv_render::layout::MINI_VIEW_THRESHOLD
-            && matches!(self.app.effective_panel_focus(), super::PanelFocus::Library);
-        if let Some(panel) = self
-            .application
-            .get_component_mut(&ComponentId::Library)
-            .and_then(|component| component.as_any_mut().downcast_mut::<LibraryPanel>())
-        {
-            panel.sync_mini_view_hero_overlay(mini_view);
-        }
-    }
-
     pub(in crate::app) fn push_tv_workspace_content(&mut self) {
         let TabSelection::EmbyLibrary(index) = self.app.tab else {
             return;
@@ -419,8 +391,7 @@ impl Model {
         if library.library.collection_type != "tvshows" {
             return;
         }
-        let lib_area = self.app.wide_tv_library_area(index);
-        let is_wide = lib_area.is_some();
+        let is_wide = self.app.is_right_panel_wide();
         let list = self.app.library_list_render_ctx(
             index,
             self.app.libs[index]
@@ -496,6 +467,14 @@ impl Model {
         );
         context.set_tv_content_mode(tv_content_mode.clone());
         context.set_series_details(series_details);
+        if tv_content_mode == Some(mbv_queue::TvContentMode::Upcoming) {
+            context.upcoming = self
+                .app
+                .tv_upcoming_snapshots
+                .get(&library_id)
+                .cloned()
+                .unwrap_or_default();
+        }
         let latest_source =
             crate::app::state::playback::DestinationLatestSource::Emby(library_id.clone());
         if tv_content_mode == Some(mbv_queue::TvContentMode::Latest)

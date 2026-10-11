@@ -11,7 +11,6 @@ use tuirealm::event::Event;
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use mbv_ui_model::library::LibraryKind;
 use mbv_ui_msg::Msg;
 use mbv_ui_msg::UserEvent;
 
@@ -52,7 +51,6 @@ fn paint_skeleton(
     area: ratatui::layout::Rect,
     content: &mut super::super::content::LibraryPanelContent<'_>,
     overview_scroll: usize,
-    show_hero_pane: bool,
     state: &mut SkeletonPaintState<'_>,
 ) -> ratatui::layout::Rect {
     if wide_hero_fits(area) {
@@ -70,7 +68,6 @@ fn paint_skeleton(
                 hits: state.hit_regions,
                 windows: state.windows,
                 terminal_height: state.terminal_height,
-                show_hero_pane,
             },
         ) {
             let gap = ratatui::layout::Rect {
@@ -126,7 +123,7 @@ fn paint_library_hero_overlay(
         overlay_rect,
         hints,
     );
-    let hero = content.hero.as_mut().map(|hero| {
+    let hero = content.hero.content_mut().map(|hero| {
         super::super::hero_composition::paint_library_hero_content(
             frame,
             inner,
@@ -171,22 +168,11 @@ impl Component for LibraryPanel {
         } else {
             &["ESC:Back"]
         };
-        let flat_tv_list = matches!(
-            self.owners.active_key(),
-            Some(LibraryKey::Service {
-                kind: LibraryKind::TvShows,
-                ..
-            })
-        );
         let Some(owner) = self.owners.active_mut() else {
             self.reset_split_gesture();
             return;
         };
         let overview_scroll = owner.hero_scroll_offset();
-        // Flat Latest/Upcoming TV rows are leaves, not a hero-bearing browser.
-        // The Library panel owns this Wide skeleton policy; other destinations
-        // and TV series/workspace modes retain the shared split.
-        let show_hero_pane = !flat_tv_list || owner.browser_rows_are_hero_bearing();
         let mut content = owner.content();
         #[cfg(any(test, feature = "test"))]
         {
@@ -198,7 +184,7 @@ impl Component for LibraryPanel {
         };
         self.painted_link_urls = content
             .hero
-            .as_ref()
+            .content()
             .map(|hero| {
                 hero.facts
                     .links
@@ -214,7 +200,6 @@ impl Component for LibraryPanel {
             area,
             &mut content,
             overview_scroll,
-            show_hero_pane,
             &mut SkeletonPaintState {
                 focused: self.focused,
                 palette_suppressed: mini_palette_suppressed(self.mini_view, self.frame_focused),
@@ -320,10 +305,9 @@ impl AppComponent<Msg, UserEvent> for LibraryPanel {
                     && key.code == tuirealm::event::Key::Enter
                     && !self.hero_overlay_open
                     && self.narrow_geometry.is_some()
-                    && self
-                        .owners
-                        .active_mut()
-                        .is_some_and(|owner| owner.hero_overlay_enter_available())
+                    && self.owners.active_mut().is_some_and(|owner| {
+                        !owner.latest_list_active() && owner.hero_overlay_enter_available()
+                    })
                     && let Some(message) = self.open_hero_from_browser(None)
                 {
                     return Some(message);

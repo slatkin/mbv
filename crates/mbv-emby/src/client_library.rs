@@ -1,6 +1,23 @@
 use super::{EmbyClient, parse_item};
-use mbv_emby_model::EmbyItem;
+use mbv_emby_model::{EmbyItem, UpcomingPremiere};
 use serde_json::Value;
+
+/// Maps an Upcoming DTO to a premiere. `None` when it has no `SeriesId`.
+/// The DTO stores a missing index as 0, so a 0 maps to `None`.
+fn premiere(item: EmbyItem) -> Option<UpcomingPremiere> {
+    if item.series_id.is_empty() {
+        return None;
+    }
+    let number = |n: i64| u32::try_from(n).ok().filter(|&n| n > 0);
+    Some(UpcomingPremiere {
+        series_id: mbv_ids::ItemId::new(item.series_id),
+        series_name: item.series_name,
+        season: number(item.parent_index_number),
+        episode: number(item.index_number),
+        title: item.name,
+        premiere_date: item.premiere_date,
+    })
+}
 
 /// `Fields` for `get_latest`. Must include every field its parser
 /// (`parse_item`) reads — in particular `DateCreated`, which destination
@@ -284,21 +301,33 @@ impl EmbyClient {
 
     /// Fetches upcoming episodes for a library using Emby's library-scoped
     /// Upcoming feed. The route returns a flat episode list, so it uses the
-    /// same fields as the library's Latest episode projection.
+    /// same fields as the library's Latest episode projection. A row with no
+    /// `SeriesId` is dropped, because the only action of a notice is to open
+    /// its series. The fetch logs one line with the count of dropped rows.
     pub fn get_upcoming(
         &self,
         parent_id: &str,
         limit: usize,
-    ) -> Result<Vec<EmbyItem>, crate::EmbyError> {
+    ) -> Result<Vec<UpcomingPremiere>, crate::EmbyError> {
         let limit = limit.to_string();
-        self.fetch_items(
+        let items = self.fetch_items(
             "/Shows/Upcoming",
             &[
                 ("ParentId", parent_id),
                 ("Limit", &limit),
                 ("Fields", LATEST_EPISODES_FIELDS),
             ],
-        )
+        )?;
+        let fetched = items.len();
+        let premieres: Vec<UpcomingPremiere> = items.into_iter().filter_map(premiere).collect();
+        tracing::info!(
+            name: "emby.upcoming.loaded",
+            target: "api",
+            count = premieres.len(),
+            dropped_without_series_id = fetched - premieres.len(),
+            "loaded upcoming premieres"
+        );
+        Ok(premieres)
     }
 
     pub fn get_all_playable_recursive(

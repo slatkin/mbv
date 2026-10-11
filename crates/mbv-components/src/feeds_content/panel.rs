@@ -1,6 +1,6 @@
 use super::super::library_panel::HeroContentData;
 use super::super::library_panel::content::{
-    HeroContent, LibraryPanelContent, ListSlot, SelectorRow,
+    HeroContent, HeroSlot, LibraryPanelContent, ListSlot, SelectorRow,
 };
 use super::super::library_panel::hero::hero_content_feed;
 use super::super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
@@ -94,6 +94,10 @@ impl FeedsContent {
 }
 
 impl LibraryContentOwner for FeedsContent {
+    fn latest_list_active(&self) -> bool {
+        self.latest_selected()
+    }
+
     fn reanchor_launch_state(&mut self, _state: &mbv_config::TuiLaunchState) -> bool {
         if self.loading && self.visible_entries.is_empty() && !self.subscriptions.is_empty() {
             return false;
@@ -210,7 +214,7 @@ impl LibraryContentOwner for FeedsContent {
         LibraryPanelContent {
             selector,
             list,
-            hero,
+            hero: HeroSlot::pane(hero),
         }
     }
 

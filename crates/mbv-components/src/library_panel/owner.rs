@@ -90,7 +90,7 @@ pub trait LibraryContentOwner {
     }
 
     fn hero_overlay_available(&mut self) -> bool {
-        self.content().hero.is_some()
+        self.content().hero.content().is_some()
     }
 
     /// Whether the selected parent can own a Hero overlay before its Hero
@@ -108,14 +108,6 @@ pub trait LibraryContentOwner {
     /// filtered roots stay local.
     fn hero_overlay_enter_available(&mut self) -> bool {
         self.hero_overlay_available() || self.hero_overlay_target_available()
-    }
-
-    /// Whether the owner asks the Library panel to show its selected item in
-    /// the compact mini-view hero overlay. This is separate from ordinary
-    /// browser activation: a mini-view episode hero must not turn Enter into
-    /// an overlay request.
-    fn mini_view_hero_available(&mut self) -> bool {
-        false
     }
 
     /// A typed request the owner resolved from the frame it just painted, or
@@ -140,6 +132,13 @@ pub trait LibraryContentOwner {
     /// opt out while retaining the ordinary row policy.
     fn double_click_opens_hero_overlay(&mut self) -> bool {
         self.browser_rows_are_hero_bearing()
+    }
+
+    /// Whether this destination currently shows its Latest list. In non-Wide
+    /// geometry the panel never opens the Library Hero overlay then: Enter and
+    /// double-click reach the owner, which plays the row.
+    fn latest_list_active(&self) -> bool {
+        false
     }
 
     fn inline_search_active(&self) -> bool {

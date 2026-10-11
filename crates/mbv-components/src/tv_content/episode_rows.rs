@@ -1,6 +1,7 @@
 use super::{
     Date, EmbyItem, MediaKind, MediaListRow, MediaListTrailing, MediaSemanticState, Pane,
-    QueueItem, TICKS_PER_SECOND, TvContent, fmt_duration_gutter, fmt_publish_date_short,
+    QueueItem, ShellRequest, TICKS_PER_SECOND, TvContent, UpcomingPremiere, fmt_duration_gutter,
+    fmt_publish_date_short,
 };
 use mbv_render::effective_sort_str;
 use mbv_ui_model::ui_util::natural_sort_key;
@@ -76,39 +77,31 @@ fn upcoming_date_heading(date: Date, today: Date) -> String {
     }
 }
 
-#[must_use]
-pub fn upcoming_episode_target(episode: &EmbyItem) -> String {
-    if !episode.id.is_empty() {
-        return episode.id.clone();
+/// "S02:E07", "S02" or "E07"; "no number" when the notice carries neither.
+fn premiere_number_label(premiere: &UpcomingPremiere) -> String {
+    match (premiere.season, premiere.episode) {
+        (Some(season), Some(episode)) => format!("S{season:02}:E{episode:02}"),
+        (Some(season), None) => format!("S{season:02}"),
+        (None, Some(episode)) => format!("E{episode:02}"),
+        (None, None) => "no number".into(),
     }
-
-    let series = if episode.series_id.is_empty() {
-        &episode.series_name
-    } else {
-        &episode.series_id
-    };
-    format!(
-        "upcoming:{}:{}:{}:{}:{}:{}",
-        series.len(),
-        series,
-        episode.parent_index_number,
-        episode.index_number,
-        episode.name.len(),
-        episode.name
-    )
 }
 
-pub fn upcoming_episode_rows(episodes: &[EmbyItem], today: Date) -> Vec<MediaListRow<String>> {
-    let mut groups: Vec<(Option<Date>, Vec<&EmbyItem>)> = Vec::with_capacity(episodes.len());
-    for episode in episodes {
-        let date = parse_premiere_date(&episode.premiere_date);
+pub fn upcoming_premiere_rows(
+    premieres: &[UpcomingPremiere],
+    today: Date,
+) -> Vec<MediaListRow<String>> {
+    let mut groups: Vec<(Option<Date>, Vec<&UpcomingPremiere>)> =
+        Vec::with_capacity(premieres.len());
+    for premiere in premieres {
+        let date = parse_premiere_date(&premiere.premiere_date);
         if let Some((_, rows)) = groups
             .iter_mut()
             .find(|(group_date, _)| *group_date == date)
         {
-            rows.push(episode);
+            rows.push(premiere);
         } else {
-            groups.push((date, vec![episode]));
+            groups.push((date, vec![premiere]));
         }
     }
 
@@ -120,22 +113,18 @@ pub fn upcoming_episode_rows(episodes: &[EmbyItem], today: Date) -> Vec<MediaLis
             });
             heading
                 .into_iter()
-                .chain(episodes.into_iter().map(|episode| {
-                    let trailing = (episode.runtime_ticks > 0)
-                        .then(|| fmt_duration_gutter(episode.runtime_ticks / TICKS_PER_SECOND))
-                        .map(MediaListTrailing::Gutter);
-                    MediaListRow::Item {
-                        target: upcoming_episode_target(episode),
-                        primary: episode.series_name.clone(),
-                        secondary: Some(format!(
-                            "S{:02}:E{:02} — {}",
-                            episode.parent_index_number, episode.index_number, episode.name
-                        )),
-                        trailing,
-                        duration: None,
-                        kind: MediaKind::Media,
-                        semantic_state: MediaSemanticState::from_emby(episode),
-                    }
+                .chain(episodes.into_iter().map(|premiere| MediaListRow::Item {
+                    target: premiere.stable_key(),
+                    primary: premiere.series_name.clone(),
+                    secondary: Some(format!(
+                        "{} — {}",
+                        premiere_number_label(premiere),
+                        premiere.title
+                    )),
+                    trailing: None,
+                    duration: None,
+                    kind: MediaKind::Media,
+                    semantic_state: MediaSemanticState::Ordinary,
                 }))
         })
         .collect()
@@ -242,6 +231,11 @@ impl TvContent {
     /// stable episode identity; the shell never reads the cursor).
     #[must_use]
     pub fn selected_episode_item(&self) -> Option<EmbyItem> {
+        // A premiere notice is not media: no play, enqueue, watched, or
+        // context-menu path can resolve one.
+        if self.upcoming_mode() {
+            return None;
+        }
         if self.flat_episode_mode() {
             return self
                 .carrier
@@ -251,13 +245,45 @@ impl TvContent {
                         .list
                         .items
                         .iter()
-                        .find(|item| upcoming_episode_target(item) == *target)
+                        .find(|item| item.id == *target)
                 })
                 .cloned();
         }
         self.current_season_episodes()
             .get(self.episodes.cursor())
             .cloned()
+    }
+
+    pub(super) fn latest_mode(&self) -> bool {
+        self.context.tv_content_mode == Some(mbv_queue::TvContentMode::Latest)
+    }
+
+    #[must_use]
+    pub fn upcoming_mode(&self) -> bool {
+        self.context.tv_content_mode == Some(mbv_queue::TvContentMode::Upcoming)
+    }
+
+    /// Open the series of the Upcoming notice whose row target is `target`.
+    pub(super) fn open_upcoming_series_request(&self, target: &str) -> Option<ShellRequest> {
+        self.context
+            .upcoming
+            .iter()
+            .find(|premiere| premiere.stable_key() == target)
+            .map(|premiere| ShellRequest::TvOpenUpcomingSeries {
+                series_id: premiere.series_id.clone(),
+                series_name: premiere.series_name.clone(),
+            })
+    }
+
+    /// Activation of the selected flat row: Latest plays its episode,
+    /// Upcoming opens the notice's series.
+    pub(super) fn flat_activation_request(&self) -> Option<ShellRequest> {
+        if self.upcoming_mode() {
+            let target = self.carrier.selected_target()?;
+            return self.open_upcoming_series_request(target);
+        }
+        self.selected_episode_item()
+            .map(|episode| ShellRequest::TvEpisodeActivate { episode })
     }
 
     #[must_use]

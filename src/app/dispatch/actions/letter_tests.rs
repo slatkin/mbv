@@ -5,7 +5,7 @@ use mbv_ui_model::browse::ServerRows;
 use crate::app::dispatch::library::browse::full_library_fetch_limit;
 use crate::app::tests::{make_app_stub, make_items};
 use crate::app::{BrowseEvent, BrowseLevel, LibEvent, LibraryTab};
-use mbv_emby_model::EmbyItem;
+use mbv_emby_model::{EmbyItem, UpcomingPremiere};
 use rstest::rstest;
 
 fn lib_tab(collection_type: &str) -> LibraryTab {
@@ -359,10 +359,15 @@ fn tv_series_root_refresh_re_arms_completion_pagination() {
 
 // ── TV Upcoming: once-per-session eager load (user rule, 2026-10-11) ─────────
 
-fn upcoming_episode(id: &str) -> EmbyItem {
-    let mut item = make_item(id, "Episode");
-    item.id = id.into();
-    item
+fn upcoming_premiere(series: &str) -> UpcomingPremiere {
+    UpcomingPremiere {
+        series_id: mbv_ids::ItemId::new(series),
+        series_name: series.into(),
+        season: Some(1),
+        episode: Some(1),
+        title: "Premiere".into(),
+        premiere_date: "2026-10-12T00:00:00.0000000Z".into(),
+    }
 }
 
 /// The eager request marks the library only when a fetch can actually go
@@ -393,14 +398,13 @@ fn upcoming_pill_select_materializes_the_session_snapshot() {
     push_top_level_tv(&mut app.libs[0], 2);
     app.libs[0].library_total = Some(1000);
     app.libs[0].tv_content_mode = Some(mbv_queue::TvContentMode::Latest);
-    let snapshot = vec![upcoming_episode("ep-1"), upcoming_episode("ep-2")];
-    app.tv_upcoming_snapshots
-        .insert("lib-1".into(), snapshot.clone());
+    let snapshot = vec![upcoming_premiere("series-1"), upcoming_premiere("series-2")];
+    app.tv_upcoming_snapshots.insert("lib-1".into(), snapshot);
 
     app.select_letter_pill(0, 1);
 
     let level = app.libs[0].nav_stack.last().unwrap();
-    assert_eq!(level.items, snapshot, "the level shows the snapshot rows");
+    assert!(level.items.is_empty(), "premieres are not level items");
     assert_eq!(level.rows, ServerRows::complete(2));
     assert!(!level.loading, "the snapshot needs no fetch");
     assert_eq!(level.item_types.as_deref(), Some("Episode"));
@@ -429,13 +433,13 @@ fn waiting_upcoming_level_fills_when_the_eager_snapshot_lands() {
         "the selection waits for the in-flight eager fetch"
     );
 
-    let items = vec![upcoming_episode("ep-1")];
-    app.accept_tv_upcoming_snapshot("lib-1", items);
+    app.accept_tv_upcoming_snapshot("lib-1", vec![upcoming_premiere("series-1")]);
 
     let level = app.libs[0].nav_stack.last().unwrap();
     assert_eq!(level.rows, ServerRows::complete(1));
     assert!(!level.loading, "the arrived snapshot unblocks the level");
-    assert_eq!(level.items.len(), 1);
+    assert!(level.items.is_empty(), "premieres are not level items");
+    assert_eq!(app.tv_upcoming_snapshots["lib-1"].len(), 1);
 }
 
 /// A failed eager fetch clears the once-per-session mark (a later selection

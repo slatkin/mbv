@@ -5,7 +5,9 @@ use tuirealm::event::{Key, KeyEvent};
 use super::EmbyLibraryContent;
 use crate::inline_search::{InlineSearch, InlineSearchHost};
 use crate::library_panel::HeroContentData;
-use crate::library_panel::content::{HeroContent, LibraryPanelContent, ListSlot, SelectorRow};
+use crate::library_panel::content::{
+    HeroContent, HeroSlot, LibraryPanelContent, ListSlot, SelectorRow,
+};
 use crate::library_panel::hero::hero_content_emby;
 use crate::library_panel::owner::{LaunchSelector, LibraryContentOwner, LibrarySlotEvent};
 use crate::media_list::{MediaListOperation, MediaListSurfaceInput, RowIntent};
@@ -35,6 +37,10 @@ impl LibraryContentOwner for EmbyLibraryContent {
 
     fn hero_overlay_target_available(&mut self) -> bool {
         self.hero_item().is_some()
+    }
+
+    fn latest_list_active(&self) -> bool {
+        self.latest_mode()
     }
 
     fn inline_search_session(&mut self) -> Option<&mut dyn InlineSearchHost> {
@@ -136,7 +142,7 @@ impl LibraryContentOwner for EmbyLibraryContent {
         LibraryPanelContent {
             selector,
             list,
-            hero,
+            hero: HeroSlot::pane(hero),
         }
     }
 

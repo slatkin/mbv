@@ -281,6 +281,12 @@ impl LibraryContentOwner for PodcastContent {
     fn hero_overlay_available(&mut self) -> bool {
         false
     }
+    // The panel treats a Latest list as hero-free (see the `library-panel`
+    // requirement "A list of non-media rows has no Hero pane"). Podcast
+    // premieres are not media rows, so report the Latest mode directly.
+    fn latest_list_active(&self) -> bool {
+        self.latest_selected()
+    }
     fn browser_rows_are_hero_bearing(&mut self) -> bool {
         false
     }

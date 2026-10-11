@@ -364,6 +364,8 @@ impl TvContent {
             // Resolve the Series from its own cursor; emit nothing if absent.
             self.selected_item()
                 .map(|item| ShellRequest::TvActivate { item })
+        } else if self.flat_episode_mode() {
+            self.flat_activation_request()
         } else {
             self.selected_episode_item()
                 .map(|episode| ShellRequest::TvEpisodeActivate { episode })
@@ -455,13 +457,10 @@ impl TvContent {
             return Some(Msg::Shell(Box::new(request)));
         }
         let request = match key.code {
-            Key::Enter => self.selected_item().map(|item| {
-                if self.flat_episode_mode() {
-                    ShellRequest::TvEpisodeActivate { episode: item }
-                } else {
-                    ShellRequest::TvActivate { item }
-                }
-            }),
+            Key::Enter if self.flat_episode_mode() => self.flat_activation_request(),
+            Key::Enter => self
+                .selected_item()
+                .map(|item| ShellRequest::TvActivate { item }),
             Key::Esc | Key::Backspace => Some(ShellRequest::TvBack),
             Key::Char('.') => self.context_menu_request(),
             _ => return self.shared_library_effect(key, self.selected_item()),
