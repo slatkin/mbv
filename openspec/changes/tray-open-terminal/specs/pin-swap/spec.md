@@ -72,21 +72,20 @@ new Client cannot be started, exits with a failure before it attaches, or does n
 - **WHEN** the started terminal does not attach a Client within 10 seconds
 - **THEN** a desktop notification SHALL say that opening mbv timed out
 
-### Requirement: Launches start mbv after its binary changes on disk
+### Requirement: Launches start the Owner's own build after its binary file changes
 
-The Pin swap, Unpin, and Open SHALL start an mbv binary even after the file the Owner process was
-started from is replaced or removed. When a file now exists at the Owner's original binary path,
-mbv SHALL start that file. When no file exists there, mbv SHALL start the binary the Owner process
-itself runs.
+The Pin swap, Unpin, and Open SHALL start the binary that the Owner process itself runs, even
+after the file the Owner was started from is replaced or removed. A Client attaches only to an
+Owner of the same build, so a launch SHALL NOT start a different build.
 
-#### Scenario: Binary rebuilt while the Owner runs
+#### Scenario: Binary file replaced while the Owner runs
 
 - **WHEN** the Owner was started from `/usr/bin/mbv`, that file is replaced by a newer build, and
   the user chooses **Pin**
-- **THEN** mbv SHALL start the new `/usr/bin/mbv --pin`
+- **THEN** mbv SHALL start a pinned Client from the build the Owner runs
 - **THEN** no "could not start" notification SHALL be sent
 
-#### Scenario: Binary removed while the Owner runs
+#### Scenario: Binary file removed while the Owner runs
 
 - **WHEN** the file the Owner was started from is deleted, nothing replaces it, and the user
   chooses **Open**

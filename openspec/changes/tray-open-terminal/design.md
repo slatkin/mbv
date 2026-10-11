@@ -24,7 +24,7 @@ See proposal.md for the reason for this change. These facts about the code shape
 
 - One shared value tells the Tray which Clients are attached. Invalid combinations cannot exist.
 - Open reuses the existing launch machine, terminal command, and notifications.
-- Launches keep working after an upgrade or a rebuild of the Owner's binary.
+- Launches keep working after the file that the Owner started from is removed or replaced.
 
 **Non-Goals:**
 
@@ -64,13 +64,21 @@ Add the new variant to `ALL`, with `cli_flag` `--open`, the `help` text "open mb
 terminal", and the serde name `open-terminal`. `event_loop/owner_action.rs` sends it to
 `PinSwapState::open(now)`. The match stays exhaustive.
 
-An older Owner that receives the new action cannot deserialize it. Its existing refusal path then
-reports the error. The "Owner too old" message already tells the user to restart mbv, so no
-protocol bump is needed.
+An older Owner that supports Owner actions advertises the `owner-action` capability, so the CLI's
+"too old" check passes. That Owner cannot parse `open-terminal`, and it replies `CommandRejected`
+(`core_ctrl_spawn.rs`). Today `await_owner_action_reply`
+(`crates/mbv-remote-player/src/connect/owner_actions.rs`) skips that event. The CLI then waits for
+the 6 s read timeout and prints "owner-action reply unavailable". The fix: pass the action to
+`await_owner_action_reply` and map `CommandRejected` to the existing `restart_required` error, with
+the same text as the capability check: "the running mbv is too old for --open; restart it". The
+only command that an Owner-action connection can send is `RunOwnerAction`, so a `CommandRejected`
+there always means the Owner cannot run the action. No protocol bump is needed.
 
 ### D3. Open is a launch kind in `PinSwapState`
 
-Add a `LaunchKind { Swap, Open }` to `Phase::Preparing` and to `Phase::Awaiting`. `open(now)`:
+Add a `LaunchKind { Swap, Open }` to `Phase::Awaiting` only. `Preparing` always belongs to a swap
+(it has a target and waits for `SwapPrepared`), so `Open` there would be an unreachable state.
+`on_swap_prepared` passes `LaunchKind::Swap`. `open(now)`:
 
 1. Returns the busy refusal when the phase is not `Idle`. The text depends on the kind that is in
    flight: `BUSY_MESSAGE` stays the same for `Swap`, and `Open` uses "mbv is already opening".
@@ -97,25 +105,32 @@ deadline, child-waiter, and token logic, and it would need its own single-flight
 Add a pure function next to `swap_argv` in `src/local_daemon.rs`:
 
 ```rust
-fn launch_exe(current: &Path, exists: impl Fn(&Path) -> bool, owner_pid: u32) -> PathBuf
+fn launch_exe(current: &Path, owner_pid: u32) -> PathBuf
 ```
 
 - If `current` does not end in ` (deleted)`, return `current`.
-- Remove the suffix. If that path `exists`, return it. This is the upgrade or rebuild case, and it
-  starts the new build.
-- Otherwise return `/proc/{owner_pid}/exe`. This is the removed-worktree case, and it starts the
-  same build as the Owner. The path is valid while the Owner runs. It also works through a
-  terminal emulator, because the path names the Owner's pid, not `self`.
+- Otherwise return `/proc/{owner_pid}/exe`. This starts the same build as the Owner. The path is
+  valid while the Owner runs. It also works through a terminal emulator, because the path names
+  the Owner's pid, not `self`.
 
-The `swap_command` hook calls `launch_exe(&current_exe()?, Path::exists, std::process::id())`.
+The `swap_command` hook calls `launch_exe(&current_exe()?, std::process::id())`.
 
-*Alternative:* always use `/proc/<pid>/exe`. This was rejected because after an upgrade the Tray
-would open the old version.
+Both logged failures (`theme-slot-model/target/debug/mbv (deleted)` and
+`home-recently-added-tree/target/release/mbv (deleted)`) are removed worktrees, so the fallback
+alone fixes them.
+
+*Alternative:* when the original path exists again (an upgrade or a rebuild), start that file.
+This was rejected. A local Client refuses an Owner whose `app_version` differs from its own,
+before it sends any hello (`mbv-remote-player/src/connect/handshake.rs`,
+`docs/invariants/15-local-client-credential-gated-on-owner-build.md`). After a version change the
+new build would start, refuse to attach, and the launch would time out. The Owner's own build
+always passes that gate.
 
 ## Risks / Trade-offs
 
-- [A new build starts as a Client of an older Owner after an upgrade] → This already happens when
-  the user runs `mbv` from a shell. The Hello capability negotiation handles it.
+- [After an in-place rebuild or upgrade, a launch starts the Owner's older build] → This is
+  required by the build gate (D4). The user restarts mbv to get the new build, as with any Owner
+  change.
 - [The ` (deleted)` suffix is a Linux procfs detail] → mbv targets Linux only. If the suffix is
   absent, the path is returned unchanged.
 - [`/proc/<pid>/exe` shows a strange argv[0] in `ps`] → This is acceptable for a fallback that
