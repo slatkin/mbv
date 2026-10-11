@@ -97,11 +97,12 @@ pub struct TvContent {
     /// The embedded Inline Search control (design.md D1). See
     /// `EmbyLibraryContent::inline_search` for the migration-phase notes.
     inline_search: InlineSearch,
-    /// The breakpoint the shell pushed for this frame (`App::
-    /// wide_tv_library_area`): `true` paints the pane-based Wide workspace,
-    /// `false` paints the flat Narrow series list. Defaults to `true` so an
-    /// owner built and viewed without an explicit push (existing unit
-    /// tests) keeps painting the Wide workspace.
+    /// The breakpoint the shell pushed for this frame: terminal geometry
+    /// only (`App::is_right_panel_wide`, design D1). `true` paints the
+    /// pane-based Wide workspace, `false` paints the flat Narrow series
+    /// list. Defaults to `true` so an owner built and viewed without an
+    /// explicit push (existing unit tests) keeps painting the Wide
+    /// workspace.
     display_mode: TvDisplayMode,
     /// Whether the Library Hero overlay is open over this owner (pushed by
     /// the panel, design D2). In Narrow geometry only the overlay focuses

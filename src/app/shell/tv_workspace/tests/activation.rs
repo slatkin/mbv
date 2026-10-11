@@ -166,6 +166,9 @@ fn activate_selected_series_gates_on_the_caller_supplied_lib_idx_not_zero() {
     let mut tv_lib = tv_app.libs.remove(0);
     tv_lib.library.id = "lib-tvshows".into();
     tv_lib.library.collection_type = "tvshows".into();
+    // The Wide series Workspace needs a show mode: the breakpoint comes
+    // from content mode now, never from row types.
+    tv_lib.tv_content_mode = Some(mbv_queue::TvContentMode::All);
     for item in &mut tv_lib.nav_stack[0].items {
         item.item_type = "Series".into();
     }
@@ -177,8 +180,8 @@ fn activate_selected_series_gates_on_the_caller_supplied_lib_idx_not_zero() {
     model.sync_tv_content();
     model.sync_active_destination();
 
-    assert!(model.app.wide_tv_library_area(0).is_none());
-    assert!(model.app.wide_tv_library_area(1).is_some());
+    assert!(model.app.wide_tv_show_area(0).is_none());
+    assert!(model.app.wide_tv_show_area(1).is_some());
 
     assert!(model.app.activate_selected_series(1));
     assert!(

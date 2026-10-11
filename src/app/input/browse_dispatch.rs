@@ -35,7 +35,7 @@ impl App {
         if item.item_type != "Series" || item.id.is_empty() {
             return false;
         }
-        if self.wide_tv_library_area(lib_idx).is_some() {
+        if self.wide_tv_show_area(lib_idx).is_some() {
             self.enter_series_selection(lib_idx, item);
         }
         // Non-Wide activation is handled by the mounted Library panel, whose

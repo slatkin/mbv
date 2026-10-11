@@ -43,17 +43,19 @@ impl TvContent {
         // Hero facts first: reading the projected snapshot and image state
         // ends before the Workspace borrows the episode carrier mutably.
         let flat_episode_mode = self.flat_episode_mode();
-        let hero_item = if flat_episode_mode
-            && self.display_mode == TvDisplayMode::Narrow
-            && self.hero_overlay_open
-        {
-            self.selected_episode_item()
-        } else {
-            None
-        };
+        let latest_mode = self.latest_mode();
         let workspace_focused = self.context.focused && self.pane == Pane::Episodes;
-        let (hero_data, overview_title) = if flat_episode_mode {
-            (hero_item.map(|episode| hero_content_emby(&episode)), None)
+        // Latest shows the selected episode's hero in every geometry, like
+        // every Latest list (design D4). Upcoming rows are premiere
+        // notices, not media: no hero. Show modes keep the Workspace hero.
+        let (hero_data, overview_title) = if latest_mode {
+            (
+                self.selected_episode_item()
+                    .map(|episode| hero_content_emby(&episode)),
+                None,
+            )
+        } else if flat_episode_mode {
+            (None, None)
         } else {
             self.workspace_hero()
         };
@@ -97,9 +99,10 @@ impl TvContent {
         LibraryPanelContent {
             selector,
             list,
-            // Flat Latest/Upcoming rows are premiere-or-episode leaves, not
-            // a hero-bearing browser: the flat list owns no Hero pane.
-            hero: if flat_episode_mode {
+            // Flat Latest/Upcoming rows are episode leaves, not a
+            // hero-bearing browser: Upcoming owns no Hero pane, while
+            // Latest owns the shared episode hero pane.
+            hero: if flat_episode_mode && !latest_mode {
                 HeroSlot::Absent
             } else {
                 HeroSlot::Pane(hero.map(Box::new))
@@ -291,11 +294,12 @@ impl LibraryContentOwner for TvContent {
     }
 
     fn hero_data(&mut self) -> Option<HeroContentData> {
-        if self.flat_episode_mode() {
-            (self.hero_overlay_open && self.display_mode == TvDisplayMode::Narrow)
-                .then(|| self.selected_episode_item())
-                .flatten()
+        if self.latest_mode() {
+            self.selected_episode_item()
                 .map(|episode| hero_content_emby(&episode))
+        } else if self.flat_episode_mode() {
+            // Upcoming rows are premiere notices, not media: no hero.
+            None
         } else {
             self.workspace_hero().0
         }

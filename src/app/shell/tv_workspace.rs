@@ -105,7 +105,7 @@ impl Model {
                         .is_some_and(|selected| {
                             selected.id == item.id && selected.name == item.name
                         });
-                    if self.app.wide_tv_library_area(lib_idx).is_some() {
+                    if self.app.wide_tv_show_area(lib_idx).is_some() {
                         self.app.activate_selected_series_item(lib_idx, &item);
                     } else if owner_has_target {
                         self.open_library_hero_overlay();
@@ -155,7 +155,7 @@ impl Model {
         // prior stable target).
         self.reanchor_tv_owner_selection(&item.id);
         self.push_tv_workspace_content();
-        if self.app.wide_tv_library_area(lib_idx).is_some() {
+        if self.app.wide_tv_show_area(lib_idx).is_some() {
             self.app.activate_selected_series_item(lib_idx, item);
             // The workspace is active: episode selection takes the local
             // focus, like music's track-selection mode.
@@ -419,8 +419,6 @@ impl Model {
         if library.library.collection_type != "tvshows" {
             return;
         }
-        let lib_area = self.app.wide_tv_library_area(index);
-        let is_wide = lib_area.is_some();
         let list = self.app.library_list_render_ctx(
             index,
             self.app.libs[index]
@@ -513,6 +511,10 @@ impl Model {
         // focused pane and claims local chords from it (task 8.4).
         let library_focused =
             matches!(self.app.effective_panel_focus(), super::PanelFocus::Library);
+        // The owner's breakpoint is terminal geometry only (design D1): the
+        // same `is_right_panel_wide` bit the panel paints with. Read before
+        // the owner borrow below so the two never overlap.
+        let is_wide = self.app.is_right_panel_wide();
         self.update_tv_owner(|owner| {
             owner.set_is_wide(is_wide);
             owner.set_list_pane_width(list_pane_width);

@@ -25,7 +25,7 @@ fn mounted_wide_tv_model() -> Model {
         item.image_tags.thumb = "tag".into();
     }
     // Wide breakpoint is now driven synchronously by terminal size
-    // (`wide_tv_library_area`), not this previous-frame paint rect.
+    // (`wide_tv_show_area`), not this previous-frame paint rect.
     app.terminal_width = 160;
     app.terminal_height = 40;
     let mut model = Model::new(app);

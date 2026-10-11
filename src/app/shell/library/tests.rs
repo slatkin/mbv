@@ -85,7 +85,7 @@ fn mouse_eligibility_follows_breakpoint_and_overlay_lifecycle() {
         app.panel_focus = PanelFocus::Library;
         app.panel_mode = PanelMode::Both;
         // Wide breakpoint is now driven synchronously by terminal size
-        // (`wide_tv_library_area`), not this previous-frame paint rect.
+        // (`wide_tv_show_area`), not this previous-frame paint rect.
         if wide {
             app.terminal_width = 160;
             app.terminal_height = 40;

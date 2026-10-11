@@ -267,6 +267,15 @@ impl TvContent {
             Some(mbv_queue::TvContentMode::Latest | mbv_queue::TvContentMode::Upcoming)
         )
     }
+    /// Whether the owner shows the flat Latest list (design D4): the
+    /// selected episode owns the shared Wide hero, in every geometry.
+    #[must_use]
+    pub fn latest_mode(&self) -> bool {
+        matches!(
+            self.context.tv_content_mode,
+            Some(mbv_queue::TvContentMode::Latest)
+        )
+    }
     #[must_use]
     pub fn selected_season(&self) -> Option<(String, String)> {
         let series_id = self.context.selected_series.as_ref()?.id.clone();
