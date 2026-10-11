@@ -2,7 +2,7 @@
 pkgname=mbv-git
 pkgver=0.1.0
 pkgrel=1
-pkgdesc="Terminal client for Emby media server (git)"
+pkgdesc="mpv/Emby and Audiobookshelf front-end (git)"
 arch=('x86_64')
 url="https://github.com/slatkin/mbv"
 license=('MIT')

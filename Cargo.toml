@@ -135,7 +135,7 @@ license.workspace = true
 repository.workspace = true
 keywords.workspace = true
 categories.workspace = true
-description = "Terminal UI client for Emby media servers."
+description = "mpv/Emby and Audiobookshelf front-end"
 default-run = "mbv"
 
 # Lints mirror [workspace.lints] in the root Cargo.toml, minus the
@@ -270,7 +270,7 @@ rstest.workspace = true
 maintainer = "slatkin <slatkin@gmail.com>"
 copyright = "2024, slatkin"
 license-file = ["LICENSE", "0"]
-extended-description = "Terminal UI client for Emby media servers. Embeds mpv for playback, syncs position with Emby, and supports full remote control via Emby's websocket API. Requires an x86-64-v2 CPU (about 2009 or newer)."
+extended-description = "mpv/Emby and Audiobookshelf front-end. Embeds mpv for playback, syncs position with Emby, and supports full remote control via Emby's websocket API."
 depends = "libmpv2 | libmpv1, libc6, libssl3 | libssl1.1, pipewire, libpipewire-0.3-0, libwayland-client0, libxkbcommon0, libfontconfig1"
 section = "video"
 priority = "optional"

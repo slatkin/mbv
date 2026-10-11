@@ -2,7 +2,7 @@
 pkgname=mbv
 pkgver=0.24.3
 pkgrel=1
-pkgdesc="Terminal client for Emby media server (requires x86-64-v2 CPU)"
+pkgdesc="mpv/Emby and Audiobookshelf front-end"
 arch=('x86_64')
 url="https://github.com/slatkin/mbv"
 license=('MIT')
