@@ -397,3 +397,65 @@ fn feed_home_video_group_browser_wheel_scrolls_viewport_and_reports_reach() {
         "the wheel moved the free viewport by the uniform step"
     );
 }
+
+/// `destination-latest-modes`, "Destination Latest lists load lazily":
+/// opening a destination on its default Latest pill fetches the full Latest
+/// list. The Emby library owner is born on the default Latest pill, so the
+/// shell's owner projection requests the fetch once per library per run —
+/// the 0.24.4 restart regression (user report 2026-10-11) where the restored
+/// tab's owner already sat on Latest, the launch-restore selector
+/// short-circuited, and the blank list was never requested. The stub has no
+/// Service client, so the request records in the dedup set without a network
+/// call; the set is the observable decision state.
+#[test]
+fn default_latest_landing_requests_the_lazy_latest_fetch_once() {
+    let mut app = make_app_stub();
+    app.terminal_width = 60;
+    app.terminal_height = 20;
+    app.mini_view_focus = PanelFocus::Library;
+    app.tab = TabSelection::EmbyLibrary(0);
+
+    let mut library = make_item("Movies", "CollectionFolder");
+    library.id = "lib-movies".into();
+    library.collection_type = "movies".into();
+    library.is_folder = true;
+
+    app.libs.push(LibraryTab {
+        nav_stack: vec![BrowseLevel {
+            rows: ServerRows::new(5),
+            parent_id: "lib-movies".into(),
+            title: "Movies".into(),
+            items: folder_items("Movie", "Movie", 5),
+            resting: mbv_ui_model::browse::BrowseResting::new(0, 0),
+            item_types: Some("Movie".into()),
+            unplayed_only: false,
+            sort_by: "SortName".into(),
+            sort_order: "Ascending".into(),
+            loading: false,
+            all_items: None,
+            letter_filter: None,
+            tv_content_mode: None,
+            music_grouping: None,
+        }],
+        library_total: Some(5),
+        ..LibraryTab::new(library)
+    });
+
+    let mut model = Model::new(app);
+    model.sync_mounted_surfaces();
+
+    assert!(
+        model
+            .emby_destination_latest_requested
+            .contains("lib-movies"),
+        "the default-Latest landing requests the lazy fetch"
+    );
+    // The projection runs every sync pass; the request stays a once-per-run
+    // decision, not a per-pass refetch loop.
+    model.sync_mounted_surfaces();
+    assert_eq!(
+        model.emby_destination_latest_requested.len(),
+        1,
+        "a later projection never re-requests the fetch"
+    );
+}

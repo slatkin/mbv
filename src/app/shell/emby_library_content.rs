@@ -186,7 +186,7 @@ impl Model {
                     .collect()
             })
             .unwrap_or_default();
-        let latest_source = super::DestinationLatestSource::Emby(library_id);
+        let latest_source = super::DestinationLatestSource::Emby(library_id.clone());
         if self.active_emby_library_owner_is_latest()
             && !self
                 .acknowledged_home_latest_sources
@@ -218,6 +218,18 @@ impl Model {
         });
         if let Some(cursor) = landed_cursor {
             self.app.fetch_nearby_movie_posters(&poster_window, cursor);
+        }
+        // Latest is the default pill, so a default landing — first open or
+        // launch restore — fetches the lazy Latest list here (spec
+        // `destination-latest-modes`, "Destination Latest lists load lazily",
+        // "opening a destination on its default Latest pill"): the podcast
+        // push seam spawns its shelf the same way. The per-run requested set
+        // keeps this every-sync-pass projection from re-requesting; an
+        // explicit pill pick or refresh re-fetches through its own path.
+        if self.active_emby_library_owner_is_latest()
+            && self.emby_destination_latest_requested.insert(library_id)
+        {
+            self.app.spawn_destination_latest_snapshot(index);
         }
     }
 

@@ -174,6 +174,11 @@ pub struct Model {
     /// One authoritative TV Latest section snapshot per Emby library view.
     pub(in crate::app) tv_latest_snapshots:
         std::collections::HashMap<String, DestinationLatestSnapshot>,
+    /// Emby libraries whose default-Latest fetch was already requested this
+    /// run, so the every-sync-pass owner projection never re-requests it
+    /// (mirrors `App.audiobookshelf_shelf_requested`; spec
+    /// `destination-latest-modes`, "Destination Latest lists load lazily").
+    pub(in crate::app) emby_destination_latest_requested: std::collections::HashSet<String>,
     /// Home's per-source Recently added rows (spec
     /// `home-latest-sections`, "Recently added combines every Latest-bearing
     /// destination"): each Service's fetch items already
@@ -306,6 +311,7 @@ impl Model {
             home_content: HomeContent::new(),
             acknowledged_home_latest_sources: std::collections::HashSet::new(),
             tv_latest_snapshots: std::collections::HashMap::new(),
+            emby_destination_latest_requested: std::collections::HashSet::new(),
             home_recently_added: std::collections::HashMap::new(),
             home_context_item: None,
             handled_terminal_size: initial_terminal_size,
