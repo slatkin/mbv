@@ -189,6 +189,9 @@ impl App {
             TabSelection::EmbyLibrary(lib_idx) => {
                 self.set_panel_focus(PanelFocus::Library);
                 self.activate_library_position(lib_idx);
+                // The TV tab's Upcoming shelf loads eagerly, once per session
+                // (user rule, 2026-10-11); re-activation is deduped.
+                self.maybe_spawn_tv_upcoming_snapshot(lib_idx);
             }
             TabSelection::AudiobookshelfLibrary(index) => {
                 self.set_panel_focus(PanelFocus::Library);

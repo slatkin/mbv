@@ -128,6 +128,15 @@ pub struct App {
     /// Podcast libraries whose default-Latest shelf fetch was already
     /// spawned, so repeated content pushes never re-request it.
     pub(in crate::app) audiobookshelf_shelf_requested: std::collections::HashSet<String>,
+    /// Per-session TV Upcoming rows per library view (user rule, 2026-10-11):
+    /// the eager fetch runs once when the TV tab loads, pill selection
+    /// materializes the root level from here instead of refetching, and only
+    /// the focused manual refresh replaces the snapshot.
+    pub(in crate::app) tv_upcoming_snapshots: std::collections::HashMap<String, Vec<EmbyItem>>,
+    /// TV libraries whose eager Upcoming fetch was already requested this
+    /// session, so tab re-entry never re-requests it. Cleared when that one
+    /// fetch fails, so a later selection can retry.
+    pub(in crate::app) tv_upcoming_requested: std::collections::HashSet<String>,
     pub(in crate::app) audiobookshelf_browse:
         Vec<mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseState>,
     pub(in crate::app) audiobookshelf_book_browse:

@@ -22,9 +22,17 @@ fn feed_home_video_selection(state: &FeedHomeVideoState) -> (usize, usize, usize
 /// silently fall through here.
 fn handle_model_content_event(ev: ModelContentEvent) {
     match ev {
-        // The shell drain applies the Model-owned latest snapshot.
-        ModelContentEvent::EmbyLatestSnapshotFetched { library_id, items } => {
+        // The shell drain applies the fetched snapshot: the Latest variant
+        // into the shell-owned latest snapshot, the TV Upcoming variant into
+        // the per-session Upcoming store.
+        ModelContentEvent::EmbyLatestSnapshotFetched { library_id, items }
+        | ModelContentEvent::TvUpcomingSnapshotFetched { library_id, items } => {
             drop((library_id, items));
+        }
+        // The shell drain clears the per-session request mark and unsets a
+        // waiting Upcoming root level's loading flag.
+        ModelContentEvent::TvUpcomingSnapshotFailed { library_id } => {
+            drop(library_id);
         }
         // The shell drain stores the fetched items under their source.
         ModelContentEvent::HomeRecentlyAddedFetched {

@@ -301,6 +301,19 @@ pub enum ModelContentEvent {
         library_id: String,
         items: Vec<EmbyItem>,
     },
+    /// One TV library's Upcoming rows for the per-session snapshot (user
+    /// rule, 2026-10-11): fetched eagerly once when the TV tab loads,
+    /// materialized into the root level on pill selection, and refreshed only
+    /// by the focused manual refresh. The shell stores the items and fills an
+    /// active Upcoming root level that is waiting for them.
+    TvUpcomingSnapshotFetched {
+        library_id: String,
+        items: Vec<EmbyItem>,
+    },
+    /// The eager TV Upcoming fetch failed: the shell clears the per-session
+    /// request mark so a later pill selection can retry, and unsets the
+    /// loading flag of an active waiting Upcoming root level.
+    TvUpcomingSnapshotFailed { library_id: String },
     /// One eligible library's Home Recently added items (spec
     /// `home-latest-sections`, "Recently added loads at launch independent of
     /// destinations"): Emby through its Latest rules,

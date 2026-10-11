@@ -1,3 +1,4 @@
+use crate::app::dispatch::library::browse::align_level_to_tv_mode;
 use crate::app::{App, BrowseLevel};
 use mbv_ui_model::browse::{BrowseResting, ServerRows};
 
@@ -364,7 +365,28 @@ impl App {
                 self.spawn_tv_latest(lib_idx, parent_id, self.libs[lib_idx].library.name.clone());
             }
             mbv_queue::TvContentMode::Upcoming => {
-                self.spawn_tv_upcoming(lib_idx, parent_id, self.libs[lib_idx].library.name.clone());
+                // Upcoming loads once per session (user rule, 2026-10-11):
+                // the eager tab-load fetch fills the per-session snapshot, so
+                // selection materializes the level from it instead of
+                // refetching the slow server query. While that fetch is still
+                // in flight the level keeps its loading flag and the
+                // completion fills it; without a request this spawn is the
+                // fallback (and its completion fills the snapshot).
+                let library_id = self.libs[lib_idx].library.id.clone();
+                if let Some(items) = self.tv_upcoming_snapshots.get(&library_id) {
+                    if let Some(last) = self.libs[lib_idx].nav_stack.last_mut() {
+                        align_level_to_tv_mode(last, &mbv_queue::TvContentMode::Upcoming);
+                        last.items.clone_from(items);
+                        last.rows = ServerRows::complete(items.len());
+                        last.loading = false;
+                    }
+                } else if !self.tv_upcoming_requested.contains(&library_id) {
+                    self.spawn_tv_upcoming(
+                        lib_idx,
+                        parent_id,
+                        self.libs[lib_idx].library.name.clone(),
+                    );
+                }
             }
             mbv_queue::TvContentMode::All => {
                 let key = mbv_ui_model::browse::LevelFetchKey {

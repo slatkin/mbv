@@ -280,6 +280,108 @@ impl App {
         });
     }
 
+    /// Request the per-session TV Upcoming snapshot for one TV library
+    /// (user rule, 2026-10-11): the eager background fetch runs once when the
+    /// TV tab loads, pill selection materializes the root level from it
+    /// instead of refetching, and only the focused manual refresh replaces
+    /// it. A no-op when the snapshot already exists, the request is already
+    /// in flight, or a saved position is restoring straight into Upcoming —
+    /// that restore's own fetch fills the snapshot through its `Loaded`
+    /// completion. Without a Service client this stays unrequested, so a
+    /// later tab load retries.
+    pub(in crate::app) fn maybe_spawn_tv_upcoming_snapshot(&mut self, lib_idx: usize) {
+        let Some(lib) = self.libs.get(lib_idx) else {
+            return;
+        };
+        if lib.library.collection_type != "tvshows" {
+            return;
+        }
+        let library_id = lib.library.id.clone();
+        if self.tv_upcoming_snapshots.contains_key(&library_id)
+            || self.tv_upcoming_requested.contains(&library_id)
+        {
+            return;
+        }
+        let restoring_into_upcoming = lib.tv_content_mode.as_ref()
+            == Some(&mbv_queue::TvContentMode::Upcoming)
+            || lib
+                .nav_stack
+                .last()
+                .and_then(|level| level.tv_content_mode.as_ref())
+                == Some(&mbv_queue::TvContentMode::Upcoming);
+        if restoring_into_upcoming {
+            return;
+        }
+        let Some(client) = self.emby_snapshot() else {
+            return;
+        };
+        self.tv_upcoming_requested.insert(library_id.clone());
+        let tx = self.channels.lib_tx.clone();
+        std::thread::spawn(move || match client.get_upcoming(&library_id, 30) {
+            Ok(items) => {
+                let _ = tx.send(LibEvent::ModelContent(
+                    ModelContentEvent::TvUpcomingSnapshotFetched { library_id, items },
+                ));
+            }
+            Err(_) => {
+                let _ = tx.send(LibEvent::ModelContent(
+                    ModelContentEvent::TvUpcomingSnapshotFailed { library_id },
+                ));
+            }
+        });
+    }
+
+    /// Accept one eager TV Upcoming completion: store the per-session
+    /// snapshot and fill an active Upcoming root level that is waiting for
+    /// it (spec-aligned empty state when the source has no rows).
+    pub(in crate::app) fn accept_tv_upcoming_snapshot(
+        &mut self,
+        library_id: &str,
+        items: Vec<EmbyItem>,
+    ) {
+        self.tv_upcoming_snapshots
+            .insert(library_id.to_string(), items.clone());
+        let Some(lib) = self
+            .libs
+            .iter_mut()
+            .find(|lib| lib.library.id == library_id && lib.library.collection_type == "tvshows")
+        else {
+            return;
+        };
+        let Some(level) = lib.nav_stack.last_mut() else {
+            return;
+        };
+        if level.tv_content_mode.as_ref() != Some(&mbv_queue::TvContentMode::Upcoming) {
+            return;
+        }
+        align_level_to_tv_mode(level, &mbv_queue::TvContentMode::Upcoming);
+        level.items = items;
+        level.rows = ServerRows::complete(level.items.len());
+        level.loading = false;
+    }
+
+    /// The eager TV Upcoming fetch failed: clear the per-session request mark
+    /// so a later pill selection can retry, and unset the loading flag of an
+    /// active Upcoming root level that was waiting for the fetch.
+    pub(in crate::app) fn tv_upcoming_snapshot_failed(&mut self, library_id: &str) {
+        self.tv_upcoming_requested.remove(library_id);
+        let Some(lib) = self
+            .libs
+            .iter_mut()
+            .find(|lib| lib.library.id == library_id && lib.library.collection_type == "tvshows")
+        else {
+            return;
+        };
+        let Some(level) = lib.nav_stack.last_mut() else {
+            return;
+        };
+        if level.tv_content_mode.as_ref() == Some(&mbv_queue::TvContentMode::Upcoming)
+            && level.loading
+        {
+            level.loading = false;
+        }
+    }
+
     pub(in crate::app) fn spawn_tv_upcoming(
         &mut self,
         lib_idx: usize,

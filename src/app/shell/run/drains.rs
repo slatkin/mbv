@@ -180,6 +180,17 @@ impl Model {
                             .collect(),
                     );
                 }
+                LibEvent::ModelContent(ModelContentEvent::TvUpcomingSnapshotFetched {
+                    library_id,
+                    items,
+                }) => {
+                    self.app.accept_tv_upcoming_snapshot(&library_id, items);
+                }
+                LibEvent::ModelContent(ModelContentEvent::TvUpcomingSnapshotFailed {
+                    library_id,
+                }) => {
+                    self.app.tv_upcoming_snapshot_failed(&library_id);
+                }
                 LibEvent::ModelContent(ModelContentEvent::HomeRecentlyAddedFetched {
                     source,
                     generation,
@@ -193,36 +204,20 @@ impl Model {
                     parent_id,
                     level,
                 }) => {
-                    let latest = self
-                        .app
-                        .libs
-                        .get(lib_idx)
-                        .filter(|lib| {
-                            lib.library.collection_type == "tvshows"
-                                && (lib.tv_content_mode == Some(mbv_queue::TvContentMode::Latest)
-                                    || level.tv_content_mode
-                                        == Some(mbv_queue::TvContentMode::Latest))
-                        })
-                        .map(|lib| {
-                            (
-                                lib.library.id.clone(),
-                                level
-                                    .items
-                                    .iter()
-                                    .cloned()
-                                    .map(Box::new)
-                                    .map(mbv_queue::QueueItem::Emby)
-                                    .collect(),
-                            )
-                        });
+                    let tv_snapshot = Self::capture_tv_root_completion(
+                        &self.app.libs,
+                        lib_idx,
+                        &parent_id,
+                        &level,
+                    );
                     self.app
                         .handle_lib_event(LibEvent::Browse(BrowseEvent::Loaded {
                             lib_idx,
                             parent_id,
                             level,
                         }));
-                    if let Some((library_id, items)) = latest {
-                        self.update_emby_latest_snapshot(&library_id, items);
+                    if let Some((library_id, mode, items)) = tv_snapshot {
+                        self.apply_tv_root_completion(&library_id, mode.as_ref(), items);
                     }
                 }
                 // Recursive album activation used to write `Some(0)` on
@@ -280,6 +275,70 @@ impl Model {
             self.push_home_content();
         }
         had_events
+    }
+
+    /// Captures one TV root completion's per-session snapshot payload before
+    /// the App consumes the `Loaded` event: which library, which TV mode owns
+    /// the root, and the rows as `QueueItem`s. The root check (`parent_id` ==
+    /// the library id) keeps every non-root fetch (drill-in, search) out of
+    /// the stores; the mode falls back to the library's selected pill mode
+    /// because the pill spawn's built level carries no mode of its own.
+    fn capture_tv_root_completion(
+        libs: &[crate::app::LibraryTab],
+        lib_idx: usize,
+        parent_id: &str,
+        level: &crate::app::BrowseLevel,
+    ) -> Option<(
+        String,
+        Option<mbv_queue::TvContentMode>,
+        Vec<mbv_queue::QueueItem>,
+    )> {
+        let lib = libs.get(lib_idx)?;
+        if lib.library.collection_type != "tvshows" || *parent_id != lib.library.id {
+            return None;
+        }
+        if level.tv_content_mode.is_none() && lib.tv_content_mode.is_none() {
+            return None;
+        }
+        let items = level
+            .items
+            .iter()
+            .cloned()
+            .map(Box::new)
+            .map(mbv_queue::QueueItem::Emby)
+            .collect();
+        Some((
+            lib.library.id.clone(),
+            level
+                .tv_content_mode
+                .clone()
+                .or_else(|| lib.tv_content_mode.clone()),
+            items,
+        ))
+    }
+
+    /// Applies one captured TV root completion to its per-session snapshot:
+    /// the Latest arm refreshes the shell-owned latest snapshot, the Upcoming
+    /// arm the App-owned per-session Upcoming store.
+    fn apply_tv_root_completion(
+        &mut self,
+        library_id: &str,
+        mode: Option<&mbv_queue::TvContentMode>,
+        items: Vec<mbv_queue::QueueItem>,
+    ) {
+        match mode {
+            Some(mbv_queue::TvContentMode::Latest) => {
+                self.update_emby_latest_snapshot(library_id, items);
+            }
+            Some(mbv_queue::TvContentMode::Upcoming) => {
+                let items = items
+                    .into_iter()
+                    .filter_map(|item| item.as_emby().cloned())
+                    .collect();
+                self.app.accept_tv_upcoming_snapshot(library_id, items);
+            }
+            _ => {}
+        }
     }
 
     /// The per-event content tail of `drain_lib_events`: a drained lib event

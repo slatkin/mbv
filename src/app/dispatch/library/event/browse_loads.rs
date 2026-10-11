@@ -287,6 +287,17 @@ impl App {
         let is_feed_video_refresh = self.is_feed_home_video_library(lib_idx)
             && item_types == Some("Video")
             && unplayed_only;
+        // A focused manual refresh of a TV root in Upcoming mode also
+        // refreshes the per-session snapshot (user rule, 2026-10-11: F5 is
+        // the only re-fetch while Upcoming is focused).
+        let is_tv_upcoming_refresh = self.libs.get(lib_idx).is_some_and(|lib| {
+            lib.library.collection_type == "tvshows"
+                && lib.tv_content_mode == Some(mbv_queue::TvContentMode::Upcoming)
+                && parent_id == lib.library.id
+                && item_types == Some("Episode")
+        });
+        let upcoming_snapshot =
+            (is_tv_upcoming_refresh && !is_feed_video_refresh).then(|| items.clone());
         if !is_feed_video_refresh {
             let mut items = Some(items);
             let updated = self.update_current_browse_level(lib_idx, parent_id, false, |last| {
@@ -307,6 +318,12 @@ impl App {
                     );
                 }
             }
+        }
+        if let Some(items) = upcoming_snapshot
+            && let Some(lib) = self.libs.get(lib_idx)
+        {
+            self.tv_upcoming_snapshots
+                .insert(lib.library.id.clone(), items);
         }
         self.normalize_current_browse_level_items(lib_idx);
         self.start_or_supersede_music_grouping(lib_idx);

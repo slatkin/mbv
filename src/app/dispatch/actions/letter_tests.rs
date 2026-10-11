@@ -356,3 +356,106 @@ fn tv_series_root_refresh_re_arms_completion_pagination() {
         "an in-place TV series refresh must re-arm the next page fetch (3 of 5 rows loaded)"
     );
 }
+
+// ── TV Upcoming: once-per-session eager load (user rule, 2026-10-11) ─────────
+
+fn upcoming_episode(id: &str) -> EmbyItem {
+    let mut item = make_item(id, "Episode");
+    item.id = id.into();
+    item
+}
+
+/// The eager request marks the library only when a fetch can actually go
+/// out: the pill select's wait-on-in-flight path treats a mark as a fetch in
+/// flight, so a client-less tab load must leave the library unmarked and let
+/// a later tab load retry.
+#[test]
+fn eager_upcoming_request_stays_unmarked_without_a_service_client() {
+    let mut app = make_app_stub();
+    app.libs.push(lib_tab("tvshows"));
+    push_top_level_tv(&mut app.libs[0], 3);
+
+    app.maybe_spawn_tv_upcoming_snapshot(0);
+
+    assert!(
+        app.tv_upcoming_requested.is_empty(),
+        "no client means no request mark, so a later tab load retries"
+    );
+}
+
+/// Selecting the Upcoming pill materializes the root level from the
+/// per-session snapshot instead of refetching the slow server query
+/// (`destination-latest-modes`-adjacent user rule, 2026-10-11).
+#[test]
+fn upcoming_pill_select_materializes_the_session_snapshot() {
+    let mut app = make_app_stub();
+    app.libs.push(lib_tab("tvshows"));
+    push_top_level_tv(&mut app.libs[0], 2);
+    app.libs[0].library_total = Some(1000);
+    app.libs[0].tv_content_mode = Some(mbv_queue::TvContentMode::Latest);
+    let snapshot = vec![upcoming_episode("ep-1"), upcoming_episode("ep-2")];
+    app.tv_upcoming_snapshots
+        .insert("lib-1".into(), snapshot.clone());
+
+    app.select_letter_pill(0, 1);
+
+    let level = app.libs[0].nav_stack.last().unwrap();
+    assert_eq!(level.items, snapshot, "the level shows the snapshot rows");
+    assert_eq!(level.rows, ServerRows::complete(2));
+    assert!(!level.loading, "the snapshot needs no fetch");
+    assert_eq!(level.item_types.as_deref(), Some("Episode"));
+    assert_eq!(level.sort_by, "PremiereDate");
+    assert_eq!(level.sort_order, "Ascending");
+    assert_eq!(
+        app.libs[0].tv_content_mode,
+        Some(mbv_queue::TvContentMode::Upcoming)
+    );
+}
+
+/// With the eager fetch still in flight, selecting Upcoming waits (loading)
+/// and the snapshot completion fills the level (`TvUpcomingSnapshotFetched`).
+#[test]
+fn waiting_upcoming_level_fills_when_the_eager_snapshot_lands() {
+    let mut app = make_app_stub();
+    app.libs.push(lib_tab("tvshows"));
+    push_top_level_tv(&mut app.libs[0], 2);
+    app.libs[0].library_total = Some(1000);
+    app.libs[0].tv_content_mode = Some(mbv_queue::TvContentMode::Latest);
+    app.tv_upcoming_requested.insert("lib-1".into());
+
+    app.select_letter_pill(0, 1);
+    assert!(
+        app.libs[0].nav_stack.last().unwrap().loading,
+        "the selection waits for the in-flight eager fetch"
+    );
+
+    let items = vec![upcoming_episode("ep-1")];
+    app.accept_tv_upcoming_snapshot("lib-1", items);
+
+    let level = app.libs[0].nav_stack.last().unwrap();
+    assert_eq!(level.rows, ServerRows::complete(1));
+    assert!(!level.loading, "the arrived snapshot unblocks the level");
+    assert_eq!(level.items.len(), 1);
+}
+
+/// A failed eager fetch clears the once-per-session mark (a later selection
+/// can retry) and unsets a waiting Upcoming level's loading flag.
+#[test]
+fn failed_eager_upcoming_fetch_unblocks_the_waiting_level() {
+    let mut app = make_app_stub();
+    app.libs.push(lib_tab("tvshows"));
+    push_top_level_tv(&mut app.libs[0], 2);
+    app.libs[0].library_total = Some(1000);
+    app.libs[0].tv_content_mode = Some(mbv_queue::TvContentMode::Latest);
+    app.tv_upcoming_requested.insert("lib-1".into());
+
+    app.select_letter_pill(0, 1);
+    app.tv_upcoming_snapshot_failed("lib-1");
+
+    let level = app.libs[0].nav_stack.last().unwrap();
+    assert!(!level.loading, "the failed fetch unblocks the level");
+    assert!(
+        app.tv_upcoming_requested.is_empty(),
+        "the failure clears the once-per-session mark for a retry"
+    );
+}
