@@ -98,8 +98,10 @@ pub struct TvContent {
     /// `EmbyLibraryContent::inline_search` for the migration-phase notes.
     inline_search: InlineSearch,
     /// The breakpoint the shell pushed for this frame (`App::
-    /// wide_tv_library_area`): `true` paints the pane-based Wide workspace,
-    /// `false` paints the flat Narrow series list. Defaults to `true` so an
+    /// is_right_panel_wide`, geometry only, the same fact the panel uses):
+    /// `true` is the Wide geometry, `false` is Narrow. It does not depend on
+    /// the content mode, so a Latest or Upcoming list in a wide terminal is
+    /// `Wide` too. Defaults to `true` so an
     /// owner built and viewed without an explicit push (existing unit
     /// tests) keeps painting the Wide workspace.
     display_mode: TvDisplayMode,

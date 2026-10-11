@@ -105,7 +105,7 @@ impl Model {
                         .is_some_and(|selected| {
                             selected.id == item.id && selected.name == item.name
                         });
-                    if self.app.wide_tv_library_area(lib_idx).is_some() {
+                    if self.app.wide_tv_show_area(lib_idx).is_some() {
                         self.app.activate_selected_series_item(lib_idx, &item);
                     } else if owner_has_target {
                         self.open_library_hero_overlay();
@@ -155,7 +155,7 @@ impl Model {
         // prior stable target).
         self.reanchor_tv_owner_selection(&item.id);
         self.push_tv_workspace_content();
-        if self.app.wide_tv_library_area(lib_idx).is_some() {
+        if self.app.wide_tv_show_area(lib_idx).is_some() {
             self.app.activate_selected_series_item(lib_idx, item);
             // The workspace is active: episode selection takes the local
             // focus, like music's track-selection mode.
@@ -419,8 +419,7 @@ impl Model {
         if library.library.collection_type != "tvshows" {
             return;
         }
-        let lib_area = self.app.wide_tv_library_area(index);
-        let is_wide = lib_area.is_some();
+        let is_wide = self.app.is_right_panel_wide();
         let list = self.app.library_list_render_ctx(
             index,
             self.app.libs[index]
