@@ -29,9 +29,9 @@ fn premiere(series_name: &str, date: &str) -> UpcomingPremiere {
 }
 
 #[test]
-fn upcoming_episode_rows_group_dates_in_first_seen_order_with_relative_headings() {
+fn upcoming_premiere_rows_group_dates_in_first_seen_order_with_relative_headings() {
     let today = time::Date::from_calendar_date(2026, time::Month::September, 23).unwrap();
-    let rows = upcoming_episode_rows(
+    let rows = upcoming_premiere_rows(
         &[
             premiere("Yesterday episode", "2026-09-22T00:00:00Z"),
             premiere("Today episode", "2026-09-23"),

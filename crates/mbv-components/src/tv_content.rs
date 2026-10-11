@@ -47,7 +47,7 @@ mod tree_projection;
 
 #[cfg(test)]
 use episode_rows::build_episode_rows;
-use episode_rows::{build_latest_episode_rows, upcoming_episode_rows};
+use episode_rows::{build_latest_episode_rows, upcoming_premiere_rows};
 #[derive(Clone, Copy, Eq, PartialEq, Debug)]
 enum Pane {
     Series,
@@ -222,7 +222,7 @@ impl TvContent {
                 build_latest_episode_rows(&context.list.items)
             }
             Some(mbv_queue::TvContentMode::Upcoming) => {
-                upcoming_episode_rows(&context.upcoming, time::OffsetDateTime::now_utc().date())
+                upcoming_premiere_rows(&context.upcoming, time::OffsetDateTime::now_utc().date())
             }
             Some(mbv_queue::TvContentMode::All | mbv_queue::TvContentMode::Range(_)) | None => {
                 Self::series_rows(context, inline_search_active)

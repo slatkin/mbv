@@ -263,7 +263,8 @@ pub struct LibraryPanelContent<'a> {
     pub hero: HeroSlot<'a>,
 }
 
-/// Whether the Hero pane exists for the current list (design D2). The panel
+/// Whether the Hero pane exists for the current list. The living requirement
+/// is `library-panel` "A list of non-media rows has no Hero pane". The panel
 /// reads "no Hero pane" from this type, never from the destination's key.
 #[derive(Debug)]
 pub enum HeroSlot<'a> {

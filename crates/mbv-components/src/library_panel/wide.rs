@@ -376,7 +376,8 @@ pub fn render_wide_skeleton(
         windows,
         terminal_height,
     } = params;
-    // The slot variant decides whether the Hero pane exists (design D2).
+    // The slot variant decides whether the Hero pane exists. See the
+    // `library-panel` requirement "A list of non-media rows has no Hero pane".
     let show_hero_pane = content.hero.shows_pane();
     let WideLibraryPanes {
         pills_area,

@@ -87,21 +87,21 @@ fn premiere_number_label(premiere: &UpcomingPremiere) -> String {
     }
 }
 
-pub fn upcoming_episode_rows(
+pub fn upcoming_premiere_rows(
     premieres: &[UpcomingPremiere],
     today: Date,
 ) -> Vec<MediaListRow<String>> {
     let mut groups: Vec<(Option<Date>, Vec<&UpcomingPremiere>)> =
         Vec::with_capacity(premieres.len());
-    for episode in premieres {
-        let date = parse_premiere_date(&episode.premiere_date);
+    for premiere in premieres {
+        let date = parse_premiere_date(&premiere.premiere_date);
         if let Some((_, rows)) = groups
             .iter_mut()
             .find(|(group_date, _)| *group_date == date)
         {
-            rows.push(episode);
+            rows.push(premiere);
         } else {
-            groups.push((date, vec![episode]));
+            groups.push((date, vec![premiere]));
         }
     }
 

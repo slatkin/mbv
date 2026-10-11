@@ -96,7 +96,8 @@ impl TvContent {
             ListSlot::Media(&mut self.browser)
         };
         // Upcoming rows are premiere notices, not media: the panel paints no
-        // Hero pane for them (design D2). Latest carries the episode hero.
+        // Hero pane for them (`library-panel` requirement "A list of non-media
+        // rows has no Hero pane"). Latest carries the episode hero.
         let hero = if upcoming_mode {
             HeroSlot::Absent
         } else {
