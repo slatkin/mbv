@@ -268,6 +268,10 @@ TV show tree:
 The show-mode TV browser. It is one shared TreeBrowser. It projects shows as selectable expandable roots, seasons as expandable children, and loaded episodes as leaf children. It uses the established show group headings and between-group spacers as structural rows. Show modes (`All` and the alphabet ranges) use it in every Panel mode. `Latest`, `Upcoming`, Inline Search, and the Hero season pills and episode Workspace stay flat and outside it. Inline tree episodes deliberately duplicate Workspace episode rows. Row identity is a closed `TvTreeTarget` that scopes seasons and episodes to their show and season. A season loads its children only when its branch expands.
 _Avoid_: show browser (bare), series list, nested TV list
 
+Upcoming premiere:
+An Emby announcement of a future episode. It shows in TV `Upcoming`. It is not a media item. It cannot play, enqueue, or show a Hero. Its only action opens its series.
+_Avoid_: upcoming episode, placeholder episode
+
 Media-list row:
 The one painted fixed-height row of a `MediaList` flow in every Panel mode. Its left-aligned metadata slot carries a progress badge in the FOAM role. Its right-aligned gutter has one closed metadata role. It is a date or year in the green `STATUS_AVAILABLE` role, or a green duration on Queue rows.
 _Avoid_: wide media row, wide_media_row, left-aligned year slot
@@ -625,7 +629,7 @@ An item that the mbv queue holds and that cannot go to a cast receiver. It has n
 _Avoid_: unplayable (cast), unsupported item, skip reason
 
 TV content mode:
-One selectable mode of the top-level pill row of a TV library. It is `Latest`, `Upcoming`, an alphabet range (`A-I`, `J-R`, or `S-Z`), or `All` (small libraries only). The row appears only at the top browse level while not searching. `Latest` and `Upcoming` rows are flat episode lists that play directly. The selected mode is part of the sticky library position. It follows `tv-library-content-modes`.
+One selectable mode of the top-level pill row of a TV library. It is `Latest`, `Upcoming`, an alphabet range (`A-I`, `J-R`, or `S-Z`), or `All` (small libraries only). The row appears only at the top browse level while not searching. `Latest` is a flat episode list that plays directly. `Upcoming` is a flat list of *Upcoming premieres* that open their series. The selected mode is part of the sticky library position. It follows `tv-library-content-modes`.
 _Avoid_: TV pill (for the mode), TV range (for the whole row), TV tab (for the mode)
 
 TV letter range:
