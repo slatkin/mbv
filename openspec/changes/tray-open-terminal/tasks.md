@@ -18,7 +18,7 @@
 
 ## 4. Tray item (spec pin-swap "The Tray offers Open…")
 
-- [ ] 4.1 In `crates/mbv-desktop/src/tray.rs`, take `Arc<AttachedClientsCell>` in `spawn`/`MbvTray`, and derive the Pin label from `Pinned`. When the state is `None`, add an **Open** item directly above **Pin** that sends `TransportCommand::OwnerAction(OwnerAction::OpenTerminal)`. The watcher compares the enum. Update the test helpers `spy_tray` and `spy_tray_with_flag`, and rewrite `pin_swap_label_follows_a_flag_flip_after_construction` (it builds an `AtomicBool`). Change the `pin_swap_item_label_and_activation_follow_the_pinned_flag` case table to take an `AttachedClients` value, with one row per state, and assert whether **Open** is present. Add one test that activating **Open** sends `OpenTerminal`. Verify: `cargo nextest run -p mbv-desktop tray`.
+- [x] 4.1 In `crates/mbv-desktop/src/tray.rs`, take `Arc<AttachedClientsCell>` in `spawn`/`MbvTray`, and derive the Pin label from `Pinned`. When the state is `None`, add an **Open** item directly above **Pin** that sends `TransportCommand::OwnerAction(OwnerAction::OpenTerminal)`. The watcher compares the enum. Update the test helpers `spy_tray` and `spy_tray_with_flag`, and rewrite `pin_swap_label_follows_a_flag_flip_after_construction` (it builds an `AtomicBool`). Change the `pin_swap_item_label_and_activation_follow_the_pinned_flag` case table to take an `AttachedClients` value, with one row per state, and assert whether **Open** is present. Add one test that activating **Open** sends `OpenTerminal`. Verify: `cargo nextest run -p mbv-desktop tray`.
 
 ## 5. Domain docs (AGENTS.md "Add new terms with the change")
 
