@@ -6,7 +6,11 @@ context: |
 
 rules:
   tasks:
-    - Break tasks into chunks that can be accomplished by a single agent without filling its compact window.
+    - Keep tasks small enough for one agent without filling its compact window.
+  specs:
+    - Specs state behavior and layout, never paint.
+    - Never pin strings, glyphs, colors, spacing, alignment, truncation.
+    - An intentional look change supersedes prior style text; no spec delta.
 
 operations:
   archive:

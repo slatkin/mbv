@@ -6,6 +6,7 @@ mbv is a Rust terminal media client for Emby, Audiobookshelf, and Feeds. It embe
 
 * Read `CONTEXT.md` before you name domain concepts. Its *Avoid* terms name the words you must not use. Add new terms with the change. Ask before you rename or collide.
 * Architecture work follows fixed sources. `docs/adr/` holds accepted decisions (the why). `openspec/specs/` holds current behavior. For in-progress work, read the full `openspec/changes/<name>/` directory. Its delta specs overlay main specs until archived. Do not edit archived changes.
+* Specs state behavior and layout, never paint (ADR 0031): no literal strings, glyphs, colors, spacing, alignment, or truncation rules. An intentional look change supersedes prior style text — never flag it as a spec violation, never require a spec delta for it, and delete paint-level SHALLs on sight.
 * `docs/invariants/` holds properties that the code must maintain but that no type enforces. It tells why they matter, how the code upholds them today, and where they still fail. Read it before you touch queue, progress, or playback-lifecycle state. Add one when you find or fix this kind of bug. Do not leave the lesson only in a commit message.
 * Write durable plans in OpenSpec markdown, not in chat. Commit plans, specs, and docs with code. Sync applied deltas into `openspec/specs/`. Archive when done.
 * Probe the real service before you plan API work. If the design of a feature depends on what a remote API returns, probe that endpoint first. Emby, Audiobookshelf, feeds, and any remote endpoint are examples.

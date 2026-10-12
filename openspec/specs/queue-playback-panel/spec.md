@@ -38,82 +38,18 @@ the Queue playback panel's transport (controls, seekbar and their times), not it
 ### Requirement: Queue-visible layouts paint a now-playing header row
 
 In every layout that renders the queue column, the left column SHALL paint one header row at the top
-of its content, above the visual slot, on the chrome surface. The header SHALL sit in the queue
-column's recessed inset: one row of column surface above it and two columns of column surface on
-each side, with no padding below it, so it is not flush with the column's top, left, or right edge
-and its text aligns with the slot and transport below. The header SHALL always be painted, including
+of its content, above the visual slot. The header SHALL always be painted, including
 while playback is idle.
-
-While playback is idle the header SHALL state `IDLE` on the left and the playback target as
-`[host]` on the right, with the brackets cream, the hostname muted when local and aqua when remote,
-and the hostname truncated with an ellipsis (brackets kept) before it can overlap `IDLE`. The target
-SHALL be the playback-target label the shell resolves: this machine's device name when playback is
-local, and the connected session's device name (then its host) or the direct-remote label when it is
-remote.
-
-While a target plays the header row SHALL NOT carry a status word (`PLAYING` or `PAUSED`) and SHALL
-NOT carry the target (`on <host>` or `[host]`): it SHALL begin with the state icon, one space, and
-then either the now-playing title or the label `Now Playing`. The state icon SHALL be the play icon
-painted aqua while playback is not paused, and the pause icon painted yellow (the focus-accent role)
-while it is paused. The row SHALL carry the title — a two-part title as the context part left-aligned
-(clipped to its room, never scrolling) and the title part right-aligned with the overflow marquee on
-the remaining width, a one-part title as a single yellow title with the marquee — unless the queue
-artwork carries the title under the `queue-artwork-title-overlay` capability, in which case it SHALL
-read `Now Playing`, the label in the context role (yellow, as a one-part title paints in the header)
-after the state icon. No throbber, progress percent, or time SHALL paint in the header.
 
 The header SHALL follow the effective playback target — cast, then connected session, then local —
 and SHALL NOT follow the queue scope being viewed.
 
-#### Scenario: Header is recessed in the queue column
 
-- **WHEN** a queue-visible layout is painted
-- **THEN** the header SHALL sit one row below the column's top edge, inset two columns from each side
-  edge, with no blank row between it and the slot/transport band below
-
-#### Scenario: Active local playback
-
-- **WHEN** a queue-visible layout is painted while a target plays and the artwork does not carry
-  the title
-- **THEN** the header row SHALL read the state icon followed by the now-playing title
-- **AND** the header row SHALL NOT contain `PLAYING`, `PAUSED`, `on <host>`, or `[host]`
-- **AND** no throbber, progress percent, or time SHALL paint in the header row
-
-#### Scenario: Play icon is aqua
-
-- **WHEN** a queue-visible layout is painted while playback is active and not paused
-- **THEN** the header row SHALL show the play icon painted aqua
-
-#### Scenario: Two-part title alignment
-
-- **WHEN** a queue-visible layout is painted while the now-playing title has a context part and the
-  artwork does not carry the title
-- **THEN** the context part SHALL be left-aligned beside the state icon and the title part
-  right-aligned, with the marquee window on the width the context part leaves
-
-#### Scenario: Now Playing label while the artwork carries the title
-
-- **WHEN** a queue-visible layout is painted while the artwork carries the title
-- **THEN** the header row SHALL read the state icon followed by `Now Playing`
-
-#### Scenario: Paused playback
-
-- **WHEN** a queue-visible layout is painted while playback is paused
-- **THEN** the header row SHALL show the pause icon painted yellow in place of the aqua play icon
-- **AND** the header row SHALL NOT contain `PAUSED`
-
-#### Scenario: Idle
-
-- **WHEN** a queue-visible layout is painted while no transport is active
-- **THEN** the header row SHALL read `IDLE` on the left and the resolved target as `[host]` on the
-  right
-
-#### Scenario: Active watched remote playback
+#### Scenario: Active watched remote playback paints no playhead
 
 - **WHEN** a queue-visible layout is painted while attached to a Session that reports a
   now-playing item the viewed queue does not hold (another device's own selection)
-- **THEN** the header row SHALL describe that Session's item as above, without a status word or target
-- **AND** no queue row SHALL be painted as the playhead
+- **THEN** no queue row SHALL be painted as the playhead
 
 #### Scenario: Header follows the playback target, not the viewed queue
 
