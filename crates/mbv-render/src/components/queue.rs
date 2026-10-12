@@ -6,22 +6,20 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Paragraph};
 use unicode_width::UnicodeWidthStr;
 
-/// The block-character `Q` emblem painted one row above the empty-queue
-/// text. Every line has the same width so the whole unit centers as one
-/// glyph when each line centers in the content area.
-const EMPTY_QUEUE_EMBLEM: [&str; 8] = [
-    " ██████ ",
-    "██    ██",
-    "██    ██",
-    "██    ██",
-    "██    ██",
-    "██  █ ██",
-    " ██████ ",
-    "      ██",
+/// The block-character `mbv` emblem painted above the empty-queue text.
+/// Every line has the same width so the whole unit centers as one glyph
+/// when each line centers in the content area.
+const EMPTY_QUEUE_EMBLEM: [&str; 6] = [
+    "        ██          ",
+    "        ██          ",
+    "████████████████  ██",
+    "██ ██ ████  ████  ██",
+    "██ ██ ████  ██ ████ ",
+    "██ ██ ████████  ██  ",
 ];
 
 /// Paints the empty-queue placeholder centered in the list content area in
-/// bold mauve, over the panel's own fill. The block `Q` emblem sits two rows
+/// bold mauve, over the panel's own fill. The block `mbv` emblem sits two rows
 /// above the text (one blank spacer row between); the whole unit centers
 /// vertically. A content area too short for the whole unit keeps the text
 /// alone, centered.
