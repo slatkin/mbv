@@ -14,24 +14,60 @@ pub struct QueueTitleModel {
     pub remote_pill: Option<String>,
 }
 
+/// The block-character `Q` emblem painted one row above the empty-queue
+/// text. Every line has the same width so the whole unit centers as one
+/// glyph when each line centers in the content area.
+const EMPTY_QUEUE_EMBLEM: [&str; 8] = [
+    " ██████ ",
+    "██    ██",
+    "██    ██",
+    "██    ██",
+    "██    ██",
+    "██  █ ██",
+    " ██████ ",
+    "      ██",
+];
+
 /// Paints the empty-queue placeholder centered in the list content area in
-/// bold mauve, over the panel's own fill.
+/// bold mauve, over the panel's own fill. The block `Q` emblem sits one row
+/// above the text; the emblem-plus-text unit centers vertically. A content
+/// area too short for the whole unit keeps the text alone, centered.
 pub fn render_empty_queue(frame: &mut Frame, content: Rect, text: &str) {
     if content.width == 0 || content.height == 0 {
         return;
     }
-    let row = Rect {
-        y: content.y + content.height / 2,
-        height: 1,
-        ..content
+    let style = Style::default()
+        .fg(palette::Role::EmptyQueueFg.color())
+        .add_modifier(Modifier::BOLD);
+    let emblem_rows = u16::try_from(EMPTY_QUEUE_EMBLEM.len()).unwrap_or(u16::MAX);
+    let unit_height = emblem_rows + 1;
+    let text_row = if content.height >= unit_height {
+        let top = content.y + (content.height - unit_height) / 2;
+        for (offset, line) in (0..emblem_rows).zip(EMPTY_QUEUE_EMBLEM) {
+            frame.render_widget(
+                Paragraph::new(line)
+                    .alignment(Alignment::Center)
+                    .style(style),
+                Rect {
+                    y: top + offset,
+                    height: 1,
+                    ..content
+                },
+            );
+        }
+        top + emblem_rows
+    } else {
+        content.y + content.height / 2
     };
     frame.render_widget(
-        Paragraph::new(text).alignment(Alignment::Center).style(
-            Style::default()
-                .fg(palette::Role::EmptyQueueFg.color())
-                .add_modifier(Modifier::BOLD),
-        ),
-        row,
+        Paragraph::new(text)
+            .alignment(Alignment::Center)
+            .style(style),
+        Rect {
+            y: text_row,
+            height: 1,
+            ..content
+        },
     );
 }
 
