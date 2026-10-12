@@ -388,6 +388,23 @@ impl Model {
         self.push_tv_workspace_content();
     }
 
+    /// Loaded details for every listed show: the tree projects children per
+    /// show so an expanded show keeps them while another is selected.
+    fn loaded_series_details(
+        &self,
+        items: &[EmbyItem],
+    ) -> std::collections::HashMap<String, mbv_ui_model::browse::SeriesDetail> {
+        items
+            .iter()
+            .filter_map(|item| {
+                self.app
+                    .series_detail_cache
+                    .get(&item.id)
+                    .map(|detail| (item.id.clone(), detail.clone()))
+            })
+            .collect()
+    }
+
     pub(in crate::app) fn push_tv_workspace_content(&mut self) {
         let TabSelection::EmbyLibrary(index) = self.app.tab else {
             return;
@@ -450,18 +467,7 @@ impl Model {
         let series_detail = selected_series
             .as_ref()
             .and_then(|item| self.app.series_detail_cache.get(&item.id).cloned());
-        // Loaded details for every listed show: the tree projects children
-        // per show so an expanded show keeps them while another is selected.
-        let series_details = list
-            .items
-            .iter()
-            .filter_map(|item| {
-                self.app
-                    .series_detail_cache
-                    .get(&item.id)
-                    .map(|detail| (item.id.clone(), detail.clone()))
-            })
-            .collect();
+        let series_details = self.loaded_series_details(&list.items);
         // The hero image is NOT projected here: task 5.10's central projection
         // (`sync_library_hero_images`, design D9) is the one projector for
         // every migrated owner, and TV is one since task 8.4. Pushing a second
