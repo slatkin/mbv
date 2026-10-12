@@ -240,13 +240,14 @@ impl Model {
             }
             queue.set_cursor(&update.cursor);
             queue.set_scope(update.scope);
-            // The footer pills are all queue concern (playlist source and
-            // autosave) — never the library column's status bar. The remote
-            // target lives on the queue header row now; the footer pill is
-            // gone.
+            // The footer pills are all queue concern (playlist source,
+            // autosave prefix, dirty suffix) — never the library column's
+            // status bar. The remote target lives on the queue header row
+            // now; the footer pill is gone.
             queue.set_status_pills(
                 self.app.playlist_status_spans(),
                 self.app.autosave_status_spans(),
+                self.app.dirty_status_spans(),
             );
             // The queue panel's placement (task 3.1): computed from the
             // same paint-free checkpoint the draw path consumes (the last

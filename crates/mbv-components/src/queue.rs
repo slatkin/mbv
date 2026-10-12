@@ -64,10 +64,14 @@ pub struct QueueComponent {
     /// `view()` (component-retained geometry, task 3.1): the list body, the
     /// empty-state text, and the context-menu keyboard anchor panel.
     content_area: Rect,
-    /// The projected status pill row (playlist source + autosave), pushed by
-    /// the queue projection and painted at the panel's own status row.
+    /// The projected status pill row (playlist source, autosave prefix, dirty
+    /// suffix), pushed by the queue projection and painted at the panel's
+    /// own status row.
     status_playlist: Vec<Span<'static>>,
     status_autosave: Option<Vec<Span<'static>>>,
+    status_dirty: Option<Vec<Span<'static>>>,
+    /// The playlist pill's retained hit area from the last paint.
+    playlist_hit: Rect,
     pending_slot: Option<QueueSlotId>,
     drag_grab: Option<QueueSlotId>,
     /// Private per-parent gesture recognition (ADR 0024, design.md D3): owns
@@ -106,6 +110,8 @@ impl QueueComponent {
             content_area: Rect::default(),
             status_playlist: Vec::new(),
             status_autosave: None,
+            status_dirty: None,
+            playlist_hit: Rect::default(),
             pending_slot: None,
             drag_grab: None,
             mouse_gestures: MouseGestureState::new(),
@@ -189,15 +195,24 @@ impl QueueComponent {
         self.mini_view = mini_view;
     }
 
-    /// Project the status pill row (playlist source + autosave), painted at
-    /// the `QueueColumn` footer below the recessed box.
+    /// Project the status pill row (playlist source, autosave prefix, dirty
+    /// suffix), painted at the `QueueColumn` footer below the recessed box.
     pub fn set_status_pills(
         &mut self,
         playlist: Vec<Span<'static>>,
         autosave: Option<Vec<Span<'static>>>,
+        dirty: Option<Vec<Span<'static>>>,
     ) {
         self.status_playlist = playlist;
         self.status_autosave = autosave;
+        self.status_dirty = dirty;
+    }
+
+    /// The playlist pill's retained hit area from the last paint.
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn playlist_hit_for_test(&self) -> Rect {
+        self.playlist_hit
     }
 
     /// The framed list content area the panel retained from its last paint:
@@ -293,14 +308,19 @@ impl Component for QueueComponent {
         // surface around the footer row.
         render_queue_panel_frame(frame, area, self.frame_focused);
         // The status pill row the projection pushed, painted at the
-        // QueueColumn footer (moved out of the recessed panel).
+        // QueueColumn footer (moved out of the recessed panel). The painter
+        // returns the playlist pill's hit area for click resolution.
         if let Some(footer_row) = footer_row {
-            render_queue_status(
+            let regions = render_queue_status(
                 frame,
                 footer_row,
                 self.status_playlist.clone(),
                 self.status_autosave.clone(),
+                self.status_dirty.clone(),
             );
+            self.playlist_hit = regions.playlist;
+        } else {
+            self.playlist_hit = Rect::default();
         }
         self.ensure_carrier();
         let list = self.carrier.wide_mut();

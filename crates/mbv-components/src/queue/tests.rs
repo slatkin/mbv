@@ -2,6 +2,7 @@ use super::*;
 use mbv_render::arrangements::queue::queue_list_box;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
+use tuirealm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
 use mbv_queue::QueueItem;
 use mbv_theme::surface_colors;
@@ -105,6 +106,56 @@ fn mini_view_rows_rest_when_the_appearance_bit_is_resting() {
             surface_colors(Surface::SelectedRow, false).fill
         ) > 0,
         "the cursor bar stayed on the resting stripe"
+    );
+}
+
+fn left_down(column: u16, row: u16) -> MouseEvent {
+    MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column,
+        row,
+        modifiers: KeyModifiers::NONE,
+    }
+}
+
+fn painted_footer_component() -> QueueComponent {
+    let mut component = QueueComponent::new();
+    component.set_rows(&[], PlaybackState::default());
+    component.set_scope(QueueScope::Local);
+    component.set_status_pills(vec![Span::raw("X"), Span::raw("name")], None, None);
+    let mut terminal = Terminal::new(TestBackend::new(60, 24)).unwrap();
+    terminal
+        .draw(|frame| component.view(frame, Rect::new(0, 0, 60, 24)))
+        .unwrap();
+    component
+}
+
+/// Clicking the playlist pill opens the F4 Playlists sidebar.
+#[test]
+fn click_on_the_playlist_pill_opens_playlists() {
+    let mut component = painted_footer_component();
+    let hit = component.playlist_hit_for_test();
+    assert!(hit.width > 0, "the playlist pill keeps a hit area");
+    assert_eq!(
+        component.handle_mouse(left_down(hit.x, hit.y)),
+        Some(Msg::Shell(Box::new(
+            mbv_ui_msg::ShellRequest::OpenPlaylists
+        ))),
+        "clicking the playlist pill opens Playlists"
+    );
+}
+
+/// A second press on the playlist pill inside the double-click window is
+/// ignored: a double-click opens once instead of toggling closed.
+#[test]
+fn double_click_on_the_playlist_pill_ignores_the_second_press() {
+    let mut component = painted_footer_component();
+    let hit = component.playlist_hit_for_test();
+    let _ = component.handle_mouse(left_down(hit.x, hit.y));
+    assert_eq!(
+        component.handle_mouse(left_down(hit.x, hit.y)),
+        None,
+        "the double-click press does not toggle Playlists closed"
     );
 }
 

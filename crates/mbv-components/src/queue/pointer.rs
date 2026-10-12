@@ -45,6 +45,10 @@ impl QueueComponent {
     }
 
     fn handle_click(&mut self, at: Position, modifier: ClickModifier) -> Option<Msg> {
+        if self.playlist_hit.width > 0 && self.playlist_hit.contains(at) {
+            self.drag_grab = None;
+            return Some(Msg::Shell(Box::new(ShellRequest::OpenPlaylists)));
+        }
         if !self.carrier.claims_current_point(at) {
             return None;
         }
@@ -68,6 +72,9 @@ impl QueueComponent {
     }
 
     fn handle_double_click(&mut self, at: Position) -> Option<Msg> {
+        if self.playlist_hit.width > 0 && self.playlist_hit.contains(at) {
+            return None;
+        }
         if !self.carrier.claims_current_point(at) {
             return None;
         }

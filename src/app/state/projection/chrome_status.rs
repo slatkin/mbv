@@ -164,84 +164,75 @@ impl App {
         (label.trim_start().to_string(), is_remote)
     }
 
+    /// The playlist source pill content (glyph plus name), without outer pads.
+    /// The painter adds the leading/trailing pads and the autosave delimiter.
+    /// Empty when no playlist is loaded: the glyph alone, grey. Loaded: blue.
     pub(in crate::app) fn playlist_status_spans(&self) -> Vec<Span<'static>> {
         let gap = if self.use_nerd_fonts { " " } else { "  " };
-        let (label, on) = match self.playback_queue().source() {
+        let (label, loaded) = match self.playback_queue().source() {
             mbv_queue::QueueSource::Playlist { name, .. } => (format!("{gap}{name}"), true),
-            _ => (format!("{gap}none"), false),
+            _ => (String::new(), false),
         };
-        let glyph_style = Style::default()
+        let fg = if loaded {
+            mbv_theme::Role::TextMetadata.color()
+        } else {
+            mbv_theme::Role::TextMuted.color()
+        };
+        let style = Style::default()
             .bg(mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false).fill)
-            .fg(mbv_theme::Role::TextMetadata.color());
-        let label_style = Style::default()
-            .fg(if on {
-                mbv_theme::Role::TextFocusAccent.color()
-            } else {
-                mbv_theme::Role::TextSecondary.color()
-            })
-            .bg(mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false).fill);
-
-        vec![
-            Span::styled(
-                " ",
-                Style::default().bg(mbv_theme::surface_colors(
-                    mbv_theme::Surface::StatusBarPill,
-                    false,
-                )
-                .fill),
-            ),
-            Span::styled(
-                if self.use_nerd_fonts {
-                    "\u{f0411}"
-                } else {
-                    "\u{1F5AD}"
-                },
-                glyph_style,
-            ),
-            Span::styled(label, label_style),
-            Span::styled(
-                " ",
-                Style::default().bg(mbv_theme::surface_colors(
-                    mbv_theme::Surface::StatusBarPill,
-                    false,
-                )
-                .fill),
-            ),
-        ]
+            .fg(fg);
+        let glyph = if self.use_nerd_fonts {
+            "\u{f0411}"
+        } else {
+            "\u{1F5AD}"
+        };
+        if label.is_empty() {
+            vec![Span::styled(glyph, style)]
+        } else {
+            vec![Span::styled(glyph, style), Span::styled(label, style)]
+        }
     }
 
+    /// The autosave indicator content, without outer pads. Present only while
+    /// save-on-consume is on for a saved playlist. Independent of the dirty
+    /// flag: both can show at one time. The painter puts it left of the
+    /// playlist pill with one space delimiter.
     pub(in crate::app) fn autosave_status_spans(&self) -> Option<Vec<Span<'static>>> {
         let autosave_on = self.queue_is_saved_playlist() && {
             let config = self.config.lock().unwrap();
             let cfg = &*config;
             cfg.save_playlist_on_consume || cfg.save_playlist_on_consume_audio
         };
-        let pill_bg = mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false).fill;
-        let (words, glyph, style) = if self.queue_dirty {
-            (
-                " UNSAVED ",
-                "\u{f0f42}",
-                Style::default()
-                    .fg(mbv_theme::Role::TextFocusAccent.color())
-                    .add_modifier(Modifier::BOLD),
-            )
-        } else if autosave_on {
-            (
-                " AUTOSAVE ",
-                "\u{f18ea}",
-                Style::default().fg(mbv_theme::Role::Accent.color()),
-            )
-        } else {
+        if !autosave_on {
             return None;
-        };
-        let pad = Span::styled(" ", Style::default().bg(pill_bg));
-        // The nerd-font glyph's one trailing space is the whole gap to the
-        // remote pill's icon, which has no leading pad; a glyph with no space
-        // after it paints cramped.
+        }
+        let pill_bg = mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false).fill;
+        let style = Style::default()
+            .fg(mbv_theme::Role::Accent.color())
+            .bg(pill_bg);
         Some(if self.use_nerd_fonts {
-            vec![pad, Span::styled(format!(" {glyph} "), style.bg(pill_bg))]
+            vec![Span::styled("\u{f18ea}", style)]
         } else {
-            vec![pad.clone(), Span::styled(words, style.bg(pill_bg)), pad]
+            vec![Span::styled("AUTOSAVE", style)]
+        })
+    }
+
+    /// The dirty indicator content, without outer pads. Present only while
+    /// the queue differs from its saved playlist. Independent of autosave.
+    /// The painter puts it right-anchored.
+    pub(in crate::app) fn dirty_status_spans(&self) -> Option<Vec<Span<'static>>> {
+        if !self.queue_dirty {
+            return None;
+        }
+        let pill_bg = mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false).fill;
+        let style = Style::default()
+            .fg(mbv_theme::Role::TextFocusAccent.color())
+            .add_modifier(Modifier::BOLD)
+            .bg(pill_bg);
+        Some(if self.use_nerd_fonts {
+            vec![Span::styled("\u{f0f42}", style)]
+        } else {
+            vec![Span::styled("UNSAVED", style)]
         })
     }
 
