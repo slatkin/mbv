@@ -4,7 +4,7 @@ use mbv_images::{audiobookshelf_hero_book_cover_cache_key, audiobookshelf_hero_c
 use mbv_render::{PANE_PAD_X, PANE_PAD_Y};
 use std::time::{Duration, Instant};
 
-pub(in crate::app) const NAV_IMAGE_FETCH_IDLE_DELAY: Duration = Duration::from_millis(150);
+pub(in crate::app) const NAV_IDLE_DELAY: Duration = Duration::from_millis(150);
 const MAX_IMAGE_FETCHES: usize = 6;
 
 fn wide_landscape_hero_eligible(

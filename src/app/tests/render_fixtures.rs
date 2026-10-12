@@ -8,17 +8,20 @@
 use crate::app::dispatch::session::service_startup::{
     AudiobookshelfCatalogCompletion, AudiobookshelfCatalogReceiver,
 };
+use crate::app::state::service_runtime::EmbyRuntime;
 use crate::app::tests::{QueueViewTestExt, make_app_stub};
 use crate::app::{App, BrowseLevel, LibraryTab, PanelFocus, TabSelection};
 use mbv_audiobookshelf::{
     AudiobookshelfBookProgress, AudiobookshelfError, AudiobookshelfLibrary, AudiobookshelfProgress,
 };
 use mbv_core::service_runtime::SetupGeneration;
+use mbv_emby::{EmbyClient, EmbyCredentialExchange};
 use mbv_emby_model::EmbyItem;
 use mbv_emby_model::test_support::make_item;
 use mbv_ui_model::browse::BrowseResting;
 use mbv_ui_model::browse::ServerRows;
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
 pub fn make_movie_app() -> App {
     let mut app = make_app_stub();
@@ -77,6 +80,22 @@ pub fn make_queue_app(item_count: usize) -> App {
         0,
     );
     app
+}
+
+/// A configured-but-unroutable `EmbyClient` (design mirrors the retired
+/// `push_music_workspace_fetches_selected_album_tracks` test): the
+/// `album_tracks_loading` insert `fetch_album_tracks` performs happens
+/// synchronously before the network attempt, so it is observable
+/// immediately after the sync call without waiting on (or requiring)
+/// the doomed connection to resolve.
+pub(in crate::app) fn ready_emby_runtime() -> EmbyRuntime {
+    let mut client = EmbyClient::new(crate::config::Config::default());
+    client.apply_credential_exchange(&EmbyCredentialExchange {
+        server_url: "http://127.0.0.1:1".into(),
+        user_id: "user-id".into(),
+        token: "token".into(),
+    });
+    EmbyRuntime::ready(Arc::new(Mutex::new(client)))
 }
 
 pub fn make_music_group_app() -> App {

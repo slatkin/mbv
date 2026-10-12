@@ -1,6 +1,6 @@
 use super::{
-    App, Instant, LevelFillAction, LevelFillState, LibEvent, MAX_IMAGE_FETCHES,
-    NAV_IMAGE_FETCH_IDLE_DELAY, PAGE_SIZE,
+    App, Instant, LevelFillAction, LevelFillState, LibEvent, MAX_IMAGE_FETCHES, NAV_IDLE_DELAY,
+    PAGE_SIZE,
 };
 use crate::app::{MusicEvent, SeriesEvent};
 use mbv_images::{ImageFetchReq, ImageSource};

@@ -486,7 +486,7 @@ pub enum ShellRequest {
     /// index against its own painted geometry and reports it here. The shell
     /// applies the resolved index through the App nav level only to retain
     /// App-owned effects (the in-memory legacy snapshot /
-    /// `mark_library_navigation` / `maybe_fetch_next_page` / `last_nav_at`);
+    /// `stamp_navigation` / `maybe_fetch_next_page`);
     /// it never recomputes the movement from a delta. The legacy season-grid
     /// branch is unreachable here: the Browser mount gate excludes TV.
     EmbyLibraryCursorIndex {

@@ -294,6 +294,7 @@ impl Model {
             && let Some(album) = context.selected_album.as_ref()
             && !self.app.album_tracks_cache.contains_key(&album.id)
             && !self.app.album_tracks_loading.contains(&album.id)
+            && self.app.navigation_idle()
         {
             self.app.fetch_album_tracks(album.id.clone());
         }
@@ -380,26 +381,10 @@ impl Model {
 mod tests {
     use crate::app::MusicEvent;
     use crate::app::shell::Model;
-    use crate::app::state::service_runtime::EmbyRuntime;
-    use crate::app::tests::render_fixtures::make_music_group_app;
-    use mbv_emby::{EmbyClient, EmbyCredentialExchange};
-    use std::sync::{Arc, Mutex};
-
-    /// A configured-but-unroutable `EmbyClient` (design mirrors the retired
-    /// `push_music_workspace_fetches_selected_album_tracks` test): the
-    /// `album_tracks_loading` insert `fetch_album_tracks` performs happens
-    /// synchronously before the network attempt, so it is observable
-    /// immediately after the sync call without waiting on (or requiring)
-    /// the doomed connection to resolve.
-    fn ready_emby_runtime() -> EmbyRuntime {
-        let mut client = EmbyClient::new(crate::config::Config::default());
-        client.apply_credential_exchange(&EmbyCredentialExchange {
-            server_url: "http://127.0.0.1:1".into(),
-            user_id: "user-id".into(),
-            token: "token".into(),
-        });
-        EmbyRuntime::ready(Arc::new(Mutex::new(client)))
-    }
+    use crate::app::tests::render_fixtures::{make_music_group_app, ready_emby_runtime};
+    use mbv_components::library_panel::owner::LibraryContentOwner;
+    use std::time::Instant;
+    use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
     /// Regression: `push_music_workspace_content` must not run its
     /// Music-only side effects (`wide_music_render_ctx`, `fetch_album_tracks`)
@@ -581,6 +566,44 @@ mod tests {
                 .filter_map(MediaListRow::selectable_target)
                 .count(),
             1,
+        );
+    }
+
+    /// The sync-pass push is an album-track fetch site. While navigation is
+    /// recent, it starts no album-track request for the selected album.
+    #[test]
+    fn music_push_defers_album_track_fetch_while_navigating() {
+        let mut app = make_music_group_app();
+        app.emby_runtime = ready_emby_runtime();
+        let mut model = Model::new(app);
+
+        // Idle navigation: the push starts the selected album's track fetch.
+        model.push_music_workspace_content();
+        assert!(
+            model.app.album_tracks_loading.contains("album-1"),
+            "an idle push starts the selected album's track fetch"
+        );
+
+        // End that fetch without caching its tracks, then walk the tree down
+        // to the album leaf: the first push leaves the artist root selected,
+        // and an artist root arms the ungated fallback aggregation instead of
+        // the gated selection fetch. With the album leaf selected and recent
+        // navigation, the pushed re-fetch must stay deferred.
+        model.app.album_tracks_loading.clear();
+        let owner = model.test_music_owner_mut();
+        owner.on_key(&KeyEvent {
+            code: Key::Right,
+            modifiers: KeyModifiers::NONE,
+        });
+        owner.on_key(&KeyEvent {
+            code: Key::Down,
+            modifiers: KeyModifiers::NONE,
+        });
+        model.app.last_nav_at = Instant::now();
+        model.push_music_workspace_content();
+        assert!(
+            model.app.album_tracks_loading.is_empty(),
+            "a push during recent navigation starts no album-track fetch"
         );
     }
 }

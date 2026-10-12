@@ -1,8 +1,6 @@
 use super::Model;
 use super::{ConfirmAction, ConfirmModal};
-use crate::app::infra::image_fetch::NAV_IMAGE_FETCH_IDLE_DELAY;
 use mbv_ui_msg::ShellRequest;
-use std::time::Instant;
 
 impl Model {
     /// Route the generic Emby browser's selected-item typed effects (task
@@ -110,10 +108,8 @@ impl Model {
         if lib_idx >= self.app.libs.len() {
             return;
         }
-        let now = Instant::now();
-        let idle = now.duration_since(self.app.last_nav_at) >= NAV_IMAGE_FETCH_IDLE_DELAY;
-        self.app.last_nav_at = now;
-        self.app.mark_library_navigation(now);
+        let idle = self.app.navigation_idle();
+        self.app.stamp_navigation();
         // Keep only the persistence-facing resting value, using the index
         // already resolved by the active control. This is not a live mirror:
         // ordinary content pushes never read it back.

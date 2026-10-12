@@ -20,10 +20,12 @@ use mbv_components::tv_content::TvContent;
 use mbv_emby_model::EmbyItem;
 use mbv_queue::ServiceKind;
 use mbv_render::components::tv_wide::TvWideRenderCtx;
+use mbv_ui_model::browse::SeriesDetail;
 use mbv_ui_model::library::{LibraryKey, LibraryKind};
 #[cfg(test)]
 use mbv_ui_msg::ComponentId;
 use mbv_ui_msg::ShellRequest;
+use std::collections::HashMap;
 
 impl Model {
     pub(in crate::app) fn handle_tv_request(&mut self, request: ShellRequest) {
@@ -105,8 +107,14 @@ impl Model {
                 self.app.cycle_letter_pill(lib_idx, delta);
                 self.acknowledge_active_tv_latest();
             }
+            // Cursor moves stamp navigation, so the sync-pass detail and
+            // card-image fetches wait for the cursor to rest. The owner already
+            // moved the cursor.
+            ShellRequest::TvMoveRows { .. } | ShellRequest::TvJumpCursor { .. } => {
+                self.app.stamp_navigation();
+            }
             // closed set: the caller restricts this to TvMoveRows/TvJumpCursor/
-            // TvActivate/TvBack/TvCycleLetterPill; cursor moves need no App effect.
+            // TvActivate/TvBack/TvCycleLetterPill; any other variant is a no-op.
             _ => {}
         }
         self.push_tv_workspace_content();
@@ -380,6 +388,20 @@ impl Model {
         self.push_tv_workspace_content();
     }
 
+    /// Loaded details for every listed show: the tree projects children per
+    /// show so an expanded show keeps them while another is selected.
+    fn loaded_series_details(&self, items: &[EmbyItem]) -> HashMap<String, SeriesDetail> {
+        items
+            .iter()
+            .filter_map(|item| {
+                self.app
+                    .series_detail_cache
+                    .get(&item.id)
+                    .map(|detail| (item.id.clone(), detail.clone()))
+            })
+            .collect()
+    }
+
     pub(in crate::app) fn push_tv_workspace_content(&mut self) {
         let TabSelection::EmbyLibrary(index) = self.app.tab else {
             return;
@@ -432,7 +454,9 @@ impl Model {
         } else {
             selected_series
         };
-        if let Some(item) = selected_series.as_ref() {
+        if let Some(item) = selected_series.as_ref()
+            && self.app.navigation_idle()
+        {
             // Detail loading is an App-owned effect; schedule it at the shell
             // hand-off rather than from the render context or painter.
             self.app.fetch_series_detail(&item.id);
@@ -440,18 +464,7 @@ impl Model {
         let series_detail = selected_series
             .as_ref()
             .and_then(|item| self.app.series_detail_cache.get(&item.id).cloned());
-        // Loaded details for every listed show: the tree projects children
-        // per show so an expanded show keeps them while another is selected.
-        let series_details = list
-            .items
-            .iter()
-            .filter_map(|item| {
-                self.app
-                    .series_detail_cache
-                    .get(&item.id)
-                    .map(|detail| (item.id.clone(), detail.clone()))
-            })
-            .collect();
+        let series_details = self.loaded_series_details(&list.items);
         // The hero image is NOT projected here: task 5.10's central projection
         // (`sync_library_hero_images`, design D9) is the one projector for
         // every migrated owner, and TV is one since task 8.4. Pushing a second

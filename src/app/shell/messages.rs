@@ -8,7 +8,6 @@ use super::{AlbumCursorKind, Model, ToastSeverity, apply_terminal_observer};
 use crate::app::state::playback::DestinationLatestSource;
 use mbv_components::library_panel::LibraryPanel;
 use mbv_ui_msg::{ComponentId, Msg, ShellRequest};
-use std::time::Instant;
 
 impl Model {
     pub(crate) fn handle_terminal_message(
