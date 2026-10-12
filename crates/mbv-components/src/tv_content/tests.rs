@@ -7,7 +7,6 @@ mod flat_latest_activation_tests;
 mod launch_state_tests;
 mod tree_panel_tests;
 mod tree_projection_tests;
-mod wheel_tests;
 mod workspace_tests;
 
 fn tv_tree_context(
