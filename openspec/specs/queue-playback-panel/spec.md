@@ -62,74 +62,11 @@ and SHALL NOT follow the queue scope being viewed.
 - **WHEN** the layout is library-only
 - **THEN** no header row SHALL be painted
 
-### Requirement: The Library playback panel's title row shows elapsed time and the status pill
-
-The Library playback panel's title row SHALL paint the transport controls, the title, the elapsed
-position, and the status indicator pill, in that order left to right, and no progress cluster: no
-throbber glyph and no progress percent SHALL appear in the strip. The position SHALL show the
-elapsed time alone, never a `pos / dur` total. The status pill SHALL carry one cell of padding on
-each side, and the strip SHALL NOT paint a second pad beside it. The transport controls SHALL
-appear only when the glyph, the controls, the elapsed time, the pill and the title all fit.
-
-#### Scenario: Active playback in the strip
-
-- **WHEN** the Library playback panel paints an active item with a known runtime
-- **THEN** the title row SHALL show the transport controls, the title, the elapsed position, and the
-  padded status pill
-- **AND** no total duration, no percent, and no throbber glyph SHALL appear in the row
-
-#### Scenario: The strip's pill is padded once per side
-
-- **WHEN** the Library playback panel paints a status pill
-- **THEN** the pill SHALL open and close with exactly one padding cell each side
-
-#### Scenario: Narrow strip drops the transport controls
-
-- **WHEN** the strip is too narrow for the transport controls, the elapsed time, the pill and the
-  title together
-- **THEN** the strip SHALL drop the controls and keep the title, the elapsed time and the pill
-
-### Requirement: The queue panel opens directly with its rows
-
-The recessed queue panel inside the queue column SHALL NOT paint a title band: no `Queue` title and
-no block separator line. One blank gap row SHALL always separate the playback region above the panel
-from the recessed box, playback active or idle; the gap row keeps the `QueueColumn` surface (it is
-the playback placement's last row), and the box's own one-row top pad and one-row bottom spacer keep
-the recessed box's fill above and below the list rows. The list runs from its first row to the row
-directly above the footer status row, with no gap row above the status bar (when no footer fits, to
-the panel's last row).
-
-#### Scenario: The panel has no title band
-
-- **WHEN** a queue-visible layout paints the recessed queue panel
-- **THEN** no `Queue` title and no block separator line are painted above the rows
-- **AND** the first queue row starts one pad row below the box's first row, which sits below the
-  playback region's blank gap row
-
-#### Scenario: The list runs to the footer status row
-
-- **WHEN** a queue-visible layout paints the queue panel with a footer status bar
-- **THEN** the last list row SHALL be the row directly above the status bar, with no gap row between
-
 ### Requirement: The playback panel renders in the queue column
 
 In every queue-visible layout the playback panel (controls, seekbar and their times) SHALL render
 inside the queue column, using the same content as the Library playback panel. The panel SHALL NOT
-render in the right column of a queue-visible layout. The queue column's transport is a fixed
-four-row band, top to bottom: the controls row, a blank title row, the seekbar row, and a blank gap
-row. The band SHALL be four rows whether or not the now-playing title carries a context part; the
-title SHALL NOT paint in the band (it rides the header row, see the header requirement) and no
-`pos / dur` time SHALL paint on a title row.
-
-The controls row SHALL paint the transport controls on the left and the status indicators on the
-right as plain text (no pill), on the slate backdrop fill edge to edge, one column of indent each
-side. The stop, previous, and next buttons SHALL paint only when they fit beside the play/pause glyph
-and the indicators; otherwise only the play/pause glyph paints. The seekbar row SHALL paint the
-elapsed time, the bar, and the total time, in that order left to right, one space between each time
-and the bar and one column of outer indent each side; a bar too narrow to paint SHALL leave only
-the two times. The title row and the gap row SHALL paint blank on the panel fill. The transport hit
-geometry rides the controls row (the glyphs) and the seekbar row (the bar span alone; the time labels
-never seek).
+render in the right column of a queue-visible layout.
 
 When the terminal is narrower than 100 columns the visual slot and the playback panel SHALL stack
 vertically: the visual slot at full column width, the panel directly below it, and the queue list
@@ -144,23 +81,6 @@ content top-aligned and the panel background filling the rows below it.
 - **WHEN** the layout shows both columns and playback is active
 - **THEN** the playback panel SHALL render inside the queue column and the Library playback panel
   SHALL NOT render
-
-#### Scenario: The band is four rows regardless of the title
-
-- **WHEN** the queue column paints the transport for a one-part title and for a two-part title
-- **THEN** both bands SHALL span four rows: controls, blank title row, seekbar, blank gap row
-- **AND** neither band SHALL show the title or a `pos / dur` time on its title row
-
-#### Scenario: Controls row carries the controls and plain-text indicators
-
-- **WHEN** the queue column paints the transport with status indicators projected
-- **THEN** the top row SHALL show the transport controls left and the indicators right as plain text
-  with no pill
-
-#### Scenario: Seekbar row flanks the bar with its times
-
-- **WHEN** the queue column paints the transport with a known runtime
-- **THEN** the seekbar row SHALL read the elapsed time, the bar, then the total time
 
 #### Scenario: Narrow terminal stacks vertically
 
@@ -184,20 +104,17 @@ content top-aligned and the panel background filling the rows below it.
 
 When the queue column is visible and no transport is active, the visual slot (artwork, placeholder,
 loading reservation, or empty visualizer box) and the playback panel SHALL NOT be rendered and SHALL
-reserve zero rows; the queue panel SHALL occupy those rows and begin below the header band's blank
-gap row, the one-row separator that keeps the `QueueColumn` surface in every queue-visible layout,
-idle included. While the band renders, the queue panel begins directly below the band's blank gap
-row. Paused
-playback counts as active and SHALL keep both. The artwork/visualizer
+reserve zero rows; the queue panel SHALL occupy those rows and begin below the header row.
+Paused playback counts as active and SHALL keep both. The artwork/visualizer
 selection SHALL persist while idle and take effect on the next playback; pressing the artwork key
 while idle SHALL NOT create a visual slot rectangle. A connected transport that is not playing SHALL
-NOT keep the panel: the header row's `IDLE` wording and target are the only idle-state indicator.
+NOT keep the panel.
 
 #### Scenario: Idle queue-visible layout reclaims the slot and panel rows
 
 - **WHEN** the queue column is visible and no transport is active
 - **THEN** no visual slot and no playback panel SHALL be rendered, and the queue panel SHALL begin
-  on the row below the header band's blank gap row
+  on the row below the header row
 
 #### Scenario: Idle collapse holds at every supported width
 
@@ -229,8 +146,7 @@ NOT keep the panel: the header row's `IDLE` wording and target are the only idle
 
 - **WHEN** the queue column is visible, a remote session or cast target is connected, and nothing is
   playing on it
-- **THEN** the visual slot and the panel SHALL NOT render, and the header row SHALL read `IDLE` with
-  the connected target
+- **THEN** the visual slot and the panel SHALL NOT render
 
 ### Requirement: The Library playback panel renders exactly when the queue column is hidden
 
@@ -266,7 +182,7 @@ column's band the transport glyphs resolve on the controls row and the seekbar o
 bar span; the blank title row, the blank gap row, and the time labels resolve nothing. Every
 transport glyph it paints, the previous control included, SHALL retain the geometry of its own glyph,
 so a click resolves that control's intent and no two controls share one region. A transport control
-whose action is unavailable SHALL paint in its unavailable role and SHALL NOT resolve an intent. A
+whose action is unavailable SHALL NOT resolve an intent. A
 panel that is not painted SHALL resolve nothing.
 
 #### Scenario: Sidebar panel accepts clicks in queue-only
@@ -389,53 +305,6 @@ viewed queue does not hold, the row SHALL continue to render that target's own t
 - **THEN** the two panels SHALL render the same title parts for that item, the queue column on its
   header row and the Library strip on its title row
 
-### Requirement: Title and context parts are delineated by colour
-
-When a title row carries both parts, the parts SHALL be separated by exactly one space and SHALL
-NOT be joined by a separator glyph — no hyphen, dash, pipe, bullet or any other delimiter. (The
-queue header row's two-part title is the exception to the one-space rule only in that the title part
-is right-aligned, so the parts may be separated by more space; it still carries no delimiter glyph.)
-The distinction between the two parts SHALL be carried by colour alone: the title part SHALL paint in
-the playback panel's aqua title role and the context part in its yellow context role. A
-single-part title SHALL paint wholly in the title role in the Library playback panel's title row, and
-wholly in the context role (yellow) in the Queue playback panel's header row.
-
-These roles SHALL be the playback panel's own semantic roles, not the shared focus-accent or
-brand roles, so that changing the focus accent or a brand colour cannot move the now-playing
-title. The roles SHALL apply wherever the title paints, including while it is marqueed for
-overflow and on the queue header row.
-
-Because the parts are distinguished by colour rather than by a delimiter, the row's plain-text
-forms used outside the panel — the strings carried by toasts, the media-progress interface and
-log lines — SHALL NOT change, and SHALL keep their existing separator form.
-
-#### Scenario: Both parts paint in their own roles
-
-- **WHEN** the title row renders an item with both a title and a context part
-- **THEN** the title part paints in the aqua title role and the context part in the yellow context
-  role
-
-#### Scenario: No delimiter glyph between the parts
-
-- **WHEN** the title row renders an item with both parts
-- **THEN** no hyphen, dash, pipe, bullet, or other delimiter glyph SHALL appear between the two parts
-
-#### Scenario: A single-part title paints in the title role
-
-- **WHEN** the Library playback panel's title row renders an item with no context part
-- **THEN** the whole title paints in the aqua title role
-
-#### Scenario: A single-part title paints yellow in the queue header
-
-- **WHEN** the queue header row renders an item with no context part
-- **THEN** the whole title paints in the yellow context role
-
-#### Scenario: The roles survive the overflow marquee
-
-- **WHEN** a two-part title is wider than its slot and the row marquees it
-- **THEN** the visible window of the title part stays in the aqua title role and of the context
-  part in the yellow context role
-
 ### Requirement: The user can hide the visual slot
 
 The user SHALL be able to hide and show the QueueColumn's visual slot (artwork, placeholder, loading
@@ -489,72 +358,29 @@ Idle collapse is unchanged: while idle the slot reserves zero rows whether or no
 - **WHEN** a library screen that binds `h` locally has focus and the user presses `h`
 - **THEN** the visual slot's hidden state SHALL toggle and the screen's local `h` action SHALL NOT run
 
-### Requirement: The Queue seekbar renders playback progress in eighth-cell increments
+### Requirement: Seekbar progress stays bounded and current
 
-When the Queue playback panel paints an active seekbar, it SHALL represent playback position
-with solid full-height accent blocks and a left-filled fractional leading block, over a solid
-`#272e33` track. Each terminal cell SHALL support eight horizontal fill increments. The rendered
-fill SHALL be the clamped position/runtime fraction of the available bar width, rounded to
-the nearest eighth of a cell, with half increments rounded upward. It SHALL NOT impose a
-minimum visible fill on positive positions below that rounding threshold.
-
-A non-positive runtime SHALL produce an empty fill. With a positive runtime, a non-positive
-position SHALL produce an empty fill and a position at or beyond runtime SHALL produce a
-full fill. The bar SHALL recompute from the current projected position and current width on
-each paint, including while paused or after a backward seek, without extrapolating playback.
-
-This presentation SHALL apply wherever the Queue playback panel's active seekbar renders,
-independent of media kind or playback target. It SHALL NOT change the Library playback
-panel's thin upper-line seekbar or its existing whole-cell rounding. It SHALL NOT change
-transport visibility or the inactive/non-interactive bar presentation.
-
-#### Scenario: Early episode progress is visible before a whole cell fills
-
-- **WHEN** an active Queue seekbar is 24 cells wide and playback is at 10 seconds of a
-  45-minute episode
-- **THEN** the first bar cell SHALL show one eighth of accent fill over the muted track
-- **AND** no whole bar cell SHALL be filled
-
-#### Scenario: Completed cells precede the fractional leading cell
-
-- **WHEN** the unrounded fill of the active Queue seekbar is 3.5 cells
-- **THEN** three cells SHALL be fully accent-filled and the next cell SHALL be half
-  accent-filled, with the remaining track muted
-- **AND** no percentage label SHALL be introduced inside the bar
+A non-positive runtime SHALL show an empty bar. With a positive runtime, a non-positive position SHALL show an empty bar and a position at or beyond runtime SHALL show a full bar. The bar SHALL recompute from the current projected position and current width on each paint, without extrapolating playback. A repaint with an unchanged paused position, runtime, and width SHALL leave the bar unchanged.
 
 #### Scenario: Invalid or out-of-range progress stays bounded
 
 - **WHEN** the Queue seekbar paints a non-positive runtime, or a non-positive position with
-  a positive runtime
-- **THEN** its entire bar SHALL remain the muted track without accent fill
+a positive runtime
+- **THEN** its bar SHALL show empty
 - **WHEN** its position is at or beyond a positive runtime
-- **THEN** the entire bar SHALL be accent-filled without an extra cell beyond its bounds
+- **THEN** its bar SHALL show full
 
 #### Scenario: Backward seeking and resizing use the current playback snapshot
 
 - **WHEN** the active Queue seekbar repaints after a backward seek or a width change
 - **THEN** its fill SHALL reflect the current projected position and current bar width
-- **AND** no previously filled cells SHALL remain accent-filled beyond the new fill
 
-#### Scenario: Paused playback does not animate the fractional fill
+#### Scenario: Paused playback does not change the bar
 
 - **WHEN** the Queue seekbar repaints with the same paused position, runtime, and width
 - **THEN** its fill SHALL remain unchanged
 
-#### Scenario: Library playback preserves its existing thin bar
-
-- **WHEN** the Library playback panel renders instead of Queue playback
-- **THEN** its seekbar SHALL retain its thin upper-line characters and whole-cell fill
-- **AND** it SHALL NOT adopt Queue's solid fractional-block presentation
-
 ### Requirement: Fractional Queue fill preserves the seek row and interaction boundaries
-
-The fractional Queue seekbar SHALL keep the existing elapsed time, bar, and total time order,
-one space between each time and the bar, and one column of outer indent on each side. Its
-height and available width SHALL remain unchanged. Elapsed and total labels SHALL retain
-their existing formatting and metadata colour; the fill SHALL retain the accent role and
-the unplayed track SHALL use the Queue playback panel's slate backdrop colour (`#272e33`),
-without changing the shared theme values or the Library `PROGRESS_TRACK` role.
 
 The bar span alone SHALL remain the pointer target. A partial cell SHALL be part of that
 same target and SHALL resolve the same terminal-column-based seek fraction as before;

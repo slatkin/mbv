@@ -194,18 +194,9 @@ A double-click on a Grouped Music tree node SHALL toggle the persistent expansio
 - **AND** no flat Inline Search activation or Hero opening replaces it
 
 ### Requirement: The integrated tree presents a coherent tree-specific surface
-The Grouped Music tree SHALL paint once in the Library panel browser slot at every Panel mode. At the repository's existing Wide geometry fixture and smallest supported non-Wide Library-panel fixture, it SHALL use semantic theme roles and present a readable, intentional tree surface: a distinguishable artist and album hierarchy with visible expansion state, a clear focused-node treatment inside the browser rectangle it is supplied, group-relative zebra rhythm, release-year metadata when it fits, focused-title marquee behavior, and a usable scrollbar. The tree's selected-row extent, zebra rhythm, and scrollbar focus behavior are its own and need not match the canonical flat media lists. Every visible node row SHALL retain its hierarchy/expansion glyph and at least one title cell; narrower content SHALL truncate or marquee rather than overrun the browser rectangle. Album leaves SHALL obtain semantic state through the canonical music collapse and SHALL remain visually unplayed with no played or resume decoration; artist roots SHALL likewise use ordinary grouping semantics. No base frame, fallback media list, or second tree painter SHALL underpaint or overpaint its rows.
+The Grouped Music tree SHALL paint once in the Library panel browser slot at every Panel mode. At the repository's existing Wide geometry fixture and smallest supported non-Wide Library-panel fixture, it SHALL present a distinguishable artist and album hierarchy with visible expansion state inside the browser rectangle it is supplied, release-year metadata when it fits, and a usable scrollbar. The tree's selected-row extent and scrollbar focus behavior are its own and need not match the canonical flat media lists. Every visible node row SHALL retain at least one title cell; narrower content SHALL truncate rather than overrun the browser rectangle. Album leaves SHALL obtain semantic state through the canonical music collapse; artist roots SHALL likewise use ordinary grouping semantics. No base frame, fallback media list, or second tree painter SHALL underpaint or overpaint its rows.
 
 The change SHALL be accepted only after automated checks at the existing Wide and smallest supported non-Wide Library-panel fixtures and the end-of-implementation manual PoC evaluation across Wide, Narrow, Mini, and Library Hero overlay states. That evaluation is where residual visual roughness is worked out. Review findings are fixed against this tree-specific contract. The dependency SHALL be removed and this change SHALL not merge only if the tree's core behavior or ownership cannot be delivered through the crate's supported interfaces; a parallel bespoke tree renderer is not an acceptance fallback at any point.
-
-#### Scenario: Focused node carries the tree's selected-row treatment
-- **WHEN** the Library panel is focused and the tree paints its selected artist root or album leaf
-- **THEN** that node paints the tree's focused-node treatment across the browser rectangle, overriding its zebra treatment
-- **AND** no destination-defined raw colour or marker substitutes for a theme role or the treatment
-
-#### Scenario: Music playback history does not decorate tree rows
-- **WHEN** an artist root or album leaf is painted and its underlying Music data carries played or resume fields
-- **THEN** the tree paints ordinary Music row semantics without played or resume decoration
 
 #### Scenario: PoC evaluation finds rough edges
 - **WHEN** automated checks pass and the end-of-implementation manual PoC evaluation finds visual roughness in the tree's hierarchy, focused-node treatment, metadata, marquee, scrollbar, or narrow-width handling

@@ -103,30 +103,6 @@ When the list is letter-grouped, each bucket SHALL begin on a fresh item row. An
 - **WHEN** a letter bucket contains an odd number of items in two-column mode
 - **THEN** that bucket's final row SHALL leave its trailing cell empty and the next bucket's header and items SHALL begin on subsequent rows
 
-### Requirement: The selected block renders as a tab joined to its panel
-
-When a selected item has inline detail, the selected block background SHALL cover the selected cell's slot across the item row and its top padding row, and SHALL cover the full pane width across the detail rows, with no gap or seam between the two regions. The cell sharing the selected item's row SHALL retain the ordinary list background. The block SHALL use the existing focused and unfocused background colors.
-
-#### Scenario: Selected item in the left column
-
-- **WHEN** an item in the left column is selected and has inline detail
-- **THEN** the selected block background SHALL cover only the left cell's slot on the item and top padding rows, and the full pane width on the detail rows below
-
-#### Scenario: Selected item in the right column
-
-- **WHEN** an item in the right column is selected and has inline detail
-- **THEN** the selected block background SHALL cover only the right cell's slot on the item and top padding rows, and the full pane width on the detail rows below
-
-#### Scenario: Single-column mode
-
-- **WHEN** the list renders in a single column
-- **THEN** the selected block SHALL be full width on every row, matching the current rectangular appearance
-
-#### Scenario: Unfocused list
-
-- **WHEN** the library list is not focused
-- **THEN** the tab and panel regions SHALL both use the unfocused background color
-
 ### Requirement: Cursor movement accounts for columns
 
 Left and right SHALL move the cursor by one item. Up and down SHALL move the cursor by one item row. Page up and page down SHALL move by one viewport of item rows. Home and end SHALL continue to select the first and last item. The cursor SHALL remain a single item index.

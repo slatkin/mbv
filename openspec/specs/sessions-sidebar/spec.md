@@ -19,18 +19,21 @@ The F3 Sessions sidebar SHALL show each Emby Session and Cast receiver as a thre
 - **THEN** each receiver still occupies a three-line item with a blank third content line
 - **AND** navigation and activation work without a Session
 
-### Requirement: Cursor selection and connection have separate visual meanings
-The currently selected F3 target SHALL use the standard filled selected-row bar across its three content lines, never an accent cursor rail. A connected Emby Session or attached Cast target SHALL be marked by an aqua `✚` badge, never by a connected-state filled row. The badge SHALL remain visible whether its item is selected or not; its colour SHALL remain aqua over the selected-row bar. Zebra striping SHALL alternate per target item, not per painted line; the blank separator SHALL remain unstriped and unselected.
+### Requirement: Cursor selection and connection are indicated separately
+
+The selected F3 target and a connected target SHALL be indicated separately: connection SHALL NOT be shown by marking the connected row as selected. A connected Emby Session or attached Cast target SHALL keep its connection mark whether its item is selected or not.
 
 #### Scenario: Connected target is not selected
+
 - **WHEN** the selected cursor is on one item and a different target is connected
-- **THEN** the cursor item alone carries the selected-row bar
-- **AND** the connected item carries the aqua `✚` without a connection fill
+- **THEN** the cursor item alone is marked selected
+- **AND** the connected item is marked connected without selection marking
 
 #### Scenario: Connected target is selected
+
 - **WHEN** the cursor selects the connected target
-- **THEN** that target carries both the selected-row bar and the aqua `✚`
-- **AND** the separator line below it carries neither fill
+- **THEN** that target carries both marks
+- **AND** the separator line below it carries neither
 
 ### Requirement: F3 activates the selected stable target
 F3 SHALL preserve selection by kind-qualified stable target identity across independent Emby Session and Cast discovery refreshes. Enter or a click on the already selected item SHALL request connection to the selected identity, not to a row number; a first click on a different item SHALL select it without connecting. The shell SHALL resolve the identity against its current target snapshot and SHALL do nothing when it has disappeared, rather than connect a replacement at the old position. Pointer resolution SHALL use only the latest painted item geometry; clicks on blank separators SHALL not activate a target.

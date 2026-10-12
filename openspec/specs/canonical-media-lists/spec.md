@@ -7,126 +7,58 @@ Provide reusable embedded TuiRealm list controls with one owner for list interac
 ## Requirements
 
 ### Requirement: Shared rows are provider-neutral and bounded
-The controls SHALL accept selectable item rows with stable opaque targets, primary text, an optional secondary title (the container name of a split row, painted after the primary text), an optional metadata slot whose text role and placement are closed — a release year or a publish date both paint right-aligned in the fixed six-column date gutter in the green (`STATUS_AVAILABLE`) role, a progress badge in the FOAM metadata role — a media kind (`Collection` for navigable containers, `Media` for playable leaves), an optional duration string (painted right-aligned in its own (`DURATION`) role for the Queue, or right-aligned in the green gutter for hero workspace lists and the audiobook browser row), and semantic state (ordinary, played, active with optional bounded integer progress `0..=100`, now-playing with optional bounded integer progress `0..=100`, or disabled), plus non-selectable Heading and Spacer rows. The Queue list SHALL project its duration string in the gold `DURATION` slot; hero workspace lists (music tracklist, TV episode, book chapter) and audiobook browser rows SHALL project duration into the unified right-aligned green gutter in the `STATUS_AVAILABLE` role, in a minutes-precision `M:SS` (under an hour) or `H:MM` (at or over an hour) form so a six-column gutter never truncates; feed entries SHALL NOT carry a duration. A Heading SHALL paint its label bold in the FOAM metadata role, so every grouped list's group label reads the same. Heading and Spacer SHALL be excluded from selectable-target indexing. When the Queue shows a duration it SHALL use the precise `M:SS`/`H:MM:SS` form (queue format, e.g. `4:32`, `1:02:03`); `Collection` rows SHALL NOT carry a duration. `Active` SHALL keep its existing meaning of stored resume progress rendered inline as trailing metadata; `NowPlaying` SHALL mean live playback, rendering its live progress inline as trailing metadata and its total duration like every other row — no throbber glyph appears in any row. On Wide lists, `NowPlaying` rows SHALL be marked by an aqua right-pointing play glyph before the title (one space from it) rather than an accent-coloured title; their title text SHALL keep the ordinary colour. A `NowPlaying` row SHALL NOT carry a secondary title, so the split-row palette below never applies to one. `Active` rows SHALL not be marked by the play glyph. The model SHALL contain no provider client, `App`, source/header, raw style, callback, breakpoint, or effect.
-
-A row carrying a secondary title SHALL paint as a split row: the primary text (the container/context name) SHALL paint in the split-row context (`SPLIT_ROW_CONTEXT_FG`) role and the secondary title (the item's own name) SHALL paint in the split-row title (`SPLIT_ROW_TITLE_FG`) role, with one separating space. A row with no secondary title SHALL keep the ordinary title role for its primary text. A played split row SHALL mute the item title to the played (`TEXT_MUTED`) role while the context part keeps the split-row context role. No other semantic state SHALL move the split-row palette, and a `NowPlaying` row SHALL NOT carry a secondary title, so the palette never overrides the now-playing row's ordinary-colour title. A split row truncates as one string: its parts SHALL be cut as a unit with at most one trailing ellipsis, the context part keeping its full width and the item title absorbing the cut.
+The controls SHALL accept selectable item rows with stable opaque targets, primary text, an optional
+secondary title (the container name of a split row), an optional metadata slot, a media kind
+(`Collection` for navigable containers, `Media` for playable leaves), an optional duration string,
+and semantic state (ordinary, played, active with optional bounded integer progress `0..=100`,
+now-playing with optional bounded integer progress `0..=100`, or disabled), plus non-selectable
+Heading and Spacer rows. Feed entries and `Collection` rows SHALL NOT carry a duration. Heading and
+Spacer SHALL be excluded from selectable-target indexing. `Active` SHALL mean stored resume
+progress; `NowPlaying` SHALL mean live playback with live progress. A now-playing row with unknown
+runtime SHALL show no progress. Only selectable Item rows SHALL carry a release year or publish
+date. The model SHALL contain no provider client, `App`, source/header, raw style, callback,
+breakpoint, or effect.
 
 #### Scenario: Queue-like progress is presented safely
 - **WHEN** a parent supplies active progress
 - **THEN** the control receives only a bounded percentage
 - **AND** playback and queue authority remain with the parent/shell
 
-#### Scenario: Now-playing renders like other rows
-- **WHEN** a row carries the now-playing state
-- **THEN** an aqua play glyph is painted one space before the title, and the title keeps the ordinary colour
-- **AND** live progress renders inline next to the title exactly as resume progress does
-- **AND** the duration slot shows the total duration
-- **AND** no throbber glyph appears anywhere in the row
-
 #### Scenario: Now-playing with unknown runtime
 - **WHEN** a now-playing row carries no progress
-- **THEN** no percentage renders and the duration slot stays empty
-
-#### Scenario: Resume progress stays inline
-- **WHEN** a row carries the active resume state
-- **THEN** progress renders inline next to the title exactly as before this change
-- **AND** the duration slot is unchanged
+- **THEN** no percentage renders
 
 #### Scenario: Structural rows are displayed only
 - **WHEN** a Heading or Spacer is rendered
 - **THEN** it occupies display geometry
 - **AND** it cannot be selected or activated
 
-#### Scenario: Group headings share one treatment
-- **WHEN** any grouped list (artist, feed age bucket, letter bucket, season) renders its Heading rows
-- **THEN** each label paints bold in the FOAM metadata role
-
-#### Scenario: Trailing metadata carries its own role
-- **WHEN** a row carries a release year
-- **THEN** the year paints right-aligned in the row's fixed six-column date gutter, in the green (`STATUS_AVAILABLE`) role
-- **AND** a row carrying a progress badge instead paints it inline next to the title in the FOAM metadata role
-
-#### Scenario: Publish date paints in the fixed right-aligned gutter
-- **WHEN** a row carries a publish date
-- **THEN** the date paints right-aligned in a six-column gutter at the row's right edge, in the same green (`STATUS_AVAILABLE`) role a release year uses, whatever the date string's own length is
-- **AND** the title's slot shrinks by that gutter so no column collides
-- **AND** a row carrying no publish date and no release year reserves no gutter and its title keeps the full slot
-
-#### Scenario: Durations share one precise format
-- **WHEN** the Queue list shows a duration
-- **THEN** every row uses the same `M:SS`/`H:MM:SS` format
-- **AND** the duration paints in its own (`DURATION`) role, not the green gutter role
-- **AND** imprecise forms (`4m`, `1h12m`, unbounded `62:03`) never appear in list rows
-
-#### Scenario: Hero workspace durations paint in the green gutter
-- **WHEN** a hero workspace list row is projected with a duration (music track, TV episode, book chapter)
-- **THEN** the duration paints right-aligned in the unified six-column date gutter in the green (`STATUS_AVAILABLE`) role
-- **AND** it uses a minutes-precision format — `M:SS` under an hour, `H:MM` at or over an hour — so the gutter never truncates it
-- **AND** the Queue's gold `DURATION` slot requirement is unchanged
-
-#### Scenario: Audiobook browser rows carry total runtime in the gutter
-- **WHEN** an audiobook's browser list row is projected (where movies/TV show production year)
-- **THEN** the book's total runtime paints right-aligned in the green gutter in the same minutes-precision format
-- **AND** an hour-or-longer book's runtime still fits within the six columns
-
 #### Scenario: Library list rows carry no duration
 - **WHEN** a library list row is projected (Home, Podcast, feed entry)
 - **THEN** it carries no duration string
-- **AND** its row paints no right-aligned duration slot (hero workspace durations and audiobook browser runtimes paint in the green gutter, not a duration slot)
 
 #### Scenario: Collections stay duration-free
 - **WHEN** a row is a navigable container (movie/series folder, album, show, book title)
 - **THEN** it carries no duration string
-- **AND** the painter suppresses the duration slot even if one is projected
 
-#### Scenario: Split rows share the now-playing palette
-- **WHEN** a row carries both a primary text and a secondary title
-- **THEN** the primary text paints in the split-row context role and the secondary title paints in the split-row title role
-- **AND** the treatment is identical on every list that projects a split row, with no per-list opt-in
-- **AND** the now-playing playback strip's title roles are unaffected
-
-#### Scenario: Single-part rows keep the ordinary title role
-- **WHEN** a row carries no secondary title
-- **THEN** its primary text paints in the ordinary title role for its semantic state, not the split-row palette
-
-#### Scenario: Played split rows mute the item title only
-- **WHEN** a played row carries a secondary title
-- **THEN** the secondary title paints in the played muted role
-- **AND** the primary context text keeps the split-row context role
-
-#### Scenario: Group headings never carry a gutter
+#### Scenario: Only Item rows carry dates
 - **WHEN** a Heading or Spacer row is rendered
-- **THEN** it reserves no date-gutter column, whatever the surrounding item rows carry
-- **AND** only selectable Item rows can carry a release year or publish date
+- **THEN** it carries no release year or publish date
 
 ### Requirement: WideMediaList owns fixed-row mechanics
 
-`WideMediaList<Target>` SHALL be a persistent embedded plain TuiRealm presentation adapter for the flat list shape. It SHALL own fixed-height one-column row placement, semantic painting delegation, and scrollbar presentation. Row flow, cursor, scroll, viewport clamping, selected target, retained current-frame geometry, and point resolution SHALL come from the shared list seam rather than from this presentation. The parent SHALL retain ownership of the destination panel/frame and establish its current claim and row-flow rectangles using its existing arrangement; before view, it SHALL configure those rectangles on the presentation.
+`WideMediaList<Target>` SHALL be a persistent embedded plain TuiRealm presentation adapter for the flat list shape. It SHALL own fixed-height one-column row placement and semantic painting delegation. Row flow, cursor, scroll, viewport clamping, selected target, retained current-frame geometry, and point resolution SHALL come from the shared list seam rather than from this presentation. The parent SHALL retain ownership of the destination panel/frame and establish its current claim and row-flow rectangles using its existing arrangement; before view, it SHALL configure those rectangles on the presentation.
 
-The presentation's `Component::view` SHALL paint the established row flow once and SHALL be the only ordinary-row painting entry point for that presentation in a frame. Before that call, the parent MAY supply only a closed semantic policy for focused/selected treatment; the policy SHALL contain no rectangle, callback, provider data, or effect. Every fixed-row presentation SHALL render its selected row with the selected-row bar: while the list holds focus the whole row paints the bar fill across its full width, overriding its zebra stripe, its two-column gutters, and any owning-surface identity, while every span keeps the ordinary unselected foreground role, so no title is bold and no accent title colour is introduced. There SHALL be no per-list opt-in or opt-out, and no marker glyph. An unfocused list SHALL paint no bar for its cursor row. A multi-selected row SHALL paint the bar too, including while the list is unfocused.
-
-The policy's owning-surface identity SHALL NOT move the selected row's fill: every selected row paints the bar whatever surface owns it. A list that paints a scrollbar column SHALL keep the parent background there — the bar reaches the panel edge on its own row only.
+The presentation's `Component::view` SHALL paint the established row flow once and SHALL be the only ordinary-row painting entry point for that presentation in a frame. Before that call, the parent MAY supply only a closed semantic policy for focused/selected treatment; the policy SHALL contain no rectangle, callback, provider data, or effect. Every fixed-row presentation SHALL visibly distinguish its selected row while the list holds focus, with no per-list opt-in or opt-out. An unfocused list SHALL NOT mark its cursor row as selected. A multi-selected row SHALL be visibly distinguished as selected, focused or not.
 
 It SHALL support Wide Hero browser rails, non-Wide Library browser lists, provider Workspace rows, and Queue fixed rows for destinations whose flow is flat, but SHALL NOT implement selected-row replacement or Grid placement. A destination whose flow nests uses the tree list shape over the same seam instead; for TV, the show-browsing modes are such a nested flow, while `Latest`, `Upcoming`, and the Hero's episode Workspace remain flat flows of this presentation. Letter grouping SHALL use `MediaListRow::Heading`/`Spacer` rows. Queue SHALL use this presentation in every Panel mode.
 
-#### Scenario: A selected row paints the selected-row bar
+#### Scenario: Selection is visibly distinguished only while focused
 
-- **WHEN** a fixed-row list renders its selected row while focused
-- **THEN** the row paints the bar fill across its full width, overriding its zebra stripe and its two-column gutters
-- **AND** every span keeps the ordinary unselected foreground role, with no bold title
-- **AND** no icon or marker glyph appears in or beside the row
-
-#### Scenario: An unfocused list paints no bar for its cursor row
-
-- **WHEN** a fixed-row list renders while unfocused
-- **THEN** no selectable cursor row carries the bar fill
-- **AND** striped positions still show the unfocused secondary background when striping applies
-
-#### Scenario: A multi-selected row paints the bar
-
-- **WHEN** a fixed-row list renders rows that are part of a multi-selection while the list is unfocused
-- **THEN** each multi-selected row paints the bar with its ordinary foreground
-- **AND** the bar overrides its zebra stripe
+- **WHEN** a fixed-row list renders its selected row
+- **THEN** the row is visibly distinguished as selected while the list holds focus
+- **AND** an unfocused list marks no cursor row as selected
+- **AND** a multi-selected row stays distinguished, focused or not
 
 #### Scenario: Wide TV rail composes the control
 
@@ -211,7 +143,7 @@ The Feeds Service/tab SHALL project FeedAgeGroup/date labels as non-selectable `
 - **THEN** cursor movement skips headings and spacers and activation resolves the selected FeedEntry target.
 
 ### Requirement: Canonical source of truth owns row presentation
-Migrated Home and Feeds rows SHALL use the canonical row model and painter. The deferred two-space row-indent correction from `restore-feeds-service-wide-list` (umbrella task 1.3a) SHALL be implemented at that source of truth, not by destination-specific offsets.
+Migrated Home and Feeds rows SHALL use the canonical row model and painter. Row-indent corrections SHALL be implemented at that source of truth, not by destination-specific offsets.
 
 #### Scenario: Wide Feeds remains one column
 - **WHEN** the Feeds Service/tab is rendered at an accepted Wide breakpoint
@@ -391,185 +323,7 @@ Missing targets SHALL be handled explicitly and SHALL NOT be replaced by the cur
 - **THEN** the destination reports or deliberately rejects the missing target according to the action contract
 - **AND** it does not substitute the cursor target or another occurrence
 
-### Requirement: Selected row marquees an overflowing title instead of truncating
 
-When the shared row painter renders the row that is both the list's current selection and on a focused list, and that row's title does not fit its title slot, the painter SHALL animate the title through a bounded back-and-forth marquee (hold at the start, scroll to reveal the tail, hold at the end, scroll back) rather than ellipsis-truncating it. A list that declares its rows reveal their title only on selection SHALL marquee that selected row's title whether or not it fits its slot, carrying the title fully out of the window and back instead of holding a fitting title static. Every other row — unselected rows, the selected row on an unfocused list, and any row whose title already fits its slot in a list that reveals titles on every row — SHALL continue to render with ellipsis truncation exactly as before this change. The marquee's timing SHALL match the existing player-strip title marquee's cadence (used for the Now Playing and idle-feed titles), so the two forms of marqueeing feel identical to the user.
-
-Each list owns an independent marquee clock (mirroring its ownership of cursor and scroll). The clock SHALL key on the full text it marquees — both parts of a split row's title, not the primary text alone — and SHALL restart from the beginning whenever that text changes: a new row becomes selected, or the selected row's own title text changes. A freshly-marqueed title therefore never opens mid-scroll, and two rows that share a primary text never share a clock position.
-
-#### Scenario: Focused selected row with an overflowing title marquees
-
-- **WHEN** the row under the cursor on a focused list has a title wider than its available slot
-- **THEN** the row's title animates through the hold/scroll/hold/scroll-back marquee cycle
-- **AND** no ellipsis appears in the row while it is marqueeing
-
-#### Scenario: Unfocused selection keeps truncating
-
-- **WHEN** the row under the cursor has an overflowing title but its list is not focused
-- **THEN** the row's title is ellipsis-truncated exactly as an ordinary row
-
-#### Scenario: Non-selected rows keep truncating
-
-- **WHEN** a row is not the list's current selection
-- **THEN** its overflowing title is ellipsis-truncated regardless of focus
-
-#### Scenario: Fitting title never marquees
-
-- **WHEN** the selected, focused row's title already fits its slot and its list reveals titles on every row
-- **THEN** it renders in full, static, with no marquee and no ellipsis
-
-#### Scenario: A fitting title in a reveal-on-selection list marquees
-
-- **WHEN** the selected, focused row's title already fits its slot and its list reveals titles only on selection
-- **THEN** the title marquees through the same cycle, scrolling fully out of the window and back
-- **AND** it does not sit static or ellipsis-truncated
-
-#### Scenario: Marquee restarts on a new selection
-
-- **WHEN** the cursor moves to a different row — including one whose context text matches the previous row's — or the selected row's title text itself changes
-- **THEN** that row's marquee begins again from its held starting position rather than resuming mid-cycle
-
-### Requirement: Library Wide lists stripe with their panel's contrasting pair
-
-Both library Wide lists SHALL paint zebra striping with the semantics the Queue list already ships:
-a group-position alternation that restarts at each `Heading`, so every group header carries the
-secondary fill and its group's rows alternate from there, the `Spacer` row above a header keeping the
-surface fill outside the sequence, and the selected row painting
-the bar over its parity. Each arm SHALL resolve its secondary pair from the surface
-table identity of the panel body that surrounds it, never from a raw colour value:
-
-- the Browser-pane list, whose list box is filled with the `LibraryPanel` surface, SHALL stripe with
-  the `MainContentBox` pair (focused `#48584e`, unfocused `#272e33`);
-- the provider Workspace list, whose box rests at the `MainContentBox` resting fill, SHALL stripe
-  with the fixed resting-content Storm (`#2b3238`) in both focus states — one unified Workspace
-  look across the Wide Hero pane and the Library Hero overlay.
-
-A stripe SHALL always resolve to a pair other than the one its own list box is filled with: a stripe
-whose colours equal its panel body's paints no visible alternation. Zebra striping SHALL remain a
-per-list policy — these pairs apply to the two library Wide lists and change nothing on any other
-list.
-
-#### Scenario: Browser-pane list stripes with the content-box pair
-
-- **WHEN** the Browser-pane Wide list renders focused
-- **THEN** the 2nd, 4th, and 6th visible rows carry the `MainContentBox` focused fill
-- **AND** the remaining visible rows carry no secondary background
-
-#### Scenario: Workspace list stripes with the fixed resting Storm
-
-- **WHEN** a provider Workspace list renders, in either focus state or either geometry
-- **THEN** the striped positions carry the fixed resting-content Storm fill
-- **AND** that fill differs from the `MainContentBox` resting fill the Workspace box is painted with
-
-#### Scenario: A stripe never equals its own panel body
-
-- **WHEN** either library Wide arm renders in either focus state
-- **THEN** its stripe colour differs from the fill its own list box is painted with in that state
-
-#### Scenario: Library group headings keep the surface fill
-
-- **WHEN** a grouping `Heading` row appears between two library items
-- **THEN** it keeps the surface fill whatever the screen row it lands on
-- **AND** the group's first member below it carries the secondary fill, whatever fill the group above it ended on
-
-#### Scenario: A `Spacer` row stays on the surface fill
-
-- **WHEN** the `Spacer` row that separates two library groups is visible
-- **THEN** it carries the surface fill wherever it sits in the sequence
-- **AND** the group below it starts from its own `Heading`, unaffected by the rows above
-
-### Requirement: Wide presentation zebra striping
-
-The Wide presentation SHALL accept an optional zebra-stripe policy on its paint policy. The policy
-SHALL carry a focused and an unfocused secondary background colour. When zebra striping is enabled,
-the painter SHALL keep grouping `Heading` rows and `Spacer` rows on the surface fill, outside the
-sequence — consuming no position, so each group opens its own alternation regardless of the rows above.
-A group's member rows SHALL alternate from the secondary fill at the group's first member: the first
-member carries the secondary background colour and every second member after it reverts to the surface
-fill, whatever the membership count. A row with
-no `Heading` above it counts from the list's first row, which is therefore unstriped. When zebra striping is
-disabled (the default), row backgrounds SHALL be unchanged from today's behaviour. Because every Wide
-list marks its selection with the selected-row bar rather than with its own row fill (see
-*WideMediaList owns fixed-row mechanics*), the selected row SHALL NOT stripe: the bar replaces the
-zebra background on the selected row while every other row keeps its own parity. For an unselected striped row, the secondary background SHALL
-be confined to the text-flow range inside the row's existing two-column left and right gutters; the
-parent background SHALL remain visible in those gutters and in any scrollbar column. Row geometry,
-width calculations, and hit geometry SHALL remain unchanged.
-
-#### Scenario: Zebra stripes are contained within existing row gutters
-
-- **WHEN** a Wide presentation renders an unselected striped row
-- **THEN** its secondary background spans only the text-flow range inside the existing two-column
-  gutters
-- **AND** the gutters and scrollbar column retain the parent background without changing row geometry
-
-#### Scenario: Zebra stripes alternate among visible rows
-
-- **WHEN** a Wide presentation has zebra striping enabled and renders five visible rows with no
-  `Heading` above them, the window opening at the list's first row
-- **THEN** the 2nd and 4th visible rows paint with the secondary background colour matching the
-  current focus state
-- **AND** the 1st, 3rd, and 5th visible rows paint with no secondary background
-
-#### Scenario: A group boundary restarts the sequence
-
-- **WHEN** a grouping `Heading` row sits between two `Item` rows
-- **THEN** the `Heading` keeps the surface fill
-- **AND** the group's first member below it carries the secondary background colour, with every second
-  member after it reverting to the surface fill, whatever position the `Item` above the
-  `Heading` took
-
-#### Scenario: Grouping rows never stripe
-
-- **WHEN** a grouping `Heading` or separating `Spacer` row is visible
-- **THEN** it keeps the surface fill in every position
-- **AND** the two-column gutters and any scrollbar column keep the parent background
-
-#### Scenario: Selected row paints the bar over its stripe
-
-- **WHEN** the selected row falls on a zebra-striped position on a focused Wide list
-- **THEN** the row paints the bar fill instead of the zebra background
-- **AND** its spans keep the ordinary foreground roles
-
-#### Scenario: Zebra follows the row's group position
-
-- **WHEN** the list scrolls by one row within a group
-- **THEN** each row keeps the stripe its position in its group resolves to, regardless of the screen
-  row it lands on
-- **AND** a window that opens mid-group keeps the group's pattern
-
-#### Scenario: Zebra is disabled by default
-
-- **WHEN** a Wide presentation is configured without a zebra-stripe policy
-- **THEN** all unselected rows paint with no explicit background, matching today's behaviour
-
-### Requirement: The non-Wide library list is the Wide Browser-pane list
-
-The non-Wide library list SHALL be the Wide Browser-pane list at the non-Wide pane width: it SHALL
-resolve the same `LibraryPanel` list-box fill and the same `MainContentBox` stripe pair, and SHALL
-carry no per-geometry body fill or scrollbar-column fill. Its list box SHALL be filled by the panel
-that composes the surface, as the Wide Browser-pane list's is, so the Wide list policy is the only
-one the non-Wide library uses. A list that carries no body fill SHALL keep the parent background in
-its scrollbar column; the selected row's bar paints only its own row, so the Queue is unaffected.
-
-#### Scenario: The non-Wide library list uses the Wide Browser-pane policy
-
-- **WHEN** a non-Wide library list renders in either focus state
-- **THEN** its list box carries the `LibraryPanel` fill and its alternating rows carry the
-  `MainContentBox` fill for that state
-- **AND** no body fill or scrollbar-column fill is set on its paint policy
-
-#### Scenario: Scrollbar column parity with the Wide Browser-pane list
-
-- **WHEN** a non-Wide library list overflows and paints its scrollbar column
-- **THEN** the column carries the same fill the Wide Browser-pane list's column carries
-- **AND** it does not carry a library-body fill
-
-#### Scenario: Lists without their own body fill keep the parent background
-
-- **WHEN** a Wide library list or the Queue list paints its scrollbar column
-- **THEN** the column keeps the parent background
-- **AND** the selected row's bar does not bleed down the column
 
 ### Requirement: Inline Search results compose the shared canonical media-list owner
 
@@ -585,7 +339,6 @@ Pointer input against search result rows SHALL flow through the panel's normaliz
 
 - **WHEN** Inline Search is open with scored results in either Wide or Narrow presentation
 - **THEN** the result rows SHALL paint through the same canonical fixed-row presentation as every other library list
-- **AND** the selected row SHALL paint the selected-row bar while the list holds focus
 
 #### Scenario: Query change resets the selection
 
@@ -650,7 +403,6 @@ The shared list owner SHALL accept a closed title-reveal policy for its rows, de
 
 - A row that is not part of the list's current selection SHALL paint only its primary (context) text. No fragment of the secondary title SHALL appear in that row, and the row SHALL NOT reserve the hidden title's width.
 - A row that is part of the list's current selection — the cursor row, or a multi-selected row — SHALL paint its full context-and-title text.
-- The reveal on its own SHALL NOT animate anything: a selected row's title marquees exactly according to the selected-row marquee requirement, which this policy extends.
 
 The policy SHALL be declared once by the destination that composes the list and resolved at the shared row-paint seam. No destination SHALL paint its own rows, fork the row painter, or pass a per-row flag to express the policy, and no list that never declares it SHALL change behaviour.
 

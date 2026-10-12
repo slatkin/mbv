@@ -146,12 +146,12 @@ The visualizer SHALL apply a fixed internal display gain before clamping and map
 
 ### Requirement: Vectorscope glyph is configurable
 
-mbv SHALL persist one valid single-cell Unicode vectorscope glyph and SHALL default it to `●` when the setting is missing, empty, a control character, or does not occupy exactly one terminal cell.
+mbv SHALL persist one valid single-cell Unicode vectorscope glyph and SHALL fall back to a built-in single-cell default when the setting is missing, empty, a control character, or does not occupy exactly one terminal cell.
 
 #### Scenario: An invalid glyph setting is loaded
 
 - **WHEN** the persisted glyph is missing, empty, a control character, or not exactly one terminal cell
-- **THEN** mbv uses the default `●` glyph
+- **THEN** mbv uses a built-in single-cell default glyph
 
 ### Requirement: Vectorscope favors fresh frames
 

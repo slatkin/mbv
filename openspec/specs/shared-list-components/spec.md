@@ -176,28 +176,6 @@ Expansion state SHALL survive content replacement by stable identity. A list sha
 - **WHEN** a list shape has no nesting
 - **THEN** it satisfies the seam without providing expansion behavior
 
-### Requirement: Tree rows share one visual hierarchy
-The shared Render Component SHALL paint nested rows with one destination-neutral visual hierarchy. An ordinary node title's resting foreground role SHALL fall back by nesting depth: the cream emphasis role at depth zero, the yellow focus-accent role at depth one, and the aqua accent role at deeper depths; semantic-state and selected-row roles SHALL still take precedence when they apply. A heading SHALL paint bold in the metadata role with its title sitting on the same baseline as a depth-zero node title, taking the shared content inset as its effective two-column inset. A heading and a spacer SHALL each paint the unstriped base; only item rows SHALL participate in zebra striping. Zebra striping SHALL reset at each heading: a row's stripe SHALL derive from its position within the group that heading introduces, not from its absolute position in the flow or viewport, and SHALL remain stable under clipping as well as scrolling, so stripes stay stable across scroll and clip and no stripe runs continuously across group boundaries. A played row's resting foreground SHALL use the existing muted/played palette role above the generic depth colours, while selected-row and other semantic-state roles still take precedence when they apply.
-
-#### Scenario: Depth colours fall back cream, yellow, aqua
-- **WHEN** an ordinary unselected node title paints at depth zero, depth one, or depth two and deeper
-- **THEN** its resting foreground role is the cream emphasis, yellow focus-accent, or aqua accent role respectively
-- **AND** a selected or semantically emphasised row still paints its own role instead of the depth fallback
-
-#### Scenario: A heading aligns with the depth-zero baseline
-- **WHEN** a heading and the depth-zero nodes of its following group paint
-- **THEN** the heading's title starts on the same baseline as those node titles, via the effective two-column inset
-
-#### Scenario: Stripes reset per heading and hold across scroll and clip
-- **WHEN** the viewport scrolls a grouped tree or clips a group at the viewport edge
-- **THEN** each row's stripe still matches its position within its heading's group
-- **AND** the heading and spacer paint unstriped and no stripe claim runs continuously from one group across a heading into the next
-
-#### Scenario: A played row reads muted before depth colours
-- **WHEN** an unselected row with the played semantic state paints at any depth
-- **THEN** its title uses the existing muted/played palette role rather than the cream, yellow, or aqua depth fallback
-- **AND** a selected played row still paints the selected-row role
-
 ### Requirement: Right navigation expands, activates roots, and no-ops on expanded descendants
 The shared TreeBrowser SHALL implement one `Right` operation over the selected row: on an unexpanded expandable row it SHALL expand that row; on an expanded root row it SHALL emit the row's activation intent to the destination; and on an expanded non-root row it SHALL perform no action while still consuming the key. A non-expandable selected row SHALL leave `Right` unhandled.
 
@@ -225,7 +203,7 @@ A destination SHALL supply only plain `TreeNode<Target>` values containing typed
 - **AND** it supplies no behavior implementation, callback, mutable state object, renderer, painter, or policy beyond the closed per-node `TreeMarkPolicy`
 
 #### Scenario: A tree behavior changes centrally
-- **WHEN** expansion, tree navigation, filtering, selection presentation, marquee, indentation, zebra striping, or scrollbar behavior changes without changing the destination-data contract
+- **WHEN** expansion, tree navigation, filtering, selection presentation, indentation, or scrollbar behavior changes without changing the destination-data contract
 - **THEN** the production change is confined to the shared `TreeBrowser`
 - **AND** every adopting destination receives that behavior without changing destination-owned browser code
 
@@ -294,18 +272,9 @@ A reusable three-line flat list SHALL paint one selectable item as a single thre
 - **THEN** point resolution returns that item's stable target from the most recent completed paint
 - **AND** changing content or geometry invalidates the previous hit result until repaint completes
 
-### Requirement: Three-line rows have consistent selection, stripes, and adjustable spacing
-The three-line presentation SHALL treat all three lines of an item as one unit for zebra striping and the standard selected-row bar. A focused selected item SHALL paint the bar across its three lines; no list-specific accent rail SHALL be needed. Stripes SHALL follow item order rather than screen position, with the first ungrouped item unstriped and subsequent items alternating, remaining stable through scrolling. An item MAY have a configurable number of blank separator lines after it; separators SHALL stay on the surrounding surface fill, carry no target, and never inherit the stripe or selected bar. The row's selectable geometry SHALL exclude separators. Changing separator spacing SHALL not change content identity or row selection.
+### Requirement: Three-line rows resolve as one unit with inert separators
 
-#### Scenario: Scrolled cards retain their stripe
-- **WHEN** the list scrolls so the same item moves to another screen position
-- **THEN** all three lines of that item keep their prior stripe treatment
-- **AND** its separator stays on the surrounding surface fill
-
-#### Scenario: Selected card overrides stripe
-- **WHEN** a striped item is selected on the focused list
-- **THEN** the selected-row bar replaces its stripe across all three content lines
-- **AND** no bar or stripe extends into the separator
+The three-line presentation SHALL treat all three lines of an item as one unit for selection and hit-testing. An item MAY have a configurable number of blank separator lines after it; separators SHALL carry no target, and the row's selectable geometry SHALL exclude them. Changing separator spacing SHALL not change content identity or row selection.
 
 #### Scenario: Separator spacing changes
 - **WHEN** the presentation's separator spacing changes while content remains the same

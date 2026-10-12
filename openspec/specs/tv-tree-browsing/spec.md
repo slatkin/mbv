@@ -31,7 +31,7 @@ A navigate-to landing or any other programmatic re-anchor of the tree's selectio
 - **THEN** they label their following shows but cannot be selected or activated
 - **AND** a non-selectable spacer still separates consecutive groups
 
-Show rows SHALL present this hierarchy through the shared tree visual contract: show, season, and episode titles take the depth-based cream, yellow, and aqua fallback roles, a played row uses the existing muted/played palette role above those depth colours, headings sit on the depth-zero baseline, headings and spacers paint unstriped, and stripes reset at each heading while holding stable across scroll and clip.
+Show rows SHALL present this hierarchy through the shared tree browser: show, season, and episode titles, with headings that label their following shows but cannot be selected or activated.
 
 #### Scenario: Preserve the selected row on refresh and resize
 - **WHEN** the TV list refreshes or changes between panel geometries and its selected row still exists

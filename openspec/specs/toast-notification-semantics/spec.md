@@ -62,13 +62,9 @@ Toasts SHALL NOT ring the terminal bell. Neutral toasts SHALL NOT emit a desktop
 - **WHEN** a Success, Warning, or Error toast is displayed
 - **THEN** a desktop notification is attempted
 
-### Requirement: Severity-colored toast row
+### Requirement: Status bar messages expire unanswered
 
-The toast-row background SHALL reflect severity: Success green, Warning yellow, Error red. Neutral toasts SHALL use the standard status-bar styling. The status bar SHALL NOT carry an interactive prompt: a message occupying it is always a toast with a severity-derived duration.
-
-#### Scenario: Background matches severity
-- **WHEN** a toast is rendered
-- **THEN** its background is the palette color for its severity class, or the standard status-bar styling for Neutral toasts
+The status bar SHALL NOT carry an interactive prompt: a message occupying it is always a toast with a severity-derived duration.
 
 #### Scenario: Status bar never awaits an answer
 - **WHEN** any message occupies the status bar

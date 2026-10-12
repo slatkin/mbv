@@ -134,13 +134,10 @@ of cover-cropping the poster into a landscape box. Until an image decodes, the d
 holds.
 
 The header SHALL render title and metadata through one presentation for all three types. Metadata is
-an ordered list of plain-text rows supplied by the destination; the panel SHALL colour row *n* with
-the *n*-th of three metadata colours, repeating from the first after the third, and SHALL own
-truncation and wrapping. A destination SHALL NOT style metadata.
+an ordered list of plain-text rows supplied by the destination. A destination SHALL NOT style metadata.
 
-The artwork SHALL fill its box completely: an image whose aspect differs from its box SHALL be scaled
-to cover the box and cropped, centred, so no margin of the box shows. When images are disabled or the
-artwork is not loaded yet, the artwork box SHALL render the shared placeholder at the same size. When
+When images are disabled or the
+artwork is not loaded yet, the artwork box SHALL render the shared placeholder. When
 vertical space is constrained, the artwork SHALL shrink before a Workspace list viewport is removed.
 
 #### Scenario: A TV series is selected at Wide geometry
@@ -173,16 +170,6 @@ vertical space is constrained, the artwork SHALL shrink before a Workspace list 
   portrait
 - **THEN** the header re-arms to the Portrait arm once the image is ready, instead of cover-cropping
   the poster into the landscape box
-
-#### Scenario: Metadata rows are coloured by position
-- **WHEN** a header shows four metadata rows
-- **THEN** rows one to three use the first, second and third metadata colours and row four uses the
-  first again, on every destination
-
-#### Scenario: A 4:3 image in a Landscape header
-- **WHEN** the chosen landscape artwork is 4:3 rather than 16:9
-- **THEN** it fills the 16:9 box, cropped at the top and bottom edges, with no empty margin inside the
-  box
 
 #### Scenario: Artwork has not loaded
 - **WHEN** a header's artwork is still loading or absent
@@ -297,26 +284,16 @@ provider order, followed by every remaining person in provider order regardless 
 type for them. The table SHALL NOT cap or reorder the provider's people beyond moving directors to
 the front. (Amended 2026-09-15 from the user's visual sweep; the former 9-actor cap is removed.)
 
-Each row SHALL show the person's name in a first column and their role in a second column. The second
-column SHALL span the overview box's remaining width after the name column, which is sized from the
-longest name the table shows, and every role SHALL be right-aligned at the box's right edge. A role
-longer than the remaining width SHALL be truncated with an ellipsis at the box's edge. The table SHALL have
-no header row, and SHALL use the body text treatment the overview paragraph
-uses. A separator line of `▁` (U+2581) block characters spanning the box's content width in the
-sage-green text role (#A7C080) SHALL sit directly under the overview text, with one blank row between
-the separator and the table's first row. Table rows
-SHALL be zebra-striped: alternate rows (by table position, first row unstriped) SHALL carry the
-darker surface tone #333c43 behind the body text, applied through a semantic theme role. The table's
-name column SHALL render in a yellow text role backed by the theme's `YELLOW` primitive (#dbbc7f).
+Each row SHALL show the person's name and their role in two columns, the role column after the name column.
 
 A person's role SHALL be the provider's role text for that person. When the provider supplies no role
 text, the person's provider type SHALL be shown instead.
 
-The overview text, the separator line, the blank row and the cast and crew table SHALL form one
+The overview text and the cast and crew table SHALL form one
 scrollable flow inside the overview Main content box: when the flow offers more rows than the box's
-height shows, the caller's scroll offset SHALL shift the whole flow — the overview text and the
-separator scroll out of the box above the table instead of staying pinned — and a scrollbar
-indicator SHALL paint at the box's right edge only while the flow overflows. The scroll offset SHALL
+height shows, the caller's scroll offset SHALL shift the whole flow — the overview text scrolls
+out of the box above the table instead of staying pinned — and a scrollbar
+indicator SHALL show at the box's right edge only while the flow overflows. The scroll offset SHALL
 be component-local (owned by the Library
 panel's destination owner), clamped at both ends against the whole flow's length, and reset when the
 shown item changes. The table
@@ -361,8 +338,8 @@ SHALL render only in the Wide Hero pane.
 #### Scenario: A long overview scrolls with its table
 
 - **WHEN** a Movie's overview and cast and crew table need more rows than the overview box shows
-- **THEN** scrolling the box shifts the overview text and the separator out of it above the table
-- **AND** the scroll range covers the overview, the separator, the blank row and every table row
+- **THEN** scrolling the box shifts the overview text out of it above the table
+- **AND** the scroll range covers the overview and every table row
 
 #### Scenario: A Movie selected in the Narrow panel
 
@@ -404,37 +381,17 @@ A destination whose item has constituent items (TV seasons and episodes, Music t
 chapters) SHALL present them in a Workspace below the overview: an
 optional one-row header, an optional Selector row (season pills)
 followed by one Main content box
-holding the canonical list. The Workspace box SHALL render the accent-soft surface while its list holds
-focus and the backdrop surface otherwise. Its selected row SHALL paint the selected-row bar like every
-other canonical list row. A Hero pane with a Workspace is focusable; a Hero pane without one is read-only and always
-renders the resting surface. No destination SHALL render a second Workspace box.
+holding the canonical list. A Hero pane with a Workspace is focusable; a Hero pane without one is read-only. No destination SHALL render a second Workspace box.
 
-Grouped Music's Workspace SHALL carry the header `Tracks` (user direction 2026-09-15): the title in the
-foam metadata role, then the same `▁` separator line and one blank row the Movie hero's overview box
-puts under its overview text, then the track rows — all inside the Workspace box, whose surface and
-bottom padding are unchanged. The header SHALL be omitted when the box has no room to keep a list row
+Grouped Music's Workspace SHALL carry the header `Tracks` (user direction 2026-09-15) above the track rows. The header SHALL be omitted when the box has no room to keep a list row
 under it.
 
 Audiobookshelf podcast episodes are not constituent items: the podcast tab lists them as the panel's own
 rows, and the selected episode's hero has no Workspace.
 
-#### Scenario: Track list takes focus
-- **WHEN** track selection becomes active in Wide grouped Music
-- **THEN** the track Workspace box renders the accent-soft surface
-
-#### Scenario: Grouped Music's track Workspace header
-- **WHEN** a Music album's tracks render in the Wide Workspace
-- **THEN** a `Tracks` header row paints above them in the foam metadata role
-- **AND** the `▁` separator line and one blank row paint between the header and the first track row
-
-#### Scenario: Episode list takes focus
-- **WHEN** episode selection becomes active in Wide TV shows
-- **THEN** the episode Workspace box renders the accent-soft surface, identically to Music
-
 #### Scenario: Audiobookshelf chapters render in the Workspace
 - **WHEN** an Audiobookshelf book is selected at Wide geometry
-- **THEN** its chapters render in the one Workspace box with the selected-row bar
-  used by TV and Music
+- **THEN** its chapters render in the one Workspace box
 
 #### Scenario: Read-only hero
 - **WHEN** Home, Movies, home videos, Feeds or Audiobookshelf podcasts render at Wide geometry
@@ -484,7 +441,7 @@ Logo decoration SHALL NOT appear on Portrait Wide artwork, Narrow inline artwork
 #### Scenario: Landscape Wide Movie declares a logo
 
 - **WHEN** a Movie with landscape base artwork and a declared transparent Logo image is selected at Wide geometry
-- **THEN** its Logo is alpha-composited near the top-left of the fanart with its aspect ratio preserved
+- **THEN** its Logo is composited onto the fanart
 - **AND** one composited image is presented through the configured image protocol
 
 #### Scenario: Landscape art arrives before its optional logo

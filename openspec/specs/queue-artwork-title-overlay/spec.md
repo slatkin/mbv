@@ -15,17 +15,14 @@ iTerm2 image protocol and local or watched playback is active (paused included),
 artwork itself, over a scrim. A title with no context part SHALL be drawn as one row at the top
 of the artwork, unless it splits across two rows under the one-part split rule. A title with a context part (artist and song, show and episode) SHALL be drawn
 as two rows: the context part at the top and the title part at the bottom. Each row SHALL be a
-single line over its own flat translucent scrim, SHALL be horizontally centred within the side
-padding, and SHALL NOT wrap. The overlay SHALL use the same title and context text the header row
-would carry. A context part SHALL paint yellow; a title part beneath a context part SHALL paint
-cream (`mbv_theme::TEXT_EMPHASIS`); and a one-part title SHALL remain yellow in both of its rows. Paused
-playback keeps the overlay. Overlay text SHALL be painted over a soft dark drop shadow so it remains legible on light or busy artwork.
+single line over its own scrim, and SHALL NOT wrap. The overlay SHALL use the same title and context text the header row
+would carry. Paused
+playback keeps the overlay.
 
 #### Scenario: One-part title
 
 - **WHEN** a movie, track without context, or other one-part title that fits its row at the nominal size plays with the overlay live
-- **THEN** the title is drawn in a single scrim row at the top of the artwork in yellow
-- **AND** the row's text is horizontally centred within the side padding
+- **THEN** the title is drawn in a single scrim row at the top of the artwork
 - **AND** nothing is drawn at the bottom of the artwork
 
 #### Scenario: Two-part title
@@ -33,7 +30,6 @@ playback keeps the overlay. Overlay text SHALL be painted over a soft dark drop 
 - **WHEN** an item with a context part plays with the overlay live
 - **THEN** the context part is drawn in a scrim row at the top of the artwork
 - **AND** the title part is drawn in a scrim row at the bottom of the artwork
-- **AND** both rows' text is horizontally centred within the side padding
 
 #### Scenario: Artwork outside the rows is untouched
 
@@ -133,7 +129,7 @@ the title.
   an episode whose session payload carries a series name draws the show name as the context part
   and the episode name as the title part, and any other item draws a one-part title from the
   session's now-playing name
-- **AND** the header row reads `Now Playing` once it has been painted
+- **AND** the header row carries no title text
 
 #### Scenario: Remote session payload lacks the series name
 
@@ -146,7 +142,7 @@ the title.
 
 - **WHEN** an overlay dialog that dims its backdrop opens while the artwork carries the title,
   for an Emby or an Audiobookshelf item
-- **THEN** the header row continues to read `Now Playing`
+- **THEN** the header row still carries no title text
 
 ### Requirement: A logo replaces the top text row
 

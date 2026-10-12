@@ -8,22 +8,6 @@ single-column browser otherwise.
 
 ## Requirements
 
-### Requirement: Selected cell indicator
-
-The selected cell in any list SHALL be identified by the selected-row bar
-alone, bleeding to the list's outer edge (a 2-column extension
-into the panel margin in single-column mode, directional in two-column
-mode), rather than by a marker glyph, a `▌` left-edge mark, or a `##` title
-prefix. No marker glyph SHALL appear on any selected cell. The marker-free
-background-bleed treatment is shared by ordinary rows, the feed group
-picker, and Wide hero list panes.
-
-#### Scenario: Selected cell marked without a marker glyph
-
-- **WHEN** a cell in a list is the current selection
-- **THEN** its selected-row bar extends to the list's outer edge
-- **AND** it does NOT show a marker glyph, a `▌` mark, or a `##` title prefix
-
 ### Requirement: Inline replacement tracks the current selection independent of scroll position
 
 The hero SHALL always reflect the selected item. In Wide hero, its screen position SHALL remain fixed while the browser cursor moves. In the inline presentation, its replacement position SHALL follow the active row in scrolling list flow, and scrolling SHALL keep the selected replacement addressable together. Wide read-only heroes SHALL derive selection solely from the right-hand browser. Interactive left workspaces SHALL continue deriving their parent item from the right-hand browser while their child cursor is active.
@@ -371,7 +355,7 @@ use, at Normal geometry, and SHALL paint each visible video row exactly once.
 
 Its expanded height SHALL be derived from the selected item's own compact
 banner content at the block's text width, not from a fixed row count. Its
-Inline hero SHALL show the title, metadata line, and truncated overview, and
+Inline hero SHALL show the title, metadata line, and overview, and
 SHALL own the selected row's hit geometry. The picker rows SHALL have exactly
 one painter.
 
@@ -381,8 +365,7 @@ one painter.
   selected video carries runtime, genre, and an overview that wraps
 - **THEN** its ordinary row is replaced by a framed Inline hero block whose
   height is the banner's content rows plus its fixed framing rows
-- **AND** the block paints the title, the metadata line, and the truncated
-  overview
+- **AND** the block shows the title, the metadata line, and the overview
 - **AND** the rows below it keep their ordinary single-row presentation
 
 #### Scenario: Selected video has no metadata

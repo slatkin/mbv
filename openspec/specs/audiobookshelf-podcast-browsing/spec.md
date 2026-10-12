@@ -199,7 +199,7 @@ The following substitutions SHALL be the only domain changes to that composition
 | Feed age-group headings | Feed age-group headings (identical) |
 
 All other observable layout behavior SHALL match the Feeds tab, including the single pill row, list
-columns, split-row context and title roles, selected-cell treatment, focus styling, scrolling, loading
+columns, scrolling, loading
 placeholder stability, and the read-only Wide hero beside a single-column browser.
 
 #### Scenario: Podcast library is displayed
