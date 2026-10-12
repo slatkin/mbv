@@ -2,10 +2,10 @@
 
 ## 1. Idle gate
 
-- [ ] 1.1 Rename `App::list_image_fetches_allowed` to `navigation_idle` and `NAV_IMAGE_FETCH_IDLE_DELAY` to `NAV_IDLE_DELAY` at every use (design D3). Find them with `rg "list_image_fetches_allowed|NAV_IMAGE_FETCH_IDLE_DELAY" src`. Verify: `cargo check -p mbv` passes and the `rg` matches nothing.
-- [ ] 1.2 In `src/app/shell/music_workspace.rs` `fetch_music_workspace_album_tracks`, add `self.app.navigation_idle()` to the `if` condition before `fetch_album_tracks` (design D1). Do not change `App::fetch_album_tracks`.
-- [ ] 1.3 In `src/app/shell/tv_workspace.rs` `push_tv_workspace_content`, call `self.app.fetch_series_detail(&item.id)` only when `self.app.navigation_idle()` is true (design D1). Do not change `App::fetch_series_detail` or the `TvTreeExpand` arm.
-- [ ] 1.4 In `handle_tv_navigation_request`, make the `TvMoveRows` and `TvJumpCursor` requests set `self.app.last_nav_at` and call `self.app.mark_library_navigation` with one `Instant::now()` before the final `push_tv_workspace_content` (design D2). Copy the pattern in `handle_music_album_cursor` (`shell/messages/music.rs`). Update the "cursor moves need no App effect" comment to match. Verify: `cargo nextest run -p mbv` passes.
+- [x] 1.1 Rename `App::list_image_fetches_allowed` to `navigation_idle` and `NAV_IMAGE_FETCH_IDLE_DELAY` to `NAV_IDLE_DELAY` at every use (design D3). Find them with `rg "list_image_fetches_allowed|NAV_IMAGE_FETCH_IDLE_DELAY" src`. Verify: `cargo check -p mbv` passes and the `rg` matches nothing.
+- [x] 1.2 In `src/app/shell/music_workspace.rs` `fetch_music_workspace_album_tracks`, add `self.app.navigation_idle()` to the `if` condition before `fetch_album_tracks` (design D1). Do not change `App::fetch_album_tracks`.
+- [x] 1.3 In `src/app/shell/tv_workspace.rs` `push_tv_workspace_content`, call `self.app.fetch_series_detail(&item.id)` only when `self.app.navigation_idle()` is true (design D1). Do not change `App::fetch_series_detail` or the `TvTreeExpand` arm.
+- [x] 1.4 In `handle_tv_navigation_request`, make the `TvMoveRows` and `TvJumpCursor` requests set `self.app.last_nav_at` and call `self.app.mark_library_navigation` with one `Instant::now()` before the final `push_tv_workspace_content` (design D2). Copy the pattern in `handle_music_album_cursor` (`shell/messages/music.rs`). Update the "cursor moves need no App effect" comment to match. Verify: `cargo nextest run -p mbv` passes.
 
 ## 2. Tests
 
