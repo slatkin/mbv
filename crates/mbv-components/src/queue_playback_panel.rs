@@ -1,7 +1,8 @@
 //! The Queue playback panel (task 3.5, design D10): the queue column's
 //! playback surface, mounted in every queue-visible layout, idle included.
-//! It owns the always-painted header row (the status word left,
-//! the now-playing title right),
+//! It owns the always-painted header row (the playback-target indicator
+//! and the right-aligned status word, with the now-playing title between
+//! them),
 //! the visual slot's region (painted by the shell's App-side slot adapter on
 //! the panel's behalf — the ABS `paint_home_image` seam) and the queue-column
 //! transport presentation, which routes through the shared width-driven
@@ -31,7 +32,7 @@ use mbv_render::arrangements::chrome::QUEUE_TRANSPORT_ROWS;
 use mbv_render::components::chrome_player::TransportAvailability;
 use mbv_render::components::widgets::queue_panel_inset;
 use mbv_render::{
-    HeaderTitle, PlaybackRenderContext, render_header_title, render_player_panel, target_pill_icon,
+    HeaderTitle, PlaybackRenderContext, render_header_title, render_player_panel, target_icon,
 };
 use mbv_theme as palette;
 use mbv_ui_model::playback_target::NowPlayingStatus;
@@ -47,8 +48,9 @@ const TRANSPORT_SURFACE: palette::Surface = palette::Surface::QueueOnlyPlaybackP
 pub struct QueuePlaybackPanel {
     /// The header's projected facts: the status word and the playback target
     /// (`App::playback_host_label_and_remote`, no tracking suffix) with its
-    /// remote flag — every header row paints `󰄙/󰄘 [host] STATUS`, and the
-    /// target and flag also pick the row's target icon.
+    /// remote flag — every header row paints the target indicator (the icon
+    /// and, while remote, the host) and the right-aligned status word; the
+    /// remote flag also picks the target icon colour.
     status: NowPlayingStatus,
     host: String,
     host_is_remote: bool,
@@ -70,9 +72,10 @@ pub struct QueuePlaybackPanel {
     /// Panel-local marquee state (the title row's scrolling title).
     marquee_text: String,
     marquee_started_at: Instant,
-    /// The target pill's painted rect, retained from the last header paint:
-    /// the whole pill is the F3 sessions shortcut's click target.
-    target_pill_area: Rect,
+    /// The playback-target indicator's painted rect, retained from the last
+    /// header paint: the icon and host name are the F3 sessions shortcut's
+    /// click target.
+    target_area: Rect,
     props: tuirealm::props::Props,
 }
 
@@ -104,7 +107,7 @@ impl QueuePlaybackPanel {
             seekbar_area: Rect::default(),
             marquee_text: String::new(),
             marquee_started_at: Instant::now(),
-            target_pill_area: Rect::default(),
+            target_area: Rect::default(),
             props: tuirealm::props::Props::default(),
         }
     }
@@ -168,21 +171,21 @@ impl QueuePlaybackPanel {
         self.transport.title_parts.clone()
     }
 
-    /// Test-only: the retained target-pill click rect.
+    /// Test-only: the retained playback-target click rect.
     #[cfg(any(test, feature = "test"))]
     #[must_use]
-    pub fn target_pill_area_for_test(&self) -> Rect {
-        self.target_pill_area
+    pub fn target_area_for_test(&self) -> Rect {
+        self.target_area
     }
 
     fn mouse(&self, event: MouseEvent) -> Option<Msg> {
         let point = (event.column, event.row).into();
         match event.kind {
-            // The whole target pill is the F3 sessions shortcut's click
-            // target (the header row paints above the transport, so its
+            // The playback-target indicator is the F3 sessions shortcut's
+            // click target (the header row paints above the transport, so its
             // check leads).
             MouseEventKind::Down(MouseButton::Left)
-                if self.target_pill_area.width > 0 && self.target_pill_area.contains(point) =>
+                if self.target_area.width > 0 && self.target_area.contains(point) =>
             {
                 Some(Msg::Shell(Box::new(ShellRequest::OpenSessions)))
             }
@@ -234,13 +237,14 @@ impl Component for QueuePlaybackPanel {
             height: 1,
             ..queue_panel_inset(area)
         };
-        // The header row always paints the status brand part — the target
-        // pill, the status word — and carries the now-playing title in the
-        // remaining space while the header is the title's home (the `Header`
-        // site); the artwork site carries the title on the overlay. The
-        // pill's painted rect is retained as the F3 sessions shortcut's
-        // click target.
-        let mut target_pill_area = Rect::default();
+        // The header row always paints the playback-target indicator — the
+        // target icon, the host name while remote — and the right-aligned
+        // status word; it carries the now-playing title in the zone between
+        // them while the header is the title's home (the `Header` site); the
+        // artwork site carries the title on the overlay. The indicator's
+        // painted rect is retained as the F3 sessions shortcut's click
+        // target.
+        let mut target_area = Rect::default();
         render_header_title(
             frame,
             header,
@@ -254,15 +258,15 @@ impl Component for QueuePlaybackPanel {
                 marquee_text: &mut self.marquee_text,
                 marquee_started_at: &mut self.marquee_started_at,
                 panel: TRANSPORT_SURFACE,
-                icon: target_pill_icon(self.transport.use_nerd_fonts, self.host_is_remote),
+                icon: target_icon(self.transport.use_nerd_fonts, self.host_is_remote),
                 title_site: self.transport.title_site,
                 status: self.status,
                 host: &self.host,
                 host_is_remote: self.host_is_remote,
             },
-            &mut target_pill_area,
+            &mut target_area,
         );
-        self.target_pill_area = target_pill_area;
+        self.target_area = target_area;
         // While idle — or whenever the shell hands no transport rect — the
         // slot and transport rows are already collapsed (task 3.6); the
         // panel paints nothing else and its hit geometry stays cleared.

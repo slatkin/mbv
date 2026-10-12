@@ -23,7 +23,7 @@ pub use components::audiobookshelf_book::book_rows;
 #[doc(inline)]
 pub use components::chrome_player::{
     HeaderTitle, PlaybackControls, PlaybackRenderContext, PlaybackStripAreas, render_header_title,
-    render_player_panel, target_pill_icon,
+    render_player_panel, target_icon,
 };
 #[doc(inline)]
 pub use components::chrome_status_bar::{

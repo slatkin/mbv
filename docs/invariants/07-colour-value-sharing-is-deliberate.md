@@ -32,8 +32,8 @@ than one role today (re-derive; roles move):
 | Slot | Roles sharing it |
 |---|---|
 | `FgMuted` | `TextSecondary`, `TextMuted`, `SplitRowTitleFg`, `ProgressTrack`, `SidebarScrollbar` |
-| `Yellow` | `TextFocusAccent`, `TextHeroTitle`, `PlaybackContextFg`, `HeroCreditsName`, `AccentAudiobookshelf` |
-| `Green` | `Duration`, `PlaybackValueFg`, `PlaybackMetaFg`, `IdleFeedTitleFg`, `HeroOverviewSeparator`, `AccentActive` |
+| `Yellow` | `TextFocusAccent`, `TextHeroTitle`, `PlaybackContextFg`, `HeroCreditsName`, `AccentAudiobookshelf`, `PlaybackTargetLocalFg` |
+| `Green` | `Duration`, `PlaybackValueFg`, `PlaybackMetaFg`, `IdleFeedTitleFg`, `HeroOverviewSeparator`, `AccentActive`, `PlaybackTargetRemoteFg` |
 | `Blue` | `WorkspaceHeaderFg`, `TextMetadata`, `GroupHeadingFg` |
 | `Purple` | `TabSelectedUnderline`, `IndicatorAudioFg`, `PlaybackHostRemoteFg`, `EmptyQueueFg` |
 | `Orange` | `PlaylistLoadedFg`, `IndicatorResolutionFg`, `ProgressPercent` |

@@ -12,7 +12,7 @@ mod title;
 #[doc(inline)]
 pub use title::render_title_row;
 #[doc(inline)]
-pub use title::target_pill_icon;
+pub use title::target_icon;
 #[doc(inline)]
 pub use title::{HeaderTitle, render_header_title};
 use title::{QueueBand, blank_row, marquee_spans, render_queue_band};

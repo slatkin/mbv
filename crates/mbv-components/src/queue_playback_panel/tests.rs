@@ -67,14 +67,15 @@ fn transport_clicks_resolve_against_retained_geometry() {
     assert!(panel.on(&click(5, 4)).is_none());
 }
 
-/// The header row's two sites: the row always paints the target pill (icon
-/// in ink on the yellow local fill — a local target shows no host) and the
+/// The header row's two sites: the row always paints the playback-target
+/// indicator (the target icon in the target colour — yellow while local,
+/// green while remote, a local target shows no host) and the right-aligned
 /// bold status word; while the header is the title's home (the `Header`
-/// site) the title rides the remaining space; with the `Artwork` site the
-/// title lives on the artwork alone and the row paints the status part
-/// only.
+/// site) the title fills the zone between them; with the `Artwork` site the
+/// title lives on the artwork alone and the row paints the indicator and the
+/// right-aligned status only.
 #[test]
-fn header_row_paints_the_status_brand_and_the_header_site_title() {
+fn header_row_paints_the_target_status_and_the_header_site_title() {
     let mut panel = QueuePlaybackPanel::new();
     panel.set_header(NowPlayingStatus::Playing, "Living Room".into(), false);
     panel.transport.use_nerd_fonts = true;
@@ -88,74 +89,77 @@ fn header_row_paints_the_status_brand_and_the_header_site_title() {
             .collect::<String>()
     };
 
-    // Header site: the status part leads and the title rides the row.
+    // Header site: the local icon leads, the title fills the zone, and the
+    // status word closes the row right-aligned.
     terminal
         .draw(|frame| panel.view(frame, Rect::new(0, 0, 40, 8)))
         .unwrap();
     let row = header_row(&terminal);
     assert!(
-        row.starts_with(" \u{f0118}  PLAYING "),
-        "the header paints the local pill and status word, left-anchored: {row}"
+        row.starts_with(" \u{f0118} Example"),
+        "the header paints interior padding, the local icon, the title, then the status: {row}"
+    );
+    assert!(
+        row.ends_with("PLAYING "),
+        "the status word is right-aligned inside the right padding: {row}"
     );
     assert!(
         !row.contains("Living Room"),
         "a local target paints no host: {row}"
     );
-    assert!(
-        row.contains("Example"),
-        "the Header site paints the title on the header row: {row}"
-    );
 
-    // Artwork site: the title lives on the artwork alone.
+    // Artwork site: the title lives on the artwork alone, and the status word
+    // still closes the row right-aligned.
     panel.transport.title_site = NowPlayingTitleSite::Artwork;
     terminal
         .draw(|frame| panel.view(frame, Rect::new(0, 0, 40, 8)))
         .unwrap();
     let row = header_row(&terminal);
     assert!(
-        row.starts_with(" \u{f0118}  PLAYING "),
-        "the Artwork site paints the status part, left-anchored: {row}"
+        row.starts_with(" \u{f0118} "),
+        "the Artwork site paints the padded local icon left-anchored: {row}"
+    );
+    assert!(
+        row.ends_with("PLAYING "),
+        "the Artwork site keeps the status word right-aligned: {row}"
     );
     assert!(
         !row.contains("Example"),
         "the title lives on the artwork alone: {row}"
     );
 
-    // The pill paints ink-on-yellow: the icon cell (row char index 1, the
-    // pill's second cell) carries the TargetPillFg foreground on the yellow
-    // fill; the status word outside the pill keeps the panel fill (row char
-    // index i is buffer column i + 2: the header row is inset two columns).
+    // The target icon paints the local target colour on the panel fill; the
+    // right-aligned status word keeps the panel fill too. The header row is
+    // inset two columns and carries one cell of interior padding each side,
+    // so the icon is the first content cell and the status word is the seven
+    // cells before the trailing padding.
     let buffer = terminal.backend().buffer();
     let icon_cell = buffer[(3, 1)].clone();
     assert_eq!(
         (icon_cell.fg, icon_cell.bg),
         (
-            palette::Role::TargetPillFg.color(),
-            palette::surface_colors(palette::Surface::TargetPillLocal, false).fill
+            palette::Role::PlaybackTargetLocalFg.color(),
+            palette::surface_colors(palette::Surface::QueueOnlyPlaybackPanel, false).fill
         ),
-        "the pill's icon paints ink on the yellow local fill"
+        "the local target icon paints the target colour on the panel fill"
     );
-    let word_cell = buffer[(
-        u16::try_from(" \u{f0118}  ".chars().count() + 2).unwrap(),
-        1,
-    )]
-        .clone();
+    let word_cell = buffer[(30, 1)].clone();
     assert_eq!(
         (word_cell.symbol().to_string(), word_cell.bg),
         (
             "P".to_string(),
             palette::surface_colors(palette::Surface::QueueOnlyPlaybackPanel, false).fill
         ),
-        "the status word outside the pill keeps the panel fill"
+        "the right-aligned status word keeps the panel fill"
     );
 }
 
-/// The target pill carries the host name only while a remote host owns
-/// playback: ` 󰄙 Living Room ` on the green fill. The whole pill is the
-/// F3 sessions shortcut's click target; a click elsewhere on the header
-/// row resolves nothing.
+/// The playback-target indicator carries the host name only while a remote
+/// host owns playback: the green target icon, a space, the plain host name.
+/// The whole indicator is the F3 sessions shortcut's click target; a click
+/// elsewhere on the header row resolves nothing.
 #[test]
-fn the_target_pill_carries_the_remote_host_and_opens_sessions_on_click() {
+fn the_target_indicator_carries_the_remote_host_and_opens_sessions_on_click() {
     let mut panel = QueuePlaybackPanel::new();
     panel.set_header(NowPlayingStatus::Playing, "Living Room".into(), true);
     panel.transport.use_nerd_fonts = true;
@@ -168,21 +172,26 @@ fn the_target_pill_carries_the_remote_host_and_opens_sessions_on_click() {
         .map(|x| terminal.backend().buffer()[(x, 1)].symbol().to_string())
         .collect();
     assert!(
-        row.starts_with(" \u{f0119} Living Room   PLAYING"),
-        "the remote pill carries the host on the green fill: {row}"
+        row.starts_with(" \u{f0119} Living Room"),
+        "the remote indicator carries the plain host after the green icon: {row}"
+    );
+    assert!(
+        row.ends_with("PLAYING "),
+        "the status word is right-aligned inside the right padding: {row}"
     );
     let icon_cell = terminal.backend().buffer()[(3, 1)].clone();
     assert_eq!(
         (icon_cell.fg, icon_cell.bg),
         (
-            palette::Role::TargetPillFg.color(),
-            palette::surface_colors(palette::Surface::TargetPillRemote, false).fill
+            palette::Role::PlaybackTargetRemoteFg.color(),
+            palette::surface_colors(palette::Surface::QueueOnlyPlaybackPanel, false).fill
         ),
-        "the pill's icon paints ink on the green remote fill"
+        "the remote target icon paints the target colour on the panel fill"
     );
 
-    // The whole pill is the F3 sessions shortcut's click target.
-    let pill = panel.target_pill_area_for_test();
+    // The whole playback-target indicator is the F3 sessions shortcut's
+    // click target.
+    let target = panel.target_area_for_test();
     let click = |column: u16, row: u16| {
         Event::Mouse(MouseEvent {
             kind: MouseEventKind::Down(MouseButton::Left),
@@ -193,13 +202,15 @@ fn the_target_pill_carries_the_remote_host_and_opens_sessions_on_click() {
     };
     assert!(
         matches!(
-            panel.on(&click(pill.x + pill.width - 1, pill.y)),
+            panel.on(&click(target.x + target.width - 1, target.y)),
             Some(Msg::Shell(request)) if matches!(*request, ShellRequest::OpenSessions)
         ),
-        "a click on the pill's last cell opens Sessions"
+        "a click on the indicator's last cell opens Sessions"
     );
     assert!(
-        panel.on(&click(pill.x + pill.width, pill.y)).is_none(),
-        "a click just outside the pill resolves nothing"
+        panel
+            .on(&click(target.x + target.width, target.y))
+            .is_none(),
+        "a click just outside the indicator resolves nothing"
     );
 }

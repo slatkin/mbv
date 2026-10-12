@@ -42,6 +42,10 @@ pub enum Role {
     PlaybackTitleFg,
     PlaybackContextFg,
     PlaybackHostRemoteFg,
+    // The queue header's playback-target indicator foreground: yellow while
+    // playback is local, green while a remote host owns it.
+    PlaybackTargetLocalFg,
+    PlaybackTargetRemoteFg,
     IdleFeedTitleFg,
     ProgressTrack,
     ProgressPercent,
@@ -56,9 +60,6 @@ pub enum Role {
     AccentAudiobookshelf,
     PillSelectedFg,
     PillOverflowFg,
-    // The queue header's playback-target pill foreground: ink text and icon
-    // on the pill's yellow (local) or green (remote) fill.
-    TargetPillFg,
 }
 
 impl Role {
@@ -81,7 +82,8 @@ impl Role {
             | Role::TextHeroTitle
             | Role::PlaybackContextFg
             | Role::HeroCreditsName
-            | Role::AccentAudiobookshelf => Slot::Yellow,
+            | Role::AccentAudiobookshelf
+            | Role::PlaybackTargetLocalFg => Slot::Yellow,
             Role::WorkspaceHeaderFg | Role::TextMetadata | Role::GroupHeadingFg => Slot::Blue,
             Role::TextOnAccent => Slot::OnAccent,
             Role::TextAccentMuted | Role::PillOverflowFg => Slot::Bg2,
@@ -89,7 +91,7 @@ impl Role {
                 Slot::Orange
             }
             Role::TextDetailMeta => Slot::FgFaint,
-            Role::SelectedRowFg | Role::PillSelectedFg | Role::TargetPillFg => Slot::BgDim,
+            Role::SelectedRowFg | Role::PillSelectedFg => Slot::BgDim,
             Role::SelectedRowProgressFg => Slot::Bg1,
             Role::StatusError => Slot::Red,
             Role::StatusAvailable => Slot::GreenDeep,
@@ -98,7 +100,8 @@ impl Role {
             | Role::PlaybackMetaFg
             | Role::IdleFeedTitleFg
             | Role::HeroOverviewSeparator
-            | Role::AccentActive => Slot::Green,
+            | Role::AccentActive
+            | Role::PlaybackTargetRemoteFg => Slot::Green,
             Role::PlaybackTitleFg | Role::Accent => Slot::Aqua,
             Role::Scrollbar => Slot::Bg3,
         }
@@ -149,6 +152,8 @@ impl Role {
         Role::PlaybackTitleFg,
         Role::PlaybackContextFg,
         Role::PlaybackHostRemoteFg,
+        Role::PlaybackTargetLocalFg,
+        Role::PlaybackTargetRemoteFg,
         Role::IdleFeedTitleFg,
         Role::ProgressTrack,
         Role::ProgressPercent,
