@@ -1,4 +1,4 @@
-use super::{AlbumCursorKind, Instant, Msg, ShellRequest, ToastSeverity};
+use super::{AlbumCursorKind, Msg, ShellRequest, ToastSeverity};
 
 impl super::super::Model {
     pub(super) fn handle_music_request(
@@ -133,9 +133,7 @@ impl super::super::Model {
             match kind {
                 AlbumCursorKind::Move => {
                     let idle = self.app.navigation_idle();
-                    let now = Instant::now();
-                    self.app.last_nav_at = now;
-                    self.app.mark_library_navigation(now);
+                    self.app.stamp_navigation();
                     let moved = self.app.move_music_group_display_cursor(lib_idx, target);
                     if moved {
                         self.app.save_default_library_position(lib_idx);

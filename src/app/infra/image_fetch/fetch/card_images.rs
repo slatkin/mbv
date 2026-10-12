@@ -101,8 +101,10 @@ impl App {
         self.last_nav_at.elapsed() >= NAV_IDLE_DELAY
     }
 
-    pub(in crate::app) fn mark_library_navigation(&mut self, at: Instant) {
-        self.last_library_nav_at = at;
+    pub(in crate::app) fn stamp_navigation(&mut self) {
+        let now = Instant::now();
+        self.last_nav_at = now;
+        self.last_library_nav_at = now;
     }
 
     pub(in crate::app) fn fetch_list_card_image_when_idle(

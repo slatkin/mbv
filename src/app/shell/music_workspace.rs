@@ -381,27 +381,8 @@ impl Model {
 mod tests {
     use crate::app::MusicEvent;
     use crate::app::shell::Model;
-    use crate::app::state::service_runtime::EmbyRuntime;
-    use crate::app::tests::render_fixtures::make_music_group_app;
-    use mbv_emby::{EmbyClient, EmbyCredentialExchange};
-    use std::sync::{Arc, Mutex};
+    use crate::app::tests::render_fixtures::{make_music_group_app, ready_emby_runtime};
     use std::time::Instant;
-
-    /// A configured-but-unroutable `EmbyClient` (design mirrors the retired
-    /// `push_music_workspace_fetches_selected_album_tracks` test): the
-    /// `album_tracks_loading` insert `fetch_album_tracks` performs happens
-    /// synchronously before the network attempt, so it is observable
-    /// immediately after the sync call without waiting on (or requiring)
-    /// the doomed connection to resolve.
-    fn ready_emby_runtime() -> EmbyRuntime {
-        let mut client = EmbyClient::new(crate::config::Config::default());
-        client.apply_credential_exchange(&EmbyCredentialExchange {
-            server_url: "http://127.0.0.1:1".into(),
-            user_id: "user-id".into(),
-            token: "token".into(),
-        });
-        EmbyRuntime::ready(Arc::new(Mutex::new(client)))
-    }
 
     /// Regression: `push_music_workspace_content` must not run its
     /// Music-only side effects (`wide_music_render_ctx`, `fetch_album_tracks`)
@@ -586,9 +567,8 @@ mod tests {
         );
     }
 
-    /// Task 2.2 (idle-gate-detail-prefetch D1): the sync-pass push is an
-    /// album-track fetch site. While navigation is recent, it starts no
-    /// album-track request for the selected album.
+    /// The sync-pass push is an album-track fetch site. While navigation is
+    /// recent, it starts no album-track request for the selected album.
     #[test]
     fn music_push_defers_album_track_fetch_while_navigating() {
         let mut app = make_music_group_app();

@@ -61,9 +61,7 @@ impl App {
         }
 
         let idle = self.navigation_idle();
-        let now = std::time::Instant::now();
-        self.last_nav_at = now;
-        self.mark_library_navigation(now);
+        self.stamp_navigation();
 
         let Some(level) = self.libs[lib_idx].nav_stack.last() else {
             return false;

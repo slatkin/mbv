@@ -1,5 +1,5 @@
 use super::*;
-use crate::app::tests::render_fixtures::make_movie_app;
+use crate::app::tests::render_fixtures::{make_movie_app, ready_emby_runtime};
 use mbv_net::mock_http::MockHttp;
 use mbv_ui_model::browse::BrowseResting;
 use mbv_ui_msg::{Msg, ShellRequest};
@@ -151,23 +151,10 @@ fn late_series_detail_completion_does_not_replace_cached_detail() {
     );
 }
 
-fn tv_model_with_ready_emby_runtime() -> Model {
-    let mut model = mounted_tv_model();
-    let mut client = mbv_emby::EmbyClient::new(crate::config::Config::default());
-    client.apply_credential_exchange(&mbv_emby::EmbyCredentialExchange {
-        server_url: "http://127.0.0.1:1".into(),
-        user_id: "user-id".into(),
-        token: "token".into(),
-    });
-    model.app.emby_runtime = crate::app::state::service_runtime::EmbyRuntime::ready(
-        std::sync::Arc::new(std::sync::Mutex::new(client)),
-    );
-    model
-}
-
 #[test]
 fn push_tv_workspace_content_fetches_uncached_selected_series_once() {
-    let mut model = tv_model_with_ready_emby_runtime();
+    let mut model = mounted_tv_model();
+    model.app.emby_runtime = ready_emby_runtime();
 
     model.push_tv_workspace_content();
     assert!(model.app.series_detail_loading.contains("movie-focused"));
@@ -188,12 +175,13 @@ fn push_tv_workspace_content_fetches_uncached_selected_series_once() {
     assert!(model.app.series_detail_loading.is_empty());
 }
 
-/// Task 2.1 (idle-gate-detail-prefetch D2): a Wide TV row move stamps
-/// `last_nav_at` before the push in its handler, so that push starts no
-/// series-detail request. The idle case is covered by the test above.
+/// A Wide TV row move stamps navigation before the push in its handler, so
+/// that push starts no series-detail request. The idle case is covered by the
+/// test above.
 #[test]
 fn wide_tv_row_move_defers_series_detail_fetch() {
-    let mut model = tv_model_with_ready_emby_runtime();
+    let mut model = mounted_tv_model();
+    model.app.emby_runtime = ready_emby_runtime();
 
     model.handle_tv_request(ShellRequest::TvMoveRows { rows: 1 });
 
