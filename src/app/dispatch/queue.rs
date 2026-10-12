@@ -75,7 +75,11 @@ impl App {
     /// the dedicated now-playing confirmation: the slot is the actively
     /// playing item, or the attached session reports it as the remote
     /// now-playing item. Non-playback scopes never need it.
-    fn queue_pos_needs_active_confirm(&self, scope: QueueScope, pos: usize) -> bool {
+    pub(in crate::app) fn queue_pos_needs_active_confirm(
+        &self,
+        scope: QueueScope,
+        pos: usize,
+    ) -> bool {
         if !self.queue_scope_is_playback(scope) {
             return false;
         }
@@ -101,8 +105,9 @@ impl App {
     /// The cursor comes to rest on the item that preceded the deleted range;
     /// when the range started the queue there is nothing before it, so the
     /// first item that followed takes the cursor instead. A selection that
-    /// includes the now-playing row keeps the dedicated per-row confirmation
-    /// flow, because stopping playback is a decision the user has to answer,
+    /// includes the now-playing row waits for one confirmation that controls
+    /// the entire multi-delete: nothing is removed before the user answers,
+    /// because stopping playback is a decision the user has to answer,
     /// not a plain edit.
     pub(in crate::app) fn remove_slots_from_queue(
         &mut self,
@@ -114,11 +119,25 @@ impl App {
                 .is_some_and(|pos| self.queue_pos_needs_active_confirm(scope, pos))
         });
         if needs_confirm {
-            for slot_id in slot_ids {
-                if let Some(pos) = self.slot_index(scope, *slot_id) {
-                    self.remove_from_queue(pos);
-                }
+            let mut confirmed: Vec<mbv_queue::QueueSlotId> = slot_ids.to_vec();
+            confirmed.sort_unstable();
+            confirmed.dedup();
+            confirmed.retain(|slot_id| self.slot_index(scope, *slot_id).is_some());
+            if confirmed.is_empty() {
+                return;
             }
+            self.ask_confirm(ConfirmModal::two_button(
+                format!(
+                    "Remove {} items including now-playing and stop playback?",
+                    confirmed.len()
+                ),
+                "Confirm",
+                "Cancel",
+                ConfirmAction::RemoveActiveQueueSelection {
+                    scope,
+                    slot_ids: confirmed,
+                },
+            ));
             return;
         }
 

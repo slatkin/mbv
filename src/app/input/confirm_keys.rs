@@ -21,6 +21,11 @@ impl App {
             ConfirmAction::RemoveActiveQueueItem(pos) => {
                 self.confirm_remove_active_queue_item_for_key(pos, key);
             }
+            ConfirmAction::RemoveActiveQueueSelection { scope, slot_ids } => {
+                if key.code == KeyCode::Enter {
+                    self.confirm_remove_active_queue_selection(scope, &slot_ids);
+                }
+            }
             ConfirmAction::RescanLibrary(lib_idx) => self.confirm_rescan_library(lib_idx, key),
             ConfirmAction::SaveOverwritePlaylist { existing_id, name } => {
                 self.confirm_save_overwrite_playlist(&existing_id, name, key);
@@ -181,6 +186,44 @@ impl App {
                 self.queue_deferrals.cancel_gated_replacement();
             }
         }
+    }
+
+    /// Confirmed removal of a multi-select that includes the now-playing
+    /// row: leave the displayed queue untouched, stop playback, then remove
+    /// every named slot in one owner edit from the resulting `Stopped`
+    /// event. When the now-playing row left the selection while the modal
+    /// was up, the remainder is a plain batch edit with no stop.
+    fn confirm_remove_active_queue_selection(
+        &mut self,
+        scope: QueueScope,
+        slot_ids: &[mbv_queue::QueueSlotId],
+    ) {
+        let live: Vec<mbv_queue::QueueSlotId> = slot_ids
+            .iter()
+            .copied()
+            .filter(|slot_id| self.slot_index(scope, *slot_id).is_some())
+            .collect();
+        if live.is_empty() {
+            return;
+        }
+        let still_needs = live.iter().any(|slot_id| {
+            self.slot_index(scope, *slot_id)
+                .is_some_and(|pos| self.queue_pos_needs_active_confirm(scope, pos))
+        });
+        if !still_needs {
+            self.remove_slots_from_queue(scope, &live);
+            return;
+        }
+        self.pending_delete_selection = Some(live);
+        if self.connected_session_id.is_some() {
+            self.playback_target().stop(self);
+        } else {
+            self.player.stop();
+        }
+        if self.local_queue_metadata_applies(scope) {
+            self.queue_dirty = true;
+        }
+        self.advance_queue_epoch();
     }
 
     /// Confirmed removal of the active queue item at `pos`: leave the

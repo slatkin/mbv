@@ -140,6 +140,7 @@ impl App {
         self.remove_queue_slots_where(mbv_queue::QueueItem::is_audiobookshelf);
         // Clear transient queue mutation state that might reference ABS slots.
         self.pending_delete_slot = None;
+        self.pending_delete_selection = None;
         self.queue_dirty = false;
     }
 

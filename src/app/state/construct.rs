@@ -147,6 +147,7 @@ impl App {
             pending_overlay: None,
             pending_exit_message: None,
             pending_delete_slot: None,
+            pending_delete_selection: None,
             queue_undo_stack: Vec::new(),
             remote_queue_undo_stack: Vec::new(),
             pending_queue_cursor_reanchor: None,

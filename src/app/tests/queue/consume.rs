@@ -379,3 +379,162 @@ fn consuming_an_audio_item_with_autosave_pushes_playlist_to_emby_and_clears_dirt
              should trigger an immediate re-save to Emby, so the queue is no longer dirty"
     );
 }
+
+#[test]
+fn multi_delete_including_active_confirms_whole_selection_before_any_removal() {
+    // A multi-select delete is one operation: when it includes the
+    // now-playing row, nothing is removed before the user answers the one
+    // confirmation (issue: non-confirmable rows deleted before the modal).
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = make_app_stub();
+    app.local_view
+        .adopt_items(make_items(3), app.local_view.cursor());
+    app.handle_player_event(PlayerEvent::TrackChanged {
+        slot_id: app.playback_queue().slot_id_at(0).unwrap(),
+        transition: None,
+    });
+    app.player.update_status(|st| {
+        st.active = true;
+        st.current_idx = 0;
+    });
+    let slot_ids = vec![
+        app.playback_queue().slot_id_at(0).unwrap(),
+        app.playback_queue().slot_id_at(2).unwrap(),
+    ];
+
+    app.remove_slots_from_queue(QueueScope::Local, &slot_ids);
+
+    assert_eq!(
+        app.local_view.emby_items().len(),
+        3,
+        "no row is removed before the multi-delete confirmation is answered"
+    );
+    assert!(app.pending_delete_slot.is_none());
+    assert!(app.pending_delete_selection.is_none());
+    assert!(
+        app.queue_undo_stack.is_empty(),
+        "no undo entry is recorded before confirmation"
+    );
+    let pending = match &app.pending_overlay {
+        Some(mbv_ui_model::overlay::OverlayRequest::Confirm(modal)) => modal.on_confirm.clone(),
+        other => panic!("one multi-delete confirmation must be pending, got {other:?}"),
+    };
+    match pending {
+        ConfirmAction::RemoveActiveQueueSelection {
+            scope,
+            slot_ids: ids,
+        } => {
+            assert_eq!(scope, QueueScope::Local);
+            assert_eq!(ids, slot_ids);
+        }
+        other => panic!("the pending confirm must gate the whole selection, got {other:?}"),
+    }
+}
+
+#[test]
+fn confirmed_multi_delete_with_active_removes_all_slots_in_one_owner_edit() {
+    // Confirming the gated multi-delete stops playback and removes every
+    // named slot in one owner edit from the resulting `Stopped` event; the
+    // Client view still waits for the owner's snapshot.
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = make_app_stub();
+    let cmd_rx = live_owner_channel(&mut app);
+    app.local_view
+        .adopt_items(make_items(3), app.local_view.cursor());
+    app.handle_player_event(PlayerEvent::TrackChanged {
+        slot_id: app.playback_queue().slot_id_at(0).unwrap(),
+        transition: None,
+    });
+    app.player.update_status(|st| {
+        st.active = true;
+        st.current_idx = 0;
+    });
+    let slot_ids = vec![
+        app.playback_queue().slot_id_at(0).unwrap(),
+        app.playback_queue().slot_id_at(1).unwrap(),
+    ];
+    let raw: Vec<u64> = slot_ids
+        .iter()
+        .copied()
+        .map(mbv_ctrl::slot_id_to_u64)
+        .collect();
+    app.remove_slots_from_queue(QueueScope::Local, &slot_ids);
+    app.pending_overlay = None;
+    app.apply_confirm_action(
+        ConfirmAction::RemoveActiveQueueSelection {
+            scope: QueueScope::Local,
+            slot_ids: slot_ids.clone(),
+        },
+        KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+    );
+    assert_eq!(
+        app.local_view.emby_items().len(),
+        3,
+        "the confirmed multi-delete leaves the Client view for the owner snapshot"
+    );
+    assert_eq!(
+        app.pending_delete_selection.as_deref(),
+        Some(slot_ids.as_slice())
+    );
+
+    app.handle_player_event(PlayerEvent::Stopped {
+        slot_id: app.playback_queue().slot_id_at(0),
+        run_identity: 0,
+        position_ticks: 0,
+        played: false,
+        consume: false,
+        error: None,
+    });
+
+    assert!(app.pending_delete_selection.is_none());
+    assert_eq!(
+        app.local_view.emby_items().len(),
+        3,
+        "the Stopped event must not optimistically change the Client view"
+    );
+    let mut sent = Vec::new();
+    while let Ok(cmd) = cmd_rx.try_recv() {
+        if let mbv_ctrl::CtrlCmd::UnifiedQueueRemoveSlots { slot_ids, .. } = cmd {
+            sent.push(slot_ids);
+        }
+    }
+    assert_eq!(
+        sent,
+        vec![raw],
+        "the whole confirmed selection goes to the owner in one RemoveSlots edit"
+    );
+}
+
+#[test]
+fn cancelled_multi_delete_with_active_removes_nothing() {
+    // Esc on the gated multi-delete answers Cancel: no stop is recorded and
+    // no row is removed.
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = make_app_stub();
+    app.local_view
+        .adopt_items(make_items(3), app.local_view.cursor());
+    app.handle_player_event(PlayerEvent::TrackChanged {
+        slot_id: app.playback_queue().slot_id_at(0).unwrap(),
+        transition: None,
+    });
+    app.player.update_status(|st| {
+        st.active = true;
+        st.current_idx = 0;
+    });
+    let slot_ids = vec![
+        app.playback_queue().slot_id_at(0).unwrap(),
+        app.playback_queue().slot_id_at(2).unwrap(),
+    ];
+    app.remove_slots_from_queue(QueueScope::Local, &slot_ids);
+    app.pending_overlay = None;
+    app.apply_confirm_action(
+        ConfirmAction::RemoveActiveQueueSelection {
+            scope: QueueScope::Local,
+            slot_ids,
+        },
+        KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE),
+    );
+    assert_eq!(app.local_view.emby_items().len(), 3);
+    assert!(app.pending_delete_slot.is_none());
+    assert!(app.pending_delete_selection.is_none());
+}

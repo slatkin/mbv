@@ -30,6 +30,7 @@ impl App {
         self.queue_undo_stack.clear();
         self.remote_queue_undo_stack.clear();
         self.pending_delete_slot = None;
+        self.pending_delete_selection = None;
         self.next_up_item = None;
         self.last_played_item_id = None;
         self.last_played_completed = false;

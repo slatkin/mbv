@@ -225,6 +225,11 @@ pub struct App {
     /// would never be visible. `None` on every other exit path.
     pub(in crate::app) pending_exit_message: Option<String>,
     pub(in crate::app) pending_delete_slot: Option<QueueSlotId>, // marks a delete that was already applied optimistically, so the Stopped handler doesn't re-derive it
+    /// A confirmed multi-select removal that included the now-playing row:
+    /// every named slot is removed in one owner edit from the `Stopped`
+    /// event that follows the confirming stop. `None` when no such
+    /// multi-delete is awaiting its stop.
+    pub(in crate::app) pending_delete_selection: Option<Vec<QueueSlotId>>,
     pub(in crate::app) queue_undo_stack: Vec<UndoEntry>,
     pub(in crate::app) remote_queue_undo_stack: Vec<UndoEntry>,
     /// One-shot cursor re-anchor for the next queue sync.

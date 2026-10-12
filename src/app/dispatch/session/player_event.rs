@@ -246,7 +246,9 @@ impl App {
             return self.handle_stopped_remote_disconnected();
         }
         let deleted_slot = self.pending_delete_slot.take();
-        let is_delete = deleted_slot.is_some();
+        let deleted_selection = self.pending_delete_selection.take();
+        let is_delete =
+            deleted_slot.is_some() || deleted_selection.as_ref().is_some_and(|s| !s.is_empty());
         let preserve_local_state = !self.has_direct_remote_queue();
         match slot_id {
             Some(slot_id) => {
@@ -264,7 +266,7 @@ impl App {
         }
         self.next_up_item = None;
         self.status.clear();
-        self.finish_stopped_consumption(deleted_slot, slot_id, consume);
+        self.finish_stopped_consumption(deleted_slot, deleted_selection, slot_id, consume);
         self.refresh_after_stop();
         false
     }
@@ -329,10 +331,22 @@ impl App {
     fn finish_stopped_consumption(
         &mut self,
         deleted_slot: Option<mbv_queue::QueueSlotId>,
+        deleted_selection: Option<Vec<mbv_queue::QueueSlotId>>,
         slot_id: Option<mbv_queue::QueueSlotId>,
         consume: bool,
     ) {
-        if deleted_slot.is_some() {
+        if let Some(selection) = deleted_selection.filter(|s| !s.is_empty()) {
+            // A confirmed multi-delete that included now-playing removes
+            // every named slot in one owner edit after the stop.
+            let raw: Vec<u64> = selection
+                .iter()
+                .map(|slot_id| mbv_ctrl::slot_id_to_u64(*slot_id))
+                .collect();
+            self.queue_op(
+                self.playing_queue_scope(),
+                mbv_remote_player::QueueOp::RemoveSlots { slot_ids: raw },
+            );
+        } else if deleted_slot.is_some() {
             // Confirmation deferred removal until playback stopped; the Client
             // now asks the owner to remove the stable slot identity.
             if let Some(deleted_slot) = deleted_slot {

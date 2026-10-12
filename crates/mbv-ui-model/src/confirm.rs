@@ -1,3 +1,5 @@
+use super::playback::QueueScope;
+
 /// What happens when the shared confirmation modal (`ConfirmModal`) is
 /// accepted. Each variant carries whatever state its effect needs, so
 /// the modal's trigger site can hand off the whole decision to the single
@@ -7,6 +9,14 @@
 pub enum ConfirmAction {
     ClearQueue,
     RemoveActiveQueueItem(usize),
+    /// A multi-select removal that includes the now-playing row: the whole
+    /// selection waits for one confirmation, so nothing is removed before
+    /// the user answers. Confirming stops playback, then removes every
+    /// named slot in one owner edit from the resulting `Stopped` event.
+    RemoveActiveQueueSelection {
+        scope: QueueScope,
+        slot_ids: Vec<mbv_queue::QueueSlotId>,
+    },
     RescanLibrary(usize),
     SaveOverwritePlaylist {
         existing_id: String,
