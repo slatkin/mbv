@@ -1,0 +1,138 @@
+# Design
+
+## Context
+
+See proposal.md (Why) for the motivation.
+
+The run loop (`crates/mbv-player/src/run/run_loop.rs`, `handle_mpv_event`) consumes `Result<libmpv2::Event, libmpv2::Error>` from `mpv.wait_event(0.0)`. It acts on these events only:
+
+| Event | Consumer |
+|---|---|
+| `PropertyChange` for the 11 IDs in `runtime.rs` `observe_properties` | `on_property_change` |
+| `PlaybackRestart` | `restart.rs` `on_playback_restart` |
+| `EndFile(reason)` | `queue_advance.rs`, `termination.rs`, `event_classifiers::is_superseded_jump_end_file` |
+| `LogMessage` | log forwarding with sensitive-source redaction |
+| `ClientMessage` | `handle_client_message` (Lua OSC buttons) |
+| `Shutdown` | `on_shutdown` |
+| `Err(e)` | `termination.rs` `on_mpv_error` with `is_clocked_audio_error` |
+
+The match ends with a `_ => false` wildcard. AGENTS.md says to replace a wildcard with explicit arms or a documented no-op.
+
+libmpv2 6.0.0 (`src/mpv/events.rs`, `wait_event`) has two properties that the IPC path does not share:
+
+- An `END_FILE` event with an error set comes back as `Err(Error::Raw(code))` only. The reason (`error`) is not delivered. Over IPC the same event is `{"event":"end-file","reason":"error","file_error":"<mpv_error_string>"}`.
+- `EndFile` carries only the reason. The `playlist_entry_id`, `playlist_insert_id` and `playlist_insert_num_entries` fields are dropped. IPC delivers them.
+
+mpv's IPC client thread (`input/ipc-unix.c`) creates an ordinary client handle per connection and writes each `mpv_wait_event` result as one JSON line, in order. It runs commands on the same thread, so a command reply line can arrive between event lines.
+
+## Goals / Non-Goals
+
+**Goals:**
+
+- Show, per scenario, whether the IPC event sequence matches the libmpv sequence after a fixed set of normalizations.
+- Leave behind real mpv event traces that unit tests can decode and feed to mbv's event classifiers with no live mpv.
+- Remove libmpv2 types from the event-classification logic, which a later migration needs anyway, with no behavior change.
+
+**Non-Goals:**
+
+- No production IPC transport, child-process supervision or `MpvConn` type. Those belong to the migration change if the findings support it.
+- No full replay of the run loop from fixtures. Run-loop handlers also issue mpv commands, so a full replay needs a command-side fake. That is migration work.
+- No change to the 5 synchronous `get_property` reads. The Findings section records them as a migration input.
+
+## Decisions
+
+### D1. The probe is a Rust example in `mbv-player` that drives both backends
+
+`crates/mbv-player/examples/mpv_ipc_probe.rs` runs each scenario through `libmpv2::Mpv` in-process, then through an `mpv` child process, and compares the two traces. `mbv-core/examples/audiobookshelf_contract_probe.rs` is the precedent. An example is a manual tool. It does not run in CI and is not a test, so the hermetic-test rule does not apply to it. The user runs it. Agents ask before they run it.
+
+Rejected alternative: connect `socat` to the IPC socket that mbv already opens, next to a running mbv. That only shows that two clients of one core agree, which the mpv source already shows. mbv also has no raw event log to compare against.
+
+The probe uses only the public `libmpv2` API and `serde_json`. Its normalizer lives in the example file. It does not use crate-private `MpvEvent`, so no item becomes `pub` for the example (M-INTEGRATION-TESTS forbids that).
+
+### D2. The child uses `--input-ipc-server=<scratch path>`, not `--input-ipc-client=fd://`
+
+Both modes run the same client thread in mpv, so the event semantics are the same. The server path needs no `pre_exec` or `dup2` unsafe code in the probe. The fd mode (with `quit_on_close`) is the likely production choice. The migration change decides it.
+
+The probe starts the child with `--idle=yes --no-config --vo=null --ao=null --no-terminal`. Scenario S6 replaces the `ao` setting. The libmpv side sets the same options through the initializer. Both sides observe the same 11 properties with the same IDs as `observe_properties`.
+
+### D3. Comparison happens at mpv's JSON event shape, after documented normalizations
+
+The probe converts each libmpv2 event into mpv's JSON event field names (`event`, `reason`, `name`, `data`, `id`, `args`, `prefix`, `level`, `text`). `Err(Raw(code))` becomes `{"event":"end-file","reason":"error","error_code":code}`. The probe reduces each IPC line to the same field set. Normalizations, all printed in the probe output:
+
+1. Drop fields that libmpv2 cannot deliver: `playlist_entry_id`, `playlist_insert_id`, `playlist_insert_num_entries`. Record that IPC has them.
+2. Map IPC `file_error` text to an error code with mpv's error-string table, through `libmpv2-sys` `mpv_error_string`.
+3. Collapse consecutive `time-pos` changes into one entry and compare no `time-pos` values, because their number depends on timing.
+4. Drop `log-message` events from the order comparison, because their count depends on timing.
+5. Drop command reply lines (`request_id`) from the event sequence.
+
+Each scenario result is `MATCH`, `MATCH-AFTER-NORMALIZATION` (it lists which rules applied) or `DIFF` (it prints the first differing index and both sides).
+
+### D4. Scenarios come from the code paths that consume events
+
+All media is synthetic: `av://lavfi:sine=frequency=440:duration=1` (audio) and `av://lavfi:testsrc=duration=1:size=64x64` (video). Missing files use a path under the scratch directory that does not exist.
+
+| ID | Scenario | Code that relies on it |
+|---|---|---|
+| S1 | Two-item audio playlist plays to natural EOF with `gapless-audio=weak` | `queue_advance.rs` advance, `track_progress.rs` |
+| S2 | Two `playlist-pos` writes in quick succession (superseded jump) | `event_classifiers::is_superseded_jump_end_file` |
+| S3 | `playlist-next` from mpv's side (window key path) | `daemon-playback-intents` spec, mpv-side entry change |
+| S4 | Load-then-play: append all items with `pause=yes`, then unpause | `submit.rs` load path (design D3), `restart.rs` |
+| S5 | Playlist with a missing file between two good ones | `termination.rs` `on_mpv_error` generic path |
+| S6 | `audio-device=alsa/mbv-probe-missing` | `is_clocked_audio_error` |
+| S7 | `script-message mbv-next-up-play` sent by a command | `handle_client_message` |
+| S8 | `quit` sent while a load is pending | `handle_stop_request`, `on_shutdown` |
+| S9 | Absolute seek while paused, then unpause | `restart.rs` seek and restart handling |
+| S10 | Video item: `video-params/h` and `current-tracks/video/image` changes | `restart.rs` output classification |
+
+The probe writes each IPC trace (raw lines, in arrival order) to `crates/mbv-player/src/mpv_event/fixtures/<id>.jsonl`.
+
+### D5. `MpvEvent` domain type with two constructors
+
+New `crates/mbv-player/src/mpv_event.rs`, crate-private:
+
+```rust
+pub(crate) enum MpvEvent {
+    PropertyChange { name: String, value: PropertyValue },
+    PlaybackRestart,
+    EndFile(EndFileReason),             // domain enum: Eof, Stop, Quit, Redirect
+    Failed(MpvFailure),                 // libmpv Err(e) / IPC end-file reason=error
+    LogMessage { prefix: String, level: String, text: String },
+    ClientMessage(Vec<String>),
+    Shutdown,
+    Ignored,                            // events the run loop does not act on
+}
+pub(crate) enum MpvFailure { AudioOutputInit, Other(String) }
+```
+
+- `MpvEvent::from_libmpv(Result<Event, libmpv2::Error>)` is the production path. `Err(Raw(AoInitFailed))` becomes `Failed(AudioOutputInit)`, and every other error becomes `Failed(Other(mpv_err_str(e)))`. This keeps today's behavior: an end-file error is a failure, not an `EndFile`.
+- `MpvEvent::from_ipc_line(&str) -> Result<MpvEvent, DecodeError>` is used by tests only for now. It decodes `end-file` with `reason:"error"` to `Failed`. It maps `file_error` equal to mpv's `AoInitFailed` error string to `AudioOutputInit`. It returns `Ignored` for known events that the run loop does not act on (`start-file`, `file-loaded`, `seek`, `idle`, `audio-reconfig`, `video-reconfig`, command replies), and `DecodeError` for malformed lines. `DecodeError` is a domain error type (no `thiserror`).
+- `PropertyValue` has the variants `Double`, `Flag`, `Int64`, `Str` and `None`. The run loop already matches on names, so the IPC decoder types each value by the property name, using the formats that `observe_properties` requests.
+- The run loop matches `MpvEvent` exhaustively, so the `_ => false` wildcard goes away. `Ignored` is the documented no-op arm.
+- `is_clocked_audio_error` takes `&MpvFailure`. `is_superseded_jump_end_file` takes the domain `EndFileReason`. `EndFileReason` changes from the libmpv2 constant type to the domain enum at its existing use sites (`termination.rs` `report_for_end_file` and the queue-advance paths).
+
+Rejected alternative: decode IPC JSON straight into `libmpv2::Event`. Its borrowed `&str` fields and `PropertyData` cannot be built from owned JSON, and the change would tie fixtures to the binding that the migration wants to remove.
+
+### D6. Tests own two contracts
+
+Both live in `crates/mbv-player/src/mpv_event/tests.rs`, because they test crate-private items.
+
+1. **Decoder contract:** a test helper `decode_fixture(name)` loads a fixture with `include_str!`, decodes every line, and panics on the first `DecodeError`. Every classifier test below goes through it, so real mpv output is decoded with no separate per-file test. One extra test asserts that a malformed line returns `DecodeError`.
+2. **Classifier-on-real-data contract:** these are named tests with different expected outcomes, each citing its scenario:
+   - S2 fixture: the decoded sequence contains a `Stop` `EndFile` that `is_superseded_jump_end_file(reason, None, false)` classifies as debris.
+   - S6 fixture: the decoded sequence contains `Failed(AudioOutputInit)`, and `is_clocked_audio_error` returns `true` when a device is configured.
+   - S5 fixture: the missing file decodes to `Failed(Other(_))`, and `is_clocked_audio_error` returns `false`.
+   - S1 fixture: the natural end decodes to `EndFile(Eof)`.
+
+No test asserts timing, counts of `time-pos` events, or log text.
+
+## Risks / Trade-offs
+
+- [lavfi media and `ao=null` behave differently from real streams and hardware audio] → The probe tests event *semantics*, not timing. The Findings section names any scenario whose outcome depends on real output. Live checks of those stay with the user.
+- [Timing-sensitive scenarios (S2, S8) can produce different sequences from run to run] → The probe runs each scenario 5 times per backend and reports every distinct sequence. Findings record nondeterminism as a property of mpv, not as a backend difference, when both backends show it.
+- [The `MpvEvent` refactor could change run-loop behavior] → Today's tests in `crates/mbv-player/src/tests/` must pass unchanged. `from_libmpv` maps error codes the same way `on_mpv_error` reads them today.
+- [Fixtures go stale with new mpv versions] → Each fixture header line records `mpv --version` and the date. Rerun the probe when mpv changes in a way that matters.
+- [The `AoInitFailed` error string differs between mpv versions] → The decoder compares against the string that `libmpv2-sys` `mpv_error_string` returns at runtime, not a literal.
+
+## Findings
+
+Empty until the probe runs. When it runs, record per scenario the result (D3 categories), the normalizations used, and any nondeterminism. Then record a recommendation: move mpv out of process, stay in process, or block on a named gap.
