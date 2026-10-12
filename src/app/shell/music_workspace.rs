@@ -294,6 +294,7 @@ impl Model {
             && let Some(album) = context.selected_album.as_ref()
             && !self.app.album_tracks_cache.contains_key(&album.id)
             && !self.app.album_tracks_loading.contains(&album.id)
+            && self.app.navigation_idle()
         {
             self.app.fetch_album_tracks(album.id.clone());
         }

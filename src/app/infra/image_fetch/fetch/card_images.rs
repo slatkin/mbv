@@ -1,5 +1,5 @@
 use super::{
-    App, ImageFetchReq, ImageSource, Instant, MAX_IMAGE_FETCHES, NAV_IMAGE_FETCH_IDLE_DELAY,
+    App, ImageFetchReq, ImageSource, Instant, MAX_IMAGE_FETCHES, NAV_IDLE_DELAY,
     audiobookshelf_book_cover_cache_key, audiobookshelf_cover_cache_key,
 };
 
@@ -97,8 +97,8 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn list_image_fetches_allowed(&self) -> bool {
-        self.last_nav_at.elapsed() >= NAV_IMAGE_FETCH_IDLE_DELAY
+    pub(in crate::app) fn navigation_idle(&self) -> bool {
+        self.last_nav_at.elapsed() >= NAV_IDLE_DELAY
     }
 
     pub(in crate::app) fn mark_library_navigation(&mut self, at: Instant) {
@@ -112,7 +112,7 @@ impl App {
         series_id: String,
         types: &[&str],
     ) {
-        if !self.list_image_fetches_allowed() {
+        if !self.navigation_idle() {
             return;
         }
         self.fetch_card_image(cache_key, item_id, series_id, types);

@@ -60,7 +60,7 @@ impl App {
             return false;
         }
 
-        let idle = self.list_image_fetches_allowed();
+        let idle = self.navigation_idle();
         let now = std::time::Instant::now();
         self.last_nav_at = now;
         self.mark_library_navigation(now);

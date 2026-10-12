@@ -132,7 +132,7 @@ impl super::super::Model {
         if let Some(lib_idx) = self.app.tab.emby_library_index() {
             match kind {
                 AlbumCursorKind::Move => {
-                    let idle = self.app.list_image_fetches_allowed();
+                    let idle = self.app.navigation_idle();
                     let now = Instant::now();
                     self.app.last_nav_at = now;
                     self.app.mark_library_navigation(now);

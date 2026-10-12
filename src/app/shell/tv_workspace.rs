@@ -24,6 +24,7 @@ use mbv_ui_model::library::{LibraryKey, LibraryKind};
 #[cfg(test)]
 use mbv_ui_msg::ComponentId;
 use mbv_ui_msg::ShellRequest;
+use std::time::Instant;
 
 impl Model {
     pub(in crate::app) fn handle_tv_request(&mut self, request: ShellRequest) {
@@ -105,8 +106,15 @@ impl Model {
                 self.app.cycle_letter_pill(lib_idx, delta);
                 self.acknowledge_active_tv_latest();
             }
+            // Cursor moves stamp the navigation time that gates the sync-pass
+            // detail and image fetches; the owner already moved the cursor.
+            ShellRequest::TvMoveRows { .. } | ShellRequest::TvJumpCursor { .. } => {
+                let now = Instant::now();
+                self.app.last_nav_at = now;
+                self.app.mark_library_navigation(now);
+            }
             // closed set: the caller restricts this to TvMoveRows/TvJumpCursor/
-            // TvActivate/TvBack/TvCycleLetterPill; cursor moves need no App effect.
+            // TvActivate/TvBack/TvCycleLetterPill; any other variant is a no-op.
             _ => {}
         }
         self.push_tv_workspace_content();
@@ -432,7 +440,9 @@ impl Model {
         } else {
             selected_series
         };
-        if let Some(item) = selected_series.as_ref() {
+        if let Some(item) = selected_series.as_ref()
+            && self.app.navigation_idle()
+        {
             // Detail loading is an App-owned effect; schedule it at the shell
             // hand-off rather than from the render context or painter.
             self.app.fetch_series_detail(&item.id);

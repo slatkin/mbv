@@ -1,6 +1,6 @@
 use super::Model;
 use super::{ConfirmAction, ConfirmModal};
-use crate::app::infra::image_fetch::NAV_IMAGE_FETCH_IDLE_DELAY;
+use crate::app::infra::image_fetch::NAV_IDLE_DELAY;
 use mbv_ui_msg::ShellRequest;
 use std::time::Instant;
 
@@ -111,7 +111,7 @@ impl Model {
             return;
         }
         let now = Instant::now();
-        let idle = now.duration_since(self.app.last_nav_at) >= NAV_IMAGE_FETCH_IDLE_DELAY;
+        let idle = now.duration_since(self.app.last_nav_at) >= NAV_IDLE_DELAY;
         self.app.last_nav_at = now;
         self.app.mark_library_navigation(now);
         // Keep only the persistence-facing resting value, using the index
