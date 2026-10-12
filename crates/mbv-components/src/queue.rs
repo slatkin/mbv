@@ -68,9 +68,6 @@ pub struct QueueComponent {
     /// the queue projection and painted at the panel's own status row.
     status_playlist: Vec<Span<'static>>,
     status_autosave: Option<Vec<Span<'static>>>,
-    /// The remote-attachment indicator pill (queue concern, painted at the
-    /// far right of the same footer row while a remote owner owns playback).
-    status_scope: Option<String>,
     pending_slot: Option<QueueSlotId>,
     drag_grab: Option<QueueSlotId>,
     /// Private per-parent gesture recognition (ADR 0024, design.md D3): owns
@@ -109,7 +106,6 @@ impl QueueComponent {
             content_area: Rect::default(),
             status_playlist: Vec::new(),
             status_autosave: None,
-            status_scope: None,
             pending_slot: None,
             drag_grab: None,
             mouse_gestures: MouseGestureState::new(),
@@ -193,18 +189,15 @@ impl QueueComponent {
         self.mini_view = mini_view;
     }
 
-    /// Project the status pill row (playlist source + autosave) and the
-    /// remote-attachment indicator, painted at the `QueueColumn` footer below
-    /// the recessed box.
+    /// Project the status pill row (playlist source + autosave), painted at
+    /// the `QueueColumn` footer below the recessed box.
     pub fn set_status_pills(
         &mut self,
         playlist: Vec<Span<'static>>,
         autosave: Option<Vec<Span<'static>>>,
-        remote_pill: Option<String>,
     ) {
         self.status_playlist = playlist;
         self.status_autosave = autosave;
-        self.status_scope = remote_pill;
     }
 
     /// The framed list content area the panel retained from its last paint:
@@ -307,7 +300,6 @@ impl Component for QueueComponent {
                 footer_row,
                 self.status_playlist.clone(),
                 self.status_autosave.clone(),
-                self.status_scope.as_deref(),
             );
         }
         self.ensure_carrier();

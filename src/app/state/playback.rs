@@ -59,7 +59,6 @@ pub(in crate::app) enum UndoEntry {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(in crate::app) enum RemoteSlotState {
-    Off,
     AttachedSession,
     DirectRemote,
     LocalDaemon,

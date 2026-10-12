@@ -43,7 +43,7 @@ impl App {
             .fg(ratatui::style::Color::White);
 
         let target = match remote_state {
-            RemoteSlotState::Off | RemoteSlotState::LocalDaemon => None,
+            RemoteSlotState::LocalDaemon => None,
             RemoteSlotState::AttachedSession => {
                 self.connected_session_state.as_ref().and_then(|session| {
                     let device_name = session.device_name.trim();
@@ -118,7 +118,7 @@ impl App {
         };
         let gap = if self.use_nerd_fonts { " " } else { "  " };
         let target = match remote_state {
-            RemoteSlotState::Off | RemoteSlotState::LocalDaemon => None,
+            RemoteSlotState::LocalDaemon => None,
             RemoteSlotState::AttachedSession => {
                 self.connected_session_state.as_ref().and_then(|session| {
                     let device_name = session.device_name.trim();

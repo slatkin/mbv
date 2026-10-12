@@ -14,7 +14,8 @@ pub(super) fn stub_endpoint() -> DaemonEndpoint {
     DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap())
 }
 
-// Row 4.1/design D1 deleted Bare: every launch attaches, so RemoteSlotState::Off has no test.
+// Row 4.1/design D1 deleted Bare: every launch attaches, so RemoteSlotState
+// never had an Off state; the variant is gone.
 
 #[test]
 fn app_stub_starts_with_no_active_library_route() {

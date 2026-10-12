@@ -67,14 +67,16 @@ fn transport_clicks_resolve_against_retained_geometry() {
     assert!(panel.on(&click(5, 4)).is_none());
 }
 
-/// The header row's two sites: while the title lives on the artwork (the
-/// `Artwork` site) the header paints the playing brand row — `PLAYING::[host]`
-/// left — so the header panel stays visible and the title is not duplicated;
-/// with the `Header` site the same projection paints the title there.
+/// The header row's two sites: the row always paints the status brand part
+/// — the target icon (yellow), the bracketed host, the bold status word —
+/// and while the header is the title's home (the `Header` site) the title
+/// rides the remaining space; with the `Artwork` site the title lives on
+/// the artwork alone and the row paints the status part only.
 #[test]
-fn header_row_paints_the_brand_row_while_the_title_lives_on_the_artwork() {
+fn header_row_paints_the_status_brand_and_the_header_site_title() {
     let mut panel = QueuePlaybackPanel::new();
     panel.set_header(NowPlayingStatus::Playing, "Living Room".into(), false);
+    panel.transport.use_nerd_fonts = true;
     panel.transport.now_playing_title =
         Some(("Example".into(), palette::Role::PlaybackValueFg.color()));
     panel.set_transport_area(Some(Rect::new(0, 2, 40, 6)));
@@ -85,39 +87,50 @@ fn header_row_paints_the_brand_row_while_the_title_lives_on_the_artwork() {
             .collect::<String>()
     };
 
-    // Header site: the header row carries the title.
+    // Header site: the status part leads and the title rides the row.
     terminal
         .draw(|frame| panel.view(frame, Rect::new(0, 0, 40, 8)))
         .unwrap();
+    let row = header_row(&terminal);
     assert!(
-        header_row(&terminal).contains("Example"),
-        "the Header site paints the title on the header row"
+        row.starts_with(" \u{f0118} [Living Room] PLAYING "),
+        "the header paints the status brand part, left-anchored: {row}"
+    );
+    assert!(
+        row.contains("Example"),
+        "the Header site paints the title on the header row: {row}"
     );
 
-    // Artwork site: the header row carries the playing brand row, host
-    // included, and never the title (the artwork carries it).
+    // Artwork site: the title lives on the artwork alone.
     panel.transport.title_site = NowPlayingTitleSite::Artwork;
     terminal
         .draw(|frame| panel.view(frame, Rect::new(0, 0, 40, 8)))
         .unwrap();
     let row = header_row(&terminal);
     assert!(
-        row.starts_with(" PLAYING::[Living Room]"),
-        "the Artwork site paints the playing brand row, left-anchored: {row}"
-    );
-    assert!(
-        !row.contains("[mbv]"),
-        "the brand anchor is gone from the header row: {row}"
+        row.starts_with(" \u{f0118} [Living Room] PLAYING "),
+        "the Artwork site paints the status brand part, left-anchored: {row}"
     );
     assert!(
         !row.contains("Example"),
         "the title lives on the artwork alone: {row}"
     );
 
-    // The brackets paint foam and the local host cream (row index i is
-    // buffer column i + 2: the header row is inset two columns).
-    let bracket_at = row.find('[').expect("the host is bracketed");
+    // The target icon paints yellow, the brackets foam, and the local host
+    // cream (row char index i is buffer column i + 2: the header row is
+    // inset two columns; the icon sits two row cells before the bracket).
+    // Char index, not `find`'s byte index: the nerd glyph is four bytes.
+    let bracket_at = row
+        .char_indices()
+        .find(|&(_, ch)| ch == '[')
+        .map(|(byte_at, _)| row[..byte_at].chars().count())
+        .expect("the host is bracketed");
     let buffer = terminal.backend().buffer();
+    assert_eq!(
+        buffer[(u16::try_from(bracket_at).unwrap(), 1)].fg,
+        palette::Role::TextFocusAccent.color(),
+        "the target icon paints yellow"
+    );
     assert_eq!(
         buffer[(u16::try_from(bracket_at + 2).unwrap(), 1)].fg,
         palette::Role::TextMetadata.color(),

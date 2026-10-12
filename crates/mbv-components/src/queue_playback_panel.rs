@@ -31,8 +31,7 @@ use mbv_render::arrangements::chrome::QUEUE_TRANSPORT_ROWS;
 use mbv_render::components::chrome_player::TransportAvailability;
 use mbv_render::components::widgets::queue_panel_inset;
 use mbv_render::{
-    HeaderTitle, PlaybackRenderContext, playback_state_icon, render_header_title,
-    render_playback_header, render_player_panel,
+    HeaderTitle, PlaybackRenderContext, remote_state_icon, render_header_title, render_player_panel,
 };
 use mbv_theme as palette;
 use mbv_ui_model::playback_target::NowPlayingStatus;
@@ -46,10 +45,10 @@ const TRANSPORT_SURFACE: palette::Surface = palette::Surface::QueueOnlyPlaybackP
 
 #[derive(Debug)]
 pub struct QueuePlaybackPanel {
-    /// The header's projected facts: the status word (idle's right-anchored
-    /// `IDLE`) and the playback target (`App::playback_host_label_and_remote`,
-    /// no tracking suffix) with its remote flag — the target and flag feed
-    /// only the artwork-site playing brand row's `PLAYING::[host]`.
+    /// The header's projected facts: the status word and the playback target
+    /// (`App::playback_host_label_and_remote`, no tracking suffix) with its
+    /// remote flag — every header row paints `󰄙/󰄘 [host] STATUS`, and the
+    /// target and flag also pick the row's target icon.
     status: NowPlayingStatus,
     host: String,
     host_is_remote: bool,
@@ -216,35 +215,31 @@ impl Component for QueuePlaybackPanel {
             height: 1,
             ..queue_panel_inset(area)
         };
-        // While a target plays, the header row carries the now-playing
-        // title (moved up from the band's former title row — two-part
-        // titles keep their context-left/title-right split, a lone title
-        // paints yellow) or, while the title lives on the artwork, the
-        // playing brand row; idle paints the brand row, ` IDLE` left.
-        if self.status != NowPlayingStatus::Idle
-            && let Some((title, _)) = &self.transport.now_playing_title
-        {
-            render_header_title(
-                frame,
-                header,
-                &mut HeaderTitle {
-                    title: title.as_str(),
-                    parts: self.transport.title_parts.as_ref(),
-                    marquee_text: &mut self.marquee_text,
-                    marquee_started_at: &mut self.marquee_started_at,
-                    panel: TRANSPORT_SURFACE,
-                    icon: playback_state_icon(
-                        self.transport.use_nerd_fonts,
-                        self.transport.state.paused,
-                    ),
-                    title_site: self.transport.title_site,
-                    host: &self.host,
-                    host_is_remote: self.host_is_remote,
-                },
-            );
-        } else {
-            render_playback_header(frame, header, self.status);
-        }
+        // The header row always paints the status brand row — the target
+        // icon, the bracketed host, the status word — and carries the
+        // now-playing title in the remaining space while the header is the
+        // title's home (the `Header` site); the artwork site carries the
+        // title on the overlay.
+        render_header_title(
+            frame,
+            header,
+            &mut HeaderTitle {
+                title: self
+                    .transport
+                    .now_playing_title
+                    .as_ref()
+                    .map(|(text, _)| text.as_str()),
+                parts: self.transport.title_parts.as_ref(),
+                marquee_text: &mut self.marquee_text,
+                marquee_started_at: &mut self.marquee_started_at,
+                panel: TRANSPORT_SURFACE,
+                icon: remote_state_icon(self.transport.use_nerd_fonts, self.host_is_remote),
+                title_site: self.transport.title_site,
+                status: self.status,
+                host: &self.host,
+                host_is_remote: self.host_is_remote,
+            },
+        );
         // While idle — or whenever the shell hands no transport rect — the
         // slot and transport rows are already collapsed (task 3.6); the
         // panel paints nothing else and its hit geometry stays cleared.

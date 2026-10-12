@@ -1,16 +1,10 @@
-//! The Queue playback panel's header row (task 3.5, design D10): one row
-//! at the top of the queue column's content whenever the header paints —
-//! idle included. The status word left (` IDLE`), on the chrome band. It
-//! never carries progress: the transport below owns the throbber, percent,
-//! and seekbar.
+//! The queue header row's status vocabulary: the status word for one
+//! now-playing status and its semantic colour. The row itself paints
+//! through `chrome_player::title::render_header_title` (the target icon,
+//! the bracketed host, and this status word left, the title riding the
+//! remaining space). It never carries progress: the transport below owns
+//! the throbber, percent, and seekbar.
 
-use ratatui::Frame;
-use ratatui::layout::Rect;
-use ratatui::style::{Modifier, Style};
-use ratatui::text::{Line, Span};
-use ratatui::widgets::Paragraph;
-
-use super::chrome_player::brand_row_spans;
 use mbv_theme as palette;
 use mbv_ui_model::playback_target::NowPlayingStatus;
 
@@ -24,35 +18,12 @@ pub fn header_status_word(status: NowPlayingStatus) -> &'static str {
     }
 }
 
-/// The status word's semantic colour: FOAM while playing, YELLOW while
+/// The status word's semantic colour: AQUA while playing, YELLOW while
 /// paused, muted while idle.
-fn status_color(status: NowPlayingStatus) -> ratatui::style::Color {
+pub(crate) fn status_color(status: NowPlayingStatus) -> ratatui::style::Color {
     match status {
-        NowPlayingStatus::Playing => palette::Role::TextMetadata.color(),
+        NowPlayingStatus::Playing => palette::Role::Accent.color(),
         NowPlayingStatus::Paused => palette::Role::TextFocusAccent.color(),
         NowPlayingStatus::Idle => palette::Role::TextMuted.color(),
     }
-}
-
-/// Paints the header row into `area`: the status word left-anchored (the
-/// shared status anchor, one indent cell each side). The idle `IDLE` paints
-/// muted grey; playing/paused keep their semantic colours. Pure painter over
-/// projected state.
-pub fn render_playback_header(f: &mut Frame, area: Rect, status: NowPlayingStatus) {
-    if area.width == 0 || area.height == 0 {
-        return;
-    }
-    let bg = palette::surface_colors(palette::Surface::QueueOnlyPlaybackPanel, false).fill;
-    let status_spans = vec![Span::styled(
-        header_status_word(status),
-        Style::default()
-            .fg(status_color(status))
-            .bg(bg)
-            .add_modifier(Modifier::BOLD),
-    )];
-    let spans = brand_row_spans(bg, status_spans);
-    f.render_widget(
-        Paragraph::new(Line::from(spans)).style(Style::default().bg(bg)),
-        area,
-    );
 }

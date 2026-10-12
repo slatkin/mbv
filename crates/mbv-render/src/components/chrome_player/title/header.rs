@@ -1,10 +1,10 @@
-use super::super::super::chrome::{pause_icon, play_icon};
 use super::super::super::marquee;
 use super::super::title_part_fg;
 use super::palette;
-use super::transport::width_u16;
+use crate::components::queue_playback::{header_status_word, status_color};
 use mbv_queue::PlaybackTitleParts;
 use mbv_ui_model::playback::NowPlayingTitleSite;
+use mbv_ui_model::playback_target::NowPlayingStatus;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
@@ -12,147 +12,60 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use unicode_width::UnicodeWidthStr;
 
-/// The header row's state icon: the play glyph while playing, the pause
-/// glyph while paused (same nerd-font/fallback pairs as the transport
-/// controls), aqua for play and yellow for pause.
+/// The header row's playback-target icon: the connected-remote glyph while a
+/// remote host owns playback, the offline glyph otherwise — the same
+/// nerd-font/fallback pair the queue footer's remote pill painted — always
+/// yellow.
 #[must_use]
-pub fn playback_state_icon(use_nerd_fonts: bool, paused: bool) -> (&'static str, Color) {
-    if paused {
-        (
-            pause_icon(use_nerd_fonts),
-            palette::Role::TextFocusAccent.color(),
-        )
-    } else {
-        (play_icon(use_nerd_fonts), palette::Role::Accent.color())
-    }
+pub fn remote_state_icon(use_nerd_fonts: bool, host_is_remote: bool) -> (&'static str, Color) {
+    let icon = match (use_nerd_fonts, host_is_remote) {
+        (false, _) => "\u{1F5A7}",
+        (true, true) => "\u{f0119}",
+        (true, false) => "\u{f0118}",
+    };
+    (icon, palette::Role::TextFocusAccent.color())
 }
 
-/// The header row's now-playing title facts: everything the header painter
-/// needs besides the frame and the row. The panel owns the marquee state
-/// and the icon (`playback_state_icon`).
+/// The queue header row's facts: everything the header painter needs besides
+/// the frame and the row. The panel owns the marquee state.
 #[derive(Debug)]
 pub struct HeaderTitle<'a> {
-    pub title: &'a str,
+    /// The now-playing title, `None` when nothing plays. It rides this row
+    /// only while the header is the title's home (the `Header` title site);
+    /// the artwork site carries the title on the overlay.
+    pub title: Option<&'a str>,
     pub parts: Option<&'a PlaybackTitleParts>,
     pub marquee_text: &'a mut String,
     pub marquee_started_at: &'a mut std::time::Instant,
     pub panel: palette::Surface,
+    /// The playback-target icon (`remote_state_icon`), yellow.
     pub icon: (&'static str, Color),
     pub title_site: NowPlayingTitleSite,
+    /// The now-playing status, painted as its status word
+    /// (`header_status_word`) in its semantic colour (`status_color`).
+    pub status: NowPlayingStatus,
     /// The playback target's host label and whether it names a remote
-    /// target; the artwork-site brand row paints it after `on`
-    /// (`PLAYBACK_HOST_REMOTE_FG` when remote, cream when local).
+    /// target; every header row paints it bracketed
+    /// (`PlaybackHostRemoteFg` when remote, cream when local).
     pub host: &'a str,
     pub host_is_remote: bool,
 }
 
-/// The queue header row's now-playing title: the state icon first, one
-/// space, then a two-part title — the context part (the show) left-aligned
-/// and clipped without scrolling, the title part with the marquee window of
-/// the remaining space — or a lone yellow title. Painted while a target
-/// plays and the header is the title's home (the `Header` title site); the
-/// artwork site paints the playing brand row instead (the overlay carries
-/// the title), and idle keeps the status/host header row.
+/// The queue header row: the playback-target icon, the bracketed host, and
+/// the bold status word left-anchored — `󰄘 [host] PLAYING` — with the
+/// now-playing title riding the remaining space while the header is the
+/// title's home (the `Header` site): a two-part title keeps its
+/// context-left/title-right split, a lone title's marquee takes the whole
+/// remaining zone. The artwork site carries the title on the overlay, so
+/// that row paints the status part alone.
 pub fn render_header_title(frame: &mut Frame, row: Rect, header: &mut HeaderTitle<'_>) {
     let panel_bg = palette::surface_colors(header.panel, false).fill;
-    if header.title_site == NowPlayingTitleSite::Artwork {
-        frame.render_widget(
-            Paragraph::new(Line::from(artwork_brand_spans(header, panel_bg)))
-                .style(Style::default().bg(panel_bg)),
-            row,
-        );
-        return;
-    }
-    match header
-        .parts
-        .and_then(|parts| parts.context.as_ref().map(|c| (c, &parts.title)))
+    let mut spans = status_brand_spans(header, panel_bg);
+    if header.title_site == NowPlayingTitleSite::Header
+        && let Some(title_text) = header.title
     {
-        Some((context, title)) => render_queue_header_combined_title(
-            frame,
-            row,
-            header,
-            panel_bg,
-            (&context.text, title_part_fg(context.role)),
-            (&title.text, title_part_fg(title.role)),
-        ),
-        None => render_queue_header_title_only(frame, row, header, panel_bg),
+        append_title_spans(header, title_text, panel_bg, &mut spans, row.width);
     }
-}
-
-/// The shared queue-header status anchor: one leading indent cell, then the
-/// status content left-anchored, then one trailing indent cell. The idle row
-/// and the artwork-site playing row both paint through this so the left
-/// anchor cannot drift.
-pub(crate) fn brand_row_spans(panel_bg: Color, status: Vec<Span<'static>>) -> Vec<Span<'static>> {
-    let mut spans = vec![Span::styled(" ", Style::default().bg(panel_bg))];
-    spans.extend(status);
-    spans.push(Span::styled(" ", Style::default().bg(panel_bg)));
-    spans
-}
-
-/// The artwork title site's header row: ` PLAYING::[host] ` left-anchored.
-/// The icon is dropped (the word carries the state), the colons are cream,
-/// `PLAYING` is aqua and bold, the brackets are foam, and the host is mauve
-/// when remote / cream when local.
-fn artwork_brand_spans(header: &HeaderTitle<'_>, panel_bg: Color) -> Vec<Span<'static>> {
-    let cream = Style::default()
-        .fg(palette::Role::TextEmphasis.color())
-        .bg(panel_bg);
-    let foam = Style::default()
-        .fg(palette::Role::TextMetadata.color())
-        .bg(panel_bg);
-    let mut status = vec![Span::styled(
-        "PLAYING",
-        Style::default()
-            .fg(palette::Role::Accent.color())
-            .bg(panel_bg)
-            .add_modifier(Modifier::BOLD),
-    )];
-    if !header.host.is_empty() {
-        let host_fg = if header.host_is_remote {
-            palette::Role::PlaybackHostRemoteFg.color()
-        } else {
-            palette::Role::TextEmphasis.color()
-        };
-        status.push(Span::styled("::", cream));
-        status.push(Span::styled("[", foam));
-        status.push(Span::styled(
-            header.host.to_string(),
-            Style::default().fg(host_fg).bg(panel_bg),
-        ));
-        status.push(Span::styled("]", foam));
-    }
-    brand_row_spans(panel_bg, status)
-}
-
-/// The ` <icon> ` prefix every header title row starts with.
-fn icon_prefix(icon: (&'static str, Color), panel_bg: Color) -> [Span<'static>; 3] {
-    [
-        Span::styled(" ", Style::default().bg(panel_bg)),
-        Span::styled(icon.0, Style::default().fg(icon.1).bg(panel_bg)),
-        Span::styled(" ", Style::default().bg(panel_bg)),
-    ]
-}
-
-/// The queue header row's lone title, no time: ` <icon> <title> ` with the
-/// marquee window sized to the row minus its indent cells. Only called when
-/// no context part projects (a two-part title takes the combined painter);
-/// the lone title always paints yellow.
-fn render_queue_header_title_only(
-    frame: &mut Frame,
-    row: Rect,
-    header: &mut HeaderTitle<'_>,
-    panel_bg: Color,
-) {
-    let text = header.parts.map_or(header.title, |parts| &parts.title.text);
-    let icon_w = width_u16(header.icon.0.width());
-    let mut spans = icon_prefix(header.icon, panel_bg).to_vec();
-    spans.extend(marquee_spans_at(
-        &[(text, palette::Role::PlaybackContextFg.color())],
-        (row.width.saturating_sub(2 + icon_w + 1)) as usize,
-        header.marquee_text,
-        header.marquee_started_at,
-    ));
     // `Paragraph::style` fills the cells the spans leave uncovered.
     frame.render_widget(
         Paragraph::new(Line::from(spans)).style(Style::default().bg(panel_bg)),
@@ -160,52 +73,96 @@ fn render_queue_header_title_only(
     );
 }
 
-/// A two-part title on the queue header row: ` <icon> <show> ... <title> ` — the context part
-/// left-aligned and clipped without scrolling (no marquee), the title part
-/// right-aligned with the marquee window of the remaining space. The show
-/// keeps priority: it clips only past `content - 2`, so the title always
-/// keeps at least a one-cell marquee floor and no part is ever dropped.
-fn render_queue_header_combined_title(
-    frame: &mut Frame,
-    row: Rect,
-    header: &mut HeaderTitle<'_>,
-    panel_bg: Color,
-    (show_text, show_fg): (&str, Color),
-    (title_text, title_fg): (&str, Color),
-) {
-    let icon_w = usize::from(width_u16(header.icon.0.width()));
-    let content = row.width.saturating_sub(2) as usize;
-    let show = clip_to_width(show_text, content.saturating_sub(icon_w + 1 + 2));
-    let sw = width_u16(show.width());
-    let title_win = content.saturating_sub(icon_w + 1 + usize::from(sw) + 1);
-    let mut spans = icon_prefix(header.icon, panel_bg).to_vec();
-    spans.push(Span::styled(
-        show,
-        Style::default().fg(show_fg).bg(panel_bg),
-    ));
-    let marquee = marquee_spans_at(
-        &[(title_text, title_fg)],
-        title_win,
-        header.marquee_text,
-        header.marquee_started_at,
-    );
-    let used = spans
-        .iter()
-        .chain(&marquee)
-        .map(|span| span.content.width())
-        .sum::<usize>();
-    // Right-anchor the title: every spare cell lands between the show and the
-    // title; the trailing indent is kept outside the gap math.
-    let gap = (row.width as usize).saturating_sub(used + 1);
-    if gap > 0 {
-        spans.push(Span::styled(" ".repeat(gap), Style::default().bg(panel_bg)));
+/// The status part every header row paints: one leading indent cell, the
+/// playback-target icon (yellow), one space, the bracketed host (foam
+/// brackets, the host mauve when remote / cream when local), one space, and
+/// the bold status word in its semantic colour.
+fn status_brand_spans(header: &HeaderTitle<'_>, panel_bg: Color) -> Vec<Span<'static>> {
+    let (icon, icon_fg) = header.icon;
+    let bg = Style::default().bg(panel_bg);
+    let mut spans = vec![
+        Span::styled(" ", bg),
+        Span::styled(icon.to_string(), Style::default().fg(icon_fg).bg(panel_bg)),
+    ];
+    if !header.host.is_empty() {
+        let host_fg = if header.host_is_remote {
+            palette::Role::PlaybackHostRemoteFg.color()
+        } else {
+            palette::Role::TextEmphasis.color()
+        };
+        let foam = Style::default()
+            .fg(palette::Role::TextMetadata.color())
+            .bg(panel_bg);
+        spans.push(Span::styled(" ", bg));
+        spans.push(Span::styled("[", foam));
+        spans.push(Span::styled(
+            header.host.to_string(),
+            Style::default().fg(host_fg).bg(panel_bg),
+        ));
+        spans.push(Span::styled("]", foam));
     }
-    spans.extend(marquee);
+    spans.push(Span::styled(" ", bg));
+    spans.push(Span::styled(
+        header_status_word(header.status).to_string(),
+        Style::default()
+            .fg(status_color(header.status))
+            .bg(panel_bg)
+            .add_modifier(Modifier::BOLD),
+    ));
+    spans
+}
+
+/// The title spans appended after the status part while the header is the
+/// title's home: a two-part title clips its context (show) part left — the
+/// show keeps priority and the title marquee keeps a one-cell floor — and a
+/// lone title's marquee takes the whole remaining zone. One cell stays
+/// reserved for the row's trailing indent.
+fn append_title_spans(
+    header: &mut HeaderTitle<'_>,
+    title_text: &str,
+    panel_bg: Color,
+    spans: &mut Vec<Span<'static>>,
+    row_width: u16,
+) {
+    let used: usize = spans.iter().map(|span| span.content.width()).sum();
+    // One gap cell between the status part and the title zone, one trailing
+    // indent cell at the row's end.
+    let zone = (row_width as usize).saturating_sub(used + 2);
     spans.push(Span::styled(" ", Style::default().bg(panel_bg)));
-    frame.render_widget(
-        Paragraph::new(Line::from(spans)).style(Style::default().bg(panel_bg)),
-        row,
-    );
+    if let Some((context, title)) = header
+        .parts
+        .and_then(|parts| parts.context.as_ref().map(|c| (c, &parts.title)))
+    {
+        let show = clip_to_width(&context.text, zone.saturating_sub(2));
+        let show_w = show.width();
+        let title_win = zone.saturating_sub(show_w + 1);
+        spans.push(Span::styled(
+            show.to_string(),
+            Style::default()
+                .fg(title_part_fg(context.role))
+                .bg(panel_bg),
+        ));
+        let marquee = marquee_spans_at(
+            &[(title_text, title_part_fg(title.role))],
+            title_win,
+            header.marquee_text,
+            header.marquee_started_at,
+        );
+        let gap = zone.saturating_sub(show_w + title_win);
+        if gap > 0 {
+            spans.push(Span::styled(" ".repeat(gap), Style::default().bg(panel_bg)));
+        }
+        spans.extend(marquee);
+    } else {
+        let marquee = marquee_spans_at(
+            &[(title_text, palette::Role::PlaybackContextFg.color())],
+            zone,
+            header.marquee_text,
+            header.marquee_started_at,
+        );
+        spans.extend(marquee);
+    }
+    spans.push(Span::styled(" ", Style::default().bg(panel_bg)));
 }
 
 /// `text` cut char by char from the end until it fits `max` cells.

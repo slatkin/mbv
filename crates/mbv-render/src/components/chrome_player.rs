@@ -9,9 +9,8 @@ use ratatui::widgets::Paragraph;
 
 mod title;
 
-pub(crate) use title::brand_row_spans;
 #[doc(inline)]
-pub use title::playback_state_icon;
+pub use title::remote_state_icon;
 #[doc(inline)]
 pub use title::render_title_row;
 #[doc(inline)]

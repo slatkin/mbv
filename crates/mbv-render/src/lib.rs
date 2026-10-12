@@ -22,7 +22,7 @@ pub use components::audiobookshelf_book::book_rows;
 
 #[doc(inline)]
 pub use components::chrome_player::{
-    HeaderTitle, PlaybackControls, PlaybackRenderContext, PlaybackStripAreas, playback_state_icon,
+    HeaderTitle, PlaybackControls, PlaybackRenderContext, PlaybackStripAreas, remote_state_icon,
     render_header_title, render_player_panel,
 };
 #[doc(inline)]
@@ -43,9 +43,6 @@ pub use components::feeds_manage::{FeedsManageRenderModel, render_feeds_manage_c
 pub use components::help::{
     HelpDestination, HelpRenderGeometry, help_destination, render_help_panel,
 };
-
-#[doc(inline)]
-pub use components::queue_playback::render_playback_header;
 
 #[doc(inline)]
 pub use arrangements::wide_hero::{
