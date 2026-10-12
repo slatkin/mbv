@@ -1,7 +1,6 @@
 use super::*;
 use crate::app::tests::QueueViewTestExt;
 use mbv_emby_model::test_support::make_item;
-use mbv_ui_model::browse::SeriesDetail;
 
 #[test]
 fn activate_selected_series_resolves_mirrored_cursor_and_guards_series() {

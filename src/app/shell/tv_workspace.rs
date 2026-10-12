@@ -20,10 +20,12 @@ use mbv_components::tv_content::TvContent;
 use mbv_emby_model::EmbyItem;
 use mbv_queue::ServiceKind;
 use mbv_render::components::tv_wide::TvWideRenderCtx;
+use mbv_ui_model::browse::SeriesDetail;
 use mbv_ui_model::library::{LibraryKey, LibraryKind};
 #[cfg(test)]
 use mbv_ui_msg::ComponentId;
 use mbv_ui_msg::ShellRequest;
+use std::collections::HashMap;
 
 impl Model {
     pub(in crate::app) fn handle_tv_request(&mut self, request: ShellRequest) {
@@ -388,10 +390,7 @@ impl Model {
 
     /// Loaded details for every listed show: the tree projects children per
     /// show so an expanded show keeps them while another is selected.
-    fn loaded_series_details(
-        &self,
-        items: &[EmbyItem],
-    ) -> std::collections::HashMap<String, mbv_ui_model::browse::SeriesDetail> {
+    fn loaded_series_details(&self, items: &[EmbyItem]) -> HashMap<String, SeriesDetail> {
         items
             .iter()
             .filter_map(|item| {

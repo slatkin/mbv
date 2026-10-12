@@ -382,7 +382,9 @@ mod tests {
     use crate::app::MusicEvent;
     use crate::app::shell::Model;
     use crate::app::tests::render_fixtures::{make_music_group_app, ready_emby_runtime};
+    use mbv_components::library_panel::owner::LibraryContentOwner;
     use std::time::Instant;
+    use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
     /// Regression: `push_music_workspace_content` must not run its
     /// Music-only side effects (`wide_music_render_ctx`, `fetch_album_tracks`)
@@ -573,12 +575,36 @@ mod tests {
     fn music_push_defers_album_track_fetch_while_navigating() {
         let mut app = make_music_group_app();
         app.emby_runtime = ready_emby_runtime();
-        app.last_nav_at = Instant::now();
         let mut model = Model::new(app);
 
+        // Idle navigation: the push starts the selected album's track fetch.
         model.push_music_workspace_content();
+        assert!(
+            model.app.album_tracks_loading.contains("album-1"),
+            "an idle push starts the selected album's track fetch"
+        );
 
-        assert!(model.app.album_tracks_loading.is_empty());
+        // End that fetch without caching its tracks, then walk the tree down
+        // to the album leaf: the first push leaves the artist root selected,
+        // and an artist root arms the ungated fallback aggregation instead of
+        // the gated selection fetch. With the album leaf selected and recent
+        // navigation, the pushed re-fetch must stay deferred.
+        model.app.album_tracks_loading.clear();
+        let owner = model.test_music_owner_mut();
+        owner.on_key(&KeyEvent {
+            code: Key::Right,
+            modifiers: KeyModifiers::NONE,
+        });
+        owner.on_key(&KeyEvent {
+            code: Key::Down,
+            modifiers: KeyModifiers::NONE,
+        });
+        model.app.last_nav_at = Instant::now();
+        model.push_music_workspace_content();
+        assert!(
+            model.app.album_tracks_loading.is_empty(),
+            "a push during recent navigation starts no album-track fetch"
+        );
     }
 }
 
