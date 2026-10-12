@@ -29,9 +29,10 @@ const EMPTY_QUEUE_EMBLEM: [&str; 8] = [
 ];
 
 /// Paints the empty-queue placeholder centered in the list content area in
-/// bold mauve, over the panel's own fill. The block `Q` emblem sits one row
-/// above the text; the emblem-plus-text unit centers vertically. A content
-/// area too short for the whole unit keeps the text alone, centered.
+/// bold mauve, over the panel's own fill. The block `Q` emblem sits two rows
+/// above the text (one blank spacer row between); the whole unit centers
+/// vertically. A content area too short for the whole unit keeps the text
+/// alone, centered.
 pub fn render_empty_queue(frame: &mut Frame, content: Rect, text: &str) {
     if content.width == 0 || content.height == 0 {
         return;
@@ -40,7 +41,7 @@ pub fn render_empty_queue(frame: &mut Frame, content: Rect, text: &str) {
         .fg(palette::Role::EmptyQueueFg.color())
         .add_modifier(Modifier::BOLD);
     let emblem_rows = u16::try_from(EMPTY_QUEUE_EMBLEM.len()).unwrap_or(u16::MAX);
-    let unit_height = emblem_rows + 1;
+    let unit_height = emblem_rows + 2;
     let text_row = if content.height >= unit_height {
         let top = content.y + (content.height - unit_height) / 2;
         for (offset, line) in (0..emblem_rows).zip(EMPTY_QUEUE_EMBLEM) {
@@ -55,7 +56,7 @@ pub fn render_empty_queue(frame: &mut Frame, content: Rect, text: &str) {
                 },
             );
         }
-        top + emblem_rows
+        top + emblem_rows + 1
     } else {
         content.y + content.height / 2
     };
