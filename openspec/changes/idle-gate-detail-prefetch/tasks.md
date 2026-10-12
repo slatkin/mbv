@@ -9,9 +9,9 @@
 
 ## 2. Tests
 
-- [ ] 2.1 In `src/app/shell/tv_workspace/tests.rs`, add `wide_tv_row_move_defers_series_detail_fetch`. Contract: a wide TV row move closes the idle gate, so the push in that handler starts no series-detail request. Set up the model as `push_tv_workspace_content_fetches_uncached_selected_series_once` does (ready Emby runtime), call `model.handle_tv_request(ShellRequest::TvMoveRows { rows: 1 })`, and assert `model.app.series_detail_loading` is empty. The existing test `push_tv_workspace_content_fetches_uncached_selected_series_once` already covers the idle case.
-- [ ] 2.2 In the `music_workspace.rs` test module, add `music_push_defers_album_track_fetch_while_navigating`. Contract: a sync-pass push with a recent `last_nav_at` starts no album-track request. Use `make_music_group_app()` with `ready_emby_runtime()`, set `app.last_nav_at = Instant::now()`, call `push_music_workspace_content()`, and assert `album_tracks_loading` is empty. Use no sleeps.
-- [ ] 2.3 Run `cargo fmt` and `cargo clippy --workspace --all-targets -- -D warnings` and verify that both are clean. Verify: `cargo nextest run -p mbv` passes. Commit.
+- [x] 2.1 In `src/app/shell/tv_workspace/tests.rs`, add `wide_tv_row_move_defers_series_detail_fetch`. Contract: a wide TV row move closes the idle gate, so the push in that handler starts no series-detail request. Set up the model as `push_tv_workspace_content_fetches_uncached_selected_series_once` does (ready Emby runtime), call `model.handle_tv_request(ShellRequest::TvMoveRows { rows: 1 })`, and assert `model.app.series_detail_loading` is empty. The existing test `push_tv_workspace_content_fetches_uncached_selected_series_once` already covers the idle case.
+- [x] 2.2 In the `music_workspace.rs` test module, add `music_push_defers_album_track_fetch_while_navigating`. Contract: a sync-pass push with a recent `last_nav_at` starts no album-track request. Use `make_music_group_app()` with `ready_emby_runtime()`, set `app.last_nav_at = Instant::now()`, call `push_music_workspace_content()`, and assert `album_tracks_loading` is empty. Use no sleeps.
+- [x] 2.3 Run `cargo fmt` and `cargo clippy --workspace --all-targets -- -D warnings` and verify that both are clean. Verify: `cargo nextest run -p mbv` passes. Commit.
 
 ## Workflow follow-up
 
