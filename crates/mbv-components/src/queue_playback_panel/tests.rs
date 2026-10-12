@@ -67,11 +67,12 @@ fn transport_clicks_resolve_against_retained_geometry() {
     assert!(panel.on(&click(5, 4)).is_none());
 }
 
-/// The header row's two sites: the row always paints the status brand part
-/// — the target icon (yellow), the bracketed host, the bold status word —
-/// and while the header is the title's home (the `Header` site) the title
-/// rides the remaining space; with the `Artwork` site the title lives on
-/// the artwork alone and the row paints the status part only.
+/// The header row's two sites: the row always paints the target pill (icon
+/// in ink on the yellow local fill — a local target shows no host) and the
+/// bold status word; while the header is the title's home (the `Header`
+/// site) the title rides the remaining space; with the `Artwork` site the
+/// title lives on the artwork alone and the row paints the status part
+/// only.
 #[test]
 fn header_row_paints_the_status_brand_and_the_header_site_title() {
     let mut panel = QueuePlaybackPanel::new();
@@ -93,8 +94,12 @@ fn header_row_paints_the_status_brand_and_the_header_site_title() {
         .unwrap();
     let row = header_row(&terminal);
     assert!(
-        row.starts_with(" \u{f0118} [Living Room] PLAYING "),
-        "the header paints the status brand part, left-anchored: {row}"
+        row.starts_with("  \u{f0118}   PLAYING "),
+        "the header paints the local pill and status word, left-anchored: {row}"
+    );
+    assert!(
+        !row.contains("Living Room"),
+        "a local target paints no host: {row}"
     );
     assert!(
         row.contains("Example"),
@@ -108,37 +113,93 @@ fn header_row_paints_the_status_brand_and_the_header_site_title() {
         .unwrap();
     let row = header_row(&terminal);
     assert!(
-        row.starts_with(" \u{f0118} [Living Room] PLAYING "),
-        "the Artwork site paints the status brand part, left-anchored: {row}"
+        row.starts_with("  \u{f0118}   PLAYING "),
+        "the Artwork site paints the status part, left-anchored: {row}"
     );
     assert!(
         !row.contains("Example"),
         "the title lives on the artwork alone: {row}"
     );
 
-    // The target icon paints yellow, the brackets foam, and the local host
-    // cream (row char index i is buffer column i + 2: the header row is
-    // inset two columns; the icon sits two row cells before the bracket).
-    // Char index, not `find`'s byte index: the nerd glyph is four bytes.
-    let bracket_at = row
-        .char_indices()
-        .find(|&(_, ch)| ch == '[')
-        .map(|(byte_at, _)| row[..byte_at].chars().count())
-        .expect("the host is bracketed");
+    // The pill paints ink-on-yellow: the icon cell (row char index 2, the
+    // pill's third cell) carries the TargetPillFg foreground on the yellow
+    // fill; the status word outside the pill keeps the panel fill (row char
+    // index i is buffer column i + 2: the header row is inset two columns).
     let buffer = terminal.backend().buffer();
+    let icon_cell = buffer[(4, 1)].clone();
     assert_eq!(
-        buffer[(u16::try_from(bracket_at).unwrap(), 1)].fg,
-        palette::Role::TextFocusAccent.color(),
-        "the target icon paints yellow"
+        (icon_cell.fg, icon_cell.bg),
+        (
+            palette::Role::TargetPillFg.color(),
+            palette::surface_colors(palette::Surface::TargetPillLocal, false).fill
+        ),
+        "the pill's icon paints ink on the yellow local fill"
     );
+    let word_cell = buffer[(
+        u16::try_from("  \u{f0118}   ".chars().count() + 2).unwrap(),
+        1,
+    )]
+        .clone();
     assert_eq!(
-        buffer[(u16::try_from(bracket_at + 2).unwrap(), 1)].fg,
-        palette::Role::TextMetadata.color(),
-        "the host brackets paint foam"
+        (word_cell.symbol().to_string(), word_cell.bg),
+        (
+            "P".to_string(),
+            palette::surface_colors(palette::Surface::QueueOnlyPlaybackPanel, false).fill
+        ),
+        "the status word outside the pill keeps the panel fill"
     );
+}
+
+/// The target pill carries the host name only while a remote host owns
+/// playback: `  󰄙 Living Room  ` on the green fill. The whole pill is the
+/// F3 sessions shortcut's click target; a click elsewhere on the header
+/// row resolves nothing.
+#[test]
+fn the_target_pill_carries_the_remote_host_and_opens_sessions_on_click() {
+    let mut panel = QueuePlaybackPanel::new();
+    panel.set_header(NowPlayingStatus::Playing, "Living Room".into(), true);
+    panel.transport.use_nerd_fonts = true;
+    panel.set_transport_area(None);
+    let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
+    terminal
+        .draw(|frame| panel.view(frame, Rect::new(0, 0, 40, 8)))
+        .unwrap();
+    let row: String = (2..38)
+        .map(|x| terminal.backend().buffer()[(x, 1)].symbol().to_string())
+        .collect();
+    assert!(
+        row.starts_with("  \u{f0119} Living Room    PLAYING"),
+        "the remote pill carries the host on the green fill: {row}"
+    );
+    let icon_cell = terminal.backend().buffer()[(4, 1)].clone();
     assert_eq!(
-        buffer[(u16::try_from(bracket_at + 3).unwrap(), 1)].fg,
-        palette::Role::TextEmphasis.color(),
-        "the local host paints cream"
+        (icon_cell.fg, icon_cell.bg),
+        (
+            palette::Role::TargetPillFg.color(),
+            palette::surface_colors(palette::Surface::TargetPillRemote, false).fill
+        ),
+        "the pill's icon paints ink on the green remote fill"
+    );
+
+    // The whole pill is the F3 sessions shortcut's click target.
+    let pill = panel.target_pill_area_for_test();
+    let click = |column: u16, row: u16| {
+        Event::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column,
+            row,
+            modifiers: KeyModifiers::NONE,
+        })
+    };
+    assert!(
+        matches!(
+            panel.on(&click(pill.x + pill.width - 1, pill.y)),
+            Some(Msg::Shell(request)) if matches!(*request, ShellRequest::OpenSessions)
+        ),
+        "a click on the pill's last cell opens Sessions"
+    );
+    assert!(
+        panel.on(&click(pill.x + pill.width, pill.y)).is_none(),
+        "a click just outside the pill resolves nothing"
     );
 }

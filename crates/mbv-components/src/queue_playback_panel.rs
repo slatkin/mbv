@@ -31,12 +31,12 @@ use mbv_render::arrangements::chrome::QUEUE_TRANSPORT_ROWS;
 use mbv_render::components::chrome_player::TransportAvailability;
 use mbv_render::components::widgets::queue_panel_inset;
 use mbv_render::{
-    HeaderTitle, PlaybackRenderContext, remote_state_icon, render_header_title, render_player_panel,
+    HeaderTitle, PlaybackRenderContext, render_header_title, render_player_panel, target_pill_icon,
 };
 use mbv_theme as palette;
 use mbv_ui_model::playback_target::NowPlayingStatus;
 use mbv_ui_msg::UserEvent;
-use mbv_ui_msg::{Msg, PlaybackRequest};
+use mbv_ui_msg::{Msg, PlaybackRequest, ShellRequest};
 
 /// The queue-column transport's surface: the fixed chrome band the queue
 /// playback panel paints in every queue-visible layout (the former
@@ -70,6 +70,9 @@ pub struct QueuePlaybackPanel {
     /// Panel-local marquee state (the title row's scrolling title).
     marquee_text: String,
     marquee_started_at: Instant,
+    /// The target pill's painted rect, retained from the last header paint:
+    /// the whole pill is the F3 sessions shortcut's click target.
+    target_pill_area: Rect,
     props: tuirealm::props::Props,
 }
 
@@ -101,6 +104,7 @@ impl QueuePlaybackPanel {
             seekbar_area: Rect::default(),
             marquee_text: String::new(),
             marquee_started_at: Instant::now(),
+            target_pill_area: Rect::default(),
             props: tuirealm::props::Props::default(),
         }
     }
@@ -164,9 +168,24 @@ impl QueuePlaybackPanel {
         self.transport.title_parts.clone()
     }
 
+    /// Test-only: the retained target-pill click rect.
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn target_pill_area_for_test(&self) -> Rect {
+        self.target_pill_area
+    }
+
     fn mouse(&self, event: MouseEvent) -> Option<Msg> {
         let point = (event.column, event.row).into();
         match event.kind {
+            // The whole target pill is the F3 sessions shortcut's click
+            // target (the header row paints above the transport, so its
+            // check leads).
+            MouseEventKind::Down(MouseButton::Left)
+                if self.target_pill_area.width > 0 && self.target_pill_area.contains(point) =>
+            {
+                Some(Msg::Shell(Box::new(ShellRequest::OpenSessions)))
+            }
             MouseEventKind::Down(MouseButton::Left) if self.play_pause_area.contains(point) => {
                 Some(Msg::Playback(PlaybackRequest::TogglePlayPause))
             }
@@ -215,11 +234,13 @@ impl Component for QueuePlaybackPanel {
             height: 1,
             ..queue_panel_inset(area)
         };
-        // The header row always paints the status brand row — the target
-        // icon, the bracketed host, the status word — and carries the
-        // now-playing title in the remaining space while the header is the
-        // title's home (the `Header` site); the artwork site carries the
-        // title on the overlay.
+        // The header row always paints the status brand part — the target
+        // pill, the status word — and carries the now-playing title in the
+        // remaining space while the header is the title's home (the `Header`
+        // site); the artwork site carries the title on the overlay. The
+        // pill's painted rect is retained as the F3 sessions shortcut's
+        // click target.
+        let mut target_pill_area = Rect::default();
         render_header_title(
             frame,
             header,
@@ -233,13 +254,15 @@ impl Component for QueuePlaybackPanel {
                 marquee_text: &mut self.marquee_text,
                 marquee_started_at: &mut self.marquee_started_at,
                 panel: TRANSPORT_SURFACE,
-                icon: remote_state_icon(self.transport.use_nerd_fonts, self.host_is_remote),
+                icon: target_pill_icon(self.transport.use_nerd_fonts, self.host_is_remote),
                 title_site: self.transport.title_site,
                 status: self.status,
                 host: &self.host,
                 host_is_remote: self.host_is_remote,
             },
+            &mut target_pill_area,
         );
+        self.target_pill_area = target_pill_area;
         // While idle — or whenever the shell hands no transport rect — the
         // slot and transport rows are already collapsed (task 3.6); the
         // panel paints nothing else and its hit geometry stays cleared.

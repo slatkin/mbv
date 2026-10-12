@@ -56,6 +56,9 @@ pub enum Role {
     AccentAudiobookshelf,
     PillSelectedFg,
     PillOverflowFg,
+    // The queue header's playback-target pill foreground: ink text and icon
+    // on the pill's yellow (local) or green (remote) fill.
+    TargetPillFg,
 }
 
 impl Role {
@@ -86,7 +89,7 @@ impl Role {
                 Slot::Orange
             }
             Role::TextDetailMeta => Slot::FgFaint,
-            Role::SelectedRowFg | Role::PillSelectedFg => Slot::BgDim,
+            Role::SelectedRowFg | Role::PillSelectedFg | Role::TargetPillFg => Slot::BgDim,
             Role::SelectedRowProgressFg => Slot::Bg1,
             Role::StatusError => Slot::Red,
             Role::StatusAvailable => Slot::GreenDeep,

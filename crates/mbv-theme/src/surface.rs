@@ -68,6 +68,12 @@ declare_surfaces!(
     // pill's selected blue, so it is its own row rather than a variant of
     // `PillChipSelected`.
     QueueScopePillSelected,
+    // The queue header's playback-target pill: yellow while playback is
+    // local, green while a remote host owns it (`surface_table` rows). The
+    // connection state picks the row, not panel focus, so both fills are
+    // fixed in both focus states.
+    TargetPillLocal,
+    TargetPillRemote,
     PillRowGap,
     // --- fills that replaced roles (design D5): one concept takes one
     // identity, so the selection bar, the fixed list stripes and the former

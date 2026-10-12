@@ -14,16 +14,16 @@ use unicode_width::UnicodeWidthStr;
 
 /// The header row's playback-target icon: the connected-remote glyph while a
 /// remote host owns playback, the offline glyph otherwise — the same
-/// nerd-font/fallback pair the queue footer's remote pill painted — always
-/// yellow.
+/// nerd-font/fallback pair the queue footer's remote pill painted. The icon
+/// paints inside the header's target pill (yellow while local, green while
+/// remote) in `TargetPillFg` ink.
 #[must_use]
-pub fn remote_state_icon(use_nerd_fonts: bool, host_is_remote: bool) -> (&'static str, Color) {
-    let icon = match (use_nerd_fonts, host_is_remote) {
+pub fn target_pill_icon(use_nerd_fonts: bool, host_is_remote: bool) -> &'static str {
+    match (use_nerd_fonts, host_is_remote) {
         (false, _) => "\u{1F5A7}",
         (true, true) => "\u{f0119}",
         (true, false) => "\u{f0118}",
-    };
-    (icon, palette::Role::TextFocusAccent.color())
+    }
 }
 
 /// The queue header row's facts: everything the header painter needs besides
@@ -38,29 +38,61 @@ pub struct HeaderTitle<'a> {
     pub marquee_text: &'a mut String,
     pub marquee_started_at: &'a mut std::time::Instant,
     pub panel: palette::Surface,
-    /// The playback-target icon (`remote_state_icon`), yellow.
-    pub icon: (&'static str, Color),
+    /// The playback-target icon glyph (`target_pill_icon`), painted in ink
+    /// inside the target pill.
+    pub icon: &'static str,
     pub title_site: NowPlayingTitleSite,
     /// The now-playing status, painted as its status word
     /// (`header_status_word`) in its semantic colour (`status_color`).
     pub status: NowPlayingStatus,
     /// The playback target's host label and whether it names a remote
-    /// target; every header row paints it bracketed
-    /// (`PlaybackHostRemoteFg` when remote, cream when local).
+    /// target. The remote flag picks the target pill's fill (yellow local,
+    /// green remote) and its icon; while remote, the host name paints
+    /// inside the pill. A local target paints the icon alone.
     pub host: &'a str,
     pub host_is_remote: bool,
 }
 
-/// The queue header row: the playback-target icon, the bracketed host, and
-/// the bold status word left-anchored — `󰄘 [host] PLAYING` — with the
-/// now-playing title riding the remaining space while the header is the
-/// title's home (the `Header` site): a two-part title keeps its
-/// context-left/title-right split, a lone title's marquee takes the whole
-/// remaining zone. The artwork site carries the title on the overlay, so
-/// that row paints the status part alone.
-pub fn render_header_title(frame: &mut Frame, row: Rect, header: &mut HeaderTitle<'_>) {
+/// The queue header row: the playback-target pill left-anchored — two cells
+/// of pill fill, the target icon in ink, and while a remote host owns
+/// playback one space and the host name, then two more fill cells (yellow
+/// while local, green while remote) — one space, and the bold status word:
+/// ` 󰄙 host  PLAYING`. With the now-playing title riding (the `Header`
+/// title site: no artwork slot or glyphs the overlay cannot render), a
+/// two-part title keeps its context-left/title-right split and a lone
+/// title's marquee takes the whole remaining zone. The artwork site carries
+/// the title on the overlay, so that row paints the status part alone.
+/// Fills `pill_area` with the pill's painted rect (clamped to the row), the
+/// click target for the F3 sessions shortcut; empty when the row is
+/// degenerate.
+pub fn render_header_title(
+    frame: &mut Frame,
+    row: Rect,
+    header: &mut HeaderTitle<'_>,
+    pill_area: &mut Rect,
+) {
+    *pill_area = Rect::default();
+    if row.width == 0 || row.height == 0 {
+        return;
+    }
     let panel_bg = palette::surface_colors(header.panel, false).fill;
-    let mut spans = status_brand_spans(header, panel_bg);
+    let pill_spans = target_pill_spans(header);
+    let pill_w: usize = pill_spans.iter().map(|span| span.content.width()).sum();
+    *pill_area = Rect {
+        x: row.x,
+        y: row.y,
+        width: u16::try_from(pill_w).unwrap_or(u16::MAX).min(row.width),
+        height: 1,
+    };
+    let mut spans = pill_spans;
+    spans.push(Span::styled(" ", Style::default().bg(panel_bg)));
+    spans.push(Span::styled(
+        header_status_word(header.status).to_string(),
+        Style::default()
+            .fg(status_color(header.status))
+            .bg(panel_bg)
+            .add_modifier(Modifier::BOLD),
+    ));
     if header.title_site == NowPlayingTitleSite::Header
         && let Some(title_text) = header.title
     {
@@ -73,42 +105,27 @@ pub fn render_header_title(frame: &mut Frame, row: Rect, header: &mut HeaderTitl
     );
 }
 
-/// The status part every header row paints: one leading indent cell, the
-/// playback-target icon (yellow), one space, the bracketed host (foam
-/// brackets, the host mauve when remote / cream when local), one space, and
-/// the bold status word in its semantic colour.
-fn status_brand_spans(header: &HeaderTitle<'_>, panel_bg: Color) -> Vec<Span<'static>> {
-    let (icon, icon_fg) = header.icon;
-    let bg = Style::default().bg(panel_bg);
+/// The target pill's spans: two fill cells, the target icon in
+/// `TargetPillFg` ink, and while a remote host owns playback one space and
+/// the host name, then two more fill cells — yellow `TargetPillLocal` while
+/// local, green `TargetPillRemote` while remote.
+fn target_pill_spans(header: &HeaderTitle<'_>) -> Vec<Span<'static>> {
+    let pill_fill = if header.host_is_remote {
+        palette::surface_colors(palette::Surface::TargetPillRemote, false).fill
+    } else {
+        palette::surface_colors(palette::Surface::TargetPillLocal, false).fill
+    };
+    let pill = Style::default()
+        .fg(palette::Role::TargetPillFg.color())
+        .bg(pill_fill);
     let mut spans = vec![
-        Span::styled(" ", bg),
-        Span::styled(icon.to_string(), Style::default().fg(icon_fg).bg(panel_bg)),
+        Span::styled("  ", pill),
+        Span::styled(header.icon.to_string(), pill),
     ];
-    if !header.host.is_empty() {
-        let host_fg = if header.host_is_remote {
-            palette::Role::PlaybackHostRemoteFg.color()
-        } else {
-            palette::Role::TextEmphasis.color()
-        };
-        let foam = Style::default()
-            .fg(palette::Role::TextMetadata.color())
-            .bg(panel_bg);
-        spans.push(Span::styled(" ", bg));
-        spans.push(Span::styled("[", foam));
-        spans.push(Span::styled(
-            header.host.to_string(),
-            Style::default().fg(host_fg).bg(panel_bg),
-        ));
-        spans.push(Span::styled("]", foam));
+    if header.host_is_remote && !header.host.is_empty() {
+        spans.push(Span::styled(format!(" {} ", header.host), pill));
     }
-    spans.push(Span::styled(" ", bg));
-    spans.push(Span::styled(
-        header_status_word(header.status).to_string(),
-        Style::default()
-            .fg(status_color(header.status))
-            .bg(panel_bg)
-            .add_modifier(Modifier::BOLD),
-    ));
+    spans.push(Span::styled("  ", pill));
     spans
 }
 

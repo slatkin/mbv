@@ -74,8 +74,9 @@ pub(super) const fn slots(surface: Surface) -> (Slot, Slot) {
         Surface::ArtworkLoadingPlaceholder => (Slot::FgMuted, Slot::FgMuted),
         // --- fills that replaced roles (design D5) ---
         // The selection bar (media lists, tree browser, playlists, the context
-        // menu's selected row).
-        Surface::SelectedRow => (Slot::Green, Slot::Green),
+        // menu's selected row) and the queue header's playback-target pill
+        // while a remote host owns playback (green).
+        Surface::SelectedRow | Surface::TargetPillRemote => (Slot::Green, Slot::Green),
         // The secondary zebra stripe shared by the playlists, settings and
         // sessions lists, and the modal frame background.
         Surface::ListStripe | Surface::PopupFrame => (Slot::Bg2, Slot::Bg2),
@@ -87,7 +88,10 @@ pub(super) const fn slots(surface: Surface) -> (Slot, Slot) {
         // "Direct remote control" — its own row, not the library pill's blue).
         Surface::PillChipSelected | Surface::HintChip0 => (Slot::Blue, Slot::Blue),
         Surface::QueueScopePillSelected => (Slot::Aqua, Slot::Aqua),
-        Surface::HintChip1 => (Slot::Yellow, Slot::Yellow),
+        // The queue header's playback-target pill while playback is local
+        // (yellow): the connection state picks the row, not panel focus, so
+        // both pill fills are fixed chrome in both focus states.
+        Surface::TargetPillLocal | Surface::HintChip1 => (Slot::Yellow, Slot::Yellow),
         Surface::HintChip2 => (Slot::Orange, Slot::Orange),
     }
 }
