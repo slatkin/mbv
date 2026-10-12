@@ -264,17 +264,12 @@ while pinned. Outside the pinned panel this requirement SHALL NOT apply.
 
 ### Requirement: Two-panel layout hides an empty queue column
 
-At 80+ columns, while the Panel mode is `both`, the displayed queue has no slots, and no remote target (an attached Emby session or an out-of-process owner over ctrl) owns playback, the window SHALL render exactly as library-only: no queue column and no queue boundary, the Library playback panel shown, and the library at full width. The Panel mode SHALL stay `both`. When the displayed queue gains a slot, the two-panel layout SHALL return without user action. While a remote target owns playback, an empty displayed queue SHALL NOT hide the queue column: it is the remote control surface (the target pill, the transport, and the remote queue's own empty state). Queue-only and the mini-view queue panel SHALL keep the empty-queue placeholder.
+At 80+ columns, while the Panel mode is `both` and the displayed queue has no slots, the window SHALL render exactly as library-only: no queue column and no queue boundary, the Library playback panel shown, and the library at full width. The Panel mode SHALL stay `both`. When the displayed queue gains a slot, the two-panel layout SHALL return without user action. Queue-only and the mini-view queue panel SHALL keep the empty-queue placeholder.
 
 #### Scenario: Empty queue renders library-only
 
-- **WHEN** the Panel mode is `both` at 80+ columns, the displayed queue is empty, and the playback slot is local
+- **WHEN** the Panel mode is `both` at 80+ columns and the displayed queue is empty
 - **THEN** the library SHALL span the full window width, the Library playback panel SHALL render, and the queue column SHALL NOT render
-
-#### Scenario: Remote target keeps the empty queue column
-
-- **WHEN** the Panel mode is `both` at 80+ columns, the displayed queue is empty, and a remote target (an attached Emby session or an out-of-process owner over ctrl) owns playback
-- **THEN** the two-panel layout SHALL render with the queue column, showing the displayed queue's empty state
 
 #### Scenario: Queue column returns when the queue fills
 

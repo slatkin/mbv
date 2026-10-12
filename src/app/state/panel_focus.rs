@@ -1,4 +1,4 @@
-use crate::app::{App, PanelFocus, PanelMode, RemoteSlotState};
+use crate::app::{App, PanelFocus, PanelMode};
 use std::time::Instant;
 
 /// How the displayed panels are presented, for the appearance-focus decision.
@@ -40,16 +40,9 @@ impl App {
     /// empty-queue placeholder, so only the wide two-panel layout hides.
     /// The stored `panel_mode` is never written: the `x` cycle reads the
     /// stored mode and still advances `both -> queue-only` while hidden.
-    /// A remote target (an attached Emby session or an out-of-process
-    /// owner over ctrl) never hides the column: it is the remote control
-    /// surface — the target pill, the transport, and the remote queue's own
-    /// empty state — and hiding it while the connection held stranded the
-    /// wide layout in library-only, reading as a stuck mini view
-    /// (2026-10-12).
     pub(in crate::app) fn queue_column_hidden_empty(&self) -> bool {
         !self.is_mini_view()
             && self.panel_mode == PanelMode::Both
-            && self.remote_slot_state() == RemoteSlotState::LocalDaemon
             && self.displayed_queue().slots().is_empty()
     }
 

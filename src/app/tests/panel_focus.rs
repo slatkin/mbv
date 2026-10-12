@@ -304,41 +304,6 @@ fn empty_displayed_queue_derives_library_only_while_stored_mode_stays_both() {
     assert_eq!(app.panel_mode, PanelMode::Both);
 }
 
-/// Contract: "Empty queue renders library-only" (change
-/// `hide-empty-queue-column`, D1) — only while the playback slot is local.
-/// While a remote target owns playback (an attached Emby session or an
-/// out-of-process owner over ctrl) the empty displayed queue keeps the
-/// queue column: the column is the remote control surface — the target
-/// pill, the transport, the remote queue's own empty state — and hiding it
-/// stranded the wide layout in library-only for as long as the connection
-/// held, reading as a stuck mini view (2026-10-12 regression).
-#[test]
-fn a_remote_target_keeps_the_empty_queue_column_visible() {
-    let mut app = make_app_stub();
-    app.terminal_width = 100;
-    app.panel_mode = PanelMode::Both;
-    assert_eq!(
-        app.effective_panel_mode(),
-        PanelMode::LibraryOnly,
-        "the local empty queue still hides the column"
-    );
-
-    app.connected_session_id = Some("session-1".into());
-    assert_eq!(
-        app.effective_panel_mode(),
-        PanelMode::Both,
-        "an attached remote session keeps the column"
-    );
-
-    app.connected_session_id = None;
-    app.remote_view = Some(crate::app::state::queue_view::QueueView::default());
-    assert_eq!(
-        app.effective_panel_mode(),
-        PanelMode::Both,
-        "a direct-remote owner keeps the column"
-    );
-}
-
 /// Contract: "Cycle continues from both" (change `hide-empty-queue-column`,
 /// D1). With the queue column hidden because the displayed queue is empty,
 /// the `x` cycle still reads the stored `both` and advances to queue-only.
