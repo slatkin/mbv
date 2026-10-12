@@ -53,10 +53,10 @@ pub struct HeaderTitle<'a> {
     pub host_is_remote: bool,
 }
 
-/// The queue header row: the playback-target pill left-anchored — two cells
-/// of pill fill, the target icon in ink, and while a remote host owns
-/// playback one space and the host name, then two more fill cells (yellow
-/// while local, green while remote) — one space, and the bold status word:
+/// The queue header row: the playback-target pill left-anchored — one fill
+/// cell, the target icon in ink, and while a remote host owns playback one
+/// space and the host name, then one more fill cell (yellow while local,
+/// green while remote) — one space, and the bold status word:
 /// ` 󰄙 host  PLAYING`. With the now-playing title riding (the `Header`
 /// title site: no artwork slot or glyphs the overlay cannot render), a
 /// two-part title keeps its context-left/title-right split and a lone
@@ -105,9 +105,9 @@ pub fn render_header_title(
     );
 }
 
-/// The target pill's spans: two fill cells, the target icon in
+/// The target pill's spans: one fill cell, the target icon in
 /// `TargetPillFg` ink, and while a remote host owns playback one space and
-/// the host name, then two more fill cells — yellow `TargetPillLocal` while
+/// the host name, then one more fill cell — yellow `TargetPillLocal` while
 /// local, green `TargetPillRemote` while remote.
 fn target_pill_spans(header: &HeaderTitle<'_>) -> Vec<Span<'static>> {
     let pill_fill = if header.host_is_remote {
@@ -119,13 +119,13 @@ fn target_pill_spans(header: &HeaderTitle<'_>) -> Vec<Span<'static>> {
         .fg(palette::Role::TargetPillFg.color())
         .bg(pill_fill);
     let mut spans = vec![
-        Span::styled("  ", pill),
+        Span::styled(" ", pill),
         Span::styled(header.icon.to_string(), pill),
     ];
     if header.host_is_remote && !header.host.is_empty() {
         spans.push(Span::styled(format!(" {} ", header.host), pill));
     }
-    spans.push(Span::styled("  ", pill));
+    spans.push(Span::styled(" ", pill));
     spans
 }
 

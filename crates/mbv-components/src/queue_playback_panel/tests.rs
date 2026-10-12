@@ -94,7 +94,7 @@ fn header_row_paints_the_status_brand_and_the_header_site_title() {
         .unwrap();
     let row = header_row(&terminal);
     assert!(
-        row.starts_with("  \u{f0118}   PLAYING "),
+        row.starts_with(" \u{f0118}  PLAYING "),
         "the header paints the local pill and status word, left-anchored: {row}"
     );
     assert!(
@@ -113,7 +113,7 @@ fn header_row_paints_the_status_brand_and_the_header_site_title() {
         .unwrap();
     let row = header_row(&terminal);
     assert!(
-        row.starts_with("  \u{f0118}   PLAYING "),
+        row.starts_with(" \u{f0118}  PLAYING "),
         "the Artwork site paints the status part, left-anchored: {row}"
     );
     assert!(
@@ -121,12 +121,12 @@ fn header_row_paints_the_status_brand_and_the_header_site_title() {
         "the title lives on the artwork alone: {row}"
     );
 
-    // The pill paints ink-on-yellow: the icon cell (row char index 2, the
-    // pill's third cell) carries the TargetPillFg foreground on the yellow
+    // The pill paints ink-on-yellow: the icon cell (row char index 1, the
+    // pill's second cell) carries the TargetPillFg foreground on the yellow
     // fill; the status word outside the pill keeps the panel fill (row char
     // index i is buffer column i + 2: the header row is inset two columns).
     let buffer = terminal.backend().buffer();
-    let icon_cell = buffer[(4, 1)].clone();
+    let icon_cell = buffer[(3, 1)].clone();
     assert_eq!(
         (icon_cell.fg, icon_cell.bg),
         (
@@ -136,7 +136,7 @@ fn header_row_paints_the_status_brand_and_the_header_site_title() {
         "the pill's icon paints ink on the yellow local fill"
     );
     let word_cell = buffer[(
-        u16::try_from("  \u{f0118}   ".chars().count() + 2).unwrap(),
+        u16::try_from(" \u{f0118}  ".chars().count() + 2).unwrap(),
         1,
     )]
         .clone();
@@ -151,7 +151,7 @@ fn header_row_paints_the_status_brand_and_the_header_site_title() {
 }
 
 /// The target pill carries the host name only while a remote host owns
-/// playback: `  󰄙 Living Room  ` on the green fill. The whole pill is the
+/// playback: ` 󰄙 Living Room ` on the green fill. The whole pill is the
 /// F3 sessions shortcut's click target; a click elsewhere on the header
 /// row resolves nothing.
 #[test]
@@ -168,10 +168,10 @@ fn the_target_pill_carries_the_remote_host_and_opens_sessions_on_click() {
         .map(|x| terminal.backend().buffer()[(x, 1)].symbol().to_string())
         .collect();
     assert!(
-        row.starts_with("  \u{f0119} Living Room    PLAYING"),
+        row.starts_with(" \u{f0119} Living Room   PLAYING"),
         "the remote pill carries the host on the green fill: {row}"
     );
-    let icon_cell = terminal.backend().buffer()[(4, 1)].clone();
+    let icon_cell = terminal.backend().buffer()[(3, 1)].clone();
     assert_eq!(
         (icon_cell.fg, icon_cell.bg),
         (
