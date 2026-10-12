@@ -385,6 +385,7 @@ mod tests {
     use crate::app::tests::render_fixtures::make_music_group_app;
     use mbv_emby::{EmbyClient, EmbyCredentialExchange};
     use std::sync::{Arc, Mutex};
+    use std::time::Instant;
 
     /// A configured-but-unroutable `EmbyClient` (design mirrors the retired
     /// `push_music_workspace_fetches_selected_album_tracks` test): the
@@ -583,6 +584,21 @@ mod tests {
                 .count(),
             1,
         );
+    }
+
+    /// Task 2.2 (idle-gate-detail-prefetch D1): the sync-pass push is an
+    /// album-track fetch site. While navigation is recent, it starts no
+    /// album-track request for the selected album.
+    #[test]
+    fn music_push_defers_album_track_fetch_while_navigating() {
+        let mut app = make_music_group_app();
+        app.emby_runtime = ready_emby_runtime();
+        app.last_nav_at = Instant::now();
+        let mut model = Model::new(app);
+
+        model.push_music_workspace_content();
+
+        assert!(model.app.album_tracks_loading.is_empty());
     }
 }
 
