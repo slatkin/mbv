@@ -114,13 +114,16 @@ impl App {
         // every Queue row's menu offers it, appended last after the Emby
         // entries, and a Feed or Audiobookshelf Queue row gets a menu with
         // only the toggle. The entry hides entirely when the owner lacks the
-        // `play-order` ctrl capability.
+        // `play-order` ctrl capability. The current order is read from the
+        // playing queue — the same queue the footer reads and the queue the
+        // command targets — so the label is always the opposite of the mode
+        // the command will change, even when another queue scope is viewed.
         if matches!(
             self.effective_panel_focus(),
             mbv_ui_model::settings::PanelFocus::Queue
         ) && self.player.supports_play_order()
         {
-            Self::push_play_order_toggle(&mut entries, self.displayed_queue().play_order());
+            Self::push_play_order_toggle(&mut entries, self.playback_queue().play_order());
         }
 
         if entries.iter().all(|entry| entry.action.is_none()) {
