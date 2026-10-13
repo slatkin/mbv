@@ -3,10 +3,10 @@ use rstest::rstest;
 use crate::tracks::{TrackInfo, parse_tracks, select_tracks};
 use crate::{
     AdvanceDecisionInput, CompletedMedia, FinishReason, NextUp, NextUpFire, SubtitlePrefs,
-    active_item_state, advance_decision, queue_next_up_decision, resolve_jump_target,
-    seek_decision, standalone_next_up_decision, volume_decision,
+    active_item_state, advance_decision, advance_next_index, queue_next_up_decision,
+    resolve_jump_target, seek_decision, standalone_next_up_decision, volume_decision,
 };
-use mbv_ctrl::player::SubtitleChoice;
+use mbv_ctrl::player::{Advance, SubtitleChoice};
 
 type AudioTracks = Vec<(i64, String)>;
 type SubtitleTracks = Vec<(i64, String, bool)>;
@@ -154,6 +154,29 @@ fn volume_decision_clamps_and_maps_sqrt_curve(
     assert_eq!(volume_decision(requested, maximum), expected);
 }
 
+/// The contract: the stored advance decides the next index (design D2,
+/// queue-shuffle-play-order) — Sequential takes the neighbor, a pick takes
+/// the picked slot's index (falling back to the neighbor when the slot is
+/// gone), and End has no next index.
+#[rstest]
+#[case::sequential_takes_the_neighbor(Advance::Sequential, 1, None, Some(2))]
+#[case::pick_takes_the_picked_slot_index(Advance::To(picked_slot()), 1, Some(2), Some(2))]
+#[case::gone_pick_falls_back_to_the_neighbor(Advance::To(picked_slot()), 1, None, Some(2))]
+#[case::end_has_no_next_index(Advance::End, 1, Some(2), None)]
+fn advance_resolves_the_next_index(
+    #[case] advance: Advance,
+    #[case] current_idx: usize,
+    #[case] picked_index: Option<usize>,
+    #[case] expected: Option<usize>,
+) {
+    let resolve = |slot: mbv_queue::QueueSlotId| picked_index.filter(|_| slot == picked_slot());
+    assert_eq!(advance_next_index(advance, current_idx, resolve), expected);
+}
+
+fn picked_slot() -> mbv_queue::QueueSlotId {
+    mbv_queue::QueueSlotId::from_raw(9)
+}
+
 #[rstest]
 #[case::threshold(NextUp::Idle, 7_000_000_000, 6_500_000_000)]
 #[case::armed(NextUp::Armed, 7_000_000_000, 6_500_000_000)]
@@ -163,7 +186,7 @@ fn queue_next_up_fires_at_threshold(
     #[case] ticks: i64,
 ) {
     assert_eq!(
-        queue_next_up_decision(state, 1, 3, true, true, runtime, ticks).fire,
+        queue_next_up_decision(state, Some(2), true, true, runtime, ticks).fire,
         Some(NextUpFire::Queue(2)),
     );
 }
@@ -206,10 +229,9 @@ fn standalone_next_up_obeys_state_and_series_gates(
 }
 
 #[rstest]
-#[case::no_next_episode(
+#[case::no_next_index(
     NextUp::Idle,
-    0,
-    1,
+    None,
     true,
     false,
     7_000_000_000,
@@ -218,8 +240,7 @@ fn standalone_next_up_obeys_state_and_series_gates(
 )]
 #[case::next_item_not_episode(
     NextUp::Idle,
-    0,
-    2,
+    Some(1),
     true,
     false,
     7_000_000_000,
@@ -228,8 +249,7 @@ fn standalone_next_up_obeys_state_and_series_gates(
 )]
 #[case::runtime_too_short(
     NextUp::Idle,
-    0,
-    2,
+    Some(1),
     true,
     true,
     5_999_999_999,
@@ -238,20 +258,27 @@ fn standalone_next_up_obeys_state_and_series_gates(
 )]
 #[case::insufficient_remaining(
     NextUp::Idle,
-    0,
-    2,
+    Some(1),
     true,
     true,
     7_000_000_000,
     6_900_000_000,
     crate::NextUpDecision::default()
 )]
-#[case::resets_fired_below_window(NextUp::Fired, 0, 2, true, true, 7_000_000_000, 6_000_000_000, crate::NextUpDecision { reset: true, arm: false, fire: None })]
-#[case::arms_near_start(NextUp::Idle, 0, 2, true, true, 7_000_000_000, 1, crate::NextUpDecision { arm: true, ..Default::default() })]
+#[case::resets_fired_below_window(NextUp::Fired, Some(1), true, true, 7_000_000_000, 6_000_000_000, crate::NextUpDecision { reset: true, arm: false, fire: None })]
+#[case::arms_near_start(NextUp::Idle, Some(1), true, true, 7_000_000_000, 1, crate::NextUpDecision { arm: true, ..Default::default() })]
+#[case::fires_at_a_picked_index_that_is_not_the_neighbor(
+    NextUp::Idle,
+    Some(3),
+    true,
+    true,
+    7_000_000_000,
+    6_500_000_000,
+    crate::NextUpDecision { fire: Some(NextUpFire::Queue(3)), ..Default::default() }
+)]
 fn queue_next_up_preserves_guards_and_reset(
     #[case] state: NextUp,
-    #[case] current_idx: usize,
-    #[case] queue_len: usize,
+    #[case] next_idx: Option<usize>,
     #[case] current_is_episode: bool,
     #[case] next_is_episode: bool,
     #[case] runtime: i64,
@@ -261,8 +288,7 @@ fn queue_next_up_preserves_guards_and_reset(
     assert_eq!(
         queue_next_up_decision(
             state,
-            current_idx,
-            queue_len,
+            next_idx,
             current_is_episode,
             next_is_episode,
             runtime,

@@ -1,6 +1,7 @@
 use super::super::{
     Mpv, NextUpFire, PlaybackOrigin, PlaybackRun, PlayerEvent, QueueItem, QueueSlotId,
-    TICKS_PER_SECOND, handle_intro, queue_next_up_decision, standalone_next_up_decision,
+    TICKS_PER_SECOND, advance_next_index, handle_intro, queue_next_up_decision,
+    standalone_next_up_decision,
 };
 
 impl PlaybackRun {
@@ -27,13 +28,19 @@ impl PlaybackRun {
     /// 60 s before end. Minimum episode: 10 min. Minimum remaining when shown: 20 s.
     fn maybe_fire_queue_next_up(&mut self, ticks: i64) {
         let runtime = self.status.lock().unwrap().runtime_ticks;
+        // The stored advance decides the next slot (design D2); a picked slot
+        // that is gone, or an index past the end, means there is no Next Up.
+        let next_idx = advance_next_index(self.upcoming, self.current_idx, |slot_id| {
+            self.queue.slot_index(slot_id)
+        })
+        .filter(|next_idx| *next_idx < self.queue_len());
+        let next_is_episode = next_idx
+            .is_some_and(|next_idx| self.item_at(next_idx).is_some_and(QueueItem::is_tv_episode));
         let decision = queue_next_up_decision(
             self.queue_next_up,
-            self.current_idx,
-            self.queue_len(),
+            next_idx,
             self.active_item().is_some_and(QueueItem::is_tv_episode),
-            self.item_at(self.current_idx + 1)
-                .is_some_and(QueueItem::is_tv_episode),
+            next_is_episode,
             runtime,
             ticks,
         );
@@ -45,7 +52,7 @@ impl PlaybackRun {
             let _ = self.event_tx.send(PlayerEvent::QueueNextUp { next_idx });
         } else if decision.arm {
             self.queue_next_up.arm();
-            tracing::info!(name: "player.queue_next_up.armed", target: "player", index = self.current_idx + 1, "queue next-up armed");
+            tracing::info!(name: "player.queue_next_up.armed", target: "player", index = ?next_idx, "queue next-up armed");
         }
     }
 

@@ -390,6 +390,7 @@ impl WireCommand {
             | PlayerCommand::QueueRemove(_)
             | PlayerCommand::QueueMove(..)
             | PlayerCommand::JumpTo { .. }
+            | PlayerCommand::SetUpcoming(_)
             | PlayerCommand::LoadNew { .. }
             | PlayerCommand::SubmitQueue { .. } => Err(cmd),
         }

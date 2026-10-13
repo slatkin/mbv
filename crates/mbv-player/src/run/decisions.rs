@@ -1,4 +1,5 @@
 use super::{IntroState, NextUp};
+use mbv_ctrl::player::Advance;
 use mbv_ids::ItemId;
 use mbv_queue::{AudiobookshelfItem, QueueItem, QueueSlotId};
 
@@ -99,10 +100,26 @@ pub(crate) struct NextUpDecision {
     pub(crate) fire: Option<NextUpFire>,
 }
 
+/// Resolves the stored advance into the index of the slot the next advance
+/// plays (queue-shuffle-play-order design D2). `resolve_slot` looks up the
+/// picked slot's current index and returns `None` when that slot is gone from
+/// the queue. `None` means the advance behaves as the end of the queue does
+/// in Sequential.
+pub(crate) fn advance_next_index(
+    advance: Advance,
+    current_idx: usize,
+    resolve_slot: impl Fn(QueueSlotId) -> Option<usize>,
+) -> Option<usize> {
+    match advance {
+        Advance::Sequential => Some(current_idx + 1),
+        Advance::To(slot_id) => Some(resolve_slot(slot_id).unwrap_or(current_idx + 1)),
+        Advance::End => None,
+    }
+}
+
 pub(crate) fn queue_next_up_decision(
     state: NextUp,
-    current_idx: usize,
-    queue_len: usize,
+    next_idx: Option<usize>,
     current_is_episode: bool,
     next_is_episode: bool,
     runtime: i64,
@@ -112,7 +129,10 @@ pub(crate) fn queue_next_up_decision(
     const MIN_REMAIN: i64 = 20 * mbv_emby_model::TICKS_PER_SECOND;
     const WINDOW: i64 = 60 * mbv_emby_model::TICKS_PER_SECOND;
     const ARM_WINDOW: i64 = 5 * mbv_emby_model::TICKS_PER_SECOND;
-    if current_idx + 1 >= queue_len || !current_is_episode || !next_is_episode || runtime <= 0 {
+    let Some(next_idx) = next_idx else {
+        return NextUpDecision::default();
+    };
+    if !current_is_episode || !next_is_episode || runtime <= 0 {
         return NextUpDecision::default();
     }
     let show_at = runtime - WINDOW;
@@ -127,7 +147,7 @@ pub(crate) fn queue_next_up_decision(
     if runtime - ticks >= MIN_REMAIN && ticks >= show_at {
         return NextUpDecision {
             reset,
-            fire: Some(NextUpFire::Queue(current_idx + 1)),
+            fire: Some(NextUpFire::Queue(next_idx)),
             ..NextUpDecision::default()
         };
     }

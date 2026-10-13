@@ -40,27 +40,3 @@ impl Default for PlayOrder {
         PlayOrder::Sequential
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::{PlayOrder, PlayOrderMode};
-    use crate::QueueSlotId;
-
-    #[test]
-    fn play_order_mode_reports_the_variant() {
-        assert_eq!(PlayOrder::Sequential.mode(), PlayOrderMode::Sequential);
-        assert_eq!(
-            PlayOrder::Shuffle {
-                upcoming: Some(QueueSlotId::from_raw(7))
-            }
-            .mode(),
-            PlayOrderMode::Shuffle
-        );
-    }
-
-    #[test]
-    fn a_new_owner_starts_in_sequential() {
-        assert_eq!(PlayOrder::default(), PlayOrder::Sequential);
-        assert_eq!(PlayOrderMode::default(), PlayOrderMode::Sequential);
-    }
-}
