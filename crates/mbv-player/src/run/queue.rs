@@ -213,7 +213,7 @@ impl PlaybackRun {
     /// not the run's active one — see `divergent_entry`. Returning the raw
     /// position too lets a caller log it without a second IPC round-trip.
     pub(crate) fn mpv_divergent_entry(&self, mpv: &Mpv) -> (i64, Option<usize>) {
-        let pos = mpv.get_i64("playlist-pos").unwrap_or(-1);
+        let pos = mpv.get_property::<i64>("playlist-pos").unwrap_or(-1);
         if self.active_file {
             return (pos, None);
         }

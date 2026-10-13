@@ -4,7 +4,7 @@
 //! through libmpv into `mpv` command-line arguments with the same values. The
 //! child-process backend starts the child with this list.
 
-use std::io::{ErrorKind, Write};
+use std::io::ErrorKind;
 use std::os::unix::net::UnixStream;
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
@@ -37,7 +37,7 @@ pub(crate) struct StartRequest {
 
 /// The work one start request performs. Production starts the `mpv` program;
 /// tests substitute a stub, so no mpv process runs (design D9).
-pub(crate) type StartFn = Box<dyn Fn(StartRequest) -> Result<Child, MpvError> + Send + 'static>;
+pub(crate) type StartFn = Box<dyn Fn(StartRequest) -> Result<Started, MpvError> + Send + 'static>;
 
 /// The one long-lived child spawner, owned by the player controller.
 ///
@@ -50,7 +50,7 @@ pub(crate) type StartFn = Box<dyn Fn(StartRequest) -> Result<Child, MpvError> + 
 /// `pre_warm` and the on-demand start in `run_player_thread` both start their
 /// child through the same spawner (design D5).
 pub(crate) struct Spawner {
-    requests: mpsc::Sender<(StartRequest, mpsc::Sender<Result<Child, MpvError>>)>,
+    requests: mpsc::Sender<(StartRequest, mpsc::Sender<Result<Started, MpvError>>)>,
 }
 
 impl Spawner {
@@ -71,7 +71,7 @@ impl Spawner {
     /// test passes a stub; design D9).
     pub(crate) fn with_start(start: StartFn) -> Self {
         let (requests, receiver) =
-            mpsc::channel::<(StartRequest, mpsc::Sender<Result<Child, MpvError>>)>();
+            mpsc::channel::<(StartRequest, mpsc::Sender<Result<Started, MpvError>>)>();
         let _worker = thread::spawn(move || {
             while let Ok((request, reply)) = receiver.recv() {
                 let _ = reply.send(start(request));
@@ -86,7 +86,7 @@ impl Spawner {
     ///
     /// Returns `MpvError::Spawn` only when the spawner thread is gone; a start
     /// fault comes back from `start` as its own `MpvError`.
-    pub(crate) fn start(&self, request: StartRequest) -> Result<Child, MpvError> {
+    pub(crate) fn start(&self, request: StartRequest) -> Result<Started, MpvError> {
         let (reply_tx, reply_rx) = mpsc::channel();
         self.requests
             .send((request, reply_tx))
@@ -182,20 +182,13 @@ pub(crate) fn connect_with_retry(
     attempts: u32,
     interval: Duration,
 ) -> Result<UnixStream, MpvError> {
-    let attempts = attempts.max(1);
-    let mut attempt = 0;
-    loop {
-        match connect_once(socket_path) {
-            Ok(stream) => return Ok(stream),
-            Err(error) => {
-                attempt += 1;
-                if attempt >= attempts {
-                    return Err(error);
-                }
-                thread::sleep(interval);
-            }
+    for _ in 1..attempts {
+        if let Ok(stream) = connect_once(socket_path) {
+            return Ok(stream);
         }
+        thread::sleep(interval);
     }
+    connect_once(socket_path)
 }
 
 /// One connect attempt. A path that does not exist yet is `NotFound`, so the
@@ -217,8 +210,10 @@ fn connect_once(socket_path: &Path) -> Result<UnixStream, MpvError> {
 /// D5). One playback run owns one `Child`.
 pub(crate) struct Child {
     process: ProcessChild,
-    stream: UnixStream,
 }
+
+/// A started child and the connected IPC socket it serves.
+pub(crate) type Started = (Child, UnixStream);
 
 impl Child {
     /// Starts `program` with `args` and connects to the IPC socket it serves.
@@ -230,10 +225,10 @@ impl Child {
         socket_path: &Path,
         attempts: u32,
         interval: Duration,
-    ) -> Result<Self, MpvError> {
+    ) -> Result<Started, MpvError> {
         let mut process = start_process(program, args)?;
         match connect_with_retry(socket_path, attempts, interval) {
-            Ok(stream) => Ok(Self { process, stream }),
+            Ok(stream) => Ok((Self { process }, stream)),
             // `std::process::Child` has no `Drop`, so a failed connect must
             // reap the process itself. Otherwise mpv stays alive (it runs with
             // `--idle=yes`) or becomes a zombie (design D5).
@@ -243,22 +238,12 @@ impl Child {
             }
         }
     }
-
-    /// A second handle to the connected IPC socket, so the session can drive
-    /// the child while this `Child` keeps its own copy for the quit it sends
-    /// on drop (design D5). A duplicated descriptor shares the same socket, so
-    /// the two handles see the same byte stream.
-    pub(crate) fn try_clone_stream(&self) -> Result<UnixStream, MpvError> {
-        self.stream.try_clone().map_err(MpvError::Io)
-    }
 }
 
 impl Drop for Child {
+    /// Kills and reaps the process. The run loop already waited its own
+    /// shutdown grace period after it sent `quit` (design D5).
     fn drop(&mut self) {
-        // A best-effort quit lets mpv release the audio device and its socket
-        // before the kill below. The run loop already waited its own shutdown
-        // grace period, so this Drop does not wait (design D5).
-        let _ = writeln!(self.stream, r#"{{"command":["quit"]}}"#);
         reap(&mut self.process);
     }
 }

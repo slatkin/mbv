@@ -21,7 +21,7 @@ stop goes through the code below.
 - `Mpv` (`crates/mbv-player/src/mpv_session.rs`) owns the `Child` in its
   `_child` field. The session lives exactly as long as the run, so the child
   does too. `Child::drop` (`crates/mbv-player/src/mpv_session/spawn.rs`)
-  sends a best-effort async `quit`, then kills and reaps the process.
+  kills and reaps the process.
 - `start_process` (`mpv_session/spawn.rs`) sets `PR_SET_PDEATHSIG` to
   `SIGKILL` in `pre_exec`. The kernel sends `SIGKILL` to the child when the
   thread that started it ends. An Owner crash cannot leave an mpv child.
@@ -40,9 +40,8 @@ No known violation. Known limits:
 
 - `PR_SET_PDEATHSIG` is Linux-specific. On another platform the child relies
   on `Drop` alone.
-- `Child::drop` sends `quit` without waiting. It relies on its own kill and
-  reap, so the exit is not graceful when the run's shutdown grace period has
-  not already passed.
+- `Child::drop` kills and reaps without a `quit`. The exit is not graceful
+  when the run's shutdown grace period has not already passed.
 - The one-pre-warmed-instance rule is a convention in `submit.rs`, not a type.
   A later call site that clones a session or keeps the pre-warm would break
   it.

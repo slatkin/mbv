@@ -9,7 +9,10 @@ use crate::run::{is_clocked_audio_error, is_superseded_jump_end_file};
 fn decode_fixture(fixture: &str) -> Vec<MpvEvent> {
     fixture
         .lines()
-        .map(|line| MpvEvent::from_ipc_line(line).unwrap_or_else(|e| panic!("{e}: {line}")))
+        .map(|line| {
+            let value = serde_json::from_str(line).unwrap_or_else(|e| panic!("{e}: {line}"));
+            MpvEvent::from_ipc_value(&value).unwrap_or_else(|e| panic!("{e}: {line}"))
+        })
         .collect()
 }
 
@@ -63,7 +66,7 @@ fn s1_natural_end_is_eof() {
 }
 
 #[test]
-fn truncated_line_is_a_decode_error() {
-    let error = MpvEvent::from_ipc_line(r#"{"event":"property-change","name":"pa"#);
-    assert!(matches!(error, Err(DecodeError::NotJson(_))));
+fn non_object_line_is_a_decode_error() {
+    let error = MpvEvent::from_ipc_value(&serde_json::json!(7));
+    assert!(matches!(error, Err(DecodeError::NotAnObject)));
 }

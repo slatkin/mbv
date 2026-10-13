@@ -92,7 +92,7 @@ impl PlaybackRun {
         // which stranded the seekbar at 0:00 for an otherwise playing file.
         let mpv_runtime_ticks = adopted_runtime(
             self.status.lock().unwrap().runtime_ticks,
-            mpv.get_f64("duration").ok(),
+            mpv.get_property::<f64>("duration").ok(),
         );
         if let Some(runtime) = mpv_runtime_ticks {
             tracing::info!(

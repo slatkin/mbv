@@ -277,24 +277,26 @@ pub(super) fn auto_select_tracks(
 }
 
 pub(super) fn refresh_tracks(mpv: &Mpv, status: &Arc<Mutex<PlayerStatus>>) {
-    let count: i64 = match mpv.get_i64("track-list/count") {
+    let count: i64 = match mpv.get_property("track-list/count") {
         Ok(n) => n,
         Err(_) => return,
     };
     let tracks = (0..count)
         .map(|index| {
             let property = |name: &str| format!("track-list/{index}/{name}");
-            let kind = mpv.get_string(&property("type")).unwrap_or_default();
-            let id = mpv.get_i64(&property("id")).unwrap_or(index + 1);
-            let lang = mpv.get_string(&property("lang")).unwrap_or_default();
-            let title = mpv.get_string(&property("title")).unwrap_or_default();
-            let codec = mpv.get_string(&property("codec")).unwrap_or_default();
-            let selected = mpv.get_bool(&property("selected")).unwrap_or(false);
-            let channels = mpv.get_i64(&property("demux-channel-count")).unwrap_or(0);
-            let forced = mpv.get_bool(&property("forced")).unwrap_or(false);
+            let kind = mpv.get_property(&property("type")).unwrap_or_default();
+            let id = mpv.get_property(&property("id")).unwrap_or(index + 1);
+            let lang = mpv.get_property(&property("lang")).unwrap_or_default();
+            let title = mpv.get_property(&property("title")).unwrap_or_default();
+            let codec = mpv.get_property(&property("codec")).unwrap_or_default();
+            let selected = mpv.get_property(&property("selected")).unwrap_or(false);
+            let channels = mpv
+                .get_property(&property("demux-channel-count"))
+                .unwrap_or(0);
+            let forced = mpv.get_property(&property("forced")).unwrap_or(false);
             let stream_index = mpv
-                .get_i64(&property("ff-index"))
-                .or_else(|_| mpv.get_i64(&property("src-id")))
+                .get_property(&property("ff-index"))
+                .or_else(|_| mpv.get_property(&property("src-id")))
                 .unwrap_or(-1);
             TrackInfo {
                 kind,

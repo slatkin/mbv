@@ -1,5 +1,5 @@
 //! Decoder for mpv JSON IPC output (design D5). The IPC session in
-//! `mpv_session/ipc.rs` calls it for each event line.
+//! `mpv_session/ipc.rs` calls it for each parsed event line.
 
 use std::fmt;
 
@@ -10,7 +10,6 @@ use super::{AUDIO_OUTPUT_INIT_FAILED, EndFileReason, MpvEvent, MpvFailure, Prope
 /// A line of mpv JSON IPC output that the decoder cannot read.
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum DecodeError {
-    NotJson(String),
     NotAnObject,
     MissingField { event: String, field: &'static str },
     UnknownProperty(String),
@@ -20,7 +19,6 @@ pub(crate) enum DecodeError {
 impl fmt::Display for DecodeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::NotJson(why) => write!(f, "not JSON: {why}"),
             Self::NotAnObject => f.write_str("JSON value is not an object"),
             Self::MissingField { event, field } => {
                 write!(f, "{event} event has no usable `{field}` field")
@@ -34,14 +32,12 @@ impl fmt::Display for DecodeError {
 impl std::error::Error for DecodeError {}
 
 impl MpvEvent {
-    /// Decodes one line of mpv JSON IPC output.
+    /// Decodes one parsed line of mpv JSON IPC output.
     ///
     /// A line with no `event` key (a command reply, or a fixture header) and an
     /// event that the run loop does not act on both become [`MpvEvent::Ignored`].
     /// That includes events that a later mpv version adds.
-    pub(crate) fn from_ipc_line(line: &str) -> Result<Self, DecodeError> {
-        let value: Value =
-            serde_json::from_str(line).map_err(|e| DecodeError::NotJson(e.to_string()))?;
+    pub(crate) fn from_ipc_value(value: &Value) -> Result<Self, DecodeError> {
         let object = value.as_object().ok_or(DecodeError::NotAnObject)?;
         let Some(event) = object.get("event").and_then(Value::as_str) else {
             return Ok(Self::Ignored);

@@ -2240,6 +2240,7 @@ dependencies = [
  "mbv-ws",
  "rand 0.10.3",
  "rstest",
+ "serde",
  "serde_json",
  "tracing",
  "tracing-subscriber",

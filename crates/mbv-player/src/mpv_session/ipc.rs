@@ -75,11 +75,7 @@ impl IpcSession {
         command: &[&str],
         timeout: Duration,
     ) -> Result<Value, MpvError> {
-        let command: Vec<Value> = command
-            .iter()
-            .map(|argument| Value::String((*argument).to_owned()))
-            .collect();
-        self.request_values(&command, timeout)
+        self.request_values(&string_values(command), timeout)
     }
 
     /// `request` for a command whose arguments are already JSON values (for
@@ -109,11 +105,7 @@ impl IpcSession {
     /// Writes `command` and returns without waiting for its reply. A later
     /// reply line decodes as `MpvEvent::Ignored` (design D2).
     pub(crate) fn send(&mut self, command: &[&str]) -> Result<(), MpvError> {
-        let command: Vec<Value> = command
-            .iter()
-            .map(|argument| Value::String((*argument).to_owned()))
-            .collect();
-        self.write_command(&command).map(|_| ())
+        self.write_command(&string_values(command)).map(|_| ())
     }
 
     /// Returns the next event. When none is queued, reads what the socket holds
@@ -137,7 +129,7 @@ impl IpcSession {
         self.stream
             .write_all(line.as_bytes())
             .map_err(MpvError::Io)?;
-        if command.first() == Some(&Value::String("quit".to_owned())) {
+        if command.first().and_then(Value::as_str) == Some("quit") {
             self.quit_requested = true;
         }
         Ok(id)
@@ -210,7 +202,7 @@ impl IpcSession {
         {
             return reply_data(value).map(Some);
         }
-        let event = MpvEvent::from_ipc_line(line).map_err(decode_error)?;
+        let event = MpvEvent::from_ipc_value(&value).map_err(decode_error)?;
         self.events.push_back(event);
         Ok(None)
     }
@@ -247,6 +239,13 @@ fn reply_data(mut reply: Value) -> Result<Value, MpvError> {
         return Err(MpvError::Reply(error.to_owned()));
     }
     Ok(reply.get_mut("data").map_or(Value::Null, Value::take))
+}
+
+fn string_values(command: &[&str]) -> Vec<Value> {
+    command
+        .iter()
+        .map(|argument| Value::String((*argument).to_owned()))
+        .collect()
 }
 
 fn decode_error(error: impl fmt::Display) -> MpvError {

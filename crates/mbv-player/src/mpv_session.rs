@@ -11,12 +11,13 @@ pub(crate) mod spawn;
 use std::cell::{Cell, RefCell};
 use std::time::Duration;
 
+use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
 use crate::mpv_error::MpvError;
-use crate::mpv_event::{MpvEvent, MpvFailure, PropertyValue};
+use crate::mpv_event::{MpvEvent, MpvFailure};
 use crate::mpv_session::ipc::IpcSession;
-use crate::mpv_session::spawn::Child;
+use crate::mpv_session::spawn::{Child, Started};
 
 /// How long one request waits for mpv's reply before the session treats the
 /// child as hung (design D3). A `request` that passes this bound returns
@@ -33,36 +34,6 @@ pub(crate) enum Format {
     Flag,
     Int64,
     String,
-}
-
-impl From<i64> for PropertyValue {
-    fn from(value: i64) -> Self {
-        Self::Int64(value)
-    }
-}
-
-impl From<bool> for PropertyValue {
-    fn from(value: bool) -> Self {
-        Self::Flag(value)
-    }
-}
-
-impl From<f64> for PropertyValue {
-    fn from(value: f64) -> Self {
-        Self::Double(value)
-    }
-}
-
-impl From<&str> for PropertyValue {
-    fn from(value: &str) -> Self {
-        Self::Str(value.to_owned())
-    }
-}
-
-impl From<String> for PropertyValue {
-    fn from(value: String) -> Self {
-        Self::Str(value)
-    }
 }
 
 /// The player's one mpv session. One playback run owns one session, and one
@@ -85,10 +56,9 @@ pub(crate) struct Mpv {
 }
 
 impl Mpv {
-    /// Wraps a started child: duplicates its connected socket into a session
-    /// and keeps the child so it lives and dies with the session (design D5).
-    pub(crate) fn from_child(child: Child) -> Result<Self, MpvError> {
-        let stream = child.try_clone_stream()?;
+    /// Wraps a started child: drives its connected socket in a session and
+    /// keeps the child so it lives and dies with the session (design D5).
+    pub(crate) fn from_child((child, stream): Started) -> Result<Self, MpvError> {
         let session = IpcSession::from_stream(stream)?;
         Ok(Self {
             _child: Some(child),
@@ -113,62 +83,35 @@ impl Mpv {
         }
     }
 
-    /// Sets a property from the domain value type (design D2). The JSON type
-    /// matches the `PropertyValue` variant, and mpv converts it for the
-    /// property's own type.
-    pub(crate) fn set_property(
-        &self,
-        name: &str,
-        value: impl Into<PropertyValue>,
-    ) -> Result<(), MpvError> {
-        let Some(value) = property_json(value.into()) else {
-            // Documented no-op: an unavailable property carries no value to
-            // set; only the observed-change decoder builds `None`.
-            return Ok(());
-        };
+    /// Sets a property (design D2). The JSON type of `value` is the type that
+    /// mpv converts for the property's own type.
+    pub(crate) fn set_property(&self, name: &str, value: impl Into<Value>) -> Result<(), MpvError> {
         let result = self.session.borrow_mut().request_values(
-            &[json!("set_property"), json!(name), value],
+            &[json!("set_property"), json!(name), value.into()],
             self.request_timeout,
         );
         self.record_result(&result);
         result.map(|_| ())
     }
 
-    pub(crate) fn get_f64(&self, name: &str) -> Result<f64, MpvError> {
-        let data = self.get_property(name)?;
-        data.as_f64()
-            .ok_or_else(|| MpvError::Reply(format!("property `{name}` is not a double")))
-    }
-
-    pub(crate) fn get_i64(&self, name: &str) -> Result<i64, MpvError> {
-        let data = self.get_property(name)?;
-        data.as_i64()
-            .ok_or_else(|| MpvError::Reply(format!("property `{name}` is not an integer")))
-    }
-
-    pub(crate) fn get_bool(&self, name: &str) -> Result<bool, MpvError> {
-        let data = self.get_property(name)?;
-        data.as_bool()
-            .ok_or_else(|| MpvError::Reply(format!("property `{name}` is not a flag")))
-    }
-
-    pub(crate) fn get_string(&self, name: &str) -> Result<String, MpvError> {
-        let data = self.get_property(name)?;
-        data.as_str()
-            .map(str::to_owned)
-            .ok_or_else(|| MpvError::Reply(format!("property `{name}` is not a string")))
+    /// Reads a property as `T`. A value of another JSON type is a decode error.
+    pub(crate) fn get_property<T: DeserializeOwned>(&self, name: &str) -> Result<T, MpvError> {
+        let result = self
+            .session
+            .borrow_mut()
+            .request(&["get_property", name], self.request_timeout);
+        self.record_result(&result);
+        serde_json::from_value(result?)
+            .map_err(|error| MpvError::Decode(format!("property `{name}`: {error}")))
     }
 
     /// Sends a command and waits for mpv to accept it. A command that fails
     /// while it runs reports through events, not here.
     pub(crate) fn command(&self, name: &str, args: &[&str]) -> Result<(), MpvError> {
-        let mut command = Vec::with_capacity(args.len() + 1);
-        command.push(name);
-        command.extend_from_slice(args);
         let result = self
             .session
             .borrow_mut()
-            .request(&command, self.request_timeout);
+            .request(&command_line(name, args), self.request_timeout);
         self.record_result(&result);
         result.map(|_| ())
     }
@@ -176,10 +119,7 @@ impl Mpv {
     /// Queues `name` without waiting for its reply. The backend reports only
     /// a synchronous send failure here; command failures arrive as events.
     pub(crate) fn command_async(&self, name: &str, args: &[&str]) -> Result<(), MpvError> {
-        let mut command = Vec::with_capacity(args.len() + 1);
-        command.push(name);
-        command.extend_from_slice(args);
-        self.session.borrow_mut().send(&command)
+        self.session.borrow_mut().send(&command_line(name, args))
     }
 
     /// Observes `name` for changes; each change arrives as a
@@ -230,15 +170,6 @@ impl Mpv {
         self.session.borrow().socket_fd()
     }
 
-    fn get_property(&self, name: &str) -> Result<Value, MpvError> {
-        let result = self
-            .session
-            .borrow_mut()
-            .request(&["get_property", name], self.request_timeout);
-        self.record_result(&result);
-        result
-    }
-
     /// Remembers a request timeout, so the next `next_event` reports the child
     /// as gone (design D3). Every other error leaves the run as it is.
     fn record_result<T>(&self, result: &Result<T, MpvError>) {
@@ -248,14 +179,10 @@ impl Mpv {
     }
 }
 
-/// The JSON value of a set-property argument, or `None` for an unavailable
-/// property (which sets nothing).
-fn property_json(value: PropertyValue) -> Option<Value> {
-    match value {
-        PropertyValue::Double(value) => Some(json!(value)),
-        PropertyValue::Flag(value) => Some(json!(value)),
-        PropertyValue::Int64(value) => Some(json!(value)),
-        PropertyValue::Str(value) => Some(Value::String(value)),
-        PropertyValue::None => None,
-    }
+/// The command name followed by its arguments, as one argument list.
+fn command_line<'a>(name: &'a str, args: &[&'a str]) -> Vec<&'a str> {
+    let mut command = Vec::with_capacity(args.len() + 1);
+    command.push(name);
+    command.extend_from_slice(args);
+    command
 }

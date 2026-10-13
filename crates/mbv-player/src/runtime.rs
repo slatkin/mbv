@@ -525,7 +525,7 @@ pub(super) fn start_session(
 
 pub(super) fn init_volume(mpv: &Mpv, status: &Arc<Mutex<PlayerStatus>>, initial_volume: u8) {
     let mut st = status.lock().unwrap();
-    let raw_max = mpv.get_i64("volume-max").unwrap_or(130);
+    let raw_max = mpv.get_property::<i64>("volume-max").unwrap_or(130);
     st.volume_max = raw_max * raw_max / 100;
     let v = i64::from(initial_volume).clamp(0, st.volume_max);
     let raw = mbv_emby_model::saturating_i64_from_f64(

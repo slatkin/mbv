@@ -262,7 +262,7 @@ fn divergent_entry(pos: i64, current_idx: usize, queue_len: usize) -> Option<usi
 
 /// mpv's position inside the entry it is playing, in ticks.
 fn mpv_position_ticks(mpv: &Mpv) -> i64 {
-    seconds_to_ticks(mpv.get_f64("time-pos").unwrap_or(0.0))
+    seconds_to_ticks(mpv.get_property::<f64>("time-pos").unwrap_or(0.0))
 }
 
 /// Verify — and if needed reassert — the playlist projection the load
@@ -283,9 +283,9 @@ fn mpv_position_ticks(mpv: &Mpv) -> i64 {
 /// reported rather than repaired, because a missing
 /// entry means the ordinal no longer names the item we think it does.
 fn reassert_queue_layout(mpv: &Mpv, start_idx: usize, item_count: usize) {
-    let mpv_count = mpv.get_i64("playlist-count").unwrap_or(-1);
-    let mpv_pos = mpv.get_i64("playlist-pos").unwrap_or(-1);
-    let mpv_idle = mpv.get_bool("idle-active").unwrap_or(false);
+    let mpv_count = mpv.get_property::<i64>("playlist-count").unwrap_or(-1);
+    let mpv_pos = mpv.get_property::<i64>("playlist-pos").unwrap_or(-1);
+    let mpv_idle = mpv.get_property::<bool>("idle-active").unwrap_or(false);
     match queue_layout_verdict(start_idx, item_count, mpv_pos, mpv_count, mpv_idle) {
         QueueLayoutVerdict::Ok => {}
         QueueLayoutVerdict::Reassert => {
