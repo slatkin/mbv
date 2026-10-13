@@ -29,7 +29,7 @@
 
 ## 4. Audiobookshelf chapter Workspace
 
-- [ ] 4.1 Add `BookContent::set_now_playing` with its own dedup guard and apply it at the
+- [x] 4.1 Add `BookContent::set_now_playing` with its own dedup guard and apply it at the
   `project_chapter_rows` seam without a full `set_content` rebuild. Call it from the sync pass only
   on the Audiobookshelf Book tab and only when the owner exists (design D5). Contract: the named
   chapter row carries `NowPlaying` with the chapter-relative progress the projection supplies, and
