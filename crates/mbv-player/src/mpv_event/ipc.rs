@@ -1,16 +1,15 @@
-//! Decoder for mpv JSON IPC output (design D5). Tests only until the
-//! out-of-process migration wires it into the run loop.
+//! Decoder for mpv JSON IPC output (design D5). The IPC session in
+//! `mpv_session/ipc.rs` calls it for each parsed event line.
 
 use std::fmt;
 
 use serde_json::{Map, Value};
 
-use super::{EndFileReason, MpvEvent, MpvFailure, PropertyValue};
+use super::{AUDIO_OUTPUT_INIT_FAILED, EndFileReason, MpvEvent, MpvFailure, PropertyValue};
 
 /// A line of mpv JSON IPC output that the decoder cannot read.
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum DecodeError {
-    NotJson(String),
     NotAnObject,
     MissingField { event: String, field: &'static str },
     UnknownProperty(String),
@@ -20,7 +19,6 @@ pub(crate) enum DecodeError {
 impl fmt::Display for DecodeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::NotJson(why) => write!(f, "not JSON: {why}"),
             Self::NotAnObject => f.write_str("JSON value is not an object"),
             Self::MissingField { event, field } => {
                 write!(f, "{event} event has no usable `{field}` field")
@@ -34,14 +32,12 @@ impl fmt::Display for DecodeError {
 impl std::error::Error for DecodeError {}
 
 impl MpvEvent {
-    /// Decodes one line of mpv JSON IPC output.
+    /// Decodes one parsed line of mpv JSON IPC output.
     ///
     /// A line with no `event` key (a command reply, or a fixture header) and an
     /// event that the run loop does not act on both become [`MpvEvent::Ignored`].
     /// That includes events that a later mpv version adds.
-    pub(crate) fn from_ipc_line(line: &str) -> Result<Self, DecodeError> {
-        let value: Value =
-            serde_json::from_str(line).map_err(|e| DecodeError::NotJson(e.to_string()))?;
+    pub(crate) fn from_ipc_value(value: &Value) -> Result<Self, DecodeError> {
         let object = value.as_object().ok_or(DecodeError::NotAnObject)?;
         let Some(event) = object.get("event").and_then(Value::as_str) else {
             return Ok(Self::Ignored);
@@ -103,9 +99,8 @@ fn property_change_from_ipc(object: &Map<String, Value>) -> Result<MpvEvent, Dec
     })
 }
 
-/// JSON IPC says why an end-file failed in `file_error`, as text. libmpv
-/// gives an error code. Compare with the text of the code that the run loop
-/// treats specially, taken from the loaded libmpv so the text follows its version.
+/// JSON IPC says why an end-file failed in `file_error`, as text. Classify the
+/// one failure the run loop treats specially by comparing that text.
 fn end_file_from_ipc(object: &Map<String, Value>) -> Result<MpvEvent, DecodeError> {
     let reason = str_field(object, "end-file", "reason")?;
     Ok(match reason {
@@ -115,8 +110,7 @@ fn end_file_from_ipc(object: &Map<String, Value>) -> Result<MpvEvent, DecodeErro
         "redirect" => MpvEvent::EndFile(EndFileReason::Redirect),
         "error" => {
             let text = str_field(object, "end-file", "file_error")?;
-            let audio_init_text = libmpv2_sys::mpv_error_str(libmpv2::mpv_error::AoInitFailed);
-            MpvEvent::Failed(if text == audio_init_text {
+            MpvEvent::Failed(if text == AUDIO_OUTPUT_INIT_FAILED {
                 MpvFailure::AudioOutputInit
             } else {
                 MpvFailure::Other(text.to_owned())

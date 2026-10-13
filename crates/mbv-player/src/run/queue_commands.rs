@@ -1,6 +1,5 @@
-use super::{PlaybackRun, QueueSlotId};
+use super::{Mpv, PlaybackRun, QueueSlotId};
 use crate::shift_index_for_move;
-use libmpv2::Mpv;
 
 impl PlaybackRun {
     /// Remove an owner-assigned slot; a stale slot (already gone here) is

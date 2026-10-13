@@ -3,7 +3,7 @@ use super::{
     Mpv, MpvFailure, MpvRunConfig, PlayerEvent, PlayerStatus, PreparedSource, ProgressGuard,
     QueueItem, QueueSlotId, ReportJob, SessionReporter, StopReportContext, SubtitlePrefs,
     TICKS_PER_SECOND, auto_select_tracks, divergent_entry, end_file_stop_report_context,
-    handle_intro, is_near_end, mpv_err_str, mpv_load_opts, mpv_position_ticks, mpv_title_opt,
+    handle_intro, is_near_end, mpv_load_opts, mpv_position_ticks, mpv_title_opt,
     queue_load_indices, queue_load_location, reassert_queue_layout, refresh_tracks,
     retry_mark_played, send_ep_info, spawn_progress_reporter, start_queue_playback,
 };

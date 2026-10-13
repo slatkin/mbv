@@ -358,6 +358,27 @@ fn alsa_initialization_error_stops_run_with_output_error() {
 }
 
 #[test]
+fn process_exit_stops_run_with_the_last_position_and_an_error() {
+    let (mut run, status, events) = make_queue_session_for_pos_tests_with_events(0);
+    run.reporter.clear_session();
+    run.last_valid_pos = 42;
+    let mut progress = noop_progress();
+
+    assert!(run.on_mpv_error(&MpvFailure::ProcessExited, &mut progress));
+    assert!(!status.lock().unwrap().active);
+    let PlayerEvent::Stopped {
+        error,
+        position_ticks,
+        ..
+    } = events.recv().unwrap()
+    else {
+        panic!("expected stopped event");
+    };
+    assert!(error.is_some());
+    assert_eq!(position_ticks, 42);
+}
+
+#[test]
 fn context_loss_rejects_audiobookshelf_without_mutating_bound_submission() {
     let (event_tx, _event_rx) = mpsc::channel();
     let player = Player::new(

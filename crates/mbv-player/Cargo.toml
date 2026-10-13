@@ -28,10 +28,9 @@ mbv-queue = { path = "../mbv-queue" }
 mbv-ids = { path = "../mbv-ids" }
 mbv-net = { path = "../mbv-net" }
 mbv-ws = { path = "../mbv-ws" }
-libmpv2.workspace = true
-libmpv2-sys.workspace = true
 libc.workspace = true
 rand.workspace = true
+serde.workspace = true
 serde_json.workspace = true
 tracing.workspace = true
 

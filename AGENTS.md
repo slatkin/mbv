@@ -1,6 +1,6 @@
 # mbv
 
-mbv is a Rust terminal media client for Emby, Audiobookshelf, and Feeds. It embeds mpv. Every local TUI is a Client of the per-user Owner process. That process is the only local Player-owner host. Stay-alive controls whether that process outlives its Clients. Packaged `mbvd` stays a separate Player owner. `mbvd` is a headless server daemon (a systemd unit, no desktop session). It never has a tray, a pinned panel, or any Client functionality. Connection to it still leaves a Local process on the user machine, and that process owns those (`CONTEXT.md`: *mbvd*, *Local process*). 
+mbv is a Rust terminal media client for Emby, Audiobookshelf, and Feeds. It runs mpv in a child process. Every local TUI is a Client of the per-user Owner process. That process is the only local Player-owner host. Stay-alive controls whether that process outlives its Clients. Packaged `mbvd` stays a separate Player owner. `mbvd` is a headless server daemon (a systemd unit, no desktop session). It never has a tray, a pinned panel, or any Client functionality. Connection to it still leaves a Local process on the user machine, and that process owns those (`CONTEXT.md`: *mbvd*, *Local process*). 
 
 ## Start here
 

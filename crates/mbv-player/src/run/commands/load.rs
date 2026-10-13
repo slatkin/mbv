@@ -1,6 +1,6 @@
 use super::{
     EmbyItem, ExecSlot, ExecutionSequence, Mpv, PlaybackOrigin, PlaybackRun, PlayerEvent,
-    ProgressGuard, QueueItem, QueueSlotId, StopReport, mpv_err_str, mpv_load_opts, mpv_title_opt,
+    ProgressGuard, QueueItem, QueueSlotId, StopReport, mpv_load_opts, mpv_title_opt,
     mpv_url_for_queue_item, queue_load_indices, queue_load_location, reassert_queue_layout,
     send_ep_info, spawn_progress_reporter, start_queue_playback,
 };
@@ -79,7 +79,7 @@ impl PlaybackRun {
             let title_opt = mpv_title_opt(&item.display_name());
             tracing::info!(name: "player.load.started", target: "player", { url.path = %mbv_core::applog::UrlPath(url), load_options = ?title_opt }, "loading media with mpv");
             if let Err(e) = mpv.command("loadfile", &[url, "replace", "-1", title_opt.as_str()]) {
-                tracing::warn!(name: "player.load.failed", target: "player", error = %mpv_err_str(&e), load_options = ?title_opt, "mpv loadfile failed");
+                tracing::warn!(name: "player.load.failed", target: "player", error = %e, load_options = ?title_opt, "mpv loadfile failed");
             }
             send_ep_info(mpv, item);
         });

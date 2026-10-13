@@ -1,6 +1,6 @@
 ## mbv
 
-`mbv` is a terminal media player: a Rust terminal UI that shows your Emby / Audiobookshelf / RSS-feed libraries and plays and syncs them through an embedded mpv. It runs as one background process per user (the "Owner") that holds the player and the queue; every TUI window is a client that talks to it over a local socket. 
+`mbv` is a terminal media player: a Rust terminal UI that shows your Emby / Audiobookshelf / RSS-feed libraries and plays and syncs them through mpv in a child process. It runs as one background process per user (the "Owner") that holds the player and the queue; every TUI window is a client that talks to it over a local socket. 
 
 Full Emby client session remote control via WebSocket is also supported. `mbv` can control (and be remote-controlled by) standard Emby clients.
 

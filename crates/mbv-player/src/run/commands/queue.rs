@@ -1,7 +1,6 @@
 use super::{
-    ExecSlot, Mpv, PlaybackRun, PlayerEvent, ProgressGuard, QueueItem, QueueSlotId, mpv_err_str,
-    mpv_load_opts, mpv_url_for_queue_item, reject_stale_jump, resolve_jump_target,
-    spawn_progress_reporter,
+    ExecSlot, Mpv, PlaybackRun, PlayerEvent, ProgressGuard, QueueItem, QueueSlotId, mpv_load_opts,
+    mpv_url_for_queue_item, reject_stale_jump, resolve_jump_target, spawn_progress_reporter,
 };
 use crate::run::{ForcedJump, StopReport};
 use crate::{EMBY_RESUME_RETRY_DELAYS, refresh_emby_resume};
@@ -124,7 +123,7 @@ impl PlaybackRun {
         });
         if let Err(e) = mpv.set_property("playlist-pos", i64::try_from(idx).unwrap_or(i64::MAX)) {
             self.forced_jump = None;
-            tracing::warn!(name: "player.jump.failed", target: "player", index = idx, error = %mpv_err_str(&e), "jump failed");
+            tracing::warn!(name: "player.jump.failed", target: "player", index = idx, error = %e, "jump failed");
             return;
         }
         tracing::info!(name: "player.jump.succeeded", target: "transition", slot = ?slot_id, index = idx, current_index = self.current_idx, queue_length = self.queue_len(), "playlist position updated");
@@ -140,7 +139,7 @@ impl PlaybackRun {
 
     fn play_from_idle_playlist(idx: usize, mpv: &Mpv) {
         if let Err(error) = mpv.command("playlist-play-index", &[&idx.to_string()]) {
-            tracing::warn!(name: "player.jump.play_from_idle_failed", target: "player", index = idx, error = %mpv_err_str(&error), "failed to play playlist index from idle");
+            tracing::warn!(name: "player.jump.play_from_idle_failed", target: "player", index = idx, error = %error, "failed to play playlist index from idle");
         }
     }
 
@@ -218,7 +217,7 @@ impl PlaybackRun {
                 "loadfile",
                 &[url.as_str(), "append-play", "-1", opts.as_str()],
             ) {
-                tracing::warn!(name: "player.queue_append.load_failed", target: "player", error = %mpv_err_str(&e), "mpv loadfile failed while appending");
+                tracing::warn!(name: "player.queue_append.load_failed", target: "player", error = %e, "mpv loadfile failed while appending");
             }
         }
 

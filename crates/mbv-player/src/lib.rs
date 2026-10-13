@@ -8,6 +8,9 @@
 mod error;
 #[doc(inline)]
 pub use error::PlayerError;
+mod mpv_error;
+mod mpv_session;
+use mpv_session::{Format, Mpv};
 mod mpv_event;
 use mpv_event::{EndFileReason, MpvEvent, MpvFailure, PropertyValue};
 
@@ -20,7 +23,6 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use libmpv2::{Format, Mpv};
 use mbv_ctrl::player::{PlayerCommand, PlayerEvent, PlayerStatus, SubtitlePrefs};
 use mbv_emby::{EmbyClient, EmbyError};
 use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND, seconds_to_ticks, ticks_to_seconds};
@@ -28,14 +30,6 @@ use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND, seconds_to_ticks, ticks_to_seco
 use mbv_queue::QueueMutationResult;
 use mbv_queue::{AudiobookshelfItem, PlaybackQueue, QueueItem, QueueSlotId};
 use mbv_queue::{ExecSlot, ExecutionSequence};
-
-fn mpv_err_str(e: &libmpv2::Error) -> String {
-    if let libmpv2::Error::Raw(code) = e {
-        format!("Raw({}) [{}]", code, libmpv2_sys::mpv_error_str(*code))
-    } else {
-        format!("{e:?}")
-    }
-}
 
 fn mpv_title_opt(title: &str) -> String {
     // Use mpv's %N% length-prefix format so the value is passed verbatim —
@@ -213,13 +207,13 @@ fn start_queue_playback(mpv: &Mpv, start_idx: usize) {
         i64::try_from(start_idx).unwrap_or(i64::MAX),
     );
     if let Err(error) = mpv.command("playlist-play-index", &[&start_idx.to_string()]) {
-        tracing::warn!(name: "player.queue_playback.start_failed", target: "player", index = start_idx, error = %mpv_err_str(&error), "failed to start playlist index");
+        tracing::warn!(name: "player.queue_playback.start_failed", target: "player", index = start_idx, error = %error, "failed to start playlist index");
     }
 }
 
 fn warn_on_set_property(mpv: &Mpv, caller: &str, name: &str, value: i64) {
     if let Err(e) = mpv.set_property(name, value) {
-        tracing::warn!(name: "player.property.set_failed", target: "player", caller, property = name, value, error = %mpv_err_str(&e), "failed to set mpv property");
+        tracing::warn!(name: "player.property.set_failed", target: "player", caller, property = name, value, error = %e, "failed to set mpv property");
     }
 }
 
@@ -298,7 +292,7 @@ fn reassert_queue_layout(mpv: &Mpv, start_idx: usize, item_count: usize) {
             tracing::warn!(name: "player.queue_layout.mismatch", target: "player", start_index = start_idx, item_count, mpv_position = mpv_pos, mpv_count, "reasserting the active ordinal");
             if mpv_idle {
                 if let Err(error) = mpv.command("playlist-play-index", &[&start_idx.to_string()]) {
-                    tracing::warn!(name: "player.queue_layout.repair_failed", target: "player", index = start_idx, error = %mpv_err_str(&error), "failed to repair playlist position");
+                    tracing::warn!(name: "player.queue_layout.repair_failed", target: "player", index = start_idx, error = %error, "failed to repair playlist position");
                 }
             } else {
                 let _ =

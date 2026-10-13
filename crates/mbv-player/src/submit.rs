@@ -8,9 +8,12 @@ use super::{
 };
 use mbv_core::applog as app_logging;
 use mbv_ids::{EmbySessionId, ItemId, MediaSourceId};
-use std::sync::{Arc, Mutex, atomic::Ordering, mpsc};
+use std::sync::atomic::Ordering;
+use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
 use std::time::Duration;
+
+use crate::mpv_session::spawn::Spawner;
 
 impl Player {
     /// Play a freshly fetched Emby sequence with no pre-existing canonical
@@ -147,10 +150,9 @@ impl Player {
         *self.stop_tx.lock().unwrap() = Some(stop_tx);
         *self.shutdown_report_timeout.lock().unwrap() = None;
         // Test builds (PlayerProxy::stub) must never construct the real
-        // external: the player thread's first act is `init_mpv`, a live
-        // libmpv/libav/GnuTLS handle whose initialization races process
-        // teardown when the test returns (glibc double-free / SIGSEGV,
-        // issue #757). The queue/status seeding above is what stub-backed
+        // external: the player thread's first act is `init_mpv`, a live `mpv`
+        // child process whose start a test must not perform (issue #757). The
+        // queue/status seeding above is what stub-backed
         // tests assert; only the real player thread (and the internal
         // command/wakeup plumbing only that thread serves) is skipped, so
         // `cmd_tx` keeps pointing at whatever the stub installed (a spy or
@@ -162,13 +164,14 @@ impl Player {
         *self.cmd_tx.lock().unwrap() = Some(cmd_tx);
         let wakeup_pipe = make_wakeup_pipe();
         let wakeup_read_fd = wakeup_pipe.as_ref().map_or(-1, |(r, _)| *r);
-        let wakeup_write_fd = wakeup_pipe.as_ref().map_or(-1, |(_, w)| w.0);
         *self.wakeup_fd.lock().unwrap() = wakeup_pipe.map(|(_, w)| w);
         let pre_warmed = self.pre_warmed_mpv.lock().unwrap().take();
+        let spawner = Arc::clone(&self.spawner);
 
         let handle = thread::spawn(move || {
             run_player_thread(PlayerThreadStart {
                 pre_warmed,
+                spawner,
                 config,
                 status,
                 event_tx,
@@ -187,7 +190,6 @@ impl Player {
                 stop_rx,
                 cmd_rx,
                 wakeup_read_fd,
-                wakeup_write_fd,
             });
         });
         *self.thread_handle.lock().unwrap() = Some(handle);
@@ -288,6 +290,9 @@ fn make_reporter(
 
 struct PlayerThreadStart {
     pre_warmed: Option<(Mpv, bool)>,
+    /// The controller's long-lived child spawner; the on-demand start uses it
+    /// when no run was pre-warmed (design D5).
+    spawner: Arc<Spawner>,
     config: MpvRunConfig,
     status: Arc<Mutex<PlayerStatus>>,
     event_tx: mpsc::Sender<PlayerEvent>,
@@ -306,13 +311,12 @@ struct PlayerThreadStart {
     stop_rx: mpsc::Receiver<()>,
     cmd_rx: mpsc::Receiver<PlayerCommand>,
     wakeup_read_fd: std::os::unix::io::RawFd,
-    wakeup_write_fd: std::os::unix::io::RawFd,
 }
 
 fn run_player_thread(mut start: PlayerThreadStart) {
     let (mpv, startup_pause_for_pipe) = match start.pre_warmed.take() {
         Some(warmed) => warmed,
-        None => match init_mpv(&start.config) {
+        None => match init_mpv(&start.spawner, &start.config) {
             Ok(value) => value,
             Err(error) => {
                 tracing::error!(name: "player.startup.failed", target: "player", error = %error, "mpv startup failed");
@@ -368,7 +372,6 @@ fn run_player_thread(mut start: PlayerThreadStart) {
         stop_rx,
         cmd_rx,
         wakeup_read_fd,
-        wakeup_write_fd,
         ..
     } = start;
     let (reporter, progress) =
@@ -391,14 +394,7 @@ fn run_player_thread(mut start: PlayerThreadStart) {
             prepared_source: Some(active_prepared_source),
         },
     );
-    session.run(
-        mpv,
-        &stop_rx,
-        &cmd_rx,
-        progress,
-        wakeup_read_fd,
-        wakeup_write_fd,
-    );
+    session.run(mpv, &stop_rx, &cmd_rx, progress, wakeup_read_fd);
 }
 
 fn load_queue_sources(
