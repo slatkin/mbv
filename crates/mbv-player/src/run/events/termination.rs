@@ -40,6 +40,8 @@ impl PlaybackRun {
     /// The teardown shared by an audio-output failure and an unexpected mpv
     /// exit: close the prepared source, join progress, deactivate the status
     /// snapshot, and report one `Stopped` with `error` and `position_ticks`.
+    /// A stop that is already reported (for example a standalone end-file
+    /// stop) is not reported a second time.
     fn stop_run_with_error(
         &mut self,
         progress: &mut ProgressGuard,
@@ -51,14 +53,17 @@ impl PlaybackRun {
         self.close_prepared_source_at(self.last_valid_pos);
         let stopped_slot = self.active_slot_id();
         self.status.lock().unwrap().active = false;
-        let _ = self.event_tx.send(PlayerEvent::Stopped {
-            slot_id: stopped_slot,
-            run_identity: self.run_identity,
-            position_ticks,
-            played: false,
-            consume: false,
-            error: Some(error),
-        });
+        if !self.stopped_event_sent && !self.stop_report_sent() {
+            let _ = self.event_tx.send(PlayerEvent::Stopped {
+                slot_id: stopped_slot,
+                run_identity: self.run_identity,
+                position_ticks,
+                played: false,
+                consume: false,
+                error: Some(error),
+            });
+            self.stopped_event_sent = true;
+        }
         true
     }
 

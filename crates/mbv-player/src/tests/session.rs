@@ -459,6 +459,33 @@ fn standalone_natural_end_file_marks_status_inactive() {
     assert!(played, "natural video EOF must surface as played");
 }
 
+/// A process exit after the run already reported its stop must not send a
+/// second `Stopped`. In a standalone run the end-file EOF path reports
+/// Stopped; if the child then exits (for example the user closes the mpv
+/// window), the socket close must end the run without a duplicate error.
+#[test]
+fn process_exit_after_a_reported_stop_sends_no_second_stopped() {
+    let (mut session, _status, events, http) = make_queue_session_for_pos_tests_with_mock(0);
+    session.origin = PlaybackOrigin::Standalone;
+    http.respond(200, "");
+    http.respond(200, "");
+    let mut progress = noop_progress();
+
+    assert!(!session.on_end_file_standalone(EndFileReason::Eof, &mut progress));
+    assert!(
+        events.try_recv().is_ok(),
+        "the EOF path reports one Stopped"
+    );
+    // The reporter session is gone, so the exit path makes no network calls.
+    session.reporter.clear_session();
+
+    assert!(session.on_mpv_error(&MpvFailure::ProcessExited, &mut progress));
+    assert!(
+        events.try_recv().is_err(),
+        "a reported stop must not be followed by a second Stopped"
+    );
+}
+
 /// Regression (2026-09-28 music queue): an active-file `JumpTo` left the status
 /// mirror on the queue's first item, so the playing row kept its duration.
 #[test]
