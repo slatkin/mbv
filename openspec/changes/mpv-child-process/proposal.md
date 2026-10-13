@@ -13,8 +13,9 @@ The change `mpv-ipc-event-probe` tested the alternative. It ran 10 scenarios thr
 - Decode socket lines with the `MpvEvent` decoder from `mpv-ipc-event-probe`. Remove its `#[cfg(test)]` gates. The run loop keeps its `MpvEvent` match. `PropertyValue::None` gets an arm.
 - Turn the libmpv option set (`init_mpv`) into child command-line arguments. Keep the same values. Keep `--input-ipc-server=<mbv_ipc_path>`: it is also the socket that mbv uses, so user tools that talk to that socket keep working.
 - Treat socket close or child exit as `Shutdown`. A child that exits before a stop was requested ends the run with an error. The Owner process, the queue, and the Clients stay up.
-- Replace the synchronous `get_property` reads that run inside event handlers with the last observed value, and read the track list in one request instead of about 10 reads for each track.
+- Keep the synchronous `get_property` reads. Each one becomes a request on the socket, and the run loop queues any event that arrives while it waits for the reply. Design D6 gives the reasons.
 - Replace the libmpv wakeup callback with a poll on the wakeup pipe and the socket together.
+- Replace `libmpv2::Error` in `PlayerError` with a domain `MpvError`.
 - Remove the `libmpv2` and `libmpv2-sys` dependencies from `mbv-player`. The Debian package depends on `mpv` in place of `libmpv2`.
 - **BREAKING (packaging):** a Debian install now needs the `mpv` program, not the `libmpv2` library. The Arch package already depends on `mpv`.
 
