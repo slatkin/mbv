@@ -21,7 +21,7 @@
 
 ## 3. Music Workspaces
 
-- [ ] 3.1 Add `MusicContent::set_now_playing`, apply the override in `resolved_workspace` for the
+- [x] 3.1 Add `MusicContent::set_now_playing`, apply the override in `resolved_workspace` for the
   album and artist track rows, and wire the projection into `push_music_workspace_content`.
   Contract: the playing track's row carries `NowPlaying { progress }` in both the album and artist
   Workspaces, and other rows and headings are unchanged. Verify with one owner test that covers both
