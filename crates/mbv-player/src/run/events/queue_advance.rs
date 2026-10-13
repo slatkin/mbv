@@ -3,7 +3,8 @@ use mbv_audiobookshelf::{AudiobookshelfError, AudiobookshelfFailureClass};
 use super::super::{
     AdvanceDecisionInput, CompletedMedia, EndFileReason, FinishReason, Mpv, PlaybackOrigin,
     PlaybackRun, PlayerEvent, ProgressGuard, QueueItem, QueueSlotId, StopReport, advance_decision,
-    is_near_end, mpv_position_ticks, retry_mark_played, send_ep_info, spawn_progress_reporter,
+    advance_next_index, is_near_end, mpv_position_ticks, retry_mark_played, send_ep_info,
+    spawn_progress_reporter,
 };
 use super::event_classifiers::{is_superseded_jump_end_file, provider_lifecycle_close_pos};
 use mbv_ids::ItemId;
@@ -130,9 +131,21 @@ impl PlaybackRun {
         let jump = self.forced_jump.take();
         let transition = jump.and_then(|jump| jump.transition);
         let slot_id = jump.map(|jump| jump.slot_id);
-        let next_idx = slot_id
-            .and_then(|slot_id| self.queue.slot_index(slot_id))
-            .unwrap_or(self.current_idx + 1);
+        let next_idx = match jump {
+            // A forced jump names its own target; the stored advance decides
+            // only the unforced advance (design D2).
+            Some(jump) => self
+                .queue
+                .slot_index(jump.slot_id)
+                .unwrap_or(self.current_idx + 1),
+            // `End` resolves to `None`, which is the end of the queue: the
+            // `next_idx >= queue_len()` check in the caller runs
+            // `stop_at_queue_end` (design D2).
+            None => advance_next_index(self.upcoming, self.current_idx, |slot_id| {
+                self.queue.slot_index(slot_id)
+            })
+            .unwrap_or_else(|| self.queue_len()),
+        };
         tracing::info!(name: "player.transition.end_file_settled", target: "transition", slot = ?slot_id, next_index = next_idx, current_index = self.current_idx, queue_length = self.queue_len(), has_transition = transition.is_some(), "settled forced jump on end-file");
         if next_idx < self.queue_len() {
             self.forced_jump = jump.filter(|jump| jump.resume_ticks.is_some()).map(|jump| {

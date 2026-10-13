@@ -103,6 +103,7 @@ pub(crate) fn unified_queue_state_for_peer(
     queued_latest_transition: Option<mbv_ctrl::TransitionSummary>,
     supports_abs_queue: bool,
     supports_abs_book_queue: bool,
+    play_order: mbv_queue::PlayOrderMode,
 ) -> CtrlEvent {
     let slots: Vec<mbv_ctrl::UnifiedQueueSlot> = queue
         .slots()
@@ -127,8 +128,13 @@ pub(crate) fn unified_queue_state_for_peer(
         .or_else(|| status.active.then(|| queue.active_slot_id()).flatten())
         .map(mbv_ctrl::slot_id_to_u64)
         .filter(|active_id| slots.iter().any(|s| s.slot_id == *active_id));
+    // The embedded status carries the owner's play order too, so snapshot
+    // consumers that read only the status (MPRIS, tray) see the same order
+    // the queue projection reports (queue-play-order design D7).
+    let mut status = status.clone();
+    status.play_order = play_order;
     CtrlEvent::UnifiedQueueState(mbv_ctrl::UnifiedQueueStateData {
-        status: status.clone(),
+        status,
         slots,
         active_slot,
         // Owner-local diagnostic only; clients mint their own projection revision.
@@ -154,6 +160,7 @@ pub(crate) fn broadcast_queue_state(
     let (in_flight, queued_latest) = transitions.summaries();
     let observed_active_slot = *shared_queue.observed_active_slot.lock().unwrap();
     let lineage = *shared_queue.lineage.lock().unwrap();
+    let play_order = *shared_queue.play_order.lock().unwrap();
 
     // ── Unified-queue peers, gate ABS episodes and books independently ──
     let unified_full_json = serialize_ctrl_event(&unified_queue_state_for_peer(
@@ -166,6 +173,7 @@ pub(crate) fn broadcast_queue_state(
         queued_latest.clone(),
         true,
         true,
+        play_order,
     ));
     let unified_abs_json = serialize_ctrl_event(&unified_queue_state_for_peer(
         &status,
@@ -177,6 +185,7 @@ pub(crate) fn broadcast_queue_state(
         queued_latest.clone(),
         true,
         false,
+        play_order,
     ));
     let unified_book_json = serialize_ctrl_event(&unified_queue_state_for_peer(
         &status,
@@ -188,6 +197,7 @@ pub(crate) fn broadcast_queue_state(
         queued_latest.clone(),
         false,
         true,
+        play_order,
     ));
     let unified_json = serialize_ctrl_event(&unified_queue_state_for_peer(
         &status,
@@ -199,6 +209,7 @@ pub(crate) fn broadcast_queue_state(
         queued_latest,
         false,
         false,
+        play_order,
     ));
 
     if let (

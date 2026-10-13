@@ -7,7 +7,7 @@ use crate::{
     QueueOpId, UnifiedQueueSlot,
 };
 use mbv_queue::QueueItem;
-use mbv_queue::{QueueLineage, QueueSource, ServiceKind};
+use mbv_queue::{PlayOrderMode, QueueLineage, QueueSource, ServiceKind};
 
 // ── CtrlCmd ──────────────────────────────────────────────────────────────
 
@@ -133,6 +133,10 @@ pub enum CtrlCmd {
         cursor: usize,
         source: QueueSource,
     },
+    /// Set the playback order of the Bound queue (design D5). Requires the
+    /// `play-order` capability; additive — no protocol-version bump. The
+    /// client never sends a slot pick; the owner picks.
+    SetPlayOrder(PlayOrderMode),
 }
 
 /// Reply a gated command's `OwnerGate` failure sends. Carried by
@@ -193,7 +197,8 @@ impl CtrlCmd {
             | CtrlCmd::UnifiedQueueClear
             | CtrlCmd::UnifiedQueueClearOp { .. }
             | CtrlCmd::UnifiedQueueRefresh { .. }
-            | CtrlCmd::UnifiedQueueApplyProgress { .. } => OwnerGate::Any,
+            | CtrlCmd::UnifiedQueueApplyProgress { .. }
+            | CtrlCmd::SetPlayOrder(_) => OwnerGate::Any,
         }
     }
 
@@ -223,7 +228,10 @@ impl CtrlCmd {
             | CtrlCmd::SwapPrepared
             | CtrlCmd::RunOwnerAction(_)
             | CtrlCmd::UnifiedQueuePlaySlot { .. }
-            | CtrlCmd::UnifiedAdoptQueue { .. } => false,
+            | CtrlCmd::UnifiedAdoptQueue { .. }
+            // The order is not saved across an owner restart (design
+            // non-goal), so setting it never triggers queue persistence.
+            | CtrlCmd::SetPlayOrder(_) => false,
         }
     }
 
@@ -382,6 +390,7 @@ impl WireCommand {
             | PlayerCommand::QueueRemove(_)
             | PlayerCommand::QueueMove(..)
             | PlayerCommand::JumpTo { .. }
+            | PlayerCommand::SetUpcoming(_)
             | PlayerCommand::LoadNew { .. }
             | PlayerCommand::SubmitQueue { .. } => Err(cmd),
         }

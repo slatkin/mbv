@@ -26,6 +26,7 @@ fn unified_projection_uses_observed_slot_not_desired_queue_slot() {
         None,
         true,
         true,
+        mbv_queue::PlayOrderMode::Sequential,
     );
     let CtrlEvent::UnifiedQueueState(data) = event else {
         panic!("expected UnifiedQueueState");
@@ -62,6 +63,7 @@ fn unified_projection_falls_back_to_canonical_active_slot_while_playing() {
         None,
         true,
         true,
+        mbv_queue::PlayOrderMode::Sequential,
     ) else {
         panic!("expected UnifiedQueueState");
     };
@@ -82,6 +84,7 @@ fn unified_projection_falls_back_to_canonical_active_slot_while_playing() {
         None,
         true,
         true,
+        mbv_queue::PlayOrderMode::Sequential,
     ) else {
         panic!("expected UnifiedQueueState");
     };

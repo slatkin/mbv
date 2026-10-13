@@ -181,6 +181,22 @@ fn us_to_seconds(microseconds: i64) -> f64 {
     microseconds as f64 / 1_000_000.0
 }
 
+/// The MPRIS `Shuffle` property for the owner's play order (queue-play-order
+/// spec, "MPRIS reports the shuffle state"): true only while the order is
+/// Shuffle. Pure so the test build can exercise it without the D-Bus
+/// machinery; the property reads it from the status snapshot.
+fn mpris_shuffle(play_order: mbv_queue::PlayOrderMode) -> bool {
+    matches!(play_order, mbv_queue::PlayOrderMode::Shuffle)
+}
+
+/// The MPRIS `CanGoPrevious` property for the owner's play order
+/// (queue-play-order spec, "Previous is disabled in Shuffle"): false while
+/// the order is Shuffle, true otherwise. Pure so the test build can exercise
+/// it without the D-Bus machinery.
+fn mpris_can_go_previous(play_order: mbv_queue::PlayOrderMode) -> bool {
+    !mpris_shuffle(play_order)
+}
+
 /// Forces `s` to look inactive (Stopped/NoTrack, no metadata) when
 /// `disconnected` is true -- see `start`'s doc comment. Pure and cheap so
 /// it's cloned/called every poll tick without hesitation; kept independent of
@@ -361,12 +377,8 @@ impl MediaPlayer2Player {
     }
 
     #[zbus(property)]
-    #[expect(
-        clippy::unused_self,
-        reason = "zbus interface macro mandates the &self receiver; the method carries no per-instance state (approved, issue #804)"
-    )]
     fn shuffle(&self) -> bool {
-        false
+        mpris_shuffle(self.snapshot.lock().unwrap().play_order)
     }
 
     #[zbus(property)]
@@ -417,12 +429,8 @@ impl MediaPlayer2Player {
         true
     }
     #[zbus(property)]
-    #[expect(
-        clippy::unused_self,
-        reason = "zbus interface macro mandates the &self receiver; the method carries no per-instance state (approved, issue #804)"
-    )]
     fn can_go_previous(&self) -> bool {
-        true
+        mpris_can_go_previous(self.snapshot.lock().unwrap().play_order)
     }
     #[zbus(property)]
     #[expect(
@@ -657,7 +665,9 @@ pub fn rebind(
 mod tests {
     use std::path::PathBuf;
 
-    use super::resolve_art_url;
+    use super::{mpris_can_go_previous, mpris_shuffle, resolve_art_url};
+    use mbv_queue::PlayOrderMode;
+    use rstest::rstest;
 
     // Regression guard: a Movie's queue card writes its art under the
     // landscape key (`{id}:QB`), so MPRIS must fall back to that key after
@@ -668,5 +678,20 @@ mod tests {
             (key == "movie:QB").then(|| PathBuf::from("/cache/movie-qb"))
         });
         assert_eq!(art_url.as_deref(), Some("file:///cache/movie-qb"));
+    }
+
+    /// queue-play-order spec, "MPRIS reports the shuffle state" and
+    /// "Previous is disabled in Shuffle": the two capability flags follow the
+    /// owner's play order from the status snapshot.
+    #[rstest]
+    #[case::sequential_keeps_sequential_behavior(PlayOrderMode::Sequential, false, true)]
+    #[case::shuffle_reports_shuffle_and_no_previous(PlayOrderMode::Shuffle, true, false)]
+    fn mpris_capability_flags_follow_the_play_order(
+        #[case] play_order: PlayOrderMode,
+        #[case] shuffle: bool,
+        #[case] can_go_previous: bool,
+    ) {
+        assert_eq!(mpris_shuffle(play_order), shuffle);
+        assert_eq!(mpris_can_go_previous(play_order), can_go_previous);
     }
 }

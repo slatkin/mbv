@@ -190,6 +190,13 @@ fn idle_queue_load_without_active_run_publishes_one_stopped_snapshot_and_accepts
         player.status.lock().unwrap().sequence_generation,
         original_generation + 1
     );
+    assert!(
+        matches!(
+            commands.try_recv(),
+            Ok(PlayerCommand::SetUpcoming(mbv_queue::PlayOrder::Sequential))
+        ),
+        "the order reset the load performs forwards its store-only advance (queue-shuffle-play-order 4.1)"
+    );
     assert!(matches!(
         commands.try_recv(),
         Err(mpsc::TryRecvError::Empty)
@@ -294,6 +301,12 @@ fn pending_idle_load_keeps_old_queue_until_stop_then_commits_once_and_invalidate
         "committing stop is not rebroadcast raw"
     );
     assert_idle_load_accepted(&reply_rx, 52);
+    // The committed load's order reset forwards its store-only advance
+    // (queue-shuffle-play-order task 4.1).
+    assert!(matches!(
+        commands.try_recv(),
+        Ok(PlayerCommand::SetUpcoming(mbv_queue::PlayOrder::Sequential))
+    ));
     assert_no_pending_message(&commands);
 }
 

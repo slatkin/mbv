@@ -4,6 +4,7 @@
 // time through `handle_event` so the process never exits.
 
 use super::*;
+use mbv_ids::ItemId;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::Instant;
@@ -334,257 +335,6 @@ fn packaged_daemon_reads_stay_alive_as_true_regardless_of_spawn_config() {
 }
 
 #[test]
-fn track_completed_stale_run_leaves_queue_and_persists_nothing() {
-    let mut t = test_loop_with_queue(
-        crate::DaemonRole::Local,
-        vec![emby_qi("a", "Video", "Movie")],
-        0,
-    );
-    t.event_loop
-        .player
-        .status
-        .lock()
-        .unwrap()
-        .sequence_generation = 5;
-    let slot = t.event_loop.owner.core.queue.slots()[0].slot_id;
-    let original_position = t.event_loop.owner.core.queue.slots()[0]
-        .item
-        .playback_position_ticks();
-
-    let flow = t
-        .event_loop
-        .handle_event(DaemonEvent::Player(PlayerEvent::TrackCompleted {
-            slot_id: slot,
-            run_identity: 4,
-            position_ticks: 900,
-            played: true,
-            consume: true,
-        }));
-
-    assert_eq!(flow, LoopFlow::Continue);
-    assert_eq!(t.event_loop.owner.core.queue.slots().len(), 1);
-    assert_eq!(
-        t.event_loop.owner.core.queue.slots()[0]
-            .item
-            .playback_position_ticks(),
-        original_position
-    );
-    assert!(t.persisted.borrow().is_empty());
-}
-
-#[test]
-fn stopped_current_run_persists_once() {
-    let mut t = test_loop_with_queue(
-        crate::DaemonRole::Local,
-        vec![emby_qi("a", "Video", "Movie")],
-        0,
-    );
-    let slot = t.event_loop.owner.core.queue.slots()[0].slot_id;
-
-    let flow = t
-        .event_loop
-        .handle_event(DaemonEvent::Player(PlayerEvent::Stopped {
-            slot_id: Some(slot),
-            run_identity: current_run(&t.event_loop),
-            position_ticks: 900,
-            played: false,
-            consume: false,
-            error: None,
-        }));
-
-    assert_eq!(flow, LoopFlow::Continue);
-    assert_eq!(
-        t.event_loop
-            .owner
-            .core
-            .queue
-            .slot(slot)
-            .unwrap()
-            .item
-            .playback_position_ticks(),
-        900
-    );
-    assert_eq!(t.persisted.borrow().len(), 1);
-}
-
-#[test]
-fn stopped_stale_run_persists_nothing() {
-    let mut t = test_loop_with_queue(
-        crate::DaemonRole::Local,
-        vec![emby_qi("a", "Video", "Movie")],
-        0,
-    );
-    t.event_loop
-        .player
-        .status
-        .lock()
-        .unwrap()
-        .sequence_generation = 5;
-    let slot = t.event_loop.owner.core.queue.slots()[0].slot_id;
-
-    let flow = t
-        .event_loop
-        .handle_event(DaemonEvent::Player(PlayerEvent::Stopped {
-            slot_id: Some(slot),
-            run_identity: 4,
-            position_ticks: 900,
-            played: true,
-            consume: false,
-            error: None,
-        }));
-
-    assert_eq!(flow, LoopFlow::Continue);
-    assert!(
-        !t.event_loop
-            .owner
-            .core
-            .queue
-            .slot(slot)
-            .unwrap()
-            .item
-            .played()
-    );
-    assert!(t.persisted.borrow().is_empty());
-}
-
-#[test]
-fn stopped_matching_pending_idle_load_commits_and_persists_once() {
-    let mut t = test_loop_with_queue(
-        crate::DaemonRole::Local,
-        vec![emby_qi("old", "Video", "Movie")],
-        0,
-    );
-    let old_slot = t.event_loop.owner.core.queue.slots()[0].slot_id;
-    let run = current_run(&t.event_loop);
-    let (reply_tx, reply_rx) = mpsc::channel();
-    t.event_loop.owner.pending_idle_load = Some(PendingIdleQueueLoad {
-        client_id: 0,
-        request_id: 7,
-        slots: vec![(old_slot, emby_qi("new", "Video", "Movie"))],
-        cursor: 0,
-        source: QueueSource::Album,
-        reply_tx,
-        stopped_run: run,
-        started_at: Instant::now(),
-    });
-
-    let flow = t
-        .event_loop
-        .handle_event(DaemonEvent::Player(PlayerEvent::Stopped {
-            slot_id: Some(old_slot),
-            run_identity: run,
-            position_ticks: 900,
-            played: false,
-            consume: false,
-            error: None,
-        }));
-
-    assert_eq!(flow, LoopFlow::Continue);
-    assert!(t.event_loop.owner.pending_idle_load.is_none());
-    assert_eq!(t.event_loop.owner.core.queue.slots()[0].item.id(), "new");
-    assert_eq!(t.event_loop.owner.core.source, QueueSource::Album);
-    assert_eq!(t.persisted.borrow().len(), 1);
-    assert!(matches!(
-        recv_event(&reply_rx),
-        CtrlEvent::UnifiedQueueLoadResult {
-            request_id: 7,
-            result: mbv_ctrl::QueueLoadResult::Accepted,
-        }
-    ));
-}
-
-#[test]
-fn stopped_different_run_cancels_pending_idle_load_and_persists_nothing() {
-    let mut t = test_loop_with_queue(
-        crate::DaemonRole::Local,
-        vec![emby_qi("old", "Video", "Movie")],
-        0,
-    );
-    t.event_loop
-        .player
-        .status
-        .lock()
-        .unwrap()
-        .sequence_generation = 5;
-    let old_slot = t.event_loop.owner.core.queue.slots()[0].slot_id;
-    let (reply_tx, reply_rx) = mpsc::channel();
-    t.event_loop.owner.pending_idle_load = Some(PendingIdleQueueLoad {
-        client_id: 0,
-        request_id: 8,
-        slots: vec![(old_slot, emby_qi("new", "Video", "Movie"))],
-        cursor: 0,
-        source: QueueSource::Album,
-        reply_tx,
-        stopped_run: 5,
-        started_at: Instant::now(),
-    });
-
-    let flow = t
-        .event_loop
-        .handle_event(DaemonEvent::Player(PlayerEvent::Stopped {
-            slot_id: Some(old_slot),
-            run_identity: 4,
-            position_ticks: 900,
-            played: false,
-            consume: false,
-            error: None,
-        }));
-
-    assert_eq!(flow, LoopFlow::Continue);
-    assert!(t.event_loop.owner.pending_idle_load.is_none());
-    assert_eq!(t.event_loop.owner.core.queue.slots()[0].item.id(), "old");
-    assert!(t.persisted.borrow().is_empty());
-    assert!(matches!(
-        recv_event(&reply_rx),
-        CtrlEvent::UnifiedQueueLoadResult {
-            request_id: 8,
-            result: mbv_ctrl::QueueLoadResult::Rejected { .. },
-        }
-    ));
-}
-
-#[test]
-fn ws_matching_generation_persists_once() {
-    let mut t = test_loop_with_queue(
-        crate::DaemonRole::Local,
-        vec![emby_qi("a", "Video", "Movie")],
-        0,
-    );
-    let runtime = EmbyOwnerContext::from_client(EmbyClient::new(Config::default()), 1);
-    let generation = runtime.generation;
-    t.event_loop.emby_runtime = Some(runtime);
-
-    let flow = t.event_loop.handle_event(DaemonEvent::Ws {
-        generation,
-        event: WsEvent::Stop,
-    });
-
-    assert_eq!(flow, LoopFlow::Continue);
-    assert_eq!(t.persisted.borrow().len(), 1);
-}
-
-#[test]
-fn ws_mismatched_generation_persists_nothing() {
-    let mut t = test_loop_with_queue(
-        crate::DaemonRole::Local,
-        vec![emby_qi("a", "Video", "Movie")],
-        0,
-    );
-    t.event_loop.emby_runtime = Some(EmbyOwnerContext::from_client(
-        EmbyClient::new(Config::default()),
-        1,
-    ));
-
-    let flow = t.event_loop.handle_event(DaemonEvent::Ws {
-        generation: mbv_core::service_runtime::SetupGeneration::new(99),
-        event: WsEvent::Stop,
-    });
-
-    assert_eq!(flow, LoopFlow::Continue);
-    assert!(t.persisted.borrow().is_empty());
-}
-
-#[test]
 fn playback_resolved_current_request_replaces_queue_and_persists_once() {
     let mut t = test_loop_with_queue(
         crate::DaemonRole::Local,
@@ -718,69 +468,70 @@ fn playback_resolved_failure_line_carries_intent_client_and_request() {
     );
 }
 
+/// In Shuffle, the Next-Up threshold card names the slot the core picked, not
+/// the queue neighbor (queue-shuffle-play-order task 4.2; queue-play-order
+/// spec: one pick drives every forward advance).
 #[test]
-fn role_gate_non_local_dirty_event_persists_nothing() {
-    let mut t = test_loop_with_role(crate::DaemonRole::Packaged);
-    t.event_loop.client.lock().unwrap().config.consume_audio = true;
-
-    let flow = t
-        .event_loop
-        .handle_event(DaemonEvent::Player(PlayerEvent::TrackCompleted {
-            slot_id: mbv_queue::QueueSlotId::from_raw(1),
-            run_identity: current_run(&t.event_loop),
-            position_ticks: 0,
-            played: true,
-            consume: true,
-        }));
-
-    assert_eq!(flow, LoopFlow::Continue);
-    assert!(t.persisted.borrow().is_empty());
-}
-
-#[test]
-fn idle_queue_load_install_persists_once_through_injected_store() {
-    let mut t = test_loop_with_queue(
+fn next_up_threshold_in_shuffle_names_the_picked_slot() {
+    let mut fixture = test_loop_with_queue(
         crate::DaemonRole::Local,
-        vec![emby_qi("old", "Video", "Movie")],
+        vec![
+            emby_qi("a", "Video", "Movie"),
+            emby_qi("b", "Video", "Movie"),
+            emby_qi("c", "Video", "Movie"),
+        ],
         0,
     );
-    // A real state dir would receive the install path's removed production
-    // write; point it at a tempdir and assert that file never appears.
-    let _guard = mbv_config::TestStateDirGuard::new();
-    t.event_loop.client.lock().unwrap().token = "test-token".to_string();
-    let (client_id, _rx) = connect_client(&mut t.event_loop.ctrl_clients.lock().unwrap());
-    let (reply_tx, reply_rx) = mpsc::channel();
+    let cmd_rx = fixture.event_loop.player.spy_on_commands();
+    let slots: Vec<_> = fixture
+        .event_loop
+        .owner
+        .core
+        .queue
+        .slots()
+        .iter()
+        .map(|slot| slot.slot_id)
+        .collect();
+    fixture
+        .event_loop
+        .owner
+        .core
+        .note_observed_active_slot(Some(slots[0]));
+    fixture
+        .event_loop
+        .owner
+        .core
+        .set_play_order(mbv_queue::PlayOrderMode::Shuffle);
+    let mbv_queue::PlayOrder::Shuffle {
+        upcoming: Some(picked),
+    } = fixture.event_loop.owner.core.play_order()
+    else {
+        panic!("shuffle over two other slots must pick one");
+    };
+    // The pick can land on the queue neighbor by chance; moving it to the
+    // tail keeps the card's source unambiguous for either outcome.
+    fixture.event_loop.owner.core.queue.move_slot(picked, 2);
+    let picked_item_id = fixture
+        .event_loop
+        .owner
+        .core
+        .queue
+        .slot(picked)
+        .map(|slot| slot.item.id().to_string())
+        .unwrap();
 
-    let flow = t.event_loop.handle_event(DaemonEvent::Ctrl(
-        CtrlCmd::UnifiedQueueLoadIdle {
-            request_id: 5,
-            slots: vec![mbv_ctrl::UnifiedQueueSlot {
-                slot_id: 1,
-                item: emby_qi("new", "Video", "Movie"),
-            }],
-            cursor: 0,
-            source: QueueSource::Album,
-        },
-        client_id,
-        reply_tx,
-    ));
+    fixture
+        .event_loop
+        .handle_event(DaemonEvent::Player(PlayerEvent::NextUpThreshold {
+            series_id: ItemId::new("series"),
+            season: 1,
+            episode: 1,
+        }));
 
-    assert_eq!(flow, LoopFlow::Continue);
-    assert_eq!(t.event_loop.owner.core.queue.slots()[0].item.id(), "new");
-    assert_eq!(t.event_loop.owner.core.source, QueueSource::Album);
-    // The install path has no inline production write: the loop-pass store is
-    // the single writer, so a committed load records exactly one snapshot.
-    assert_eq!(t.persisted.borrow().len(), 1);
-    assert_eq!(t.persisted.borrow()[0].item_ids, vec!["new".to_string()]);
-    assert!(
-        !mbv_config::stay_alive_queue_state_path().exists(),
-        "install path must not write the production store directly"
-    );
-    assert!(matches!(
-        recv_event(&reply_rx),
-        CtrlEvent::UnifiedQueueLoadResult {
-            request_id: 5,
-            result: mbv_ctrl::QueueLoadResult::Accepted,
-        }
-    ));
+    match cmd_rx.recv().unwrap() {
+        PlayerCommand::NextUpShow { item_id, .. } => assert_eq!(item_id, picked_item_id),
+        other => panic!("expected NextUpShow, got {other:?}"),
+    }
 }
+
+mod persistence;

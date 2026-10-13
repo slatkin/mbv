@@ -2,8 +2,8 @@ use super::{
     CtrlContext, DaemonEvent, DaemonPlayerOwner, EmbyItem, ExecSlot, PlaybackQueue, PlayerCommand,
     PlayerOwnerState, QueueItem, QueueSlotId, RejectContext, abs_queue_transport_rejection,
     admit_queue_items, admit_queue_slots, audio_only_rejection, broadcast_queue_state,
-    daemon_admits, mint_queue_lineage, reject_command, reset_slot_jumps,
-    submit_queue_slots_cold_start,
+    daemon_admits, forward_play_order_advance, mint_queue_lineage, reject_command,
+    reset_play_order_for_queue_replacement, reset_slot_jumps, submit_queue_slots_cold_start,
 };
 use crate::AudiobookshelfOwnerContext;
 use mbv_emby::EmbyClient;
@@ -21,14 +21,7 @@ pub(super) fn handle_adopt_queue(
 ) {
     let has_emby = ctx.has_emby();
     let DaemonPlayerOwner {
-        core:
-            PlayerOwnerState {
-                queue,
-                source,
-                transitions,
-                ..
-            },
-        queued_transition_origin,
+        core: PlayerOwnerState { queue, source, .. },
         ..
     } = &mut *ctx.owner;
     // Adoption only applies to a Cold daemon — one with no queue yet.
@@ -44,6 +37,7 @@ pub(super) fn handle_adopt_queue(
                 source: &*source,
                 lineage,
                 op: &ctx.op,
+                play_order: *ctx.shared_queue.play_order.lock().unwrap(),
             },
             "daemon already has a queue; adoption skipped",
         );
@@ -72,6 +66,7 @@ pub(super) fn handle_adopt_queue(
                 source: &*source,
                 lineage,
                 op: &ctx.op,
+                play_order: *ctx.shared_queue.play_order.lock().unwrap(),
             },
             &reason,
         );
@@ -85,22 +80,33 @@ pub(super) fn handle_adopt_queue(
         ctx.audiobookshelf.is_some(),
     );
     ctx.player.set_initial_queue(&items, next_cursor);
-    reset_slot_jumps(transitions, queued_transition_origin);
-    let mint = queue.revision_mint();
-    *queue = PlaybackQueue::from_queue_items(items, Some(next_cursor), mint);
-    *source = new_source;
+    reset_slot_jumps(
+        &mut ctx.owner.core.transitions,
+        &mut ctx.owner.queued_transition_origin,
+    );
+    let mint = ctx.owner.core.queue.revision_mint();
+    ctx.owner.core.queue = PlaybackQueue::from_queue_items(items, Some(next_cursor), mint);
+    ctx.owner.core.source = new_source;
+    // Adoption installs a new lineage: the whole-queue replacement that
+    // resets the order (design D4).
     mint_queue_lineage(ctx.shared_queue);
+    reset_play_order_for_queue_replacement(&mut ctx.owner.core, ctx.shared_queue, ctx.player);
     broadcast_queue_state(
         ctx.ctrl_clients,
         ctx.player,
         ctx.shared_queue,
-        queue,
-        source,
-        transitions,
+        &ctx.owner.core.queue,
+        &ctx.owner.core.source,
+        &ctx.owner.core.transitions,
         None,
     );
 
-    start_queue_enrichment(queue, ctx.client, ctx.audiobookshelf, ctx.merged_tx);
+    start_queue_enrichment(
+        &ctx.owner.core.queue,
+        ctx.client,
+        ctx.audiobookshelf,
+        ctx.merged_tx,
+    );
 }
 
 pub(super) fn handle_queue_refresh(ctx: &mut CtrlContext<'_>) {
@@ -226,6 +232,7 @@ pub(super) fn handle_queue_source_update(
                 source: &ctx.owner.core.source,
                 lineage,
                 op: &ctx.op,
+                play_order: *ctx.shared_queue.play_order.lock().unwrap(),
             },
             "queue source update rejected: owner queue lineage changed",
         );
@@ -364,6 +371,10 @@ pub(super) fn handle_queue_replace(
     // needed (as `play_resolved_items` does).
     let queue_slots = queue.slot_pairs();
     submit_queue_slots_cold_start(ctx.player, queue_slots, next_cursor, ctx.client);
+    // The replacement installs a new lineage: reset the order (design D4)
+    // before the observation clear, so the re-pick hook inside it sees the
+    // Sequential order and does nothing.
+    reset_play_order_for_queue_replacement(&mut ctx.owner.core, ctx.shared_queue, ctx.player);
     ctx.owner.core.note_observed_active_slot(None);
     ctx.shared_queue.publish_observed(&ctx.owner.core);
     // Publish after the submit, not before: the snapshot resolves its
@@ -418,30 +429,14 @@ fn forward_queue_append(player: &Player, items: Vec<ExecSlot>, before: Option<u6
 
 /// `CtrlCmd::UnifiedQueueAppend`: append item-generic values to the tail of
 /// the queue.
-pub(super) fn handle_queue_append(
-    ctx: &mut CtrlContext<'_>,
+/// Admit a queue-append's items against the transport, daemon, and audio-only
+/// gates. `None` means a gate rejected the append, and the rejection was sent.
+fn admit_append_items(
+    ctx: &CtrlContext<'_>,
+    mut items: Vec<QueueItem>,
     lineage: mbv_queue::QueueLineage,
-    items: Vec<QueueItem>,
-    before: Option<u64>,
-) {
-    let except_op_client = ctx.except_op_client();
-    if items.is_empty() {
-        return;
-    }
-    let Some(index) = append_index(ctx, lineage, before) else {
-        return;
-    };
-    let has_emby = ctx.has_emby();
-    let DaemonPlayerOwner {
-        core:
-            PlayerOwnerState {
-                queue,
-                source,
-                transitions,
-                ..
-            },
-        ..
-    } = &mut *ctx.owner;
+) -> Option<Vec<QueueItem>> {
+    let reject = |reason: &str| reject_command(&ctx.rejection_context(lineage), reason);
     let supports_abs_queue = ctx
         .ctrl_clients
         .lock()
@@ -455,57 +450,51 @@ pub(super) fn handle_queue_append(
     if let Some(reason) =
         abs_queue_transport_rejection(&items, supports_abs_queue, supports_abs_book_queue)
     {
-        reject_command(
-            &RejectContext {
-                reply_tx: ctx.reply_tx,
-                ctrl_clients: ctx.ctrl_clients,
-                client_id: ctx.client_id,
-                player: ctx.player,
-                queue: &*queue,
-                source: &*source,
-                lineage,
-                op: &ctx.op,
-            },
-            &reason,
-        );
-        return;
+        reject(&reason);
+        return None;
     }
-    let mut items = items;
+    let has_emby = ctx.has_emby();
     items
         .retain(|item| daemon_admits(item, ctx.audio_only, has_emby, ctx.audiobookshelf.is_some()));
     if items.is_empty() {
-        reject_command(
-            &RejectContext {
-                reply_tx: ctx.reply_tx,
-                ctrl_clients: ctx.ctrl_clients,
-                client_id: ctx.client_id,
-                player: ctx.player,
-                queue: &*queue,
-                source: &*source,
-                lineage,
-                op: &ctx.op,
-            },
-            "Playback owner rejected the queue append",
-        );
-        return;
+        reject("Playback owner rejected the queue append");
+        return None;
     }
     // Audio-only admission: reject if any appended item is non-audio.
     if let Some(reason) = audio_only_rejection(ctx.audio_only, &items) {
-        reject_command(
-            &RejectContext {
-                reply_tx: ctx.reply_tx,
-                ctrl_clients: ctx.ctrl_clients,
-                client_id: ctx.client_id,
-                player: ctx.player,
-                queue: &*queue,
-                source: &*source,
-                lineage,
-                op: &ctx.op,
-            },
-            &reason,
-        );
+        reject(&reason);
+        return None;
+    }
+    Some(items)
+}
+
+pub(super) fn handle_queue_append(
+    ctx: &mut CtrlContext<'_>,
+    lineage: mbv_queue::QueueLineage,
+    items: Vec<QueueItem>,
+    before: Option<u64>,
+) {
+    let except_op_client = ctx.except_op_client();
+    if items.is_empty() {
         return;
     }
+    let Some(index) = append_index(ctx, lineage, before) else {
+        return;
+    };
+    let order_before = ctx.owner.core.play_order();
+    let Some(items) = admit_append_items(ctx, items, lineage) else {
+        return;
+    };
+    let DaemonPlayerOwner {
+        core:
+            PlayerOwnerState {
+                queue,
+                source,
+                transitions,
+                ..
+            },
+        ..
+    } = &mut *ctx.owner;
     // Allocate the owner slot ids once, in the daemon's canonical
     // queue, and hand the same ids to the Playback run.
     let items_for_player: Vec<ExecSlot> = items
@@ -525,6 +514,12 @@ pub(super) fn handle_queue_append(
         transitions,
         except_op_client,
     );
+    // The append can make a Shuffle pick possible where none was; re-pick
+    // and forward the new advance decision (design D2).
+    ctx.owner.core.note_queue_slot_appended();
+    if ctx.owner.core.play_order() != order_before {
+        forward_play_order_advance(&ctx.owner.core, ctx.player);
+    }
     // Append to the player's queue rather than replacing the whole queue.
     // A following move keeps the run's order aligned with canonical inserts.
     forward_queue_append(ctx.player, items_for_player, before, index);

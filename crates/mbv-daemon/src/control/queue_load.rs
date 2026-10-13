@@ -3,6 +3,7 @@ use super::{
     QueueItem, QueueSlotId, SharedQueueState, abs_queue_transport_rejection, admit_queue_slots,
     audio_only_rejection, broadcast_queue_state, mint_queue_lineage, reset_slot_jumps, send_to,
 };
+use crate::reset_play_order_for_queue_replacement;
 use mbv_ctrl::CtrlEvent;
 use mbv_queue::PlaybackQueue;
 use std::time::{Duration, Instant};
@@ -34,7 +35,10 @@ fn install_idle_queue_load(
     let mint = std::sync::Arc::clone(&owner.core.revision_mint);
     owner.core.queue = PlaybackQueue::from_slot_items(slots, active_slot, mint);
     owner.core.source = source;
+    // The load installs a new lineage: the whole-queue replacement that
+    // resets the order (design D4).
     mint_queue_lineage(shared_queue);
+    reset_play_order_for_queue_replacement(&mut owner.core, shared_queue, player);
     owner.core.note_observed_active_slot(None);
     shared_queue.publish_observed(&owner.core);
     broadcast_queue_state(

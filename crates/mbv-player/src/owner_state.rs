@@ -9,8 +9,21 @@
 use crate::transition::OwnerTransitionState;
 use crate::transition::TransitionCause;
 use mbv_ctrl::Direction;
-use mbv_queue::{PlaybackQueue, QueueRevisionMint, QueueSlotId};
+use mbv_queue::{PlayOrder, PlayOrderMode, PlaybackQueue, QueueRevisionMint, QueueSlotId};
 use std::sync::Arc;
+
+/// Pick the next slot uniformly at random from `slots`, never the active
+/// slot (design D2). `None` when no slot other than the active slot exists.
+fn pick_next_slot(
+    slots: impl Iterator<Item = QueueSlotId>,
+    active_slot: Option<QueueSlotId>,
+    rng: &mut impl rand::Rng,
+) -> Option<QueueSlotId> {
+    use rand::seq::IteratorRandom;
+    slots
+        .filter(|slot_id| Some(*slot_id) != active_slot)
+        .choose(rng)
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StepTarget {
@@ -25,6 +38,7 @@ pub struct PlayerOwnerState {
     pub revision_mint: Arc<QueueRevisionMint>,
     pub source: mbv_queue::QueueSource,
     observed_active_slot: Option<QueueSlotId>,
+    play_order: PlayOrder,
     pub transitions: OwnerTransitionState,
 }
 
@@ -49,6 +63,7 @@ impl PlayerOwnerState {
             revision_mint,
             source,
             observed_active_slot: None,
+            play_order: PlayOrder::default(),
             transitions: OwnerTransitionState::default(),
         }
     }
@@ -68,15 +83,86 @@ impl PlayerOwnerState {
         } else {
             self.queue.clear_active_slot();
         }
+        // A synced queue can drop the Shuffle pick's slot; re-pick so
+        // `upcoming` never names a removed slot (queue-shuffle-play-order
+        // task 4.1).
+        if let PlayOrder::Shuffle {
+            upcoming: Some(pick),
+        } = self.play_order
+            && self.queue.slot(pick).is_none()
+        {
+            self.note_queue_slot_removed(pick);
+        }
     }
 
     /// Record a Playback-run observation of the active file. The only path
-    /// permitted to change the observed active slot (design D3).
+    /// permitted to change the observed active slot (design D3). An observed
+    /// change also re-picks in Shuffle (design D2).
     pub fn note_observed_active_slot(&mut self, slot_id: Option<QueueSlotId>) {
+        let changed = self.observed_active_slot != slot_id;
         self.observed_active_slot = slot_id;
         if let Some(slot_id) = slot_id {
             self.queue.set_active_slot(slot_id);
         }
+        if changed && matches!(self.play_order, PlayOrder::Shuffle { .. }) {
+            self.repick_upcoming();
+        }
+    }
+
+    /// The playback order the owner holds for its Bound queue (design D1).
+    #[must_use]
+    pub fn play_order(&self) -> PlayOrder {
+        self.play_order
+    }
+
+    /// Set the playback order (design D2). Turning Shuffle on picks the next
+    /// slot immediately; turning Sequential clears the pick. Setting the mode
+    /// the order already has keeps the current pick.
+    pub fn set_play_order(&mut self, mode: PlayOrderMode) {
+        if mode == self.play_order.mode() {
+            return;
+        }
+        match mode {
+            PlayOrderMode::Sequential => self.play_order = PlayOrder::Sequential,
+            PlayOrderMode::Shuffle => self.repick_upcoming(),
+        }
+    }
+
+    /// A whole-queue replacement resets the order to Sequential (design D4).
+    /// The daemon owner calls this where it installs a new `QueueLineage`.
+    pub fn note_queue_replaced(&mut self) {
+        self.set_play_order(PlayOrderMode::Sequential);
+    }
+
+    /// A queue edit removed `slot_id` from the canonical queue. Re-pick when
+    /// the edit dropped the Shuffle pick (design D2).
+    pub fn note_queue_slot_removed(&mut self, slot_id: QueueSlotId) {
+        let pick_dropped = match self.play_order {
+            PlayOrder::Shuffle { upcoming } => upcoming == Some(slot_id),
+            PlayOrder::Sequential => false,
+        };
+        if pick_dropped {
+            self.repick_upcoming();
+        }
+    }
+
+    /// A queue edit appended a slot to the canonical queue. Re-pick when
+    /// Shuffle had no pick because no other slot existed (design D2).
+    pub fn note_queue_slot_appended(&mut self) {
+        if matches!(self.play_order, PlayOrder::Shuffle { upcoming: None }) {
+            self.repick_upcoming();
+        }
+    }
+
+    /// Pick a new `upcoming` and store it on the Shuffle order. Only called
+    /// while the order is Shuffle.
+    fn repick_upcoming(&mut self) {
+        let active = self
+            .observed_active_slot
+            .or_else(|| self.queue.active_slot_id());
+        let slots = self.queue.slots().iter().map(|slot| slot.slot_id);
+        let pick = pick_next_slot(slots, active, &mut rand::rng());
+        self.play_order = PlayOrder::Shuffle { upcoming: pick };
     }
 
     /// Resolve a Playback-run `TrackChanged` observation against the canonical
@@ -121,14 +207,22 @@ impl PlayerOwnerState {
         let allowed = consume
             && ((slot.item.is_video() && consume_videos)
                 || (slot.item.is_audio() && consume_audio));
-        allowed
+        let removed = allowed
             && matches!(
                 self.queue.consume_slot(slot_id),
                 mbv_queue::QueueMutationResult::Applied(_)
-            )
+            );
+        if removed {
+            // A consumed slot can be the Shuffle pick; re-pick so `upcoming`
+            // never names a removed slot (queue-shuffle-play-order task 4.1).
+            self.note_queue_slot_removed(slot_id);
+        }
+        removed
     }
 
-    /// Resolve a relative step from the latest desired/observed queue position (design D3).
+    /// Resolve a relative step from the latest desired/observed queue position
+    /// (design D3). In Shuffle, Next jumps to the picked slot (or is at the
+    /// edge when no pick exists) and Previous does nothing.
     #[must_use]
     pub fn relative_step_target(&self, direction: Direction) -> StepTarget {
         let latest = self
@@ -137,6 +231,12 @@ impl PlayerOwnerState {
             .or_else(|| self.transitions.in_flight());
         if latest.is_some_and(|t| t.cause == TransitionCause::Step(direction)) {
             return StepTarget::Coalesced;
+        }
+        if let PlayOrder::Shuffle { upcoming } = self.play_order {
+            return match direction {
+                Direction::Next => upcoming.map_or(StepTarget::AtEdge, StepTarget::Jump),
+                Direction::Previous => StepTarget::AtEdge,
+            };
         }
         let base = latest
             .map(|t| t.target)
@@ -218,6 +318,7 @@ impl PlayerOwnerState {
 mod tests {
     use super::*;
     use crate::transition::{DispatchDecision, ExpireOutcome, Transition};
+    use rstest::rstest;
     use std::time::{Duration, Instant};
 
     #[test]
@@ -323,6 +424,31 @@ mod tests {
             owner.relative_step_target(Direction::Next),
             StepTarget::AtEdge
         );
+
+        // In Shuffle, Next jumps to the pick and Previous does nothing
+        // (design D3).
+        let shuffle_queue = PlaybackQueue::from_items(
+            vec![item("a"), item("b"), item("c")],
+            Some(0),
+            Arc::new(QueueRevisionMint::default()),
+        );
+        let shuffle_slots: Vec<_> = shuffle_queue
+            .slots()
+            .iter()
+            .map(|slot| slot.slot_id)
+            .collect();
+        let mut shuffle_owner =
+            PlayerOwnerState::new(shuffle_queue, mbv_queue::QueueSource::default());
+        shuffle_owner.note_observed_active_slot(Some(shuffle_slots[1]));
+        let picked = shuffle_pick(&mut shuffle_owner);
+        assert_eq!(
+            shuffle_owner.relative_step_target(Direction::Next),
+            StepTarget::Jump(picked)
+        );
+        assert_eq!(
+            shuffle_owner.relative_step_target(Direction::Previous),
+            StepTarget::AtEdge
+        );
     }
 
     #[test]
@@ -404,5 +530,167 @@ mod tests {
         let slot = owner.queue.slot(slot_id).expect("slot still present");
         assert_eq!(slot.item.playback_position_ticks(), watched_ticks);
         assert_ne!(owner.queue.revision(), before_revision);
+    }
+
+    /// Turn Shuffle on and return the pick it made, read back from the order
+    /// the way the daemon reads it.
+    fn shuffle_pick(owner: &mut PlayerOwnerState) -> QueueSlotId {
+        owner.set_play_order(PlayOrderMode::Shuffle);
+        let PlayOrder::Shuffle { upcoming } = owner.play_order() else {
+            panic!("shuffle must leave the Shuffle order");
+        };
+        upcoming.expect("shuffle over two other slots must pick one")
+    }
+
+    /// The contract: the Shuffle pick never lands on the active slot, and it
+    /// is `None` when the queue has no slot other than the active slot
+    /// (design D2).
+    #[rstest]
+    #[case::one_slot_has_no_other_slot(vec![7], 7, false)]
+    #[case::multi_slot_never_picks_the_active_slot(vec![7, 8, 9], 8, true)]
+    fn pick_next_slot_only_picks_slots_other_than_the_active_slot(
+        #[case] slot_ids: Vec<u64>,
+        #[case] active_raw: u64,
+        #[case] picks_available: bool,
+    ) {
+        use rand::SeedableRng;
+
+        let slots: Vec<QueueSlotId> = slot_ids.into_iter().map(QueueSlotId::from_raw).collect();
+        let active = QueueSlotId::from_raw(active_raw);
+        let mut rng = rand::rngs::SmallRng::seed_from_u64(7);
+        let picks: Vec<Option<QueueSlotId>> = (0..32)
+            .map(|_| pick_next_slot(slots.iter().copied(), Some(active), &mut rng))
+            .collect();
+
+        assert_eq!(picks.iter().all(Option::is_some), picks_available);
+        assert!(picks.iter().all(|pick| *pick != Some(active)));
+    }
+
+    /// The contract: setting Shuffle while Shuffle is on keeps the current
+    /// pick (design D2).
+    #[test]
+    fn repeating_shuffle_keeps_the_current_pick() {
+        let queue = PlaybackQueue::from_items(
+            vec![item("a"), item("b"), item("c")],
+            Some(0),
+            Arc::new(QueueRevisionMint::default()),
+        );
+        let mut owner = PlayerOwnerState::new(queue, mbv_queue::QueueSource::default());
+        let picked = shuffle_pick(&mut owner);
+
+        owner.set_play_order(PlayOrderMode::Shuffle);
+
+        assert_eq!(
+            owner.play_order(),
+            PlayOrder::Shuffle {
+                upcoming: Some(picked)
+            }
+        );
+    }
+
+    /// The contract: a whole-queue replacement resets the order to
+    /// Sequential (design D4); the daemon calls this where it installs a new
+    /// `QueueLineage`.
+    #[test]
+    fn queue_replacement_resets_play_order_to_sequential() {
+        let queue = PlaybackQueue::from_items(
+            vec![item("a"), item("b")],
+            Some(0),
+            Arc::new(QueueRevisionMint::default()),
+        );
+        let mut owner = PlayerOwnerState::new(queue, mbv_queue::QueueSource::default());
+        owner.set_play_order(PlayOrderMode::Shuffle);
+        assert_eq!(owner.play_order().mode(), PlayOrderMode::Shuffle);
+
+        owner.note_queue_replaced();
+
+        assert_eq!(owner.play_order(), PlayOrder::Sequential);
+    }
+
+    /// The contract: a queue edit that removes the picked slot causes a new
+    /// pick, and the new pick is a present slot other than the active slot
+    /// (design D2).
+    #[test]
+    fn removing_the_picked_slot_repicks_a_present_non_active_slot() {
+        let queue = PlaybackQueue::from_items(
+            vec![item("a"), item("b"), item("c")],
+            Some(0),
+            Arc::new(QueueRevisionMint::default()),
+        );
+        let active = queue.slots()[0].slot_id;
+        let mut owner = PlayerOwnerState::new(queue, mbv_queue::QueueSource::default());
+        let removed = shuffle_pick(&mut owner);
+
+        owner.queue.remove_slot(removed);
+        owner.note_queue_slot_removed(removed);
+        let PlayOrder::Shuffle { upcoming } = owner.play_order() else {
+            panic!("removing the pick must leave Shuffle");
+        };
+        let repicked = upcoming.expect("removing the pick must re-pick");
+
+        assert_ne!(repicked, active);
+        assert!(owner.queue.slot(repicked).is_some());
+    }
+
+    /// The contract: consuming a completed slot that held the Shuffle pick
+    /// re-picks a present slot other than the active slot, so `upcoming`
+    /// never names a removed slot (queue-shuffle-play-order task 4.1).
+    #[test]
+    fn consuming_the_picked_slot_repicks_a_present_non_active_slot() {
+        let queue = PlaybackQueue::from_items(
+            vec![item("a"), item("b"), item("c")],
+            Some(0),
+            Arc::new(QueueRevisionMint::default()),
+        );
+        let active = queue.slots()[0].slot_id;
+        let mut owner = PlayerOwnerState::new(queue, mbv_queue::QueueSource::default());
+        let consumed = shuffle_pick(&mut owner);
+
+        assert!(owner.consume_completed_slot(consumed, true, true, true));
+
+        let PlayOrder::Shuffle { upcoming } = owner.play_order() else {
+            panic!("a consume that removed the pick must leave Shuffle");
+        };
+        let repicked = upcoming.expect("another non-active slot remains");
+        assert_ne!(repicked, active);
+        assert!(owner.queue.slot(repicked).is_some());
+    }
+
+    /// The contract: a synced queue that dropped the Shuffle pick's slot
+    /// re-picks, so `upcoming` never names a removed slot
+    /// (queue-shuffle-play-order task 4.1).
+    #[test]
+    fn syncing_a_queue_without_the_picked_slot_repicks() {
+        let queue = PlaybackQueue::from_items(
+            vec![item("a"), item("b"), item("c")],
+            Some(0),
+            Arc::new(QueueRevisionMint::default()),
+        );
+        let active = queue.slots()[0].slot_id;
+        let mut owner = PlayerOwnerState::new(queue, mbv_queue::QueueSource::default());
+        owner.note_observed_active_slot(Some(active));
+        let dropped = shuffle_pick(&mut owner);
+
+        // The replacement keeps the active slot identity and mints a fresh
+        // id for the surviving other slot, so the dropped pick cannot survive
+        // under a new name.
+        let replacement = PlaybackQueue::from_slot_items(
+            vec![
+                (active, mbv_queue::QueueItem::Emby(Box::new(item("a")))),
+                (
+                    QueueSlotId::from_raw(11),
+                    mbv_queue::QueueItem::Emby(Box::new(item("d"))),
+                ),
+            ],
+            Some(active),
+            Arc::new(QueueRevisionMint::default()),
+        );
+        owner.sync_canonical_queue(replacement);
+
+        let PlayOrder::Shuffle { upcoming } = owner.play_order() else {
+            panic!("sync keeps the order; only removal hooks may reset it");
+        };
+        assert_ne!(upcoming, Some(dropped));
+        assert_eq!(upcoming, Some(QueueSlotId::from_raw(11)));
     }
 }

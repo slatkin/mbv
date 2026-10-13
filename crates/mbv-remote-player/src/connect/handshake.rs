@@ -145,6 +145,7 @@ pub(super) fn read_server_hello(
     compatibility.supports_owner_queue_load = info.supports_owner_queue_load();
     compatibility.supports_answered_queue_ops = info.supports_answered_queue_ops();
     compatibility.supports_owner_action = info.supports_owner_action();
+    compatibility.supports_play_order = info.supports_play_order();
     tracing::info!(name: "remote.daemon_protocol_validation.succeeded", target: "remote", protocol_version = info.protocol_version, app_version = %info.app_version, capabilities = ?info.capabilities, "daemon protocol validated");
     Ok(compatibility)
 }

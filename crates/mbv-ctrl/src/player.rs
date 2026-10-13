@@ -1,7 +1,7 @@
 use mbv_emby_model::EmbyItem;
 use mbv_ids::ItemId;
 use mbv_queue::ExecSlot;
-use mbv_queue::{AudiobookshelfItem, QueueItem, QueueSlotId};
+use mbv_queue::{AudiobookshelfItem, PlayOrder, PlayOrderMode, QueueItem, QueueSlotId};
 
 #[derive(Clone, Debug, Default)]
 pub struct SubtitlePrefs {
@@ -75,6 +75,11 @@ pub struct PlayerStatus {
     pub audio_codec: String, // e.g. "flac", "mp3", "aac"
     #[serde(default)]
     pub video_is_image: bool, // true when the video track is cover art (not real video)
+    /// The owner's playback order, so MPRIS reads it from the same status
+    /// snapshot the rest of the interface reads (queue-play-order design D7).
+    /// Serde default keeps older owners decoding as Sequential.
+    #[serde(default)]
+    pub play_order: PlayOrderMode,
 }
 
 impl PlayerStatus {
@@ -201,6 +206,7 @@ impl Default for PlayerStatus {
             video_height: 0,
             audio_codec: String::new(),
             video_is_image: false,
+            play_order: PlayOrderMode::Sequential,
         }
     }
 }
@@ -418,6 +424,11 @@ pub enum PlayerCommand {
         #[serde(default)]
         resume_ticks: Option<i64>,
     },
+    /// Store the owner's play order the run obeys on its next unforced
+    /// end-of-file advance (queue-shuffle-play-order design D2). In-process
+    /// only — never crosses the ctrl wire: the pick is owner-local state, like
+    /// `JumpTo`'s target.
+    SetUpcoming(PlayOrder),
     QueueAppend {
         items: Vec<ExecSlot>,
     },

@@ -9,7 +9,7 @@ use super::{
 };
 use crate::{divergent_entry, prepare_source};
 use mbv_ids::ItemId;
-use mbv_queue::MpvUrlSource;
+use mbv_queue::{MpvUrlSource, PlayOrder};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
@@ -564,6 +564,7 @@ impl PlaybackRun {
             ext_sub_urls,
             current_idx: start_idx,
             forced_jump: None,
+            upcoming: PlayOrder::Sequential,
             stop_slot: None,
             stop_runtime: None,
             quit_at: None,

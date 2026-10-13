@@ -4,7 +4,8 @@
 use super::super::{
     DaemonLoop, DaemonOwnerContext, apply_stopped_observation, apply_track_completed_observation,
     broadcast, broadcast_player_event_if_not_replaced, cancel_pending_idle_queue_load,
-    complete_pending_idle_queue_load, settle_and_redispatch,
+    complete_pending_idle_queue_load, forward_play_order_advance, next_up_slot,
+    settle_and_redispatch,
 };
 use super::EventOutcome;
 use mbv_ctrl::player::{PlayerCommand, PlayerEvent};
@@ -29,11 +30,17 @@ impl DaemonLoop {
         // evidence about which surviving slot was intended, so it is
         // discarded and logged without touching canonical queue or
         // observed slot (design D6).
+        let order_before = self.owner.core.play_order();
         let Some((observed_idx, resolved_slot_id)) = self.owner.core.observe_track_change(slot_id)
         else {
             tracing::warn!(name: "daemon.queue_track_change.discarded", target: "queue", slot = ?slot_id, "discarding track change for unknown slot");
             return EventOutcome::CONTINUE;
         };
+        // An observed active-slot change re-picks the Shuffle advance; forward
+        // the new decision when it changed (queue-shuffle-play-order D2).
+        if self.owner.core.play_order() != order_before {
+            forward_play_order_advance(&self.owner.core, &self.player);
+        }
         broadcast(
             &self.ctrl_clients,
             &CtrlEvent::Player(PlayerEvent::TrackChanged {
@@ -94,16 +101,20 @@ impl DaemonLoop {
         EventOutcome::CONTINUE
     }
 
-    /// `PlayerEvent::NextUpThreshold`: show the Next-Up card for the item
-    /// after the active slot, then relay the event.
+    /// `PlayerEvent::NextUpThreshold`: show the Next-Up card for the slot
+    /// the core will really play next, then relay the event.
     pub(super) fn handle_next_up_threshold(
         &mut self,
         series_id: ItemId,
         season: i64,
         episode: i64,
     ) -> EventOutcome {
-        let active_idx = self.owner.core.queue.active_index().unwrap_or(0);
-        if let Some(slot) = self.owner.core.queue.slots().get(active_idx + 1)
+        // One pick drives every forward advance (queue-play-order spec): the
+        // card names the Shuffle pick in Shuffle and the queue neighbor in
+        // Sequential; a Shuffle order with no pick means the queue ends here,
+        // so no card is shown (queue-shuffle-play-order task 4.2).
+        if let Some(slot_id) = next_up_slot(&self.owner.core, &self.owner.core.queue)
+            && let Some(slot) = self.owner.core.queue.slot(slot_id)
             && let Some(emby) = slot.item.as_emby()
         {
             self.player.send_command(PlayerCommand::NextUpShow {

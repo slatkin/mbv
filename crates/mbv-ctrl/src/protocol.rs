@@ -85,6 +85,9 @@ pub const SWAP_TOKEN_ENV: &str = "MBV_SWAP_TOKEN";
 /// Connection may run one Owner action (`CtrlCmd::RunOwnerAction`). Additive —
 /// no protocol-version bump.
 pub const CTRL_CAP_OWNER_ACTION: &str = "owner-action";
+/// Peer supports `CtrlCmd::SetPlayOrder` for the Bound queue playback order.
+/// Additive — no protocol-version bump.
+pub const CTRL_CAP_PLAY_ORDER: &str = "play-order";
 /// Peer supports correlated owner-answered queue operations.
 /// Additive — no protocol-version bump.
 pub const CTRL_CAP_ANSWERED_QUEUE_OPS: &str = "answered-queue-ops";

@@ -1,7 +1,7 @@
 use mbv_emby_model::EmbyItem;
 use mbv_queue::{
-    ExecSlot, PlaybackQueue, QueueItem, QueueLineage, QueueRevision, QueueRevisionMint, QueueSlot,
-    QueueSlotId, QueueSource,
+    ExecSlot, PlayOrderMode, PlaybackQueue, QueueItem, QueueLineage, QueueRevision,
+    QueueRevisionMint, QueueSlot, QueueSlotId, QueueSource,
 };
 use std::sync::Arc;
 
@@ -11,6 +11,7 @@ pub struct QueueView {
     cursor: usize,
     queue: PlaybackQueue,
     source: QueueSource,
+    play_order: PlayOrderMode,
     lineage: QueueLineage,
     pending_playback_slot: Option<QueueSlotId>,
     revision_mint: Arc<QueueRevisionMint>,
@@ -31,6 +32,7 @@ impl Default for QueueView {
             cursor: 0,
             queue: PlaybackQueue::from_queue_items(Vec::new(), None, Arc::clone(&revision_mint)),
             source: QueueSource::Unknown,
+            play_order: PlayOrderMode::Sequential,
             lineage: QueueLineage::default(),
             pending_playback_slot: None,
             revision_mint,
@@ -66,6 +68,7 @@ impl QueueView {
                 .unwrap_or_else(|| clamp_cursor(old_cursor, self.queue.len()))
         };
         self.source = state.source.clone();
+        self.play_order = state.status.play_order;
         self.lineage = state.lineage;
         self.pending_playback_slot = pending_playback_slot(state);
     }
@@ -118,6 +121,13 @@ impl QueueView {
     #[must_use]
     pub fn source(&self) -> &QueueSource {
         &self.source
+    }
+
+    /// The owner-reported playback order of this queue (design D5). The
+    /// footer indicator and the queue-row order toggle both read it.
+    #[must_use]
+    pub fn play_order(&self) -> PlayOrderMode {
+        self.play_order
     }
 
     #[must_use]

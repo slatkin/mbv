@@ -621,6 +621,10 @@ fn unified_queue_clear_empties_canonical_queue_and_clears_the_player() {
         mbv_queue::QueueLineage(1)
     );
     match cmd_rx.recv().unwrap() {
+        PlayerCommand::SetUpcoming(mbv_queue::PlayOrder::Sequential) => {}
+        _ => panic!("expected the order-reset advance (queue-shuffle-play-order 4.1)"),
+    }
+    match cmd_rx.recv().unwrap() {
         PlayerCommand::SubmitQueue { items, start_idx } => {
             assert!(items.is_empty());
             assert_eq!(start_idx, 0);
