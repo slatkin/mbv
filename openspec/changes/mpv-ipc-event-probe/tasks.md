@@ -20,9 +20,9 @@
 
 ## 4. IPC decoder and tests on real traces
 
-- [ ] 4.1 Add `MpvEvent::from_ipc_line(&str) -> Result<MpvEvent, DecodeError>` with a domain `DecodeError` type (design D5). Type property values by property name, decode `end-file` with `reason:"error"` to `Failed`, and compare `file_error` with the runtime `mpv_error_string` for `AoInitFailed`. Known events the run loop does not act on become `Ignored`. Skip the fixture header line. Verify: `cargo check -p mbv-player` passes.
-- [ ] 4.2 Add `crates/mbv-player/src/mpv_event/tests.rs` with the `decode_fixture` helper and the tests from design D6: S2 debris classification, S6 `AudioOutputInit` with `is_clocked_audio_error` true, S5 `Failed(Other(_))` with `is_clocked_audio_error` false, S1 `EndFile(Eof)`, and one malformed-line `DecodeError` test. Each test cites its scenario ID in a comment. Verify: `cargo nextest run -p mbv-player` passes.
-- [ ] 4.3 Run `cargo fmt` and clippy with `-D warnings` and verify that both are clean. Commit group 4.
+- [x] 4.1 Add `MpvEvent::from_ipc_line(&str) -> Result<MpvEvent, DecodeError>` with a domain `DecodeError` type (design D5). Type property values by property name, decode `end-file` with `reason:"error"` to `Failed`, and compare `file_error` with the runtime `mpv_error_string` for `AoInitFailed`. Known events the run loop does not act on become `Ignored`. Skip the fixture header line. Verify: `cargo check -p mbv-player` passes.
+- [x] 4.2 Add `crates/mbv-player/src/mpv_event/tests.rs` with the `decode_fixture` helper and the tests from design D6: S2 debris classification, S6 `AudioOutputInit` with `is_clocked_audio_error` true, S5 `Failed(Other(_))` with `is_clocked_audio_error` false, S1 `EndFile(Eof)`, and one malformed-line `DecodeError` test. Each test cites its scenario ID in a comment. Verify: `cargo nextest run -p mbv-player` passes.
+- [x] 4.3 Run `cargo fmt` and clippy with `-D warnings` and verify that both are clean. Commit group 4.
 
 ## 5. Findings
 

@@ -118,7 +118,9 @@ pub(crate) enum MpvFailure { AudioOutputInit, Other(String) }
 - `is_clocked_audio_error` takes `&MpvFailure`. `is_superseded_jump_end_file` takes the domain `EndFileReason`. `EndFileReason` changes from the libmpv2 constant type to the domain enum at its existing use sites (`termination.rs` `report_for_end_file` and the queue-advance paths).
 
 - The domain `EndFileReason` has no `Error` variant. mpv always sets an error code with the `error` reason, so libmpv2 returns that end-file as `Err` and `EndFile(Error)` never arrives. The `reason == Error` branches were unreachable: the `player.end_file.playback_error` warning, `fail_active_file_start` (with its `active_file_starting` field), and the `Error` test cases. Group 1 deletes them. Issue #936 tracks the active-file start-failure stop, which never fired. A reason value without a domain variant becomes `Failed(Other(_))`.
-- `PropertyValue::None` comes with the IPC decoder in group 4. Until then nothing constructs it.
+- `PropertyValue::None` comes with the IPC decoder in group 4. Only the decoder constructs it.
+- Nothing outside tests calls the decoder, and the lint rules forbid `allow` for dead code. So the decoder lives in `mpv_event/ipc.rs` behind `#[cfg(test)]`, and so does the `None` variant. The migration change removes both gates when it wires IPC into the run loop. That change must also give `None` an arm in `on_property_change`: today the `("video-params/h", change)` arm would log it as an unexpected type.
+- The decoder returns `Ignored` for a line with no `event` key (command replies and the fixture header) and for any event name it does not know, so a new mpv version that adds an event does not break it.
 
 Rejected alternative: decode IPC JSON straight into `libmpv2::Event`. Its borrowed `&str` fields and `PropertyData` cannot be built from owned JSON, and the change would tie fixtures to the binding that the migration wants to remove.
 

@@ -10,6 +10,11 @@ use libmpv2::mpv_end_file_reason;
 
 use super::mpv_err_str;
 
+#[cfg(test)]
+mod ipc;
+#[cfg(test)]
+mod tests;
+
 /// Why mpv left a playlist entry without an error.
 ///
 /// mpv's `error` reason is not here: an end-file with an error arrives as
@@ -30,6 +35,10 @@ pub(crate) enum PropertyValue {
     Flag(bool),
     Int64(i64),
     Str(String),
+    /// The property is unavailable. JSON IPC reports this as a change with no
+    /// data. libmpv2 swallows such a change, so only the IPC decoder builds it.
+    #[cfg(test)]
+    None,
 }
 
 /// An mpv failure: an end-file with an error, or a failed event.
