@@ -31,5 +31,5 @@
 
 ## 6. Integration checks
 
-- [ ] 6.1 Run `cargo fmt --all`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run --workspace`. All pass.
+- [x] 6.1 Run `cargo fmt --all`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run --workspace`. All pass.
 - [x] 6.2 Sync the spec deltas into `openspec/specs/` (`queue-play-order` new, `context-menu` modified). Verify: `openspec validate queue-shuffle-play-order`.
