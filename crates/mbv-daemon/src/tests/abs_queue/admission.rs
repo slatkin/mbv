@@ -19,6 +19,7 @@ fn abs_queue_projection_includes_abs_slots_for_capable_peer_only() {
         None,
         true,
         false,
+        mbv_queue::PlayOrderMode::Sequential,
     ) else {
         panic!("expected UnifiedQueueState");
     };
@@ -32,6 +33,7 @@ fn abs_queue_projection_includes_abs_slots_for_capable_peer_only() {
         None,
         false,
         false,
+        mbv_queue::PlayOrderMode::Sequential,
     ) else {
         panic!("expected UnifiedQueueState");
     };
@@ -66,6 +68,7 @@ fn abs_queue_projection_clears_active_slot_for_old_peer_when_abs_is_active() {
         None,
         false,
         false,
+        mbv_queue::PlayOrderMode::Sequential,
     ) else {
         panic!("expected UnifiedQueueState");
     };

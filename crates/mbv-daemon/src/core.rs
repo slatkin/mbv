@@ -7,6 +7,7 @@ use std::time::{Duration, Instant};
 use super::control_queue::broadcast_queue_state;
 use super::ws::all_audio;
 use crate::ctrl::{ClientRegistry, CtrlClientId, CtrlSender, serialize_ctrl_event};
+use crate::forward_play_order_advance;
 use mbv_audiobookshelf::{AudiobookshelfBookProgress, AudiobookshelfProgress};
 use mbv_ctrl::player::PlayerEvent;
 use mbv_ctrl::{
@@ -474,7 +475,11 @@ pub(super) fn send_jump_or_cold_start(
     // is dropped, so the broadcast that follows resolves the requested slot
     // as active instead of the restored cursor's slot.
     let _ = ctx.owner.core.queue.set_active_slot(target);
+    let order_before = ctx.owner.core.play_order();
     ctx.owner.core.note_observed_active_slot(None);
+    if ctx.owner.core.play_order() != order_before {
+        forward_play_order_advance(&ctx.owner.core, ctx.player);
+    }
     ctx.shared_queue.publish_observed(&ctx.owner.core);
     true
 }
@@ -638,11 +643,17 @@ pub(crate) struct SharedQueueState {
     pub(super) source: Arc<Mutex<mbv_queue::QueueSource>>,
     pub(super) lineage: Arc<Mutex<mbv_queue::QueueLineage>>,
     pub(super) observed_active_slot: Arc<Mutex<Option<QueueSlotId>>>,
+    /// Mirror of the owner core's order mode, read by snapshots built off the
+    /// shared state (cold ctrl-client seeds and queue broadcasts). The owner
+    /// core stays the authority; `publish_observed` and the order-change sites
+    /// keep this in sync (queue-shuffle-play-order design D5).
+    pub(super) play_order: Arc<Mutex<mbv_queue::PlayOrderMode>>,
 }
 
 impl SharedQueueState {
     pub(crate) fn publish_observed(&self, owner: &mbv_player::PlayerOwnerState) {
         *self.observed_active_slot.lock().unwrap() = owner.observed_active_slot();
+        *self.play_order.lock().unwrap() = owner.play_order().mode();
     }
 }
 

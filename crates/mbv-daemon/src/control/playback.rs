@@ -1,7 +1,7 @@
 use super::super::core::DaemonEvent;
 use super::{
     CtrlContext, DaemonOwnerContext, DaemonPlayerOwner, broadcast_queue_state, dispatch_slot_jump,
-    handle_stop, mint_queue_lineage, send_to,
+    handle_stop, mint_queue_lineage, reset_play_order_for_queue_replacement, send_to,
 };
 use mbv_ctrl::CtrlEvent;
 use mbv_ctrl::player::PlayerCommand;
@@ -48,13 +48,7 @@ pub(crate) fn play_resolved_items(
     new_source: mbv_queue::QueueSource,
 ) {
     let DaemonPlayerOwner {
-        core:
-            PlayerOwnerState {
-                queue,
-                source,
-                transitions,
-                ..
-            },
+        core: PlayerOwnerState { queue, source, .. },
         ..
     } = &mut *ctx.owner;
     let queue_items: Vec<QueueItem> = fetched
@@ -66,14 +60,17 @@ pub(crate) fn play_resolved_items(
     let mint = queue.revision_mint();
     *queue = PlaybackQueue::from_queue_items(queue_items, Some(start_idx), mint);
     *source = new_source;
+    // The resolved play installs a new lineage: the whole-queue replacement
+    // that resets the order (design D4).
     mint_queue_lineage(ctx.shared_queue);
+    reset_play_order_for_queue_replacement(&mut ctx.owner.core, ctx.shared_queue, ctx.player);
     broadcast_queue_state(
         ctx.ctrl_clients,
         ctx.player,
         ctx.shared_queue,
-        queue,
-        source,
-        transitions,
+        &ctx.owner.core.queue,
+        &ctx.owner.core.source,
+        &ctx.owner.core.transitions,
         None,
     );
     if fetched.len() == 1 {

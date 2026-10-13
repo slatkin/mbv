@@ -99,7 +99,13 @@ fn unified_adopt_queue_seeds_status_without_starting_playback_when_cold() {
     assert_eq!(queue.len(), 1);
     assert_eq!(queue.slots()[0].item.id(), "adopted");
     assert!(!player.status.lock().unwrap().active);
-    player_cmd_rx.try_recv().unwrap_err();
+    // Adoption must not start playback: the only allowed command is the
+    // store-only advance-decision update the order reset sends
+    // (queue-shuffle-play-order task 4.1; design D4).
+    match player_cmd_rx.try_recv() {
+        Ok(PlayerCommand::SetUpcoming(_)) => {}
+        other => panic!("adoption must not start playback, got {other:?}"),
+    }
 }
 
 #[test]

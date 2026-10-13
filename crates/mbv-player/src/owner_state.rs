@@ -87,6 +87,16 @@ impl PlayerOwnerState {
         } else {
             self.queue.clear_active_slot();
         }
+        // A synced queue can drop the Shuffle pick's slot; re-pick so
+        // `upcoming` never names a removed slot (queue-shuffle-play-order
+        // task 4.1).
+        if let PlayOrder::Shuffle {
+            upcoming: Some(pick),
+        } = self.play_order
+            && self.queue.slot(pick).is_none()
+        {
+            self.repick_upcoming();
+        }
     }
 
     /// Record a Playback-run observation of the active file. The only path
@@ -213,11 +223,17 @@ impl PlayerOwnerState {
         let allowed = consume
             && ((slot.item.is_video() && consume_videos)
                 || (slot.item.is_audio() && consume_audio));
-        allowed
+        let removed = allowed
             && matches!(
                 self.queue.consume_slot(slot_id),
                 mbv_queue::QueueMutationResult::Applied(_)
-            )
+            );
+        if removed {
+            // A consumed slot can be the Shuffle pick; re-pick so `upcoming`
+            // never names a removed slot (queue-shuffle-play-order task 4.1).
+            self.note_queue_slot_removed(slot_id);
+        }
+        removed
     }
 
     /// Resolve a relative step from the latest desired/observed queue position
@@ -600,5 +616,71 @@ mod tests {
 
         assert_ne!(repicked, active);
         assert!(owner.queue.slot(repicked).is_some());
+    }
+
+    /// The contract: consuming a completed slot that held the Shuffle pick
+    /// re-picks a present slot other than the active slot, so `upcoming`
+    /// never names a removed slot (queue-shuffle-play-order task 4.1).
+    #[test]
+    fn consuming_the_picked_slot_repicks_a_present_non_active_slot() {
+        let queue = PlaybackQueue::from_items(
+            vec![item("a"), item("b"), item("c")],
+            Some(0),
+            Arc::new(QueueRevisionMint::default()),
+        );
+        let active = queue.slots()[0].slot_id;
+        let mut owner = PlayerOwnerState::new(queue, mbv_queue::QueueSource::default());
+        let consumed = owner
+            .set_play_order(PlayOrderMode::Shuffle)
+            .expect("shuffle over two other slots must pick one");
+
+        assert!(owner.consume_completed_slot(consumed, true, true, true));
+
+        let PlayOrder::Shuffle { upcoming } = owner.play_order() else {
+            panic!("a consume that removed the pick must leave Shuffle");
+        };
+        let repicked = upcoming.expect("another non-active slot remains");
+        assert_ne!(repicked, active);
+        assert!(owner.queue.slot(repicked).is_some());
+    }
+
+    /// The contract: a synced queue that dropped the Shuffle pick's slot
+    /// re-picks, so `upcoming` never names a removed slot
+    /// (queue-shuffle-play-order task 4.1).
+    #[test]
+    fn syncing_a_queue_without_the_picked_slot_repicks() {
+        let queue = PlaybackQueue::from_items(
+            vec![item("a"), item("b"), item("c")],
+            Some(0),
+            Arc::new(QueueRevisionMint::default()),
+        );
+        let active = queue.slots()[0].slot_id;
+        let mut owner = PlayerOwnerState::new(queue, mbv_queue::QueueSource::default());
+        owner.note_observed_active_slot(Some(active));
+        let dropped = owner
+            .set_play_order(PlayOrderMode::Shuffle)
+            .expect("shuffle over two other slots must pick one");
+
+        // The replacement keeps the active slot identity and mints a fresh
+        // id for the surviving other slot, so the dropped pick cannot survive
+        // under a new name.
+        let replacement = PlaybackQueue::from_slot_items(
+            vec![
+                (active, mbv_queue::QueueItem::Emby(Box::new(item("a")))),
+                (
+                    QueueSlotId::from_raw(11),
+                    mbv_queue::QueueItem::Emby(Box::new(item("d"))),
+                ),
+            ],
+            Some(active),
+            Arc::new(QueueRevisionMint::default()),
+        );
+        owner.sync_canonical_queue(replacement);
+
+        let PlayOrder::Shuffle { upcoming } = owner.play_order() else {
+            panic!("sync keeps the order; only removal hooks may reset it");
+        };
+        assert_ne!(upcoming, Some(dropped));
+        assert_eq!(upcoming, Some(QueueSlotId::from_raw(11)));
     }
 }

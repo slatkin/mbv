@@ -7,6 +7,7 @@ use super::{
     start_queue_enrichment,
 };
 use crate::PinSwapState;
+use crate::forward_play_order_advance;
 use crate::owner_lock::{OwnerLockError, PidFileLock, lock_pid_file};
 use crate::{ClientRegistry, CtrlClients};
 use mbv_ctrl::player::PlayerEvent;
@@ -70,6 +71,7 @@ pub(super) fn apply_track_completed_observation(
             observation.played(),
         );
     }
+    let order_before = owner.core.play_order();
     if owner.core.consume_completed_slot(
         slot_id,
         consume,
@@ -77,6 +79,11 @@ pub(super) fn apply_track_completed_observation(
         consume_policy.audio,
     ) {
         tracing::info!(name: "daemon.queue_slot.consumed", target: "consume", slot = ?slot_id, "completed track consumed");
+    }
+    // Consuming the Shuffle pick re-picks inside the core; forward the new
+    // advance decision when the order changed (queue-shuffle-play-order D2).
+    if owner.core.play_order() != order_before {
+        forward_play_order_advance(&owner.core, player);
     }
     shared_queue.publish_observed(&owner.core);
     true
@@ -420,6 +427,8 @@ fn initialize_queue(role: DaemonRole, player: &Player) -> (DaemonPlayerOwner, Sh
         source: Arc::new(Mutex::new(initial_source.clone())),
         lineage: Arc::new(Mutex::new(initial_lineage)),
         observed_active_slot: Arc::new(Mutex::new(None)),
+        // A new owner starts in Sequential (queue-shuffle-play-order D5).
+        play_order: Arc::new(Mutex::new(mbv_queue::PlayOrderMode::Sequential)),
     };
     let owner = DaemonPlayerOwner {
         core: PlayerOwnerState::new(initial_queue, initial_source),

@@ -96,3 +96,5 @@ mod queue_source_updates;
 mod queue_refresh_progress;
 // Slot jumps start playback even on a cold owner whose run is not alive.
 mod queue_play_slot;
+// SetPlayOrder turns the owner order, forwards the advance, and projects the mode.
+mod play_order;
