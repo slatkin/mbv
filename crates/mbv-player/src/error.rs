@@ -1,5 +1,7 @@
 use std::{backtrace::Backtrace, error::Error, ffi::NulError, fmt, io};
 
+use crate::mpv_error::MpvError;
+
 #[derive(Debug)]
 pub struct PlayerError {
     kind: PlayerErrorKind,
@@ -8,44 +10,17 @@ pub struct PlayerError {
 
 #[derive(Debug)]
 enum PlayerErrorKind {
-    RemoveDirectory {
-        path: String,
-        source: io::Error,
-    },
-    RemovePath {
-        path: String,
-        source: io::Error,
-    },
-    InspectDirectory {
-        path: String,
-        source: io::Error,
-    },
-    CreateDirectory {
-        path: String,
-        source: io::Error,
-    },
-    WriteConfig {
-        path: String,
-        source: io::Error,
-    },
+    RemoveDirectory { path: String, source: io::Error },
+    RemovePath { path: String, source: io::Error },
+    InspectDirectory { path: String, source: io::Error },
+    CreateDirectory { path: String, source: io::Error },
+    WriteConfig { path: String, source: io::Error },
     PipeNotFifo(String),
-    UnsafeFifo {
-        path: String,
-        detail: String,
-    },
+    UnsafeFifo { path: String, detail: String },
     PipePath(NulError),
-    MakePipe {
-        path: String,
-        source: io::Error,
-    },
-    SetAudioDevice {
-        device: String,
-        source: libmpv2::Error,
-    },
-    MpvInit {
-        message: String,
-        source: libmpv2::Error,
-    },
+    MakePipe { path: String, source: io::Error },
+    SetAudioDevice { device: String, source: MpvError },
+    MpvInit { message: String, source: MpvError },
 }
 
 impl PlayerError {
@@ -117,7 +92,7 @@ impl PlayerError {
         }
     }
 
-    pub(crate) fn set_audio_device(device: &str, source: libmpv2::Error) -> Self {
+    pub(crate) fn set_audio_device(device: &str, source: MpvError) -> Self {
         Self {
             kind: PlayerErrorKind::SetAudioDevice {
                 device: device.to_owned(),
@@ -127,7 +102,7 @@ impl PlayerError {
         }
     }
 
-    pub(crate) fn mpv_init(message: String, source: libmpv2::Error) -> Self {
+    pub(crate) fn mpv_init(message: String, source: MpvError) -> Self {
         Self {
             kind: PlayerErrorKind::MpvInit { message, source },
             backtrace: Backtrace::capture(),
@@ -197,8 +172,7 @@ impl fmt::Display for PlayerError {
             }
             PlayerErrorKind::SetAudioDevice { device, source } => write!(
                 f,
-                "clocked audio output: failed to set audio-device '{device}': {}",
-                super::mpv_err_str(source)
+                "clocked audio output: failed to set audio-device '{device}': {source}"
             ),
             PlayerErrorKind::MpvInit { message, .. } => f.write_str(message),
         }

@@ -8,6 +8,7 @@
 mod error;
 #[doc(inline)]
 pub use error::PlayerError;
+mod mpv_error;
 mod mpv_event;
 use mpv_event::{EndFileReason, MpvEvent, MpvFailure, PropertyValue};
 

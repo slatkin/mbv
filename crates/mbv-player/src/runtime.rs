@@ -2,6 +2,7 @@ use super::{
     Format, IntroState, Mpv, OsStr, Path, PathBuf, PlayerError, PlayerEvent, PlayerStatus,
     SessionReporter, fs, mpv_err_str,
 };
+use crate::mpv_error::MpvError;
 use mbv_core::applog as app_logging;
 use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
@@ -317,7 +318,10 @@ fn configure_audio_output(mpv: &Mpv, config: &MpvRunConfig) -> Result<bool, Play
     } else if let Some(device) = &config.audio_device {
         // Clocked ALSA output: the device identifier alone selects the
         // backend, so `ao` is left to mpv's own negotiation.
-        if let Err(e) = mpv.set_property("audio-device", device.as_str()) {
+        if let Err(e) = mpv
+            .set_property("audio-device", device.as_str())
+            .map_err(MpvError::from)
+        {
             return Err(PlayerError::set_audio_device(device, e));
         }
         tracing::info!(name: "player.audio_output.configured", target: "player", device = %device, "using clocked ALSA audio output");
@@ -471,7 +475,7 @@ pub(super) fn init_mpv(config: &MpvRunConfig) -> Result<(Mpv, bool), PlayerError
         Err(e) => {
             let msg =
                 init_err.unwrap_or_else(|| format!("[player] mpv init error: {}", mpv_err_str(&e)));
-            return Err(PlayerError::mpv_init(msg, e));
+            return Err(PlayerError::mpv_init(msg, MpvError::from(e)));
         }
     };
 
