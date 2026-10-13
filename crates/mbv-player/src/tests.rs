@@ -6,6 +6,7 @@ mod decisions;
 mod pipe;
 mod proxy;
 mod resume_refresh;
+mod runtime;
 mod session;
 mod session_feed;
 mod status;

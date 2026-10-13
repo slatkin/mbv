@@ -6,9 +6,12 @@ use super::{
     PlayerStatus, SubtitlePrefs, init_mpv,
 };
 use mbv_queue::QueueItem;
-use std::sync::{Arc, Mutex, atomic::AtomicBool, mpsc};
+use std::sync::atomic::AtomicBool;
+use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
 use std::time::Duration;
+
+use crate::mpv_session::spawn::Spawner;
 
 // Write end of a self-pipe used to wake the player event loop immediately
 // (see player_session_run.rs) instead of it polling on a fixed timeout.
@@ -111,10 +114,14 @@ pub struct Player {
     pub cmd_tx: Arc<Mutex<Option<mpsc::Sender<PlayerCommand>>>>,
     pub(super) wakeup_fd: Arc<Mutex<Option<WakeupWriter>>>,
     pub(super) pre_warmed_mpv: Arc<Mutex<Option<(Mpv, bool)>>>,
+    /// The one long-lived child spawner. Every playback run and `pre_warm`
+    /// start their `mpv` child through it, so `PR_SET_PDEATHSIG` ties each
+    /// child to a thread that outlives the run (design D5).
+    pub(super) spawner: Arc<Spawner>,
     /// Test-only inhibit (`PlayerProxy::stub`): `submit_queue_slots` keeps its
     /// queue/status seeding but never spawns the player thread, whose first
-    /// act is `init_mpv` — a real libmpv/libav/GnuTLS handle that unit tests
-    /// must not construct (it raced process teardown at test exit; issue #757).
+    /// act is `init_mpv` — a live `mpv` child process that unit tests must
+    /// not start (issue #757).
     pub(super) mpv_inhibited: AtomicBool,
     pub status: Arc<Mutex<PlayerStatus>>,
     pub(super) thread_handle: Mutex<Option<thread::JoinHandle<()>>>,
@@ -180,6 +187,7 @@ impl Player {
             cmd_tx: Arc::new(Mutex::new(None)),
             wakeup_fd: Arc::new(Mutex::new(None)),
             pre_warmed_mpv: Arc::new(Mutex::new(None)),
+            spawner: Arc::new(Spawner::new()),
             mpv_inhibited: AtomicBool::new(false),
             status: Arc::new(Mutex::new(PlayerStatus::default())),
             thread_handle: Mutex::new(None),
@@ -226,7 +234,7 @@ impl Player {
             audio_pipe_bitdepth: bitdepth,
             audio_device: None,
         };
-        match init_mpv(&config) {
+        match init_mpv(&self.spawner, &config) {
             Ok(warmed) => {
                 tracing::info!(name: "player.mpv.prewarmed", target: "player", "pre-warmed mpv for pipe output");
                 *self.pre_warmed_mpv.lock().unwrap() = Some(warmed);
@@ -386,8 +394,8 @@ impl Player {
 
     /// Marks this player so every later `submit_queue_slots` keeps its
     /// queue/status seeding but never spawns the player thread — whose
-    /// first act is a live `init_mpv` handle tests must not construct
-    /// (it raced process teardown at test exit; issue #757).
+    /// first act is a live `init_mpv` child process tests must not start
+    /// (issue #757).
     /// Used by externally built players that only feed the command-watching
     /// paths, e.g. `cold_player()`.
     #[cfg(any(test, feature = "test"))]

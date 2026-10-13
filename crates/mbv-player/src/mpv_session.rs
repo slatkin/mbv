@@ -1,40 +1,37 @@
 //! Crate-private mpv session wrapper (design D2 of `mpv-child-process`).
 //!
 //! [`Mpv`] is the only mpv-handle type the player names outside this module
-//! and the event types (`mpv_event.rs`). It wraps the live backend — libmpv
-//! today, the IPC child process from group 3 on — and offers only the calls
-//! the player makes. The backend swap (group 4) changes this module's inside
-//! and leaves every call site untouched.
+//! and the event types (`mpv_event.rs`). It wraps the live backend — the
+//! `mpv` child process that mbv controls over its JSON IPC socket — and offers
+//! only the calls the player makes.
 
 pub(crate) mod ipc;
 pub(crate) mod spawn;
 
-use std::ffi::CString;
+use std::cell::RefCell;
+use std::time::Duration;
 
-use libmpv2::Mpv as Libmpv;
+use serde_json::{Value, json};
 
 use crate::mpv_error::MpvError;
 use crate::mpv_event::{MpvEvent, PropertyValue};
+use crate::mpv_session::ipc::IpcSession;
+use crate::mpv_session::spawn::Child;
 
-/// The format of an observed property (design D2). The backend maps it onto
-/// its own observation format.
+/// How long one request waits for mpv's reply before the session treats the
+/// child as hung (design D3). A `request` that passes this bound kills nothing
+/// itself; the run loop's `next_event` turns the timeout into a failure event.
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// The format of an observed property (design D2 and D8). The IPC backend
+/// maps it onto an mpv observation command: a string property uses
+/// `observe_property_string`, every other format uses `observe_property`.
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum Format {
     Double,
     Flag,
     Int64,
     String,
-}
-
-impl From<Format> for libmpv2::Format {
-    fn from(format: Format) -> Self {
-        match format {
-            Format::Double => libmpv2::Format::Double,
-            Format::Flag => libmpv2::Format::Flag,
-            Format::Int64 => libmpv2::Format::Int64,
-            Format::String => libmpv2::Format::String,
-        }
-    }
 }
 
 impl From<i64> for PropertyValue {
@@ -68,82 +65,95 @@ impl From<String> for PropertyValue {
 }
 
 /// The player's one mpv session. One playback run owns one session, and one
-/// thread owns the session, as the libmpv handle does today.
+/// thread owns the session. The session owns the child, so the child lives
+/// exactly as long as the run (design D5); the socket lives in a `RefCell`
+/// because the player's read and write calls all take `&self`.
 pub(crate) struct Mpv {
-    inner: Libmpv,
+    /// Owns the child process. The field is never read: it exists so the
+    /// child lives exactly as long as the session and its `Drop` kills and
+    /// reaps the process (design D5).
+    _child: Child,
+    session: RefCell<IpcSession>,
 }
 
 impl Mpv {
-    /// Builds a session through libmpv's initializer. The option list is the
-    /// one `init_mpv` sets; the child-process backend turns it into command
-    /// line arguments (design D4) and drops this constructor.
-    pub(crate) fn with_initializer<F>(initializer: F) -> Result<Self, MpvError>
-    where
-        F: FnOnce(libmpv2::MpvInitializer) -> Result<(), libmpv2::Error>,
-    {
-        Libmpv::with_initializer(initializer)
-            .map(|inner| Self { inner })
-            .map_err(MpvError::from)
+    /// Wraps a started child: duplicates its connected socket into a session
+    /// and keeps the child so it lives and dies with the session (design D5).
+    pub(crate) fn from_child(child: Child) -> Result<Self, MpvError> {
+        let stream = child.try_clone_stream()?;
+        let session = IpcSession::from_stream(stream)?;
+        Ok(Self {
+            _child: child,
+            session: RefCell::new(session),
+        })
     }
 
-    /// Sets a property from the domain value type (design D2).
+    /// Sets a property from the domain value type (design D2). The JSON type
+    /// matches the `PropertyValue` variant, and mpv converts it for the
+    /// property's own type.
     pub(crate) fn set_property(
         &self,
         name: &str,
         value: impl Into<PropertyValue>,
     ) -> Result<(), MpvError> {
-        match value.into() {
-            PropertyValue::Double(value) => self.inner.set_property(name, value),
-            PropertyValue::Flag(value) => self.inner.set_property(name, value),
-            PropertyValue::Int64(value) => self.inner.set_property(name, value),
-            PropertyValue::Str(value) => self.inner.set_property(name, value),
+        let Some(value) = property_json(value.into()) else {
             // Documented no-op: an unavailable property carries no value to
             // set; only the observed-change decoder builds `None`.
-            PropertyValue::None => Ok(()),
-        }
-        .map_err(MpvError::from)
+            return Ok(());
+        };
+        self.session
+            .borrow_mut()
+            .request_values(
+                &[json!("set_property"), json!(name), value],
+                REQUEST_TIMEOUT,
+            )
+            .map(|_| ())
     }
 
     pub(crate) fn get_f64(&self, name: &str) -> Result<f64, MpvError> {
-        self.inner.get_property(name).map_err(MpvError::from)
+        let data = self.get_property(name)?;
+        data.as_f64()
+            .ok_or_else(|| MpvError::Reply(format!("property `{name}` is not a double")))
     }
 
     pub(crate) fn get_i64(&self, name: &str) -> Result<i64, MpvError> {
-        self.inner.get_property(name).map_err(MpvError::from)
+        let data = self.get_property(name)?;
+        data.as_i64()
+            .ok_or_else(|| MpvError::Reply(format!("property `{name}` is not an integer")))
     }
 
     pub(crate) fn get_bool(&self, name: &str) -> Result<bool, MpvError> {
-        self.inner.get_property(name).map_err(MpvError::from)
+        let data = self.get_property(name)?;
+        data.as_bool()
+            .ok_or_else(|| MpvError::Reply(format!("property `{name}` is not a flag")))
     }
 
     pub(crate) fn get_string(&self, name: &str) -> Result<String, MpvError> {
-        self.inner.get_property(name).map_err(MpvError::from)
+        let data = self.get_property(name)?;
+        data.as_str()
+            .map(str::to_owned)
+            .ok_or_else(|| MpvError::Reply(format!("property `{name}` is not a string")))
     }
 
     /// Sends a command and waits for mpv to accept it. A command that fails
     /// while it runs reports through events, not here.
     pub(crate) fn command(&self, name: &str, args: &[&str]) -> Result<(), MpvError> {
-        self.inner.command(name, args).map_err(MpvError::from)
+        let mut command = Vec::with_capacity(args.len() + 1);
+        command.push(name);
+        command.extend_from_slice(args);
+        self.session
+            .borrow_mut()
+            .request(&command, REQUEST_TIMEOUT)
+            .map(|_| ())
     }
 
     /// Queues `name` without waiting for its reply. The backend reports only
     /// a synchronous send failure here; command failures arrive as events.
     pub(crate) fn command_async(&self, name: &str, args: &[&str]) -> Result<(), MpvError> {
-        let mut c_args: Vec<CString> = Vec::with_capacity(args.len() + 1);
-        c_args.push(c_string(name)?);
-        for arg in args {
-            c_args.push(c_string(arg)?);
-        }
-        let mut ptrs: Vec<*const std::ffi::c_char> =
-            c_args.iter().map(|arg| arg.as_ptr()).collect();
-        ptrs.push(std::ptr::null());
-        // SAFETY: `self.inner` owns a live mpv context, and every pointer in
-        // `ptrs` refers to a NUL-terminated string that stays alive for the
-        // duration of this call.
-        let rc = unsafe {
-            libmpv2_sys::mpv_command_async(self.inner.ctx.as_ptr(), 0, ptrs.as_mut_ptr())
-        };
-        mpv_result(rc, "mpv_command_async")
+        let mut command = Vec::with_capacity(args.len() + 1);
+        command.push(name);
+        command.extend_from_slice(args);
+        self.session.borrow_mut().send(&command)
     }
 
     /// Observes `name` for changes; each change arrives as a
@@ -154,53 +164,51 @@ impl Mpv {
         id: u64,
         format: Format,
     ) -> Result<(), MpvError> {
-        self.inner
-            .observe_property(name, format.into(), id)
-            .map_err(MpvError::from)
+        let command = match format {
+            Format::String => "observe_property_string",
+            Format::Double | Format::Flag | Format::Int64 => "observe_property",
+        };
+        self.session
+            .borrow_mut()
+            .request_values(&[json!(command), json!(id), json!(name)], REQUEST_TIMEOUT)
+            .map(|_| ())
     }
 
     /// Requests log messages at or above `level` (an mpv level name, for
     /// example `warn`), so they arrive as log-message events.
     pub(crate) fn request_log_messages(&self, level: &str) -> Result<(), MpvError> {
-        let level = c_string(level)?;
-        // SAFETY: `self.inner` owns a live mpv context, and `level` is a
-        // NUL-terminated string that stays alive for the call.
-        let rc = unsafe {
-            libmpv2_sys::mpv_request_log_messages(self.inner.ctx.as_ptr(), level.as_ptr())
-        };
-        mpv_result(rc, "mpv_request_log_messages")
+        self.session
+            .borrow_mut()
+            .request(&["request_log_messages", level], REQUEST_TIMEOUT)
+            .map(|_| ())
     }
 
-    /// Pops the next event, or `None` when the backend has none now. The IPC
-    /// session queues events that arrive while a request waits for its reply;
-    /// the libmpv session polls the event queue.
+    /// Pops the next event, or `None` when the child has none now. The IPC
+    /// session queues events that arrive while a request waits for its reply.
     pub(crate) fn next_event(&self) -> Option<MpvEvent> {
-        self.inner.wait_event(0.0).map(MpvEvent::from_libmpv)
+        self.session.borrow_mut().next_event()
     }
 
-    /// The wakeup hook: the backend calls `callback` when events may be
-    /// available. The run loop writes to its self-pipe with it.
-    pub(crate) fn set_wakeup_callback(&mut self, callback: impl Fn() + Send + 'static) {
-        self.inner.set_wakeup_callback(callback);
+    /// The wakeup hook. The IPC child delivers events on a readable socket,
+    /// so there is no callback to install: the run loop polls the socket and
+    /// the wakeup pipe together (row 4.3 of `mpv-child-process`).
+    pub(crate) fn set_wakeup_callback(_callback: impl Fn() + Send + 'static) {}
+
+    fn get_property(&self, name: &str) -> Result<Value, MpvError> {
+        self.session
+            .borrow_mut()
+            .request(&["get_property", name], REQUEST_TIMEOUT)
     }
 }
 
-/// Turns an mpv status code into the domain result.
-fn mpv_result(rc: i32, call: &str) -> Result<(), MpvError> {
-    if rc == 0 {
-        return Ok(());
+/// The JSON value of a set-property argument, or `None` for an unavailable
+/// property (which sets nothing).
+fn property_json(value: PropertyValue) -> Option<Value> {
+    match value {
+        PropertyValue::Double(value) => Some(json!(value)),
+        PropertyValue::Flag(value) => Some(json!(value)),
+        PropertyValue::Int64(value) => Some(json!(value)),
+        PropertyValue::Str(value) => Some(Value::String(value)),
+        PropertyValue::None => None,
     }
-    Err(MpvError::Libmpv(format!(
-        "{call} failed: {} ({rc})",
-        libmpv2_sys::mpv_error_str(rc)
-    )))
-}
-
-fn c_string(value: &str) -> Result<CString, MpvError> {
-    CString::new(value).map_err(|error| {
-        MpvError::Libmpv(format!(
-            "mpv argument contains a NUL byte at position {}: {value}",
-            error.nul_position()
-        ))
-    })
 }

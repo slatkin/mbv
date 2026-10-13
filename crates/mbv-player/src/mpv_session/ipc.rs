@@ -2,7 +2,7 @@
 //! `mpv-child-process`).
 //!
 //! One session owns one non-blocking `UnixStream` to the `mpv` child. The
-//! playback thread drives it, as it drives the libmpv handle today. `request`
+//! playback thread drives it, as it drove the libmpv handle before. `request`
 //! sends a command and waits for its reply, and `next_event` pops the queued
 //! events in the order that mpv sent them. No reader thread runs.
 
@@ -69,6 +69,20 @@ impl IpcSession {
         command: &[&str],
         timeout: Duration,
     ) -> Result<Value, MpvError> {
+        let command: Vec<Value> = command
+            .iter()
+            .map(|argument| Value::String((*argument).to_owned()))
+            .collect();
+        self.request_values(&command, timeout)
+    }
+
+    /// `request` for a command whose arguments are already JSON values (for
+    /// example `set_property` with a numeric value).
+    pub(crate) fn request_values(
+        &mut self,
+        command: &[Value],
+        timeout: Duration,
+    ) -> Result<Value, MpvError> {
         let id = self.write_command(command)?;
         let started = Instant::now();
         loop {
@@ -86,6 +100,16 @@ impl IpcSession {
         }
     }
 
+    /// Writes `command` and returns without waiting for its reply. A later
+    /// reply line decodes as `MpvEvent::Ignored` (design D2).
+    pub(crate) fn send(&mut self, command: &[&str]) -> Result<(), MpvError> {
+        let command: Vec<Value> = command
+            .iter()
+            .map(|argument| Value::String((*argument).to_owned()))
+            .collect();
+        self.write_command(&command).map(|_| ())
+    }
+
     /// Returns the next event. When none is queued, reads what the socket holds
     /// now. A read or decode fault is delivered as a failure event.
     pub(crate) fn next_event(&mut self) -> Option<MpvEvent> {
@@ -99,7 +123,7 @@ impl IpcSession {
     }
 
     /// Writes one command line and returns its request id.
-    fn write_command(&mut self, command: &[&str]) -> Result<u64, MpvError> {
+    fn write_command(&mut self, command: &[Value]) -> Result<u64, MpvError> {
         let id = self.next_request_id;
         self.next_request_id += 1;
         let mut line = json!({"command": command, "request_id": id}).to_string();
@@ -107,7 +131,7 @@ impl IpcSession {
         self.stream
             .write_all(line.as_bytes())
             .map_err(MpvError::Io)?;
-        if command.first() == Some(&"quit") {
+        if command.first() == Some(&Value::String("quit".to_owned())) {
             self.quit_requested = true;
         }
         Ok(id)

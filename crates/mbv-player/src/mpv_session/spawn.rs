@@ -1,20 +1,101 @@
 //! Child-process spawn arguments (design D4 of `mpv-child-process`).
 //!
-//! `spawn_args` turns the option list that `init_mpv` sets through libmpv
-//! into `mpv` command-line arguments with the same values. The child-process
-//! backend (group 4) starts the child with this list; libmpv stays the live
-//! backend until then.
+//! `spawn_args` turns the option list that the embedded client used to set
+//! through libmpv into `mpv` command-line arguments with the same values. The
+//! child-process backend starts the child with this list.
 
 use std::io::{ErrorKind, Write};
 use std::os::unix::net::UnixStream;
 use std::os::unix::process::CommandExt;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Child as ProcessChild, Command, Stdio};
+use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 
 use crate::mpv_error::MpvError;
 use crate::runtime::MpvRunConfig;
+
+/// How many connect attempts one start makes before it fails, and how long it
+/// waits between them (design D4). mpv creates its socket some time after it
+/// starts, so the first tries can find no path yet. Production uses these; the
+/// tests in `mpv_session/ipc/tests.rs` pass their own zero interval.
+pub(crate) const CONNECT_ATTEMPTS: u32 = 250;
+pub(crate) const CONNECT_INTERVAL: Duration = Duration::from_millis(20);
+
+/// One child-start request: the program, its arguments, and the socket that
+/// appears once it serves them.
+pub(crate) struct StartRequest {
+    /// The program to start. Production passes `"mpv"`, so a missing program
+    /// names `mpv` in the start error (design D7).
+    pub(crate) program: String,
+    pub(crate) args: Vec<String>,
+    pub(crate) socket_path: PathBuf,
+    pub(crate) attempts: u32,
+    pub(crate) interval: Duration,
+}
+
+/// The work one start request performs. Production starts the `mpv` program;
+/// tests substitute a stub, so no mpv process runs (design D9).
+pub(crate) type StartFn = Box<dyn Fn(StartRequest) -> Result<Child, MpvError> + Send + 'static>;
+
+/// The one long-lived child spawner, owned by the player controller.
+///
+/// A child carries `PR_SET_PDEATHSIG`, which fires when the *thread* that
+/// started it ends (design D5). Starting a child on the caller's thread would
+/// tie it to a short-lived thread (for example the daemon start-up thread that
+/// calls `pre_warm`). One long-lived thread starts every child instead, so a
+/// child lives as long as the spawner and no longer.
+///
+/// `pre_warm` and the on-demand start in `run_player_thread` both start their
+/// child through the same spawner (design D5).
+pub(crate) struct Spawner {
+    requests: mpsc::Sender<(StartRequest, mpsc::Sender<Result<Child, MpvError>>)>,
+}
+
+impl Spawner {
+    /// The production spawner: the worker runs `Child::start` for `"mpv"`.
+    pub(crate) fn new() -> Self {
+        Self::with_start(Box::new(|request| {
+            Child::start(
+                &request.program,
+                &request.args,
+                &request.socket_path,
+                request.attempts,
+                request.interval,
+            )
+        }))
+    }
+
+    /// A spawner whose worker runs `start` instead of the `mpv` program (a
+    /// test passes a stub; design D9).
+    pub(crate) fn with_start(start: StartFn) -> Self {
+        let (requests, receiver) =
+            mpsc::channel::<(StartRequest, mpsc::Sender<Result<Child, MpvError>>)>();
+        let _worker = thread::spawn(move || {
+            while let Ok((request, reply)) = receiver.recv() {
+                let _ = reply.send(start(request));
+            }
+        });
+        Self { requests }
+    }
+
+    /// Starts one child on the spawner thread and returns it to the caller.
+    ///
+    /// # Errors
+    ///
+    /// Returns `MpvError::Spawn` only when the spawner thread is gone; a start
+    /// fault comes back from `start` as its own `MpvError`.
+    pub(crate) fn start(&self, request: StartRequest) -> Result<Child, MpvError> {
+        let (reply_tx, reply_rx) = mpsc::channel();
+        self.requests
+            .send((request, reply_tx))
+            .map_err(|error| MpvError::Spawn(format!("mpv spawner is gone: {error}")))?;
+        reply_rx
+            .recv()
+            .map_err(|error| MpvError::Spawn(format!("mpv spawner stopped: {error}")))?
+    }
+}
 
 /// The path and script inputs that `init_mpv` resolves before it starts the
 /// child. `spawn_args` stays a pure function of these values and the run
@@ -161,6 +242,14 @@ impl Child {
                 Err(error)
             }
         }
+    }
+
+    /// A second handle to the connected IPC socket, so the session can drive
+    /// the child while this `Child` keeps its own copy for the quit it sends
+    /// on drop (design D5). A duplicated descriptor shares the same socket, so
+    /// the two handles see the same byte stream.
+    pub(crate) fn try_clone_stream(&self) -> Result<UnixStream, MpvError> {
+        self.stream.try_clone().map_err(MpvError::Io)
     }
 }
 

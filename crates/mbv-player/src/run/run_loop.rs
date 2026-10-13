@@ -49,7 +49,7 @@ impl PlaybackRun {
     // without the immediate wakeup.
     pub(crate) fn run(
         mut self,
-        mut mpv: Mpv,
+        mpv: Mpv,
         stop_rx: &mpsc::Receiver<()>,
         cmd_rx: &mpsc::Receiver<PlayerCommand>,
         mut progress: ProgressGuard,
@@ -73,7 +73,7 @@ impl PlaybackRun {
         }));
 
         if wakeup_write_fd >= 0 {
-            mpv.set_wakeup_callback(move || {
+            Mpv::set_wakeup_callback(move || {
                 let byte = [0u8; 1];
                 // SAFETY: the run keeps the self-pipe write descriptor open
                 // until the callback is removed with its Mpv instance; `byte`
@@ -109,6 +109,10 @@ impl PlaybackRun {
                 libc::close(wakeup_read_fd);
             }
         }
+        // The session owns the child process, so dropping it here tears the
+        // child down at the end of the run, before the panic teardown below
+        // (design D5).
+        drop(mpv);
         if let Err(panic) = result {
             let msg = panic
                 .downcast_ref::<&str>()

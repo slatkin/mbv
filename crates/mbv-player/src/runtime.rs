@@ -1,6 +1,9 @@
 use super::{
     Format, IntroState, Mpv, OsStr, Path, PathBuf, PlayerError, PlayerEvent, PlayerStatus,
-    SessionReporter, fs, mpv_err_str,
+    SessionReporter, fs,
+};
+use crate::mpv_session::spawn::{
+    CONNECT_ATTEMPTS, CONNECT_INTERVAL, SpawnPaths, Spawner, StartRequest, spawn_args,
 };
 use mbv_core::applog as app_logging;
 use std::sync::{Arc, Mutex, mpsc};
@@ -420,59 +423,91 @@ fn log_overlay_script_policy(no_scripts: bool, use_mpv_config: bool) {
     }
 }
 
-pub(super) fn init_mpv(config: &MpvRunConfig) -> Result<(Mpv, bool), PlayerError> {
-    let ipc_path = mbv_config::mpv_ipc_path();
-    let private_config_dir = prepare_mpv_config_dir(config.use_mpv_config, &ipc_path)?;
-    prepare_ipc_socket(&ipc_path);
+pub(super) fn init_mpv(
+    spawner: &Spawner,
+    config: &MpvRunConfig,
+) -> Result<(Mpv, bool), PlayerError> {
+    let resolved = resolve_spawn(config)?;
+    start_session(spawner, config, &resolved)
+}
 
-    let no_scripts = config.no_scripts;
-    let use_mpv_config = config.use_mpv_config;
-    log_overlay_script_policy(no_scripts, use_mpv_config);
-    let mut init_err: Option<String> = None;
-    let mpv = match Mpv::with_initializer(|init| {
-        macro_rules! opt {
-            ($k:expr_2021, $v:expr_2021) => {{
-                let r = init.set_option($k, $v);
-                if let Err(ref e) = r {
-                    init_err = Some(format!(
-                        "[player] set_option('{}') failed: {}",
-                        $k,
-                        mpv_err_str(e)
-                    ));
-                }
-                r?;
-            }};
+/// The filesystem inputs one start needs. `init_mpv` resolves them and
+/// `start_session` turns them into `spawn_args` and a spawn request.
+pub(super) struct ResolvedSpawn {
+    ipc_path: String,
+    config_dir: PathBuf,
+    overlay: Option<(PathBuf, PathBuf)>,
+}
+
+impl ResolvedSpawn {
+    /// A resolved path set for the start tests: no real runtime directory is
+    /// touched (design D9).
+    #[cfg(test)]
+    pub(crate) fn for_test(ipc_path: &str, config_dir: &Path) -> Self {
+        Self {
+            ipc_path: ipc_path.to_owned(),
+            config_dir: config_dir.to_owned(),
+            overlay: None,
         }
-        opt!("config", "yes");
-        // Use an mbv-owned config dir so user mpv.conf cannot override
-        // input-ipc-server during mpv_initialize() and clobber a live mpv socket.
-        opt!("config-dir", private_config_dir.to_str().unwrap_or(""));
-        opt!("input-ipc-server", ipc_path.as_str());
-        opt!("input-default-bindings", "yes");
-        opt!("input-vo-keyboard", "yes");
-        opt!("wayland-app-id", "mbv");
-        opt!("gapless-audio", "weak");
-        if no_scripts || !use_mpv_config {
-            opt!("load-scripts", "no");
-            opt!("osc", "no");
-            opt!("osd-bar", "no");
-        }
-        if !no_scripts
-            && !use_mpv_config
-            && let Some(script) = resolve_overlay_scripts()
-        {
-            opt!("scripts", script.to_str().unwrap_or(""));
-            let fonts = resolve_overlay_fonts();
-            opt!("osd-fonts-dir", fonts.to_str().unwrap_or(""));
-        }
-        Ok(())
-    }) {
-        Ok(m) => m,
-        Err(e) => {
-            let msg = init_err.unwrap_or_else(|| format!("[player] mpv init error: {e}"));
-            return Err(PlayerError::mpv_init(msg, e));
-        }
+    }
+}
+
+/// Resolves the socket path, the mbv-owned config directory, and the overlay
+/// scripts for this run. This is the only filesystem step of a start.
+fn resolve_spawn(config: &MpvRunConfig) -> Result<ResolvedSpawn, PlayerError> {
+    let ipc_path = mbv_config::mpv_ipc_path();
+    let config_dir = prepare_mpv_config_dir(config.use_mpv_config, &ipc_path)?;
+    prepare_ipc_socket(&ipc_path);
+    log_overlay_script_policy(config.no_scripts, config.use_mpv_config);
+    Ok(ResolvedSpawn {
+        ipc_path,
+        config_dir,
+        overlay: overlay_paths(config),
+    })
+}
+
+/// The overlay script and its font directory, when mbv hands mpv its own
+/// scripts (design D4). `resolve_overlay_scripts` already warns when the
+/// chosen script is missing, so a missing script yields neither path.
+fn overlay_paths(config: &MpvRunConfig) -> Option<(PathBuf, PathBuf)> {
+    if config.no_scripts || config.use_mpv_config {
+        return None;
+    }
+    let script = resolve_overlay_scripts()?;
+    Some((script, resolve_overlay_fonts()))
+}
+
+/// Builds the child command line, starts the child through `spawner`,
+/// connects to its socket, and applies the post-init properties (row 4.2 of
+/// `mpv-child-process`). `init_mpv` resolves the paths and calls this; tests
+/// call it directly with a stub spawner, because a real start would rewrite
+/// the live runtime config directory.
+pub(super) fn start_session(
+    spawner: &Spawner,
+    config: &MpvRunConfig,
+    resolved: &ResolvedSpawn,
+) -> Result<(Mpv, bool), PlayerError> {
+    let paths = SpawnPaths {
+        ipc_path: &resolved.ipc_path,
+        config_dir: &resolved.config_dir,
+        overlay: resolved
+            .overlay
+            .as_ref()
+            .map(|(script, fonts)| (script.as_path(), fonts.as_path())),
     };
+    let request = StartRequest {
+        program: "mpv".to_owned(),
+        args: spawn_args(config, &paths),
+        socket_path: PathBuf::from(&resolved.ipc_path),
+        attempts: CONNECT_ATTEMPTS,
+        interval: CONNECT_INTERVAL,
+    };
+    let child = spawner.start(request).map_err(|error| {
+        PlayerError::mpv_init(format!("[player] mpv start failed: {error}"), error)
+    })?;
+    let mpv = Mpv::from_child(child).map_err(|error| {
+        PlayerError::mpv_init(format!("[player] mpv connect failed: {error}"), error)
+    })?;
 
     // Request mpv log messages so they arrive as log-message events.
     let log_level = if cfg!(debug_assertions) {
