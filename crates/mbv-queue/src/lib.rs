@@ -34,6 +34,9 @@ pub use state::{
 mod execution_sequence;
 #[doc(inline)]
 pub use execution_sequence::{ExecSlot, ExecutionSequence};
+mod play_order;
+#[doc(inline)]
+pub use play_order::{PlayOrder, PlayOrderMode};
 mod progress;
 pub(crate) use progress::apply_progress_to_queue_item;
 #[doc(inline)]

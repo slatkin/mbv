@@ -1,5 +1,5 @@
 use super::*;
-use mbv_queue::{QueueItem, QueueLineage, QueueSource};
+use mbv_queue::{PlayOrderMode, QueueItem, QueueLineage, QueueSource};
 
 fn stub_media_item() -> mbv_emby_model::EmbyItem {
     mbv_emby_model::EmbyItem {
@@ -136,6 +136,7 @@ fn unified_queue_state_data_round_trips() {
             generation: 3,
             target_slot: 1,
         }),
+        play_order: PlayOrderMode::Sequential,
     };
     let json = serde_json::to_string(&state).unwrap();
     let decoded: UnifiedQueueStateData = serde_json::from_str(&json).unwrap();
@@ -159,6 +160,30 @@ fn unified_queue_state_data_round_trips() {
     assert_eq!(decoded_legacy.in_flight_transition, None);
     assert_eq!(decoded_legacy.queued_latest_transition, None);
     assert_eq!(decoded_legacy.lineage, QueueLineage::default());
+}
+
+// Contract: a `UnifiedQueueStateData` payload without `play_order` (older
+// peer, queue-shuffle-play-order design D5) decodes as Sequential.
+#[test]
+fn unified_queue_state_data_without_play_order_decodes_as_sequential() {
+    let state = UnifiedQueueStateData {
+        status: PlayerStatus::default(),
+        slots: vec![],
+        active_slot: None,
+        revision: 1,
+        source: QueueSource::Unknown,
+        lineage: QueueLineage(1),
+        in_flight_transition: None,
+        queued_latest_transition: None,
+        play_order: PlayOrderMode::Shuffle,
+    };
+    let mut json: serde_json::Value =
+        serde_json::from_str(&serde_json::to_string(&state).unwrap()).unwrap();
+    json.as_object_mut().unwrap().remove("play_order");
+
+    let decoded: UnifiedQueueStateData = serde_json::from_value(json).unwrap();
+
+    assert_eq!(decoded.play_order, PlayOrderMode::Sequential);
 }
 
 #[test]
@@ -437,6 +462,7 @@ fn unified_queue_state_event_round_trips() {
         lineage: QueueLineage::default(),
         in_flight_transition: None,
         queued_latest_transition: None,
+        play_order: PlayOrderMode::Sequential,
     });
     let json = serde_json::to_string(&event).unwrap();
     let decoded: CtrlEvent = serde_json::from_str(&json).unwrap();

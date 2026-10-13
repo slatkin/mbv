@@ -137,6 +137,10 @@ pub(crate) fn unified_queue_state_for_peer(
         lineage,
         in_flight_transition,
         queued_latest_transition,
+        // Real projection of the owner's order arrives with the daemon
+        // wiring unit (queue-shuffle-play-order task 4.1); Sequential until
+        // then.
+        play_order: mbv_queue::PlayOrderMode::Sequential,
     })
 }
 

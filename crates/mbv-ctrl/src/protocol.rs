@@ -1,7 +1,9 @@
 use serde::{Deserialize, Serialize};
 
 use crate::player::PlayerStatus;
-use mbv_queue::{QueueItem, QueueItemContentId, QueueLineage, QueueSlotId, QueueSource};
+use mbv_queue::{
+    PlayOrderMode, QueueItem, QueueItemContentId, QueueLineage, QueueSlotId, QueueSource,
+};
 
 /// Bump ONLY when an old peer would misbehave, not when it would merely
 /// fail to understand. Compatibility is exact-match, so every bump kills
@@ -85,6 +87,9 @@ pub const SWAP_TOKEN_ENV: &str = "MBV_SWAP_TOKEN";
 /// Connection may run one Owner action (`CtrlCmd::RunOwnerAction`). Additive —
 /// no protocol-version bump.
 pub const CTRL_CAP_OWNER_ACTION: &str = "owner-action";
+/// Peer supports `CtrlCmd::SetPlayOrder` for the Bound queue playback order.
+/// Additive — no protocol-version bump.
+pub const CTRL_CAP_PLAY_ORDER: &str = "play-order";
 /// Peer supports correlated owner-answered queue operations.
 /// Additive — no protocol-version bump.
 pub const CTRL_CAP_ANSWERED_QUEUE_OPS: &str = "answered-queue-ops";
@@ -147,6 +152,10 @@ pub struct UnifiedQueueStateData {
     /// D4/D5). `None` when nothing is queued.
     #[serde(default)]
     pub queued_latest_transition: Option<TransitionSummary>,
+    /// Playback order of the Bound queue (design D5). The owner-side pick
+    /// never crosses the wire; only the mode does. Absent on older payloads.
+    #[serde(default)]
+    pub play_order: PlayOrderMode,
 }
 
 /// Build an `UnifiedQueueSlot` from a `QueueSlotId`.  Callers in

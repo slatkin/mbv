@@ -644,6 +644,7 @@ impl RemotePlayer {
             lineage: QueueLineage::default(),
             in_flight_transition: None,
             queued_latest_transition: None,
+            play_order: mbv_queue::PlayOrderMode::Sequential,
         };
         let status = Arc::new(Mutex::new(status));
         let subtitle_prefs = Arc::new(Mutex::new(mbv_ctrl::player::SubtitlePrefs::default()));

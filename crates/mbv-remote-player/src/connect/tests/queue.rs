@@ -110,6 +110,7 @@ fn inbound_queue_op_result_follows_prior_state_event() {
         lineage: mbv_queue::QueueLineage::default(),
         in_flight_transition: None,
         queued_latest_transition: None,
+        play_order: mbv_queue::PlayOrderMode::Sequential,
     };
     let mut earlier_state = state.clone();
     earlier_state.revision = 2;
@@ -370,6 +371,7 @@ fn reconnect_replaces_queue_and_status_from_one_playback_snapshot() {
         lineage: mbv_queue::QueueLineage::default(),
         in_flight_transition: None,
         queued_latest_transition: None,
+        play_order: mbv_queue::PlayOrderMode::Sequential,
     };
 
     apply_ctrl_event(
@@ -460,6 +462,7 @@ fn unified_queue_state_preserves_canonical_coordinates_and_source() {
         lineage: mbv_queue::QueueLineage::default(),
         in_flight_transition: None,
         queued_latest_transition: None,
+        play_order: mbv_queue::PlayOrderMode::Sequential,
     };
 
     apply_ctrl_event(

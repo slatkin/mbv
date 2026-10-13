@@ -429,7 +429,11 @@ fn dispatch_ctrl_command(
             send_to(ctx.reply_tx, &CtrlEvent::ShutdownAccepted);
             let _ = ctx.merged_tx.send(DaemonEvent::Shutdown);
         }
-        CtrlCmd::ApplyServiceSetup { .. } => {}
+        // `ApplyServiceSetup` runs on the packaged daemon's owner-admin
+        // path. `SetPlayOrder` gets its real handling (owner-core order
+        // change plus `SetUpcoming` dispatch) with the daemon wiring unit
+        // (queue-shuffle-play-order task 4.1); ignored until then.
+        CtrlCmd::ApplyServiceSetup { .. } | CtrlCmd::SetPlayOrder(_) => {}
         // The Pin-swap state machine consumes its target's `SwapPrepared` in
         // the event loop (tray-pin-swap task 3.3) before role dispatch; this
         // arm only covers direct `handle_ctrl_for_role` callers.

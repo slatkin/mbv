@@ -95,6 +95,7 @@ fn connected_pair_for_disconnect_test() -> (RemotePlayer, mpsc::Receiver<PlayerE
             lineage: mbv_queue::QueueLineage::default(),
             in_flight_transition: None,
             queued_latest_transition: None,
+            play_order: mbv_queue::PlayOrderMode::Sequential,
         });
         writeln!(writer, "{}", serde_json::to_string(&state).unwrap()).unwrap();
         daemon_tx.send(writer).unwrap();
@@ -163,6 +164,7 @@ fn service_setup_admin_handshake_advertises_an_admin_only_connection() {
                 lineage: mbv_queue::QueueLineage::default(),
                 in_flight_transition: None,
                 queued_latest_transition: None,
+                play_order: mbv_queue::PlayOrderMode::Sequential,
             }))
             .unwrap()
         )
@@ -215,6 +217,7 @@ fn owner_action_refused_reply_surfaces_the_owner_reason() {
                 lineage: mbv_queue::QueueLineage::default(),
                 in_flight_transition: None,
                 queued_latest_transition: None,
+                play_order: mbv_queue::PlayOrderMode::Sequential,
             }))
             .unwrap()
         )
@@ -286,6 +289,7 @@ fn owner_action_command_rejected_reply_reports_a_restart_requirement() {
                 lineage: mbv_queue::QueueLineage::default(),
                 in_flight_transition: None,
                 queued_latest_transition: None,
+                play_order: mbv_queue::PlayOrderMode::Sequential,
             }))
             .unwrap()
         )
@@ -464,6 +468,7 @@ fn local_handshake_accepts_identical_owner_build() {
                 lineage: mbv_queue::QueueLineage::default(),
                 in_flight_transition: None,
                 queued_latest_transition: None,
+                play_order: mbv_queue::PlayOrderMode::Sequential,
             }))
             .unwrap()
         )
@@ -513,6 +518,7 @@ fn handshake_records_audio_only_capability_and_ignores_unknown_capability() {
             lineage: mbv_queue::QueueLineage::default(),
             in_flight_transition: None,
             queued_latest_transition: None,
+            play_order: mbv_queue::PlayOrderMode::Sequential,
         });
         writeln!(writer, "{}", serde_json::to_string(&state).unwrap()).unwrap();
     });
@@ -554,6 +560,7 @@ fn handshake_without_audio_only_capability_defaults_to_video_capable() {
             lineage: mbv_queue::QueueLineage::default(),
             in_flight_transition: None,
             queued_latest_transition: None,
+            play_order: mbv_queue::PlayOrderMode::Sequential,
         });
         writeln!(writer, "{}", serde_json::to_string(&state).unwrap()).unwrap();
     });

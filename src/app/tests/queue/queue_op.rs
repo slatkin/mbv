@@ -73,6 +73,7 @@ fn snapshot_from_base(item_count: usize, base: u64) -> Box<mbv_ctrl::UnifiedQueu
         lineage: mbv_queue::QueueLineage::default(),
         in_flight_transition: None,
         queued_latest_transition: None,
+        play_order: mbv_queue::PlayOrderMode::Sequential,
     })
 }
 

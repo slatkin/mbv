@@ -198,6 +198,7 @@ mod tests {
             lineage: QueueLineage(lineage),
             in_flight_transition: None,
             queued_latest_transition: None,
+            play_order: mbv_queue::PlayOrderMode::Sequential,
         }
     }
 
