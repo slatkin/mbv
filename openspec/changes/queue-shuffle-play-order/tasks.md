@@ -20,7 +20,7 @@
 ## 4. Daemon wiring
 
 - [x] 4.1 In `crates/mbv-daemon`, handle `CtrlCmd::SetPlayOrder` by calling `set_play_order`, and send `PlayerCommand::SetUpcoming` to the Playback run every time the core's pick or order changes (Shuffle on/off, re-pick, lineage reset). Project `play_order.mode()` into `UnifiedQueueStateData`. Give the new command an exhaustive dispatch arm in every match over `CtrlCmd` (including `crates/mbvd`). Test in `crates/mbv-daemon/src/tests/queue_ops/`: `SetPlayOrder(Shuffle)` sends `SetUpcoming(To(slot))` with a non-active slot, and the next snapshot reports Shuffle. Verify: `cargo nextest run -p mbv-daemon`.
-- [ ] 4.2 In `crates/mbv-daemon/src/event_loop/player_events.rs`, make `handle_next_up_threshold` show the Next-Up card for the slot the core will really play next (the Shuffle pick; Sequential keeps the neighbor slot) instead of `active_idx + 1`, so one pick drives the card (spec `queue-play-order`: "One pick drives every forward advance"). Test: in Shuffle with a pick that is not the neighbor slot, the `NextUpShow` command names the picked slot. Verify: `cargo nextest run -p mbv-daemon`.
+- [x] 4.2 In `crates/mbv-daemon/src/event_loop/player_events.rs`, make `handle_next_up_threshold` show the Next-Up card for the slot the core will really play next (the Shuffle pick; Sequential keeps the neighbor slot) instead of `active_idx + 1`, so one pick drives the card (spec `queue-play-order`: "One pick drives every forward advance"). Test: in Shuffle with a pick that is not the neighbor slot, the `NextUpShow` command names the picked slot. Verify: `cargo nextest run -p mbv-daemon`.
 
 ## 5. TUI: menu, footer, MPRIS
 
