@@ -1,6 +1,6 @@
 # Tasks
 
-The libmpv-to-IPC swap lands in group 4. Groups 1 to 3 keep libmpv as the live backend, so each of them ends with a green gate: `cargo nextest run -p mbv-player`, `cargo fmt --all -- --check`, and `cargo clippy --workspace --all-targets -- -D warnings`. Do not run mpv in any test. Commit each group.
+The libmpv-to-IPC swap lands in group 4. Groups 1 to 3 keep libmpv as the live backend. The gate is `cargo nextest run -p mbv-player`, `cargo fmt --all -- --check`, and `cargo clippy --workspace --all-targets -- -D warnings`. Group 3 adds code that has no caller until group 4, so its gate uses `cargo clippy -p mbv-player --tests -- -D warnings`; the workspace `dead_code` errors on unwired code are expected until group 4. Do not run mpv in any test. Commit each group.
 
 ## 1. Domain `MpvError` (still on libmpv)
 
@@ -18,11 +18,11 @@ The libmpv-to-IPC swap lands in group 4. Groups 1 to 3 keep libmpv as the live b
 
 ## 3. Child-process session (built and tested, not yet used by the run loop)
 
-- [ ] 3.1 Read mpv's `player/client.c` (`mpv_create` and the client defaults) with `ketch code` or the mpv source. List each default that an embedded client has and the `mpv` program lacks, in a comment above `spawn_args`. Add `spawn_args(&MpvRunConfig) -> Vec<String>` in `mpv_session/spawn.rs` (design D4). Verify: one `#[case]` table test pins the argument list for the `use_mpv_config` / `no_scripts` combinations that `init_mpv` handles, and `cargo nextest run -p mbv-player` passes.
-- [ ] 3.2 Add the socket session in `mpv_session/ipc.rs`: a non-blocking `UnixStream`, a line buffer, the event queue, `request` (reply matched by `request_id`, other lines decoded with `MpvEvent::from_ipc_line` and queued in order), `next_event`, and the timeout as a parameter (design D3). Verify: unit tests on a `UnixStream::pair()` peer prove that an event sent before the reply is still delivered, in order, and that a reply that does not come returns `MpvError::Timeout` with a zero timeout.
-- [ ] 3.3 Add end-of-file handling and `quit_requested` (design D7): `next_event` returns `Shutdown` once for a close after a quit, and `Failed(ProcessExited)` for a close without one. Add the `ProcessExited` variant to `MpvFailure` (`is_clocked_audio_error` stays false for it). Cite scenario S8 in the test. Verify: two peer tests (close after quit, close without quit) pass.
-- [ ] 3.4 Add `connect_with_retry(path, attempts, interval)`, the `Child` start in `mpv_session/spawn.rs` with null stdio and `PR_SET_PDEATHSIG` (one `unsafe` block with a SAFETY comment), and `Drop` (async `quit`, kill, reap). Verify: a test that connects to a missing path with a zero interval returns `MpvError::NotFound` or `Io` as the design says, and clippy is clean with no `allow`.
-- [ ] 3.5 Run the gate and commit group 3.
+- [x] 3.1 Read mpv's `player/client.c` (`mpv_create` and the client defaults) with `ketch code` or the mpv source. List each default that an embedded client has and the `mpv` program lacks, in a comment above `spawn_args`. Add `spawn_args(&MpvRunConfig) -> Vec<String>` in `mpv_session/spawn.rs` (design D4). Verify: one `#[case]` table test pins the argument list for the `use_mpv_config` / `no_scripts` combinations that `init_mpv` handles, and `cargo nextest run -p mbv-player` passes.
+- [x] 3.2 Add the socket session in `mpv_session/ipc.rs`: a non-blocking `UnixStream`, a line buffer, the event queue, `request` (reply matched by `request_id`, other lines decoded with `MpvEvent::from_ipc_line` and queued in order), `next_event`, and the timeout as a parameter (design D3). Verify: unit tests on a `UnixStream::pair()` peer prove that an event sent before the reply is still delivered, in order, and that a reply that does not come returns `MpvError::Timeout` with a zero timeout.
+- [x] 3.3 Add end-of-file handling and `quit_requested` (design D7): `next_event` returns `Shutdown` once for a close after a quit, and `Failed(ProcessExited)` for a close without one. Add the `ProcessExited` variant to `MpvFailure` (`is_clocked_audio_error` stays false for it). Cite scenario S8 in the test. Verify: two peer tests (close after quit, close without quit) pass.
+- [x] 3.4 Add `connect_with_retry(path, attempts, interval)`, the `Child` start in `mpv_session/spawn.rs` with null stdio and `PR_SET_PDEATHSIG` (one `unsafe` block with a SAFETY comment), and `Drop` (async `quit`, kill, reap). Verify: a test that connects to a missing path with a zero interval returns `MpvError::NotFound` or `Io` as the design says, and clippy is clean with no `allow`.
+- [x] 3.5 Run the gate and commit group 3.
 
 ## 4. Swap the backend to the child process
 
