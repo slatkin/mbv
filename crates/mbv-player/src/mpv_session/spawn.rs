@@ -150,9 +150,17 @@ impl Child {
         attempts: u32,
         interval: Duration,
     ) -> Result<Self, MpvError> {
-        let process = start_process(program, args)?;
-        let stream = connect_with_retry(socket_path, attempts, interval)?;
-        Ok(Self { process, stream })
+        let mut process = start_process(program, args)?;
+        match connect_with_retry(socket_path, attempts, interval) {
+            Ok(stream) => Ok(Self { process, stream }),
+            // `std::process::Child` has no `Drop`, so a failed connect must
+            // reap the process itself. Otherwise mpv stays alive (it runs with
+            // `--idle=yes`) or becomes a zombie (design D5).
+            Err(error) => {
+                reap(&mut process);
+                Err(error)
+            }
+        }
     }
 }
 
@@ -162,11 +170,15 @@ impl Drop for Child {
         // before the kill below. The run loop already waited its own shutdown
         // grace period, so this Drop does not wait (design D5).
         let _ = writeln!(self.stream, r#"{{"command":["quit"]}}"#);
-        // Killing an exited child is harmless, and the wait reaps it so no
-        // zombie stays.
-        let _ = self.process.kill();
-        let _ = self.process.wait();
+        reap(&mut self.process);
     }
+}
+
+/// Kills and reaps the child. Killing an exited child is harmless, and the
+/// wait reaps it so no zombie stays.
+fn reap(process: &mut ProcessChild) {
+    let _ = process.kill();
+    let _ = process.wait();
 }
 
 /// Starts one `mpv` child process with the null device for every standard
