@@ -2845,8 +2845,8 @@ checksum = "a89322df9ebe1c1578d689c92318e070967d1042b512afbe49518723f4e6d5cd"
 
 [[package]]
 name = "pinwin"
-version = "0.3.3"
-source = "git+https://github.com/slatkin/pinwin?tag=0.3.3#b73c14aa66c5be8e6207fc8873c5cb677e1ca709"
+version = "0.3.4"
+source = "git+https://github.com/slatkin/pinwin?tag=0.3.4#4dd5f05d720e131c7d49fa758bd4b277bfd4d8f2"
 dependencies = [
  "calloop",
  "calloop-wayland-source",
