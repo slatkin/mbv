@@ -2,7 +2,6 @@ use super::{
     Format, IntroState, Mpv, OsStr, Path, PathBuf, PlayerError, PlayerEvent, PlayerStatus,
     SessionReporter, fs, mpv_err_str,
 };
-use crate::mpv_error::MpvError;
 use mbv_core::applog as app_logging;
 use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
@@ -318,10 +317,7 @@ fn configure_audio_output(mpv: &Mpv, config: &MpvRunConfig) -> Result<bool, Play
     } else if let Some(device) = &config.audio_device {
         // Clocked ALSA output: the device identifier alone selects the
         // backend, so `ao` is left to mpv's own negotiation.
-        if let Err(e) = mpv
-            .set_property("audio-device", device.as_str())
-            .map_err(MpvError::from)
-        {
+        if let Err(e) = mpv.set_property("audio-device", device.as_str()) {
             return Err(PlayerError::set_audio_device(device, e));
         }
         tracing::info!(name: "player.audio_output.configured", target: "player", device = %device, "using clocked ALSA audio output");
@@ -333,7 +329,7 @@ fn configure_audio_output(mpv: &Mpv, config: &MpvRunConfig) -> Result<bool, Play
         return Ok(false);
     }
     if let Err(e) = mpv.set_property("pause", true) {
-        tracing::warn!(name: "player.audio_pipe.pause_failed", target: "player", error = %mpv_err_str(&e), "failed to pre-pause startup");
+        tracing::warn!(name: "player.audio_pipe.pause_failed", target: "player", error = %e, "failed to pre-pause startup");
         return Ok(false);
     }
     Ok(true)
@@ -366,13 +362,13 @@ fn audio_pipe_format(bitdepth: u8) -> (u8, &'static str) {
 fn set_audio_pipe_properties(mpv: &Mpv, path: &str, audio_format: &str, rate: &str) -> Vec<String> {
     let mut failed = Vec::new();
     if let Err(e) = mpv.set_property("ao", "pcm") {
-        failed.push(format!("ao: {}", mpv_err_str(&e)));
+        failed.push(format!("ao: {e}"));
     }
     if let Err(e) = mpv.set_property("ao-pcm-file", path) {
-        failed.push(format!("ao-pcm-file: {}", mpv_err_str(&e)));
+        failed.push(format!("ao-pcm-file: {e}"));
     }
     if let Err(e) = mpv.set_property("ao-pcm-waveheader", "no") {
-        failed.push(format!("ao-pcm-waveheader: {}", mpv_err_str(&e)));
+        failed.push(format!("ao-pcm-waveheader: {e}"));
     }
     // Force a fixed <bitdepth>-bit/stereo/<rate> PCM format so the byte
     // stream always matches a single Snapcast `sampleformat`
@@ -380,16 +376,16 @@ fn set_audio_pipe_properties(mpv: &Mpv, path: &str, audio_format: &str, rate: &s
     // 32-bit remains the default for headroom, but narrower
     // bit depths improve compatibility with some Snapclients.
     if let Err(e) = mpv.set_property("audio-format", audio_format) {
-        failed.push(format!("audio-format: {}", mpv_err_str(&e)));
+        failed.push(format!("audio-format: {e}"));
     }
     if let Err(e) = mpv.set_property("audio-channels", "stereo") {
-        failed.push(format!("audio-channels: {}", mpv_err_str(&e)));
+        failed.push(format!("audio-channels: {e}"));
     }
     if let Err(e) = mpv.set_property("audio-samplerate", rate) {
-        failed.push(format!("audio-samplerate: {}", mpv_err_str(&e)));
+        failed.push(format!("audio-samplerate: {e}"));
     }
     if let Err(e) = mpv.set_property("audio-swresample-o", "resampler=soxr,precision=28") {
-        failed.push(format!("audio-swresample-o: {}", mpv_err_str(&e)));
+        failed.push(format!("audio-swresample-o: {e}"));
     }
     failed
 }
@@ -473,21 +469,18 @@ pub(super) fn init_mpv(config: &MpvRunConfig) -> Result<(Mpv, bool), PlayerError
     }) {
         Ok(m) => m,
         Err(e) => {
-            let msg =
-                init_err.unwrap_or_else(|| format!("[player] mpv init error: {}", mpv_err_str(&e)));
-            return Err(PlayerError::mpv_init(msg, MpvError::from(e)));
+            let msg = init_err.unwrap_or_else(|| format!("[player] mpv init error: {e}"));
+            return Err(PlayerError::mpv_init(msg, e));
         }
     };
 
-    // SAFETY: mpv.ctx is a live context owned by `mpv`, and `log_level` is a valid C string.
-    unsafe {
-        let log_level = if cfg!(debug_assertions) {
-            c"warn"
-        } else {
-            c"error"
-        };
-        libmpv2_sys::mpv_request_log_messages(mpv.ctx.as_ptr(), log_level.as_ptr().cast())
+    // Request mpv log messages so they arrive as log-message events.
+    let log_level = if cfg!(debug_assertions) {
+        "warn"
+    } else {
+        "error"
     };
+    let _ = mpv.request_log_messages(log_level);
 
     configure_caches(&mpv, config);
     let startup_pause_armed = configure_audio_output(&mpv, config)?;
@@ -497,7 +490,7 @@ pub(super) fn init_mpv(config: &MpvRunConfig) -> Result<(Mpv, bool), PlayerError
 
 pub(super) fn init_volume(mpv: &Mpv, status: &Arc<Mutex<PlayerStatus>>, initial_volume: u8) {
     let mut st = status.lock().unwrap();
-    let raw_max = mpv.get_property::<i64>("volume-max").unwrap_or(130);
+    let raw_max = mpv.get_i64("volume-max").unwrap_or(130);
     st.volume_max = raw_max * raw_max / 100;
     let v = i64::from(initial_volume).clamp(0, st.volume_max);
     let raw = mbv_emby_model::saturating_i64_from_f64(
@@ -508,17 +501,17 @@ pub(super) fn init_volume(mpv: &Mpv, status: &Arc<Mutex<PlayerStatus>>, initial_
 }
 
 pub(super) fn observe_properties(mpv: &Mpv, use_mpv_config: bool) {
-    let _ = mpv.observe_property("time-pos", Format::Double, 0);
-    let _ = mpv.observe_property("pause", Format::Flag, 1);
-    let _ = mpv.observe_property("volume", Format::Double, 2);
-    let _ = mpv.observe_property("sid", Format::String, 3);
-    let _ = mpv.observe_property("mute", Format::Flag, 4);
-    let _ = mpv.observe_property("aid", Format::String, 5);
-    let _ = mpv.observe_property("video-params/h", Format::Int64, 6);
-    let _ = mpv.observe_property("audio-codec-name", Format::String, 7);
-    let _ = mpv.observe_property("current-tracks/video/image", Format::Flag, 8);
-    let _ = mpv.observe_property("playlist-pos", Format::Int64, 9);
-    let _ = mpv.observe_property("playlist-count", Format::Int64, 10);
+    let _ = mpv.observe_property("time-pos", 0, Format::Double);
+    let _ = mpv.observe_property("pause", 1, Format::Flag);
+    let _ = mpv.observe_property("volume", 2, Format::Double);
+    let _ = mpv.observe_property("sid", 3, Format::String);
+    let _ = mpv.observe_property("mute", 4, Format::Flag);
+    let _ = mpv.observe_property("aid", 5, Format::String);
+    let _ = mpv.observe_property("video-params/h", 6, Format::Int64);
+    let _ = mpv.observe_property("audio-codec-name", 7, Format::String);
+    let _ = mpv.observe_property("current-tracks/video/image", 8, Format::Flag);
+    let _ = mpv.observe_property("playlist-pos", 9, Format::Int64);
+    let _ = mpv.observe_property("playlist-count", 10, Format::Int64);
     if use_mpv_config {
         let _ = mpv.command("keybind", &["MOUSE_MOVE", "script-message mouse-moved"]);
     }

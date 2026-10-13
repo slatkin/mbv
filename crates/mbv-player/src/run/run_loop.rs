@@ -1,9 +1,8 @@
 use super::super::{
-    Duration, Instant, MpvEvent, Ordering, PlayerCommand, PlayerEvent, PreparedSource,
+    Duration, Instant, Mpv, MpvEvent, Ordering, PlayerCommand, PlayerEvent, PreparedSource,
     PropertyValue, mpsc, mpv_position_ticks, quit_timeout_stop_flags, refresh_tracks, thread,
 };
 use super::{PlaybackRun, ProgressGuard};
-use libmpv2::Mpv;
 use mbv_core::applog as app_logging;
 use mbv_queue::QueueItem;
 use std::os::unix::io::RawFd;

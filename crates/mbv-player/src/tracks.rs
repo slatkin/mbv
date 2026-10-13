@@ -1,4 +1,4 @@
-use libmpv2::Mpv;
+use super::Mpv;
 use mbv_ctrl::player::{PlayerStatus, SubtitleChoice, SubtitlePrefs};
 use std::sync::{Arc, Mutex};
 

@@ -2,10 +2,9 @@ use std::os::unix::io::RawFd;
 
 use super::PlaybackOrigin;
 use super::{
-    AudiobookshelfPlayerContext, EmbyClient, MpvRunConfig, PlayerCommand, PlayerEvent,
+    AudiobookshelfPlayerContext, EmbyClient, Mpv, MpvRunConfig, PlayerCommand, PlayerEvent,
     PlayerStatus, SubtitlePrefs, init_mpv,
 };
-use libmpv2::Mpv;
 use mbv_queue::QueueItem;
 use std::sync::{Arc, Mutex, atomic::AtomicBool, mpsc};
 use std::thread;

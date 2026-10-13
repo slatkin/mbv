@@ -9,6 +9,8 @@ mod error;
 #[doc(inline)]
 pub use error::PlayerError;
 mod mpv_error;
+mod mpv_session;
+use mpv_session::{Format, Mpv};
 mod mpv_event;
 use mpv_event::{EndFileReason, MpvEvent, MpvFailure, PropertyValue};
 
@@ -21,7 +23,6 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use libmpv2::{Format, Mpv};
 use mbv_ctrl::player::{PlayerCommand, PlayerEvent, PlayerStatus, SubtitlePrefs};
 use mbv_emby::{EmbyClient, EmbyError};
 use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND, seconds_to_ticks, ticks_to_seconds};
@@ -214,13 +215,13 @@ fn start_queue_playback(mpv: &Mpv, start_idx: usize) {
         i64::try_from(start_idx).unwrap_or(i64::MAX),
     );
     if let Err(error) = mpv.command("playlist-play-index", &[&start_idx.to_string()]) {
-        tracing::warn!(name: "player.queue_playback.start_failed", target: "player", index = start_idx, error = %mpv_err_str(&error), "failed to start playlist index");
+        tracing::warn!(name: "player.queue_playback.start_failed", target: "player", index = start_idx, error = %error, "failed to start playlist index");
     }
 }
 
 fn warn_on_set_property(mpv: &Mpv, caller: &str, name: &str, value: i64) {
     if let Err(e) = mpv.set_property(name, value) {
-        tracing::warn!(name: "player.property.set_failed", target: "player", caller, property = name, value, error = %mpv_err_str(&e), "failed to set mpv property");
+        tracing::warn!(name: "player.property.set_failed", target: "player", caller, property = name, value, error = %e, "failed to set mpv property");
     }
 }
 
@@ -269,7 +270,7 @@ fn divergent_entry(pos: i64, current_idx: usize, queue_len: usize) -> Option<usi
 
 /// mpv's position inside the entry it is playing, in ticks.
 fn mpv_position_ticks(mpv: &Mpv) -> i64 {
-    seconds_to_ticks(mpv.get_property::<f64>("time-pos").unwrap_or(0.0))
+    seconds_to_ticks(mpv.get_f64("time-pos").unwrap_or(0.0))
 }
 
 /// Verify — and if needed reassert — the playlist projection the load
@@ -290,16 +291,16 @@ fn mpv_position_ticks(mpv: &Mpv) -> i64 {
 /// reported rather than repaired, because a missing
 /// entry means the ordinal no longer names the item we think it does.
 fn reassert_queue_layout(mpv: &Mpv, start_idx: usize, item_count: usize) {
-    let mpv_count = mpv.get_property::<i64>("playlist-count").unwrap_or(-1);
-    let mpv_pos = mpv.get_property::<i64>("playlist-pos").unwrap_or(-1);
-    let mpv_idle = mpv.get_property::<bool>("idle-active").unwrap_or(false);
+    let mpv_count = mpv.get_i64("playlist-count").unwrap_or(-1);
+    let mpv_pos = mpv.get_i64("playlist-pos").unwrap_or(-1);
+    let mpv_idle = mpv.get_bool("idle-active").unwrap_or(false);
     match queue_layout_verdict(start_idx, item_count, mpv_pos, mpv_count, mpv_idle) {
         QueueLayoutVerdict::Ok => {}
         QueueLayoutVerdict::Reassert => {
             tracing::warn!(name: "player.queue_layout.mismatch", target: "player", start_index = start_idx, item_count, mpv_position = mpv_pos, mpv_count, "reasserting the active ordinal");
             if mpv_idle {
                 if let Err(error) = mpv.command("playlist-play-index", &[&start_idx.to_string()]) {
-                    tracing::warn!(name: "player.queue_layout.repair_failed", target: "player", index = start_idx, error = %mpv_err_str(&error), "failed to repair playlist position");
+                    tracing::warn!(name: "player.queue_layout.repair_failed", target: "player", index = start_idx, error = %error, "failed to repair playlist position");
                 }
             } else {
                 let _ =

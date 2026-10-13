@@ -1,8 +1,7 @@
 use super::super::{
-    Duration, ForcedJump, Instant, Ordering, PlaybackOrigin, PlaybackRun, PlayerEvent, QueueItem,
-    QueueSlotId, StopReport, auto_select_tracks, mpv_err_str, mpv_position_ticks, send_ep_info,
+    Duration, ForcedJump, Instant, Mpv, Ordering, PlaybackOrigin, PlaybackRun, PlayerEvent,
+    QueueItem, QueueSlotId, StopReport, auto_select_tracks, mpv_position_ticks, send_ep_info,
 };
-use libmpv2::Mpv;
 
 impl PlaybackRun {
     pub(crate) fn settle_idle_jump_on_restart(
@@ -82,7 +81,7 @@ impl PlaybackRun {
         self.forced_jump = None;
         let seconds = mbv_emby_model::ticks_to_seconds(ticks);
         if let Err(e) = mpv.command("seek", &[&seconds.to_string(), "absolute"]) {
-            tracing::warn!(name: "player.resume_seek.failed", target: "player", position_seconds = seconds, error = %mpv_err_str(&e), "resume seek failed");
+            tracing::warn!(name: "player.resume_seek.failed", target: "player", position_seconds = seconds, error = %e, "resume seek failed");
             return;
         }
         // Arms the same seek-settle guard below, so this restart
