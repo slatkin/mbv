@@ -261,6 +261,7 @@ impl Model {
 mod tests {
     use super::*;
     use crate::app::tests::{make_app_stub, make_items};
+    use crate::app::{LibEvent, ModelContentEvent};
     use mbv_emby_model::test_support::make_item;
 
     fn target(id: &str) -> HomeItemTarget {
@@ -471,6 +472,58 @@ mod tests {
             !titles.contains(&"OldMovie".to_string()),
             "fetched row older than the 14-day cutoff is absent"
         );
+    }
+
+    /// Spec `home-latest-sections`, "Recently added loads at launch
+    /// independent of destinations" ("when that Service becomes ready"):
+    /// a launch whose Emby client exists at construction never runs the
+    /// async-startup bootstrap that re-arms the Home Recently added fetch,
+    /// so the launch-time Home load itself arms it. Regression guard for
+    /// the launch that needed F5 before any Emby row (or its TV New Item
+    /// marker) appeared (#930 follow-up).
+    #[test]
+    fn home_load_at_launch_with_a_cached_emby_client_arms_the_emby_recently_added_fetch() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let http = mbv_net::mock_http::MockHttp::new();
+        let mut config = crate::config::Config {
+            server_url: "http://127.0.0.1:1".into(),
+            ..crate::config::Config::default()
+        };
+        let client = mbv_emby::EmbyClient::new(config.clone()).with_test_agent(http.agent());
+        config.emby_setup = Some(mbv_config::EmbySetup::new("http://127.0.0.1:1", "user"));
+        let mut app = make_app_stub();
+        app.config = std::sync::Arc::new(std::sync::Mutex::new(config));
+        app.emby_runtime = crate::app::state::service_runtime::EmbyRuntime::ready(
+            std::sync::Arc::new(std::sync::Mutex::new(client)),
+        );
+        let mut model = Model::new(app);
+
+        // `fetch_home`'s own requests, then the armed fetch's one Latest
+        // request for the one eligible library the views response carries.
+        http.respond(
+            200,
+            r#"[{"ItemId":"lib-movies","Name":"Movies","CollectionType":"movies"}]"#,
+        );
+        http.respond(200, r#"{"Items":[],"TotalRecordCount":0}"#);
+        http.respond(200, r#"{"Items":[],"TotalRecordCount":0}"#);
+        http.respond(200, r#"[{"Id":"movie-1","Name":"Movie","Type":"Movie"}]"#);
+
+        model.fetch_home_at_startup();
+
+        match model.app.channels.lib_rx.recv().expect("fetch event") {
+            LibEvent::ModelContent(ModelContentEvent::HomeRecentlyAddedFetched {
+                source,
+                items,
+                ..
+            }) => {
+                assert_eq!(
+                    source,
+                    crate::app::DestinationLatestSource::Emby("lib-movies".into())
+                );
+                assert_eq!(items.len(), 1);
+            }
+            other => panic!("unexpected LibEvent: {other:?}"),
+        }
     }
 
     /// Spec scenario "Podcast row context menu" (`home-latest-sections`): a

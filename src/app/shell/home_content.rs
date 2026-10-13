@@ -187,6 +187,19 @@ impl Model {
         self.home_content.loading = false;
         match fetched_home {
             Ok(content) => {
+                // A launch with a cached Emby client brings the Service to
+                // Ready at construction, so `apply_emby_bootstrap` -- the
+                // async-startup seam that re-arms the Home Recently added
+                // fetch -- never runs on this path. This is that launch's
+                // one Home load with the eligible libraries already known,
+                // so it arms the fetch here (spec `home-latest-sections`,
+                // "Recently added loads at launch independent of
+                // destinations": "when that Service becomes ready"). The
+                // spawn is a no-op without an Emby client, which keeps the
+                // async-startup launch (still Connecting here) on its own
+                // bootstrap seam.
+                self.app
+                    .spawn_home_recently_added(mbv_queue::ServiceKind::Emby);
                 let has_live_flash = self.app.status_expires.is_some_and(|t| t > Instant::now());
                 if !has_live_flash {
                     self.app.status.clear();
