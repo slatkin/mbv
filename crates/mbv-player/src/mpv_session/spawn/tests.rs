@@ -2,11 +2,13 @@
 //! combination that `init_mpv` handles, with the embedded-client defaults
 //! from mpv 0.41's `[libmpv]` profile restored.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use rstest::rstest;
 
-use super::{SpawnPaths, spawn_args};
+use super::{Child, SpawnPaths, connect_with_retry, spawn_args};
+use crate::mpv_error::MpvError;
 use crate::runtime::MpvRunConfig;
 
 const IPC_PATH: &str = "/run/mbv/mbv-mpv.sock";
@@ -102,4 +104,38 @@ fn pins_argument_list(
     let args = spawn_args(&config(use_mpv_config, no_scripts), &paths());
     let expected: Vec<String> = expected.iter().map(|arg| (*arg).to_owned()).collect();
     assert_eq!(args, expected);
+}
+
+/// A path that no process serves, so a connect finds no socket there.
+fn missing_socket_path() -> PathBuf {
+    std::env::temp_dir().join(format!("mbv-mpv-missing-{}.sock", std::process::id()))
+}
+
+#[test]
+fn connect_to_a_missing_path_is_not_found() {
+    let result = connect_with_retry(&missing_socket_path(), 1, Duration::ZERO);
+
+    assert!(matches!(result, Err(MpvError::NotFound(_))));
+}
+
+#[test]
+fn start_with_a_missing_program_is_not_found() {
+    let result = Child::start(
+        "mbv-test-no-such-mpv-program",
+        &[],
+        &missing_socket_path(),
+        1,
+        Duration::ZERO,
+    );
+
+    assert!(matches!(result, Err(MpvError::NotFound(_))));
+}
+
+#[test]
+fn start_that_cannot_exec_is_a_spawn_error() {
+    // A directory is never executable, so `spawn` fails for a reason other
+    // than `NotFound` and the fault is a spawn error, not a missing program.
+    let result = Child::start("/", &[], &missing_socket_path(), 1, Duration::ZERO);
+
+    assert!(matches!(result, Err(MpvError::Spawn(_))));
 }

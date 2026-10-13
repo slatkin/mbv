@@ -5,9 +5,9 @@
 //! changing `PlayerError`'s shape.
 //!
 //! The change `mpv-child-process` grows this enum with the backend. The IPC
-//! session adds `Io`, `Reply`, `Timeout`, `Closed`, and `Decode` with its first
-//! producers. `Spawn` and `NotFound` come with the child start, and group 4
-//! removes `Libmpv` with the libmpv backend.
+//! session adds `Io`, `Reply`, `Timeout`, `Closed`, and `Decode`, and the
+//! child start adds `Spawn` and `NotFound`, each with its first producer.
+//! Group 4 removes `Libmpv` with the libmpv backend.
 
 use std::error::Error;
 use std::fmt;
@@ -17,6 +17,11 @@ use crate::mpv_err_str;
 /// Errors raised by the mpv backend.
 #[derive(Debug)]
 pub(crate) enum MpvError {
+    /// The `mpv` child process could not be started. The text names the fault.
+    Spawn(String),
+    /// The `mpv` program or its IPC socket path does not exist. The text names
+    /// what was missing.
+    NotFound(String),
     /// A libmpv call failed; the text comes from `mpv_err_str`. This case goes
     /// away when the backend changes to the IPC child process.
     Libmpv(String),
@@ -35,7 +40,7 @@ pub(crate) enum MpvError {
 impl fmt::Display for MpvError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Libmpv(text) => f.write_str(text),
+            Self::Spawn(text) | Self::NotFound(text) | Self::Libmpv(text) => f.write_str(text),
             Self::Io(error) => write!(f, "mpv IPC socket I/O failed: {error}"),
             Self::Reply(text) => write!(f, "mpv rejected a command: {text}"),
             Self::Timeout => f.write_str("mpv did not reply in time"),
