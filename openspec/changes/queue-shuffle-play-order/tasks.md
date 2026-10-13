@@ -2,8 +2,8 @@
 
 ## 1. Shared types and ctrl wire
 
-- [ ] 1.1 In `crates/mbv-queue`, add `PlayOrderMode { Sequential, Shuffle }` (serde, `Default = Sequential`) and the owner-side `PlayOrder { Sequential, Shuffle { upcoming: Option<QueueSlotId> } }` with a `mode()` accessor (design D1). Verify: `cargo check -p mbv-queue`.
-- [ ] 1.2 In `crates/mbv-ctrl`, add `CtrlCmd::SetPlayOrder(PlayOrderMode)`, the `CTRL_CAP_PLAY_ORDER` capability (advertised in `CtrlHello::current()`), and `#[serde(default)] play_order: PlayOrderMode` on `UnifiedQueueStateData`. Do not change `CTRL_PROTOCOL_VERSION` (design D5). Contract test in the crate's `tests/` binary: a `UnifiedQueueStateData` JSON without `play_order` decodes as Sequential. Verify: `cargo nextest run -p mbv-ctrl`.
+- [x] 1.1 In `crates/mbv-queue`, add `PlayOrderMode { Sequential, Shuffle }` (serde, `Default = Sequential`) and the owner-side `PlayOrder { Sequential, Shuffle { upcoming: Option<QueueSlotId> } }` with a `mode()` accessor (design D1). Verify: `cargo check -p mbv-queue`.
+- [x] 1.2 In `crates/mbv-ctrl`, add `CtrlCmd::SetPlayOrder(PlayOrderMode)`, the `CTRL_CAP_PLAY_ORDER` capability (advertised in `CtrlHello::current()`), and `#[serde(default)] play_order: PlayOrderMode` on `UnifiedQueueStateData`. Do not change `CTRL_PROTOCOL_VERSION` (design D5). Contract test in the crate's `tests/` binary: a `UnifiedQueueStateData` JSON without `play_order` decodes as Sequential. Verify: `cargo nextest run -p mbv-ctrl`.
 
 ## 2. Owner core picks the next slot
 
