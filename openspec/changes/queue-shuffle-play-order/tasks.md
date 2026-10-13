@@ -7,9 +7,9 @@
 
 ## 2. Owner core picks the next slot
 
-- [ ] 2.1 In `crates/mbv-player`, add the pure pick function (candidate slots, active slot, `&mut impl rand::Rng`) → `Option<QueueSlotId>` that never returns the active slot and returns `None` when no other slot exists (design D2). Tests with a seeded RNG: two cases in one `#[case]` table — one-slot queue gives `None`; multi-slot queue never gives the active slot. Verify: `cargo nextest run -p mbv-player`.
-- [ ] 2.2 Add `play_order: PlayOrder` to `PlayerOwnerState` with a transition `set_play_order(PlayOrderMode)` and the re-pick hooks: on Shuffle on, in `note_observed_active_slot`, after a remove that drops `upcoming`, and after an append when `upcoming` is `None` (design D2). Reset to Sequential where the core installs a new `QueueLineage` (design D4). Tests in `owner_state.rs`: replacement resets to Sequential; removing `upcoming` re-picks a present non-active slot. Verify: `cargo nextest run -p mbv-player`.
-- [ ] 2.3 Change `relative_step_target`: in Shuffle, `Next` returns `Jump(upcoming)` or `AtEdge` when `None`; `Previous` returns `AtEdge` (design D3). Extend the existing step test with one Shuffle Next case and one Shuffle Previous case. Verify: `cargo nextest run -p mbv-player`.
+- [x] 2.1 In `crates/mbv-player`, add the pure pick function (candidate slots, active slot, `&mut impl rand::Rng`) → `Option<QueueSlotId>` that never returns the active slot and returns `None` when no other slot exists (design D2). Tests with a seeded RNG: two cases in one `#[case]` table — one-slot queue gives `None`; multi-slot queue never gives the active slot. Verify: `cargo nextest run -p mbv-player`.
+- [x] 2.2 Add `play_order: PlayOrder` to `PlayerOwnerState` with a transition `set_play_order(PlayOrderMode)` and the re-pick hooks: on Shuffle on, in `note_observed_active_slot`, after a remove that drops `upcoming`, and after an append when `upcoming` is `None` (design D2). Reset to Sequential where the core installs a new `QueueLineage` (design D4). Tests in `owner_state.rs`: replacement resets to Sequential; removing `upcoming` re-picks a present non-active slot. Verify: `cargo nextest run -p mbv-player`.
+- [x] 2.3 Change `relative_step_target`: in Shuffle, `Next` returns `Jump(upcoming)` or `AtEdge` when `None`; `Previous` returns `AtEdge` (design D3). Extend the existing step test with one Shuffle Next case and one Shuffle Previous case. Verify: `cargo nextest run -p mbv-player`.
 
 ## 3. Playback run obeys the pick
 
