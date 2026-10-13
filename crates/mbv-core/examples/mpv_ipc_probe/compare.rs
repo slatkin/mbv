@@ -5,12 +5,13 @@ use crate::scenarios::Scenario;
 use serde_json::{Map, Value, json};
 use std::collections::BTreeSet;
 
-pub(crate) const RULES: [&str; 5] = [
+pub(crate) const RULES: [&str; 6] = [
     "1: drop what libmpv2 cannot deliver (playlist_* fields, property changes with no data)",
     "2: map file_error text to an mpv error code",
     "3: collapse consecutive time-pos changes and drop their values",
     "4: drop log-message events",
     "5: drop command replies",
+    "6: add the property-change id that mpv's JSON omits when it is 0",
 ];
 
 /// Applies the rules. Returns the sequence and the rule numbers used.
@@ -32,6 +33,10 @@ fn normalize(trace: &[Value]) -> (Vec<Value>, BTreeSet<usize>) {
         if is_undeliverable(&map) {
             rules.insert(1);
             continue;
+        }
+        if map["event"] == "property-change" && !map.contains_key("id") {
+            rules.insert(6);
+            map.insert("id".to_owned(), json!(0));
         }
         if map.contains_key("playlist_entry_id") || map.contains_key("playlist_insert_id") {
             rules.insert(1);

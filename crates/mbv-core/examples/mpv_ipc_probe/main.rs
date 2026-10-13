@@ -33,6 +33,9 @@ impl fmt::Display for ProbeError {
 
 fn run_scenario(backend: &mut dyn Backend, scenario: &Scenario, missing: &str) -> Vec<Value> {
     let mut trace = Vec::new();
+    // Take the initial observed values before the first step, so their
+    // position does not depend on when each client first polls.
+    drain(backend, &mut trace);
     for step in scenario.steps {
         match step {
             Step::Cmd(args) => {
@@ -50,10 +53,14 @@ fn run_scenario(backend: &mut dyn Backend, scenario: &Scenario, missing: &str) -
             }
         }
     }
+    drain(backend, &mut trace);
+    trace
+}
+
+fn drain(backend: &mut dyn Backend, trace: &mut Vec<Value>) {
     while let Next::Event(event) = backend.next(SETTLE) {
         trace.push(event);
     }
-    trace
 }
 
 fn wait_for(backend: &mut dyn Backend, trace: &mut Vec<Value>, event: &str, count: usize) {

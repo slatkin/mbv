@@ -66,6 +66,9 @@ The probe converts each libmpv2 event into mpv's JSON event field names (`event`
 3. Collapse consecutive `time-pos` changes into one entry and compare no `time-pos` values, because their number depends on timing.
 4. Drop `log-message` events from the order comparison, because their count depends on timing.
 5. Drop command reply lines (`request_id`) from the event sequence.
+6. Add `"id": 0` to a `property-change` that has no `id`. mpv's JSON encoder leaves out the ID when it is 0 (`time-pos`).
+
+Before the first step, each backend drains the initial values of its observed properties. Without this step, the first probe run showed IPC delivering those values before or after `start-file` from one run to the next. Their position depended on when the client first polls, not on the transport.
 
 Each scenario result is `MATCH`, `MATCH-AFTER-NORMALIZATION` (it lists which rules applied) or `DIFF` (it prints the first differing index and both sides).
 
