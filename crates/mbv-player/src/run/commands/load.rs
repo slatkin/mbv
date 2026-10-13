@@ -373,7 +373,6 @@ impl PlaybackRun {
         };
         self.load_active_item_state();
         self.begin_item_lifecycle(StopAction::ReportedNow(self.stop_report()));
-        self.active_file_starting = false;
         self.pending_initial_playlist_layout = false;
         self.ext_sub_urls.clear();
         self.reporter.clear_session();

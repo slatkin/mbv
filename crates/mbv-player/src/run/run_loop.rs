@@ -1,6 +1,6 @@
 use super::super::{
-    Duration, Event, Instant, Ordering, PlayerCommand, PlayerEvent, PreparedSource, PropertyData,
-    mpsc, mpv_position_ticks, quit_timeout_stop_flags, refresh_tracks, thread,
+    Duration, Instant, MpvEvent, Ordering, PlayerCommand, PlayerEvent, PreparedSource,
+    PropertyValue, mpsc, mpv_position_ticks, quit_timeout_stop_flags, refresh_tracks, thread,
 };
 use super::{PlaybackRun, ProgressGuard};
 use libmpv2::Mpv;
@@ -172,7 +172,8 @@ impl PlaybackRun {
         let mut had_event = false;
         while let Some(event_result) = mpv.wait_event(0.0) {
             had_event = true;
-            if self.handle_mpv_event(event_result, mpv, progress, progress_report_tx) {
+            let event = MpvEvent::from_libmpv(event_result);
+            if self.handle_mpv_event(event, mpv, progress, progress_report_tx) {
                 return true;
             }
         }
@@ -238,21 +239,21 @@ impl PlaybackRun {
     /// (end of playlist, shutdown, or unrecoverable error).
     fn handle_mpv_event(
         &mut self,
-        event_result: Result<Event<'_>, libmpv2::Error>,
+        event: MpvEvent,
         mpv: &Mpv,
         progress: &mut ProgressGuard,
         progress_report_tx: &mpsc::Sender<String>,
     ) -> bool {
-        match event_result {
-            Ok(Event::PropertyChange { name, change, .. }) => {
-                self.on_property_change(name, change, mpv, progress_report_tx);
+        match event {
+            MpvEvent::PropertyChange { name, value } => {
+                self.on_property_change(&name, value, mpv, progress_report_tx);
                 false
             }
-            Ok(Event::PlaybackRestart) => {
+            MpvEvent::PlaybackRestart => {
                 self.on_playback_restart(mpv);
                 false
             }
-            Ok(Event::EndFile(reason)) => {
+            MpvEvent::EndFile(reason) => {
                 let should_continue = self.on_end_file(reason, mpv, progress);
                 // on_end_file returns false both for "continue normally" and for
                 // "end of playlist — return from thread". Detect end-of-playlist
@@ -262,42 +263,37 @@ impl PlaybackRun {
                 }
                 false
             }
-            Ok(Event::LogMessage {
+            MpvEvent::LogMessage {
                 prefix,
                 level,
                 text,
-                ..
-            }) => {
+            } => {
                 if let Some(t) = mpv_log_text(
                     self.prepared_source
                         .as_ref()
                         .is_some_and(PreparedSource::has_sensitive_lifecycle),
-                    text,
+                    &text,
                 ) {
-                    tracing::warn!(name: "player.mpv.message", target: "mpv", prefix, mpv_level = level, message = %t, "mpv log message");
+                    tracing::warn!(name: "player.mpv.message", target: "mpv", prefix = prefix.as_str(), mpv_level = level.as_str(), message = %t, "mpv log message");
                 }
                 false
             }
-            Ok(Event::ClientMessage(args)) => {
+            MpvEvent::ClientMessage(args) => {
                 self.handle_client_message(&args, mpv);
                 false
             }
-            Ok(Event::Shutdown) => {
+            MpvEvent::Shutdown => {
                 self.on_shutdown(progress);
                 true
             }
-            Err(e) => {
-                if self.on_mpv_error(&e, progress) {
-                    return true;
-                }
-                false
-            }
-            _ => false,
+            MpvEvent::Failed(failure) => self.on_mpv_error(&failure, progress),
+            // Documented no-op: events the run loop does not act on.
+            MpvEvent::Ignored => false,
         }
     }
 
-    fn handle_client_message(&mut self, args: &[&str], mpv: &Mpv) {
-        match args.first().copied() {
+    fn handle_client_message(&mut self, args: &[String], mpv: &Mpv) {
+        match args.first().map(String::as_str) {
             Some("mbv-next-up-play") => {
                 tracing::info!(name: "player.next_up.play_requested", target: "player", "Lua requested next-up playback");
                 self.next_up_jump = true;
@@ -323,19 +319,19 @@ impl PlaybackRun {
     fn on_property_change(
         &mut self,
         name: &str,
-        change: PropertyData,
+        change: PropertyValue,
         mpv: &Mpv,
         progress_report_tx: &mpsc::Sender<String>,
     ) {
         match (name, change) {
-            ("volume", PropertyData::Double(vol)) => {
+            ("volume", PropertyValue::Double(vol)) => {
                 self.status.lock().unwrap().volume =
                     mbv_emby_model::saturating_i64_from_f64(vol * vol / 100.0);
             }
-            (_, PropertyData::Double(pos_secs)) => {
+            (_, PropertyValue::Double(pos_secs)) => {
                 self.on_time_pos(pos_secs, mpv);
             }
-            ("pause", PropertyData::Flag(paused)) => {
+            ("pause", PropertyValue::Flag(paused)) => {
                 self.status.lock().unwrap().paused = paused;
                 if self.startup_pause.consume_event() {
                     return;
@@ -347,31 +343,31 @@ impl PlaybackRun {
                     let _ = progress_report_tx.send(event_name.to_string());
                 }
             }
-            ("sid", PropertyData::Str(s)) => {
-                self.set_subtitle_id(s);
+            ("sid", PropertyValue::Str(s)) => {
+                self.set_subtitle_id(&s);
             }
-            ("aid", PropertyData::Str(_)) => {
+            ("aid", PropertyValue::Str(_)) => {
                 refresh_tracks(mpv, &self.status);
             }
-            ("mute", PropertyData::Flag(m)) => {
+            ("mute", PropertyValue::Flag(m)) => {
                 self.status.lock().unwrap().muted = m;
             }
-            ("video-params/h", PropertyData::Int64(h)) => {
+            ("video-params/h", PropertyValue::Int64(h)) => {
                 self.set_video_height(h);
             }
             ("video-params/h", change) => {
                 Self::warn_unexpected_video_height(&change);
             }
-            ("audio-codec-name", PropertyData::Str(s)) => {
+            ("audio-codec-name", PropertyValue::Str(s)) => {
                 self.status.lock().unwrap().audio_codec = s.to_lowercase();
             }
-            ("current-tracks/video/image", PropertyData::Flag(is_img)) => {
+            ("current-tracks/video/image", PropertyValue::Flag(is_img)) => {
                 self.set_video_image(is_img);
             }
-            ("playlist-pos", PropertyData::Int64(pos)) => {
+            ("playlist-pos", PropertyValue::Int64(pos)) => {
                 self.on_playlist_pos_changed(pos, mpv_position_ticks(mpv));
             }
-            ("playlist-count", PropertyData::Int64(count)) if self.load_is_ready() => {
+            ("playlist-count", PropertyValue::Int64(count)) if self.load_is_ready() => {
                 self.on_playlist_count_changed(usize::try_from(count).unwrap_or(usize::MAX));
             }
             _ => {}
@@ -391,7 +387,7 @@ impl PlaybackRun {
         self.status.lock().unwrap().video_height = h;
     }
 
-    fn warn_unexpected_video_height(change: &PropertyData) {
+    fn warn_unexpected_video_height(change: &PropertyValue) {
         tracing::warn!(name: "player.video_height.unexpected_type", target: "player", value = ?change, "unexpected video height property type");
     }
 

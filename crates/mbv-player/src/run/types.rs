@@ -62,7 +62,6 @@ pub(crate) struct PlaybackRun {
     pub(crate) active_lifecycle: ActiveItemLifecycle,
     pub(crate) active_file: bool,
     pub(crate) prepared_source: Option<PreparedSource>,
-    pub(crate) active_file_starting: bool,
     pub(crate) ext_sub_urls: Vec<String>,
     // loop state
     pub(crate) current_idx: usize,

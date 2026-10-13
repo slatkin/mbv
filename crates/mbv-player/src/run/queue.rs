@@ -408,7 +408,6 @@ impl PlaybackRun {
         let prepared_lifecycle = prepared.take_lifecycle();
         self.prepared_source = Some(prepared);
         self.active_lifecycle = ActiveItemLifecycle::for_item(item, prepared_lifecycle);
-        self.active_file_starting = true;
         self.accept_replacement();
         self.pending_initial_playlist_layout = false;
         Ok(())
@@ -539,7 +538,6 @@ impl PlaybackRun {
         tracing::info!(name: "player.playback.initialized", target: "player", origin = ?origin, index = start_idx, position_seconds = initial_pos / mbv_emby_model::TICKS_PER_SECOND, "playback initialized");
         let run_identity = status.lock().unwrap().sequence_generation;
         let active_file = queue.has_audiobookshelf_entries();
-        let active_file_starting = active_file && prepared_source.is_some();
         let mut prepared_source = prepared_source;
         let active_lifecycle = ActiveItemLifecycle::for_item(
             &initial_item,
@@ -563,7 +561,6 @@ impl PlaybackRun {
             active_file,
             prepared_source,
             active_lifecycle,
-            active_file_starting,
             ext_sub_urls,
             current_idx: start_idx,
             forced_jump: None,

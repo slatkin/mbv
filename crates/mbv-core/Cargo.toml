@@ -92,4 +92,5 @@ mbv-queue = { path = "../mbv-queue" }
 ureq.workspace = true
 serde_json.workspace = true
 libmpv2.workspace = true
+libmpv2-sys.workspace = true
 rust_cast.workspace = true

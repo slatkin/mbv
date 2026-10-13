@@ -8,7 +8,7 @@ mpv source (`input/ipc-unix.c`) shows that each IPC connection is an ordinary cl
 
 ## What Changes
 
-- Add a manual probe example to `mbv-player`. It runs each scenario two times, one time through in-process libmpv and one time through an `mpv` child process on an `--input-ipc-client=fd://` socketpair. It compares the two event traces and writes the IPC trace to a fixture file. The scenarios use synthetic `av://lavfi:` media, so they need no files and no network.
+- Add a manual probe example to `mbv-player`. It runs each scenario two times, one time through in-process libmpv and one time through an `mpv` child process on an `--input-ipc-server=<scratch path>` socket (design D2). It compares the two event traces and writes the IPC trace to a fixture file. The scenarios use synthetic `av://lavfi:` media, so they need no files and no network.
 - Add a crate-private `MpvEvent` domain type to `mbv-player`. It covers only the events that the run loop consumes. It has two constructors: one from a libmpv2 event, and one from an IPC JSON event line. The run loop matches on `MpvEvent` in place of `libmpv2::Event`, with no change in behavior.
 - Change `event_classifiers` to take domain types in place of libmpv2 types.
 - Check in the recorded IPC traces as fixtures. Add unit tests that decode them and run the classifiers on real mpv sequences.
@@ -30,6 +30,6 @@ None. This change is test tooling plus a behavior-preserving refactor of the eve
 
 - `crates/mbv-player/src/run/run_loop.rs`, `run/events/termination.rs`, `run/events/event_classifiers.rs`: these use `MpvEvent` in place of `libmpv2::Event` and `libmpv2::Error`.
 - New `crates/mbv-player/src/mpv_event.rs` (domain type, conversions, IPC decoder) with its tests.
-- New `crates/mbv-player/examples/mpv_ipc_probe.rs`. It is a manual tool that needs a real `mpv` binary and libmpv. It never runs in CI.
+- New `crates/mbv-core/examples/mpv_ipc_probe/` (in `mbv-core` because `mbv-player` denies terminal output; see design D1). It is a manual tool that needs a real `mpv` binary and libmpv. It never runs in CI.
 - New fixture files under `crates/mbv-player/src/mpv_event/fixtures/`.
-- No new dependencies. `serde_json` and `libmpv2` are already dependencies of `mbv-player`.
+- No new external dependencies. `mbv-core` gains `libmpv2-sys` (already a workspace dependency) as a dev-dependency for the probe.

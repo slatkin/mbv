@@ -127,7 +127,6 @@ impl PlaybackRun {
     pub(crate) fn on_playback_restart(&mut self, mpv: &Mpv) {
         let settled_idle_jump = self.settle_idle_jump_on_restart(mpv_position_ticks(mpv));
         let was_seek = self.last_seek_at.is_some();
-        self.active_file_starting = false;
         // `PlaybackRestart` is the concrete mpv-owned event used by mbvd as
         // its output-started boundary. It says nothing about downstream pipe
         // buffers or actual audibility.

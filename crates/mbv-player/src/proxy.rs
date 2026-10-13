@@ -265,7 +265,7 @@ pub(super) enum StopReportContext {
 }
 
 pub(super) fn end_file_stop_report_context(reason: EndFileReason) -> StopReportContext {
-    if reason == super::mpv_end_file_reason::Quit {
+    if reason == EndFileReason::Quit {
         StopReportContext::ShutdownAware
     } else {
         StopReportContext::Ordinary

@@ -330,18 +330,12 @@ fn complete_bare_player_admits_audiobookshelf_without_ctrl_transport() {
 
 #[test]
 fn mpv_audio_errors_only_classify_alsa_initialization_failures() {
-    assert!(is_clocked_audio_error(
-        &libmpv2::Error::Raw(libmpv2::mpv_error::AoInitFailed),
+    assert!(is_clocked_audio_error(&MpvFailure::AudioOutputInit, true));
+    assert!(!is_clocked_audio_error(
+        &MpvFailure::Other("loading failed".into()),
         true,
     ));
-    assert!(!is_clocked_audio_error(
-        &libmpv2::Error::Raw(libmpv2::mpv_error::LoadingFailed),
-        true,
-    ));
-    assert!(!is_clocked_audio_error(
-        &libmpv2::Error::Raw(libmpv2::mpv_error::AoInitFailed),
-        false,
-    ));
+    assert!(!is_clocked_audio_error(&MpvFailure::AudioOutputInit, false));
 }
 
 #[test]
@@ -352,10 +346,7 @@ fn alsa_initialization_error_stops_run_with_output_error() {
     run.reporter.clear_session();
     let mut progress = noop_progress();
 
-    assert!(run.on_mpv_error(
-        &libmpv2::Error::Raw(libmpv2::mpv_error::AoInitFailed),
-        &mut progress,
-    ));
+    assert!(run.on_mpv_error(&MpvFailure::AudioOutputInit, &mut progress));
     assert!(!status.lock().unwrap().active);
     let PlayerEvent::Stopped { error, .. } = events.recv().unwrap() else {
         panic!("expected stopped event");
