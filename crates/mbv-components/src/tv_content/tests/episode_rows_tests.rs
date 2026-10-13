@@ -92,6 +92,94 @@ fn upcoming_owner_rows_come_from_context_premieres_keyed_by_stable_key() {
     );
 }
 
+/// Contract (hero-workspace-now-playing task 2.1, design D2/D4): the playing
+/// episode's row carries `NowPlaying { progress }`, every other row keeps its
+/// derived state, and an identical re-pushed projection skips `set_content`
+/// (the `last_episode_rows` guard), so the painted frame stays claimable.
+#[test]
+fn set_now_playing_marks_the_playing_episode_row_and_dedups_identical_projection() {
+    use mbv_queue::QueueItemContentId;
+    use mbv_ui_model::now_playing::WorkspaceNowPlaying;
+
+    let mut owner = TvContent::new();
+    let series = tv_show("Series", "series-1");
+    let season = tv_show("Season 1", "season-1");
+    let detail = mbv_ui_model::browse::SeriesDetail {
+        seasons: vec![season],
+        episodes: [(
+            "season-1".into(),
+            vec![
+                tv_episode("Episode 1", "episode-1"),
+                tv_episode("Episode 2", "episode-2"),
+            ],
+        )]
+        .into_iter()
+        .collect(),
+    };
+    owner.set_content(tv_tree_context(
+        vec![series],
+        Some("series-1"),
+        Some(detail),
+        false,
+    ));
+
+    let playing = || WorkspaceNowPlaying::Item {
+        content_id: QueueItemContentId::Emby("episode-2".into()),
+        progress: Some(42),
+    };
+    owner.set_now_playing(Some(playing()));
+
+    let states = |rows: &[MediaListRow<String>]| -> Vec<(String, MediaSemanticState)> {
+        rows.iter()
+            .filter_map(|row| match row {
+                MediaListRow::Item {
+                    target,
+                    semantic_state,
+                    ..
+                } => Some((target.clone(), semantic_state.clone())),
+                _ => None,
+            })
+            .collect()
+    };
+    assert_eq!(
+        states(owner.episodes.rows()),
+        vec![
+            ("episode-1".into(), MediaSemanticState::Ordinary),
+            (
+                "episode-2".into(),
+                MediaSemanticState::NowPlaying {
+                    progress: Some(mbv_render::components::media_list::ActiveProgress::new(42)),
+                },
+            ),
+        ],
+        "the playing row lights with progress; the other row keeps its derived state"
+    );
+
+    // Observable set_content skip: a completed paint is retained until the
+    // carrier's set_content invalidates it (the last_episode_rows guard).
+    let list = ratatui::layout::Rect::new(0, 0, 40, 3);
+    let geometry = owner.episodes.wide().row_geometry(3);
+    owner
+        .episodes
+        .wide_mut()
+        .finish_view(list, list, &geometry, None);
+    assert!(owner.episodes.current_content_rect().is_some());
+
+    // Identical input skips set_content (painted frame stays claimable).
+    owner.set_now_playing(Some(playing()));
+    assert!(
+        owner.episodes.current_content_rect().is_some(),
+        "an identical projection must not re-run set_content"
+    );
+
+    // Control: changed input rebuilds (and invalidates the paint).
+    owner.set_now_playing(Some(WorkspaceNowPlaying::Item {
+        content_id: QueueItemContentId::Emby("episode-2".into()),
+        progress: Some(43),
+    }));
+    assert!(owner.episodes.current_content_rect().is_none());
+}
+
 /// What the user does to the selected Upcoming row.
 #[derive(Clone, Copy)]
 enum Gesture {

@@ -3,8 +3,44 @@ use super::{
     QueueItem, ShellRequest, TICKS_PER_SECOND, TvContent, UpcomingPremiere, fmt_duration_gutter,
     fmt_publish_date_short,
 };
+use mbv_queue::QueueItemContentId;
+use mbv_render::components::media_list::ActiveProgress;
 use mbv_render::effective_sort_str;
+use mbv_ui_model::now_playing::WorkspaceNowPlaying;
 use mbv_ui_model::ui_util::natural_sort_key;
+
+/// The now-playing override (hero-workspace-now-playing D2/D4): the row
+/// whose target is the projection's Emby item identity becomes
+/// `NowPlaying { progress }`; every other row keeps its derived state.
+/// Identity is provider-qualified, so a Feed or Audiobookshelf projection
+/// never matches an episode row, and a `None` projection (no active item,
+/// or the active item is not one of this Workspace's episodes) overrides
+/// nothing.
+fn apply_now_playing_override(
+    rows: &mut [MediaListRow<String>],
+    now_playing: Option<&WorkspaceNowPlaying>,
+) {
+    let Some(WorkspaceNowPlaying::Item {
+        content_id: QueueItemContentId::Emby(playing_id),
+        progress,
+    }) = now_playing
+    else {
+        return;
+    };
+    for row in rows.iter_mut() {
+        if let MediaListRow::Item {
+            target,
+            semantic_state,
+            ..
+        } = row
+            && target == playing_id
+        {
+            *semantic_state = MediaSemanticState::NowPlaying {
+                progress: progress.map(ActiveProgress::new),
+            };
+        }
+    }
+}
 
 pub fn build_episode_rows(episodes: &[EmbyItem]) -> Vec<MediaListRow<String>> {
     episodes
@@ -165,11 +201,13 @@ impl TvContent {
     /// target where still present, otherwise clamps locally -- the same
     /// canonical machinery the series rail uses.
     pub fn refresh_episode_rows(&mut self) {
-        let rows = build_episode_rows(self.current_season_episodes());
+        let mut rows = build_episode_rows(self.current_season_episodes());
+        apply_now_playing_override(&mut rows, self.now_playing.as_ref());
         // The 6.1 `last_projected_rows` pattern: an identical re-projection
-        // skips `set_content`, which would otherwise invalidate the painted
-        // frame and make a sync-without-draw frame unclaimable by pointer
-        // input (design D6 frame invalidation).
+        // (including the now-playing override) skips `set_content`, which
+        // would otherwise invalidate the painted frame and make a
+        // sync-without-draw frame unclaimable by pointer input (design D6
+        // frame invalidation).
         if self.last_episode_rows.as_ref() != Some(&rows) {
             self.episodes.set_content(rows.clone());
             self.last_episode_rows = Some(rows);
