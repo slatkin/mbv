@@ -100,6 +100,10 @@ Owner process:
 The part of the mbv app that is the Player owner for every terminal UI on this machine. Every such UI is a Client. The Owner process stays the local playback authority across route switches. With Stay-alive disabled, it is part of the running app. It is not a background process or service. With Stay-alive enabled, it is a background process. It survives its last Client.
 _Avoid_: local daemon, home daemon, daemon, session, background service, relay, backend, server
 
+mpv child process:
+The `mpv` program that the Player owner starts as a child process, one per Playback run. The Player owner controls it over mpv's IPC socket. The child exits when its run ends. It never outlives the Owner process. mpv is never loaded into the Owner process address space.
+_Avoid_: embedded mpv, libmpv handle, external player, mpv instance
+
 Stay-alive process:
 _Avoid_: Stay-alive process
 
