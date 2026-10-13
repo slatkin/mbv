@@ -8,7 +8,7 @@ mpv source (`input/ipc-unix.c`) shows that each IPC connection is an ordinary cl
 
 ## What Changes
 
-- Add a manual probe example to `mbv-player`. It runs each scenario two times, one time through in-process libmpv and one time through an `mpv` child process on an `--input-ipc-client=fd://` socketpair. It compares the two event traces and writes the IPC trace to a fixture file. The scenarios use synthetic `av://lavfi:` media, so they need no files and no network.
+- Add a manual probe example to `mbv-player`. It runs each scenario two times, one time through in-process libmpv and one time through an `mpv` child process on an `--input-ipc-server=<scratch path>` socket (design D2). It compares the two event traces and writes the IPC trace to a fixture file. The scenarios use synthetic `av://lavfi:` media, so they need no files and no network.
 - Add a crate-private `MpvEvent` domain type to `mbv-player`. It covers only the events that the run loop consumes. It has two constructors: one from a libmpv2 event, and one from an IPC JSON event line. The run loop matches on `MpvEvent` in place of `libmpv2::Event`, with no change in behavior.
 - Change `event_classifiers` to take domain types in place of libmpv2 types.
 - Check in the recorded IPC traces as fixtures. Add unit tests that decode them and run the classifiers on real mpv sequences.
