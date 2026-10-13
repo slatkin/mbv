@@ -6,6 +6,8 @@
 //! the player makes. The backend swap (group 4) changes this module's inside
 //! and leaves every call site untouched.
 
+pub(crate) mod spawn;
+
 use std::ffi::CString;
 
 use libmpv2::Mpv as Libmpv;
