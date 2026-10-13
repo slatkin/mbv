@@ -9,13 +9,13 @@
 
 ## 2. Dual-backend probe example
 
-- [ ] 2.1 Add `crates/mbv-player/examples/mpv_ipc_probe.rs` with two backends behind one scenario runner: in-process `libmpv2::Mpv`, and an `mpv` child process started with `--idle=yes --no-config --vo=null --ao=null --no-terminal --input-ipc-server=<scratch path>` (design D2). Both observe the same 11 properties and IDs as `runtime.rs` `observe_properties`. It uses the public `libmpv2` API, `serde_json` and std only, with no crate-private items. Verify: `cargo build -p mbv-player --example mpv_ipc_probe` succeeds.
-- [ ] 2.2 Add the normalizer and comparison from design D3 (JSON event shape, the 5 normalization rules, results `MATCH`, `MATCH-AFTER-NORMALIZATION` and `DIFF` with the first differing index). Each scenario runs 5 times per backend and every distinct sequence is reported. Verify: the example builds, and `--help` lists the scenarios and the output directory flag.
-- [ ] 2.3 Add scenarios S1 to S10 from design D4, using `av://lavfi:` media only. Write each IPC trace as raw lines to `crates/mbv-player/src/mpv_event/fixtures/<id>.jsonl`, with a first header line that records `mpv --version` and the date. Verify: the example builds and clippy is clean. Do not run it (see 3.1). Commit group 2.
+- [x] 2.1 Add `crates/mbv-core/examples/mpv_ipc_probe/` (design D1 implementation note) with two backends behind one scenario runner: in-process `libmpv2::Mpv`, and an `mpv` child process started with `--idle=yes --no-config --vo=null --ao=null --no-terminal --input-ipc-server=<scratch path>` (design D2). Both observe the same 11 properties and IDs as `runtime.rs` `observe_properties`. It uses the public `libmpv2` API, `serde_json` and std only, with no crate-private items. Verify: `cargo build -p mbv-core --example mpv_ipc_probe` succeeds.
+- [x] 2.2 Add the normalizer and comparison from design D3 (JSON event shape, the 5 normalization rules, results `MATCH`, `MATCH-AFTER-NORMALIZATION` and `DIFF` with the first differing index). Each scenario runs 5 times per backend and every distinct sequence is reported. Verify: the example builds, and `--help` lists the scenarios and the output directory flag.
+- [x] 2.3 Add scenarios S1 to S10 from design D4, using `av://lavfi:` media only. Write each IPC trace as raw lines to `crates/mbv-player/src/mpv_event/fixtures/<id>.jsonl`, with a first header line that records `mpv --version` and the date. Verify: the example builds and clippy is clean. Do not run it (see 3.1). Commit group 2.
 
 ## 3. Capture traces (the user runs the probe)
 
-- [ ] 3.1 Ask the user to run `cargo run -p mbv-player --example mpv_ipc_probe -- --out crates/mbv-player/src/mpv_event/fixtures`. Explain that it starts real mpv processes with synthetic media, `vo=null` and `ao=null`, plus one `ao` failure scenario. Do not run it without a yes. Verify: 10 fixture files exist, and the user has pasted or saved the probe's comparison output.
+- [ ] 3.1 Ask the user to run `cargo run -p mbv-core --example mpv_ipc_probe -- --out crates/mbv-player/src/mpv_event/fixtures`. Explain that it starts real mpv processes with synthetic media, `vo=null` and `ao=null`, plus one `ao` failure scenario. Do not run it without a yes. Verify: 10 fixture files exist, and the user has pasted or saved the probe's comparison output.
 - [ ] 3.2 Commit the fixture files. Verify: `git status` is clean.
 
 ## 4. IPC decoder and tests on real traces

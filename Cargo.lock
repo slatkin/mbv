@@ -2070,6 +2070,7 @@ name = "mbv-core"
 version = "0.24.6"
 dependencies = [
  "libmpv2",
+ "libmpv2-sys",
  "log",
  "mbv-audiobookshelf",
  "mbv-config",

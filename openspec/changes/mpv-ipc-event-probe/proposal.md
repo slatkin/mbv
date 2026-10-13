@@ -30,6 +30,6 @@ None. This change is test tooling plus a behavior-preserving refactor of the eve
 
 - `crates/mbv-player/src/run/run_loop.rs`, `run/events/termination.rs`, `run/events/event_classifiers.rs`: these use `MpvEvent` in place of `libmpv2::Event` and `libmpv2::Error`.
 - New `crates/mbv-player/src/mpv_event.rs` (domain type, conversions, IPC decoder) with its tests.
-- New `crates/mbv-player/examples/mpv_ipc_probe.rs`. It is a manual tool that needs a real `mpv` binary and libmpv. It never runs in CI.
+- New `crates/mbv-core/examples/mpv_ipc_probe/` (in `mbv-core` because `mbv-player` denies terminal output; see design D1). It is a manual tool that needs a real `mpv` binary and libmpv. It never runs in CI.
 - New fixture files under `crates/mbv-player/src/mpv_event/fixtures/`.
-- No new dependencies. `serde_json` and `libmpv2` are already dependencies of `mbv-player`.
+- No new external dependencies. `mbv-core` gains `libmpv2-sys` (already a workspace dependency) as a dev-dependency for the probe.

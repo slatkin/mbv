@@ -41,13 +41,15 @@ mpv's IPC client thread (`input/ipc-unix.c`) creates an ordinary client handle p
 
 ## Decisions
 
-### D1. The probe is a Rust example in `mbv-player` that drives both backends
+### D1. The probe is a Rust example in `mbv-core` that drives both backends
 
-`crates/mbv-player/examples/mpv_ipc_probe.rs` runs each scenario through `libmpv2::Mpv` in-process, then through an `mpv` child process, and compares the two traces. `mbv-core/examples/audiobookshelf_contract_probe.rs` is the precedent. An example is a manual tool. It does not run in CI and is not a test, so the hermetic-test rule does not apply to it. The user runs it. Agents ask before they run it.
+`crates/mbv-core/examples/mpv_ipc_probe/` runs each scenario through `libmpv2::Mpv` in-process, then through an `mpv` child process, and compares the two traces. `mbv-core/examples/audiobookshelf_contract_probe.rs` is the precedent. An example is a manual tool. It does not run in CI and is not a test, so the hermetic-test rule does not apply to it. The user runs it. Agents ask before they run it.
 
 Rejected alternative: connect `socat` to the IPC socket that mbv already opens, next to a running mbv. That only shows that two clients of one core agree, which the mpv source already shows. mbv also has no raw event log to compare against.
 
 The probe uses only the public `libmpv2` API and `serde_json`. Its normalizer lives in the example file. It does not use crate-private `MpvEvent`, so no item becomes `pub` for the example (M-INTEGRATION-TESTS forbids that).
+
+Implementation note: the probe lives at `crates/mbv-core/examples/mpv_ipc_probe/` (`main.rs`, `backends.rs`, `compare.rs`, `scenarios.rs`), not in `mbv-player`. `mbv-player` inherits the workspace `print_stdout`/`print_stderr` deny, and a probe must print its report. `mbv-core` mirrors the lint block without those two rules for its CLI probes, and it already has `libmpv2` and `serde_json` as dev-dependencies. This change adds `libmpv2-sys` (already a workspace dependency) as an `mbv-core` dev-dependency for `mpv_error_str` and the `IDLE` event ID. The fixture header date comes from `time`, which `mbv-core` already depends on. The fixture output path is unchanged. Neither side requests log messages, because the libmpv side would need the unsafe `mpv_request_log_messages` call and rule 4 drops log messages anyway. For the 3 properties observed as `Format::String`, the IPC side uses `observe_property_string`, so both sides deliver the same string form.
 
 ### D2. The child uses `--input-ipc-server=<scratch path>`, not `--input-ipc-client=fd://`
 
@@ -59,7 +61,7 @@ The probe starts the child with `--idle=yes --no-config --vo=null --ao=null --no
 
 The probe converts each libmpv2 event into mpv's JSON event field names (`event`, `reason`, `name`, `data`, `id`, `args`, `prefix`, `level`, `text`). `Err(Raw(code))` becomes `{"event":"end-file","reason":"error","error_code":code}`. The probe reduces each IPC line to the same field set. Normalizations, all printed in the probe output:
 
-1. Drop fields that libmpv2 cannot deliver: `playlist_entry_id`, `playlist_insert_id`, `playlist_insert_num_entries`. Record that IPC has them.
+1. Drop what libmpv2 cannot deliver: the fields `playlist_entry_id`, `playlist_insert_id`, `playlist_insert_num_entries`, and `property-change` events with no `data` (libmpv2 `wait_event` returns `None` for a property that becomes unavailable). Record that IPC has them.
 2. Map IPC `file_error` text to an error code with mpv's error-string table, through `libmpv2-sys` `mpv_error_string`.
 3. Collapse consecutive `time-pos` changes into one entry and compare no `time-pos` values, because their number depends on timing.
 4. Drop `log-message` events from the order comparison, because their count depends on timing.
