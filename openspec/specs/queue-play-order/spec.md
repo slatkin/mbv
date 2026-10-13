@@ -2,7 +2,7 @@
 
 ## Purpose
 
-TBD — Update Purpose after archive
+Defines how the Player owner orders playback of a Bound queue. The owner can play the queue in Shuffle order, one shared pick drives every forward advance, Previous is disabled in Shuffle, and a whole-queue replacement resets the order to Sequential.
 
 ## Requirements
 
