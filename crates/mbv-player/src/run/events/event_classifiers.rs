@@ -1,15 +1,7 @@
-use super::super::{EndFileReason, ForcedJump, QueueItem};
-use libmpv2::mpv_end_file_reason;
+use super::super::{EndFileReason, ForcedJump, MpvFailure, QueueItem};
 
-pub(crate) fn is_clocked_audio_error(
-    error: &libmpv2::Error,
-    audio_device_configured: bool,
-) -> bool {
-    audio_device_configured
-        && matches!(
-            error,
-            libmpv2::Error::Raw(code) if *code == libmpv2::mpv_error::AoInitFailed
-        )
+pub(crate) fn is_clocked_audio_error(failure: &MpvFailure, audio_device_configured: bool) -> bool {
+    audio_device_configured && matches!(failure, MpvFailure::AudioOutputInit)
 }
 
 /// Whether an `EndFile` is debris from a superseded `JumpTo`.
@@ -32,7 +24,7 @@ pub(crate) fn is_superseded_jump_end_file(
 ) -> bool {
     forced_jump.is_none_or(|jump| jump.transition.is_none())
         && !track_finished
-        && (reason == mpv_end_file_reason::Stop || reason == mpv_end_file_reason::Redirect)
+        && matches!(reason, EndFileReason::Stop | EndFileReason::Redirect)
 }
 
 pub(crate) fn provider_lifecycle_close_pos(

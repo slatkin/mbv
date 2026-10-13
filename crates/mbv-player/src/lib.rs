@@ -8,6 +8,8 @@
 mod error;
 #[doc(inline)]
 pub use error::PlayerError;
+mod mpv_event;
+use mpv_event::{EndFileReason, MpvEvent, MpvFailure, PropertyValue};
 
 use std::sync::{Arc, atomic::Ordering, mpsc};
 use std::thread;
@@ -18,11 +20,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use libmpv2::{
-    EndFileReason, Format, Mpv,
-    events::{Event, PropertyData},
-    mpv_end_file_reason,
-};
+use libmpv2::{Format, Mpv};
 use mbv_ctrl::player::{PlayerCommand, PlayerEvent, PlayerStatus, SubtitlePrefs};
 use mbv_emby::{EmbyClient, EmbyError};
 use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND, seconds_to_ticks, ticks_to_seconds};

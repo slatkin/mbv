@@ -1,20 +1,20 @@
 use super::super::{
-    EndFileReason, PlaybackOrigin, PlaybackRun, PlayerEvent, ProgressGuard, QueueItem, QueueSlotId,
-    StopReport, is_near_end, mpv_end_file_reason, mpv_err_str, retry_mark_played,
+    EndFileReason, MpvFailure, PlaybackOrigin, PlaybackRun, PlayerEvent, ProgressGuard, QueueItem,
+    QueueSlotId, StopReport, is_near_end, retry_mark_played,
 };
 use super::event_classifiers::{is_clocked_audio_error, provider_lifecycle_close_pos};
 use std::sync::{Arc, atomic::Ordering};
 
 impl PlaybackRun {
-    // libmpv2 returns MPV_EVENT_END_FILE failures as Err(Error::Raw(...)),
-    // so classify the output-specific error before the generic event logging.
+    // An end-file error arrives as MpvEvent::Failed, so classify the
+    // output-specific failure before the generic event logging.
     pub(crate) fn on_mpv_error(
         &mut self,
-        error: &libmpv2::Error,
+        failure: &MpvFailure,
         progress: &mut ProgressGuard,
     ) -> bool {
-        if !is_clocked_audio_error(error, self.config.audio_device.is_some()) {
-            tracing::warn!(name: "player.event.failed", target: "player", error = %mpv_err_str(error), "mpv event failed");
+        if !is_clocked_audio_error(failure, self.config.audio_device.is_some()) {
+            tracing::warn!(name: "player.event.failed", target: "player", error = %failure, "mpv event failed");
             return false;
         }
 
@@ -42,7 +42,7 @@ impl PlaybackRun {
     /// client attaching later would otherwise inherit a "still playing"
     /// now-playing panel frozen at the final position.
     fn report_for_end_file(&mut self, reason: EndFileReason, progress: &mut ProgressGuard) {
-        if reason == mpv_end_file_reason::Quit {
+        if reason == EndFileReason::Quit {
             // Keep an external window close off the mpv event loop. Natural
             // EOF still reports synchronously before its completion event.
             self.report_stop_now_or_background(progress);
@@ -74,11 +74,11 @@ impl PlaybackRun {
         reason: EndFileReason,
         progress: &mut ProgressGuard,
     ) -> bool {
-        if reason == mpv_end_file_reason::Quit {
+        if reason == EndFileReason::Quit {
             self.pin_stop_runtime();
         }
         let runtime = self.status.lock().unwrap().runtime_ticks;
-        let natural_end = reason == mpv_end_file_reason::Eof && runtime > 0;
+        let natural_end = reason == EndFileReason::Eof && runtime > 0;
         let completed_is_audio = self.reporter.is_audio.load(Ordering::Relaxed);
         let completed_slot_id = self.active_slot_id();
 

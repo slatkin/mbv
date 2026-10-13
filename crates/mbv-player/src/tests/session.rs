@@ -277,15 +277,11 @@ fn shutdown_stop_sets_timeout_without_changing_plain_stop() {
 #[test]
 fn end_file_quit_uses_shutdown_aware_stop_report_context() {
     assert_eq!(
-        end_file_stop_report_context(mpv_end_file_reason::Quit),
+        end_file_stop_report_context(EndFileReason::Quit),
         StopReportContext::ShutdownAware
     );
     assert_eq!(
-        end_file_stop_report_context(mpv_end_file_reason::Eof),
-        StopReportContext::Ordinary
-    );
-    assert_eq!(
-        end_file_stop_report_context(mpv_end_file_reason::Error),
+        end_file_stop_report_context(EndFileReason::Eof),
         StopReportContext::Ordinary
     );
 }
@@ -305,39 +301,33 @@ fn superseded_jump_end_file_is_dropped_without_a_pending_transition() {
     };
 
     assert!(is_superseded_jump_end_file(
-        mpv_end_file_reason::Stop,
+        EndFileReason::Stop,
         None,
         false
     ));
     assert!(is_superseded_jump_end_file(
-        mpv_end_file_reason::Redirect,
+        EndFileReason::Redirect,
         None,
         false
     ));
     assert!(is_superseded_jump_end_file(
-        mpv_end_file_reason::Stop,
+        EndFileReason::Stop,
         Some(rearmed_jump),
         false
     ));
     assert!(!is_superseded_jump_end_file(
-        mpv_end_file_reason::Stop,
+        EndFileReason::Stop,
         Some(in_flight_jump),
         false
     ));
     // A finished track (EOF/near-end/next-up) always advances.
     assert!(!is_superseded_jump_end_file(
-        mpv_end_file_reason::Stop,
+        EndFileReason::Stop,
         None,
         true
     ));
-    // A playback error still skips the broken track forward.
     assert!(!is_superseded_jump_end_file(
-        mpv_end_file_reason::Error,
-        None,
-        false
-    ));
-    assert!(!is_superseded_jump_end_file(
-        mpv_end_file_reason::Eof,
+        EndFileReason::Eof,
         None,
         false
     ));
@@ -457,7 +447,7 @@ fn standalone_natural_end_file_marks_status_inactive() {
     http.respond(200, "");
     let mut progress = noop_progress();
 
-    assert!(!session.on_end_file_standalone(mpv_end_file_reason::Eof, &mut progress));
+    assert!(!session.on_end_file_standalone(EndFileReason::Eof, &mut progress));
 
     assert!(
         !status.lock().unwrap().active,

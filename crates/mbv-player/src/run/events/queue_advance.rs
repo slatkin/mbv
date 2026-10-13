@@ -3,8 +3,7 @@ use mbv_audiobookshelf::{AudiobookshelfError, AudiobookshelfFailureClass};
 use super::super::{
     AdvanceDecisionInput, CompletedMedia, EndFileReason, FinishReason, Mpv, PlaybackOrigin,
     PlaybackRun, PlayerEvent, ProgressGuard, QueueItem, QueueSlotId, StopReport, advance_decision,
-    is_near_end, mpv_end_file_reason, mpv_position_ticks, retry_mark_played, send_ep_info,
-    spawn_progress_reporter,
+    is_near_end, mpv_position_ticks, retry_mark_played, send_ep_info, spawn_progress_reporter,
 };
 use super::event_classifiers::{is_superseded_jump_end_file, provider_lifecycle_close_pos};
 use mbv_ids::ItemId;
@@ -38,13 +37,6 @@ impl PlaybackRun {
         // Pin the completed occurrence's identity before QueueMove/QueueRemove
         // can mutate the sequence (design D2).
         let completed_slot_id = self.active_slot_id();
-        if let Some(done) = self.fail_active_file_start(reason, progress, completed_slot_id) {
-            return done;
-        }
-        if reason == mpv_end_file_reason::Error {
-            tracing::warn!(name: "player.end_file.playback_error", target: "player", "playback error; file may be unreadable or unsupported");
-        }
-
         let completed_is_audio = self.reporter.is_audio.load(Ordering::Relaxed);
 
         if let Some(done) =
@@ -81,7 +73,7 @@ impl PlaybackRun {
             return self.stop_for_missing_completed(completed_slot_id, completed_idx, progress);
         };
         let completed_runtime = completed_item.runtime_ticks();
-        let natural = reason == mpv_end_file_reason::Eof && completed_runtime > 0;
+        let natural = reason == EndFileReason::Eof && completed_runtime > 0;
         let near_end = is_near_end(
             completed_is_audio,
             natural,
@@ -248,36 +240,6 @@ impl PlaybackRun {
         true
     }
 
-    /// Active-file start failure: the outgoing file errored before playback
-    /// began. Returns Some(false) when handled.
-    fn fail_active_file_start(
-        &mut self,
-        reason: EndFileReason,
-        progress: &mut ProgressGuard,
-        completed_slot_id: Option<QueueSlotId>,
-    ) -> Option<bool> {
-        if !self.active_file || !self.active_file_starting {
-            return None;
-        }
-        if reason != mpv_end_file_reason::Error {
-            return None;
-        }
-        self.active_file_starting = false;
-        self.close_prepared_source();
-        progress.stop_and_join(Self::progress_join_budget());
-        self.close_prepared_source_at(self.last_valid_pos);
-        self.status.lock().unwrap().active = false;
-        let _ = self.event_tx.send(PlayerEvent::Stopped {
-            slot_id: completed_slot_id,
-            run_identity: self.run_identity,
-            position_ticks: 0,
-            played: false,
-            consume: false,
-            error: Some("failed to start media".into()),
-        });
-        Some(false)
-    }
-
     /// mpv-initiated quit mid-queue: report stop without blocking mpv's own
     /// shutdown, record the near-end decision for the deferred Shutdown emit.
     /// Returns Some(true) when handled.
@@ -288,7 +250,7 @@ impl PlaybackRun {
         completed_slot_id: Option<QueueSlotId>,
         completed_is_audio: bool,
     ) -> Option<bool> {
-        if self.origin != PlaybackOrigin::Queue || reason != mpv_end_file_reason::Quit {
+        if self.origin != PlaybackOrigin::Queue || reason != EndFileReason::Quit {
             return None;
         }
         let completed_runtime = self.active_item().map_or(0, QueueItem::runtime_ticks);
