@@ -2,7 +2,7 @@
 
 ## Why
 
-Issue #928. Each scrollable list surface gets the viewport height for its wheel clamp from a different place:
+Issue: https://github.com/slatkin/mbv/issues/928 (#928). Each scrollable list surface gets the viewport height for its wheel clamp from a different place:
 
 - `MediaList` (`media_list.rs` `scroll_wheel`) clamps against a fixed one-row viewport. The viewport can end with only the last row at its top. The next paint snaps it back.
 - `ThreeLineFlatList::scroll_viewport(delta, painted_height)` takes the height as an argument. `SessionsComponent` keeps its own `painted_content_area` field only to supply it.
