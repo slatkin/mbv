@@ -157,15 +157,13 @@ impl BookContent {
     }
 
     /// The workspace now-playing projection (hero-workspace-now-playing
-    /// D4/D5): stored for the next chapter-row projection and applied at the
-    /// `project_chapter_rows` seam. This is the book owner's dedicated
-    /// sync-pass refresh, separate from the event-driven `set_content`, so
-    /// chapter progress follows ticks without rebuilding the whole book
-    /// surface. The rows comparison in `project_chapter_rows` is the dedup
-    /// guard: an identical projection skips `set_content`.
+    /// D4/D5), pushed every sync pass apart from the event-driven
+    /// `set_content`. Only a changed projection re-projects the chapter rows.
     pub fn set_now_playing(&mut self, now_playing: Option<WorkspaceNowPlaying>) {
-        self.now_playing = now_playing;
-        self.project_chapter_rows();
+        if self.now_playing != now_playing {
+            self.now_playing = now_playing;
+            self.project_chapter_rows();
+        }
     }
 
     pub fn set_focused(&mut self, focused: bool) {

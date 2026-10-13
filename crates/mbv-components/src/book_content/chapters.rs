@@ -3,60 +3,34 @@ use super::{
     MediaKind, MediaListRow, MediaListSurfaceInput, MediaListTrailing, MediaSemanticState, Msg,
     ShellRequest, fmt_duration_gutter,
 };
-use mbv_queue::QueueItemContentId;
 use mbv_render::components::media_list::ActiveProgress;
 use mbv_ui_model::now_playing::WorkspaceNowPlaying;
 
-/// The now-playing override (hero-workspace-now-playing D3/D4): the chapter
-/// row the projection names becomes `NowPlaying { progress }`; every other
-/// row keeps its derived state. The projection applies only when its book is
-/// this Workspace's selected book, and the named target must resolve to a
-/// projected `BookRow::Chapter` -- an audio-part row never carries the state,
-/// and an `Item` or foreign-provider projection overrides nothing.
-fn apply_now_playing_override(
-    rows: &mut [MediaListRow<usize>],
-    state: &AudiobookshelfBookBrowseState,
-    now_playing: Option<&WorkspaceNowPlaying>,
-) {
-    let Some(WorkspaceNowPlaying::Chapter {
-        content_id: QueueItemContentId::AudiobookshelfBook { library_item_id },
-        chapter_id,
-        progress,
-    }) = now_playing
-    else {
-        return;
-    };
-    let Some(selected) = state
-        .selected_id
-        .as_deref()
-        .filter(|id| id == library_item_id)
-    else {
-        return;
-    };
-    // `chapter_rows` projects `visible_rows` one-to-one in order, so the
-    // named chapter's row is the position of its `BookRow::Chapter`; an
-    // audio-part fallback's indices can never match a chapter id here.
-    let Some(position) = state
-        .visible_rows(selected)
-        .iter()
-        .position(|row| matches!(row, BookRow::Chapter { id, .. } if *id == *chapter_id))
-    else {
-        return;
-    };
-    let Some(MediaListRow::Item { semantic_state, .. }) = rows.get_mut(position) else {
-        return;
-    };
-    *semantic_state = MediaSemanticState::NowPlaying {
-        progress: Some(ActiveProgress::new(*progress)),
-    };
+/// The playing chapter's id and progress when the projection names book `id`
+/// (hero-workspace-now-playing D3/D4); an `Item` or other-book projection
+/// lights nothing.
+fn playing_chapter(now_playing: Option<&WorkspaceNowPlaying>, id: &str) -> Option<(usize, u16)> {
+    match now_playing? {
+        WorkspaceNowPlaying::Chapter {
+            library_item_id,
+            chapter_id,
+            progress,
+        } if library_item_id == id => Some((*chapter_id, *progress)),
+        _ => None,
+    }
 }
 
 /// Canonical row projection for one book's chapter/audio-part detail: one
 /// selectable `Item` per visible row, keyed by its stable row discriminator.
 /// Chapters fall back to audio files when the book exposes no chapters
 /// (book-browsing spec: never an empty or broken list state). Rehomed from
-/// the Books panel owner (task 10.1).
-fn chapter_rows(state: &AudiobookshelfBookBrowseState, id: &str) -> Vec<MediaListRow<usize>> {
+/// the Books panel owner (task 10.1). Only a chapter row can match `playing`,
+/// so an audio-part row never lights.
+fn chapter_rows(
+    state: &AudiobookshelfBookBrowseState,
+    id: &str,
+    playing: Option<(usize, u16)>,
+) -> Vec<MediaListRow<usize>> {
     state
         .visible_rows(id)
         .into_iter()
@@ -65,16 +39,31 @@ fn chapter_rows(state: &AudiobookshelfBookBrowseState, id: &str) -> Vec<MediaLis
             // number or the audio-part index -- never the `enumerate()` display
             // position, so a detail refresh that re-composes `visible_rows`
             // cannot resolve a stale target to a different row (design.md D4).
-            let (target, primary, duration_seconds) = match row {
+            let (target, primary, duration_seconds, semantic_state) = match row {
                 BookRow::Chapter {
                     id,
                     start,
                     end,
                     title,
-                } => (id, title, end - start),
+                } => {
+                    let semantic_state = match playing {
+                        Some((chapter_id, progress)) if chapter_id == id => {
+                            MediaSemanticState::NowPlaying {
+                                progress: Some(ActiveProgress::new(progress)),
+                            }
+                        }
+                        _ => MediaSemanticState::Ordinary,
+                    };
+                    (id, title, end - start, semantic_state)
+                }
                 BookRow::AudioFile {
                     index, duration, ..
-                } => (index, format!("Part {index}"), duration),
+                } => (
+                    index,
+                    format!("Part {index}"),
+                    duration,
+                    MediaSemanticState::Ordinary,
+                ),
             };
             #[expect(
                 clippy::cast_possible_truncation,
@@ -90,7 +79,7 @@ fn chapter_rows(state: &AudiobookshelfBookBrowseState, id: &str) -> Vec<MediaLis
                 trailing,
                 duration: None,
                 kind: MediaKind::Media,
-                semantic_state: MediaSemanticState::Ordinary,
+                semantic_state,
             }
         })
         .collect()
@@ -133,13 +122,18 @@ impl BookContent {
     /// chapter/audio-part discriminator; the typed `BookChapterTarget` pairs it
     /// with the selected book identity (design.md D4).
     pub fn project_chapter_rows(&mut self) {
-        let mut rows = self
+        let rows = self
             .state
             .selected_id
             .as_deref()
-            .map(|id| chapter_rows(&self.state, id))
+            .map(|id| {
+                chapter_rows(
+                    &self.state,
+                    id,
+                    playing_chapter(self.now_playing.as_ref(), id),
+                )
+            })
             .unwrap_or_default();
-        apply_now_playing_override(&mut rows, &self.state, self.now_playing.as_ref());
         if self.chapter_list.rows() != rows.as_slice() {
             self.chapter_list.set_content(rows);
         }

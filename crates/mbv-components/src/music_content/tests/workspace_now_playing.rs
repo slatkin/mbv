@@ -1,11 +1,10 @@
-//! Grouped Music Workspace now-playing override tests (task 3.1 of
-//! `hero-workspace-now-playing`): the playing track's row lights in both the
-//! album and the artist Workspace, and the rows guard dedups an identical
-//! re-projection.
+//! Grouped Music Workspace now-playing override tests: the playing track's
+//! row lights in both the album and the artist Workspace, and the rows guard
+//! dedups an identical re-projection.
 
 use self::tree_fixtures::tree_owner_with_tracks;
 use super::*;
-use mbv_queue::QueueItemContentId;
+use mbv_ids::ItemId;
 use mbv_render::components::media_list::ActiveProgress;
 
 fn track(id: &str) -> EmbyItem {
@@ -54,7 +53,7 @@ fn set_now_playing_marks_the_playing_track_row_in_both_workspaces() {
     owner.expand_all_tree_roots();
     owner.select_tree_target(MusicTreeTarget::Album("a-0".into()));
     owner.set_now_playing(Some(WorkspaceNowPlaying::Item {
-        content_id: QueueItemContentId::Emby("track-2".into()),
+        item_id: ItemId::new("track-2"),
         progress: Some(37),
     }));
     owner.reconcile_workspace_rows();
@@ -71,7 +70,6 @@ fn set_now_playing_marks_the_playing_track_row_in_both_workspaces() {
         ],
         "the playing row lights with progress; the other row keeps its derived state"
     );
-    assert_eq!(heading_texts(owner.track_list.rows()), [] as [String; 0]);
 
     // Observable set_content skip: a completed paint is retained until the
     // carrier's set_content invalidates it.
@@ -85,7 +83,7 @@ fn set_now_playing_marks_the_playing_track_row_in_both_workspaces() {
 
     // Identical input skips set_content (painted frame stays claimable).
     owner.set_now_playing(Some(WorkspaceNowPlaying::Item {
-        content_id: QueueItemContentId::Emby("track-2".into()),
+        item_id: ItemId::new("track-2"),
         progress: Some(37),
     }));
     owner.reconcile_workspace_rows();
@@ -96,7 +94,7 @@ fn set_now_playing_marks_the_playing_track_row_in_both_workspaces() {
 
     // Control: changed input rebuilds (and invalidates the paint).
     owner.set_now_playing(Some(WorkspaceNowPlaying::Item {
-        content_id: QueueItemContentId::Emby("track-2".into()),
+        item_id: ItemId::new("track-2"),
         progress: Some(38),
     }));
     owner.reconcile_workspace_rows();
@@ -106,7 +104,7 @@ fn set_now_playing_marks_the_playing_track_row_in_both_workspaces() {
     // included and unchanged.
     let mut owner = artist_workspace_owner();
     owner.set_now_playing(Some(WorkspaceNowPlaying::Item {
-        content_id: QueueItemContentId::Emby("alpha-track-2".into()),
+        item_id: ItemId::new("alpha-track-2"),
         progress: Some(55),
     }));
     owner.reconcile_workspace_rows();

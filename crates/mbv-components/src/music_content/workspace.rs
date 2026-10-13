@@ -4,43 +4,10 @@ use super::{
     HeroSlot, LibraryPanelContent, ListSlot, MediaKind, MediaListRow, MediaListTrailing,
     MediaSemanticState, Msg, MusicArtistTarget, MusicContent, MusicTreeAction, MusicTreeTarget,
     NEIGHBOUR_PREFETCH_AHEAD, NEIGHBOUR_PREFETCH_BEHIND, SelectorRow, ShellRequest,
-    TICKS_PER_SECOND, Workspace, WorkspaceHeader, WorkspaceNowPlaying, fmt_duration_gutter,
-    hero_content_music_album, music_album_artwork, trunc_str, wide_album_metadata,
+    TICKS_PER_SECOND, Workspace, WorkspaceHeader, fmt_duration_gutter, hero_content_music_album,
+    music_album_artwork, trunc_str, wide_album_metadata,
 };
-use mbv_queue::QueueItemContentId;
-use mbv_render::components::media_list::ActiveProgress;
-
-/// The now-playing override (hero-workspace-now-playing D2/D4): the row whose
-/// target is the projection's Emby item identity becomes
-/// `NowPlaying { progress }`; every other row keeps its derived state.
-/// Identity is provider-qualified, so an Audiobookshelf or Feed projection
-/// never matches a track row, and a `None` projection (no active item, or the
-/// active item is not one of this Workspace's tracks) overrides nothing.
-fn apply_now_playing_override(
-    rows: &mut [MediaListRow<String>],
-    now_playing: Option<&WorkspaceNowPlaying>,
-) {
-    let Some(WorkspaceNowPlaying::Item {
-        content_id: QueueItemContentId::Emby(playing_id),
-        progress,
-    }) = now_playing
-    else {
-        return;
-    };
-    for row in rows.iter_mut() {
-        if let MediaListRow::Item {
-            target,
-            semantic_state,
-            ..
-        } = row
-            && target == playing_id
-        {
-            *semantic_state = MediaSemanticState::NowPlaying {
-                progress: progress.map(ActiveProgress::new),
-            };
-        }
-    }
-}
+use crate::now_playing::apply_emby_now_playing;
 
 pub fn track_row_label(track: &EmbyItem, index: usize) -> String {
     let number = if track.index_number > 0 {
@@ -151,13 +118,18 @@ impl MusicContent {
     /// to empty rows, so the prior title's tracks never paint under the new
     /// one.
     fn resolved_workspace(&self) -> (Option<WorkspaceOwner>, Vec<MediaListRow<String>>) {
+        let (owner, mut rows) = self.resolved_workspace_rows();
+        apply_emby_now_playing(&mut rows, self.now_playing.as_ref());
+        (owner, rows)
+    }
+
+    fn resolved_workspace_rows(&self) -> (Option<WorkspaceOwner>, Vec<MediaListRow<String>>) {
         if self.selected_is_artist() {
             let owner = self.artist_detail_target().map(WorkspaceOwner::Artist);
-            let mut rows = self
+            let rows = self
                 .current_artist_detail()
                 .map(build_artist_track_rows)
                 .unwrap_or_default();
-            apply_now_playing_override(&mut rows, self.now_playing.as_ref());
             return (owner, rows);
         }
         let Some(selected) = self.selected_item() else {
@@ -169,9 +141,10 @@ impl MusicContent {
             }
             _ => &[],
         };
-        let mut rows = build_track_rows(tracks);
-        apply_now_playing_override(&mut rows, self.now_playing.as_ref());
-        (Some(WorkspaceOwner::Album(selected.id)), rows)
+        (
+            Some(WorkspaceOwner::Album(selected.id)),
+            build_track_rows(tracks),
+        )
     }
 
     /// The projected artist detail when it belongs to the tree's current

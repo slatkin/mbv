@@ -510,12 +510,9 @@ impl Model {
             owner.set_is_wide(is_wide);
             owner.set_list_pane_width(list_pane_width);
             owner.set_latest_marker(latest_marker);
+            owner.set_now_playing(now_playing);
             owner.set_content(context);
             owner.set_focused(library_focused);
-            // The workspace now-playing projection (hero-workspace-now-playing
-            // D4): pushed after `set_content` so the guarded season refresh
-            // applies it to the freshly projected episode rows.
-            owner.set_now_playing(now_playing);
         });
     }
 }

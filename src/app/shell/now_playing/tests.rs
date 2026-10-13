@@ -1,5 +1,4 @@
-//! The workspace now-playing derivation (hero-workspace-now-playing row 1.1):
-//! one `#[case]` table over the derivation's outcomes — an Emby item match, a
+//! The workspace now-playing derivation's outcomes: an Emby item match, a
 //! pending slot that moves the match, an Audiobookshelf position resolving to
 //! a chapter with chapter-relative progress, a pending book resolving to no
 //! chapter, and no active item or a different book resolving to nothing.
@@ -11,14 +10,13 @@ use mbv_audiobookshelf::{AudiobookshelfChapter, AudiobookshelfLibrary};
 use mbv_ctrl::{TransitionSummary, UnifiedQueueSlot, UnifiedQueueStateData};
 use mbv_queue::QueueSource;
 use mbv_ui_model::audiobookshelf_browse::AudiobookshelfBookBrowseState;
-use rstest::rstest;
 
-fn emby_playing_app(current_idx: usize, position_ticks: i64) -> App {
+fn emby_playing_app(position_ticks: i64) -> App {
     let mut app = make_app_stub();
     app.local_view.adopt_items(make_items(2), 0);
     app.player.update_status(|status| {
         status.active = true;
-        status.current_idx = current_idx;
+        status.current_idx = 0;
         status.position_ticks = position_ticks;
         status.runtime_ticks = 10_000;
     });
@@ -167,64 +165,57 @@ fn inactive_player_app() -> App {
     app
 }
 
-fn scenario_emby_item_matches_with_clamped_progress() {
-    let app = emby_playing_app(0, 2_500);
+#[test]
+fn emby_item_matches_with_clamped_progress() {
+    let app = emby_playing_app(2_500);
     assert_eq!(
         derive_workspace_now_playing(&app),
         Some(WorkspaceNowPlaying::Item {
-            content_id: QueueItemContentId::Emby("id0".into()),
+            item_id: ItemId::new("id0"),
             progress: Some(25),
         })
     );
 }
 
-fn scenario_pending_slot_moves_the_match() {
+#[test]
+fn pending_slot_moves_the_match() {
     let app = pending_emby_app();
     assert_eq!(
         derive_workspace_now_playing(&app),
         Some(WorkspaceNowPlaying::Item {
-            content_id: QueueItemContentId::Emby("id1".into()),
+            item_id: ItemId::new("id1"),
             progress: None,
         })
     );
 }
 
-fn scenario_abs_position_resolves_to_chapter_with_chapter_relative_progress() {
+#[test]
+fn abs_position_resolves_to_chapter_with_chapter_relative_progress() {
     let app = book_app("book-a", "book-a", 150.0);
     assert_eq!(
         derive_workspace_now_playing(&app),
         Some(WorkspaceNowPlaying::Chapter {
-            content_id: QueueItemContentId::AudiobookshelfBook {
-                library_item_id: "book-a".into(),
-            },
+            library_item_id: "book-a".into(),
             chapter_id: 1,
             progress: 50,
         })
     );
 }
 
-fn scenario_pending_book_resolves_to_no_chapter() {
+#[test]
+fn pending_book_resolves_to_no_chapter() {
     let app = pending_book_app();
     assert_eq!(derive_workspace_now_playing(&app), None);
 }
 
-fn scenario_no_active_item_or_different_book_resolves_to_nothing() {
-    let inactive = inactive_player_app();
-    assert_eq!(derive_workspace_now_playing(&inactive), None);
-    let uncached = book_app("book-a", "book-z", 150.0);
-    assert_eq!(derive_workspace_now_playing(&uncached), None);
+#[test]
+fn no_active_item_resolves_to_nothing() {
+    let app = inactive_player_app();
+    assert_eq!(derive_workspace_now_playing(&app), None);
 }
 
-#[rstest]
-#[case::emby_item_matches_with_clamped_progress(|| scenario_emby_item_matches_with_clamped_progress())]
-#[case::pending_slot_moves_the_match(|| scenario_pending_slot_moves_the_match())]
-#[case::abs_position_resolves_to_chapter_with_chapter_relative_progress(|| {
-    scenario_abs_position_resolves_to_chapter_with_chapter_relative_progress();
-})]
-#[case::pending_book_resolves_to_no_chapter(|| scenario_pending_book_resolves_to_no_chapter())]
-#[case::no_active_item_or_different_book_resolves_to_nothing(|| {
-    scenario_no_active_item_or_different_book_resolves_to_nothing();
-})]
-fn workspace_now_playing_derivation(#[case] scenario: fn()) {
-    scenario();
+#[test]
+fn uncached_book_resolves_to_nothing() {
+    let app = book_app("book-a", "book-z", 150.0);
+    assert_eq!(derive_workspace_now_playing(&app), None);
 }

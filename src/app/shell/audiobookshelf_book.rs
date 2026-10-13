@@ -53,14 +53,9 @@ impl Model {
         });
     }
 
-    /// The book owner's now-playing refresh (hero-workspace-now-playing
-    /// D5): a dedicated sync-pass call, separate from the event-driven
-    /// `push_audiobookshelf_book_content` (`set_content`), so chapter
-    /// progress follows ticks without rebuilding the whole book surface. It
-    /// runs only on the Audiobookshelf Book tab and only when the owner
-    /// already exists, so it never mounts an empty `BookContent` before the
-    /// first content push (`handle_audiobookshelf_book_request` guards the
-    /// same case).
+    /// The book owner's per-pass now-playing push (hero-workspace-now-playing
+    /// D5). It never mounts an empty `BookContent` before the first content
+    /// push (`handle_audiobookshelf_book_request` guards the same case).
     pub(in crate::app) fn sync_abs_book_now_playing(&mut self) {
         if self.abs_book_owner().is_none() {
             return;

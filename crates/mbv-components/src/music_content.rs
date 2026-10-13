@@ -231,13 +231,8 @@ impl MusicContent {
         self.context.focused = focused;
     }
 
-    /// Records the shell's now-playing projection for this sync pass (design
-    /// D4 of `hero-workspace-now-playing`): the matching track row carries
-    /// `NowPlaying { progress }` when the owner rebuilds its Workspace rows;
-    /// every other row keeps its derived state. The rows rebuild at the
-    /// paint-time `reconcile_workspace_rows` seam, whose rows comparison
-    /// already includes the override, so an identical re-projection skips
-    /// `set_content` and the painted frame stays claimable.
+    /// Records the shell's now-playing projection for the next Workspace-row
+    /// reconcile. Push it before `set_content`, whose reconcile applies it.
     pub fn set_now_playing(&mut self, now_playing: Option<WorkspaceNowPlaying>) {
         self.now_playing = now_playing;
     }

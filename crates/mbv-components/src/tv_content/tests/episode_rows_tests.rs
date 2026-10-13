@@ -92,20 +92,18 @@ fn upcoming_owner_rows_come_from_context_premieres_keyed_by_stable_key() {
     );
 }
 
-/// Contract (hero-workspace-now-playing task 2.1, design D2/D4): the playing
+/// Contract (hero-workspace-now-playing D2/D4): the playing
 /// episode's row carries `NowPlaying { progress }`, every other row keeps its
 /// derived state, and an identical re-pushed projection skips `set_content`
 /// (the `last_episode_rows` guard), so the painted frame stays claimable.
 #[test]
 fn set_now_playing_marks_the_playing_episode_row_and_dedups_identical_projection() {
-    use mbv_queue::QueueItemContentId;
+    use mbv_ids::ItemId;
     use mbv_ui_model::now_playing::WorkspaceNowPlaying;
 
     let mut owner = TvContent::new();
-    let series = tv_show("Series", "series-1");
-    let season = tv_show("Season 1", "season-1");
     let detail = mbv_ui_model::browse::SeriesDetail {
-        seasons: vec![season],
+        seasons: vec![tv_show("Season 1", "season-1")],
         episodes: [(
             "season-1".into(),
             vec![
@@ -116,18 +114,20 @@ fn set_now_playing_marks_the_playing_episode_row_and_dedups_identical_projection
         .into_iter()
         .collect(),
     };
-    owner.set_content(tv_tree_context(
-        vec![series],
-        Some("series-1"),
-        Some(detail),
-        false,
-    ));
-
-    let playing = || WorkspaceNowPlaying::Item {
-        content_id: QueueItemContentId::Emby("episode-2".into()),
-        progress: Some(42),
+    // The shell's push order: the projection, then the content refresh.
+    let push = |owner: &mut TvContent, progress: u16| {
+        owner.set_now_playing(Some(WorkspaceNowPlaying::Item {
+            item_id: ItemId::new("episode-2"),
+            progress: Some(progress),
+        }));
+        owner.set_content(tv_tree_context(
+            vec![tv_show("Series", "series-1")],
+            Some("series-1"),
+            Some(detail.clone()),
+            false,
+        ));
     };
-    owner.set_now_playing(Some(playing()));
+    push(&mut owner, 42);
 
     let states = |rows: &[MediaListRow<String>]| -> Vec<(String, MediaSemanticState)> {
         rows.iter()
@@ -166,17 +166,14 @@ fn set_now_playing_marks_the_playing_episode_row_and_dedups_identical_projection
     assert!(owner.episodes.current_content_rect().is_some());
 
     // Identical input skips set_content (painted frame stays claimable).
-    owner.set_now_playing(Some(playing()));
+    push(&mut owner, 42);
     assert!(
         owner.episodes.current_content_rect().is_some(),
         "an identical projection must not re-run set_content"
     );
 
     // Control: changed input rebuilds (and invalidates the paint).
-    owner.set_now_playing(Some(WorkspaceNowPlaying::Item {
-        content_id: QueueItemContentId::Emby("episode-2".into()),
-        progress: Some(43),
-    }));
+    push(&mut owner, 43);
     assert!(owner.episodes.current_content_rect().is_none());
 }
 

@@ -248,14 +248,13 @@ fn reanchor_launch_state_falls_back_to_first_bucket_and_book() {
     assert_eq!(owner.selected_book_id(), Some("book-a"));
 }
 
-/// Contract (hero-workspace-now-playing task 4.1, design D3/D4/D5): the
+/// Contract (hero-workspace-now-playing D3/D4/D5): the
 /// named chapter row carries `NowPlaying` with the chapter-relative progress
 /// the projection supplies, every other chapter keeps its derived state, and
 /// an identical re-pushed projection skips `set_content` (the chapter rows
 /// guard), so the painted frame stays claimable.
 #[test]
 fn set_now_playing_marks_the_playing_chapter_row_and_dedups_identical_projection() {
-    use mbv_queue::QueueItemContentId;
     use mbv_ui_model::now_playing::WorkspaceNowPlaying;
 
     let mut owner = BookContent::new();
@@ -283,9 +282,7 @@ fn set_now_playing_marks_the_playing_chapter_row_and_dedups_identical_projection
     owner.set_content(&state, false);
 
     let playing = || WorkspaceNowPlaying::Chapter {
-        content_id: QueueItemContentId::AudiobookshelfBook {
-            library_item_id: "book-a".into(),
-        },
+        library_item_id: "book-a".into(),
         chapter_id: 1,
         progress: 42,
     };
@@ -336,9 +333,7 @@ fn set_now_playing_marks_the_playing_chapter_row_and_dedups_identical_projection
 
     // Control: changed input rebuilds (and invalidates the paint).
     owner.set_now_playing(Some(WorkspaceNowPlaying::Chapter {
-        content_id: QueueItemContentId::AudiobookshelfBook {
-            library_item_id: "book-a".into(),
-        },
+        library_item_id: "book-a".into(),
         chapter_id: 1,
         progress: 43,
     }));

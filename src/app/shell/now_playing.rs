@@ -6,7 +6,8 @@
 
 use crate::app::App;
 use mbv_emby_model::seconds_to_ticks;
-use mbv_queue::{AudiobookshelfBookQueueItem, AudiobookshelfItem, QueueItem, QueueItemContentId};
+use mbv_ids::ItemId;
+use mbv_queue::{AudiobookshelfBookQueueItem, AudiobookshelfItem, QueueItem};
 use mbv_ui_model::now_playing::WorkspaceNowPlaying;
 use mbv_ui_model::playback::PlaybackState;
 
@@ -24,16 +25,14 @@ pub(in crate::app) fn derive_workspace_now_playing(app: &App) -> Option<Workspac
     if !state.active {
         return None;
     }
-    let item = app.playback_queue().item_at(state.active_idx?)?;
-    let content_id = item.content_id();
-    match item {
-        QueueItem::Emby(_) => Some(WorkspaceNowPlaying::Item {
-            content_id,
+    match app.playback_queue().item_at(state.active_idx?)? {
+        QueueItem::Emby(item) => Some(WorkspaceNowPlaying::Item {
+            item_id: ItemId::new(item.id.clone()),
             progress: clamped_live_progress(state.position_ticks, state.runtime_ticks),
         }),
         QueueItem::Feed(_) | QueueItem::Audiobookshelf(AudiobookshelfItem::Episode(_)) => None,
         QueueItem::Audiobookshelf(AudiobookshelfItem::Book(book)) => {
-            playing_book_chapter(app, &state, book, content_id)
+            playing_book_chapter(app, &state, book)
         }
     }
 }
@@ -42,17 +41,16 @@ pub(in crate::app) fn derive_workspace_now_playing(app: &App) -> Option<Workspac
 /// the playback position against the chapter list the shell already holds in
 /// `AudiobookshelfBookBrowseState` (`detail_cache`, absolute seconds on the
 /// merged timeline), as the chapter's stable Service id plus the position's
-/// fraction of the chapter range, clamped to `0..=100`.
+/// fraction of the chapter range.
 fn playing_book_chapter(
     app: &App,
     state: &PlaybackState,
     book: &AudiobookshelfBookQueueItem,
-    content_id: QueueItemContentId,
 ) -> Option<WorkspaceNowPlaying> {
-    // D6: a pending book lights no chapter. The displayed position is 0
-    // until the owner confirms, so a chapter resolved from it would light a
-    // chapter the owner has not reached.
-    if pending_selection_unconfirmed(app) {
+    // D6: a pending book lights no chapter. `displayed_playback_state`
+    // synthesizes the unconfirmed slot with position 0, so a chapter
+    // resolved from it would light a chapter the owner has not reached.
+    if app.pending_playback_slot().is_some() && *state != app.effective_playback_state() {
         return None;
     }
     let (chapters, _) = app
@@ -64,30 +62,15 @@ fn playing_book_chapter(
         position_ticks >= seconds_to_ticks(chapter.start)
             && position_ticks < seconds_to_ticks(chapter.end)
     })?;
+    // The match above guarantees `start <= position < end`, so the span is
+    // positive and the fraction is below 100.
     let start = seconds_to_ticks(chapter.start);
-    let span = seconds_to_ticks(chapter.end) - start;
-    // Degenerate chapter ranges carry no fraction; a zero progress lights
-    // the row without a percentage claim about the position.
-    let progress = if span > 0 {
-        ((position_ticks - start) * 100 / span).clamp(0, 100)
-    } else {
-        0
-    };
+    let progress = (position_ticks - start) * 100 / (seconds_to_ticks(chapter.end) - start);
     Some(WorkspaceNowPlaying::Chapter {
-        content_id,
+        library_item_id: book.library_item_id.clone(),
         chapter_id: chapter.id,
         progress: u16::try_from(progress).unwrap_or(u16::MAX),
     })
-}
-
-/// Whether the displayed active index is a pending selection the playback
-/// owner has not confirmed yet (D6): `displayed_playback_state` synthesizes
-/// that slot with position 0, so a chapter derived from it would be a lie.
-/// Reads the same sources `displayed_playback_state` uses, so the pending
-/// exception never disagrees with the projection's own state.
-fn pending_selection_unconfirmed(app: &App) -> bool {
-    app.pending_playback_slot().is_some()
-        && app.displayed_playback_state() != app.effective_playback_state()
 }
 
 /// The clamped live progress percentage (`0..=100`) a workspace row paints,

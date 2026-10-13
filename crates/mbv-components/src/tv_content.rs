@@ -174,16 +174,10 @@ impl TvContent {
         self.latest_marker = marker;
     }
 
-    /// Records the shell's now-playing projection for this sync pass (design
-    /// D4 of `hero-workspace-now-playing`): the matching episode row carries
-    /// `NowPlaying { progress }` when the owner rebuilds its rows; every other
-    /// row keeps its derived state. Storing it re-runs the guarded season
-    /// refresh, so a progress-only change reaches the rows without a content
-    /// push; the `last_episode_rows` guard still skips an identical
-    /// re-projection. Tree, series-rail, and flat-mode rows are untouched.
+    /// Records the shell's now-playing projection for the next episode-row
+    /// rebuild. Push it before `set_content`, whose season refresh applies it.
     pub fn set_now_playing(&mut self, now_playing: Option<WorkspaceNowPlaying>) {
         self.now_playing = now_playing;
-        self.refresh_current_season();
     }
 
     /// Reset TV's local presentation without replacing its projected content

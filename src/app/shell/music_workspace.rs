@@ -12,7 +12,6 @@ use mbv_components::music_tree_target::MusicTreeTarget;
 use mbv_queue::ServiceKind;
 use mbv_ui_model::library::LibraryKey;
 use mbv_ui_model::library::LibraryKind;
-use mbv_ui_model::now_playing::WorkspaceNowPlaying;
 use mbv_ui_model::targets::MusicArtistTarget;
 
 impl Model {
@@ -187,14 +186,9 @@ impl Model {
         // closure only reaches the owner, so it reports back whether the
         // request needs to stay armed (bound to this album) for the tracks
         // re-push to retry, rather than re-arming `self` from inside.
-        if let Some(rearm) = self.push_music_workspace_owner(
-            context,
-            reanchor,
-            wide,
-            focused,
-            request,
-            self.workspace_now_playing.clone(),
-        ) {
+        if let Some(rearm) =
+            self.push_music_workspace_owner(context, reanchor, wide, focused, request)
+        {
             self.music_track_focus_request = Some(rearm);
         }
         self.apply_pending_music_track_selection();
@@ -313,19 +307,16 @@ impl Model {
         wide: bool,
         focused: bool,
         request: Option<MusicTrackFocusRequest>,
-        now_playing: Option<WorkspaceNowPlaying>,
     ) -> Option<MusicTrackFocusRequest> {
+        let now_playing = self.workspace_now_playing.clone();
         self.update_music_owner(|owner| {
+            owner.set_now_playing(now_playing);
             owner.set_content(context);
             if let Some(target) = reanchor {
                 owner.select_tree_target(target);
             }
             owner.set_focused(focused);
             owner.set_inline_track_focus_enabled(wide);
-            // The workspace now-playing projection (hero-workspace-now-playing
-            // D4): stored for the rows' next rebuild at the reconcile seam;
-            // the reconcile rows comparison skips an identical re-projection.
-            owner.set_now_playing(now_playing);
             match request {
                 Some(MusicTrackFocusRequest::Clear) => {
                     owner.clear_track_focus();

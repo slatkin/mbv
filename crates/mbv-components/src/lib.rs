@@ -20,6 +20,7 @@ pub mod mouse;
 pub mod multiselect;
 pub mod music_content;
 pub mod music_tree_target;
+mod now_playing;
 pub mod playlists;
 pub mod podcast_content;
 pub mod queue;
