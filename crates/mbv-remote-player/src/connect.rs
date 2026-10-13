@@ -569,7 +569,6 @@ pub fn connect_stub_daemon_pair() -> Result<
             lineage: mbv_queue::QueueLineage::default(),
             in_flight_transition: None,
             queued_latest_transition: None,
-            play_order: mbv_queue::PlayOrderMode::Sequential,
         }))
         .unwrap();
         writeln!(writer, "{state}").unwrap();

@@ -145,7 +145,6 @@ fn adopt_queue_view(
         lineage: mbv_queue::QueueLineage::default(),
         in_flight_transition: None,
         queued_latest_transition: None,
-        play_order: mbv_queue::PlayOrderMode::Sequential,
     };
     view.adopt(
         &state,
@@ -472,6 +471,5 @@ pub(crate) fn emby_unified_state(
         lineage: mbv_queue::QueueLineage::default(),
         in_flight_transition: None,
         queued_latest_transition: None,
-        play_order: mbv_queue::PlayOrderMode::Sequential,
     }
 }

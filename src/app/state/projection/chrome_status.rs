@@ -507,7 +507,7 @@ mod tests {
         let mut app = make_app_stub();
         app.panel_focus = PanelFocus::Library;
         let mut state = emby_unified_state(&make_items(2), 0);
-        state.play_order = PlayOrderMode::Shuffle;
+        state.status.play_order = PlayOrderMode::Shuffle;
         app.local_view = QueueView::from_snapshot(&state);
 
         let spans = app.status_bar_right_spans();

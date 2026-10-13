@@ -145,7 +145,6 @@ fn pending_book_app() -> App {
             target_slot: 101,
         }),
         queued_latest_transition: None,
-        play_order: mbv_queue::PlayOrderMode::Sequential,
     };
     app.local_view = QueueView::from_snapshot(&snapshot);
     app.player.update_status(|status| {

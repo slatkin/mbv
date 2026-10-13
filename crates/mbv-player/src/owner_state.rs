@@ -116,8 +116,12 @@ impl PlayerOwnerState {
     }
 
     /// Set the playback order (design D2). Turning Shuffle on picks the next
-    /// slot immediately; turning Sequential clears the pick.
+    /// slot immediately; turning Sequential clears the pick. Setting the mode
+    /// the order already has keeps the current pick.
     pub fn set_play_order(&mut self, mode: PlayOrderMode) {
+        if mode == self.play_order.mode() {
+            return;
+        }
         match mode {
             PlayOrderMode::Sequential => self.play_order = PlayOrder::Sequential,
             PlayOrderMode::Shuffle => self.repick_upcoming(),
@@ -560,6 +564,28 @@ mod tests {
 
         assert_eq!(picks.iter().all(Option::is_some), picks_available);
         assert!(picks.iter().all(|pick| *pick != Some(active)));
+    }
+
+    /// The contract: setting Shuffle while Shuffle is on keeps the current
+    /// pick (design D2).
+    #[test]
+    fn repeating_shuffle_keeps_the_current_pick() {
+        let queue = PlaybackQueue::from_items(
+            vec![item("a"), item("b"), item("c")],
+            Some(0),
+            Arc::new(QueueRevisionMint::default()),
+        );
+        let mut owner = PlayerOwnerState::new(queue, mbv_queue::QueueSource::default());
+        let picked = shuffle_pick(&mut owner);
+
+        owner.set_play_order(PlayOrderMode::Shuffle);
+
+        assert_eq!(
+            owner.play_order(),
+            PlayOrder::Shuffle {
+                upcoming: Some(picked)
+            }
+        );
     }
 
     /// The contract: a whole-queue replacement resets the order to

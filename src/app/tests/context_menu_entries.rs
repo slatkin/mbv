@@ -124,7 +124,10 @@ fn queue_state(
     play_order: mbv_queue::PlayOrderMode,
 ) -> mbv_ctrl::UnifiedQueueStateData {
     mbv_ctrl::UnifiedQueueStateData {
-        status: mbv_ctrl::player::PlayerStatus::default(),
+        status: mbv_ctrl::player::PlayerStatus {
+            play_order,
+            ..Default::default()
+        },
         active_slot: Some(1),
         slots: items
             .into_iter()
@@ -139,7 +142,6 @@ fn queue_state(
         lineage: mbv_queue::QueueLineage::default(),
         in_flight_transition: None,
         queued_latest_transition: None,
-        play_order,
     }
 }
 

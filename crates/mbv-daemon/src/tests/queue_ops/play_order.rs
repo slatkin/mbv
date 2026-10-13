@@ -48,7 +48,7 @@ fn set_play_order_shuffle_forwards_the_picked_advance_and_projects_the_mode() {
     // The next snapshot reports the new order mode (design D5).
     match recv_event(&client_rx) {
         CtrlEvent::UnifiedQueueState(state) => {
-            assert_eq!(state.play_order, mbv_queue::PlayOrderMode::Shuffle);
+            assert_eq!(state.status.play_order, mbv_queue::PlayOrderMode::Shuffle);
         }
         other => panic!("expected a queue-state publish, got {other:?}"),
     }

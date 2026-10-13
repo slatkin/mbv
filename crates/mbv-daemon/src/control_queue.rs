@@ -143,9 +143,6 @@ pub(crate) fn unified_queue_state_for_peer(
         lineage,
         in_flight_transition,
         queued_latest_transition,
-        // The owner core is the order authority; the shared mirror is kept in
-        // sync by `publish_observed` and the order-change sites (design D5).
-        play_order,
     })
 }
 

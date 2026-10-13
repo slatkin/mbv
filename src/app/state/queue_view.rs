@@ -68,7 +68,7 @@ impl QueueView {
                 .unwrap_or_else(|| clamp_cursor(old_cursor, self.queue.len()))
         };
         self.source = state.source.clone();
-        self.play_order = state.play_order;
+        self.play_order = state.status.play_order;
         self.lineage = state.lineage;
         self.pending_playback_slot = pending_playback_slot(state);
     }
@@ -208,7 +208,6 @@ mod tests {
             lineage: QueueLineage(lineage),
             in_flight_transition: None,
             queued_latest_transition: None,
-            play_order: mbv_queue::PlayOrderMode::Sequential,
         }
     }
 
