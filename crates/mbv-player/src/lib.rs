@@ -31,14 +31,6 @@ use mbv_queue::QueueMutationResult;
 use mbv_queue::{AudiobookshelfItem, PlaybackQueue, QueueItem, QueueSlotId};
 use mbv_queue::{ExecSlot, ExecutionSequence};
 
-fn mpv_err_str(e: &libmpv2::Error) -> String {
-    if let libmpv2::Error::Raw(code) = e {
-        format!("Raw({}) [{}]", code, libmpv2_sys::mpv_error_str(*code))
-    } else {
-        format!("{e:?}")
-    }
-}
-
 fn mpv_title_opt(title: &str) -> String {
     // Use mpv's %N% length-prefix format so the value is passed verbatim —
     // no escaping needed, handles commas, backslashes, and any other character.

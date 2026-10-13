@@ -5,7 +5,7 @@ use std::fmt;
 
 use serde_json::{Map, Value};
 
-use super::{EndFileReason, MpvEvent, MpvFailure, PropertyValue};
+use super::{AUDIO_OUTPUT_INIT_FAILED, EndFileReason, MpvEvent, MpvFailure, PropertyValue};
 
 /// A line of mpv JSON IPC output that the decoder cannot read.
 #[derive(Debug, PartialEq, Eq)]
@@ -103,9 +103,8 @@ fn property_change_from_ipc(object: &Map<String, Value>) -> Result<MpvEvent, Dec
     })
 }
 
-/// JSON IPC says why an end-file failed in `file_error`, as text. libmpv
-/// gives an error code. Compare with the text of the code that the run loop
-/// treats specially, taken from the loaded libmpv so the text follows its version.
+/// JSON IPC says why an end-file failed in `file_error`, as text. Classify the
+/// one failure the run loop treats specially by comparing that text.
 fn end_file_from_ipc(object: &Map<String, Value>) -> Result<MpvEvent, DecodeError> {
     let reason = str_field(object, "end-file", "reason")?;
     Ok(match reason {
@@ -115,8 +114,7 @@ fn end_file_from_ipc(object: &Map<String, Value>) -> Result<MpvEvent, DecodeErro
         "redirect" => MpvEvent::EndFile(EndFileReason::Redirect),
         "error" => {
             let text = str_field(object, "end-file", "file_error")?;
-            let audio_init_text = libmpv2_sys::mpv_error_str(libmpv2::mpv_error::AoInitFailed);
-            MpvEvent::Failed(if text == audio_init_text {
+            MpvEvent::Failed(if text == AUDIO_OUTPUT_INIT_FAILED {
                 MpvFailure::AudioOutputInit
             } else {
                 MpvFailure::Other(text.to_owned())
