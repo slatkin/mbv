@@ -2,7 +2,7 @@
 
 ## 1. Shell now-playing projection
 
-- [ ] 1.1 Add the `WorkspaceNowPlaying` projection type in `mbv-ui-model` (D1: `QueueItemContentId`
+- [x] 1.1 Add the `WorkspaceNowPlaying` projection type in `mbv-ui-model` (D1: `QueueItemContentId`
   identity, clamped live progress, and for Audiobookshelf the chapter id plus chapter-relative
   progress). Derive it in the shell from `displayed_playback_state()` and the playing queue's item at
   the active index. Contract: the Queue and every Workspace agree on which item is playing
