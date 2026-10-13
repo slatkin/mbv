@@ -246,6 +246,19 @@ fn local_only_command_is_refused_without_wire_encoding() {
     );
 }
 
+// The ctrl wire carries the playback order only on `PlayerStatus.play_order`
+// (design D5, wire authority named in the queue-play-order spec): a payload
+// from an owner built before the field decodes as Sequential, and
+// `UnifiedQueueStateData` carries the order only through its `status` field.
+#[test]
+fn player_status_without_play_order_field_decodes_as_sequential() {
+    let mut value = serde_json::to_value(PlayerStatus::default()).unwrap();
+    value.as_object_mut().unwrap().remove("play_order").unwrap();
+
+    let decoded: PlayerStatus = serde_json::from_value(value).unwrap();
+    assert_eq!(decoded.play_order, mbv_queue::PlayOrderMode::Sequential);
+}
+
 #[rstest::rstest]
 #[case::remove_slot(CtrlCmd::UnifiedQueueRemoveSlot { slot_id: 1, op: None }, true)]
 #[case::remove_slots(CtrlCmd::UnifiedQueueRemoveSlots { slot_ids: vec![1, 2], op: None }, true)]

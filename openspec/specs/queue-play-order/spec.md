@@ -17,6 +17,13 @@ The Player owner SHALL hold a playback order for its Bound queue. The order SHAL
 - **WHEN** Shuffle is on and the last Client disconnects from a Stay-alive owner
 - **THEN** the owner continues to advance in Shuffle order
 
+### Requirement: The status payload carries the playback order
+The ctrl status payload SHALL carry the playback order in one place. `PlayerStatus` SHALL carry a `play_order` field with a serde default of Sequential, so a payload from an owner built before the field decodes as Sequential without a protocol version change. `UnifiedQueueStateData` SHALL carry the order only through its `status` field and SHALL NOT repeat the order at its own level. Every Client SHALL read the same order mode from that one value.
+
+#### Scenario: Status payload without the field
+- **WHEN** a Client decodes a status payload that has no `play_order` field
+- **THEN** the order reads as Sequential
+
 ### Requirement: Shuffle picks a random slot other than the active slot
 In Shuffle, each advance SHALL go to a slot picked at random from all queue slots except the active slot. A slot that already played SHALL be a valid pick. If the queue has no slot other than the active slot, the advance SHALL behave as the end of the queue does in Sequential.
 
