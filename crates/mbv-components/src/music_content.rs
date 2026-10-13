@@ -500,19 +500,7 @@ impl MusicContent {
                 self.browser.apply(TreeOperation::Last);
                 self.album_selection_request(AlbumCursorKind::Jump)
             }
-            Key::Left if self.selected_is_artist() => {
-                if let Some(root) = self.browser.selected_target().cloned()
-                    && self.browser.is_expanded(&root)
-                {
-                    self.browser
-                        .apply(TreeOperation::ToggleExpansionTarget(root));
-                }
-                None
-            }
-            Key::Left => {
-                self.browser.apply(TreeOperation::Parent);
-                self.album_selection_request(AlbumCursorKind::Move)
-            }
+            Key::Left => self.tree_move_left(),
             Key::Right => {
                 let intent = self.browser.apply(TreeOperation::Right).external_intent;
                 match intent {

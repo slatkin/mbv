@@ -162,3 +162,28 @@ fn left_collapses_an_expanded_root_and_returns_a_leaf_to_its_parent() {
     assert!(!owner.browser.is_expanded(&root));
     assert_eq!(owner.browser.selected_target(), Some(&root));
 }
+
+/// Grouped Music album rows branch like TV season rows: Left collapses an
+/// expanded album in place and Enter toggles it, never entering the Workspace.
+#[test]
+fn left_and_enter_collapse_and_expand_an_album_with_cached_tracks() {
+    let mut owner = artist_workspace_owner();
+    // The fixture expands the roots; a second pass expands their albums.
+    owner.expand_all_tree_roots();
+    press(&mut owner, Key::Home);
+    press(&mut owner, Key::Down);
+    let album = owner
+        .browser
+        .selected_target()
+        .cloned()
+        .expect("album row selected");
+    assert!(owner.browser.is_expanded(&album));
+
+    assert_eq!(press(&mut owner, Key::Left), None);
+    assert!(!owner.browser.is_expanded(&album));
+    assert_eq!(owner.browser.selected_target(), Some(&album));
+
+    assert_eq!(press(&mut owner, Key::Enter), None);
+    assert!(owner.browser.is_expanded(&album));
+    assert!(!owner.track_focused());
+}

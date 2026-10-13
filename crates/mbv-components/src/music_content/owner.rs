@@ -550,6 +550,17 @@ impl MusicContent {
         if self.track_focused() {
             return self.workspace_track_activation();
         }
+        // An expandable branch toggles on Enter, like a TV season row.
+        if let Some(target) = self.browser.selected_target().cloned()
+            && self
+                .browser
+                .children_of(&target)
+                .is_some_and(|children| !children.is_empty())
+        {
+            self.browser
+                .apply(TreeOperation::ToggleExpansionTarget(target));
+            return None;
+        }
         if self.selected_is_track() {
             let (album_target, track_id) = self.selected_tree_track()?;
             return Some(Msg::Shell(Box::new(ShellRequest::MusicTreeTrackActivate {
@@ -627,16 +638,17 @@ impl MusicContent {
         }
     }
 
-    /// Left in the tree (task 2.4): collapse a focused expanded artist root,
-    /// or return a leaf to its artist parent.
-    fn tree_move_left(&mut self) -> Option<Msg> {
+    /// Left in the tree (task 2.4): collapse any focused expanded branch (the
+    /// same rule as the TV tree), else return a leaf to its parent.
+    pub(super) fn tree_move_left(&mut self) -> Option<Msg> {
+        if let Some(target) = self.browser.selected_target().cloned()
+            && self.browser.is_expanded(&target)
+        {
+            self.browser
+                .apply(TreeOperation::ToggleExpansionTarget(target));
+            return None;
+        }
         if self.selected_is_artist() {
-            if let Some(root) = self.browser.selected_target().cloned()
-                && self.browser.is_expanded(&root)
-            {
-                self.browser
-                    .apply(TreeOperation::ToggleExpansionTarget(root));
-            }
             return None;
         }
         if self
