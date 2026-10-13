@@ -43,6 +43,7 @@ pub mod library_tab;
 pub mod media_list;
 pub mod music_artist_detail;
 pub mod music_grouping;
+pub mod now_playing;
 pub mod overlay;
 pub mod panel_targets;
 pub mod playback;

@@ -37,6 +37,11 @@ impl Model {
         self.sync_status_bar_panel();
         self.sync_queue_card_geometry();
         self.sync_queue_playback_panel();
+        // The workspace now-playing projection (hero-workspace-now-playing
+        // D1): derived once per pass from the playing queue's displayed
+        // playback state, then read by every workspace owner's push seam
+        // below.
+        self.workspace_now_playing = super::now_playing::derive_workspace_now_playing(&self.app);
         // The Music workspace re-projects every sync pass: navigation
         // landings, track-fetch arrivals, focus requests, and breakpoint
         // flips all land in App state, and the owner only picks them up
