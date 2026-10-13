@@ -13,9 +13,9 @@
 
 ## 3. Playback run obeys the pick
 
-- [ ] 3.1 Add the in-process `PlayerCommand::SetUpcoming(Advance)` with `Advance { Sequential, To(QueueSlotId), End }` (never on the ctrl wire, like `JumpTo`). Handle it in `crates/mbv-player/src/run/commands.rs` by storing the value on `PlaybackRun` (design D2). Verify: `cargo check -p mbv-player`.
-- [ ] 3.2 In `settle_forced_jump` (`run/events/queue_advance.rs`), with no forced jump: `To(slot)` → that slot's index (fall back to `current_idx + 1` if the slot is gone); `End` → `queue_len()` so `stop_at_queue_end` runs; `Sequential` → `current_idx + 1`. Unit-test the index choice as a pure helper with one `#[case]` table of the three variants. Verify: `cargo nextest run -p mbv-player`.
-- [ ] 3.3 Change `queue_next_up_decision` (`run/decisions.rs`) to take the next index (or none) as input instead of `current_idx + 1`; the caller in `run/events/track_progress.rs` passes the index derived from the stored `Advance`. Update the existing `tests/decisions.rs` cases to the new signature; add one case where the next index is not `current_idx + 1`. Verify: `cargo nextest run -p mbv-player`.
+- [x] 3.1 Add the in-process `PlayerCommand::SetUpcoming(Advance)` with `Advance { Sequential, To(QueueSlotId), End }` (never on the ctrl wire, like `JumpTo`). Handle it in `crates/mbv-player/src/run/commands.rs` by storing the value on `PlaybackRun` (design D2). Verify: `cargo check -p mbv-player`.
+- [x] 3.2 In `settle_forced_jump` (`run/events/queue_advance.rs`), with no forced jump: `To(slot)` → that slot's index (fall back to `current_idx + 1` if the slot is gone); `End` → `queue_len()` so `stop_at_queue_end` runs; `Sequential` → `current_idx + 1`. Unit-test the index choice as a pure helper with one `#[case]` table of the three variants. Verify: `cargo nextest run -p mbv-player`.
+- [x] 3.3 Change `queue_next_up_decision` (`run/decisions.rs`) to take the next index (or none) as input instead of `current_idx + 1`; the caller in `run/events/track_progress.rs` passes the index derived from the stored `Advance`. Update the existing `tests/decisions.rs` cases to the new signature; add one case where the next index is not `current_idx + 1`. Verify: `cargo nextest run -p mbv-player`.
 
 ## 4. Daemon wiring
 
