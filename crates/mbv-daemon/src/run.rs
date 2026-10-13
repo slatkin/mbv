@@ -556,6 +556,7 @@ fn serve_tcp_control(
 fn spawn_status_broadcast(
     client: &Arc<Mutex<EmbyClient>>,
     player: &Player,
+    shared_queue: &SharedQueueState,
     clients: &ClientRegistry,
 ) {
     // Broadcast current PlayerStatus to connected TUIs so the
@@ -563,6 +564,7 @@ fn spawn_status_broadcast(
     let broadcast_interval =
         std::time::Duration::from_millis(client.lock().unwrap().config.daemon_broadcast_ms);
     let player_status = Arc::clone(&player.status);
+    let shared_queue = shared_queue.clone();
     let ctrl_clients = Arc::clone(clients);
     std::thread::spawn(move || {
         loop {
@@ -570,7 +572,11 @@ fn spawn_status_broadcast(
             if !ctrl_clients.lock().unwrap().has_driver() {
                 continue;
             }
-            let status = player_status.lock().unwrap().clone();
+            // The order rides on the status so snapshot consumers that read
+            // only the status (MPRIS, tray) see the same order the queue
+            // projection reports (queue-play-order design D7).
+            let mut status = player_status.lock().unwrap().clone();
+            status.play_order = *shared_queue.play_order.lock().unwrap();
             broadcast(&ctrl_clients, &CtrlEvent::StatusOnly(status));
         }
     });
@@ -646,7 +652,7 @@ pub fn run_with_options(
         control_credential.as_ref(),
         Arc::clone(&owner_settings),
     );
-    spawn_status_broadcast(&client, &player, &ctrl_clients);
+    spawn_status_broadcast(&client, &player, &shared_queue, &ctrl_clients);
 
     let queue_persist_tx = spawn_queue_persistence_worker(merged_tx.clone());
     let mut daemon_loop = DaemonLoop {

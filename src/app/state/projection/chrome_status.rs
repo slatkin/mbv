@@ -345,10 +345,32 @@ impl App {
         ]
     }
 
-    /// The status row's right segment: queue-source scope label, username,
-    /// and the service-state glyphs (Emby, Audiobookshelf, stay-alive) —
-    /// always visible, coloured by state. Built shell-side
-    /// (task 2.2); the mounted `StatusBarPanel` positions and paints it.
+    /// The shuffle-order indicator content, without outer pads (queue-play-order
+    /// design D7). Present only while the owner's play order is Shuffle, and
+    /// independent of panel focus — unlike the queue-source label, which shows
+    /// only while the Queue panel is focused. The painter adds the pill
+    /// background; the span carries the glyph or fallback text and the color.
+    pub(in crate::app) fn shuffle_status_span(&self) -> Option<Span<'static>> {
+        let shuffle_on = self.playback_queue().play_order() == mbv_queue::PlayOrderMode::Shuffle;
+        shuffle_on.then(|| {
+            Span::styled(
+                if self.use_nerd_fonts {
+                    "\u{f074}"
+                } else {
+                    "SHUFFLE"
+                },
+                Style::default()
+                    .fg(mbv_theme::Role::Accent.color())
+                    .bg(mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false).fill),
+            )
+        })
+    }
+
+    /// The status row's right segment: queue-source scope label, shuffle-order
+    /// indicator, username, and the service-state glyphs (Emby,
+    /// Audiobookshelf, stay-alive) — always visible, coloured by state. Built
+    /// shell-side (task 2.2); the mounted `StatusBarPanel` positions and
+    /// paints it.
     pub(in crate::app) fn status_bar_right_spans(&self) -> Vec<Span<'static>> {
         let (username, stay_alive) = {
             let config = self.config.lock().unwrap();
@@ -389,6 +411,11 @@ impl App {
                     .fill),
                 ),
             );
+        }
+        // The shuffle indicator does not depend on Queue focus (design D7):
+        // it follows the owner's play order, not the panel under the cursor.
+        if let Some(shuffle) = self.shuffle_status_span() {
+            append_right(&mut right_spans, shuffle);
         }
         if !username.is_empty() {
             if !right_spans.is_empty() {
@@ -462,4 +489,33 @@ fn queue_source_status_label(
         }
     };
     Some((label, mbv_theme::Role::TextMuted.color()))
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::app::PanelFocus;
+    use crate::app::state::queue_view::QueueView;
+    use crate::app::tests::{emby_unified_state, make_app_stub, make_items};
+    use mbv_queue::PlayOrderMode;
+
+    /// queue-play-order spec, "The footer shows Shuffle": the shuffle
+    /// indicator follows the owner's play order, not the panel under the
+    /// cursor — it shows with the Library panel focused (design D7), where
+    /// the queue-source label stays hidden.
+    #[test]
+    fn shuffle_indicator_shows_with_the_library_panel_focused() {
+        let mut app = make_app_stub();
+        app.panel_focus = PanelFocus::Library;
+        let mut state = emby_unified_state(&make_items(2), 0);
+        state.play_order = PlayOrderMode::Shuffle;
+        app.local_view = QueueView::from_snapshot(&state);
+
+        let spans = app.status_bar_right_spans();
+
+        assert!(
+            spans.iter().any(|span| span.content.contains("SHUFFLE")),
+            "shuffle indicator missing from the status row with the Library panel focused: {:?}",
+            spans.iter().map(|s| s.content.as_ref()).collect::<Vec<_>>()
+        );
+    }
 }
