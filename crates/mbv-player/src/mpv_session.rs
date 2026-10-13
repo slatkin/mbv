@@ -71,8 +71,9 @@ impl From<String> for PropertyValue {
 pub(crate) struct Mpv {
     /// Owns the child process. The field is never read: it exists so the
     /// child lives exactly as long as the session and its `Drop` kills and
-    /// reaps the process (design D5).
-    _child: Child,
+    /// reaps the process (design D5). It is `None` only in tests, which build
+    /// the session over a socket pair and start no child (design D9).
+    _child: Option<Child>,
     session: RefCell<IpcSession>,
 }
 
@@ -83,9 +84,20 @@ impl Mpv {
         let stream = child.try_clone_stream()?;
         let session = IpcSession::from_stream(stream)?;
         Ok(Self {
-            _child: child,
+            _child: Some(child),
             session: RefCell::new(session),
         })
+    }
+
+    /// A session over an already-connected socket and no child, for tests that
+    /// exercise the run loop's event handling without starting mpv (design
+    /// D9).
+    #[cfg(test)]
+    pub(crate) fn for_test(session: IpcSession) -> Self {
+        Self {
+            _child: None,
+            session: RefCell::new(session),
+        }
     }
 
     /// Sets a property from the domain value type (design D2). The JSON type
@@ -189,10 +201,11 @@ impl Mpv {
         self.session.borrow_mut().next_event()
     }
 
-    /// The wakeup hook. The IPC child delivers events on a readable socket,
-    /// so there is no callback to install: the run loop polls the socket and
-    /// the wakeup pipe together (row 4.3 of `mpv-child-process`).
-    pub(crate) fn set_wakeup_callback(_callback: impl Fn() + Send + 'static) {}
+    /// The raw descriptor of the child's IPC socket, so the run loop can poll
+    /// it together with the wakeup pipe (design D3).
+    pub(crate) fn socket_fd(&self) -> std::os::unix::io::RawFd {
+        self.session.borrow().socket_fd()
+    }
 
     fn get_property(&self, name: &str) -> Result<Value, MpvError> {
         self.session

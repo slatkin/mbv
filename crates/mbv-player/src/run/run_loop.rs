@@ -7,26 +7,35 @@ use mbv_core::applog as app_logging;
 use mbv_queue::QueueItem;
 use std::os::unix::io::RawFd;
 
-/// Worst-case mpv event latency when a wakeup byte is lost.
+/// Worst-case mpv event latency for the run's own timers.
 ///
-/// libmpv's wakeup callback may fire *before* the event is deliverable by
-/// `wait_event`, so its byte can be drained while `wait_event(0.0)` still
-/// returns `None`. mpv then writes no second byte for that event, and the
-/// client blocks for the whole timeout — which is how a 2000 ms poll turned
-/// into "mpv takes 2 s to notice next/prev". The pipe stays a latency
-/// optimisation; this ceiling, not an idle interval, is the real contract.
+/// The libmpv wakeup-byte loss is gone: the IPC socket is level-triggered, so
+/// a readable socket stays readable until the run drains it and no event can
+/// be missed. This ceiling is not an idle interval; it bounds how long the run
+/// waits before it rechecks its timers (the stop request and the quit timeout)
+/// when neither the wakeup pipe nor the socket is readable.
 const WAKEUP_POLL_MS: i32 = 50;
 
-fn poll_wakeup(fd: RawFd, timeout_ms: i32) {
-    let mut pfd = libc::pollfd {
-        fd,
-        events: libc::POLLIN,
-        revents: 0,
-    };
-    // SAFETY: `pfd` is a valid, writable pollfd for this call; the caller
-    // passes an open self-pipe descriptor owned by the playback run.
+/// Waits until the wakeup pipe or the mpv socket is readable, or `timeout_ms`
+/// passes. `poll` ignores a negative fd, so a missing wakeup pipe leaves the
+/// socket as the only source and the ceiling still bounds the timers.
+fn poll_readable(wakeup_fd: RawFd, socket_fd: RawFd, timeout_ms: i32) {
+    let mut fds = [
+        libc::pollfd {
+            fd: wakeup_fd,
+            events: libc::POLLIN,
+            revents: 0,
+        },
+        libc::pollfd {
+            fd: socket_fd,
+            events: libc::POLLIN,
+            revents: 0,
+        },
+    ];
+    // SAFETY: `fds` is a valid, writable two-entry pollfd array for this call;
+    // each descriptor is open and owned elsewhere for its whole lifetime.
     unsafe {
-        libc::poll(&raw mut pfd, 1, timeout_ms);
+        libc::poll(fds.as_mut_ptr(), 2, timeout_ms);
     }
 }
 
@@ -43,10 +52,11 @@ fn drain_wakeup(fd: RawFd) {
 }
 
 impl PlaybackRun {
-    // wakeup_read_fd/wakeup_write_fd are the two ends of a self-pipe created by
-    // the caller (Player::play/play_queue). -1 means pipe(2) creation failed;
-    // the loop falls back to a bounded sleep so it still makes progress, just
-    // without the immediate wakeup.
+    // wakeup_read_fd is the read end of a self-pipe created by the caller
+    // (Player::play/play_queue). Commands arrive on `cmd_rx`, and the sender
+    // writes one byte to the pipe to wake the poll below. -1 means pipe(2)
+    // creation failed; `poll` ignores it, so the run then wakes on the mpv
+    // socket alone and the 50 ms ceiling still bounds its timers.
     pub(crate) fn run(
         mut self,
         mpv: Mpv,
@@ -54,7 +64,6 @@ impl PlaybackRun {
         cmd_rx: &mpsc::Receiver<PlayerCommand>,
         mut progress: ProgressGuard,
         wakeup_read_fd: RawFd,
-        wakeup_write_fd: RawFd,
     ) {
         let event_tx_panic = self.event_tx.clone();
 
@@ -71,18 +80,6 @@ impl PlaybackRun {
                 progress_worker_reporter.report_progress(&event_name);
             }
         }));
-
-        if wakeup_write_fd >= 0 {
-            Mpv::set_wakeup_callback(move || {
-                let byte = [0u8; 1];
-                // SAFETY: the run keeps the self-pipe write descriptor open
-                // until the callback is removed with its Mpv instance; `byte`
-                // points to one readable byte for this write.
-                unsafe {
-                    libc::write(wakeup_write_fd, byte.as_ptr().cast::<libc::c_void>(), 1);
-                }
-            });
-        }
 
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             loop {
@@ -171,11 +168,9 @@ impl PlaybackRun {
         }
 
         if !had_event {
+            poll_readable(wakeup_read_fd, mpv.socket_fd(), WAKEUP_POLL_MS);
             if wakeup_read_fd >= 0 {
-                poll_wakeup(wakeup_read_fd, WAKEUP_POLL_MS);
                 drain_wakeup(wakeup_read_fd);
-            } else {
-                std::thread::sleep(Duration::from_millis(WAKEUP_POLL_MS as u64));
             }
         }
         false
@@ -316,6 +311,10 @@ impl PlaybackRun {
         progress_report_tx: &mpsc::Sender<String>,
     ) {
         match (name, change) {
+            // An unavailable property (JSON null) carries no value to mirror;
+            // the IPC decoder builds `None` for it, and the `video-params/h`
+            // unexpected-type arm must not log it (design D8).
+            (_, PropertyValue::None) => {}
             ("volume", PropertyValue::Double(vol)) => {
                 self.status.lock().unwrap().volume =
                     mbv_emby_model::saturating_i64_from_f64(vol * vol / 100.0);
@@ -405,5 +404,30 @@ mod mpv_log_tests {
         assert_eq!(mpv_log_text(true, diagnostic), None);
         assert_eq!(mpv_log_text(false, diagnostic), Some(diagnostic));
         assert_eq!(mpv_log_text(false, "\n"), None);
+    }
+}
+
+#[cfg(test)]
+mod unavailable_property_tests {
+    use super::{Mpv, PropertyValue};
+    use crate::mpv_session::ipc::IpcSession;
+    use crate::tests::make_queue_session_for_pos_tests_with_events;
+    use std::os::unix::net::UnixStream;
+    use std::sync::mpsc;
+
+    /// An unavailable `video-params/h` (JSON null) leaves the status snapshot
+    /// alone instead of logging an unexpected type (design D8).
+    #[test]
+    fn unavailable_video_height_leaves_status_unchanged() {
+        let (mut run, status, _events) = make_queue_session_for_pos_tests_with_events(0);
+        status.lock().unwrap().video_height = 720;
+        let (ours, _peer) = UnixStream::pair().expect("socket pair");
+        let session = IpcSession::from_stream(ours).expect("session over a socket pair");
+        let mpv = Mpv::for_test(session);
+        let (tx, _rx) = mpsc::channel();
+
+        run.on_property_change("video-params/h", PropertyValue::None, &mpv, &tx);
+
+        assert_eq!(status.lock().unwrap().video_height, 720);
     }
 }

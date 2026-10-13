@@ -61,6 +61,12 @@ impl IpcSession {
         })
     }
 
+    /// The raw descriptor of the connected socket, so the run loop can poll
+    /// it together with the wakeup pipe (design D3).
+    pub(crate) fn socket_fd(&self) -> std::os::unix::io::RawFd {
+        self.stream.as_raw_fd()
+    }
+
     /// Sends `command` and waits up to `timeout` for its reply, and returns the
     /// reply's `data`. Events that arrive before the reply stay queued, in
     /// order, for `next_event`.

@@ -164,7 +164,6 @@ impl Player {
         *self.cmd_tx.lock().unwrap() = Some(cmd_tx);
         let wakeup_pipe = make_wakeup_pipe();
         let wakeup_read_fd = wakeup_pipe.as_ref().map_or(-1, |(r, _)| *r);
-        let wakeup_write_fd = wakeup_pipe.as_ref().map_or(-1, |(_, w)| w.0);
         *self.wakeup_fd.lock().unwrap() = wakeup_pipe.map(|(_, w)| w);
         let pre_warmed = self.pre_warmed_mpv.lock().unwrap().take();
         let spawner = Arc::clone(&self.spawner);
@@ -191,7 +190,6 @@ impl Player {
                 stop_rx,
                 cmd_rx,
                 wakeup_read_fd,
-                wakeup_write_fd,
             });
         });
         *self.thread_handle.lock().unwrap() = Some(handle);
@@ -313,7 +311,6 @@ struct PlayerThreadStart {
     stop_rx: mpsc::Receiver<()>,
     cmd_rx: mpsc::Receiver<PlayerCommand>,
     wakeup_read_fd: std::os::unix::io::RawFd,
-    wakeup_write_fd: std::os::unix::io::RawFd,
 }
 
 fn run_player_thread(mut start: PlayerThreadStart) {
@@ -375,7 +372,6 @@ fn run_player_thread(mut start: PlayerThreadStart) {
         stop_rx,
         cmd_rx,
         wakeup_read_fd,
-        wakeup_write_fd,
         ..
     } = start;
     let (reporter, progress) =
@@ -398,14 +394,7 @@ fn run_player_thread(mut start: PlayerThreadStart) {
             prepared_source: Some(active_prepared_source),
         },
     );
-    session.run(
-        mpv,
-        &stop_rx,
-        &cmd_rx,
-        progress,
-        wakeup_read_fd,
-        wakeup_write_fd,
-    );
+    session.run(mpv, &stop_rx, &cmd_rx, progress, wakeup_read_fd);
 }
 
 fn load_queue_sources(

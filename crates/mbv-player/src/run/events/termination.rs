@@ -13,12 +13,39 @@ impl PlaybackRun {
         failure: &MpvFailure,
         progress: &mut ProgressGuard,
     ) -> bool {
+        if matches!(failure, MpvFailure::ProcessExited) {
+            // The child exited with no quit request: end the run like an
+            // audio-output failure, but report the last observed position so
+            // the stop lands where playback stopped (design D7, S8).
+            tracing::error!(name: "player.mpv.process_exited", target: "player", "mpv process exited without a quit request");
+            return self.stop_run_with_error(
+                progress,
+                self.last_valid_pos,
+                "mpv process exited unexpectedly".to_owned(),
+            );
+        }
         if !is_clocked_audio_error(failure, self.config.audio_device.is_some()) {
             tracing::warn!(name: "player.event.failed", target: "player", error = %failure, "mpv event failed");
             return false;
         }
 
         let device = self.config.audio_device.clone().unwrap_or_default();
+        self.stop_run_with_error(
+            progress,
+            0,
+            format!("audio output failed to start (device: {device})"),
+        )
+    }
+
+    /// The teardown shared by an audio-output failure and an unexpected mpv
+    /// exit: close the prepared source, join progress, deactivate the status
+    /// snapshot, and report one `Stopped` with `error` and `position_ticks`.
+    fn stop_run_with_error(
+        &mut self,
+        progress: &mut ProgressGuard,
+        position_ticks: i64,
+        error: String,
+    ) -> bool {
         self.close_prepared_source();
         progress.stop_and_join(Self::progress_join_budget());
         self.close_prepared_source_at(self.last_valid_pos);
@@ -27,10 +54,10 @@ impl PlaybackRun {
         let _ = self.event_tx.send(PlayerEvent::Stopped {
             slot_id: stopped_slot,
             run_identity: self.run_identity,
-            position_ticks: 0,
+            position_ticks,
             played: false,
             consume: false,
-            error: Some(format!("audio output failed to start (device: {device})")),
+            error: Some(error),
         });
         true
     }
