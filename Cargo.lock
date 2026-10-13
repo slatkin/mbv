@@ -2227,8 +2227,6 @@ name = "mbv-player"
 version = "0.24.6"
 dependencies = [
  "libc",
- "libmpv2",
- "libmpv2-sys",
  "mbv-audiobookshelf",
  "mbv-config",
  "mbv-core",
