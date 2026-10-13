@@ -147,4 +147,73 @@ No test asserts timing, counts of `time-pos` events, or log text.
 
 ## Findings
 
-Empty until the probe runs. When it runs, record per scenario the result (D3 categories), the normalizations used, and any nondeterminism. Then record a recommendation: move mpv out of process, stay in process, or block on a named gap.
+Run on 2026-10-13. The mpv binary and libmpv are both v0.41.0. Each scenario ran 5 times per backend. The full output is in `probe-output.txt`. The recorded traces are in `crates/mbv-player/src/mpv_event/fixtures/`.
+
+### Results per scenario
+
+| ID | Scenario | Result | Note |
+|----|----------|--------|------|
+| S1 | Two-item playlist plays to natural EOF | MATCH-IGNORING-PROPERTY-INTERLEAVING | Both items end with `end-file eof`. |
+| S2 | Two `playlist-pos` writes in quick succession | MATCH-IGNORING-PROPERTY-INTERLEAVING | The `stop` end-file for the superseded target arrives on both backends. |
+| S3 | `playlist-next` from mpv's side | MATCH-IGNORING-PROPERTY-INTERLEAVING | |
+| S4 | Load with `pause=yes`, then unpause | MATCH-IGNORING-PROPERTY-INTERLEAVING | |
+| S5 | Missing file between two good items | MATCH-IGNORING-PROPERTY-INTERLEAVING | Error code -13 (`loading failed`) on both. Playback goes on to the next item. |
+| S6 | Audio output init failure | MATCH-IGNORING-PROPERTY-INTERLEAVING | Error code -14 (`audio output initialization failed`) on both. |
+| S7 | `script-message mbv-next-up-play` | MATCH-IGNORING-PROPERTY-INTERLEAVING | `client-message` args are equal. |
+| S8 | `quit` while a load is pending | **DIFF** | See below. |
+| S9 | Absolute seek while paused, then unpause | MATCH-IGNORING-PROPERTY-INTERLEAVING | |
+| S10 | Video item (`video-params/h`, image flag) | MATCH-AFTER-NORMALIZATION | Exact order, after the rules below. |
+
+**S8 is the one real difference.** libmpv delivers `shutdown` in 5 of 5 runs. The IPC client never gets `shutdown`: the socket closes. Before the close, IPC delivered `start-file` and `end-file(reason=quit)` in 3 of 5 runs, and nothing after `quit` in 2 of 5 runs.
+
+### Normalizations used
+
+| Rule | What it hides | Scenarios |
+|------|---------------|-----------|
+| 1 | IPC-only fields (`playlist_entry_id`, `playlist_insert_id`, `playlist_insert_num_entries`), and property changes with no data (libmpv2 never delivers them) | all |
+| 2 | `file_error` text mapped to an error code (libmpv gives the code) | S5, S6 |
+| 3 | Consecutive `time-pos` changes collapsed, values dropped | all but S8 |
+| 5 | Command replies (`request_id` lines) | all |
+| 6 | `"id":0` that mpv's JSON omits | all but S8 |
+
+Rule 4 (log messages) never applied: the probe does not request them.
+
+Two comparison choices are not rules. The probe drops non-property events that arrive before the first step (the IPC client connects after mpv starts, so it misses the startup `idle`). The split comparison ignores where a property change lands among other events, and drops repeated equal values.
+
+### Nondeterminism
+
+- Where a property change lands among nearby events changes from run to run on **both** backends (for example `audio-codec-name` against `audio-reconfig`). It is a property of mpv, not of IPC. The run loop cannot depend on that position today, and a move must not add the dependency.
+- S8 gave 3 different IPC sequences in 5 runs. libmpv gave 1 in the final run. An earlier run showed that libmpv also sometimes delivers `end-file(quit)` before `shutdown`.
+
+### IPC-only and libmpv-only behavior
+
+- IPC events carry `playlist_entry_id` (also `playlist_insert_id`). libmpv2 does not expose them. They can tie an `end-file` to the playlist entry that caused it.
+- IPC sends a property change with no `data` when a property is unavailable. libmpv2's `wait_event` returns `None` for it, and that ends mbv's drain loop early. The IPC decoder maps it to `PropertyValue::None`.
+- IPC numbers come as JSON (`100.000000`). The decoder types each value by property name.
+- Failure reasons are text over IPC and codes over libmpv. The decoder compares `file_error` with the runtime text of `AoInitFailed`. The test on S6 proves this on v0.41.0. Rerun the probe when mpv changes.
+
+### Synchronous `get_property` reads
+
+Over IPC, each read is a round trip. The design counted 5. The code has these sites:
+
+| Site | Reads | Migration input |
+|------|-------|-----------------|
+| `lib.rs` `mpv_position_ticks` | `time-pos` | Called inside event handlers. The value is the value at read time, so the round trip makes the gap larger. |
+| `lib.rs` `reassert_queue_layout` | `playlist-count`, `playlist-pos`, `idle-active` | One `get_property` per read. |
+| `run/queue.rs` | `playlist-pos` | Already observed (id 9). Use the last observed value. |
+| `run/events/restart.rs` | `video-params/h`, `current-tracks/video/image`, `audio-codec-name` | All three are already observed. Use the last observed values. |
+| `run/events/track_progress.rs` | `duration` | One read. |
+| `runtime.rs` | `volume-max` | One read at startup. |
+| `tracks.rs` | `track-list/count`, then about 10 reads per track | N × 10 round trips. Replace with one read of `track-list`. |
+
+### Recommendation
+
+**Move mpv out of process. No event gap blocks it.** 9 of 10 scenarios give the same events over IPC as through libmpv, up to the normalizations above. The one difference (S8) is a known shutdown behavior that the move can handle. Start a separate change with `/opsx:propose`. It must carry these inputs:
+
+1. Treat socket close or child exit as `Shutdown`. Do not rely on `end-file(quit)` at stop.
+2. Give `PropertyValue::None` an arm in `on_property_change` (today `("video-params/h", change)` would log it as an unexpected type), and remove the `#[cfg(test)]` gates on `mpv_event/ipc.rs` and on `None`.
+3. Replace the synchronous reads in the table above with observed values or one batched read. Check each one that runs inside an event handler for a stale-value hazard.
+4. Connect to the socket before the first `loadfile`, and read start state (`idle-active`) with a request, because the client can miss the startup `idle`.
+5. Keep the run loop free of dependence on property-change position (nondeterminism above).
+
+Not covered by this probe: real audio devices and video output (`ao=null`, `vo=null`), network streams, log messages, and the command path (`loadfile`, `seek`, `set_property` over IPC). Those stay with the migration change and with live checks by the user.

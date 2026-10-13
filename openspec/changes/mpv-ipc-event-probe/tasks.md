@@ -26,7 +26,7 @@
 
 ## 5. Findings
 
-- [ ] 5.1 Fill the Findings section of `design.md` from the probe output: the result for each scenario, the normalizations used, any nondeterminism, the IPC-only fields seen (`playlist_entry_id` and others), and the 5 synchronous `get_property` reads as migration input. End with a recommendation: move mpv out of process, stay in process, or block on a named gap. Verify: every scenario S1 to S10 has a row. Commit.
+- [x] 5.1 Fill the Findings section of `design.md` from the probe output: the result for each scenario, the normalizations used, any nondeterminism, the IPC-only fields seen (`playlist_entry_id` and others), and the 5 synchronous `get_property` reads as migration input. End with a recommendation: move mpv out of process, stay in process, or block on a named gap. Verify: every scenario S1 to S10 has a row. Commit.
 
 ## Workflow follow-up
 
