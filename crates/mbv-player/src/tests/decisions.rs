@@ -6,7 +6,7 @@ use crate::{
     active_item_state, advance_decision, advance_next_index, queue_next_up_decision,
     resolve_jump_target, seek_decision, standalone_next_up_decision, volume_decision,
 };
-use mbv_ctrl::player::{Advance, SubtitleChoice};
+use mbv_ctrl::player::SubtitleChoice;
 
 type AudioTracks = Vec<(i64, String)>;
 type SubtitleTracks = Vec<(i64, String, bool)>;
@@ -159,12 +159,12 @@ fn volume_decision_clamps_and_maps_sqrt_curve(
 /// the picked slot's index (falling back to the neighbor when the slot is
 /// gone), and End has no next index.
 #[rstest]
-#[case::sequential_takes_the_neighbor(Advance::Sequential, 1, None, Some(2))]
-#[case::pick_takes_the_picked_slot_index(Advance::To(picked_slot()), 1, Some(2), Some(2))]
-#[case::gone_pick_falls_back_to_the_neighbor(Advance::To(picked_slot()), 1, None, Some(2))]
-#[case::end_has_no_next_index(Advance::End, 1, Some(2), None)]
+#[case::sequential_takes_the_neighbor(mbv_queue::PlayOrder::Sequential, 1, None, Some(2))]
+#[case::pick_takes_the_picked_slot_index(mbv_queue::PlayOrder::Shuffle { upcoming: Some(picked_slot()) }, 1, Some(2), Some(2))]
+#[case::gone_pick_falls_back_to_the_neighbor(mbv_queue::PlayOrder::Shuffle { upcoming: Some(picked_slot()) }, 1, None, Some(2))]
+#[case::end_has_no_next_index(mbv_queue::PlayOrder::Shuffle { upcoming: None }, 1, Some(2), None)]
 fn advance_resolves_the_next_index(
-    #[case] advance: Advance,
+    #[case] advance: mbv_queue::PlayOrder,
     #[case] current_idx: usize,
     #[case] picked_index: Option<usize>,
     #[case] expected: Option<usize>,

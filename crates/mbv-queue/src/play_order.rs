@@ -14,9 +14,11 @@ pub enum PlayOrderMode {
 /// The playback order the Player owner holds for its Bound queue. In
 /// `Shuffle` the order carries the owner's picked next slot, so a pick can
 /// only exist while Shuffle is on (design D1). `upcoming` is `None` only when
-/// the queue has no slot other than the active slot.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// the queue has no slot other than the active slot. A new Player owner
+/// starts in Sequential.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum PlayOrder {
+    #[default]
     Sequential,
     Shuffle {
         upcoming: Option<crate::QueueSlotId>,
@@ -31,12 +33,5 @@ impl PlayOrder {
             PlayOrder::Sequential => PlayOrderMode::Sequential,
             PlayOrder::Shuffle { .. } => PlayOrderMode::Shuffle,
         }
-    }
-}
-
-impl Default for PlayOrder {
-    /// A new Player owner starts in Sequential.
-    fn default() -> Self {
-        PlayOrder::Sequential
     }
 }

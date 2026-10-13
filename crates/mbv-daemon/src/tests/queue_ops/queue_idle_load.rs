@@ -193,9 +193,7 @@ fn idle_queue_load_without_active_run_publishes_one_stopped_snapshot_and_accepts
     assert!(
         matches!(
             commands.try_recv(),
-            Ok(PlayerCommand::SetUpcoming(
-                mbv_ctrl::player::Advance::Sequential
-            ))
+            Ok(PlayerCommand::SetUpcoming(mbv_queue::PlayOrder::Sequential))
         ),
         "the order reset the load performs forwards its store-only advance (queue-shuffle-play-order 4.1)"
     );
@@ -307,9 +305,7 @@ fn pending_idle_load_keeps_old_queue_until_stop_then_commits_once_and_invalidate
     // (queue-shuffle-play-order task 4.1).
     assert!(matches!(
         commands.try_recv(),
-        Ok(PlayerCommand::SetUpcoming(
-            mbv_ctrl::player::Advance::Sequential
-        ))
+        Ok(PlayerCommand::SetUpcoming(mbv_queue::PlayOrder::Sequential))
     ));
     assert_no_pending_message(&commands);
 }

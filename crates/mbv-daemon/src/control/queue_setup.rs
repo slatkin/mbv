@@ -430,32 +430,13 @@ fn forward_queue_append(player: &Player, items: Vec<ExecSlot>, before: Option<u6
 /// `CtrlCmd::UnifiedQueueAppend`: append item-generic values to the tail of
 /// the queue.
 /// Admit a queue-append's items against the transport, daemon, and audio-only
-/// gates; `Err` carries the rejection reason of the first failed gate.
+/// gates. `None` means a gate rejected the append, and the rejection was sent.
 fn admit_append_items(
     ctx: &CtrlContext<'_>,
     mut items: Vec<QueueItem>,
     lineage: mbv_queue::QueueLineage,
-) -> Result<Vec<QueueItem>, String> {
-    let DaemonPlayerOwner {
-        core: PlayerOwnerState { queue, source, .. },
-        ..
-    } = &*ctx.owner;
-    let reject = |reason: String| {
-        reject_command(
-            &RejectContext {
-                reply_tx: ctx.reply_tx,
-                ctrl_clients: ctx.ctrl_clients,
-                client_id: ctx.client_id,
-                player: ctx.player,
-                queue,
-                source,
-                lineage,
-                op: &ctx.op,
-                play_order: *ctx.shared_queue.play_order.lock().unwrap(),
-            },
-            &reason,
-        );
-    };
+) -> Option<Vec<QueueItem>> {
+    let reject = |reason: &str| reject_command(&ctx.rejection_context(lineage), reason);
     let supports_abs_queue = ctx
         .ctrl_clients
         .lock()
@@ -469,23 +450,22 @@ fn admit_append_items(
     if let Some(reason) =
         abs_queue_transport_rejection(&items, supports_abs_queue, supports_abs_book_queue)
     {
-        reject(reason.clone());
-        return Err(reason);
+        reject(&reason);
+        return None;
     }
     let has_emby = ctx.has_emby();
     items
         .retain(|item| daemon_admits(item, ctx.audio_only, has_emby, ctx.audiobookshelf.is_some()));
     if items.is_empty() {
-        let reason = "Playback owner rejected the queue append".to_string();
-        reject(reason.clone());
-        return Err(reason);
+        reject("Playback owner rejected the queue append");
+        return None;
     }
     // Audio-only admission: reject if any appended item is non-audio.
     if let Some(reason) = audio_only_rejection(ctx.audio_only, &items) {
-        reject(reason.clone());
-        return Err(reason);
+        reject(&reason);
+        return None;
     }
-    Ok(items)
+    Some(items)
 }
 
 pub(super) fn handle_queue_append(
@@ -502,7 +482,7 @@ pub(super) fn handle_queue_append(
         return;
     };
     let order_before = ctx.owner.core.play_order();
-    let Ok(items) = admit_append_items(ctx, items, lineage) else {
+    let Some(items) = admit_append_items(ctx, items, lineage) else {
         return;
     };
     let DaemonPlayerOwner {

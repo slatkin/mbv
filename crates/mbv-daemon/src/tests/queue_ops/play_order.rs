@@ -36,7 +36,9 @@ fn set_play_order_shuffle_forwards_the_picked_advance_and_projects_the_mode() {
     // The run is told to advance to the picked slot, which is never the
     // active slot (design D2).
     match cmd_rx.recv().unwrap() {
-        PlayerCommand::SetUpcoming(mbv_ctrl::player::Advance::To(slot)) => {
+        PlayerCommand::SetUpcoming(mbv_queue::PlayOrder::Shuffle {
+            upcoming: Some(slot),
+        }) => {
             assert_ne!(slot, active_slot);
             assert!(owner.core.queue.slot(slot).is_some());
         }

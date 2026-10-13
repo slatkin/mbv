@@ -1,7 +1,7 @@
 use mbv_emby_model::EmbyItem;
 use mbv_ids::ItemId;
 use mbv_queue::ExecSlot;
-use mbv_queue::{AudiobookshelfItem, PlayOrderMode, QueueItem, QueueSlotId};
+use mbv_queue::{AudiobookshelfItem, PlayOrder, PlayOrderMode, QueueItem, QueueSlotId};
 
 #[derive(Clone, Debug, Default)]
 pub struct SubtitlePrefs {
@@ -401,20 +401,6 @@ pub enum PlayerEvent {
     AudiobookshelfBookProgress(crate::AudiobookshelfBookProgressEvent),
 }
 
-/// The advance decision the Player owner sends to the Playback run: where the
-/// next unforced advance goes (queue-shuffle-play-order design D2). In-process
-/// only — never crosses the ctrl wire, like `JumpTo`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub enum Advance {
-    /// No order override: the run advances to the slot after the active one.
-    Sequential,
-    /// The run advances to this owner-picked slot.
-    To(QueueSlotId),
-    /// Shuffle is on and no slot other than the active one exists: the run
-    /// treats the advance as the end of the queue.
-    End,
-}
-
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub enum PlayerCommand {
     TogglePause,
@@ -438,11 +424,11 @@ pub enum PlayerCommand {
         #[serde(default)]
         resume_ticks: Option<i64>,
     },
-    /// Store the owner's advance decision the run obeys on its next unforced
+    /// Store the owner's play order the run obeys on its next unforced
     /// end-of-file advance (queue-shuffle-play-order design D2). In-process
     /// only — never crosses the ctrl wire: the pick is owner-local state, like
     /// `JumpTo`'s target.
-    SetUpcoming(Advance),
+    SetUpcoming(PlayOrder),
     QueueAppend {
         items: Vec<ExecSlot>,
     },

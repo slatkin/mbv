@@ -3,7 +3,7 @@ use super::{
     IntroState, ItemId, ItemLifecycleState, MpvRunConfig, Mutex, NextUp, PlayerEvent, PlayerStatus,
     PreparedSource, QueueSlotId, SessionReporter, StartupPause, SubtitlePrefs, mpsc,
 };
-use mbv_ctrl::player::Advance;
+use mbv_queue::PlayOrder;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub(crate) enum PlaybackOrigin {
@@ -71,7 +71,7 @@ pub(crate) struct PlaybackRun {
     /// end-of-file advance (queue-shuffle-play-order design D2). Sequential
     /// until the owner sends `SetUpcoming`; the run never reads the play
     /// order or picks for itself.
-    pub(crate) upcoming: Advance,
+    pub(crate) upcoming: PlayOrder,
     /// Slot identity captured at the moment a stop/quit is first observed, so a
     /// `QueueMove`/`QueueRemove` applied before the deferred `Stopped` emit
     /// (shutdown / quit-timeout paths) cannot change which occurrence the event

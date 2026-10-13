@@ -1,7 +1,6 @@
 use super::{IntroState, NextUp};
-use mbv_ctrl::player::Advance;
 use mbv_ids::ItemId;
-use mbv_queue::{AudiobookshelfItem, QueueItem, QueueSlotId};
+use mbv_queue::{AudiobookshelfItem, PlayOrder, QueueItem, QueueSlotId};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct ActiveItemState {
@@ -106,14 +105,16 @@ pub(crate) struct NextUpDecision {
 /// the queue. `None` means the advance behaves as the end of the queue does
 /// in Sequential.
 pub(crate) fn advance_next_index(
-    advance: Advance,
+    advance: PlayOrder,
     current_idx: usize,
     resolve_slot: impl Fn(QueueSlotId) -> Option<usize>,
 ) -> Option<usize> {
     match advance {
-        Advance::Sequential => Some(current_idx + 1),
-        Advance::To(slot_id) => Some(resolve_slot(slot_id).unwrap_or(current_idx + 1)),
-        Advance::End => None,
+        PlayOrder::Sequential => Some(current_idx + 1),
+        PlayOrder::Shuffle {
+            upcoming: Some(slot_id),
+        } => Some(resolve_slot(slot_id).unwrap_or(current_idx + 1)),
+        PlayOrder::Shuffle { upcoming: None } => None,
     }
 }
 

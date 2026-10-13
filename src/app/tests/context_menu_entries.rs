@@ -19,6 +19,11 @@ fn emby_library_app() -> App {
 /// entry labels.
 fn menu_labels_for(app: &mut App, item: EmbyItem) -> Vec<&'static str> {
     app.open_context_menu_for(item);
+    pending_menu_labels(app)
+}
+
+/// The ordered entry labels of the context menu waiting in the pending overlay.
+fn pending_menu_labels(app: &mut App) -> Vec<&'static str> {
     match app.pending_overlay.take() {
         Some(OverlayRequest::ContextMenu(menu)) => {
             menu.entries.iter().map(|entry| entry.label).collect()
@@ -140,12 +145,7 @@ fn queue_state(
 
 fn opened_menu_labels(app: &mut App) -> Vec<&'static str> {
     app.open_context_menu(false, None);
-    match app.pending_overlay.take() {
-        Some(OverlayRequest::ContextMenu(menu)) => {
-            menu.entries.iter().map(|entry| entry.label).collect()
-        }
-        other => panic!("expected a context menu overlay, got {other:?}"),
-    }
+    pending_menu_labels(app)
 }
 
 /// queue-play-order spec, "The Queue list menu toggles Shuffle": an Emby

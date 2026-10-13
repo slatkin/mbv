@@ -30,16 +30,22 @@ impl PlaybackRun {
         let runtime = self.status.lock().unwrap().runtime_ticks;
         // The stored advance decides the next slot (design D2); a picked slot
         // that is gone, or an index past the end, means there is no Next Up.
-        let next_idx = advance_next_index(self.upcoming, self.current_idx, |slot_id| {
-            self.queue.slot_index(slot_id)
-        })
-        .filter(|next_idx| *next_idx < self.queue_len());
+        let current_is_episode = self.active_item().is_some_and(QueueItem::is_tv_episode);
+        // Next Up needs an episode on both sides, so skip the pick lookup otherwise.
+        let next_idx = current_is_episode
+            .then(|| {
+                advance_next_index(self.upcoming, self.current_idx, |slot_id| {
+                    self.queue.slot_index(slot_id)
+                })
+            })
+            .flatten()
+            .filter(|next_idx| *next_idx < self.queue_len());
         let next_is_episode = next_idx
             .is_some_and(|next_idx| self.item_at(next_idx).is_some_and(QueueItem::is_tv_episode));
         let decision = queue_next_up_decision(
             self.queue_next_up,
             next_idx,
-            self.active_item().is_some_and(QueueItem::is_tv_episode),
+            current_is_episode,
             next_is_episode,
             runtime,
             ticks,

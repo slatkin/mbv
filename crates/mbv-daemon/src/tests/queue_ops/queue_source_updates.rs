@@ -282,9 +282,7 @@ fn matching_source_update_publishes_without_replacing_queue_or_playback() {
     // (queue-shuffle-play-order task 4.1); the source update itself sends none.
     assert!(matches!(
         fx.commands.try_recv(),
-        Ok(PlayerCommand::SetUpcoming(
-            mbv_ctrl::player::Advance::Sequential
-        ))
+        Ok(PlayerCommand::SetUpcoming(mbv_queue::PlayOrder::Sequential))
     ));
     assert!(matches!(
         fx.commands.try_recv(),
@@ -384,9 +382,7 @@ fn delayed_source_update_is_rejected_after_another_client_replaces_queue() {
     for _ in 0..2 {
         assert!(matches!(
             fx.commands.try_recv(),
-            Ok(PlayerCommand::SetUpcoming(
-                mbv_ctrl::player::Advance::Sequential
-            ))
+            Ok(PlayerCommand::SetUpcoming(mbv_queue::PlayOrder::Sequential))
         ));
     }
     assert!(matches!(

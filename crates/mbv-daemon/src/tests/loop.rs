@@ -497,12 +497,17 @@ fn next_up_threshold_in_shuffle_names_the_picked_slot() {
         .owner
         .core
         .note_observed_active_slot(Some(slots[0]));
-    let picked = fixture
+    fixture
         .event_loop
         .owner
         .core
-        .set_play_order(mbv_queue::PlayOrderMode::Shuffle)
-        .expect("shuffle over two other slots must pick one");
+        .set_play_order(mbv_queue::PlayOrderMode::Shuffle);
+    let mbv_queue::PlayOrder::Shuffle {
+        upcoming: Some(picked),
+    } = fixture.event_loop.owner.core.play_order()
+    else {
+        panic!("shuffle over two other slots must pick one");
+    };
     // The pick can land on the queue neighbor by chance; moving it to the
     // tail keeps the card's source unambiguous for either outcome.
     fixture.event_loop.owner.core.queue.move_slot(picked, 2);

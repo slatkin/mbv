@@ -8,9 +8,8 @@ use super::{
     end_file_stop_report_context,
 };
 use crate::{divergent_entry, prepare_source};
-use mbv_ctrl::player::Advance;
 use mbv_ids::ItemId;
-use mbv_queue::MpvUrlSource;
+use mbv_queue::{MpvUrlSource, PlayOrder};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
@@ -565,7 +564,7 @@ impl PlaybackRun {
             ext_sub_urls,
             current_idx: start_idx,
             forced_jump: None,
-            upcoming: Advance::Sequential,
+            upcoming: PlayOrder::Sequential,
             stop_slot: None,
             stop_runtime: None,
             quit_at: None,
