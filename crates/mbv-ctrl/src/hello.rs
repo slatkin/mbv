@@ -190,6 +190,13 @@ impl CtrlHello {
     }
 
     #[must_use]
+    pub fn supports_play_order(&self) -> bool {
+        self.capabilities
+            .iter()
+            .any(|cap| cap == CTRL_CAP_PLAY_ORDER)
+    }
+
+    #[must_use]
     pub fn supports_pin_swap(&self) -> bool {
         self.capabilities.iter().any(|cap| cap == CTRL_CAP_PIN_SWAP)
     }
@@ -252,6 +259,10 @@ pub struct CtrlCompatibility {
     /// The peer runs Owner actions (`CtrlCmd::RunOwnerAction`); set from the
     /// peer Hello's `owner-action` capability by the Client's handshake.
     pub supports_owner_action: bool,
+    /// The peer accepts `CtrlCmd::SetPlayOrder` and reports `play_order` on
+    /// `UnifiedQueueStateData`; set from the peer Hello's `play-order`
+    /// capability by the Client's handshake.
+    pub supports_play_order: bool,
 }
 
 impl CtrlCompatibility {
@@ -273,6 +284,7 @@ impl CtrlCompatibility {
                 supports_owner_queue_load: false,
                 supports_answered_queue_ops: false,
                 supports_owner_action: false,
+                supports_play_order: false,
             }),
             _ => Err(CtrlError::incompatible_protocol(peer_protocol_version)),
         }

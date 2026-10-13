@@ -1,5 +1,5 @@
 use mbv_emby_model::EmbyItem;
-use mbv_queue::{FeedEntry, QueueItem, QueueSlotId};
+use mbv_queue::{FeedEntry, PlayOrderMode, QueueItem, QueueSlotId};
 
 #[derive(Clone, Debug)]
 pub enum BulkRemoveTarget {
@@ -119,6 +119,10 @@ pub enum ContextAction {
     /// Home mixed-Service selection enqueue (same terms as
     /// [`ContextAction::HomePlaySelection`]).
     HomeEnqueueSelection(Vec<QueueItem>),
+    /// Set the Player owner's playback order for its Bound queue
+    /// (queue-play-order design D6). The menu builds the opposite of the
+    /// current mode; this action only carries the requested mode.
+    SetPlayOrder(PlayOrderMode),
 }
 
 #[derive(Clone, Debug)]
