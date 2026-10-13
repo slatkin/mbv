@@ -10,6 +10,7 @@ use serde_json::json;
 use super::IpcSession;
 use crate::mpv_error::MpvError;
 use crate::mpv_event::{MpvEvent, MpvFailure, PropertyValue};
+use crate::mpv_session::Mpv;
 
 fn session_with_peer() -> (IpcSession, UnixStream) {
     let (ours, peer) = UnixStream::pair().expect("socket pair");
@@ -53,6 +54,26 @@ fn reply_that_never_comes_is_a_timeout() {
     let result = session.request(&["get_property", "time-pos"], Duration::ZERO);
 
     assert!(matches!(result, Err(MpvError::Timeout)));
+}
+
+// Design D3: a request that does not come within its timeout is a fault. The
+// wrapper records the hang and the next `next_event` reports the child as a
+// process exit, so the run ends through the process-exit teardown (S8) rather
+// than polling a silent socket forever.
+#[test]
+fn timed_out_request_makes_next_event_a_process_exit() {
+    let (ours, _peer) = UnixStream::pair().expect("socket pair");
+    let session = IpcSession::from_stream(ours).expect("session over a socket pair");
+    let mpv = Mpv::for_test(session);
+
+    assert!(matches!(
+        mpv.command("get_property", &["time-pos"]),
+        Err(MpvError::Timeout)
+    ));
+    assert!(matches!(
+        mpv.next_event(),
+        Some(MpvEvent::Failed(MpvFailure::ProcessExited))
+    ));
 }
 
 // S8: mpv closes the socket after a quit and sends no shutdown event, so a
