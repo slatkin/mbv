@@ -3,6 +3,53 @@ use super::{
     MediaKind, MediaListRow, MediaListSurfaceInput, MediaListTrailing, MediaSemanticState, Msg,
     ShellRequest, fmt_duration_gutter,
 };
+use mbv_queue::QueueItemContentId;
+use mbv_render::components::media_list::ActiveProgress;
+use mbv_ui_model::now_playing::WorkspaceNowPlaying;
+
+/// The now-playing override (hero-workspace-now-playing D3/D4): the chapter
+/// row the projection names becomes `NowPlaying { progress }`; every other
+/// row keeps its derived state. The projection applies only when its book is
+/// this Workspace's selected book, and the named target must resolve to a
+/// projected `BookRow::Chapter` -- an audio-part row never carries the state,
+/// and an `Item` or foreign-provider projection overrides nothing.
+fn apply_now_playing_override(
+    rows: &mut [MediaListRow<usize>],
+    state: &AudiobookshelfBookBrowseState,
+    now_playing: Option<&WorkspaceNowPlaying>,
+) {
+    let Some(WorkspaceNowPlaying::Chapter {
+        content_id: QueueItemContentId::AudiobookshelfBook { library_item_id },
+        chapter_id,
+        progress,
+    }) = now_playing
+    else {
+        return;
+    };
+    let Some(selected) = state
+        .selected_id
+        .as_deref()
+        .filter(|id| id == library_item_id)
+    else {
+        return;
+    };
+    // `chapter_rows` projects `visible_rows` one-to-one in order, so the
+    // named chapter's row is the position of its `BookRow::Chapter`; an
+    // audio-part fallback's indices can never match a chapter id here.
+    let Some(position) = state
+        .visible_rows(selected)
+        .iter()
+        .position(|row| matches!(row, BookRow::Chapter { id, .. } if *id == *chapter_id))
+    else {
+        return;
+    };
+    let Some(MediaListRow::Item { semantic_state, .. }) = rows.get_mut(position) else {
+        return;
+    };
+    *semantic_state = MediaSemanticState::NowPlaying {
+        progress: Some(ActiveProgress::new(*progress)),
+    };
+}
 
 /// Canonical row projection for one book's chapter/audio-part detail: one
 /// selectable `Item` per visible row, keyed by its stable row discriminator.
@@ -86,12 +133,13 @@ impl BookContent {
     /// chapter/audio-part discriminator; the typed `BookChapterTarget` pairs it
     /// with the selected book identity (design.md D4).
     pub fn project_chapter_rows(&mut self) {
-        let rows = self
+        let mut rows = self
             .state
             .selected_id
             .as_deref()
             .map(|id| chapter_rows(&self.state, id))
             .unwrap_or_default();
+        apply_now_playing_override(&mut rows, &self.state, self.now_playing.as_ref());
         if self.chapter_list.rows() != rows.as_slice() {
             self.chapter_list.set_content(rows);
         }

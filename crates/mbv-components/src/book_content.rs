@@ -29,6 +29,7 @@ use mbv_render::components::tv_wide::HeroImageState;
 use mbv_ui_model::audiobookshelf_browse::books::audiobookshelf_book_queue_item;
 use mbv_ui_model::audiobookshelf_browse::{AudiobookshelfBookBrowseState, BookRow};
 use mbv_ui_model::context_menu::{AudiobookshelfMenuTarget, ContextMenuTargets};
+use mbv_ui_model::now_playing::WorkspaceNowPlaying;
 use mbv_ui_model::ui_util::{clean_overview, fmt_duration_gutter};
 use mbv_ui_msg::{
     AudiobookshelfBookIntent, AudiobookshelfBookMove, BookChapterTarget, LeafKeyResult, Msg,
@@ -67,6 +68,11 @@ pub struct BookContent {
     /// retained hits. Its rows are projected from the selected book's detail
     /// before view.
     pub chapter_list: MediaListCarrier<usize>,
+    /// The workspace now-playing projection (hero-workspace-now-playing
+    /// D3/D4): the shell's per-sync-pass `Chapter` projection, applied to the
+    /// chapter rows at the `project_chapter_rows` seam. The owner never
+    /// derives chapters itself.
+    now_playing: Option<WorkspaceNowPlaying>,
     hero_image: HeroImageState,
 }
 
@@ -86,6 +92,7 @@ impl BookContent {
             images_enabled: false,
             carrier: MediaListCarrier::new(),
             chapter_list: MediaListCarrier::new(),
+            now_playing: None,
             hero_image: HeroImageState::None,
         }
     }
@@ -146,6 +153,18 @@ impl BookContent {
         self.state.detail_loading = projected_detail_loading;
         self.initialized = true;
         self.images_enabled = images_enabled;
+        self.project_chapter_rows();
+    }
+
+    /// The workspace now-playing projection (hero-workspace-now-playing
+    /// D4/D5): stored for the next chapter-row projection and applied at the
+    /// `project_chapter_rows` seam. This is the book owner's dedicated
+    /// sync-pass refresh, separate from the event-driven `set_content`, so
+    /// chapter progress follows ticks without rebuilding the whole book
+    /// surface. The rows comparison in `project_chapter_rows` is the dedup
+    /// guard: an identical projection skips `set_content`.
+    pub fn set_now_playing(&mut self, now_playing: Option<WorkspaceNowPlaying>) {
+        self.now_playing = now_playing;
         self.project_chapter_rows();
     }
 

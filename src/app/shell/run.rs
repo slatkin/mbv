@@ -42,6 +42,11 @@ impl Model {
         // playback state, then read by every workspace owner's push seam
         // below.
         self.workspace_now_playing = super::now_playing::derive_workspace_now_playing(&self.app);
+        // The book owner's now-playing refresh (hero-workspace-now-playing
+        // D5): a dedicated sync-pass call, separate from the event-driven
+        // `push_audiobookshelf_book_content`, so chapter progress follows
+        // ticks without rebuilding the whole book surface every pass.
+        self.sync_abs_book_now_playing();
         // The Music workspace re-projects every sync pass: navigation
         // landings, track-fetch arrivals, focus requests, and breakpoint
         // flips all land in App state, and the owner only picks them up
