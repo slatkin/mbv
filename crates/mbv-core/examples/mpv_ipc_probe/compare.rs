@@ -3,7 +3,7 @@
 use crate::RUNS;
 use crate::scenarios::Scenario;
 use serde_json::{Map, Value, json};
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 pub(crate) const RULES: [&str; 6] = [
     "1: drop what libmpv2 cannot deliver (playlist_* fields, property changes with no data)",
@@ -83,9 +83,33 @@ fn error_code(text: &Value) -> Value {
         .map_or_else(|| text.clone(), |code| json!(code))
 }
 
-/// Distinct sequences with the number of runs that produced each, most common first.
-fn distinct(runs: Vec<Vec<Value>>) -> Vec<(Vec<Value>, usize)> {
-    let mut out: Vec<(Vec<Value>, usize)> = Vec::new();
+/// The order of the events that are not property changes, and the value
+/// sequence of each property. A property change can land before or after a
+/// nearby event from run to run, so this view ignores that interleaving.
+type Split = (Vec<Value>, BTreeMap<String, Vec<Value>>);
+
+fn split(seq: &[Value]) -> Split {
+    let mut events = Vec::new();
+    let mut properties: BTreeMap<String, Vec<Value>> = BTreeMap::new();
+    for event in seq {
+        match event["name"].as_str() {
+            Some(name) if event["event"] == "property-change" => properties
+                .entry(name.to_owned())
+                .or_default()
+                .push(event["data"].clone()),
+            _ => events.push(event.clone()),
+        }
+    }
+    (events, properties)
+}
+
+fn same_sets<T: PartialEq>(a: &[(T, usize)], b: &[(T, usize)]) -> bool {
+    a.len() == b.len() && a.iter().all(|(x, _)| b.iter().any(|(y, _)| x == y))
+}
+
+/// Distinct values with the number of runs that produced each, most common first.
+fn distinct<T: PartialEq>(runs: Vec<T>) -> Vec<(T, usize)> {
+    let mut out: Vec<(T, usize)> = Vec::new();
     for run in runs {
         match out.iter_mut().find(|(seq, _)| *seq == run) {
             Some((_, count)) => *count += 1,
@@ -121,22 +145,31 @@ impl Outcome {
         Self { libmpv, ipc, rules }
     }
 
-    fn same_sequences(&self) -> bool {
-        self.libmpv.len() == self.ipc.len()
-            && self
-                .libmpv
+    fn splits(sequences: &[(Vec<Value>, usize)]) -> Vec<(Split, usize)> {
+        distinct(
+            sequences
                 .iter()
-                .all(|(seq, _)| self.ipc.iter().any(|(other, _)| other == seq))
+                .flat_map(|(seq, count)| vec![split(seq); *count])
+                .collect(),
+        )
     }
 
     pub(crate) fn print(&self, scenario: &Scenario) {
-        let verdict = match (self.same_sequences(), self.rules.is_empty()) {
-            (true, true) => "MATCH".to_owned(),
-            (true, false) => format!("MATCH-AFTER-NORMALIZATION (rules {:?})", self.rules),
-            (false, _) => format!("DIFF (rules {:?})", self.rules),
+        let exact = same_sets(&self.libmpv, &self.ipc);
+        let interleaving_only = same_sets(&Self::splits(&self.libmpv), &Self::splits(&self.ipc));
+        let verdict = match (exact, interleaving_only, self.rules.is_empty()) {
+            (true, _, true) => "MATCH".to_owned(),
+            (true, _, false) => format!("MATCH-AFTER-NORMALIZATION (rules {:?})", self.rules),
+            (false, true, _) => {
+                format!(
+                    "MATCH-IGNORING-PROPERTY-INTERLEAVING (rules {:?})",
+                    self.rules
+                )
+            }
+            (false, false, _) => format!("DIFF (rules {:?})", self.rules),
         };
         println!("{} {}: {verdict}", scenario.id, scenario.summary);
-        if !self.same_sequences() {
+        if !exact {
             print_first_difference(&self.libmpv[0].0, &self.ipc[0].0);
         }
         print_side("libmpv", &self.libmpv);

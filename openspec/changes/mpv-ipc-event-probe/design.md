@@ -68,7 +68,9 @@ The probe converts each libmpv2 event into mpv's JSON event field names (`event`
 5. Drop command reply lines (`request_id`) from the event sequence.
 6. Add `"id": 0` to a `property-change` that has no `id`. mpv's JSON encoder leaves out the ID when it is 0 (`time-pos`).
 
-Before the first step, each backend drains the initial values of its observed properties. Without this step, the first probe run showed IPC delivering those values before or after `start-file` from one run to the next. Their position depended on when the client first polls, not on the transport.
+Before the first step, each backend drains the initial values of its observed properties. Without this step, the first probe run showed IPC delivering those values before or after `start-file` from one run to the next. Their position depended on when the client first polls, not on the transport. The drain keeps only property changes, because the IPC client connects after mpv starts and can miss the startup `idle` event (second probe run).
+
+The second run also showed that a property change can land before or after a nearby event from run to run on the same backend (for example `audio-codec-name` and `audio-reconfig`). So the probe also compares a split view: the order of the non-property events, plus each property's value sequence. When only that view agrees, the result is `MATCH-IGNORING-PROPERTY-INTERLEAVING`. That is a finding to judge: the run loop must not depend on where a property change falls relative to other events.
 
 Each scenario result is `MATCH`, `MATCH-AFTER-NORMALIZATION` (it lists which rules applied) or `DIFF` (it prints the first differing index and both sides).
 

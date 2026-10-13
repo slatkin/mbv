@@ -34,8 +34,11 @@ impl fmt::Display for ProbeError {
 fn run_scenario(backend: &mut dyn Backend, scenario: &Scenario, missing: &str) -> Vec<Value> {
     let mut trace = Vec::new();
     // Take the initial observed values before the first step, so their
-    // position does not depend on when each client first polls.
+    // position does not depend on when each client first polls. Keep only
+    // property changes: the IPC client connects after mpv starts, so it can
+    // miss startup events such as `idle`.
     drain(backend, &mut trace);
+    trace.retain(|event| event["event"] == "property-change");
     for step in scenario.steps {
         match step {
             Step::Cmd(args) => {
