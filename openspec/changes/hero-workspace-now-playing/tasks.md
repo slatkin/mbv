@@ -13,7 +13,7 @@
 
 ## 2. TV episode Workspace
 
-- [ ] 2.1 Add `TvContent::set_now_playing`, apply the override at the `refresh_episode_rows` seam,
+- [x] 2.1 Add `TvContent::set_now_playing`, apply the override at the `refresh_episode_rows` seam,
   and wire the projection into `push_tv_workspace_content`. Contract: the playing episode's row
   carries `NowPlaying { progress }`, other rows keep their derived state, and identical input skips
   `set_content` (existing `last_episode_rows` guard). Verify with one owner test, written red before
