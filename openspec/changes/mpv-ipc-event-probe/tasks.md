@@ -15,8 +15,8 @@
 
 ## 3. Capture traces (the user runs the probe)
 
-- [ ] 3.1 Ask the user to run `cargo run -p mbv-core --example mpv_ipc_probe -- --out crates/mbv-player/src/mpv_event/fixtures`. Explain that it starts real mpv processes with synthetic media, `vo=null` and `ao=null`, plus one `ao` failure scenario. Do not run it without a yes. Verify: 10 fixture files exist, and the user has pasted or saved the probe's comparison output.
-- [ ] 3.2 Commit the fixture files. Verify: `git status` is clean.
+- [x] 3.1 Ask the user to run `cargo run -p mbv-core --example mpv_ipc_probe -- --out crates/mbv-player/src/mpv_event/fixtures`. Explain that it starts real mpv processes with synthetic media, `vo=null` and `ao=null`, plus one `ao` failure scenario. Do not run it without a yes. Verify: 10 fixture files exist, and the user has pasted or saved the probe's comparison output.
+- [x] 3.2 Commit the fixture files. Verify: `git status` is clean.
 
 ## 4. IPC decoder and tests on real traces
 

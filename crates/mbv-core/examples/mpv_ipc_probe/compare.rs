@@ -100,6 +100,11 @@ fn split(seq: &[Value]) -> Split {
             _ => events.push(event.clone()),
         }
     }
+    // Rule 3 collapses only adjacent time-pos changes, so interleaving can
+    // change how many survive. Repeated equal values carry no information.
+    for values in properties.values_mut() {
+        values.dedup();
+    }
     (events, properties)
 }
 
