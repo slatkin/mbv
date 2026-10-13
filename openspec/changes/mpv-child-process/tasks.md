@@ -10,11 +10,11 @@ The libmpv-to-IPC swap lands in group 4. Groups 1 to 3 keep libmpv as the live b
 
 ## 2. Wrapper `Mpv` (still on libmpv)
 
-- [ ] 2.1 Add `crates/mbv-player/src/mpv_session.rs` with the crate-private struct `Mpv` that wraps `libmpv2::Mpv`. Give it the calls in design D2: `set_property(name, impl Into<PropertyValue>)` with `From` for `i64`, `bool`, `f64`, `&str`, `String`; `get_f64`, `get_i64`, `get_bool`, `get_string`; `command`, `command_async`, `observe_property`, `request_log_messages`, `next_event`, and the wakeup hook. Each returns `Result<_, MpvError>`. Verify: `cargo check -p mbv-player` passes.
-- [ ] 2.2 Move `lib.rs`, `runtime.rs`, `controller.rs`, `submit.rs` and `run.rs` to the wrapper (`init_mpv` returns the wrapper). Verify: `rg "libmpv2::Mpv|libmpv2::\{" crates/mbv-player/src/{lib,runtime,controller,submit,run}.rs` has no match, and `cargo nextest run -p mbv-player` passes.
-- [ ] 2.3 Move `tracks.rs`, `run/commands.rs`, `run/queue_commands.rs`, `run/events/restart.rs` and `run/run_loop.rs` to the wrapper. Replace each `get_property::<T>` with the typed getter. Verify: `rg "libmpv2" crates/mbv-player/src -g '!mpv_session.rs' -g '!mpv_event*' -g '!mpv_error.rs' -g '!tests/**'` shows no use outside the wrapper, the event types, and `lib.rs` `mpv_err_str`. `cargo nextest run -p mbv-player` passes.
-- [ ] 2.4 Replace the two raw FFI calls (`mpv_command_async` in `run_loop.rs`, `mpv_request_log_messages` in `runtime.rs`) with `command_async` and `request_log_messages`. Verify: `rg "libmpv2_sys|\.ctx" crates/mbv-player/src` matches only `mpv_session.rs`, `lib.rs` `mpv_err_str`, and `mpv_event*`.
-- [ ] 2.5 Run the gate and commit group 2.
+- [x] 2.1 Add `crates/mbv-player/src/mpv_session.rs` with the crate-private struct `Mpv` that wraps `libmpv2::Mpv`. Give it the calls in design D2: `set_property(name, impl Into<PropertyValue>)` with `From` for `i64`, `bool`, `f64`, `&str`, `String`; `get_f64`, `get_i64`, `get_bool`, `get_string`; `command`, `command_async`, `observe_property`, `request_log_messages`, `next_event`, and the wakeup hook. Each returns `Result<_, MpvError>`. Verify: `cargo check -p mbv-player` passes.
+- [x] 2.2 Move `lib.rs`, `runtime.rs`, `controller.rs`, `submit.rs` and `run.rs` to the wrapper (`init_mpv` returns the wrapper). Verify: `rg "libmpv2::Mpv|libmpv2::\{" crates/mbv-player/src/{lib,runtime,controller,submit,run}.rs` has no match, and `cargo nextest run -p mbv-player` passes.
+- [x] 2.3 Move `tracks.rs`, `run/commands.rs`, `run/queue_commands.rs`, `run/events/restart.rs` and `run/run_loop.rs` to the wrapper. Replace each `get_property::<T>` with the typed getter. Verify: `rg "libmpv2" crates/mbv-player/src -g '!mpv_session.rs' -g '!mpv_event*' -g '!mpv_error.rs' -g '!tests/**'` shows no use outside the wrapper, the event types, and `lib.rs` `mpv_err_str`. `cargo nextest run -p mbv-player` passes.
+- [x] 2.4 Replace the two raw FFI calls (`mpv_command_async` in `run_loop.rs`, `mpv_request_log_messages` in `runtime.rs`) with `command_async` and `request_log_messages`. Verify: `rg "libmpv2_sys|\.ctx" crates/mbv-player/src` matches only `mpv_session.rs`, `lib.rs` `mpv_err_str`, and `mpv_event*`.
+- [x] 2.5 Run the gate and commit group 2.
 
 ## 3. Child-process session (built and tested, not yet used by the run loop)
 
