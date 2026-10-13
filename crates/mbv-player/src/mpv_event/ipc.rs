@@ -1,5 +1,5 @@
-//! Decoder for mpv JSON IPC output (design D5). Tests only until the
-//! out-of-process migration wires it into the run loop.
+//! Decoder for mpv JSON IPC output (design D5). The IPC session in
+//! `mpv_session/ipc.rs` calls it for each event line.
 
 use std::fmt;
 

@@ -10,7 +10,6 @@ use libmpv2::mpv_end_file_reason;
 
 use super::mpv_err_str;
 
-#[cfg(test)]
 mod ipc;
 #[cfg(test)]
 mod tests;
@@ -37,7 +36,6 @@ pub(crate) enum PropertyValue {
     Str(String),
     /// The property is unavailable. JSON IPC reports this as a change with no
     /// data. libmpv2 swallows such a change, so only the IPC decoder builds it.
-    #[cfg(test)]
     None,
 }
 
@@ -45,6 +43,8 @@ pub(crate) enum PropertyValue {
 #[derive(Debug)]
 pub(crate) enum MpvFailure {
     AudioOutputInit,
+    /// The child process closed the IPC socket with no quit requested (S8).
+    ProcessExited,
     Other(String),
 }
 
@@ -54,6 +54,7 @@ impl fmt::Display for MpvFailure {
             Self::AudioOutputInit => f.write_str(&mpv_err_str(&libmpv2::Error::Raw(
                 libmpv2::mpv_error::AoInitFailed,
             ))),
+            Self::ProcessExited => f.write_str("mpv process exited"),
             Self::Other(text) => f.write_str(text),
         }
     }

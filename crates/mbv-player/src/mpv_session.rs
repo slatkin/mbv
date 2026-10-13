@@ -6,6 +6,7 @@
 //! the player makes. The backend swap (group 4) changes this module's inside
 //! and leaves every call site untouched.
 
+pub(crate) mod ipc;
 pub(crate) mod spawn;
 
 use std::ffi::CString;
@@ -96,7 +97,6 @@ impl Mpv {
             PropertyValue::Flag(value) => self.inner.set_property(name, value),
             PropertyValue::Int64(value) => self.inner.set_property(name, value),
             PropertyValue::Str(value) => self.inner.set_property(name, value),
-            #[cfg(test)]
             // Documented no-op: an unavailable property carries no value to
             // set; only the observed-change decoder builds `None`.
             PropertyValue::None => Ok(()),
