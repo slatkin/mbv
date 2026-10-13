@@ -415,3 +415,6 @@ mod artist_workspace;
 
 #[cfg(test)]
 mod artist_actions;
+
+#[cfg(test)]
+mod workspace_now_playing;
