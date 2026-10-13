@@ -36,9 +36,9 @@ The libmpv-to-IPC swap lands in group 4. Groups 1 to 3 keep libmpv as the live b
 
 ## 5. Dependencies and packaging
 
-- [ ] 5.1 Remove `libmpv2` and `libmpv2-sys` from `crates/mbv-player/Cargo.toml`. Keep the workspace entries that `mbv-core` dev-dependencies use. Verify: `cargo tree -p mbv-player | rg libmpv` shows nothing, and `cargo check --workspace --all-targets` passes.
-- [ ] 5.2 Change the Debian `depends` lines in `Cargo.toml` and `crates/mbvd/Cargo.toml` from `libmpv2 | libmpv1` to `mpv`. Check `PKGBUILD` and any release workflow for a libmpv build or link step. Verify: `rg "libmpv" Cargo.toml crates/mbvd/Cargo.toml PKGBUILD .github` matches only the `mbv-core` dev-dependency.
-- [ ] 5.3 Run the gate and commit group 5.
+- [x] 5.1 Remove `libmpv2` and `libmpv2-sys` from `crates/mbv-player/Cargo.toml`. Keep the workspace entries that `mbv-core` dev-dependencies use. Verify: `cargo tree -p mbv-player | rg libmpv` shows nothing, and `cargo check --workspace --all-targets` passes.
+- [x] 5.2 Change the Debian `depends` lines in `Cargo.toml` and `crates/mbvd/Cargo.toml` from `libmpv2 | libmpv1` to `mpv`. Check `PKGBUILD` and any release workflow for a libmpv build or link step. Verify: `rg "libmpv" Cargo.toml crates/mbvd/Cargo.toml PKGBUILD .github` matches only the `mbv-core` dev-dependency.
+- [x] 5.3 Run the gate and commit group 5.
 
 ## Workflow follow-up
 
