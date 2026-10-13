@@ -37,7 +37,7 @@
 
 ## 5. Gate
 
-- [ ] 5.1 Run `cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings`, and
+- [x] 5.1 Run `cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings`, and
   `cargo nextest run` for the touched packages; fix or split anything they surface.
 
 ## Workflow follow-up
