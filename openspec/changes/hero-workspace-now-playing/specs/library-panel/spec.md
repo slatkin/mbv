@@ -26,6 +26,11 @@ Workspace row SHALL carry the now-playing state. A Hero pane without a Workspace
 - **WHEN** the queue has no active item
 - **THEN** no Workspace row carries the now-playing state
 
+#### Scenario: Tree rows are not Workspace rows
+
+- **WHEN** the queue is playing an episode or track that a TV tree or Grouped Music tree also lists
+- **THEN** the tree row keeps its ordinary state
+
 ### Requirement: Workspace now-playing matching is by item identity
 
 A Workspace row SHALL carry the now-playing state whenever its constituent item is the queue's
@@ -51,13 +56,29 @@ alone.
 
 For an Audiobookshelf book Workspace, the active queue item is the book. When the queue's active
 item is the Workspace's book, the chapter that contains the current playback position SHALL carry
-the canonical now-playing state with live progress. When the active item is any other book, episode,
-or item, no chapter row SHALL carry the state.
+the canonical now-playing state with live progress. The progress SHALL be the playback position's
+fraction of that chapter's own range, clamped to `0..=100`, not the progress of the whole book. When
+the active item is any other book, episode, or item, no chapter row SHALL carry the state.
 
 #### Scenario: The playing book's chapter lights
 
 - **WHEN** the queue is playing the book whose Workspace is shown
 - **THEN** the chapter containing the playback position carries the now-playing state
+
+#### Scenario: Chapter progress is relative to the chapter
+
+- **WHEN** the playback position is halfway through the playing chapter
+- **THEN** that chapter row's progress is 50, whatever the position is within the whole book
+
+#### Scenario: The book is only pending
+
+- **WHEN** the Player owner has not yet confirmed the selected book
+- **THEN** no chapter row carries the now-playing state
+
+#### Scenario: The book has no chapters
+
+- **WHEN** the playing book's Workspace shows audio-part rows instead of chapters
+- **THEN** no row carries the now-playing state
 
 #### Scenario: A different book is playing
 

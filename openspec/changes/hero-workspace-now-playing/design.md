@@ -28,33 +28,43 @@ identical re-projection skips `set_content` and keeps the painted frame claimabl
 **Non-Goals:**
 
 - Remote Emby sessions (another device's now-playing item) never light a workspace row; only the
-  local queue's active item matches.
-- Grouped Music tree track items, Home rows, podcast rows, and feed rows are not workspaces and are
-  out of scope.
+  playing queue's active item matches (the same queue the Queue column treats as playing).
+- Grouped Music tree track items, TV tree episode nodes, Home rows, podcast rows, and feed rows are
+  not workspaces and are out of scope.
+- Audiobookshelf audio-part rows (the fallback for a book with no chapters) never light.
 - No paint-vocabulary change: the painter already renders the `NowPlaying` state.
 
 ## Decisions
 
-**D1 — One projection type, computed in the shell.** A new shell-owned projection value
-(`WorkspaceNowPlaying`) carries exactly what a workspace owner needs: for Emby constituents, the
-queue item's own identity (service kind + Emby item id); for Audiobookshelf books, the book identity
-plus the derived playing-chapter index; and the clamped live progress percentage. The shell computes
-it once per sync pass from `displayed_playback_state()`, `pending_playback_slot()`, and the active
-queue item — the same inputs the queue row projection reads. Alternative: push `PlaybackState` and
-the queue into owners — rejected: components never receive queue or protocol objects; the
-boundary-crossing value must be presentation data with a stable identity, like `latest_marker`.
+**D1 — One projection type, computed in the shell.** A new projection value
+(`WorkspaceNowPlaying`) carries exactly what a workspace owner needs: the active queue item's
+`QueueItemContentId` (from `QueueItem::content_id()`); for an Audiobookshelf book, also the derived
+playing-chapter index and the chapter-relative progress; for Emby constituents, the clamped live
+progress percentage. The type lives in `mbv-ui-model`, because components cannot name shell types.
+The shell computes the value once per sync pass. It reads `displayed_playback_state()` (the playing
+queue's state, with a pending slot already applied as the active index) and the playing queue's item
+at that index. It does not read `displayed_queue_playback_state()`, which the Queue column gates by
+its viewed scope: the Workspace must not go blank when the user views the other queue scope.
+Alternative: push `PlaybackState` and the queue into owners — rejected: components never receive
+queue or protocol objects; the boundary-crossing value must be presentation data with a stable
+identity, like `latest_marker`.
 
-**D2 — Identity matching, discriminant-aware.** The projection carries the queue item's variant
-identity, not a bare string, so an Emby item id can never match an Audiobookshelf id. A workspace
-row matches when its stable target equals the active item's identity within the same provider kind.
+**D2 — Identity matching, discriminant-aware.** The projection carries `QueueItemContentId`, not a
+bare string, so an Emby item id can never match an Audiobookshelf id. A workspace row matches when
+its stable target equals the active item's identity within the same provider variant.
 Alternative: match by queue lineage (only queues composed from this workspace) — rejected by user
 direction: identity matching regardless of origin.
 
 **D3 — Chapters derive from book position in the shell.** For a book workspace the queue item is the
 book; the shell resolves the chapter that contains the playback position against the chapter list
-the shell already holds in `AudiobookshelfBookBrowseState`, and pushes the chapter index. The owner
-never reads playback state. Alternative: push raw position and let the owner resolve the chapter —
-rejected: derivation is projection, and owners stay presentation-only.
+the shell already holds in `AudiobookshelfBookBrowseState` (`BookRow::Chapter { id, start, end }`,
+absolute seconds on the merged timeline). It pushes the chapter's `id` and the position's fraction of
+`start..end`, clamped to `0..=100`, as that chapter's progress. The owner never reads playback state.
+The shell derives nothing for a pending book (the displayed position is 0 until the owner confirms),
+and nothing when the book has no chapters (audio-part rows never light). Alternative: push raw
+position and let the owner resolve the chapter — rejected: derivation is projection, and owners stay
+presentation-only. Alternative: book-relative progress — rejected: a chapter row would show the whole
+book's percentage.
 
 **D4 — Owners apply the override at their row-refresh seam.** Each owner gains a
 `set_now_playing(Option<...>)` that stores the projection and applies it when it rebuilds its rows:
@@ -66,17 +76,22 @@ existing `last_*` dedup guards now compare rows that include the override, so un
 **D5 — No new tick path.** Music and TV pushes already run every sync pass; they gain the
 projection input. The book owner gains its now-playing refresh as a dedicated sync-pass call
 (separate from `set_content`, which stays event-driven), so chapter progress follows ticks without
-rebuilding the whole book surface every tick.
+rebuilding the whole book surface every tick. The call runs only on the Audiobookshelf Book tab and
+only when the owner already exists (`abs_book_owner().is_some()`), so it never mounts an empty
+`BookContent` before the first content push (`handle_audiobookshelf_book_request` guards the same
+case).
 
-**D6 — Pending selection mirrors the Queue.** The projection resolves the pending slot the same way
-`queue_media_row_at` does: a pending selection lights the selected row and drops the outgoing
-active row before the owner confirms.
+**D6 — Pending selection mirrors the Queue.** `displayed_playback_state()` already moves the active
+index to the pending slot, so the projection lights the selected row and drops the outgoing active
+row before the owner confirms, the same result as `queue_media_row_at`. An Audiobookshelf chapter is
+the exception (D3): a pending book lights no chapter.
 
 ## Risks / Trade-offs
 
-- [Per-tick row rebuild while playing] → The dedup guards rebuild rows only when the projected rows
-  actually changed (progress moves at tick granularity, like the Queue column today). When playback
-  is idle or the workspace is hidden, the input is stable and nothing rebuilds.
+- [Per-tick row build while playing] → Each sync pass builds the owner's rows and compares them with
+  the last projected rows (the TV push already builds its context every pass). The guards call
+  `set_content` only when the rows changed (progress moves in whole percent steps). There is no fast
+  path that skips the build.
 - [Frame invalidation churn] → The existing `last_*` pattern treats an identical re-projection as a
   no-op, keeping the painted frame claimable by pointer input; the override rides the same guard.
 - [Chapter boundary drift between shell and owner] → The shell derives the chapter from the same
