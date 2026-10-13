@@ -132,11 +132,9 @@ impl PlaybackRun {
         let _ = self.event_tx.send(PlayerEvent::OutputStarted);
         self.pending_initial_playlist_layout = false;
         {
-            let h: i64 = mpv.get_property("video-params/h").unwrap_or(0);
-            let is_img: bool = mpv
-                .get_property("current-tracks/video/image")
-                .unwrap_or(false);
-            let codec: String = mpv.get_property("audio-codec-name").unwrap_or_default();
+            let h: i64 = mpv.get_i64("video-params/h").unwrap_or(0);
+            let is_img: bool = mpv.get_bool("current-tracks/video/image").unwrap_or(false);
+            let codec: String = mpv.get_string("audio-codec-name").unwrap_or_default();
             let mut st = self.status.lock().unwrap();
             st.video_height = h;
             st.audio_codec = codec.to_lowercase();

@@ -7,7 +7,6 @@
 //! and leaves every call site untouched.
 
 use std::ffi::CString;
-use std::ops::Deref;
 
 use libmpv2::Mpv as Libmpv;
 
@@ -181,18 +180,6 @@ impl Mpv {
     /// available. The run loop writes to its self-pipe with it.
     pub(crate) fn set_wakeup_callback(&mut self, callback: impl Fn() + Send + 'static) {
         self.inner.set_wakeup_callback(callback);
-    }
-}
-
-/// Temporary bridge until rows 2.3 and 2.4 move the remaining call sites:
-/// `tracks.rs` and `run/*` still call libmpv methods (`get_property::<T>`,
-/// `wait_event`, the raw `ctx` handle) through this deref. Delete it when the
-/// last call site has moved to the wrapper's own methods.
-impl Deref for Mpv {
-    type Target = Libmpv;
-
-    fn deref(&self) -> &Self::Target {
-        &self.inner
     }
 }
 

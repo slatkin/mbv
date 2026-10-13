@@ -7,16 +7,6 @@ use mbv_core::applog as app_logging;
 use mbv_queue::QueueItem;
 use std::os::unix::io::RawFd;
 
-fn command_quit_async(mpv: &Mpv) {
-    let quit = std::ffi::CString::new("quit").unwrap();
-    let mut args = [quit.as_ptr(), std::ptr::null()];
-    // SAFETY: `mpv` owns a live context, and both argument pointers refer to
-    // NUL-terminated strings that stay alive for the duration of this call.
-    unsafe {
-        libmpv2_sys::mpv_command_async(mpv.ctx.as_ptr(), 0, args.as_mut_ptr());
-    }
-}
-
 /// Worst-case mpv event latency when a wakeup byte is lost.
 ///
 /// libmpv's wakeup callback may fire *before* the event is deliverable by
@@ -169,9 +159,8 @@ impl PlaybackRun {
         }
 
         let mut had_event = false;
-        while let Some(event_result) = mpv.wait_event(0.0) {
+        while let Some(event) = mpv.next_event() {
             had_event = true;
-            let event = MpvEvent::from_libmpv(event_result);
             if self.handle_mpv_event(event, mpv, progress, progress_report_tx) {
                 return true;
             }
@@ -194,7 +183,7 @@ impl PlaybackRun {
     /// handle a delayed Shutdown event.
     fn handle_stop_request(&mut self, mpv: &Mpv) {
         if self.config.audio_pipe_path.is_some() {
-            command_quit_async(mpv);
+            let _ = mpv.command_async("quit", &[]);
         } else {
             let _ = mpv.command("quit", &[]);
         }
