@@ -29,6 +29,7 @@ use mbv_render::components::media_list::{
 };
 use mbv_render::components::tv_wide::HeroImageState;
 use mbv_ui_model::media_list::SelectionOrigin;
+use mbv_ui_model::now_playing::WorkspaceNowPlaying;
 use mbv_ui_model::targets::MusicArtistTarget;
 use mbv_ui_model::ui_util::{fmt_duration_gutter, trunc_str};
 use mbv_ui_msg::LeafKeyResult;
@@ -130,6 +131,12 @@ pub struct MusicContent {
     /// album and never clears or overwrites it. This is a destination
     /// translation of the shared owner's selected stable target.
     last_reported_album: Option<String>,
+    /// The shell's now-playing projection for this sync pass (design D4 of
+    /// `hero-workspace-now-playing`): the matching Workspace track row carries
+    /// `NowPlaying { progress }` when the rows rebuild; every other row keeps
+    /// its derived state. Presentation data only — never a queue or playback
+    /// object.
+    now_playing: Option<WorkspaceNowPlaying>,
 }
 
 impl MusicContent {
@@ -164,6 +171,7 @@ impl MusicContent {
             tree_tracks: HashMap::new(),
             tree_track_revision: None,
             last_reported_album: None,
+            now_playing: None,
         }
     }
 
@@ -221,6 +229,12 @@ impl MusicContent {
 
     pub fn set_focused(&mut self, focused: bool) {
         self.context.focused = focused;
+    }
+
+    /// Records the shell's now-playing projection for the next Workspace-row
+    /// reconcile. Push it before `set_content`, whose reconcile applies it.
+    pub fn set_now_playing(&mut self, now_playing: Option<WorkspaceNowPlaying>) {
+        self.now_playing = now_playing;
     }
 
     /// The album-selection persistence request after a local tree move (design

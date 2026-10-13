@@ -501,6 +501,7 @@ impl Model {
         }
         let latest_marker = self.destination_latest_marker(&latest_source);
         let list_pane_width = self.app.list_pane_width;
+        let now_playing = self.workspace_now_playing.clone();
         // Panel focus is the library area's focus bit; the owner paints its
         // focused pane and claims local chords from it (task 8.4).
         let library_focused =
@@ -509,6 +510,7 @@ impl Model {
             owner.set_is_wide(is_wide);
             owner.set_list_pane_width(list_pane_width);
             owner.set_latest_marker(latest_marker);
+            owner.set_now_playing(now_playing);
             owner.set_content(context);
             owner.set_focused(library_focused);
         });

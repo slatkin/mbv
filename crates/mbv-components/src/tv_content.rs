@@ -31,6 +31,7 @@ use mbv_render::components::media_list::{
 use mbv_render::{
     LetterFilter, LetterFilterKind, TvWideRenderCtx, effective_sort_str, letter_bucket,
 };
+use mbv_ui_model::now_playing::WorkspaceNowPlaying;
 use mbv_ui_model::ui_util::{fmt_duration_gutter, fmt_publish_date_short, natural_sort_key};
 use mbv_ui_msg::TvTreeTarget;
 use mbv_ui_msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent, TvHit};
@@ -92,6 +93,11 @@ pub struct TvContent {
     last_series_rows: Option<Vec<MediaListRow<String>>>,
     /// The episode twin of [`TvContent::last_series_rows`].
     last_episode_rows: Option<Vec<MediaListRow<String>>>,
+    /// The shell's now-playing projection for this sync pass (design D4 of
+    /// `hero-workspace-now-playing`): applied at the `refresh_episode_rows`
+    /// seam so the playing episode's row carries `NowPlaying { progress }`
+    /// while every other row keeps its derived state.
+    now_playing: Option<WorkspaceNowPlaying>,
     /// The embedded Inline Search control (design.md D1). See
     /// `EmbyLibraryContent::inline_search` for the migration-phase notes.
     inline_search: InlineSearch,
@@ -136,6 +142,7 @@ impl TvContent {
             viewport_height: 1,
             last_series_rows: None,
             last_episode_rows: None,
+            now_playing: None,
             inline_search: InlineSearch::new(),
             display_mode: TvDisplayMode::Wide,
             hero_overlay_open: false,
@@ -165,6 +172,12 @@ impl TvContent {
 
     pub fn set_latest_marker(&mut self, marker: bool) {
         self.latest_marker = marker;
+    }
+
+    /// Records the shell's now-playing projection for the next episode-row
+    /// rebuild. Push it before `set_content`, whose season refresh applies it.
+    pub fn set_now_playing(&mut self, now_playing: Option<WorkspaceNowPlaying>) {
+        self.now_playing = now_playing;
     }
 
     /// Reset TV's local presentation without replacing its projected content

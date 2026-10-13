@@ -7,6 +7,7 @@ use super::{
     TICKS_PER_SECOND, Workspace, WorkspaceHeader, fmt_duration_gutter, hero_content_music_album,
     music_album_artwork, trunc_str, wide_album_metadata,
 };
+use crate::now_playing::apply_emby_now_playing;
 
 pub fn track_row_label(track: &EmbyItem, index: usize) -> String {
     let number = if track.index_number > 0 {
@@ -117,6 +118,12 @@ impl MusicContent {
     /// to empty rows, so the prior title's tracks never paint under the new
     /// one.
     fn resolved_workspace(&self) -> (Option<WorkspaceOwner>, Vec<MediaListRow<String>>) {
+        let (owner, mut rows) = self.resolved_workspace_rows();
+        apply_emby_now_playing(&mut rows, self.now_playing.as_ref());
+        (owner, rows)
+    }
+
+    fn resolved_workspace_rows(&self) -> (Option<WorkspaceOwner>, Vec<MediaListRow<String>>) {
         if self.selected_is_artist() {
             let owner = self.artist_detail_target().map(WorkspaceOwner::Artist);
             let rows = self

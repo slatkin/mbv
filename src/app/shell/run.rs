@@ -37,6 +37,9 @@ impl Model {
         self.sync_status_bar_panel();
         self.sync_queue_card_geometry();
         self.sync_queue_playback_panel();
+        // Derived once per pass, before every workspace owner's push below.
+        self.workspace_now_playing = super::now_playing::derive_workspace_now_playing(&self.app);
+        self.sync_abs_book_now_playing();
         // The Music workspace re-projects every sync pass: navigation
         // landings, track-fetch arrivals, focus requests, and breakpoint
         // flips all land in App state, and the owner only picks them up

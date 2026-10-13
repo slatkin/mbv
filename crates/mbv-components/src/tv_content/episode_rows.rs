@@ -3,6 +3,7 @@ use super::{
     QueueItem, ShellRequest, TICKS_PER_SECOND, TvContent, UpcomingPremiere, fmt_duration_gutter,
     fmt_publish_date_short,
 };
+use crate::now_playing::apply_emby_now_playing;
 use mbv_render::effective_sort_str;
 use mbv_ui_model::ui_util::natural_sort_key;
 
@@ -165,11 +166,13 @@ impl TvContent {
     /// target where still present, otherwise clamps locally -- the same
     /// canonical machinery the series rail uses.
     pub fn refresh_episode_rows(&mut self) {
-        let rows = build_episode_rows(self.current_season_episodes());
+        let mut rows = build_episode_rows(self.current_season_episodes());
+        apply_emby_now_playing(&mut rows, self.now_playing.as_ref());
         // The 6.1 `last_projected_rows` pattern: an identical re-projection
-        // skips `set_content`, which would otherwise invalidate the painted
-        // frame and make a sync-without-draw frame unclaimable by pointer
-        // input (design D6 frame invalidation).
+        // (including the now-playing override) skips `set_content`, which
+        // would otherwise invalidate the painted frame and make a
+        // sync-without-draw frame unclaimable by pointer input (design D6
+        // frame invalidation).
         if self.last_episode_rows.as_ref() != Some(&rows) {
             self.episodes.set_content(rows.clone());
             self.last_episode_rows = Some(rows);

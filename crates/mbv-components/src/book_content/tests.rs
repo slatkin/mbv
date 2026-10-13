@@ -1,5 +1,6 @@
 use super::*;
 use mbv_audiobookshelf::{AudiobookshelfBook, AudiobookshelfLibrary};
+use mbv_render::components::media_list::ActiveProgress;
 use tuirealm::event::KeyModifiers;
 
 fn book(id: &str, author_sort_key: &str) -> AudiobookshelfBook {
@@ -245,6 +246,98 @@ fn reanchor_launch_state_falls_back_to_first_bucket_and_book() {
     assert!(owner.reanchor_launch_state(&state));
     assert_eq!(owner.selected_bucket, 0);
     assert_eq!(owner.selected_book_id(), Some("book-a"));
+}
+
+/// Contract (hero-workspace-now-playing D3/D4/D5): the
+/// named chapter row carries `NowPlaying` with the chapter-relative progress
+/// the projection supplies, every other chapter keeps its derived state, and
+/// an identical re-pushed projection skips `set_content` (the chapter rows
+/// guard), so the painted frame stays claimable.
+#[test]
+fn set_now_playing_marks_the_playing_chapter_row_and_dedups_identical_projection() {
+    use mbv_ui_model::now_playing::WorkspaceNowPlaying;
+
+    let mut owner = BookContent::new();
+    let mut state = state_with_books(vec![book("book-a", "Adams")]);
+    state.detail_cache.insert(
+        "book-a".into(),
+        (
+            vec![
+                mbv_audiobookshelf::AudiobookshelfChapter {
+                    id: 0,
+                    start: 0.0,
+                    end: 30.0,
+                    title: "Chapter one".into(),
+                },
+                mbv_audiobookshelf::AudiobookshelfChapter {
+                    id: 1,
+                    start: 30.0,
+                    end: 60.0,
+                    title: "Chapter two".into(),
+                },
+            ],
+            Vec::new(),
+        ),
+    );
+    owner.set_content(&state, false);
+
+    let playing = || WorkspaceNowPlaying::Chapter {
+        library_item_id: "book-a".into(),
+        chapter_id: 1,
+        progress: 42,
+    };
+    owner.set_now_playing(Some(playing()));
+
+    let states = |rows: &[MediaListRow<usize>]| -> Vec<(usize, MediaSemanticState)> {
+        rows.iter()
+            .filter_map(|row| match row {
+                MediaListRow::Item {
+                    target,
+                    semantic_state,
+                    ..
+                } => Some((*target, semantic_state.clone())),
+                _ => None,
+            })
+            .collect()
+    };
+    assert_eq!(
+        states(owner.chapter_list.rows()),
+        vec![
+            (0, MediaSemanticState::Ordinary),
+            (
+                1,
+                MediaSemanticState::NowPlaying {
+                    progress: Some(ActiveProgress::new(42)),
+                },
+            ),
+        ],
+        "the named chapter row lights with the chapter-relative progress; the other chapter keeps its derived state"
+    );
+
+    // Observable set_content skip: a completed paint is retained until the
+    // carrier's set_content invalidates it.
+    let list = ratatui::layout::Rect::new(0, 0, 40, 3);
+    let geometry = owner.chapter_list.wide().row_geometry(3);
+    owner
+        .chapter_list
+        .wide_mut()
+        .finish_view(list, list, &geometry, None);
+    assert!(owner.chapter_list.current_content_rect().is_some());
+
+    // Identical input skips set_content (painted frame stays claimable).
+    owner.set_now_playing(Some(playing()));
+    assert!(
+        owner.chapter_list.current_content_rect().is_some(),
+        "an identical projection must not re-run set_content"
+    );
+
+    // Control: changed input rebuilds (and invalidates the paint).
+    owner.set_now_playing(Some(WorkspaceNowPlaying::Chapter {
+        library_item_id: "book-a".into(),
+        chapter_id: 1,
+        progress: 43,
+    }));
+    assert!(owner.chapter_list.current_content_rect().is_none());
 }
 
 /// #745: reset returns the book owner to its first surname bucket and first

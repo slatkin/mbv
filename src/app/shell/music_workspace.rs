@@ -308,7 +308,9 @@ impl Model {
         focused: bool,
         request: Option<MusicTrackFocusRequest>,
     ) -> Option<MusicTrackFocusRequest> {
+        let now_playing = self.workspace_now_playing.clone();
         self.update_music_owner(|owner| {
+            owner.set_now_playing(now_playing);
             owner.set_content(context);
             if let Some(target) = reanchor {
                 owner.select_tree_target(target);

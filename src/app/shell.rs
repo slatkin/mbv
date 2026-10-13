@@ -21,6 +21,7 @@ use crate::app::state::playback::{
 use mbv_components::{QueueBoundaryComponent, UiRootComponent};
 use mbv_ui_model::feeds_manage::FeedsManagePopup;
 use mbv_ui_model::home_latest::HomeLatestLaunchWindow;
+use mbv_ui_model::now_playing::WorkspaceNowPlaying;
 use mbv_ui_msg::AlbumCursorKind;
 #[cfg(test)]
 pub(in crate::app) use mbv_ui_msg::OverlayId;
@@ -49,6 +50,7 @@ mod library_panel;
 mod messages;
 mod modal_actions;
 mod music_workspace;
+mod now_playing;
 mod overlays;
 mod playback;
 mod playlists;
@@ -235,6 +237,12 @@ pub struct Model {
     /// sent `SwapQuit`, so `teardown` skips the launch-state save and the
     /// coordinated shutdown request. Never reset within a run.
     pub(in crate::app) swapped_out_exit: bool,
+    /// The sync pass's workspace now-playing projection
+    /// (hero-workspace-now-playing D1): derived once per pass from the
+    /// playing queue's displayed playback state and its active item, then
+    /// read by every workspace owner's push seam. Shell-owned presentation
+    /// data, never a mirror of component-local state.
+    pub(in crate::app) workspace_now_playing: Option<WorkspaceNowPlaying>,
 }
 
 impl Model {
@@ -324,6 +332,7 @@ impl Model {
             keybinds,
             prefix_armed_focus: None,
             swapped_out_exit: false,
+            workspace_now_playing: None,
         };
         // UiRoot owns overlay z-order and permanently observes terminal events.
         // This is the ONLY mount with a non-mouse subscription; every other

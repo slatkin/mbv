@@ -53,6 +53,17 @@ impl Model {
         });
     }
 
+    /// The book owner's per-pass now-playing push (hero-workspace-now-playing
+    /// D5). It never mounts an empty `BookContent` before the first content
+    /// push (`handle_audiobookshelf_book_request` guards the same case).
+    pub(in crate::app) fn sync_abs_book_now_playing(&mut self) {
+        if self.abs_book_owner().is_none() {
+            return;
+        }
+        let now_playing = self.workspace_now_playing.clone();
+        self.update_abs_book_owner(|owner| owner.set_now_playing(now_playing));
+    }
+
     pub(in crate::app) fn handle_audiobookshelf_book_request(&mut self, request: ShellRequest) {
         // A request can arrive before the Books owner has been registered by
         // its first discrete content push. Do not mutate shell focus on that
