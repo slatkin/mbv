@@ -4,9 +4,9 @@ The libmpv-to-IPC swap lands in group 4. Groups 1 to 3 keep libmpv as the live b
 
 ## 1. Domain `MpvError` (still on libmpv)
 
-- [ ] 1.1 Add the crate-private `MpvError` in `crates/mbv-player/src/mpv_error.rs` with the cases `Spawn`, `NotFound`, `Io`, `Reply(String)`, `Timeout`, `Closed`, `Decode`, and `Libmpv(String)` (carries `mpv_err_str` text until group 4 removes it). It implements `Display` and `std::error::Error`. Verify: `cargo check -p mbv-player` passes.
-- [ ] 1.2 Replace `libmpv2::Error` in `error.rs` (`PlayerErrorKind::MpvInit`, `set_audio_device`, the two `source:` fields) with `MpvError`. Convert at the existing libmpv call sites. Verify: `rg "libmpv2::Error" crates/mbv-player/src/error.rs` has no match, and `cargo nextest run -p mbv-player` passes.
-- [ ] 1.3 Run the gate and commit group 1.
+- [x] 1.1 Add the crate-private `MpvError` in `crates/mbv-player/src/mpv_error.rs` with the cases `Spawn`, `NotFound`, `Io`, `Reply(String)`, `Timeout`, `Closed`, `Decode`, and `Libmpv(String)` (carries `mpv_err_str` text until group 4 removes it). It implements `Display` and `std::error::Error`. Verify: `cargo check -p mbv-player` passes. (Done with `Libmpv` only: the other cases have no producer until group 3 and fail the `dead_code` gate. Add each in group 3 with its first producer.)
+- [x] 1.2 Replace `libmpv2::Error` in `error.rs` (`PlayerErrorKind::MpvInit`, `set_audio_device`, the two `source:` fields) with `MpvError`. Convert at the existing libmpv call sites. Verify: `rg "libmpv2::Error" crates/mbv-player/src/error.rs` has no match, and `cargo nextest run -p mbv-player` passes.
+- [x] 1.3 Run the gate and commit group 1.
 
 ## 2. Wrapper `Mpv` (still on libmpv)
 
