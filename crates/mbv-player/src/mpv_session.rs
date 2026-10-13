@@ -8,21 +8,21 @@
 pub(crate) mod ipc;
 pub(crate) mod spawn;
 
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
 use std::time::Duration;
 
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
 use crate::mpv_error::MpvError;
-use crate::mpv_event::{MpvEvent, MpvFailure};
+use crate::mpv_event::MpvEvent;
 use crate::mpv_session::ipc::IpcSession;
 use crate::mpv_session::spawn::{Child, Started};
 
 /// How long one request waits for mpv's reply before the session treats the
 /// child as hung (design D3). A `request` that passes this bound returns
-/// `MpvError::Timeout` and records the hang; the next `next_event` reports the
-/// child as a process exit, so the run ends and its `Drop` kills the child.
+/// `MpvError::Timeout` and the session queues the child's end event, so the
+/// next `next_event` ends the run and its `Drop` kills the child.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// The format of an observed property (design D2 and D8). The IPC backend
@@ -50,9 +50,6 @@ pub(crate) struct Mpv {
     /// How long a request waits for its reply (design D3). Production uses
     /// `REQUEST_TIMEOUT`; the test constructor passes zero.
     request_timeout: Duration,
-    /// Set when a request passed its timeout. The child is hung: the next
-    /// `next_event` reports it as a process exit (design D3).
-    hung: Cell<bool>,
 }
 
 impl Mpv {
@@ -64,7 +61,6 @@ impl Mpv {
             _child: Some(child),
             session: RefCell::new(session),
             request_timeout: REQUEST_TIMEOUT,
-            hung: Cell::new(false),
         })
     }
 
@@ -79,7 +75,6 @@ impl Mpv {
             // A zero timeout makes a request against a silent peer time out
             // at once, so the test needs no wait (design D9).
             request_timeout: Duration::ZERO,
-            hung: Cell::new(false),
         }
     }
 
@@ -90,7 +85,6 @@ impl Mpv {
             &[json!("set_property"), json!(name), value.into()],
             self.request_timeout,
         );
-        self.record_result(&result);
         result.map(|_| ())
     }
 
@@ -100,7 +94,6 @@ impl Mpv {
             .session
             .borrow_mut()
             .request(&["get_property", name], self.request_timeout);
-        self.record_result(&result);
         serde_json::from_value(result?)
             .map_err(|error| MpvError::Decode(format!("property `{name}`: {error}")))
     }
@@ -112,7 +105,6 @@ impl Mpv {
             .session
             .borrow_mut()
             .request(&command_line(name, args), self.request_timeout);
-        self.record_result(&result);
         result.map(|_| ())
     }
 
@@ -138,7 +130,6 @@ impl Mpv {
             &[json!(command), json!(id), json!(name)],
             self.request_timeout,
         );
-        self.record_result(&result);
         result.map(|_| ())
     }
 
@@ -149,18 +140,14 @@ impl Mpv {
             .session
             .borrow_mut()
             .request(&["request_log_messages", level], self.request_timeout);
-        self.record_result(&result);
         result.map(|_| ())
     }
 
-    /// Pops the next event, or `None` when the child has none now. After a
-    /// request timed out, the first call reports the child as a process exit
-    /// (design D3). The IPC session queues events that arrive while a request
-    /// waits for its reply.
+    /// Pops the next event, or `None` when the child has none now. The IPC
+    /// session owns the child's liveness, so a timed-out request queues the
+    /// matching end event (design D3). The IPC session queues events that
+    /// arrive while a request waits for its reply.
     pub(crate) fn next_event(&self) -> Option<MpvEvent> {
-        if self.hung.replace(false) {
-            return Some(MpvEvent::Failed(MpvFailure::ProcessExited));
-        }
         self.session.borrow_mut().next_event()
     }
 
@@ -168,14 +155,6 @@ impl Mpv {
     /// it together with the wakeup pipe (design D3).
     pub(crate) fn socket_fd(&self) -> std::os::unix::io::RawFd {
         self.session.borrow().socket_fd()
-    }
-
-    /// Remembers a request timeout, so the next `next_event` reports the child
-    /// as gone (design D3). Every other error leaves the run as it is.
-    fn record_result<T>(&self, result: &Result<T, MpvError>) {
-        if matches!(result, Err(MpvError::Timeout)) {
-            self.hung.set(true);
-        }
     }
 }
 

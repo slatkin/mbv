@@ -21,15 +21,31 @@ use crate::mpv_event::{MpvEvent, MpvFailure};
 /// Bytes read from the socket per call.
 const READ_CHUNK: usize = 4096;
 
-/// Where the socket stands. The end event waits behind the lines that arrived
-/// before end-of-file, so it is queued only after those lines are delivered.
+/// Where the child stands. One owner for the socket state and the quit
+/// request, so a timeout during a quit is a normal stop and not a crash. The
+/// end event waits behind the lines that arrived before end-of-file, so it is
+/// queued only after those lines are delivered.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Link {
+enum Liveness {
+    /// The socket is open and no quit was requested.
     Open,
-    /// End-of-file was read. Complete lines may still be buffered.
+    /// A `quit` command was sent; the socket is still open.
+    Quitting,
+    /// End-of-file was read after no quit request. Complete lines may still be
+    /// buffered.
     PeerClosed,
-    /// The end event is queued. The session reads no more.
+    /// End-of-file was read after a quit request. Complete lines may still be
+    /// buffered.
+    PeerClosedAfterQuit,
+    /// A terminal event is queued. The session reads no more.
     Ended,
+}
+
+impl Liveness {
+    /// A socket that can still carry a reply.
+    fn is_open(self) -> bool {
+        matches!(self, Self::Open | Self::Quitting)
+    }
 }
 
 /// The IPC socket of one `mpv` child process.
@@ -39,10 +55,7 @@ pub(crate) struct IpcSession {
     /// Bytes read from the socket that do not yet end in a newline.
     received: Vec<u8>,
     events: VecDeque<MpvEvent>,
-    link: Link,
-    /// Set when a `quit` command is sent. The end of the socket then reads as
-    /// a shutdown, not as a crash (scenario S8).
-    quit_requested: bool,
+    liveness: Liveness,
     next_request_id: u64,
 }
 
@@ -55,8 +68,7 @@ impl IpcSession {
             stream,
             received: Vec::new(),
             events: VecDeque::new(),
-            link: Link::Open,
-            quit_requested: false,
+            liveness: Liveness::Open,
             next_request_id: 1,
         })
     }
@@ -65,6 +77,19 @@ impl IpcSession {
     /// it together with the wakeup pipe (design D3).
     pub(crate) fn socket_fd(&self) -> std::os::unix::io::RawFd {
         self.stream.as_raw_fd()
+    }
+
+    /// A request passed its timeout. A pending quit is on its way out, so its
+    /// end is a normal `Shutdown`; any other silent request is a hung child
+    /// that the run reports as a process exit (design D3, scenario S8).
+    fn finish_timed_out_request(&mut self) {
+        let end = if self.liveness == Liveness::Quitting {
+            MpvEvent::Shutdown
+        } else {
+            MpvEvent::Failed(MpvFailure::ProcessExited)
+        };
+        self.events.push_back(end);
+        self.liveness = Liveness::Ended;
     }
 
     /// Sends `command` and waits up to `timeout` for its reply, and returns the
@@ -91,11 +116,12 @@ impl IpcSession {
             if let Some(data) = self.pump(Some(id))? {
                 return Ok(data);
             }
-            if self.link != Link::Open {
+            if !self.liveness.is_open() {
                 return Err(MpvError::Closed);
             }
             let remaining = timeout.saturating_sub(started.elapsed());
             if remaining.is_zero() {
+                self.finish_timed_out_request();
                 return Err(MpvError::Timeout);
             }
             self.wait_readable(remaining)?;
@@ -129,8 +155,10 @@ impl IpcSession {
         self.stream
             .write_all(line.as_bytes())
             .map_err(MpvError::Io)?;
-        if command.first().and_then(Value::as_str) == Some("quit") {
-            self.quit_requested = true;
+        if command.first().and_then(Value::as_str) == Some("quit")
+            && self.liveness == Liveness::Open
+        {
+            self.liveness = Liveness::Quitting;
         }
         Ok(id)
     }
@@ -145,21 +173,24 @@ impl IpcSession {
                 return Ok(Some(data));
             }
         }
-        if self.link == Link::PeerClosed {
-            let end = if self.quit_requested {
-                MpvEvent::Shutdown
-            } else {
-                MpvEvent::Failed(MpvFailure::ProcessExited)
-            };
-            self.events.push_back(end);
-            self.link = Link::Ended;
+        match self.liveness {
+            Liveness::PeerClosed => {
+                self.events
+                    .push_back(MpvEvent::Failed(MpvFailure::ProcessExited));
+                self.liveness = Liveness::Ended;
+            }
+            Liveness::PeerClosedAfterQuit => {
+                self.events.push_back(MpvEvent::Shutdown);
+                self.liveness = Liveness::Ended;
+            }
+            _ => {}
         }
         Ok(None)
     }
 
     /// Reads until the socket would block or the peer is gone.
     fn read_available(&mut self) -> Result<(), MpvError> {
-        if self.link != Link::Open {
+        if !self.liveness.is_open() {
             return Ok(());
         }
         let mut chunk = [0_u8; READ_CHUNK];
@@ -174,7 +205,11 @@ impl IpcSession {
                 Err(error) => return Err(MpvError::Io(error)),
             };
             if count == 0 {
-                self.link = Link::PeerClosed;
+                self.liveness = if self.liveness == Liveness::Quitting {
+                    Liveness::PeerClosedAfterQuit
+                } else {
+                    Liveness::PeerClosed
+                };
                 return Ok(());
             }
             self.received.extend_from_slice(&chunk[..count]);

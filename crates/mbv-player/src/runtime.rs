@@ -439,19 +439,6 @@ pub(super) struct ResolvedSpawn {
     overlay: Option<(PathBuf, PathBuf)>,
 }
 
-impl ResolvedSpawn {
-    /// A resolved path set for the start tests: no real runtime directory is
-    /// touched (design D9).
-    #[cfg(test)]
-    pub(crate) fn for_test(ipc_path: &str, config_dir: &Path) -> Self {
-        Self {
-            ipc_path: ipc_path.to_owned(),
-            config_dir: config_dir.to_owned(),
-            overlay: None,
-        }
-    }
-}
-
 /// Resolves the socket path, the mbv-owned config directory, and the overlay
 /// scripts for this run. This is the only filesystem step of a start.
 fn resolve_spawn(config: &MpvRunConfig) -> Result<ResolvedSpawn, PlayerError> {

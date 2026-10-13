@@ -4,12 +4,13 @@
 //! through libmpv into `mpv` command-line arguments with the same values. The
 //! child-process backend starts the child with this list.
 
-use std::io::ErrorKind;
+use std::collections::VecDeque;
+use std::io::{BufRead, BufReader, ErrorKind};
 use std::os::unix::net::UnixStream;
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
-use std::process::{Child as ProcessChild, Command, Stdio};
-use std::sync::mpsc;
+use std::process::{Child as ProcessChild, ChildStderr, Command, ExitStatus, Stdio};
+use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
 use std::time::Duration;
 
@@ -175,28 +176,65 @@ pub(crate) fn spawn_args(config: &MpvRunConfig, paths: &SpawnPaths<'_>) -> Vec<S
 
 /// Connects to the `mpv` IPC socket, retrying up to `attempts` times with
 /// `interval` between tries. mpv creates the socket some time after it starts,
-/// so the first tries can find no path yet (design D4). Tests pass a zero
-/// interval.
-pub(crate) fn connect_with_retry(
+/// so the first tries can find no path yet (design D4). After every failed
+/// attempt it checks whether the child already exited: a child that died at
+/// start-up is the real fault, not the socket that never appeared (design D7).
+fn connect_with_retry(
+    process: &mut ProcessChild,
+    stderr: &mut StderrLog,
+    program: &str,
     socket_path: &Path,
     attempts: u32,
     interval: Duration,
 ) -> Result<UnixStream, MpvError> {
-    for _ in 1..attempts {
-        if let Ok(stream) = connect_once(socket_path) {
-            return Ok(stream);
+    let attempts = attempts.max(1);
+    let mut attempt = 0;
+    loop {
+        attempt += 1;
+        match connect_once(socket_path) {
+            Ok(stream) => return Ok(stream),
+            Err(error) => {
+                check_child_alive(process, stderr, program)?;
+                if attempt >= attempts {
+                    return Err(error);
+                }
+            }
         }
         thread::sleep(interval);
     }
-    connect_once(socket_path)
 }
 
-/// One connect attempt. A path that does not exist yet is `NotFound`, so the
-/// retry loop above can tell it from a real socket fault.
+/// Returns `ChildExited` when the child is already gone, so a failed connect
+/// reports the real cause instead of a missing socket (design D7).
+fn check_child_alive(
+    process: &mut ProcessChild,
+    stderr: &mut StderrLog,
+    program: &str,
+) -> Result<(), MpvError> {
+    if let Some(status) = process.try_wait().map_err(MpvError::Io)? {
+        return Err(child_exited_error(program, status, stderr));
+    }
+    Ok(())
+}
+
+/// The message for a child that exited during start-up: the exit status and
+/// the tail of what it wrote to stderr, so the real cause is visible.
+fn child_exited_error(program: &str, status: ExitStatus, stderr: &mut StderrLog) -> MpvError {
+    let mut message = format!("the {program} child process exited during start-up ({status})");
+    let tail = stderr.finish();
+    if !tail.is_empty() {
+        message.push_str("; stderr: ");
+        message.push_str(&tail.join(" | "));
+    }
+    MpvError::ChildExited(message)
+}
+
+/// One connect attempt. A path that does not exist yet is `SocketNotFound`,
+/// so the retry loop above can tell it from a real socket fault.
 fn connect_once(socket_path: &Path) -> Result<UnixStream, MpvError> {
     UnixStream::connect(socket_path).map_err(|error| {
         if error.kind() == ErrorKind::NotFound {
-            MpvError::NotFound(format!(
+            MpvError::SocketNotFound(format!(
                 "the mpv IPC socket {} was not found",
                 socket_path.display()
             ))
@@ -217,8 +255,9 @@ pub(crate) type Started = (Child, UnixStream);
 
 impl Child {
     /// Starts `program` with `args` and connects to the IPC socket it serves.
-    /// Standard input, output, and error go to the null device: the child
-    /// reports on its socket and mbv captures no terminal (design D4).
+    /// Standard input and output go to the null device; stderr is drained to
+    /// the log and kept as a tail, so a start failure names the real cause
+    /// instead of the socket that never appeared (design D4 and D7).
     pub(crate) fn start(
         program: &str,
         args: &[String],
@@ -226,14 +265,24 @@ impl Child {
         attempts: u32,
         interval: Duration,
     ) -> Result<Started, MpvError> {
-        let mut process = start_process(program, args)?;
-        match connect_with_retry(socket_path, attempts, interval) {
+        let (mut process, mut stderr) = start_process(program, args)?;
+        match connect_with_retry(
+            &mut process,
+            &mut stderr,
+            program,
+            socket_path,
+            attempts,
+            interval,
+        ) {
             Ok(stream) => Ok((Self { process }, stream)),
             // `std::process::Child` has no `Drop`, so a failed connect must
             // reap the process itself. Otherwise mpv stays alive (it runs with
-            // `--idle=yes`) or becomes a zombie (design D5).
+            // `--idle=yes`) or becomes a zombie (design D5). A child that
+            // `try_wait` already reaped is not touched again.
             Err(error) => {
-                reap(&mut process);
+                if !matches!(error, MpvError::ChildExited(_)) {
+                    reap(&mut process);
+                }
                 Err(error)
             }
         }
@@ -255,15 +304,16 @@ fn reap(process: &mut ProcessChild) {
     let _ = process.wait();
 }
 
-/// Starts one `mpv` child process with the null device for every standard
-/// stream and a `SIGKILL` on the parent thread's death.
-fn start_process(program: &str, args: &[String]) -> Result<ProcessChild, MpvError> {
+/// Starts one `mpv` child process with the null device for standard input and
+/// output, a drained pipe for standard error, and a `SIGKILL` on the parent
+/// thread's death.
+fn start_process(program: &str, args: &[String]) -> Result<(ProcessChild, StderrLog), MpvError> {
     let mut command = Command::new(program);
     command
         .args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
-        .stderr(Stdio::null());
+        .stderr(Stdio::piped());
     // SAFETY: `pre_exec` runs in the forked child before `exec`. The closure
     // calls only `prctl`, which is async-signal-safe and touches no shared
     // state. `PR_SET_PDEATHSIG` makes the kernel send `SIGKILL` to this child
@@ -277,9 +327,60 @@ fn start_process(program: &str, args: &[String]) -> Result<ProcessChild, MpvErro
             Ok(())
         })
     };
-    command
+    let mut process = command
         .spawn()
-        .map_err(|error| spawn_error(program, &error))
+        .map_err(|error| spawn_error(program, &error))?;
+    let stderr = StderrLog::drain(process.stderr.take());
+    Ok((process, stderr))
+}
+
+/// How many trailing stderr lines `child_exited_error` keeps.
+const STDERR_TAIL_LINES: usize = 20;
+
+/// The kept tail of a child's stderr and the reader thread that drains the
+/// pipe, so a chatty child never blocks on a full stderr buffer.
+struct StderrLog {
+    tail: Arc<Mutex<VecDeque<String>>>,
+    reader: Option<thread::JoinHandle<()>>,
+}
+
+impl StderrLog {
+    /// Drains `stderr` on its own thread: each line is logged, and the last
+    /// `STDERR_TAIL_LINES` lines are kept for a start-failure message.
+    fn drain(stderr: Option<ChildStderr>) -> Self {
+        let tail = Arc::new(Mutex::new(VecDeque::new()));
+        let Some(stderr) = stderr else {
+            return Self { tail, reader: None };
+        };
+        let sink = Arc::clone(&tail);
+        let reader = thread::spawn(move || {
+            for line in BufReader::new(stderr).lines().map_while(Result::ok) {
+                let line = line.trim_end().to_owned();
+                if line.is_empty() {
+                    continue;
+                }
+                tracing::warn!(name: "player.mpv.stderr", target: "mpv", message = %line, "mpv wrote to stderr");
+                let mut tail = sink.lock().unwrap();
+                if tail.len() == STDERR_TAIL_LINES {
+                    tail.pop_front();
+                }
+                tail.push_back(line);
+            }
+        });
+        Self {
+            tail,
+            reader: Some(reader),
+        }
+    }
+
+    /// Waits for the reader to reach end-of-file and returns the kept lines.
+    /// The child has exited, so the pipe is closed and this cannot block.
+    fn finish(&mut self) -> Vec<String> {
+        if let Some(reader) = self.reader.take() {
+            let _ = reader.join();
+        }
+        self.tail.lock().unwrap().iter().cloned().collect()
+    }
 }
 
 /// Maps a spawn fault. A program that is not on the search path names `mpv`
@@ -287,7 +388,7 @@ fn start_process(program: &str, args: &[String]) -> Result<ProcessChild, MpvErro
 /// every other fault is a general spawn error.
 fn spawn_error(program: &str, error: &std::io::Error) -> MpvError {
     if error.kind() == ErrorKind::NotFound {
-        MpvError::NotFound(format!(
+        MpvError::ProgramNotFound(format!(
             "the {program} program was not found on the search path"
         ))
     } else {

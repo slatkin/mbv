@@ -76,6 +76,19 @@ fn timed_out_request_makes_next_event_a_process_exit() {
     ));
 }
 
+// Design D3 and S8: a `quit` request that times out is the child on its way
+// out, so its end is a normal `Shutdown`, not a process-exit crash.
+#[test]
+fn timed_out_quit_request_is_a_shutdown() {
+    let (mut session, _peer) = session_with_peer();
+
+    assert!(matches!(
+        session.request(&["quit"], Duration::ZERO),
+        Err(MpvError::Timeout)
+    ));
+    assert!(matches!(session.next_event(), Some(MpvEvent::Shutdown)));
+}
+
 // S8: mpv closes the socket after a quit and sends no shutdown event, so a
 // close after a requested quit is a shutdown, reported once. The peer closes
 // with the quit line unread, so the kernel resets the socket, and the session
