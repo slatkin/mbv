@@ -11,9 +11,8 @@ use super::TreeBrowser;
 
 impl<Target: Clone + Eq + std::hash::Hash> Component for TreeBrowser<Target> {
     fn view(&mut self, frame: &mut Frame, area: Rect) {
-        self.last_painted = Some(area);
         let (claim_rect, content_rect) = self.configured_geometry.unwrap_or((area, area));
-        self.reconcile_selection();
+        self.reconcile_selection_with_height(Some(usize::from(content_rect.height)));
         self.paint.begin();
         let visible_rows = self.visible_flow_rows();
         let rows = self.visible_rows(&visible_rows);

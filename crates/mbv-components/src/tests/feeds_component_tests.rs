@@ -417,8 +417,18 @@ fn group_change_reflects_active_filter() {
 fn unfocused_component_wheel_scrolls_viewport_and_keeps_selection() {
     // Task 4.3: an unfocused panel's wheel still scrolls the mounted
     // owner's viewport (task 2.3 owns the claim itself), and the group
-    // selection stays where the click put it.
-    let mut panel = panel_with(grouped_component(), false);
+    // selection stays where the click put it. #928: the wheel clamps
+    // against the painted viewport, so the selected group's projection
+    // must overflow it — a list that fits has no boundary to move toward.
+    let subscriptions = vec![subscription("A"), subscription("B")];
+    let overflow: Vec<_> = (0..30).map(|i| entry(&format!("A-{i}"), false)).collect();
+    let second = vec![entry("B-unplayed", false), entry("B-played", true)];
+    let owner = owner_with(
+        subscriptions,
+        vec![overflow.clone(), second.clone()],
+        overflow.into_iter().chain(second).collect(),
+    );
+    let mut panel = panel_with(owner, false);
     let _ = paint(&mut panel, 60, 20);
     let selector = panel
         .test_selector_hits()

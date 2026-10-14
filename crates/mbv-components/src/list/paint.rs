@@ -23,11 +23,15 @@ struct CompletedPaint<Target> {
 #[derive(Debug)]
 pub struct PaintRetainedState<Target> {
     completed: Option<CompletedPaint<Target>>,
+    last_content_rect: Option<Rect>,
 }
 
 impl<Target> Default for PaintRetainedState<Target> {
     fn default() -> Self {
-        Self { completed: None }
+        Self {
+            completed: None,
+            last_content_rect: None,
+        }
     }
 }
 
@@ -74,6 +78,7 @@ impl<Target> PaintRetainedState<Target> {
             rows: rows.into_iter().collect(),
             selected_row_rect,
         });
+        self.last_content_rect = Some(content_rect);
     }
 
     /// Whether a completed frame is currently retained.
@@ -86,6 +91,13 @@ impl<Target> PaintRetainedState<Target> {
     #[must_use]
     pub fn content_rect(&self) -> Option<Rect> {
         self.completed.as_ref().map(|paint| paint.content_rect)
+    }
+
+    /// The height of the last painted frame's content rectangle.
+    /// Survives invalidation, unlike [`Self::content_rect`].
+    #[must_use]
+    pub fn last_content_rect(&self) -> Option<Rect> {
+        self.last_content_rect
     }
 
     /// Whether the latest completed paint claims `point`.
@@ -201,6 +213,9 @@ mod tests {
         assert_eq!(paint.resolve_point(Position { x: 2, y: 3 }), None);
         assert_eq!(paint.retained.selected_row_rect(), None);
         assert_eq!(paint.retained.content_rect(), None);
+        // The last-painted rectangle survives invalidation (#928): it is the
+        // wheel-clamp height source when no frame is current.
+        assert_eq!(paint.retained.last_content_rect(), Some(claim));
 
         paint.finish(
             claim,
@@ -211,6 +226,7 @@ mod tests {
         paint.invalidate();
         assert!(!paint.retained.claims_point(Position { x: 2, y: 3 }));
         assert_eq!(paint.retained.selected_row_rect(), None);
+        assert_eq!(paint.retained.last_content_rect(), Some(claim));
     }
 
     #[test]

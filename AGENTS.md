@@ -47,7 +47,7 @@ mbv is a Rust terminal media client for Emby, Audiobookshelf, and Feeds. It runs
 * `crates/mbv-images/`: image cache, loading and processing, terminal image protocol support.
 * `crates/mbv-ui-model/`: plain presentation models shared by UI crates.
 * `crates/mbv-ui-msg/`: typed messages crossing the interactive-component boundary.
-* `pinwin`: the Rust pinwin crate (Wayland layer-shell panel, separate repo `slatkin/pinwin`). It docks the mbv pinned panel beside tiled windows. `src/pin.rs` is the only boundary. It is a git-rev dependency pinned in `Cargo.toml` (`pinwin = { git = "https://github.com/slatkin/pinwin", rev = "<sha>" }`). Update the pin by changing `rev` there. Fix pinwin bugs upstream, never here.
+* `pinwin`: the Rust pinwin crate (Wayland layer-shell panel, separate repo `slatkin/pinwin`). It docks the mbv pinned panel beside tiled windows. `src/pin.rs` is the only boundary. It is a git-tag dependency pinned in `Cargo.toml` (`pinwin = { git = "https://github.com/slatkin/pinwin", tag = "<version>" }`). Update the pin by changing `tag` there. Fix pinwin bugs upstream, never here.
 
 ## Interactive architecture
 
@@ -78,7 +78,7 @@ Before any TUI change, read `docs/architecture/tui-frontend.md`. It covers the t
 
 ## Tooling
 
-* Write no bespoke scripting. Write no shell, awk, or python checkers, including their self-tests, CI jobs, and Makefile targets. Never use one as proof. Use unit tests instead, unless the user explicitly asks for a script for that request.
+* Write no bespoke scripting. Write no shell, awk, or python checkers, including their self-tests, CI jobs, and Makefile targets. Never use one as proof. Use unit tests instead, unless the user explicitly asks for a script for that request. The existing `scripts/check-code-file-lines.sh` and its self-test are the one approved exception, run only through `make check-code-file-lines`.
 * check: `cargo check -p <package>`
 * test: `cargo nextest run -p <package>` locally (prefer nextest). CI runs `cargo nextest run --release --test-threads=4` (fd-budget throttling, see `build.yml` comment). Use `cargo llvm-cov` to measure coverage.
 * A test owns a contract or it does not exist. Before you add a test, name the contract and the layer that owns it (`docs/architecture/tui-frontend.md`, Tests matrix). If another test already covers the claim, extend that test or add nothing. Keep in `#[case]` tables only cases with different expected outcomes. Cite in a regression test the issue or commit it guards, in its name or a comment. A plan item that only says "add tests" is not sufficient. Name the contract. Test count and coverage are never goals (`docs/invariants/14-test-ownership.md`).

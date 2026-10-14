@@ -113,7 +113,11 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
     fn viewport_height(&self) -> Option<usize> {
         self.configured_geometry
             .map(|(_, content)| usize::from(content.height))
-            .or_else(|| self.last_painted.map(|area| usize::from(area.height)))
+            .or_else(|| {
+                self.paint
+                    .last_content_rect()
+                    .map(|rect| usize::from(rect.height))
+            })
     }
 
     fn with_state<R>(&mut self, action: impl FnOnce(&mut TreeState<'_, Target>) -> R) -> R {
@@ -249,6 +253,13 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
     }
 
     pub fn reconcile_selection(&mut self) {
+        self.reconcile_selection_with_height(self.viewport_height());
+    }
+
+    /// Reconcile against an explicitly supplied content height.  `view` uses
+    /// this with the rectangle of the frame it is painting, so the first
+    /// frame reconciles before any paint has completed.
+    pub(super) fn reconcile_selection_with_height(&mut self, height: Option<usize>) {
         let flow = self.current_flow();
         if self
             .with_state(|state| Cursored::index(state, &flow))
@@ -256,11 +267,9 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
         {
             self.with_state(|state| Cursored::first(state, &flow));
         }
-        // Keep the selection visible against the established viewport: the
-        // panel-declared content height, or the latest completed frame's.
-        // Before either exists there is no viewport to reconcile, so the
-        // offset stays untouched and the next view applies the real rule.
-        let height = self.viewport_height();
+        // Keep the selection visible against the established viewport.  Before
+        // a height exists there is no viewport to reconcile, so the offset
+        // stays untouched and the next view applies the real rule.
         if let Some(height) = height {
             self.with_state(|state| Viewported::reconcile_viewport(state, &flow, height));
         }

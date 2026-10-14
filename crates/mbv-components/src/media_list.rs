@@ -240,13 +240,18 @@ impl<Target> MediaList<Target> {
 impl<Target: Clone + Eq> MediaList<Target> {
     /// D3: the wheel releases the viewport to free following and leaves every
     /// selection fact — cursor, multi-selection, live range — untouched. The
-    /// canonical owner has no painted geometry, so clamping uses the minimal
-    /// viewport guarantee; the presentation's resolve applies the real height
-    /// on the next frame it paints. #926: the offset arithmetic needs only
-    /// the row count, so the wheel's hot path never builds a row flow.
-    fn scroll_wheel(&mut self, delta: i64) {
-        let offset =
-            scrolled_viewport_offset(Viewported::viewport_offset(self), delta, self.rows.len(), 1);
+    /// caller supplies the painted viewport length; the canonical owner with
+    /// no painted geometry passes the minimal viewport guarantee, and the
+    /// presentation's resolve applies the real height on the next frame it
+    /// paints. #926: the offset arithmetic needs only the row count, so the
+    /// wheel's hot path never builds a row flow.
+    fn scroll_wheel(&mut self, delta: i64, viewport_len: usize) {
+        let offset = scrolled_viewport_offset(
+            Viewported::viewport_offset(self),
+            delta,
+            self.rows.len(),
+            viewport_len,
+        );
         self.set_scroll(offset);
         Viewported::set_viewport_anchor(self, ViewportAnchor::Free);
     }
@@ -273,9 +278,25 @@ impl<Target: Clone + Eq> MediaList<Target> {
     }
 
     /// Apply a target-resolved operation and report all independent effects.
+    /// The canonical owner has no painted geometry, so it clamps the wheel
+    /// with the minimal viewport guarantee (design D3).
     pub fn delegate_operation(
         &mut self,
         operation: MediaListOperation<Target>,
+    ) -> MediaListTransition<Target>
+    where
+        Target: Clone + Eq,
+    {
+        self.delegate_operation_with_viewport_len(operation, 1)
+    }
+
+    /// Sibling of [`Self::delegate_operation`] for presentations that know
+    /// their painted viewport height (design D3): `viewport_len` clamps the
+    /// `Scroll` arm's wheel offset. Crate-visible only.
+    pub(crate) fn delegate_operation_with_viewport_len(
+        &mut self,
+        operation: MediaListOperation<Target>,
+        viewport_len: usize,
     ) -> MediaListTransition<Target>
     where
         Target: Clone + Eq,
@@ -308,7 +329,7 @@ impl<Target: Clone + Eq> MediaList<Target> {
                 None
             }
             MediaListOperation::Scroll(delta) => {
-                self.scroll_wheel(delta);
+                self.scroll_wheel(delta, viewport_len);
                 None
             }
             MediaListOperation::First => {
