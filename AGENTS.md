@@ -1,12 +1,11 @@
 # mbv
 
-mbv is a Rust terminal media client for Emby, Audiobookshelf, and Feeds. It runs mpv in a child process. Every local TUI is a Client of the per-user Owner process. That process is the only local Player-owner host. Stay-alive controls whether that process outlives its Clients. Packaged `mbvd` stays a separate Player owner. `mbvd` is a headless server daemon (a systemd unit, no desktop session). It never has a tray, a pinned panel, or any Client functionality. Connection to it still leaves a Local process on the user machine, and that process owns those (`CONTEXT.md`: *mbvd*, *Local process*). 
+mbv is a Rust terminal media client for Emby, Audiobookshelf, and Feeds. It embeds mpv. Every local TUI is a Client of the per-user Owner process. That process is the only local Player-owner host. Stay-alive controls whether that process outlives its Clients. Packaged `mbvd` stays a separate Player owner. `mbvd` is a headless server daemon (a systemd unit, no desktop session). It never has a tray, a pinned panel, or any Client functionality. Connection to it still leaves a Local process on the user machine, and that process owns those (`CONTEXT.md`: *mbvd*, *Local process*). 
 
 ## Start here
 
 * Read `CONTEXT.md` before you name domain concepts. Its *Avoid* terms name the words you must not use. Add new terms with the change. Ask before you rename or collide.
 * Architecture work follows fixed sources. `docs/adr/` holds accepted decisions (the why). `openspec/specs/` holds current behavior. For in-progress work, read the full `openspec/changes/<name>/` directory. Its delta specs overlay main specs until archived. Do not edit archived changes.
-* Specs state behavior and layout, never paint (ADR 0031): no literal strings, glyphs, colors, spacing, alignment, or truncation rules. An intentional look change supersedes prior style text — never flag it as a spec violation, never require a spec delta for it, and delete paint-level SHALLs on sight.
 * `docs/invariants/` holds properties that the code must maintain but that no type enforces. It tells why they matter, how the code upholds them today, and where they still fail. Read it before you touch queue, progress, or playback-lifecycle state. Add one when you find or fix this kind of bug. Do not leave the lesson only in a commit message.
 * Write durable plans in OpenSpec markdown, not in chat. Commit plans, specs, and docs with code. Sync applied deltas into `openspec/specs/`. Archive when done.
 * Probe the real service before you plan API work. If the design of a feature depends on what a remote API returns, probe that endpoint first. Emby, Audiobookshelf, feeds, and any remote endpoint are examples.
@@ -15,6 +14,7 @@ mbv is a Rust terminal media client for Emby, Audiobookshelf, and Feeds. It runs
 * Keep no file over 800 lines at push time. Split along responsibility seams. Run `make check-code-file-lines` just before you push. Never use it as a per-task, CI, or acceptance gate.
 * Coding standards live in `docs/standards/README.md` (Microsoft Pragmatic Rust Guidelines, pinned locally, one file per rule). Scan its checklist. Then run `qmd query` for the full text of a rule. Never read every rule.
 * Prevent test inflation. Do not cover every execution path for every addition. Small additions need few tests, if any.
+comp
 
 ## Repository map
 
@@ -47,7 +47,7 @@ mbv is a Rust terminal media client for Emby, Audiobookshelf, and Feeds. It runs
 * `crates/mbv-images/`: image cache, loading and processing, terminal image protocol support.
 * `crates/mbv-ui-model/`: plain presentation models shared by UI crates.
 * `crates/mbv-ui-msg/`: typed messages crossing the interactive-component boundary.
-* `pinwin`: the Rust pinwin crate (Wayland layer-shell panel, separate repo `slatkin/pinwin`). It docks the mbv pinned panel beside tiled windows. `src/pin.rs` is the only boundary. It is a git-tag dependency pinned in `Cargo.toml` (`pinwin = { git = "https://github.com/slatkin/pinwin", tag = "<version>" }`). Update the pin by changing `tag` there. Fix pinwin bugs upstream, never here.
+* `pinwin`: the Rust pinwin crate (Wayland layer-shell panel, separate repo `slatkin/pinwin`). It docks the mbv pinned panel beside tiled windows. `src/pin.rs` is the only boundary. It is a git-rev dependency pinned in `Cargo.toml` (`pinwin = { git = "https://github.com/slatkin/pinwin", rev = "<sha>" }`). Update the pin by changing `rev` there. Fix pinwin bugs upstream, never here.
 
 ## Interactive architecture
 
@@ -78,13 +78,13 @@ Before any TUI change, read `docs/architecture/tui-frontend.md`. It covers the t
 
 ## Tooling
 
-* Write no bespoke scripting. Write no shell, awk, or python checkers, including their self-tests, CI jobs, and Makefile targets. Never use one as proof. Use unit tests instead, unless the user explicitly asks for a script for that request. The existing `scripts/check-code-file-lines.sh` and its self-test are the one approved exception, run only through `make check-code-file-lines`.
+* Write no bespoke scripting. Write no shell, awk, or python checkers, including their self-tests, CI jobs, and Makefile targets. Never use one as proof. Use unit tests instead, unless the user explicitly asks for a script for that request.
 * check: `cargo check -p <package>`
 * test: `cargo nextest run -p <package>` locally (prefer nextest). CI runs `cargo nextest run --release --test-threads=4` (fd-budget throttling, see `build.yml` comment). Use `cargo llvm-cov` to measure coverage.
 * A test owns a contract or it does not exist. Before you add a test, name the contract and the layer that owns it (`docs/architecture/tui-frontend.md`, Tests matrix). If another test already covers the claim, extend that test or add nothing. Keep in `#[case]` tables only cases with different expected outcomes. Cite in a regression test the issue or commit it guards, in its name or a comment. A plan item that only says "add tests" is not sufficient. Name the contract. Test count and coverage are never goals (`docs/invariants/14-test-ownership.md`).
 * Public-API tests of a library crate go in that crate's `tests/<name>.rs` binary (one binary per crate, `<name>/` submodules); `src/` tests are for private items. Never widen visibility to keep a test in `src/` (`docs/standards/rules/M-INTEGRATION-TESTS.md`).
 * Unit tests are hermetic mocks with no live or smoke tests. Use no live mpv handle (`init_mpv`/`test_mpv`), no real configuration or state directories, and no live servers. Mock the boundary. Anything that needs the real external system needs a manual run.
-* Live-test debugging needs the approval of the user. The user does live testing. Before you run anything live on the user machine, ask first. State the exact command and why. mbv, pinwin, a demo, compositor commands (`niri msg`), and any self-driving diagnostic are examples. Never proceed without a yes. "Find the issue" is not that approval.
+* Live-test debugging needs the approval of the user. The user does live testing. Before you run anything live on the user machine, ask first.
 * Use no real sleeps in tests (`thread::sleep`, timeouts, retry backoff). Inject the outcome, not the delay (mock returning the terminal state, zeroed timeout, seam observing attempts). If a test cannot run fast without a change to production timing, it asserts the wrong thing. Delete it.
 * Keep tests simple. Use one behavior per test. Use no loops or branching in the body. Put setup in helpers. The Clippy complexity threshold (25) applies to the whole crate, so review holds tests to the stricter bar.
 * Fixture-varying test families use named `#[case]` tables (through the `rstest` dev-dependency). `#[case]` is never a way to generate many thin tests. Convert opportunistically and file by file.
@@ -95,5 +95,4 @@ Before any TUI change, read `docs/architecture/tui-frontend.md`. It covers the t
 * Lay out modules as one file per module through `mod`. Never splice a module across files with `include!` or `#[path]`. Give a module with children as `foo.rs` plus a `foo/` directory to hold them (tests as `foo/tests.rs`, or `foo/tests.rs` plus `foo/tests/` when split). Never use `mod.rs`.
 * Prefer synchronous code first. `tokio` is edge-only (`crates/mbv-desktop`, `zbus`). Do not spread it.
 * For sharing, prefer owned data and `Msg` identities over new `Arc` or `Rc`.
-* For anything web related, use `ketch`, not curl.
 * For docs and concept discovery (ADRs, openspec, CONTEXT.md), run `qmd query "..."` (collection `mbv`). Use `rg` only for exact strings.
