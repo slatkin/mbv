@@ -256,25 +256,20 @@ impl<Target: Clone + Eq> MediaList<Target> {
         Viewported::set_viewport_anchor(self, ViewportAnchor::Free);
     }
 
-    /// D2: restore a freely scrolled viewport to following the selection for
-    /// the keyboard and selection operations that own it. Pointer right-click
-    /// (`Context`) keeps the user's free scroll instead of jumping the view.
+    /// D2/D3: the shared re-anchor rule (`ViewportAnchor`, #927) restores a
+    /// freely scrolled viewport to following the selection for every
+    /// operation except the two exclusions: the wheel scroll releases the
+    /// viewport, and pointer right-click (`Context`) keeps the user's free
+    /// scroll instead of jumping the view. The keyboard `ContextCurrent` and
+    /// `ActivateCurrent` are ordinary keyboard operations and re-anchor.
     fn re_anchor_selection_following(&mut self, operation: &MediaListOperation<Target>) {
         if matches!(
             operation,
-            MediaListOperation::Move(_)
-                | MediaListOperation::Page(_)
-                | MediaListOperation::First
-                | MediaListOperation::Last
-                | MediaListOperation::Select(_)
-                | MediaListOperation::Toggle(_)
-                | MediaListOperation::Range(_)
-                | MediaListOperation::Activate(_)
-                | MediaListOperation::ActivateCurrent
-                | MediaListOperation::ContextCurrent
+            MediaListOperation::Scroll(_) | MediaListOperation::Context(_)
         ) {
-            self.set_viewport_anchor(ViewportAnchor::FollowSelection);
+            return;
         }
+        self.set_viewport_anchor(ViewportAnchor::FollowSelection);
     }
 
     /// Apply a target-resolved operation and report all independent effects.

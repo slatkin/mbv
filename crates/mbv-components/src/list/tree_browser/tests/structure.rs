@@ -362,6 +362,34 @@ fn a_wheel_scroll_moves_the_viewport_and_keeps_the_selected_node() {
     assert_eq!(browser.selected_target(), Some(&Target::Branch));
 }
 
+/// Shared re-anchor rule (`ViewportAnchor`, #927): `Right` is a keyboard
+/// operation, so it restores a freely scrolled viewport to following the
+/// selection — the selected node the wheel scrolled out of view is pulled
+/// back in when `Right` expands it.
+#[test]
+fn keyboard_right_after_a_free_scroll_restores_following_the_selection() {
+    let mut browser = TreeBrowser::new();
+    browser
+        .reconcile([
+            node(Target::Root, None),
+            node(Target::Branch, Some(Target::Root)),
+            node(Target::Other, None),
+        ])
+        .unwrap();
+    browser.set_geometry(Rect::new(0, 0, 18, 1), Rect::new(0, 0, 18, 1));
+    browser.apply(TreeOperation::Select(Target::Root));
+    assert_eq!(browser.selected_target(), Some(&Target::Root));
+
+    browser.apply(TreeOperation::Scroll(1));
+    assert_eq!(browser.viewport_offset, 1);
+
+    let transition = browser.apply(TreeOperation::Right);
+
+    assert_eq!(transition.disposition, super::super::TreeConsumed::Consumed);
+    assert_eq!(browser.selected_target(), Some(&Target::Root));
+    assert_eq!(browser.viewport_offset, 0);
+}
+
 /// A target whose clones the test counts: the old wheel path built the full
 /// flow through `current_flow()` (#926), so a large tree flooded the counter
 /// while a length-only scroll stays constant.
