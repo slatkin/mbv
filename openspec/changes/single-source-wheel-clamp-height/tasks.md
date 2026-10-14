@@ -22,6 +22,6 @@ Package for every command: `mbv-components`. Test contracts are in `design.md` D
 
 ## 5. Spec sync and gates
 
-- [ ] 5.1 Check `docs/architecture/interactive-surface-ledger.md` and `docs/architecture/tui-frontend.md` for text that names a per-surface wheel clamp height. Fix any hit. Verify: `rg -n "painted_height|painted_content_area|last_painted" docs openspec/specs` shows no stale reference.
-- [ ] 5.2 Run `cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run -p mbv-components`. Verify all three pass.
-- [ ] 5.3 Sync the delta into `openspec/specs/mouse-input/spec.md` with `/opsx:sync`. Verify: the boundary scenario in the main spec has the two added lines.
+- [x] 5.1 Check `docs/architecture/interactive-surface-ledger.md` and `docs/architecture/tui-frontend.md` for text that names a per-surface wheel clamp height. Fix any hit. Verify: `rg -n "painted_height|painted_content_area|last_painted" docs openspec/specs` shows no stale reference.
+- [x] 5.2 Run `cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run -p mbv-components`. Verify all three pass.
+- [x] 5.3 Sync the delta into `openspec/specs/mouse-input/spec.md` with `/opsx:sync`. Verify: the boundary scenario in the main spec has the two added lines.

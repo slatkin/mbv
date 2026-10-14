@@ -574,6 +574,8 @@ Every scrollable interactive surface SHALL interpret an accepted wheel gesture a
 
 - **WHEN** the user turns the wheel toward the start or end of a scrollable surface whose viewport is already at, or fewer than three rows from, that boundary
 - **THEN** the viewport stops at the boundary
+- **AND** at the end boundary of a list that has been painted, the last flow row is the last row the viewport shows, never the first
+- **AND** every list surface stops at the same position, whether or not the list repainted between wheel notches
 
 ### Requirement: The owning component applies the wheel scroll
 
