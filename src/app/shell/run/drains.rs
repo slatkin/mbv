@@ -533,7 +533,11 @@ impl Model {
         } else {
             Duration::from_millis(50)
         };
-        let Ok(messages) = self.application.tick(PollStrategy::Once(poll_timeout)) else {
+        let ticked = self.application.tick(PollStrategy::Once(poll_timeout));
+        // Issue #940: the input port forwards one mouse move at a time. This
+        // tick took its event, so the port may forward the next move.
+        self.move_gate.release();
+        let Ok(messages) = ticked else {
             return true;
         };
         // ADR 0024: fold the mouse-derived messages (one per eligible

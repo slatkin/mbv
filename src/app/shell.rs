@@ -71,9 +71,10 @@ mod ui_state_reset;
 /// render cadence.
 const TERMINAL_LISTENER_INTERVAL: Duration = Duration::from_millis(8);
 /// Upper bound on port polls, and so on events delivered to the channel, in one
-/// worker cycle. The input port folds runs of mouse moves, so one poll can read
-/// many terminal events; the main thread still processes at most one per tick
-/// via `PollStrategy::Once`, matching the legacy one-event-per-iteration loop.
+/// worker cycle. The input port forwards at most one mouse move at a time, so a
+/// burst of moves cannot flood the channel; the main thread still processes at
+/// most one event per tick via `PollStrategy::Once`, matching the legacy
+/// one-event-per-iteration loop.
 const TERMINAL_LISTENER_MAX_POLL: usize = 60;
 
 /// A second Esc inside this window stops playback; a single Esc stays free
@@ -244,6 +245,9 @@ pub struct Model {
     /// read by every workspace owner's push seam. Shell-owned presentation
     /// data, never a mirror of component-local state.
     pub(in crate::app) workspace_now_playing: Option<WorkspaceNowPlaying>,
+    /// Shared with the terminal input port (issue #940). The run loop releases
+    /// it after each terminal tick so the port forwards the next mouse move.
+    move_gate: input_port::MoveGate,
 }
 
 impl Model {
@@ -251,15 +255,12 @@ impl Model {
     /// mounting the permanent root observer.
     #[cfg(test)]
     pub fn new(app: App) -> Self {
-        Self::new_with_listener(
+        Self::new_with_launch_window(
             app,
-            EventListenerCfg::default().add_port(
-                Box::new(input_port::CoalescingInputPort::new(
-                    TERMINAL_LISTENER_INTERVAL,
-                )),
-                TERMINAL_LISTENER_INTERVAL,
-                TERMINAL_LISTENER_MAX_POLL,
-            ),
+            HomeLatestLaunchWindow {
+                previous: None,
+                current: current_launch_secs(),
+            },
         )
     }
 
@@ -267,17 +268,16 @@ impl Model {
         app: App,
         home_latest_launch_window: HomeLatestLaunchWindow,
     ) -> Self {
-        Self::new_with_listener_and_window(
-            app,
-            EventListenerCfg::default().add_port(
-                Box::new(input_port::CoalescingInputPort::new(
-                    TERMINAL_LISTENER_INTERVAL,
-                )),
+        let move_gate = input_port::MoveGate::default();
+        let listener_cfg = EventListenerCfg::default().add_port(
+            Box::new(input_port::CoalescingInputPort::new(
                 TERMINAL_LISTENER_INTERVAL,
-                TERMINAL_LISTENER_MAX_POLL,
-            ),
-            home_latest_launch_window,
-        )
+                move_gate.clone(),
+            )),
+            TERMINAL_LISTENER_INTERVAL,
+            TERMINAL_LISTENER_MAX_POLL,
+        );
+        Self::new_with_listener_and_window(app, listener_cfg, move_gate, home_latest_launch_window)
     }
 
     #[cfg(test)]
@@ -297,6 +297,7 @@ impl Model {
         Self::new_with_listener_and_window(
             app,
             listener_cfg,
+            input_port::MoveGate::default(),
             HomeLatestLaunchWindow {
                 previous: None,
                 current: current_launch,
@@ -307,6 +308,7 @@ impl Model {
     fn new_with_listener_and_window(
         mut app: App,
         listener_cfg: EventListenerCfg<UserEvent>,
+        move_gate: input_port::MoveGate,
         home_latest_launch_window: HomeLatestLaunchWindow,
     ) -> Self {
         let application = Application::init(listener_cfg);
@@ -344,6 +346,7 @@ impl Model {
             prefix_armed_focus: None,
             swapped_out_exit: false,
             workspace_now_playing: None,
+            move_gate,
         };
         // UiRoot owns overlay z-order and permanently observes terminal events.
         // This is the ONLY mount with a non-mouse subscription; every other
