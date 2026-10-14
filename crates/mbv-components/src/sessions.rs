@@ -42,9 +42,6 @@ pub struct SessionsComponent {
     display: SessionsDisplayContext,
     requested_panel_area: Option<Rect>,
     painted_panel_area: Option<Rect>,
-    /// The painted overlay's content rect, retained by `view()`; the wheel
-    /// derives its visible-item capacity from its height.
-    painted_content_area: Option<Rect>,
     /// Private per-parent gesture recognition (ADR 0024, design.md D3).
     mouse_gestures: MouseGestureState,
 }
@@ -69,7 +66,6 @@ impl SessionsComponent {
             },
             requested_panel_area: None,
             painted_panel_area: None,
-            painted_content_area: None,
             mouse_gestures: MouseGestureState::new(),
         }
     }
@@ -184,8 +180,9 @@ impl SessionsComponent {
                 // Focus-owned wheel while the Sessions overlay is the sole
                 // eligible one (wheel-scrolls-viewport): the shared viewport
                 // scroll takes the gesture delta; selection and cursor stay.
-                let height = self.painted_content_area.map_or(0, |area| area.height);
-                self.list.scroll_viewport(delta, height);
+                // The viewport height comes from the list's own retained
+                // paint (issue #928).
+                self.list.scroll_viewport(delta);
                 Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
             }
             MouseGesture::Click { at, .. } | MouseGesture::DoubleClick(at) => {
@@ -350,7 +347,7 @@ impl SessionsComponent {
     #[cfg(any(test, feature = "test"))]
     #[must_use]
     pub fn content_area_for_test(&self) -> Option<Rect> {
-        self.painted_content_area
+        self.list.last_content_rect()
     }
 
     #[cfg(any(test, feature = "test"))]
@@ -376,7 +373,6 @@ impl Component for SessionsComponent {
             self.can_disconnect,
         );
         self.painted_panel_area = Some(panel_area);
-        self.painted_content_area = Some(content_area);
         if has_content {
             if self.content_dirty || self.projected_width != Some(content_area.width) {
                 self.list
@@ -540,7 +536,7 @@ mod tests {
     #[test]
     fn test_session_mouse_click_on_selected_item_connects() {
         let mut component = painted_component();
-        let content = component.painted_content_area.unwrap();
+        let content = component.content_area_for_test().unwrap();
         assert_eq!(
             component.handle_mouse(left_down(content.x, content.y)),
             Some(Msg::Shell(Box::new(ShellRequest::SelectSession(
@@ -554,7 +550,7 @@ mod tests {
         let mut component = painted_component();
         let point = Position {
             x: 10,
-            y: component.painted_content_area.unwrap().y + 4,
+            y: component.content_area_for_test().unwrap().y + 4,
         };
         // The second item starts immediately after the first item's three lines.
         assert_eq!(component.handle_mouse(left_down(point.x, point.y)), None);

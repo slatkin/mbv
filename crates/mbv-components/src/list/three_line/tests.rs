@@ -1,7 +1,7 @@
 use ratatui::layout::Position;
 use rstest::rstest;
 
-use super::ThreeLineFlatList;
+use super::{ThreeLineFlatList, Viewported};
 use mbv_render::components::three_line_flat_list::{ThreeLineItem, ThreeLineRole, ThreeLineSpan};
 
 fn item(target: u8) -> ThreeLineItem<u8> {
@@ -71,4 +71,32 @@ fn test_three_line_paint_invalidation_preserves_selection() {
     );
     assert_eq!(list.selected_target(), Some(&1));
     assert_eq!(list.painting_parts(area).1, 2);
+}
+
+/// #928: the second wheel notch before a repaint must clamp with the
+/// painted height, not fall back to the one-item viewport minimum.
+#[test]
+fn test_three_line_wheel_notch_after_invalidation_keeps_painted_viewport_928() {
+    let mut list = ThreeLineFlatList::new(1);
+    list.set_content((0..10).map(item).collect());
+    let area = ratatui::layout::Rect::new(0, 0, 12, 12);
+    let (offset, visible, _) = list.painting_parts(area);
+    assert_eq!((offset, visible), (0, 3));
+    list.publish(
+        area,
+        area,
+        vec![(ratatui::layout::Rect::new(0, 0, 12, 3), 0)],
+        None,
+    );
+
+    // No repaint between the two notches: the retained height stays the
+    // clamp source after each `scroll_viewport` invalidates.
+    list.scroll_viewport(100);
+    list.scroll_viewport(100);
+
+    assert_eq!(
+        list.viewport_offset(),
+        7,
+        "10 items minus the painted 3-item viewport"
+    );
 }

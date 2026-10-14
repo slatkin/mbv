@@ -79,22 +79,18 @@ impl<Target> ThreeLineFlatList<Target> {
 
     /// Scroll the viewport by the normalized wheel gesture delta and release
     /// it from following the selection (wheel-scrolls-viewport D3): the
-    /// selection and its facts stay untouched. `painted_height` is the
-    /// content-area height from which the visible-item capacity is derived;
-    /// an unpainted or too-short area clamps at the minimal one-item
+    /// selection and its facts stay untouched. The visible-item capacity
+    /// comes from the last painted content rectangle's height (issue #928);
+    /// an unpainted or too-short surface clamps at the minimal one-item
     /// viewport guarantee until the next frame's resolve applies the real
     /// height.
-    pub fn scroll_viewport(&mut self, delta: i64, painted_height: u16)
+    pub fn scroll_viewport(&mut self, delta: i64)
     where
         Target: Clone + Eq,
     {
         let flow = self.flow();
-        Viewported::scroll_viewport(
-            self,
-            &flow,
-            self.visible_items(painted_height).max(1),
-            delta,
-        );
+        let height = self.paint.last_content_rect().map_or(0, |rect| rect.height);
+        Viewported::scroll_viewport(self, &flow, self.visible_items(height).max(1), delta);
         self.invalidate();
     }
 
@@ -114,6 +110,13 @@ impl<Target> ThreeLineFlatList<Target> {
 
     pub fn invalidate_paint(&mut self) {
         self.invalidate();
+    }
+
+    /// The last painted content rectangle; survives invalidation, unlike the
+    /// per-frame paint snapshot.
+    #[must_use]
+    pub fn last_content_rect(&self) -> Option<Rect> {
+        self.paint.last_content_rect()
     }
 
     fn flow(&self) -> RowFlow<Target>
