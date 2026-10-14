@@ -220,6 +220,7 @@ impl App {
             connected_session_id: None,
             connected_session_state: None,
             cast_attachment: None,
+            cast_job_sent: None,
             last_cast_poll: Instant::now()
                 .checked_sub(Duration::from_secs(60))
                 .unwrap_or_else(Instant::now),

@@ -25,7 +25,7 @@ use std::time::{Duration, Instant};
 /// indefinitely for a slow/unreachable receiver -- this runs on a
 /// background thread (`App::connect_cast_receiver`), so it never blocks the
 /// UI loop regardless.
-const CAST_ATTACH_TIMEOUT: Duration = Duration::from_secs(5);
+pub(super) const CAST_ATTACH_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// How long a single cast discovery browse is allowed to run when the F3
 /// panel opens (8.1). Runs concurrently with the `/Sessions` fetch on its
@@ -79,6 +79,9 @@ impl App {
             muted: false,
             disconnected: false,
         });
+        // A fresh attachment starts a fresh worker; any pending deadline
+        // belonged to the old one.
+        self.cast_job_sent = None;
         self.stop_visualizer_capture();
     }
 
@@ -127,6 +130,7 @@ impl App {
     /// attachment (5.6).
     pub(in crate::app) fn detach_cast(&mut self) {
         self.cast_attachment = None;
+        self.cast_job_sent = None;
     }
 
     /// Routes a played selection to the attached receiver instead of the
@@ -145,6 +149,12 @@ impl App {
         };
         let receiver_id = attachment.receiver_id.clone();
         let client = attachment.client.clone();
+        // The unresponsive-watchdog clock starts at dispatch: it must cover
+        // the resolution round trip plus the transport job, and no worker
+        // event clears it until one actually arrives.
+        if self.cast_job_sent.is_none() {
+            self.cast_job_sent = Some(Instant::now());
+        }
         let emby = self.emby_snapshot();
         let abs = self.audiobookshelf_cast_context();
         let tx = self.channels.cast_tx.clone();
@@ -262,6 +272,18 @@ impl App {
     }
 
     pub(in crate::app) fn handle_cast_event(&mut self, event: CastEvent) {
+        // A worker event proves the worker thread is alive; the
+        // unresponsive-worker watchdog (`check_cast_worker_responsive`)
+        // reads the deadline this clears. Connect/discovery events come
+        // from other threads and prove nothing about the worker.
+        if matches!(
+            event,
+            CastEvent::Dispatched { .. }
+                | CastEvent::StatusUpdated { .. }
+                | CastEvent::TransportError(_)
+        ) {
+            self.cast_job_sent = None;
+        }
         match event {
             CastEvent::Dispatched {
                 receiver_id,

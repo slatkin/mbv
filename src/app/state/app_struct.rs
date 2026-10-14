@@ -338,6 +338,13 @@ pub struct App {
     /// above: `None` means no cast target is attached. See `cast_actions.rs`
     /// for attach/detach and `cast_status_actions.rs` for status polling.
     pub(in crate::app) cast_attachment: Option<CastAttachment>,
+    /// When the oldest cast job still awaiting any worker event was
+    /// submitted. The unresponsive-worker watchdog
+    /// (`check_cast_worker_responsive`) reads it: `rust_cast` operations
+    /// have no socket timeout, so one unresponsive receiver exchange blocks
+    /// the single worker thread forever -- status freezes and every later
+    /// job queues behind it while the target still reads connected.
+    pub(in crate::app) cast_job_sent: Option<Instant>,
     pub(in crate::app) last_cast_poll: Instant,
     pub(in crate::app) cast_status_loading: bool,
     pub(in crate::app) queue_epoch: QueueEpoch,

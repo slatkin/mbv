@@ -2,7 +2,9 @@
 // extrapolation (6.3, 6.4), matching a reported entry to a dispatched item
 // (6.5), and progress reporting to that item's provider (6.6).
 
+use super::cast::CAST_ATTACH_TIMEOUT;
 use crate::app::App;
+use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::state::types::cast::{
     CastAttachment, CastEvent, CastProgressTarget, DispatchedCastItem,
 };
@@ -16,6 +18,18 @@ use std::time::{Duration, Instant};
 /// roughly 90s (see `CastClient::keep_alive`'s doc comment), so any cadence
 /// in that range keeps the heartbeat alive with margin to spare.
 pub(in crate::app) const CAST_STATUS_POLL_INTERVAL: Duration = Duration::from_secs(7);
+
+/// How long a submitted cast job may go without any worker event before the
+/// worker counts as unresponsive. Covers one dispatch in full -- the
+/// provider resolution round trip (Emby `PlaybackInfo`, hard-bound near 5s)
+/// plus the transport job -- or two poll intervals.
+///
+/// The bound exists because `rust_cast` operations have no socket timeout:
+/// one unresponsive receiver exchange blocks the single worker thread
+/// forever. Status freezes and every later job queues behind it while the
+/// target still reads connected -- the observed "plays nothing, reads as
+/// connected" state after a receiver stops its media app.
+pub(in crate::app) const CAST_JOB_ANSWER_BOUND: Duration = Duration::from_secs(15);
 
 /// A progress report computed from a matched dispatched item, decoupled from
 /// how it's actually sent so the matching+extrapolation core (6.5, and the
@@ -50,6 +64,10 @@ impl App {
         let receiver_id = attachment.receiver_id.clone();
         self.cast_status_loading = true;
         self.last_cast_poll = Instant::now();
+        // The unresponsive-watchdog clock: this poll expects a worker event.
+        if self.cast_job_sent.is_none() {
+            self.cast_job_sent = Some(Instant::now());
+        }
         let tx = self.channels.cast_tx.clone();
         let _ = client.send(Box::new(move |transport| {
             if let Err(e) = transport.keep_alive() {
@@ -93,6 +111,43 @@ impl App {
                 attachment.disconnected = true;
                 attachment.client = None;
             }
+        }
+    }
+
+    /// The unresponsive-worker watchdog. When a submitted cast job has
+    /// produced no worker event within `CAST_JOB_ANSWER_BOUND`, the worker
+    /// thread is wedged on an unbounded `rust_cast` exchange; recover the way
+    /// a dropped connection is handled (7.6): log, present the target as
+    /// disconnected, stop polling it -- then reconnect. A fresh connect
+    /// relaunches the receiver's app session, which a media stop may have
+    /// ended, so playback works again without a manual re-attach.
+    pub(in crate::app) fn check_cast_worker_responsive(&mut self) {
+        let unresponsive = self
+            .cast_job_sent
+            .is_some_and(|sent| sent.elapsed() >= CAST_JOB_ANSWER_BOUND)
+            && self
+                .cast_attachment
+                .as_ref()
+                .is_some_and(|attachment| attachment.client.is_some());
+        if !unresponsive {
+            return;
+        }
+        self.cast_job_sent = None;
+        tracing::warn!(name: "cast.worker.unresponsive", target: "cast", "cast worker produced no event within the answer bound");
+        if let Some(attachment) = self.cast_attachment.as_mut() {
+            attachment.disconnected = true;
+            attachment.client = None;
+        }
+        self.flash(
+            "Cast target stopped responding; reconnecting".to_string(),
+            ToastSeverity::Warning,
+        );
+        if let Some(receiver_id) = self
+            .cast_attachment
+            .as_ref()
+            .map(|attachment| attachment.receiver_id.clone())
+        {
+            self.connect_cast_receiver(receiver_id, CAST_ATTACH_TIMEOUT);
         }
     }
 
@@ -425,6 +480,80 @@ mod tests {
         assert!(!attachment.disconnected);
         assert!(attachment.client.is_some(), "the transport stays usable");
         assert_eq!(App::cast_now_playing_title(attachment), None);
+    }
+
+    fn connect_ok_stub(
+        id: &str,
+        _timeout: Duration,
+    ) -> Result<std::sync::mpsc::Sender<crate::app::state::types::cast::CastJob>, CastError> {
+        // The stub only serves the receiver this test attaches to; anything
+        // else is as unreachable as a real connect to an unknown id.
+        if id != "device-1" {
+            return Err(CastError::receiver_not_found());
+        }
+        let (tx, _calls) = crate::app::state::types::cast::spawn_fake_cast_worker(
+            crate::app::state::types::cast::FakeCastTransport::default(),
+        );
+        Ok(tx)
+    }
+
+    /// The unresponsive-worker watchdog: a submitted job with no worker
+    /// event within the answer bound is a wedged worker (`rust_cast` has no
+    /// socket timeout). The target is presented disconnected and the
+    /// reconnect relaunches the receiver's app session, so playback works
+    /// again without a manual re-attach.
+    #[test]
+    fn an_unresponsive_cast_target_is_presented_disconnected_and_reconnected() {
+        let _guard = crate::app::CAST_CONNECT_TEST_LOCK.lock().unwrap();
+        *crate::app::CAST_CONNECT_OVERRIDE.lock().unwrap() = Some(connect_ok_stub);
+        let mut app = make_app_stub();
+        app.attach_cast("device-1".to_string(), "Living Room".to_string());
+        let (job_tx, _calls) = crate::app::state::types::cast::spawn_fake_cast_worker(
+            crate::app::state::types::cast::FakeCastTransport::default(),
+        );
+        app.set_cast_client("device-1", job_tx);
+        app.cast_job_sent = Some(
+            Instant::now()
+                .checked_sub(CAST_JOB_ANSWER_BOUND + Duration::from_secs(1))
+                .unwrap(),
+        );
+
+        app.check_cast_worker_responsive();
+
+        assert!(
+            app.status.contains("stopped responding"),
+            "the wedge is flashed, got {:?}",
+            app.status
+        );
+        // The reconnect re-attaches through the overridden connect and
+        // restores a usable transport.
+        let event = app
+            .channels
+            .cast_rx
+            .recv_timeout(Duration::from_secs(2))
+            .unwrap();
+        app.handle_cast_event(event);
+        *crate::app::CAST_CONNECT_OVERRIDE.lock().unwrap() = None;
+        let attachment = app.cast_attachment.as_ref().unwrap();
+        assert!(!attachment.disconnected);
+        assert!(attachment.client.is_some(), "the transport is usable again");
+    }
+
+    #[test]
+    fn a_responsive_cast_worker_is_not_touched_by_the_watchdog() {
+        let mut app = make_app_stub();
+        app.attach_cast("device-1".to_string(), "Living Room".to_string());
+        let (job_tx, _calls) = crate::app::state::types::cast::spawn_fake_cast_worker(
+            crate::app::state::types::cast::FakeCastTransport::default(),
+        );
+        app.set_cast_client("device-1", job_tx);
+        app.cast_job_sent = Some(Instant::now());
+
+        app.check_cast_worker_responsive();
+
+        let attachment = app.cast_attachment.as_ref().unwrap();
+        assert!(!attachment.disconnected);
+        assert!(attachment.client.is_some());
     }
 
     #[test]

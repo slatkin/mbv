@@ -492,6 +492,15 @@ impl Model {
             self.app.spawn_cast_status_poll();
         }
 
+        // Unresponsive-worker watchdog: rust_cast's operations have no
+        // socket timeout, so one unresponsive receiver exchange wedges the
+        // single worker thread forever -- status freezes and every later
+        // job queues behind it while the target still reads connected. No
+        // worker event within the answer bound is that wedge's only visible
+        // signature; recover the way a dropped connection is handled and
+        // reconnect (a fresh connect relaunches the receiver's app session).
+        self.app.check_cast_worker_responsive();
+
         // Keep this session visible to other Emby clients
         if let Some(ref tx) = self.app.ws_send_tx
             && self.app.last_keepalive.elapsed() >= Duration::from_secs(30)
