@@ -539,6 +539,45 @@ mod tests {
         assert!(attachment.client.is_some(), "the transport is usable again");
     }
 
+    /// The wedge the watchdog recovers can be a poll exchange mid-flight: its
+    /// `StatusUpdated` will never arrive, so `cast_status_loading` stays up
+    /// through recovery. The reconnect must clear it, or the tick gate
+    /// (`drains.rs`) never spawns another poll, the keep-alive heartbeat
+    /// stops, and the watchdog cannot re-arm (ff63b1db9 review).
+    #[test]
+    fn watchdog_recovery_clears_the_stuck_poll_gate_so_polling_resumes() {
+        let _guard = crate::app::CAST_CONNECT_TEST_LOCK.lock().unwrap();
+        *crate::app::CAST_CONNECT_OVERRIDE.lock().unwrap() = Some(connect_ok_stub);
+        let mut app = make_app_stub();
+        app.attach_cast("device-1".to_string(), "Living Room".to_string());
+        let (job_tx, _calls) = crate::app::state::types::cast::spawn_fake_cast_worker(
+            crate::app::state::types::cast::FakeCastTransport::default(),
+        );
+        app.set_cast_client("device-1", job_tx);
+        // The stuck state a wedged poll leaves: the loading gate is up and the
+        // watchdog clock is already past the answer bound.
+        app.cast_status_loading = true;
+        app.cast_job_sent = Some(
+            Instant::now()
+                .checked_sub(CAST_JOB_ANSWER_BOUND + Duration::from_secs(1))
+                .unwrap(),
+        );
+
+        app.check_cast_worker_responsive();
+        let event = app
+            .channels
+            .cast_rx
+            .recv_timeout(Duration::from_secs(2))
+            .unwrap();
+        app.handle_cast_event(event);
+        *crate::app::CAST_CONNECT_OVERRIDE.lock().unwrap() = None;
+
+        assert!(
+            !app.cast_status_loading,
+            "the reconnect resets the poll gate so ticks spawn polls again"
+        );
+    }
+
     #[test]
     fn a_responsive_cast_worker_is_not_touched_by_the_watchdog() {
         let mut app = make_app_stub();

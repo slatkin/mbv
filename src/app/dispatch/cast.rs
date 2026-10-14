@@ -80,8 +80,12 @@ impl App {
             disconnected: false,
         });
         // A fresh attachment starts a fresh worker; any pending deadline
-        // belonged to the old one.
+        // belonged to the old one, and a poll still in flight for it can no
+        // longer report (the watchdog reconnect that lands here is the case
+        // where no event will ever clear the flag) -- the tick gate
+        // (`drains`) must be free to spawn polls for the fresh transport.
         self.cast_job_sent = None;
+        self.cast_status_loading = false;
         self.stop_visualizer_capture();
     }
 
