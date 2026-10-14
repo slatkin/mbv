@@ -378,6 +378,17 @@ impl SessionReporter {
         });
     }
 
+    /// Fire-and-forget `report_start` for the item the run is playing, using
+    /// the ids the submit already resolved. Called by the run when playback
+    /// actually begins, so a run that never plays reports no session start.
+    pub(super) fn report_start_when_playing(&self, item: &EmbyItem) {
+        if !self.has_session() {
+            return;
+        }
+        let (_, media_source_id, session_id) = self.ids.lock().unwrap().clone();
+        self.report_start_background(item, &media_source_id, &session_id);
+    }
+
     pub(super) fn report_stopped_for_shutdown(
         &self,
         last_valid_pos: i64,

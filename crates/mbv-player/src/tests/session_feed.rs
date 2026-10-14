@@ -686,3 +686,86 @@ fn append_items_to_queue_keeps_feed_items() {
         Some(QueueSlotId::from_raw(4_242))
     );
 }
+
+// ── Submit-time start report waits for actual playback ─────────────────────
+
+/// Blocks until the captured line containing `needle`, collecting every line
+/// seen before it (the needle included), so a test can assert absence among
+/// the lines a FIFO worker drained before its sentinel.
+fn collect_until_captured_line(rx: &mpsc::Receiver<String>, needle: &str) -> Vec<String> {
+    let mut seen = Vec::new();
+    loop {
+        let line = rx
+            .recv()
+            .expect("capture channel closed before the expected line");
+        let found = line.contains(needle);
+        seen.push(line);
+        if found {
+            return seen;
+        }
+    }
+}
+
+#[test]
+fn run_that_never_plays_reports_no_emby_start() {
+    // Regression (#938-era session churn): the start report fired when the
+    // submission was accepted, so a run that died without ever playing still
+    // sent start+stop to Emby within milliseconds, and repeated attempts
+    // churned the server-side session. The start report now waits for actual
+    // playback, so a never-played run sends only its stop.
+    let (mut session, _status, _events, http) = make_queue_session_for_pos_tests_with_mock(0);
+    session.origin = PlaybackOrigin::Standalone;
+    http.respond(200, "");
+    let mut progress = noop_progress();
+
+    assert!(!session.on_end_file_standalone(EndFileReason::Stop, &mut progress));
+
+    let requests = http.requests();
+    assert!(
+        requests
+            .iter()
+            .any(|r| r.starts_with("POST /Sessions/Playing/Stopped")),
+        "the stop report is expected: {requests:?}"
+    );
+    assert!(
+        !requests
+            .iter()
+            .any(|r| r.starts_with("POST /Sessions/Playing ")),
+        "a never-played run must not report a session start: {requests:?}"
+    );
+}
+
+#[test]
+fn first_playback_restart_reports_the_emby_start_once() {
+    use tracing_subscriber::prelude::*;
+
+    let (line_tx, line_rx) = mpsc::channel();
+    let subscriber = tracing_subscriber::registry().with(capture_layer(line_tx));
+
+    tracing::subscriber::with_default(subscriber, || {
+        // The session (and its report worker) must be built inside the
+        // captured dispatcher: the worker inherits the dispatcher at spawn.
+        let (mut session, _status, _events, http) = make_queue_session_for_pos_tests_with_mock(0);
+        // Requests race for the script FIFO: the worker's start POST (async)
+        // and the run thread's sync progress POSTs can land in either order,
+        // so script more responses than any interleaving consumes. What the
+        // test asserts is the start line count, not the mock's order.
+        for _ in 0..6 {
+            http.respond(200, "");
+        }
+        let (ours, _peer) = std::os::unix::net::UnixStream::pair().expect("socket pair");
+        let mpv =
+            Mpv::for_test(crate::mpv_session::ipc::IpcSession::from_stream(ours).expect("session"));
+
+        session.on_playback_restart(&mpv);
+        session.on_playback_restart(&mpv);
+        // Sentinel: FIFO order makes every earlier line observable before it.
+        session.reporter.report_stopped_background(0);
+        let drained = collect_until_captured_line(&line_rx, "sent stopped report");
+        let starts = drained
+            .iter()
+            .filter(|line| line.contains("event=emby.playback_start.requested"))
+            .count();
+        assert_eq!(starts, 1, "exactly one start report, drained: {drained:?}");
+    });
+}

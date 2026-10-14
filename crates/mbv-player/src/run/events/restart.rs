@@ -124,6 +124,16 @@ impl PlaybackRun {
     }
 
     pub(crate) fn on_playback_restart(&mut self, mpv: &Mpv) {
+        // The submit-time start report fires here, on the first actual
+        // playback: a run that never plays (the file never opens, the child
+        // dies at startup) reports no session start, so no start+stop pair
+        // churns the server-side session.
+        if !self.start_report_sent
+            && let Some(item) = self.active_item().and_then(QueueItem::as_emby)
+        {
+            self.reporter.report_start_when_playing(item);
+            self.start_report_sent = true;
+        }
         let settled_idle_jump = self.settle_idle_jump_on_restart(mpv_position_ticks(mpv));
         let was_seek = self.last_seek_at.is_some();
         // `PlaybackRestart` is the concrete mpv-owned event used by mbvd as

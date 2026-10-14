@@ -6,7 +6,6 @@ use super::{
     prepare_source, queue_load_indices, queue_load_location, reassert_queue_layout,
     refresh_emby_resume, send_ep_info, spawn_progress_reporter, start_queue_playback,
 };
-use mbv_core::applog as app_logging;
 use mbv_ids::{EmbySessionId, ItemId, MediaSourceId};
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex, mpsc};
@@ -235,22 +234,10 @@ fn make_reporter(
     status: Arc<Mutex<PlayerStatus>>,
 ) -> (SessionReporter, ProgressGuard) {
     let session = client.as_ref().zip(item.as_emby()).map(|(client, emby)| {
+        // The ids resolve here, but the start report itself waits until the
+        // run observes actual playback (`PlaybackRestart`), so a run that
+        // never plays reports no session start and no server-side churn.
         let info = client.get_playback_info(&emby.id);
-        let report_client = Arc::clone(client);
-        let report_item = emby.clone();
-        let media_source_id = info.media_source_id.clone();
-        let session_id = info.session_id.clone();
-        thread::spawn(app_logging::carry_dispatcher(move || {
-            // `playback.report` from the ids this report sends (design D5);
-            // the thread outlives the slot, so it inherits no `playback` span.
-            let span =
-                crate::report_worker::report_span(report_item.id.as_str(), Some(&session_id));
-            let _entered = span.entered();
-            let ok = report_client.report_start(&report_item, &media_source_id, &session_id);
-            if !ok {
-                tracing::warn!(name: "player.report_start.failed", target: "player", phase = "submit", item = %report_item.id, "start report failed");
-            }
-        }));
         (
             ItemId::new(emby.id.clone()),
             info.media_source_id,

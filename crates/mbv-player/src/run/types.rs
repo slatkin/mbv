@@ -87,6 +87,10 @@ pub(crate) struct PlaybackRun {
     pub(crate) item_lifecycle: ItemLifecycleState,
     pub(crate) pending_initial_playlist_layout: bool,
     pub(crate) stopped_event_sent: bool,
+    /// The submit-time start report waits for actual playback; this gates it
+    /// to the first `PlaybackRestart`, so a run that never plays reports no
+    /// Emby session start (and no churn with its stop report).
+    pub(crate) start_report_sent: bool,
     pub(crate) mark_played_id: Option<ItemId>,
     pub(crate) osd_title: String,
     pub(crate) last_mouse_osd: Option<Instant>,
