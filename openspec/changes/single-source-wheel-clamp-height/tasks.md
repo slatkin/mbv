@@ -13,8 +13,8 @@ Package for every command: `mbv-components`. Test contracts are in `design.md` D
 
 ## 3. MediaList wheel clamp
 
-- [ ] 3.1 In `media_list.rs`, thread a `viewport_len: usize` through the core operation path so the `Scroll` arm passes it to `scrolled_viewport_offset` in place of the literal `1`. The core's public `delegate_operation(op)` keeps its signature and passes `1`. Add the sibling entry that takes the length (crate-visible only). Update the `scroll_wheel` doc comment. Verify: `a_wheel_scroll_never_builds_the_row_flow` in `media_list/tests.rs` passes unchanged.
-- [ ] 3.2 In `media_list/wide.rs`, make `WideMediaList::delegate_operation` call the sibling entry with the height of `self.paint.last_content_rect()` (`.max(1)`). Verify: add one test in the wide list's test module (contract: a wheel at the end leaves the last row at the bottom of the viewport, #928). Paint 20 rows into a 5-row content rectangle, apply `Scroll` until the offset stops moving, assert the offset is 15. Run `cargo nextest run -p mbv-components media_list`.
+- [x] 3.1 In `media_list.rs`, thread a `viewport_len: usize` through the core operation path so the `Scroll` arm passes it to `scrolled_viewport_offset` in place of the literal `1`. The core's public `delegate_operation(op)` keeps its signature and passes `1`. Add the sibling entry that takes the length (crate-visible only). Update the `scroll_wheel` doc comment. Verify: `a_wheel_scroll_never_builds_the_row_flow` in `media_list/tests.rs` passes unchanged.
+- [x] 3.2 In `media_list/wide.rs`, make `WideMediaList::delegate_operation` call the sibling entry with the height of `self.paint.last_content_rect()` (`.max(1)`). Verify: add one test in the wide list's test module (contract: a wheel at the end leaves the last row at the bottom of the viewport, #928). Paint 20 rows into a 5-row content rectangle, apply `Scroll` until the offset stops moving, assert the offset is 15. Run `cargo nextest run -p mbv-components media_list`.
 
 ## 4. TreeBrowser
 
