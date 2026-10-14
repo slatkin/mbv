@@ -274,29 +274,47 @@ impl App {
     }
 
     pub(in crate::app) fn handle_cast_event(&mut self, event: CastEvent) {
-        // A worker event proves the worker thread is alive; the
-        // unresponsive-worker watchdog (`check_cast_worker_responsive`)
-        // reads the deadline this clears. Connect/discovery events come
-        // from other threads and prove nothing about the worker.
-        if matches!(
-            event,
-            CastEvent::Dispatched { .. }
-                | CastEvent::StatusUpdated { .. }
-                | CastEvent::TransportError(_)
-        ) {
-            self.cast_job_sent = None;
-        }
         match event {
             CastEvent::Dispatched {
                 receiver_id,
                 outcome,
                 uncastable,
-            } => self.apply_cast_dispatch(&receiver_id, outcome, &uncastable),
+            } => {
+                // A worker event proves the worker thread is alive; the
+                // unresponsive-worker watchdog (`check_cast_worker_responsive`)
+                // reads the deadline this clears. Only an event for the
+                // attached receiver clears it: a late event from a previous
+                // attachment's worker (the watchdog reconnect race) must not
+                // suspend watchdog coverage for this attachment's in-flight
+                // job. The `worker_gone` dispatch outcome carries an empty id
+                // and also leaves the clock armed -- nothing further will
+                // arrive from that worker, so the reconnect is the recovery.
+                if self
+                    .cast_attachment
+                    .as_ref()
+                    .is_some_and(|a| a.receiver_id == receiver_id)
+                {
+                    self.cast_job_sent = None;
+                }
+                self.apply_cast_dispatch(&receiver_id, outcome, &uncastable);
+            }
             CastEvent::StatusUpdated {
                 receiver_id,
                 status,
-            } => self.apply_cast_status(&receiver_id, status),
+            } => {
+                if self
+                    .cast_attachment
+                    .as_ref()
+                    .is_some_and(|a| a.receiver_id == receiver_id)
+                {
+                    self.cast_job_sent = None;
+                }
+                self.apply_cast_status(&receiver_id, status);
+            }
             CastEvent::TransportError(error) => {
+                // Carries no receiver id and can only come from a worker that
+                // just ran one of this attachment's jobs.
+                self.cast_job_sent = None;
                 self.flash(
                     format!("Cast command failed: {error}"),
                     ToastSeverity::Error,

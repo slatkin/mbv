@@ -19,16 +19,20 @@ use std::time::{Duration, Instant};
 pub(in crate::app) const CAST_STATUS_POLL_INTERVAL: Duration = Duration::from_secs(7);
 
 /// How long a submitted cast job may go without any worker event before the
-/// worker counts as unresponsive. Covers one dispatch in full -- the
-/// provider resolution round trip (Emby `PlaybackInfo`, hard-bound near 5s)
-/// plus the transport job -- or two poll intervals.
+/// worker counts as unresponsive. The worst legitimate dispatch waits out an
+/// in-flight status poll (one `CAST_STATUS_POLL_INTERVAL`), the provider
+/// resolution round trip (Emby `PlaybackInfo`, hard-bound near 5s), and the
+/// transport job itself; the bound adds margin over that sum. A
+/// slow-but-alive exchange that exceeds it is treated as the wedge anyway --
+/// the reconnect is the recovery, and a wedged worker never recovers on its
+/// own.
 ///
 /// The bound exists because `rust_cast` operations have no socket timeout:
 /// one unresponsive receiver exchange blocks the single worker thread
 /// forever. Status freezes and every later job queues behind it while the
 /// target still reads connected -- the observed "plays nothing, reads as
 /// connected" state after a receiver stops its media app.
-pub(in crate::app) const CAST_JOB_ANSWER_BOUND: Duration = Duration::from_secs(15);
+pub(in crate::app) const CAST_JOB_ANSWER_BOUND: Duration = Duration::from_secs(20);
 
 /// A progress report computed from a matched dispatched item, decoupled from
 /// how it's actually sent so the matching+extrapolation core (6.5, and the
@@ -83,13 +87,16 @@ impl App {
         receiver_id: &str,
         status: Result<CastStatus, CastError>,
     ) {
-        self.cast_status_loading = false;
         let Some(attachment) = self.cast_attachment.as_mut() else {
             return;
         };
         if attachment.receiver_id != receiver_id {
             return;
         }
+        // Only the poll this attachment spawned re-opens the tick gate: a
+        // late event from a previous attachment's worker (the watchdog
+        // reconnect race) must not clear a poll still in flight.
+        self.cast_status_loading = false;
         match status {
             Ok(status) => {
                 attachment.status = Some(status);
@@ -571,6 +578,53 @@ mod tests {
         let attachment = app.cast_attachment.as_ref().unwrap();
         assert!(!attachment.disconnected);
         assert!(attachment.client.is_some());
+    }
+
+    /// A late event from a previous attachment's worker (the watchdog
+    /// reconnect race) must not disturb the current attachment's watchdog
+    /// bookkeeping: the clock stays armed for the in-flight job and the poll
+    /// gate stays closed around its still-outstanding poll.
+    #[test]
+    fn a_stale_receivers_status_event_leaves_the_watchdog_bookkeeping_alone() {
+        let mut app = make_app_stub();
+        app.attach_cast("device-1".to_string(), "Living Room".to_string());
+        app.cast_job_sent = Some(Instant::now());
+        app.cast_status_loading = true;
+
+        app.handle_cast_event(CastEvent::StatusUpdated {
+            receiver_id: "device-2".to_string(),
+            status: Ok(CastStatus::idle()),
+        });
+
+        assert!(
+            app.cast_job_sent.is_some(),
+            "the watchdog clock stays armed for the in-flight job"
+        );
+        assert!(
+            app.cast_status_loading,
+            "the poll gate stays closed around the in-flight poll"
+        );
+    }
+
+    /// The `worker_gone` dispatch outcome carries an empty receiver id: no
+    /// worker event will ever arrive for that job, so the event must not
+    /// disarm the watchdog -- the reconnect it triggers is the recovery.
+    #[test]
+    fn a_worker_gone_dispatch_leaves_the_watchdog_armed_for_the_reconnect() {
+        let mut app = make_app_stub();
+        app.attach_cast("device-1".to_string(), "Living Room".to_string());
+        app.cast_job_sent = Some(Instant::now());
+
+        app.handle_cast_event(CastEvent::Dispatched {
+            receiver_id: String::new(),
+            outcome: Err(CastError::worker_gone()),
+            uncastable: Vec::new(),
+        });
+
+        assert!(
+            app.cast_job_sent.is_some(),
+            "the watchdog clock stays armed so the reconnect fires"
+        );
     }
 
     #[test]
