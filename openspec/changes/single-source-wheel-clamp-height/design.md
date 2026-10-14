@@ -66,6 +66,8 @@ One difference: `view` wrote `painted_content_area` even when `has_content` is f
 
 `last_painted` stores the `area` that `view` received. When `configured_geometry` is `None`, `view` uses `(area, area)`, so that area equals the content rectangle the paint stores. `viewport_height` becomes `configured_geometry` content height, else `paint.last_content_rect()` height. Precedence is unchanged.
 
+The first frame reconciles its viewport against the content area `view` is painting in that frame, passed in as a value. The retained rectangle serves calls between frames.
+
 ## Risks / Trade-offs
 
 - [A resize between paint and wheel clamps with the old height for one frame] → Same as today for `TreeBrowser` and `Sessions`. The paint-time `resolved_viewport_offset` corrects it. `MediaList` goes from "always one row" to "last painted height", which is closer to correct in every case.
