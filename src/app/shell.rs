@@ -45,6 +45,7 @@ mod feeds_manage;
 mod home;
 mod home_content;
 mod inline_search;
+mod input_port;
 mod library;
 mod library_panel;
 mod messages;
@@ -69,10 +70,10 @@ mod ui_state_reset;
 /// only affects how promptly a buffered event reaches the channel — not the
 /// render cadence.
 const TERMINAL_LISTENER_INTERVAL: Duration = Duration::from_millis(8);
-/// Upper bound on events the listener drains from crossterm in one worker
-/// cycle. Generous so a burst (e.g. a mouse drag) is flushed into the channel
-/// in one cycle; the main thread still processes at most one per tick via
-/// `PollStrategy::Once`, matching the legacy one-event-per-iteration loop.
+/// Upper bound on port polls, and so on events delivered to the channel, in one
+/// worker cycle. The input port folds runs of mouse moves, so one poll can read
+/// many terminal events; the main thread still processes at most one per tick
+/// via `PollStrategy::Once`, matching the legacy one-event-per-iteration loop.
 const TERMINAL_LISTENER_MAX_POLL: usize = 60;
 
 /// A second Esc inside this window stops playback; a single Esc stays free
@@ -252,8 +253,13 @@ impl Model {
     pub fn new(app: App) -> Self {
         Self::new_with_listener(
             app,
-            EventListenerCfg::default()
-                .crossterm_input_listener(TERMINAL_LISTENER_INTERVAL, TERMINAL_LISTENER_MAX_POLL),
+            EventListenerCfg::default().add_port(
+                Box::new(input_port::CoalescingInputPort::new(
+                    TERMINAL_LISTENER_INTERVAL,
+                )),
+                TERMINAL_LISTENER_INTERVAL,
+                TERMINAL_LISTENER_MAX_POLL,
+            ),
         )
     }
 
@@ -263,8 +269,13 @@ impl Model {
     ) -> Self {
         Self::new_with_listener_and_window(
             app,
-            EventListenerCfg::default()
-                .crossterm_input_listener(TERMINAL_LISTENER_INTERVAL, TERMINAL_LISTENER_MAX_POLL),
+            EventListenerCfg::default().add_port(
+                Box::new(input_port::CoalescingInputPort::new(
+                    TERMINAL_LISTENER_INTERVAL,
+                )),
+                TERMINAL_LISTENER_INTERVAL,
+                TERMINAL_LISTENER_MAX_POLL,
+            ),
             home_latest_launch_window,
         )
     }
