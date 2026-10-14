@@ -187,10 +187,14 @@ fn active_file_load_location() -> (&'static str, String) {
 /// Start playback at `start_idx` after the no-play queue loads (design D3).
 ///
 /// Set the deferred-start ordinal and select the target after the no-play
-/// loads. `playlist-play-index` is required as well as the position writes:
-/// `playlist-pos` can be a no-op when mpv already points at the requested
-/// ordinal (commonly entry zero), leaving a freshly loaded playlist idle.
-/// An armed audio-pipe startup pause stays in force until `PlaybackRestart`.
+/// loads. `playlist-play-index` starts (or restarts) playback of the given
+/// index; when the `playlist-pos` write already started the entry, the play
+/// command would restart it, and the just-loaded file ends with
+/// `end-file(stop)` — a standalone run treats that first end-file as its end
+/// (intermittent "Enter never starts playback", issue #938-era IPC timing).
+/// So the play command fires only while mpv is still idle; once playback
+/// began, the position write already did the work. An armed audio-pipe
+/// startup pause stays in force until `PlaybackRestart`.
 fn start_queue_playback(mpv: &Mpv, start_idx: usize) {
     // A position write can be a no-op on an already-selected idle entry, so
     // issue mpv's explicit play command rather than inferring playback from it.
@@ -206,6 +210,10 @@ fn start_queue_playback(mpv: &Mpv, start_idx: usize) {
         "playlist-pos",
         i64::try_from(start_idx).unwrap_or(i64::MAX),
     );
+    if !mpv.get_property::<bool>("idle-active").unwrap_or(true) {
+        tracing::info!(name: "player.queue_playback.already_started", target: "player", index = start_idx, "playlist-pos write started playback; skipping playlist-play-index");
+        return;
+    }
     if let Err(error) = mpv.command("playlist-play-index", &[&start_idx.to_string()]) {
         tracing::warn!(name: "player.queue_playback.start_failed", target: "player", index = start_idx, error = %error, "failed to start playlist index");
     }
