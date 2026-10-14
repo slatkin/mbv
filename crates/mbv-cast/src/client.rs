@@ -270,12 +270,10 @@ impl CastClient {
             .media
             .get_status(self.transport_id.as_str(), self.media_session_id)
             .map_err(|e| CastError::transport(TransportKind::Status, e))?;
-        let entry = status
-            .entries
-            .first()
-            .ok_or_else(CastError::status_no_entries)?;
-        self.adopt_status_entry(entry);
-        Ok(cast_status_from_entry(entry))
+        if let Some(entry) = status.entries.first() {
+            self.adopt_status_entry(entry);
+        }
+        Ok(status_from_entries(&status.entries))
     }
 
     fn adopt_status(&mut self, status: &rust_cast::channels::media::Status) {
@@ -334,6 +332,29 @@ fn cast_status_from_entry(entry: &StatusEntry) -> CastStatus {
         playback_rate: entry.playback_rate,
         state: cast_playback_state(entry.player_state),
         playing_content_id: entry.media.as_ref().map(|m| m.content_id.clone()),
+    }
+}
+
+/// The status of a receiver that reports no media session (cast-session-
+/// control "Receiver is idle"): idle, no position, no duration, no content
+/// id. An empty report is a status, not an error -- reporting it as `Err`
+/// made the app mark the target disconnected and drop the transport on the
+/// first poll after attach, so nothing could ever be dispatched to an idle
+/// receiver.
+fn status_from_entries(entries: &[StatusEntry]) -> CastStatus {
+    match entries.first() {
+        Some(entry) => cast_status_from_entry(entry),
+        None => idle_cast_status(),
+    }
+}
+
+fn idle_cast_status() -> CastStatus {
+    CastStatus {
+        position_seconds: None,
+        duration_seconds: None,
+        playback_rate: 1.0,
+        state: CastPlaybackState::Idle,
+        playing_content_id: None,
     }
 }
 
@@ -438,5 +459,23 @@ mod tests {
         assert_eq!(status.state, CastPlaybackState::Idle);
         assert_eq!(status.playing_content_id, None);
         assert_eq!(status.duration_seconds, None);
+    }
+
+    /// An idle receiver answers `get_status` with no entries at all (no
+    /// media session, recorded against the Shield Android TV spike setup).
+    /// That empty report must come back as an idle status, not as an error:
+    /// the app treats every status error as connection loss, so the error
+    /// form killed the attachment on the first poll after attach and made
+    /// the receiver undispatchable (cast-session-control "Receiver is
+    /// idle").
+    #[test]
+    fn empty_status_report_is_an_idle_status_not_an_error() {
+        let status = status_from_entries(&[]);
+        assert_eq!(status.state, CastPlaybackState::Idle);
+        assert_eq!(status.playing_content_id, None);
+        assert_eq!(status.position_seconds, None);
+
+        let status = status_from_entries(&[recorded_playing_entry()]);
+        assert_eq!(status.state, CastPlaybackState::Playing);
     }
 }

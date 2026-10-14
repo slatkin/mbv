@@ -397,6 +397,37 @@ mod tests {
     }
 
     #[test]
+    fn an_idle_receiver_stays_attached_and_dispatchable() {
+        // cast-session-control "Receiver is idle": an idle report is a
+        // status, not a connection loss. Before the client mapped an empty
+        // report to an idle status, the first poll after attach against an
+        // idle receiver errored, the target was marked disconnected, and the
+        // transport was dropped -- nothing could ever be dispatched to it.
+        let mut app = make_app_stub();
+        app.attach_cast("device-1".to_string(), "Living Room".to_string());
+        let (job_tx, _calls) = crate::app::state::types::cast::spawn_fake_cast_worker(
+            crate::app::state::types::cast::FakeCastTransport::default(),
+        );
+        app.set_cast_client("device-1", job_tx);
+
+        app.apply_cast_status(
+            "device-1",
+            Ok(mbv_cast::client::CastStatus {
+                position_seconds: None,
+                duration_seconds: None,
+                playback_rate: 1.0,
+                state: mbv_cast::client::CastPlaybackState::Idle,
+                playing_content_id: None,
+            }),
+        );
+
+        let attachment = app.cast_attachment.as_ref().unwrap();
+        assert!(!attachment.disconnected);
+        assert!(attachment.client.is_some(), "the transport stays usable");
+        assert_eq!(App::cast_now_playing_title(attachment), None);
+    }
+
+    #[test]
     fn a_dropped_connection_presents_disconnected_stops_polling_and_leaves_the_queue_intact() {
         let mut app = make_app_stub();
         let items = crate::app::tests::make_items(2);
