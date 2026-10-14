@@ -351,6 +351,16 @@ impl App {
         self.play_single_item(item, direct_remote, &label);
     }
 
+    /// The queue-view tail the library cast play arms share with their
+    /// local paths: the played scope becomes the viewed one, and focus
+    /// moves to the queue unless the play started in the library.
+    fn adopt_played_queue_view(&mut self) {
+        self.set_queue_scope(self.playing_queue_scope());
+        if !matches!(self.effective_panel_focus(), PanelFocus::Library) {
+            self.set_panel_focus(PanelFocus::Queue);
+        }
+    }
+
     /// The cast arm of `play_items_routed` (cast-session-control "Playing
     /// while attached"): the library selection is dispatched to the attached
     /// receiver and local playback never starts. The owner queue is loaded
@@ -369,11 +379,7 @@ impl App {
             .map(|item| QueueItem::Emby(Box::new(item)))
             .collect();
         self.play_selection_on_cast(queue_items, start_idx, queue_source);
-        self.set_queue_scope(self.playing_queue_scope());
-        // Keep library focus when playing from the library panel.
-        if !matches!(self.effective_panel_focus(), PanelFocus::Library) {
-            self.set_panel_focus(PanelFocus::Queue);
-        }
+        self.adopt_played_queue_view();
     }
 
     /// The cast arm of `play_item` (cast-session-control "Playing while
@@ -391,11 +397,7 @@ impl App {
             .map(|item| QueueItem::Emby(Box::new(item)))
             .collect();
         self.play_selection_on_cast(queue_items, start_idx, source);
-        self.set_queue_scope(self.playing_queue_scope());
-        // Keep library focus when playing from the library panel.
-        if !matches!(self.effective_panel_focus(), PanelFocus::Library) {
-            self.set_panel_focus(PanelFocus::Queue);
-        }
+        self.adopt_played_queue_view();
     }
 
     /// The selection an Emby play covers: the series continuation when

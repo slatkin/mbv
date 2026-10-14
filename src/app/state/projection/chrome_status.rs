@@ -29,20 +29,33 @@ impl App {
         ))
     }
 
+    /// The label naming the attached cast receiver, if one is attached.
+    /// Shared by the status-bar remote pill and the queue header so both
+    /// name the receiver consistently; the attachment keeps the discovered
+    /// friendly name because the discovery list is rebuilt on every F3
+    /// browse and may no longer hold the attached receiver.
+    fn cast_target_label(&self) -> Option<String> {
+        self.cast_attachment
+            .as_ref()
+            .map(|attachment| attachment.receiver_name.clone())
+    }
+
     pub(in crate::app) fn remote_status_spans(
         &self,
         remote_state: RemoteSlotState,
         daemon_endpoint: &str,
     ) -> Vec<Span<'static>> {
-        let remote_on = matches!(
-            remote_state,
-            RemoteSlotState::AttachedSession | RemoteSlotState::DirectRemote
-        );
+        let cast_target = self.cast_target_label();
+        let remote_on = cast_target.is_some()
+            || matches!(
+                remote_state,
+                RemoteSlotState::AttachedSession | RemoteSlotState::DirectRemote
+            );
         let glyph_style = Style::default()
             .bg(mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false).fill)
             .fg(ratatui::style::Color::White);
 
-        let target = match remote_state {
+        let target = cast_target.or(match remote_state {
             RemoteSlotState::LocalDaemon => None,
             RemoteSlotState::AttachedSession => {
                 self.connected_session_state.as_ref().and_then(|session| {
@@ -61,7 +74,7 @@ impl App {
                 .map(|name| format!("route:{name}"))
                 .or_else(|| self.remote.direct_remote_label.clone())
                 .or_else(|| daemon_endpoint_label(daemon_endpoint)),
-        };
+        });
         let gap = if self.use_nerd_fonts { " " } else { "  " };
         let label = match target {
             Some(target) => format!("{gap}{target}"),
@@ -105,19 +118,26 @@ impl App {
     }
 
     /// Returns `(icon, label)` for a remote pill without styling.
-    /// Used by queue-title rendering that applies its own colors.
+    /// Used by queue-title rendering that applies its own colors. An
+    /// attached cast receiver takes the connected glyph and names the label.
     pub(in crate::app) fn remote_icon_and_label(
         &self,
         remote_state: RemoteSlotState,
         daemon_endpoint: &str,
     ) -> (&'static str, String) {
-        let icon = match (self.use_nerd_fonts, remote_state) {
+        let cast_target = self.cast_target_label();
+        let connected = cast_target.is_some()
+            || matches!(
+                remote_state,
+                RemoteSlotState::AttachedSession | RemoteSlotState::DirectRemote
+            );
+        let icon = match (self.use_nerd_fonts, connected) {
             (false, _) => "\u{1F5A7}",
-            (true, RemoteSlotState::AttachedSession | RemoteSlotState::DirectRemote) => "\u{f0119}",
-            (true, _) => "\u{f0118}",
+            (true, true) => "\u{f0119}",
+            (true, false) => "\u{f0118}",
         };
         let gap = if self.use_nerd_fonts { " " } else { "  " };
-        let target = match remote_state {
+        let target = cast_target.or(match remote_state {
             RemoteSlotState::LocalDaemon => None,
             RemoteSlotState::AttachedSession => {
                 self.connected_session_state.as_ref().and_then(|session| {
@@ -136,7 +156,7 @@ impl App {
                 .map(|name| format!("route:{name}"))
                 .or_else(|| self.remote.direct_remote_label.clone())
                 .or_else(|| daemon_endpoint_label(daemon_endpoint)),
-        };
+        });
         let label = match target {
             Some(target) => format!("{gap}{target}"),
             None => format!("{gap}{}", mbv_emby::device_name()),
@@ -146,19 +166,14 @@ impl App {
 
     /// The playback target's host label plus whether it names a remote target
     /// (a cast attachment, an attached session, or a direct-remote
-    /// route/label): the connected session's device name (falling back to
-    /// its host), the direct-remote route/label, or this machine's device
-    /// name when playback is local — computed together from one
+    /// route/label): the attached receiver's name, the connected session's
+    /// device name (falling back to its host), the direct-remote route/label,
+    /// or this machine's device name when playback is local — computed
+    /// together from one
     /// `remote_slot_state()` resolution for callers (the queue header sync)
     /// that need both every tick. Callers style the returned label and the
     /// header row shows it verbatim.
     pub(in crate::app) fn playback_host_label_and_remote(&self) -> (String, bool) {
-        // The attached cast receiver names the host. The attachment stores
-        // the discovered friendly name because the discovery list is rebuilt
-        // on every F3 browse and may no longer hold the attached receiver.
-        if let Some(attachment) = self.cast_attachment.as_ref() {
-            return (attachment.receiver_name.clone(), true);
-        }
         let remote_state = self.remote_slot_state();
         let is_remote = self.cast_attachment.is_some()
             || matches!(
@@ -500,9 +515,29 @@ fn queue_source_status_label(
 #[cfg(test)]
 mod tests {
     use crate::app::PanelFocus;
+    use crate::app::RemoteSlotState;
     use crate::app::state::queue_view::QueueView;
     use crate::app::tests::{emby_unified_state, make_app_stub, make_items};
     use mbv_queue::PlayOrderMode;
+
+    /// Same consistency contract as the queue header: the status-bar remote
+    /// pill names the attached receiver instead of this machine's device
+    /// name, with the remote-on styling.
+    #[test]
+    fn attached_cast_receiver_names_the_status_bar_pill() {
+        let mut app = make_app_stub();
+        app.attach_cast("device-1".to_string(), "Living Room".to_string());
+
+        let spans = app.remote_status_spans(RemoteSlotState::LocalDaemon, "endpoint");
+
+        assert!(
+            spans
+                .iter()
+                .any(|span| span.content.contains("Living Room")),
+            "the pill names the attached receiver: {:?}",
+            spans.iter().map(|s| s.content.as_ref()).collect::<Vec<_>>()
+        );
+    }
 
     /// queue-play-order spec, "The footer shows Shuffle": the shuffle
     /// indicator follows the owner's play order, not the panel under the
