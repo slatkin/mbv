@@ -458,6 +458,7 @@ impl Player {
     /// Panics if the `stop_tx` mutex is poisoned, or if the `wakeup_fd` mutex is
     /// poisoned. Both mean a previous owner panicked while holding the lock.
     pub fn stop(&self) {
+        tracing::info!(name: "player.stop.requested", target: "player", "player stop requested");
         if let Some(tx) = self.stop_tx.lock().unwrap().take() {
             let _ = tx.send(());
         }

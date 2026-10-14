@@ -297,6 +297,7 @@ fn persist_shutdown_queue(ctx: &CtrlContext<'_>, queue_state: &mbv_queue::QueueS
 /// jump — a stop makes every awaited transition identity unobservable. Shared
 /// verbatim by the `Stop` command and `PlaybackIntentAction::Stop`.
 fn handle_stop(ctx: &mut CtrlContext<'_>) {
+    tracing::info!(name: "daemon.ctrl_stop.received", target: "daemon", client = %ctx.client_id, "ctrl stop received");
     let DaemonPlayerOwner {
         core: PlayerOwnerState { transitions, .. },
         queued_transition_origin,

@@ -106,6 +106,7 @@ impl PlaybackRun {
         reason: EndFileReason,
         progress: &mut ProgressGuard,
     ) -> bool {
+        tracing::info!(name: "player.end_file.standalone", target: "player", reason = ?reason, "standalone run end-file");
         if reason == EndFileReason::Quit {
             self.pin_stop_runtime();
         }

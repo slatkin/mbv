@@ -218,6 +218,7 @@ pub(super) fn handle_queue_load_idle(
             stopped_run,
             started_at: Instant::now(),
         });
+        tracing::info!(name: "daemon.idle_load.stop_active_run", target: "daemon", request = %request_id, "queue load parked; stopping the active run");
         ctx.player.stop();
         return;
     }

@@ -181,6 +181,7 @@ impl PlaybackRun {
     /// that path asynchronous and let the bounded fallback
     /// handle a delayed Shutdown event.
     fn handle_stop_request(&mut self, mpv: &Mpv) {
+        tracing::info!(name: "player.run.stop_request", target: "player", "run applying a stop request");
         if self.config.audio_pipe_path.is_some() {
             let _ = mpv.command_async("quit", &[]);
         } else {

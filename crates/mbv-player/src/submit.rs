@@ -449,6 +449,7 @@ fn load_queue_sources(
             queue_load_location(index, start.start_idx)
         };
         let options = prepared.mpv_load_options(item);
+        tracing::info!(name: "player.queue_load.started", target: "player", { url.path = %mbv_core::applog::UrlPath(prepared.url.as_str()), mode = mode }, "queue loadfile starting");
         if let Err(error) = mpv.command(
             "loadfile",
             &[prepared.url.as_str(), mode, &position, &options],
