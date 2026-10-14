@@ -8,6 +8,7 @@ mod proxy;
 mod resume_refresh;
 mod session;
 mod session_feed;
+mod session_report;
 mod status;
 mod submit;
 
