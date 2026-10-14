@@ -434,6 +434,10 @@ impl App {
     /// `dispatch`; every early exit there returned `false`, i.e. fell through
     /// to dispatch's own `false` tail).
     pub(in crate::app) fn dispatch_queue_play_cursor(&mut self, t: usize) {
+        if self.is_cast_attached() {
+            self.dispatch_queue_play_cursor_to_cast(t);
+            return;
+        }
         let Some(item) = self.queue_play_cursor_item(t) else {
             return;
         };
@@ -448,6 +452,23 @@ impl App {
             return;
         }
         self.play_queue_cursor_locally(t, &item, slot_id, all_slots);
+    }
+
+    /// The cast arm of `dispatch_queue_play_cursor` (cast-session-control
+    /// "Playing while attached"): Enter on a queue row dispatches the queue
+    /// to the attached receiver starting at the cursor -- the same selection
+    /// the local cold start would submit -- instead of starting local
+    /// playback. No owner call is made: the queue is already the owner's, and
+    /// owner admission does not gate a cast dispatch (dispatch resolution
+    /// surfaces uncastable items by name instead).
+    fn dispatch_queue_play_cursor_to_cast(&mut self, t: usize) {
+        let queue = self.displayed_queue();
+        if t >= queue.total_queue_len() {
+            return;
+        }
+        let items: Vec<mbv_queue::QueueItem> =
+            queue.slots().iter().map(|slot| slot.item.clone()).collect();
+        self.dispatch_selection_to_cast(items, t);
     }
 
     fn queue_play_cursor_item(&mut self, t: usize) -> Option<mbv_queue::QueueItem> {

@@ -128,7 +128,7 @@ mod tests {
         app.player.update_status(|status| status.active = true);
         assert!(app.visualizer_should_run());
 
-        app.attach_cast("device-1".to_string());
+        app.attach_cast("device-1".to_string(), "Living Room".to_string());
 
         assert!(!app.visualizer_should_run());
     }

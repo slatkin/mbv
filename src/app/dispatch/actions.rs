@@ -218,6 +218,10 @@ impl App {
             self.flash(CONNECTION_LOST_MESSAGE.into(), ToastSeverity::Warning);
             return;
         }
+        if self.is_cast_attached() {
+            self.play_items_routed_on_cast(items, start_idx, queue_source);
+            return;
+        }
         let mixed_unplayable = match self.playback_eligibility(&items) {
             PlaybackEligibility::WhollyUnplayable { .. } => {
                 self.defer_local_play(items, start_idx, queue_source.clone());
@@ -310,6 +314,13 @@ impl App {
             return;
         }
         tracing::info!(name: "library_route.play.requested", target: "library_route", item = %item.id, item_name = %item.name, "play requested");
+        if self.is_cast_attached() {
+            // cast-session-control "Playing while attached": the selection
+            // the local path would have queued is dispatched to the attached
+            // receiver instead, and local playback never starts.
+            self.play_item_on_cast(item);
+            return;
+        }
         if matches!(
             self.playback_eligibility(std::slice::from_ref(&item)),
             PlaybackEligibility::WhollyUnplayable { .. }
@@ -338,6 +349,75 @@ impl App {
             return;
         }
         self.play_single_item(item, direct_remote, &label);
+    }
+
+    /// The cast arm of `play_items_routed` (cast-session-control "Playing
+    /// while attached"): the library selection is dispatched to the attached
+    /// receiver and local playback never starts. The owner queue is loaded
+    /// idle (no playback-starting command) so the queue view still adopts
+    /// the selection, mirroring the attached-session path. Dispatch
+    /// resolution -- not owner admission -- gates what is castable, so the
+    /// local audio-only deferral does not apply here.
+    fn play_items_routed_on_cast(
+        &mut self,
+        items: Vec<EmbyItem>,
+        start_idx: usize,
+        queue_source: mbv_queue::QueueSource,
+    ) {
+        let queue_items: Vec<QueueItem> = items
+            .into_iter()
+            .map(|item| QueueItem::Emby(Box::new(item)))
+            .collect();
+        self.play_selection_on_cast(queue_items, start_idx, queue_source);
+        self.set_queue_scope(self.playing_queue_scope());
+        // Keep library focus when playing from the library panel.
+        if !matches!(self.effective_panel_focus(), PanelFocus::Library) {
+            self.set_panel_focus(PanelFocus::Queue);
+        }
+    }
+
+    /// The cast arm of `play_item` (cast-session-control "Playing while
+    /// attached"): the selection the local path would have queued -- the
+    /// item alone, or the series continuation when always-play-next is on --
+    /// is dispatched to the attached receiver instead of starting local
+    /// playback. The queue view adopts the selection through the idle owner
+    /// load in `play_selection_on_cast`.
+    fn play_item_on_cast(&mut self, item: EmbyItem) {
+        let Some((items, start_idx, source)) = self.cast_play_selection(item) else {
+            return;
+        };
+        let queue_items: Vec<QueueItem> = items
+            .into_iter()
+            .map(|item| QueueItem::Emby(Box::new(item)))
+            .collect();
+        self.play_selection_on_cast(queue_items, start_idx, source);
+        self.set_queue_scope(self.playing_queue_scope());
+        // Keep library focus when playing from the library panel.
+        if !matches!(self.effective_panel_focus(), PanelFocus::Library) {
+            self.set_panel_focus(PanelFocus::Queue);
+        }
+    }
+
+    /// The selection an Emby play covers: the series continuation when
+    /// always-play-next is on and the item belongs to a multi-episode
+    /// series, else the single item. `None` when the series lookup fails
+    /// (Emby unavailable) -- flashed, and the play stops, matching the local
+    /// path's series continuation.
+    fn cast_play_selection(
+        &mut self,
+        item: EmbyItem,
+    ) -> Option<(Vec<EmbyItem>, usize, mbv_queue::QueueSource)> {
+        if item.series_id.is_empty() || !self.player.always_play_next {
+            return Some((vec![item], 0, mbv_queue::QueueSource::Unknown));
+        }
+        let Some(episodes) = self.series_episodes_from(&item) else {
+            self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
+            return None;
+        };
+        if episodes.len() <= 1 {
+            return Some((vec![item], 0, mbv_queue::QueueSource::Unknown));
+        }
+        Some((episodes, 0, mbv_queue::QueueSource::Series))
     }
 
     /// Plays the rest of a series when "always play next" is on and the item
@@ -525,23 +605,9 @@ impl App {
         // "Attaching to a cast target does not engage the local player") and
         // must never begin local playback of it.
         if self.is_cast_attached() {
-            if answered {
-                // The receiver is handed the owner-accepted queue: the idle
-                // load's correlated answer gates the dispatch, so a rejected
-                // or unanswered load (another idle load pending, a stale
-                // owner) flashes and dispatches nothing.
-                let Some(request_id) = self.send_idle_queue_load(
-                    vec![item.clone()],
-                    0,
-                    mbv_queue::QueueSource::Unknown,
-                ) else {
-                    return false;
-                };
-                if !self.await_queue_load(request_id) {
-                    return false;
-                }
+            if !self.play_selection_on_cast(vec![item], 0, mbv_queue::QueueSource::Unknown) {
+                return false;
             }
-            self.dispatch_selection_to_cast(vec![item], 0);
         } else {
             // Row 5.3 (design D6): play replaces the owner queue with exactly
             // this item and starts it, as an answered op when the owner

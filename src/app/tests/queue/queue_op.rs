@@ -15,11 +15,11 @@ use mbv_ctrl::player::PlayerEvent;
 use mbv_ctrl::{CtrlCmd, QueueOpId, QueueOpOutcome};
 use mbv_queue::{QueueItem, QueueSource};
 use mbv_remote_player::QueueOp;
-use std::sync::{Arc, mpsc};
+use std::sync::mpsc;
 use std::time::Duration;
 
 /// Local-daemon stub whose owner advertises `answered-queue-ops`.
-fn answered_local_daemon_app() -> (App, mpsc::Receiver<CtrlCmd>) {
+pub(super) fn answered_local_daemon_app() -> (App, mpsc::Receiver<CtrlCmd>) {
     let (remote, player_rx, cmd_rx) =
         mbv_remote_player::RemotePlayer::stub_answered_queue_ops_with_command_rx(make_items(2), 0);
     let config = crate::config::Config {
@@ -42,7 +42,7 @@ fn answered_local_daemon_app() -> (App, mpsc::Receiver<CtrlCmd>) {
 
 /// Replace the Local link's event receiver with an injected one; keep the
 /// sender alive to deliver preloaded events.
-fn inject_player_rx(app: &mut App) -> mpsc::Sender<PlayerEvent> {
+pub(super) fn inject_player_rx(app: &mut App) -> mpsc::Sender<PlayerEvent> {
     let (tx, rx) = mpsc::channel();
     app.player_rx = rx;
     tx
@@ -562,153 +562,6 @@ fn single_item_play_replaces_the_populated_queue_with_the_played_item() {
         app.status.is_empty(),
         "a timely answer must not flash a timeout"
     );
-}
-
-fn feed_queue_item() -> QueueItem {
-    QueueItem::Feed(mbv_queue::FeedEntry {
-        guid: "cast-play".into(),
-        title: "Episode".into(),
-        enclosure_url: Some("https://feed/example.mp3".into()),
-        link: None,
-        mime_type: Some("audio/mpeg".into()),
-        duration_ticks: None,
-        pub_date_secs: None,
-        feed_kind: None,
-        feed_id: Some("feed".into()),
-        position_ticks: 0,
-        played: false,
-    })
-}
-
-/// Wait for the fake cast worker thread to record a matching call instead of
-/// sleeping a fixed delay: the transport records synchronously, so only the
-/// dispatch/worker thread hops are async. Fails loudly at the deadline if the
-/// call never arrives (same shape as the `playback_target` cast tests).
-fn wait_for_cast_call(
-    calls: &Arc<std::sync::Mutex<Vec<String>>>,
-    mut matches: impl FnMut(&str) -> bool,
-    desc: &str,
-) {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
-    loop {
-        if calls.lock().unwrap().iter().any(|call| matches(call)) {
-            return;
-        }
-        assert!(
-            std::time::Instant::now() < deadline,
-            "timed out waiting for cast call {desc}"
-        );
-        std::thread::sleep(std::time::Duration::from_millis(1));
-    }
-}
-
-/// Bounded negative check that no cast call was recorded: the dispatch thread
-/// is only ever spawned after the gate, so the short grace window just closes
-/// the race where a hypothetical misplaced dispatch would still be recording.
-fn assert_no_cast_call(calls: &Arc<std::sync::Mutex<Vec<String>>>) {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_millis(100);
-    while std::time::Instant::now() < deadline {
-        assert!(
-            calls.lock().unwrap().is_empty(),
-            "the receiver must not be handed a queue the owner never accepted"
-        );
-        std::thread::sleep(std::time::Duration::from_millis(1));
-    }
-    assert!(
-        calls.lock().unwrap().is_empty(),
-        "the receiver must not be handed a queue the owner never accepted"
-    );
-}
-
-#[test]
-fn cast_attached_play_loads_the_owner_queue_without_starting_playback() {
-    // cast-session-control "Attaching to a cast target does not engage the
-    // local player": playing while attached dispatches the selection to the
-    // receiver and SHALL NOT begin local playback of it. The owner's
-    // `Replace` op always starts playback, so the owner queue is loaded
-    // through the idle-load route instead, and the receiver is dispatched the
-    // played item (queue-owner-process #857 review follow-up).
-    let (mut app, cmd_rx) = answered_local_daemon_app();
-    let tx = inject_player_rx(&mut app);
-    // The idle load's correlated answer gates the dispatch; preload the
-    // owner's acceptance so the pump finds it without waiting.
-    tx.send(PlayerEvent::UnifiedQueueLoadResult {
-        request_id: 1,
-        result: mbv_ctrl::QueueLoadResult::Accepted,
-    })
-    .unwrap();
-    app.attach_cast("device-1".to_string());
-    let (job_tx, calls) = crate::app::state::types::cast::spawn_fake_cast_worker(
-        crate::app::state::types::cast::FakeCastTransport::default(),
-    );
-    app.set_cast_client("device-1", job_tx);
-
-    assert!(app.submit_queue_item(feed_queue_item(), true));
-
-    match cmd_rx.try_recv().unwrap() {
-        CtrlCmd::UnifiedQueueLoadIdle { slots, cursor, .. } => {
-            assert_eq!(slots.len(), 1, "the played item is the whole loaded queue");
-            assert_eq!(cursor, 0, "the load starts at the played item");
-        }
-        other => {
-            panic!("cast-attached play must not send a playback-starting command, got {other:?}")
-        }
-    }
-    assert!(
-        cmd_rx.try_iter().all(|command| !matches!(
-            command,
-            CtrlCmd::UnifiedQueueReplace { .. } | CtrlCmd::UnifiedQueuePlaySlot { .. }
-        )),
-        "no playback-starting command reaches the owner"
-    );
-
-    // The receiver is dispatched the played selection.
-    wait_for_cast_call(
-        &calls,
-        |call| call == "load_queue(1, 0)",
-        "load_queue(1, 0)",
-    );
-}
-
-#[test]
-fn cast_attached_play_dispatches_nothing_when_the_owner_rejects_the_idle_load() {
-    // The receiver is handed the owner-accepted queue, so a rejected idle
-    // load — the owner's "another idle queue load is pending" gate — must
-    // dispatch nothing: the correlated answer gates the dispatch like the
-    // answered queue ops (queue-owner-process #857 review follow-up).
-    let (mut app, cmd_rx) = answered_local_daemon_app();
-    let tx = inject_player_rx(&mut app);
-    tx.send(PlayerEvent::UnifiedQueueLoadResult {
-        request_id: 1,
-        result: mbv_ctrl::QueueLoadResult::Rejected {
-            reason: "another idle queue load is pending".into(),
-        },
-    })
-    .unwrap();
-    app.attach_cast("device-1".to_string());
-    let (job_tx, calls) = crate::app::state::types::cast::spawn_fake_cast_worker(
-        crate::app::state::types::cast::FakeCastTransport::default(),
-    );
-    app.set_cast_client("device-1", job_tx);
-
-    assert!(
-        !app.submit_queue_item(feed_queue_item(), true),
-        "a rejected load fails the submit"
-    );
-
-    assert!(
-        app.status.contains("Queue load rejected"),
-        "the rejection is flashed, got {:?}",
-        app.status
-    );
-    assert!(
-        matches!(
-            cmd_rx.try_recv().unwrap(),
-            CtrlCmd::UnifiedQueueLoadIdle { .. }
-        ),
-        "the load was sent before the rejection came back"
-    );
-    assert_no_cast_call(&calls);
 }
 
 #[test]

@@ -67,9 +67,10 @@ impl App {
     /// tick regardless, but doing it here covers the frame between attach
     /// and that tick, and both of this function's callers -- selection and
     /// reattach -- need the same teardown).
-    pub(in crate::app) fn attach_cast(&mut self, receiver_id: String) {
+    pub(in crate::app) fn attach_cast(&mut self, receiver_id: String, receiver_name: String) {
         self.cast_attachment = Some(CastAttachment {
             receiver_id,
+            receiver_name,
             client: None,
             dispatched: Vec::new(),
             status: None,
@@ -93,7 +94,8 @@ impl App {
             PanelTarget::Emby(session) => self.connect_to_session(&session),
             PanelTarget::Cast(receiver) => {
                 self.sever_active_connection();
-                self.attach_cast(receiver.id.clone());
+                let name = receiver.friendly_name.clone();
+                self.attach_cast(receiver.id.clone(), name);
                 self.connect_cast_receiver(receiver.id, CAST_ATTACH_TIMEOUT);
             }
         }
@@ -190,6 +192,37 @@ impl App {
         });
     }
 
+    /// Plays a selection on the attached receiver (cast-session-control
+    /// "Playing while attached"): the owner queue is loaded without
+    /// starting playback -- the owner's `Replace` op always starts it -- and
+    /// the selection is dispatched to the receiver. Capable owners gate the
+    /// dispatch on the load's correlated answer; legacy owners are
+    /// dispatched with no owner call at all (the same gate
+    /// `submit_queue_item` applies). Returns whether the dispatch was sent.
+    pub(in crate::app) fn play_selection_on_cast(
+        &mut self,
+        items: Vec<QueueItem>,
+        start_index: usize,
+        source: mbv_queue::QueueSource,
+    ) -> bool {
+        let answered = self
+            .queue_link(self.playing_queue_scope())
+            .0
+            .remote()
+            .supports_answered_queue_ops();
+        if answered {
+            let Some(request_id) = self.send_idle_queue_load(items.clone(), start_index, source)
+            else {
+                return false;
+            };
+            if !self.await_queue_load(request_id) {
+                return false;
+            }
+        }
+        self.dispatch_selection_to_cast(items, start_index);
+        true
+    }
+
     pub(in crate::app) fn audiobookshelf_cast_context(&self) -> Option<AbsCastContext> {
         let config = self.config.lock().unwrap().clone();
         let (setup, credential) =
@@ -249,7 +282,14 @@ impl App {
                 receiver_id,
                 client,
             } => {
-                self.attach_cast(receiver_id.clone());
+                // The connected connect re-attaches over the optimistic
+                // attachment (8.3), so it must carry the receiver's name too:
+                // resolve it from the discovery list the selection came from.
+                let name = self.cast_receivers.iter().find_map(|receiver| {
+                    (receiver.id == receiver_id).then(|| receiver.friendly_name.clone())
+                });
+                let name = name.unwrap_or_else(|| receiver_id.clone());
+                self.attach_cast(receiver_id.clone(), name);
                 self.set_cast_client(&receiver_id, client);
             }
             CastEvent::ConnectFailed { receiver_id, error } => {
@@ -527,7 +567,7 @@ mod tests {
             right: 1.0,
         }];
 
-        app.attach_cast("device-1".to_string());
+        app.attach_cast("device-1".to_string(), "Living Room".to_string());
 
         assert_eq!(
             app.visualizer_window.samples,

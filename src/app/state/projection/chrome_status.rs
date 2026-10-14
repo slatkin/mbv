@@ -153,6 +153,12 @@ impl App {
     /// that need both every tick. Callers style the returned label and the
     /// header row shows it verbatim.
     pub(in crate::app) fn playback_host_label_and_remote(&self) -> (String, bool) {
+        // The attached cast receiver names the host. The attachment stores
+        // the discovered friendly name because the discovery list is rebuilt
+        // on every F3 browse and may no longer hold the attached receiver.
+        if let Some(attachment) = self.cast_attachment.as_ref() {
+            return (attachment.receiver_name.clone(), true);
+        }
         let remote_state = self.remote_slot_state();
         let is_remote = self.cast_attachment.is_some()
             || matches!(
@@ -502,6 +508,21 @@ mod tests {
     /// indicator follows the owner's play order, not the panel under the
     /// cursor — it shows with the Library panel focused (design D7), where
     /// the queue-source label stays hidden.
+    /// The attached cast receiver names the queue header's host, matching
+    /// the connected icon cast-session-control "Playing while attached"
+    /// pairs with it: the header previously showed the connected icon but
+    /// labelled the host with this machine's device name.
+    #[test]
+    fn attached_cast_receiver_names_the_queue_header_host() {
+        let mut app = make_app_stub();
+        app.attach_cast("device-1".to_string(), "Living Room".to_string());
+
+        let (host, is_remote) = app.playback_host_label_and_remote();
+
+        assert_eq!(host, "Living Room");
+        assert!(is_remote);
+    }
+
     #[test]
     fn shuffle_indicator_shows_with_the_library_panel_focused() {
         let mut app = make_app_stub();

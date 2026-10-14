@@ -307,6 +307,7 @@ mod tests {
     fn attachment(dispatched_items: Vec<DispatchedCastItem>) -> CastAttachment {
         CastAttachment {
             receiver_id: "device-1".into(),
+            receiver_name: "Living Room".into(),
             client: None,
             dispatched: dispatched_items,
             status: None,
@@ -355,7 +356,7 @@ mod tests {
     #[test]
     fn a_fresh_status_report_corrects_drift() {
         let mut app = make_app_stub();
-        app.attach_cast("device-1".to_string());
+        app.attach_cast("device-1".to_string(), "Living Room".to_string());
         app.cast_attachment.as_mut().unwrap().dispatched = vec![dispatched("https://a")];
         app.apply_cast_status("device-1", Ok(playing_status(10.0, "https://a")));
         // A later report disagrees with where extrapolation from the first
@@ -377,7 +378,7 @@ mod tests {
     fn spawn_cast_status_poll_calls_keep_alive_and_status_on_the_transport() {
         use crate::app::state::types::cast::{FakeCastTransport, spawn_fake_cast_worker};
         let mut app = make_app_stub();
-        app.attach_cast("device-1".to_string());
+        app.attach_cast("device-1".to_string(), "Living Room".to_string());
         let (job_tx, calls) = spawn_fake_cast_worker(FakeCastTransport {
             status: Some(playing_status(1.0, "https://a")),
             ..Default::default()
@@ -400,7 +401,7 @@ mod tests {
         let mut app = make_app_stub();
         let items = crate::app::tests::make_items(2);
         app.local_view.adopt_items(items.clone(), 0);
-        app.attach_cast("device-1".to_string());
+        app.attach_cast("device-1".to_string(), "Living Room".to_string());
         let (job_tx, _calls) = crate::app::state::types::cast::spawn_fake_cast_worker(
             crate::app::state::types::cast::FakeCastTransport::default(),
         );

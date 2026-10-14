@@ -104,7 +104,7 @@ mod tests {
 
     fn attached_app_with_fake_transport() -> (App, Arc<Mutex<Vec<String>>>) {
         let mut app = make_app_stub();
-        app.attach_cast("device-1".to_string());
+        app.attach_cast("device-1".to_string(), "Living Room".to_string());
         let (job_tx, calls) = spawn_fake_cast_worker(FakeCastTransport::default());
         app.set_cast_client("device-1", job_tx);
         (app, calls)
