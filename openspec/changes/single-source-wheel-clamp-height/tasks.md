@@ -18,7 +18,7 @@ Package for every command: `mbv-components`. Test contracts are in `design.md` D
 
 ## 4. TreeBrowser
 
-- [ ] 4.1 In `list/tree_browser.rs` and `list/tree_browser/render.rs`, delete the `last_painted` field, its init, and its write in `view`. In `list/tree_browser/operations.rs`, change `viewport_height` to `configured_geometry` content height, else `self.paint.last_content_rect()` height. Verify: `rg last_painted crates/mbv-components/src/list` returns nothing, and `cargo nextest run -p mbv-components tree_browser` passes with no test changed.
+- [x] 4.1 In `list/tree_browser.rs` and `list/tree_browser/render.rs`, delete the `last_painted` field, its init, and its write in `view`. In `list/tree_browser/operations.rs`, change `viewport_height` to `configured_geometry` content height, else `self.paint.last_content_rect()` height. Verify: `rg last_painted crates/mbv-components/src/list` returns nothing, and `cargo nextest run -p mbv-components tree_browser` passes with no test changed.
 
 ## 5. Spec sync and gates
 
