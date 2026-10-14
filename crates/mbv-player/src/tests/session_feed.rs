@@ -406,6 +406,33 @@ fn reporter_with_session_stopped_proceeds_to_client(
     assert!(requests[0].starts_with("POST /Sessions/Playing/Stopped"));
 }
 
+#[rstest::rstest]
+fn progress_and_ping_send_nothing_before_the_start_report(
+    make_no_session_reporter_with_ids: (SessionReporter, mbv_net::mock_http::MockHttp),
+) {
+    // The ids resolve at submit, but Emby has no session until the first
+    // start report goes out: the progress thread (spawned at submit, ticking
+    // on its interval) and pings must not reference a session the server
+    // never saw started.
+    let (reporter, http) = make_no_session_reporter_with_ids;
+    assert!(reporter.has_session());
+
+    reporter.report_progress("TimeUpdate");
+    reporter.report_ping();
+    assert!(
+        http.requests().is_empty(),
+        "nothing is sent before the start report: {:?}",
+        http.requests()
+    );
+
+    reporter
+        .start_reported
+        .store(true, std::sync::atomic::Ordering::Relaxed);
+    http.respond(200, "");
+    reporter.report_progress("TimeUpdate");
+    assert_eq!(http.requests().len(), 1, "the gate opens on the start");
+}
+
 #[rstest::fixture]
 fn make_no_session_reporter_with_ids() -> (SessionReporter, mbv_net::mock_http::MockHttp) {
     let status = Arc::new(Mutex::new(PlayerStatus::default()));
@@ -758,6 +785,48 @@ fn first_playback_restart_reports_the_emby_start_once() {
             Mpv::for_test(crate::mpv_session::ipc::IpcSession::from_stream(ours).expect("session"));
 
         session.on_playback_restart(&mpv);
+        session.on_playback_restart(&mpv);
+        // Sentinel: FIFO order makes every earlier line observable before it.
+        session.reporter.report_stopped_background(0);
+        let drained = collect_until_captured_line(&line_rx, "sent stopped report");
+        let starts = drained
+            .iter()
+            .filter(|line| line.contains("event=emby.playback_start.requested"))
+            .count();
+        assert_eq!(starts, 1, "exactly one start report, drained: {drained:?}");
+    });
+}
+
+#[test]
+fn a_start_reported_by_the_advance_path_is_not_repeated_by_the_first_restart() {
+    // An advance whose start report already went out (a submitted item that
+    // failed before playing, or a mixed queue's first Emby item) must not be
+    // duplicated when the run's first `PlaybackRestart` arrives for that
+    // item -- the reporter's start flag, not a run-local one-shot, decides.
+    use tracing_subscriber::prelude::*;
+
+    let (line_tx, line_rx) = mpsc::channel();
+    let subscriber = tracing_subscriber::registry().with(capture_layer(line_tx));
+
+    tracing::subscriber::with_default(subscriber, || {
+        let (mut session, _status, _events, http) = make_queue_session_for_pos_tests_with_mock(0);
+        for _ in 0..6 {
+            http.respond(200, "");
+        }
+        let (ours, _peer) = std::os::unix::net::UnixStream::pair().expect("socket pair");
+        let mpv =
+            Mpv::for_test(crate::mpv_session::ipc::IpcSession::from_stream(ours).expect("session"));
+
+        // The advance path's order: `start_item` reports the start before the
+        // item's `PlaybackRestart` can arrive.
+        let item = session
+            .active_item()
+            .and_then(QueueItem::as_emby)
+            .expect("the queue holds Emby items")
+            .clone();
+        let (_urls, ok) = session.reporter.start_item(&item, &session.playback_span);
+        assert!(ok, "the mock answered the advance's start report");
+
         session.on_playback_restart(&mpv);
         // Sentinel: FIFO order makes every earlier line observable before it.
         session.reporter.report_stopped_background(0);

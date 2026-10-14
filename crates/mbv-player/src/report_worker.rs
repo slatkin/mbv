@@ -200,6 +200,13 @@ pub(super) struct SessionReporter {
     pub(super) ids: Arc<Mutex<(ItemId, MediaSourceId, EmbySessionId)>>,
     // Shared with progress thread so it knows whether to send progress or just ping.
     pub(super) is_audio: Arc<AtomicBool>,
+    /// Set once any start report has been issued for this reporter. Emby has
+    /// no session before the first start report, so progress and ping gate on
+    /// it (their reports would reference a session the server never saw), and
+    /// `report_start_when_playing` gates on it so a start already issued by an
+    /// advance path (`start_item`/`transition_to`) is not repeated when the
+    /// run's first `PlaybackRestart` arrives for that item.
+    pub(super) start_reported: Arc<AtomicBool>,
     status: Arc<Mutex<PlayerStatus>>,
     // FIFO worker: stopped/start/progress-join jobs are sent here instead of
     // spawning a detached thread per call, so an outgoing stopped-report and
@@ -230,6 +237,7 @@ impl SessionReporter {
             ws_tx,
             ids: Arc::new(Mutex::new((item_id, msid, sid))),
             is_audio: Arc::new(AtomicBool::new(is_audio)),
+            start_reported: Arc::new(AtomicBool::new(false)),
             status,
             job_tx,
         }
@@ -297,9 +305,11 @@ impl SessionReporter {
     // Sends progress via websocket when connected, otherwise falls back to HTTP.
     // Recovers from poisoned mutexes so the progress thread never panics while
     // holding a lock.  No-op when the reporter has no session (feed-only
-    // playback) so callers never need to guard.
+    // playback) or no start report has been sent yet (the progress thread
+    // spawns at submit and would otherwise reference a session Emby never
+    // saw started), so callers never need to guard.
     pub(super) fn report_progress(&self, event_name: &str) {
-        if !self.has_session() {
+        if !self.has_session() || !self.start_reported.load(Ordering::Relaxed) {
             return;
         }
         let (id, msid, sid) = self
@@ -368,6 +378,7 @@ impl SessionReporter {
         media_source_id: &MediaSourceId,
         session_id: &EmbySessionId,
     ) {
+        self.start_reported.store(true, Ordering::Relaxed);
         let _ = self.job_tx.send(ReportJob::Start {
             client: Arc::clone(&self.client),
             item: Box::new(item.clone()),
@@ -381,8 +392,11 @@ impl SessionReporter {
     /// Fire-and-forget `report_start` for the item the run is playing, using
     /// the ids the submit already resolved. Called by the run when playback
     /// actually begins, so a run that never plays reports no session start.
+    /// A no-op once any start report went out (an advance path's
+    /// `start_item`/`transition_to` already covers this run), so the run can
+    /// call it on every `PlaybackRestart` without duplicating the report.
     pub(super) fn report_start_when_playing(&self, item: &EmbyItem) {
-        if !self.has_session() {
+        if self.start_reported.load(Ordering::Relaxed) || !self.has_session() {
             return;
         }
         let (_, media_source_id, session_id) = self.ids.lock().unwrap().clone();
@@ -409,6 +423,9 @@ impl SessionReporter {
     }
 
     pub(super) fn report_ping(&self) {
+        if !self.start_reported.load(Ordering::Relaxed) {
+            return;
+        }
         let (id, sid) = {
             let ids = self
                 .ids
@@ -444,6 +461,7 @@ impl SessionReporter {
         };
         record_play_session(playback_span, &info.session_id);
         self.is_audio.store(item.is_audio(), Ordering::Relaxed);
+        self.start_reported.store(true, Ordering::Relaxed);
         let ok = self
             .client
             .report_start(item, &info.media_source_id, &info.session_id);
@@ -498,5 +516,8 @@ impl SessionReporter {
                 playback_span,
             },
         });
+        // The start report itself fires on the worker shortly after; the flag
+        // only needs to lead the run's next `PlaybackRestart` check.
+        self.start_reported.store(true, Ordering::Relaxed);
     }
 }

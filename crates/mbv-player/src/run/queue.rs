@@ -574,7 +574,6 @@ impl PlaybackRun {
             item_lifecycle: ItemLifecycleState::new(),
             pending_initial_playlist_layout: start_idx > 0,
             stopped_event_sent: false,
-            start_report_sent: false,
             mark_played_id: None,
             last_mouse_osd: None,
             series_id,
