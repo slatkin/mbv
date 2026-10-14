@@ -132,7 +132,7 @@ struct FoldedRun {
     latest_move: Option<XtermEvent>,
     /// The first non-move event. It ended the run.
     other: Option<XtermEvent>,
-    /// A read error that ended the run early.
+    /// A permanent read error that ended the run early.
     error: Option<PortError>,
 }
 
@@ -164,8 +164,17 @@ fn fold_run(
         }
         match next_ready() {
             Ok(next) => incoming = next,
-            Err(error) => {
+            Err(error @ PortError::PermanentError(_)) => {
                 run.error = Some(error);
+                break;
+            }
+            Err(error @ PortError::IntermittentError(_)) => {
+                tracing::warn!(
+                    name: "terminal_input.coalesce.read_failed",
+                    target: "terminal_input",
+                    error = %error,
+                    "terminal read failed while folding mouse moves"
+                );
                 break;
             }
         }
@@ -291,6 +300,15 @@ mod tests {
                 Some(PortError::PermanentError("hup".to_owned()))
             )
         );
+    }
+
+    /// #940: a transient read error ends the fold without a deferred error.
+    #[test]
+    fn intermittent_read_error_mid_run_is_not_deferred() {
+        let folded = fold_run(None, Some(moved(1)), || {
+            Err(PortError::IntermittentError("interrupted".to_owned()))
+        });
+        assert_eq!(folded.error, None);
     }
 
     /// #940: an open gate forwards the move and closes behind it.
