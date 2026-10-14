@@ -113,7 +113,11 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
     fn viewport_height(&self) -> Option<usize> {
         self.configured_geometry
             .map(|(_, content)| usize::from(content.height))
-            .or_else(|| self.last_painted.map(|area| usize::from(area.height)))
+            .or_else(|| {
+                self.paint
+                    .last_content_rect()
+                    .map(|rect| usize::from(rect.height))
+            })
     }
 
     fn with_state<R>(&mut self, action: impl FnOnce(&mut TreeState<'_, Target>) -> R) -> R {

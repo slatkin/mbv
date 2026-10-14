@@ -165,9 +165,6 @@ pub struct TreeBrowser<Target> {
     palette_focused: bool,
     marquee_text: String,
     marquee_started_at: Instant,
-    /// The area of the latest completed `view`, the paging viewport fallback
-    /// when the panel has not declared geometry yet.
-    last_painted: Option<Rect>,
 }
 
 impl<Target> Default for TreeBrowser<Target> {
@@ -260,7 +257,6 @@ impl<Target> TreeBrowser<Target> {
             palette_focused: true,
             marquee_text: String::new(),
             marquee_started_at: Instant::now(),
-            last_painted: None,
         }
     }
 
