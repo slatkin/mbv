@@ -193,6 +193,15 @@ pub(in crate::app) struct CastAttachment {
     pub(in crate::app) disconnected: bool,
 }
 
+impl CastAttachment {
+    /// Presents the target as disconnected and stops submitting poll jobs:
+    /// both fields change together, so no caller can set one without the other.
+    pub(in crate::app) fn mark_disconnected(&mut self) {
+        self.disconnected = true;
+        self.client = None;
+    }
+}
+
 /// Results of background work against the attached receiver, reported back
 /// to the main thread over `App::cast_tx`/`cast_rx`.
 pub(in crate::app) enum CastEvent {

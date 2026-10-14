@@ -25,7 +25,7 @@ use std::time::{Duration, Instant};
 /// indefinitely for a slow/unreachable receiver -- this runs on a
 /// background thread (`App::connect_cast_receiver`), so it never blocks the
 /// UI loop regardless.
-pub(super) const CAST_ATTACH_TIMEOUT: Duration = Duration::from_secs(5);
+const CAST_ATTACH_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// How long a single cast discovery browse is allowed to run when the F3
 /// panel opens (8.1). Runs concurrently with the `/Sessions` fetch on its
@@ -103,7 +103,7 @@ impl App {
                 self.sever_active_connection();
                 let name = receiver.friendly_name.clone();
                 self.attach_cast(receiver.id.clone(), name);
-                self.connect_cast_receiver(receiver.id, CAST_ATTACH_TIMEOUT);
+                self.connect_cast_receiver(receiver.id);
             }
         }
     }
@@ -156,9 +156,7 @@ impl App {
         // The unresponsive-watchdog clock starts at dispatch: it must cover
         // the resolution round trip plus the transport job, and no worker
         // event clears it until one actually arrives.
-        if self.cast_job_sent.is_none() {
-            self.cast_job_sent = Some(Instant::now());
-        }
+        self.cast_job_sent.get_or_insert_with(Instant::now);
         let emby = self.emby_snapshot();
         let abs = self.audiobookshelf_cast_context();
         let tx = self.channels.cast_tx.clone();
@@ -257,11 +255,11 @@ impl App {
     /// are blocking network calls (mirrors `try_daemon_route_connect`'s
     /// blocking-network style), and neither may run on the caller's thread.
     /// Shared by attach-on-selection from the discovery panel (8.3).
-    pub(in crate::app) fn connect_cast_receiver(&mut self, id: String, timeout: Duration) {
+    pub(in crate::app) fn connect_cast_receiver(&mut self, id: String) {
         let tx = self.channels.cast_tx.clone();
         let connect = cast_connect_fn();
         std::thread::spawn(move || {
-            let event = match connect(&id, timeout) {
+            let event = match connect(&id, CAST_ATTACH_TIMEOUT) {
                 Ok(client) => CastEvent::Connected {
                     receiver_id: id,
                     client,
@@ -311,10 +309,14 @@ impl App {
                 // The connected connect re-attaches over the optimistic
                 // attachment (8.3), so it must carry the receiver's name too:
                 // resolve it from the discovery list the selection came from.
-                let name = self.cast_receivers.iter().find_map(|receiver| {
-                    (receiver.id == receiver_id).then(|| receiver.friendly_name.clone())
-                });
-                let name = name.unwrap_or_else(|| receiver_id.clone());
+                let name = self
+                    .cast_receivers
+                    .iter()
+                    .find(|receiver| receiver.id == receiver_id)
+                    .map_or_else(
+                        || receiver_id.clone(),
+                        |receiver| receiver.friendly_name.clone(),
+                    );
                 self.attach_cast(receiver_id.clone(), name);
                 self.set_cast_client(&receiver_id, client);
             }

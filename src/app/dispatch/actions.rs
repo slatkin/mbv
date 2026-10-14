@@ -243,11 +243,7 @@ impl App {
         if !direct_remote {
             self.on_queue_replace_silent();
         }
-        self.set_queue_scope(self.playing_queue_scope());
-        // Keep library focus when playing from the library panel.
-        if !matches!(self.effective_panel_focus(), PanelFocus::Library) {
-            self.set_panel_focus(PanelFocus::Queue);
-        }
+        self.adopt_played_queue_view();
         // Attached Emby session: the queue is installed on the Player owner
         // through the idle-load path (ruling on row 5.3: the owner's Replace
         // op always starts playback, so it must not be used while another
@@ -386,18 +382,12 @@ impl App {
     /// attached"): the selection the local path would have queued -- the
     /// item alone, or the series continuation when always-play-next is on --
     /// is dispatched to the attached receiver instead of starting local
-    /// playback. The queue view adopts the selection through the idle owner
-    /// load in `play_selection_on_cast`.
+    /// playback, through the same cast arm `play_items_routed` uses.
     fn play_item_on_cast(&mut self, item: EmbyItem) {
         let Some((items, start_idx, source)) = self.cast_play_selection(item) else {
             return;
         };
-        let queue_items: Vec<QueueItem> = items
-            .into_iter()
-            .map(|item| QueueItem::Emby(Box::new(item)))
-            .collect();
-        self.play_selection_on_cast(queue_items, start_idx, source);
-        self.adopt_played_queue_view();
+        self.play_items_routed_on_cast(items, start_idx, source);
     }
 
     /// The selection an Emby play covers: the series continuation when

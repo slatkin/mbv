@@ -26,40 +26,10 @@ fn feed_queue_item() -> QueueItem {
     })
 }
 
-/// Wait for the fake cast worker thread to record a matching call instead of
-/// sleeping a fixed delay: the transport records synchronously, so only the
-/// dispatch/worker thread hops are async. Fails loudly at the deadline if the
-/// call never arrives (same shape as the `playback_target` cast tests).
-fn wait_for_cast_call(
-    calls: &Arc<std::sync::Mutex<Vec<String>>>,
-    mut matches: impl FnMut(&str) -> bool,
-    desc: &str,
-) {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
-    loop {
-        if calls.lock().unwrap().iter().any(|call| matches(call)) {
-            return;
-        }
-        assert!(
-            std::time::Instant::now() < deadline,
-            "timed out waiting for cast call {desc}"
-        );
-        std::thread::sleep(std::time::Duration::from_millis(1));
-    }
-}
-
-/// Bounded negative check that no cast call was recorded: the dispatch thread
-/// is only ever spawned after the gate, so the short grace window just closes
-/// the race where a hypothetical misplaced dispatch would still be recording.
+/// No cast call was recorded. The dispatch thread is spawned only after the
+/// owner's answer gates the dispatch, so a rejected load has already returned
+/// before any dispatch could record a call.
 fn assert_no_cast_call(calls: &Arc<std::sync::Mutex<Vec<String>>>) {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_millis(100);
-    while std::time::Instant::now() < deadline {
-        assert!(
-            calls.lock().unwrap().is_empty(),
-            "the receiver must not be handed a queue the owner never accepted"
-        );
-        std::thread::sleep(std::time::Duration::from_millis(1));
-    }
     assert!(
         calls.lock().unwrap().is_empty(),
         "the receiver must not be handed a queue the owner never accepted"
@@ -108,12 +78,21 @@ fn cast_attached_play_loads_the_owner_queue_without_starting_playback() {
         "no playback-starting command reaches the owner"
     );
 
-    // The receiver is dispatched the played selection.
-    wait_for_cast_call(
-        &calls,
-        |call| call == "load_queue(1, 0)",
-        "load_queue(1, 0)",
+    // The receiver is dispatched the played selection: the worker reports the
+    // dispatch only after the transport has recorded its load.
+    let event = app
+        .channels
+        .cast_rx
+        .recv_timeout(Duration::from_secs(2))
+        .unwrap();
+    assert!(
+        matches!(
+            event,
+            crate::app::state::types::cast::CastEvent::Dispatched { outcome: Ok(_), .. }
+        ),
+        "the played selection dispatches to the receiver"
     );
+    assert_eq!(calls.lock().unwrap().as_slice(), ["load_queue(1, 0)"]);
 }
 
 #[test]

@@ -40,22 +40,23 @@ impl App {
             .map(|attachment| attachment.receiver_name.clone())
     }
 
-    pub(in crate::app) fn remote_status_spans(
-        &self,
-        remote_state: RemoteSlotState,
-        daemon_endpoint: &str,
-    ) -> Vec<Span<'static>> {
-        let cast_target = self.cast_target_label();
-        let remote_on = cast_target.is_some()
+    /// Whether the remote pill shows its connected state: a cast receiver is
+    /// attached, or the remote slot names an attached session or direct route.
+    fn remote_connected(&self, remote_state: RemoteSlotState) -> bool {
+        self.cast_attachment.is_some()
             || matches!(
                 remote_state,
                 RemoteSlotState::AttachedSession | RemoteSlotState::DirectRemote
-            );
-        let glyph_style = Style::default()
-            .bg(mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false).fill)
-            .fg(ratatui::style::Color::White);
+            )
+    }
 
-        let target = cast_target.or(match remote_state {
+    /// The remote pill label, gap included. An attached cast receiver names it
+    /// first; otherwise the remote slot names it, and this machine's device
+    /// name is the fallback. `or_else` leaves the slot unread while a receiver
+    /// is attached.
+    fn remote_label(&self, remote_state: RemoteSlotState, daemon_endpoint: &str) -> String {
+        let gap = if self.use_nerd_fonts { " " } else { "  " };
+        let target = self.cast_target_label().or_else(|| match remote_state {
             RemoteSlotState::LocalDaemon => None,
             RemoteSlotState::AttachedSession => {
                 self.connected_session_state.as_ref().and_then(|session| {
@@ -75,11 +76,23 @@ impl App {
                 .or_else(|| self.remote.direct_remote_label.clone())
                 .or_else(|| daemon_endpoint_label(daemon_endpoint)),
         });
-        let gap = if self.use_nerd_fonts { " " } else { "  " };
-        let label = match target {
+        match target {
             Some(target) => format!("{gap}{target}"),
             None => format!("{gap}{}", mbv_emby::device_name()),
-        };
+        }
+    }
+
+    pub(in crate::app) fn remote_status_spans(
+        &self,
+        remote_state: RemoteSlotState,
+        daemon_endpoint: &str,
+    ) -> Vec<Span<'static>> {
+        let remote_on = self.remote_connected(remote_state);
+        let glyph_style = Style::default()
+            .bg(mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false).fill)
+            .fg(ratatui::style::Color::White);
+
+        let label = self.remote_label(remote_state, daemon_endpoint);
         let label_style = Style::default()
             .fg(if remote_on {
                 mbv_theme::Role::Accent.color()
@@ -117,53 +130,6 @@ impl App {
         ]
     }
 
-    /// Returns `(icon, label)` for a remote pill without styling.
-    /// Used by queue-title rendering that applies its own colors. An
-    /// attached cast receiver takes the connected glyph and names the label.
-    pub(in crate::app) fn remote_icon_and_label(
-        &self,
-        remote_state: RemoteSlotState,
-        daemon_endpoint: &str,
-    ) -> (&'static str, String) {
-        let cast_target = self.cast_target_label();
-        let connected = cast_target.is_some()
-            || matches!(
-                remote_state,
-                RemoteSlotState::AttachedSession | RemoteSlotState::DirectRemote
-            );
-        let icon = match (self.use_nerd_fonts, connected) {
-            (false, _) => "\u{1F5A7}",
-            (true, true) => "\u{f0119}",
-            (true, false) => "\u{f0118}",
-        };
-        let gap = if self.use_nerd_fonts { " " } else { "  " };
-        let target = cast_target.or(match remote_state {
-            RemoteSlotState::LocalDaemon => None,
-            RemoteSlotState::AttachedSession => {
-                self.connected_session_state.as_ref().and_then(|session| {
-                    let device_name = session.device_name.trim();
-                    if device_name.is_empty() {
-                        let host = session.host.trim();
-                        (!host.is_empty()).then(|| host.to_string())
-                    } else {
-                        Some(device_name.to_string())
-                    }
-                })
-            }
-            RemoteSlotState::DirectRemote => self
-                .active_route
-                .as_ref()
-                .map(|name| format!("route:{name}"))
-                .or_else(|| self.remote.direct_remote_label.clone())
-                .or_else(|| daemon_endpoint_label(daemon_endpoint)),
-        });
-        let label = match target {
-            Some(target) => format!("{gap}{target}"),
-            None => format!("{gap}{}", mbv_emby::device_name()),
-        };
-        (icon, label)
-    }
-
     /// The playback target's host label plus whether it names a remote target
     /// (a cast attachment, an attached session, or a direct-remote
     /// route/label): the attached receiver's name, the connected session's
@@ -175,13 +141,9 @@ impl App {
     /// header row shows it verbatim.
     pub(in crate::app) fn playback_host_label_and_remote(&self) -> (String, bool) {
         let remote_state = self.remote_slot_state();
-        let is_remote = self.cast_attachment.is_some()
-            || matches!(
-                remote_state,
-                RemoteSlotState::AttachedSession | RemoteSlotState::DirectRemote
-            );
+        let is_remote = self.remote_connected(remote_state);
         let daemon_endpoint = self.config.lock().unwrap().daemon_client_endpoint.clone();
-        let (_, label) = self.remote_icon_and_label(remote_state, &daemon_endpoint);
+        let label = self.remote_label(remote_state, &daemon_endpoint);
         (label.trim_start().to_string(), is_remote)
     }
 
@@ -539,10 +501,6 @@ mod tests {
         );
     }
 
-    /// queue-play-order spec, "The footer shows Shuffle": the shuffle
-    /// indicator follows the owner's play order, not the panel under the
-    /// cursor — it shows with the Library panel focused (design D7), where
-    /// the queue-source label stays hidden.
     /// The attached cast receiver names the queue header's host, matching
     /// the connected icon cast-session-control "Playing while attached"
     /// pairs with it: the header previously showed the connected icon but
@@ -558,6 +516,10 @@ mod tests {
         assert!(is_remote);
     }
 
+    /// queue-play-order spec, "The footer shows Shuffle": the shuffle
+    /// indicator follows the owner's play order, not the panel under the
+    /// cursor — it shows with the Library panel focused (design D7), where
+    /// the queue-source label stays hidden.
     #[test]
     fn shuffle_indicator_shows_with_the_library_panel_focused() {
         let mut app = make_app_stub();

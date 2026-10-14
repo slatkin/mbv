@@ -280,16 +280,6 @@ mod now_playing_status_tests {
         assert_eq!(app.now_playing_status(), NowPlayingStatus::Paused);
     }
 
-    fn idle_cast_status() -> mbv_cast::client::CastStatus {
-        mbv_cast::client::CastStatus {
-            position_seconds: None,
-            duration_seconds: None,
-            playback_rate: 1.0,
-            state: mbv_cast::client::CastPlaybackState::Idle,
-            playing_content_id: None,
-        }
-    }
-
     /// Regression: a cast receiver reattached at launch is attached but idle
     /// (and its status poll may fail outright, leaving no status at all).
     /// That attachment must not shadow real local playback -- the now-playing
@@ -301,7 +291,7 @@ mod now_playing_status_tests {
         app.attach_cast("device-1".to_string(), "Living Room".to_string());
 
         // Receiver reports no active media.
-        app.apply_cast_status("device-1", Ok(idle_cast_status()));
+        app.apply_cast_status("device-1", Ok(mbv_cast::client::CastStatus::idle()));
         set_player(&app, true, false);
         assert_eq!(app.now_playing_status(), NowPlayingStatus::Playing);
 

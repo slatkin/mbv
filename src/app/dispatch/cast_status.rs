@@ -2,7 +2,6 @@
 // extrapolation (6.3, 6.4), matching a reported entry to a dispatched item
 // (6.5), and progress reporting to that item's provider (6.6).
 
-use super::cast::CAST_ATTACH_TIMEOUT;
 use crate::app::App;
 use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::state::types::cast::{
@@ -65,9 +64,7 @@ impl App {
         self.cast_status_loading = true;
         self.last_cast_poll = Instant::now();
         // The unresponsive-watchdog clock: this poll expects a worker event.
-        if self.cast_job_sent.is_none() {
-            self.cast_job_sent = Some(Instant::now());
-        }
+        self.cast_job_sent.get_or_insert_with(Instant::now);
         let tx = self.channels.cast_tx.clone();
         let _ = client.send(Box::new(move |transport| {
             if let Err(e) = transport.keep_alive() {
@@ -108,8 +105,7 @@ impl App {
                 // they were; only progress reporting and further polling
                 // stop.
                 tracing::warn!(name: "cast.status_poll.failed", target: "cast", error = %e, "cast status poll failed");
-                attachment.disconnected = true;
-                attachment.client = None;
+                attachment.mark_disconnected();
             }
         }
     }
@@ -122,33 +118,24 @@ impl App {
     /// relaunches the receiver's app session, which a media stop may have
     /// ended, so playback works again without a manual re-attach.
     pub(in crate::app) fn check_cast_worker_responsive(&mut self) {
-        let unresponsive = self
-            .cast_job_sent
-            .is_some_and(|sent| sent.elapsed() >= CAST_JOB_ANSWER_BOUND)
-            && self
-                .cast_attachment
-                .as_ref()
-                .is_some_and(|attachment| attachment.client.is_some());
-        if !unresponsive {
+        let Some(sent) = self.cast_job_sent else {
+            return;
+        };
+        let Some(attachment) = self.cast_attachment.as_mut() else {
+            return;
+        };
+        if sent.elapsed() < CAST_JOB_ANSWER_BOUND || attachment.client.is_none() {
             return;
         }
+        let receiver_id = attachment.receiver_id.clone();
+        attachment.mark_disconnected();
         self.cast_job_sent = None;
         tracing::warn!(name: "cast.worker.unresponsive", target: "cast", "cast worker produced no event within the answer bound");
-        if let Some(attachment) = self.cast_attachment.as_mut() {
-            attachment.disconnected = true;
-            attachment.client = None;
-        }
         self.flash(
             "Cast target stopped responding; reconnecting".to_string(),
             ToastSeverity::Warning,
         );
-        if let Some(receiver_id) = self
-            .cast_attachment
-            .as_ref()
-            .map(|attachment| attachment.receiver_id.clone())
-        {
-            self.connect_cast_receiver(receiver_id, CAST_ATTACH_TIMEOUT);
-        }
+        self.connect_cast_receiver(receiver_id);
     }
 
     /// `None` when no cast target is attached; the caller falls back to
@@ -465,16 +452,7 @@ mod tests {
         );
         app.set_cast_client("device-1", job_tx);
 
-        app.apply_cast_status(
-            "device-1",
-            Ok(mbv_cast::client::CastStatus {
-                position_seconds: None,
-                duration_seconds: None,
-                playback_rate: 1.0,
-                state: mbv_cast::client::CastPlaybackState::Idle,
-                playing_content_id: None,
-            }),
-        );
+        app.apply_cast_status("device-1", Ok(CastStatus::idle()));
 
         let attachment = app.cast_attachment.as_ref().unwrap();
         assert!(!attachment.disconnected);

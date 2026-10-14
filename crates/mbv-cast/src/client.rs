@@ -68,6 +68,21 @@ pub struct CastStatus {
     pub playing_content_id: Option<String>,
 }
 
+impl CastStatus {
+    /// A receiver with no media session: idle, no position, no duration, no
+    /// content id.
+    #[must_use]
+    pub fn idle() -> Self {
+        Self {
+            position_seconds: None,
+            duration_seconds: None,
+            playback_rate: 1.0,
+            state: CastPlaybackState::Idle,
+            playing_content_id: None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CastPlaybackState {
     Idle,
@@ -270,9 +285,7 @@ impl CastClient {
             .media
             .get_status(self.transport_id.as_str(), self.media_session_id)
             .map_err(|e| CastError::transport(TransportKind::Status, e))?;
-        if let Some(entry) = status.entries.first() {
-            self.adopt_status_entry(entry);
-        }
+        self.adopt_status(&status);
         Ok(status_from_entries(&status.entries))
     }
 
@@ -344,17 +357,7 @@ fn cast_status_from_entry(entry: &StatusEntry) -> CastStatus {
 fn status_from_entries(entries: &[StatusEntry]) -> CastStatus {
     match entries.first() {
         Some(entry) => cast_status_from_entry(entry),
-        None => idle_cast_status(),
-    }
-}
-
-fn idle_cast_status() -> CastStatus {
-    CastStatus {
-        position_seconds: None,
-        duration_seconds: None,
-        playback_rate: 1.0,
-        state: CastPlaybackState::Idle,
-        playing_content_id: None,
+        None => CastStatus::idle(),
     }
 }
 
