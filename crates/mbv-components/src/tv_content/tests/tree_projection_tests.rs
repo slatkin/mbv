@@ -57,6 +57,11 @@ fn tree_expand_requests_shell_loading_only_on_the_open_transition() {
         season: "season-1".into(),
         occurrence: 0,
     };
+    // Production keyboard paths act on the selection, so move the cursor to
+    // the season before the keyboard toggle, as Enter on a season does.
+    component
+        .browser
+        .apply(TreeOperation::Select(season_target.clone()));
     assert!(matches!(
         component.toggle_tree_expansion(season_target.clone()),
         Some(Msg::Shell(ref shell_boxed))  if matches!(shell_boxed.as_ref(), ShellRequest::TvTreeExpand { target } if *target == season_target)));

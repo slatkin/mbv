@@ -141,7 +141,13 @@ pub enum TreeOperation<Target> {
     /// Expand the selected node, or activate an already-expanded root.
     /// Expanded descendants consume Right without collapsing or activating.
     Right,
-    /// Toggle one node's persistent expansion without changing selection.
+    /// Keyboard toggle: switch the selected node's persistent expansion.
+    /// A keyboard operation, so it re-anchors a freely scrolled viewport.
+    /// No selection or an unexpandable selection is `Unhandled`.
+    ToggleExpansion,
+    /// Pointer toggle: switch one resolved target's persistent expansion
+    /// without changing selection. Pointer paths `Select` the target first,
+    /// so the viewport already follows; this arm keeps the free scroll.
     /// A target with neither loaded children nor declared expandability is
     /// an explicit `Unhandled` result.
     ToggleExpansionTarget(Target),

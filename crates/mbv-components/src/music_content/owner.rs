@@ -181,8 +181,7 @@ impl LibraryContentOwner for MusicContent {
                     if let Some(target) = self.browser.selected_target().cloned()
                         && !self.browser.is_expanded(&target)
                     {
-                        self.browser
-                            .apply(TreeOperation::ToggleExpansionTarget(target));
+                        self.browser.apply(TreeOperation::ToggleExpansion);
                     }
                     None
                 }
@@ -557,8 +556,7 @@ impl MusicContent {
                 .children_of(&target)
                 .is_some_and(|children| !children.is_empty())
         {
-            self.browser
-                .apply(TreeOperation::ToggleExpansionTarget(target));
+            self.browser.apply(TreeOperation::ToggleExpansion);
             return None;
         }
         if self.selected_is_track() {
@@ -644,8 +642,7 @@ impl MusicContent {
         if let Some(target) = self.browser.selected_target().cloned()
             && self.browser.is_expanded(&target)
         {
-            self.browser
-                .apply(TreeOperation::ToggleExpansionTarget(target));
+            self.browser.apply(TreeOperation::ToggleExpansion);
             return None;
         }
         if self.selected_is_artist() {
@@ -675,8 +672,7 @@ impl MusicContent {
     fn tree_right_artist(&mut self) -> Option<Msg> {
         let root = self.browser.selected_target().cloned()?;
         if !self.browser.is_expanded(&root) {
-            self.browser
-                .apply(TreeOperation::ToggleExpansionTarget(root));
+            self.browser.apply(TreeOperation::ToggleExpansion);
             return None;
         }
         if self.inline_track_focus_enabled {

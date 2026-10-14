@@ -390,6 +390,36 @@ fn keyboard_right_after_a_free_scroll_restores_following_the_selection() {
     assert_eq!(browser.viewport_offset, 0);
 }
 
+/// Shared re-anchor rule (invariant 23, #927 follow-up): the keyboard
+/// expansion toggle acts on the selection, so it restores a freely scrolled
+/// viewport like every other keyboard operation. This owns the toggle's
+/// re-anchor arm; the sibling `Right` test owns `Right`'s arm, and each
+/// fails for a different production change.
+#[test]
+fn keyboard_toggle_expansion_after_a_free_scroll_restores_following_the_selection() {
+    let mut browser = TreeBrowser::new();
+    browser
+        .reconcile([
+            node(Target::Root, None),
+            node(Target::Branch, Some(Target::Root)),
+            node(Target::Other, None),
+        ])
+        .unwrap();
+    browser.set_geometry(Rect::new(0, 0, 18, 1), Rect::new(0, 0, 18, 1));
+    browser.apply(TreeOperation::Select(Target::Root));
+    assert_eq!(browser.selected_target(), Some(&Target::Root));
+
+    browser.apply(TreeOperation::Scroll(1));
+    assert_eq!(browser.viewport_offset, 1);
+
+    let transition = browser.apply(TreeOperation::ToggleExpansion);
+
+    assert_eq!(transition.disposition, super::super::TreeConsumed::Consumed);
+    assert!(browser.is_expanded(&Target::Root));
+    assert_eq!(browser.selected_target(), Some(&Target::Root));
+    assert_eq!(browser.viewport_offset, 0);
+}
+
 /// A target whose clones the test counts: the old wheel path built the full
 /// flow through `current_flow()` (#926), so a large tree flooded the counter
 /// while a length-only scroll stays constant.

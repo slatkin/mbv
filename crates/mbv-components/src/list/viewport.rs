@@ -3,16 +3,10 @@
 use super::{Cursored, Row, RowFlow};
 
 /// Whether the viewport follows the selection or was freely scrolled by the
-/// user.
-///
-/// The shared re-anchor rule (#927, shared-list-components "A freely scrolled
-/// viewport returns to following the selection"): a freely scrolled viewport
-/// returns to [`ViewportAnchor::FollowSelection`] on the next keyboard
-/// operation on the list, or the next operation that moves or sets the
-/// selection — a click, a select, a restore, or a shell re-anchor. The wheel
-/// scroll releases it, and the pointer context click is the explicit
-/// exclusion that keeps the user's free scroll. Each owner's dispatch site
-/// applies the rule once; no arm re-states it.
+/// user. The re-anchor requirement in
+/// `openspec/specs/shared-list-components/spec.md` and invariant 23 name
+/// which operations return a free viewport to following; this type carries
+/// only the state.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum ViewportAnchor {
     /// Every resolve keeps the selection visible (minimum scroll).

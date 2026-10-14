@@ -307,8 +307,7 @@ impl TvContent {
     fn collapse_show_tree_left(&mut self, target: Option<TvTreeTarget>) -> Option<Msg> {
         if let Some(target) = target {
             if self.browser.is_expanded(&target) {
-                self.browser
-                    .apply(TreeOperation::ToggleExpansionTarget(target));
+                self.browser.apply(TreeOperation::ToggleExpansion);
             } else {
                 self.browser.apply(TreeOperation::Parent);
             }

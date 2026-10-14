@@ -437,12 +437,12 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
         operation: super::TreeOperation<Target>,
         flow: &RowFlow<Target>,
     ) -> Option<(TreeConsumed, Option<TreeExternalIntent<Target>>)> {
-        // Shared re-anchor rule (`ViewportAnchor`, #927): every operation
-        // restores a freely scrolled viewport to following the selection
-        // except the curated exclusions — the wheel scroll releases the
-        // viewport, and the pointer chevron toggle and the filter operations
-        // are neither keyboard operations nor selection-moving or
-        // selection-setting, so they keep the user's offset.
+        // Shared re-anchor rule (shared-list-components re-anchor
+        // requirement, invariant 23): every operation restores a freely
+        // scrolled viewport to following the selection except the wheel
+        // scroll, the pointer expansion toggle, and the filter operations.
+        // The keyboard expansion toggle re-anchors; the pointer toggle
+        // keeps the free scroll because its path selects first.
         if !matches!(
             operation,
             super::TreeOperation::Scroll(_)
@@ -491,6 +491,14 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
             }
             super::TreeOperation::Right => {
                 (disposition, external_intent) = self.apply_right();
+            }
+            super::TreeOperation::ToggleExpansion => {
+                disposition = self
+                    .selected
+                    .clone()
+                    .map_or(TreeConsumed::Unhandled, |target| {
+                        self.apply_toggle_expansion(&target)
+                    });
             }
             super::TreeOperation::ToggleExpansionTarget(target) => {
                 disposition = self.apply_toggle_expansion(&target);
@@ -552,6 +560,7 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
             | super::TreeOperation::Page(_)
             | super::TreeOperation::Scroll(_)
             | super::TreeOperation::Right
+            | super::TreeOperation::ToggleExpansion
             | super::TreeOperation::ToggleExpansionTarget(_)
             | super::TreeOperation::AnchorSelection { .. }
             | super::TreeOperation::Select(_)
@@ -581,6 +590,7 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
             | super::TreeOperation::Last
             | super::TreeOperation::Parent
             | super::TreeOperation::Right
+            | super::TreeOperation::ToggleExpansion
             | super::TreeOperation::ToggleExpansionTarget(_)
             | super::TreeOperation::AnchorSelection { .. }
             | super::TreeOperation::Select(_)

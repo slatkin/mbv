@@ -106,7 +106,7 @@ express it as one guarded call per owner:
       to the selection (the changed contract; name the spec rule).
 - [x] Run `cargo nextest run -p mbv-components`, `cargo clippy --workspace
       --all-targets -- -D warnings`, `cargo fmt`.
-- [ ] Commit (no push without user confirmation), referencing #927.
+- [x] Commit (no push without user confirmation), referencing #927.
 
 ## Verification
 
@@ -117,3 +117,40 @@ express it as one guarded call per owner:
 - Manual (user, live): wheel-scroll a tree panel away from the selection, press
   Right — the viewport returns to the selection; wheel-scroll a media list and
   right-click a visible row — the viewport stays free.
+
+## Follow-up (review of 66ead8428)
+
+A doc paragraph masked a spec gap: `ViewportAnchor` prose named only the
+wheel scroll and the pointer context click as exclusions, while the tree
+excluded five operations. Keyboard and pointer both routed tree expansion
+through `TreeOperation::ToggleExpansionTarget`, and that shared operation
+was excluded — so the tree's keyboard expansion keys never re-anchored.
+
+- [x] Split the vocabulary by origin: `TreeOperation::ToggleExpansion`
+      (keyboard, acts on the selected node, re-anchors) and
+      `TreeOperation::ToggleExpansionTarget` (pointer, acts on a resolved
+      target, keeps the free scroll). The split beats an origin field: only
+      the eight keyboard call sites move, while pointer sites, the test
+      fixture, and generic toggle tests keep the target form unchanged.
+      The pointer exclusion stays because the pointer form keeps the free
+      scroll by contract; pointer paths select first today, so no gesture
+      changes. `Right` behavior is unchanged.
+- [x] Move keyboard call sites to the new form: TV `toggle_tree_expansion`
+      seam and `collapse_show_tree_left`; Music Right-on-album, Enter,
+      `tree_move_left`, `tree_right_artist`, `on_filter_enter_key`. Pointer
+      double-clicks and `expand_all_tree_roots` keep the target form.
+- [x] Fix the stale season-toggle test: it toggled without selecting, which
+      the new form no longer permits; it now selects first, as production
+      Enter-on-season does.
+- [x] Remove the normative prose from `ViewportAnchor` and
+      `re_anchor_selection_following`; both now point at the spec
+      requirement and invariant 23.
+- [x] Record `docs/invariants/23-viewport-re-anchor.md` in house format,
+      including the media-list default-on guard.
+- [x] Add one media-list test (pointer `Context` after free scroll keeps
+      the offset) and one tree test (keyboard toggle after free scroll
+      re-anchors). The new tree test does not duplicate the `Right` test:
+      each owns a different arm and fails for a different change.
+- [x] Run `cargo nextest run -p mbv-components`, `cargo clippy --workspace
+      --all-targets -- -D warnings`, `cargo fmt --all -- --check`.
+- [x] Commit (no push without user confirmation), referencing #927.

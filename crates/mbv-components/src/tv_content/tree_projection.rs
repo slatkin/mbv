@@ -239,11 +239,12 @@ impl TvContent {
     }
 
     // Kept as a typed boundary seam until task 3.1 connects mounted tree input.
+    // Keyboard and pointer-select paths both act on the selection: keyboard
+    // callers pass the selected target, and the pointer double-click selects
+    // first. The keyboard toggle re-anchors a freely scrolled viewport.
     pub fn toggle_tree_expansion(&mut self, target: TvTreeTarget) -> Option<Msg> {
         let was_expanded = self.browser.is_expanded(&target);
-        let transition = self
-            .browser
-            .apply(TreeOperation::ToggleExpansionTarget(target.clone()));
+        let transition = self.browser.apply(TreeOperation::ToggleExpansion);
         if was_expanded
             || transition.disposition == super::super::list::tree_browser::TreeConsumed::Unhandled
         {

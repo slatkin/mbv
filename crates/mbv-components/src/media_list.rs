@@ -256,12 +256,10 @@ impl<Target: Clone + Eq> MediaList<Target> {
         Viewported::set_viewport_anchor(self, ViewportAnchor::Free);
     }
 
-    /// D2/D3: the shared re-anchor rule (`ViewportAnchor`, #927) restores a
-    /// freely scrolled viewport to following the selection for every
-    /// operation except the two exclusions: the wheel scroll releases the
-    /// viewport, and pointer right-click (`Context`) keeps the user's free
-    /// scroll instead of jumping the view. The keyboard `ContextCurrent` and
-    /// `ActivateCurrent` are ordinary keyboard operations and re-anchor.
+    /// Restore following the selection unless the operation keeps a free
+    /// viewport. The re-anchor requirement in
+    /// `openspec/specs/shared-list-components/spec.md` and invariant 23
+    /// name the kept operations; this function only applies them.
     fn re_anchor_selection_following(&mut self, operation: &MediaListOperation<Target>) {
         if matches!(
             operation,

@@ -520,9 +520,8 @@ impl MusicContent {
 
     fn on_filter_enter_key(&mut self) -> Option<Msg> {
         if self.selected_is_artist() {
-            if let Some(root) = self.browser.selected_target().cloned() {
-                self.browser
-                    .apply(TreeOperation::ToggleExpansionTarget(root));
+            if self.browser.selected_target().is_some() {
+                self.browser.apply(TreeOperation::ToggleExpansion);
             }
             return None;
         }

@@ -163,6 +163,27 @@ fn a_key_after_a_free_scroll_bring_the_selection_back_into_view() {
     assert_eq!(list.resolve_viewport(3).offset, 1);
 }
 
+/// D2 (shared-list-components, invariant 23): a pointer right-click
+/// (`Context`) after a free scroll keeps the user's offset — unlike the
+/// keyboard `ContextCurrent` it sets no selection, so the viewport stays
+/// free and the selection stays where it was.
+#[test]
+fn a_pointer_context_click_after_a_free_scroll_keeps_the_free_viewport() {
+    let mut list = MediaList::new();
+    list.set_content(vec![item("a"), item("b"), item("c"), item("d"), item("e")]);
+    let flow = list.row_flow();
+    Viewported::scroll_viewport(&mut list, &flow, 3, 100);
+    assert_eq!(list.viewport_anchor(), ViewportAnchor::Free);
+    assert_eq!(list.viewport_offset(), 2);
+
+    let transition = list.delegate_operation(MediaListOperation::Context("c".to_string()));
+
+    assert_eq!(list.viewport_anchor(), ViewportAnchor::Free);
+    assert_eq!(list.viewport_offset(), 2);
+    assert_eq!(list.selected_target(), Some(&"a".to_string()));
+    assert!(transition.external_intent.is_some());
+}
+
 /// D2 (shared-list-components): refreshed content that still holds the
 /// selected target keeps a freely scrolled viewport exactly where it is.
 #[test]
