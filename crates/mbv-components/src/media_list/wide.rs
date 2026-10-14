@@ -258,7 +258,16 @@ impl<Target: Clone + Eq> WideMediaList<Target> {
         &mut self,
         operation: MediaListOperation<Target>,
     ) -> MediaListTransition<Target> {
-        self.core.delegate_operation(operation)
+        // D3: the wheel clamp uses the last painted content rectangle's
+        // height (#928), falling back to the one-row minimum before any
+        // paint. The retained height survives invalidation, so consecutive
+        // wheel notches between paints clamp consistently.
+        let viewport_len = self
+            .paint
+            .last_content_rect()
+            .map_or(1, |rect| usize::from(rect.height.max(1)));
+        self.core
+            .delegate_operation_with_viewport_len(operation, viewport_len)
     }
 }
 

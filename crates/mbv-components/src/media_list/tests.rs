@@ -339,3 +339,20 @@ fn a_wheel_scroll_never_builds_the_row_flow() {
         );
     });
 }
+
+/// Regression (#928): a wheel at the end of a painted list leaves the last
+/// row at the bottom of the viewport, not above it. The clamp uses the wide
+/// list's painted content height (5), so the offset stops at 20 - 5 = 15
+/// instead of the one-row clamp's 19.
+#[test]
+fn a_wheel_scroll_stops_with_the_last_row_at_the_viewport_bottom() {
+    let mut list = WideMediaList::new();
+    list.set_content((0..20).map(|i| item(&i.to_string())).collect());
+    paint(&mut list, Rect::new(0, 0, 10, 5));
+
+    for _ in 0..16 {
+        list.delegate_operation(MediaListOperation::Scroll(1));
+    }
+
+    assert_eq!(list.viewport_offset(), 15);
+}
