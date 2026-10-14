@@ -271,6 +271,9 @@ pub enum Direction {
 pub enum TransportCommand {
     Step(Direction),
     Player(crate::player::PlayerCommand),
+    /// Stop playback and clear the owner's slot-jump state. Not a
+    /// `PlayerCommand`: the run stop must also work while no run exists.
+    Stop,
     /// Run one Owner action (e.g. the Tray's Pin swap item). The Owner
     /// resolves it in-process; the result is not reported back.
     #[serde(rename = "OwnerAction")]

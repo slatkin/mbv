@@ -28,3 +28,15 @@ fn send_transport_step_next_sends_a_playback_intent() {
             if intent.action == mbv_ctrl::PlaybackIntentAction::Next
     ));
 }
+
+#[test]
+fn send_transport_stop_sends_the_ctrl_stop() {
+    // An MPRIS/tray stop crosses as the uncorrelated wire stop, not as a
+    // playback intent: stop has no resolve/open lifecycle to correlate.
+    let (remote, _, commands) = RemotePlayer::stub_with_command_rx(Vec::new(), 0);
+    remote.send_transport(mbv_ctrl::TransportCommand::Stop);
+    assert!(matches!(
+        commands.try_recv().unwrap(),
+        mbv_ctrl::CtrlCmd::Stop
+    ));
+}

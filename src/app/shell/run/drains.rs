@@ -419,6 +419,9 @@ impl Model {
                 mbv_ctrl::TransportCommand::Player(command) => {
                     let _ = self.app.player.send_command(command);
                 }
+                mbv_ctrl::TransportCommand::Stop => {
+                    self.app.player.stop();
+                }
                 // Owner actions are resolved inside the Owner process
                 // (tray-pin-swap task 3.5); the shell never receives one.
                 mbv_ctrl::TransportCommand::OwnerAction(_) => {}

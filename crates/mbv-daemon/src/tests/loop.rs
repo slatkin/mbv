@@ -194,6 +194,41 @@ fn transport_next_dispatches_owner_resolved_canonical_jump() {
 }
 
 #[test]
+fn transport_stop_stops_the_player_and_clears_slot_jumps() {
+    // A transport stop (MPRIS/tray) mirrors `CtrlCmd::Stop`: a stop makes
+    // every awaited transition identity unobservable, so an in-flight jump
+    // must not survive it and settle against a later run.
+    let mut t = test_loop_with_queue(
+        crate::DaemonRole::Local,
+        vec![
+            emby_qi("current", "Video", "Movie"),
+            emby_qi("next", "Video", "Movie"),
+        ],
+        0,
+    );
+    let commands = t.event_loop.player.spy_on_commands();
+    t.event_loop
+        .handle_event(DaemonEvent::Transport(mbv_ctrl::TransportCommand::Step(
+            mbv_ctrl::Direction::Next,
+        )));
+    let dispatched = commands.try_recv();
+    assert!(
+        matches!(
+            dispatched,
+            Ok(mbv_ctrl::player::PlayerCommand::JumpTo { .. })
+        ),
+        "unexpected dispatch: {dispatched:?}"
+    );
+    assert!(t.event_loop.owner.core.transitions.in_flight().is_some());
+
+    t.event_loop
+        .handle_event(DaemonEvent::Transport(mbv_ctrl::TransportCommand::Stop));
+
+    assert!(t.event_loop.owner.core.transitions.in_flight().is_none());
+    assert!(t.event_loop.owner.queued_transition_origin.is_none());
+}
+
+#[test]
 fn websocket_next_dispatches_owner_resolved_jump_not_run_step() {
     let mut t = test_loop_with_queue(
         crate::DaemonRole::Local,

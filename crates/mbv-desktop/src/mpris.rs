@@ -297,7 +297,7 @@ impl MediaPlayer2Player {
     }
 
     fn stop(&self) {
-        self.dispatch_transport(TransportCommand::Player(PlayerCommand::TogglePause));
+        self.dispatch_transport(TransportCommand::Stop);
     }
 
     fn next(&self) {

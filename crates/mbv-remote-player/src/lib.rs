@@ -265,6 +265,12 @@ impl RemotePlayer {
             mbv_ctrl::TransportCommand::Player(command) => {
                 let _ = self.send_command(command);
             }
+            mbv_ctrl::TransportCommand::Stop => {
+                // The uncorrelated wire stop: stop has no resolve/open
+                // lifecycle, so it crosses as `CtrlCmd::Stop`, not as a
+                // playback intent.
+                let _ = self.send_ctrl_cmd(mbv_ctrl::CtrlCmd::Stop);
+            }
             // Owner actions are resolved by the Owner in-process (tray
             // tray-pin-swap task 3.5); a RemotePlayer transport has no ctrl
             // path for them yet.

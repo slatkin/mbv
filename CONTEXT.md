@@ -212,7 +212,7 @@ The media snapshot of the queue. It is an EmbyItem, a FeedEntry, or an Audiobook
 _Avoid_: queue entry, playable, mixed item
 
 Transport command:
-A command to the Player owner for transport control. `Step(Direction)` asks for an owner-resolved relative queue move. `Player(PlayerCommand)` carries a playback command such as pause, seek, or stop. A step is not a `PlayerCommand`. It resolves against the owner canonical queue.
+The command to the Player owner for transport control. `Step(Direction)` asks for an owner-resolved relative queue move. `Player(PlayerCommand)` carries a playback command such as pause or seek. `Stop` stops playback and clears the owner's slot-jump state; it is not a `PlayerCommand`, and it works while no run exists. A step is not a `PlayerCommand`. It resolves against the owner canonical queue.
 _Avoid_: playback command, navigation command, transport action
 
 Relative step:

@@ -2,7 +2,7 @@ use super::{
     AudiobookshelfOwnerContext, ClientRegistry, DaemonEvent, DaemonOwnerContext, DaemonPlayerOwner,
     DaemonRole, EmbyOwnerContext, SharedQueueState, broadcast_queue_state,
     cancel_pending_idle_queue_load_if_run_changed, expire_and_redispatch,
-    expire_pending_idle_queue_load, persist_stay_alive_owner_queue,
+    expire_pending_idle_queue_load, persist_stay_alive_owner_queue, reset_slot_jumps,
 };
 use mbv_ctrl::CtrlEvent;
 use mbv_ctrl::player::PlayerEvent;
@@ -231,6 +231,15 @@ impl DaemonLoop {
         match command {
             mbv_ctrl::TransportCommand::Player(command) => {
                 self.player.send_command(command);
+            }
+            mbv_ctrl::TransportCommand::Stop => {
+                // Mirror `CtrlCmd::Stop` (control.rs `handle_stop`): a stop
+                // makes every awaited transition identity unobservable.
+                self.player.stop();
+                reset_slot_jumps(
+                    &mut self.owner.core.transitions,
+                    &mut self.owner.queued_transition_origin,
+                );
             }
             // Owner actions run through the one owner-action handler
             // (tray-pin-swap design D7); the transport path drops the result.
