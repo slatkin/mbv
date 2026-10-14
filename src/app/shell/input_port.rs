@@ -12,7 +12,7 @@
 use std::io;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crossterm::event::{self as xterm, Event as XtermEvent, MouseEventKind};
 use mbv_ui_msg::UserEvent;
@@ -22,6 +22,11 @@ use tuirealm::listener::{Poll, PortError, PortResult};
 /// Most terminal events one `poll` folds. Continuous motion cannot hold a move
 /// back past this many reads.
 const MAX_FOLD: usize = 256;
+
+/// Issue #940: a listener poll that takes at least this long gets a WARN, so a
+/// window where input was buffered below the port names the listener thread as
+/// the stall point (logged after the poll unblocks).
+const SLOW_POLL: Duration = Duration::from_secs(2);
 
 /// Shared flag for "a `Moved` is on its way to the main loop". The port closes
 /// it when it forwards a move. The main loop opens it after each terminal tick,
@@ -98,6 +103,23 @@ impl CoalescingInputPort {
 
 impl Poll<UserEvent> for CoalescingInputPort {
     fn poll(&mut self) -> PortResult<Option<Event<UserEvent>>> {
+        let started = Instant::now();
+        let result = self.poll_once();
+        let elapsed = started.elapsed();
+        if elapsed >= SLOW_POLL {
+            tracing::warn!(
+                name: "terminal_input.slow_poll",
+                target: "terminal_input",
+                { elapsed = ?elapsed },
+                "input port poll exceeded the 2s watchdog bound"
+            );
+        }
+        result
+    }
+}
+
+impl CoalescingInputPort {
+    fn poll_once(&mut self) -> PortResult<Option<Event<UserEvent>>> {
         if let Some(event) = self.stash.take() {
             return Ok(Some(Event::from(event)));
         }

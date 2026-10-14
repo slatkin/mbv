@@ -236,6 +236,12 @@ impl RemotePlayer {
             true
         } else {
             self.pending_playback.lock().unwrap().remove(&request_id);
+            tracing::warn!(
+                name: "ctrl.intent.send_failed",
+                target: "ctrl",
+                { request = request_id, generation = generation },
+                "playback intent dropped: the ctrl channel is closed"
+            );
             false
         }
     }
@@ -300,7 +306,15 @@ impl RemotePlayer {
                 }
             },
         };
-        self.cmd_tx.send(CtrlCmd::PlayerCmd(wire_cmd)).is_ok()
+        let sent = self.cmd_tx.send(CtrlCmd::PlayerCmd(wire_cmd)).is_ok();
+        if !sent {
+            tracing::warn!(
+                name: "ctrl.command_send.failed",
+                target: "ctrl",
+                "player command dropped: the ctrl channel is closed"
+            );
+        }
+        sent
     }
 
     #[must_use]

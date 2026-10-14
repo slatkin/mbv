@@ -545,7 +545,9 @@ impl Model {
         } else {
             Duration::from_millis(50)
         };
+        let tick_started = Instant::now();
         let ticked = self.application.tick(PollStrategy::Once(poll_timeout));
+        super::warn_slow_phase("tick", tick_started);
         // Issue #940: the input port forwards one mouse move at a time. This
         // tick took its event, so the port may forward the next move.
         self.move_gate.release();
@@ -582,6 +584,24 @@ impl Model {
         // own request stand.
         let router = self.router_outcome(&messages);
         let (messages, diagnostic) = arbitrate_key(messages, focused.as_ref(), &router);
+        // Issue #940: name every arbitrated key tick, so a swallowed or
+        // deferred chord is visible in the log at debug level. Mouse-only
+        // ticks (no chord) stay silent.
+        if diagnostic.chord.is_some() {
+            tracing::debug!(
+                name: "input_router.key_tick",
+                target: "input_router",
+                {
+                    chord = ?diagnostic.chord,
+                    focus = ?diagnostic.captured_focus,
+                    router = diagnostic.router_result,
+                    leaf = diagnostic.leaf_disposition,
+                    final = diagnostic.final_disposition,
+                    dispatch = diagnostic.dispatch_kind
+                },
+                "key tick arbitrated"
+            );
+        }
         // A prefix-namespace dispatch (design D6, task 6.2) runs the
         // mapped action and disarms, like an immediate `Command`.
         if let RouterOutcome::Command(command) | RouterOutcome::PrefixDispatch(command) = &router {
@@ -633,6 +653,7 @@ impl Model {
         if self.app.visualizer.is_some() {
             self.app.sync_visualizer();
         }
+        let draw_started = Instant::now();
         if let Err(e) = terminal.draw(|f| self.draw_frame(f, music_resize, tv_resize)) {
             tracing::error!(
                 name: "run_loop.terminal_draw.failed",
@@ -642,6 +663,7 @@ impl Model {
             );
             return Err(e.into());
         }
+        super::warn_slow_phase("draw", draw_started);
         *last_render = Instant::now();
         Ok(())
     }

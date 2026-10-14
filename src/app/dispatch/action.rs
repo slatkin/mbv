@@ -234,6 +234,14 @@ impl App {
     }
 
     fn dispatch_playback_command(&mut self, command: &Command) {
+        // Issue #940: name every dispatched transport command, so a dead
+        // input window shows whether the dispatch happened at all.
+        tracing::debug!(
+            name: "transport.dispatch",
+            target: "transport",
+            { command = ?command },
+            "transport command dispatched"
+        );
         match *command {
             Command::TogglePlayPause => self.playback_target().toggle_play_pause(self),
             Command::Stop => self.playback_target().stop(self),

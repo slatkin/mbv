@@ -386,6 +386,12 @@ impl Model {
             return false;
         };
         if leaf_consumed {
+            tracing::debug!(
+                name: "input_router.deferred_cancelled",
+                target: "input_router",
+                { command = ?command },
+                "deferred candidate cancelled: the press was consumed"
+            );
             return false;
         }
         let quit = self.dispatch_router_command(command);

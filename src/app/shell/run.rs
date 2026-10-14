@@ -11,6 +11,23 @@ use super::{
 use super::App;
 use mbv_images::SERIES_IMAGE_CACHE_KEY_INFIX;
 
+/// Issue #940: a run-loop phase that takes at least this long gets a WARN
+/// naming the phase that consumed it, so a stalled input window names its
+/// blocker after the loop unblocks (a blocked phase cannot log mid-stall).
+const SLOW_PHASE: Duration = Duration::from_secs(2);
+
+fn warn_slow_phase(phase: &'static str, started: Instant) {
+    let elapsed = started.elapsed();
+    if elapsed >= SLOW_PHASE {
+        tracing::warn!(
+            name: "run_loop.slow_phase",
+            target: "run_loop",
+            { phase = phase, elapsed = ?elapsed },
+            "run-loop phase exceeded the 2s watchdog bound"
+        );
+    }
+}
+
 impl Model {
     pub(crate) fn sync_mounted_surfaces(&mut self) {
         // Tasks 1.1/1.2: the draw-time state mutations run here, before any
@@ -327,6 +344,7 @@ impl Model {
             let mut had_events = false;
             let mut music_resize = false;
             let mut tv_resize = false;
+            let drain_started = Instant::now();
             if QUIT_REQUESTED.load(Ordering::Relaxed) {
                 break;
             }
@@ -358,6 +376,9 @@ impl Model {
             if self.drain_iteration_work(&mut had_events, &mut music_resize, &mut tv_resize) {
                 break 'outer;
             }
+            // The drain phase includes the terminal tick, which logs its own
+            // slow-phase WARN; a tick WARN plus this one pinpoints the tick.
+            warn_slow_phase("drain", drain_started);
 
             if self.finish_run_iteration(
                 terminal,
@@ -400,7 +421,9 @@ impl Model {
         }
 
         // Keep in sync with tests/tick_integration/harness.rs, the other caller of this shared pass.
+        let sync_started = Instant::now();
         self.sync_mounted_surfaces();
+        warn_slow_phase("sync", sync_started);
         self.app.expire_music_grouping_candidates();
         self.app.sync_volume_from_player();
         self.app.advance_idle_feed_rotation();
