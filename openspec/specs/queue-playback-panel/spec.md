@@ -44,7 +44,6 @@ while playback is idle.
 The header SHALL follow the effective playback target — cast, then connected session, then local —
 and SHALL NOT follow the queue scope being viewed.
 
-
 #### Scenario: Active watched remote playback paints no playhead
 
 - **WHEN** a queue-visible layout is painted while attached to a Session that reports a
@@ -309,7 +308,8 @@ viewed queue does not hold, the row SHALL continue to render that target's own t
 
 The user SHALL be able to hide and show the QueueColumn's visual slot (artwork, placeholder, loading
 reservation, or visualizer) with the `hide_visual_slot` keyboard action, whose default chord is `h`.
-While hidden, the visual slot SHALL NOT be rendered and SHALL reserve zero rows and zero columns; the
+The same hide action SHALL be reachable from the visual slot's context menu. While hidden, the visual
+slot SHALL NOT be rendered and SHALL reserve zero rows and zero columns; the
 header row and the playback panel's transport SHALL remain rendered whenever they would be without
 this action. Below 100 columns the transport SHALL begin on the row directly below the header row.
 At 100 columns or more the transport SHALL span the full width of the slot region, and the band
@@ -357,6 +357,12 @@ Idle collapse is unchanged: while idle the slot reserves zero rows whether or no
 
 - **WHEN** a library screen that binds `h` locally has focus and the user presses `h`
 - **THEN** the visual slot's hidden state SHALL toggle and the screen's local `h` action SHALL NOT run
+
+#### Scenario: Hiding from the visual slot menu
+
+- **WHEN** the visual slot shows and the user chooses the slot menu's hide entry
+- **THEN** the slot SHALL hide with the same persisted hidden state and the same layout change the
+  `h` action produces
 
 ### Requirement: Seekbar progress stays bounded and current
 

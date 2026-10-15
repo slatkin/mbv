@@ -22,7 +22,7 @@ When the visualizer is selected during supported local playback, mbv SHALL captu
 
 ### Requirement: Queue card selects artwork or visualization
 
-mbv SHALL keep the artwork/visualizer queue-card selection session-local: every launch SHALL display artwork when available, and pressing unmodified `v` SHALL switch between those two contents without changing the queue card's reserved rectangle. When the Queue panel is visible and no playback is active, the queue card SHALL NOT be rendered and SHALL reserve zero rows instead; the selection persists and takes effect on the next playback, and pressing `v` while idle SHALL NOT create a card rectangle.
+mbv SHALL keep the artwork/visualizer queue-card selection session-local: every launch SHALL display artwork when available, and pressing unmodified `v` SHALL switch between those two contents without changing the queue card's reserved rectangle. The same selection SHALL also be reachable from the queue card's context menu. When the Queue panel is visible and no playback is active, the queue card SHALL NOT be rendered and SHALL reserve zero rows instead; the selection persists and takes effect on the next playback, and pressing `v` while idle SHALL NOT create a card rectangle.
 
 #### Scenario: Launch after selecting the visualizer
 
@@ -37,6 +37,16 @@ mbv SHALL keep the artwork/visualizer queue-card selection session-local: every 
 #### Scenario: User selects artwork
 
 - **WHEN** the queue card is rendered, displays the visualizer, and the user presses unmodified `v`
+- **THEN** the same queue card rectangle displays the current queue artwork
+
+#### Scenario: User selects the visualizer from the queue card menu
+
+- **WHEN** the queue card is rendered, displays artwork, and the user chooses the menu's visualizer entry
+- **THEN** the same queue card rectangle displays the visualizer
+
+#### Scenario: User selects artwork from the queue card menu
+
+- **WHEN** the queue card is rendered, displays the visualizer, and the user chooses the menu's artwork entry
 - **THEN** the same queue card rectangle displays the current queue artwork
 
 #### Scenario: Idle queue-visible layout collapses the card
