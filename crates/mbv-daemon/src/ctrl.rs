@@ -84,6 +84,9 @@ struct CtrlClient {
     /// Capabilities advertised by this peer at Hello.
     audiobookshelf: CtrlAudiobookshelfCapabilities,
     supports_owner_queue_load: bool,
+    /// Whether the peer negotiated `playback-output` at Hello
+    /// (cast-owner-output design D3); gates `CtrlEvent::PlaybackOutput`.
+    supports_playback_output: bool,
     role: CtrlConnectionRole,
     swap_surface: Option<SwapSurface>,
 }
@@ -156,6 +159,7 @@ impl CtrlClients {
         transport: CtrlTransport,
         audiobookshelf: CtrlAudiobookshelfCapabilities,
         supports_owner_queue_load: bool,
+        supports_playback_output: bool,
         swap_surface: Option<SwapSurface>,
         role: CtrlConnectionRole,
     ) -> CtrlClientId {
@@ -174,6 +178,7 @@ impl CtrlClients {
             transport,
             audiobookshelf,
             supports_owner_queue_load,
+            supports_playback_output,
             role,
             swap_surface,
         });
@@ -361,6 +366,22 @@ impl CtrlClients {
         });
     }
 
+    /// Sends the playback-output event `json` only to clients that negotiated
+    /// `playback-output` at Hello (cast-owner-output design D3). Peers
+    /// lacking the capability are silently skipped, mirroring
+    /// `broadcast_progress_gated`.
+    pub(crate) fn broadcast_playback_output_gated(&mut self, json: &str) {
+        self.retain_clients(|client| {
+            if !client.supports_playback_output {
+                return true;
+            }
+            client
+                .tx
+                .send(CtrlOutbound::Event(json.to_string()))
+                .is_ok()
+        });
+    }
+
     /// Broadcast a `Disconnected` notification to all connected ctrl clients
     /// without closing their connections. Used for Emby remote authority
     /// transitions — clients observe the authority change but stay connected.
@@ -435,6 +456,7 @@ mod tests {
             transport,
             CtrlAudiobookshelfCapabilities::default(),
             false,
+            false,
             surface,
             CtrlConnectionRole::Client,
         )
@@ -501,6 +523,7 @@ mod tests {
             CtrlTransport::Local,
             CtrlAudiobookshelfCapabilities::default(),
             false,
+            false,
             None,
             CtrlConnectionRole::OwnerAction,
         );
@@ -509,6 +532,7 @@ mod tests {
             tx,
             CtrlTransport::Local,
             CtrlAudiobookshelfCapabilities::default(),
+            false,
             false,
             None,
             CtrlConnectionRole::ServiceSetupAdmin,
@@ -554,6 +578,7 @@ mod tests {
             tx,
             CtrlTransport::Local,
             CtrlAudiobookshelfCapabilities::default(),
+            false,
             false,
             None,
             CtrlConnectionRole::OwnerAction,

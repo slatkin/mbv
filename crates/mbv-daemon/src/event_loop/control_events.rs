@@ -105,6 +105,13 @@ impl DaemonLoop {
             }
             return EventOutcome::CONTINUE;
         }
+        if let CtrlCmd::SelectPlaybackOutput(selection) = cmd {
+            // Playback-output selection is handled before the ctrl dispatcher
+            // (cast-owner-output task 3.2): the Cast connector lives on the
+            // loop, which `CtrlContext` does not carry.
+            crate::cast::handle_select_playback_output(self, reply_tx, selection);
+            return EventOutcome::CONTINUE;
+        }
         let persist_after_command = cmd.mutates_owner_queue();
         handle_ctrl_for_role(
             cmd,

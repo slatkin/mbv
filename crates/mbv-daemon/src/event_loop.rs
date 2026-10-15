@@ -84,6 +84,9 @@ pub(crate) struct DaemonLoop {
     pub(super) tray: TrayState,
     /// Pin-swap state machine (tray-pin-swap design D3).
     pub(super) pin_swap: PinSwapState,
+    /// The runtime's Cast connector, when it supplies one (cast-owner-output
+    /// design D2). `None` keeps the Owner on local playback only.
+    pub(super) cast_connector: Option<crate::CastConnector>,
 }
 
 impl DaemonLoop {
@@ -216,6 +219,10 @@ impl DaemonLoop {
                 } else {
                     EventOutcome::CONTINUE
                 }
+            }
+            DaemonEvent::Cast(event) => {
+                super::cast::handle_cast_event(self, event);
+                EventOutcome::CONTINUE
             }
             DaemonEvent::Shutdown => self.handle_shutdown(),
         };

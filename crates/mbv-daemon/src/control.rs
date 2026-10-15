@@ -477,6 +477,13 @@ fn dispatch_ctrl_command(
         CtrlCmd::RunOwnerAction(_) => {
             tracing::debug!(name: "daemon.ctrl_owner_action.ignored", target: "daemon", "ignoring RunOwnerAction outside the event-loop owner-action path");
         }
+        // Playback-output selection is consumed by the event loop before this
+        // dispatcher (cast-owner-output task 3.2): the Cast connector lives on
+        // the loop, which `CtrlContext` does not carry. Direct callers that
+        // bypass the loop have no connector to consult and no output to swap.
+        CtrlCmd::SelectPlaybackOutput(_) => {
+            tracing::debug!(name: "daemon.ctrl_select_output.ignored", target: "daemon", "ignoring SelectPlaybackOutput outside the event-loop selection path");
+        }
         CtrlCmd::UnifiedQueueLoadIdle {
             request_id,
             slots,

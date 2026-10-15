@@ -99,6 +99,10 @@ pub(super) enum DaemonEvent {
         token: String,
     },
     LastClientGone,
+    /// One Cast-output event from the Cast connector or worker (cast-owner-
+    /// output design D2/D8): connect outcomes now, status and keep-alive
+    /// results as the Cast tasks land.
+    Cast(crate::cast::CastOwnerEvent),
     Shutdown,
 }
 
@@ -391,6 +395,11 @@ pub(super) struct DaemonPlayerOwner {
     /// when it is displaced. task 3.5 folds transition/intent identity tracking
     /// together.
     pub(super) queued_transition_origin: Option<(PlaybackRequestId, CtrlClientId)>,
+    /// The Owner's single active playback output (cast-owner-output design
+    /// D1): local playback, or one Cast receiver. Starts and resets to Local.
+    pub(super) output: crate::cast::PlaybackOutput,
+    /// The Cast selection waiting for its worker to connect (task 3.2).
+    pub(super) pending_cast_connect: Option<crate::cast::PendingCastConnect>,
 }
 
 pub(crate) struct PendingIdleQueueLoad {
@@ -648,6 +657,11 @@ pub(crate) struct SharedQueueState {
     /// core stays the authority; `publish_observed` and the order-change sites
     /// keep this in sync (queue-shuffle-play-order design D5).
     pub(super) play_order: Arc<Mutex<mbv_queue::PlayOrderMode>>,
+    /// Mirror of the owner's active playback output, read by the ctrl accept
+    /// path to seed newly-connecting Clients that negotiated
+    /// `playback-output` (cast-owner-output design D3). The owner stays the
+    /// authority; the Cast handlers keep this in sync on every change.
+    pub(super) playback_output: Arc<Mutex<mbv_ctrl::OutputState>>,
 }
 
 impl SharedQueueState {
@@ -692,6 +706,11 @@ pub struct DaemonRuntimeHooks {
     pub on_tray_ready: OnTrayReady,
     pub swap_command: SwapCommandHook,
     pub notify: NotifyHook,
+    /// Cast connector for the runtime (cast-owner-output design D2): the
+    /// Local daemon supplies one, `mbvd` passes `None`. `None` keeps the
+    /// Owner on local playback only and hides the `playback-output`
+    /// capability from the Hello.
+    pub cast_connector: Option<crate::cast::CastConnector>,
 }
 
 impl std::fmt::Debug for DaemonRuntimeHooks {
@@ -702,6 +721,7 @@ impl std::fmt::Debug for DaemonRuntimeHooks {
             .field("on_tray_ready", &"<callback>")
             .field("swap_command", &"<callback>")
             .field("notify", &"<callback>")
+            .field("cast_connector", &self.cast_connector.is_some())
             .finish()
     }
 }

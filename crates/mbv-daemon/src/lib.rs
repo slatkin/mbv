@@ -35,6 +35,9 @@ pub(crate) use core::{
 };
 #[doc(inline)]
 pub use core::{DaemonPlayerHandle, DaemonRuntimeHooks, SwapDirection};
+mod cast;
+#[doc(inline)]
+pub use cast::{CastConnectOutcome, CastConnectRequest, CastConnector, local_cast_connector};
 mod owner_lock;
 #[doc(inline)]
 pub use owner_lock::{
@@ -42,7 +45,7 @@ pub use owner_lock::{
     try_lock, write_pid,
 };
 mod core_ctrl_spawn;
-pub(crate) use core_ctrl_spawn::spawn_ctrl_client;
+pub(crate) use core_ctrl_spawn::{DaemonHelloCaps, spawn_ctrl_client};
 mod play_order;
 pub(crate) use play_order::{
     forward_play_order_advance, next_up_slot, reset_play_order_for_queue_replacement,

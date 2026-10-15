@@ -2104,6 +2104,7 @@ version = "0.25.5"
 dependencies = [
  "libc",
  "mbv-audiobookshelf",
+ "mbv-cast",
  "mbv-config",
  "mbv-core",
  "mbv-ctrl",

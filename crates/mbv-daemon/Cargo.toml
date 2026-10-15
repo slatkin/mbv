@@ -19,6 +19,7 @@ mbv-player = { path = "../mbv-player" }
 mbv-emby = { path = "../mbv-emby" }
 mbv-emby-model = { path = "../mbv-emby-model" }
 mbv-audiobookshelf = { path = "../mbv-audiobookshelf" }
+mbv-cast = { path = "../mbv-cast" }
 mbv-ctrl = { path = "../mbv-ctrl" }
 mbv-config = { path = "../mbv-config" }
 mbv-queue = { path = "../mbv-queue" }
@@ -33,6 +34,7 @@ tracing.workspace = true
 
 [dev-dependencies]
 mbv-core = { path = "../mbv-core", features = ["test"] }
+mbv-cast = { path = "../mbv-cast", features = ["test"] }
 tracing-subscriber.workspace = true
 rstest.workspace = true
 mbv-player = { path = "../mbv-player", features = ["test"] }
