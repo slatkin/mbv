@@ -305,6 +305,15 @@ A freely scrolled viewport SHALL return to following the selection on the next k
 - **THEN** that row becomes the selection
 - **AND** the viewport does not move
 
+### Requirement: The wheel scroll and the non-selection operations keep a free viewport
+
+A freely scrolled viewport SHALL stay free under the wheel scroll and under an operation that does not act on the row selection as navigation: a filter query edit, a filter clear, a mark clear, the pointer expansion toggle, and the pointer context click. A filter operation MAY reconcile the selection to a filtered or restored target without re-anchoring.
+
+#### Scenario: A pointer context click after a scroll keeps the free viewport
+- **WHEN** the user wheel-scrolls a list until its selection is out of view and then right-clicks a painted row
+- **THEN** the context menu opens for that row
+- **AND** the selection and the viewport offset are unchanged
+
 ### Requirement: List-shaped overlays hold their list in the shared list owner
 
 A list-shaped overlay (the Playlists overlay's two lists, the Global Search sidebar results) SHALL hold its cursor, viewport offset and anchor in the shared canonical list owner, and SHALL scroll through that owner's scroll operation, with no anchor, clamp or cursor-follow rule of its own. Its painter SHALL paint the offset the owner resolved and SHALL NOT clamp or write it back. The shell SHALL NOT project a cursor or scroll mirror into it.
