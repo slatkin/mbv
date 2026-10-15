@@ -535,7 +535,10 @@ fn run_local_instance(
                         pin::fatal(format!("mbv: {error}"));
                     }
                     let mut input = std::io::stdin().lock();
-                    let mut output = std::io::stderr().lock();
+                    // The prompt must land where the user looks: in a pinned
+                    // launch stderr is the crash log, so it goes to stdout,
+                    // the pty the panel displays.
+                    let mut output = std::io::stdout().lock();
                     match owner_restart::ask(&error, &mut input, &mut output) {
                         owner_restart::Choice::Quit => {
                             // `ask` already rendered the mismatch text.
@@ -543,8 +546,9 @@ fn run_local_instance(
                         }
                         owner_restart::Choice::Restart => {
                             if let Err(terminate_error) = mbv_daemon::signal_owner(&lock_path) {
-                                eprintln!("mbv: failed to stop Owner process: {terminate_error}");
-                                std::process::exit(1);
+                                pin::fatal(format!(
+                                    "mbv: failed to stop Owner process: {terminate_error}"
+                                ));
                             }
                             restart_requested = true;
                             resolution = wait_for_owner_exit();
