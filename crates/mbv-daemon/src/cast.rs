@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 use mbv_cast::{
     CastClient, CastJob, CastReceiver, CastStatus, CastTransport, ConnectMode, spawn_cast_worker,
 };
-use mbv_ctrl::{CastConnection, CtrlEvent, OutputSelection, OutputState};
+use mbv_ctrl::{CastConnection, CtrlEvent, OutputSelection, OutputState, PlaybackGeneration};
 use mbv_queue::QueueSlotId;
 
 use super::DaemonLoop;
@@ -46,14 +46,19 @@ pub(crate) enum PlaybackOutput {
 /// the only path to the receiver: the `CastClient` itself lives on the worker
 /// thread and is never `Send`. `last_status` is the most recent poll result
 /// (task 3.3 fills it); `loaded` is the item the receiver was told to play.
-/// Its progress target and ABS lifecycle join it in tasks 4.1/6.4.
+/// The ABS lifecycle of a loaded episode joins it in task 6.4.
 pub(crate) struct CastOutput {
-    worker: mpsc::Sender<CastJob>,
+    /// The only path to the receiver: the `CastClient` lives on the worker
+    /// thread and is never `Send`. `pub(super)` so the crate's tests can
+    /// submit sentinel jobs that make asynchronous job order assertable.
+    pub(super) worker: mpsc::Sender<CastJob>,
     receiver: CastReceiver,
     connection: CastConnection,
     last_status: Option<CastStatus>,
     status_at: Option<Instant>,
-    loaded: Option<CastLoadedItem>,
+    /// The item the receiver was told to play. `pub(super)` so the crate's
+    /// tests can assert what a resolve outcome loaded.
+    pub(super) loaded: Option<CastLoadedItem>,
     /// Cast tick timers (design D8, task 3.3), owned by the output so they
     /// travel with it. `last_keep_alive` paces the 3s pong job; `last_poll`
     /// paces the 7s status poll; `poll_sent` arms the 20s worker watchdog
@@ -76,9 +81,12 @@ pub(crate) struct CastOutput {
 /// stops a second poll of the same `Finished` entry from advancing twice
 /// (design D7); task 6.2 owns it.
 pub(crate) struct CastLoadedItem {
-    slot: QueueSlotId,
-    content_id: String,
-    end_handled: bool,
+    pub(super) slot: QueueSlotId,
+    pub(super) content_id: String,
+    /// The resolved item's progress target (design D1); the provider
+    /// reporting of task 6.4 feeds from it.
+    pub(super) progress: crate::cast_resolve::CastProgressTarget,
+    pub(super) end_handled: bool,
 }
 
 impl std::fmt::Debug for CastLoadedItem {
@@ -86,6 +94,7 @@ impl std::fmt::Debug for CastLoadedItem {
         f.debug_struct("CastLoadedItem")
             .field("slot", &self.slot)
             .field("content_id", &self.content_id)
+            .field("progress", &self.progress)
             .field("end_handled", &self.end_handled)
             .finish()
     }
@@ -129,8 +138,23 @@ pub(crate) struct PendingCastConnect {
     reply_tx: CtrlSender,
 }
 
-/// The result of one connect attempt, carried by `DaemonEvent::Cast`.
-pub(crate) enum CastOwnerEvent {
+/// A Cast source resolve in flight (design D4, task 4.2): the slot it was
+/// started for, the transition generation it belongs to, and the position the
+/// resolved media starts at. The resolve outcome re-enters through
+/// `CastOwnerEvent::Resolved`; one whose slot or generation no longer matches
+/// this record belongs to a superseded target and is dropped.
+pub(crate) struct PendingCastResolve {
+    pub(super) slot: QueueSlotId,
+    pub(super) generation: PlaybackGeneration,
+    pub(super) start_ticks: i64,
+}
+
+/// One Cast-output event from the Cast connector or worker (cast-owner-output
+/// design D2/D4/D8), carried to the owner's event loop as `DaemonEvent::Cast`:
+/// connect and reconnect outcomes, status-poll results from the Cast timers on
+/// the daemon tick, and Cast source resolve outcomes.
+#[derive(Debug)]
+pub enum CastOwnerEvent {
     Connect {
         receiver_id: String,
         outcome: CastConnectOutcome,
@@ -154,6 +178,16 @@ pub(crate) enum CastOwnerEvent {
     Reconnect {
         receiver_id: String,
         outcome: CastConnectOutcome,
+    },
+    /// One Cast source resolve outcome (cast-owner-output design D4, task
+    /// 4.2), keyed by the slot the resolve was started for and the transition
+    /// generation it belongs to. A result whose pair no longer matches the
+    /// owner's pending resolve is a stale result for a superseded target and
+    /// is dropped without a load.
+    Resolved {
+        slot: QueueSlotId,
+        generation: PlaybackGeneration,
+        result: Result<crate::cast_resolve::CastSource, crate::cast_resolve::Uncastable>,
     },
 }
 
@@ -335,6 +369,11 @@ pub(super) fn handle_cast_event(daemon: &mut DaemonLoop, event: CastOwnerEvent) 
             receiver_id,
             outcome,
         } => handle_reconnect_outcome(daemon, &receiver_id, outcome),
+        CastOwnerEvent::Resolved {
+            slot,
+            generation,
+            result,
+        } => crate::cast_resolve::handle_cast_resolved(daemon, slot, generation, result),
     }
 }
 

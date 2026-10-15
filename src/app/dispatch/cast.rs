@@ -8,18 +8,13 @@
 use crate::app::App;
 use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::state::panel_targets::PanelTarget;
-use crate::app::state::types::cast::{
-    CastAttachment, CastEvent, CastProgressTarget, DispatchedCastItem,
-};
+use crate::app::state::types::cast::{CastAttachment, CastEvent, DispatchedCastItem};
 use mbv_audiobookshelf::AudiobookshelfClient;
 use mbv_cast::CastError;
 use mbv_cast::CastJob;
 use mbv_cast::CastTransport;
-use mbv_cast::client::CastMediaItem;
-use mbv_cast::dispatch::{self, CastSubtitleKind, build_cast_device_profile};
-use mbv_emby::EmbyClient;
-use mbv_emby_model::EmbyItem;
-use mbv_queue::{AudiobookshelfQueueItem, QueueItem};
+use mbv_daemon::{AbsCastContext, CastResolveContext, CastSource, Uncastable, prepare_cast_source};
+use mbv_queue::{QueueItem, QueueItemContentId};
 use std::sync::mpsc::Sender;
 use std::time::{Duration, Instant};
 
@@ -35,23 +30,15 @@ const CAST_ATTACH_TIMEOUT: Duration = Duration::from_secs(5);
 /// content, never Emby rows rendering.
 const CAST_DISCOVERY_TIMEOUT: Duration = Duration::from_secs(3);
 
-/// Everything an Audiobookshelf episode's cast dispatch needs: enough to
-/// open a playback session and resolve its castable source, mirroring
-/// `AudiobookshelfPlayerContext` (`player_sources.rs`) without depending on
-/// that excluded file.
-pub(in crate::app) struct AbsCastContext {
-    pub(in crate::app) client: AudiobookshelfClient,
-    pub(in crate::app) credential: String,
-    device_id: String,
-}
-
 /// One item's cast resolution, still tagged with its original selection
 /// index so `partition_dispatch_with_start` can compute where the receiver
-/// should begin.
+/// should begin. The resolve itself lives in the Owner's resolver
+/// (`mbv_daemon::cast_resolve`, cast-owner-output task 4.1); the TUI's Cast
+/// runtime keeps calling it until row 8.3 deletes that runtime.
 struct ResolvedCastItem {
     name: String,
-    content_id: mbv_queue::QueueItemContentId,
-    result: Result<(CastMediaItem, CastProgressTarget), CastError>,
+    content_id: QueueItemContentId,
+    result: Result<CastSource, Uncastable>,
 }
 
 impl App {
@@ -166,13 +153,15 @@ impl App {
         // the resolution round trip plus the transport job, and no worker
         // event clears it until one actually arrives.
         self.cast_job_sent.get_or_insert_with(Instant::now);
-        let emby = self.emby_snapshot();
-        let abs = self.audiobookshelf_cast_context();
+        let ctx = CastResolveContext {
+            emby: self.emby_snapshot(),
+            abs: self.audiobookshelf_cast_context(),
+        };
         let tx = self.channels.cast_tx.clone();
         std::thread::spawn(move || {
             let resolved: Vec<ResolvedCastItem> = all_items
                 .iter()
-                .map(|item| resolve_cast_dispatch_item(item, emby.as_ref(), abs.as_ref()))
+                .map(|item| resolve_cast_dispatch_item(item, &ctx))
                 .collect();
             let (media, uncastable, start_index, dispatched) =
                 partition_dispatch_with_start(resolved, selected_index);
@@ -469,87 +458,12 @@ fn cast_connect_fn() -> fn(&str, Duration) -> Result<Sender<CastJob>, CastError>
     resolve_and_connect_cast_receiver
 }
 
-fn resolve_cast_dispatch_item(
-    item: &QueueItem,
-    emby: Option<&EmbyClient>,
-    abs: Option<&AbsCastContext>,
-) -> ResolvedCastItem {
-    let name = item.display_name();
-    let content_id = item.content_id();
-    let result = match item {
-        QueueItem::Emby(emby_item) => resolve_emby_cast_item(emby_item, emby),
-        QueueItem::Feed(entry) => dispatch::resolve_feed_dispatch(entry).map(|media| {
-            (
-                media,
-                CastProgressTarget::Feed {
-                    feed_id: entry.feed_id.clone(),
-                    guid: entry.guid.clone(),
-                },
-            )
-        }),
-        QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Episode(episode)) => {
-            resolve_abs_episode_cast_item(episode, abs)
-        }
-        QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Book(book)) => {
-            Err(CastError::audiobookshelf_book(&book.title))
-        }
-    };
+fn resolve_cast_dispatch_item(item: &QueueItem, ctx: &CastResolveContext) -> ResolvedCastItem {
     ResolvedCastItem {
-        name,
-        content_id,
-        result,
+        name: item.display_name(),
+        content_id: item.content_id(),
+        result: prepare_cast_source(item, ctx),
     }
-}
-
-fn resolve_emby_cast_item(
-    item: &EmbyItem,
-    emby: Option<&EmbyClient>,
-) -> Result<(CastMediaItem, CastProgressTarget), CastError> {
-    let Some(client) = emby else {
-        return Err(CastError::emby_unavailable(&item.name));
-    };
-    let profile = build_cast_device_profile(CastSubtitleKind::None);
-    let info = client
-        .get_playback_info_for_cast(&item.id, item.is_audio(), &profile)
-        .map_err(CastError::emby_playback_info)?;
-    Ok((
-        info.item,
-        CastProgressTarget::Emby {
-            item_id: item.id.clone(),
-            media_source_id: info.media_source_id,
-            session_id: info.session_id,
-            runtime_ticks: item.runtime_ticks,
-        },
-    ))
-}
-
-fn resolve_abs_episode_cast_item(
-    episode: &AudiobookshelfQueueItem,
-    abs: Option<&AbsCastContext>,
-) -> Result<(CastMediaItem, CastProgressTarget), CastError> {
-    let Some(ctx) = abs else {
-        return Err(CastError::audiobookshelf_unavailable(&episode.title));
-    };
-    let session = ctx
-        .client
-        .create_playback_session_bounded(
-            &ctx.credential,
-            &ctx.device_id,
-            &episode.library_item_id,
-            &episode.episode_id,
-            false,
-            AudiobookshelfClient::REQUEST_HARD_BOUND,
-        )
-        .map_err(|e| CastError::audiobookshelf_session(&episode.title, e))?;
-    let media =
-        dispatch::resolve_audiobookshelf_episode_dispatch(&session.source, &ctx.credential)?;
-    Ok((
-        media,
-        CastProgressTarget::AudiobookshelfEpisode {
-            session_id: session.id,
-            duration_seconds: session.duration_seconds,
-        },
-    ))
 }
 
 /// Media to load, the uncastable `(name, reason)` pairs, the start index
@@ -557,7 +471,7 @@ fn resolve_abs_episode_cast_item(
 /// dispatched-item metadata (6.5/6.6) in the same compacted order as the
 /// loaded queue -- `partition_dispatch_with_start`'s result.
 type CastDispatchPartition = (
-    Vec<CastMediaItem>,
+    Vec<mbv_cast::client::CastMediaItem>,
     Vec<(String, String)>,
     u16,
     Vec<DispatchedCastItem>,
@@ -576,19 +490,19 @@ fn partition_dispatch_with_start(
     let mut start_index = 0u16;
     for (i, item) in items.into_iter().enumerate() {
         match item.result {
-            Ok((cast_media, report)) => {
+            Ok(source) => {
                 if i == selected_index {
                     start_index = u16::try_from(media.len()).unwrap_or(u16::MAX);
                 }
                 dispatched.push(DispatchedCastItem {
-                    url: cast_media.url.clone(),
+                    url: source.media.url.clone(),
                     content_id: item.content_id,
                     title: item.name,
-                    report,
+                    report: source.progress,
                 });
-                media.push(cast_media);
+                media.push(source.media);
             }
-            Err(reason) => uncastable.push((item.name, reason.to_string())),
+            Err(reason) => uncastable.push((reason.item, reason.reason)),
         }
     }
     (media, uncastable, start_index, dispatched)
@@ -597,6 +511,7 @@ fn partition_dispatch_with_start(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app::state::types::cast::CastProgressTarget;
     use crate::app::tests::{QueueViewTestExt, make_app_stub};
     use mbv_queue::FeedEntry;
 
@@ -775,21 +690,24 @@ mod tests {
             ResolvedCastItem {
                 name: "Uncastable".into(),
                 content_id: mbv_queue::QueueItemContentId::Feed("a".into()),
-                result: Err(CastError::feed_no_url("Uncastable")),
+                result: Err(Uncastable {
+                    item: "Uncastable".into(),
+                    reason: "\"Uncastable\" has no media URL to cast".into(),
+                }),
             },
             ResolvedCastItem {
                 name: "Castable".into(),
                 content_id: mbv_queue::QueueItemContentId::Feed("b".into()),
-                result: Ok((
-                    CastMediaItem {
+                result: Ok(CastSource {
+                    media: mbv_cast::client::CastMediaItem {
                         url: "https://b".into(),
                         content_type: "audio/mpeg".into(),
                     },
-                    CastProgressTarget::Feed {
+                    progress: CastProgressTarget::Feed {
                         feed_id: None,
                         guid: "b".into(),
                     },
-                )),
+                }),
             },
         ];
         let (media, uncastable, start_index, dispatched) =

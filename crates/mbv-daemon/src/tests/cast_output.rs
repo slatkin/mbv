@@ -14,7 +14,7 @@ use crate::cast::PlaybackOutput;
 
 /// A Cast connector whose connect always succeeds, backed by a fake
 /// transport; returns the connector and the transport's call log.
-fn fake_connector() -> (CastConnector, Arc<Mutex<Vec<String>>>) {
+pub(super) fn fake_connector() -> (CastConnector, Arc<Mutex<Vec<String>>>) {
     let calls = Arc::new(Mutex::new(Vec::new()));
     let log = Arc::clone(&calls);
     let connector: CastConnector = Box::new(move |request: CastConnectRequest| {
@@ -64,7 +64,7 @@ fn failing_connector(reason: &'static str) -> CastConnector {
 }
 
 /// A ctrl Client that negotiated `playback-output` at Hello.
-fn connect_output_client(
+pub(super) fn connect_output_client(
     clients: &ClientRegistry,
     supports_playback_output: bool,
 ) -> (u64, CtrlSender, mpsc::Receiver<CtrlOutbound>) {
@@ -81,7 +81,7 @@ fn connect_output_client(
     (id, tx, rx)
 }
 
-fn cast_selection() -> OutputSelection {
+pub(super) fn cast_selection() -> OutputSelection {
     cast_selection_for("rcv-1", "Living room")
 }
 
@@ -96,7 +96,7 @@ fn cast_selection_for(receiver_id: &str, name: &str) -> OutputSelection {
 
 /// Pumps the one `DaemonEvent::Cast` the connector's outcome produced into
 /// the loop.
-fn pump_cast_event(t: &mut TestLoop) {
+pub(super) fn pump_cast_event(t: &mut TestLoop) {
     let event = t
         .merged_rx
         .recv()
@@ -104,7 +104,7 @@ fn pump_cast_event(t: &mut TestLoop) {
     t.event_loop.handle_event(event);
 }
 
-fn select_output(
+pub(super) fn select_output(
     t: &mut TestLoop,
     client_id: u64,
     reply_tx: &CtrlSender,

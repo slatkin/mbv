@@ -400,6 +400,10 @@ pub(super) struct DaemonPlayerOwner {
     pub(super) output: crate::cast::PlaybackOutput,
     /// The Cast selection waiting for its worker to connect (task 3.2).
     pub(super) pending_cast_connect: Option<crate::cast::PendingCastConnect>,
+    /// The Cast source resolve in flight for the output's next load (task
+    /// 4.2). Its outcome re-enters through `CastOwnerEvent::Resolved` and is
+    /// matched against it by slot and transition generation.
+    pub(super) pending_cast_resolve: Option<crate::cast::PendingCastResolve>,
 }
 
 pub(crate) struct PendingIdleQueueLoad {

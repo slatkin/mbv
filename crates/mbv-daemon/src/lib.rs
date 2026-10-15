@@ -37,7 +37,15 @@ pub(crate) use core::{
 pub use core::{DaemonPlayerHandle, DaemonRuntimeHooks, SwapDirection};
 mod cast;
 #[doc(inline)]
-pub use cast::{CastConnectOutcome, CastConnectRequest, CastConnector, local_cast_connector};
+pub use cast::{
+    CastConnectOutcome, CastConnectRequest, CastConnector, CastOwnerEvent, local_cast_connector,
+};
+mod cast_resolve;
+#[doc(inline)]
+pub use cast_resolve::{
+    AbsCastContext, CastProgressTarget, CastResolveContext, CastSource, Uncastable,
+    prepare_cast_source, spawn_cast_resolve,
+};
 mod owner_lock;
 #[doc(inline)]
 pub use owner_lock::{

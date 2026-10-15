@@ -9,34 +9,14 @@
 
 use mbv_cast::discovery::CastReceiver;
 use mbv_cast::{CastError, CastJob, CastStatus};
-use mbv_ids::{EmbySessionId, MediaSourceId};
 use mbv_queue::QueueItemContentId;
 use std::sync::mpsc::Sender;
 use std::time::Instant;
 
-/// Where a dispatched item's progress is reported (6.6), one variant per
-/// provider `cast_dispatch` resolves items for.
-pub(in crate::app) enum CastProgressTarget {
-    Emby {
-        item_id: String,
-        media_source_id: MediaSourceId,
-        session_id: EmbySessionId,
-        runtime_ticks: i64,
-    },
-    Feed {
-        feed_id: Option<String>,
-        guid: String,
-    },
-    /// `session_id` is the Audiobookshelf playback session opened to resolve
-    /// this episode's cast URL (`create_playback_session_bounded`) -- it must
-    /// be opened at dispatch time regardless of progress reporting, since
-    /// `cast::dispatch::resolve_audiobookshelf_episode_dispatch` requires an
-    /// already-resolved `AudiobookshelfAudioSource`.
-    AudiobookshelfEpisode {
-        session_id: String,
-        duration_seconds: f64,
-    },
-}
+// The progress target moved to the Owner's resolver (cast-owner-output task
+// 4.1); the TUI's Cast runtime keeps using it until row 8.3 deletes that
+// runtime.
+pub(in crate::app) use mbv_daemon::CastProgressTarget;
 
 /// One item dispatched to the receiver's queue: enough identity to match a
 /// reported `playing_content_id` back to it (6.5) and to report its
