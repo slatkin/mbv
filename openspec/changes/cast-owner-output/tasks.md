@@ -19,8 +19,8 @@
 
 ## 4. Cast source resolution in the Owner
 
-- [ ] 4.1 Move the Cast resolve into `mbv-daemon`: `resolve_emby_cast_item` and `resolve_abs_episode_cast_item` from `src/app/dispatch/cast.rs`, and `CastProgressTarget`. `resolve_feed_dispatch` (`crates/mbv-cast/src/dispatch.rs:80`) and `build_cast_device_profile` (`crates/mbv-cast/src/dispatch.rs:51`) already live in `mbv-cast`; call them from `mbv-daemon`, do not move them. The result is `prepare_cast_source(item, ctx) -> Result<CastSource, Uncastable>` (design D6). The ABS episode session stays open and its lifecycle is returned. It is not closed at resolve. Verify: one `#[case]` table test over uncastable classification (ABS book, feed without a media URL) with the reason for each.
-- [ ] 4.2 Run the resolve on a resolve thread and re-enter through a `DaemonEvent` that carries the slot id and the transition generation. A result for a slot that is no longer the target is dropped. Verify: one test where a stale resolve result produces no load.
+- [x] 4.1 Move the Cast resolve into `mbv-daemon`: `resolve_emby_cast_item` and `resolve_abs_episode_cast_item` from `src/app/dispatch/cast.rs`, and `CastProgressTarget`. `resolve_feed_dispatch` (`crates/mbv-cast/src/dispatch.rs:80`) and `build_cast_device_profile` (`crates/mbv-cast/src/dispatch.rs:51`) already live in `mbv-cast`; call them from `mbv-daemon`, do not move them. The result is `prepare_cast_source(item, ctx) -> Result<CastSource, Uncastable>` (design D6). The ABS episode session stays open and its lifecycle is returned. It is not closed at resolve. Verify: one `#[case]` table test over uncastable classification (ABS book, feed without a media URL) with the reason for each.
+- [x] 4.2 Run the resolve on a resolve thread and re-enter through a `DaemonEvent` that carries the slot id and the transition generation. A result for a slot that is no longer the target is dropped. Verify: one test where a stale resolve result produces no load.
 
 ## 5. Routing at the funnels and transport commands
 
