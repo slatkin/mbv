@@ -49,6 +49,10 @@ fn the_upcoming_placeholder_names_the_failed_fetch_for_a_reselect_retry() {
     }
 }
 
+/// Owns the shared empty+loading placeholder contract (the slot branch is
+/// mode-independent): an empty list box with the fetch still under way shows
+/// the shared loading wording, not a blank box. This fixture is the spec's
+/// "An in-flight eager fetch shows loading" Upcoming scenario.
 #[test]
 fn the_upcoming_placeholder_shows_loading_while_the_snapshot_fetch_is_in_flight() {
     use crate::library_panel::ListSlot;
@@ -73,25 +77,4 @@ fn loaded_upcoming_premieres_stay_a_media_slot() {
     let mut owner = upcoming_owner(vec![upcoming_premiere("Series 1")], false, false);
 
     assert!(matches!(owner.panel_content().list, ListSlot::Media(_)));
-}
-
-/// A Latest level still fetching shows the shared loading placeholder
-/// instead of a blank list box (the tab's non-blocking loading indicator).
-#[test]
-fn the_latest_placeholder_shows_loading_while_the_level_fetches() {
-    use crate::library_panel::ListSlot;
-
-    let mut owner = TvContent::new();
-    let mut context = tv_tree_context(Vec::new(), None, None, false);
-    context.set_tv_content_mode(Some(TvContentMode::Latest));
-    context.list.loading = true;
-    owner.set_content(context);
-
-    match owner.panel_content().list {
-        ListSlot::Empty { loading, text } => {
-            assert!(loading);
-            assert_eq!(text, " (empty)");
-        }
-        other => panic!("an empty loading Latest must use the placeholder slot, got {other:?}"),
-    }
 }

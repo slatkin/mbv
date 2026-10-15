@@ -344,10 +344,13 @@ impl App {
     /// TV tab loads, pill selection materializes the root level from it
     /// instead of refetching, and only the focused manual refresh replaces
     /// it. A no-op when the snapshot already exists or the request is in
-    /// flight (`Failed` re-requests), and a saved position restoring straight
-    /// into Upcoming skips — that restore's own fetch fills the snapshot
-    /// through its `Loaded` completion. Without a Service client this stays
-    /// unrequested, so a later tab load retries.
+    /// flight (`Failed` re-requests). A saved position restoring straight
+    /// into Upcoming skips only while no fetch state is recorded — that
+    /// restore's own fetch fills the snapshot through its `Loaded`
+    /// completion; a `Failed` state re-requests here because the restore's
+    /// fetch is suppressed by `activate_library_position`'s current==saved
+    /// shortcut (spec: retry by a later tab load). Without a Service client
+    /// this stays unrequested, so a later tab load retries.
     pub(in crate::app) fn maybe_spawn_tv_upcoming_snapshot(&mut self, lib_idx: usize) {
         let Some(lib) = self.libs.get(lib_idx) else {
             return;
@@ -356,8 +359,9 @@ impl App {
             return;
         }
         let library_id = lib.library.id.clone();
+        let fetch_state = self.tv_upcoming_fetches.get(&library_id);
         if self.tv_upcoming_snapshots.contains_key(&library_id)
-            || TvUpcomingFetchState::blocks_request(self.tv_upcoming_fetches.get(&library_id))
+            || TvUpcomingFetchState::blocks_request(fetch_state)
         {
             return;
         }
@@ -368,7 +372,9 @@ impl App {
                 .last()
                 .and_then(|level| level.tv_content_mode.as_ref())
                 == Some(&mbv_queue::TvContentMode::Upcoming);
-        if restoring_into_upcoming {
+        // `Failed` falls through: the restore's own fetch is suppressed by
+        // the current==saved shortcut, so this request is the tab-load retry.
+        if restoring_into_upcoming && fetch_state.is_none() {
             return;
         }
         let Some(client) = self.emby_snapshot() else {

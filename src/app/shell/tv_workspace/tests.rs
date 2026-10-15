@@ -296,27 +296,33 @@ mod activation;
 
 /// Contract (2026-10-15): after the eager Upcoming fetch fails through all
 /// its retries, the sync pass projects the failed fetch state into the
-/// owner, so the panel names the failure and offers the pill reselect
-/// instead of painting a silent empty list.
+/// owner as an empty, not-loading placeholder slot and leaves the `Failed`
+/// state marked for the shell's retry paths. The placeholder's wording is
+/// the component test's contract (`flat_upcoming_placeholder_tests`).
 #[test]
 fn the_failed_upcoming_fetch_projects_into_the_panel_placeholder() {
     use mbv_components::library_panel::ListSlot;
 
     let http = MockHttp::new();
     let mut model = mounted_tv_model_with_mock_emby(&http);
+    let library_id = model.app.libs[0].library.id.clone();
     model.app.libs[0].nav_stack[0].tv_content_mode = Some(mbv_queue::TvContentMode::Upcoming);
     model.app.tv_upcoming_fetches.insert(
-        model.app.libs[0].library.id.clone(),
+        library_id.clone(),
         crate::app::state::app_struct::TvUpcomingFetchState::Failed,
     );
 
     model.sync_tv_content();
 
     match model.test_tv_owner_mut().panel_content().list {
-        ListSlot::Empty { loading, text } => {
+        ListSlot::Empty { loading, .. } => {
             assert!(!loading, "the failed fetch is no longer in flight");
-            assert_eq!(text, " Upcoming fetch failed — select the pill to retry");
         }
-        other => panic!("a failed Upcoming fetch must show the named failure, got {other:?}"),
+        other => panic!("a failed Upcoming fetch must show the placeholder slot, got {other:?}"),
     }
+    assert_eq!(
+        model.app.tv_upcoming_fetches.get(&library_id),
+        Some(&crate::app::state::app_struct::TvUpcomingFetchState::Failed),
+        "the failed state stays marked for the shell's retry paths",
+    );
 }

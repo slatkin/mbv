@@ -405,19 +405,28 @@ fn eager_upcoming_request_stays_unmarked_without_a_service_client() {
 
 /// A tab re-entry after a failed eager fetch re-requests it: `Failed` is a
 /// retryable state, unlike the stored success snapshot, which dedups the
-/// whole session.
+/// whole session. The saved position restores straight into Upcoming (the
+/// restore writes the mode onto the root level), and the restore's own fetch
+/// is suppressed by the current==saved shortcut — so this eager request is
+/// the tab-load retry the spec names.
 #[test]
 fn failed_upcoming_fetch_retries_on_the_next_tab_load() {
     let mut app = make_app_stub();
     let http = install_mock_emby(&mut app);
     app.libs.push(lib_tab("tvshows"));
     push_top_level_tv(&mut app.libs[0], 2);
+    app.libs[0].nav_stack[0].tv_content_mode = Some(mbv_queue::TvContentMode::Upcoming);
     app.tv_upcoming_fetches
         .insert("lib-1".into(), TvUpcomingFetchState::Failed);
     http.respond(200, r#"{"Items":[{"Id":"ep-1","Type":"Episode","SeriesId":"series-1","SeriesName":"Series 1"}]}"#);
 
     app.maybe_spawn_tv_upcoming_snapshot(0);
 
+    assert_eq!(
+        app.tv_upcoming_fetches.get("lib-1"),
+        Some(&TvUpcomingFetchState::InFlight),
+        "the tab-load retry must arm a new fetch"
+    );
     let LibEvent::ModelContent(event) =
         app.channels.lib_rx.recv().expect("the retry must complete")
     else {
