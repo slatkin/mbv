@@ -80,7 +80,11 @@ It does not extend `prepare_source`, because the mpv path (bearer-header options
 
 ### D7. Advance: `idleReason` plus a content guard
 
-`CastStatus` gets `idle_reason: Option<CastIdleReason>`, and `LOADING` is mapped to a buffering state. On each status:
+`CastStatus` gets `idle_reason: Option<CastIdleReason>`.
+
+`LOADING` needs its own mechanism. `rust_cast` 0.21 types `StatusEntry.player_state` as `PlayerState`, and its `FromStr` (`channels/media.rs:357-367`) rejects `"LOADING"` with `Error::Internal("Unknown player state LOADING")`. Receivers do report `LOADING` while they load media. So today the whole `media.get_status()` call fails during a load, before `cast_playback_state` (`crates/mbv-cast/src/client.rs:331`) sees a value. `rust_cast` has no public raw-message API (`CastDevice.message_manager` is private), so mbv-cast cannot parse the raw string itself. Instead, mbv-cast recognizes this one error (`Error::Internal` whose text names `LOADING`) on `get_status` and on `load` and converts it to a `Buffering` status for the loaded content id. On `load` this means "load accepted", not a failure, so the transition gate of D5 does not expire. Every other parse error stays an error. The match is on `rust_cast` error text, so the pinned `rust_cast` version is part of the contract; a test owns it.
+
+On each status:
 
 | Status | Owner action |
 |---|---|
@@ -100,18 +104,19 @@ The daemon tick runs the keep-alive (3s) and the status poll (7s) as jobs on the
 
 - **Emby:** a `SessionReporter` built from the ids in the `CastProgressTarget` (item, media source, play session), fed with the status positions.
 - **ABS episode:** the `AudiobookshelfLifecycle` from the resolve, held in the loaded item. It is observed and synced on each status, and closed on advance, stop, or output change.
-- **Feed:** entry state follows the path that local playback uses for Feed progress. The Cast-only Feed write in `cast_status.rs` is deleted. The implementer verifies this path before deleting (task 6.4).
+- **Feed:** local Feed progress is written by the Client, not the Owner. `persist_feed_slot_lifecycle` (`src/app/dispatch/feeds/feed_tab.rs:292`) runs in the TUI when it receives ctrl `PlayerEvent`s: `Stopped` and `TrackCompleted` (`src/app/dispatch/session/player_event.rs:324`, `:405`), and `PausedChanged(true)` and `OutputStarted` after a seek (through `persist_feed_slot_position`, `:577-583`). `StatusOnly` broadcasts do not drive it. So the Cast output emits the same events from receiver status: `PausedChanged` on a pause change, `OutputStarted` when a seek settles, `Stopped` on a user stop or output change, and `TrackCompleted` on a natural end (D7). The Owner SHALL NOT write the Feed state file itself: the `feed-entry-state` spec says the client stores it, and two writers would race. The Cast-only Feed write in `cast_status.rs` is deleted. As with local playback on a stay-alive Owner, Feed progress is not stored while no Client is connected.
 
 On an output change, the old output reports stop before the new output reports start.
 
 ### D10. Hand-off sequence
 
-1. Capture `(active slot, position, paused)` from the current output.
-2. Stop the old output: Local stops the run; Cast stops the media and tears down the app.
-3. Swap `PlaybackOutput`.
-4. If a slot was active, load it on the new output at the position. Cast: `load(item, position)`, then pause if it was paused. Local: cold start at the resume position, then pause if it was paused.
+1. Capture `(active slot, position, paused)` from the current output. A slot counts as active only while the output plays or pauses it. After a stop, or while the output is idle, nothing continues on the new output.
+2. If the new output is Cast, connect to the receiver. On failure, keep the old output, report the failure, and stop here. The old output is not touched.
+3. Stop the old output: Local stops the run; Cast stops the media and tears down the app.
+4. Swap `PlaybackOutput`.
+5. If a slot was active, load it on the new output at the position. Cast: `load(item, position)`, then pause if it was paused. Local: cold start at the resume position, then pause if it was paused.
 
-If the slot is uncastable on the new output, the Owner reports it and the output stays idle. A Cast connect failure keeps the old output and reports the failure. In that case the stop in step 2 has not happened yet, because the connect is attempted first.
+If the slot is uncastable on the new output, the Owner reports it and the output stays idle.
 
 ### D11. Connect joins and does not hijack
 
@@ -129,6 +134,7 @@ When the Owner shuts down, it closes the socket and does not call `stop_app`. On
 ### D13. The TUI becomes a thin picker
 
 - F3 Cast selection and detach send `SelectPlaybackOutput`.
+- A session connect (Sessions panel or auto-reconnect) while the owner's output is Cast sends `Stop`, then `SelectPlaybackOutput(Local)`, to the Local daemon owner before it severs. The shared site is `sever_active_connection` (`src/app/state/remote_slot.rs:82`), which `connect_to_session` (`src/app/dispatch/session/switch.rs:439`) calls. Because the stop comes first, no slot is active at the hand-off (D10 step 1), so the receiver stops and local playback does not start.
 - The output indicator, the F3 connection mark, and the idle "keep panel" rule read `CtrlEvent::PlaybackOutput`.
 - `playback_target()` loses its Cast branch. While a receiver is the output, the TUI target is its Local daemon owner.
 - Cast rows are offered only when the owner advertises `playback-output`.
@@ -141,7 +147,7 @@ Discovery (`spawn_cast_discovery`) stays.
 
 ### D14. Vocabulary
 
-`CONTEXT.md` gets **Playback output**: the one place where a Player owner plays its active slot, local playback or one Cast receiver. It avoids "output target", "active player", and "sink". The entry states that it differs from *Clocked audio output*, which is the audio device of a Playback run. *Cast attachment* is redefined as the Owner's relation to the receiver that is its output. *Cast dispatch* is retired (its avoid-list moves to *Playback output*).
+`CONTEXT.md` gets **Playback output**: the one place where a Player owner plays its active slot, local playback or one Cast receiver. It avoids "output target", "active player", and "sink". The entry states that it differs from *Clocked audio output*, which is the audio device of a Playback run. *Cast attachment* is redefined as the Owner's relation to the receiver that is its output. The *Dispatch:* term in the *Cast* section of `CONTEXT.md` is retired (its avoid-list moves to *Playback output*).
 
 ## Risks / Trade-offs
 

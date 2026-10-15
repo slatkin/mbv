@@ -38,7 +38,7 @@ The owner SHALL broadcast its active playback output to every connected Client, 
 
 ### Requirement: Selecting an output hands off the active slot
 
-When the active output changes, the owner SHALL stop the old output and continue the active slot on the new output at its current position, with the same paused or playing state. When no slot is active, the new output SHALL become active without playing anything.
+When the active output changes, the owner SHALL stop the old output and continue the active slot on the new output at its current position, with the same paused or playing state. A slot is active only while the old output plays or pauses it. When no slot is active (for example, after a stop), the new output SHALL become active without playing anything.
 
 #### Scenario: Local playback moves to a receiver
 
