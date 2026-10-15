@@ -244,7 +244,7 @@ impl App {
         lib_idx: usize,
         parent_id: String,
         title: String,
-        upcoming: bool,
+        on_error: fn(String, mbv_emby::EmbyError) -> LibEvent,
         build: F,
     ) where
         F: FnOnce(
@@ -277,15 +277,7 @@ impl App {
                 }));
             }
             Err(e) => {
-                if upcoming {
-                    let _ = tx.send(LibEvent::ModelContent(
-                        ModelContentEvent::TvUpcomingSnapshotFailed {
-                            library_id: parent_id,
-                        },
-                    ));
-                } else {
-                    let _ = tx.send(LibEvent::Error(e.to_string()));
-                }
+                let _ = tx.send(on_error(parent_id, e));
             }
         });
     }
@@ -307,7 +299,7 @@ impl App {
             lib_idx,
             parent_id,
             title,
-            false,
+            |_, e| LibEvent::Error(e.to_string()),
             |client, parent_id, title| {
                 build_tv_latest_level(client, parent_id, title).map(|level| (level, None))
             },
@@ -471,7 +463,7 @@ impl App {
         // A fetch is starting: repeated pill selections must not stack a
         // second one behind the first. `spawn_tv_content`'s no-client
         // no-op above this point means the mark only lands on real spawns.
-        if self.emby_snapshot().is_some() {
+        if self.emby_client().is_some() {
             self.tv_upcoming_fetches
                 .insert(parent_id.clone(), TvUpcomingFetchState::InFlight);
         }
@@ -479,7 +471,9 @@ impl App {
             lib_idx,
             parent_id,
             title,
-            true,
+            |library_id, _| {
+                LibEvent::ModelContent(ModelContentEvent::TvUpcomingSnapshotFailed { library_id })
+            },
             |client, parent_id, title| {
                 build_tv_upcoming_level(client, parent_id, title)
                     .map(|(level, premieres)| (level, Some(premieres)))

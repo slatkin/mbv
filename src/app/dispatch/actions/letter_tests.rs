@@ -5,7 +5,7 @@ use mbv_ui_model::browse::ServerRows;
 use crate::app::dispatch::library::browse::full_library_fetch_limit;
 use crate::app::state::app_struct::TvUpcomingFetchState;
 use crate::app::tests::{make_app_stub, make_items};
-use crate::app::{BrowseEvent, BrowseLevel, LibEvent, LibraryTab, ModelContentEvent};
+use crate::app::{App, BrowseEvent, BrowseLevel, LibEvent, LibraryTab, ModelContentEvent};
 use mbv_emby_model::{EmbyItem, UpcomingPremiere};
 use rstest::rstest;
 
@@ -14,6 +14,20 @@ fn lib_tab(collection_type: &str) -> LibraryTab {
     library.id = "lib-1".into();
     library.collection_type = collection_type.into();
     LibraryTab::new(library)
+}
+
+/// Installs an Emby runtime whose client answers from the returned `MockHttp`.
+fn install_mock_emby(app: &mut App) -> mbv_net::mock_http::MockHttp {
+    let config = crate::config::Config {
+        server_url: "http://127.0.0.1:1".into(),
+        ..crate::config::Config::default()
+    };
+    let http = mbv_net::mock_http::MockHttp::new();
+    let client = mbv_emby::EmbyClient::new(config).with_test_agent(http.agent());
+    app.emby_runtime = crate::app::state::service_runtime::EmbyRuntime::ready(std::sync::Arc::new(
+        std::sync::Mutex::new(client),
+    ));
+    http
 }
 
 #[test]
@@ -395,15 +409,7 @@ fn eager_upcoming_request_stays_unmarked_without_a_service_client() {
 #[test]
 fn failed_upcoming_fetch_retries_on_the_next_tab_load() {
     let mut app = make_app_stub();
-    let config = crate::config::Config {
-        server_url: "http://127.0.0.1:1".into(),
-        ..crate::config::Config::default()
-    };
-    let http = mbv_net::mock_http::MockHttp::new();
-    let client = mbv_emby::EmbyClient::new(config).with_test_agent(http.agent());
-    app.emby_runtime = crate::app::state::service_runtime::EmbyRuntime::ready(std::sync::Arc::new(
-        std::sync::Mutex::new(client),
-    ));
+    let http = install_mock_emby(&mut app);
     app.libs.push(lib_tab("tvshows"));
     push_top_level_tv(&mut app.libs[0], 2);
     app.tv_upcoming_fetches
@@ -412,12 +418,10 @@ fn failed_upcoming_fetch_retries_on_the_next_tab_load() {
 
     app.maybe_spawn_tv_upcoming_snapshot(0);
 
-    let event = loop {
-        if let LibEvent::ModelContent(event) =
-            app.channels.lib_rx.recv().expect("the retry must complete")
-        {
-            break event;
-        }
+    let LibEvent::ModelContent(event) =
+        app.channels.lib_rx.recv().expect("the retry must complete")
+    else {
+        panic!("the retry must complete as a model-content event");
     };
     match event {
         ModelContentEvent::TvUpcomingSnapshotFetched { library_id, items } => {
@@ -494,15 +498,7 @@ fn waiting_upcoming_level_fills_when_the_eager_snapshot_lands() {
 #[test]
 fn failed_eager_upcoming_fetch_unblocks_the_waiting_level() {
     let mut app = make_app_stub();
-    let config = crate::config::Config {
-        server_url: "http://127.0.0.1:1".into(),
-        ..crate::config::Config::default()
-    };
-    let http = mbv_net::mock_http::MockHttp::new();
-    let client = mbv_emby::EmbyClient::new(config).with_test_agent(http.agent());
-    app.emby_runtime = crate::app::state::service_runtime::EmbyRuntime::ready(std::sync::Arc::new(
-        std::sync::Mutex::new(client),
-    ));
+    let http = install_mock_emby(&mut app);
     app.libs.push(lib_tab("tvshows"));
     push_top_level_tv(&mut app.libs[0], 2);
     app.libs[0].library_total = Some(1000);
