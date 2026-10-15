@@ -70,7 +70,12 @@ impl PlaybackRun {
         if !matches!(failure, MpvFailure::Other(_)) {
             return false;
         }
-        if self.playback_began && self.current_idx + 1 < self.queue_len() {
+        // mpv skips a failed entry on its own only while it holds the run's
+        // playlist, and an `active_file` projection clears it to the single
+        // entry playing — so nothing follows a failure there, whatever the
+        // run's own queue holds.
+        let mpv_has_next_entry = !self.active_file && self.current_idx + 1 < self.queue_len();
+        if self.playback_began && mpv_has_next_entry {
             return false;
         }
         let error = if self.playback_began {

@@ -448,6 +448,36 @@ fn generic_error_after_playback_began_stops_the_run_when_no_entry_follows() {
 }
 
 #[test]
+fn generic_error_after_playback_began_stops_an_active_file_run() {
+    // Regression (#942, #943, review of 7971bf149): the `active_file`
+    // projection clears mpv's playlist to the one entry playing, so mpv has
+    // nothing to skip to even while the run's own queue holds a later slot.
+    // Without the projection check, the failed entry's successor in that
+    // queue was read as mpv's next entry and the run stayed active.
+    let (mut run, status, events) = make_queue_session_for_pos_tests_with_events(0);
+    run.reporter.clear_session();
+    run.queue = ExecutionSequence::from_slot_items(
+        vec![
+            (QueueSlotId::from_raw(1), abs_item()),
+            (QueueSlotId::from_raw(2), abs_book_item()),
+        ],
+        Some(QueueSlotId::from_raw(1)),
+    );
+    // What `PlaybackRun::new` derives from this queue.
+    assert!(run.queue.has_audiobookshelf_entries());
+    run.active_file = true;
+    run.playback_began = true;
+    let mut progress = noop_progress();
+
+    assert!(run.on_mpv_error(&MpvFailure::Other("loading failed".into()), &mut progress));
+    assert!(!status.lock().unwrap().active);
+    assert!(matches!(
+        events.recv().unwrap(),
+        PlayerEvent::Stopped { error: Some(_), .. }
+    ));
+}
+
+#[test]
 fn context_loss_rejects_audiobookshelf_without_mutating_bound_submission() {
     let (event_tx, _event_rx) = mpsc::channel();
     let player = Player::new(

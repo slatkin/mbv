@@ -29,9 +29,12 @@ error, because the failure that caused it reached no error path.
   (`crates/mbv-player/src/run/events/termination.rs`).
 - `stop_for_unrecoverable_error` (same file) is that path for a generic error.
   It stops the run when `playback_began` is false (#941, a file that never
-  started), and when `current_idx + 1 >= queue_len` (#942 a failed last queue
-  entry, #943 a failed single-file run). `current_idx` is the failed entry:
-  the advance to it settled before mpv tried to load it.
+  started), and when mpv has no entry after the failed one (#942 a failed last
+  queue entry, #943 a failed single-file run). mpv holds a playlist of its own
+  only outside the `active_file` projection, which clears it to the single
+  entry playing (`install_active_projection`, `crates/mbv-player/src/run/queue.rs`),
+  so an `active_file` run always stops. `current_idx` is the failed entry: the
+  advance to it settled before mpv tried to load it.
 - `playback_began` (`crates/mbv-player/src/run/types.rs`) is set on the first
   `PlaybackRestart` (`run/events/restart.rs`) and is the boundary between the
   two cases.
