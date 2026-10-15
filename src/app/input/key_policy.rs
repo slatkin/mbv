@@ -91,6 +91,10 @@ pub(in crate::app) struct RouterSnapshot {
     pub overlays: RouterOverlayState,
     pub panel_mode: PanelMode,
     pub panel_focus: PanelFocus,
+    /// Whether the focused list holds an active Visual selection. Its row-local
+    /// Space (`media-list-multi-select` spec) takes Space ahead of the global
+    /// play/pause toggle.
+    pub visual_selection_active: bool,
     /// Whether prefix mode is armed (change `add-configurable-keybinds`,
     /// design D6, task 6.1): the mirror of the App-owned bit. While true, the
     /// next chord resolves against the prefix namespace only; arming is

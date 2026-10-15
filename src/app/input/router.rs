@@ -98,13 +98,14 @@ pub(in crate::app) fn resolve_router_outcome_with_focused(
                 return RouterOutcome::FallThrough;
             }
             match command_for_policy(entry.binding, chord) {
-                // Space and the Esc chord stay deferred candidates (the
-                // shell's leaf arbitration decides them); a non-Esc stop
-                // chord fires immediately.
-                Some(cmd @ Command::Stop) if chord.code != KeyCode::Esc => {
-                    RouterOutcome::Command(cmd)
+                // Global transport: Space toggles from any focus unless a
+                // Visual selection owns it. Esc stays a deferred candidate for
+                // the shell's leaf arbitration; a non-Esc stop chord fires
+                // immediately.
+                Some(cmd @ Command::TogglePlayPause) if snapshot.visual_selection_active => {
+                    RouterOutcome::Deferred(cmd)
                 }
-                Some(cmd @ (Command::TogglePlayPause | Command::Stop)) => {
+                Some(cmd @ Command::Stop) if chord.code == KeyCode::Esc => {
                     RouterOutcome::Deferred(cmd)
                 }
                 Some(cmd) => RouterOutcome::Command(cmd),

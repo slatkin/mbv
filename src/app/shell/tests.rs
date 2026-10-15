@@ -35,25 +35,6 @@ fn ui_root_router_command_opens_help() {
     );
 }
 
-/// Global transport (user decision 2026-10-15): Space toggles on the press
-/// itself, from any focus — the router dispatches immediately and a leaf
-/// that consumed the press is discarded.
-#[test]
-fn space_toggles_immediately_from_any_focus() {
-    let mut model = Model::new(make_app_stub());
-    model
-        .app
-        .player
-        .update_status(|status| status.active = true);
-    let key = KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE);
-    let messages = vec![Msg::TerminalEvent(TerminalObserverEvent::Key(key.into()))];
-
-    assert_eq!(
-        model.router_outcome(&messages),
-        RouterOutcome::Command(Command::TogglePlayPause)
-    );
-}
-
 #[test]
 fn consumed_space_cancels_the_playback_candidate_and_leaves_no_state() {
     let mut model = Model::new(make_app_stub());
@@ -89,7 +70,7 @@ fn consumed_space_cancels_the_playback_candidate_and_leaves_no_state() {
 /// press. A press on any other key disarms, so Esc-then-Space stays a
 /// play/pause toggle.
 #[test]
-fn first_escape_falls_through_and_second_dispatches_the_stop_candidate() {
+fn first_escape_falls_through_and_second_dispatches_the_stop() {
     let mut model = Model::new(make_app_stub());
     model
         .app

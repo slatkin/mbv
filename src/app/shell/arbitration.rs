@@ -301,6 +301,7 @@ impl Model {
             panel_mode: self.app.effective_panel_mode(),
             panel_focus: self.app.effective_panel_focus(),
             prefix_armed: self.app.prefix_armed,
+            visual_selection_active: self.visual_selection.is_some(),
         };
 
         let outcome = resolve_router_outcome_with_focused(
@@ -309,30 +310,15 @@ impl Model {
             self.application.focus(),
             &self.keybinds,
         );
-        // Global transport (user decision 2026-10-15): Space toggles on the
-        // press itself from any focus, so the deferred toggle upgrades to an
-        // immediate command unless the focused panel holds an active Visual
-        // selection whose row-local Space the leaf owns
-        // (`media-list-multi-select` spec). The first Esc resolves to the
-        // stop candidate but falls through: the leaf (and the
-        // deferred-candidate arbitration) handle it as today, and nothing
-        // dispatches. The second Esc inside the window dispatches the stop
-        // from any focus — the leaf's own Esc action (back, close, selection
-        // clearing) already ran on the first press, so the second press's
-        // request is discarded rather than repeated. A playback panel whose
-        // own Esc is Stop already dispatched through the leaf on the first
-        // press; that second press is swallowed instead of dispatching a
-        // duplicate Stop behind it. A non-Esc stop chord fires immediately,
-        // unchanged (the router dispatches it directly).
+        // The first Esc resolves to the stop candidate but falls through: the
+        // leaf (and the deferred-candidate arbitration) handle it, and nothing
+        // dispatches. The second Esc inside the window dispatches the stop from
+        // any focus, unless the focused leaf already stops on this tick (its own
+        // Esc action ran on the first press); that press is swallowed.
         let leaf_stops = messages
             .iter()
             .any(|msg| matches!(msg, Msg::Playback(PlaybackRequest::Stop)));
         let outcome = match outcome {
-            RouterOutcome::Deferred(Command::TogglePlayPause)
-                if self.visual_selection.is_none() =>
-            {
-                RouterOutcome::Command(Command::TogglePlayPause)
-            }
             RouterOutcome::Deferred(Command::Stop) if !double_esc => RouterOutcome::FallThrough,
             RouterOutcome::Deferred(Command::Stop) if leaf_stops => RouterOutcome::Swallow,
             RouterOutcome::Deferred(Command::Stop) => RouterOutcome::Command(Command::Stop),

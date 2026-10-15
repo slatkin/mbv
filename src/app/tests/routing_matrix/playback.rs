@@ -23,8 +23,23 @@ fn playback_gating_esc_falls_through_to_consumed_leaf() {
     );
 }
 #[test]
-fn playback_gating_space_claims_deferred_toggle() {
-    let snapshot = active_snapshot();
+fn playback_gating_space_toggles_without_a_visual_selection() {
+    assert_eq!(
+        resolve_router_outcome_with_focused(
+            key(KeyCode::Char(' ')),
+            &active_snapshot(),
+            None,
+            &default_keybinds()
+        ),
+        RouterOutcome::Command(Command::TogglePlayPause)
+    );
+}
+#[test]
+fn playback_gating_space_defers_to_a_visual_selection() {
+    let snapshot = RouterSnapshot {
+        visual_selection_active: true,
+        ..active_snapshot()
+    };
     assert_eq!(
         resolve_router_outcome_with_focused(
             key(KeyCode::Char(' ')),
