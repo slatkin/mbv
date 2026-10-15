@@ -8,7 +8,7 @@
 
 ## 2. Ctrl vocabulary
 
-- [ ] 2.1 In `crates/mbv-ctrl`, add the capability `playback-output`, `OutputSelection::{Local, Cast { receiver_id, name, host, port }}`, `OutputState::{Local, Cast { receiver_id, name, connection }}` with `CastConnection::{Connecting, Connected, Disconnected}`, `CtrlCmd::SelectPlaybackOutput`, and `CtrlEvent::PlaybackOutput` (design D3). No protocol version bump. Verify: one serde round-trip test for the command and one for the event in the `mbv-ctrl` tests binary.
+- [x] 2.1 In `crates/mbv-ctrl`, add the capability `playback-output`, `OutputSelection::{Local, Cast { receiver_id, name, host, port }}`, `OutputState::{Local, Cast { receiver_id, name, connection }}` with `CastConnection::{Connecting, Connected, Disconnected}`, `CtrlCmd::SelectPlaybackOutput`, and `CtrlEvent::PlaybackOutput` (design D3). No protocol version bump. Verify: one serde round-trip test for the command and one for the event in the `mbv-ctrl` tests binary.
 
 ## 3. Owner output model and hosting
 
