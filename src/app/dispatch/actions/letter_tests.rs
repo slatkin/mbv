@@ -172,6 +172,44 @@ fn push_top_level_tv(lib: &mut LibraryTab, item_count: usize) {
     });
 }
 
+/// Drives a successful restore thread to completion without applying its
+/// events: the position event is the thread's last, and the caller asserts
+/// the pre-event state.
+fn await_restore_completion(app: &mut App) {
+    loop {
+        let event = app
+            .channels
+            .lib_rx
+            .recv()
+            .expect("the restore must complete");
+        if matches!(
+            event,
+            LibEvent::Browse(BrowseEvent::RestoreLibraryPosition { .. })
+        ) {
+            return;
+        }
+    }
+}
+
+/// Drives a failed restore thread to completion and applies its snapshot
+/// failure the way the shell drain does (the failure records `Failed` and
+/// clears the waiting level). The generic error is the thread's last event;
+/// the caller leaves it unhandled.
+fn handle_restore_failure(app: &mut App) {
+    loop {
+        let event = app.channels.lib_rx.recv().expect("the restore must report");
+        if matches!(event, LibEvent::Error(_)) {
+            return;
+        }
+        if let LibEvent::ModelContent(ModelContentEvent::TvUpcomingSnapshotFailed {
+            ref library_id,
+        }) = event
+        {
+            app.tv_upcoming_snapshot_failed(library_id);
+        }
+    }
+}
+
 #[rstest]
 #[case::should_show_letter_pills_true_for_any_tvshows_total(5)]
 fn should_show_letter_pills_true_for_tvshows_total(#[case] total: usize) {
@@ -469,22 +507,7 @@ fn a_genuine_restore_with_a_failed_fetch_does_not_stack_a_second_eager_fetch() {
 
     app.activate_library_position(0);
     app.maybe_spawn_tv_upcoming_snapshot(0);
-
-    // The restore thread completes before the assertions: its position
-    // event is the last one it sends (the snapshot event precedes it).
-    loop {
-        let event = app
-            .channels
-            .lib_rx
-            .recv()
-            .expect("the restore must complete");
-        if matches!(
-            event,
-            LibEvent::Browse(BrowseEvent::RestoreLibraryPosition { .. })
-        ) {
-            break;
-        }
-    }
+    await_restore_completion(&mut app);
 
     let level = app.libs[0].nav_stack.last().unwrap();
     assert!(
@@ -506,6 +529,57 @@ fn a_genuine_restore_with_a_failed_fetch_does_not_stack_a_second_eager_fetch() {
         .filter(|request| request.contains("/Shows/Upcoming"))
         .count();
     assert_eq!(upcoming_requests, 1, "one Upcoming query per tab load");
+}
+
+/// The previously-stranded case: a genuine restore's own Upcoming fetch
+/// fails — the restore's generic error clears nothing — and the next tab
+/// load takes the current==saved shortcut (the saved position's root had
+/// fetched nothing, so the failed placeholder's signature matches it). The
+/// failure must still record `Failed` and clear the waiting level, so the
+/// spec-named later-tab-load retry arms the eager fetch.
+#[test]
+fn a_failed_genuine_restore_retries_on_the_next_tab_load() {
+    let mut app = make_app_stub();
+    let http = install_mock_emby(&mut app);
+    app.libs.push(lib_tab("tvshows"));
+    push_top_level_tv(&mut app.libs[0], 0);
+    let mut saved = app.libs[0].library_position_snapshot();
+    saved.levels[0].tv_content_mode = Some(mbv_queue::TvContentMode::Upcoming);
+    app.library_position_state
+        .libraries
+        .insert("lib-1".into(), saved);
+    // The restore's own Upcoming fetch fails; the later eager retry succeeds.
+    http.fail(std::io::ErrorKind::ConnectionRefused);
+    http.respond(200, r#"{"Items":[{"Id":"ep-1","Type":"Episode","SeriesId":"series-1","SeriesName":"Series 1"}]}"#);
+
+    app.activate_library_position(0);
+    app.maybe_spawn_tv_upcoming_snapshot(0);
+    handle_restore_failure(&mut app);
+
+    let level = app.libs[0].nav_stack.last().unwrap();
+    assert!(
+        !level.loading,
+        "the failed restore's placeholder stopped waiting"
+    );
+    assert_eq!(
+        app.tv_upcoming_fetches.get("lib-1"),
+        Some(&TvUpcomingFetchState::Failed)
+    );
+
+    app.activate_library_position(0);
+    app.maybe_spawn_tv_upcoming_snapshot(0);
+    assert_eq!(
+        app.tv_upcoming_fetches.get("lib-1"),
+        Some(&TvUpcomingFetchState::InFlight),
+        "the tab-load retry must arm the eager fetch"
+    );
+    let LibEvent::ModelContent(ModelContentEvent::TvUpcomingSnapshotFetched { library_id, items }) =
+        app.channels.lib_rx.recv().expect("the retry must complete")
+    else {
+        panic!("the retry must complete as a snapshot event");
+    };
+    assert_eq!(library_id, "lib-1");
+    assert_eq!(items.len(), 1);
 }
 
 /// Selecting the Upcoming pill materializes the root level from the

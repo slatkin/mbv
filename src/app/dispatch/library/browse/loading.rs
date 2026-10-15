@@ -207,6 +207,11 @@ impl App {
         );
         std::thread::spawn(move || {
             let mut upcoming = None;
+            // The parent whose Upcoming fetch failed: the thread's error
+            // report must also record the retryable `Failed` state and
+            // clear the waiting level, or a failed genuine restore strands
+            // the later-tab-load retry behind its `loading` placeholder.
+            let mut failed_upcoming: Option<String> = None;
             let restored = crate::app::restore_library_position_with_fetched_rows_for_kind(
                 &saved,
                 visible_rows,
@@ -225,7 +230,10 @@ impl App {
                         return Ok((items, total_count, total_count));
                     }
                     if matches!(tv_mode, Some(mbv_queue::TvContentMode::Upcoming)) {
-                        return restore_upcoming_level(&client, saved_level, &mut upcoming);
+                        return restore_upcoming_level(&client, saved_level, &mut upcoming)
+                            .inspect_err(|_| {
+                                failed_upcoming = Some(saved_level.parent_id.clone());
+                            });
                     }
                     let letter_filter = match tv_mode {
                         Some(mbv_queue::TvContentMode::Range(index)) => {
@@ -291,6 +299,11 @@ impl App {
                 }
                 Ok(None) => {}
                 Err(e) => {
+                    if let Some(library_id) = failed_upcoming {
+                        let _ = tx.send(LibEvent::ModelContent(
+                            ModelContentEvent::TvUpcomingSnapshotFailed { library_id },
+                        ));
+                    }
                     let _ = tx.send(LibEvent::Error(e.to_string()));
                 }
             }
