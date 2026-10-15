@@ -367,6 +367,11 @@ pub struct App {
     /// job queues behind it while the target still reads connected.
     pub(in crate::app) cast_job_sent: Option<Instant>,
     pub(in crate::app) last_cast_poll: Instant,
+    /// When the last keep-alive pong was submitted
+    /// (`spawn_cast_keep_alive`), on its own cadence
+    /// (`CAST_KEEP_ALIVE_INTERVAL`) so the receiver's heartbeat deadline is
+    /// met even while a queue-load exchange occupies the worker.
+    pub(in crate::app) last_cast_keep_alive: Instant,
     pub(in crate::app) cast_status_loading: bool,
     pub(in crate::app) queue_epoch: QueueEpoch,
     pub(in crate::app) playlist_mutations: std::collections::HashMap<String, PlaylistMutationState>,

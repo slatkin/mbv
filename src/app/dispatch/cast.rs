@@ -185,6 +185,10 @@ impl App {
             };
             let job_tx = tx.clone();
             let sent = client.send(Box::new(move |transport: &mut dyn CastTransport| {
+                // A fresh pong immediately before the blocking exchange: the
+                // load's reply waits for the receiver to load the first
+                // item, and the heartbeat deadline must survive that wait.
+                let _ = transport.keep_alive();
                 tracing::info!(name: "cast.dispatch.sent", target: "cast", items = media.len(), start_index = %start_index, "dispatching the queue to the receiver");
                 let outcome = transport
                     .load_queue(&media, start_index)

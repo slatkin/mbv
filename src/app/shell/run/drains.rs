@@ -484,15 +484,24 @@ impl Model {
             self.app.spawn_sessions_load();
         }
 
-        // Periodic status poll while attached to a cast target (6.1). The
-        // keep-alive heartbeat this poll's background thread sends is not
-        // optional -- see `CAST_STATUS_POLL_INTERVAL`'s doc comment.
+        // Periodic status poll while attached to a cast target (6.1).
         if self.app.cast_attachment.is_some()
             && self.app.last_cast_poll.elapsed()
                 >= crate::app::dispatch::cast_status::CAST_STATUS_POLL_INTERVAL
             && !self.app.cast_status_loading
         {
             self.app.spawn_cast_status_poll();
+        }
+
+        // The keep-alive heartbeat runs on its own, faster cadence than the
+        // status poll: the receiver terminates a sender whose pongs lapse
+        // (~7s observed), and a queue-load exchange occupying the worker
+        // must not stretch the gap past that deadline.
+        if self.app.cast_attachment.is_some()
+            && self.app.last_cast_keep_alive.elapsed()
+                >= crate::app::dispatch::cast_status::CAST_KEEP_ALIVE_INTERVAL
+        {
+            self.app.spawn_cast_keep_alive();
         }
 
         // Unresponsive-worker watchdog: rust_cast's operations have no

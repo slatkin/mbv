@@ -5,7 +5,7 @@
 use crate::app::App;
 use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::state::types::cast::{
-    CastAttachment, CastEvent, CastProgressTarget, DispatchedCastItem,
+    CastAttachment, CastEvent, CastProgressTarget, CastTransport, DispatchedCastItem,
 };
 use mbv_audiobookshelf::{AudiobookshelfClient, AudiobookshelfPlaybackProgress};
 use mbv_cast::CastError;
@@ -17,6 +17,17 @@ use std::time::{Duration, Instant};
 /// roughly 90s (see `CastClient::keep_alive`'s doc comment), so any cadence
 /// in that range keeps the heartbeat alive with margin to spare.
 pub(in crate::app) const CAST_STATUS_POLL_INTERVAL: Duration = Duration::from_secs(7);
+
+/// The keep-alive cadence, decoupled from the status poll. The receiver
+/// terminates a sender whose PONGs lapse in well under ten seconds (observed
+/// ~7s: two 2026-10-15 broken-pipe deaths landed exactly one poll interval
+/// after the last pong, and the queue load's blocking exchange delayed the
+/// next poll past the deadline, killing the connection within a second of
+/// every play). The 7s poll rode at that deadline with no margin; pinging
+/// every 3s keeps a pong inside the deadline even while a queue-load
+/// exchange occupies the single worker thread (the load job also pongs
+/// first, so the gap it can create is its own reply time alone).
+pub(in crate::app) const CAST_KEEP_ALIVE_INTERVAL: Duration = Duration::from_secs(3);
 
 /// How long a submitted cast job may go without any worker event before the
 /// worker counts as unresponsive. The worst legitimate dispatch waits out an
@@ -54,9 +65,9 @@ impl App {
     }
 
     /// Polls the attached receiver's status on `CAST_STATUS_POLL_INTERVAL` by
-    /// submitting a job to its worker thread. Calling `keep_alive()` every
-    /// tick is not optional plumbing -- see design.md Risks: an unanswered
-    /// sender is dropped in ~90s.
+    /// submitting a job to its worker thread. The heartbeat itself is pumped
+    /// by `spawn_cast_keep_alive` on its own cadence; this job's keep-alive
+    /// is belt-and-braces ahead of the status exchange.
     pub(in crate::app) fn spawn_cast_status_poll(&mut self) {
         let Some(attachment) = self.cast_attachment.as_ref() else {
             return;
@@ -79,6 +90,28 @@ impl App {
                 receiver_id,
                 status,
             });
+        }));
+    }
+
+    /// Submits a pong-only job every [`CAST_KEEP_ALIVE_INTERVAL`], independent
+    /// of the status poll: the poll's 7s cadence sat at the receiver's
+    /// heartbeat deadline, and any worker occupancy (the queue load's
+    /// blocking exchange above all) delayed the next pong past it, so the
+    /// receiver closed the connection. The keep-alive job produces no worker
+    /// event and never touches the watchdog clock; a socket this job finds
+    /// dead is reported by the next status poll, which drives 7.6.
+    pub(in crate::app) fn spawn_cast_keep_alive(&mut self) {
+        let Some(attachment) = self.cast_attachment.as_ref() else {
+            return;
+        };
+        let Some(client) = attachment.client.clone() else {
+            return;
+        };
+        self.last_cast_keep_alive = Instant::now();
+        let _ = client.send(Box::new(|transport: &mut dyn CastTransport| {
+            if let Err(e) = transport.keep_alive() {
+                tracing::warn!(name: "cast.keep_alive.failed", target: "cast", error = %e, "cast keep-alive failed");
+            }
         }));
     }
 
@@ -454,6 +487,35 @@ mod tests {
         let calls = calls.lock().unwrap().clone();
         assert!(calls.contains(&"keep_alive".to_string()));
         assert!(app.cast_attachment.unwrap().status.is_some());
+    }
+
+    /// The keep-alive heartbeat is a pong-only job on its own cadence
+    /// (`CAST_KEEP_ALIVE_INTERVAL`), independent of the status poll: the
+    /// receiver terminates a sender whose pongs lapse, and the poll's 7s
+    /// cadence sat at that deadline while the queue load occupied the worker.
+    #[test]
+    fn spawn_cast_keep_alive_sends_a_pong_on_the_transport() {
+        use crate::app::state::types::cast::{CastJob, FakeCastTransport, spawn_fake_cast_worker};
+        let mut app = make_app_stub();
+        app.attach_cast("device-1".to_string(), "Living Room".to_string());
+        let (job_tx, calls) = spawn_fake_cast_worker(FakeCastTransport::default());
+        app.set_cast_client("device-1", job_tx.clone());
+
+        app.spawn_cast_keep_alive();
+        // Jobs run serially on the worker: when this sentinel runs, the
+        // keep-alive job submitted before it has finished.
+        let (done_tx, done_rx) = std::sync::mpsc::channel();
+        let _ = job_tx.send(Box::new(move |_transport: &mut dyn CastTransport| {
+            let _ = done_tx.send(());
+        }) as CastJob);
+        done_rx.recv_timeout(Duration::from_secs(2)).unwrap();
+
+        let calls = calls.lock().unwrap().clone();
+        assert_eq!(calls, vec!["keep_alive".to_string()]);
+        // Nothing armed and no poll gate touched: the keep-alive produces no
+        // worker event and is invisible to the watchdog.
+        assert!(app.cast_job_sent.is_none());
+        assert!(!app.cast_status_loading);
     }
 
     #[test]

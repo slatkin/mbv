@@ -224,6 +224,9 @@ impl App {
             last_cast_poll: Instant::now()
                 .checked_sub(Duration::from_secs(60))
                 .unwrap_or_else(Instant::now),
+            last_cast_keep_alive: Instant::now()
+                .checked_sub(Duration::from_secs(60))
+                .unwrap_or_else(Instant::now),
             cast_status_loading: false,
             queue_epoch: crate::app::state::queue_owner::QueueEpoch::default(),
             playlist_mutations: std::collections::HashMap::new(),
