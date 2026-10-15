@@ -45,8 +45,11 @@ echo "==> cargo test..."
 cargo nextest run 
 
 echo
-echo "==> cargo clippy..."
-cargo clippy
+echo "==> cargo fmt --check (CI runs the same check)..."
+cargo fmt --all -- --check
+
+echo "==> cargo clippy (same strictness as CI: -D warnings)..."
+cargo clippy --workspace --all-targets -- -D warnings
 
 echo
 echo "==> Bumping Cargo.toml to ${VERSION}..."
