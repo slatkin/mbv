@@ -9,10 +9,12 @@ use crate::app::App;
 use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::state::panel_targets::PanelTarget;
 use crate::app::state::types::cast::{
-    CastAttachment, CastEvent, CastJob, CastProgressTarget, CastTransport, DispatchedCastItem,
+    CastAttachment, CastEvent, CastProgressTarget, DispatchedCastItem,
 };
 use mbv_audiobookshelf::AudiobookshelfClient;
 use mbv_cast::CastError;
+use mbv_cast::CastJob;
+use mbv_cast::CastTransport;
 use mbv_cast::client::CastMediaItem;
 use mbv_cast::dispatch::{self, CastSubtitleKind, build_cast_device_profile};
 use mbv_emby::EmbyClient;
@@ -264,7 +266,7 @@ impl App {
 
     /// Resolves `id`'s current address via a fresh discovery browse,
     /// connects, and hands the connected transport to a new cast worker
-    /// (`state::types::cast::spawn_cast_worker`), reporting the outcome back over
+    /// (`mbv_cast::spawn_cast_worker`), reporting the outcome back over
     /// `cast_tx` as `CastEvent::Connected`/`ConnectFailed`. Runs entirely on
     /// a background thread: both the discovery browse and `CastClient::connect`
     /// are blocking network calls (mirrors `try_daemon_route_connect`'s
@@ -416,7 +418,7 @@ impl App {
     /// (5.5): `CastClient`'s operations are blocking network calls, so
     /// running them on the caller's thread would freeze the UI loop for the
     /// round trip -- the job runs on the dedicated worker instead (see
-    /// `state::types::cast::spawn_cast_worker`). A no-op when nothing is attached or
+    /// `mbv_cast::spawn_cast_worker`). A no-op when nothing is attached or
     /// the transport hasn't connected yet.
     pub(in crate::app) fn send_cast_command(
         &self,
@@ -447,8 +449,12 @@ fn resolve_and_connect_cast_receiver(
 ) -> Result<Sender<CastJob>, CastError> {
     let receiver = mbv_cast::discovery::resolve_cast_receiver(id, timeout)
         .ok_or_else(CastError::receiver_not_found)?;
-    crate::app::state::types::cast::spawn_cast_worker(move || {
-        mbv_cast::client::CastClient::connect(&receiver.host, receiver.port)
+    mbv_cast::spawn_cast_worker(move || {
+        mbv_cast::client::CastClient::connect(
+            &receiver.host,
+            receiver.port,
+            mbv_cast::ConnectMode::FirstSelect,
+        )
     })
 }
 
@@ -750,9 +756,8 @@ mod tests {
     fn a_stale_connect_failure_does_not_detach_a_connected_attachment() {
         let mut app = make_app_stub();
         app.attach_cast("device-1".to_string(), "Living Room".to_string());
-        let (job_tx, _calls) = crate::app::state::types::cast::spawn_fake_cast_worker(
-            crate::app::state::types::cast::FakeCastTransport::default(),
-        );
+        let (job_tx, _calls) =
+            mbv_cast::spawn_fake_cast_worker(mbv_cast::FakeCastTransport::default());
         app.set_cast_client("device-1", job_tx);
 
         app.handle_cast_event(CastEvent::ConnectFailed {

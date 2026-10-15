@@ -317,6 +317,7 @@ mod now_playing_status_tests {
                 playback_rate: 1.0,
                 state: mbv_cast::client::CastPlaybackState::Playing,
                 playing_content_id: None,
+                idle_reason: None,
             }),
         );
         set_player(&app, false, false);

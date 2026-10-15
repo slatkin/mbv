@@ -5,10 +5,11 @@
 use crate::app::App;
 use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::state::types::cast::{
-    CastAttachment, CastEvent, CastProgressTarget, CastTransport, DispatchedCastItem,
+    CastAttachment, CastEvent, CastProgressTarget, DispatchedCastItem,
 };
 use mbv_audiobookshelf::{AudiobookshelfClient, AudiobookshelfPlaybackProgress};
 use mbv_cast::CastError;
+use mbv_cast::CastTransport;
 use mbv_cast::client::{CastPlaybackState, CastStatus};
 use mbv_emby_model::seconds_to_ticks;
 use std::time::{Duration, Instant};
@@ -418,6 +419,7 @@ mod tests {
             playback_rate: 1.0,
             state: CastPlaybackState::Playing,
             playing_content_id: Some(content_id.to_string()),
+            idle_reason: None,
         }
     }
 
@@ -469,7 +471,7 @@ mod tests {
 
     #[test]
     fn spawn_cast_status_poll_calls_keep_alive_and_status_on_the_transport() {
-        use crate::app::state::types::cast::{FakeCastTransport, spawn_fake_cast_worker};
+        use mbv_cast::{FakeCastTransport, spawn_fake_cast_worker};
         let mut app = make_app_stub();
         app.attach_cast("device-1".to_string(), "Living Room".to_string());
         let (job_tx, calls) = spawn_fake_cast_worker(FakeCastTransport {
@@ -495,7 +497,7 @@ mod tests {
     /// cadence sat at that deadline while the queue load occupied the worker.
     #[test]
     fn spawn_cast_keep_alive_sends_a_pong_on_the_transport() {
-        use crate::app::state::types::cast::{CastJob, FakeCastTransport, spawn_fake_cast_worker};
+        use mbv_cast::{CastJob, FakeCastTransport, spawn_fake_cast_worker};
         let mut app = make_app_stub();
         app.attach_cast("device-1".to_string(), "Living Room".to_string());
         let (job_tx, calls) = spawn_fake_cast_worker(FakeCastTransport::default());
@@ -527,9 +529,8 @@ mod tests {
         // transport was dropped -- nothing could ever be dispatched to it.
         let mut app = make_app_stub();
         app.attach_cast("device-1".to_string(), "Living Room".to_string());
-        let (job_tx, _calls) = crate::app::state::types::cast::spawn_fake_cast_worker(
-            crate::app::state::types::cast::FakeCastTransport::default(),
-        );
+        let (job_tx, _calls) =
+            mbv_cast::spawn_fake_cast_worker(mbv_cast::FakeCastTransport::default());
         app.set_cast_client("device-1", job_tx);
 
         app.apply_cast_status("device-1", Ok(CastStatus::idle()));
@@ -543,22 +544,20 @@ mod tests {
     fn connect_ok_stub(
         id: &str,
         _timeout: Duration,
-    ) -> Result<std::sync::mpsc::Sender<crate::app::state::types::cast::CastJob>, CastError> {
+    ) -> Result<std::sync::mpsc::Sender<mbv_cast::CastJob>, CastError> {
         // The stub only serves the receiver this test attaches to; anything
         // else is as unreachable as a real connect to an unknown id.
         if id != "device-1" {
             return Err(CastError::receiver_not_found());
         }
-        let (tx, _calls) = crate::app::state::types::cast::spawn_fake_cast_worker(
-            crate::app::state::types::cast::FakeCastTransport::default(),
-        );
+        let (tx, _calls) = mbv_cast::spawn_fake_cast_worker(mbv_cast::FakeCastTransport::default());
         Ok(tx)
     }
 
     fn connect_failing_stub(
         _id: &str,
         _timeout: Duration,
-    ) -> Result<std::sync::mpsc::Sender<crate::app::state::types::cast::CastJob>, CastError> {
+    ) -> Result<std::sync::mpsc::Sender<mbv_cast::CastJob>, CastError> {
         Err(CastError::receiver_not_found())
     }
 
@@ -573,9 +572,8 @@ mod tests {
         *crate::app::CAST_CONNECT_OVERRIDE.lock().unwrap() = Some(connect_ok_stub);
         let mut app = make_app_stub();
         app.attach_cast("device-1".to_string(), "Living Room".to_string());
-        let (job_tx, _calls) = crate::app::state::types::cast::spawn_fake_cast_worker(
-            crate::app::state::types::cast::FakeCastTransport::default(),
-        );
+        let (job_tx, _calls) =
+            mbv_cast::spawn_fake_cast_worker(mbv_cast::FakeCastTransport::default());
         app.set_cast_client("device-1", job_tx);
         app.cast_job_sent = Some(
             Instant::now()
@@ -615,9 +613,8 @@ mod tests {
         *crate::app::CAST_CONNECT_OVERRIDE.lock().unwrap() = Some(connect_ok_stub);
         let mut app = make_app_stub();
         app.attach_cast("device-1".to_string(), "Living Room".to_string());
-        let (job_tx, _calls) = crate::app::state::types::cast::spawn_fake_cast_worker(
-            crate::app::state::types::cast::FakeCastTransport::default(),
-        );
+        let (job_tx, _calls) =
+            mbv_cast::spawn_fake_cast_worker(mbv_cast::FakeCastTransport::default());
         app.set_cast_client("device-1", job_tx);
         // The stuck state a wedged poll leaves: the loading gate is up and the
         // watchdog clock is already past the answer bound.
@@ -647,9 +644,8 @@ mod tests {
     fn a_responsive_cast_worker_is_not_touched_by_the_watchdog() {
         let mut app = make_app_stub();
         app.attach_cast("device-1".to_string(), "Living Room".to_string());
-        let (job_tx, _calls) = crate::app::state::types::cast::spawn_fake_cast_worker(
-            crate::app::state::types::cast::FakeCastTransport::default(),
-        );
+        let (job_tx, _calls) =
+            mbv_cast::spawn_fake_cast_worker(mbv_cast::FakeCastTransport::default());
         app.set_cast_client("device-1", job_tx);
         app.cast_job_sent = Some(Instant::now());
 
@@ -715,9 +711,8 @@ mod tests {
         let items = crate::app::tests::make_items(2);
         app.local_view.adopt_items(items.clone(), 0);
         app.attach_cast("device-1".to_string(), "Living Room".to_string());
-        let (job_tx, _calls) = crate::app::state::types::cast::spawn_fake_cast_worker(
-            crate::app::state::types::cast::FakeCastTransport::default(),
-        );
+        let (job_tx, _calls) =
+            mbv_cast::spawn_fake_cast_worker(mbv_cast::FakeCastTransport::default());
         app.set_cast_client("device-1", job_tx);
 
         app.apply_cast_status("device-1", Err(CastError::not_connected()));
@@ -765,9 +760,8 @@ mod tests {
         *crate::app::CAST_CONNECT_OVERRIDE.lock().unwrap() = Some(connect_ok_stub);
         let mut app = make_app_stub();
         app.attach_cast("device-1".to_string(), "Living Room".to_string());
-        let (job_tx, _calls) = crate::app::state::types::cast::spawn_fake_cast_worker(
-            crate::app::state::types::cast::FakeCastTransport::default(),
-        );
+        let (job_tx, _calls) =
+            mbv_cast::spawn_fake_cast_worker(mbv_cast::FakeCastTransport::default());
         app.set_cast_client("device-1", job_tx);
 
         app.apply_cast_status("device-1", Err(CastError::not_connected()));

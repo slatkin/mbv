@@ -252,6 +252,7 @@ mbv-feed = { path = "crates/mbv-feed" }
 
 [dev-dependencies]
 mbv-ui-msg = { path = "crates/mbv-ui-msg", features = ["test"] }
+mbv-cast = { path = "crates/mbv-cast", features = ["test"] }
 mbv-images = { path = "crates/mbv-images", features = ["test"] }
 mbv-core = { path = "crates/mbv-core" }
 mbv-remote-player = { path = "crates/mbv-remote-player", features = ["test"] }

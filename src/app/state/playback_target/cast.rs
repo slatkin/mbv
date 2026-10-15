@@ -98,8 +98,8 @@ impl CastPlaybackTarget {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::state::types::cast::{FakeCastTransport, spawn_fake_cast_worker};
     use crate::app::tests::make_app_stub;
+    use mbv_cast::{FakeCastTransport, spawn_fake_cast_worker};
     use std::sync::{Arc, Mutex};
 
     fn attached_app_with_fake_transport() -> (App, Arc<Mutex<Vec<String>>>) {
@@ -150,6 +150,7 @@ mod tests {
             playback_rate: 1.0,
             state: CastPlaybackState::Paused,
             playing_content_id: None,
+            idle_reason: None,
         });
         CastPlaybackTarget::toggle_play_pause(&mut app);
         wait_for_cast_call(&calls, |c| c == "play", "play");

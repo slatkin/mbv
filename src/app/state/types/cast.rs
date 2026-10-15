@@ -2,85 +2,17 @@
 // `connected_session_state` give an attached Emby session (see
 // `remote_slot_state.rs`).
 //
-// Threading model: `rust_cast::CastDevice` (which `CastClient` wraps) holds
-// an `Rc<MessageManager<..>>` internally, so `CastClient` is not `Send` --
-// it can never be moved to, or shared with, a thread other than the one it
-// was constructed on. That rules out the `Arc<Mutex<CastClient>>` shape used
-// elsewhere in this codebase for cross-thread state (e.g. `EmbyClient`
-// snapshots). Instead, whoever connects a `CastClient` (`App::connect_cast_receiver`,
-// shared by task 7.3's reattach and task 8.3's attach-on-selection) owns a
-// single long-lived worker thread
-// that constructs the client and never lets it leave that thread; App state
-// only ever holds a `Sender<CastCommand>` to that worker (`Send`+`Sync`+
-// `Clone`, no `Rc` in sight). `run_cast_worker` below is the worker's command
-// loop, generic over `CastTransport` so it runs unmodified against a
-// `FakeCastTransport` in tests -- constructing the (non-`Send`) transport
-// inside the same closure that spawns the worker thread, rather than
-// capturing an already-built one, is what keeps this compiling.
+// The transport abstraction, the worker thread, and the test fake live in
+// `mbv_cast::transport` now (they moved there so the Owner can host the
+// cast output too); App state only ever holds the worker's
+// `Sender<CastJob>`, never the (non-`Send`) transport itself.
 
-use mbv_cast::CastError;
-use mbv_cast::client::{CastClient, CastMediaItem, CastStatus};
 use mbv_cast::discovery::CastReceiver;
+use mbv_cast::{CastError, CastJob, CastStatus};
 use mbv_ids::{EmbySessionId, MediaSourceId};
 use mbv_queue::QueueItemContentId;
-#[cfg(test)]
-use std::sync::Arc;
 use std::sync::mpsc::Sender;
 use std::time::Instant;
-
-/// The cast operations App state needs, decoupled from the concrete
-/// `CastClient` so tests can substitute a recording fake instead of a live
-/// receiver connection. No `Send` bound: see the threading-model note above
-/// -- a `CastTransport` never crosses a thread boundary after construction.
-pub(in crate::app) trait CastTransport {
-    fn load(&mut self, item: &CastMediaItem, start_position_seconds: f64) -> Result<(), CastError>;
-    fn play(&mut self) -> Result<(), CastError>;
-    fn pause(&mut self) -> Result<(), CastError>;
-    fn stop(&mut self) -> Result<(), CastError>;
-    fn seek(&mut self, position_seconds: f32) -> Result<(), CastError>;
-    fn skip_next(&mut self) -> Result<(), CastError>;
-    fn skip_previous(&mut self) -> Result<(), CastError>;
-    fn set_volume(&self, level: f32) -> Result<(), CastError>;
-    fn set_muted(&self, muted: bool) -> Result<(), CastError>;
-    fn status(&mut self) -> Result<CastStatus, CastError>;
-    fn keep_alive(&self) -> Result<(), CastError>;
-}
-
-impl CastTransport for CastClient {
-    fn load(&mut self, item: &CastMediaItem, start_position_seconds: f64) -> Result<(), CastError> {
-        CastClient::load(self, item, start_position_seconds)
-    }
-    fn play(&mut self) -> Result<(), CastError> {
-        CastClient::play(self)
-    }
-    fn pause(&mut self) -> Result<(), CastError> {
-        CastClient::pause(self)
-    }
-    fn stop(&mut self) -> Result<(), CastError> {
-        CastClient::stop(self)
-    }
-    fn seek(&mut self, position_seconds: f32) -> Result<(), CastError> {
-        CastClient::seek(self, position_seconds)
-    }
-    fn skip_next(&mut self) -> Result<(), CastError> {
-        CastClient::skip_next(self)
-    }
-    fn skip_previous(&mut self) -> Result<(), CastError> {
-        CastClient::skip_previous(self)
-    }
-    fn set_volume(&self, level: f32) -> Result<(), CastError> {
-        CastClient::set_volume(self, level)
-    }
-    fn set_muted(&self, muted: bool) -> Result<(), CastError> {
-        CastClient::set_muted(self, muted)
-    }
-    fn status(&mut self) -> Result<CastStatus, CastError> {
-        CastClient::status(self)
-    }
-    fn keep_alive(&self) -> Result<(), CastError> {
-        CastClient::keep_alive(self)
-    }
-}
 
 /// Where a dispatched item's progress is reported (6.6), one variant per
 /// provider `cast_dispatch` resolves items for.
@@ -114,56 +46,6 @@ pub(in crate::app) struct DispatchedCastItem {
     pub(in crate::app) content_id: QueueItemContentId,
     pub(in crate::app) title: String,
     pub(in crate::app) report: CastProgressTarget,
-}
-
-/// One unit of work submitted to a cast worker thread. Runs on that thread,
-/// against the transport it owns, never the caller's -- see the
-/// threading-model note above. Any response it needs to produce (typically a
-/// `CastEvent`) is sent from inside the closure itself, since the job's
-/// return value is discarded.
-pub(in crate::app) type CastJob = Box<dyn FnOnce(&mut dyn CastTransport) + Send>;
-
-/// Spawns the worker thread that owns a live `CastTransport` for the
-/// lifetime of one cast attachment, and returns the `Sender` App state holds
-/// instead of the transport itself. `build` runs on the new thread, not the
-/// caller's: a `CastTransport` is constructed and consumed entirely within
-/// that thread and never itself needs to be `Send`, only `build` (its
-/// inputs, e.g. a device address) and each `CastJob` (plain-data closures)
-/// do.
-///
-/// `build` is fallible: connecting a real receiver (7.3's reattach, task
-/// 8.3's attach-on-selection) can genuinely fail, and `CastClient` isn't
-/// `Send` (see the threading-model note above), so the connect attempt
-/// can't happen on the caller's thread and then be handed off -- it must
-/// happen on this function's own new thread. This function blocks the
-/// calling thread until that thread reports whether `build` succeeded, so
-/// every caller that must not block its own thread (all of them so far)
-/// invokes this from a background thread of its own, the way
-/// `App::connect_cast_receiver` does.
-pub(in crate::app) fn spawn_cast_worker<T, F>(build: F) -> Result<Sender<CastJob>, CastError>
-where
-    T: CastTransport,
-    F: FnOnce() -> Result<T, CastError> + Send + 'static,
-{
-    let (tx, rx) = std::sync::mpsc::channel::<CastJob>();
-    let (ready_tx, ready_rx) = std::sync::mpsc::channel::<Result<(), CastError>>();
-    std::thread::spawn(move || match build() {
-        Ok(mut transport) => {
-            if ready_tx.send(Ok(())).is_err() {
-                return; // Caller gave up waiting; nothing left to serve.
-            }
-            for job in rx {
-                job(&mut transport);
-            }
-        }
-        Err(e) => {
-            let _ = ready_tx.send(Err(e));
-        }
-    });
-    match ready_rx.recv() {
-        Ok(result) => result.map(|()| tx),
-        Err(_) => Err(CastError::worker_not_ready()),
-    }
 }
 
 /// mbv's attachment to a Google Cast receiver. `client` starts `None` on
@@ -233,100 +115,4 @@ pub(in crate::app) enum CastEvent {
     /// errors (see `cast_discovery.rs`). Drives `App::rebuild_panel_targets`
     /// (8.1/8.2).
     DiscoveryCompleted(Vec<CastReceiver>),
-}
-
-/// A recording `CastTransport` double: no network, no live receiver. Used by
-/// `cast_actions`/`playback_target_cast`/`cast_status_actions` tests to
-/// verify which command was sent without a real Chromecast.
-#[cfg(test)]
-pub(in crate::app) struct FakeCastTransport {
-    // Shared (not owned) so a test can keep reading `calls` after the
-    // transport itself has been moved into a worker thread by
-    // `spawn_fake_cast_worker` -- matching the real `CastTransport`'s
-    // never-leaves-its-thread shape.
-    pub(in crate::app) calls: Arc<std::sync::Mutex<Vec<String>>>,
-    pub(in crate::app) status: Option<CastStatus>,
-}
-
-#[cfg(test)]
-impl Default for FakeCastTransport {
-    fn default() -> Self {
-        Self {
-            calls: Arc::new(std::sync::Mutex::new(Vec::new())),
-            status: None,
-        }
-    }
-}
-
-#[cfg(test)]
-impl CastTransport for FakeCastTransport {
-    fn load(&mut self, item: &CastMediaItem, start_position_seconds: f64) -> Result<(), CastError> {
-        self.calls
-            .lock()
-            .unwrap()
-            .push(format!("load({}, {start_position_seconds})", item.url));
-        Ok(())
-    }
-    fn play(&mut self) -> Result<(), CastError> {
-        self.calls.lock().unwrap().push("play".to_string());
-        Ok(())
-    }
-    fn pause(&mut self) -> Result<(), CastError> {
-        self.calls.lock().unwrap().push("pause".to_string());
-        Ok(())
-    }
-    fn stop(&mut self) -> Result<(), CastError> {
-        self.calls.lock().unwrap().push("stop".to_string());
-        Ok(())
-    }
-    fn seek(&mut self, position_seconds: f32) -> Result<(), CastError> {
-        self.calls
-            .lock()
-            .unwrap()
-            .push(format!("seek({position_seconds})"));
-        Ok(())
-    }
-    fn skip_next(&mut self) -> Result<(), CastError> {
-        self.calls.lock().unwrap().push("skip_next".to_string());
-        Ok(())
-    }
-    fn skip_previous(&mut self) -> Result<(), CastError> {
-        self.calls.lock().unwrap().push("skip_previous".to_string());
-        Ok(())
-    }
-    fn set_volume(&self, level: f32) -> Result<(), CastError> {
-        self.calls
-            .lock()
-            .unwrap()
-            .push(format!("set_volume({level})"));
-        Ok(())
-    }
-    fn set_muted(&self, muted: bool) -> Result<(), CastError> {
-        self.calls
-            .lock()
-            .unwrap()
-            .push(format!("set_muted({muted})"));
-        Ok(())
-    }
-    fn status(&mut self) -> Result<CastStatus, CastError> {
-        self.status
-            .clone()
-            .ok_or_else(CastError::receiver_not_found)
-    }
-    fn keep_alive(&self) -> Result<(), CastError> {
-        self.calls.lock().unwrap().push("keep_alive".to_string());
-        Ok(())
-    }
-}
-
-/// Spawns a worker thread owning `transport` and returns the job `Sender`
-/// App state holds plus a handle to the call log, still readable from the
-/// test thread after `transport` itself has moved.
-#[cfg(test)]
-pub(in crate::app) fn spawn_fake_cast_worker(
-    transport: FakeCastTransport,
-) -> (Sender<CastJob>, Arc<std::sync::Mutex<Vec<String>>>) {
-    let calls = std::sync::Arc::clone(&transport.calls);
-    let tx = spawn_cast_worker(move || Ok(transport)).expect("fake transport build never fails");
-    (tx, calls)
 }

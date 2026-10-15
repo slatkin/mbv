@@ -8,9 +8,12 @@ pub mod client;
 pub mod discovery;
 pub mod dispatch;
 mod error;
+pub mod transport;
 
 #[doc(inline)]
-pub use client::{CastClient, CastMediaItem, CastPlaybackState, CastStatus};
+pub use client::{
+    CastClient, CastIdleReason, CastMediaItem, CastPlaybackState, CastStatus, ConnectMode,
+};
 #[doc(inline)]
 pub use discovery::{CastReceiver, browse_cast_receivers, resolve_cast_receiver};
 #[doc(inline)]
@@ -21,3 +24,8 @@ pub use dispatch::{
 };
 #[doc(inline)]
 pub use error::CastError;
+#[doc(inline)]
+pub use transport::{CastJob, CastTransport, spawn_cast_worker};
+#[cfg(any(test, feature = "test"))]
+#[doc(inline)]
+pub use transport::{FakeCastTransport, spawn_fake_cast_worker};

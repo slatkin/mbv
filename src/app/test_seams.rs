@@ -47,9 +47,6 @@ pub(in crate::app) static SESSIONS_LOAD_OVERRIDE: Mutex<Option<SessionsLoadFn>> 
 // making the reattach/attach-on-selection call sites themselves
 // test-aware.
 pub(in crate::app) type CastConnectFn =
-    fn(
-        &str,
-        Duration,
-    ) -> Result<mpsc::Sender<crate::app::state::types::cast::CastJob>, mbv_cast::CastError>;
+    fn(&str, Duration) -> Result<mpsc::Sender<mbv_cast::CastJob>, mbv_cast::CastError>;
 pub(in crate::app) static CAST_CONNECT_OVERRIDE: Mutex<Option<CastConnectFn>> = Mutex::new(None);
 pub(in crate::app) static CAST_CONNECT_TEST_LOCK: Mutex<()> = Mutex::new(());

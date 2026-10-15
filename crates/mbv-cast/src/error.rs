@@ -20,8 +20,10 @@ enum CastErrorKind {
 pub(crate) enum TransportKind {
     Connect,
     ReceiverPlatformConnect,
+    ReceiverStatus,
     LaunchApp,
     AppTransportConnect,
+    ReconnectRefused,
     Teardown,
     KeepAlive,
     Load,
@@ -108,6 +110,10 @@ impl CastError {
 
     pub(crate) fn no_session_id() -> Self {
         Self::transport_message(TransportKind::NoSessionId)
+    }
+
+    pub(crate) fn reconnect_refused() -> Self {
+        Self::transport_message(TransportKind::ReconnectRefused)
     }
 
     fn transport_message(kind: TransportKind) -> Self {
@@ -233,8 +239,12 @@ impl TransportKind {
         match self {
             Self::Connect => "cast connect failed",
             Self::ReceiverPlatformConnect => "cast receiver-platform connect failed",
+            Self::ReceiverStatus => "cast receiver get_status failed",
             Self::LaunchApp => "cast launch_app failed",
             Self::AppTransportConnect => "cast app-transport connect failed",
+            Self::ReconnectRefused => {
+                "cast reconnect refused: another receiver application is running"
+            }
             Self::Teardown => "cast teardown failed",
             Self::KeepAlive => "cast keep_alive failed",
             Self::Load => "cast load failed",
@@ -257,8 +267,10 @@ impl TransportKind {
         match self {
             Self::Connect => "cast.connect",
             Self::ReceiverPlatformConnect => "cast.receiver_platform_connect",
+            Self::ReceiverStatus => "cast.receiver_status",
             Self::LaunchApp => "cast.launch_app",
             Self::AppTransportConnect => "cast.app_transport_connect",
+            Self::ReconnectRefused => "cast.reconnect_refused",
             Self::Teardown => "cast.teardown",
             Self::KeepAlive => "cast.keep_alive",
             Self::Load => "cast.load",
