@@ -124,6 +124,12 @@ impl PlaybackRun {
     }
 
     pub(crate) fn on_playback_restart(&mut self, mpv: &Mpv) {
+        // The "has playback begun" boundary (#941): the first restart means
+        // the run's file actually opened and played. A generic mpv failure
+        // before it is a start failure and stops the run with an error; a
+        // failure after it is a mid-run entry error that mpv handles by
+        // skipping to the next entry, with the drift machinery following.
+        self.playback_began = true;
         // The submit-time start report fires here, on the first actual
         // playback: a run that never plays reports no session start, so no
         // start+stop pair churns the server-side session (its stop report

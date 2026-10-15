@@ -24,6 +24,19 @@ impl PlaybackRun {
                 "mpv process exited unexpectedly".to_owned(),
             );
         }
+        if matches!(failure, MpvFailure::Other(_)) && !self.playback_began {
+            // A generic error before any playback began — a missing file, an
+            // HTTP 404 from the stream endpoint, a decode error — is a start
+            // failure: mpv has no next entry to skip to in the standalone
+            // case, so the run must end with the error instead of staying
+            // active with no playback (#941).
+            tracing::error!(name: "player.event.start_failed", target: "player", error = %failure, "file failed to start before playback began");
+            return self.stop_run_with_error(
+                progress,
+                self.last_valid_pos,
+                format!("failed to start media: {failure}"),
+            );
+        }
         if !is_clocked_audio_error(failure, self.config.audio_device.is_some()) {
             tracing::warn!(name: "player.event.failed", target: "player", error = %failure, "mpv event failed");
             return false;

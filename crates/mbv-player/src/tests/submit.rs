@@ -379,6 +379,51 @@ fn process_exit_stops_run_with_the_last_position_and_an_error() {
 }
 
 #[test]
+fn generic_start_failure_stops_the_run_with_an_error() {
+    // Regression (#941): an end-file reason=error before any playback began
+    // (missing file, HTTP 404, decode error) decoded to Failed(Other) and was
+    // only warned about, so the run stayed active with no playback and the
+    // user never got a failed-to-start signal. It must end the run like the
+    // process-exited and audio-output paths do.
+    let (mut run, status, events) = make_queue_session_for_pos_tests_with_events(0);
+    run.reporter.clear_session();
+    let mut progress = noop_progress();
+
+    assert!(run.on_mpv_error(&MpvFailure::Other("loading failed".into()), &mut progress));
+    assert!(!status.lock().unwrap().active);
+    let PlayerEvent::Stopped {
+        error,
+        position_ticks,
+        ..
+    } = events.recv().unwrap()
+    else {
+        panic!("expected stopped event");
+    };
+    assert_eq!(
+        error.as_deref(),
+        Some("failed to start media: loading failed")
+    );
+    assert_eq!(position_ticks, 0);
+    // The run ended: no further events follow the one error stop.
+    events.try_recv().unwrap_err();
+}
+
+#[test]
+fn generic_error_after_playback_began_keeps_the_run_active() {
+    // mpv skips a failed playlist entry on its own once playback has begun,
+    // and the playlist-position drift machinery follows it (#941 probe S5):
+    // the failure must not end the whole run there.
+    let (mut run, status, events) = make_queue_session_for_pos_tests_with_events(0);
+    run.reporter.clear_session();
+    run.playback_began = true;
+    let mut progress = noop_progress();
+
+    assert!(!run.on_mpv_error(&MpvFailure::Other("loading failed".into()), &mut progress));
+    assert!(status.lock().unwrap().active);
+    events.try_recv().unwrap_err();
+}
+
+#[test]
 fn context_loss_rejects_audiobookshelf_without_mutating_bound_submission() {
     let (event_tx, _event_rx) = mpsc::channel();
     let player = Player::new(

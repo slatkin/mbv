@@ -87,6 +87,12 @@ pub(crate) struct PlaybackRun {
     pub(crate) item_lifecycle: ItemLifecycleState,
     pub(crate) pending_initial_playlist_layout: bool,
     pub(crate) stopped_event_sent: bool,
+    /// Whether any `PlaybackRestart` has arrived in this run — the "has
+    /// playback begun" boundary. A generic mpv failure before it is a start
+    /// failure and stops the run with an error (#941); after it, mpv owns
+    /// skipping a failed entry and the playlist-position drift machinery
+    /// follows it.
+    pub(crate) playback_began: bool,
     pub(crate) mark_played_id: Option<ItemId>,
     pub(crate) osd_title: String,
     pub(crate) last_mouse_osd: Option<Instant>,
