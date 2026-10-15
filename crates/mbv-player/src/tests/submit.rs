@@ -424,6 +424,30 @@ fn generic_error_after_playback_began_keeps_the_run_active() {
 }
 
 #[test]
+fn generic_error_after_playback_began_stops_the_run_when_no_entry_follows() {
+    // Regression (#942, #943): with no entry after the failed one — the last
+    // queue entry, or a single-file run — mpv goes idle instead of skipping,
+    // and nothing observes `idle-active`, so the run stayed marked active with
+    // no playback and the user got no error.
+    let (mut run, status, events) = make_queue_session_for_pos_tests_with_events(2);
+    run.reporter.clear_session();
+    run.playback_began = true;
+    let mut progress = noop_progress();
+
+    assert!(run.on_mpv_error(&MpvFailure::Other("loading failed".into()), &mut progress));
+    assert!(!status.lock().unwrap().active);
+    let PlayerEvent::Stopped { error, .. } = events.recv().unwrap() else {
+        panic!("expected stopped event");
+    };
+    assert_eq!(
+        error.as_deref(),
+        Some("failed to play media: loading failed")
+    );
+    // The run ended: no further events follow the one error stop.
+    events.try_recv().unwrap_err();
+}
+
+#[test]
 fn context_loss_rejects_audiobookshelf_without_mutating_bound_submission() {
     let (event_tx, _event_rx) = mpsc::channel();
     let player = Player::new(

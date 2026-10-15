@@ -91,7 +91,8 @@ pub(crate) struct PlaybackRun {
     /// playback begun" boundary. A generic mpv failure before it is a start
     /// failure and stops the run with an error (#941); after it, mpv owns
     /// skipping a failed entry and the playlist-position drift machinery
-    /// follows it.
+    /// follows it — unless no entry follows the failed one, where the run
+    /// still ends with the error (#942, #943).
     pub(crate) playback_began: bool,
     pub(crate) mark_played_id: Option<ItemId>,
     pub(crate) osd_title: String,

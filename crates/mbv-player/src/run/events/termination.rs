@@ -6,8 +6,10 @@ use super::event_classifiers::{is_clocked_audio_error, provider_lifecycle_close_
 use std::sync::{Arc, atomic::Ordering};
 
 impl PlaybackRun {
-    // An end-file error arrives as MpvEvent::Failed, so classify the
-    // output-specific failure before the generic event logging.
+    // An end-file error arrives as MpvEvent::Failed, not as
+    // MpvEvent::EndFile, so every error-exit path lives here and the
+    // end-of-file paths never see an error. Classify the output-specific
+    // failure before the generic event logging.
     pub(crate) fn on_mpv_error(
         &mut self,
         failure: &MpvFailure,
@@ -16,7 +18,7 @@ impl PlaybackRun {
         if self.stop_for_process_exit(failure, progress) {
             return true;
         }
-        if self.stop_for_start_failure(failure, progress) {
+        if self.stop_for_unrecoverable_error(failure, progress) {
             return true;
         }
         if !is_clocked_audio_error(failure, self.config.audio_device.is_some()) {
@@ -52,25 +54,33 @@ impl PlaybackRun {
         true
     }
 
-    /// A generic error before any playback began — a missing file, an
-    /// HTTP 404 from the stream endpoint, a decode error — is a start
-    /// failure: mpv has no next entry to skip to in the standalone
-    /// case, so the run must end with the error instead of staying
-    /// active with no playback (#941).
-    fn stop_for_start_failure(
+    /// A generic error — a missing file, an HTTP 404 from the stream
+    /// endpoint, a decode error — ends the run with the error whenever mpv has
+    /// no next entry to skip to: before any playback began (#941), or past
+    /// that boundary when the failed entry is the run's last one (#942, #943).
+    /// With an entry after the failed one, mpv skips to it on its own and the
+    /// playlist-position drift machinery follows (probe S5), so the
+    /// warn-and-continue path stays there. `current_idx` is the failed entry:
+    /// the advance to it settled before mpv tried to load it.
+    fn stop_for_unrecoverable_error(
         &mut self,
         failure: &MpvFailure,
         progress: &mut ProgressGuard,
     ) -> bool {
-        if !matches!(failure, MpvFailure::Other(_)) || self.playback_began {
+        if !matches!(failure, MpvFailure::Other(_)) {
             return false;
         }
-        tracing::error!(name: "player.event.start_failed", target: "player", error = %failure, "file failed to start before playback began");
-        self.stop_run_with_error(
-            progress,
-            self.last_valid_pos,
-            format!("failed to start media: {failure}"),
-        );
+        if self.playback_began && self.current_idx + 1 < self.queue_len() {
+            return false;
+        }
+        let error = if self.playback_began {
+            tracing::error!(name: "player.event.playback_failed", target: "player", error = %failure, "playback error with no next entry; ending the run");
+            format!("failed to play media: {failure}")
+        } else {
+            tracing::error!(name: "player.event.start_failed", target: "player", error = %failure, "file failed to start before playback began");
+            format!("failed to start media: {failure}")
+        };
+        self.stop_run_with_error(progress, self.last_valid_pos, error);
         true
     }
 
