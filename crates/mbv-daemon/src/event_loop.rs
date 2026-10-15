@@ -111,6 +111,7 @@ impl DaemonLoop {
         }
         self.tray.poll(now, &self.owner_settings);
         self.pin_swap.poll(now);
+        super::cast::tick_cast(self, now);
     }
 
     /// Idle work performed when no event arrived within the poll timeout.

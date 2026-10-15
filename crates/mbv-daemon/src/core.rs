@@ -100,8 +100,8 @@ pub(super) enum DaemonEvent {
     },
     LastClientGone,
     /// One Cast-output event from the Cast connector or worker (cast-owner-
-    /// output design D2/D8): connect outcomes now, status and keep-alive
-    /// results as the Cast tasks land.
+    /// output design D2/D8): connect and reconnect outcomes, and status-poll
+    /// results from the Cast timers on the daemon tick.
     Cast(crate::cast::CastOwnerEvent),
     Shutdown,
 }

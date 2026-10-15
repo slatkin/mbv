@@ -4,15 +4,32 @@
 //! connection state, and every receiver call runs on the Cast worker.
 
 use std::sync::mpsc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
-use mbv_cast::{CastClient, CastJob, CastReceiver, CastStatus, ConnectMode, spawn_cast_worker};
+use mbv_cast::{
+    CastClient, CastJob, CastReceiver, CastStatus, CastTransport, ConnectMode, spawn_cast_worker,
+};
 use mbv_ctrl::{CastConnection, CtrlEvent, OutputSelection, OutputState};
 use mbv_queue::QueueSlotId;
 
 use super::DaemonLoop;
 use super::core::DaemonEvent;
 use super::ctrl::{CtrlSender, send_to};
+
+/// The keep-alive cadence (design D8, task 3.3). The receiver terminates a
+/// sender whose PONGs lapse in well under ten seconds, and the 7s poll sat
+/// at that deadline while a load exchange occupied the worker; pinging every
+/// 3s keeps a pong inside the deadline (TUI `cast_status.rs`, moved here).
+pub(crate) const CAST_KEEP_ALIVE_INTERVAL: Duration = Duration::from_secs(3);
+
+/// The status-poll cadence (design D8, task 3.3); design targets 5-10s.
+pub(crate) const CAST_STATUS_POLL_INTERVAL: Duration = Duration::from_secs(7);
+
+/// How long a submitted poll may go without a worker event before the worker
+/// counts as wedged (design D8, task 3.3). `rust_cast` operations have no
+/// socket timeout, so one unresponsive receiver exchange blocks the single
+/// worker thread forever; the reconnect is the recovery.
+pub(crate) const CAST_JOB_ANSWER_BOUND: Duration = Duration::from_secs(20);
 
 /// The single playback output a Player owner plays through (design D1): the
 /// type system makes two active outputs unrepresentable. The Cast side is
@@ -37,6 +54,15 @@ pub(crate) struct CastOutput {
     last_status: Option<CastStatus>,
     status_at: Option<Instant>,
     loaded: Option<CastLoadedItem>,
+    /// Cast tick timers (design D8, task 3.3), owned by the output so they
+    /// travel with it. `last_keep_alive` paces the 3s pong job; `last_poll`
+    /// paces the 7s status poll; `poll_sent` arms the 20s worker watchdog
+    /// while a poll is in flight and is disarmed by its result; `reconnecting`
+    /// marks an in-flight reconnect attempt whose outcome is still due.
+    last_keep_alive: Instant,
+    last_poll: Option<Instant>,
+    poll_sent: Option<Instant>,
+    reconnecting: bool,
 }
 
 /// The item the Cast receiver was told to play (design D1). `end_handled`
@@ -67,6 +93,10 @@ impl std::fmt::Debug for CastOutput {
             .field("last_status", &self.last_status)
             .field("status_at", &self.status_at)
             .field("loaded", &self.loaded)
+            .field("last_keep_alive", &self.last_keep_alive)
+            .field("last_poll", &self.last_poll)
+            .field("poll_sent", &self.poll_sent)
+            .field("reconnecting", &self.reconnecting)
             .finish()
     }
 }
@@ -97,6 +127,22 @@ pub(crate) enum CastOwnerEvent {
         receiver_id: String,
         outcome: CastConnectOutcome,
     },
+    /// One status-poll result from the Cast worker (design D8, task 3.3).
+    /// `Err` carries the rendered `CastError`: a poll error is a broken
+    /// connection, not a slow receiver (`rust_cast` receives block rather
+    /// than time out), so the handler disconnects and reconnects.
+    Status {
+        receiver_id: String,
+        result: Result<CastStatus, String>,
+    },
+    /// The outcome of the automatic reconnect a poll error or a watchdog
+    /// timeout spawned (design D8/D11, task 3.3). Not a user selection: a
+    /// success restores the existing output's worker, a failure leaves it
+    /// `Disconnected` (task 7.4 refines the outcomes).
+    Reconnect {
+        receiver_id: String,
+        outcome: CastConnectOutcome,
+    },
 }
 
 /// The connect outcome a Cast connector reports (design D2). A connected
@@ -113,6 +159,9 @@ pub enum CastConnectOutcome {
 pub struct CastConnectRequest {
     pub host: String,
     pub port: u16,
+    /// First select or automatic reconnect (design D11): a reconnect never
+    /// launches over another sender's running app.
+    pub mode: ConnectMode,
     /// One-shot reply path; the connector sends exactly one outcome on it.
     pub reply: mpsc::Sender<CastConnectOutcome>,
 }
@@ -127,11 +176,14 @@ pub type CastConnector = Box<dyn Fn(CastConnectRequest) + Send>;
 /// mode (design D11) on a dedicated worker thread.
 pub fn local_cast_connector() -> CastConnector {
     Box::new(|request: CastConnectRequest| {
-        let CastConnectRequest { host, port, reply } = request;
+        let CastConnectRequest {
+            host,
+            port,
+            mode,
+            reply,
+        } = request;
         std::thread::spawn(move || {
-            let outcome = match spawn_cast_worker(move || {
-                CastClient::connect(&host, port, ConnectMode::FirstSelect)
-            }) {
+            let outcome = match spawn_cast_worker(move || CastClient::connect(&host, port, mode)) {
                 Ok(worker) => CastConnectOutcome::Connected(worker),
                 Err(error) => CastConnectOutcome::Failed(error.to_string()),
             };
@@ -219,6 +271,7 @@ pub(super) fn handle_select_playback_output(
             connector(CastConnectRequest {
                 host: receiver.host.clone(),
                 port: receiver.port,
+                mode: ConnectMode::FirstSelect,
                 reply: outcome_tx,
             });
             // A connect already in flight loses to this newer selection: its
@@ -249,15 +302,30 @@ pub(super) fn handle_select_playback_output(
     }
 }
 
-/// `DaemonEvent::Cast`: apply one connect outcome to the owner's output
-/// (task 3.2). A connect failure keeps the current output and reports to the
-/// selecting Client; a success with no active slot swaps the output and
-/// broadcasts it to peers that negotiated `playback-output`.
+/// `DaemonEvent::Cast`: apply one Cast-worker or connector outcome to the
+/// owner's output (tasks 3.2/3.3). A connect failure keeps the current output
+/// and reports to the selecting Client; a success with no active slot swaps
+/// the output and broadcasts it to peers that negotiated `playback-output`.
+/// A poll error disconnects and reconnects (design D8); a reconnect outcome
+/// restores the existing output or leaves it `Disconnected`.
 pub(super) fn handle_cast_event(daemon: &mut DaemonLoop, event: CastOwnerEvent) {
-    let CastOwnerEvent::Connect {
-        receiver_id,
-        outcome,
-    } = event;
+    match event {
+        CastOwnerEvent::Connect {
+            receiver_id,
+            outcome,
+        } => handle_connect_outcome(daemon, &receiver_id, outcome),
+        CastOwnerEvent::Status {
+            receiver_id,
+            result,
+        } => handle_cast_status(daemon, &receiver_id, result),
+        CastOwnerEvent::Reconnect {
+            receiver_id,
+            outcome,
+        } => handle_reconnect_outcome(daemon, &receiver_id, outcome),
+    }
+}
+
+fn handle_connect_outcome(daemon: &mut DaemonLoop, receiver_id: &str, outcome: CastConnectOutcome) {
     let waiting = daemon
         .owner
         .pending_cast_connect
@@ -299,6 +367,10 @@ pub(super) fn handle_cast_event(daemon: &mut DaemonLoop, event: CastOwnerEvent) 
                 last_status: None,
                 status_at: None,
                 loaded: None,
+                last_keep_alive: Instant::now(),
+                last_poll: None,
+                poll_sent: None,
+                reconnecting: false,
             };
             tracing::info!(name: "daemon.cast_output.connected", target: "daemon", receiver = %receiver_id, output = ?output, "cast receiver is now the playback output");
             daemon.owner.output = PlaybackOutput::Cast(Box::new(output));
@@ -312,6 +384,211 @@ pub(super) fn handle_cast_event(daemon: &mut DaemonLoop, event: CastOwnerEvent) 
             );
         }
     }
+}
+
+/// Cast tick timers (design D8, task 3.3), driven by `DaemonLoop::tick` with
+/// the loop's injected clock. On a connected output the tick submits the 3s
+/// pong job and the 7s status poll (which pongs first) as jobs on the Cast
+/// worker; results come back as `DaemonEvent::Cast`. The 20s worker watchdog
+/// moves with the poll: a poll with no worker event within the answer bound
+/// is a wedged worker and gets the disconnect-and-reconnect recovery.
+/// A disconnected output runs no jobs; its reconnect attempt is in flight.
+pub(super) fn tick_cast(daemon: &mut DaemonLoop, now: Instant) {
+    let merged_tx = daemon.merged_tx.clone();
+    let wedged = {
+        let PlaybackOutput::Cast(cast) = &mut daemon.owner.output else {
+            return;
+        };
+        if matches!(cast.connection, CastConnection::Connected) {
+            if now.duration_since(cast.last_keep_alive) >= CAST_KEEP_ALIVE_INTERVAL {
+                submit_keep_alive_job(&cast.worker);
+                cast.last_keep_alive = now;
+            }
+            if cast.poll_sent.is_none()
+                && cast
+                    .last_poll
+                    .is_none_or(|at| now.duration_since(at) >= CAST_STATUS_POLL_INTERVAL)
+            {
+                submit_status_poll_job(&cast.worker, &cast.receiver.id, merged_tx);
+                cast.poll_sent = Some(now);
+            }
+        }
+        cast.poll_sent
+            .is_some_and(|sent| now.duration_since(sent) >= CAST_JOB_ANSWER_BOUND)
+    };
+    if wedged {
+        tracing::warn!(name: "cast.worker.unresponsive", target: "cast", "cast worker produced no event within the answer bound");
+        disconnect_and_reconnect(daemon);
+    }
+}
+
+/// Submits one pong-only job (design D8). It produces no worker event and
+/// never touches the watchdog clock: a socket this job finds dead is reported
+/// by the next status poll.
+fn submit_keep_alive_job(worker: &mpsc::Sender<CastJob>) {
+    let _ = worker.send(Box::new(|transport: &mut dyn CastTransport| {
+        if let Err(error) = transport.keep_alive() {
+            tracing::warn!(name: "cast.keep_alive.failed", target: "cast", error = %error, "cast keep-alive failed");
+        }
+    }));
+}
+
+/// Submits one status poll (design D8): a belt-and-braces pong ahead of the
+/// status exchange, then the status result back as `DaemonEvent::Cast`.
+fn submit_status_poll_job(
+    worker: &mpsc::Sender<CastJob>,
+    receiver_id: &str,
+    merged_tx: mpsc::Sender<DaemonEvent>,
+) {
+    let receiver_id = receiver_id.to_string();
+    let _ = worker.send(Box::new(move |transport: &mut dyn CastTransport| {
+        if let Err(error) = transport.keep_alive() {
+            tracing::warn!(name: "cast.keep_alive.failed", target: "cast", error = %error, "cast keep-alive failed");
+        }
+        let result = transport
+            .status()
+            .map_err(|error| error.to_string());
+        let _ = merged_tx.send(DaemonEvent::Cast(CastOwnerEvent::Status {
+            receiver_id,
+            result,
+        }));
+    }));
+}
+
+/// One status-poll result (design D8, task 3.3). Only the poll this output
+/// spawned disarms the watchdog clock: a stale receiver's late event must
+/// not disturb the in-flight poll's bookkeeping. A returned status is stored
+/// (task 6.1 owns its translation and extrapolation); a poll error is a
+/// broken connection, so the output disconnects and reconnects.
+fn handle_cast_status(
+    daemon: &mut DaemonLoop,
+    receiver_id: &str,
+    result: Result<CastStatus, String>,
+) {
+    let error = {
+        let PlaybackOutput::Cast(cast) = &mut daemon.owner.output else {
+            return;
+        };
+        if cast.receiver.id != receiver_id
+            || !matches!(cast.connection, CastConnection::Connected)
+            || cast.poll_sent.is_none()
+        {
+            return;
+        }
+        match result {
+            Ok(status) => {
+                cast.last_status = Some(status);
+                cast.status_at = Some(Instant::now());
+                cast.poll_sent = None;
+                cast.last_poll = Some(Instant::now());
+                None
+            }
+            Err(error) => {
+                cast.poll_sent = None;
+                Some(error)
+            }
+        }
+    };
+    if let Some(error) = error {
+        tracing::warn!(name: "cast.status_poll.failed", target: "cast", receiver = %receiver_id, error = %error, "cast status poll failed; reconnecting");
+        disconnect_and_reconnect(daemon);
+    }
+}
+
+/// The reconnect a poll error or a watchdog timeout spawned (design D8/D11,
+/// task 3.3). A success restores the existing output's worker and connection;
+/// a failure leaves the output `Disconnected` (task 7.4 refines the recovery
+/// outcomes). A displaced outcome — the output moved on or was replaced — is
+/// discarded, and its worker sender dropped to end the thread.
+fn handle_reconnect_outcome(
+    daemon: &mut DaemonLoop,
+    receiver_id: &str,
+    outcome: CastConnectOutcome,
+) {
+    let restored = {
+        let PlaybackOutput::Cast(cast) = &mut daemon.owner.output else {
+            drop_connected_worker(outcome);
+            return;
+        };
+        if cast.receiver.id != receiver_id || !cast.reconnecting {
+            drop_connected_worker(outcome);
+            return;
+        }
+        cast.reconnecting = false;
+        match outcome {
+            CastConnectOutcome::Connected(worker) => {
+                cast.worker = worker;
+                cast.connection = CastConnection::Connected;
+                cast.poll_sent = None;
+                cast.last_poll = Some(Instant::now());
+                cast.last_keep_alive = Instant::now();
+                true
+            }
+            CastConnectOutcome::Failed(reason) => {
+                tracing::warn!(name: "daemon.cast_output.reconnect_failed", target: "daemon", receiver = %receiver_id, error = %reason, "cast reconnect failed; the output stays disconnected");
+                false
+            }
+        }
+    };
+    if restored {
+        broadcast_output_change(daemon);
+    }
+}
+
+/// A connected worker with no owner: dropping its sender ends the worker
+/// thread (the same discard `handle_connect_outcome` applies).
+fn drop_connected_worker(outcome: CastConnectOutcome) {
+    if let CastConnectOutcome::Connected(worker) = outcome {
+        drop(worker);
+    }
+}
+
+/// Marks the Cast output disconnected, broadcasts the change, and spawns one
+/// reconnect attempt in reconnect mode (design D8). The queue, the active
+/// slot, and the loaded item are untouched: the connection loss says nothing
+/// about the owner's playback intent. The wedged or dead worker's sender is
+/// replaced when the reconnect succeeds; while disconnected no jobs run.
+fn disconnect_and_reconnect(daemon: &mut DaemonLoop) {
+    let (receiver_id, host, port) = {
+        let PlaybackOutput::Cast(cast) = &daemon.owner.output else {
+            return;
+        };
+        if !matches!(cast.connection, CastConnection::Connected) {
+            return;
+        }
+        (
+            cast.receiver.id.clone(),
+            cast.receiver.host.clone(),
+            cast.receiver.port,
+        )
+    };
+    let connector = daemon
+        .cast_connector
+        .as_ref()
+        .expect("a Cast output exists only where a connector was supplied");
+    let (outcome_tx, outcome_rx) = mpsc::channel::<CastConnectOutcome>();
+    connector(CastConnectRequest {
+        host,
+        port,
+        mode: ConnectMode::Reconnect,
+        reply: outcome_tx,
+    });
+    let PlaybackOutput::Cast(cast) = &mut daemon.owner.output else {
+        return;
+    };
+    cast.connection = CastConnection::Disconnected;
+    cast.poll_sent = None;
+    cast.reconnecting = true;
+    broadcast_output_change(daemon);
+    let merged_tx = daemon.merged_tx.clone();
+    std::thread::spawn(move || {
+        if let Ok(outcome) = outcome_rx.recv() {
+            let _ = merged_tx.send(DaemonEvent::Cast(CastOwnerEvent::Reconnect {
+                receiver_id,
+                outcome,
+            }));
+        }
+    });
 }
 
 /// Mirrors the owner's output into the shared state and broadcasts it to
