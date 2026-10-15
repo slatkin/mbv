@@ -86,6 +86,10 @@ Clocked audio output:
 The inherited Playback-run output of packaged mbvd. The mpv `audio-device` property binds to a real ALSA endpoint. Hardware paces playback. It differs from legacy PCM pipe output. That output writes untimed PCM through the mpv `ao=pcm` file writer into a FIFO. An external consumer such as Snapserver reads the FIFO.
 _Avoid_: ALSA mode, direct audio, hardware output
 
+Playback output:
+The one place where a Player owner plays its active slot. It is local playback or one Cast receiver. It differs from *Clocked audio output*. *Clocked audio output* is the audio device of a Playback run. *Playback output* is where the active slot plays. When the output is a Cast receiver, *Cast attachment* names the relation of the Owner to that receiver.
+_Avoid_: output target, active player, sink
+
 mpv script set:
 The entry script `mbv.lua` and its sibling Lua fragments. They build the mpv on-screen control overlay (OSC) and the Next-Up prompt. Exactly one copy is live per playback run. It is the copy of the running build. It is never a leftover from the removed installer, a prior version, or another build. It differs from mpv configuration and user scripts. mbv never reads or edits those.
 _Avoid_: OSC bundle, overlay bundle, Lua scripts (bare), script folder
@@ -621,7 +625,7 @@ A Google Cast device found on the LAN through mDNS. It appears as a row in the F
 _Avoid_: chromecast device, TV, cast device
 
 Cast attachment:
-The relation of mbv to a cast receiver it controls. Selection of one attaches mbv without start, stop, or reconfiguration of the local Player. While attached, play of a selection dispatches it to the receiver instead of local playback. It is held beside `connected_session_id`, apart from Emby session state. Both can be attached at one time. It differs from Attach above. It is not a ctrl connection and makes no Client relation, even though both name one process that reaches a playback target. On launch with `auto_reconnect` enabled, mbv attaches to the receiver it was attached to at exit. It restores control and displayed state from its reported status without dispatch of anything.
+The relation of a Player owner to the Cast receiver that is its *Playback output*. Selection of one makes that receiver the output without start, stop, or reconfiguration of local playback. While attached, play of a selection dispatches it to the receiver instead of local playback. It stands apart from Emby session state. Both can be attached at one time. It differs from Attach above. It is not a ctrl connection and makes no Client relation, even though both name one process that reaches a playback target. On launch with `auto_reconnect` enabled, mbv returns to the receiver it used at exit. It restores control and displayed state from its reported status without dispatch of anything.
 _Avoid_: attach (bare, without "cast"), cast session, cast connection
 
 Dispatch:
