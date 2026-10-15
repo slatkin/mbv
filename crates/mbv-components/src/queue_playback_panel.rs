@@ -61,6 +61,11 @@ pub struct QueuePlaybackPanel {
     /// to panel layout state. `None` while idle (task 3.6) or on a degenerate
     /// rect.
     transport_area: Option<Rect>,
+    /// The visual slot's image rectangle the shell resolves in the sync pass
+    /// from the same paint checkpoint the slot adapter uses (artwork, loading
+    /// placeholder, or visualizer reservation). `Rect::default()` while the
+    /// slot is idle, hidden, or absent, so a right-click resolves nothing.
+    visual_slot_area: Rect,
     /// The panel's own retained transport hit geometry (task 3.7): cleared
     /// whenever the transport does not paint, so a collapsed panel resolves
     /// nothing.
@@ -100,6 +105,7 @@ impl QueuePlaybackPanel {
                 availability: TransportAvailability::default(),
             },
             transport_area: None,
+            visual_slot_area: Rect::default(),
             play_pause_area: Rect::default(),
             stop_area: Rect::default(),
             next_area: Rect::default(),
@@ -142,6 +148,15 @@ impl QueuePlaybackPanel {
         self.transport_area = painted;
     }
 
+    /// Project the visual slot's hit rectangle, computed by the shell in the
+    /// sync pass. `None` (idle, hidden, or no placement) clears the hit
+    /// geometry so a right-click resolves nothing.
+    pub fn set_visual_slot_area(&mut self, area: Option<Rect>) {
+        self.visual_slot_area = area
+            .filter(|rect| rect.width > 0 && rect.height > 0)
+            .unwrap_or_default();
+    }
+
     /// Test-only: the retained transport hit geometry (task 3.7).
     #[cfg(any(test, feature = "test"))]
     #[must_use]
@@ -161,6 +176,13 @@ impl QueuePlaybackPanel {
     #[must_use]
     pub fn transport_area_for_test(&self) -> Option<Rect> {
         self.transport_area
+    }
+
+    /// Test-only: the sync-projected visual slot hit rect.
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn visual_slot_area_for_test(&self) -> Rect {
+        self.visual_slot_area
     }
 
     /// Test-only: the projected now-playing title parts the sync pass
@@ -213,6 +235,15 @@ impl QueuePlaybackPanel {
                 let fraction = f64::from(event.column.saturating_sub(self.seekbar_area.x))
                     / f64::from(self.seekbar_area.width);
                 Some(Msg::Playback(PlaybackRequest::SeekTo(fraction)))
+            }
+            // A right-click on the visual slot's image rectangle opens its
+            // chrome menu. The click point anchors the menu; the shell owns
+            // the menu build and the queue-column placement bounds.
+            MouseEventKind::Down(MouseButton::Right) if self.visual_slot_area.contains(point) => {
+                Some(Msg::Shell(Box::new(ShellRequest::VisualSlotContextMenu {
+                    x: event.column,
+                    y: event.row,
+                })))
             }
             _ => None,
         }

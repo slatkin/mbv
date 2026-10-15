@@ -155,6 +155,15 @@ impl Model {
             | ShellRequest::ResizeListPaneEnd(_)) => {
                 self.handle_pointer_and_layout_request(&request);
             }
+            // The queue visual slot's chrome menu: the panel reports the
+            // pointer anchor; the shell owns the menu build and the placement
+            // bounds. A blocking overlay already owns mouse input through the
+            // eligibility ladder; the guard is the spec's defensive rule.
+            ShellRequest::VisualSlotContextMenu { x, y } => {
+                if !self.blocking_overlay_active() {
+                    self.app.open_visual_slot_context_menu(x, y);
+                }
+            }
             request
             @ (ShellRequest::RowContextMenu(..) | ShellRequest::MusicRowContextMenu(..)) => {
                 quit |= self.handle_row_context_menu_request(request, music_resize, tv_resize);

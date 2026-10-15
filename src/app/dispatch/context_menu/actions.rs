@@ -39,10 +39,36 @@ impl App {
         // The shell dismisses the mounted ContextMenu component; this only
         // dispatches the chosen action (task 5.3c).
         let lib_idx = self.context_menu_lib_idx();
+        let action = self.execute_context_visual_action(action);
         let action = self.execute_context_selection_action(action, lib_idx);
         let action = self.execute_context_library_action(action, cw_item, lib_idx);
         let action = self.execute_context_queue_and_feed_action(action);
         self.execute_context_navigation_action(action);
+    }
+
+    /// The queue visual slot's chrome-menu actions (the now-playing image
+    /// menu): select the artwork or the visualizer, or hide the slot. They
+    /// carry no row targets, so they run ahead of the selection and library
+    /// chains, which pass the action through unchanged.
+    fn execute_context_visual_action(
+        &mut self,
+        action: Option<ContextAction>,
+    ) -> Option<ContextAction> {
+        match action {
+            Some(ContextAction::ShowVisualizer) => {
+                self.set_visualizer(true);
+                None
+            }
+            Some(ContextAction::ShowMediaArt) => {
+                self.set_visualizer(false);
+                None
+            }
+            Some(ContextAction::HideVisualSlot) => {
+                self.set_visual_slot_hidden(true);
+                None
+            }
+            other => other,
+        }
     }
 
     fn execute_context_selection_action(
@@ -401,7 +427,10 @@ impl App {
                 | ContextAction::AudiobookshelfMarkPlayed(_)
                 | ContextAction::AudiobookshelfMarkUnplayed(_)
                 | ContextAction::HomePlaySelection(_)
-                | ContextAction::HomeEnqueueSelection(_),
+                | ContextAction::HomeEnqueueSelection(_)
+                | ContextAction::ShowVisualizer
+                | ContextAction::ShowMediaArt
+                | ContextAction::HideVisualSlot,
             ) => {}
         }
     }

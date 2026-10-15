@@ -49,53 +49,65 @@ impl Model {
     /// and the owning surface's geometry. Replaces the old `layout.context_menu_rect`
     /// global written during `App::render` (task 5.3c); the component now owns
     /// its rect and hit test.
-    fn context_menu_rect(&self, anchor: ContextMenuAnchor, entries: &[ContextMenuEntry]) -> Rect {
+    fn context_menu_rect(
+        &self,
+        anchor: ContextMenuAnchor,
+        entries: &[ContextMenuEntry],
+        bounds: Option<Rect>,
+    ) -> Rect {
         let layout = &self.app.layout;
         let size = ContextMenu::rendered_size(entries);
-        // For component-owned destinations, use the geometry exported by the
+        // An opener-named containing panel (the queue visual slot's chrome
+        // menu) wins ahead of the destination-derived panel: the slot menu is
+        // chrome, so panel focus must not decide its clamp. For
+        // component-owned destinations, use the geometry exported by the
         // active control. Other destinations and Queue focus keep using
         // `AppLayout` as before.
-        let (panel_rect, anchor_rect): (Rect, Option<Rect>) = match &anchor {
-            ContextMenuAnchor::SelectedItem(focus) => {
-                let (panel, selected) = match focus {
-                    PanelFocus::Library => match self.library_menu_geometry() {
-                        Some((panel, selected)) => (panel, selected),
-                        // No owning component publishes a selected-row
-                        // anchor for this destination yet; the panel
-                        // still places the menu, just without a row
-                        // anchor (matches the legacy `AppLayout` mirror's
-                        // behaviour, which never populated this field).
-                        None => (layout.left_area, None),
-                    },
-                    PanelFocus::Queue => self.queue_menu_geometry().unwrap_or_default(),
-                };
-                (panel, selected)
-            }
-            ContextMenuAnchor::Pointer { .. } => {
-                let panel = match self.app.effective_panel_focus() {
-                    PanelFocus::Library
-                        if self.app.tab.emby_library_index().is_some_and(|lib_idx| {
-                            self.app.wide_tv_show_area(lib_idx).is_some()
-                        }) =>
-                    {
-                        // Task 8.2 deleted the `tv_wide_*` pane rects; the
-                        // panel's paint-free library content area is the
-                        // placement region for the whole Wide TV workspace.
-                        self.app
-                            .tab
-                            .emby_library_index()
-                            .and_then(|lib_idx| self.app.wide_tv_show_area(lib_idx))
-                            .unwrap_or_default()
-                    }
-                    PanelFocus::Library => self
-                        .library_menu_geometry()
-                        .map_or(layout.left_area, |(panel, _)| panel),
-                    PanelFocus::Queue => self
-                        .queue_menu_geometry()
-                        .map(|(panel, _)| panel)
-                        .unwrap_or_default(),
-                };
-                (panel, None)
+        let (panel_rect, anchor_rect): (Rect, Option<Rect>) = if let Some(bounds) = bounds {
+            (bounds, None)
+        } else {
+            match &anchor {
+                ContextMenuAnchor::SelectedItem(focus) => {
+                    let (panel, selected) = match focus {
+                        PanelFocus::Library => match self.library_menu_geometry() {
+                            Some((panel, selected)) => (panel, selected),
+                            // No owning component publishes a selected-row
+                            // anchor for this destination yet; the panel
+                            // still places the menu, just without a row
+                            // anchor (matches the legacy `AppLayout` mirror's
+                            // behaviour, which never populated this field).
+                            None => (layout.left_area, None),
+                        },
+                        PanelFocus::Queue => self.queue_menu_geometry().unwrap_or_default(),
+                    };
+                    (panel, selected)
+                }
+                ContextMenuAnchor::Pointer { .. } => {
+                    let panel = match self.app.effective_panel_focus() {
+                        PanelFocus::Library
+                            if self.app.tab.emby_library_index().is_some_and(|lib_idx| {
+                                self.app.wide_tv_show_area(lib_idx).is_some()
+                            }) =>
+                        {
+                            // Task 8.2 deleted the `tv_wide_*` pane rects; the
+                            // panel's paint-free library content area is the
+                            // placement region for the whole Wide TV workspace.
+                            self.app
+                                .tab
+                                .emby_library_index()
+                                .and_then(|lib_idx| self.app.wide_tv_show_area(lib_idx))
+                                .unwrap_or_default()
+                        }
+                        PanelFocus::Library => self
+                            .library_menu_geometry()
+                            .map_or(layout.left_area, |(panel, _)| panel),
+                        PanelFocus::Queue => self
+                            .queue_menu_geometry()
+                            .map(|(panel, _)| panel)
+                            .unwrap_or_default(),
+                    };
+                    (panel, None)
+                }
             }
         };
         let pointer = match &anchor {
@@ -119,18 +131,18 @@ impl Model {
         if !self.application.mounted(&id) {
             return;
         }
-        // Read the menu's anchor/entries immutably, compute the rect, then
-        // borrow mutably only to set it (avoids aliasing `self`).
-        let (anchor, entries) = {
+        // Read the menu's anchor/entries/bounds immutably, compute the rect,
+        // then borrow mutably only to set it (avoids aliasing `self`).
+        let (anchor, entries, bounds) = {
             let comp = self.application.get_component(&id);
             let Some(menu) = comp
                 .and_then(|component| component.as_any().downcast_ref::<ContextMenuComponent>())
             else {
                 return;
             };
-            (menu.anchor(), menu.entries().to_vec())
+            (menu.anchor(), menu.entries().to_vec(), menu.bounds())
         };
-        let rect = self.context_menu_rect(anchor, &entries);
+        let rect = self.context_menu_rect(anchor, &entries, bounds);
         if let Some(comp) = self.application.get_component_mut(&id)
             && let Some(menu) = comp.as_any_mut().downcast_mut::<ContextMenuComponent>()
         {

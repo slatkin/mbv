@@ -225,9 +225,7 @@ impl App {
             Command::OpenIdleFeedLink => self.open_idle_feed_link(),
             Command::ToggleVisualizer => self.toggle_visualizer(),
             Command::ToggleVisualSlotHidden => {
-                self.visual_slot_hidden = !self.visual_slot_hidden;
-                self.sync_visualizer();
-                self.save_prefs();
+                self.set_visual_slot_hidden(!self.visual_slot_hidden);
             }
             _ => unreachable!("dispatch_visual_command only accepts visual commands"),
         }

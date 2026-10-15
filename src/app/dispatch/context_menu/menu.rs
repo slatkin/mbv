@@ -142,6 +142,7 @@ impl App {
             anchor,
             cursor: ContextMenu::first_selectable(&entries),
             entries,
+            bounds: None,
         })
     }
 
@@ -194,6 +195,7 @@ impl App {
             anchor: menu_anchor(anchor, PanelFocus::Library),
             cursor: ContextMenu::first_selectable(&entries),
             entries,
+            bounds: None,
         }));
     }
 
@@ -425,6 +427,7 @@ impl App {
             anchor: menu_anchor(anchor, PanelFocus::Library),
             cursor: 0,
             entries: menu_entries,
+            bounds: None,
         };
         self.pending_overlay = Some(OverlayRequest::ContextMenu(menu));
     }
@@ -491,6 +494,7 @@ impl App {
             anchor: menu_anchor(anchor, PanelFocus::Library),
             cursor: ContextMenu::first_selectable(&menu_entries),
             entries: menu_entries,
+            bounds: None,
         };
         self.pending_overlay = Some(OverlayRequest::ContextMenu(menu));
     }
@@ -611,6 +615,7 @@ impl App {
             anchor: menu_anchor(anchor, focus),
             cursor: 0,
             entries,
+            bounds: None,
         }));
     }
 
@@ -657,5 +662,37 @@ impl App {
         };
         menu.anchor = ContextMenuAnchor::Pointer { x, y };
         self.pending_overlay = Some(OverlayRequest::ContextMenu(menu));
+    }
+
+    /// Open the queue visual slot's chrome menu at a pointer anchor: choose
+    /// the visualizer or the artwork, or hide the slot. Pointer-only (the
+    /// slot has no keyboard anchor and no row targets), so the menu clamps
+    /// inside the queue column rather than the destination-derived panel.
+    /// The label names the other content, never a toggle.
+    pub(in crate::app) fn open_visual_slot_context_menu(&mut self, x: u16, y: u16) {
+        if !self.visual_slot_shown() {
+            return;
+        }
+        let mut entries = Vec::new();
+        if self.visualizer_enabled {
+            Self::push_context_action(&mut entries, "Show Media Art", ContextAction::ShowMediaArt);
+        } else {
+            Self::push_context_action(
+                &mut entries,
+                "Show Visualizer",
+                ContextAction::ShowVisualizer,
+            );
+        }
+        Self::push_context_action(&mut entries, "Hide", ContextAction::HideVisualSlot);
+        let bounds = {
+            let area = self.layout.left_area;
+            (area.width > 0 && area.height > 0).then_some(area)
+        };
+        self.pending_overlay = Some(OverlayRequest::ContextMenu(ContextMenu {
+            anchor: ContextMenuAnchor::Pointer { x, y },
+            cursor: 0,
+            entries,
+            bounds,
+        }));
     }
 }

@@ -35,6 +35,10 @@ pub struct ContextMenuComponent {
     cursor: usize,
     anchor: ContextMenuAnchor,
     menu_rect: Rect,
+    /// The containing panel the shell clamps a menu inside, when the opener
+    /// named one (the queue visual slot's chrome menu). `None` keeps the
+    /// shell's destination-derived panel.
+    bounds: Option<Rect>,
 }
 
 impl ContextMenuComponent {
@@ -45,6 +49,7 @@ impl ContextMenuComponent {
             cursor: 0,
             anchor: ContextMenuAnchor::SelectedItem(PanelFocus::Library),
             menu_rect: Rect::default(),
+            bounds: None,
         }
     }
 
@@ -55,10 +60,12 @@ impl ContextMenuComponent {
         anchor: ContextMenuAnchor,
         entries: Vec<ContextMenuEntry>,
         cursor: usize,
+        bounds: Option<Rect>,
     ) {
         self.anchor = anchor;
         self.entries = entries;
         self.cursor = cursor;
+        self.bounds = bounds;
     }
 
     /// Set the painted rect, computed by the shell from `AppLayout` each frame.
@@ -77,6 +84,13 @@ impl ContextMenuComponent {
     #[must_use]
     pub fn anchor(&self) -> ContextMenuAnchor {
         self.anchor
+    }
+
+    /// The opener-named containing panel, used by the shell to recompute
+    /// `menu_rect` ahead of the destination-derived panel.
+    #[must_use]
+    pub fn bounds(&self) -> Option<Rect> {
+        self.bounds
     }
 
     /// Entries, used by the shell to recompute `menu_rect` size.
@@ -263,6 +277,7 @@ mod tests {
                 },
             ],
             0,
+            None,
         );
         comp.set_rect(Rect {
             x: 10,

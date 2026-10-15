@@ -200,6 +200,7 @@ fn context_menu_click_select_executes_and_closes_the_menu() {
                 action: Some(ContextAction::Play),
             }],
             cursor: 0,
+            bounds: None,
         },
     ));
     model.sync_modal_requests();

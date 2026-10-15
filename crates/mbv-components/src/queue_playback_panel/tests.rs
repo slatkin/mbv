@@ -67,6 +67,35 @@ fn transport_clicks_resolve_against_retained_geometry() {
     assert!(panel.on(&click(5, 4)).is_none());
 }
 
+/// The visual slot's right-click gesture: the panel reports the image anchor
+/// to the shell, and resolves nothing outside the projected slot rectangle,
+/// or when no rectangle is projected at all (idle, hidden, or absent).
+#[test]
+fn visual_slot_right_click_reports_the_image_anchor() {
+    let mut panel = QueuePlaybackPanel::new();
+    panel.set_visual_slot_area(Some(Rect::new(4, 2, 20, 8)));
+    let right_click = |column: u16, row: u16| {
+        Event::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Right),
+            column,
+            row,
+            modifiers: KeyModifiers::NONE,
+        })
+    };
+
+    assert_eq!(
+        panel.on(&right_click(5, 3)),
+        Some(Msg::Shell(Box::new(ShellRequest::VisualSlotContextMenu {
+            x: 5,
+            y: 3,
+        })))
+    );
+    assert!(panel.on(&right_click(0, 3)).is_none());
+    assert!(panel.on(&right_click(5, 0)).is_none());
+    panel.set_visual_slot_area(None);
+    assert!(panel.on(&right_click(5, 3)).is_none());
+}
+
 /// The header row's two sites: the row always paints the playback-target
 /// indicator (the target icon in the target colour — yellow while local,
 /// green while remote, a local target shows no host) and the right-aligned

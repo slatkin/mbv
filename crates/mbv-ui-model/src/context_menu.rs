@@ -123,6 +123,16 @@ pub enum ContextAction {
     /// (queue-play-order design D6). The menu builds the opposite of the
     /// current mode; this action only carries the requested mode.
     SetPlayOrder(PlayOrderMode),
+    /// Select the queue visual slot's system-audio visualizer (the visual
+    /// slot's chrome menu). The menu resolves the current selection when it
+    /// builds, so this action carries the target content, never a toggle.
+    ShowVisualizer,
+    /// Select the queue visual slot's artwork (the visual slot's chrome
+    /// menu).
+    ShowMediaArt,
+    /// Hide the queue visual slot (the visual slot's chrome menu). The `h`
+    /// action toggles the same persisted state.
+    HideVisualSlot,
 }
 
 #[derive(Clone, Debug)]
@@ -215,6 +225,11 @@ pub struct ContextMenu {
     pub anchor: ContextMenuAnchor,
     pub entries: Vec<ContextMenuEntry>,
     pub cursor: usize,
+    /// The containing panel a menu is clamped inside, when the opener knows
+    /// it: the queue visual slot's chrome menu clamps to the queue column
+    /// instead of the destination-derived panel. `None` keeps the shell's
+    /// destination-derived panel for every row menu.
+    pub bounds: Option<Rect>,
 }
 
 impl ContextMenu {

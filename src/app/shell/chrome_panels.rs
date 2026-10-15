@@ -289,6 +289,23 @@ impl Model {
                 queue_playback_transport_area(slot_region, wide, card.width, card.height)
             })
         };
+        // The visual slot's hit rectangle: the image reservation computed
+        // from the same last-card checkpoint the slot adapter paints with.
+        // `visual_slot_shown()` collapses idle and the user's hide toggle,
+        // and a missing placement means no slot is painted at all.
+        let visual_slot_area =
+            placement
+                .filter(|_| self.app.visual_slot_shown())
+                .map(|placement| {
+                    let slot_region = queue_playback_slot_region(placement);
+                    let wide = queue_playback_column_wide(placement.width);
+                    queue_card_reserved_rect(
+                        self.app.images.last_card_size(),
+                        self.app.terminal_height,
+                        slot_region,
+                        wide,
+                    )
+                });
         if let Some(comp) = self.application.get_component_mut(&id)
             && let Some(panel) = comp.as_any_mut().downcast_mut::<QueuePlaybackPanel>()
         {
@@ -299,6 +316,7 @@ impl Model {
             panel.set_header(status, host, host_is_remote);
             panel.set_transport(transport);
             panel.set_transport_area(transport_area);
+            panel.set_visual_slot_area(visual_slot_area);
         }
     }
 

@@ -296,3 +296,52 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout_narrow()
         "menu must not fall back to the poisoned AppLayout geometry"
     );
 }
+
+/// The queue visual slot's chrome menu clamps inside the queue column even
+/// while the Library panel is focused and has painted its own menu geometry.
+/// The slot menu names its containing panel, so placement must not fall back
+/// to the destination-derived Library side.
+#[test]
+fn visual_slot_menu_clamps_inside_the_queue_column() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = library_app();
+    // The two-panel layout needs a non-empty queue (hide-empty-queue-column D1).
+    app.local_view
+        .adopt_items(vec![make_item("Queue Item", "Movie")], 0);
+    let mut model = Model::new(app);
+    model.sync_library_panel();
+
+    let backend = TestBackend::new(100, 40);
+    let mut term = Terminal::new(backend).unwrap();
+    // Publish the frame layout first: the live loop always has a painted
+    // frame before the slot can be clicked, and the menu resolves its
+    // queue-column bounds from that published layout.
+    term.draw(|f| model.app.compose_root_frame(f)).unwrap();
+    model.app.open_visual_slot_context_menu(2, 20);
+    model.sync_modal_requests();
+
+    term.draw(|f| {
+        model.app.compose_root_frame(f);
+        let library_area = model
+            .app
+            .layout
+            .root_frame
+            .library
+            .expect("library placement");
+        model.render_library_panel_at(f, library_area);
+        model.render_context_menu_overlay(f);
+    })
+    .unwrap();
+
+    let id = ComponentId::Overlay(OverlayId::ContextMenu);
+    assert!(
+        model.application.mounted(&id),
+        "the visual slot right-click menu must be mounted"
+    );
+    let rect = mounted_context_menu_rect(&model);
+    let column = model.app.layout.left_area;
+    assert!(
+        rect.right() <= column.right() && rect.bottom() <= column.bottom(),
+        "the slot menu must clamp inside the queue column {column:?}: {rect:?}"
+    );
+}

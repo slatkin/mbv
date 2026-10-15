@@ -217,6 +217,13 @@ pub enum ShellRequest {
     /// boundary; keyboard requests use `None` and resolve placement from the
     /// freshly painted selection geometry.
     RowContextMenu(ContextMenuTargets, Option<(u16, u16)>),
+    /// Open the queue visual slot's chrome menu at the pointer anchor. The
+    /// menu chooses artwork or the visualizer, or hides the slot; it carries
+    /// no row targets.
+    VisualSlotContextMenu {
+        x: u16,
+        y: u16,
+    },
     /// Request shell-owned data for a newly expanded TV tree branch. The TV
     /// owner carries its stable target; the shell resolves the Service IDs and
     /// reuses its existing detail/season fetch guards. The mounted-tree intent

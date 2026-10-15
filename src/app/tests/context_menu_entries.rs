@@ -4,6 +4,7 @@
 use super::podcast::add_emby_movie_library;
 use super::*;
 use crate::app::state::context_menu_capabilities::{ItemCapabilities, emby_item_capabilities};
+use mbv_ui_model::context_menu::ContextAction;
 use mbv_ui_model::overlay::OverlayRequest;
 use mbv_ui_msg::{Msg, ShellRequest};
 use rstest::rstest;
@@ -247,4 +248,53 @@ fn row_context_menu_for_an_item_outside_the_nav_level_still_opens() {
         model.app.pending_overlay,
         Some(OverlayRequest::ContextMenu(_))
     ));
+}
+
+/// Queue visual slot menu: the first entry names the content the image is not
+/// showing, and the second hides the slot. The label is resolved when the
+/// menu opens, never a toggle.
+#[rstest]
+#[case(false, &["Show Visualizer", "Hide"])]
+#[case(true, &["Show Media Art", "Hide"])]
+fn visual_slot_menu_names_the_other_content(
+    #[case] visualizer_enabled: bool,
+    #[case] expected: &[&str],
+) {
+    let mut app = make_app_stub();
+    app.visualizer_enabled = visualizer_enabled;
+
+    app.open_visual_slot_context_menu(10, 5);
+
+    assert_eq!(pending_menu_labels(&mut app), expected);
+}
+
+/// Queue visual slot menu: each content entry selects the content it names.
+/// The stub player stays idle so selecting the visualizer never starts the
+/// `PipeWire` capture worker.
+#[rstest]
+#[case(ContextAction::ShowVisualizer, true)]
+#[case(ContextAction::ShowMediaArt, false)]
+fn visual_slot_content_entry_selects_the_named_content(
+    #[case] action: ContextAction,
+    #[case] expected: bool,
+) {
+    let mut app = make_app_stub();
+    app.player.update_status(|status| status.active = false);
+    app.visualizer_enabled = !expected;
+
+    app.execute_context_action(Some(action), None);
+
+    assert_eq!(app.visualizer_enabled, expected);
+}
+
+/// Queue visual slot menu: the Hide entry sets the same persisted
+/// `visual_slot_hidden` state the `h` action toggles.
+#[test]
+fn visual_slot_hide_entry_hides_the_slot() {
+    let mut app = make_app_stub();
+    app.player.update_status(|status| status.active = false);
+
+    app.execute_context_action(Some(ContextAction::HideVisualSlot), None);
+
+    assert!(app.visual_slot_hidden);
 }

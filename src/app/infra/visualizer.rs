@@ -69,13 +69,29 @@ impl App {
         if self.visual_slot_hidden {
             return;
         }
-        self.visualizer_enabled = !self.visualizer_enabled;
+        self.set_visualizer(!self.visualizer_enabled);
+    }
+
+    /// Select the artwork (`false`) or the visualizer (`true`), reconcile
+    /// capture, and persist. The visual slot menu carries the target content
+    /// directly; `toggle_visualizer` is this setter's only keyboard caller.
+    pub(in crate::app) fn set_visualizer(&mut self, enabled: bool) {
+        self.visualizer_enabled = enabled;
         self.visualizer_failed = false;
-        if self.visualizer_enabled {
+        if enabled {
             self.sync_visualizer();
         } else {
             self.stop_visualizer_capture();
         }
+        self.save_prefs();
+    }
+
+    /// Set the persisted visual-slot hidden state, reconcile capture, and
+    /// persist. Shared by the `h` keyboard action and the visual slot menu's
+    /// Hide entry.
+    pub(in crate::app) fn set_visual_slot_hidden(&mut self, hidden: bool) {
+        self.visual_slot_hidden = hidden;
+        self.sync_visualizer();
         self.save_prefs();
     }
 }
