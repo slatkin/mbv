@@ -28,3 +28,4 @@ session-log.md
 # t-plan: private runtime state — never commit or publish
 plan_*.md
 plan.md
+.cortexkit/magic-context/
