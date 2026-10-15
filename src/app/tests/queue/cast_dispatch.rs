@@ -93,11 +93,14 @@ fn cast_attached_play_loads_the_owner_queue_without_starting_playback() {
         "the played selection dispatches to the receiver"
     );
     // The pong ahead of the load resets the heartbeat clock: the load's
-    // reply waits for the receiver to load the first item, and the receiver
-    // terminates a sender whose pongs lapse during that wait.
+    // reply waits for the receiver to load the item, and the receiver
+    // terminates a sender whose pongs lapse during that wait. The receiver
+    // is loaded with the single played item, not the whole queue (a whole
+    // queue in one QUEUE_LOAD exceeds the receiver's message bound and
+    // kills the connection -- 2026-10-15 logs).
     assert_eq!(
         calls.lock().unwrap().as_slice(),
-        ["keep_alive", "load_queue(1, 0)"]
+        ["keep_alive", "load(https://feed/example.mp3, 0)"]
     );
 }
 

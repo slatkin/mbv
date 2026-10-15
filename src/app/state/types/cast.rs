@@ -33,7 +33,7 @@ use std::time::Instant;
 /// receiver connection. No `Send` bound: see the threading-model note above
 /// -- a `CastTransport` never crosses a thread boundary after construction.
 pub(in crate::app) trait CastTransport {
-    fn load_queue(&mut self, items: &[CastMediaItem], start_index: u16) -> Result<(), CastError>;
+    fn load(&mut self, item: &CastMediaItem, start_position_seconds: f64) -> Result<(), CastError>;
     fn play(&mut self) -> Result<(), CastError>;
     fn pause(&mut self) -> Result<(), CastError>;
     fn stop(&mut self) -> Result<(), CastError>;
@@ -47,8 +47,8 @@ pub(in crate::app) trait CastTransport {
 }
 
 impl CastTransport for CastClient {
-    fn load_queue(&mut self, items: &[CastMediaItem], start_index: u16) -> Result<(), CastError> {
-        CastClient::load_queue(self, items, start_index)
+    fn load(&mut self, item: &CastMediaItem, start_position_seconds: f64) -> Result<(), CastError> {
+        CastClient::load(self, item, start_position_seconds)
     }
     fn play(&mut self) -> Result<(), CastError> {
         CastClient::play(self)
@@ -260,11 +260,11 @@ impl Default for FakeCastTransport {
 
 #[cfg(test)]
 impl CastTransport for FakeCastTransport {
-    fn load_queue(&mut self, items: &[CastMediaItem], start_index: u16) -> Result<(), CastError> {
+    fn load(&mut self, item: &CastMediaItem, start_position_seconds: f64) -> Result<(), CastError> {
         self.calls
             .lock()
             .unwrap()
-            .push(format!("load_queue({}, {start_index})", items.len()));
+            .push(format!("load({}, {start_position_seconds})", item.url));
         Ok(())
     }
     fn play(&mut self) -> Result<(), CastError> {

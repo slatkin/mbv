@@ -9,8 +9,7 @@ use crate::CastError;
 use crate::error::TransportKind;
 use rust_cast::CastDevice;
 use rust_cast::channels::media::{
-    Media, MediaQueue, PlayerState as CastPlayerState, QueueItem, QueueType, StatusEntry,
-    StreamType,
+    Media, MediaQueue, PlayerState as CastPlayerState, StatusEntry, StreamType,
 };
 use rust_cast::channels::receiver::CastDeviceApp;
 
@@ -164,25 +163,6 @@ impl CastClient {
         Ok(())
     }
 
-    pub fn load_queue(
-        &mut self,
-        items: &[CastMediaItem],
-        start_index: u16,
-    ) -> Result<(), CastError> {
-        let queue = build_queue(items, start_index);
-        let status = self
-            .device
-            .media
-            .load_queue(self.transport_id.as_str(), self.session_id.as_str(), &queue)
-            .map_err(|e| CastError::transport(TransportKind::LoadQueue, e))?;
-        self.adopt_status(&status);
-        self.dispatched_queue = Some(DispatchedQueue {
-            queue,
-            current_index: start_index,
-        });
-        Ok(())
-    }
-
     pub fn play(&mut self) -> Result<(), CastError> {
         let id = self.require_media_session_id()?;
         let entry = self
@@ -314,19 +294,6 @@ fn build_media(url: &str, content_type: &str) -> Media {
     }
 }
 
-fn build_queue(items: &[CastMediaItem], start_index: u16) -> MediaQueue {
-    MediaQueue {
-        items: items
-            .iter()
-            .map(|item| QueueItem {
-                media: build_media(&item.url, &item.content_type),
-            })
-            .collect(),
-        start_index,
-        queue_type: QueueType::Playlist,
-    }
-}
-
 /// Pure index arithmetic for `next`/`previous`, kept separate from the
 /// network call so it is unit-testable without a device.
 fn next_queue_index(current: u16, len: usize, delta: i32) -> Option<u16> {
@@ -380,26 +347,6 @@ mod tests {
         assert_eq!(media.content_id, "http://host/stream.mp4");
         assert_eq!(media.content_type, "video/mp4");
         assert_eq!(media.stream_type, StreamType::Buffered);
-    }
-
-    #[test]
-    fn build_queue_carries_start_index_and_items_in_order() {
-        let items = vec![
-            CastMediaItem {
-                url: "http://a".to_string(),
-                content_type: "video/mp4".to_string(),
-            },
-            CastMediaItem {
-                url: "http://b".to_string(),
-                content_type: "video/mp4".to_string(),
-            },
-        ];
-        let queue = build_queue(&items, 1);
-        assert_eq!(queue.start_index, 1);
-        assert_eq!(queue.items.len(), 2);
-        assert_eq!(queue.items[0].media.content_id, "http://a");
-        assert_eq!(queue.items[1].media.content_id, "http://b");
-        assert_eq!(queue.queue_type, QueueType::Playlist);
     }
 
     #[test]

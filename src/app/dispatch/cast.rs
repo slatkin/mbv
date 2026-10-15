@@ -142,7 +142,11 @@ impl App {
 
     /// Routes a played selection to the attached receiver instead of the
     /// local player (5.3), surfacing uncastable items by name and reason at
-    /// dispatch time (5.4). Resolution touches the network (Emby
+    /// dispatch time (5.4). The receiver is loaded with the single selected
+    /// item only: the owner stays queue authority, and one item keeps the
+    /// transport message small (a whole-queue `QUEUE_LOAD` oversized the
+    /// receiver's message bound and killed the connection -- 2026-10-15
+    /// logs). Resolution touches the network (Emby
     /// `PlaybackInfo`, Audiobookshelf session open), so it runs on a
     /// background thread; the result comes back through `cast_rx`
     /// (`handle_cast_event`).
@@ -192,9 +196,9 @@ impl App {
                 // load's reply waits for the receiver to load the first
                 // item, and the heartbeat deadline must survive that wait.
                 let _ = transport.keep_alive();
-                tracing::info!(name: "cast.dispatch.sent", target: "cast", items = media.len(), start_index = %start_index, "dispatching the queue to the receiver");
+                tracing::info!(name: "cast.dispatch.sent", target: "cast", items = media.len(), start_index = %start_index, "loading the selected item on the receiver");
                 let outcome = transport
-                    .load_queue(&media, start_index)
+                    .load(&media[usize::from(start_index)], 0.0)
                     .map(|()| dispatched);
                 if let Err(error) = &outcome {
                     tracing::warn!(name: "cast.dispatch.failed", target: "cast", error = %error, "cast queue dispatch failed");
