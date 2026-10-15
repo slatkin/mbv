@@ -137,7 +137,7 @@ Tests:
       zero-size rect.
 - [x] Shell sync pass pushes the hit rect; gate on `visual_slot_shown()`.
 - [x] Shell request arm calls `App::open_visual_slot_context_menu(x, y)`.
-- [ ] Menu builder: gate on `visual_slot_shown()` and
+- [x] Menu builder: gate on `visual_slot_shown()` and
       `!blocking_overlay_active()`; build the two entries; set the anchor and
       the queue-column bounds (`layout.left_area`, `None` if empty).
 - [x] `ContextMenu.bounds` plus component and render plumbing.
@@ -148,7 +148,7 @@ Tests:
 - [x] `cargo nextest run -p mbv-components`, `cargo nextest run -p mbv-ui-model`,
       `cargo nextest run -p mbv`.
 - [x] `cargo clippy --workspace --all-targets -- -D warnings`.
-- [ ] Commit after the user confirms. No push without the user's word.
+- [x] Commit after the user confirms. No push without the user's word.
 
 ## Verification
 
