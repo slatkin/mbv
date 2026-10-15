@@ -6,7 +6,7 @@
 //! `Swallow` (run nothing, discard the leaf's message), or `FallThrough` (the
 //! leaf's own typed request stands).
 
-use crossterm::event::KeyEvent;
+use crossterm::event::{KeyCode, KeyEvent};
 use mbv_keybinds::Keybinds;
 
 use super::key_policy::{KeyPolicyBinding, command_for_policy, resolve_policy};
@@ -98,6 +98,12 @@ pub(in crate::app) fn resolve_router_outcome_with_focused(
                 return RouterOutcome::FallThrough;
             }
             match command_for_policy(entry.binding, chord) {
+                // Space and the Esc chord stay deferred candidates (the
+                // shell's leaf arbitration decides them); a non-Esc stop
+                // chord fires immediately.
+                Some(cmd @ Command::Stop) if chord.code != KeyCode::Esc => {
+                    RouterOutcome::Command(cmd)
+                }
                 Some(cmd @ (Command::TogglePlayPause | Command::Stop)) => {
                     RouterOutcome::Deferred(cmd)
                 }

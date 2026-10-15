@@ -309,12 +309,26 @@ impl Model {
             self.application.focus(),
             &self.keybinds,
         );
-        // The first Esc resolves to the stop candidate but falls through:
-        // the leaf (and the deferred-candidate arbitration) handle it as
-        // today, and nothing dispatches. A non-Esc stop chord (a rebound
-        // binding) fires immediately, unchanged.
+        // Global transport (user decision 2026-10-15): Space toggles on the
+        // press itself from any focus, so the deferred toggle upgrades to an
+        // immediate command unless the focused panel holds an active Visual
+        // selection whose row-local Space the leaf owns
+        // (`media-list-multi-select` spec). The first Esc resolves to the
+        // stop candidate but falls through: the leaf (and the
+        // deferred-candidate arbitration) handle it as today, and nothing
+        // dispatches. The second Esc inside the window dispatches the stop
+        // from any focus — the leaf's own Esc action (back, close, selection
+        // clearing) already ran on the first press, so the second press's
+        // request is discarded rather than repeated. A non-Esc stop chord
+        // fires immediately, unchanged (the router dispatches it directly).
         let outcome = match outcome {
+            RouterOutcome::Deferred(Command::TogglePlayPause)
+                if self.visual_selection.is_none() =>
+            {
+                RouterOutcome::Command(Command::TogglePlayPause)
+            }
             RouterOutcome::Deferred(Command::Stop) if !double_esc => RouterOutcome::FallThrough,
+            RouterOutcome::Deferred(Command::Stop) => RouterOutcome::Command(Command::Stop),
             other => other,
         };
         // Arm/disarm transitions come from the router's outcome (design D6,
@@ -375,8 +389,8 @@ impl Model {
     /// an unhandled press dispatches the command on that press; a consumed press
     /// cancels the candidate and records nothing, so a later unhandled press
     /// behaves as a first press. Returns whether the candidate fired. The
-    /// shell's quit signal is unaffected: deferred candidates are only ever
-    /// `TogglePlayPause`/`Stop`, which never quit.
+    /// shell's quit signal is unaffected: a deferred candidate is only ever
+    /// `TogglePlayPause` (the Visual-selection Space), which never quits.
     pub(in crate::app) fn apply_deferred_candidate(
         &mut self,
         router: &RouterOutcome,

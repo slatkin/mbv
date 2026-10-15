@@ -104,33 +104,29 @@ fn active_queue_harness() -> TickHarness {
     TickHarness::new(app)
 }
 
-/// Unhandled `Space` fires the playback candidate on the press itself: no
-/// repeated-press window arms, and every unhandled press fires again
-/// (semantic-input-arbitration, "Unhandled Space fires immediately").
+/// Global transport (user decision 2026-10-15): `Space` toggles on the press
+/// itself, from any focus — the router dispatches immediately and a consumed
+/// leaf request is discarded. A focused list's active Visual selection keeps
+/// its row-local Space as a deferred candidate (see `shell/tests.rs`).
 #[test]
-fn live_tick_unhandled_space_fires_playback_on_the_press() {
+fn live_tick_space_toggles_immediately_on_the_press() {
     let mut harness = active_queue_harness();
 
     harness.inject(key(Key::Char(' ')));
     let first = harness.step();
-    assert!(matches!(first.router, RouterOutcome::Deferred(_)));
-    assert!(first.deferred_fired);
-
-    harness.inject(key(Key::Char(' ')));
-    let second = harness.step();
-    assert!(matches!(second.router, RouterOutcome::Deferred(_)));
-    assert!(
-        second.deferred_fired,
-        "a later unhandled press fires again as a first press"
+    assert_eq!(
+        first.router,
+        RouterOutcome::Command(crate::app::dispatch::action::Command::TogglePlayPause)
     );
+    assert!(!first.deferred_fired);
 }
 
 /// The double-Esc stop (see `Model::router_outcome`): the first Esc falls
-/// through (the leaf's own consumption — e.g. the playback panel's `Stop` —
-/// claims first; see the Visual-mode records in `tests/tick_integration/home.rs`),
-/// and the second press inside the window fires the stop candidate.
+/// through to its claimants and dispatches nothing; the second press inside
+/// the window dispatches the stop from any focus — the leaf's own Esc action
+/// (back, close, selection clearing) already ran on the first press.
 #[test]
-fn live_tick_unhandled_escape_fires_stop_on_the_second_press() {
+fn live_tick_escape_stops_on_the_second_press() {
     let mut harness = active_queue_harness();
 
     harness.inject(key(Key::Esc));
@@ -142,9 +138,9 @@ fn live_tick_unhandled_escape_fires_stop_on_the_second_press() {
     let second = harness.step();
     assert_eq!(
         second.router,
-        RouterOutcome::Deferred(crate::app::dispatch::action::Command::Stop)
+        RouterOutcome::Command(crate::app::dispatch::action::Command::Stop)
     );
-    assert!(second.deferred_fired);
+    assert!(!second.deferred_fired);
 }
 
 #[test]

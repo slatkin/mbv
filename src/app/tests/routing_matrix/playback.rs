@@ -9,21 +9,6 @@ use crossterm::event::KeyCode;
 use mbv_ui_msg::{ComponentId, Msg, ShellRequest};
 
 #[test]
-fn playback_gating_space_falls_through_to_consumed_leaf() {
-    let leaf = Some(Msg::Shell(Box::new(ShellRequest::Quit)));
-    let out = fold_tick(
-        leaf,
-        key(KeyCode::Char(' ')),
-        Some(&ComponentId::Library),
-        active_snapshot(),
-    );
-    assert_eq!(
-        out.len(),
-        1,
-        "consumed Space press must fall through (browse leaf keeps its request)"
-    );
-}
-#[test]
 fn playback_gating_esc_falls_through_to_consumed_leaf() {
     let leaf = Some(Msg::Shell(Box::new(ShellRequest::EmbyLibraryBack)));
     let out = fold_tick(
