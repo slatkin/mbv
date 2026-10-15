@@ -101,6 +101,9 @@ impl App {
             PanelTarget::Emby(session) => self.connect_to_session(&session),
             PanelTarget::Cast(receiver) => {
                 self.sever_active_connection();
+                // Same panel-close-on-connect parity as the Emby path
+                // (`connect_to_session` dismisses the Sessions sidebar).
+                self.request_sidebar_dismiss(mbv_ui_model::overlay::SidebarId::Sessions);
                 let name = receiver.friendly_name.clone();
                 self.attach_cast(receiver.id.clone(), name);
                 self.connect_cast_receiver(receiver.id);
@@ -662,6 +665,14 @@ mod tests {
             app.cast_attachment.as_ref().unwrap().receiver_id,
             "device-1"
         );
+        // Emby-path parity: selecting a target dismisses the F3 Sessions
+        // panel (`connect_to_session` requests the same dismissal).
+        match app.pending_overlay {
+            Some(mbv_ui_model::overlay::OverlayRequest::DismissSidebar(
+                mbv_ui_model::overlay::SidebarId::Sessions,
+            )) => {}
+            other => panic!("expected Sessions-sidebar dismissal, got {other:?}"),
+        }
         let after: Vec<String> = app
             .local_view
             .slots()
