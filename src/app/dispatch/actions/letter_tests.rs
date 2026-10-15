@@ -441,6 +441,73 @@ fn failed_upcoming_fetch_retries_on_the_next_tab_load() {
     }
 }
 
+/// A genuine restore (the current position differs from the saved one) arms
+/// its own Upcoming fetch synchronously: the restored level waits `loading`
+/// for the restore's fetch. A recorded `Failed` state must not stack a
+/// second eager request behind it — the restore's fetch is this tab load's
+/// one Upcoming query.
+#[test]
+fn a_genuine_restore_with_a_failed_fetch_does_not_stack_a_second_eager_fetch() {
+    let mut app = make_app_stub();
+    let http = install_mock_emby(&mut app);
+    app.libs.push(lib_tab("tvshows"));
+    push_top_level_tv(&mut app.libs[0], 2);
+    // The saved position selected Upcoming; the current level no longer
+    // carries it, so activation takes the genuine-restore path.
+    let mut saved = app.libs[0].library_position_snapshot();
+    saved.levels[0].tv_content_mode = Some(mbv_queue::TvContentMode::Upcoming);
+    app.library_position_state
+        .libraries
+        .insert("lib-1".into(), saved);
+    app.tv_upcoming_fetches
+        .insert("lib-1".into(), TvUpcomingFetchState::Failed);
+    // Two responses: on the deduped path only the restore's fetch runs and
+    // one stays scripted; without the dedupe both fetches complete and the
+    // state assertion below fails instead of hanging the drain.
+    http.respond(200, r#"{"Items":[{"Id":"ep-1","Type":"Episode","SeriesId":"series-1","SeriesName":"Series 1"}]}"#);
+    http.respond(200, r#"{"Items":[{"Id":"ep-1","Type":"Episode","SeriesId":"series-1","SeriesName":"Series 1"}]}"#);
+
+    app.activate_library_position(0);
+    app.maybe_spawn_tv_upcoming_snapshot(0);
+
+    // The restore thread completes before the assertions: its position
+    // event is the last one it sends (the snapshot event precedes it).
+    loop {
+        let event = app
+            .channels
+            .lib_rx
+            .recv()
+            .expect("the restore must complete");
+        if matches!(
+            event,
+            LibEvent::Browse(BrowseEvent::RestoreLibraryPosition { .. })
+        ) {
+            break;
+        }
+    }
+
+    let level = app.libs[0].nav_stack.last().unwrap();
+    assert!(
+        level.loading,
+        "the restore's placeholder waits for its fetch"
+    );
+    assert_eq!(
+        level.tv_content_mode.as_ref(),
+        Some(&mbv_queue::TvContentMode::Upcoming)
+    );
+    assert_eq!(
+        app.tv_upcoming_fetches.get("lib-1"),
+        Some(&TvUpcomingFetchState::Failed),
+        "the eager request must not stack behind the restore's fetch"
+    );
+    let upcoming_requests = http
+        .requests()
+        .into_iter()
+        .filter(|request| request.contains("/Shows/Upcoming"))
+        .count();
+    assert_eq!(upcoming_requests, 1, "one Upcoming query per tab load");
+}
+
 /// Selecting the Upcoming pill materializes the root level from the
 /// per-session snapshot instead of refetching the slow server query
 /// (`destination-latest-modes`-adjacent user rule, 2026-10-11).

@@ -295,10 +295,11 @@ fn tv_workspace_stays_mounted_and_preserves_pane_cursor_across_resize() {
 mod activation;
 
 /// Contract (2026-10-15): after the eager Upcoming fetch fails through all
-/// its retries, the sync pass projects the failed fetch state into the
-/// owner as an empty, not-loading placeholder slot and leaves the `Failed`
-/// state marked for the shell's retry paths. The placeholder's wording is
-/// the component test's contract (`flat_upcoming_placeholder_tests`).
+/// its retries, the sync pass maps the `Failed` fetch state into the owner's
+/// `upcoming_failed` and delivers an empty, not-loading placeholder slot,
+/// leaving the `Failed` state marked for the shell's retry paths. The
+/// placeholder's wording is the component test's contract
+/// (`flat_upcoming_placeholder_tests`).
 #[test]
 fn the_failed_upcoming_fetch_projects_into_the_panel_placeholder() {
     use mbv_components::library_panel::ListSlot;
@@ -314,6 +315,10 @@ fn the_failed_upcoming_fetch_projects_into_the_panel_placeholder() {
 
     model.sync_tv_content();
 
+    assert!(
+        model.test_tv_owner().upcoming_failed(),
+        "the Failed fetch state must project into the owner's context"
+    );
     match model.test_tv_owner_mut().panel_content().list {
         ListSlot::Empty { loading, .. } => {
             assert!(!loading, "the failed fetch is no longer in flight");

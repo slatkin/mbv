@@ -266,6 +266,15 @@ impl TvContent {
         self.context.tv_content_mode == Some(mbv_queue::TvContentMode::Upcoming)
     }
 
+    /// Whether the shell projected the failed snapshot fetch into this
+    /// context. The shell's Failed→flag mapping is the tick test's contract;
+    /// the panel wording that reads the flag is
+    /// `flat_upcoming_placeholder_tests`'s.
+    #[must_use]
+    pub fn upcoming_failed(&self) -> bool {
+        self.context.upcoming_failed
+    }
+
     /// Whether the active mode's rows are all absent: Upcoming judges
     /// emptiness from the premiere snapshot (the level itself keeps no
     /// items), every other mode from the level items.

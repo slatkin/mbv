@@ -343,14 +343,14 @@ impl App {
     /// (user rule, 2026-10-11): the eager background fetch runs once when the
     /// TV tab loads, pill selection materializes the root level from it
     /// instead of refetching, and only the focused manual refresh replaces
-    /// it. A no-op when the snapshot already exists or the request is in
-    /// flight (`Failed` re-requests). A saved position restoring straight
-    /// into Upcoming skips only while no fetch state is recorded — that
-    /// restore's own fetch fills the snapshot through its `Loaded`
-    /// completion; a `Failed` state re-requests here because the restore's
-    /// fetch is suppressed by `activate_library_position`'s current==saved
-    /// shortcut (spec: retry by a later tab load). Without a Service client
-    /// this stays unrequested, so a later tab load retries.
+    /// it. A no-op when the snapshot already exists, the request is in
+    /// flight, or an Upcoming top level is still `loading`: a saved position
+    /// restoring straight into Upcoming installs that level synchronously and
+    /// fetches behind it, and its completion fills the snapshot. A `Failed`
+    /// state with no fetch under way re-requests — the current==saved
+    /// shortcut suppressed the restore's fetch on that tab load, so this
+    /// request is the spec's tab-load retry. Without a Service client this
+    /// stays unrequested, so a later tab load retries.
     pub(in crate::app) fn maybe_spawn_tv_upcoming_snapshot(&mut self, lib_idx: usize) {
         let Some(lib) = self.libs.get(lib_idx) else {
             return;
@@ -359,22 +359,22 @@ impl App {
             return;
         }
         let library_id = lib.library.id.clone();
-        let fetch_state = self.tv_upcoming_fetches.get(&library_id);
         if self.tv_upcoming_snapshots.contains_key(&library_id)
-            || TvUpcomingFetchState::blocks_request(fetch_state)
+            || TvUpcomingFetchState::blocks_request(self.tv_upcoming_fetches.get(&library_id))
         {
             return;
         }
-        let restoring_into_upcoming = lib.tv_content_mode.as_ref()
-            == Some(&mbv_queue::TvContentMode::Upcoming)
-            || lib
-                .nav_stack
-                .last()
-                .and_then(|level| level.tv_content_mode.as_ref())
-                == Some(&mbv_queue::TvContentMode::Upcoming);
-        // `Failed` falls through: the restore's own fetch is suppressed by
-        // the current==saved shortcut, so this request is the tab-load retry.
-        if restoring_into_upcoming && fetch_state.is_none() {
+        // A fetch is already under way for an Upcoming top level: a saved
+        // position restoring straight into Upcoming installs its `loading`
+        // level synchronously and fetches behind it, so a second eager
+        // request here would double the server's slowest query. With no
+        // fetch under way — the current==saved shortcut suppressed the
+        // restore's fetch — a `Failed` state still falls through: this
+        // request is the spec's tab-load retry.
+        if lib.nav_stack.last().is_some_and(|level| {
+            level.loading
+                && level.tv_content_mode.as_ref() == Some(&mbv_queue::TvContentMode::Upcoming)
+        }) {
             return;
         }
         let Some(client) = self.emby_snapshot() else {
