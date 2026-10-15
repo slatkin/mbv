@@ -37,13 +37,18 @@ impl App {
     fn cast_target_label(&self) -> Option<String> {
         self.cast_attachment
             .as_ref()
+            // A target marked disconnected (7.6) must not read as connected:
+            // the pill falls back to the local label until the reconnect
+            // lands, so it never contradicts the header's "Cast:
+            // disconnected".
+            .filter(|attachment| !attachment.disconnected)
             .map(|attachment| attachment.receiver_name.clone())
     }
 
     /// Whether the remote pill shows its connected state: a cast receiver is
-    /// attached, or the remote slot names an attached session or direct route.
+    /// attached and live, or the remote slot names an attached session or direct route.
     fn remote_connected(&self, remote_state: RemoteSlotState) -> bool {
-        self.cast_attachment.is_some()
+        self.cast_target_label().is_some()
             || matches!(
                 remote_state,
                 RemoteSlotState::AttachedSession | RemoteSlotState::DirectRemote
@@ -514,6 +519,26 @@ mod tests {
 
         assert_eq!(host, "Living Room");
         assert!(is_remote);
+    }
+
+    /// A cast target marked disconnected (7.6) must not read as connected:
+    /// the pill falls back to the local label until the reconnect lands, so
+    /// it never contradicts the header's "Cast: disconnected".
+    #[test]
+    fn a_disconnected_cast_target_stops_naming_the_status_bar_pill() {
+        let mut app = make_app_stub();
+        app.attach_cast("device-1".to_string(), "Living Room".to_string());
+        app.cast_attachment.as_mut().unwrap().mark_disconnected();
+
+        let spans = app.remote_status_spans(RemoteSlotState::LocalDaemon, "endpoint");
+
+        assert!(
+            !spans
+                .iter()
+                .any(|span| span.content.contains("Living Room")),
+            "the pill stops naming a disconnected receiver: {:?}",
+            spans.iter().map(|s| s.content.as_ref()).collect::<Vec<_>>()
+        );
     }
 
     /// queue-play-order spec, "The footer shows Shuffle": the shuffle

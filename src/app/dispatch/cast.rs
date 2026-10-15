@@ -185,9 +185,13 @@ impl App {
             };
             let job_tx = tx.clone();
             let sent = client.send(Box::new(move |transport: &mut dyn CastTransport| {
+                tracing::info!(name: "cast.dispatch.sent", target: "cast", items = media.len(), start_index = %start_index, "dispatching the queue to the receiver");
                 let outcome = transport
                     .load_queue(&media, start_index)
                     .map(|()| dispatched);
+                if let Err(error) = &outcome {
+                    tracing::warn!(name: "cast.dispatch.failed", target: "cast", error = %error, "cast queue dispatch failed");
+                }
                 let _ = job_tx.send(CastEvent::Dispatched {
                     receiver_id,
                     outcome,
@@ -341,13 +345,16 @@ impl App {
             CastEvent::ConnectFailed { receiver_id, error } => {
                 tracing::warn!(name: "cast.connect.failed", target: "cast", receiver = %receiver_id, error = %error, "cast receiver connection failed");
                 // Detach if the failure is for the currently-attached
-                // receiver (attach-on-selection sets state optimistically
-                // before the connect completes; reattach does not, so
-                // detach_cast is a no-op there).
+                // receiver and that attachment is still waiting for its
+                // connect (attach-on-selection attaches optimistically; a
+                // reattach or a loss-reconnect has no live client either).
+                // An attachment that already connected is live: a stale
+                // connect's failure (the loss-reconnect racing a manual
+                // re-attach) must not kill it.
                 if self
                     .cast_attachment
                     .as_ref()
-                    .is_some_and(|a| a.receiver_id == receiver_id)
+                    .is_some_and(|a| a.receiver_id == receiver_id && a.client.is_none())
                 {
                     self.detach_cast();
                 }
@@ -715,6 +722,27 @@ mod tests {
         assert!(app.is_cast_attached());
         assert!(app.connected_session_id.is_none());
         assert!(app.connected_session_state.is_none());
+    }
+
+    /// A connect failure for a receiver whose attachment already connected
+    /// is stale (a loss-reconnect racing a manual re-attach): it must not
+    /// kill the live attachment.
+    #[test]
+    fn a_stale_connect_failure_does_not_detach_a_connected_attachment() {
+        let mut app = make_app_stub();
+        app.attach_cast("device-1".to_string(), "Living Room".to_string());
+        let (job_tx, _calls) = crate::app::state::types::cast::spawn_fake_cast_worker(
+            crate::app::state::types::cast::FakeCastTransport::default(),
+        );
+        app.set_cast_client("device-1", job_tx);
+
+        app.handle_cast_event(CastEvent::ConnectFailed {
+            receiver_id: "device-1".to_string(),
+            error: CastError::receiver_not_found(),
+        });
+
+        let attachment = app.cast_attachment.as_ref().unwrap();
+        assert!(attachment.client.is_some(), "the live attachment survives");
     }
 
     #[test]

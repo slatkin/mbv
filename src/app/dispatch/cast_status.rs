@@ -110,9 +110,20 @@ impl App {
                 // submit a job to. `dispatched`/`status` and mbv's own queue
                 // (`local_view.queue`, untouched here) are left exactly as
                 // they were; only progress reporting and further polling
-                // stop.
+                // stop. A `rust_cast` receive blocks rather than times out,
+                // so a poll error is a broken connection, not a slow
+                // receiver -- recover the way the watchdog does: a fresh
+                // connect relaunches the receiver's app session, and a
+                // failed reconnect detaches (ConnectFailed), so the retry
+                // stays bounded.
                 tracing::warn!(name: "cast.status_poll.failed", target: "cast", error = %e, "cast status poll failed");
+                let receiver_id = attachment.receiver_id.clone();
                 attachment.mark_disconnected();
+                self.flash(
+                    "Cast connection lost; reconnecting".to_string(),
+                    ToastSeverity::Warning,
+                );
+                self.connect_cast_receiver(receiver_id);
             }
         }
     }
@@ -482,6 +493,13 @@ mod tests {
         Ok(tx)
     }
 
+    fn connect_failing_stub(
+        _id: &str,
+        _timeout: Duration,
+    ) -> Result<std::sync::mpsc::Sender<crate::app::state::types::cast::CastJob>, CastError> {
+        Err(CastError::receiver_not_found())
+    }
+
     /// The unresponsive-worker watchdog: a submitted job with no worker
     /// event within the answer bound is a wedged worker (`rust_cast` has no
     /// socket timeout). The target is presented disconnected and the
@@ -629,6 +647,8 @@ mod tests {
 
     #[test]
     fn a_dropped_connection_presents_disconnected_stops_polling_and_leaves_the_queue_intact() {
+        let _guard = crate::app::CAST_CONNECT_TEST_LOCK.lock().unwrap();
+        *crate::app::CAST_CONNECT_OVERRIDE.lock().unwrap() = Some(connect_failing_stub);
         let mut app = make_app_stub();
         let items = crate::app::tests::make_items(2);
         app.local_view.adopt_items(items.clone(), 0);
@@ -658,5 +678,49 @@ mod tests {
                 .map(|item| mbv_queue::QueueItemContentId::Emby(item.id.clone()))
                 .collect::<Vec<_>>()
         );
+
+        // The loss reconnects; a failed reconnect detaches instead of
+        // looping: the recovery stays bounded.
+        let event = app
+            .channels
+            .cast_rx
+            .recv_timeout(Duration::from_secs(2))
+            .unwrap();
+        app.handle_cast_event(event);
+        *crate::app::CAST_CONNECT_OVERRIDE.lock().unwrap() = None;
+        assert!(
+            !app.is_cast_attached(),
+            "a failed reconnect detaches instead of looping"
+        );
+    }
+
+    /// The loss recovery: the reconnect a dropped connection spawns
+    /// re-attaches and restores a usable transport -- the same recovery the
+    /// unresponsive-worker watchdog gets.
+    #[test]
+    fn a_dropped_connection_reconnects_and_recovers_the_target() {
+        let _guard = crate::app::CAST_CONNECT_TEST_LOCK.lock().unwrap();
+        *crate::app::CAST_CONNECT_OVERRIDE.lock().unwrap() = Some(connect_ok_stub);
+        let mut app = make_app_stub();
+        app.attach_cast("device-1".to_string(), "Living Room".to_string());
+        let (job_tx, _calls) = crate::app::state::types::cast::spawn_fake_cast_worker(
+            crate::app::state::types::cast::FakeCastTransport::default(),
+        );
+        app.set_cast_client("device-1", job_tx);
+
+        app.apply_cast_status("device-1", Err(CastError::not_connected()));
+        assert!(app.cast_attachment.as_ref().unwrap().disconnected);
+
+        let event = app
+            .channels
+            .cast_rx
+            .recv_timeout(Duration::from_secs(2))
+            .unwrap();
+        app.handle_cast_event(event);
+        *crate::app::CAST_CONNECT_OVERRIDE.lock().unwrap() = None;
+
+        let attachment = app.cast_attachment.as_ref().unwrap();
+        assert!(!attachment.disconnected);
+        assert!(attachment.client.is_some(), "the transport is usable again");
     }
 }
