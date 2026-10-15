@@ -13,29 +13,11 @@ impl PlaybackRun {
         failure: &MpvFailure,
         progress: &mut ProgressGuard,
     ) -> bool {
-        if matches!(failure, MpvFailure::ProcessExited) {
-            // The child exited with no quit request: end the run like an
-            // audio-output failure, but report the last observed position so
-            // the stop lands where playback stopped (design D7, S8).
-            tracing::error!(name: "player.mpv.process_exited", target: "player", "mpv process exited without a quit request");
-            return self.stop_run_with_error(
-                progress,
-                self.last_valid_pos,
-                "mpv process exited unexpectedly".to_owned(),
-            );
+        if self.stop_for_process_exit(failure, progress) {
+            return true;
         }
-        if matches!(failure, MpvFailure::Other(_)) && !self.playback_began {
-            // A generic error before any playback began — a missing file, an
-            // HTTP 404 from the stream endpoint, a decode error — is a start
-            // failure: mpv has no next entry to skip to in the standalone
-            // case, so the run must end with the error instead of staying
-            // active with no playback (#941).
-            tracing::error!(name: "player.event.start_failed", target: "player", error = %failure, "file failed to start before playback began");
-            return self.stop_run_with_error(
-                progress,
-                self.last_valid_pos,
-                format!("failed to start media: {failure}"),
-            );
+        if self.stop_for_start_failure(failure, progress) {
+            return true;
         }
         if !is_clocked_audio_error(failure, self.config.audio_device.is_some()) {
             tracing::warn!(name: "player.event.failed", target: "player", error = %failure, "mpv event failed");
@@ -48,6 +30,48 @@ impl PlaybackRun {
             0,
             format!("audio output failed to start (device: {device})"),
         )
+    }
+
+    /// The child exited with no quit request: end the run like an
+    /// audio-output failure, but report the last observed position so
+    /// the stop lands where playback stopped (design D7, S8).
+    fn stop_for_process_exit(
+        &mut self,
+        failure: &MpvFailure,
+        progress: &mut ProgressGuard,
+    ) -> bool {
+        if !matches!(failure, MpvFailure::ProcessExited) {
+            return false;
+        }
+        tracing::error!(name: "player.mpv.process_exited", target: "player", "mpv process exited without a quit request");
+        self.stop_run_with_error(
+            progress,
+            self.last_valid_pos,
+            "mpv process exited unexpectedly".to_owned(),
+        );
+        true
+    }
+
+    /// A generic error before any playback began — a missing file, an
+    /// HTTP 404 from the stream endpoint, a decode error — is a start
+    /// failure: mpv has no next entry to skip to in the standalone
+    /// case, so the run must end with the error instead of staying
+    /// active with no playback (#941).
+    fn stop_for_start_failure(
+        &mut self,
+        failure: &MpvFailure,
+        progress: &mut ProgressGuard,
+    ) -> bool {
+        if !matches!(failure, MpvFailure::Other(_)) || self.playback_began {
+            return false;
+        }
+        tracing::error!(name: "player.event.start_failed", target: "player", error = %failure, "file failed to start before playback began");
+        self.stop_run_with_error(
+            progress,
+            self.last_valid_pos,
+            format!("failed to start media: {failure}"),
+        );
+        true
     }
 
     /// The teardown shared by an audio-output failure and an unexpected mpv
