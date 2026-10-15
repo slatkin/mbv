@@ -4,7 +4,7 @@
 
 Cast sent the whole played queue to the receiver as one `QUEUE_LOAD` message. With about 300–400 bytes for each Emby URL, a queue of 271 items made a frame of about 100 KB. The receiver dropped the connection, and every later poll failed (#944). The interim fix (`7389aeb54`) loads only the selected item. Now next, previous, and auto-advance do nothing on Cast.
 
-The original Cast design also broke the queue authority rule: the receiver owned its own copy of the queue, and mbv lost track of it after dispatch. The Cast attachment lives in the TUI. Because of this, the Owner process cannot see or drive Cast playback, and Cast stops when the TUI closes.
+The original Cast design also broke the queue authority rule: the receiver owned its own copy of the queue, and mbv lost track of it after dispatch. The Cast attachment lives in the TUI. Because of this, the Owner process cannot see or drive Cast playback. When the TUI closes, the receiver keeps playing its current item, but control, progress reporting, and advance stop.
 
 ## What Changes
 
@@ -32,10 +32,10 @@ The original Cast design also broke the queue authority rule: the receiver owned
 
 ## Impact
 
-- `crates/mbv-cast`: remove the jump code; pass `idleReason` through to `CastStatus`; map `LOADING`; join a running receiver app on connect; the transport trait and the worker become public, so that the daemon can host them.
+- `crates/mbv-cast`: remove the jump code; pass `idleReason` through to `CastStatus`; convert the `rust_cast` parse error for `playerState: LOADING` into a buffering status (today it fails the whole status call); join a running receiver app on connect; the transport trait and the worker become public, so that the daemon can host them.
 - `crates/mbv-ctrl`: new capability, a command that selects the output, and an event that carries output state.
 - `crates/mbv-daemon`, `crates/mbv-player`: output state in the Owner; the Cast branch at the three submission paths and at slot jumps; Cast source resolution (Emby device profile, ABS episode session, Feed URL); Owner-owned progress reporting for Cast; a poll and keep-alive tick; Local-only hosting through `DaemonRuntimeHooks`.
 - `src/app/dispatch/cast.rs`, `cast_status.rs`, `state/types/cast.rs`, `state/playback_target/cast.rs`: most of this code is deleted. The TUI keeps discovery and the picker, and sends the output selection.
 - Tests: `src/app/tests/queue/cast_dispatch.rs` is deleted. New tests on the Owner use a fake Cast transport.
-- Docs: `CONTEXT.md` (new *Playback output*; *Cast attachment* and *Cast dispatch* are rewritten or retired), AGENTS.md "Playback and queue authority".
+- Docs: `CONTEXT.md` (new *Playback output*; in the *Cast* section, *Cast attachment* is rewritten and the *Dispatch:* term is retired), AGENTS.md "Playback and queue authority".
 - Follow-ups: #945 (Emby remote as the second remote output) and #946 (`mbvd` local-only enforcement).

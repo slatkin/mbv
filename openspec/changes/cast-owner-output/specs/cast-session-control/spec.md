@@ -155,7 +155,8 @@ Connecting to a new playback target SHALL sever the currently connected one. A c
 
 - **WHEN** the user connects to an Emby session (Sessions panel or auto-reconnect)
   while a cast target is the active output
-- **THEN** the owner selects local playback as its output, which stops the receiver
+- **THEN** the owner stops the receiver and selects local playback as its output
+- **AND** local playback does not start
 - **AND** the newly connected target becomes the one active target
 
 #### Scenario: A different cast target is selected while one is attached
