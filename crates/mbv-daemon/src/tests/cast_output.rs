@@ -55,9 +55,13 @@ fn connect_output_client(
 }
 
 fn cast_selection() -> OutputSelection {
+    cast_selection_for("rcv-1", "Living room")
+}
+
+fn cast_selection_for(receiver_id: &str, name: &str) -> OutputSelection {
     OutputSelection::Cast {
-        receiver_id: "rcv-1".to_string(),
-        name: "Living room".to_string(),
+        receiver_id: receiver_id.to_string(),
+        name: name.to_string(),
         host: "192.0.2.10".to_string(),
         port: 8009,
     }
@@ -268,6 +272,105 @@ fn a_failed_cast_connect_keeps_the_local_output() {
         panic!("a failed connect reports to the selecting Client");
     };
     assert!(reason.contains("receiver unreachable"), "reason: {reason}");
+    assert!(matches!(t.event_loop.owner.output, PlaybackOutput::Local));
+    assert_eq!(
+        *t.event_loop.shared_queue.playback_output.lock().unwrap(),
+        OutputState::Local
+    );
+}
+
+/// Contract: correction P2 — local playback that starts after the select but
+/// before the connect outcome must not end in two live outputs: the late
+/// success is discarded and reported, and the output stays Local.
+#[test]
+fn a_cast_success_after_local_playback_starts_keeps_the_local_output() {
+    let mut t = test_loop_with_role(DaemonRole::Local);
+    let (connector, _calls) = fake_connector();
+    t.event_loop.cast_connector = Some(connector);
+    let (client_id, reply_tx, rx) = connect_output_client(&t.event_loop.ctrl_clients, true);
+
+    select_output(&mut t, client_id, &reply_tx, cast_selection());
+    t.event_loop.player.status.lock().unwrap().active = true;
+    pump_cast_event(&mut t);
+
+    let CtrlEvent::CommandRejected(reason) = recv_event(&rx) else {
+        panic!("a late success against active playback is reported");
+    };
+    assert!(
+        reason.contains("started while connecting"),
+        "reason: {reason}"
+    );
+    assert!(matches!(t.event_loop.owner.output, PlaybackOutput::Local));
+    assert_eq!(
+        *t.event_loop.shared_queue.playback_output.lock().unwrap(),
+        OutputState::Local
+    );
+}
+
+/// Contract: correction P2 — a second Cast select supersedes the in-flight
+/// connect: the first selector is told (it never hangs), and the last
+/// selection wins.
+#[test]
+fn a_second_cast_select_supersedes_the_pending_connect() {
+    let mut t = test_loop_with_role(DaemonRole::Local);
+    let (connector, _calls) = fake_connector();
+    t.event_loop.cast_connector = Some(connector);
+    let (first_id, first_tx, first_rx) = connect_output_client(&t.event_loop.ctrl_clients, true);
+    let (second_id, second_tx, _second_rx) =
+        connect_output_client(&t.event_loop.ctrl_clients, true);
+
+    select_output(
+        &mut t,
+        first_id,
+        &first_tx,
+        cast_selection_for("rcv-1", "Living room"),
+    );
+    select_output(
+        &mut t,
+        second_id,
+        &second_tx,
+        cast_selection_for("rcv-2", "Bedroom"),
+    );
+    // Both connects report; arrival order is thread timing, and each outcome
+    // applies by receiver id, so both are pumped before asserting.
+    pump_cast_event(&mut t);
+    pump_cast_event(&mut t);
+
+    let CtrlEvent::CommandRejected(reason) = recv_event(&first_rx) else {
+        panic!("the displaced selector is told");
+    };
+    assert!(reason.contains("superseded"), "reason: {reason}");
+    let PlaybackOutput::Cast(_) = &t.event_loop.owner.output else {
+        panic!("the last selection wins");
+    };
+    assert_eq!(
+        crate::cast::output_state(&t.event_loop.owner.output),
+        OutputState::Cast {
+            receiver_id: "rcv-2".to_string(),
+            name: "Bedroom".to_string(),
+            connection: CastConnection::Connected,
+        }
+    );
+}
+
+/// Contract: correction P2 — selecting Local while a Cast connect is in
+/// flight cancels it: the selector is told, the late success is discarded,
+/// and the output stays Local.
+#[test]
+fn a_local_select_cancels_a_pending_cast_connect() {
+    let mut t = test_loop_with_role(DaemonRole::Local);
+    let (connector, _calls) = fake_connector();
+    t.event_loop.cast_connector = Some(connector);
+    let (client_id, reply_tx, rx) = connect_output_client(&t.event_loop.ctrl_clients, true);
+
+    select_output(&mut t, client_id, &reply_tx, cast_selection());
+    select_output(&mut t, client_id, &reply_tx, OutputSelection::Local);
+    pump_cast_event(&mut t);
+
+    let CtrlEvent::CommandRejected(reason) = recv_event(&rx) else {
+        panic!("the cancelled selector is told");
+    };
+    assert!(reason.contains("kept local playback"), "reason: {reason}");
     assert!(matches!(t.event_loop.owner.output, PlaybackOutput::Local));
     assert_eq!(
         *t.event_loop.shared_queue.playback_output.lock().unwrap(),

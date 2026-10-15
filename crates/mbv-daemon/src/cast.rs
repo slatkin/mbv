@@ -149,6 +149,18 @@ pub(super) fn handle_select_playback_output(
 ) {
     match selection {
         OutputSelection::Local => {
+            // A pending Cast connect loses to the newer Local selection: the
+            // selector is told, and the late outcome matches nothing and is
+            // discarded when it arrives.
+            if let Some(pending) = daemon.owner.pending_cast_connect.take() {
+                send_to(
+                    &pending.reply_tx,
+                    &CtrlEvent::CommandRejected(
+                        "a newer selection kept local playback".to_string(),
+                    ),
+                );
+                return;
+            }
             // Selecting Local while a receiver is the output hands the active
             // slot back (design D10); the hand-off sequence is task 7.1.
             if matches!(daemon.owner.output, PlaybackOutput::Cast(_)) {
@@ -209,6 +221,17 @@ pub(super) fn handle_select_playback_output(
                 port: receiver.port,
                 reply: outcome_tx,
             });
+            // A connect already in flight loses to this newer selection: its
+            // selector is told now, so no Client hangs, and its late outcome
+            // matches nothing and is discarded when it arrives.
+            if let Some(displaced) = daemon.owner.pending_cast_connect.take() {
+                send_to(
+                    &displaced.reply_tx,
+                    &CtrlEvent::CommandRejected(
+                        "superseded by a newer receiver selection".to_string(),
+                    ),
+                );
+            }
             daemon.owner.pending_cast_connect = Some(PendingCastConnect {
                 receiver,
                 reply_tx: reply_tx.clone(),
@@ -254,6 +277,21 @@ pub(super) fn handle_cast_event(daemon: &mut DaemonLoop, event: CastOwnerEvent) 
     };
     match outcome {
         CastConnectOutcome::Connected(worker) => {
+            // Local playback may have started after the select (the
+            // select-time check only guards the selection moment). Swapping
+            // now would leave two live outputs, so the connect is discarded
+            // and reported instead.
+            if daemon.player.status.lock().unwrap().active {
+                drop(worker);
+                send_to(
+                    &pending.reply_tx,
+                    &CtrlEvent::CommandRejected(
+                        "local playback started while connecting; stop playback before moving it to a receiver"
+                            .to_string(),
+                    ),
+                );
+                return;
+            }
             let output = CastOutput {
                 worker,
                 receiver: pending.receiver,
