@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+use crate::output::OutputSelection;
 use crate::owner_action::OwnerAction;
 use crate::player::PlayerCommand;
 use crate::{
@@ -137,6 +138,11 @@ pub enum CtrlCmd {
     /// `play-order` capability; additive — no protocol-version bump. The
     /// client never sends a slot pick; the owner picks.
     SetPlayOrder(PlayOrderMode),
+    /// Select the Owner's playback output (cast-owner-output design D3).
+    /// Requires the `playback-output` capability; additive — no
+    /// protocol-version bump. An output the Owner cannot host is rejected
+    /// with `CtrlEvent::CommandRejected`.
+    SelectPlaybackOutput(OutputSelection),
 }
 
 /// Reply a gated command's `OwnerGate` failure sends. Carried by
@@ -198,7 +204,8 @@ impl CtrlCmd {
             | CtrlCmd::UnifiedQueueClearOp { .. }
             | CtrlCmd::UnifiedQueueRefresh { .. }
             | CtrlCmd::UnifiedQueueApplyProgress { .. }
-            | CtrlCmd::SetPlayOrder(_) => OwnerGate::Any,
+            | CtrlCmd::SetPlayOrder(_)
+            | CtrlCmd::SelectPlaybackOutput(_) => OwnerGate::Any,
         }
     }
 
@@ -231,7 +238,9 @@ impl CtrlCmd {
             | CtrlCmd::UnifiedAdoptQueue { .. }
             // The order is not saved across an owner restart (design
             // non-goal), so setting it never triggers queue persistence.
-            | CtrlCmd::SetPlayOrder(_) => false,
+            | CtrlCmd::SetPlayOrder(_)
+            // The output is not part of the persisted queue (design D3).
+            | CtrlCmd::SelectPlaybackOutput(_) => false,
         }
     }
 

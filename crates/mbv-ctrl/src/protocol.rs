@@ -85,6 +85,11 @@ pub const SWAP_TOKEN_ENV: &str = "MBV_SWAP_TOKEN";
 /// Connection may run one Owner action (`CtrlCmd::RunOwnerAction`). Additive —
 /// no protocol-version bump.
 pub const CTRL_CAP_OWNER_ACTION: &str = "owner-action";
+/// Peer supports the owner playback-output surface:
+/// `CtrlCmd::SelectPlaybackOutput` and `CtrlEvent::PlaybackOutput`
+/// (cast-owner-output design D3). Additive — no protocol-version bump. The
+/// Owner advertises it only when it can host a Cast output.
+pub const CTRL_CAP_PLAYBACK_OUTPUT: &str = "playback-output";
 /// Peer supports `CtrlCmd::SetPlayOrder` for the Bound queue playback order.
 /// Additive — no protocol-version bump.
 pub const CTRL_CAP_PLAY_ORDER: &str = "play-order";

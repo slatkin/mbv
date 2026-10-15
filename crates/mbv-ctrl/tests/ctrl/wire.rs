@@ -283,3 +283,63 @@ fn player_status_without_play_order_field_decodes_as_sequential() {
 fn owner_persists_only_after_queue_edits(#[case] cmd: CtrlCmd, #[case] persists: bool) {
     assert_eq!(cmd.mutates_owner_queue(), persists);
 }
+
+// cast-owner-output design D3: the playback-output command and event
+// round-trip through the ctrl JSON framing under their pinned top-level tags.
+#[test]
+fn select_playback_output_round_trips_through_json() {
+    let command = CtrlCmd::SelectPlaybackOutput(OutputSelection::Cast {
+        receiver_id: "receiver-1".into(),
+        name: "Living Room".into(),
+        host: "192.168.1.20".into(),
+        port: 8009,
+    });
+
+    let json = serde_json::to_string(&command).unwrap();
+    assert!(
+        json.starts_with("{\"SelectPlaybackOutput\":"),
+        "tag changed: {json}"
+    );
+    assert!(matches!(
+        serde_json::from_str::<CtrlCmd>(&json).unwrap(),
+        CtrlCmd::SelectPlaybackOutput(OutputSelection::Cast { receiver_id, name, host, port })
+            if receiver_id == "receiver-1"
+                && name == "Living Room"
+                && host == "192.168.1.20"
+                && port == 8009
+    ));
+
+    let local: CtrlCmd = serde_json::from_str(r#"{"SelectPlaybackOutput":"Local"}"#).unwrap();
+    assert!(matches!(
+        local,
+        CtrlCmd::SelectPlaybackOutput(OutputSelection::Local)
+    ));
+}
+
+#[test]
+fn playback_output_event_round_trips_through_json() {
+    let event = CtrlEvent::PlaybackOutput(OutputState::Cast {
+        receiver_id: "receiver-1".into(),
+        name: "Living Room".into(),
+        connection: CastConnection::Disconnected,
+    });
+
+    let json = serde_json::to_string(&event).unwrap();
+    assert!(
+        json.starts_with("{\"PlaybackOutput\":"),
+        "tag changed: {json}"
+    );
+    assert!(matches!(
+        serde_json::from_str::<CtrlEvent>(&json).unwrap(),
+        CtrlEvent::PlaybackOutput(OutputState::Cast { receiver_id, name, connection })
+            if receiver_id == "receiver-1"
+                && name == "Living Room"
+                && connection == CastConnection::Disconnected
+    ));
+
+    let local: CtrlEvent = serde_json::from_str(r#"{"PlaybackOutput":"Local"}"#).unwrap();
+    assert!(matches!(
+        local,
+        CtrlEvent::PlaybackOutput(OutputState::Local)
+    ));
+}
