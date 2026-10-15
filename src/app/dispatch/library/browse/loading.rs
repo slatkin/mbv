@@ -79,6 +79,82 @@ pub(in crate::app) fn retain_grouped_music_level_items(
     );
 }
 
+/// One restored level's rows: the Latest and Upcoming TV modes fetch their
+/// own endpoints; every other mode runs the ranged sorted-items fetch for
+/// the saved letter filter, refetching the full count when the first page
+/// shows there is more. A failed Upcoming fetch records its parent in
+/// `failed_upcoming` so the thread's error report also clears the waiting
+/// level instead of stranding the later-tab-load retry.
+fn fetch_restored_level_rows(
+    client: &mbv_emby::EmbyClient,
+    filter_kind: mbv_ui_model::sort_filter::LetterFilterKind,
+    saved_level: &mbv_queue::LibraryPositionLevel,
+    upcoming: &mut Option<(String, Vec<UpcomingPremiere>)>,
+    failed_upcoming: &mut Option<String>,
+) -> Result<(Vec<EmbyItem>, usize, usize), mbv_ui_model::UiModelError> {
+    let tv_mode = restored_tv_content_mode(
+        filter_kind == mbv_ui_model::sort_filter::LetterFilterKind::Tv,
+        saved_level.library_total,
+        saved_level.tv_content_mode.as_ref(),
+    );
+    if matches!(tv_mode, Some(mbv_queue::TvContentMode::Latest)) {
+        let items = client
+            .get_latest_episodes(&saved_level.parent_id, 30)
+            .map_err(mbv_ui_model::UiModelError::operation_source)?;
+        let total_count = items.len();
+        return Ok((items, total_count, total_count));
+    }
+    if matches!(tv_mode, Some(mbv_queue::TvContentMode::Upcoming)) {
+        return restore_upcoming_level(client, saved_level, upcoming).inspect_err(|_| {
+            *failed_upcoming = Some(saved_level.parent_id.clone());
+        });
+    }
+    let letter_filter = match tv_mode {
+        Some(mbv_queue::TvContentMode::Range(index)) => {
+            mbv_ui_model::sort_filter::LetterFilter::for_index_for_kind(index, filter_kind)
+        }
+        _ => saved_level.letter_filter_index.and_then(|index| {
+            mbv_ui_model::sort_filter::LetterFilter::for_index_for_kind(index, filter_kind)
+        }),
+    };
+    let (name_ge, name_lt) = letter_filter
+        .as_ref()
+        .map_or((None, None), |f| (f.name_ge, f.name_lt));
+    let (items, total_count) = client
+        .get_items_sorted_ranged(&mbv_emby::SortedItemsParams {
+            parent_id: &saved_level.parent_id,
+            item_types: saved_level.item_types.as_deref(),
+            unplayed_only: saved_level.unplayed_only,
+            start_index: 0,
+            limit: PAGE_SIZE,
+            sort_by: &saved_level.sort_by,
+            sort_order: &saved_level.sort_order,
+            name_ge,
+            name_lt,
+        })
+        .map_err(mbv_ui_model::UiModelError::operation_source)?;
+    let fetched_rows = items.len();
+    if total_count > fetched_rows {
+        let (items, total_count) = client
+            .get_items_sorted_ranged(&mbv_emby::SortedItemsParams {
+                parent_id: &saved_level.parent_id,
+                item_types: saved_level.item_types.as_deref(),
+                unplayed_only: saved_level.unplayed_only,
+                start_index: 0,
+                limit: total_count,
+                sort_by: &saved_level.sort_by,
+                sort_order: &saved_level.sort_order,
+                name_ge,
+                name_lt,
+            })
+            .map_err(mbv_ui_model::UiModelError::operation_source)?;
+        let fetched_rows = items.len();
+        Ok((items, total_count, fetched_rows))
+    } else {
+        Ok((items, total_count, fetched_rows))
+    }
+}
+
 impl App {
     /// The default top-level browse fields for library `idx`: server item
     /// type filter, unplayed-only flag, sort field and order. One source for
@@ -217,74 +293,13 @@ impl App {
                 visible_rows,
                 filter_kind,
                 |saved_level| {
-                    let tv_mode = restored_tv_content_mode(
-                        filter_kind == mbv_ui_model::sort_filter::LetterFilterKind::Tv,
-                        saved_level.library_total,
-                        saved_level.tv_content_mode.as_ref(),
-                    );
-                    if matches!(tv_mode, Some(mbv_queue::TvContentMode::Latest)) {
-                        let items = client
-                            .get_latest_episodes(&saved_level.parent_id, 30)
-                            .map_err(mbv_ui_model::UiModelError::operation_source)?;
-                        let total_count = items.len();
-                        return Ok((items, total_count, total_count));
-                    }
-                    if matches!(tv_mode, Some(mbv_queue::TvContentMode::Upcoming)) {
-                        return restore_upcoming_level(&client, saved_level, &mut upcoming)
-                            .inspect_err(|_| {
-                                failed_upcoming = Some(saved_level.parent_id.clone());
-                            });
-                    }
-                    let letter_filter = match tv_mode {
-                        Some(mbv_queue::TvContentMode::Range(index)) => {
-                            mbv_ui_model::sort_filter::LetterFilter::for_index_for_kind(
-                                index,
-                                filter_kind,
-                            )
-                        }
-                        _ => saved_level.letter_filter_index.and_then(|index| {
-                            mbv_ui_model::sort_filter::LetterFilter::for_index_for_kind(
-                                index,
-                                filter_kind,
-                            )
-                        }),
-                    };
-                    let (name_ge, name_lt) = letter_filter
-                        .as_ref()
-                        .map_or((None, None), |f| (f.name_ge, f.name_lt));
-                    let (items, total_count) = client
-                        .get_items_sorted_ranged(&mbv_emby::SortedItemsParams {
-                            parent_id: &saved_level.parent_id,
-                            item_types: saved_level.item_types.as_deref(),
-                            unplayed_only: saved_level.unplayed_only,
-                            start_index: 0,
-                            limit: PAGE_SIZE,
-                            sort_by: &saved_level.sort_by,
-                            sort_order: &saved_level.sort_order,
-                            name_ge,
-                            name_lt,
-                        })
-                        .map_err(mbv_ui_model::UiModelError::operation_source)?;
-                    let fetched_rows = items.len();
-                    if total_count > fetched_rows {
-                        let (items, total_count) = client
-                            .get_items_sorted_ranged(&mbv_emby::SortedItemsParams {
-                                parent_id: &saved_level.parent_id,
-                                item_types: saved_level.item_types.as_deref(),
-                                unplayed_only: saved_level.unplayed_only,
-                                start_index: 0,
-                                limit: total_count,
-                                sort_by: &saved_level.sort_by,
-                                sort_order: &saved_level.sort_order,
-                                name_ge,
-                                name_lt,
-                            })
-                            .map_err(mbv_ui_model::UiModelError::operation_source)?;
-                        let fetched_rows = items.len();
-                        Ok((items, total_count, fetched_rows))
-                    } else {
-                        Ok((items, total_count, fetched_rows))
-                    }
+                    fetch_restored_level_rows(
+                        &client,
+                        filter_kind,
+                        saved_level,
+                        &mut upcoming,
+                        &mut failed_upcoming,
+                    )
                 },
             );
             match restored {
