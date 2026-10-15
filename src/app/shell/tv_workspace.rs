@@ -14,6 +14,7 @@
 
 use super::TabSelection;
 use super::{Model, PendingEpisodeSelection};
+use crate::app::state::app_struct::TvUpcomingFetchState;
 #[cfg(test)]
 use mbv_components::library_panel::LibraryPanel;
 use mbv_components::tv_content::TvContent;
@@ -487,6 +488,10 @@ impl Model {
                 .get(&library_id)
                 .cloned()
                 .unwrap_or_default();
+            context.upcoming_failed = matches!(
+                self.app.tv_upcoming_fetches.get(&library_id),
+                Some(TvUpcomingFetchState::Failed)
+            );
         }
         let latest_source =
             crate::app::state::playback::DestinationLatestSource::Emby(library_id.clone());

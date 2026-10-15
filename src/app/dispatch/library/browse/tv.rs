@@ -1,3 +1,4 @@
+use crate::app::state::app_struct::TvUpcomingFetchState;
 use crate::app::{App, BrowseEvent, BrowseLevel, LibEvent, ModelContentEvent};
 use mbv_emby::EmbyClient;
 use mbv_emby_model::{EmbyItem, UpcomingPremiere};
@@ -43,6 +44,33 @@ impl TvUpcomingSource for EmbyClient {
     ) -> Result<Vec<UpcomingPremiere>, mbv_emby::EmbyError> {
         EmbyClient::get_upcoming(self, parent_id, limit)
     }
+}
+
+/// Spacing between the Upcoming fetch's retry attempts. The Emby Upcoming
+/// query blocks for the whole 30 s agent budget while the server's metadata
+/// refresh (TheTVDB/fanart downloads) runs — the query itself needs ~1 s
+/// once that work settles (2026-10-15 server log: 30063 ms against a
+/// normally-1.24 s endpoint). Delays are injected so tests pay no sleeps.
+const UPCOMING_RETRY_DELAYS: [std::time::Duration; 2] = [
+    std::time::Duration::from_secs(30),
+    std::time::Duration::from_secs(60),
+];
+
+/// `get_upcoming` with spaced retries: one attempt per `delays` entry (each
+/// failed attempt sleeps its delay before the next), then a final attempt,
+/// returning only the final error. An empty slice is a single attempt.
+fn fetch_upcoming_with_retries<S: TvUpcomingSource>(
+    source: &S,
+    parent_id: &str,
+    delays: &[std::time::Duration],
+) -> Result<Vec<UpcomingPremiere>, mbv_emby::EmbyError> {
+    for delay in delays {
+        if let Ok(items) = source.get_upcoming(parent_id, 30) {
+            return Ok(items);
+        }
+        std::thread::sleep(*delay);
+    }
+    source.get_upcoming(parent_id, 30)
 }
 
 /// The canonical fetch fields each TV content mode's root level must carry
@@ -109,7 +137,7 @@ fn build_tv_upcoming_level<S: TvUpcomingSource>(
     parent_id: String,
     title: String,
 ) -> Result<(BrowseLevel, Vec<UpcomingPremiere>), mbv_emby::EmbyError> {
-    let premieres = source.get_upcoming(&parent_id, 30)?;
+    let premieres = fetch_upcoming_with_retries(source, &parent_id, &UPCOMING_RETRY_DELAYS)?;
     let total_count = premieres.len();
     let (item_types, sort_by, sort_order) =
         tv_mode_fetch_fields(&mbv_queue::TvContentMode::Upcoming);
@@ -208,9 +236,17 @@ impl App {
     /// Build one TV mode root level off-thread and send it as `Loaded`. A build
     /// that also fetched the Upcoming snapshot returns it: it lands before the
     /// level so the projection that follows the level's `Loaded` already has
-    /// its rows.
-    fn spawn_tv_content<F>(&self, lib_idx: usize, parent_id: String, title: String, build: F)
-    where
+    /// its rows. An Upcoming build's failure is a snapshot failure (it marks
+    /// the fetch state and unsets the waiting level); a Latest build's
+    /// failure stays a plain error event.
+    fn spawn_tv_content<F>(
+        &self,
+        lib_idx: usize,
+        parent_id: String,
+        title: String,
+        upcoming: bool,
+        build: F,
+    ) where
         F: FnOnce(
                 &EmbyClient,
                 String,
@@ -241,7 +277,15 @@ impl App {
                 }));
             }
             Err(e) => {
-                let _ = tx.send(LibEvent::Error(e.to_string()));
+                if upcoming {
+                    let _ = tx.send(LibEvent::ModelContent(
+                        ModelContentEvent::TvUpcomingSnapshotFailed {
+                            library_id: parent_id,
+                        },
+                    ));
+                } else {
+                    let _ = tx.send(LibEvent::Error(e.to_string()));
+                }
             }
         });
     }
@@ -259,9 +303,15 @@ impl App {
         {
             align_level_to_tv_mode(level, &mbv_queue::TvContentMode::Latest);
         }
-        self.spawn_tv_content(lib_idx, parent_id, title, |client, parent_id, title| {
-            build_tv_latest_level(client, parent_id, title).map(|level| (level, None))
-        });
+        self.spawn_tv_content(
+            lib_idx,
+            parent_id,
+            title,
+            false,
+            |client, parent_id, title| {
+                build_tv_latest_level(client, parent_id, title).map(|level| (level, None))
+            },
+        );
     }
 
     pub(in crate::app) fn spawn_destination_latest_snapshot(&self, lib_idx: usize) {
@@ -301,11 +351,11 @@ impl App {
     /// (user rule, 2026-10-11): the eager background fetch runs once when the
     /// TV tab loads, pill selection materializes the root level from it
     /// instead of refetching, and only the focused manual refresh replaces
-    /// it. A no-op when the snapshot already exists, the request is already
-    /// in flight, or a saved position is restoring straight into Upcoming —
-    /// that restore's own fetch fills the snapshot through its `Loaded`
-    /// completion. Without a Service client this stays unrequested, so a
-    /// later tab load retries.
+    /// it. A no-op when the snapshot already exists or the request is in
+    /// flight (`Failed` re-requests), and a saved position restoring straight
+    /// into Upcoming skips — that restore's own fetch fills the snapshot
+    /// through its `Loaded` completion. Without a Service client this stays
+    /// unrequested, so a later tab load retries.
     pub(in crate::app) fn maybe_spawn_tv_upcoming_snapshot(&mut self, lib_idx: usize) {
         let Some(lib) = self.libs.get(lib_idx) else {
             return;
@@ -315,7 +365,7 @@ impl App {
         }
         let library_id = lib.library.id.clone();
         if self.tv_upcoming_snapshots.contains_key(&library_id)
-            || self.tv_upcoming_requested.contains(&library_id)
+            || TvUpcomingFetchState::blocks_request(self.tv_upcoming_fetches.get(&library_id))
         {
             return;
         }
@@ -332,18 +382,21 @@ impl App {
         let Some(client) = self.emby_snapshot() else {
             return;
         };
-        self.tv_upcoming_requested.insert(library_id.clone());
+        self.tv_upcoming_fetches
+            .insert(library_id.clone(), TvUpcomingFetchState::InFlight);
         let tx = self.channels.lib_tx.clone();
-        std::thread::spawn(move || match client.get_upcoming(&library_id, 30) {
-            Ok(items) => {
-                let _ = tx.send(LibEvent::ModelContent(
-                    ModelContentEvent::TvUpcomingSnapshotFetched { library_id, items },
-                ));
-            }
-            Err(_) => {
-                let _ = tx.send(LibEvent::ModelContent(
-                    ModelContentEvent::TvUpcomingSnapshotFailed { library_id },
-                ));
+        std::thread::spawn(move || {
+            match fetch_upcoming_with_retries(&client, &library_id, &UPCOMING_RETRY_DELAYS) {
+                Ok(items) => {
+                    let _ = tx.send(LibEvent::ModelContent(
+                        ModelContentEvent::TvUpcomingSnapshotFetched { library_id, items },
+                    ));
+                }
+                Err(_) => {
+                    let _ = tx.send(LibEvent::ModelContent(
+                        ModelContentEvent::TvUpcomingSnapshotFailed { library_id },
+                    ));
+                }
             }
         });
     }
@@ -359,6 +412,7 @@ impl App {
         let total_count = premieres.len();
         self.tv_upcoming_snapshots
             .insert(library_id.to_string(), premieres);
+        self.tv_upcoming_fetches.remove(library_id);
         let Some(lib) = self
             .libs
             .iter_mut()
@@ -377,11 +431,13 @@ impl App {
         level.loading = false;
     }
 
-    /// The eager TV Upcoming fetch failed: clear the per-session request mark
-    /// so a later pill selection can retry, and unset the loading flag of an
-    /// active Upcoming root level that was waiting for the fetch.
+    /// The eager TV Upcoming fetch failed after all its retries: mark the
+    /// library `Failed` — the panel names the failure and a pill reselect or
+    /// later tab load retries — and unset the loading flag of an active
+    /// Upcoming root level that was waiting for the fetch.
     pub(in crate::app) fn tv_upcoming_snapshot_failed(&mut self, library_id: &str) {
-        self.tv_upcoming_requested.remove(library_id);
+        self.tv_upcoming_fetches
+            .insert(library_id.to_string(), TvUpcomingFetchState::Failed);
         let Some(lib) = self
             .libs
             .iter_mut()
@@ -412,10 +468,23 @@ impl App {
         {
             align_level_to_tv_mode(level, &mbv_queue::TvContentMode::Upcoming);
         }
-        self.spawn_tv_content(lib_idx, parent_id, title, |client, parent_id, title| {
-            build_tv_upcoming_level(client, parent_id, title)
-                .map(|(level, premieres)| (level, Some(premieres)))
-        });
+        // A fetch is starting: repeated pill selections must not stack a
+        // second one behind the first. `spawn_tv_content`'s no-client
+        // no-op above this point means the mark only lands on real spawns.
+        if self.emby_snapshot().is_some() {
+            self.tv_upcoming_fetches
+                .insert(parent_id.clone(), TvUpcomingFetchState::InFlight);
+        }
+        self.spawn_tv_content(
+            lib_idx,
+            parent_id,
+            title,
+            true,
+            |client, parent_id, title| {
+                build_tv_upcoming_level(client, parent_id, title)
+                    .map(|(level, premieres)| (level, Some(premieres)))
+            },
+        );
     }
 }
 
@@ -543,6 +612,84 @@ mod tv_latest_tests {
             }
             _ => unreachable!(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tv_upcoming_retry_tests {
+    use super::*;
+    use std::cell::Cell;
+    use std::collections::VecDeque;
+    use std::time::Duration;
+
+    struct FakeUpcomingSource {
+        results: std::cell::RefCell<VecDeque<Result<Vec<UpcomingPremiere>, mbv_emby::EmbyError>>>,
+        attempts: Cell<usize>,
+    }
+
+    impl TvUpcomingSource for FakeUpcomingSource {
+        fn get_upcoming(
+            &self,
+            _parent_id: &str,
+            _limit: usize,
+        ) -> Result<Vec<UpcomingPremiere>, mbv_emby::EmbyError> {
+            self.attempts.set(self.attempts.get() + 1);
+            self.results
+                .borrow_mut()
+                .pop_front()
+                .expect("every retry test scripts one result per attempt")
+        }
+    }
+
+    fn one_premiere() -> Vec<UpcomingPremiere> {
+        vec![UpcomingPremiere {
+            series_id: mbv_ids::ItemId::new("series-1"),
+            series_name: "Series 1".into(),
+            season: Some(1),
+            episode: Some(1),
+            title: "Premiere".into(),
+            premiere_date: "2026-10-12T00:00:00.0000000Z".into(),
+        }]
+    }
+
+    /// The eager Upcoming fetch retries on failure so a server-side metadata
+    /// refresh blocking one attempt (2026-10-15: 30063 ms server log) does
+    /// not leave the session snapshot empty; zero-length delays keep the
+    /// test sleep-free.
+    #[test]
+    fn upcoming_fetch_retries_a_failed_attempt() {
+        let source = FakeUpcomingSource {
+            results: std::cell::RefCell::new(VecDeque::from([Err(error()), Ok(one_premiere())])),
+            attempts: Cell::new(0),
+        };
+
+        let items = fetch_upcoming_with_retries(&source, "lib-1", &[Duration::ZERO])
+            .expect("the second attempt succeeds");
+
+        assert_eq!(items.len(), 1);
+        assert_eq!(source.attempts.get(), 2);
+    }
+
+    #[test]
+    fn upcoming_fetch_stops_after_the_final_attempt() {
+        let source = FakeUpcomingSource {
+            results: std::cell::RefCell::new(VecDeque::from([Err(error())])),
+            attempts: Cell::new(0),
+        };
+
+        let Err(error) = fetch_upcoming_with_retries(&source, "lib-1", &[]) else {
+            panic!("an exhausted retry must return the final error");
+        };
+        assert_eq!(
+            source.attempts.get(),
+            1,
+            "an empty delay slice is one attempt"
+        );
+        assert_eq!(error.kind_name(), "emby.resolve");
+    }
+
+    fn error() -> mbv_emby::EmbyError {
+        mbv_emby::EmbyError::resolve("test failure")
     }
 }
 

@@ -107,6 +107,26 @@ impl LevelFillState {
     }
 }
 
+/// The one fetch-lifecycle state of a TV library's eager Upcoming snapshot
+/// (mirrors `LevelFillState`'s Loading/Failed shape). `InFlight` spans the
+/// fetch's spaced retries; `Failed` is sticky until a new request or a
+/// success replaces it, so the panel can name the failure and a reselect
+/// can retry.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::app) enum TvUpcomingFetchState {
+    InFlight,
+    Failed,
+}
+
+impl TvUpcomingFetchState {
+    /// Whether a fetch is under way for `state`: only `InFlight` blocks a
+    /// new request; `Failed` and an absent entry both allow one.
+    #[must_use]
+    pub(in crate::app) fn blocks_request(state: Option<&Self>) -> bool {
+        matches!(state, Some(Self::InFlight))
+    }
+}
+
 #[expect(
     clippy::struct_excessive_bools,
     reason = "22 independent core app-state bits spanning launch/readiness, load-in-flight, persistence/UI options, and transient connection flags across unrelated subsystems; grouping would be a pure lint dodge (design analysis, issue #804)"
@@ -135,9 +155,10 @@ pub struct App {
     pub(in crate::app) tv_upcoming_snapshots:
         std::collections::HashMap<String, Vec<mbv_emby_model::UpcomingPremiere>>,
     /// TV libraries whose eager Upcoming fetch was already requested this
-    /// session, so tab re-entry never re-requests it. Cleared when that one
-    /// fetch fails, so a later selection can retry.
-    pub(in crate::app) tv_upcoming_requested: std::collections::HashSet<String>,
+    /// session, so tab re-entry never re-requests it. `InFlight` spans the
+    /// fetch's spaced retries; only a final failure moves the entry to
+    /// `Failed`, which a later pill selection or tab load retries.
+    pub(in crate::app) tv_upcoming_fetches: std::collections::HashMap<String, TvUpcomingFetchState>,
     pub(in crate::app) audiobookshelf_browse:
         Vec<mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseState>,
     pub(in crate::app) audiobookshelf_book_browse:

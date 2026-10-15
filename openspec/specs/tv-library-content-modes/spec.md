@@ -118,6 +118,25 @@ Activating an `Upcoming` row, by keyboard or by mouse, SHALL navigate the librar
 - **THEN** no Hero pane or Library Hero overlay is shown
 - **AND** in Wide geometry the list spans the whole content area
 
+### Requirement: Upcoming loads once per session with a named failure and a retryable fetch
+
+The TV tab load SHALL start one eager Upcoming fetch per library per session, and pill selection SHALL materialize the root level from that per-session snapshot instead of refetching. The eager fetch SHALL retry a failed attempt on spaced delays before giving up. While the fetch is in flight an empty Upcoming list SHALL show the shared loading placeholder. A final failure SHALL show a panel placeholder naming the failure instead of an empty list, and the user SHALL be able to retry it by selecting the pill again, by the focused manual refresh, or by a later tab load. A success SHALL replace any failed state for the rest of the session.
+
+#### Scenario: An in-flight eager fetch shows loading
+
+- **WHEN** the Upcoming mode is selected while the session's eager fetch is still in flight
+- **THEN** the empty list box shows the shared loading placeholder instead of a blank list
+
+#### Scenario: An exhausted fetch names the failure
+
+- **WHEN** the eager Upcoming fetch has failed through all its retries while the Upcoming mode is selected
+- **THEN** the list box shows a placeholder naming the failed fetch with selecting the pill again as the retry
+
+#### Scenario: The failure is retried
+
+- **WHEN** the user reselects the Upcoming pill, runs the focused manual refresh, or re-enters the TV tab after a failed fetch
+- **THEN** mbv starts a new eager Upcoming fetch and the placeholder returns to loading
+
 ### Requirement: The content mode is part of the sticky library position
 
 The selected TV content mode SHALL be saved with the library's navigation position and restored when the library is reopened within the same session. The mode SHALL NOT persist across a restart: after a restart the library opens on `Latest` before the row is painted or any fetch is issued, regardless of the mode selected in the previous session. A saved mode that the reopened library's current show count no longer offers SHALL be replaced by the count's default mode before the row is painted or any fetch is issued. Keyboard cycling SHALL move the selection across every mode in row order and SHALL wrap from the last mode to the first and from the first to the last. Mouse selection SHALL select the clicked mode.

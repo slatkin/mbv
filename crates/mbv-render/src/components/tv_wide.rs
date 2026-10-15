@@ -31,6 +31,10 @@ pub struct TvWideRenderCtx {
     /// The library's Upcoming premieres from the per-session snapshot. Empty
     /// outside Upcoming mode; the Upcoming level itself keeps no items.
     pub upcoming: Vec<UpcomingPremiere>,
+    /// The eager Upcoming snapshot fetch failed after all its retries. Only
+    /// meaningful in Upcoming mode with empty rows; the panel names the
+    /// failure and offers the pill reselect as the retry.
+    pub upcoming_failed: bool,
     /// The shell-projected hero image state (design D9/D16): the panel's
     /// shared `EmbyItem` producer reads it; painting never fetches.
     pub hero_image: HeroImageState,
@@ -67,6 +71,7 @@ impl TvWideRenderCtx {
             show_letter_pills,
             tv_content_mode: None,
             upcoming: Vec::new(),
+            upcoming_failed: false,
             hero_image: HeroImageState::None,
         }
     }

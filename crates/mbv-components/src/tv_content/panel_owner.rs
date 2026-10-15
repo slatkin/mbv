@@ -52,6 +52,11 @@ impl TvContent {
         // ends before the Workspace borrows the episode carrier mutably.
         let flat_episode_mode = self.flat_episode_mode();
         let upcoming_mode = self.upcoming_mode();
+        // Read the emptiness/failure facts before the hero borrows episode
+        // state mutably; the list branch below only needs these locals.
+        let rows_empty = self.rows_empty();
+        let upcoming_failed = upcoming_mode && self.context.upcoming_failed;
+        let loading = self.context.list.loading;
         let workspace_focused = self.context.focused && self.pane == Pane::Episodes;
         let (hero_data, overview_title) = if flat_episode_mode {
             (self.latest_hero_data(), None)
@@ -90,6 +95,13 @@ impl TvContent {
         });
         let list = if searching {
             ListSlot::Search(&mut self.inline_search)
+        } else if rows_empty {
+            let text = if upcoming_failed {
+                " Upcoming fetch failed — select the pill to retry".into()
+            } else {
+                " (empty)".into()
+            };
+            ListSlot::Empty { loading, text }
         } else if flat_episode_mode {
             ListSlot::Media(&mut self.carrier)
         } else {

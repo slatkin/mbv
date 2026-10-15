@@ -1,4 +1,5 @@
 use crate::app::dispatch::library::browse::align_level_to_tv_mode;
+use crate::app::state::app_struct::TvUpcomingFetchState;
 use crate::app::{App, BrowseLevel};
 use mbv_ui_model::browse::{BrowseResting, ServerRows};
 
@@ -370,8 +371,8 @@ impl App {
                 // selection materializes the level from it instead of
                 // refetching the slow server query. While that fetch is still
                 // in flight the level keeps its loading flag and the
-                // completion fills it; without a request this spawn is the
-                // fallback (and its completion fills the snapshot).
+                // completion fills it; a `Failed` fetch (or none) respawns —
+                // reselecting the pill is the visible retry.
                 let library_id = self.libs[lib_idx].library.id.clone();
                 if let Some(premieres) = self.tv_upcoming_snapshots.get(&library_id) {
                     if let Some(last) = self.libs[lib_idx].nav_stack.last_mut() {
@@ -380,7 +381,9 @@ impl App {
                         last.rows = ServerRows::complete(premieres.len());
                         last.loading = false;
                     }
-                } else if !self.tv_upcoming_requested.contains(&library_id) {
+                } else if !TvUpcomingFetchState::blocks_request(
+                    self.tv_upcoming_fetches.get(&library_id),
+                ) {
                     self.spawn_tv_upcoming(
                         lib_idx,
                         parent_id,

@@ -266,6 +266,18 @@ impl TvContent {
         self.context.tv_content_mode == Some(mbv_queue::TvContentMode::Upcoming)
     }
 
+    /// Whether the active mode's rows are all absent: Upcoming judges
+    /// emptiness from the premiere snapshot (the level itself keeps no
+    /// items), every other mode from the level items.
+    #[must_use]
+    pub fn rows_empty(&self) -> bool {
+        if self.upcoming_mode() {
+            self.context.upcoming.is_empty()
+        } else {
+            self.context.list.items.is_empty()
+        }
+    }
+
     /// Open the series of the Upcoming notice whose row target is `target`.
     pub(super) fn open_upcoming_series_request(&self, target: &str) -> Option<ShellRequest> {
         self.context
