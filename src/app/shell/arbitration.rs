@@ -3,7 +3,7 @@ use crate::app::dispatch::action::Command;
 use crate::app::input::router::{
     RouterOutcome, RouterSnapshot, resolve_router_outcome_with_focused,
 };
-use mbv_ui_msg::{ComponentId, Msg, OverlayId, TerminalObserverEvent};
+use mbv_ui_msg::{ComponentId, Msg, OverlayId, PlaybackRequest, TerminalObserverEvent};
 
 /// The ADR 0023 Keyboard Router fold: apply the router's outcome to this
 /// tick's message list and return the messages that survive.
@@ -319,8 +319,14 @@ impl Model {
         // dispatches. The second Esc inside the window dispatches the stop
         // from any focus — the leaf's own Esc action (back, close, selection
         // clearing) already ran on the first press, so the second press's
-        // request is discarded rather than repeated. A non-Esc stop chord
-        // fires immediately, unchanged (the router dispatches it directly).
+        // request is discarded rather than repeated. A playback panel whose
+        // own Esc is Stop already dispatched through the leaf on the first
+        // press; that second press is swallowed instead of dispatching a
+        // duplicate Stop behind it. A non-Esc stop chord fires immediately,
+        // unchanged (the router dispatches it directly).
+        let leaf_stops = messages
+            .iter()
+            .any(|msg| matches!(msg, Msg::Playback(PlaybackRequest::Stop)));
         let outcome = match outcome {
             RouterOutcome::Deferred(Command::TogglePlayPause)
                 if self.visual_selection.is_none() =>
@@ -328,6 +334,7 @@ impl Model {
                 RouterOutcome::Command(Command::TogglePlayPause)
             }
             RouterOutcome::Deferred(Command::Stop) if !double_esc => RouterOutcome::FallThrough,
+            RouterOutcome::Deferred(Command::Stop) if leaf_stops => RouterOutcome::Swallow,
             RouterOutcome::Deferred(Command::Stop) => RouterOutcome::Command(Command::Stop),
             other => other,
         };
@@ -435,7 +442,6 @@ impl Model {
 #[cfg(test)]
 mod mouse_fold_tests {
     use super::*;
-    use mbv_ui_msg::PlaybackRequest;
 
     #[test]
     fn fold_keeps_one_mouse_claim_and_the_observer_signal() {

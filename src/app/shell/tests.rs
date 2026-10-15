@@ -6,7 +6,7 @@ use mbv_emby_model::EmbyItem;
 use mbv_emby_model::test_support::make_item;
 use mbv_net::mock_http::MockHttp;
 use mbv_ui_model::media_list::SelectionOrigin;
-use mbv_ui_msg::{MusicTreeAction, ShellRequest};
+use mbv_ui_msg::{MusicTreeAction, PlaybackRequest, ShellRequest};
 use std::sync::{Arc, Mutex};
 
 #[test]
@@ -145,6 +145,34 @@ fn second_escape_stops_when_the_leaf_consumes_both_presses() {
     assert!(
         folded.is_empty(),
         "the second Esc's back request is discarded"
+    );
+}
+
+/// A playback panel whose own Esc is Stop (`library_playback_panel`)
+/// dispatched through the leaf on the first press; the second Esc inside the
+/// window is inert instead of dispatching a duplicate Stop behind it
+/// (review round 1, P2: duplicate toast and redundant stop command).
+#[test]
+fn second_escape_behind_a_leaf_stop_is_swallowed() {
+    let mut model = Model::new(make_app_stub());
+    model
+        .app
+        .player
+        .update_status(|status| status.active = true);
+    let key = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
+    let leaf_stop = vec![
+        Msg::Playback(PlaybackRequest::Stop),
+        Msg::TerminalEvent(TerminalObserverEvent::Key(key.into())),
+    ];
+
+    // First press: falls through, the leaf's own Stop dispatches.
+    assert_eq!(model.router_outcome(&leaf_stop), RouterOutcome::FallThrough);
+    // Second press inside the window: the leaf is stopping already, so the
+    // press is swallowed — no duplicate Stop dispatch.
+    assert_eq!(
+        model.router_outcome(&leaf_stop),
+        RouterOutcome::Swallow,
+        "the leaf's own stop stands; no duplicate dispatch"
     );
 }
 
