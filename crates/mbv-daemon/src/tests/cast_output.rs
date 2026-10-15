@@ -597,3 +597,114 @@ fn a_returned_status_rearms_the_poll_and_keeps_the_connection() {
         "the connection stays"
     );
 }
+
+/// The owner's `OutputState` for the test receiver in `connection`.
+fn cast_output_state(connection: CastConnection) -> OutputState {
+    OutputState::Cast {
+        receiver_id: "rcv-1".to_string(),
+        name: "Living room".to_string(),
+        connection,
+    }
+}
+
+/// A hand-stamped late result of the old worker: the same shape the worker
+/// sends, carrying a stale poll id.
+fn stale_status(poll_id: u64) -> DaemonEvent {
+    DaemonEvent::Cast(crate::cast::CastOwnerEvent::Status {
+        receiver_id: "rcv-1".to_string(),
+        poll_id,
+        result: Err("late worker lost the connection".to_string()),
+    })
+}
+
+/// Contract: review P2 on row 3.3 — a late result from the previous worker
+/// (the watchdog reconnect race) carries a stale poll id and is dropped: it
+/// causes no extra disconnect/reconnect flap and leaves the new poll's
+/// watchdog armed.
+#[test]
+fn a_late_result_from_the_old_worker_leaves_the_new_poll_alone() {
+    let mut t = test_loop_with_role(crate::DaemonRole::Local);
+    let (connector, _calls, modes) = recording_connector(None);
+    t.event_loop.cast_connector = Some(connector);
+    let (client_id, reply_tx, rx) = connect_output_client(&t.event_loop.ctrl_clients, true);
+
+    select_output(&mut t, client_id, &reply_tx, cast_selection());
+    pump_cast_event(&mut t);
+    assert!(matches!(
+        recv_event(&rx),
+        CtrlEvent::PlaybackOutput(state) if state == cast_output_state(CastConnection::Connected)
+    ));
+
+    let start = std::time::Instant::now();
+    // Poll P1 goes to worker W1; its result sits unpumped.
+    t.event_loop.tick(start);
+    // W1's blocking status exceeds the answer bound: the watchdog disconnects
+    // and reconnects.
+    t.event_loop
+        .tick(start + crate::cast::CAST_JOB_ANSWER_BOUND + std::time::Duration::from_secs(1));
+    assert!(matches!(
+        recv_event(&rx),
+        CtrlEvent::PlaybackOutput(state) if state == cast_output_state(CastConnection::Disconnected)
+    ));
+
+    // W1's late result arrives while no poll is in flight: dropped silently.
+    let event = t.merged_rx.recv().unwrap();
+    let DaemonEvent::Cast(crate::cast::CastOwnerEvent::Status {
+        poll_id: stale_poll_id,
+        ..
+    }) = event
+    else {
+        panic!("expected the wedged poll's late status result");
+    };
+    t.event_loop.handle_event(stale_status(stale_poll_id));
+    assert!(rx.try_recv().is_err(), "the stale late result is silent");
+    assert_eq!(
+        crate::cast::output_state(&t.event_loop.owner.output),
+        cast_output_state(CastConnection::Disconnected),
+        "the stale late result causes no flap"
+    );
+
+    // The reconnect restores worker W2.
+    let event = t
+        .merged_rx
+        .recv()
+        .expect("the reconnect reports its outcome");
+    t.event_loop.handle_event(event);
+    assert!(matches!(
+        recv_event(&rx),
+        CtrlEvent::PlaybackOutput(state) if state == cast_output_state(CastConnection::Connected)
+    ));
+
+    // The next tick polls W2 (P2).
+    t.event_loop
+        .tick(start + std::time::Duration::from_secs(40));
+
+    // A late result of the old worker arrives while P2 is in flight: dropped
+    // by its stale id — no spurious disconnect.
+    t.event_loop.handle_event(stale_status(stale_poll_id));
+    assert!(rx.try_recv().is_err(), "the stale late result is silent");
+    assert_eq!(
+        crate::cast::output_state(&t.event_loop.owner.output),
+        cast_output_state(CastConnection::Connected),
+        "the stale late result does not disconnect the restored worker"
+    );
+
+    // P2's watchdog was not disarmed by the stale result: a tick past the
+    // answer bound still fires it.
+    t.event_loop
+        .tick(start + std::time::Duration::from_secs(40) + crate::cast::CAST_JOB_ANSWER_BOUND);
+    assert!(matches!(
+        recv_event(&rx),
+        CtrlEvent::PlaybackOutput(state) if state == cast_output_state(CastConnection::Disconnected)
+    ));
+    // The reconnect the fired watchdog spawns is the only one after the
+    // recovery: the stale late results spawned none.
+    assert_eq!(
+        modes.lock().unwrap().clone(),
+        vec![
+            ConnectMode::FirstSelect,
+            ConnectMode::Reconnect,
+            ConnectMode::Reconnect
+        ],
+    );
+}

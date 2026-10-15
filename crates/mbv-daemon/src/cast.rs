@@ -57,11 +57,18 @@ pub(crate) struct CastOutput {
     /// Cast tick timers (design D8, task 3.3), owned by the output so they
     /// travel with it. `last_keep_alive` paces the 3s pong job; `last_poll`
     /// paces the 7s status poll; `poll_sent` arms the 20s worker watchdog
-    /// while a poll is in flight and is disarmed by its result; `reconnecting`
-    /// marks an in-flight reconnect attempt whose outcome is still due.
+    /// while a poll is in flight — the id is stamped into the poll's job and
+    /// echoed by its result, so a late result from a previous worker (the
+    /// watchdog reconnect race) cannot match — and is disarmed by the
+    /// matching result; `reconnecting` marks an in-flight reconnect attempt
+    /// whose outcome is still due.
     last_keep_alive: Instant,
     last_poll: Option<Instant>,
-    poll_sent: Option<Instant>,
+    poll_sent: Option<(u64, Instant)>,
+    /// Mints the monotonic id of the next status poll (review P2 on row
+    /// 3.3): ids outlive a reconnect, so an old worker's late result can
+    /// never be mistaken for the in-flight poll.
+    next_poll_id: u64,
     reconnecting: bool,
 }
 
@@ -96,6 +103,7 @@ impl std::fmt::Debug for CastOutput {
             .field("last_keep_alive", &self.last_keep_alive)
             .field("last_poll", &self.last_poll)
             .field("poll_sent", &self.poll_sent)
+            .field("next_poll_id", &self.next_poll_id)
             .field("reconnecting", &self.reconnecting)
             .finish()
     }
@@ -128,11 +136,15 @@ pub(crate) enum CastOwnerEvent {
         outcome: CastConnectOutcome,
     },
     /// One status-poll result from the Cast worker (design D8, task 3.3).
-    /// `Err` carries the rendered `CastError`: a poll error is a broken
-    /// connection, not a slow receiver (`rust_cast` receives block rather
-    /// than time out), so the handler disconnects and reconnects.
+    /// `poll_id` echoes the id stamped into the poll's job; a result whose
+    /// id does not match the in-flight poll is a late result from a previous
+    /// worker and is dropped. `Err` carries the rendered `CastError`: a poll
+    /// error is a broken connection, not a slow receiver (`rust_cast`
+    /// receives block rather than time out), so the handler disconnects and
+    /// reconnects.
     Status {
         receiver_id: String,
+        poll_id: u64,
         result: Result<CastStatus, String>,
     },
     /// The outcome of the automatic reconnect a poll error or a watchdog
@@ -316,8 +328,9 @@ pub(super) fn handle_cast_event(daemon: &mut DaemonLoop, event: CastOwnerEvent) 
         } => handle_connect_outcome(daemon, &receiver_id, outcome),
         CastOwnerEvent::Status {
             receiver_id,
+            poll_id,
             result,
-        } => handle_cast_status(daemon, &receiver_id, result),
+        } => handle_cast_status(daemon, &receiver_id, poll_id, result),
         CastOwnerEvent::Reconnect {
             receiver_id,
             outcome,
@@ -370,6 +383,7 @@ fn handle_connect_outcome(daemon: &mut DaemonLoop, receiver_id: &str, outcome: C
                 last_keep_alive: Instant::now(),
                 last_poll: None,
                 poll_sent: None,
+                next_poll_id: 0,
                 reconnecting: false,
             };
             tracing::info!(name: "daemon.cast_output.connected", target: "daemon", receiver = %receiver_id, output = ?output, "cast receiver is now the playback output");
@@ -409,12 +423,14 @@ pub(super) fn tick_cast(daemon: &mut DaemonLoop, now: Instant) {
                     .last_poll
                     .is_none_or(|at| now.duration_since(at) >= CAST_STATUS_POLL_INTERVAL)
             {
-                submit_status_poll_job(&cast.worker, &cast.receiver.id, merged_tx);
-                cast.poll_sent = Some(now);
+                let poll_id = cast.next_poll_id;
+                cast.next_poll_id += 1;
+                submit_status_poll_job(&cast.worker, &cast.receiver.id, merged_tx, poll_id);
+                cast.poll_sent = Some((poll_id, now));
             }
         }
         cast.poll_sent
-            .is_some_and(|sent| now.duration_since(sent) >= CAST_JOB_ANSWER_BOUND)
+            .is_some_and(|(_, sent)| now.duration_since(sent) >= CAST_JOB_ANSWER_BOUND)
     };
     if wedged {
         tracing::warn!(name: "cast.worker.unresponsive", target: "cast", "cast worker produced no event within the answer bound");
@@ -434,11 +450,13 @@ fn submit_keep_alive_job(worker: &mpsc::Sender<CastJob>) {
 }
 
 /// Submits one status poll (design D8): a belt-and-braces pong ahead of the
-/// status exchange, then the status result back as `DaemonEvent::Cast`.
+/// status exchange, then the status result — stamped with `poll_id` — back
+/// as `DaemonEvent::Cast`.
 fn submit_status_poll_job(
     worker: &mpsc::Sender<CastJob>,
     receiver_id: &str,
     merged_tx: mpsc::Sender<DaemonEvent>,
+    poll_id: u64,
 ) {
     let receiver_id = receiver_id.to_string();
     let _ = worker.send(Box::new(move |transport: &mut dyn CastTransport| {
@@ -450,19 +468,24 @@ fn submit_status_poll_job(
             .map_err(|error| error.to_string());
         let _ = merged_tx.send(DaemonEvent::Cast(CastOwnerEvent::Status {
             receiver_id,
+            poll_id,
             result,
         }));
     }));
 }
 
-/// One status-poll result (design D8, task 3.3). Only the poll this output
-/// spawned disarms the watchdog clock: a stale receiver's late event must
-/// not disturb the in-flight poll's bookkeeping. A returned status is stored
-/// (task 6.1 owns its translation and extrapolation); a poll error is a
-/// broken connection, so the output disconnects and reconnects.
+/// One status-poll result (design D8, task 3.3). Only the result whose id
+/// matches the in-flight poll — the same id stamped into that poll's job —
+/// disarms the watchdog clock: a late result from a previous worker (the
+/// watchdog reconnect race) carries a stale id and is dropped, so it can
+/// neither spuriously disconnect the restored worker nor disturb the new
+/// poll's bookkeeping. A returned status is stored (task 6.1 owns its
+/// translation and extrapolation); a poll error is a broken connection, so
+/// the output disconnects and reconnects.
 fn handle_cast_status(
     daemon: &mut DaemonLoop,
     receiver_id: &str,
+    poll_id: u64,
     result: Result<CastStatus, String>,
 ) {
     let error = {
@@ -471,7 +494,9 @@ fn handle_cast_status(
         };
         if cast.receiver.id != receiver_id
             || !matches!(cast.connection, CastConnection::Connected)
-            || cast.poll_sent.is_none()
+            || cast
+                .poll_sent
+                .is_none_or(|(in_flight, _)| in_flight != poll_id)
         {
             return;
         }
