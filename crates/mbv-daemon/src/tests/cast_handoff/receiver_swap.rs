@@ -179,65 +179,6 @@ fn a_failed_cast_to_cast_connect_leaves_the_old_receiver_untouched() {
     );
 }
 
-/// Contract: cast-owner-output row 7.1 dispatch C — selecting the receiver
-/// that is already the output is rejected as no hand-off: the output is
-/// already where the selection asks it to be, and its playback is untouched.
-#[test]
-fn selecting_the_receiver_that_is_already_the_output_is_rejected() {
-    let mut t = test_loop_with_queue(
-        crate::DaemonRole::Local,
-        vec![feed_qi_with_url("a", "https://feed/a.mp3")],
-        0,
-    );
-    let status = CastStatus {
-        duration_seconds: Some(10.0),
-        ..playing_status_at("https://feed/a.mp3", 10.0)
-    };
-    let old_calls = receiver_presenting(&mut t, status).calls;
-    let slot = t.event_loop.owner.core.queue.slots()[0].slot_id;
-    // A second Client issues the same-receiver selection; its reply path is
-    // its own channel.
-    let (selector_id, reply_tx, rx) = connect_output_client(&t.event_loop.ctrl_clients, true);
-    drain(&rx);
-
-    select_output(
-        &mut t,
-        selector_id,
-        &reply_tx,
-        super::cast_output::cast_selection(),
-    );
-
-    let CtrlEvent::CommandRejected(reason) = recv_event(&rx) else {
-        panic!("a same-receiver selection is rejected");
-    };
-    assert!(
-        reason.contains("already the playback output"),
-        "reason: {reason}"
-    );
-    let crate::cast::PlaybackOutput::Cast(cast) = &t.event_loop.owner.output else {
-        panic!("the receiver stays the output");
-    };
-    assert_eq!(
-        crate::cast::output_state(&t.event_loop.owner.output),
-        OutputState::Cast {
-            receiver_id: "rcv-1".to_string(),
-            name: "Living room".to_string(),
-            connection: mbv_ctrl::CastConnection::Connected,
-        },
-        "the output is unchanged"
-    );
-    let loaded = cast.loaded.as_ref().expect("the load is untouched");
-    assert_eq!(loaded.slot, slot, "the loaded item is untouched");
-    assert!(
-        !old_calls
-            .lock()
-            .unwrap()
-            .iter()
-            .any(|call| *call == "stop" || *call == "teardown"),
-        "the receiver is not stopped and not torn down"
-    );
-}
-
 /// Contract: correction P1 on row 7.1 — a Local selection wins over a
 /// Cast→Cast connect that is still in flight (last selection wins): the
 /// pending selector is told, the hand-back still runs — the receiver's

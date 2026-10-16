@@ -425,38 +425,6 @@ fn a_second_poll_of_the_same_finished_end_steps_nothing_again() {
     );
 }
 
-/// Contract: cast-owner-output row 6.2 (design D7, spec "User stops on the
-/// device") — a `Cancelled` end advances nothing: no slot is loaded and the
-/// loaded item stays the one the receiver was told to play.
-#[test]
-fn a_cancelled_end_loads_nothing() {
-    let mut t = test_loop_with_queue(
-        crate::DaemonRole::Local,
-        vec![
-            feed_qi_with_url("a", "https://feed/a.mp3"),
-            feed_qi_with_url("b", "https://feed/b.mp3"),
-        ],
-        0,
-    );
-    let (_client_id, _rx, calls, t0) = settled_casting_fixture(&mut t);
-
-    report_end(
-        &mut t,
-        idle_status("https://feed/a.mp3", CastIdleReason::Cancelled),
-        t0 + std::time::Duration::from_secs(120),
-    );
-
-    assert!(
-        t.merged_rx.try_recv().is_err(),
-        "a cancelled end starts no load"
-    );
-    assert_eq!(
-        load_calls(&calls),
-        vec!["load(https://feed/a.mp3, 0)".to_string()],
-        "the cancelled end leaves the loaded item alone"
-    );
-}
-
 /// Contract: cast-owner-output row 6.2 (design D7, spec "Receiver fails to
 /// play the item") — an `Error` end is reported to Clients and advances
 /// nothing: no slot is loaded after the failure.
@@ -495,11 +463,19 @@ fn a_receiver_error_is_reported_and_loads_nothing() {
     );
 }
 
-/// Contract: cast-owner-output row 6.2 (design D7, spec "Receiver plays
-/// something mbv did not dispatch") — a `Finished` end of media the Owner did
-/// not load advances nothing: the loaded item keeps its place.
-#[test]
-fn a_finished_end_of_foreign_media_advances_nothing() {
+/// Contract: cast-owner-output row 6.2 (design D7, spec "User stops on the
+/// device" and "Receiver plays something mbv did not dispatch") — an end that
+/// does not finish the loaded item advances nothing: no slot is loaded and the
+/// loaded item keeps its place.
+#[rstest]
+// Design D7, `Idle(Cancelled)`: the loaded item was cancelled, not finished.
+#[case::cancelled_loaded_item("https://feed/a.mp3", CastIdleReason::Cancelled)]
+// Design D7, foreign content: a `Finished` end of media the Owner did not load.
+#[case::finished_foreign_media("https://feed/other.mp3", CastIdleReason::Finished)]
+fn an_end_that_does_not_finish_the_loaded_item_advances_nothing(
+    #[case] content_id: &str,
+    #[case] reason: CastIdleReason,
+) {
     let mut t = test_loop_with_queue(
         crate::DaemonRole::Local,
         vec![
@@ -512,18 +488,15 @@ fn a_finished_end_of_foreign_media_advances_nothing() {
 
     report_end(
         &mut t,
-        idle_status("https://feed/other.mp3", CastIdleReason::Finished),
+        idle_status(content_id, reason),
         t0 + std::time::Duration::from_secs(120),
     );
 
-    assert!(
-        t.merged_rx.try_recv().is_err(),
-        "a foreign end starts no load"
-    );
+    assert!(t.merged_rx.try_recv().is_err(), "the end starts no load");
     assert_eq!(
         load_calls(&calls),
         vec!["load(https://feed/a.mp3, 0)".to_string()],
-        "the foreign end leaves the queue in place"
+        "the loaded item keeps its place"
     );
 }
 
