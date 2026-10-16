@@ -577,9 +577,11 @@ fn daemon_endpoint_rejects_unsupported_schemes() {
 }
 
 /// A fake daemon whose Hello advertises `playback-output`, whose Client
-/// hello is captured for assertion, and which cold-seeds a Cast output
-/// right after the initial state — then holds the socket open.
-fn connect_with_cast_seed_daemon() -> (
+/// hello is captured for assertion, and which — after the initial state —
+/// optionally cold-seeds a Cast output, then holds the socket open.
+fn connect_with_advertised_hello(
+    seed: Option<mbv_ctrl::OutputState>,
+) -> (
     crate::RemotePlayer,
     mpsc::Receiver<PlayerEvent>,
     std::thread::JoinHandle<()>,
@@ -617,12 +619,10 @@ fn connect_with_cast_seed_daemon() -> (
             queued_latest_transition: None,
         });
         writeln!(writer, "{}", serde_json::to_string(&state).unwrap()).unwrap();
-        let seed = CtrlEvent::PlaybackOutput(mbv_ctrl::OutputState::Cast {
-            receiver_id: "r-1".to_string(),
-            name: "Living Room".to_string(),
-            connection: mbv_ctrl::CastConnection::Connected,
-        });
-        writeln!(writer, "{}", serde_json::to_string(&seed).unwrap()).unwrap();
+        if let Some(output) = seed {
+            let seed_event = CtrlEvent::PlaybackOutput(output);
+            writeln!(writer, "{}", serde_json::to_string(&seed_event).unwrap()).unwrap();
+        }
         let mut buf = [0u8; 256];
         while let Ok(n) = reader.get_mut().read(&mut buf) {
             if n == 0 {
@@ -644,7 +644,12 @@ fn playback_output_seed_is_retained_from_the_handshake() {
     // any event drain, which is what lets launch auto-reconnect's handback
     // decision see Cast — and the event still forwards to the channel so
     // the App mirror receives it on the first drain.
-    let (player, event_rx, peer) = connect_with_cast_seed_daemon();
+    let (player, event_rx, peer) =
+        connect_with_advertised_hello(Some(mbv_ctrl::OutputState::Cast {
+            receiver_id: "r-1".to_string(),
+            name: "Living Room".to_string(),
+            connection: mbv_ctrl::CastConnection::Connected,
+        }));
 
     let expected = mbv_ctrl::OutputState::Cast {
         receiver_id: "r-1".to_string(),
@@ -662,6 +667,25 @@ fn playback_output_seed_is_retained_from_the_handshake() {
     }
     // No Drop impl: disconnect() is what shuts the client end down, so
     // the fake daemon's read loop observes EOF and the join completes.
+    player.disconnect();
+    peer.join().unwrap();
+}
+
+#[test]
+fn connect_survives_a_missing_playback_output_seed() {
+    // cast-owner-output 8.2 fix, tolerance half: a peer that advertises
+    // `playback-output` but never sends the cold seed (a stale or
+    // misbehaving daemon) must not fail or hang the connect. The tolerant
+    // handshake read gives up after its short timeout and leaves the
+    // silence to the reader thread, so the connect succeeds with no
+    // retained output.
+    let (player, _event_rx, peer) = connect_with_advertised_hello(None);
+
+    assert_eq!(
+        player.playback_output_state(),
+        None,
+        "no seed means no retained output, and the connect must still succeed"
+    );
     player.disconnect();
     peer.join().unwrap();
 }
