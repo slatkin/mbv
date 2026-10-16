@@ -22,6 +22,7 @@ use crate::CtrlClientId;
 use super::DaemonLoop;
 use super::core::DaemonEvent;
 
+pub(crate) mod advance;
 mod command;
 mod connect;
 mod status;
@@ -89,11 +90,17 @@ pub(crate) struct CastOutput {
     /// never be mistaken for the in-flight poll.
     next_poll_id: u64,
     reconnecting: bool,
+    /// The advance a natural end started and that uncastable step targets
+    /// may still be stepping through (design D7, row 6.2); `None` when the
+    /// output has no advance under way. `pub(super)` so the crate's resolve
+    /// handler can end it with the step's load.
+    pub(super) advance: Option<advance::CastAdvance>,
 }
 
 /// The item the Cast receiver was told to play (design D1). `end_handled`
-/// stops a second poll of the same `Finished` entry from advancing twice
-/// (design D7); task 6.2 owns it.
+/// marks the end report the Owner already acted on: the second poll of the
+/// same `Finished` must not advance a second time, and the same `Error` must
+/// not be reported again (design D7, row 6.2).
 pub(crate) struct CastLoadedItem {
     pub(super) slot: QueueSlotId,
     pub(super) content_id: String,
@@ -128,6 +135,7 @@ impl std::fmt::Debug for CastOutput {
             .field("poll_sent", &self.poll_sent)
             .field("next_poll_id", &self.next_poll_id)
             .field("reconnecting", &self.reconnecting)
+            .field("advance", &self.advance)
             .finish()
     }
 }
@@ -302,7 +310,10 @@ pub(super) fn dispatch_cast_load(
 /// Expires the in-flight transition a failed Cast load or resolve belonged to
 /// (design D5, row 5.2), dispatching a queued transition the expiry promotes.
 /// The caller reports the failure; this helper owns the gate and the publish.
-pub(super) fn expire_cast_transition(ctx: &mut super::core::DaemonOwnerContext<'_>) {
+/// Returns whether a queued transition was promoted, so the caller can tell a
+/// user takeover from an expiry that left the queue to the caller (design
+/// D7's step-over).
+pub(super) fn expire_cast_transition(ctx: &mut super::core::DaemonOwnerContext<'_>) -> bool {
     if let Some((expired, dispatch_next)) = ctx.owner.core.transitions.expire_now() {
         tracing::info!(
             name: "daemon.cast_transition.expired",
@@ -344,6 +355,7 @@ pub(super) fn expire_cast_transition(ctx: &mut super::core::DaemonOwnerContext<'
         let origin = super::core::take_promoted_origin(ctx, dispatch_next.as_ref());
         if let Some(next) = dispatch_next {
             super::core::send_jump_or_cold_start(ctx, next, origin);
+            return true;
         }
     }
     super::broadcast_queue_state(
@@ -355,6 +367,7 @@ pub(super) fn expire_cast_transition(ctx: &mut super::core::DaemonOwnerContext<'
         &ctx.owner.core.transitions,
         None,
     );
+    false
 }
 
 /// Reports a failed Cast resolve to its origin (row 5.1): the item and the
@@ -420,6 +433,9 @@ pub(super) fn stop_active_output(
         PlaybackOutput::Cast(cast) => {
             let worker = cast.worker.clone();
             cast.loaded = None;
+            // The stop ends any advance the loaded item's end started (design
+            // D7): a stopped output advances nothing.
+            cast.advance = None;
             command::submit_command_job(&worker, "stop", |transport| transport.stop());
             let base = player.status.lock().unwrap().clone();
             let presented = status::presented_player_status(

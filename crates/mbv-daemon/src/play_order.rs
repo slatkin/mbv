@@ -7,8 +7,11 @@
 
 use crate::SharedQueueState;
 use mbv_ctrl::player::PlayerCommand;
+use mbv_ctrl::{Direction, PlaybackRequestId};
 use mbv_player::{Player, PlayerOwnerState};
 use mbv_queue::{PlayOrder, PlaybackQueue, QueueSlotId};
+
+use crate::core::DaemonOwnerContext;
 
 /// The slot the Next-Up card must name (queue-shuffle-play-order task 4.2):
 /// the owner's order resolved against the canonical queue — the Shuffle pick
@@ -25,6 +28,36 @@ pub(crate) fn next_up_slot(owner: &PlayerOwnerState, queue: &PlaybackQueue) -> O
         } => queue.slot(slot_id).map(|slot| slot.slot_id),
         PlayOrder::Shuffle { upcoming: None } => None,
     }
+}
+
+/// The owner's one step rule (cast-owner-output design D7): a relative step —
+/// a next or previous key, and the advance a natural end starts — resolves
+/// its target through `relative_step_target` and dispatches a jump transition
+/// through the one-in-flight gate. A jump returns the dispatched transition's
+/// request id; the edge and a coalesced same-direction step return `None` and
+/// leave the playback state alone.
+pub(crate) fn dispatch_relative_step(
+    ctx: &mut DaemonOwnerContext<'_>,
+    direction: Direction,
+) -> Option<PlaybackRequestId> {
+    let mbv_player::owner_state::StepTarget::Jump(slot_id) =
+        ctx.owner.core.relative_step_target(direction)
+    else {
+        return None;
+    };
+    let (request_id, generation) = ctx.owner.core.transitions.mint_local_id();
+    crate::core::dispatch_slot_jump(
+        ctx,
+        crate::core::JumpOrigin::Transport,
+        mbv_player::transition::Transition::with_cause(
+            request_id,
+            generation,
+            slot_id,
+            mbv_player::transition::TransitionCause::Step(direction),
+        ),
+        None,
+    );
+    Some(request_id)
 }
 
 /// Forward the owner's current play order to the Playback run. Called after

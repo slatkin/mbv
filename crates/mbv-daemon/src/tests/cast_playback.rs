@@ -306,7 +306,7 @@ fn playing_an_audiobookshelf_book_on_cast_loads_nothing_and_reports() {
 
 /// A feed queue item with no media URL at all: its Cast resolve fails as
 /// uncastable, with no service client involved.
-fn feed_qi_without_url(guid: &str) -> QueueItem {
+pub(super) fn feed_qi_without_url(guid: &str) -> QueueItem {
     QueueItem::Feed(FeedEntry {
         enclosure_url: None,
         ..feed_qi_with_url(guid, "unused").as_feed().unwrap().clone()
@@ -315,7 +315,7 @@ fn feed_qi_without_url(guid: &str) -> QueueItem {
 
 /// Drains a client's event channel without blocking: broadcasts land in the
 /// channel synchronously during `handle_event`, so nothing here waits.
-fn drained_events(rx: &mpsc::Receiver<CtrlOutbound>) -> Vec<CtrlEvent> {
+pub(super) fn drained_events(rx: &mpsc::Receiver<CtrlOutbound>) -> Vec<CtrlEvent> {
     let mut events = Vec::new();
     while let Ok(outbound) = rx.try_recv() {
         if let CtrlOutbound::Event(json) = outbound {

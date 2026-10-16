@@ -265,29 +265,18 @@ impl DaemonLoop {
                 let _ = owner_action::run(self, action);
             }
             mbv_ctrl::TransportCommand::Step(direction) => {
-                let target = self.owner.core.relative_step_target(direction);
-                if let mbv_player::owner_state::StepTarget::Jump(slot_id) = target {
-                    let (request_id, generation) = self.owner.core.transitions.mint_local_id();
-                    super::core::dispatch_slot_jump(
-                        &mut super::core::DaemonOwnerContext {
-                            player: &self.player,
-                            client: &self.client,
-                            owner: &mut self.owner,
-                            shared_queue: &self.shared_queue,
-                            ctrl_clients: &self.ctrl_clients,
-                            merged_tx: &self.merged_tx,
-                            audiobookshelf: self.audiobookshelf_runtime.as_ref(),
-                        },
-                        super::core::JumpOrigin::Transport,
-                        mbv_player::transition::Transition::with_cause(
-                            request_id,
-                            generation,
-                            slot_id,
-                            mbv_player::transition::TransitionCause::Step(direction),
-                        ),
-                        None,
-                    );
-                }
+                // The owner's one step rule (design D7): the same funnel the
+                // natural advance uses. The transport path drops the outcome.
+                let mut ctx = super::core::DaemonOwnerContext {
+                    player: &self.player,
+                    client: &self.client,
+                    owner: &mut self.owner,
+                    shared_queue: &self.shared_queue,
+                    ctrl_clients: &self.ctrl_clients,
+                    merged_tx: &self.merged_tx,
+                    audiobookshelf: self.audiobookshelf_runtime.as_ref(),
+                };
+                crate::play_order::dispatch_relative_step(&mut ctx, direction);
             }
         }
         EventOutcome::CONTINUE

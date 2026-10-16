@@ -68,6 +68,7 @@ pub(super) fn handle_cast_status(
     if let Some(loaded_slot) = settle_slot {
         settle_cast_transition(daemon, loaded_slot);
     }
+    super::advance::apply_end_report(daemon);
     refresh_presentation(daemon, Instant::now());
 }
 

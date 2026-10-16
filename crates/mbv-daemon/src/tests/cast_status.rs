@@ -1,19 +1,28 @@
-// cast-owner-output row 6.1: the Owner translates a receiver status into its
-// presented `PlayerStatus` — the loaded slot as the active slot with the
-// receiver's position, duration, and paused state — advances the position on
-// the daemon tick while the receiver plays, holds it while the receiver is
+// cast-owner-output rows 6.1 and 6.2: the Owner translates a receiver status
+// into its presented `PlayerStatus` — the loaded slot as the active slot with
+// the receiver's position, duration, and paused state — advances the position
+// on the daemon tick while the receiver plays, holds it while the receiver is
 // paused or buffering, and lets a fresh report correct the extrapolation.
-// The daemon's status-broadcast thread (`run.rs` `spawn_status_broadcast`)
-// publishes this status to Clients at the local broadcast cadence, so the
-// presented status is what Clients receive as `StatusOnly` (design D8).
+// Row 6.2 applies the advance table of design D7: a `Finished` end of the
+// loaded item advances the queue once through the shared step funnel, an
+// `Error` end is reported and advances nothing, a `Cancelled` end and foreign
+// content advance nothing, an uncastable step target is reported and stepped
+// over, and the edge leaves the output idle. The daemon's status-broadcast
+// thread (`run.rs` `spawn_status_broadcast`) publishes the presented status to
+// Clients at the local broadcast cadence, so the presented status is what
+// Clients receive as `StatusOnly` (design D8).
 
 use super::*;
 
 use mbv_cast::CastStatus;
+use mbv_cast::client::CastIdleReason;
 use mbv_cast::client::CastPlaybackState;
 
 use super::cast_output::{cast_selection, connect_output_client, pump_cast_event, select_output};
-use super::cast_playback::{feed_qi_with_url, playing_status_at, pump, status_connector};
+use super::cast_playback::{
+    drained_events, feed_qi_with_url, feed_qi_without_url, playing_status_at, pump,
+    status_connector,
+};
 use super::cast_resolve::wait_for_worker_jobs;
 use super::r#loop::{TestLoop, test_loop_with_queue};
 
@@ -245,4 +254,350 @@ fn stopping_the_receiver_presents_no_active_playback() {
     let status = t.event_loop.player.status.lock().unwrap().clone();
     assert!(!status.active, "the stopped output presents no playback");
     assert!(status.title.is_empty(), "the stopped item is unnamed");
+}
+
+/// Selects the receiver as the output, loads the queue's first slot on it,
+/// and lets the fixture transport's confirming status settle the load's
+/// transition — the shape every advance test starts from: the end report
+/// under test is injected as the next poll's result. Returns the selecting
+/// client's id, its event channel, the transport's call log, and the instant
+/// the settle tick ran at, so the end report's tick can be placed a poll
+/// cadence later.
+fn settled_casting_fixture(
+    t: &mut TestLoop,
+) -> (
+    u64,
+    mpsc::Receiver<CtrlOutbound>,
+    Arc<Mutex<Vec<String>>>,
+    std::time::Instant,
+) {
+    let (connector, calls) = status_connector(playing_status_at("https://feed/a.mp3", 10.0));
+    t.event_loop.cast_connector = Some(connector);
+    let (client_id, reply_tx, rx) = connect_output_client(&t.event_loop.ctrl_clients, true);
+    select_output(t, client_id, &reply_tx, cast_selection());
+    pump_cast_event(t);
+    let slot = t.event_loop.owner.core.queue.slots()[0].slot_id;
+    t.event_loop.handle_event(DaemonEvent::Ctrl(
+        CtrlCmd::UnifiedQueuePlaySlot {
+            slot_id: mbv_ctrl::slot_id_to_u64(slot),
+            op: None,
+        },
+        client_id,
+        mpsc::channel().0,
+    ));
+    pump(t);
+    wait_for_worker_jobs(&t.event_loop.owner.output);
+    let t0 = std::time::Instant::now();
+    t.event_loop.tick(t0);
+    pump(t);
+    (client_id, rx, calls, t0)
+}
+
+/// Reports `end` as the receiver's next poll result (design D7): the tick's
+/// poll is drained unapplied and `end` is delivered under its poll id, the
+/// same injection the drift-correction test uses.
+fn report_end(t: &mut TestLoop, end: CastStatus, at: std::time::Instant) {
+    t.event_loop.tick(at);
+    wait_for_worker_jobs(&t.event_loop.owner.output);
+    let event = t.merged_rx.try_recv().expect("the poll reported a result");
+    let DaemonEvent::Cast(CastOwnerEvent::Status { poll_id, .. }) = event else {
+        panic!("expected the poll's status result");
+    };
+    t.event_loop
+        .handle_event(DaemonEvent::Cast(CastOwnerEvent::Status {
+            receiver_id: "rcv-1".to_string(),
+            poll_id,
+            result: Ok(end),
+        }));
+}
+
+/// A receiver status that reports `content_id`'s media session went idle for
+/// `reason`: idle, no position, the content session still named.
+fn idle_status(content_id: &str, reason: CastIdleReason) -> CastStatus {
+    CastStatus {
+        state: CastPlaybackState::Idle,
+        position_seconds: None,
+        duration_seconds: None,
+        playback_rate: 1.0,
+        playing_content_id: Some(content_id.to_string()),
+        idle_reason: Some(reason),
+    }
+}
+
+/// The load calls the transport recorded, in order.
+fn load_calls(calls: &Arc<Mutex<Vec<String>>>) -> Vec<String> {
+    calls
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|call| call.starts_with("load("))
+        .cloned()
+        .collect()
+}
+
+/// The `CommandRejected` reports the client's event channel carries.
+fn rejected_reports(rx: &mpsc::Receiver<CtrlOutbound>) -> Vec<String> {
+    drained_events(rx)
+        .into_iter()
+        .filter_map(|event| match event {
+            CtrlEvent::CommandRejected(report) => Some(report),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Contract: cast-owner-output row 6.2 (design D7) — a `Finished` end of the
+/// loaded item advances once: the next slot of the play order is resolved and
+/// loaded, and only that load is sent.
+#[test]
+fn a_finished_end_loads_the_next_slot_once() {
+    let mut t = test_loop_with_queue(
+        crate::DaemonRole::Local,
+        vec![
+            feed_qi_with_url("a", "https://feed/a.mp3"),
+            feed_qi_with_url("b", "https://feed/b.mp3"),
+        ],
+        0,
+    );
+    let (_client_id, _rx, calls, t0) = settled_casting_fixture(&mut t);
+
+    report_end(
+        &mut t,
+        idle_status("https://feed/a.mp3", CastIdleReason::Finished),
+        t0 + std::time::Duration::from_secs(120),
+    );
+    pump(&mut t);
+    wait_for_worker_jobs(&t.event_loop.owner.output);
+
+    assert_eq!(
+        load_calls(&calls),
+        vec![
+            "load(https://feed/a.mp3, 0)".to_string(),
+            "load(https://feed/b.mp3, 0)".to_string()
+        ],
+        "the finished item's end advances exactly one slot"
+    );
+}
+
+/// Contract: cast-owner-output row 6.2 (design D7) — the end-handled flag: a
+/// second poll of the same `Finished` entry steps nothing again. The step
+/// target is uncastable and the step-over ends at the edge, so the loaded item
+/// stays put and the same end report is still handled once: exactly one
+/// report and no second step.
+#[test]
+fn a_second_poll_of_the_same_finished_end_steps_nothing_again() {
+    let mut t = test_loop_with_queue(
+        crate::DaemonRole::Local,
+        vec![
+            feed_qi_with_url("a", "https://feed/a.mp3"),
+            feed_qi_without_url("b"),
+        ],
+        0,
+    );
+    let (_client_id, rx, calls, t0) = settled_casting_fixture(&mut t);
+    let later = t0 + std::time::Duration::from_secs(120);
+
+    report_end(
+        &mut t,
+        idle_status("https://feed/a.mp3", CastIdleReason::Finished),
+        later,
+    );
+    pump(&mut t);
+    report_end(
+        &mut t,
+        idle_status("https://feed/a.mp3", CastIdleReason::Finished),
+        later + std::time::Duration::from_secs(120),
+    );
+
+    assert!(
+        t.merged_rx.try_recv().is_err(),
+        "the second poll of the same Finished end produces no event"
+    );
+    assert_eq!(
+        load_calls(&calls),
+        vec!["load(https://feed/a.mp3, 0)".to_string()],
+        "the handled end steps nothing again"
+    );
+    assert_eq!(
+        rejected_reports(&rx).len(),
+        1,
+        "the uncastable step is reported once, not once per poll"
+    );
+}
+
+/// Contract: cast-owner-output row 6.2 (design D7, spec "User stops on the
+/// device") — a `Cancelled` end advances nothing: no slot is loaded and the
+/// loaded item stays the one the receiver was told to play.
+#[test]
+fn a_cancelled_end_loads_nothing() {
+    let mut t = test_loop_with_queue(
+        crate::DaemonRole::Local,
+        vec![
+            feed_qi_with_url("a", "https://feed/a.mp3"),
+            feed_qi_with_url("b", "https://feed/b.mp3"),
+        ],
+        0,
+    );
+    let (_client_id, _rx, calls, t0) = settled_casting_fixture(&mut t);
+
+    report_end(
+        &mut t,
+        idle_status("https://feed/a.mp3", CastIdleReason::Cancelled),
+        t0 + std::time::Duration::from_secs(120),
+    );
+
+    assert!(
+        t.merged_rx.try_recv().is_err(),
+        "a cancelled end starts no load"
+    );
+    assert_eq!(
+        load_calls(&calls),
+        vec!["load(https://feed/a.mp3, 0)".to_string()],
+        "the cancelled end leaves the loaded item alone"
+    );
+}
+
+/// Contract: cast-owner-output row 6.2 (design D7, spec "Receiver fails to
+/// play the item") — an `Error` end is reported to Clients and advances
+/// nothing: no slot is loaded after the failure.
+#[test]
+fn a_receiver_error_is_reported_and_loads_nothing() {
+    let mut t = test_loop_with_queue(
+        crate::DaemonRole::Local,
+        vec![
+            feed_qi_with_url("a", "https://feed/a.mp3"),
+            feed_qi_with_url("b", "https://feed/b.mp3"),
+        ],
+        0,
+    );
+    let (_client_id, rx, calls, t0) = settled_casting_fixture(&mut t);
+
+    report_end(
+        &mut t,
+        idle_status("https://feed/a.mp3", CastIdleReason::Error),
+        t0 + std::time::Duration::from_secs(120),
+    );
+
+    let reports = rejected_reports(&rx);
+    assert_eq!(
+        reports.len(),
+        1,
+        "the receiver's error is reported to Clients: {reports:?}"
+    );
+    assert!(
+        reports[0].contains('a') && reports[0].contains("failed to play"),
+        "the report names the item: {reports:?}"
+    );
+    assert_eq!(
+        load_calls(&calls),
+        vec!["load(https://feed/a.mp3, 0)".to_string()],
+        "the error end skips ahead nowhere"
+    );
+}
+
+/// Contract: cast-owner-output row 6.2 (design D7, spec "Receiver plays
+/// something mbv did not dispatch") — a `Finished` end of media the Owner did
+/// not load advances nothing: the loaded item keeps its place.
+#[test]
+fn a_finished_end_of_foreign_media_advances_nothing() {
+    let mut t = test_loop_with_queue(
+        crate::DaemonRole::Local,
+        vec![
+            feed_qi_with_url("a", "https://feed/a.mp3"),
+            feed_qi_with_url("b", "https://feed/b.mp3"),
+        ],
+        0,
+    );
+    let (_client_id, _rx, calls, t0) = settled_casting_fixture(&mut t);
+
+    report_end(
+        &mut t,
+        idle_status("https://feed/other.mp3", CastIdleReason::Finished),
+        t0 + std::time::Duration::from_secs(120),
+    );
+
+    assert!(
+        t.merged_rx.try_recv().is_err(),
+        "a foreign end starts no load"
+    );
+    assert_eq!(
+        load_calls(&calls),
+        vec!["load(https://feed/a.mp3, 0)".to_string()],
+        "the foreign end leaves the queue in place"
+    );
+}
+
+/// Contract: cast-owner-output row 6.2 (spec "Advance reaches an uncastable
+/// slot") — the advance steps over an uncastable slot: it is reported to
+/// Clients by name and reason, and the next castable slot after it is loaded.
+#[test]
+fn an_advance_steps_over_an_uncastable_slot_and_reports_it() {
+    let mut t = test_loop_with_queue(
+        crate::DaemonRole::Local,
+        vec![
+            feed_qi_with_url("a", "https://feed/a.mp3"),
+            feed_qi_without_url("b"),
+            feed_qi_with_url("c", "https://feed/c.mp3"),
+        ],
+        0,
+    );
+    let (_client_id, rx, calls, t0) = settled_casting_fixture(&mut t);
+
+    report_end(
+        &mut t,
+        idle_status("https://feed/a.mp3", CastIdleReason::Finished),
+        t0 + std::time::Duration::from_secs(120),
+    );
+    pump(&mut t);
+    pump(&mut t);
+    wait_for_worker_jobs(&t.event_loop.owner.output);
+
+    let reports = rejected_reports(&rx);
+    assert!(
+        reports
+            .iter()
+            .any(|report| report.contains("\"b\" has no media URL")),
+        "the uncastable step target is reported by name and reason: {reports:?}"
+    );
+    assert_eq!(
+        load_calls(&calls),
+        vec![
+            "load(https://feed/a.mp3, 0)".to_string(),
+            "load(https://feed/c.mp3, 0)".to_string()
+        ],
+        "the advance skips the uncastable slot and loads the next castable one"
+    );
+}
+
+/// Contract: cast-owner-output row 6.2 (design D7, spec "Last item ends") —
+/// an advance at the edge of the queue loads nothing and the output stays
+/// idle.
+#[test]
+fn an_advance_at_the_queue_edge_leaves_the_output_idle() {
+    let mut t = test_loop_with_queue(
+        crate::DaemonRole::Local,
+        vec![feed_qi_with_url("a", "https://feed/a.mp3")],
+        0,
+    );
+    let (_client_id, _rx, calls, t0) = settled_casting_fixture(&mut t);
+
+    report_end(
+        &mut t,
+        idle_status("https://feed/a.mp3", CastIdleReason::Finished),
+        t0 + std::time::Duration::from_secs(120),
+    );
+
+    assert!(
+        t.merged_rx.try_recv().is_err(),
+        "the edge advance starts no load"
+    );
+    assert_eq!(
+        load_calls(&calls),
+        vec!["load(https://feed/a.mp3, 0)".to_string()],
+        "the last slot's end loads nothing"
+    );
+    assert!(
+        !t.event_loop.player.status.lock().unwrap().active,
+        "the output stays idle at the edge"
+    );
 }

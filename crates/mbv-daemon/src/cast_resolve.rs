@@ -332,6 +332,9 @@ pub(super) fn handle_cast_resolved(
             progress: source.progress,
             end_handled: false,
         });
+        // The load ends any advance the step belonged to (design D7): its
+        // target is on the receiver, so no step-over is pending.
+        cast.advance = None;
         return;
     };
     // A failed resolve expires the transition it belonged to (design D5, row
@@ -345,9 +348,33 @@ pub(super) fn handle_cast_resolved(
         reason = %uncastable.reason,
         "the slot's item cannot be cast; nothing was loaded"
     );
-    let mut ctx = crate::cast::owner_context(daemon);
-    crate::cast::report_resolve_failure(&mut ctx, &pending.transition, pending.origin, &uncastable);
-    crate::cast::expire_cast_transition(&mut ctx);
+    let report = format!("{} ({})", uncastable.item, uncastable.reason);
+    if crate::cast::advance::step_failed(daemon, pending.transition.request_id) {
+        // The failed step was the advance's own (design D7): it has no
+        // issuing client, so the report goes to every Client (spec "Advance
+        // reaches an uncastable slot"), and the advance steps over unless the
+        // expiry promoted a queued user transition — that user took the queue
+        // over.
+        crate::core::broadcast(
+            &daemon.ctrl_clients,
+            &mbv_ctrl::CtrlEvent::CommandRejected(report),
+        );
+        let mut ctx = crate::cast::owner_context(daemon);
+        if crate::cast::expire_cast_transition(&mut ctx) {
+            crate::cast::advance::abandon(daemon);
+        } else {
+            crate::cast::advance::continue_after_failed_step(daemon, pending.transition.target);
+        }
+    } else {
+        let mut ctx = crate::cast::owner_context(daemon);
+        crate::cast::report_resolve_failure(
+            &mut ctx,
+            &pending.transition,
+            pending.origin,
+            &uncastable,
+        );
+        crate::cast::expire_cast_transition(&mut ctx);
+    }
 }
 
 /// Submits one load job (design D4): a fresh pong immediately before the
