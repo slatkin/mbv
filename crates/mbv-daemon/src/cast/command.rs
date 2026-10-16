@@ -128,9 +128,11 @@ fn route_cast_command(
             };
             // The seek arms the settle marker only while an item is loaded:
             // a seek with nothing loaded has no slot whose settle could mean
-            // anything (design D9).
+            // anything (design D9). The bound is the next poll id, so only
+            // a status whose poll was issued after the seek settles it — a
+            // poll still in flight at arm time carries a pre-seek snapshot.
             if cast.loaded.is_some() {
-                cast.pending_seek = true;
+                cast.pending_seek = Some(cast.next_poll_id);
             }
             let worker = cast.worker.clone();
             submit_command_job(&worker, "seek", move |transport| transport.seek(target));
@@ -146,7 +148,7 @@ fn route_cast_command(
                 return;
             };
             if cast.loaded.is_some() {
-                cast.pending_seek = true;
+                cast.pending_seek = Some(cast.next_poll_id);
             }
             let worker = cast.worker.clone();
             submit_command_job(&worker, "seek", move |transport| transport.seek(seconds));

@@ -97,13 +97,16 @@ pub(crate) struct CastOutput {
     /// output has no advance under way. `pub(super)` so the crate's resolve
     /// handler can end it with the step's load.
     pub(super) advance: Option<advance::CastAdvance>,
-    /// Whether a seek was submitted for the loaded item and no receiver
-    /// status has presented it since (design D9): the Feed `OutputStarted`
-    /// fires when a presenting status settles the seek. Cleared by the
-    /// settle, by a replacing load, and by the loaded item's stop.
-    /// `pub(super)` so the crate's resolve handler clears it with the
-    /// replaced load.
-    pub(super) pending_seek: bool,
+    /// A seek was submitted for the loaded item and no receiver status
+    /// issued after it has presented the item yet (design D9): the Feed
+    /// `OutputStarted` fires when such a status settles the seek. The value
+    /// is the poll-id bound the settling status's poll must have reached —
+    /// the next poll id at arm time — so a status whose poll was issued
+    /// before the seek, including one still in flight at arm time, settles
+    /// nothing. Cleared by the settle, by a replacing load, and by the
+    /// loaded item's stop. `pub(super)` so the crate's resolve handler
+    /// clears it with the replaced load.
+    pub(super) pending_seek: Option<u64>,
 }
 
 /// The item the Cast receiver was told to play (design D1). `end_handled`
@@ -475,7 +478,7 @@ pub(super) fn stop_active_output(
             // The stop ends any advance the loaded item's end started (design
             // D7): a stopped output advances nothing.
             cast.advance = None;
-            cast.pending_seek = false;
+            cast.pending_seek = None;
             command::submit_command_job(&worker, "stop", |transport| transport.stop());
             let base = player.status.lock().unwrap().clone();
             let presented = status::presented_player_status(

@@ -53,12 +53,16 @@ impl StatusFeedEvents {
 }
 
 /// Reads the fresh status's Feed events (design D9) ahead of the status's
-/// installation, while the previous status is still stored.
+/// installation, while the previous status is still stored. `poll_id` is the
+/// id of the poll the fresh status answered: a pending seek settles only on
+/// a status whose poll was issued after the seek, so a snapshot captured
+/// before the seek — one in flight at arm time — settles nothing.
 pub(super) fn status_feed_events(
     loaded: Option<&CastLoadedItem>,
     previous: Option<&CastStatus>,
     fresh: &CastStatus,
-    seek_pending: bool,
+    seek_armed_from: Option<u64>,
+    poll_id: u64,
 ) -> StatusFeedEvents {
     let Some(loaded) = loaded.filter(|loaded| loaded_is_feed(loaded)) else {
         return StatusFeedEvents::none();
@@ -73,7 +77,7 @@ pub(super) fn status_feed_events(
         .map(|_| paused(fresh));
     StatusFeedEvents {
         paused_changed,
-        seek_settled: seek_pending,
+        seek_settled: seek_armed_from.is_some_and(|from| poll_id >= from),
     }
 }
 
@@ -90,7 +94,7 @@ pub(super) fn emit_status_events(daemon: &mut DaemonLoop, events: StatusFeedEven
     let PlaybackOutput::Cast(cast) = &mut daemon.owner.output else {
         return;
     };
-    cast.pending_seek = false;
+    cast.pending_seek = None;
     broadcast_loaded_event(daemon, PlayerEvent::OutputStarted);
 }
 

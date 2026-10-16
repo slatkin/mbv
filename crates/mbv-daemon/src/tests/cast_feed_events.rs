@@ -266,6 +266,74 @@ fn a_user_stop_of_a_feed_slot_emits_stopped_to_clients() {
     );
 }
 
+/// Contract: cast-owner-output row 6.4 review — a seek is settled only by a
+/// status whose poll was issued after it. A poll in flight when the seek
+/// arms carries a snapshot captured before the seek: it presents the loaded
+/// item but settles nothing, and the marker stays armed for the first
+/// post-seek status, whose settle emits `OutputStarted` (design D9).
+#[test]
+fn a_seek_is_not_settled_by_a_status_issued_before_it() {
+    let mut t = test_loop_with_queue(
+        crate::DaemonRole::Local,
+        vec![timed_video_feed_qi(
+            "a",
+            "https://feed/a.mp4",
+            ten_minutes(),
+        )],
+        0,
+    );
+    let (client_id, rx) = loaded_feed_fixture(&mut t);
+    let t0 = std::time::Instant::now();
+
+    // A poll goes in flight; its result is still queued when the seek arms.
+    t.event_loop.tick(t0);
+    wait_for_worker_jobs(&t.event_loop.owner.output);
+
+    t.event_loop.handle_event(DaemonEvent::Ctrl(
+        CtrlCmd::PlayerCmd(mbv_ctrl::WireCommand::SeekAbsolute(300.0)),
+        client_id,
+        mpsc::channel().0,
+    ));
+    wait_for_worker_jobs(&t.event_loop.owner.output);
+
+    // The pre-seek status arrives and presents the loaded item: it settles
+    // nothing.
+    let event = t
+        .merged_rx
+        .try_recv()
+        .expect("the first poll reported a result");
+    let DaemonEvent::Cast(CastOwnerEvent::Status { poll_id, .. }) = &event else {
+        panic!("expected the first poll's status result");
+    };
+    let pre_seek_poll = *poll_id;
+    t.event_loop
+        .handle_event(DaemonEvent::Cast(CastOwnerEvent::Status {
+            receiver_id: "rcv-1".to_string(),
+            poll_id: pre_seek_poll,
+            result: Ok(playing_status_at("https://feed/a.mp4", 10.0)),
+        }));
+    assert!(
+        !player_events(&rx)
+            .iter()
+            .any(|event| matches!(event, PlayerEvent::OutputStarted)),
+        "the pre-seek status settles nothing"
+    );
+
+    // A status whose poll was issued after the seek settles it.
+    report_status(
+        &mut t,
+        playing_status_at("https://feed/a.mp4", 300.0),
+        t0 + std::time::Duration::from_secs(120),
+    );
+    let events = player_events(&rx);
+    assert_eq!(events.len(), 1, "the settle is the only event: {events:?}");
+    assert!(
+        matches!(&events[0], PlayerEvent::OutputStarted),
+        "the post-seek status settles the seek: {:?}",
+        events[0]
+    );
+}
+
 /// Contract: cast-owner-output row 6.4 (design D9) — a receiver status that
 /// presents the loaded Feed slot after a seek command settles the seek and
 /// emits `OutputStarted` to Clients, the event the TUI persists the seeked

@@ -237,7 +237,7 @@ pub(super) fn handle_connect_outcome(
                 next_poll_id: 0,
                 reconnecting: false,
                 advance: None,
-                pending_seek: false,
+                pending_seek: None,
             };
             tracing::info!(name: "daemon.cast_output.connected", target: "daemon", receiver = %receiver_id, output = ?output, "cast receiver is now the playback output");
             daemon.owner.output = PlaybackOutput::Cast(Box::new(output));

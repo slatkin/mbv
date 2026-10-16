@@ -56,6 +56,7 @@ pub(super) fn handle_cast_status(
                     cast.last_status.as_ref(),
                     &status,
                     cast.pending_seek,
+                    poll_id,
                 );
                 cast.last_status = Some(status);
                 cast.status_at = Some(Instant::now());
