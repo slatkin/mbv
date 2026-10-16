@@ -264,84 +264,7 @@ pub(super) fn handle_connect_outcome(
     } = pending;
     match outcome {
         CastConnectOutcome::Connected(worker) => {
-            let active_now = daemon.player.status.lock().unwrap().active;
-            if handoff.is_none() && active_now {
-                // Playback may have started on the old output after the
-                // select (the select-time capture found nothing active).
-                // Swapping now would leave two live outputs, so the connect
-                // is discarded and reported instead.
-                drop(worker);
-                send_to(
-                    &reply_tx,
-                    &CtrlEvent::CommandRejected(
-                        "playback started while connecting; stop playback before moving it to a receiver"
-                            .to_string(),
-                    ),
-                );
-                return;
-            }
-            if let Some(handoff) = handoff {
-                if active_now {
-                    tracing::info!(
-                        name: "daemon.cast_handoff.old_output_stopped",
-                        target: "daemon",
-                        slot = ?handoff.slot,
-                        "the connect succeeded; the old output stops and its slot continues on the new receiver"
-                    );
-                } else {
-                    tracing::info!(
-                        name: "daemon.cast_handoff.playback_stopped",
-                        target: "daemon",
-                        slot = ?handoff.slot,
-                        "the captured playback stopped while connecting; the output swaps with nothing to continue"
-                    );
-                }
-            }
-            // Every swap stops the old output (design D10 step 3), whether
-            // or not a hand-off was captured: the local run stops; the old
-            // receiver's media stops with its stop reports — none where
-            // nothing was loaded or reported — and the deliberate output
-            // change tears the old receiver's app down (design D12), on the
-            // old receiver never the new one. The stop also makes every
-            // awaited transition identity the old output could confirm
-            // unobservable (the same rule a ctrl stop applies).
-            stop_old_output_for_handoff(daemon);
-            crate::core::reset_slot_jumps(
-                &mut daemon.owner.core.transitions,
-                &mut daemon.owner.queued_transition_origin,
-            );
-            let pending_handoff_load = handoff.map(|handoff| super::PendingHandoffLoad {
-                slot: handoff.slot,
-                start_ticks: handoff.start_ticks,
-                paused: handoff.paused,
-                reply_tx,
-            });
-            let output = super::CastOutput {
-                worker,
-                receiver,
-                connection: CastConnection::Connected,
-                last_status: None,
-                status_at: None,
-                loaded: None,
-                last_keep_alive: Instant::now(),
-                last_poll: None,
-                poll_sent: None,
-                next_poll_id: 0,
-                reconnecting: false,
-                advance: None,
-                pending_seek: None,
-                pending_handoff_load,
-            };
-            tracing::info!(name: "daemon.cast_output.connected", target: "daemon", receiver = %receiver_id, output = ?output, "cast receiver is now the playback output");
-            daemon.owner.output = PlaybackOutput::Cast(Box::new(output));
-            refresh_presentation(daemon, Instant::now());
-            broadcast_output_change(daemon);
-            if let Some(handoff) = handoff {
-                // The queue's own active marker follows the handed-off slot,
-                // the same bookkeeping a Cast dispatch does.
-                let _ = daemon.owner.core.queue.set_active_slot(handoff.slot);
-                spawn_handoff_resolve(daemon, handoff);
-            }
+            apply_connected_output(daemon, receiver_id, worker, receiver, reply_tx, handoff);
         }
         CastConnectOutcome::Failed(reason) => {
             tracing::warn!(name: "daemon.cast_output.connect_failed", target: "daemon", receiver = %receiver_id, error = %reason, "cast connect failed; playback output unchanged");
@@ -351,6 +274,119 @@ pub(super) fn handle_connect_outcome(
             );
         }
     }
+}
+
+/// Applies one successful connect to the owner's output (task 3.2): the swap
+/// stops the old output, installs the new receiver as the output, re-presents
+/// it (row 6.1: the presented status starts clean), and continues a captured
+/// hand-off on the new receiver.
+fn apply_connected_output(
+    daemon: &mut DaemonLoop,
+    receiver_id: &str,
+    worker: mpsc::Sender<CastJob>,
+    receiver: CastReceiver,
+    reply_tx: CtrlSender,
+    handoff: Option<HandoffPlayback>,
+) {
+    let active_now = daemon.player.status.lock().unwrap().active;
+    if handoff.is_none() && active_now {
+        // Playback may have started on the old output after the
+        // select (the select-time capture found nothing active).
+        // Swapping now would leave two live outputs, so the connect
+        // is discarded and reported instead.
+        drop(worker);
+        send_to(
+            &reply_tx,
+            &CtrlEvent::CommandRejected(
+                "playback started while connecting; stop playback before moving it to a receiver"
+                    .to_string(),
+            ),
+        );
+        return;
+    }
+    log_handoff_connect_outcome(active_now, handoff);
+    // Every swap stops the old output (design D10 step 3), whether
+    // or not a hand-off was captured: the local run stops; the old
+    // receiver's media stops with its stop reports — none where
+    // nothing was loaded or reported — and the deliberate output
+    // change tears the old receiver's app down (design D12), on the
+    // old receiver never the new one. The stop also makes every
+    // awaited transition identity the old output could confirm
+    // unobservable (the same rule a ctrl stop applies).
+    stop_old_output_for_handoff(daemon);
+    crate::core::reset_slot_jumps(
+        &mut daemon.owner.core.transitions,
+        &mut daemon.owner.queued_transition_origin,
+    );
+    let pending_handoff_load = handoff.map(|handoff| super::PendingHandoffLoad {
+        slot: handoff.slot,
+        start_ticks: handoff.start_ticks,
+        paused: handoff.paused,
+        reply_tx,
+    });
+    install_connected_output(daemon, receiver_id, worker, receiver, pending_handoff_load);
+    if let Some(handoff) = handoff {
+        // The queue's own active marker follows the handed-off slot,
+        // the same bookkeeping a Cast dispatch does.
+        let _ = daemon.owner.core.queue.set_active_slot(handoff.slot);
+        spawn_handoff_resolve(daemon, handoff);
+    }
+}
+
+/// Logs what a successful connect means for a captured hand-off (design D10
+/// step 3): the old output stops and its slot continues on the new receiver,
+/// or the captured playback stopped while connecting and the output swaps
+/// with nothing to continue.
+fn log_handoff_connect_outcome(active_now: bool, handoff: Option<HandoffPlayback>) {
+    if let Some(handoff) = handoff {
+        if active_now {
+            tracing::info!(
+                name: "daemon.cast_handoff.old_output_stopped",
+                target: "daemon",
+                slot = ?handoff.slot,
+                "the connect succeeded; the old output stops and its slot continues on the new receiver"
+            );
+        } else {
+            tracing::info!(
+                name: "daemon.cast_handoff.playback_stopped",
+                target: "daemon",
+                slot = ?handoff.slot,
+                "the captured playback stopped while connecting; the output swaps with nothing to continue"
+            );
+        }
+    }
+}
+
+/// Installs the connected receiver as the playback output (task 3.2): the
+/// output is built clean (row 6.1: the presented status starts clean),
+/// logged, installed, re-presented, and broadcast.
+fn install_connected_output(
+    daemon: &mut DaemonLoop,
+    receiver_id: &str,
+    worker: mpsc::Sender<CastJob>,
+    receiver: CastReceiver,
+    pending_handoff_load: Option<super::PendingHandoffLoad>,
+) {
+    let output = super::CastOutput {
+        worker,
+        receiver,
+        connection: CastConnection::Connected,
+        last_status: None,
+        status_at: None,
+        loaded: None,
+        last_keep_alive: Instant::now(),
+        last_poll: None,
+        poll_sent: None,
+        next_poll_id: 0,
+        reconnecting: false,
+        advance: None,
+        pending_seek: None,
+        pending_handoff_load,
+    };
+    tracing::info!(name: "daemon.cast_output.connected", target: "daemon", receiver = %receiver_id, output = ?output, "cast receiver is now the playback output");
+    daemon.owner.output = PlaybackOutput::Cast(Box::new(output));
+    refresh_presentation(daemon, Instant::now());
+    broadcast_output_change(daemon);
 }
 
 /// Stops the old output for a successful swap (design D10 step 3): the local

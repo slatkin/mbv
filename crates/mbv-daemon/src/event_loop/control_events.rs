@@ -40,67 +40,7 @@ impl DaemonLoop {
             return EventOutcome::CONTINUE;
         }
         if let CtrlCmd::ApplyServiceSetup { kind, revision } = cmd {
-            let transport = self.ctrl_clients.lock().unwrap().transport(client_id);
-            let allowed = owner_admin_transport_allowed(self.role, kind, transport);
-            let result = if allowed {
-                match kind {
-                    mbv_queue::ServiceKind::Emby => reconcile_packaged_emby(
-                        revision,
-                        &mut self.emby_runtime,
-                        &mut self.ws_send_tx,
-                        &self.merged_tx,
-                        &self.direct_commands,
-                        self.audio_only,
-                        &mut DaemonOwnerContext {
-                            player: &self.player,
-                            client: &self.client,
-                            owner: &mut self.owner,
-                            shared_queue: &self.shared_queue,
-                            ctrl_clients: &self.ctrl_clients,
-                            merged_tx: &self.merged_tx,
-                            audiobookshelf: self.audiobookshelf_runtime.as_ref(),
-                        },
-                    ),
-                    mbv_queue::ServiceKind::Audiobookshelf => reconcile_packaged_audiobookshelf(
-                        revision,
-                        // The runtime is being replaced here: the context
-                        // cannot borrow it immutably at the same time, and
-                        // the outgoing runtime is not a usable resolve
-                        // source anyway.
-                        &mut self.audiobookshelf_runtime,
-                        &mut DaemonOwnerContext {
-                            player: &self.player,
-                            client: &self.client,
-                            owner: &mut self.owner,
-                            shared_queue: &self.shared_queue,
-                            ctrl_clients: &self.ctrl_clients,
-                            merged_tx: &self.merged_tx,
-                            audiobookshelf: None,
-                        },
-                    ),
-                }
-            } else {
-                Err(mbv_ctrl::ServiceSetupRejection::TransitionRejected)
-            };
-            match result {
-                Ok(()) => send_to(reply_tx, &CtrlEvent::ServiceSetupApplied { kind, revision }),
-                Err(reason) => send_to(
-                    reply_tx,
-                    &CtrlEvent::ServiceSetupRejected {
-                        kind,
-                        revision,
-                        reason,
-                    },
-                ),
-            }
-            if result.is_ok() && kind == mbv_queue::ServiceKind::Audiobookshelf {
-                install_daemon_audiobookshelf_context(
-                    &self.player,
-                    self.audiobookshelf_runtime.as_ref(),
-                    &self.merged_tx,
-                );
-            }
-            return EventOutcome::CONTINUE;
+            return self.handle_apply_service_setup(kind, revision, client_id, reply_tx);
         }
         if let CtrlCmd::RunOwnerAction(action) = cmd {
             // Owner actions run through the one owner-action handler
@@ -145,8 +85,78 @@ impl DaemonLoop {
         EventOutcome::CONTINUE
     }
 
-    /// `DaemonEvent::PlaybackResolved`: validate a resolved play intent, then
-    /// replace the queue and start playback.
+    /// `CtrlCmd::ApplyServiceSetup`: apply the service-setup reconcile inline
+    /// and answer the requesting Client; an applied Audiobookshelf setup also
+    /// reinstalls the daemon's resolve context.
+    fn handle_apply_service_setup(
+        &mut self,
+        kind: mbv_queue::ServiceKind,
+        revision: u64,
+        client_id: CtrlClientId,
+        reply_tx: &CtrlSender,
+    ) -> EventOutcome {
+        let transport = self.ctrl_clients.lock().unwrap().transport(client_id);
+        let allowed = owner_admin_transport_allowed(self.role, kind, transport);
+        let result = if allowed {
+            match kind {
+                mbv_queue::ServiceKind::Emby => reconcile_packaged_emby(
+                    revision,
+                    &mut self.emby_runtime,
+                    &mut self.ws_send_tx,
+                    &self.merged_tx,
+                    &self.direct_commands,
+                    self.audio_only,
+                    &mut DaemonOwnerContext {
+                        player: &self.player,
+                        client: &self.client,
+                        owner: &mut self.owner,
+                        shared_queue: &self.shared_queue,
+                        ctrl_clients: &self.ctrl_clients,
+                        merged_tx: &self.merged_tx,
+                        audiobookshelf: self.audiobookshelf_runtime.as_ref(),
+                    },
+                ),
+                mbv_queue::ServiceKind::Audiobookshelf => reconcile_packaged_audiobookshelf(
+                    revision,
+                    // The runtime is being replaced here: the context
+                    // cannot borrow it immutably at the same time, and
+                    // the outgoing runtime is not a usable resolve
+                    // source anyway.
+                    &mut self.audiobookshelf_runtime,
+                    &mut DaemonOwnerContext {
+                        player: &self.player,
+                        client: &self.client,
+                        owner: &mut self.owner,
+                        shared_queue: &self.shared_queue,
+                        ctrl_clients: &self.ctrl_clients,
+                        merged_tx: &self.merged_tx,
+                        audiobookshelf: None,
+                    },
+                ),
+            }
+        } else {
+            Err(mbv_ctrl::ServiceSetupRejection::TransitionRejected)
+        };
+        match result {
+            Ok(()) => send_to(reply_tx, &CtrlEvent::ServiceSetupApplied { kind, revision }),
+            Err(reason) => send_to(
+                reply_tx,
+                &CtrlEvent::ServiceSetupRejected {
+                    kind,
+                    revision,
+                    reason,
+                },
+            ),
+        }
+        if result.is_ok() && kind == mbv_queue::ServiceKind::Audiobookshelf {
+            install_daemon_audiobookshelf_context(
+                &self.player,
+                self.audiobookshelf_runtime.as_ref(),
+                &self.merged_tx,
+            );
+        }
+        EventOutcome::CONTINUE
+    }
     pub(super) fn handle_playback_resolved(
         &mut self,
         start_idx: usize,

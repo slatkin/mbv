@@ -261,6 +261,35 @@ pub(super) fn handle_queue_source_update(
     }
 }
 
+/// Installs the replacement queue on the owner core (design D2): the queue
+/// is rebuilt from the admitted slots with the start slot active, the new
+/// source is recorded, the shared lineage is minted, and any in-flight slot
+/// jump is reset.
+fn install_replaced_queue(
+    ctx: &mut CtrlContext<'_>,
+    slots: Vec<(QueueSlotId, QueueItem)>,
+    next_cursor: usize,
+    new_source: mbv_queue::QueueSource,
+) {
+    let DaemonPlayerOwner {
+        core:
+            PlayerOwnerState {
+                queue,
+                source,
+                transitions,
+                ..
+            },
+        queued_transition_origin,
+        ..
+    } = &mut *ctx.owner;
+    let active_slot = slots.get(next_cursor).map(|(slot_id, _)| *slot_id);
+    let mint = queue.revision_mint();
+    *queue = PlaybackQueue::from_slot_items(slots, active_slot, mint);
+    *source = new_source;
+    mint_queue_lineage(ctx.shared_queue);
+    reset_slot_jumps(transitions, queued_transition_origin);
+}
+
 fn prepare_replacement_slots(
     ctx: &CtrlContext<'_>,
     items: Vec<QueueItem>,
@@ -340,25 +369,7 @@ pub(super) fn handle_queue_replace(
             }
         };
     let except_op_client = ctx.except_op_client();
-    {
-        let DaemonPlayerOwner {
-            core:
-                PlayerOwnerState {
-                    queue,
-                    source,
-                    transitions,
-                    ..
-                },
-            queued_transition_origin,
-            ..
-        } = &mut *ctx.owner;
-        let active_slot = slots.get(next_cursor).map(|(slot_id, _)| *slot_id);
-        let mint = queue.revision_mint();
-        *queue = PlaybackQueue::from_slot_items(slots, active_slot, mint);
-        *source = new_source;
-        mint_queue_lineage(ctx.shared_queue);
-        reset_slot_jumps(transitions, queued_transition_origin);
-    }
+    install_replaced_queue(ctx, slots, next_cursor, new_source);
     // A new queue invalidates the previous playback observation (design
     // D2): clear it on both the shared snapshot and the owner core so
     // Next/Previous fall back to the new queue's active slot until the

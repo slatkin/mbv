@@ -553,22 +553,30 @@ fn handle_load_failed(daemon: &mut DaemonLoop, slot: QueueSlotId, error: &str) {
         error = %error,
         "the receiver did not take the load"
     );
-    {
-        let PlaybackOutput::Cast(cast) = &mut daemon.owner.output else {
-            return;
-        };
-        if cast
-            .loaded
-            .as_ref()
-            .is_none_or(|loaded| loaded.slot != slot)
-        {
-            return;
-        }
-        cast.loaded = None;
+    if !clear_loaded_for_failed_slot(&mut daemon.owner.output, slot) {
+        return;
     }
     status::refresh_presentation(daemon, Instant::now());
     let mut ctx = owner_context(daemon);
     expire_cast_transition(&mut ctx);
+}
+
+/// Drops the loaded record when the load failure named the loaded slot
+/// (design D5); returns whether a record was dropped, so the caller refreshes
+/// the presentation and expires the transition only then.
+fn clear_loaded_for_failed_slot(output: &mut PlaybackOutput, slot: QueueSlotId) -> bool {
+    let PlaybackOutput::Cast(cast) = output else {
+        return false;
+    };
+    if cast
+        .loaded
+        .as_ref()
+        .is_none_or(|loaded| loaded.slot != slot)
+    {
+        return false;
+    }
+    cast.loaded = None;
+    true
 }
 
 /// Cast tick timers (design D8, task 3.3), driven by `DaemonLoop::tick` with

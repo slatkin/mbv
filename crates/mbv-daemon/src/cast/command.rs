@@ -116,42 +116,10 @@ fn route_cast_command(
                     .and_then(|status| status.position_seconds)
                     .unwrap_or(0.0),
             );
-            let target_f64 = (base + *delta).max(0.0);
-            let Some(target) = cast_seconds_f32(target_f64) else {
-                tracing::warn!(
-                    name: "cast.seek.invalid",
-                    target: "cast",
-                    seconds = target_f64,
-                    "the seek position is outside the receiver's range; the seek is dropped"
-                );
-                return;
-            };
-            // The seek arms the settle marker only while an item is loaded:
-            // a seek with nothing loaded has no slot whose settle could mean
-            // anything (design D9). The bound is the next poll id, so only
-            // a status whose poll was issued after the seek settles it — a
-            // poll still in flight at arm time carries a pre-seek snapshot.
-            if cast.loaded.is_some() {
-                cast.pending_seek = Some(cast.next_poll_id);
-            }
-            let worker = cast.worker.clone();
-            submit_command_job(&worker, "seek", move |transport| transport.seek(target));
+            submit_seek(cast, (base + *delta).max(0.0));
         }
         mbv_ctrl::WireCommand::SeekAbsolute(seconds) => {
-            let Some(seconds) = cast_seconds_f32(*seconds) else {
-                tracing::warn!(
-                    name: "cast.seek.invalid",
-                    target: "cast",
-                    seconds = *seconds,
-                    "the seek position is outside the receiver's range; the seek is dropped"
-                );
-                return;
-            };
-            if cast.loaded.is_some() {
-                cast.pending_seek = Some(cast.next_poll_id);
-            }
-            let worker = cast.worker.clone();
-            submit_command_job(&worker, "seek", move |transport| transport.seek(seconds));
+            submit_seek(cast, *seconds);
         }
         mbv_ctrl::WireCommand::SetVolume(volume) => {
             let volume = u8::try_from((*volume).clamp(0, 100)).unwrap_or(u8::MAX);
@@ -171,24 +139,7 @@ fn route_cast_command(
         mbv_ctrl::WireCommand::SetAudio(_)
         | mbv_ctrl::WireCommand::SetSub(_)
         | mbv_ctrl::WireCommand::SetSubtitlePrefs { .. } => {
-            if let Some(reply) = reply {
-                send_to(
-                    reply,
-                    &mbv_ctrl::CtrlEvent::CommandRejected(
-                        "audio and subtitle track selection is not supported on a cast receiver"
-                            .to_string(),
-                    ),
-                );
-            } else {
-                // The transport path has no reply channel; the refusal is
-                // logged so a track command is never silently swallowed.
-                tracing::debug!(
-                    name: "cast.track_command.refused",
-                    target: "cast",
-                    command = ?cmd,
-                    "track selection has no receiver counterpart"
-                );
-            }
+            refuse_track_command(reply, cmd);
         }
         mbv_ctrl::WireCommand::NextUpShow { .. }
         | mbv_ctrl::WireCommand::NextUpDismiss
@@ -199,6 +150,53 @@ fn route_cast_command(
         mbv_ctrl::WireCommand::JumpTo(_) => {
             unreachable!("inbound WireCommand::JumpTo is rejected before conversion (design D6)")
         }
+    }
+}
+
+/// Submits one seek to the receiver (design D4): the requested seconds are
+/// narrowed to the receiver protocol's f32, and an out-of-range value drops
+/// the seek. The seek arms the settle marker only while an item is loaded:
+/// a seek with nothing loaded has no slot whose settle could mean anything
+/// (design D9). The bound is the next poll id, so only a status whose poll
+/// was issued after the seek settles it — a poll still in flight at arm time
+/// carries a pre-seek snapshot.
+fn submit_seek(cast: &mut CastOutput, requested_seconds: f64) {
+    let Some(target) = cast_seconds_f32(requested_seconds) else {
+        tracing::warn!(
+            name: "cast.seek.invalid",
+            target: "cast",
+            seconds = requested_seconds,
+            "the seek position is outside the receiver's range; the seek is dropped"
+        );
+        return;
+    };
+    if cast.loaded.is_some() {
+        cast.pending_seek = Some(cast.next_poll_id);
+    }
+    let worker = cast.worker.clone();
+    submit_command_job(&worker, "seek", move |transport| transport.seek(target));
+}
+
+/// Refuses one audio or subtitle track-selection command (design D4): a
+/// receiver has no track primitives. The refusal reaches the requesting
+/// Client when a reply path exists; the transport path has none, so the
+/// refusal is logged and a track command is never silently swallowed.
+fn refuse_track_command(reply: Option<&CtrlSender>, cmd: &mbv_ctrl::WireCommand) {
+    if let Some(reply) = reply {
+        send_to(
+            reply,
+            &mbv_ctrl::CtrlEvent::CommandRejected(
+                "audio and subtitle track selection is not supported on a cast receiver"
+                    .to_string(),
+            ),
+        );
+    } else {
+        tracing::debug!(
+            name: "cast.track_command.refused",
+            target: "cast",
+            command = ?cmd,
+            "track selection has no receiver counterpart"
+        );
     }
 }
 
