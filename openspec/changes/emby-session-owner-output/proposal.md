@@ -9,7 +9,7 @@ The Cast output (#944, PR #947) fixed the same problem for Cast receivers. The `
 ## What Changes
 
 - **An Emby Session becomes a Playback output of the Owner.** `PlaybackOutput` gets an Emby Session variant. The Owner holds the queue and the active slot. It sends only the active slot to the device (`session_play` with one item) and never sends a list.
-- **A connect in F3 selects the output.** Activation of an Emby Session row sends `SelectPlaybackOutput`. The Owner hands the active slot off to the device at its position (the same D10 hand-off as Cast). There is no watch-only mode.
+- **A connect in F3 selects the output.** Activation of an Emby Session row sends `SelectPlaybackOutput`. The Owner hands the active slot off to the device at its position (the same D10 hand-off as Cast). There is no watch-only mode. If a Session offers Direct remote control but that connect fails, the TUI reports the failure and selects the Session as the output.
 - **The Owner observes the Session.** The Owner polls `/Sessions` every 1 s while the Session is the output. It presents the position, pause state, volume, and tracks to every Client through its normal status broadcast.
 - **The Owner infers a natural end.** Emby reports no end reason. The Owner counts an end when the Session goes idle after it played the loaded item and the estimated position is within 10 s of the item runtime. A stop in the last 10 s therefore counts as an end. That is a stated limit.
 - **The Owner infers a load failure.** If the device does not show the loaded item within 30 s, the Owner reports the failure and does not advance.
@@ -30,9 +30,10 @@ None.
 ### Modified Capabilities
 
 - `owner-playback-output`: the output can be one Emby Session. New requirements for the Emby Session end rule, load failure, admission, progress ownership, device reattach, and launch. "Only a natural end advances" states the Emby Session limit.
-- `unified-playback-queue`: an Emby Session output holds only the active slot's item, as a Cast receiver does. The populate-only load scenario for an attached Emby Session is removed, because no session play needs it.
+- `unified-playback-queue`: an Emby Session output holds only the active slot's item, as a Cast receiver does. The populate-only load scenario for an attached Emby Session is reworded to cover any Stay-alive Client, because no session play needs it.
 - `non-audio-fall-through`: the eligible relation is the Owner's Emby Session output, not an Emby Session that the Client controls. Accepting the prompt returns the Owner's output to local playback.
 - `queue-scope-remote-handoff`: a play on an Emby Session output is a play on the local Owner, not a hand-off to the session.
+- `cast-session-control`: a watched session is no longer a Client target. A Session selection while a receiver is the output, and a cast selection while a Session is the output, are hand-offs of the active slot.
 
 ## Impact
 

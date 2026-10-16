@@ -50,7 +50,7 @@ See proposal.md for the reasons. Current state that shapes the approach:
 - `OutputSelection::EmbySession { device_id, name }`. The Owner resolves the current session id itself (D4), so a session id that is no longer valid cannot reach it.
 - `OutputState::EmbySession { device_id, name, connection, audio_only, now_playing }`. `now_playing: Option<SessionNowPlaying>` describes content that the Owner did not load (item id, item type, name, series id, series name, logo tag): the fields that the TUI reads from `SessionInfo` today for the card, the title overlay, and the logo. It changes only when the device item changes, so it is sent in this event and not in the hot `StatusOnly` broadcast.
 - `CastConnection` is renamed to `OutputConnection`. The wire form does not change, because serde writes the variant names and not the type name.
-- The Owner sends an `OutputState::EmbySession` event only to peers that negotiated `emby-session-output`.
+- The Owner sends an `OutputState::EmbySession` event only to peers that negotiated `emby-session-output`. A peer that negotiated `playback-output` but not `emby-session-output` receives `OutputState::Local` in its place, on cold seed and on each change, so it does not keep a stale Cast state.
 
 *Alternative:* put the foreign item into `PlayerStatus`. This was rejected because `PlayerStatus` is a hot, versioned shape, and this value changes rarely.
 
@@ -60,11 +60,11 @@ An Emby Session output owns one worker thread with a job channel. That thread ru
 
 The worker calls a small `SessionApi` trait (`get_sessions`, `play`, `transport`, `seek`, `set_volume`, `set_mute`, `set_audio_index`, `set_subtitle_index`). It is implemented for `EmbyClient`. Tests use a fake (the boundary mock, the same pattern as the Cast transport). The trait has no method that reports progress, so D8 holds by construction.
 
-A selection runs `get_sessions` on the worker and finds the entry whose `DeviceId` matches. If it finds none, or the call fails, the old output stays and the Owner reports the reason.
+The trait's `get_sessions` calls `EmbyClient::get_sessions_unfiltered`, not the filtered `get_sessions`. The filtered list (`ActiveWithinSeconds=600`) drops a device that is idle but still connected (#236), so the Owner would mark an idle TV `Disconnected`. A selection runs `get_sessions` on the worker and finds the entry whose `DeviceId` matches. If it finds none, or the call fails, the old output stays and the Owner reports the reason.
 
 ### D5. Poll, observation, and reattach
 
-The daemon tick sends a poll job every 1 s, with one poll in flight at a time. Each poll has a monotonic id, as the Cast poll does, so a late result from a replaced worker is ignored. For each result, the Owner finds the entry by `device_id`:
+The daemon tick sends a poll job every 1 s, with one poll in flight at a time. The poll uses the same unfiltered list (D4). Each poll has a monotonic id, as the Cast poll does, so a late result from a replaced worker is ignored. For each result, the Owner finds the entry by `device_id`:
 - **Entry found:** store the observation and its time, reset the miss count, and adopt its `session_id` (a reattach after the device app restarts). Then run D6 and D7.
 - **Entry missing:** add one to the miss count. At 3 misses, set the connection to `Disconnected` and broadcast it. The queue, the active slot, and the loaded item do not change, and polling continues. A missing entry is never an idle Session and never an end.
 
@@ -85,7 +85,7 @@ On each observation:
 
 The 30 s check also runs on the tick, so a Session that is idle and unchanged still gets the timeout.
 
-The advance and step-over code in `cast/advance.rs` (`CastAdvance`, `begin_advance`, `step_advance`, `step_failed`, `continue_after_failed_step`) moves to `output/advance.rs` as `OutputAdvance`. `PlaybackOutput` gets an accessor that returns the advance state of the remote variant that is active. Only `apply_end_report` (which reads a `CastStatus`) stays in `cast/`. For the Emby Session, the admission check of D7 is synchronous. A step target that it rejects goes through the same "report and step again" path that a Cast resolve failure uses, limited by the queue length.
+The advance and step-over code in `cast/advance.rs` (`CastAdvance`, `begin_advance`, `step_advance`, `step_failed`, `continue_after_failed_step`) moves to `output/advance.rs` as `OutputAdvance`. `PlaybackOutput` gets an accessor that returns the advance state of the remote variant that is active. Only `apply_end_report` (which reads a `CastStatus`) stays in `cast/`. The private helpers that `begin_advance` calls move with it, except the Feed `TrackCompleted` call in `record_natural_end`, which stays on the Cast side: Feed slots never pass Emby admission, so the Emby Session needs no Feed events. For the Emby Session, the admission check of D7 is synchronous. It runs before `dispatch_step_target`, not inside it, because `step_target_advance` sets `step_request` only after the dispatch returns, and a rejection inside the dispatch would not match it in `step_failed`. A rejected step target is reported, and the next target is picked in the same loop, limited by the queue length. The user sees the same "report and step again" result as for a Cast resolve failure.
 
 *Alternative:* copy the advance code for the Emby Session. This was rejected because two state machines would drift apart.
 
@@ -107,6 +107,7 @@ The Emby Session arm builds no `SessionReporter` and opens no ABS lifecycle. Fee
 | Command | Emby Session |
 |---|---|
 | `TogglePause` | `transport("PlayPause")` |
+| `PlaybackIntentAction::SetPaused { paused }` (the TUI pause path) | `transport("Pause")` or `transport("Unpause")`; no command when the observation already matches. The guarded intent settles at once, as on Cast |
 | `Seek(delta)` | `seek(estimate + delta)`, clamped at 0 |
 | `SeekAbsolute` | `seek` |
 | `SetVolume`, `SetMute` | `set_volume`, `set_mute` |
@@ -118,6 +119,10 @@ The Emby Session arm builds no `SessionReporter` and opens no ABS lifecycle. Fee
 | Next / previous on content the Owner did not load | `transport("NextTrack" / "PreviousTrack")` |
 
 Track and volume commands act on whatever the device plays, as they do in the TUI today. Cast rejects track commands, but an Emby Session supports them.
+
+The Next and Previous intents follow the next and previous rows. A tray or MPRIS command (`route_transport_command`) routes like the matching wire command; a local-only command is a documented no-op, as on Cast.
+
+Most routing sites do not `match` on `PlaybackOutput` today. They use `let … else` or `matches!(…, Cast(_))`, so an Emby Session output falls through to the local player there without a compile error: `cast/command.rs` (`route_player_cmd`, `route_transport_command`, `set_receiver_paused`), `control/playback.rs:84` and `:171`, `control/queue_setup.rs:386`, and `core/transition_dispatch.rs:37`. Each of these sites gets an Emby Session branch.
 
 **Hand-off pause:** a `play` job cannot start paused. When the hand-off state was paused, the output sets a pending pause. The first observation that shows the loaded item sends `transport("Pause")`.
 
@@ -138,7 +143,7 @@ The Cast D10 sequence holds unchanged for every pair of outputs. "Connect" for a
 ### D12. The TUI becomes a picker
 
 - **F3 activation of an Emby Session row:**
-  - A Session with a direct endpoint keeps today's Direct remote control path.
+  - A Session with a direct endpoint keeps today's Direct remote control path. If that connect fails, the TUI reports the failure. Then, when the owner advertises `emby-session-output`, it selects the Session as the output (today's fallback to an attached session, moved to the Owner).
   - Otherwise, when the owner advertises `emby-session-output`, the TUI calls `sever_connections_without_output_change` (a Library route or Direct remote control) and sends `SelectPlaybackOutput(EmbySession)`.
   - Without the capability, it shows a warning and does nothing.
 - `hand_cast_output_back_to_local` becomes `hand_remote_output_back_to_local`, for a Cast or an Emby Session output. It runs before a Direct remote or Library route connect.
@@ -154,6 +159,7 @@ The Cast D10 sequence holds unchanged for every pair of outputs. "Connect" for a
   - the 1 s poll trigger, the connected-session half of the `SessionEvent::Loaded` handling, the extrapolation, the miss counting, and `remote_tracking.rs`;
   - `session_play_items`.
 - **Kept:** the F3 list load (`spawn_sessions_load`).
+- **Moved to the output state:** two guards read `connected_session_id` today and must not be deleted with it. `sync_volume_from_player` does not save the volume while the output is an Emby Session, because D10 puts the device volume in `PlayerStatus`. `visualizer_should_run` does not capture while the output is an Emby Session (spec `system-audio-visualizer`), next to its `output_is_cast()` check.
 
 ### D13. Vocabulary
 
@@ -162,6 +168,7 @@ In `CONTEXT.md`:
 - *Session watch* is retired (its avoid list moves to the new term).
 - New **Session output**: the relation of a Player owner to the Emby Session that is its *Playback output*. It is keyed by the device, observed by a poll, and its end is inferred. _Avoid_: session watch, attach (bare), tracked session.
 - The *Queue scope* and *Library route* entries change their references from *Session watch* to *Session output*.
+- *Consume* drops its sentence that a Session watch never consumes. An Emby Session output consumes through the Owner, as every output does.
 - *Cast attachment* drops "a watched session" from its exclusivity sentence. It states that a Session selection while a receiver is the output is a hand-off.
 
 In AGENTS.md "Playback and queue authority", an Emby Session joins Cast as an output projection.
@@ -174,7 +181,7 @@ In AGENTS.md "Playback and queue authority", an Emby Session joins Cast as an ou
 - [A paused hand-off plays for about one poll interval before the pause] → Accepted. Emby `PlayNow` has no start-paused flag.
 - [A 1 s `/Sessions` poll loads the server] → The TUI polls at the same rate today. The Owner polls only while the output is an Emby Session.
 - [A slow command delays the poll on the shared worker] → Accepted, because order matters more. The poll skips while one is in flight, and the 30 s timeout uses Owner time, not poll time.
-- [An older TUI meets a newer Owner] → The `OutputState::EmbySession` event is sent only to peers with `emby-session-output` (D3). An older TUI shows local state.
+- [An older TUI meets a newer Owner] → The `OutputState::EmbySession` event is sent only to peers with `emby-session-output`. Other peers with `playback-output` receive `OutputState::Local` (D3). An older TUI shows local state.
 
 ## Migration Plan
 

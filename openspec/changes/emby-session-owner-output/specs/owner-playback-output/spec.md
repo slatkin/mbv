@@ -52,7 +52,7 @@ A stop by the user on the device, a replacement by another sender, or an error S
 
 ### Requirement: The owner infers a natural end on an Emby Session
 
-The owner SHALL treat the loaded item as ended when the Emby Session stops presenting any item after it presented the loaded item, and the owner's estimated position is within 10 seconds of the item's runtime. The estimate SHALL be the last observed position plus the time since that observation while playing. The runtime SHALL be the queue item's own runtime. Each loaded item SHALL advance at most once.
+The owner SHALL treat the loaded item as ended when the Emby Session stops presenting any item after it presented the loaded item, and the owner's estimated position is within 10 seconds of the item's runtime. The estimate SHALL be the last observed position plus the time since that observation while playing. The runtime SHALL be the queue item's own runtime, or the runtime that the Session reports when the queue item has none. Each loaded item SHALL advance at most once.
 
 #### Scenario: Item plays to its end
 
