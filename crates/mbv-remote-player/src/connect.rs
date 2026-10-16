@@ -2,7 +2,7 @@
 mod tests;
 
 use std::collections::HashMap;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Cursor, Read, Write};
 #[cfg(any(test, feature = "test"))]
 use std::os::unix::net::UnixStream;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -29,8 +29,8 @@ pub use endpoint::{DaemonEndpoint, resolve_library_route};
 pub use owner_actions::{run_local_owner_action, signal_local_daemon_service_setup};
 
 use handshake::{
-    DAEMON_HANDSHAKE_HARD_BOUND, HandshakeRole, PeerBuild, perform_handshake_with_role,
-    read_playback_output_seed,
+    DAEMON_HANDSHAKE_HARD_BOUND, HandshakeRole, PeerBuild, SeedLineRead,
+    perform_handshake_with_role, read_playback_output_seed,
 };
 
 fn apply_ctrl_event(
@@ -289,7 +289,7 @@ struct HandshakeOutcome {
     reader: BufReader<SocketStream>,
     state_event: CtrlEvent,
     ctrl_compatibility: CtrlCompatibility,
-    playback_output_seed: Option<CtrlEvent>,
+    seed: SeedLineRead,
 }
 
 /// Runs the client handshake — hello exchange, initial state, and the
@@ -321,16 +321,16 @@ fn run_bounded_handshake(
             // carries its own short timeout, and an absent or late seed
             // just returns None and degrades to the reader-thread path —
             // the connect never fails or hangs on the seed.
-            let playback_output_seed = if ctrl_compatibility.supports_playback_output {
+            let seed = if ctrl_compatibility.supports_playback_output {
                 read_playback_output_seed(&mut reader)
             } else {
-                None
+                SeedLineRead::default()
             };
             Ok(HandshakeOutcome {
                 reader,
                 state_event,
                 ctrl_compatibility,
-                playback_output_seed,
+                seed,
             })
         },
         || {
@@ -390,8 +390,12 @@ fn connect_stream(
         reader,
         state_event,
         ctrl_compatibility,
-        playback_output_seed,
+        seed,
     } = run_bounded_handshake(stream.try_clone()?, peer_build, pinned, swap_token)?;
+    let SeedLineRead {
+        event: playback_output_seed,
+        consumed: replayed_bytes,
+    } = seed;
     tracing::info!(
         name: "ctrl.connection.established",
         target: "ctrl",
@@ -429,6 +433,12 @@ fn connect_stream(
         shutdown_request: Arc::clone(&shutdown_request_tx),
         event_tx: event_tx.clone(),
     };
+    // The seed wait may have consumed bytes of a line that did not
+    // complete in time. They are never lost: replay them ahead of the
+    // live stream so the reader thread reads the whole line exactly as
+    // the daemon sent it (`read_remote_events` takes any `BufRead`; an
+    // empty replay cursor is a no-op prefix).
+    let reader = Cursor::new(replayed_bytes).chain(reader);
     std::thread::spawn(move || read_remote_events(reader, reader_state));
 
     // Writer thread: serializes CtrlCmd to daemon
@@ -463,7 +473,7 @@ fn connect_stream(
     ))
 }
 
-fn read_remote_events(reader: BufReader<SocketStream>, state: ReaderThreadState) {
+fn read_remote_events(reader: impl BufRead, state: ReaderThreadState) {
     let ReaderThreadState {
         status,
         unified_queue,
@@ -659,7 +669,6 @@ pub fn connect_stub_daemon_pair() -> Result<
     ),
     String,
 > {
-    use std::io::Read;
     let (client, daemon) = UnixStream::pair().map_err(|e| e.to_string())?;
     let peer = std::thread::spawn(move || {
         let mut writer = daemon.try_clone().unwrap();

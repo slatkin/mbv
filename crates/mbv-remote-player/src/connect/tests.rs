@@ -586,8 +586,6 @@ fn connect_with_advertised_hello(
     mpsc::Receiver<PlayerEvent>,
     std::thread::JoinHandle<()>,
 ) {
-    use std::io::Read;
-
     let (client, daemon) = UnixStream::pair().unwrap();
     let peer = std::thread::spawn(move || {
         let mut writer = daemon.try_clone().unwrap();
@@ -686,6 +684,101 @@ fn connect_survives_a_missing_playback_output_seed() {
         None,
         "no seed means no retained output, and the connect must still succeed"
     );
+    player.disconnect();
+    peer.join().unwrap();
+}
+
+#[test]
+fn a_late_partial_seed_line_is_never_consumed() {
+    // 8.2 fix 2 (review P2): a `read_line` under a read timeout consumes
+    // the prefix of a line split across two arrivals and loses it when the
+    // second half times out — the reader thread would then see only the
+    // remainder and the seed would be lost for the whole session. The seed
+    // wait must never consume a partial line: it gives up at its deadline
+    // without touching the socket, and the reader thread then reads the
+    // whole line as one event.
+    use std::time::Duration;
+
+    let cast_output = mbv_ctrl::OutputState::Cast {
+        receiver_id: "r-1".to_string(),
+        name: "Living Room".to_string(),
+        connection: mbv_ctrl::CastConnection::Connected,
+    };
+    // The line as the daemon sends it: JSON plus its terminating newline,
+    // so both halves still end the line correctly when reassembled.
+    let seed_line = format!(
+        "{}\n",
+        serde_json::to_string(&CtrlEvent::PlaybackOutput(cast_output.clone())).unwrap()
+    );
+    // The payload is ASCII, so a plain split never cuts a code point.
+    // Owned halves: the daemon thread takes them by value.
+    let split = seed_line.len() / 2;
+    let (seed_prefix, seed_suffix) = (seed_line[..split].to_owned(), seed_line[split..].to_owned());
+
+    let (client, daemon) = UnixStream::pair().unwrap();
+    let peer = std::thread::spawn(move || {
+        let mut writer = daemon.try_clone().unwrap();
+        let mut reader = BufReader::new(daemon);
+        let mut hello = CtrlHello::current();
+        hello
+            .capabilities
+            .push(mbv_ctrl::CTRL_CAP_PLAYBACK_OUTPUT.to_string());
+        writeln!(
+            writer,
+            "{}",
+            serde_json::to_string(&CtrlEvent::Hello(hello)).unwrap()
+        )
+        .unwrap();
+        let mut client_hello = String::new();
+        reader.read_line(&mut client_hello).unwrap();
+        let state = CtrlEvent::UnifiedQueueState(UnifiedQueueStateData {
+            status: PlayerStatus::default(),
+            slots: Vec::new(),
+            active_slot: None,
+            revision: 0,
+            source: QueueSource::Unknown,
+            lineage: mbv_queue::QueueLineage::default(),
+            in_flight_transition: None,
+            queued_latest_transition: None,
+        });
+        writeln!(writer, "{}", serde_json::to_string(&state).unwrap()).unwrap();
+        // Half the seed now, the other half after a pause twice the
+        // handshake's seed deadline: the wait must give up on the partial
+        // line without consuming it, and the reader thread must later see
+        // the two halves as one line.
+        writer.write_all(seed_prefix.as_bytes()).unwrap();
+        writer.flush().unwrap();
+        std::thread::sleep(Duration::from_secs(1));
+        writer.write_all(seed_suffix.as_bytes()).unwrap();
+        writer.flush().unwrap();
+        // Hold until the client end closes: nothing is sent, so `lines`
+        // just waits for EOF (no `Read` import needed).
+        for held in reader.lines() {
+            let _ = held;
+        }
+    });
+
+    let (player, event_rx) =
+        connect_stream(SocketStream::Unix(client), PeerBuild::Any, false, None).unwrap();
+
+    let event = event_rx
+        .recv_timeout(Duration::from_secs(5))
+        .expect("the whole seed line must reach the reader thread as one event");
+    match event {
+        PlayerEvent::PlaybackOutput(state) => assert_eq!(state, cast_output),
+        other => panic!("expected PlaybackOutput, got {other:?}"),
+    }
+    assert_eq!(
+        player.playback_output_state(),
+        Some(mbv_ctrl::OutputState::Cast {
+            receiver_id: "r-1".to_string(),
+            name: "Living Room".to_string(),
+            connection: mbv_ctrl::CastConnection::Connected,
+        }),
+        "the reader thread retains the late seed too"
+    );
+    // No Drop impl: disconnect() is what shuts the client end down, so
+    // the fake daemon's read loop observes EOF and the join completes.
     player.disconnect();
     peer.join().unwrap();
 }
