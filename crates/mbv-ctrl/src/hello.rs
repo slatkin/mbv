@@ -270,6 +270,11 @@ pub struct CtrlCompatibility {
     /// `UnifiedQueueStateData`; set from the peer Hello's `play-order`
     /// capability by the Client's handshake.
     pub supports_play_order: bool,
+    /// The peer accepts `CtrlCmd::SelectPlaybackOutput` and reports
+    /// `CtrlEvent::PlaybackOutput` (cast-owner-output design D3); set from
+    /// the peer Hello's `playback-output` capability by the Client's
+    /// handshake.
+    pub supports_playback_output: bool,
 }
 
 impl CtrlCompatibility {
@@ -292,6 +297,7 @@ impl CtrlCompatibility {
                 supports_answered_queue_ops: false,
                 supports_owner_action: false,
                 supports_play_order: false,
+                supports_playback_output: false,
             }),
             _ => Err(CtrlError::incompatible_protocol(peer_protocol_version)),
         }

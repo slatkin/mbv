@@ -288,7 +288,7 @@ mod now_playing_status_tests {
     #[test]
     fn attached_but_idle_cast_does_not_shadow_local_playback() {
         let mut app = make_app_stub();
-        app.attach_cast("device-1".to_string(), "Living Room".to_string());
+        app.attach_cast("device-1".to_string());
 
         // Receiver reports no active media.
         app.apply_cast_status("device-1", Ok(mbv_cast::client::CastStatus::idle()));
@@ -298,7 +298,7 @@ mod now_playing_status_tests {
         // Connection lost before any status arrived (the observed failure:
         // "cast get_status returned no entries"), status stays None.
         let mut app = make_app_stub();
-        app.attach_cast("device-1".to_string(), "Living Room".to_string());
+        app.attach_cast("device-1".to_string());
         app.apply_cast_status("device-1", Err(mbv_cast::CastError::status_no_entries()));
         set_player(&app, true, false);
         assert_eq!(app.now_playing_status(), NowPlayingStatus::Playing);
@@ -308,7 +308,7 @@ mod now_playing_status_tests {
     #[test]
     fn playing_cast_still_wins_over_the_local_player() {
         let mut app = make_app_stub();
-        app.attach_cast("device-1".to_string(), "Living Room".to_string());
+        app.attach_cast("device-1".to_string());
         app.apply_cast_status(
             "device-1",
             Ok(mbv_cast::client::CastStatus {

@@ -401,7 +401,6 @@ mod tests {
     fn attachment(dispatched_items: Vec<DispatchedCastItem>) -> CastAttachment {
         CastAttachment {
             receiver_id: "device-1".into(),
-            receiver_name: "Living Room".into(),
             client: None,
             dispatched: dispatched_items,
             status: None,
@@ -451,7 +450,7 @@ mod tests {
     #[test]
     fn a_fresh_status_report_corrects_drift() {
         let mut app = make_app_stub();
-        app.attach_cast("device-1".to_string(), "Living Room".to_string());
+        app.attach_cast("device-1".to_string());
         app.cast_attachment.as_mut().unwrap().dispatched = vec![dispatched("https://a")];
         app.apply_cast_status("device-1", Ok(playing_status(10.0, "https://a")));
         // A later report disagrees with where extrapolation from the first
@@ -473,7 +472,7 @@ mod tests {
     fn spawn_cast_status_poll_calls_keep_alive_and_status_on_the_transport() {
         use mbv_cast::{FakeCastTransport, spawn_fake_cast_worker};
         let mut app = make_app_stub();
-        app.attach_cast("device-1".to_string(), "Living Room".to_string());
+        app.attach_cast("device-1".to_string());
         let (job_tx, calls) = spawn_fake_cast_worker(FakeCastTransport {
             status: Some(playing_status(1.0, "https://a")),
             ..Default::default()
@@ -499,7 +498,7 @@ mod tests {
     fn spawn_cast_keep_alive_sends_a_pong_on_the_transport() {
         use mbv_cast::{CastJob, FakeCastTransport, spawn_fake_cast_worker};
         let mut app = make_app_stub();
-        app.attach_cast("device-1".to_string(), "Living Room".to_string());
+        app.attach_cast("device-1".to_string());
         let (job_tx, calls) = spawn_fake_cast_worker(FakeCastTransport::default());
         app.set_cast_client("device-1", job_tx.clone());
 
@@ -528,7 +527,7 @@ mod tests {
         // idle receiver errored, the target was marked disconnected, and the
         // transport was dropped -- nothing could ever be dispatched to it.
         let mut app = make_app_stub();
-        app.attach_cast("device-1".to_string(), "Living Room".to_string());
+        app.attach_cast("device-1".to_string());
         let (job_tx, _calls) =
             mbv_cast::spawn_fake_cast_worker(mbv_cast::FakeCastTransport::default());
         app.set_cast_client("device-1", job_tx);
@@ -571,7 +570,7 @@ mod tests {
         let _guard = crate::app::CAST_CONNECT_TEST_LOCK.lock().unwrap();
         *crate::app::CAST_CONNECT_OVERRIDE.lock().unwrap() = Some(connect_ok_stub);
         let mut app = make_app_stub();
-        app.attach_cast("device-1".to_string(), "Living Room".to_string());
+        app.attach_cast("device-1".to_string());
         let (job_tx, _calls) =
             mbv_cast::spawn_fake_cast_worker(mbv_cast::FakeCastTransport::default());
         app.set_cast_client("device-1", job_tx);
@@ -612,7 +611,7 @@ mod tests {
         let _guard = crate::app::CAST_CONNECT_TEST_LOCK.lock().unwrap();
         *crate::app::CAST_CONNECT_OVERRIDE.lock().unwrap() = Some(connect_ok_stub);
         let mut app = make_app_stub();
-        app.attach_cast("device-1".to_string(), "Living Room".to_string());
+        app.attach_cast("device-1".to_string());
         let (job_tx, _calls) =
             mbv_cast::spawn_fake_cast_worker(mbv_cast::FakeCastTransport::default());
         app.set_cast_client("device-1", job_tx);
@@ -643,7 +642,7 @@ mod tests {
     #[test]
     fn a_responsive_cast_worker_is_not_touched_by_the_watchdog() {
         let mut app = make_app_stub();
-        app.attach_cast("device-1".to_string(), "Living Room".to_string());
+        app.attach_cast("device-1".to_string());
         let (job_tx, _calls) =
             mbv_cast::spawn_fake_cast_worker(mbv_cast::FakeCastTransport::default());
         app.set_cast_client("device-1", job_tx);
@@ -663,7 +662,7 @@ mod tests {
     #[test]
     fn a_stale_receivers_status_event_leaves_the_watchdog_bookkeeping_alone() {
         let mut app = make_app_stub();
-        app.attach_cast("device-1".to_string(), "Living Room".to_string());
+        app.attach_cast("device-1".to_string());
         app.cast_job_sent = Some(Instant::now());
         app.cast_status_loading = true;
 
@@ -688,7 +687,7 @@ mod tests {
     #[test]
     fn a_worker_gone_dispatch_leaves_the_watchdog_armed_for_the_reconnect() {
         let mut app = make_app_stub();
-        app.attach_cast("device-1".to_string(), "Living Room".to_string());
+        app.attach_cast("device-1".to_string());
         app.cast_job_sent = Some(Instant::now());
 
         app.handle_cast_event(CastEvent::Dispatched {
@@ -710,7 +709,7 @@ mod tests {
         let mut app = make_app_stub();
         let items = crate::app::tests::make_items(2);
         app.local_view.adopt_items(items.clone(), 0);
-        app.attach_cast("device-1".to_string(), "Living Room".to_string());
+        app.attach_cast("device-1".to_string());
         let (job_tx, _calls) =
             mbv_cast::spawn_fake_cast_worker(mbv_cast::FakeCastTransport::default());
         app.set_cast_client("device-1", job_tx);
@@ -759,7 +758,7 @@ mod tests {
         let _guard = crate::app::CAST_CONNECT_TEST_LOCK.lock().unwrap();
         *crate::app::CAST_CONNECT_OVERRIDE.lock().unwrap() = Some(connect_ok_stub);
         let mut app = make_app_stub();
-        app.attach_cast("device-1".to_string(), "Living Room".to_string());
+        app.attach_cast("device-1".to_string());
         let (job_tx, _calls) =
             mbv_cast::spawn_fake_cast_worker(mbv_cast::FakeCastTransport::default());
         app.set_cast_client("device-1", job_tx);

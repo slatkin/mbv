@@ -33,11 +33,6 @@ pub(in crate::app) struct DispatchedCastItem {
 /// task 8.3) -- see `App::attach_cast`/`App::set_cast_client`.
 pub(in crate::app) struct CastAttachment {
     pub(in crate::app) receiver_id: String,
-    /// The receiver's discovered friendly name, kept on the attachment so
-    /// the queue header's host label names the target even after a later
-    /// discovery browse rebuilds `App::cast_receivers` (the attached
-    /// receiver may no longer be in that list).
-    pub(in crate::app) receiver_name: String,
     pub(in crate::app) client: Option<Sender<CastJob>>,
     pub(in crate::app) dispatched: Vec<DispatchedCastItem>,
     pub(in crate::app) status: Option<CastStatus>,

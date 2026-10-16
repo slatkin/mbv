@@ -165,15 +165,27 @@ impl super::super::Model {
                 }
             }
             ShellRequest::DetachSessions => {
+                // The owner's output decides (design D13): when a cast target
+                // is the output, detach sends `SelectPlaybackOutput(Local)`
+                // and the owner tears the receiver app down (D12); the local
+                // attachment runtime (deleted by row 8.3) still detaches its
+                // transport itself when it holds one without an owner output.
+                let cast_output = self.app.output_is_cast();
                 let cast_attached = self.app.is_cast_attached();
-                // Skip disconnect_remote's "No session selected" toast when
-                // only a cast target is attached; the cast detach below is
+                // Skip disconnect_remote's "No session selected" toast when a
+                // cast target is the detach target; the cast detach below is
                 // the real action in that case.
-                if self.app.can_disconnect_remote() || !cast_attached {
+                if self.app.can_disconnect_remote() || !(cast_output || cast_attached) {
                     self.app.disconnect_remote();
                 }
-                if cast_attached {
-                    self.app.detach_cast();
+                if cast_output || cast_attached {
+                    if cast_output {
+                        self.app
+                            .select_playback_output(mbv_ctrl::OutputSelection::Local);
+                    }
+                    if cast_attached {
+                        self.app.detach_cast();
+                    }
                     self.app.flash(
                         "Detached from cast target".to_string(),
                         ToastSeverity::Success,

@@ -82,9 +82,8 @@ impl Model {
                 .and_then(|session| session.now_playing.clone())
         };
         let now_playing_title = title.map(|title| (title, palette::Role::PlaybackValueFg.color()));
-        let show_controls = state.active
-            || self.app.connected_session_id.is_some()
-            || self.app.cast_attachment.is_some();
+        let show_controls =
+            state.active || self.app.connected_session_id.is_some() || self.app.output_is_cast();
         let (prev_available, next_available) = self.app.transport_prev_next_available();
         PlaybackProjection {
             state,

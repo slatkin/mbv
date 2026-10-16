@@ -74,6 +74,18 @@ impl App {
         }
     }
 
+    /// Send a playback-output selection to the Player owner (design D13).
+    /// The owner is the only authority over the output: it performs the
+    /// hand-off, tears the previous output down, and broadcasts the
+    /// resulting `CtrlEvent::PlaybackOutput` that every Client mirrors into
+    /// `playback_output`. Best-effort like every other fire-and-forget
+    /// player send.
+    pub(in crate::app) fn select_playback_output(&mut self, selection: OutputSelection) {
+        let _ = self
+            .player
+            .send_ctrl_cmd(CtrlCmd::SelectPlaybackOutput(selection));
+    }
+
     /// Hand the Local daemon owner's Cast output back to Local (design D13):
     /// `Stop` first so no slot is active at the hand-off (D10 step 1), then
     /// `SelectPlaybackOutput(Local)` — the receiver stops and local playback
@@ -101,6 +113,15 @@ impl App {
     /// else is connected.
     pub(in crate::app) fn sever_active_connection(&mut self) {
         self.hand_cast_output_back_to_local();
+        self.sever_connections_without_output_change();
+    }
+
+    /// The same severing without the Cast-output hand-back, used when the
+    /// new target is itself a Cast receiver: the owner performs the
+    /// Cast-to-Cast hand-off, and a prior `Stop` here would clear the active
+    /// slot the new receiver must continue (spec scenario "A different cast
+    /// target is selected while one is attached").
+    pub(in crate::app) fn sever_connections_without_output_change(&mut self) {
         if self.cast_attachment.take().is_some() {
             self.stop_visualizer_capture();
         }

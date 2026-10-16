@@ -53,7 +53,7 @@ fn cast_attached_play_loads_the_owner_queue_without_starting_playback() {
         result: mbv_ctrl::QueueLoadResult::Accepted,
     })
     .unwrap();
-    app.attach_cast("device-1".to_string(), "Living Room".to_string());
+    app.attach_cast("device-1".to_string());
     let (job_tx, calls) = mbv_cast::spawn_fake_cast_worker(mbv_cast::FakeCastTransport::default());
     app.set_cast_client("device-1", job_tx);
 
@@ -117,7 +117,7 @@ fn cast_attached_play_dispatches_nothing_when_the_owner_rejects_the_idle_load() 
         },
     })
     .unwrap();
-    app.attach_cast("device-1".to_string(), "Living Room".to_string());
+    app.attach_cast("device-1".to_string());
     let (job_tx, calls) = mbv_cast::spawn_fake_cast_worker(mbv_cast::FakeCastTransport::default());
     app.set_cast_client("device-1", job_tx);
 
@@ -155,7 +155,7 @@ fn cast_attached_library_play_dispatches_instead_of_playing_locally() {
         result: mbv_ctrl::QueueLoadResult::Accepted,
     })
     .unwrap();
-    app.attach_cast("device-1".to_string(), "Living Room".to_string());
+    app.attach_cast("device-1".to_string());
 
     app.play_item(make_items(1).remove(0));
 
@@ -206,7 +206,7 @@ fn cast_attached_library_selection_dispatches_instead_of_playing_locally() {
         result: mbv_ctrl::QueueLoadResult::Accepted,
     })
     .unwrap();
-    app.attach_cast("device-1".to_string(), "Living Room".to_string());
+    app.attach_cast("device-1".to_string());
 
     app.play_items_routed(make_items(2), 1, QueueSource::Album);
 
@@ -238,7 +238,7 @@ fn cast_attached_queue_cursor_play_dispatches_without_commanding_the_owner() {
     // command is sent at all -- the owner's Replace/PlaySlot would start
     // local playback.
     let (mut app, cmd_rx) = answered_local_daemon_app();
-    app.attach_cast("device-1".to_string(), "Living Room".to_string());
+    app.attach_cast("device-1".to_string());
 
     app.dispatch_queue_play_cursor(1);
 

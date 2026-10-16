@@ -56,10 +56,9 @@ impl App {
     /// tick regardless, but doing it here covers the frame between attach
     /// and that tick, and both of this function's callers -- selection and
     /// reattach -- need the same teardown).
-    pub(in crate::app) fn attach_cast(&mut self, receiver_id: String, receiver_name: String) {
+    pub(in crate::app) fn attach_cast(&mut self, receiver_id: String) {
         self.cast_attachment = Some(CastAttachment {
             receiver_id,
-            receiver_name,
             client: None,
             dispatched: Vec::new(),
             status: None,
@@ -78,24 +77,31 @@ impl App {
         self.stop_visualizer_capture();
     }
 
-    /// Selecting a target from the F3 panel (8.3): the previously connected
-    /// target is severed first (attachment slots are mutually exclusive),
-    /// then an Emby target reuses the existing `connect_to_session` path
-    /// unchanged; a cast target attaches optimistically before its connect
-    /// completes (matching this codebase's optimistic-attach convention --
-    /// see `types_cast.rs`'s doc comment on `CastAttachment.client`), then
-    /// reuses the shared resolve-and-connect primitive below.
+    /// Selecting a target from the F3 panel (design D13): the previously
+    /// connected target is severed first (attachment slots are mutually
+    /// exclusive), then an Emby target reuses the existing
+    /// `connect_to_session` path unchanged; a cast target sends
+    /// `CtrlCmd::SelectPlaybackOutput(Cast)` to the owner whose
+    /// `playback-output` capability gated the row (D3). The owner performs
+    /// the hand-off itself — no `Stop` here, or the active slot the new
+    /// receiver must continue would be cleared (spec scenario "A different
+    /// cast target is selected while one is attached"). The Client holds no
+    /// receiver connection: the owner connects and broadcasts the resulting
+    /// `CtrlEvent::PlaybackOutput`.
     pub(in crate::app) fn select_panel_target(&mut self, target: PanelTarget) {
         match target {
             PanelTarget::Emby(session) => self.connect_to_session(&session),
             PanelTarget::Cast(receiver) => {
-                self.sever_active_connection();
+                self.sever_connections_without_output_change();
                 // Same panel-close-on-connect parity as the Emby path
                 // (`connect_to_session` dismisses the Sessions sidebar).
                 self.request_sidebar_dismiss(mbv_ui_model::overlay::SidebarId::Sessions);
-                let name = receiver.friendly_name.clone();
-                self.attach_cast(receiver.id.clone(), name);
-                self.connect_cast_receiver(receiver.id);
+                self.select_playback_output(mbv_ctrl::OutputSelection::Cast {
+                    receiver_id: receiver.id,
+                    name: receiver.friendly_name,
+                    host: receiver.host,
+                    port: receiver.port,
+                });
             }
         }
     }
@@ -331,17 +337,8 @@ impl App {
                 client,
             } => {
                 // The connected connect re-attaches over the optimistic
-                // attachment (8.3), so it must carry the receiver's name too:
-                // resolve it from the discovery list the selection came from.
-                let name = self
-                    .cast_receivers
-                    .iter()
-                    .find(|receiver| receiver.id == receiver_id)
-                    .map_or_else(
-                        || receiver_id.clone(),
-                        |receiver| receiver.friendly_name.clone(),
-                    );
-                self.attach_cast(receiver_id.clone(), name);
+                // attachment (8.3).
+                self.attach_cast(receiver_id.clone());
                 self.set_cast_client(&receiver_id, client);
             }
             CastEvent::ConnectFailed { receiver_id, error } => {
@@ -512,16 +509,8 @@ fn partition_dispatch_with_start(
 mod tests {
     use super::*;
     use crate::app::state::types::cast::CastProgressTarget;
-    use crate::app::tests::{QueueViewTestExt, make_app_stub};
+    use crate::app::tests::{QueueViewTestExt, live_owner_channel, make_app_stub};
     use mbv_queue::FeedEntry;
-
-    fn connect_stub(_id: &str, _timeout: Duration) -> Result<Sender<CastJob>, CastError> {
-        Err(CastError::receiver_not_found())
-    }
-
-    fn connect_fail(_id: &str, _timeout: Duration) -> Result<Sender<CastJob>, CastError> {
-        Err(CastError::receiver_not_found())
-    }
 
     fn feed_item(guid: &str, url: Option<&str>) -> QueueItem {
         QueueItem::Feed(FeedEntry {
@@ -552,7 +541,7 @@ mod tests {
             right: 1.0,
         }];
 
-        app.attach_cast("device-1".to_string(), "Living Room".to_string());
+        app.attach_cast("device-1".to_string());
 
         assert_eq!(
             app.visualizer_window.samples,
@@ -560,12 +549,16 @@ mod tests {
         );
     }
 
+    /// cast-owner-output row 8.1, design D13, spec "Selecting a cast target
+    /// makes it the owner's output": selecting a cast row sends
+    /// `CtrlCmd::SelectPlaybackOutput(Cast)` to the owner (no Stop — the
+    /// owner performs the hand-off), attaches no local transport, dismisses
+    /// the F3 panel like the Emby path, and leaves the queue intact.
     #[test]
-    fn selecting_a_cast_target_from_the_panel_attaches_and_leaves_the_queue_intact() {
-        let _connect_guard = crate::app::CAST_CONNECT_TEST_LOCK.lock().unwrap();
-        *crate::app::CAST_CONNECT_OVERRIDE.lock().unwrap() = Some(connect_stub);
-
+    fn selecting_a_cast_target_from_the_panel_selects_the_owner_output_and_leaves_the_queue_intact()
+    {
         let mut app = make_app_stub();
+        let cmd_rx = live_owner_channel(&mut app);
         app.local_view
             .adopt_queue_items(vec![feed_item("a", Some("https://feed/a.mp3"))], 0);
         let before: Vec<String> = app
@@ -583,12 +576,20 @@ mod tests {
         };
         app.select_panel_target(PanelTarget::Cast(receiver));
 
-        *crate::app::CAST_CONNECT_OVERRIDE.lock().unwrap() = None;
-
-        assert!(app.is_cast_attached());
-        assert_eq!(
-            app.cast_attachment.as_ref().unwrap().receiver_id,
-            "device-1"
+        assert!(matches!(
+            cmd_rx.try_recv().unwrap(),
+            mbv_ctrl::CtrlCmd::SelectPlaybackOutput(mbv_ctrl::OutputSelection::Cast {
+                ref receiver_id,
+                ..
+            }) if receiver_id == "device-1"
+        ));
+        assert!(
+            cmd_rx.try_recv().is_err(),
+            "no command precedes the selection: the owner performs the hand-off"
+        );
+        assert!(
+            app.cast_attachment.is_none(),
+            "the Client holds no receiver connection: the owner does"
         );
         // Emby-path parity: selecting a target dismisses the F3 Sessions
         // panel (`connect_to_session` requests the same dismissal).
@@ -607,44 +608,11 @@ mod tests {
         assert_eq!(before, after);
     }
 
-    #[test]
-    fn failed_connect_after_selection_detaches_the_phantom_attachment() {
-        let _connect_guard = crate::app::CAST_CONNECT_TEST_LOCK.lock().unwrap();
-        *crate::app::CAST_CONNECT_OVERRIDE.lock().unwrap() = Some(connect_fail);
-
-        let mut app = make_app_stub();
-        let receiver = mbv_cast::discovery::CastReceiver {
-            id: "device-1".to_string(),
-            friendly_name: "Living Room".to_string(),
-            host: "192.168.0.5".to_string(),
-            port: 8009,
-        };
-        // Selection attaches optimistically before the connect completes.
-        app.select_panel_target(PanelTarget::Cast(receiver));
-        assert!(app.is_cast_attached());
-
-        // The background connect fails and reports back.
-        let event = app
-            .channels
-            .cast_rx
-            .recv_timeout(std::time::Duration::from_secs(2))
-            .unwrap();
-        app.handle_cast_event(event);
-
-        *crate::app::CAST_CONNECT_OVERRIDE.lock().unwrap() = None;
-
-        assert!(
-            !app.is_cast_attached(),
-            "a failed connect should clear the optimistic attachment"
-        );
-        assert!(app.status.contains("Couldn't connect to cast receiver"));
-    }
-
+    /// Selecting a cast target severs the watched session it replaces
+    /// (spec "Cast target is selected while a session is watched") but
+    /// sends no Cast hand-back: the owner performs the hand-off (D13).
     #[test]
     fn selecting_a_cast_target_severs_a_watched_session() {
-        let _connect_guard = crate::app::CAST_CONNECT_TEST_LOCK.lock().unwrap();
-        *crate::app::CAST_CONNECT_OVERRIDE.lock().unwrap() = Some(connect_stub);
-
         let mut app = make_app_stub();
         app.connected_session_id = Some("sess-1".to_string());
         app.connected_session_state = Some(mbv_emby::test_support::make_session("tv", "mbv"));
@@ -657,9 +625,6 @@ mod tests {
         };
         app.select_panel_target(PanelTarget::Cast(receiver));
 
-        *crate::app::CAST_CONNECT_OVERRIDE.lock().unwrap() = None;
-
-        assert!(app.is_cast_attached());
         assert!(app.connected_session_id.is_none());
         assert!(app.connected_session_state.is_none());
     }
@@ -670,7 +635,7 @@ mod tests {
     #[test]
     fn a_stale_connect_failure_does_not_detach_a_connected_attachment() {
         let mut app = make_app_stub();
-        app.attach_cast("device-1".to_string(), "Living Room".to_string());
+        app.attach_cast("device-1".to_string());
         let (job_tx, _calls) =
             mbv_cast::spawn_fake_cast_worker(mbv_cast::FakeCastTransport::default());
         app.set_cast_client("device-1", job_tx);

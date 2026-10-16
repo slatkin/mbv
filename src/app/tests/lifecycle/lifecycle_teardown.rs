@@ -39,7 +39,7 @@ fn teardown_persists_active_library_route_when_auto_reconnect_enabled() {
 fn teardown_issues_no_stop_for_an_attached_cast_target() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
-    app.attach_cast("device-1".to_string(), "Living Room".to_string());
+    app.attach_cast("device-1".to_string());
     let (job_tx, calls) = mbv_cast::spawn_fake_cast_worker(mbv_cast::FakeCastTransport::default());
     app.set_cast_client("device-1", job_tx);
 

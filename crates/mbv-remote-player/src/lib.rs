@@ -430,6 +430,11 @@ impl RemotePlayer {
         self.ctrl_compatibility.supports_play_order
     }
 
+    #[must_use]
+    pub fn supports_playback_output(&self) -> bool {
+        self.ctrl_compatibility.supports_playback_output
+    }
+
     pub fn load_queue_idle(
         &self,
         request_id: mbv_ctrl::QueueLoadRequestId,
