@@ -14,7 +14,7 @@ use crate::cast::PlaybackOutput;
 
 /// A feed queue item with an enclosure URL: the resolve needs no service
 /// client, so the funnel tests stay hermetic.
-fn feed_qi_with_url(guid: &str, url: &str) -> QueueItem {
+pub(super) fn feed_qi_with_url(guid: &str, url: &str) -> QueueItem {
     QueueItem::Feed(FeedEntry {
         guid: guid.into(),
         title: guid.into(),
@@ -33,7 +33,7 @@ fn feed_qi_with_url(guid: &str, url: &str) -> QueueItem {
 /// A Cast connector whose connect always succeeds, backed by a fake transport
 /// that answers every status poll with `status`; returns the connector and the
 /// transport's call log.
-fn status_connector(status: CastStatus) -> (CastConnector, Arc<Mutex<Vec<String>>>) {
+pub(super) fn status_connector(status: CastStatus) -> (CastConnector, Arc<Mutex<Vec<String>>>) {
     let calls = Arc::new(Mutex::new(Vec::new()));
     let log = Arc::clone(&calls);
     let connector: CastConnector = Box::new(move |request: CastConnectRequest| {
@@ -49,7 +49,7 @@ fn status_connector(status: CastStatus) -> (CastConnector, Arc<Mutex<Vec<String>
 
 /// Selects the test receiver as the output and pumps the connect outcome.
 /// Returns the client id, its event channel, and the transport's call log.
-fn select_cast_output(
+pub(super) fn select_cast_output(
     t: &mut TestLoop,
     status: CastStatus,
 ) -> (u64, mpsc::Receiver<CtrlOutbound>, Arc<Mutex<Vec<String>>>) {
@@ -62,7 +62,7 @@ fn select_cast_output(
 }
 
 /// Pumps one `DaemonEvent` the loop produced and applies it.
-fn pump(t: &mut TestLoop) {
+pub(super) fn pump(t: &mut TestLoop) {
     let event = t.merged_rx.recv().expect("the loop produced an event");
     t.event_loop.handle_event(event);
 }
@@ -548,7 +548,7 @@ fn a_resolve_that_lands_after_its_transition_expired_loads_nothing() {
 }
 
 /// A receiver status that confirms `content_id` is playing at `position_seconds`.
-fn playing_status_at(content_id: &str, position_seconds: f32) -> CastStatus {
+pub(super) fn playing_status_at(content_id: &str, position_seconds: f32) -> CastStatus {
     CastStatus {
         position_seconds: Some(position_seconds),
         ..playing_status(content_id)
@@ -612,6 +612,7 @@ fn a_routed_transport_command_lands_on_the_receiver(
     let now = std::time::Instant::now();
     t.event_loop.tick(now);
     pump(&mut t);
+    let commands = t.event_loop.player.spy_on_commands();
 
     t.event_loop.handle_event(DaemonEvent::Ctrl(
         CtrlCmd::PlayerCmd(command),
@@ -629,7 +630,7 @@ fn a_routed_transport_command_lands_on_the_receiver(
         "the routed command lands on the receiver: {log:?}"
     );
     assert!(
-        !t.event_loop.player.status.lock().unwrap().active,
+        commands.try_recv().is_err(),
         "the local run is never started or touched"
     );
 }
@@ -740,6 +741,7 @@ fn a_tray_transport_command_on_cast_lands_on_the_receiver_not_the_local_player()
     let now = std::time::Instant::now();
     t.event_loop.tick(now);
     pump(&mut t);
+    let commands = t.event_loop.player.spy_on_commands();
 
     t.event_loop
         .handle_event(DaemonEvent::Transport(mbv_ctrl::TransportCommand::Player(
@@ -756,7 +758,7 @@ fn a_tray_transport_command_on_cast_lands_on_the_receiver_not_the_local_player()
         "the tray pause lands on the receiver: {log:?}"
     );
     assert!(
-        !t.event_loop.player.status.lock().unwrap().active,
+        commands.try_recv().is_err(),
         "the local run is never started or touched"
     );
 }

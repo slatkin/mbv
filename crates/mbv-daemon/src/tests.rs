@@ -61,4 +61,5 @@ pub use queue_ops::owner_with;
 mod cast_output;
 mod cast_playback;
 mod cast_resolve;
+mod cast_status;
 mod r#loop;

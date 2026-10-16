@@ -2,23 +2,33 @@
 //! (cast-owner-output design D1/D2/D3). The Owner holds exactly one output;
 //! the Cast side owns the worker sender, the receiver identity, and the
 //! connection state, and every receiver call runs on the Cast worker.
+//!
+//! The module splits along responsibility:
+//! - `connect`: output selection, connect and reconnect outcomes, and the
+//!   disconnect-and-reconnect recovery;
+//! - `status`: the status-poll handler, the transition gate's Cast settle,
+//!   and the presented `PlayerStatus` (design D8);
+//! - `command`: routing transport commands onto the receiver.
 
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
-use mbv_cast::{
-    CastClient, CastError, CastJob, CastReceiver, CastStatus, CastTransport, ConnectMode,
-    spawn_cast_worker,
-};
-use mbv_ctrl::player::PlayerCommand;
-use mbv_ctrl::{CastConnection, CtrlEvent, OutputSelection, OutputState, PlaybackGeneration};
+use mbv_cast::{CastJob, CastReceiver, CastStatus};
+use mbv_ctrl::{CtrlEvent, OutputState, PlaybackGeneration};
 use mbv_queue::QueueSlotId;
 
-use crate::{CtrlClientId, CtrlContext};
+use crate::CtrlClientId;
 
 use super::DaemonLoop;
 use super::core::DaemonEvent;
-use super::ctrl::{CtrlSender, send_to};
+
+mod command;
+mod connect;
+mod status;
+
+pub(super) use command::{route_player_cmd, route_transport_command, set_receiver_paused};
+pub use connect::{CastConnectOutcome, CastConnectRequest, CastConnector, local_cast_connector};
+pub(super) use connect::{PendingCastConnect, handle_select_playback_output};
 
 /// The keep-alive cadence (design D8, task 3.3). The receiver terminates a
 /// sender whose PONGs lapse in well under ten seconds, and the 7s poll sat
@@ -38,7 +48,7 @@ pub(crate) const CAST_JOB_ANSWER_BOUND: Duration = Duration::from_secs(20);
 /// The single playback output a Player owner plays through (design D1): the
 /// type system makes two active outputs unrepresentable. The Cast side is
 /// boxed: it carries the worker sender, the last status, and the loaded item
-/// while `Local` carries nothing (later units grow it further).
+/// while `Local` carries nothing.
 #[derive(Default)]
 pub(crate) enum PlaybackOutput {
     #[default]
@@ -48,16 +58,16 @@ pub(crate) enum PlaybackOutput {
 
 /// One Cast receiver as the Owner's output (design D1). The worker sender is
 /// the only path to the receiver: the `CastClient` itself lives on the worker
-/// thread and is never `Send`. `last_status` is the most recent poll result
-/// (task 3.3 fills it); `loaded` is the item the receiver was told to play.
-/// The ABS lifecycle of a loaded episode joins it in task 6.4.
+/// thread and is never `Send`. `last_status` is the most recent poll result;
+/// `loaded` is the item the receiver was told to play. The ABS lifecycle of a
+/// loaded episode joins it in task 6.4.
 pub(crate) struct CastOutput {
     /// The only path to the receiver: the `CastClient` lives on the worker
     /// thread and is never `Send`. `pub(super)` so the crate's tests can
     /// submit sentinel jobs that make asynchronous job order assertable.
     pub(super) worker: mpsc::Sender<CastJob>,
     receiver: CastReceiver,
-    connection: CastConnection,
+    connection: mbv_ctrl::CastConnection,
     last_status: Option<CastStatus>,
     status_at: Option<Instant>,
     /// The item the receiver was told to play. `pub(super)` so the crate's
@@ -134,14 +144,6 @@ pub(crate) fn output_state(output: &PlaybackOutput) -> OutputState {
     }
 }
 
-/// A selection waiting for its Cast worker to connect (design D2). `reply_tx`
-/// answers the selecting Client when the connect fails; on success the
-/// broadcast is the reply.
-pub(crate) struct PendingCastConnect {
-    receiver: CastReceiver,
-    reply_tx: CtrlSender,
-}
-
 /// A Cast source resolve in flight (design D4, task 4.2): the transition it
 /// belongs to (its target slot is the slot the resolve was started for, its
 /// identity is the transition's), the position the resolved media starts at,
@@ -201,163 +203,6 @@ pub enum CastOwnerEvent {
     LoadFailed { slot: QueueSlotId, error: String },
 }
 
-/// The connect outcome a Cast connector reports (design D2). A connected
-/// worker is owned by whoever stores it: dropping the sender ends the worker
-/// thread, which is how a displaced or unused connect is discarded.
-#[derive(Debug)]
-pub enum CastConnectOutcome {
-    Connected(mpsc::Sender<CastJob>),
-    Failed(String),
-}
-
-/// What a Cast connector needs for one connect attempt.
-#[derive(Debug)]
-pub struct CastConnectRequest {
-    pub host: String,
-    pub port: u16,
-    /// First select or automatic reconnect (design D11): a reconnect never
-    /// launches over another sender's running app.
-    pub mode: ConnectMode,
-    /// One-shot reply path; the connector sends exactly one outcome on it.
-    pub reply: mpsc::Sender<CastConnectOutcome>,
-}
-
-/// Spawns one Cast worker connection for the Owner (design D2). The Local
-/// daemon supplies a connector through `DaemonRuntimeHooks`; `mbvd` passes
-/// `None`. The connector hands the (blocking) connect to its own thread and
-/// reports the outcome on the request's reply path.
-pub type CastConnector = Box<dyn Fn(CastConnectRequest) + Send>;
-
-/// The Local daemon's Cast connector (design D2): connect in first-select
-/// mode (design D11) on a dedicated worker thread.
-pub fn local_cast_connector() -> CastConnector {
-    Box::new(|request: CastConnectRequest| {
-        let CastConnectRequest {
-            host,
-            port,
-            mode,
-            reply,
-        } = request;
-        std::thread::spawn(move || {
-            let outcome = match spawn_cast_worker(move || CastClient::connect(&host, port, mode)) {
-                Ok(worker) => CastConnectOutcome::Connected(worker),
-                Err(error) => CastConnectOutcome::Failed(error.to_string()),
-            };
-            let _ = reply.send(outcome);
-        });
-    })
-}
-
-/// `CtrlCmd::SelectPlaybackOutput` (design D3, task 3.2). Called by the event
-/// loop before the ctrl dispatcher, because the connector lives on the loop.
-pub(super) fn handle_select_playback_output(
-    daemon: &mut DaemonLoop,
-    reply_tx: &CtrlSender,
-    selection: OutputSelection,
-) {
-    match selection {
-        OutputSelection::Local => {
-            // A pending Cast connect loses to the newer Local selection: the
-            // selector is told, and the late outcome matches nothing and is
-            // discarded when it arrives.
-            if let Some(pending) = daemon.owner.pending_cast_connect.take() {
-                send_to(
-                    &pending.reply_tx,
-                    &CtrlEvent::CommandRejected(
-                        "a newer selection kept local playback".to_string(),
-                    ),
-                );
-                return;
-            }
-            // Selecting Local while a receiver is the output hands the active
-            // slot back (design D10); the hand-off sequence is task 7.1.
-            if matches!(daemon.owner.output, PlaybackOutput::Cast(_)) {
-                send_to(
-                    reply_tx,
-                    &CtrlEvent::CommandRejected(
-                        "moving receiver playback back to local is not supported yet".to_string(),
-                    ),
-                );
-            }
-        }
-        OutputSelection::Cast {
-            receiver_id,
-            name,
-            host,
-            port,
-        } => {
-            let Some(connector) = daemon.cast_connector.as_ref() else {
-                send_to(
-                    reply_tx,
-                    &CtrlEvent::CommandRejected(
-                        "this owner has no Cast playback output".to_string(),
-                    ),
-                );
-                return;
-            };
-            // Local → Cast is the only selection this unit swaps; hand-offs
-            // between outputs keep the current output until task 7.1.
-            if matches!(daemon.owner.output, PlaybackOutput::Cast(_)) {
-                send_to(
-                    reply_tx,
-                    &CtrlEvent::CommandRejected(
-                        "moving playback between outputs is not supported yet".to_string(),
-                    ),
-                );
-                return;
-            }
-            // A slot counts as active while the local run plays or pauses it
-            // (design D10 step 1); moving active playback is task 7.1.
-            if daemon.player.status.lock().unwrap().active {
-                send_to(
-                    reply_tx,
-                    &CtrlEvent::CommandRejected(
-                        "stop playback before moving it to a receiver".to_string(),
-                    ),
-                );
-                return;
-            }
-            let receiver = CastReceiver {
-                id: receiver_id.clone(),
-                friendly_name: name,
-                host,
-                port,
-            };
-            let (outcome_tx, outcome_rx) = mpsc::channel::<CastConnectOutcome>();
-            connector(CastConnectRequest {
-                host: receiver.host.clone(),
-                port: receiver.port,
-                mode: ConnectMode::FirstSelect,
-                reply: outcome_tx,
-            });
-            // A connect already in flight loses to this newer selection: its
-            // selector is told now, so no Client hangs, and its late outcome
-            // matches nothing and is discarded when it arrives.
-            if let Some(displaced) = daemon.owner.pending_cast_connect.take() {
-                send_to(
-                    &displaced.reply_tx,
-                    &CtrlEvent::CommandRejected(
-                        "superseded by a newer receiver selection".to_string(),
-                    ),
-                );
-            }
-            daemon.owner.pending_cast_connect = Some(PendingCastConnect {
-                receiver,
-                reply_tx: reply_tx.clone(),
-            });
-            let merged_tx = daemon.merged_tx.clone();
-            std::thread::spawn(move || {
-                if let Ok(outcome) = outcome_rx.recv() {
-                    let _ = merged_tx.send(DaemonEvent::Cast(CastOwnerEvent::Connect {
-                        receiver_id,
-                        outcome,
-                    }));
-                }
-            });
-        }
-    }
-}
-
 /// `DaemonEvent::Cast`: apply one Cast-worker or connector outcome to the
 /// owner's output (tasks 3.2/3.3). A connect failure keeps the current output
 /// and reports to the selecting Client; a success with no active slot swaps
@@ -369,16 +214,16 @@ pub(super) fn handle_cast_event(daemon: &mut DaemonLoop, event: CastOwnerEvent) 
         CastOwnerEvent::Connect {
             receiver_id,
             outcome,
-        } => handle_connect_outcome(daemon, &receiver_id, outcome),
+        } => connect::handle_connect_outcome(daemon, &receiver_id, outcome),
         CastOwnerEvent::Status {
             receiver_id,
             poll_id,
             result,
-        } => handle_cast_status(daemon, &receiver_id, poll_id, result),
+        } => status::handle_cast_status(daemon, &receiver_id, poll_id, result),
         CastOwnerEvent::Reconnect {
             receiver_id,
             outcome,
-        } => handle_reconnect_outcome(daemon, &receiver_id, outcome),
+        } => connect::handle_reconnect_outcome(daemon, &receiver_id, outcome),
         CastOwnerEvent::Resolved {
             slot,
             generation,
@@ -405,10 +250,10 @@ pub(super) fn owner_context(daemon: &mut DaemonLoop) -> super::core::DaemonOwner
 /// Dispatches one Cast load for an accepted transition (design D4, row 5.1):
 /// the target slot becomes the queue's active slot, the resolve is registered
 /// as the owner's pending Cast resolve, and the resolve runs off the
-/// event-loop thread. Its outcome re-enters through
-/// `CastOwnerEvent::Resolved`; on success the resolved media loads at
-/// `start_ticks`, on failure the transition expires and the failure is
-/// reported (design D5). Returns whether the dispatch started.
+/// event-loop thread. Its outcome re-enters through `CastOwnerEvent::Resolved`;
+/// on success the resolved media loads at `start_ticks`, on failure the
+/// transition expires and the failure is reported (design D5). Returns whether
+/// the dispatch started.
 pub(super) fn dispatch_cast_load(
     ctx: &mut super::core::DaemonOwnerContext<'_>,
     transition: mbv_player::transition::Transition,
@@ -563,224 +408,30 @@ pub(super) fn report_resolve_failure(
 /// later idle status of the stopped receiver can neither settle nor advance
 /// anything (design D5/D7). Shared by the ctrl stop, the guarded stop
 /// intent, and the transport (MPRIS/tray) stop, which mirrors `CtrlCmd::Stop`.
-pub(super) fn stop_active_output(player: &mbv_player::Player, output: &mut PlaybackOutput) {
+/// The Cast arm also re-presents the output: with the loaded item gone the
+/// presented status shows no active playback (design D8, row 6.1).
+pub(super) fn stop_active_output(
+    player: &mbv_player::Player,
+    output: &mut PlaybackOutput,
+    queue: &mbv_queue::PlaybackQueue,
+) {
     match output {
         PlaybackOutput::Local => player.stop(),
         PlaybackOutput::Cast(cast) => {
             let worker = cast.worker.clone();
             cast.loaded = None;
-            submit_command_job(&worker, "stop", |transport| transport.stop());
+            command::submit_command_job(&worker, "stop", |transport| transport.stop());
+            let base = player.status.lock().unwrap().clone();
+            let presented = status::presented_player_status(
+                &base,
+                queue,
+                None,
+                cast.last_status.as_ref(),
+                Duration::ZERO,
+            );
+            *player.status.lock().unwrap() = presented;
         }
     }
-}
-
-/// The cast side of `CtrlCmd::PlayerCmd` (design D4, row 5.3). Local
-/// forwards the command to the run unchanged; Cast routes through
-/// `route_cast_command` with the ctrl reply path for the rejections.
-pub(super) fn route_player_cmd(ctx: &mut CtrlContext<'_>, cmd: mbv_ctrl::WireCommand) {
-    let PlaybackOutput::Cast(cast) = &mut ctx.owner.output else {
-        ctx.player.send_command(PlayerCommand::from(cmd));
-        return;
-    };
-    route_cast_command(cast, &cmd, Some(ctx.reply_tx));
-}
-
-/// The transport side of a tray/MPRIS `TransportCommand::Player` (design D4,
-/// row 5.3): Local forwards the command to the run unchanged. On a Cast
-/// output a command with a wire form routes like the matching ctrl wire
-/// command; a local-only command (slot jumps, run playlist submission, the
-/// mpv next-up overlays) has no receiver counterpart and is a documented
-/// no-op — the canonical queue paths are output-agnostic.
-pub(super) fn route_transport_command(
-    player: &mbv_player::Player,
-    output: &mut PlaybackOutput,
-    command: mbv_ctrl::player::PlayerCommand,
-) {
-    let PlaybackOutput::Cast(cast) = output else {
-        player.send_command(command);
-        return;
-    };
-    match mbv_ctrl::WireCommand::try_from_player_command(command) {
-        Ok(wire) => route_cast_command(cast, &wire, None),
-        Err(command) => {
-            tracing::debug!(
-                name: "cast.transport_command.ignored",
-                target: "cast",
-                command = ?command,
-                "local-only player command has no receiver counterpart"
-            );
-        }
-    }
-}
-
-/// `PlaybackIntentAction::SetPaused` on a Cast output (row 5.3 correction:
-/// spec "play, pause, next, previous, and stop from either Client act on
-/// that receiver"): the desired state translates to an explicit receiver
-/// pause or play — the intent carries the state, so no toggle is needed. The
-/// caller settles the guarded intent; the receiver's own pause change
-/// reports through the status poll (design D8), not through a run event.
-pub(super) fn set_receiver_paused(output: &mut PlaybackOutput, paused: bool) {
-    let PlaybackOutput::Cast(cast) = output else {
-        return;
-    };
-    // Already in the desired state: no command, the caller still settles the
-    // intent (the local path settles a matching state without a command too).
-    if matches!(
-        cast.last_status.as_ref().map(|status| status.state),
-        Some(mbv_cast::CastPlaybackState::Paused)
-    ) == paused
-    {
-        return;
-    }
-    let worker = cast.worker.clone();
-    submit_command_job(&worker, "set_paused", move |transport| {
-        if paused {
-            transport.pause()
-        } else {
-            transport.play()
-        }
-    });
-}
-
-/// Routes one wire command onto the Cast receiver (design D4, row 5.3). The
-/// transport commands act on the receiver — `TogglePause` picks its direction
-/// from the receiver's last reported state, a relative `Seek` starts from the
-/// receiver's reported position, and the 0-100 wire volume scales to the
-/// receiver's 0-1 level; track selection has no cast primitive and is
-/// rejected with a reason when a reply path exists; the next-up and
-/// skip-intro overlays are mpv script messages with no receiver counterpart,
-/// a documented no-op. `JumpTo` never reaches here: the dispatcher rejects it
-/// before conversion.
-fn route_cast_command(
-    cast: &mut CastOutput,
-    cmd: &mbv_ctrl::WireCommand,
-    reply: Option<&CtrlSender>,
-) {
-    match cmd {
-        mbv_ctrl::WireCommand::TogglePause => {
-            let paused = matches!(
-                cast.last_status.as_ref().map(|status| status.state),
-                Some(mbv_cast::CastPlaybackState::Paused)
-            );
-            let worker = cast.worker.clone();
-            submit_command_job(&worker, "toggle_pause", move |transport| {
-                if paused {
-                    transport.play()
-                } else {
-                    transport.pause()
-                }
-            });
-        }
-        mbv_ctrl::WireCommand::Seek(delta) => {
-            let base = f64::from(
-                cast.last_status
-                    .as_ref()
-                    .and_then(|status| status.position_seconds)
-                    .unwrap_or(0.0),
-            );
-            let target_f64 = (base + *delta).max(0.0);
-            let Some(target) = cast_seconds_f32(target_f64) else {
-                tracing::warn!(
-                    name: "cast.seek.invalid",
-                    target: "cast",
-                    seconds = target_f64,
-                    "the seek position is outside the receiver's range; the seek is dropped"
-                );
-                return;
-            };
-            let worker = cast.worker.clone();
-            submit_command_job(&worker, "seek", move |transport| transport.seek(target));
-        }
-        mbv_ctrl::WireCommand::SeekAbsolute(seconds) => {
-            let Some(seconds) = cast_seconds_f32(*seconds) else {
-                tracing::warn!(
-                    name: "cast.seek.invalid",
-                    target: "cast",
-                    seconds = *seconds,
-                    "the seek position is outside the receiver's range; the seek is dropped"
-                );
-                return;
-            };
-            let worker = cast.worker.clone();
-            submit_command_job(&worker, "seek", move |transport| transport.seek(seconds));
-        }
-        mbv_ctrl::WireCommand::SetVolume(volume) => {
-            let volume = u8::try_from((*volume).clamp(0, 100)).unwrap_or(u8::MAX);
-            let level = f32::from(volume) / 100.0;
-            let worker = cast.worker.clone();
-            submit_command_job(&worker, "set_volume", move |transport| {
-                transport.set_volume(level)
-            });
-        }
-        mbv_ctrl::WireCommand::SetMute(muted) => {
-            let muted = *muted;
-            let worker = cast.worker.clone();
-            submit_command_job(&worker, "set_muted", move |transport| {
-                transport.set_muted(muted)
-            });
-        }
-        mbv_ctrl::WireCommand::SetAudio(_)
-        | mbv_ctrl::WireCommand::SetSub(_)
-        | mbv_ctrl::WireCommand::SetSubtitlePrefs { .. } => {
-            if let Some(reply) = reply {
-                send_to(
-                    reply,
-                    &CtrlEvent::CommandRejected(
-                        "audio and subtitle track selection is not supported on a cast receiver"
-                            .to_string(),
-                    ),
-                );
-            } else {
-                // The transport path has no reply channel; the refusal is
-                // logged so a track command is never silently swallowed.
-                tracing::debug!(
-                    name: "cast.track_command.refused",
-                    target: "cast",
-                    command = ?cmd,
-                    "track selection has no receiver counterpart"
-                );
-            }
-        }
-        mbv_ctrl::WireCommand::NextUpShow { .. }
-        | mbv_ctrl::WireCommand::NextUpDismiss
-        | mbv_ctrl::WireCommand::SkipIntroDismiss => {
-            // Documented no-op: these drive the mpv next-up and skip-intro
-            // overlays, which a receiver has no counterpart for.
-        }
-        mbv_ctrl::WireCommand::JumpTo(_) => {
-            unreachable!("inbound WireCommand::JumpTo is rejected before conversion (design D6)")
-        }
-    }
-}
-
-/// Narrows a wire seconds value to the receiver protocol's f32 (`rust_cast`'s
-/// seek is f32; no lossless f64-to-f32 conversion exists). A value outside
-/// the f32 range — or not a number — is no valid seek position: the caller
-/// drops the seek instead of issuing one.
-fn cast_seconds_f32(value: f64) -> Option<f32> {
-    num_traits::cast(value)
-}
-
-/// Submits one receiver-command job (design D4, row 5.3): the operation runs
-/// on the Cast worker against the transport it owns; a failure is logged — a
-/// dead connection is reported by the next status poll, which disconnects
-/// and reconnects (design D8).
-fn submit_command_job(
-    worker: &mpsc::Sender<CastJob>,
-    command: &'static str,
-    op: impl FnOnce(&mut dyn CastTransport) -> Result<(), CastError> + Send + 'static,
-) {
-    let _ = worker.send(Box::new(move |transport: &mut dyn CastTransport| {
-        if let Err(error) = op(transport) {
-            tracing::warn!(
-                name: "cast.command.failed",
-                target: "cast",
-                command,
-                error = %error,
-                "the receiver refused the command"
-            );
-        }
-    }));
 }
 
 /// The receiver refused the load (design D5, row 5.2): the loaded record is
@@ -806,70 +457,9 @@ fn handle_load_failed(daemon: &mut DaemonLoop, slot: QueueSlotId, error: &str) {
         }
         cast.loaded = None;
     }
+    status::refresh_presentation(daemon, Instant::now());
     let mut ctx = owner_context(daemon);
     expire_cast_transition(&mut ctx);
-}
-
-fn handle_connect_outcome(daemon: &mut DaemonLoop, receiver_id: &str, outcome: CastConnectOutcome) {
-    let waiting = daemon
-        .owner
-        .pending_cast_connect
-        .as_ref()
-        .is_some_and(|pending| pending.receiver.id == receiver_id);
-    if !waiting {
-        // No selection waits for this receiver: the outcome is displaced (the
-        // last selection wins), so its worker has no owner and the dropped
-        // sender ends the worker thread.
-        if let CastConnectOutcome::Connected(worker) = outcome {
-            drop(worker);
-        }
-        return;
-    }
-    let Some(pending) = daemon.owner.pending_cast_connect.take() else {
-        return;
-    };
-    match outcome {
-        CastConnectOutcome::Connected(worker) => {
-            // Local playback may have started after the select (the
-            // select-time check only guards the selection moment). Swapping
-            // now would leave two live outputs, so the connect is discarded
-            // and reported instead.
-            if daemon.player.status.lock().unwrap().active {
-                drop(worker);
-                send_to(
-                    &pending.reply_tx,
-                    &CtrlEvent::CommandRejected(
-                        "local playback started while connecting; stop playback before moving it to a receiver"
-                            .to_string(),
-                    ),
-                );
-                return;
-            }
-            let output = CastOutput {
-                worker,
-                receiver: pending.receiver,
-                connection: CastConnection::Connected,
-                last_status: None,
-                status_at: None,
-                loaded: None,
-                last_keep_alive: Instant::now(),
-                last_poll: None,
-                poll_sent: None,
-                next_poll_id: 0,
-                reconnecting: false,
-            };
-            tracing::info!(name: "daemon.cast_output.connected", target: "daemon", receiver = %receiver_id, output = ?output, "cast receiver is now the playback output");
-            daemon.owner.output = PlaybackOutput::Cast(Box::new(output));
-            broadcast_output_change(daemon);
-        }
-        CastConnectOutcome::Failed(reason) => {
-            tracing::warn!(name: "daemon.cast_output.connect_failed", target: "daemon", receiver = %receiver_id, error = %reason, "cast connect failed; playback output unchanged");
-            send_to(
-                &pending.reply_tx,
-                &CtrlEvent::CommandRejected(format!("connecting to the receiver failed: {reason}")),
-            );
-        }
-    }
 }
 
 /// Cast tick timers (design D8, task 3.3), driven by `DaemonLoop::tick` with
@@ -879,13 +469,17 @@ fn handle_connect_outcome(daemon: &mut DaemonLoop, receiver_id: &str, outcome: C
 /// moves with the poll: a poll with no worker event within the answer bound
 /// is a wedged worker and gets the disconnect-and-reconnect recovery.
 /// A disconnected output runs no jobs; its reconnect attempt is in flight.
+/// While the output is connected the tick also advances the presented
+/// position (design D8, row 6.1): extrapolation from the last report.
 pub(super) fn tick_cast(daemon: &mut DaemonLoop, now: Instant) {
     let merged_tx = daemon.merged_tx.clone();
+    let mut connected = false;
     let wedged = {
         let PlaybackOutput::Cast(cast) = &mut daemon.owner.output else {
             return;
         };
-        if matches!(cast.connection, CastConnection::Connected) {
+        if matches!(cast.connection, mbv_ctrl::CastConnection::Connected) {
+            connected = true;
             if now.duration_since(cast.last_keep_alive) >= CAST_KEEP_ALIVE_INTERVAL {
                 submit_keep_alive_job(&cast.worker);
                 cast.last_keep_alive = now;
@@ -906,7 +500,11 @@ pub(super) fn tick_cast(daemon: &mut DaemonLoop, now: Instant) {
     };
     if wedged {
         tracing::warn!(name: "cast.worker.unresponsive", target: "cast", "cast worker produced no event within the answer bound");
-        disconnect_and_reconnect(daemon);
+        connect::disconnect_and_reconnect(daemon);
+        return;
+    }
+    if connected {
+        status::refresh_presentation(daemon, now);
     }
 }
 
@@ -914,7 +512,7 @@ pub(super) fn tick_cast(daemon: &mut DaemonLoop, now: Instant) {
 /// never touches the watchdog clock: a socket this job finds dead is reported
 /// by the next status poll.
 fn submit_keep_alive_job(worker: &mpsc::Sender<CastJob>) {
-    let _ = worker.send(Box::new(|transport: &mut dyn CastTransport| {
+    let _ = worker.send(Box::new(|transport: &mut dyn mbv_cast::CastTransport| {
         if let Err(error) = transport.keep_alive() {
             tracing::warn!(name: "cast.keep_alive.failed", target: "cast", error = %error, "cast keep-alive failed");
         }
@@ -931,7 +529,7 @@ fn submit_status_poll_job(
     poll_id: u64,
 ) {
     let receiver_id = receiver_id.to_string();
-    let _ = worker.send(Box::new(move |transport: &mut dyn CastTransport| {
+    let _ = worker.send(Box::new(move |transport: &mut dyn mbv_cast::CastTransport| {
         if let Err(error) = transport.keep_alive() {
             tracing::warn!(name: "cast.keep_alive.failed", target: "cast", error = %error, "cast keep-alive failed");
         }
@@ -944,246 +542,4 @@ fn submit_status_poll_job(
             result,
         }));
     }));
-}
-
-/// One status-poll result (design D8, task 3.3). Only the result whose id
-/// matches the in-flight poll — the same id stamped into that poll's job —
-/// disarms the watchdog clock: a late result from a previous worker (the
-/// watchdog reconnect race) carries a stale id and is dropped, so it can
-/// neither spuriously disconnect the restored worker nor disturb the new
-/// poll's bookkeeping. A returned status is stored (task 6.1 owns its
-/// translation and extrapolation); a poll error is a broken connection, so
-/// the output disconnects and reconnects.
-fn handle_cast_status(
-    daemon: &mut DaemonLoop,
-    receiver_id: &str,
-    poll_id: u64,
-    result: Result<CastStatus, String>,
-) {
-    let (error, settle_slot) = {
-        let PlaybackOutput::Cast(cast) = &mut daemon.owner.output else {
-            return;
-        };
-        if cast.receiver.id != receiver_id
-            || !matches!(cast.connection, CastConnection::Connected)
-            || cast
-                .poll_sent
-                .is_none_or(|(in_flight, _)| in_flight != poll_id)
-        {
-            return;
-        }
-        match result {
-            Ok(status) => {
-                cast.last_status = Some(status);
-                cast.status_at = Some(Instant::now());
-                cast.poll_sent = None;
-                cast.last_poll = Some(Instant::now());
-                (None, settle_check(&cast))
-            }
-            Err(error) => {
-                cast.poll_sent = None;
-                (Some(error), None)
-            }
-        }
-    };
-    if let Some(error) = error {
-        tracing::warn!(name: "cast.status_poll.failed", target: "cast", receiver = %receiver_id, error = %error, "cast status poll failed; reconnecting");
-        disconnect_and_reconnect(daemon);
-        return;
-    }
-    if let Some(loaded_slot) = settle_slot {
-        settle_cast_transition(daemon, loaded_slot);
-    }
-}
-
-/// Whether a stored status settles the loaded item's transition (design D5,
-/// row 5.2): the status names the loaded content id in a playing, buffering,
-/// or paused state — the Cast counterpart of the run's `TrackChanged`
-/// confirmation. Returns the loaded slot when it does.
-fn settle_check(cast: &CastOutput) -> Option<QueueSlotId> {
-    let loaded = cast.loaded.as_ref()?;
-    let status = cast.last_status.as_ref()?;
-    let confirmed = matches!(
-        status.state,
-        mbv_cast::CastPlaybackState::Playing
-            | mbv_cast::CastPlaybackState::Buffering
-            | mbv_cast::CastPlaybackState::Paused
-    ) && status.playing_content_id.as_deref() == Some(loaded.content_id.as_str());
-    confirmed.then_some(loaded.slot)
-}
-
-/// Settles the in-flight transition a confirming receiver status closes (row
-/// 5.2): the loaded slot becomes the observed active slot, the transition
-/// settles, a queued transition the settle promotes is dispatched, and the
-/// guarded play intent the load carried is applied. Mirrors the run's
-/// `TrackChanged` handling (observe → settle → publish).
-fn settle_cast_transition(daemon: &mut DaemonLoop, loaded_slot: QueueSlotId) {
-    // Only the transition the loaded item belongs to settles here: a newer
-    // in-flight transition targets a slot the receiver has not confirmed.
-    let Some(in_flight) = daemon
-        .owner
-        .core
-        .transitions
-        .in_flight()
-        .filter(|t| t.target == loaded_slot)
-    else {
-        return;
-    };
-    let mut ctx = owner_context(daemon);
-    let order_before = ctx.owner.core.play_order();
-    ctx.owner.core.note_observed_active_slot(Some(loaded_slot));
-    if ctx.owner.core.play_order() != order_before {
-        super::forward_play_order_advance(&ctx.owner.core, ctx.player);
-    }
-    super::core::settle_and_redispatch(&mut ctx, in_flight.request_id, loaded_slot);
-    // The guarded play intent the load registered under settles with its
-    // transition; without this a Cast play would sit unresolved and coalesce
-    // every later play from its connection.
-    if let Some((connection_id, request_id, generation)) = ctx
-        .owner
-        .intents
-        .current
-        .as_ref()
-        .filter(|current| {
-            current.request_id == in_flight.request_id
-                && matches!(current.action, mbv_ctrl::PlaybackIntentAction::Play { .. })
-        })
-        .map(|current| {
-            (
-                current.connection_id,
-                current.request_id,
-                current.generation,
-            )
-        })
-        && let Some(event) =
-            ctx.owner
-                .intents
-                .applied_if_current(connection_id, request_id, generation)
-    {
-        ctx.ctrl_clients
-            .lock()
-            .unwrap()
-            .send_to_client(connection_id, &CtrlEvent::PlaybackIntent(event));
-    }
-    ctx.shared_queue.publish_observed(&ctx.owner.core);
-    super::broadcast_queue_state(
-        ctx.ctrl_clients,
-        ctx.player,
-        ctx.shared_queue,
-        &ctx.owner.core.queue,
-        &ctx.owner.core.source,
-        &ctx.owner.core.transitions,
-        None,
-    );
-}
-
-/// The reconnect a poll error or a watchdog timeout spawned (design D8/D11,
-/// task 3.3). A success restores the existing output's worker and connection;
-/// a failure leaves the output `Disconnected` (task 7.4 refines the recovery
-/// outcomes). A displaced outcome — the output moved on or was replaced — is
-/// discarded, and its worker sender dropped to end the thread.
-fn handle_reconnect_outcome(
-    daemon: &mut DaemonLoop,
-    receiver_id: &str,
-    outcome: CastConnectOutcome,
-) {
-    let restored = {
-        let PlaybackOutput::Cast(cast) = &mut daemon.owner.output else {
-            drop_connected_worker(outcome);
-            return;
-        };
-        if cast.receiver.id != receiver_id || !cast.reconnecting {
-            drop_connected_worker(outcome);
-            return;
-        }
-        cast.reconnecting = false;
-        match outcome {
-            CastConnectOutcome::Connected(worker) => {
-                cast.worker = worker;
-                cast.connection = CastConnection::Connected;
-                cast.poll_sent = None;
-                cast.last_poll = Some(Instant::now());
-                cast.last_keep_alive = Instant::now();
-                true
-            }
-            CastConnectOutcome::Failed(reason) => {
-                tracing::warn!(name: "daemon.cast_output.reconnect_failed", target: "daemon", receiver = %receiver_id, error = %reason, "cast reconnect failed; the output stays disconnected");
-                false
-            }
-        }
-    };
-    if restored {
-        broadcast_output_change(daemon);
-    }
-}
-
-/// A connected worker with no owner: dropping its sender ends the worker
-/// thread (the same discard `handle_connect_outcome` applies).
-fn drop_connected_worker(outcome: CastConnectOutcome) {
-    if let CastConnectOutcome::Connected(worker) = outcome {
-        drop(worker);
-    }
-}
-
-/// Marks the Cast output disconnected, broadcasts the change, and spawns one
-/// reconnect attempt in reconnect mode (design D8). The queue, the active
-/// slot, and the loaded item are untouched: the connection loss says nothing
-/// about the owner's playback intent. The wedged or dead worker's sender is
-/// replaced when the reconnect succeeds; while disconnected no jobs run.
-fn disconnect_and_reconnect(daemon: &mut DaemonLoop) {
-    let (receiver_id, host, port) = {
-        let PlaybackOutput::Cast(cast) = &daemon.owner.output else {
-            return;
-        };
-        if !matches!(cast.connection, CastConnection::Connected) {
-            return;
-        }
-        (
-            cast.receiver.id.clone(),
-            cast.receiver.host.clone(),
-            cast.receiver.port,
-        )
-    };
-    let connector = daemon
-        .cast_connector
-        .as_ref()
-        .expect("a Cast output exists only where a connector was supplied");
-    let (outcome_tx, outcome_rx) = mpsc::channel::<CastConnectOutcome>();
-    connector(CastConnectRequest {
-        host,
-        port,
-        mode: ConnectMode::Reconnect,
-        reply: outcome_tx,
-    });
-    let PlaybackOutput::Cast(cast) = &mut daemon.owner.output else {
-        return;
-    };
-    cast.connection = CastConnection::Disconnected;
-    cast.poll_sent = None;
-    cast.reconnecting = true;
-    broadcast_output_change(daemon);
-    let merged_tx = daemon.merged_tx.clone();
-    std::thread::spawn(move || {
-        if let Ok(outcome) = outcome_rx.recv() {
-            let _ = merged_tx.send(DaemonEvent::Cast(CastOwnerEvent::Reconnect {
-                receiver_id,
-                outcome,
-            }));
-        }
-    });
-}
-
-/// Mirrors the owner's output into the shared state and broadcasts it to
-/// peers that negotiated `playback-output` (design D3).
-fn broadcast_output_change(daemon: &DaemonLoop) {
-    let state = output_state(&daemon.owner.output);
-    *daemon.shared_queue.playback_output.lock().unwrap() = state.clone();
-    let Ok(json) = serde_json::to_string(&CtrlEvent::PlaybackOutput(state)) else {
-        return;
-    };
-    daemon
-        .ctrl_clients
-        .lock()
-        .unwrap()
-        .broadcast_playback_output_gated(&json);
 }

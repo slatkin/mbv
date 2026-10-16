@@ -249,7 +249,11 @@ impl DaemonLoop {
                 // makes every awaited transition identity unobservable, and
                 // stops the active output's media — the local run on Local,
                 // the receiver media on Cast (design D4, row 5.3).
-                super::cast::stop_active_output(&self.player, &mut self.owner.output);
+                super::cast::stop_active_output(
+                    &self.player,
+                    &mut self.owner.output,
+                    &self.owner.core.queue,
+                );
                 reset_slot_jumps(
                     &mut self.owner.core.transitions,
                     &mut self.owner.queued_transition_origin,
