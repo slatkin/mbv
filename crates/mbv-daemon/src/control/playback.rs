@@ -168,7 +168,26 @@ pub(super) fn handle_playback_intent(ctx: &mut CtrlContext<'_>, intent: mbv_ctrl
         ),
         mbv_ctrl::PlaybackIntentAction::Stop => handle_stop(ctx),
         mbv_ctrl::PlaybackIntentAction::SetPaused { paused } => {
-            if ctx.player.status.lock().unwrap().paused != paused {
+            if matches!(ctx.owner.output, crate::cast::PlaybackOutput::Cast(_)) {
+                // The receiver is the output (row 5.3 correction, spec "play,
+                // pause, next, previous, and stop from either Client act on
+                // that receiver"): the desired state translates to an
+                // explicit receiver pause or play, and the guarded intent
+                // settles now — the receiver's own pause change reports
+                // through the status poll (design D8), not a run event, so
+                // nothing else would settle it.
+                crate::cast::set_receiver_paused(&mut ctx.owner.output, paused);
+                if let Some(event) = ctx.owner.intents.applied_if_current(
+                    ctx.client_id,
+                    intent_request_id,
+                    intent_generation,
+                ) {
+                    ctx.ctrl_clients
+                        .lock()
+                        .unwrap()
+                        .send_to_client(ctx.client_id, &CtrlEvent::PlaybackIntent(event));
+                }
+            } else if ctx.player.status.lock().unwrap().paused != paused {
                 ctx.player.send_command(PlayerCommand::TogglePause);
             }
         }

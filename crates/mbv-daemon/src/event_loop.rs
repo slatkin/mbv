@@ -240,7 +240,9 @@ impl DaemonLoop {
     fn handle_transport(&mut self, command: mbv_ctrl::TransportCommand) -> EventOutcome {
         match command {
             mbv_ctrl::TransportCommand::Player(command) => {
-                self.player.send_command(command);
+                // The active output takes the command (design D4, row 5.3):
+                // the run on Local, the receiver on Cast.
+                super::cast::route_transport_command(&self.player, &mut self.owner.output, command);
             }
             mbv_ctrl::TransportCommand::Stop => {
                 // Mirror `CtrlCmd::Stop` (control.rs `handle_stop`): a stop

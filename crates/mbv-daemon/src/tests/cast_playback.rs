@@ -727,6 +727,99 @@ fn loaded_item_slot(t: &TestLoop) -> Option<mbv_queue::QueueSlotId> {
     cast.loaded.as_ref().map(|loaded| loaded.slot)
 }
 
+/// Contract: row 5.3 correction — a tray/MPRIS transport command on a Cast
+/// output lands on the receiver, not on the local player: the transport
+/// `Player` arm routes to the active output like the ctrl wire command.
+#[test]
+fn a_tray_transport_command_on_cast_lands_on_the_receiver_not_the_local_player() {
+    let mut t = test_loop_with_role(crate::DaemonRole::Local);
+    let (_client_id, _rx, calls) =
+        select_cast_output(&mut t, playing_status_at("https://feed/a.mp3", 10.0));
+    // One tick runs the status poll, so the output holds the receiver's
+    // reported state before the command routes.
+    let now = std::time::Instant::now();
+    t.event_loop.tick(now);
+    pump(&mut t);
+
+    t.event_loop
+        .handle_event(DaemonEvent::Transport(mbv_ctrl::TransportCommand::Player(
+            PlayerCommand::TogglePause,
+        )));
+    wait_for_worker_jobs(&t.event_loop.owner.output);
+
+    // The poll job pongs before its status exchange, so the routed command's
+    // call is the last one the transport recorded.
+    let log = calls.lock().unwrap().clone();
+    assert_eq!(
+        log.last().map(String::as_str),
+        Some("pause"),
+        "the tray pause lands on the receiver: {log:?}"
+    );
+    assert!(
+        !t.event_loop.player.status.lock().unwrap().active,
+        "the local run is never started or touched"
+    );
+}
+
+/// Contract: row 5.3 correction (spec "play, pause, next, previous, and stop
+/// from either Client act on that receiver") — a guarded `SetPaused` intent
+/// on a Cast output pauses the receiver with an explicit pause (the intent
+/// carries the desired state) and settles to Applied immediately: no run
+/// event would settle it, and the local player is never told.
+#[test]
+fn a_set_paused_intent_on_cast_pauses_the_receiver_and_settles_the_intent() {
+    let mut t = test_loop_with_role(crate::DaemonRole::Local);
+    let (connector, calls) = status_connector(playing_status_at("https://feed/a.mp3", 10.0));
+    t.event_loop.cast_connector = Some(connector);
+    let (client_id, reply_tx, rx) = connect_output_client(&t.event_loop.ctrl_clients, true);
+    select_output(&mut t, client_id, &reply_tx, cast_selection());
+    pump_cast_event(&mut t);
+    let now = std::time::Instant::now();
+    t.event_loop.tick(now);
+    pump(&mut t);
+
+    t.event_loop.handle_event(DaemonEvent::Ctrl(
+        CtrlCmd::PlaybackIntent(PlaybackIntent {
+            request_id: 9,
+            generation: 9,
+            action: PlaybackIntentAction::SetPaused { paused: true },
+        }),
+        client_id,
+        reply_tx,
+    ));
+    wait_for_worker_jobs(&t.event_loop.owner.output);
+
+    let log = calls.lock().unwrap().clone();
+    assert_eq!(
+        log.last().map(String::as_str),
+        Some("pause"),
+        "the desired pause translates to an explicit receiver pause: {log:?}"
+    );
+    assert!(
+        !t.event_loop.player.status.lock().unwrap().paused,
+        "the local player is never told"
+    );
+    let events = drained_events(&rx);
+    assert!(
+        events.iter().any(|event| matches!(
+            event,
+            CtrlEvent::PlaybackIntent(ev)
+                if ev.request_id == 9
+                    && matches!(ev.outcome, PlaybackIntentOutcome::Accepted)
+        )),
+        "the intent is accepted"
+    );
+    assert!(
+        events.iter().any(|event| matches!(
+            event,
+            CtrlEvent::PlaybackIntent(ev)
+                if ev.request_id == 9
+                    && matches!(ev.outcome, PlaybackIntentOutcome::Applied)
+        )),
+        "the guarded intent settles to Applied"
+    );
+}
+
 /// Contract: design D4 — a Cast queue replacement resets the play order like
 /// the local path does, so a replacement does not inherit the old queue's
 /// shuffle state.
