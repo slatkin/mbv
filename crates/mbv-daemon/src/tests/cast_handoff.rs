@@ -6,13 +6,14 @@
 
 use super::*;
 
-use mbv_cast::ConnectMode;
+use mbv_cast::{CastStatus, ConnectMode};
+use mbv_ctrl::{OutputSelection, OutputState};
 
 use super::cast_output::{
     cast_selection, connect_output_client, failing_connector, fake_connector, pump_cast_event,
     select_output,
 };
-use super::cast_playback::{feed_qi_with_url, pump};
+use super::cast_playback::{feed_qi_with_url, playing_status_at, pump, select_cast_output};
 use super::cast_resolve::wait_for_worker_jobs;
 use super::r#loop::{TestLoop, test_loop_with_queue};
 use crate::cast::PlaybackOutput;
@@ -181,5 +182,168 @@ fn a_handoff_selection_connects_in_first_select_mode() {
         *modes.lock().unwrap(),
         vec![ConnectMode::FirstSelect],
         "the user's first selection launches in first-select mode"
+    );
+}
+
+/// Loads `slot` on the selected receiver through the ctrl play-slot command
+/// and waits for the resolve and the load job to run.
+fn load_slot_on_receiver(t: &mut TestLoop, client_id: u64, slot: mbv_queue::QueueSlotId) {
+    t.event_loop.handle_event(DaemonEvent::Ctrl(
+        CtrlCmd::UnifiedQueuePlaySlot {
+            slot_id: mbv_ctrl::slot_id_to_u64(slot),
+            op: None,
+        },
+        client_id,
+        mpsc::channel().0,
+    ));
+    pump(t);
+    wait_for_worker_jobs(&t.event_loop.owner.output);
+}
+
+/// Holds the Cast worker behind a blocker job, so the jobs the Local
+/// selection queues (media stop, teardown) run only after the test releases
+/// it. Returns the release sender and the worker sender — still valid after
+/// the output swapped to Local, so the test can queue a sentinel job behind
+/// the select's jobs and learn when they have all run.
+fn hold_cast_worker(t: &TestLoop) -> (mpsc::Sender<()>, mpsc::Sender<mbv_cast::CastJob>) {
+    let crate::cast::PlaybackOutput::Cast(cast) = &t.event_loop.owner.output else {
+        panic!("the receiver is the output");
+    };
+    let worker = cast.worker.clone();
+    let (release_tx, release_rx) = mpsc::channel::<()>();
+    let _ = worker.send(Box::new(move |_| {
+        let _ = release_rx.recv();
+    }));
+    (release_tx, worker)
+}
+
+/// Contract: cast-owner-output row 7.2 (design D10 step 5, dispatch B) — a
+/// Cast→Local hand-off from a paused receiver gives a paused local run at
+/// the receiver's position: the fresh local run is submitted at the
+/// handed-off slot with the receiver's position as its resume position, and
+/// the captured pause reaches the local player as an explicit pause command
+/// after the submission (a local cold start cannot begin paused).
+#[test]
+fn a_paused_receiver_hands_back_to_a_paused_local_run_at_the_receiver_position() {
+    let mut t = test_loop_with_queue(
+        crate::DaemonRole::Local,
+        vec![feed_qi_with_url("a", "https://feed/a.mp3")],
+        0,
+    );
+    let position_ticks = 10 * mbv_emby_model::TICKS_PER_SECOND;
+    let receiver = CastStatus {
+        state: mbv_cast::CastPlaybackState::Paused,
+        ..playing_status_at("https://feed/a.mp3", 10.0)
+    };
+    let (client_id, rx, _calls) = select_cast_output(&mut t, receiver);
+    let slot = t.event_loop.owner.core.queue.slots()[0].slot_id;
+    load_slot_on_receiver(&mut t, client_id, slot);
+    // One tick runs the status poll, so the output presents the receiver's
+    // paused state at its reported position before the hand-off.
+    let now = std::time::Instant::now();
+    t.event_loop.tick(now);
+    pump(&mut t);
+    // Drain the events the load and the status produced, so the events the
+    // hand-off emits are the next ones the channel holds.
+    while rx.try_recv().is_ok() {}
+
+    let commands = t.event_loop.player.spy_on_commands();
+    select_output(
+        &mut t,
+        client_id,
+        &mpsc::channel().0,
+        OutputSelection::Local,
+    );
+
+    assert!(
+        matches!(t.event_loop.owner.output, PlaybackOutput::Local),
+        "the receiver hands playback back to local"
+    );
+    // The old output's stop report precedes the new output's state (design
+    // D9): the Feed `Stopped` goes out before the Local broadcast.
+    assert!(
+        matches!(
+            recv_event(&rx),
+            CtrlEvent::Player(PlayerEvent::Stopped { .. })
+        ),
+        "the handed-off slot's stop report goes out first"
+    );
+    assert!(
+        matches!(
+            recv_event(&rx),
+            CtrlEvent::PlaybackOutput(OutputState::Local)
+        ),
+        "the output change is broadcast after the stop report"
+    );
+    assert_eq!(
+        commands
+            .try_recv()
+            .map(|command| matches!(command, PlayerCommand::TogglePause)),
+        Ok(true),
+        "the captured pause reaches the local player as a pause command"
+    );
+    assert!(
+        commands.try_recv().is_err(),
+        "the hand-off touches the local player only to pause it"
+    );
+    assert_eq!(
+        mbv_player::resume_ticks_for_slot(&t.event_loop.owner.core.queue, slot),
+        Some(position_ticks),
+        "the receiver's position is the fresh run's resume position"
+    );
+    let status = t.event_loop.player.status.lock().unwrap();
+    assert!(
+        status.active && status.position_ticks == position_ticks,
+        "the local run presents the handed-off slot at the receiver's position"
+    );
+}
+
+/// Contract: cast-owner-output row 7.1 dispatch B / design D12 — selecting
+/// Local tears the receiver app down after its media stops: the deliberate
+/// output change queues the teardown job behind the media-stop job. (A user
+/// Stop records no teardown — owned by the row 5.3 stop test.)
+#[test]
+fn selecting_local_tears_the_receiver_app_down_after_the_media_stop() {
+    let mut t = test_loop_with_queue(
+        crate::DaemonRole::Local,
+        vec![feed_qi_with_url("a", "https://feed/a.mp3")],
+        0,
+    );
+    let (client_id, _rx, calls) = select_cast_output(&mut t, CastStatus::idle());
+    let slot = t.event_loop.owner.core.queue.slots()[0].slot_id;
+    load_slot_on_receiver(&mut t, client_id, slot);
+
+    let (release_tx, worker) = hold_cast_worker(&t);
+    select_output(
+        &mut t,
+        client_id,
+        &mpsc::channel().0,
+        OutputSelection::Local,
+    );
+    assert!(
+        matches!(t.event_loop.owner.output, PlaybackOutput::Local),
+        "the output swaps to Local"
+    );
+    let _ = release_tx.send(());
+    let (done_tx, done_rx) = mpsc::channel();
+    let _ = worker.send(Box::new(move |_| {
+        let _ = done_tx.send(());
+    }));
+    done_rx
+        .recv_timeout(Duration::from_secs(2))
+        .expect("the select's queued jobs ran before the sentinel");
+
+    let calls = calls.lock().unwrap();
+    let stop = calls
+        .iter()
+        .position(|call| *call == "stop")
+        .expect("the media stop lands on the receiver");
+    let teardown = calls
+        .iter()
+        .position(|call| *call == "teardown")
+        .expect("the deliberate output change tears the receiver app down");
+    assert!(
+        stop < teardown,
+        "the teardown runs after the media stop, in worker FIFO order: {calls:?}"
     );
 }

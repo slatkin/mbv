@@ -537,9 +537,8 @@ pub(super) fn stop_active_output(
 /// only a deliberate output change or detach tears down the receiver app).
 /// The job runs FIFO after any media-stop job the caller queued first. A
 /// user Stop (`stop_active_output`) never calls this: stopping media must
-/// leave the app running. Row 7.3 wires the callers; until then the daemon
-/// test is this helper's only caller.
-#[cfg(test)]
+/// leave the app running. The Cast→Local hand-off (row 7.1 dispatch B) is
+/// the deliberate output change that calls it.
 pub(super) fn queue_teardown_job(cast: &CastOutput) {
     command::submit_command_job(&cast.worker, "teardown", |transport| transport.teardown());
 }
