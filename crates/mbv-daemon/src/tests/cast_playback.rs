@@ -547,6 +547,186 @@ fn a_resolve_that_lands_after_its_transition_expired_loads_nothing() {
     );
 }
 
+/// A receiver status that confirms `content_id` is playing at `position_seconds`.
+fn playing_status_at(content_id: &str, position_seconds: f32) -> CastStatus {
+    CastStatus {
+        position_seconds: Some(position_seconds),
+        ..playing_status(content_id)
+    }
+}
+
+/// A receiver status paused at 10s.
+fn paused_status() -> CastStatus {
+    CastStatus {
+        state: mbv_cast::CastPlaybackState::Paused,
+        ..playing_status_at("https://feed/a.mp3", 10.0)
+    }
+}
+
+/// Contract: cast-owner-output row 5.3 (design D4) — a routed transport
+/// command on a Cast output lands on the receiver as the matching cast
+/// operation and nothing else: `TogglePause` picks its direction from the
+/// receiver's reported state, a relative Seek starts from the receiver's
+/// reported position, the 0-100 wire volume scales to the receiver's 0-1
+/// level, and the local run is never told.
+#[rstest]
+#[case::toggle_pause_pauses_a_playing_receiver(
+    mbv_ctrl::WireCommand::TogglePause,
+    playing_status_at("https://feed/a.mp3", 10.0),
+    "pause"
+)]
+#[case::toggle_pause_plays_a_paused_receiver(
+    mbv_ctrl::WireCommand::TogglePause,
+    paused_status(),
+    "play"
+)]
+#[case::relative_seek_seeks_from_the_reported_position(
+    mbv_ctrl::WireCommand::Seek(5.0),
+    playing_status_at("https://feed/a.mp3", 10.0),
+    "seek(15)"
+)]
+#[case::absolute_seek_lands_as_a_receiver_seek(
+    mbv_ctrl::WireCommand::SeekAbsolute(42.0),
+    playing_status_at("https://feed/a.mp3", 10.0),
+    "seek(42)"
+)]
+#[case::wire_volume_scales_to_the_receiver_level(
+    mbv_ctrl::WireCommand::SetVolume(30),
+    playing_status_at("https://feed/a.mp3", 10.0),
+    "set_volume(0.3)"
+)]
+#[case::mute_lands_as_a_receiver_mute(
+    mbv_ctrl::WireCommand::SetMute(true),
+    playing_status_at("https://feed/a.mp3", 10.0),
+    "set_muted(true)"
+)]
+fn a_routed_transport_command_lands_on_the_receiver(
+    #[case] command: mbv_ctrl::WireCommand,
+    #[case] receiver_status: CastStatus,
+    #[case] expected_call: &str,
+) {
+    let mut t = test_loop_with_role(crate::DaemonRole::Local);
+    let (client_id, _rx, calls) = select_cast_output(&mut t, receiver_status);
+    // One tick runs the status poll, so the output holds the receiver's
+    // reported state and position before the command routes.
+    let now = std::time::Instant::now();
+    t.event_loop.tick(now);
+    pump(&mut t);
+
+    t.event_loop.handle_event(DaemonEvent::Ctrl(
+        CtrlCmd::PlayerCmd(command),
+        client_id,
+        mpsc::channel().0,
+    ));
+    wait_for_worker_jobs(&t.event_loop.owner.output);
+
+    // The poll job pongs before its status exchange, so the routed command's
+    // call is the last one the transport recorded.
+    let log = calls.lock().unwrap().clone();
+    assert_eq!(
+        log.last().map(String::as_str),
+        Some(expected_call),
+        "the routed command lands on the receiver: {log:?}"
+    );
+    assert!(
+        !t.event_loop.player.status.lock().unwrap().active,
+        "the local run is never started or touched"
+    );
+}
+
+/// Contract: cast-owner-output row 5.3 (design D4) — a track command has no
+/// cast primitive: it is rejected with `CommandRejected` and lands nothing
+/// on the receiver.
+#[rstest]
+#[case::set_audio_is_rejected(mbv_ctrl::WireCommand::SetAudio(1))]
+#[case::set_sub_is_rejected(mbv_ctrl::WireCommand::SetSub(0))]
+#[case::subtitle_prefs_are_rejected(mbv_ctrl::WireCommand::SetSubtitlePrefs {
+    mode: "off".into(),
+    subtitle_lang: String::new(),
+    audio_lang: String::new(),
+})]
+fn a_track_command_on_cast_is_rejected_and_lands_nothing(#[case] command: mbv_ctrl::WireCommand) {
+    let mut t = test_loop_with_role(crate::DaemonRole::Local);
+    let (client_id, _rx, calls) = select_cast_output(&mut t, mbv_cast::CastStatus::idle());
+    let (reply_tx, reply_rx) = mpsc::channel();
+
+    t.event_loop.handle_event(DaemonEvent::Ctrl(
+        CtrlCmd::PlayerCmd(command),
+        client_id,
+        reply_tx,
+    ));
+    wait_for_worker_jobs(&t.event_loop.owner.output);
+
+    assert!(matches!(
+        recv_event(&reply_rx),
+        CtrlEvent::CommandRejected(_)
+    ));
+    assert!(
+        calls.lock().unwrap().is_empty(),
+        "the rejected track command lands nothing on the receiver"
+    );
+}
+
+/// Contract: cast-owner-output row 5.3 — a stop on a Cast output stops the
+/// receiver media and forgets the loaded item, so a later idle status can
+/// neither settle nor advance anything, and the awaited load's transition is
+/// reset like the local stop's.
+#[test]
+fn a_stop_stops_the_receiver_media_and_forgets_the_loaded_item() {
+    let mut t = test_loop_with_queue(
+        crate::DaemonRole::Local,
+        vec![feed_qi_with_url("a", "https://feed/a.mp3")],
+        0,
+    );
+    let (client_id, _rx, calls) = select_cast_output(&mut t, mbv_cast::CastStatus::idle());
+    let slot = t.event_loop.owner.core.queue.slots()[0].slot_id;
+    t.event_loop.handle_event(DaemonEvent::Ctrl(
+        CtrlCmd::UnifiedQueuePlaySlot {
+            slot_id: mbv_ctrl::slot_id_to_u64(slot),
+            op: None,
+        },
+        client_id,
+        mpsc::channel().0,
+    ));
+    pump(&mut t);
+    wait_for_worker_jobs(&t.event_loop.owner.output);
+    assert!(loaded_item_slot(&t).is_some(), "the play loaded its slot");
+
+    t.event_loop.handle_event(DaemonEvent::Ctrl(
+        CtrlCmd::Stop,
+        client_id,
+        mpsc::channel().0,
+    ));
+    wait_for_worker_jobs(&t.event_loop.owner.output);
+
+    assert_eq!(
+        *calls.lock().unwrap(),
+        vec![
+            // The load job pongs before its load exchange (row 5.1).
+            "keep_alive".to_string(),
+            "load(https://feed/a.mp3, 0)".to_string(),
+            "stop".to_string()
+        ],
+        "the stop lands on the receiver after the load"
+    );
+    assert!(
+        loaded_item_slot(&t).is_none(),
+        "the loaded item is forgotten"
+    );
+    assert!(
+        t.event_loop.owner.core.transitions.in_flight().is_none(),
+        "the stop resets the awaited load's transition"
+    );
+}
+
+/// The loaded item's slot, when one is recorded.
+fn loaded_item_slot(t: &TestLoop) -> Option<mbv_queue::QueueSlotId> {
+    let PlaybackOutput::Cast(cast) = &t.event_loop.owner.output else {
+        panic!("the receiver is the output");
+    };
+    cast.loaded.as_ref().map(|loaded| loaded.slot)
+}
+
 /// Contract: design D4 — a Cast queue replacement resets the play order like
 /// the local path does, so a replacement does not inherit the old queue's
 /// shuffle state.

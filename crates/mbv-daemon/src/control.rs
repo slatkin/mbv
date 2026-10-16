@@ -298,12 +298,14 @@ fn persist_shutdown_queue(ctx: &CtrlContext<'_>, queue_state: &mbv_queue::QueueS
 /// verbatim by the `Stop` command and `PlaybackIntentAction::Stop`.
 fn handle_stop(ctx: &mut CtrlContext<'_>) {
     tracing::info!(name: "daemon.ctrl_stop.received", target: "daemon", client = %ctx.client_id, "ctrl stop received");
+    // The active output's media stops (design D4, row 5.3): the local run on
+    // Local, the receiver media and its loaded record on Cast.
+    crate::cast::stop_active_output(ctx.player, &mut ctx.owner.output);
     let DaemonPlayerOwner {
         core: PlayerOwnerState { transitions, .. },
         queued_transition_origin,
         ..
     } = &mut *ctx.owner;
-    ctx.player.stop();
     reset_slot_jumps(transitions, queued_transition_origin);
 }
 
@@ -447,9 +449,7 @@ fn dispatch_ctrl_command(
                 ),
             );
         }
-        CtrlCmd::PlayerCmd(pc) => {
-            ctx.player.send_command(PlayerCommand::from(pc));
-        }
+        CtrlCmd::PlayerCmd(pc) => crate::cast::route_player_cmd(ctx, pc),
         CtrlCmd::Stop => handle_stop(ctx),
         CtrlCmd::PlaybackIntent(intent) => playback::handle_playback_intent(ctx, intent),
         CtrlCmd::RequestShutdown => {

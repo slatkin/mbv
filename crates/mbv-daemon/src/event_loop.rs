@@ -244,8 +244,10 @@ impl DaemonLoop {
             }
             mbv_ctrl::TransportCommand::Stop => {
                 // Mirror `CtrlCmd::Stop` (control.rs `handle_stop`): a stop
-                // makes every awaited transition identity unobservable.
-                self.player.stop();
+                // makes every awaited transition identity unobservable, and
+                // stops the active output's media — the local run on Local,
+                // the receiver media on Cast (design D4, row 5.3).
+                super::cast::stop_active_output(&self.player, &mut self.owner.output);
                 reset_slot_jumps(
                     &mut self.owner.core.transitions,
                     &mut self.owner.queued_transition_origin,

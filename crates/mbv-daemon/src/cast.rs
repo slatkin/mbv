@@ -7,12 +7,14 @@ use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 use mbv_cast::{
-    CastClient, CastJob, CastReceiver, CastStatus, CastTransport, ConnectMode, spawn_cast_worker,
+    CastClient, CastError, CastJob, CastReceiver, CastStatus, CastTransport, ConnectMode,
+    spawn_cast_worker,
 };
+use mbv_ctrl::player::PlayerCommand;
 use mbv_ctrl::{CastConnection, CtrlEvent, OutputSelection, OutputState, PlaybackGeneration};
 use mbv_queue::QueueSlotId;
 
-use crate::CtrlClientId;
+use crate::{CtrlClientId, CtrlContext};
 
 use super::DaemonLoop;
 use super::core::DaemonEvent;
@@ -554,6 +556,138 @@ pub(super) fn report_resolve_failure(
             .unwrap()
             .send_to_client(connection_id, &CtrlEvent::CommandRejected(report));
     }
+}
+
+/// Stops the active output's media (design D4, row 5.3): Local stops the
+/// run; Cast stops the receiver media and forgets the loaded item, so a
+/// later idle status of the stopped receiver can neither settle nor advance
+/// anything (design D5/D7). Shared by the ctrl stop, the guarded stop
+/// intent, and the transport (MPRIS/tray) stop, which mirrors `CtrlCmd::Stop`.
+pub(super) fn stop_active_output(player: &mbv_player::Player, output: &mut PlaybackOutput) {
+    match output {
+        PlaybackOutput::Local => player.stop(),
+        PlaybackOutput::Cast(cast) => {
+            let worker = cast.worker.clone();
+            cast.loaded = None;
+            submit_command_job(&worker, "stop", |transport| transport.stop());
+        }
+    }
+}
+
+/// Routes one `CtrlCmd::PlayerCmd` wire command to the active output (design
+/// D4, row 5.3). Local forwards it to the run unchanged. On a Cast output the
+/// transport commands act on the receiver — `TogglePause` picks its direction
+/// from the receiver's last reported state, a relative `Seek` starts from the
+/// receiver's reported position, and the 0-100 wire volume scales to the
+/// receiver's 0-1 level; track selection has no cast primitive and is
+/// rejected with a reason; the next-up and skip-intro overlays are mpv script
+/// messages with no receiver counterpart, a documented no-op. `JumpTo` never
+/// reaches here: the dispatcher rejects it before conversion.
+pub(super) fn route_player_cmd(ctx: &mut CtrlContext<'_>, cmd: mbv_ctrl::WireCommand) {
+    let PlaybackOutput::Cast(cast) = &mut ctx.owner.output else {
+        ctx.player.send_command(PlayerCommand::from(cmd));
+        return;
+    };
+    match cmd {
+        mbv_ctrl::WireCommand::TogglePause => {
+            let paused = matches!(
+                cast.last_status.as_ref().map(|status| status.state),
+                Some(mbv_cast::CastPlaybackState::Paused)
+            );
+            let worker = cast.worker.clone();
+            submit_command_job(&worker, "toggle_pause", move |transport| {
+                if paused {
+                    transport.play()
+                } else {
+                    transport.pause()
+                }
+            });
+        }
+        mbv_ctrl::WireCommand::Seek(delta) => {
+            let base = f64::from(
+                cast.last_status
+                    .as_ref()
+                    .and_then(|status| status.position_seconds)
+                    .unwrap_or(0.0),
+            );
+            let target = cast_seconds_f32((base + delta).max(0.0));
+            let worker = cast.worker.clone();
+            submit_command_job(&worker, "seek", move |transport| transport.seek(target));
+        }
+        mbv_ctrl::WireCommand::SeekAbsolute(seconds) => {
+            let seconds = cast_seconds_f32(seconds);
+            let worker = cast.worker.clone();
+            submit_command_job(&worker, "seek", move |transport| transport.seek(seconds));
+        }
+        mbv_ctrl::WireCommand::SetVolume(volume) => {
+            let volume = u8::try_from(volume.clamp(0, 100)).unwrap_or(u8::MAX);
+            let level = f32::from(volume) / 100.0;
+            let worker = cast.worker.clone();
+            submit_command_job(&worker, "set_volume", move |transport| {
+                transport.set_volume(level)
+            });
+        }
+        mbv_ctrl::WireCommand::SetMute(muted) => {
+            let worker = cast.worker.clone();
+            submit_command_job(&worker, "set_muted", move |transport| {
+                transport.set_muted(muted)
+            });
+        }
+        mbv_ctrl::WireCommand::SetAudio(_)
+        | mbv_ctrl::WireCommand::SetSub(_)
+        | mbv_ctrl::WireCommand::SetSubtitlePrefs { .. } => {
+            send_to(
+                ctx.reply_tx,
+                &CtrlEvent::CommandRejected(
+                    "audio and subtitle track selection is not supported on a cast receiver"
+                        .to_string(),
+                ),
+            );
+        }
+        mbv_ctrl::WireCommand::NextUpShow { .. }
+        | mbv_ctrl::WireCommand::NextUpDismiss
+        | mbv_ctrl::WireCommand::SkipIntroDismiss => {
+            // Documented no-op: these drive the mpv next-up and skip-intro
+            // overlays, which a receiver has no counterpart for.
+        }
+        mbv_ctrl::WireCommand::JumpTo(_) => {
+            unreachable!("inbound WireCommand::JumpTo is rejected before conversion (design D6)")
+        }
+    }
+}
+
+/// Narrows a wire seconds value to the receiver protocol's f32. The approved
+/// cast the TUI's cast target carried (`src/app/state/playback_target/cast.rs`,
+/// issue #804) moves here as the TUI cast runtime is deleted (row 8.3): no
+/// lossless f64-to-f32 conversion exists, and `rust_cast`'s seek is f32.
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "seek seconds narrow to the receiver protocol's f32; no lossless conversion exists (approved, issue #804)"
+)]
+fn cast_seconds_f32(value: f64) -> f32 {
+    value as f32
+}
+
+/// Submits one receiver-command job (design D4, row 5.3): the operation runs
+/// on the Cast worker against the transport it owns; a failure is logged — a
+/// dead connection is reported by the next status poll, which disconnects
+/// and reconnects (design D8).
+fn submit_command_job(
+    worker: &mpsc::Sender<CastJob>,
+    command: &'static str,
+    op: impl FnOnce(&mut dyn CastTransport) -> Result<(), CastError> + Send + 'static,
+) {
+    let _ = worker.send(Box::new(move |transport: &mut dyn CastTransport| {
+        if let Err(error) = op(transport) {
+            tracing::warn!(
+                name: "cast.command.failed",
+                target: "cast",
+                command,
+                error = %error,
+                "the receiver refused the command"
+            );
+        }
+    }));
 }
 
 /// The receiver refused the load (design D5, row 5.2): the loaded record is
