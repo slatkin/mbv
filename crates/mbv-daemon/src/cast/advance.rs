@@ -1,15 +1,17 @@
 //! The Owner's queue advance from a receiver's reported end (cast-owner-output
-//! design D7, row 6.2). The advance table runs on every fresh status report:
-//! a `Finished` end of the loaded item marks the end handled and steps the
-//! queue with the same `relative_step_target(Next)` funnel the next key uses;
-//! an `Error` end is reported once and advances nothing; a `Cancelled` or
-//! `Interrupted` end and an idle for foreign content only change what the
-//! presentation shows (row 6.1). An uncastable step target is reported and
-//! stepped over, with the queue length bounding the attempts; at the edge the
-//! output stays idle.
+//! design D7, rows 6.2 and 6.3). The advance table runs on every fresh status
+//! report: a `Finished` end of the loaded item marks the end handled, records
+//! the slot's completion through the same observation funnel `TrackCompleted`
+//! records through (progress, consume rules), and steps the queue with the
+//! same `relative_step_target(Next)` funnel the next key uses; an `Error` end
+//! is reported once and advances nothing; a `Cancelled` or `Interrupted` end
+//! and an idle for foreign content only change what the presentation shows
+//! (row 6.1). An uncastable step target is reported and stepped over, with the
+//! queue length bounding the attempts; at the edge the output stays idle.
 
 use mbv_cast::client::{CastIdleReason, CastPlaybackState};
 use mbv_ctrl::{CtrlEvent, Direction, PlaybackRequestId};
+use mbv_player::owner_state::StepTarget;
 use mbv_queue::QueueSlotId;
 
 use super::super::DaemonLoop;
@@ -107,8 +109,10 @@ fn report_receiver_error(daemon: &mut DaemonLoop) {
 }
 
 /// Starts the advance a natural end began (design D7): the ended slot is
-/// recorded as the observed active slot ahead of the step, the queue length
-/// bounds the step attempts, and the steps go through the shared step funnel.
+/// recorded as the observed active slot ahead of the step, its completion is
+/// recorded through the `TrackCompleted` observation funnel (row 6.3), the
+/// queue length bounds the step attempts, and the steps go through the shared
+/// step funnel.
 fn begin_advance(daemon: &mut DaemonLoop) {
     // The completion observation design D7's Finished row requires ahead of
     // the step: a load whose in-flight transition expired before a settling
@@ -124,6 +128,12 @@ fn begin_advance(daemon: &mut DaemonLoop) {
         }
     };
     observe_slot(daemon, ended);
+    // The step target resolves while the ended slot is still in the queue:
+    // the completion record's consume rules can remove it, and the shared
+    // step funnel has no base to step from once the slot it observes is gone
+    // (row 6.3).
+    let target = daemon.owner.core.relative_step_target(Direction::Next);
+    record_natural_end(daemon, ended, matches!(target, StepTarget::Jump(_)));
     let remaining = daemon.owner.core.queue.len();
     let PlaybackOutput::Cast(cast) = &mut daemon.owner.output else {
         return;
@@ -133,13 +143,38 @@ fn begin_advance(daemon: &mut DaemonLoop) {
         failed_slot: None,
         remaining,
     });
-    step_advance(daemon);
+    step_target_advance(daemon, target);
 }
 
-/// One advance step attempt (design D7). The shared step funnel resolves the
-/// target: a jump dispatches the load whose resolve outcome continues or ends
-/// the advance, the edge leaves the output idle, and a coalesced step leaves
-/// the same-direction step already loading the next slot in charge.
+/// Records the ended slot's completion through the same observation funnel
+/// `TrackCompleted` records through (design D7's Finished row, row 6.3):
+/// progress into the slot's canonical state and the consume rules. The payload
+/// is the outcome a local natural end decides (`FinishReason::Natural`): the
+/// position resets, `played` stays video-only, and a finished track is
+/// consumable. `consume` follows the resolved step target — at the queue edge
+/// the local outcome is the `Stopped` observation, which consumes nothing.
+fn record_natural_end(daemon: &mut DaemonLoop, ended: QueueSlotId, consume: bool) {
+    let played = daemon
+        .owner
+        .core
+        .queue
+        .slot(ended)
+        .is_none_or(|slot| !slot.item.is_audio());
+    let consume_policy = (daemon.owner_settings)().consume;
+    crate::record_completed_slot(
+        &mut daemon.owner,
+        &daemon.player,
+        &daemon.shared_queue,
+        ended,
+        0,
+        played,
+        consume,
+        consume_policy,
+    );
+}
+
+/// One advance step attempt (design D7). The step target is resolved through
+/// the shared step funnel, then dispatched with the advance's bookkeeping.
 fn step_advance(daemon: &mut DaemonLoop) {
     rebase_on_failed_step(daemon);
     // The queue length bounds the attempts (design D7): an advance that has
@@ -156,9 +191,27 @@ fn step_advance(daemon: &mut DaemonLoop) {
         clear_advance(daemon);
         return;
     }
-    let dispatched = {
-        let mut ctx = super::owner_context(daemon);
-        crate::play_order::dispatch_relative_step(&mut ctx, Direction::Next)
+    let target = daemon.owner.core.relative_step_target(Direction::Next);
+    step_target_advance(daemon, target);
+}
+
+/// The advance bookkeeping and dispatch one resolved step target performs
+/// (design D7) — shared by the advance's own steps and the natural end's
+/// first step, whose target the completion record may have consumed the ended
+/// slot out from under. A jump dispatches the load whose resolve outcome
+/// continues or ends the advance; the edge and a coalesced step leave the
+/// same-direction step already loading the next slot in charge.
+fn step_target_advance(daemon: &mut DaemonLoop, target: StepTarget) {
+    let dispatched = match target {
+        StepTarget::Jump(slot_id) => {
+            let mut ctx = super::owner_context(daemon);
+            Some(crate::play_order::dispatch_step_target(
+                &mut ctx,
+                slot_id,
+                Direction::Next,
+            ))
+        }
+        StepTarget::Coalesced | StepTarget::AtEdge => None,
     };
     let PlaybackOutput::Cast(cast) = &mut daemon.owner.output else {
         return;

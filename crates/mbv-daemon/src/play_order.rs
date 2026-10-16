@@ -45,6 +45,18 @@ pub(crate) fn dispatch_relative_step(
     else {
         return None;
     };
+    Some(dispatch_step_target(ctx, slot_id, direction))
+}
+
+/// Dispatches the jump one resolved step target names (the dispatch half of
+/// [`dispatch_relative_step`], cast-owner-output row 6.3): the transport jump
+/// goes out under a freshly minted request id, and the id comes back so the
+/// caller can track the step it dispatched.
+pub(crate) fn dispatch_step_target(
+    ctx: &mut DaemonOwnerContext<'_>,
+    slot_id: QueueSlotId,
+    direction: Direction,
+) -> PlaybackRequestId {
     let (request_id, generation) = ctx.owner.core.transitions.mint_local_id();
     crate::core::dispatch_slot_jump(
         ctx,
@@ -57,7 +69,7 @@ pub(crate) fn dispatch_relative_step(
         ),
         None,
     );
-    Some(request_id)
+    request_id
 }
 
 /// Forward the owner's current play order to the Playback run. Called after

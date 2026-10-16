@@ -60,6 +60,35 @@ pub(super) fn apply_track_completed_observation(
     if !playback_run_identity_is_current(run_identity, player) {
         return false;
     }
+    record_completed_slot(
+        owner,
+        player,
+        shared_queue,
+        slot_id,
+        position_ticks,
+        was_played,
+        consume,
+        consume_policy,
+    )
+}
+
+/// The completion recording every natural end shares (cast-owner-output row
+/// 6.3, design D7's Finished row): progress into the slot's canonical state,
+/// the consume rules, the Shuffle re-pick forward, and the shared snapshot
+/// publish. Local playback reaches it through
+/// [`apply_track_completed_observation`]'s run-identity guard; a Cast natural
+/// end records through it directly, because a receiver's end report carries no
+/// local run identity to guard.
+pub(super) fn record_completed_slot(
+    owner: &mut DaemonPlayerOwner,
+    player: &Player,
+    shared_queue: &SharedQueueState,
+    slot_id: QueueSlotId,
+    position_ticks: i64,
+    was_played: bool,
+    consume: bool,
+    consume_policy: ConsumePolicy,
+) -> bool {
     if let Some(slot) = owner.core.queue.slot(slot_id) {
         let observation = ProgressObservation::Completed {
             position_ticks,

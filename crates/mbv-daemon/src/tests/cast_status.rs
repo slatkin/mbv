@@ -691,3 +691,87 @@ fn an_unsettled_loads_natural_end_advances_past_it_not_back_onto_it() {
         "the unsettled load's end advances past it instead of reloading it"
     );
 }
+
+/// The feed slots' canonical completion state, in queue order: guid,
+/// position, and played, so a Cast outcome can be compared against the
+/// local-playback outcome slot by slot.
+fn feed_completion_state(owner: &DaemonPlayerOwner) -> Vec<(String, i64, bool)> {
+    owner
+        .core
+        .queue
+        .slots()
+        .iter()
+        .map(|slot| match &slot.item {
+            QueueItem::Feed(entry) => (entry.guid.clone(), entry.position_ticks, entry.played),
+            _ => panic!("the fixture queue holds feed slots"),
+        })
+        .collect()
+}
+
+/// Contract: cast-owner-output row 6.3 (design D7's Finished row) — a natural
+/// end records the completed slot through the same observation funnel
+/// `TrackCompleted` records through. With the consume policy removing audio
+/// slots, the Cast outcome for a naturally finished Feed slot equals the
+/// outcome local playback records for the same slot kind: a reference owner
+/// that receives the payload a local natural end of an audio item carries
+/// (the natural-end position resets, `played` stays video-only, a finished
+/// track is consumable — `advance_decision`'s `FinishReason::Natural` outcome)
+/// through `apply_track_completed_observation` holds the same canonical queue
+/// the Cast advance left behind, and the receiver is still loaded with the
+/// successor.
+#[test]
+fn a_natural_end_records_the_completed_slot_like_local_playback() {
+    let items = vec![
+        feed_qi_with_url("a", "https://feed/a.mp3"),
+        feed_qi_with_url("b", "https://feed/b.mp3"),
+    ];
+    let mut t = test_loop_with_queue(crate::DaemonRole::Local, items.clone(), 0);
+    t.settings.lock().unwrap().consume.audio = true;
+    let (_client_id, _rx, calls, t0) = settled_casting_fixture(&mut t);
+
+    report_end(
+        &mut t,
+        idle_status("https://feed/a.mp3", CastIdleReason::Finished),
+        t0 + std::time::Duration::from_secs(120),
+    );
+    pump(&mut t);
+    wait_for_worker_jobs(&t.event_loop.owner.output);
+
+    let mut local = owner_with(items, 0);
+    let local_completed = local.core.queue.slots()[0].slot_id;
+    let player = cold_player();
+    let run = player.status.lock().unwrap().sequence_generation;
+    assert!(
+        apply_track_completed_observation(
+            &mut local,
+            &player,
+            &shared_queue_state(),
+            run,
+            local_completed,
+            0,
+            false,
+            true,
+            t.settings.lock().unwrap().consume,
+        ),
+        "the local reference records the natural end of the current run"
+    );
+
+    assert_eq!(
+        feed_completion_state(&t.event_loop.owner),
+        feed_completion_state(&local),
+        "the Cast natural end's canonical state matches the local-playback outcome"
+    );
+    assert_eq!(
+        feed_completion_state(&t.event_loop.owner),
+        vec![("b".to_string(), 0, false)],
+        "the completed slot is consumed and the retained successor keeps its progress"
+    );
+    assert_eq!(
+        load_calls(&calls),
+        vec![
+            "load(https://feed/a.mp3, 0)".to_string(),
+            "load(https://feed/b.mp3, 0)".to_string()
+        ],
+        "the advance still loads the successor on the receiver"
+    );
+}

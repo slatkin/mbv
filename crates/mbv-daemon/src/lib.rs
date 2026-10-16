@@ -68,6 +68,7 @@ pub use run::run_with_options;
 pub(crate) use run::{
     ConsumePolicy, apply_queue_enriched, apply_stopped_observation,
     apply_track_completed_observation, broadcast_player_event_if_not_replaced,
+    record_completed_slot,
 };
 mod event_loop;
 pub(crate) use event_loop::{DaemonLoop, LoopFlow, PendingSwapToken, PinSwapState, TrayState};
