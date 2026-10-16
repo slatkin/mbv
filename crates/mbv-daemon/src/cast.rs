@@ -107,6 +107,14 @@ pub(crate) struct CastOutput {
     /// loaded item's stop. `pub(super)` so the crate's resolve handler
     /// clears it with the replaced load.
     pub(super) pending_seek: Option<u64>,
+    /// The Local→Cast hand-off load this output carries (design D10, row
+    /// 7.1): the captured active slot with the position and pause state it
+    /// had on the old output, and the selecting Client's reply path for the
+    /// uncastable report. It lives on the output, so any replacement of the
+    /// output — a newer selection — drops it, and a late resolve outcome
+    /// loads nothing; the active output's stop clears it too, so a stop
+    /// while the resolve runs leaves the receiver idle.
+    pub(super) pending_handoff_load: Option<PendingHandoffLoad>,
 }
 
 /// The item the Cast receiver was told to play (design D1). `end_handled`
@@ -160,6 +168,10 @@ impl std::fmt::Debug for CastOutput {
             .field("reconnecting", &self.reconnecting)
             .field("advance", &self.advance)
             .field("pending_seek", &self.pending_seek)
+            .field(
+                "pending_handoff_load",
+                &self.pending_handoff_load.as_ref().map(|load| load.slot),
+            )
             .finish()
     }
 }
@@ -174,6 +186,16 @@ pub(crate) fn output_state(output: &PlaybackOutput) -> OutputState {
             connection: cast.connection,
         },
     }
+}
+
+/// The slot a successful Local→Cast hand-off continues (design D10, row
+/// 7.1), with the position and pause state it had on the old output and the
+/// selecting Client's reply path for the uncastable report.
+pub(crate) struct PendingHandoffLoad {
+    pub(super) slot: QueueSlotId,
+    pub(super) start_ticks: i64,
+    pub(super) paused: bool,
+    pub(super) reply_tx: crate::CtrlSender,
 }
 
 /// A Cast source resolve in flight (design D4, task 4.2): the transition it
@@ -233,14 +255,25 @@ pub enum CastOwnerEvent {
     /// D5): the loaded record is dropped and the in-flight transition the
     /// load belonged to expires, so later steps are not wedged behind it.
     LoadFailed { slot: QueueSlotId, error: String },
+    /// The outcome of the Cast source resolve a successful Local→Cast
+    /// hand-off started for the captured slot (design D10, row 7.1), keyed
+    /// by that slot. A result whose slot no longer matches the output's
+    /// pending hand-off load — or that lands after the output was replaced
+    /// or stopped — is stale and loads nothing.
+    HandoffResolved {
+        slot: QueueSlotId,
+        result: Result<crate::cast_resolve::CastSource, crate::cast_resolve::Uncastable>,
+    },
 }
 
 /// `DaemonEvent::Cast`: apply one Cast-worker or connector outcome to the
-/// owner's output (tasks 3.2/3.3). A connect failure keeps the current output
-/// and reports to the selecting Client; a success with no active slot swaps
-/// the output and broadcasts it to peers that negotiated `playback-output`.
-/// A poll error disconnects and reconnects (design D8); a reconnect outcome
-/// restores the existing output or leaves it `Disconnected`.
+/// owner's output (tasks 3.2/3.3/7.1). A connect failure keeps the current
+/// output and reports to the selecting Client; a success swaps the output —
+/// continuing a captured active slot on the receiver when the selection
+/// handed one off (design D10) — and broadcasts the change to peers that
+/// negotiated `playback-output`. A poll error disconnects and reconnects
+/// (design D8); a reconnect outcome restores the existing output or leaves
+/// it `Disconnected`.
 pub(super) fn handle_cast_event(daemon: &mut DaemonLoop, event: CastOwnerEvent) {
     match event {
         CastOwnerEvent::Connect {
@@ -262,6 +295,9 @@ pub(super) fn handle_cast_event(daemon: &mut DaemonLoop, event: CastOwnerEvent) 
             result,
         } => crate::cast_resolve::handle_cast_resolved(daemon, slot, generation, result),
         CastOwnerEvent::LoadFailed { slot, error } => handle_load_failed(daemon, slot, &error),
+        CastOwnerEvent::HandoffResolved { slot, result } => {
+            crate::cast_resolve::handle_handoff_resolved(daemon, slot, result);
+        }
     }
 }
 
@@ -479,6 +515,10 @@ pub(super) fn stop_active_output(
             // D7): a stopped output advances nothing.
             cast.advance = None;
             cast.pending_seek = None;
+            // A stop also drops a pending hand-off load (design D10, row
+            // 7.1): the user stopped the output before the hand-off's load
+            // landed, so the resolve's late outcome must load nothing.
+            cast.pending_handoff_load = None;
             command::submit_command_job(&worker, "stop", |transport| transport.stop());
             let base = player.status.lock().unwrap().clone();
             let presented = status::presented_player_status(

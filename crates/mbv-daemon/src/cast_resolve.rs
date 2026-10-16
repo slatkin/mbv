@@ -21,6 +21,8 @@ use mbv_queue::{AudiobookshelfItem, AudiobookshelfQueueItem, FeedEntry, QueueIte
 use super::DaemonEvent;
 use super::DaemonLoop;
 use super::cast::{CastLoadedItem, PlaybackOutput};
+use crate::ctrl::send_to;
+use mbv_ctrl::CtrlEvent;
 
 /// Where a cast item's progress is reported (design D6/D9), one variant per
 /// provider the resolver resolves items for. Moved here from the TUI's
@@ -319,7 +321,63 @@ pub(super) fn handle_cast_resolved(
         );
         return;
     }
-    load_resolved_source(daemon, &pending, slot, source);
+    load_resolved_source(daemon, slot, pending.start_ticks, source);
+}
+
+/// One hand-off resolve outcome (design D10, row 7.1): the captured slot's
+/// Cast source for a successful Local→Cast hand-off. Matched against the
+/// output's pending hand-off load by slot: a result whose slot no longer
+/// matches — or that lands after the output was replaced or stopped, which
+/// dropped the record with it — is stale and loads nothing. On success the
+/// resolved media loads at the captured position and a captured pause is
+/// applied after the load; an uncastable slot is reported to the selecting
+/// Client and the output stays idle.
+pub(super) fn handle_handoff_resolved(
+    daemon: &mut DaemonLoop,
+    slot: QueueSlotId,
+    result: Result<CastSource, Uncastable>,
+) {
+    let pending = {
+        let crate::cast::PlaybackOutput::Cast(cast) = &mut daemon.owner.output else {
+            return;
+        };
+        cast.pending_handoff_load
+            .take_if(|pending| pending.slot == slot)
+    };
+    let Some(pending) = pending else {
+        tracing::info!(
+            name: "daemon.cast_handoff.stale",
+            target: "daemon",
+            slot = ?slot,
+            "stale hand-off resolve result dropped"
+        );
+        return;
+    };
+    match result {
+        Ok(source) => {
+            load_resolved_source(daemon, slot, pending.start_ticks, source);
+            // The captured pause applies after the load (design D10 step 5):
+            // both jobs queue on the worker in order, so the receiver pauses
+            // the item it just took.
+            if pending.paused {
+                crate::cast::set_receiver_paused(&mut daemon.owner.output, true);
+            }
+        }
+        Err(uncastable) => {
+            tracing::warn!(
+                name: "daemon.cast_handoff.uncastable",
+                target: "daemon",
+                slot = ?slot,
+                item = %uncastable.item,
+                reason = %uncastable.reason,
+                "the handed-off slot's item cannot be cast; the output stays idle"
+            );
+            send_to(
+                &pending.reply_tx,
+                &CtrlEvent::CommandRejected(format!("{} ({})", uncastable.item, uncastable.reason)),
+            );
+        }
+    }
 }
 
 /// Loads the resolved source on the receiver (design D4): the item the output
@@ -329,8 +387,8 @@ pub(super) fn handle_cast_resolved(
 /// installed, ending any advance the step belonged to (design D7).
 fn load_resolved_source(
     daemon: &mut DaemonLoop,
-    pending: &crate::cast::PendingCastResolve,
     slot: QueueSlotId,
+    start_ticks: i64,
     source: CastSource,
 ) {
     crate::cast::progress::stop_loaded_reporting(daemon);
@@ -338,12 +396,12 @@ fn load_resolved_source(
         daemon,
         slot,
         &source.progress,
-        pending.start_ticks,
+        start_ticks,
     );
     let PlaybackOutput::Cast(cast) = &mut daemon.owner.output else {
         return;
     };
-    let start_seconds = mbv_emby_model::ticks_to_seconds(pending.start_ticks);
+    let start_seconds = mbv_emby_model::ticks_to_seconds(start_ticks);
     tracing::info!(
         name: "daemon.cast_output.load",
         target: "daemon",

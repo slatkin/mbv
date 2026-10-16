@@ -55,7 +55,7 @@ fn recording_connector(status: Option<mbv_cast::CastStatus>) -> RecordedConnecto
 }
 
 /// A Cast connector whose connect always fails with `reason`.
-fn failing_connector(reason: &'static str) -> CastConnector {
+pub(super) fn failing_connector(reason: &'static str) -> CastConnector {
     Box::new(move |request: CastConnectRequest| {
         let _ = request
             .reply
