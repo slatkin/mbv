@@ -213,6 +213,23 @@ fn resolve_abs_episode_cast_item(
     })
 }
 
+/// The Audiobookshelf context one bounded-session call needs, built from the
+/// owner runtime: the runtime's client and the Service secret. Shared by the
+/// resolve (`owner_resolve_context`) and the loaded item's progress reporting
+/// (`build_progress_reporting`'s Audiobookshelf arm), so both drive the same
+/// server with the same credential.
+pub(crate) fn abs_cast_context(
+    runtime: &super::AudiobookshelfOwnerContext,
+) -> Option<AbsCastContext> {
+    let credential = mbv_config::load_service_secret(mbv_queue::ServiceKind::Audiobookshelf)?;
+    let client = AudiobookshelfClient::new(&runtime.setup.server_url).ok()?;
+    Some(AbsCastContext {
+        client,
+        credential,
+        device_id: runtime.device_id.clone(),
+    })
+}
+
 /// The resolve context a dispatch on the event-loop thread builds (design
 /// D4/D6): the owner's Emby client, and — when the Audiobookshelf runtime is
 /// connected — the bounded-session context an episode resolve needs. Both
@@ -224,16 +241,7 @@ pub(crate) fn owner_resolve_context(
 ) -> CastResolveContext {
     CastResolveContext {
         emby: Some(client.lock().unwrap().clone()),
-        abs: audiobookshelf.and_then(|runtime| {
-            let credential =
-                mbv_config::load_service_secret(mbv_queue::ServiceKind::Audiobookshelf)?;
-            let client = AudiobookshelfClient::new(&runtime.setup.server_url).ok()?;
-            Some(AbsCastContext {
-                client,
-                credential,
-                device_id: runtime.device_id.clone(),
-            })
-        }),
+        abs: audiobookshelf.and_then(abs_cast_context),
     }
 }
 
@@ -284,70 +292,94 @@ pub(super) fn handle_cast_resolved(
     let Some(pending) = daemon.owner.pending_cast_resolve.take() else {
         return;
     };
-    let Err(uncastable) = result else {
-        // The transition the resolve belonged to must still be in flight: one
-        // that expired in its bounded window (design D5, row 5.2) is no
-        // longer guarded, so a load now would never settle and would leave
-        // the receiver silently on the old slot.
-        if daemon
-            .owner
-            .core
-            .transitions
-            .in_flight()
-            .is_none_or(|t| t != pending.transition)
-        {
-            tracing::info!(
-                name: "daemon.cast_resolve.expired",
-                target: "transition",
-                slot = ?slot,
-                generation,
-                "the resolve's transition expired; the resolved source is dropped"
-            );
+    let source = match result {
+        Ok(source) => source,
+        Err(uncastable) => {
+            resolve_failed(daemon, &pending, &uncastable);
             return;
         }
-        let source = result.expect("checked Err arm above");
-        // The item the output still presents reports its stop before the new
-        // load's session can report its start (design D9); an already-ended
-        // item's reporting is gone, so this is a no-op there.
-        crate::cast::progress::stop_loaded_reporting(daemon);
-        let reporting =
-            crate::cast::progress::build_progress_reporting(daemon, slot, &source.progress);
-        let PlaybackOutput::Cast(cast) = &mut daemon.owner.output else {
-            return;
-        };
-        let start_seconds = mbv_emby_model::ticks_to_seconds(pending.start_ticks);
+    };
+    // The transition the resolve belonged to must still be in flight: one
+    // that expired in its bounded window (design D5, row 5.2) is no longer
+    // guarded, so a load now would never settle and would leave the receiver
+    // silently on the old slot.
+    if daemon
+        .owner
+        .core
+        .transitions
+        .in_flight()
+        .is_none_or(|t| t != pending.transition)
+    {
         tracing::info!(
-            name: "daemon.cast_output.load",
-            target: "daemon",
+            name: "daemon.cast_resolve.expired",
+            target: "transition",
             slot = ?slot,
-            url = %source.media.url,
-            start_seconds,
-            "loading the resolved cast source on the receiver"
+            generation,
+            "the resolve's transition expired; the resolved source is dropped"
         );
-        let content_id = source.media.url.clone();
-        submit_load_job(
-            &cast.worker,
-            source.media,
-            start_seconds,
-            slot,
-            &daemon.merged_tx,
-        );
-        cast.loaded = Some(CastLoadedItem {
-            slot,
-            content_id,
-            progress: source.progress,
-            reporting,
-            start_reported: false,
-            end_handled: false,
-        });
-        // The load ends any advance the step belonged to (design D7): its
-        // target is on the receiver, so no step-over is pending.
-        cast.advance = None;
+        return;
+    }
+    load_resolved_source(daemon, &pending, slot, source);
+}
+
+/// Loads the resolved source on the receiver (design D4): the item the output
+/// still presents reports its stop before the new load's session can report
+/// its start (design D9; an already-ended item's reporting is gone, so that
+/// is a no-op there), then the load job is submitted and the loaded record
+/// installed, ending any advance the step belonged to (design D7).
+fn load_resolved_source(
+    daemon: &mut DaemonLoop,
+    pending: &crate::cast::PendingCastResolve,
+    slot: QueueSlotId,
+    source: CastSource,
+) {
+    crate::cast::progress::stop_loaded_reporting(daemon);
+    let reporting = crate::cast::progress::build_progress_reporting(
+        daemon,
+        slot,
+        &source.progress,
+        pending.start_ticks,
+    );
+    let PlaybackOutput::Cast(cast) = &mut daemon.owner.output else {
         return;
     };
-    // A failed resolve expires the transition it belonged to (design D5, row
-    // 5.2) and names the item and reason to the client that issued the play
-    // or jump (row 5.1); the receiver is given nothing new.
+    let start_seconds = mbv_emby_model::ticks_to_seconds(pending.start_ticks);
+    tracing::info!(
+        name: "daemon.cast_output.load",
+        target: "daemon",
+        slot = ?slot,
+        url = %source.media.url,
+        start_seconds,
+        "loading the resolved cast source on the receiver"
+    );
+    let content_id = source.media.url.clone();
+    submit_load_job(
+        &cast.worker,
+        source.media,
+        start_seconds,
+        slot,
+        &daemon.merged_tx,
+    );
+    cast.loaded = Some(CastLoadedItem {
+        slot,
+        content_id,
+        progress: source.progress,
+        reporting,
+        start_reported: false,
+        end_handled: false,
+    });
+    cast.advance = None;
+}
+
+/// A failed resolve expires the transition it belonged to (design D5, row
+/// 5.2) and names the item and reason to the client that issued the play or
+/// jump (row 5.1); the receiver is given nothing new.
+fn resolve_failed(
+    daemon: &mut DaemonLoop,
+    pending: &crate::cast::PendingCastResolve,
+    uncastable: &Uncastable,
+) {
+    let slot = pending.transition.target;
     tracing::warn!(
         name: "daemon.cast_resolve.uncastable",
         target: "daemon",
@@ -379,7 +411,7 @@ pub(super) fn handle_cast_resolved(
             &mut ctx,
             &pending.transition,
             pending.origin,
-            &uncastable,
+            uncastable,
         );
         crate::cast::expire_cast_transition(&mut ctx);
     }

@@ -83,6 +83,37 @@ fn install_reporting(t: &mut TestLoop, name: &'static str, log: Arc<Mutex<Vec<St
         .reporting = Some(Box::new(RecordingReporter { name, log }));
 }
 
+/// The cast URL the ABS resolve builds for the fixture episode (an IP
+/// literal, so nothing here can resolve a name).
+const ABS_EPISODE_URL: &str = "http://127.0.0.1:1/episode.mp3";
+
+/// Installs the ABS episode `slot` as the receiver's loaded item, the state
+/// the resolve outcome installs in production: the episode's cast URL as the
+/// content id, the Audiobookshelf progress target, and the named recording
+/// double as its reporting. The resolve's own bounded session open is unit
+/// 4.1's tested territory; the boundary under test here is the reporting the
+/// loaded item drives.
+fn install_abs_loaded(
+    t: &mut TestLoop,
+    slot: mbv_queue::QueueSlotId,
+    log: Arc<Mutex<Vec<String>>>,
+) {
+    let crate::cast::PlaybackOutput::Cast(cast) = &mut t.event_loop.owner.output else {
+        panic!("the receiver is the output");
+    };
+    cast.loaded = Some(crate::cast::CastLoadedItem {
+        slot,
+        content_id: ABS_EPISODE_URL.to_string(),
+        progress: crate::cast_resolve::CastProgressTarget::AudiobookshelfEpisode {
+            session_id: "abs-session".to_string(),
+            duration_seconds: 600.0,
+        },
+        reporting: Some(Box::new(RecordingReporter { name: "abs", log })),
+        start_reported: false,
+        end_handled: false,
+    });
+}
+
 /// Reports `status` as the receiver's next poll result (design D7's
 /// injection): the tick's poll is drained unapplied and `status` is
 /// delivered under its poll id, the same injection the drift-correction test
@@ -194,5 +225,51 @@ fn an_ended_item_reports_stop_before_the_next_item_reports_start() {
             "b:progress".to_string(),
         ],
         "the ended item's stop precedes the next item's start"
+    );
+}
+
+/// Contract: cast-owner-output row 6.4, the Audiobookshelf half (design D9,
+/// spec "Progress is reported while mbv is attached") — the episode lifecycle
+/// a loaded ABS episode drives is observed and synced only while the
+/// receiver's reported media is that episode, and the session closes on a
+/// user stop. The recording double stands in for the lifecycle-backed
+/// reporter: its start/progress records are the lifecycle's observe and
+/// sync, its stop record the session close.
+#[test]
+fn an_abs_episode_is_synced_only_while_the_receiver_plays_it_and_closed_on_stop() {
+    let mut t = test_loop_with_queue(crate::DaemonRole::Local, vec![abs_qi("li_1", "ep_1")], 0);
+    let (connector, _calls) = status_connector(CastStatus::idle());
+    t.event_loop.cast_connector = Some(connector);
+    let (client_id, reply_tx, _rx) = connect_output_client(&t.event_loop.ctrl_clients, true);
+    select_output(&mut t, client_id, &reply_tx, cast_selection());
+    pump_cast_event(&mut t);
+    let slot = t.event_loop.owner.core.queue.slots()[0].slot_id;
+    let log = Arc::new(Mutex::new(Vec::new()));
+    install_abs_loaded(&mut t, slot, Arc::clone(&log));
+    let t0 = std::time::Instant::now();
+
+    report_status(&mut t, playing_status_at(ABS_EPISODE_URL, 10.0), t0);
+    report_status(
+        &mut t,
+        playing_status_at("http://127.0.0.1:2/other.mp3", 30.0),
+        t0 + std::time::Duration::from_secs(120),
+    );
+
+    // The user stop closes the loaded episode's session (design D9's stop
+    // ordering: the close goes out for the presented position).
+    t.event_loop.handle_event(DaemonEvent::Ctrl(
+        CtrlCmd::Stop,
+        client_id,
+        mpsc::channel().0,
+    ));
+
+    assert_eq!(
+        *log.lock().unwrap(),
+        vec![
+            "abs:start".to_string(),
+            "abs:progress".to_string(),
+            "abs:stop".to_string(),
+        ],
+        "the presenting status starts and syncs the episode's session, the foreign media reports nothing, the stop closes it"
     );
 }

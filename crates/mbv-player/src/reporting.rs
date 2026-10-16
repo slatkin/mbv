@@ -35,8 +35,9 @@ impl ListeningTime {
 /// (episode) or `AudiobookshelfBookProgressUpdate` (book). Both carry the same
 /// fields except `episode_id`, so one lifecycle struct serves the two shapes —
 /// the identity boundary stays at `QueueItem`/ctrl types, not this internal
-/// struct.
-pub(crate) trait SessionProgressUpdate: Send {
+/// struct. Public because the Cast output's reporting (`mbv-daemon`) drives
+/// the same lifecycle the local run does (cast-owner-output design D9).
+pub trait SessionProgressUpdate: Send {
     fn from_session(
         generation: mbv_core::service_runtime::SetupGeneration,
         library_item_id: String,
@@ -90,8 +91,11 @@ impl SessionProgressUpdate for AudiobookshelfBookProgressUpdate {
 /// episode-shaped `AudiobookshelfPlaybackLifecycle` and book-shaped
 /// `AudiobookshelfBookPlaybackLifecycle` aliases. The two instantiations keep
 /// `PreparedLifecycle`/`ActiveItemLifecycle` distinct, so a book session can
-/// never be matched against (or emit progress for) an episode.
-pub(crate) struct AudiobookshelfLifecycle<U: SessionProgressUpdate> {
+/// never be matched against (or emit progress for) an episode. Public so the
+/// Cast output's reporting drives the episode instantiation with the
+/// presented receiver status (cast-owner-output design D9); the book
+/// instantiation stays crate-local.
+pub struct AudiobookshelfLifecycle<U: SessionProgressUpdate> {
     pub(crate) generation: mbv_core::service_runtime::SetupGeneration,
     client: mbv_audiobookshelf::AudiobookshelfClient,
     credential: String,
@@ -108,8 +112,22 @@ pub(crate) struct AudiobookshelfLifecycle<U: SessionProgressUpdate> {
     closed: bool,
 }
 
+impl<U: SessionProgressUpdate> std::fmt::Debug for AudiobookshelfLifecycle<U> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AudiobookshelfLifecycle")
+            .field("generation", &self.generation)
+            .field("session_id", &self.session_id)
+            .field("library_item_id", &self.library_item_id)
+            .field("episode_id", &self.episode_id)
+            .field("current_position", &self.current_position)
+            .field("duration", &self.duration)
+            .field("closed", &self.closed)
+            .finish_non_exhaustive()
+    }
+}
+
 impl<U: SessionProgressUpdate> AudiobookshelfLifecycle<U> {
-    pub(crate) fn new(
+    pub fn new(
         generation: mbv_core::service_runtime::SetupGeneration,
         client: mbv_audiobookshelf::AudiobookshelfClient,
         credential: String,
@@ -138,7 +156,7 @@ impl<U: SessionProgressUpdate> AudiobookshelfLifecycle<U> {
         }
     }
 
-    fn observe(&mut self, now: std::time::Instant, playing: bool) {
+    pub fn observe(&mut self, now: std::time::Instant, playing: bool) {
         self.listening_time.observe(now, playing);
     }
 
@@ -146,7 +164,7 @@ impl<U: SessionProgressUpdate> AudiobookshelfLifecycle<U> {
         force || now.saturating_duration_since(self.last_sync) >= AUDIOBOOKSHELF_REPORT_INTERVAL
     }
 
-    fn sync(&mut self, position_ticks: i64, now: std::time::Instant, force: bool) {
+    pub fn sync(&mut self, position_ticks: i64, now: std::time::Instant, force: bool) {
         if self.closed || self.in_flight || !self.should_sync(now, force) {
             return;
         }
@@ -191,7 +209,10 @@ impl<U: SessionProgressUpdate> AudiobookshelfLifecycle<U> {
         }
     }
 
-    fn close(&mut self, position_ticks: i64) {
+    /// Ends the session: one final sync at `position_ticks`, then the close
+    /// request. Idempotent; the `Drop` impl calls it with the lifecycle's
+    /// last known position, so an owner that forgets to close still closes.
+    pub fn close(&mut self, position_ticks: i64) {
         if self.closed {
             return;
         }
@@ -222,8 +243,10 @@ impl<U: SessionProgressUpdate> Drop for AudiobookshelfLifecycle<U> {
     }
 }
 
-pub(crate) type AudiobookshelfPlaybackLifecycle =
-    AudiobookshelfLifecycle<AudiobookshelfProgressUpdate>;
+/// The episode-shaped lifecycle a playback output drives (design D9): the
+/// local run promotes it from its prepared source, and the Cast output builds
+/// it around the session the resolve opened.
+pub type AudiobookshelfPlaybackLifecycle = AudiobookshelfLifecycle<AudiobookshelfProgressUpdate>;
 pub(crate) type AudiobookshelfBookPlaybackLifecycle =
     AudiobookshelfLifecycle<AudiobookshelfBookProgressUpdate>;
 

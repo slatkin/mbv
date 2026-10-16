@@ -110,10 +110,10 @@ pub(crate) struct CastLoadedItem {
     pub(super) progress: crate::cast_resolve::CastProgressTarget,
     pub(super) end_handled: bool,
     /// The provider reporting the loaded item drives (design D9, row 6.4):
-    /// `Some` for an Emby target — the `SessionReporter` built from the
-    /// target's ids — and `None` for the targets whose reporting joins in
-    /// their own pieces (the Audiobookshelf lifecycle, the Feed
-    /// `PlayerEvent`s).
+    /// a `SessionReporter` for an Emby target, the episode lifecycle for an
+    /// Audiobookshelf target — both built from the resolved target and fed
+    /// from the presented status — and `None` for the Feed target, whose
+    /// `PlayerEvent`s join in their own piece of the row.
     pub(super) reporting: Option<Box<dyn progress::CastProgressReporting>>,
     /// Whether the loaded item's session start went out (design D9): the
     /// first receiver status that presents the loaded item reports it, once.
