@@ -39,8 +39,8 @@
 
 - [x] 7.1 Implement the hand-off of design D10 for Local→Cast, Cast→Local, and Cast→Cast. Connect first; stop the old output only after a successful connect. Verify: tests: Local playing at a position gives a receiver `load` at that position; a paused state carries over; a connect failure leaves local playback running.
 - [x] 7.2 Check whether a local cold start can begin paused at a resume position. If it cannot, start the run and then pause it. Verify: a test that Cast→Local from a paused receiver gives a paused local run at the receiver's position.
-- [ ] 7.3 On Owner shutdown, drop the receiver connection without `stop_app`. A deliberate output change or detach tears down the app (design D12). Verify: tests with the fake transport: shutdown records no teardown; a select of `Local` records a teardown.
-- [ ] 7.4 Reconnect recovery: after `Disconnected`, a reconnect that sees `Idle(Finished)` for the loaded content advances once. A reconnect refused because another app runs stays `Disconnected` (design D11). Verify: one test for each outcome.
+- [x] 7.3 On Owner shutdown, drop the receiver connection without `stop_app`. A deliberate output change or detach tears down the app (design D12). Verify: tests with the fake transport: shutdown records no teardown; a select of `Local` records a teardown.
+- [x] 7.4 Reconnect recovery: after `Disconnected`, a reconnect that sees `Idle(Finished)` for the loaded content advances once. A reconnect refused because another app runs stays `Disconnected` (design D11). Verify: one test for each outcome.
 
 ## 8. TUI becomes a thin picker
 
