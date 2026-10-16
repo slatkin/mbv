@@ -88,7 +88,7 @@ _Avoid_: ALSA mode, direct audio, hardware output
 
 Playback output:
 The one place where a Player owner plays its active slot. It is local playback or one Cast receiver. It differs from *Clocked audio output*. *Clocked audio output* is the audio device of a Playback run. *Playback output* is where the active slot plays. When the output is a Cast receiver, *Cast attachment* names the relation of the Owner to that receiver.
-_Avoid_: output target, active player, sink
+_Avoid_: output target, active player, sink, enqueue, cast queue, load (bare)
 
 mpv script set:
 The entry script `mbv.lua` and its sibling Lua fragments. They build the mpv on-screen control overlay (OSC) and the Next-Up prompt. Exactly one copy is live per playback run. It is the copy of the running build. It is never a leftover from the removed installer, a prior version, or another build. It differs from mpv configuration and user scripts. mbv never reads or edits those.
@@ -621,7 +621,7 @@ _Avoid_: routing, daemon route
 ## Cast
 
 Cast receiver:
-A Google Cast device found on the LAN through mDNS. It appears as a row in the F3 target panel with Emby sessions. It is identified durably by its advertised identifier across address changes and not by a stored host or port. It is called a cast target once mbv attaches to it. That is the receiver in its role as the place where playback actions go.
+A Google Cast device found on the LAN through mDNS. It appears as a row in the F3 target panel with Emby sessions. It is identified durably by its advertised identifier across address changes and not by a stored host or port. It is called a cast target once mbv attaches to it. That is the receiver in its role as the *Playback output* of the Owner.
 _Avoid_: chromecast device, TV, cast device
 
 Cast attachment:
@@ -629,8 +629,8 @@ The relation of a Player owner to the Cast receiver that is its *Playback output
 _Avoid_: attach (bare, without "cast"), cast session, cast connection
 
 Dispatch:
-The act that sends the items of a played selection to the own media queue of a cast receiver in one act. mbv does not project, track, or reconcile that queue after. The receiver advances on its own between dispatched items. It differs from Bound (a Player owner that holds the own queue of mbv). A receiver owns what it plays apart from the queue of mbv once dispatch completes.
-_Avoid_: enqueue, cast queue, load (bare)
+Retired term. The receiver holds no queue of its own. The Owner loads the active slot on it and advances through its own PlayOrder. Use *Playback output* and *Cast attachment*.
+_Avoid_: Dispatch, dispatched queue
 
 Uncastable:
 An item that the mbv queue holds and that cannot go to a cast receiver. It has no retrievable media URL. It has a credential that lives only in a request header. For Audiobookshelf, it can be a multi-file book whose position has no form on a receiver without harm to its stored resume point. It is reported to the user by name and reason and not replaced or dropped in silence. It differs from Unplayable item, which never enters the queue of a Player owner at all.
