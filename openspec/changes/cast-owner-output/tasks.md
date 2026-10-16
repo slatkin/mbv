@@ -24,8 +24,8 @@
 
 ## 5. Routing at the funnels and transport commands
 
-- [ ] 5.1 Branch `play_resolved_items`, `handle_queue_replace`, the cold path of `send_jump_or_cold_start`, and `dispatch_slot_jump` on `PlaybackOutput::Cast`: set the active slot, register the in-flight transition, start the resolve, and on success send `load(item, start)` to the worker (design D4). An explicit play or jump of an uncastable slot names the item and the reason and loads nothing. Verify: a regression test for #944 (play of a 300-slot queue gives the fake transport exactly one `load`, with the selected slot's URL); one test that playing an ABS book loads nothing and reports.
-- [ ] 5.2 Settle a Cast transition when the status shows the loaded content id in Playing, Buffering, or Paused. Expire it on load or resolve failure (design D5). Verify: one test where two quick Next commands give one final `load` two slots ahead.
+- [x] 5.1 Branch `play_resolved_items`, `handle_queue_replace`, the cold path of `send_jump_or_cold_start`, and `dispatch_slot_jump` on `PlaybackOutput::Cast`: set the active slot, register the in-flight transition, start the resolve, and on success send `load(item, start)` to the worker (design D4). An explicit play or jump of an uncastable slot names the item and the reason and loads nothing. Verify: a regression test for #944 (play of a 300-slot queue gives the fake transport exactly one `load`, with the selected slot's URL); one test that playing an ABS book loads nothing and reports.
+- [x] 5.2 Settle a Cast transition when the status shows the loaded content id in Playing, Buffering, or Paused. Expire it on load or resolve failure (design D5). Verify: one test where two quick Next commands give one final `load` two slots ahead.
 - [ ] 5.3 Route `TogglePause`, `Seek`, `SeekAbsolute`, `SetVolume`, and `SetMute` to the receiver. Reject `SetAudio`, `SetSub`, and `SetSubtitlePrefs` with `CommandRejected`. Stop stops the receiver media. Verify: one `#[case]` table test (routed command lands on the fake transport, track command is rejected).
 
 ## 6. Status, advance, and progress
