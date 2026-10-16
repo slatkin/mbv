@@ -47,16 +47,11 @@ impl CastDeviceProfile {
     }
 }
 
-/// The bitrate ceiling Emby may pick for a cast transcode. Unbounded
-/// (120-140 Mbps) lets Emby choose an HLS bitrate the receiver cannot fetch
-/// as fast as it plays, so it buffers a few seconds in.
-pub const CAST_MAX_STREAMING_BITRATE: u32 = 20_000_000;
-
 #[must_use]
 pub fn build_cast_device_profile(subtitles: CastSubtitleKind) -> CastDeviceProfile {
     let profile = serde_json::json!({
         "Name": "mbv-chromecast",
-        "MaxStreamingBitrate": CAST_MAX_STREAMING_BITRATE,
+        "MaxStreamingBitrate": 120_000_000,
         "DirectPlayProfiles": [
             {"Type": "Video", "Container": "mp4", "VideoCodec": "h264", "AudioCodec": "aac"},
             {"Type": "Audio", "Container": "mp3", "AudioCodec": "mp3"},

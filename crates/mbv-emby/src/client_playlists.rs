@@ -111,7 +111,7 @@ impl EmbyClient {
         })?;
         let mut body = serde_json::json!({
             "UserId": self.user_id,
-            "MaxStreamingBitrate": mbv_cast::dispatch::CAST_MAX_STREAMING_BITRATE,
+            "MaxStreamingBitrate": 140_000_000,
             "EnableDirectPlay": true,
             "EnableDirectStream": false,
             "IsPlayback": true,
