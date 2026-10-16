@@ -325,7 +325,7 @@ fn idle_status(content_id: &str, reason: CastIdleReason) -> CastStatus {
 }
 
 /// The load calls the transport recorded, in order.
-fn load_calls(calls: &Arc<Mutex<Vec<String>>>) -> Vec<String> {
+pub(super) fn load_calls(calls: &Arc<Mutex<Vec<String>>>) -> Vec<String> {
     calls
         .lock()
         .unwrap()

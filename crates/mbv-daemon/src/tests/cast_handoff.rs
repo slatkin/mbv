@@ -392,6 +392,51 @@ fn selecting_local_tears_the_receiver_app_down_after_the_media_stop() {
     );
 }
 
+/// Contract: cast-owner-output row 7.3 (design D12) — the Owner's shutdown
+/// drops the receiver connection without tearing the receiver app down: the
+/// shutdown event queues neither a media stop nor an app teardown on the
+/// receiver's worker, so the receiver keeps playing when the Owner exits.
+/// (A deliberate select of `Local` does tear down — owned by
+/// `selecting_local_tears_the_receiver_app_down_after_the_media_stop`.)
+#[test]
+fn the_owner_shutdown_queues_no_stop_and_no_teardown_on_the_receiver() {
+    let mut t = test_loop_with_queue(
+        crate::DaemonRole::Local,
+        vec![feed_qi_with_url("a", "https://feed/a.mp3")],
+        0,
+    );
+    let (client_id, _rx, calls) =
+        select_cast_output(&mut t, playing_status_at("https://feed/a.mp3", 10.0));
+    let slot = t.event_loop.owner.core.queue.slots()[0].slot_id;
+    load_slot_on_receiver(&mut t, client_id, slot);
+    // One tick runs the status poll, so the receiver presents its loaded
+    // item when the Owner shuts down.
+    t.event_loop.tick(std::time::Instant::now());
+    pump(&mut t);
+
+    // The worker is held behind a blocker, so any job the shutdown queued —
+    // if it queued one — runs before the sentinel the test queues last.
+    let (release_tx, worker) = hold_cast_worker(&t);
+    t.event_loop.handle_event(DaemonEvent::Shutdown);
+    let _ = release_tx.send(());
+    let (done_tx, done_rx) = mpsc::channel();
+    let _ = worker.send(Box::new(move |_| {
+        let _ = done_tx.send(());
+    }));
+    done_rx
+        .recv_timeout(Duration::from_secs(2))
+        .expect("the shutdown's queued jobs, if any, ran before the sentinel");
+
+    assert!(
+        !calls
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|call| *call == "stop" || *call == "teardown"),
+        "the shutdown stops neither the receiver media nor its app: {calls:?}"
+    );
+}
+
 /// Contract: cast-owner-output row 7.1 dispatch C (design D10) — selecting a
 /// second receiver while a first receiver plays connects to the new receiver
 /// first, stops the old output only after the connect succeeded, and gives
