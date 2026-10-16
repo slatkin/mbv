@@ -184,11 +184,18 @@ so a click resolves that control's intent and no two controls share one region. 
 whose action is unavailable SHALL NOT resolve an intent. A
 panel that is not painted SHALL resolve nothing.
 
+A transport glyph SHALL resolve on a single press. The seekbar SHALL resolve a seek only on a
+recognized double-click: two presses inside the double-click interval at the same cell. A single
+press on the bar SHALL resolve neither a seek nor a transport intent. A left-button drag that
+anchored inside the bar span SHALL scrub — each admitted motion resolves the seek fraction of the
+pointer's current column — and the panel SHALL admit at most one scrub seek per 150 ms. A drag that
+anchored outside the bar span, and a motion whose pointer is outside it, SHALL resolve no seek.
+
 #### Scenario: Sidebar panel accepts clicks in queue-only
 
 - **WHEN** the layout is queue-only and the playback panel is painted
-- **THEN** a click on its play/pause glyph SHALL toggle playback, and a click on its seekbar SHALL
-  seek to the corresponding fraction
+- **THEN** a click on its play/pause glyph SHALL toggle playback, and a double-click on its seekbar
+  SHALL seek to the corresponding fraction
 
 #### Scenario: Sidebar panel accepts clicks in the two-panel layout
 
@@ -198,15 +205,30 @@ panel that is not painted SHALL resolve nothing.
 #### Scenario: Queue band resolves only its glyphs and bar
 
 - **WHEN** the queue column's band is painted
-- **THEN** a click on a glyph in the controls row SHALL emit that control's intent and a click on the
-  seekbar row's bar SHALL seek
+- **THEN** a click on a glyph in the controls row SHALL emit that control's intent and a
+  double-click on the seekbar row's bar SHALL seek
+- **AND** a single press on the seekbar row's bar SHALL emit no playback intent
 - **AND** a click on the blank title row, the blank gap row, or either time label SHALL NOT emit a
   playback intent
 
 #### Scenario: Strip accepts clicks in library-only
 
 - **WHEN** the layout is library-only
-- **THEN** clicks on the strip's glyphs and seekbar SHALL resolve against the strip's painted geometry
+- **THEN** clicks on the strip's glyphs SHALL resolve against the strip's painted geometry, and a
+  double-click on its seekbar SHALL seek
+
+#### Scenario: A drag on the bar scrubs at most once per interval
+
+- **WHEN** the panel is painted and the user presses the left button inside the seekbar's bar span
+  and moves the pointer along it
+- **THEN** each admitted motion SHALL seek to the fraction of the pointer's current column
+- **AND** no two admitted scrubs SHALL be less than 150 ms apart
+
+#### Scenario: A drag that anchored outside the bar does not scrub
+
+- **WHEN** the user drags the pointer across the seekbar's bar span from a press that landed outside
+  it
+- **THEN** the panel SHALL emit no seek intent
 
 #### Scenario: Previous control accepts clicks
 
@@ -397,8 +419,9 @@ region. No border, label, or extra row SHALL be added to the bar.
 
 #### Scenario: A partially filled cell is still an ordinary seek target
 
-- **WHEN** the user clicks a partially filled cell of the Queue seekbar
-- **THEN** the click SHALL seek to the same fraction that column resolved before
+- **WHEN** the user double-clicks a partially filled cell of the Queue seekbar
+- **THEN** the seek SHALL resolve the same fraction that column resolved before
+- **AND** a single press on the same cell SHALL NOT seek
 - **AND** clicks on either flanking time label SHALL NOT seek
 
 #### Scenario: A narrow seek row has no room for a bar

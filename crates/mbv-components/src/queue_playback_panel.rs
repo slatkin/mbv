@@ -13,8 +13,11 @@
 //! transport reserve zero rows, and the shell publishes that collapse
 //! (task 3.6). Transport hit geometry is the panel's own retained
 //! state (task 3.7) — the legacy playback geometry side channel is not read here.
+//! A transport glyph resolves on a single press; the seekbar seeks on a
+//! double-click and scrubs on a left-drag anchored inside its bar, recognized
+//! by the panel's own `MouseGestureState`.
 
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
@@ -27,6 +30,7 @@ use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
 use super::library_playback_panel::PlaybackProjection;
+use crate::mouse::gesture::{MouseGesture, MouseGestureState};
 use mbv_render::PlaybackStripAreas;
 use mbv_render::arrangements::chrome::QUEUE_TRANSPORT_ROWS;
 use mbv_render::components::chrome_player::TransportAvailability;
@@ -43,6 +47,11 @@ use mbv_ui_msg::{Msg, PlaybackRequest, ShellRequest};
 /// playback panel paints in every queue-visible layout (the former
 /// queue-only strip's identity, D10).
 const TRANSPORT_SURFACE: palette::Surface = palette::Surface::QueueOnlyPlaybackPanel;
+
+/// Seekbar scrub throttle. A drag reports every motion event, so the panel
+/// admits at most one scrub seek per interval (the legacy 150 ms cadence);
+/// without it one pointer sweep would queue a seek per terminal event.
+const SEEKBAR_SCRUB_INTERVAL: Duration = Duration::from_millis(150);
 
 #[derive(Debug)]
 pub struct QueuePlaybackPanel {
@@ -74,6 +83,13 @@ pub struct QueuePlaybackPanel {
     next_area: Rect,
     prev_area: Rect,
     seekbar_area: Rect,
+    /// Panel-local pointer recognition (ADR 0024, design.md D3): the
+    /// double-click window that separates a transport glyph's single press
+    /// from a seekbar seek, and the drag anchor a scrub needs.
+    mouse_gestures: MouseGestureState,
+    /// The last admitted seekbar scrub; `None` admits the next one. Set only
+    /// by an admitted scrub, so the throttle measures real scrubs.
+    scrub_at: Option<Instant>,
     /// Panel-local marquee state (the title row's scrolling title).
     marquee_text: String,
     marquee_started_at: Instant,
@@ -111,6 +127,8 @@ impl QueuePlaybackPanel {
             next_area: Rect::default(),
             prev_area: Rect::default(),
             seekbar_area: Rect::default(),
+            mouse_gestures: MouseGestureState::new(),
+            scrub_at: None,
             marquee_text: String::new(),
             marquee_started_at: Instant::now(),
             target_area: Rect::default(),
@@ -200,7 +218,14 @@ impl QueuePlaybackPanel {
         self.target_area
     }
 
-    fn mouse(&self, event: MouseEvent) -> Option<Msg> {
+    /// Resolve one pointer event. The transport glyphs and the target
+    /// indicator act on a single press; the seekbar needs a recognized
+    /// double-click, and a left-drag anchored inside the bar scrubs it.
+    fn mouse(&mut self, event: MouseEvent) -> Option<Msg> {
+        // Every event reaches the recognizer, the ignored ones included: the
+        // first press of a pair must be remembered for the second to be a
+        // double-click, and that press arms the drag anchor.
+        let gesture = self.mouse_gestures.recognize(event);
         let point = (event.column, event.row).into();
         match event.kind {
             // The playback-target indicator is the F3 sessions shortcut's
@@ -229,13 +254,18 @@ impl QueuePlaybackPanel {
             {
                 Some(Msg::Playback(PlaybackRequest::Next))
             }
+            // A single press on the bar resolves nothing: only the second
+            // press of a pair is a seek, so a stray click cannot jump the
+            // position. The transport arms above keep the raw press because
+            // that second press recognizes as a double-click, not a click.
             MouseEventKind::Down(MouseButton::Left)
-                if self.seekbar_area.contains(point) && self.seekbar_area.width > 0 =>
+                if self.seekbar_area.width > 0
+                    && self.seekbar_area.contains(point)
+                    && matches!(gesture, Some(MouseGesture::DoubleClick(_))) =>
             {
-                let fraction = f64::from(event.column.saturating_sub(self.seekbar_area.x))
-                    / f64::from(self.seekbar_area.width);
-                Some(Msg::Playback(PlaybackRequest::SeekTo(fraction)))
+                self.seek_intent(event.column)
             }
+            MouseEventKind::Drag(MouseButton::Left) => self.scrub(gesture),
             // A right-click on the visual slot's image rectangle opens its
             // chrome menu. The click point anchors the menu; the shell owns
             // the menu build and the queue-column placement bounds.
@@ -247,6 +277,38 @@ impl QueuePlaybackPanel {
             }
             _ => None,
         }
+    }
+
+    /// The seek intent a column resolves: its fraction of the painted bar
+    /// span. `None` when the panel painted no bar.
+    fn seek_intent(&self, column: u16) -> Option<Msg> {
+        (self.seekbar_area.width > 0).then(|| {
+            let fraction = f64::from(column.saturating_sub(self.seekbar_area.x))
+                / f64::from(self.seekbar_area.width);
+            Msg::Playback(PlaybackRequest::SeekTo(fraction))
+        })
+    }
+
+    /// Scrub the bar for one recognized left-drag motion. The drag must have
+    /// anchored inside the bar span and the pointer must still be over it —
+    /// a drag that merely crossed the bar (a queue-row drag, say) is not a
+    /// scrub of this bar. Admitted at most once per `SEEKBAR_SCRUB_INTERVAL`.
+    fn scrub(&mut self, gesture: Option<MouseGesture>) -> Option<Msg> {
+        let MouseGesture::Drag { from, to } = gesture? else {
+            return None;
+        };
+        if !self.seekbar_area.contains(from) || !self.seekbar_area.contains(to) {
+            return None;
+        }
+        let now = Instant::now();
+        if self
+            .scrub_at
+            .is_some_and(|at| now.duration_since(at) < SEEKBAR_SCRUB_INTERVAL)
+        {
+            return None;
+        }
+        self.scrub_at = Some(now);
+        self.seek_intent(to.x)
     }
 }
 
