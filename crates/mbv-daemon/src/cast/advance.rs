@@ -106,9 +106,24 @@ fn report_receiver_error(daemon: &mut DaemonLoop) {
     crate::core::broadcast(&daemon.ctrl_clients, &CtrlEvent::CommandRejected(report));
 }
 
-/// Starts the advance a natural end began (design D7): the queue length
+/// Starts the advance a natural end began (design D7): the ended slot is
+/// recorded as the observed active slot ahead of the step, the queue length
 /// bounds the step attempts, and the steps go through the shared step funnel.
 fn begin_advance(daemon: &mut DaemonLoop) {
+    // The completion observation design D7's Finished row requires ahead of
+    // the step: a load whose in-flight transition expired before a settling
+    // status never recorded its slot, and the shared funnel would otherwise
+    // step from the stale predecessor and reload the item that just finished.
+    let ended = {
+        let PlaybackOutput::Cast(cast) = &daemon.owner.output else {
+            return;
+        };
+        match cast.loaded.as_ref() {
+            Some(loaded) => loaded.slot,
+            None => return,
+        }
+    };
+    observe_slot(daemon, ended);
     let remaining = daemon.owner.core.queue.len();
     let PlaybackOutput::Cast(cast) = &mut daemon.owner.output else {
         return;
@@ -169,32 +184,43 @@ fn clear_advance(daemon: &mut DaemonLoop) {
     cast.advance = None;
 }
 
+/// Records `slot` as the owner's observed active slot (design D3's only path
+/// for that record), forwarding the play order when the note re-picked the
+/// Shuffle pick — the settle path's pattern.
+fn observe_slot(daemon: &mut DaemonLoop, slot: QueueSlotId) {
+    let crate::core::DaemonPlayerOwner { core, .. } = &mut daemon.owner;
+    let order_before = core.play_order();
+    core.note_observed_active_slot(Some(slot));
+    if core.play_order() != order_before {
+        crate::forward_play_order_advance(core, &daemon.player);
+    }
+}
+
 /// Re-bases the shared step funnel on the slot the failed step targeted
 /// (design D7's step-over): that slot becomes the desired active slot, so the
 /// funnel steps from after it and the Shuffle pick re-picks past it. A failed
 /// slot an edit removed ends the advance: the edited queue has no order past
 /// it.
 fn rebase_on_failed_step(daemon: &mut DaemonLoop) {
-    let crate::core::DaemonPlayerOwner { core, output, .. } = &mut daemon.owner;
-    let PlaybackOutput::Cast(cast) = output else {
-        return;
+    let failed = {
+        let crate::core::DaemonPlayerOwner { core, output, .. } = &mut daemon.owner;
+        let PlaybackOutput::Cast(cast) = output else {
+            return;
+        };
+        let Some(failed) = cast
+            .advance
+            .as_ref()
+            .and_then(|advance| advance.failed_slot)
+        else {
+            return;
+        };
+        if core.queue.slot(failed).is_none() {
+            cast.advance = None;
+            return;
+        }
+        failed
     };
-    let Some(failed) = cast
-        .advance
-        .as_ref()
-        .and_then(|advance| advance.failed_slot)
-    else {
-        return;
-    };
-    if core.queue.slot(failed).is_none() {
-        cast.advance = None;
-        return;
-    }
-    let order_before = core.play_order();
-    core.note_observed_active_slot(Some(failed));
-    if core.play_order() != order_before {
-        crate::forward_play_order_advance(core, &daemon.player);
-    }
+    observe_slot(daemon, failed);
 }
 
 /// Whether a failed resolve belonged to the advance's in-flight step (design

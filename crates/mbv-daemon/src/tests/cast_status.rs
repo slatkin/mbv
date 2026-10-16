@@ -601,3 +601,93 @@ fn an_advance_at_the_queue_edge_leaves_the_output_idle() {
         "the output stays idle at the edge"
     );
 }
+
+/// Contract: cast-owner-output row 6.2 review fix — a load whose in-flight
+/// transition expired without a settling status never recorded its slot as
+/// the observed active slot, and the shared step funnel would step from the
+/// stale predecessor and reload the item that just finished. The Finished end
+/// records the ended slot before stepping (design D7's Finished row), so the
+/// advance loads the slot after the loaded one.
+#[test]
+fn an_unsettled_loads_natural_end_advances_past_it_not_back_onto_it() {
+    let mut t = test_loop_with_queue(
+        crate::DaemonRole::Local,
+        vec![
+            feed_qi_with_url("x", "https://feed/x.mp3"),
+            feed_qi_with_url("a", "https://feed/a.mp3"),
+            feed_qi_with_url("b", "https://feed/b.mp3"),
+        ],
+        0,
+    );
+    // The transport confirms only x: the predecessor whose stale observation
+    // would mislead the step funnel.
+    let (connector, calls) = status_connector(playing_status_at("https://feed/x.mp3", 5.0));
+    t.event_loop.cast_connector = Some(connector);
+    let (client_id, reply_tx, _rx) = connect_output_client(&t.event_loop.ctrl_clients, true);
+    select_output(&mut t, client_id, &reply_tx, cast_selection());
+    pump_cast_event(&mut t);
+    let slots: Vec<_> = t
+        .event_loop
+        .owner
+        .core
+        .queue
+        .slots()
+        .iter()
+        .map(|slot| slot.slot_id)
+        .collect();
+
+    // Play x and let its confirming status settle it.
+    t.event_loop.handle_event(DaemonEvent::Ctrl(
+        CtrlCmd::UnifiedQueuePlaySlot {
+            slot_id: mbv_ctrl::slot_id_to_u64(slots[0]),
+            op: None,
+        },
+        client_id,
+        mpsc::channel().0,
+    ));
+    pump(&mut t);
+    let t0 = std::time::Instant::now();
+    t.event_loop.tick(t0);
+    pump(&mut t);
+
+    // Play a: its transition expires without a settling status, so a is
+    // never recorded as the observed active slot.
+    t.event_loop.handle_event(DaemonEvent::Ctrl(
+        CtrlCmd::UnifiedQueuePlaySlot {
+            slot_id: mbv_ctrl::slot_id_to_u64(slots[1]),
+            op: None,
+        },
+        client_id,
+        mpsc::channel().0,
+    ));
+    pump(&mut t);
+    wait_for_worker_jobs(&t.event_loop.owner.output);
+    let backdated = std::time::Instant::now()
+        .checked_sub(std::time::Duration::from_secs(10))
+        .expect("the monotonic clock reaches back ten seconds");
+    t.event_loop.owner.core.transitions.expire(backdated);
+    t.event_loop.on_recv_timeout(std::time::Instant::now());
+    assert!(
+        t.event_loop.owner.core.transitions.in_flight().is_none(),
+        "a's load transition expired without a settling status"
+    );
+
+    // a's natural end: the advance steps to the slot after a.
+    report_end(
+        &mut t,
+        idle_status("https://feed/a.mp3", CastIdleReason::Finished),
+        t0 + std::time::Duration::from_secs(120),
+    );
+    pump(&mut t);
+    wait_for_worker_jobs(&t.event_loop.owner.output);
+
+    assert_eq!(
+        load_calls(&calls),
+        vec![
+            "load(https://feed/x.mp3, 0)".to_string(),
+            "load(https://feed/a.mp3, 0)".to_string(),
+            "load(https://feed/b.mp3, 0)".to_string()
+        ],
+        "the unsettled load's end advances past it instead of reloading it"
+    );
+}
