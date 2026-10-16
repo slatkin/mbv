@@ -107,13 +107,13 @@ pub(crate) struct CastOutput {
     /// loaded item's stop. `pub(super)` so the crate's resolve handler
     /// clears it with the replaced load.
     pub(super) pending_seek: Option<u64>,
-    /// The Local→Cast hand-off load this output carries (design D10, row
-    /// 7.1): the captured active slot with the position and pause state it
-    /// had on the old output, and the selecting Client's reply path for the
-    /// uncastable report. It lives on the output, so any replacement of the
-    /// output — a newer selection — drops it, and a late resolve outcome
-    /// loads nothing; the active output's stop clears it too, so a stop
-    /// while the resolve runs leaves the receiver idle.
+    /// The hand-off load this output carries (design D10, row 7.1): the
+    /// captured active slot with the position and pause state it had on the
+    /// old output, and the selecting Client's reply path for the uncastable
+    /// report. It lives on the output, so any replacement of the output — a
+    /// newer selection — drops it, and a late resolve outcome loads nothing;
+    /// the active output's stop clears it too, so a stop while the resolve
+    /// runs leaves the receiver idle.
     pub(super) pending_handoff_load: Option<PendingHandoffLoad>,
 }
 
@@ -188,9 +188,9 @@ pub(crate) fn output_state(output: &PlaybackOutput) -> OutputState {
     }
 }
 
-/// The slot a successful Local→Cast hand-off continues (design D10, row
-/// 7.1), with the position and pause state it had on the old output and the
-/// selecting Client's reply path for the uncastable report.
+/// The slot a successful hand-off to this receiver continues (design D10,
+/// row 7.1), with the position and pause state it had on the old output and
+/// the selecting Client's reply path for the uncastable report.
 pub(crate) struct PendingHandoffLoad {
     pub(super) slot: QueueSlotId,
     pub(super) start_ticks: i64,
@@ -255,8 +255,8 @@ pub enum CastOwnerEvent {
     /// D5): the loaded record is dropped and the in-flight transition the
     /// load belonged to expires, so later steps are not wedged behind it.
     LoadFailed { slot: QueueSlotId, error: String },
-    /// The outcome of the Cast source resolve a successful Local→Cast
-    /// hand-off started for the captured slot (design D10, row 7.1), keyed
+    /// The outcome of the Cast source resolve a successful hand-off to a
+    /// receiver started for the captured slot (design D10, row 7.1), keyed
     /// by that slot. A result whose slot no longer matches the output's
     /// pending hand-off load — or that lands after the output was replaced
     /// or stopped — is stale and loads nothing.

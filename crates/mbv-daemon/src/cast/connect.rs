@@ -1,7 +1,8 @@
 //! Output selection and connection lifecycle (cast-owner-output design
-//! D2/D3/D8/D10/D11): `SelectPlaybackOutput`, the Local→Cast hand-off,
-//! connect and reconnect outcomes, and the disconnect-and-reconnect recovery
-//! a poll error or a wedged worker spawns.
+//! D2/D3/D8/D10/D11): `SelectPlaybackOutput`, the Local→Cast and Cast→Cast
+//! hand-offs, the Cast→Local hand-back, connect and reconnect outcomes, and
+//! the disconnect-and-reconnect recovery a poll error or a wedged worker
+//! spawns.
 
 use std::sync::mpsc;
 use std::time::Instant;
@@ -19,16 +20,18 @@ use super::status::refresh_presentation;
 /// A selection waiting for its Cast worker to connect (design D2). `reply_tx`
 /// answers the selecting Client when the connect fails; on success the
 /// broadcast is the reply. `handoff` is the active playback the selection
-/// captured from the Local output (design D10, row 7.1); `None` when the
-/// output was idle at the selection.
+/// captured from the old output — the local run or the receiver that was the
+/// output (design D10, row 7.1); `None` when the output was idle at the
+/// selection.
 pub struct PendingCastConnect {
     receiver: CastReceiver,
     reply_tx: CtrlSender,
     handoff: Option<HandoffPlayback>,
 }
 
-/// The active playback a Local→Cast selection captures from the old output
-/// (design D10 step 1, row 7.1): the slot, its position, and its pause state.
+/// The active playback a selection captures from the old output for the
+/// hand-off (design D10 step 1, row 7.1): the slot, its position, and its
+/// pause state.
 #[derive(Clone, Copy, Debug)]
 pub struct HandoffPlayback {
     pub slot: QueueSlotId,
@@ -40,7 +43,8 @@ pub struct HandoffPlayback {
 /// step 1, row 7.1): the run-observed active slot — the queue's own marker
 /// when no run observation exists yet — with the presented position and
 /// pause state. A slot counts as active only while the output plays or
-/// pauses it, so a stopped or idle output hands nothing over.
+/// pauses it, so a stopped or idle output hands nothing over. The Cast
+/// counterpart is `capture_cast_handoff`.
 fn capture_handoff_playback(daemon: &DaemonLoop) -> Option<HandoffPlayback> {
     let (active, position_ticks, paused) = {
         let status = daemon.player.status.lock().unwrap();
@@ -134,6 +138,36 @@ pub fn handle_select_playback_output(
             host,
             port,
         } => {
+            // Selecting the receiver that is already the output is no
+            // hand-off: the output is already where the selection asks it to
+            // be, and a full connect-stop-teardown-reload cycle would only
+            // interrupt the playback it presents.
+            if let PlaybackOutput::Cast(cast) = &daemon.owner.output
+                && cast.receiver.id == receiver_id
+            {
+                send_to(
+                    reply_tx,
+                    &CtrlEvent::CommandRejected(
+                        "this receiver is already the playback output".to_string(),
+                    ),
+                );
+                return;
+            }
+            // The Cast hand-offs (design D10, row 7.1): a selection while
+            // another receiver is the output moves the captured playback to
+            // the new receiver; a selection while Local plays hands the
+            // active slot over. Either way the active slot's state is
+            // captured at the selection and continues after a successful
+            // connect; an idle output hands nothing over.
+            let handoff = if matches!(daemon.owner.output, PlaybackOutput::Cast(_)) {
+                // One re-derivation pins the presented position to the
+                // selection instant without a fresh poll (row 7.1 dispatch
+                // B), and the capture reads it.
+                refresh_presentation(daemon, Instant::now());
+                capture_cast_handoff(daemon)
+            } else {
+                capture_handoff_playback(daemon)
+            };
             let Some(connector) = daemon.cast_connector.as_ref() else {
                 send_to(
                     reply_tx,
@@ -143,22 +177,6 @@ pub fn handle_select_playback_output(
                 );
                 return;
             };
-            // Cast → anything stays rejected until its dispatch lands (row
-            // 7.1 dispatch B); only Local → Cast hands off in this unit.
-            if matches!(daemon.owner.output, PlaybackOutput::Cast(_)) {
-                send_to(
-                    reply_tx,
-                    &CtrlEvent::CommandRejected(
-                        "moving playback between outputs is not supported yet".to_string(),
-                    ),
-                );
-                return;
-            }
-            // The Local → Cast hand-off (design D10, row 7.1): the active
-            // slot's state is captured at the selection and continues on the
-            // receiver after a successful connect; an idle output hands
-            // nothing over.
-            let handoff = capture_handoff_playback(daemon);
             let receiver = CastReceiver {
                 id: receiver_id.clone(),
                 friendly_name: name,
@@ -248,21 +266,16 @@ pub(super) fn handle_connect_outcome(
             if let Some(handoff) = handoff {
                 if active_now {
                     // Stop the old output only after the connect succeeded
-                    // (design D10 step 3): the Local run stops, and with it
-                    // every awaited transition identity it could confirm
-                    // (the same rule a ctrl stop applies).
+                    // (design D10 step 3), and with it every awaited
+                    // transition identity it could confirm (the same rule a
+                    // ctrl stop applies).
                     tracing::info!(
-                        name: "daemon.cast_handoff.local_stopped",
+                        name: "daemon.cast_handoff.old_output_stopped",
                         target: "daemon",
                         slot = ?handoff.slot,
-                        "the connect succeeded; the local run stops and its slot continues on the receiver"
+                        "the connect succeeded; the old output stops and its slot continues on the new receiver"
                     );
-                    crate::cast::stop_active_output(
-                        &daemon.player,
-                        &mut daemon.owner.output,
-                        &daemon.owner.core.queue,
-                        &daemon.ctrl_clients,
-                    );
+                    stop_old_output_for_handoff(daemon);
                     crate::core::reset_slot_jumps(
                         &mut daemon.owner.core.transitions,
                         &mut daemon.owner.queued_transition_origin,
@@ -270,7 +283,10 @@ pub(super) fn handle_connect_outcome(
                 } else {
                     // The playback the selection captured stopped while the
                     // connect ran (design D10 step 1): nothing continues on
-                    // the receiver.
+                    // the new receiver. The old receiver's app still ends:
+                    // the deliberate output change tears it down (design
+                    // D12), and its media is already stopped.
+                    teardown_old_receiver_app(daemon);
                     tracing::info!(
                         name: "daemon.cast_handoff.playback_stopped",
                         target: "daemon",
@@ -279,15 +295,15 @@ pub(super) fn handle_connect_outcome(
                     );
                 }
             } else if active_now {
-                // Local playback may have started after the select (the
-                // select-time capture found nothing active). Swapping now
-                // would leave two live outputs, so the connect is discarded
-                // and reported instead.
+                // Playback may have started on the old output after the
+                // select (the select-time capture found nothing active).
+                // Swapping now would leave two live outputs, so the connect
+                // is discarded and reported instead.
                 drop(worker);
                 send_to(
                     &reply_tx,
                     &CtrlEvent::CommandRejected(
-                        "local playback started while connecting; stop playback before moving it to a receiver"
+                        "playback started while connecting; stop playback before moving it to a receiver"
                             .to_string(),
                     ),
                 );
@@ -336,6 +352,33 @@ pub(super) fn handle_connect_outcome(
     }
 }
 
+/// Stops the old output for a successful hand-off connect (design D10 step
+/// 3): the local run stops, or the old receiver's media stops with its stop
+/// reports; when the old output was itself a receiver, the deliberate output
+/// change also tears its app down (design D12) — on the old receiver, never
+/// the new one.
+fn stop_old_output_for_handoff(daemon: &mut DaemonLoop) {
+    let old_output_is_cast = matches!(&daemon.owner.output, PlaybackOutput::Cast(_));
+    crate::cast::stop_active_output(
+        &daemon.player,
+        &mut daemon.owner.output,
+        &daemon.owner.core.queue,
+        &daemon.ctrl_clients,
+    );
+    if old_output_is_cast {
+        teardown_old_receiver_app(daemon);
+    }
+}
+
+/// Queues the app teardown on the old receiver when it was the output
+/// (design D12): only a deliberate output change tears the app down. The
+/// worker's FIFO order runs it behind any media stop queued first.
+fn teardown_old_receiver_app(daemon: &DaemonLoop) {
+    if let PlaybackOutput::Cast(old) = &daemon.owner.output {
+        crate::cast::queue_teardown_job(old);
+    }
+}
+
 /// The Cast→Local hand-off (design D10 steps 3-5, row 7.1 dispatch B): the
 /// receiver's presented playback is captured, the old output stops — the
 /// receiver's media-stop job first, then its app teardown (design D12: only
@@ -357,9 +400,7 @@ fn hand_cast_back_to_local(daemon: &mut DaemonLoop, reply_tx: &CtrlSender) {
         &daemon.owner.core.queue,
         &daemon.ctrl_clients,
     );
-    if let PlaybackOutput::Cast(cast) = &daemon.owner.output {
-        crate::cast::queue_teardown_job(cast);
-    }
+    teardown_old_receiver_app(daemon);
     // A stop makes every awaited transition identity unobservable (the same
     // rule the ctrl stop applies), so the fresh run starts with a clear gate.
     crate::core::reset_slot_jumps(

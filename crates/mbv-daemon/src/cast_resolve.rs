@@ -325,7 +325,8 @@ pub(super) fn handle_cast_resolved(
 }
 
 /// One hand-off resolve outcome (design D10, row 7.1): the captured slot's
-/// Cast source for a successful Local→Cast hand-off. Matched against the
+/// Cast source for a successful hand-off to a receiver (from Local or from
+/// another receiver). Matched against the
 /// output's pending hand-off load by slot: a result whose slot no longer
 /// matches — or that lands after the output was replaced or stopped, which
 /// dropped the record with it — is stale and loads nothing. On success the

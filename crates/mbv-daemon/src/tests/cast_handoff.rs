@@ -200,6 +200,50 @@ fn load_slot_on_receiver(t: &mut TestLoop, client_id: u64, slot: mbv_queue::Queu
     wait_for_worker_jobs(&t.event_loop.owner.output);
 }
 
+/// A selection of a second receiver, distinct from the receiver the shared
+/// helpers select (`rcv-1`).
+fn second_cast_selection() -> OutputSelection {
+    OutputSelection::Cast {
+        receiver_id: "rcv-2".to_string(),
+        name: "Kitchen".to_string(),
+        host: "192.0.2.11".to_string(),
+        port: 8009,
+    }
+}
+
+/// Sets the first receiver up as the output presenting the queue's first
+/// slot: it is selected, the slot is loaded on it, and one tick runs the
+/// status poll whose report presents the loaded item.
+fn receiver_presenting(t: &mut TestLoop, status: CastStatus) -> PresentedReceiver {
+    let (client_id, _rx, calls) = select_cast_output(t, status);
+    let slot = t.event_loop.owner.core.queue.slots()[0].slot_id;
+    load_slot_on_receiver(t, client_id, slot);
+    // One tick runs the status poll, so the output presents the receiver's
+    // state for the loaded item before the hand-off.
+    t.event_loop.tick(std::time::Instant::now());
+    pump(t);
+    let crate::cast::PlaybackOutput::Cast(cast) = &t.event_loop.owner.output else {
+        panic!("the receiver is the output");
+    };
+    PresentedReceiver {
+        worker: cast.worker.clone(),
+        calls,
+    }
+}
+
+/// Drains a Client's event channel, so the events a later step emits are the
+/// next ones the channel holds.
+fn drain(rx: &mpsc::Receiver<CtrlOutbound>) {
+    while rx.try_recv().is_ok() {}
+}
+
+/// The handles a receiver set up with `receiver_presenting` gives the test:
+/// the receiver's worker sender and its transport call log.
+struct PresentedReceiver {
+    worker: mpsc::Sender<mbv_cast::CastJob>,
+    calls: Arc<Mutex<Vec<String>>>,
+}
+
 /// Holds the Cast worker behind a blocker job, so the jobs the Local
 /// selection queues (media stop, teardown) run only after the test releases
 /// it. Returns the release sender and the worker sender — still valid after
@@ -345,5 +389,240 @@ fn selecting_local_tears_the_receiver_app_down_after_the_media_stop() {
     assert!(
         stop < teardown,
         "the teardown runs after the media stop, in worker FIFO order: {calls:?}"
+    );
+}
+
+/// Contract: cast-owner-output row 7.1 dispatch C (design D10) — selecting a
+/// second receiver while a first receiver plays connects to the new receiver
+/// first, stops the old output only after the connect succeeded, and gives
+/// the NEW receiver a `load` of the handed-off slot's media at the old
+/// receiver's presented position. The old receiver's transport log shows the
+/// media stop and then the app teardown, and the new receiver is given no
+/// teardown.
+#[test]
+fn a_cast_handoff_loads_the_new_receiver_at_the_old_receivers_position() {
+    let mut t = test_loop_with_queue(
+        crate::DaemonRole::Local,
+        vec![feed_qi_with_url("a", "https://feed/a.mp3")],
+        0,
+    );
+    // The reported duration clamps the presented position's extrapolation,
+    // so the capture reads exactly the reported position however long the
+    // connect takes.
+    let status = CastStatus {
+        duration_seconds: Some(10.0),
+        ..playing_status_at("https://feed/a.mp3", 10.0)
+    };
+    let presented = receiver_presenting(&mut t, status);
+    let old_worker = presented.worker;
+    let old_calls = presented.calls;
+    let slot = t.event_loop.owner.core.queue.slots()[0].slot_id;
+
+    let (connector, new_calls) = fake_connector();
+    t.event_loop.cast_connector = Some(connector);
+    let (client_id, reply_tx, _rx) = connect_output_client(&t.event_loop.ctrl_clients, true);
+    select_output(&mut t, client_id, &reply_tx, second_cast_selection());
+    pump_cast_event(&mut t);
+    pump(&mut t);
+    wait_for_worker_jobs(&t.event_loop.owner.output);
+    // The sentinel job queues behind the select's jobs on the old worker, so
+    // its call log is complete once the sentinel answers.
+    let (done_tx, done_rx) = mpsc::channel();
+    let _ = old_worker.send(Box::new(move |_| {
+        let _ = done_tx.send(());
+    }));
+    done_rx
+        .recv_timeout(Duration::from_secs(2))
+        .expect("the old receiver's queued jobs ran before the sentinel");
+
+    let crate::cast::PlaybackOutput::Cast(cast) = &t.event_loop.owner.output else {
+        panic!("the new receiver is the output after the hand-off");
+    };
+    assert_eq!(
+        crate::cast::output_state(&t.event_loop.owner.output),
+        OutputState::Cast {
+            receiver_id: "rcv-2".to_string(),
+            name: "Kitchen".to_string(),
+            connection: mbv_ctrl::CastConnection::Connected,
+        },
+        "the selected receiver is the output after the hand-off"
+    );
+    let loaded = cast.loaded.as_ref().expect("the hand-off loaded the slot");
+    assert_eq!(loaded.slot, slot, "the captured slot is the loaded one");
+    assert_eq!(
+        *new_calls.lock().unwrap(),
+        vec![
+            "keep_alive".to_string(),
+            "load(https://feed/a.mp3, 10)".to_string()
+        ],
+        "the new receiver is given the handed-off media at the old receiver's position, and no teardown"
+    );
+    let old_calls = old_calls.lock().unwrap();
+    let stop = old_calls
+        .iter()
+        .position(|call| *call == "stop")
+        .expect("the old receiver's media stops");
+    let teardown = old_calls
+        .iter()
+        .position(|call| *call == "teardown")
+        .expect("the old receiver's app is torn down");
+    assert!(
+        stop < teardown,
+        "the old receiver's teardown runs after its media stop: {old_calls:?}"
+    );
+}
+
+/// Contract: cast-owner-output row 7.1 dispatch C (design D10 step 5) — a
+/// paused receiver's state carries over to the new receiver: the hand-off
+/// load is followed by an explicit pause, so the new receiver holds the item
+/// paused at the old receiver's position.
+#[test]
+fn a_paused_receiver_hands_off_to_a_paused_new_receiver_at_its_position() {
+    let mut t = test_loop_with_queue(
+        crate::DaemonRole::Local,
+        vec![feed_qi_with_url("a", "https://feed/a.mp3")],
+        0,
+    );
+    let status = CastStatus {
+        state: mbv_cast::CastPlaybackState::Paused,
+        ..playing_status_at("https://feed/a.mp3", 10.0)
+    };
+    let _presented = receiver_presenting(&mut t, status);
+
+    let (connector, new_calls) = fake_connector();
+    t.event_loop.cast_connector = Some(connector);
+    let (client_id, reply_tx, _rx) = connect_output_client(&t.event_loop.ctrl_clients, true);
+    select_output(&mut t, client_id, &reply_tx, second_cast_selection());
+    pump_cast_event(&mut t);
+    pump(&mut t);
+    wait_for_worker_jobs(&t.event_loop.owner.output);
+
+    assert_eq!(
+        *new_calls.lock().unwrap(),
+        vec![
+            "keep_alive".to_string(),
+            "load(https://feed/a.mp3, 10)".to_string(),
+            "pause".to_string()
+        ],
+        "the captured pause applies after the load, in order"
+    );
+}
+
+/// Contract: cast-owner-output row 7.1 dispatch C (design D10 step 2) — a
+/// connect failure to the new receiver keeps the old output fully untouched:
+/// it stays connected with its loaded item presenting, its transport logs no
+/// stop and no teardown, and the selecting Client is told the reason.
+#[test]
+fn a_failed_cast_to_cast_connect_leaves_the_old_receiver_untouched() {
+    let mut t = test_loop_with_queue(
+        crate::DaemonRole::Local,
+        vec![feed_qi_with_url("a", "https://feed/a.mp3")],
+        0,
+    );
+    let status = CastStatus {
+        duration_seconds: Some(10.0),
+        ..playing_status_at("https://feed/a.mp3", 10.0)
+    };
+    let old_calls = receiver_presenting(&mut t, status).calls;
+    let slot = t.event_loop.owner.core.queue.slots()[0].slot_id;
+
+    t.event_loop.cast_connector = Some(failing_connector("receiver unreachable"));
+    let (client_id, reply_tx, rx) = connect_output_client(&t.event_loop.ctrl_clients, true);
+    drain(&rx);
+    select_output(&mut t, client_id, &reply_tx, second_cast_selection());
+    pump_cast_event(&mut t);
+
+    let CtrlEvent::CommandRejected(reason) = recv_event(&rx) else {
+        panic!("a failed connect reports to the selecting Client");
+    };
+    assert!(reason.contains("receiver unreachable"), "reason: {reason}");
+    let crate::cast::PlaybackOutput::Cast(cast) = &t.event_loop.owner.output else {
+        panic!("the old receiver stays the output");
+    };
+    assert_eq!(
+        crate::cast::output_state(&t.event_loop.owner.output),
+        OutputState::Cast {
+            receiver_id: "rcv-1".to_string(),
+            name: "Living room".to_string(),
+            connection: mbv_ctrl::CastConnection::Connected,
+        },
+        "the old receiver stays the output on a failed connect"
+    );
+    let loaded = cast.loaded.as_ref().expect("the old output keeps its load");
+    assert_eq!(
+        loaded.slot, slot,
+        "the old output's loaded item is untouched"
+    );
+    assert!(
+        !old_calls
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|call| *call == "stop" || *call == "teardown"),
+        "the old receiver's media is not stopped and its app is not torn down"
+    );
+    let status = t.event_loop.player.status.lock().unwrap();
+    assert!(
+        status.active,
+        "the old receiver keeps presenting the loaded item"
+    );
+}
+
+/// Contract: cast-owner-output row 7.1 dispatch C — selecting the receiver
+/// that is already the output is rejected as no hand-off: the output is
+/// already where the selection asks it to be, and its playback is untouched.
+#[test]
+fn selecting_the_receiver_that_is_already_the_output_is_rejected() {
+    let mut t = test_loop_with_queue(
+        crate::DaemonRole::Local,
+        vec![feed_qi_with_url("a", "https://feed/a.mp3")],
+        0,
+    );
+    let status = CastStatus {
+        duration_seconds: Some(10.0),
+        ..playing_status_at("https://feed/a.mp3", 10.0)
+    };
+    let old_calls = receiver_presenting(&mut t, status).calls;
+    let slot = t.event_loop.owner.core.queue.slots()[0].slot_id;
+    // A second Client issues the same-receiver selection; its reply path is
+    // its own channel.
+    let (selector_id, reply_tx, rx) = connect_output_client(&t.event_loop.ctrl_clients, true);
+    drain(&rx);
+
+    select_output(
+        &mut t,
+        selector_id,
+        &reply_tx,
+        super::cast_output::cast_selection(),
+    );
+
+    let CtrlEvent::CommandRejected(reason) = recv_event(&rx) else {
+        panic!("a same-receiver selection is rejected");
+    };
+    assert!(
+        reason.contains("already the playback output"),
+        "reason: {reason}"
+    );
+    let crate::cast::PlaybackOutput::Cast(cast) = &t.event_loop.owner.output else {
+        panic!("the receiver stays the output");
+    };
+    assert_eq!(
+        crate::cast::output_state(&t.event_loop.owner.output),
+        OutputState::Cast {
+            receiver_id: "rcv-1".to_string(),
+            name: "Living room".to_string(),
+            connection: mbv_ctrl::CastConnection::Connected,
+        },
+        "the output is unchanged"
+    );
+    let loaded = cast.loaded.as_ref().expect("the load is untouched");
+    assert_eq!(loaded.slot, slot, "the loaded item is untouched");
+    assert!(
+        !old_calls
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|call| *call == "stop" || *call == "teardown"),
+        "the receiver is not stopped and not torn down"
     );
 }
