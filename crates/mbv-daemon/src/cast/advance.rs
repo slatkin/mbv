@@ -4,7 +4,8 @@
 //! the slot's completion through the same observation funnel `TrackCompleted`
 //! records through (progress, consume rules), and steps the queue with the
 //! same `relative_step_target(Next)` funnel the next key uses; an `Error` end
-//! is reported once and advances nothing; a `Cancelled` or `Interrupted` end
+//! is reported once and advances nothing unless the last known position was
+//! within `NEAR_END_SECONDS` of the duration, which is a natural end; a `Cancelled` or `Interrupted` end
 //! and an idle for foreign content only change what the presentation shows
 //! (row 6.1). An uncastable step target is reported and stepped over, with the
 //! queue length bounding the attempts; at the edge the output stays idle.
@@ -33,6 +34,12 @@ pub(crate) struct CastAdvance {
     /// The step attempts the queue length still allows (design D7).
     remaining: usize,
 }
+
+/// How close to the duration the last known position must be for an `Error`
+/// end to count as the item's natural end. Over two 7 s poll intervals: the position is
+/// the last polled one, and a receiver can fail its stream tail (HLS 310)
+/// instead of reporting `Finished`.
+const NEAR_END_SECONDS: f32 = 15.0;
 
 /// What the freshly stored status's end report asks the Owner to do (design
 /// D7's advance table).
@@ -68,7 +75,15 @@ pub(super) fn apply_end_report(daemon: &mut DaemonLoop) {
             }
             Some(CastIdleReason::Error) => {
                 loaded.end_handled = true;
-                Some(EndReport::ReportError)
+                let near_end = status
+                    .position_seconds
+                    .zip(status.duration_seconds)
+                    .is_some_and(|(position, duration)| duration - position <= NEAR_END_SECONDS);
+                Some(if near_end {
+                    EndReport::Step
+                } else {
+                    EndReport::ReportError
+                })
             }
             // A Cancelled end presents no active playback and advances
             // nothing; an Interrupted end is the Owner's own replacing load.

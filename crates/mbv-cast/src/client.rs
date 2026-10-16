@@ -28,6 +28,9 @@ pub struct CastClient {
     /// The URL of the last item `load` accepted, kept so a `LOADING`-report
     /// status (design D7) can still name the loaded content id.
     loaded_content_id: Option<String>,
+    /// The last status the receiver reported for the loaded item, so an
+    /// unparseable error report can still carry the position it ended at.
+    last_status: Option<CastStatus>,
 }
 
 impl std::fmt::Debug for CastClient {
@@ -113,6 +116,23 @@ impl CastStatus {
     }
 }
 
+impl CastStatus {
+    /// The loaded item ended with an error report `rust_cast` cannot parse
+    /// (an undocumented `detailedErrorCode`): idle with `Error`, carrying the
+    /// position and duration of the last status that parsed, if any.
+    #[must_use]
+    pub fn errored(content_id: Option<String>, last: Option<&CastStatus>) -> Self {
+        Self {
+            position_seconds: last.and_then(|status| status.position_seconds),
+            duration_seconds: last.and_then(|status| status.duration_seconds),
+            playback_rate: 1.0,
+            state: CastPlaybackState::Idle,
+            playing_content_id: content_id,
+            idle_reason: Some(CastIdleReason::Error),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CastPlaybackState {
     Idle,
@@ -167,6 +187,7 @@ impl CastClient {
             session_id: app.session_id,
             media_session_id: None,
             loaded_content_id: None,
+            last_status: None,
         })
     }
 
@@ -201,6 +222,7 @@ impl CastClient {
             session_id,
             media_session_id,
             loaded_content_id: None,
+            last_status: None,
         })
     }
 
@@ -266,6 +288,7 @@ impl CastClient {
 
     fn record_accepted_load(&mut self, url: &str) {
         self.loaded_content_id = Some(url.to_string());
+        self.last_status = None;
     }
 
     pub fn play(&mut self) -> Result<(), CastError> {
@@ -337,7 +360,9 @@ impl CastClient {
         {
             Ok(status) => {
                 self.adopt_status(&status);
-                Ok(status_from_entries(&status.entries))
+                let status = status_from_entries(&status.entries);
+                self.last_status = Some(status.clone());
+                Ok(status)
             }
             Err(error) => {
                 // The receiver is reporting a load in progress it cannot be
@@ -346,6 +371,11 @@ impl CastClient {
                 // loaded content id.
                 if is_loading_parse_error(&error) {
                     Ok(CastStatus::buffering(self.loaded_content_id.clone()))
+                } else if is_unsupported_error_code(&error) {
+                    Ok(CastStatus::errored(
+                        self.loaded_content_id.clone(),
+                        self.last_status.as_ref(),
+                    ))
                 } else {
                     Err(error)
                 }
@@ -411,6 +441,18 @@ fn is_loading_parse_error(error: &CastError) -> bool {
     matches!(
         error.source().and_then(|source| source.downcast_ref::<RustCastError>()),
         Some(RustCastError::Internal(text)) if text == LOADING_PARSE_ERROR_TEXT
+    )
+}
+
+/// Recognizes `rust_cast`'s rejection of a receiver `detailedErrorCode` it
+/// has no variant for (310, `HLS_NETWORK_UNKNOWN`, ends Emby HLS streams):
+/// its text is `media error code N is not supported`. The code only appears
+/// in an idle `ERROR` report. The pinned `rust_cast` version is part of this
+/// contract; a test owns it.
+fn is_unsupported_error_code(error: &CastError) -> bool {
+    matches!(
+        error.source().and_then(|source| source.downcast_ref::<RustCastError>()),
+        Some(RustCastError::Parsing(text)) if text.starts_with("media error code ")
     )
 }
 
@@ -569,6 +611,30 @@ mod tests {
             RustCastError::Internal("Unknown player state PAUSED".to_string()),
         );
         assert!(!is_loading_parse_error(&other));
+    }
+
+    /// An end report with an undocumented `detailedErrorCode` (310 ended the
+    /// Emby HLS item in the field) must not read as a broken connection: it
+    /// becomes an idle `Error` status that keeps the last known position.
+    #[test]
+    fn unsupported_error_code_maps_to_errored_status_with_last_position() {
+        let ended = CastError::transport(
+            TransportKind::Status,
+            RustCastError::Parsing("media error code 310 is not supported".to_string()),
+        );
+        assert!(is_unsupported_error_code(&ended));
+        let mut last = CastStatus::idle();
+        last.position_seconds = Some(540.0);
+        last.duration_seconds = Some(545.0);
+        let status = CastStatus::errored(Some("http://host/s".to_string()), Some(&last));
+        assert_eq!(status.idle_reason, Some(CastIdleReason::Error));
+        assert_eq!(status.position_seconds, Some(540.0));
+
+        let other = CastError::transport(
+            TransportKind::Status,
+            RustCastError::Parsing("Unknown player state X".to_string()),
+        );
+        assert!(!is_unsupported_error_code(&other));
     }
 
     /// A real receiver status payload's `applications` list is reduced to

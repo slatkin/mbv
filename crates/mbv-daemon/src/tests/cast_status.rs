@@ -389,6 +389,40 @@ fn a_finished_end_loads_the_next_slot_once() {
     );
 }
 
+/// Contract: cast-owner-output row 6.2 (design D7) — an `Error` end whose last
+/// known position was within `NEAR_END_SECONDS` of the duration is the item's
+/// natural end (Emby HLS ends with `detailedErrorCode` 310, not `Finished`):
+/// the next slot loads. Guards the field report where the queue stopped after
+/// the first cast item.
+#[test]
+fn an_error_end_near_the_duration_loads_the_next_slot() {
+    let mut t = test_loop_with_queue(
+        crate::DaemonRole::Local,
+        vec![
+            feed_qi_with_url("a", "https://feed/a.mp3"),
+            feed_qi_with_url("b", "https://feed/b.mp3"),
+        ],
+        0,
+    );
+    let (_client_id, _rx, calls, t0) = settled_casting_fixture(&mut t);
+    let mut ended = idle_status("https://feed/a.mp3", CastIdleReason::Error);
+    ended.position_seconds = Some(540.0);
+    ended.duration_seconds = Some(545.0);
+
+    report_end(&mut t, ended, t0 + std::time::Duration::from_secs(120));
+    pump(&mut t);
+    wait_for_worker_jobs(&t.event_loop.owner.output);
+
+    assert_eq!(
+        load_calls(&calls),
+        vec![
+            "load(https://feed/a.mp3, 0)".to_string(),
+            "load(https://feed/b.mp3, 0)".to_string()
+        ],
+        "the near-end error advances exactly one slot"
+    );
+}
+
 /// Contract: cast-owner-output row 6.2 (design D7) — the end-handled flag: a
 /// second poll of the same `Finished` entry steps nothing again. The step
 /// target is uncastable and the step-over ends at the edge, so the loaded item
