@@ -253,6 +253,7 @@ impl DaemonLoop {
                     &self.player,
                     &mut self.owner.output,
                     &self.owner.core.queue,
+                    &self.ctrl_clients,
                 );
                 reset_slot_jumps(
                     &mut self.owner.core.transitions,

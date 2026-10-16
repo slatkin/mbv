@@ -118,7 +118,7 @@ fn install_abs_loaded(
 /// injection): the tick's poll is drained unapplied and `status` is
 /// delivered under its poll id, the same injection the drift-correction test
 /// uses.
-fn report_status(t: &mut TestLoop, status: CastStatus, at: std::time::Instant) {
+pub(super) fn report_status(t: &mut TestLoop, status: CastStatus, at: std::time::Instant) {
     t.event_loop.tick(at);
     wait_for_worker_jobs(&t.event_loop.owner.output);
     let event = t.merged_rx.try_recv().expect("the poll reported a result");

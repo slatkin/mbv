@@ -369,6 +369,9 @@ fn load_resolved_source(
         end_handled: false,
     });
     cast.advance = None;
+    // The new load's first presenting status settles its own arrival, not a
+    // seek the replaced item took (design D9).
+    cast.pending_seek = false;
 }
 
 /// A failed resolve expires the transition it belonged to (design D5, row

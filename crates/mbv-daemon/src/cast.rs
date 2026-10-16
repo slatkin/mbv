@@ -25,6 +25,7 @@ use super::core::DaemonEvent;
 pub(crate) mod advance;
 mod command;
 mod connect;
+mod feed_events;
 pub(crate) mod progress;
 mod status;
 
@@ -96,6 +97,13 @@ pub(crate) struct CastOutput {
     /// output has no advance under way. `pub(super)` so the crate's resolve
     /// handler can end it with the step's load.
     pub(super) advance: Option<advance::CastAdvance>,
+    /// Whether a seek was submitted for the loaded item and no receiver
+    /// status has presented it since (design D9): the Feed `OutputStarted`
+    /// fires when a presenting status settles the seek. Cleared by the
+    /// settle, by a replacing load, and by the loaded item's stop.
+    /// `pub(super)` so the crate's resolve handler clears it with the
+    /// replaced load.
+    pub(super) pending_seek: bool,
 }
 
 /// The item the Cast receiver was told to play (design D1). `end_handled`
@@ -148,6 +156,7 @@ impl std::fmt::Debug for CastOutput {
             .field("next_poll_id", &self.next_poll_id)
             .field("reconnecting", &self.reconnecting)
             .field("advance", &self.advance)
+            .field("pending_seek", &self.pending_seek)
             .finish()
     }
 }
@@ -434,29 +443,39 @@ pub(super) fn report_resolve_failure(
 /// anything (design D5/D7). Shared by the ctrl stop, the guarded stop
 /// intent, and the transport (MPRIS/tray) stop, which mirrors `CtrlCmd::Stop`.
 /// The Cast arm also re-presents the output: with the loaded item gone the
-/// presented status shows no active playback (design D8, row 6.1).
+/// presented status shows no active playback (design D8, row 6.1), and the
+/// loaded Feed slot's `Stopped` goes out to the Clients (design D9).
 pub(super) fn stop_active_output(
     player: &mbv_player::Player,
     output: &mut PlaybackOutput,
     queue: &mbv_queue::PlaybackQueue,
+    ctrl_clients: &crate::ctrl::ClientRegistry,
 ) {
     match output {
         PlaybackOutput::Local => player.stop(),
         PlaybackOutput::Cast(cast) => {
             // The stop report goes out for the presented position before the
             // presentation is replaced (design D9).
-            let position_ticks = player.status.lock().unwrap().position_ticks;
+            let (position_ticks, generation) = {
+                let status = player.status.lock().unwrap();
+                (status.position_ticks, status.sequence_generation)
+            };
             if let Some(loaded) = cast.loaded.as_ref()
                 && loaded.start_reported
                 && let Some(reporting) = loaded.reporting.as_ref()
             {
                 reporting.report_stop(position_ticks);
             }
+            // The loaded Feed slot's `Stopped` goes out for the presented
+            // position before the presentation is replaced (design D9): the
+            // Client persists the Feed state file from it.
+            feed_events::emit_stopped(ctrl_clients, cast, queue, position_ticks, generation);
             let worker = cast.worker.clone();
             cast.loaded = None;
             // The stop ends any advance the loaded item's end started (design
             // D7): a stopped output advances nothing.
             cast.advance = None;
+            cast.pending_seek = false;
             command::submit_command_job(&worker, "stop", |transport| transport.stop());
             let base = player.status.lock().unwrap().clone();
             let presented = status::presented_player_status(

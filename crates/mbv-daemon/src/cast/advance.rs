@@ -168,6 +168,10 @@ fn record_natural_end(daemon: &mut DaemonLoop, ended: QueueSlotId, consume: bool
         .queue
         .slot(ended)
         .is_none_or(|slot| !slot.item.is_audio());
+    // The Feed completion event's kind gate is read before the record: a
+    // consumed slot is gone from the queue by the time the event goes out
+    // (design D9, row 6.3's record).
+    let is_feed = super::feed_events::slot_is_feed(&daemon.owner.core.queue, ended);
     let consume_policy = (daemon.owner_settings)().consume;
     crate::record_completed_slot(
         &mut daemon.owner,
@@ -179,6 +183,14 @@ fn record_natural_end(daemon: &mut DaemonLoop, ended: QueueSlotId, consume: bool
         consume,
         consume_policy,
     );
+    // The ended Feed slot's `TrackCompleted` goes out beside the record
+    // (design D9): the payload is the recorded outcome, the same one a local
+    // natural end's `TrackCompleted` carries, so the Client's Feed lifecycle
+    // decision is the same one local playback drives.
+    if is_feed {
+        let generation = daemon.player.status.lock().unwrap().sequence_generation;
+        super::feed_events::emit_track_completed(daemon, ended, 0, played, consume, generation);
+    }
 }
 
 /// One advance step attempt (design D7). The step target is resolved through

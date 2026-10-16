@@ -126,6 +126,12 @@ fn route_cast_command(
                 );
                 return;
             };
+            // The seek arms the settle marker only while an item is loaded:
+            // a seek with nothing loaded has no slot whose settle could mean
+            // anything (design D9).
+            if cast.loaded.is_some() {
+                cast.pending_seek = true;
+            }
             let worker = cast.worker.clone();
             submit_command_job(&worker, "seek", move |transport| transport.seek(target));
         }
@@ -139,6 +145,9 @@ fn route_cast_command(
                 );
                 return;
             };
+            if cast.loaded.is_some() {
+                cast.pending_seek = true;
+            }
             let worker = cast.worker.clone();
             submit_command_job(&worker, "seek", move |transport| transport.seek(seconds));
         }

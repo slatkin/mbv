@@ -34,7 +34,7 @@ pub(super) fn handle_cast_status(
     poll_id: u64,
     result: Result<CastStatus, String>,
 ) {
-    let (error, settle_slot) = {
+    let (error, settle_slot, feed_events) = {
         let PlaybackOutput::Cast(cast) = &mut daemon.owner.output else {
             return;
         };
@@ -48,15 +48,28 @@ pub(super) fn handle_cast_status(
         }
         match result {
             Ok(status) => {
+                // The fresh status's Feed events are read ahead of the
+                // installation, while the previous status is still stored
+                // (design D9).
+                let feed_events = super::feed_events::status_feed_events(
+                    cast.loaded.as_ref(),
+                    cast.last_status.as_ref(),
+                    &status,
+                    cast.pending_seek,
+                );
                 cast.last_status = Some(status);
                 cast.status_at = Some(Instant::now());
                 cast.poll_sent = None;
                 cast.last_poll = Some(Instant::now());
-                (None, settle_check(cast))
+                (None, settle_check(cast), feed_events)
             }
             Err(error) => {
                 cast.poll_sent = None;
-                (Some(error), None)
+                (
+                    Some(error),
+                    None,
+                    super::feed_events::StatusFeedEvents::none(),
+                )
             }
         }
     };
@@ -74,6 +87,9 @@ pub(super) fn handle_cast_status(
     // D9): the presented status the refresh installed is what the reporter
     // snapshots, and the content-id gate is the presentation's own.
     super::progress::report_presenting_status(daemon);
+    // The applied status's Feed events go out after the presentation refresh
+    // installed the state they report (design D9, row 6.4's Feed piece).
+    super::feed_events::emit_status_events(daemon, feed_events);
 }
 
 /// Whether a stored status settles the loaded item's transition (design D5,
