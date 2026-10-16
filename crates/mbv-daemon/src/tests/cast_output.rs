@@ -397,7 +397,7 @@ fn a_local_select_cancels_a_pending_cast_connect() {
     let CtrlEvent::CommandRejected(reason) = recv_event(&rx) else {
         panic!("the cancelled selector is told");
     };
-    assert!(reason.contains("kept local playback"), "reason: {reason}");
+    assert!(reason.contains("chose local playback"), "reason: {reason}");
     assert!(matches!(t.event_loop.owner.output, PlaybackOutput::Local));
     assert_eq!(
         *t.event_loop.shared_queue.playback_output.lock().unwrap(),

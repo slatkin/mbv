@@ -114,15 +114,15 @@ pub fn handle_select_playback_output(
         OutputSelection::Local => {
             // A pending Cast connect loses to the newer Local selection: the
             // selector is told, and the late outcome matches nothing and is
-            // discarded when it arrives.
+            // discarded when it arrives. The selection still applies below —
+            // when a receiver is the output, the hand-back follows.
             if let Some(pending) = daemon.owner.pending_cast_connect.take() {
                 send_to(
                     &pending.reply_tx,
                     &CtrlEvent::CommandRejected(
-                        "a newer selection kept local playback".to_string(),
+                        "a newer selection chose local playback".to_string(),
                     ),
                 );
-                return;
             }
             // Selecting Local while a receiver is the output hands the
             // active slot back (design D10, row 7.1 dispatch B): capture,
@@ -138,6 +138,19 @@ pub fn handle_select_playback_output(
             host,
             port,
         } => {
+            // A connect already in flight loses to this newer selection —
+            // even when the newer selection asks for the receiver that is
+            // already the output (last selection wins): its selector is told
+            // now, so no Client hangs, and its late outcome matches nothing
+            // and is discarded when it arrives.
+            if let Some(displaced) = daemon.owner.pending_cast_connect.take() {
+                send_to(
+                    &displaced.reply_tx,
+                    &CtrlEvent::CommandRejected(
+                        "superseded by a newer receiver selection".to_string(),
+                    ),
+                );
+            }
             // Selecting the receiver that is already the output is no
             // hand-off: the output is already where the selection asks it to
             // be, and a full connect-stop-teardown-reload cycle would only
@@ -190,17 +203,6 @@ pub fn handle_select_playback_output(
                 mode: ConnectMode::FirstSelect,
                 reply: outcome_tx,
             });
-            // A connect already in flight loses to this newer selection: its
-            // selector is told now, so no Client hangs, and its late outcome
-            // matches nothing and is discarded when it arrives.
-            if let Some(displaced) = daemon.owner.pending_cast_connect.take() {
-                send_to(
-                    &displaced.reply_tx,
-                    &CtrlEvent::CommandRejected(
-                        "superseded by a newer receiver selection".to_string(),
-                    ),
-                );
-            }
             daemon.owner.pending_cast_connect = Some(PendingCastConnect {
                 receiver,
                 reply_tx: reply_tx.clone(),
@@ -263,38 +265,7 @@ pub(super) fn handle_connect_outcome(
     match outcome {
         CastConnectOutcome::Connected(worker) => {
             let active_now = daemon.player.status.lock().unwrap().active;
-            if let Some(handoff) = handoff {
-                if active_now {
-                    // Stop the old output only after the connect succeeded
-                    // (design D10 step 3), and with it every awaited
-                    // transition identity it could confirm (the same rule a
-                    // ctrl stop applies).
-                    tracing::info!(
-                        name: "daemon.cast_handoff.old_output_stopped",
-                        target: "daemon",
-                        slot = ?handoff.slot,
-                        "the connect succeeded; the old output stops and its slot continues on the new receiver"
-                    );
-                    stop_old_output_for_handoff(daemon);
-                    crate::core::reset_slot_jumps(
-                        &mut daemon.owner.core.transitions,
-                        &mut daemon.owner.queued_transition_origin,
-                    );
-                } else {
-                    // The playback the selection captured stopped while the
-                    // connect ran (design D10 step 1): nothing continues on
-                    // the new receiver. The old receiver's app still ends:
-                    // the deliberate output change tears it down (design
-                    // D12), and its media is already stopped.
-                    teardown_old_receiver_app(daemon);
-                    tracing::info!(
-                        name: "daemon.cast_handoff.playback_stopped",
-                        target: "daemon",
-                        slot = ?handoff.slot,
-                        "the captured playback stopped while connecting; the output swaps with nothing to continue"
-                    );
-                }
-            } else if active_now {
+            if handoff.is_none() && active_now {
                 // Playback may have started on the old output after the
                 // select (the select-time capture found nothing active).
                 // Swapping now would leave two live outputs, so the connect
@@ -309,6 +280,36 @@ pub(super) fn handle_connect_outcome(
                 );
                 return;
             }
+            if let Some(handoff) = handoff {
+                if active_now {
+                    tracing::info!(
+                        name: "daemon.cast_handoff.old_output_stopped",
+                        target: "daemon",
+                        slot = ?handoff.slot,
+                        "the connect succeeded; the old output stops and its slot continues on the new receiver"
+                    );
+                } else {
+                    tracing::info!(
+                        name: "daemon.cast_handoff.playback_stopped",
+                        target: "daemon",
+                        slot = ?handoff.slot,
+                        "the captured playback stopped while connecting; the output swaps with nothing to continue"
+                    );
+                }
+            }
+            // Every swap stops the old output (design D10 step 3), whether
+            // or not a hand-off was captured: the local run stops; the old
+            // receiver's media stops with its stop reports — none where
+            // nothing was loaded or reported — and the deliberate output
+            // change tears the old receiver's app down (design D12), on the
+            // old receiver never the new one. The stop also makes every
+            // awaited transition identity the old output could confirm
+            // unobservable (the same rule a ctrl stop applies).
+            stop_old_output_for_handoff(daemon);
+            crate::core::reset_slot_jumps(
+                &mut daemon.owner.core.transitions,
+                &mut daemon.owner.queued_transition_origin,
+            );
             let pending_handoff_load = handoff.map(|handoff| super::PendingHandoffLoad {
                 slot: handoff.slot,
                 start_ticks: handoff.start_ticks,
@@ -352,11 +353,10 @@ pub(super) fn handle_connect_outcome(
     }
 }
 
-/// Stops the old output for a successful hand-off connect (design D10 step
-/// 3): the local run stops, or the old receiver's media stops with its stop
-/// reports; when the old output was itself a receiver, the deliberate output
-/// change also tears its app down (design D12) — on the old receiver, never
-/// the new one.
+/// Stops the old output for a successful swap (design D10 step 3): the local
+/// run stops, or the old receiver's media stops with its stop reports; when
+/// the old output was itself a receiver, the deliberate output change also
+/// tears its app down (design D12) — on the old receiver, never the new one.
 fn stop_old_output_for_handoff(daemon: &mut DaemonLoop) {
     let old_output_is_cast = matches!(&daemon.owner.output, PlaybackOutput::Cast(_));
     crate::cast::stop_active_output(
