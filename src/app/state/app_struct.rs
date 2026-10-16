@@ -560,13 +560,6 @@ impl App {
     /// control scenario keeps the target presented as disconnected and the
     /// output selection usable. `None` (no report yet, or the connection was
     /// replaced/lost) and `Local` both read as not-Cast.
-    ///
-    /// Gated on `cfg(test)` for this plumbing-only dispatch (cast-owner-output
-    /// rows 8.1/8.2 A): no production reader exists yet, the lint gate rejects
-    /// a never-called item, and the dispatch scope forbids wiring the mark,
-    /// the indicator, the keep-panel rule, or `sever_active_connection`. The
-    /// consuming dispatch drops the gate when it wires those readers.
-    #[cfg(test)]
     pub(in crate::app) fn output_is_cast(&self) -> bool {
         matches!(
             self.playback_output,

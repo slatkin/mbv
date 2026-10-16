@@ -1,5 +1,6 @@
 use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::{App, RemoteSlotState};
+use mbv_ctrl::{CtrlCmd, OutputSelection};
 use mbv_remote_player::DaemonEndpoint;
 
 impl App {
@@ -73,13 +74,33 @@ impl App {
         }
     }
 
+    /// Hand the Local daemon owner's Cast output back to Local (design D13):
+    /// `Stop` first so no slot is active at the hand-off (D10 step 1), then
+    /// `SelectPlaybackOutput(Local)` — the receiver stops and local playback
+    /// does not start. `playback_output` mirrors the current owner's last
+    /// `CtrlEvent::PlaybackOutput`, so the send happens only when that owner
+    /// is the Local daemon: a remote owner's own Cast output is not ours to
+    /// stop. Best-effort like every other fire-and-forget player send.
+    pub(in crate::app) fn hand_cast_output_back_to_local(&mut self) {
+        if self.is_local_daemon() && self.output_is_cast() {
+            tracing::info!(name: "sessions.output_handback", target: "sessions", "stopping the receiver and returning the Local owner's output to Local");
+            let _ = self.player.send_ctrl_cmd(CtrlCmd::Stop);
+            let _ = self
+                .player
+                .send_ctrl_cmd(CtrlCmd::SelectPlaybackOutput(OutputSelection::Local));
+        }
+    }
+
     /// Connecting to a new target severs the current one: the cast
     /// attachment, watched session, direct remote, and library-route slots
     /// are mutually exclusive, so a new connect tears the old target down
-    /// instead of holding both. The severed cast receiver is left as it is
-    /// ("the receiver owns what it plays"); the dropped transport ends
-    /// mbv's connection to it. No-op when nothing is connected.
+    /// instead of holding both. The owner's Cast output is handed back to
+    /// Local first (`hand_cast_output_back_to_local`); the severed cast
+    /// receiver is left as it is ("the receiver owns what it plays"); the
+    /// dropped transport ends mbv's connection to it. No-op when nothing
+    /// else is connected.
     pub(in crate::app) fn sever_active_connection(&mut self) {
+        self.hand_cast_output_back_to_local();
         if self.cast_attachment.take().is_some() {
             self.stop_visualizer_capture();
         }

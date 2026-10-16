@@ -54,3 +54,50 @@ fn playback_output_event_stores_cast_state_including_disconnected() {
         "a Local report clears the Cast output"
     );
 }
+
+#[test]
+fn session_connect_hands_a_cast_output_back_to_the_local_owner() {
+    // cast-owner-output row 8.2, design D13, spec scenario "A session or
+    // direct remote is connected while a cast target is attached": the
+    // session connect sends `Stop` then `SelectPlaybackOutput(Local)` to the
+    // Local daemon owner, and neither command while the owner's output is
+    // already Local.
+    let mut app = make_app_stub();
+    let cast_rx = live_owner_channel(&mut app);
+    app.player_endpoint = Some(mbv_remote_player::DaemonEndpoint::Local);
+    app.handle_player_event(mbv_ctrl::player::PlayerEvent::PlaybackOutput(
+        mbv_ctrl::OutputState::Cast {
+            receiver_id: "r-1".to_string(),
+            name: "Living Room".to_string(),
+            connection: mbv_ctrl::CastConnection::Connected,
+        },
+    ));
+    app.connect_to_session(&make_session("remote-host", "mbv"));
+    assert!(
+        matches!(cast_rx.try_recv().unwrap(), mbv_ctrl::CtrlCmd::Stop),
+        "the handback stops the receiver first"
+    );
+    assert!(
+        matches!(
+            cast_rx.try_recv().unwrap(),
+            mbv_ctrl::CtrlCmd::SelectPlaybackOutput(mbv_ctrl::OutputSelection::Local)
+        ),
+        "the handback then selects Local as the owner's output"
+    );
+    assert!(
+        cast_rx.try_recv().is_err(),
+        "the handback sends exactly the two commands"
+    );
+
+    let mut app = make_app_stub();
+    let local_rx = live_owner_channel(&mut app);
+    app.player_endpoint = Some(mbv_remote_player::DaemonEndpoint::Local);
+    app.handle_player_event(mbv_ctrl::player::PlayerEvent::PlaybackOutput(
+        mbv_ctrl::OutputState::Local,
+    ));
+    app.connect_to_session(&make_session("remote-host", "mbv"));
+    assert!(
+        local_rx.try_recv().is_err(),
+        "a connect on a Local output sends no handback command"
+    );
+}

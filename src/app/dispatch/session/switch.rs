@@ -123,7 +123,10 @@ impl App {
         // Attachment slots are mutually exclusive: a library-route switch can
         // be reached (via `apply_route_for_playback`) without going through
         // `connect_to_session`'s sever, so a cast attachment must be severed
-        // here too. No-op when nothing is attached.
+        // here too. No-op when nothing is attached. The owner's Cast output
+        // is handed back to Local first, exactly as a session connect does
+        // (design D13) — `self.player` is still the outgoing owner here.
+        self.hand_cast_output_back_to_local();
         self.cast_attachment = None;
         let current_is_home = self.home_is_local_daemon && self.is_local_daemon();
         self.stop_visualizer_capture();
