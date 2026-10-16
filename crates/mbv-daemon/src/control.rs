@@ -468,13 +468,20 @@ fn dispatch_ctrl_command(
         // D2/D5): the core picks (or clears) and the run is told the advance
         // decision to obey.
         CtrlCmd::SetPlayOrder(mode) => handle_set_play_order(ctx, mode),
-        // The Pin-swap state machine consumes its target's `SwapPrepared` in
-        // the event loop (tray-pin-swap task 3.3) before role dispatch; these
-        // arms only cover direct `handle_ctrl_for_role` callers.
-        cmd @ (CtrlCmd::SwapPrepared
-        | CtrlCmd::RunOwnerAction(_)
-        | CtrlCmd::SelectPlaybackOutput(_)) => {
-            log_direct_caller_ignorable(&cmd);
+        // The commands the event loop consumes before this dispatcher: the
+        // swap machine takes its target's `SwapPrepared` (tray-pin-swap task
+        // 3.3), the owner-action handler takes `RunOwnerAction` (task 3.5),
+        // and the Cast connector lives on the loop for `SelectPlaybackOutput`
+        // (cast-owner-output task 3.2). Direct callers that bypass the loop
+        // have no swap machine, owner-action path, or connector to consult.
+        CtrlCmd::SwapPrepared => {
+            tracing::debug!(name: "daemon.ctrl_swap_prepared.ignored", target: "daemon", "ignoring SwapPrepared outside the event-loop swap path");
+        }
+        CtrlCmd::RunOwnerAction(_) => {
+            tracing::debug!(name: "daemon.ctrl_owner_action.ignored", target: "daemon", "ignoring RunOwnerAction outside the event-loop owner-action path");
+        }
+        CtrlCmd::SelectPlaybackOutput(_) => {
+            tracing::debug!(name: "daemon.ctrl_select_output.ignored", target: "daemon", "ignoring SelectPlaybackOutput outside the event-loop selection path");
         }
         CtrlCmd::UnifiedQueueLoadIdle {
             request_id,
@@ -535,29 +542,6 @@ fn log_unexpected_hello_after_negotiation() {
         target: "daemon",
         "unexpected ctrl protocol hello after negotiation"
     );
-}
-
-/// The commands the event loop consumes before this dispatcher: the swap
-/// machine takes its target's `SwapPrepared` (tray-pin-swap task 3.3), the
-/// owner-action handler takes `RunOwnerAction` (tray-pin-swap task 3.5), and
-/// the Cast connector lives on the loop for `SelectPlaybackOutput`
-/// (cast-owner-output task 3.2). Direct callers that bypass the loop have no
-/// swap machine, owner-action path, or connector to consult.
-fn log_direct_caller_ignorable(cmd: &CtrlCmd) {
-    match cmd {
-        CtrlCmd::SwapPrepared => {
-            tracing::debug!(name: "daemon.ctrl_swap_prepared.ignored", target: "daemon", "ignoring SwapPrepared outside the event-loop swap path");
-        }
-        CtrlCmd::RunOwnerAction(_) => {
-            tracing::debug!(name: "daemon.ctrl_owner_action.ignored", target: "daemon", "ignoring RunOwnerAction outside the event-loop owner-action path");
-        }
-        CtrlCmd::SelectPlaybackOutput(_) => {
-            tracing::debug!(name: "daemon.ctrl_select_output.ignored", target: "daemon", "ignoring SelectPlaybackOutput outside the event-loop selection path");
-        }
-        // The grouped arm in `dispatch_ctrl_command` admits only these
-        // variants.
-        _ => unreachable!("log_direct_caller_ignorable called with a handled command"),
-    }
 }
 
 pub(crate) fn owner_admin_transport_allowed(

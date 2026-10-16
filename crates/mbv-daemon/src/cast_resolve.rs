@@ -63,8 +63,7 @@ pub struct CastSource {
 }
 
 /// Why an item's Cast source could not be resolved (design D6): the item's
-/// display name and the reason, ready to surface to the user. The reason
-/// text already names the item, so `Display` carries it unchanged.
+/// display name and the reason, ready to surface to the user.
 #[derive(Debug, Clone)]
 pub struct Uncastable {
     pub item: String,
@@ -79,14 +78,6 @@ impl Uncastable {
         }
     }
 }
-
-impl fmt::Display for Uncastable {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.reason)
-    }
-}
-
-impl std::error::Error for Uncastable {}
 
 /// What one Audiobookshelf episode's resolve needs: enough to open a bounded
 /// playback session and resolve its castable source. Moved from the TUI's
@@ -463,7 +454,7 @@ fn resolve_failed(
         );
         let mut ctx = crate::cast::owner_context(daemon);
         if crate::cast::expire_cast_transition(&mut ctx) {
-            crate::cast::advance::abandon(daemon);
+            crate::cast::advance::clear_advance(daemon);
         } else {
             crate::cast::advance::continue_after_failed_step(daemon, pending.transition.target);
         }

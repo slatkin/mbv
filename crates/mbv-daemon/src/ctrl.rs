@@ -341,29 +341,13 @@ impl CtrlClients {
     /// silently skipped (not dropped) — mirrors `broadcast_state_gated`'s
     /// drop-on-failed-send semantics for the peers that do receive it.
     pub(crate) fn broadcast_progress_gated(&mut self, json: &str) {
-        self.retain_clients(|client| {
-            if !client.audiobookshelf.progress {
-                return true;
-            }
-            client
-                .tx
-                .send(CtrlOutbound::Event(json.to_string()))
-                .is_ok()
-        });
+        self.broadcast_gated(json, |client| client.audiobookshelf.progress);
     }
 
     /// Sends redacted Audiobookshelf book progress `json` only to clients
     /// that advertised `abs-book-progress` at Hello.
     pub(crate) fn broadcast_book_progress_gated(&mut self, json: &str) {
-        self.retain_clients(|client| {
-            if !client.audiobookshelf.book_progress {
-                return true;
-            }
-            client
-                .tx
-                .send(CtrlOutbound::Event(json.to_string()))
-                .is_ok()
-        });
+        self.broadcast_gated(json, |client| client.audiobookshelf.book_progress);
     }
 
     /// Sends the playback-output event `json` only to clients that negotiated
@@ -371,8 +355,14 @@ impl CtrlClients {
     /// lacking the capability are silently skipped, mirroring
     /// `broadcast_progress_gated`.
     pub(crate) fn broadcast_playback_output_gated(&mut self, json: &str) {
+        self.broadcast_gated(json, |client| client.supports_playback_output);
+    }
+
+    /// Sends `json` to each client `wants` admits. Clients it rejects keep
+    /// their connection and get nothing.
+    fn broadcast_gated(&mut self, json: &str, wants: impl Fn(&CtrlClient) -> bool) {
         self.retain_clients(|client| {
-            if !client.supports_playback_output {
+            if !wants(client) {
                 return true;
             }
             client

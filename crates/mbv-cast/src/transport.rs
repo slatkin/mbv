@@ -123,7 +123,7 @@ where
 /// A recording `CastTransport` double: no network, no live receiver. Used
 /// by tests to verify which command was sent without a real Chromecast.
 #[cfg(any(test, feature = "test"))]
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct FakeCastTransport {
     // Shared (not owned) so a test can keep reading `calls` after the
     // transport itself has been moved into a worker thread by
@@ -131,16 +131,6 @@ pub struct FakeCastTransport {
     // never-leaves-its-thread shape.
     pub calls: std::sync::Arc<std::sync::Mutex<Vec<String>>>,
     pub status: Option<CastStatus>,
-}
-
-#[cfg(any(test, feature = "test"))]
-impl Default for FakeCastTransport {
-    fn default() -> Self {
-        Self {
-            calls: std::sync::Arc::new(std::sync::Mutex::new(Vec::new())),
-            status: None,
-        }
-    }
 }
 
 #[cfg(any(test, feature = "test"))]

@@ -5,27 +5,9 @@
 use super::cast_output::{
     cast_selection, connect_output_client, fake_connector, pump_cast_event, select_output,
 };
+use super::cast_playback::feed_qi_with_url;
 use super::r#loop::{TestLoop, test_loop_with_queue};
 use super::*;
-
-/// A feed queue item with an enclosure URL: `prepare_cast_source` resolves it
-/// with an empty resolve context (no service client is touched), so the
-/// resolve-thread tests stay hermetic.
-fn feed_qi_with_url(guid: &str, url: &str) -> QueueItem {
-    QueueItem::Feed(FeedEntry {
-        guid: guid.into(),
-        title: guid.into(),
-        enclosure_url: Some(url.into()),
-        link: None,
-        mime_type: Some("audio/mpeg".into()),
-        duration_ticks: None,
-        pub_date_secs: None,
-        feed_kind: None,
-        feed_id: Some("feed".into()),
-        position_ticks: 0,
-        played: false,
-    })
-}
 
 /// Arms the pending resolve record the way the row 5.1 funnel will: keyed by
 /// the transition the resolve belongs to (its target slot is the resolve's

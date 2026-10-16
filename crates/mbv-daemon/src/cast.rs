@@ -589,7 +589,6 @@ fn clear_loaded_for_failed_slot(output: &mut PlaybackOutput, slot: QueueSlotId) 
 /// While the output is connected the tick also advances the presented
 /// position (design D8, row 6.1): extrapolation from the last report.
 pub(super) fn tick_cast(daemon: &mut DaemonLoop, now: Instant) {
-    let merged_tx = daemon.merged_tx.clone();
     let mut connected = false;
     let wedged = {
         let PlaybackOutput::Cast(cast) = &mut daemon.owner.output else {
@@ -597,6 +596,7 @@ pub(super) fn tick_cast(daemon: &mut DaemonLoop, now: Instant) {
         };
         if matches!(cast.connection, mbv_ctrl::CastConnection::Connected) {
             connected = true;
+            let merged_tx = daemon.merged_tx.clone();
             if now.duration_since(cast.last_keep_alive) >= CAST_KEEP_ALIVE_INTERVAL {
                 submit_keep_alive_job(&cast.worker);
                 cast.last_keep_alive = now;

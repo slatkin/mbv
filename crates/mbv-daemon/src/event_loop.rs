@@ -1,6 +1,6 @@
 use super::{
-    AudiobookshelfOwnerContext, ClientRegistry, DaemonEvent, DaemonOwnerContext, DaemonPlayerOwner,
-    DaemonRole, EmbyOwnerContext, SharedQueueState, broadcast_queue_state,
+    AudiobookshelfOwnerContext, ClientRegistry, DaemonEvent, DaemonPlayerOwner, DaemonRole,
+    EmbyOwnerContext, SharedQueueState, broadcast_queue_state,
     cancel_pending_idle_queue_load_if_run_changed, expire_and_redispatch,
     expire_pending_idle_queue_load, persist_stay_alive_owner_queue, reset_slot_jumps,
 };
@@ -128,15 +128,7 @@ impl DaemonLoop {
                 self.owner.intents.invalidate_connection(connection_id);
             }
         }
-        expire_and_redispatch(&mut DaemonOwnerContext {
-            player: &self.player,
-            client: &self.client,
-            owner: &mut self.owner,
-            shared_queue: &self.shared_queue,
-            ctrl_clients: &self.ctrl_clients,
-            merged_tx: &self.merged_tx,
-            audiobookshelf: self.audiobookshelf_runtime.as_ref(),
-        });
+        expire_and_redispatch(&mut super::cast::owner_context(self));
     }
 
     /// Processes exactly one event. Never exits the process: `Shutdown` is
@@ -268,15 +260,7 @@ impl DaemonLoop {
             mbv_ctrl::TransportCommand::Step(direction) => {
                 // The owner's one step rule (design D7): the same funnel the
                 // natural advance uses. The transport path drops the outcome.
-                let mut ctx = super::core::DaemonOwnerContext {
-                    player: &self.player,
-                    client: &self.client,
-                    owner: &mut self.owner,
-                    shared_queue: &self.shared_queue,
-                    ctrl_clients: &self.ctrl_clients,
-                    merged_tx: &self.merged_tx,
-                    audiobookshelf: self.audiobookshelf_runtime.as_ref(),
-                };
+                let mut ctx = super::cast::owner_context(self);
                 crate::play_order::dispatch_relative_step(&mut ctx, direction);
             }
         }

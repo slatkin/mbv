@@ -13,7 +13,7 @@
 use mbv_cast::client::{CastPlaybackState, CastStatus};
 use mbv_ctrl::player::PlayerEvent;
 use mbv_ctrl::{CtrlEvent, PlaybackGeneration};
-use mbv_queue::{PlaybackQueue, QueueItem, QueueSlotId};
+use mbv_queue::{PlaybackQueue, QueueSlotId};
 
 use super::super::DaemonLoop;
 use super::{CastLoadedItem, CastOutput, PlaybackOutput};
@@ -178,7 +178,5 @@ fn broadcast_loaded_event(daemon: &DaemonLoop, event: PlayerEvent) {
 /// Whether `slot`'s queue item is a Feed entry (design D9): the natural
 /// end's `TrackCompleted` is Feed-only.
 pub(crate) fn slot_is_feed(queue: &PlaybackQueue, slot: QueueSlotId) -> bool {
-    queue
-        .slot(slot)
-        .is_some_and(|slot| matches!(slot.item, QueueItem::Feed(_)))
+    queue.slot(slot).is_some_and(|slot| slot.item.is_feed())
 }

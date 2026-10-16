@@ -249,8 +249,10 @@ fn step_target_advance(daemon: &mut DaemonLoop, target: StepTarget) {
     }
 }
 
-/// Ends the advance without a step: the queue has no target for it.
-fn clear_advance(daemon: &mut DaemonLoop) {
+/// Ends the advance without a step: the queue has no target for it, or a
+/// queued user transition the failed step's expiry promoted took the queue
+/// over.
+pub(crate) fn clear_advance(daemon: &mut DaemonLoop) {
     let PlaybackOutput::Cast(cast) = &mut daemon.owner.output else {
         return;
     };
@@ -323,13 +325,4 @@ pub(crate) fn continue_after_failed_step(daemon: &mut DaemonLoop, failed_slot: Q
         None => return,
     }
     step_advance(daemon);
-}
-
-/// Ends the advance: a queued user transition the failed step's expiry
-/// promoted took the queue over, so the advance stops stepping.
-pub(crate) fn abandon(daemon: &mut DaemonLoop) {
-    let PlaybackOutput::Cast(cast) = &mut daemon.owner.output else {
-        return;
-    };
-    cast.advance = None;
 }
