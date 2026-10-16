@@ -12,6 +12,8 @@ use mbv_cast::{
 use mbv_ctrl::{CastConnection, CtrlEvent, OutputSelection, OutputState, PlaybackGeneration};
 use mbv_queue::QueueSlotId;
 
+use crate::CtrlClientId;
+
 use super::DaemonLoop;
 use super::core::DaemonEvent;
 use super::ctrl::{CtrlSender, send_to};
@@ -138,15 +140,17 @@ pub(crate) struct PendingCastConnect {
     reply_tx: CtrlSender,
 }
 
-/// A Cast source resolve in flight (design D4, task 4.2): the slot it was
-/// started for, the transition generation it belongs to, and the position the
-/// resolved media starts at. The resolve outcome re-enters through
-/// `CastOwnerEvent::Resolved`; one whose slot or generation no longer matches
-/// this record belongs to a superseded target and is dropped.
+/// A Cast source resolve in flight (design D4, task 4.2): the transition it
+/// belongs to (its target slot is the slot the resolve was started for, its
+/// identity is the transition's), the position the resolved media starts at,
+/// and the ctrl client that issued the command, for the failure report. The
+/// resolve outcome re-enters through `CastOwnerEvent::Resolved`; one whose
+/// slot or generation no longer matches this record belongs to a superseded
+/// target and is dropped.
 pub(crate) struct PendingCastResolve {
-    pub(super) slot: QueueSlotId,
-    pub(super) generation: PlaybackGeneration,
+    pub(super) transition: mbv_player::transition::Transition,
     pub(super) start_ticks: i64,
+    pub(super) origin: Option<CtrlClientId>,
 }
 
 /// One Cast-output event from the Cast connector or worker (cast-owner-output
@@ -189,6 +193,10 @@ pub enum CastOwnerEvent {
         generation: PlaybackGeneration,
         result: Result<crate::cast_resolve::CastSource, crate::cast_resolve::Uncastable>,
     },
+    /// The receiver refused the load the owner submitted for `slot` (design
+    /// D5): the loaded record is dropped and the in-flight transition the
+    /// load belonged to expires, so later steps are not wedged behind it.
+    LoadFailed { slot: QueueSlotId, error: String },
 }
 
 /// The connect outcome a Cast connector reports (design D2). A connected
@@ -374,7 +382,176 @@ pub(super) fn handle_cast_event(daemon: &mut DaemonLoop, event: CastOwnerEvent) 
             generation,
             result,
         } => crate::cast_resolve::handle_cast_resolved(daemon, slot, generation, result),
+        CastOwnerEvent::LoadFailed { slot, error } => handle_load_failed(daemon, slot, &error),
     }
+}
+
+/// The `DaemonOwnerContext` the Cast handlers need, built from the loop in
+/// one place so the field list cannot drift between call sites.
+pub(super) fn owner_context(daemon: &mut DaemonLoop) -> super::core::DaemonOwnerContext<'_> {
+    super::core::DaemonOwnerContext {
+        player: &daemon.player,
+        client: &daemon.client,
+        owner: &mut daemon.owner,
+        shared_queue: &daemon.shared_queue,
+        ctrl_clients: &daemon.ctrl_clients,
+        merged_tx: &daemon.merged_tx,
+        audiobookshelf: daemon.audiobookshelf_runtime.as_ref(),
+    }
+}
+
+/// Dispatches one Cast load for an accepted transition (design D4, row 5.1):
+/// the target slot becomes the queue's active slot, the resolve is registered
+/// as the owner's pending Cast resolve, and the resolve runs off the
+/// event-loop thread. Its outcome re-enters through
+/// `CastOwnerEvent::Resolved`; on success the resolved media loads at
+/// `start_ticks`, on failure the transition expires and the failure is
+/// reported (design D5). Returns whether the dispatch started.
+pub(super) fn dispatch_cast_load(
+    ctx: &mut super::core::DaemonOwnerContext<'_>,
+    transition: mbv_player::transition::Transition,
+    start_ticks: i64,
+    origin: Option<CtrlClientId>,
+) -> bool {
+    let Some(slot) = ctx.owner.core.queue.slot(transition.target) else {
+        tracing::warn!(
+            name: "daemon.cast_dispatch.slot_missing",
+            target: "daemon",
+            slot = ?transition.target,
+            "the jump target slot is absent; nothing was loaded"
+        );
+        return false;
+    };
+    let item = slot.item.clone();
+    // The queue's own active marker follows the target: the snapshot that
+    // the caller broadcasts resolves it once the status confirms the load.
+    let _ = ctx.owner.core.queue.set_active_slot(transition.target);
+    let resolve_ctx = crate::cast_resolve::owner_resolve_context(ctx.client, ctx.audiobookshelf);
+    ctx.owner.pending_cast_resolve = Some(PendingCastResolve {
+        transition,
+        start_ticks,
+        origin,
+    });
+    let merged_tx = ctx.merged_tx.clone();
+    let slot_id = transition.target;
+    let generation = transition.generation;
+    tracing::info!(
+        name: "daemon.cast_dispatch.resolve_started",
+        target: "daemon",
+        slot = ?slot_id,
+        generation,
+        "resolving the slot's cast source"
+    );
+    crate::cast_resolve::spawn_cast_resolve(item, resolve_ctx, move |result| {
+        let _ = merged_tx.send(DaemonEvent::Cast(CastOwnerEvent::Resolved {
+            slot: slot_id,
+            generation,
+            result,
+        }));
+    });
+    true
+}
+
+/// Expires the in-flight transition a failed Cast load or resolve belonged to
+/// (design D5, row 5.2), dispatching a queued transition the expiry promotes.
+/// The caller reports the failure; this helper owns the gate and the publish.
+pub(super) fn expire_cast_transition(ctx: &mut super::core::DaemonOwnerContext<'_>) {
+    if let Some((expired, dispatch_next)) = ctx.owner.core.transitions.expire_now() {
+        tracing::info!(
+            name: "daemon.cast_transition.expired",
+            target: "transition",
+            request = %expired.request_id,
+            slot = ?expired.target,
+            dispatch_next = dispatch_next.is_some(),
+            "the failed cast load expired its transition"
+        );
+        let origin = super::core::take_promoted_origin(ctx, dispatch_next.as_ref());
+        if let Some(next) = dispatch_next {
+            super::core::send_jump_or_cold_start(ctx, next, origin);
+        }
+    }
+    super::broadcast_queue_state(
+        ctx.ctrl_clients,
+        ctx.player,
+        ctx.shared_queue,
+        &ctx.owner.core.queue,
+        &ctx.owner.core.source,
+        &ctx.owner.core.transitions,
+        None,
+    );
+}
+
+/// Reports a failed Cast resolve to its origin (row 5.1): the item and the
+/// reason reach the ctrl client that issued the play or jump, and a current
+/// guarded play intent keyed to the same request is rejected so it cannot
+/// wedge the guarded protocol.
+pub(super) fn report_resolve_failure(
+    ctx: &mut super::core::DaemonOwnerContext<'_>,
+    failed: &mbv_player::transition::Transition,
+    origin: Option<CtrlClientId>,
+    uncastable: &crate::cast_resolve::Uncastable,
+) {
+    let report = format!("{} ({})", uncastable.item, uncastable.reason);
+    if let Some((connection_id, request_id, generation)) = ctx
+        .owner
+        .intents
+        .current
+        .as_ref()
+        .filter(|current| {
+            current.request_id == failed.request_id && current.generation == failed.generation
+        })
+        .map(|current| {
+            (
+                current.connection_id,
+                current.request_id,
+                current.generation,
+            )
+        })
+        && let Some(event) = ctx.owner.intents.rejected_if_current(
+            connection_id,
+            request_id,
+            generation,
+            mbv_ctrl::PlaybackIntentRejection::ResolutionFailed,
+        )
+    {
+        ctx.ctrl_clients
+            .lock()
+            .unwrap()
+            .send_to_client(connection_id, &CtrlEvent::PlaybackIntent(event));
+    }
+    if let Some(connection_id) = origin {
+        ctx.ctrl_clients
+            .lock()
+            .unwrap()
+            .send_to_client(connection_id, &CtrlEvent::CommandRejected(report));
+    }
+}
+
+/// The receiver refused the load (design D5, row 5.2): the loaded record is
+/// dropped and the in-flight transition whose target was that slot expires.
+fn handle_load_failed(daemon: &mut DaemonLoop, slot: QueueSlotId, error: &str) {
+    tracing::warn!(
+        name: "daemon.cast_load.failed",
+        target: "daemon",
+        slot = ?slot,
+        error = %error,
+        "the receiver did not take the load"
+    );
+    {
+        let PlaybackOutput::Cast(cast) = &mut daemon.owner.output else {
+            return;
+        };
+        if cast
+            .loaded
+            .as_ref()
+            .is_none_or(|loaded| loaded.slot != slot)
+        {
+            return;
+        }
+        cast.loaded = None;
+    }
+    let mut ctx = owner_context(daemon);
+    expire_cast_transition(&mut ctx);
 }
 
 fn handle_connect_outcome(daemon: &mut DaemonLoop, receiver_id: &str, outcome: CastConnectOutcome) {
@@ -527,7 +704,7 @@ fn handle_cast_status(
     poll_id: u64,
     result: Result<CastStatus, String>,
 ) {
-    let error = {
+    let (error, settle_slot) = {
         let PlaybackOutput::Cast(cast) = &mut daemon.owner.output else {
             return;
         };
@@ -545,18 +722,103 @@ fn handle_cast_status(
                 cast.status_at = Some(Instant::now());
                 cast.poll_sent = None;
                 cast.last_poll = Some(Instant::now());
-                None
+                (None, settle_check(&cast))
             }
             Err(error) => {
                 cast.poll_sent = None;
-                Some(error)
+                (Some(error), None)
             }
         }
     };
     if let Some(error) = error {
         tracing::warn!(name: "cast.status_poll.failed", target: "cast", receiver = %receiver_id, error = %error, "cast status poll failed; reconnecting");
         disconnect_and_reconnect(daemon);
+        return;
     }
+    if let Some(loaded_slot) = settle_slot {
+        settle_cast_transition(daemon, loaded_slot);
+    }
+}
+
+/// Whether a stored status settles the loaded item's transition (design D5,
+/// row 5.2): the status names the loaded content id in a playing, buffering,
+/// or paused state — the Cast counterpart of the run's `TrackChanged`
+/// confirmation. Returns the loaded slot when it does.
+fn settle_check(cast: &CastOutput) -> Option<QueueSlotId> {
+    let loaded = cast.loaded.as_ref()?;
+    let status = cast.last_status.as_ref()?;
+    let confirmed = matches!(
+        status.state,
+        mbv_cast::CastPlaybackState::Playing
+            | mbv_cast::CastPlaybackState::Buffering
+            | mbv_cast::CastPlaybackState::Paused
+    ) && status.playing_content_id.as_deref() == Some(loaded.content_id.as_str());
+    confirmed.then_some(loaded.slot)
+}
+
+/// Settles the in-flight transition a confirming receiver status closes (row
+/// 5.2): the loaded slot becomes the observed active slot, the transition
+/// settles, a queued transition the settle promotes is dispatched, and the
+/// guarded play intent the load carried is applied. Mirrors the run's
+/// `TrackChanged` handling (observe → settle → publish).
+fn settle_cast_transition(daemon: &mut DaemonLoop, loaded_slot: QueueSlotId) {
+    // Only the transition the loaded item belongs to settles here: a newer
+    // in-flight transition targets a slot the receiver has not confirmed.
+    let Some(in_flight) = daemon
+        .owner
+        .core
+        .transitions
+        .in_flight()
+        .filter(|t| t.target == loaded_slot)
+    else {
+        return;
+    };
+    let mut ctx = owner_context(daemon);
+    let order_before = ctx.owner.core.play_order();
+    ctx.owner.core.note_observed_active_slot(Some(loaded_slot));
+    if ctx.owner.core.play_order() != order_before {
+        super::forward_play_order_advance(&ctx.owner.core, ctx.player);
+    }
+    super::core::settle_and_redispatch(&mut ctx, in_flight.request_id, loaded_slot);
+    // The guarded play intent the load registered under settles with its
+    // transition; without this a Cast play would sit unresolved and coalesce
+    // every later play from its connection.
+    if let Some((connection_id, request_id, generation)) = ctx
+        .owner
+        .intents
+        .current
+        .as_ref()
+        .filter(|current| {
+            current.request_id == in_flight.request_id
+                && matches!(current.action, mbv_ctrl::PlaybackIntentAction::Play { .. })
+        })
+        .map(|current| {
+            (
+                current.connection_id,
+                current.request_id,
+                current.generation,
+            )
+        })
+        && let Some(event) =
+            ctx.owner
+                .intents
+                .applied_if_current(connection_id, request_id, generation)
+    {
+        ctx.ctrl_clients
+            .lock()
+            .unwrap()
+            .send_to_client(connection_id, &CtrlEvent::PlaybackIntent(event));
+    }
+    ctx.shared_queue.publish_observed(&ctx.owner.core);
+    super::broadcast_queue_state(
+        ctx.ctrl_clients,
+        ctx.player,
+        ctx.shared_queue,
+        &ctx.owner.core.queue,
+        &ctx.owner.core.source,
+        &ctx.owner.core.transitions,
+        None,
+    );
 }
 
 /// The reconnect a poll error or a watchdog timeout spawned (design D8/D11,

@@ -57,10 +57,16 @@ impl DaemonLoop {
                             owner: &mut self.owner,
                             shared_queue: &self.shared_queue,
                             ctrl_clients: &self.ctrl_clients,
+                            merged_tx: &self.merged_tx,
+                            audiobookshelf: self.audiobookshelf_runtime.as_ref(),
                         },
                     ),
                     mbv_queue::ServiceKind::Audiobookshelf => reconcile_packaged_audiobookshelf(
                         revision,
+                        // The runtime is being replaced here: the context
+                        // cannot borrow it immutably at the same time, and
+                        // the outgoing runtime is not a usable resolve
+                        // source anyway.
                         &mut self.audiobookshelf_runtime,
                         &mut DaemonOwnerContext {
                             player: &self.player,
@@ -68,6 +74,8 @@ impl DaemonLoop {
                             owner: &mut self.owner,
                             shared_queue: &self.shared_queue,
                             ctrl_clients: &self.ctrl_clients,
+                            merged_tx: &self.merged_tx,
+                            audiobookshelf: None,
                         },
                     ),
                 }
@@ -236,11 +244,16 @@ impl DaemonLoop {
                     owner: &mut self.owner,
                     shared_queue: &self.shared_queue,
                     ctrl_clients: &self.ctrl_clients,
+                    merged_tx: &self.merged_tx,
+                    audiobookshelf: self.audiobookshelf_runtime.as_ref(),
                 },
                 fetched_items,
                 start_idx,
                 start_ticks,
                 new_source,
+                client_id,
+                request_id,
+                generation,
             );
             return EventOutcome::DIRTY;
         }

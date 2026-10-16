@@ -1,9 +1,10 @@
 use super::{
-    CtrlContext, DaemonEvent, DaemonPlayerOwner, EmbyItem, ExecSlot, PlaybackQueue, PlayerCommand,
-    PlayerOwnerState, QueueItem, QueueSlotId, RejectContext, abs_queue_transport_rejection,
-    admit_queue_items, admit_queue_slots, audio_only_rejection, broadcast_queue_state,
-    daemon_admits, forward_play_order_advance, mint_queue_lineage, reject_command,
-    reset_play_order_for_queue_replacement, reset_slot_jumps, submit_queue_slots_cold_start,
+    CtrlContext, DaemonEvent, DaemonOwnerContext, DaemonPlayerOwner, EmbyItem, ExecSlot,
+    PlaybackQueue, PlayerCommand, PlayerOwnerState, QueueItem, QueueSlotId, RejectContext,
+    abs_queue_transport_rejection, admit_queue_items, admit_queue_slots, audio_only_rejection,
+    broadcast_queue_state, daemon_admits, forward_play_order_advance, mint_queue_lineage,
+    reject_command, reset_play_order_for_queue_replacement, reset_slot_jumps,
+    submit_queue_slots_cold_start,
 };
 use crate::AudiobookshelfOwnerContext;
 use mbv_emby::EmbyClient;
@@ -339,23 +340,25 @@ pub(super) fn handle_queue_replace(
             }
         };
     let except_op_client = ctx.except_op_client();
-    let DaemonPlayerOwner {
-        core:
-            PlayerOwnerState {
-                queue,
-                source,
-                transitions,
-                ..
-            },
-        queued_transition_origin,
-        ..
-    } = &mut *ctx.owner;
-    let active_slot = slots.get(next_cursor).map(|(slot_id, _)| *slot_id);
-    let mint = queue.revision_mint();
-    *queue = PlaybackQueue::from_slot_items(slots, active_slot, mint);
-    *source = new_source;
-    mint_queue_lineage(ctx.shared_queue);
-    reset_slot_jumps(transitions, queued_transition_origin);
+    {
+        let DaemonPlayerOwner {
+            core:
+                PlayerOwnerState {
+                    queue,
+                    source,
+                    transitions,
+                    ..
+                },
+            queued_transition_origin,
+            ..
+        } = &mut *ctx.owner;
+        let active_slot = slots.get(next_cursor).map(|(slot_id, _)| *slot_id);
+        let mint = queue.revision_mint();
+        *queue = PlaybackQueue::from_slot_items(slots, active_slot, mint);
+        *source = new_source;
+        mint_queue_lineage(ctx.shared_queue);
+        reset_slot_jumps(transitions, queued_transition_origin);
+    }
     // A new queue invalidates the previous playback observation (design
     // D2): clear it on both the shared snapshot and the owner core so
     // Next/Previous fall back to the new queue's active slot until the
@@ -369,8 +372,68 @@ pub(super) fn handle_queue_replace(
     // thread; on a freshly started daemon no thread exists yet, so
     // route through `submit_queue_slots`, which cold-starts one when
     // needed (as `play_resolved_items` does).
-    let queue_slots = queue.slot_pairs();
-    submit_queue_slots_cold_start(ctx.player, queue_slots, next_cursor, ctx.client);
+    if matches!(ctx.owner.output, crate::cast::PlaybackOutput::Cast(_)) {
+        // The receiver is the output (design D4): the queue is installed
+        // above, and only the slot at the start index is resolved and loaded
+        // on the receiver — the local run is never started. The replace
+        // registers as the in-flight transition under an owner-minted
+        // identity, so a confirming receiver status settles it and a resolve
+        // failure expires and reports it to the replacing Client.
+        let Some(start_slot) = ctx.owner.core.queue.active_slot_id() else {
+            tracing::warn!(name: "daemon.cast_queue_replace.no_start_slot", target: "daemon", "the replaced queue has no start slot; nothing was loaded");
+            return;
+        };
+        let (request_id, generation) = ctx.owner.core.transitions.mint_local_id();
+        let transition =
+            mbv_player::transition::Transition::new(request_id, generation, start_slot);
+        match ctx.owner.core.transitions.accept(transition) {
+            mbv_player::transition::DispatchDecision::DispatchNow(t) => {
+                let resume_ticks =
+                    mbv_player::resume_ticks_for_slot(&ctx.owner.core.queue, start_slot)
+                        .unwrap_or(0);
+                crate::cast::dispatch_cast_load(
+                    &mut DaemonOwnerContext {
+                        player: ctx.player,
+                        client: ctx.client,
+                        owner: &mut *ctx.owner,
+                        shared_queue: ctx.shared_queue,
+                        ctrl_clients: ctx.ctrl_clients,
+                        merged_tx: ctx.merged_tx,
+                        audiobookshelf: ctx.audiobookshelf,
+                    },
+                    t,
+                    resume_ticks,
+                    Some(ctx.client_id),
+                );
+            }
+            // Nothing can be in flight here: the replacement reset the
+            // transitions above.
+            mbv_player::transition::DispatchDecision::Queued { .. } => {
+                tracing::warn!(name: "daemon.cast_queue_replace.no_start_slot", target: "daemon", "the replaced queue's transition was queued behind another; nothing was loaded");
+            }
+        }
+        // The reset above cleared the observation; publish it so the shared
+        // snapshot and the broadcast below agree (the local path publishes
+        // after its cold start).
+        ctx.owner.core.note_observed_active_slot(None);
+        ctx.shared_queue.publish_observed(&ctx.owner.core);
+        broadcast_queue_state(
+            ctx.ctrl_clients,
+            ctx.player,
+            ctx.shared_queue,
+            &ctx.owner.core.queue,
+            &ctx.owner.core.source,
+            &ctx.owner.core.transitions,
+            except_op_client,
+        );
+        return;
+    }
+    submit_queue_slots_cold_start(
+        ctx.player,
+        ctx.owner.core.queue.slot_pairs(),
+        next_cursor,
+        ctx.client,
+    );
     // The replacement installs a new lineage: reset the order (design D4)
     // before the observation clear, so the re-pick hook inside it sees the
     // Sequential order and does nothing.

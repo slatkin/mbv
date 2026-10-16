@@ -6,6 +6,7 @@ use std::time::{Duration, Instant};
 
 use super::control_queue::broadcast_queue_state;
 use super::ws::all_audio;
+use crate::AudiobookshelfOwnerContext;
 use crate::ctrl::{ClientRegistry, CtrlClientId, CtrlSender, serialize_ctrl_event};
 use crate::forward_play_order_advance;
 use mbv_audiobookshelf::{AudiobookshelfBookProgress, AudiobookshelfProgress};
@@ -431,6 +432,13 @@ pub(super) struct DaemonOwnerContext<'a> {
     pub(super) owner: &'a mut DaemonPlayerOwner,
     pub(super) shared_queue: &'a SharedQueueState,
     pub(super) ctrl_clients: &'a ClientRegistry,
+    /// The loop's merged-event sender, so a Cast dispatch can spawn its
+    /// source resolve whose outcome re-enters as `DaemonEvent::Cast`
+    /// (cast-owner-output design D4).
+    pub(super) merged_tx: &'a mpsc::Sender<DaemonEvent>,
+    /// The Audiobookshelf owner runtime, when connected: a Cast resolve for
+    /// an episode needs its setup to open the playback session (design D6).
+    pub(super) audiobookshelf: Option<&'a AudiobookshelfOwnerContext>,
 }
 
 /// Route one slot-jump transition through the owner's one-in-flight dispatch
@@ -452,11 +460,22 @@ pub(super) enum JumpOrigin {
 /// carries the run identity, never this request identity — an in-flight entry
 /// would otherwise linger until its expire deadline and wedge every later jump
 /// behind it (queue-owner-process #857).
-/// Returns whether playback delivery started (live jump or cold start).
+/// Returns whether playback delivery started (live jump, cold start, or Cast
+/// load). On a Cast output the jump never reaches the local run: the target
+/// slot is resolved off-thread and loaded on the receiver, and the accepted
+/// transition stays in flight until a receiver status settles it (design
+/// D4/D5).
 pub(super) fn send_jump_or_cold_start(
     ctx: &mut DaemonOwnerContext<'_>,
     transition: mbv_player::transition::Transition,
+    origin: Option<CtrlClientId>,
 ) -> bool {
+    if matches!(ctx.owner.output, crate::cast::PlaybackOutput::Cast(_)) {
+        let resume_ticks =
+            mbv_player::resume_ticks_for_slot(&ctx.owner.core.queue, transition.target)
+                .unwrap_or(0);
+        return crate::cast::dispatch_cast_load(ctx, transition, resume_ticks, origin);
+    }
     let target = transition.target;
     let resume_ticks = mbv_player::resume_ticks_for_slot(&ctx.owner.core.queue, target);
     if ctx.player.send_command(transition.into_jump(resume_ticks)) {
@@ -506,11 +525,15 @@ pub(super) fn dispatch_slot_jump(
     let transition_target = transition.target;
     let transition_request_id = transition.request_id;
     let transition_generation = transition.generation;
+    let origin_client = match origin {
+        JumpOrigin::Ctrl(client_id) => Some(client_id),
+        JumpOrigin::Transport => None,
+    };
     let decision = ctx.owner.core.transitions.accept(transition);
     match decision {
         mbv_player::transition::DispatchDecision::DispatchNow(t) => {
             tracing::info!(name: "daemon.transition_dispatch.started", target: "transition", target_slot = ?transition_target, request = %transition_request_id, generation = %transition_generation, "slot jump dispatched");
-            send_jump_or_cold_start(ctx, t);
+            send_jump_or_cold_start(ctx, t, origin_client);
         }
         mbv_player::transition::DispatchDecision::Queued { superseded } => {
             tracing::info!(name: "daemon.transition_dispatch.queued", target: "transition", target_slot = ?transition_target, request = %transition_request_id, generation = %transition_generation, "slot jump queued");
@@ -566,6 +589,22 @@ pub(super) fn reset_slot_jumps(
     *queued_origin = None;
 }
 
+/// The origin client of a promoted queued transition, when the tracked
+/// origin's request matches it. Cleared with the dispatch either way.
+pub(super) fn take_promoted_origin(
+    ctx: &mut DaemonOwnerContext<'_>,
+    promoted: Option<&mbv_player::transition::Transition>,
+) -> Option<CtrlClientId> {
+    let origin = match ctx.owner.queued_transition_origin {
+        Some((request_id, client_id)) if promoted.is_some_and(|t| t.request_id == request_id) => {
+            Some(client_id)
+        }
+        _ => None,
+    };
+    ctx.owner.queued_transition_origin = None;
+    origin
+}
+
 /// Settle the in-flight transition against a Playback-run observation and, if
 /// a newer transition was queued behind it, dispatch that one now (task 3.3).
 pub(super) fn settle_and_redispatch(
@@ -583,9 +622,9 @@ pub(super) fn settle_and_redispatch(
         return;
     };
     tracing::info!(name: "daemon.transition_settle.completed", target: "transition", request = %observed_request_id, slot = ?observed_slot, settled = true, dispatch_next = dispatch_next.is_some(), "transition settled");
-    ctx.owner.queued_transition_origin = None;
+    let origin = take_promoted_origin(ctx, dispatch_next.as_ref());
     if let Some(next) = dispatch_next {
-        send_jump_or_cold_start(ctx, next);
+        send_jump_or_cold_start(ctx, next, origin);
     }
 }
 
@@ -632,8 +671,9 @@ pub(super) fn expire_and_redispatch(ctx: &mut DaemonOwnerContext<'_>) {
             .unwrap()
             .send_to_client(connection_id, &CtrlEvent::PlaybackIntent(event));
     }
+    let origin = take_promoted_origin(ctx, dispatch_next.as_ref());
     if let Some(next) = dispatch_next {
-        send_jump_or_cold_start(ctx, next);
+        send_jump_or_cold_start(ctx, next, origin);
     }
     // Abandoning / promoting a transition changed desired state; republish.
     broadcast_queue_state(

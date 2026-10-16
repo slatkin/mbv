@@ -28,13 +28,13 @@ fn feed_qi_with_url(guid: &str, url: &str) -> QueueItem {
 }
 
 /// Arms the pending resolve record the way the row 5.1 funnel will: keyed by
-/// the slot the resolve was started for and the transition generation it
-/// belongs to, carrying the start position.
+/// the transition the resolve belongs to (its target slot is the resolve's
+/// slot, its identity the transition's), carrying the start position.
 fn arm_pending_resolve(t: &mut TestLoop, slot: mbv_queue::QueueSlotId, generation: u64) {
     t.event_loop.owner.pending_cast_resolve = Some(crate::cast::PendingCastResolve {
-        slot,
-        generation,
+        transition: mbv_player::transition::Transition::new(generation, generation, slot),
         start_ticks: 0,
+        origin: None,
     });
 }
 
@@ -59,7 +59,7 @@ fn resolved_event(slot: mbv_queue::QueueSlotId, generation: u64, url: &str) -> D
 
 /// Waits until every job already queued on the cast worker has run: a sentinel
 /// job queued last fires only after the jobs ahead of it (the load) did.
-fn wait_for_worker_jobs(cast: &crate::cast::PlaybackOutput) {
+pub(super) fn wait_for_worker_jobs(cast: &crate::cast::PlaybackOutput) {
     let crate::cast::PlaybackOutput::Cast(cast) = cast else {
         panic!("the receiver is the output");
     };
@@ -166,6 +166,6 @@ fn a_stale_cast_resolve_result_loads_nothing() {
         .pending_cast_resolve
         .as_ref()
         .expect("the newer target's resolve stays armed");
-    assert_eq!(pending.slot, slot_b);
-    assert_eq!(pending.generation, 9);
+    assert_eq!(pending.transition.target, slot_b);
+    assert_eq!(pending.transition.generation, 9);
 }

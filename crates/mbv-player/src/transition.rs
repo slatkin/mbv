@@ -241,6 +241,19 @@ impl OwnerTransitionState {
         }
     }
 
+    /// Expire the in-flight transition immediately (cast-owner-output design
+    /// D5): a Cast load or resolve failure abandons it without waiting for
+    /// the deadline. Returns the abandoned transition and, when a newer
+    /// transition was queued behind it, that one promoted into `in_flight`
+    /// for dispatch — the same promotion [`expire`](Self::expire) performs.
+    pub fn expire_now(&mut self) -> Option<(Transition, Option<Transition>)> {
+        let expired = self.in_flight.take()?;
+        let dispatch_next = self.queued_latest.take();
+        self.in_flight = dispatch_next;
+        self.in_flight_deadline = None;
+        Some((expired, dispatch_next))
+    }
+
     /// Replace the queued-latest transition, returning the displaced one (its
     /// caller reports `Superseded` per design D4).
     pub fn replace_queued_latest(&mut self, transition: Transition) -> Option<Transition> {

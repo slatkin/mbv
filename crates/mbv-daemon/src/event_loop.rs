@@ -134,6 +134,8 @@ impl DaemonLoop {
             owner: &mut self.owner,
             shared_queue: &self.shared_queue,
             ctrl_clients: &self.ctrl_clients,
+            merged_tx: &self.merged_tx,
+            audiobookshelf: self.audiobookshelf_runtime.as_ref(),
         });
     }
 
@@ -265,6 +267,8 @@ impl DaemonLoop {
                             owner: &mut self.owner,
                             shared_queue: &self.shared_queue,
                             ctrl_clients: &self.ctrl_clients,
+                            merged_tx: &self.merged_tx,
+                            audiobookshelf: self.audiobookshelf_runtime.as_ref(),
                         },
                         super::core::JumpOrigin::Transport,
                         mbv_player::transition::Transition::with_cause(

@@ -18,6 +18,7 @@ use mbv_emby_model::EmbyItem;
 use mbv_ids::{EmbySessionId, MediaSourceId};
 use mbv_queue::{AudiobookshelfItem, AudiobookshelfQueueItem, FeedEntry, QueueItem, QueueSlotId};
 
+use super::DaemonEvent;
 use super::DaemonLoop;
 use super::cast::{CastLoadedItem, PlaybackOutput};
 
@@ -212,6 +213,30 @@ fn resolve_abs_episode_cast_item(
     })
 }
 
+/// The resolve context a dispatch on the event-loop thread builds (design
+/// D4/D6): the owner's Emby client, and — when the Audiobookshelf runtime is
+/// connected — the bounded-session context an episode resolve needs. Both
+/// constructions are local (no network): the resolve thread does the network
+/// work.
+pub(crate) fn owner_resolve_context(
+    client: &std::sync::Arc<std::sync::Mutex<EmbyClient>>,
+    audiobookshelf: Option<&super::AudiobookshelfOwnerContext>,
+) -> CastResolveContext {
+    CastResolveContext {
+        emby: Some(client.lock().unwrap().clone()),
+        abs: audiobookshelf.and_then(|runtime| {
+            let credential =
+                mbv_config::load_service_secret(mbv_queue::ServiceKind::Audiobookshelf)?;
+            let client = AudiobookshelfClient::new(&runtime.setup.server_url).ok()?;
+            Some(AbsCastContext {
+                client,
+                credential,
+                device_id: runtime.device_id.clone(),
+            })
+        }),
+    }
+}
+
 /// Spawns one Cast source resolve on a dedicated thread (design D4, task
 /// 4.2) and reports the outcome through `send` exactly once, whatever it is.
 /// The caller pairs the spawn with a `PendingCastResolve` record and sends
@@ -243,7 +268,9 @@ pub(super) fn handle_cast_resolved(
         .owner
         .pending_cast_resolve
         .as_ref()
-        .is_some_and(|pending| pending.slot == slot && pending.generation == generation);
+        .is_some_and(|pending| {
+            pending.transition.target == slot && pending.transition.generation == generation
+        });
     if !matched {
         tracing::info!(
             name: "daemon.cast_resolve.stale",
@@ -257,57 +284,75 @@ pub(super) fn handle_cast_resolved(
     let Some(pending) = daemon.owner.pending_cast_resolve.take() else {
         return;
     };
-    let PlaybackOutput::Cast(cast) = &mut daemon.owner.output else {
+    let Err(uncastable) = result else {
+        let source = result.expect("checked Err arm above");
+        let PlaybackOutput::Cast(cast) = &mut daemon.owner.output else {
+            return;
+        };
+        let start_seconds = mbv_emby_model::ticks_to_seconds(pending.start_ticks);
+        tracing::info!(
+            name: "daemon.cast_output.load",
+            target: "daemon",
+            slot = ?slot,
+            url = %source.media.url,
+            start_seconds,
+            "loading the resolved cast source on the receiver"
+        );
+        let content_id = source.media.url.clone();
+        submit_load_job(
+            &cast.worker,
+            source.media,
+            start_seconds,
+            slot,
+            &daemon.merged_tx,
+        );
+        cast.loaded = Some(CastLoadedItem {
+            slot,
+            content_id,
+            progress: source.progress,
+            end_handled: false,
+        });
         return;
     };
-    match result {
-        Ok(source) => {
-            let start_seconds = mbv_emby_model::ticks_to_seconds(pending.start_ticks);
-            tracing::info!(
-                name: "daemon.cast_output.load",
-                target: "daemon",
-                slot = ?slot,
-                url = %source.media.url,
-                start_seconds,
-                "loading the resolved cast source on the receiver"
-            );
-            let content_id = source.media.url.clone();
-            submit_load_job(&cast.worker, source.media, start_seconds);
-            cast.loaded = Some(CastLoadedItem {
-                slot,
-                content_id,
-                progress: source.progress,
-                end_handled: false,
-            });
-        }
-        Err(uncastable) => {
-            tracing::warn!(
-                name: "daemon.cast_resolve.uncastable",
-                target: "daemon",
-                slot = ?slot,
-                item = %uncastable.item,
-                reason = %uncastable.reason,
-                "the slot's item cannot be cast; nothing was loaded"
-            );
-        }
-    }
+    // A failed resolve expires the transition it belonged to (design D5, row
+    // 5.2) and names the item and reason to the client that issued the play
+    // or jump (row 5.1); the receiver is given nothing new.
+    tracing::warn!(
+        name: "daemon.cast_resolve.uncastable",
+        target: "daemon",
+        slot = ?slot,
+        item = %uncastable.item,
+        reason = %uncastable.reason,
+        "the slot's item cannot be cast; nothing was loaded"
+    );
+    let mut ctx = crate::cast::owner_context(daemon);
+    crate::cast::report_resolve_failure(&mut ctx, &pending.transition, pending.origin, &uncastable);
+    crate::cast::expire_cast_transition(&mut ctx);
 }
 
 /// Submits one load job (design D4): a fresh pong immediately before the
 /// blocking exchange -- the load's reply waits for the receiver to load the
 /// item, and the heartbeat deadline must survive that wait (the same ordering
-/// the TUI's dispatch used).
+/// the TUI's dispatch used). A load the receiver refuses reports back as
+/// `CastOwnerEvent::LoadFailed` for `slot`, which expires the transition the
+/// load belonged to (design D5).
 fn submit_load_job(
     worker: &std::sync::mpsc::Sender<mbv_cast::CastJob>,
     media: CastMediaItem,
     start_seconds: f64,
+    slot: QueueSlotId,
+    merged_tx: &std::sync::mpsc::Sender<DaemonEvent>,
 ) {
+    let merged_tx = merged_tx.clone();
     let _ = worker.send(Box::new(move |transport: &mut dyn mbv_cast::CastTransport| {
         if let Err(error) = transport.keep_alive() {
             tracing::warn!(name: "cast.keep_alive.failed", target: "cast", error = %error, "cast keep-alive failed");
         }
         if let Err(error) = transport.load(&media, start_seconds) {
-            tracing::warn!(name: "cast.load.failed", target: "cast", error = %error, "cast load failed");
+            let _ = merged_tx.send(DaemonEvent::Cast(crate::cast::CastOwnerEvent::LoadFailed {
+                slot,
+                error: error.to_string(),
+            }));
         }
     }));
 }
