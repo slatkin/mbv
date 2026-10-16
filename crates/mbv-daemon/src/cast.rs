@@ -678,12 +678,29 @@ fn route_cast_command(
                     .and_then(|status| status.position_seconds)
                     .unwrap_or(0.0),
             );
-            let target = cast_seconds_f32((base + *delta).max(0.0));
+            let target_f64 = (base + *delta).max(0.0);
+            let Some(target) = cast_seconds_f32(target_f64) else {
+                tracing::warn!(
+                    name: "cast.seek.invalid",
+                    target: "cast",
+                    seconds = target_f64,
+                    "the seek position is outside the receiver's range; the seek is dropped"
+                );
+                return;
+            };
             let worker = cast.worker.clone();
             submit_command_job(&worker, "seek", move |transport| transport.seek(target));
         }
         mbv_ctrl::WireCommand::SeekAbsolute(seconds) => {
-            let seconds = cast_seconds_f32(*seconds);
+            let Some(seconds) = cast_seconds_f32(*seconds) else {
+                tracing::warn!(
+                    name: "cast.seek.invalid",
+                    target: "cast",
+                    seconds = *seconds,
+                    "the seek position is outside the receiver's range; the seek is dropped"
+                );
+                return;
+            };
             let worker = cast.worker.clone();
             submit_command_job(&worker, "seek", move |transport| transport.seek(seconds));
         }
@@ -736,16 +753,12 @@ fn route_cast_command(
     }
 }
 
-/// Narrows a wire seconds value to the receiver protocol's f32. The approved
-/// cast the TUI's cast target carried (`src/app/state/playback_target/cast.rs`,
-/// issue #804) moves here as the TUI cast runtime is deleted (row 8.3): no
-/// lossless f64-to-f32 conversion exists, and `rust_cast`'s seek is f32.
-#[expect(
-    clippy::cast_possible_truncation,
-    reason = "seek seconds narrow to the receiver protocol's f32; no lossless conversion exists (approved, issue #804)"
-)]
-fn cast_seconds_f32(value: f64) -> f32 {
-    value as f32
+/// Narrows a wire seconds value to the receiver protocol's f32 (`rust_cast`'s
+/// seek is f32; no lossless f64-to-f32 conversion exists). A value outside
+/// the f32 range — or not a number — is no valid seek position: the caller
+/// drops the seek instead of issuing one.
+fn cast_seconds_f32(value: f64) -> Option<f32> {
+    num_traits::cast(value)
 }
 
 /// Submits one receiver-command job (design D4, row 5.3): the operation runs

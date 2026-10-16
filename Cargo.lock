@@ -2116,6 +2116,7 @@ dependencies = [
  "mbv-queue",
  "mbv-ws",
  "nix 0.31.3",
+ "num-traits",
  "rstest",
  "serde_json",
  "tracing",
