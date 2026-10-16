@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+use crate::output::OutputState;
 use crate::player::{PlayerEvent, PlayerStatus};
 use crate::{
     CtrlHello, PlaybackGeneration, PlaybackRequestId, QueueLoadRequestId, QueueOpId,
@@ -86,6 +87,12 @@ pub enum CtrlEvent {
     /// peers advertising `abs-book-progress`. Keyed by `library_item_id` only,
     /// so it can never be matched against an episode-shaped event.
     AudiobookshelfBookProgress(AudiobookshelfBookProgressEvent),
+
+    /// The Owner's active playback output, sent on cold seed and on every
+    /// change to peers advertising `playback-output` (cast-owner-output
+    /// design D3). Slot, position, and pause state stay on
+    /// `UnifiedQueueState` and `StatusOnly`.
+    PlaybackOutput(OutputState),
 }
 
 /// Redacted, provider-qualified Audiobookshelf progress: identity,

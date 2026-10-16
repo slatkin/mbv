@@ -47,6 +47,18 @@ pub(super) enum StartIds {
     },
 }
 
+// Snapshotted inputs for an output-driven start-report job (design D9): the
+// ids and the presented positions the output already resolved, so the worker
+// reads nothing from a lock itself.
+pub(super) struct StartedReportData {
+    client: Arc<EmbyClient>,
+    id: ItemId,
+    msid: MediaSourceId,
+    sid: EmbySessionId,
+    position_ticks: i64,
+    runtime_ticks: i64,
+}
+
 // The three jobs SessionReporter used to run on detached per-call threads,
 // now executed FIFO on one worker thread fed by `SessionReporter::job_tx`.
 pub(super) enum ReportJob {
@@ -55,6 +67,16 @@ pub(super) enum ReportJob {
         client: Arc<EmbyClient>,
         item: Box<EmbyItem>,
         ids: StartIds,
+    },
+    /// One output-driven start report (design D9): the ids and the presented
+    /// positions were snapshotted at submit.
+    OutputStart(StartedReportData),
+    /// One output-driven progress report (design D9): snapshotted at submit,
+    /// sent on the worker like every other report job.
+    OutputProgress {
+        client: Arc<EmbyClient>,
+        ws_tx: Option<mbv_ws::WsSender>,
+        report: mbv_emby::ProgressReport,
     },
     ProgressJoinThenStopped {
         handle: Option<thread::JoinHandle<()>>,
@@ -129,10 +151,53 @@ fn report_start_job(
     }
 }
 
+/// Executes one output-driven start report (design D9): the same
+/// `Sessions/Playing` start the run sends, from the ids and presented
+/// positions the output snapshotted at submit.
+fn execute_output_start_report(data: StartedReportData) {
+    let StartedReportData {
+        client,
+        id,
+        msid,
+        sid,
+        position_ticks,
+        runtime_ticks,
+    } = data;
+    let span = report_span(id.as_str(), Some(&sid));
+    let _entered = span.entered();
+    tracing::info!(name: "player.report_start.sent", target: "player", item = %id, position_ticks, "sent output start report");
+    let ok = client.report_start_ids(&id, &msid, &sid, position_ticks, runtime_ticks);
+    if !ok {
+        tracing::warn!(name: "player.report_start.failed", target: "player", item = %id, "output start report failed");
+    }
+}
+
+/// Sends one progress report: over the websocket when it is connected, HTTP
+/// otherwise — and on a websocket send failure the client falls back to HTTP
+/// itself. Shared by the progress reporter thread and the output-driven
+/// progress job (design D9).
+fn send_progress(
+    client: &EmbyClient,
+    ws_tx: Option<&mbv_ws::WsSender>,
+    report: &mbv_emby::ProgressReport,
+) {
+    if let Some(tx) = ws_tx.filter(|tx| tx.is_connected()) {
+        client.report_progress_ws(report, tx);
+        return;
+    }
+    client.report_progress_http(report);
+}
+
 fn run_report_worker(rx: mpsc::Receiver<ReportJob>) {
     for job in rx {
         match job {
             ReportJob::Stopped(data) => execute_stopped_report(data),
+            ReportJob::OutputStart(data) => execute_output_start_report(data),
+            ReportJob::OutputProgress {
+                client,
+                ws_tx,
+                report,
+            } => send_progress(&client, ws_tx.as_ref(), &report),
             ReportJob::Start { client, item, ids } => match ids {
                 StartIds::Resolved {
                     media_source_id,
@@ -192,7 +257,7 @@ fn run_report_worker(rx: mpsc::Receiver<ReportJob>) {
 // Shared between the event loop thread and the progress reporter thread.
 // All mutable fields are Arc-wrapped so transitions are visible to both.
 #[derive(Clone)]
-pub(super) struct SessionReporter {
+pub struct SessionReporter {
     pub(super) client: Arc<EmbyClient>,
     ws_tx: Option<mbv_ws::WsSender>,
     // (item_id, msid, sid) in a single lock so progress and event-loop threads never
@@ -216,8 +281,24 @@ pub(super) struct SessionReporter {
     pub(super) job_tx: mpsc::Sender<ReportJob>,
 }
 
+impl std::fmt::Debug for SessionReporter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SessionReporter")
+            .field("client", &self.client)
+            .field("ws_tx", &self.ws_tx)
+            .field("ids", &self.ids)
+            .field("is_audio", &self.is_audio)
+            .field(
+                "start_reported",
+                &self.start_reported.load(Ordering::Relaxed),
+            )
+            .field("status", &self.status)
+            .finish_non_exhaustive()
+    }
+}
+
 impl SessionReporter {
-    pub(super) fn new(
+    pub fn new(
         client: Arc<EmbyClient>,
         ws_tx: Option<mbv_ws::WsSender>,
         item_id: ItemId,
@@ -337,13 +418,7 @@ impl SessionReporter {
             session_id: sid,
             event_name: event_name.to_string(),
         };
-        if let Some(ref tx) = self.ws_tx
-            && tx.is_connected()
-        {
-            self.client.report_progress_ws(&report, tx);
-            return;
-        }
-        self.client.report_progress_http(&report);
+        send_progress(&self.client, self.ws_tx.as_ref(), &report);
     }
 
     // Zeroes position for audio items so Emby doesn't resume audio from mid-track.
@@ -364,6 +439,88 @@ impl SessionReporter {
     // which report_stopped's synchronous callers don't do — it's bookkeeping
     // that doesn't affect playback).  No-op when the reporter has no session.
     pub(crate) fn report_stopped_background(&self, last_valid_pos: i64) {
+        if let Some(data) = self.stopped_report_data(last_valid_pos) {
+            let _ = self.job_tx.send(ReportJob::Stopped(data));
+        }
+    }
+
+    /// Reports the session start for a playback output whose session ids are
+    /// already resolved (design D9: the Cast output's progress target carries
+    /// ids, not an item payload): the position and runtime come from the
+    /// presented status the output publishes, so the start carries where the
+    /// output actually began. Queued on the report worker; a no-op once a
+    /// start went out or when the reporter has no session.
+    pub fn report_output_start(&self) {
+        if self.start_reported.load(Ordering::Relaxed) || !self.has_session() {
+            return;
+        }
+        let (id, msid, sid) = self
+            .ids
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        let (position_ticks, runtime_ticks) = {
+            let status = self
+                .status
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            (status.position_ticks, status.runtime_ticks)
+        };
+        self.start_reported.store(true, Ordering::Relaxed);
+        let _ = self.job_tx.send(ReportJob::OutputStart(StartedReportData {
+            client: Arc::clone(&self.client),
+            id,
+            msid,
+            sid,
+            position_ticks,
+            runtime_ticks,
+        }));
+    }
+
+    /// Reports one progress position for a playback output (design D9): the
+    /// presented status supplies the position, runtime, and paused state at
+    /// submit time. Queued on the report worker; a no-op when the reporter
+    /// has no session or no start has gone out.
+    pub fn report_output_progress(&self, event_name: &str) {
+        if !self.has_session() || !self.start_reported.load(Ordering::Relaxed) {
+            return;
+        }
+        let (id, msid, sid) = self
+            .ids
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        let (position_ticks, runtime_ticks, is_paused) = {
+            let status = self
+                .status
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            (status.position_ticks, status.runtime_ticks, status.paused)
+        };
+        let report = mbv_emby::ProgressReport {
+            item_id: id,
+            media_source_id: msid,
+            position_ticks,
+            runtime_ticks,
+            is_paused,
+            session_id: sid,
+            event_name: event_name.to_string(),
+        };
+        let _ = self.job_tx.send(ReportJob::OutputProgress {
+            client: Arc::clone(&self.client),
+            ws_tx: self.ws_tx.clone(),
+            report,
+        });
+    }
+
+    /// Reports the stop of a playback output's item (design D9): a no-op
+    /// while no start went out, so a session Emby never saw takes no stop.
+    /// Audio positions report as zero, as the run's stop reports do. Queued
+    /// on the report worker.
+    pub fn report_output_stop(&self, last_valid_pos: i64) {
+        if !self.start_reported.load(Ordering::Relaxed) {
+            return;
+        }
         if let Some(data) = self.stopped_report_data(last_valid_pos) {
             let _ = self.job_tx.send(ReportJob::Stopped(data));
         }

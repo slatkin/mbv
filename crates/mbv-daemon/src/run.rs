@@ -60,6 +60,35 @@ pub(super) fn apply_track_completed_observation(
     if !playback_run_identity_is_current(run_identity, player) {
         return false;
     }
+    record_completed_slot(
+        owner,
+        player,
+        shared_queue,
+        slot_id,
+        position_ticks,
+        was_played,
+        consume,
+        consume_policy,
+    )
+}
+
+/// The completion recording every natural end shares (cast-owner-output row
+/// 6.3, design D7's Finished row): progress into the slot's canonical state,
+/// the consume rules, the Shuffle re-pick forward, and the shared snapshot
+/// publish. Local playback reaches it through
+/// [`apply_track_completed_observation`]'s run-identity guard; a Cast natural
+/// end records through it directly, because a receiver's end report carries no
+/// local run identity to guard.
+pub(super) fn record_completed_slot(
+    owner: &mut DaemonPlayerOwner,
+    player: &Player,
+    shared_queue: &SharedQueueState,
+    slot_id: QueueSlotId,
+    position_ticks: i64,
+    was_played: bool,
+    consume: bool,
+    consume_policy: ConsumePolicy,
+) -> bool {
     if let Some(slot) = owner.core.queue.slot(slot_id) {
         let observation = ProgressObservation::Completed {
             position_ticks,
@@ -161,6 +190,9 @@ struct DaemonStarted {
     pending_swap: Arc<crate::PendingSwapToken>,
     /// Shared with the ctrl registry, which keeps it current (design D1).
     attached_clients: Arc<AttachedClientsCell>,
+    /// The runtime's Cast connector, when the runtime supplies one
+    /// (cast-owner-output design D2). Lives on the event loop.
+    cast_connector: Option<crate::CastConnector>,
 }
 
 fn spawn_queue_persistence_worker(
@@ -331,6 +363,7 @@ fn start_daemon(
         pin_swap,
         pending_swap,
         attached_clients,
+        cast_connector: hooks.cast_connector,
     })
 }
 
@@ -429,6 +462,9 @@ fn initialize_queue(role: DaemonRole, player: &Player) -> (DaemonPlayerOwner, Sh
         observed_active_slot: Arc::new(Mutex::new(None)),
         // A new owner starts in Sequential (queue-shuffle-play-order D5).
         play_order: Arc::new(Mutex::new(mbv_queue::PlayOrderMode::Sequential)),
+        // A new owner starts on local playback (cast-owner-output spec
+        // "Owner starts").
+        playback_output: Arc::new(Mutex::new(mbv_ctrl::OutputState::Local)),
     };
     let owner = DaemonPlayerOwner {
         core: PlayerOwnerState::new(initial_queue, initial_source),
@@ -439,7 +475,7 @@ fn initialize_queue(role: DaemonRole, player: &Player) -> (DaemonPlayerOwner, Sh
 
 fn start_local_control_server(
     role: DaemonRole,
-    audio_only: bool,
+    caps: crate::DaemonHelloCaps,
     merged_tx: &mpsc::Sender<DaemonEvent>,
     ctrl_clients: &ClientRegistry,
     player: &Player,
@@ -468,7 +504,7 @@ fn start_local_control_server(
                     control_credential.clone(),
                     Arc::clone(&player_status),
                     shared_queue.clone(),
-                    audio_only,
+                    caps,
                     role,
                     Arc::clone(&settings_reader),
                 );
@@ -518,7 +554,7 @@ fn register_capabilities(
 fn serve_tcp_control(
     listener: Option<TcpListener>,
     role: DaemonRole,
-    audio_only: bool,
+    caps: crate::DaemonHelloCaps,
     ctrl_clients: &ClientRegistry,
     merged_tx: &mpsc::Sender<DaemonEvent>,
     player: &Player,
@@ -544,7 +580,7 @@ fn serve_tcp_control(
                     control_credential.clone(),
                     Arc::clone(&player_status),
                     shared_queue.clone(),
-                    audio_only,
+                    caps,
                     role,
                     Arc::clone(&settings_reader),
                 );
@@ -607,8 +643,13 @@ pub fn run_with_options(
         pin_swap,
         pending_swap,
         attached_clients,
+        cast_connector,
     } = started;
     let (owner, shared_queue) = initialize_queue(role, &player);
+    let caps = crate::DaemonHelloCaps {
+        audio_only,
+        playback_output: cast_connector.is_some(),
+    };
     // Owner restore runs the same progress refresh as cold adoption and a
     // manual queue refresh: the restored queue carries no Service positions
     // (design D3), so Emby and Audiobookshelf slots get the server's values
@@ -626,7 +667,7 @@ pub fn run_with_options(
     )));
     start_local_control_server(
         role,
-        audio_only,
+        caps,
         &merged_tx,
         &ctrl_clients,
         &player,
@@ -644,7 +685,7 @@ pub fn run_with_options(
     serve_tcp_control(
         tcp_listener,
         role,
-        audio_only,
+        caps,
         &ctrl_clients,
         &merged_tx,
         &player,
@@ -675,6 +716,7 @@ pub fn run_with_options(
         queue_persist_tx: Some(queue_persist_tx),
         tray,
         pin_swap,
+        cast_connector,
     };
     run_daemon_loop(&mut daemon_loop, &merged_rx)
 }

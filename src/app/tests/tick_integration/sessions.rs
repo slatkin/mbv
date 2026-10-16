@@ -6,8 +6,10 @@ use tuirealm::event::{
 };
 
 use crate::app::dispatch::action::Command;
+use crate::app::state::panel_targets::PanelTarget;
 use crate::app::tests::make_app_stub;
 use crate::app::tests::tick_integration::harness::{StepOutcome, TickHarness};
+use mbv_cast::discovery::CastReceiver;
 use mbv_components::SessionsComponent;
 use mbv_ui_model::panel_targets::SessionTargetKey;
 use mbv_ui_msg::{ComponentId, Msg, OverlayId, ShellRequest, UserEvent};
@@ -27,6 +29,33 @@ fn sessions(ids: &[&str]) -> Vec<crate::app::state::panel_targets::PanelTarget> 
             crate::app::state::panel_targets::PanelTarget::Emby(Box::new(session))
         })
         .collect()
+}
+
+fn cast_target(id: &str) -> PanelTarget {
+    PanelTarget::Cast(CastReceiver {
+        id: id.to_string(),
+        friendly_name: "Living Room".to_string(),
+        host: "192.168.0.5".to_string(),
+        port: 8009,
+    })
+}
+
+/// An app whose owner advertises the `playback-output` capability and whose
+/// owner-bound commands arrive on the returned receiver (design D13 rows
+/// 8.1/8.2; same pattern as `live_owner_channel` plus the capability).
+fn playback_output_owner_app() -> (
+    crate::app::App,
+    std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>,
+) {
+    let mut app = make_app_stub();
+    let (mut remote, player_rx, cmd_rx) =
+        mbv_remote_player::RemotePlayer::stub_with_command_rx(Vec::new(), 0);
+    let mut compatibility = mbv_ctrl::CtrlCompatibility::current();
+    compatibility.supports_playback_output = true;
+    remote.set_ctrl_compatibility_for_test(compatibility);
+    app.player = mbv_player::PlayerProxy::from_remote(remote, false);
+    app.player_rx = player_rx;
+    (app, cmd_rx)
 }
 
 fn apply_messages(harness: &mut TickHarness, outcome: StepOutcome) {
@@ -348,7 +377,6 @@ fn tick_sessions_removed_target_request_is_noop_not_former_index_replacement() {
         &mut tv_resize,
     );
     assert!(harness.model().app.connected_session_id.is_none());
-    assert!(!harness.model().app.is_cast_attached());
 }
 
 #[test]
@@ -365,4 +393,48 @@ fn tick_sessions_selection_delivers_through_focused_tick_after_f3() {
         message,
         Msg::TerminalEvent(mbv_ui_msg::TerminalObserverEvent::KeyClaimed)
     )));
+}
+
+/// cast-owner-output row 8.1, design D13, cast-session-control spec
+/// "Selecting a cast target makes it the owner's output": activating a cast
+/// row sends `CtrlCmd::SelectPlaybackOutput(Cast)` to the owner whose
+/// `playback-output` capability gated the row, and no `Stop` precedes it —
+/// the owner performs the Cast-to-Cast hand-off, and a prior stop would
+/// clear the active slot the new receiver must continue.
+#[test]
+fn tick_sessions_cast_row_activation_sends_the_owner_output_selection() {
+    let (mut app, cmd_rx) = playback_output_owner_app();
+    app.terminal_width = 100;
+    app.terminal_height = 14;
+    app.player_endpoint = Some(mbv_remote_player::DaemonEndpoint::Local);
+    app.panel_targets = vec![cast_target("r-1")];
+    let mut harness = TickHarness::new(app);
+    open_sessions(&mut harness);
+
+    let request = enter_request(&mut harness);
+    assert_eq!(request, SessionTargetKey::Cast("r-1".into()));
+    let (mut music_resize, mut tv_resize) = (false, false);
+    harness.model_mut().handle_terminal_message(
+        Msg::Shell(Box::new(ShellRequest::SelectSession(request))),
+        &mut music_resize,
+        &mut tv_resize,
+    );
+
+    assert!(
+        matches!(
+            cmd_rx.try_recv().unwrap(),
+            mbv_ctrl::CtrlCmd::SelectPlaybackOutput(mbv_ctrl::OutputSelection::Cast {
+                ref receiver_id,
+                ref name,
+                ref host,
+                port,
+            }) if receiver_id == "r-1" && name == "Living Room"
+                && host == "192.168.0.5" && port == 8009
+        ),
+        "the activation selects that receiver as the owner's output"
+    );
+    assert!(
+        cmd_rx.try_recv().is_err(),
+        "no command precedes the selection: the owner performs the hand-off"
+    );
 }

@@ -2,8 +2,8 @@
 //! selection, client hello, and the initial state read. Split out of
 //! `connect.rs` so each file stays under the size bar.
 
-use std::io::{BufRead, BufReader, Write};
-use std::time::Duration;
+use std::io::{BufRead, BufReader, ErrorKind, Write};
+use std::time::{Duration, Instant};
 
 use mbv_ctrl::{CtrlCmd, CtrlCompatibility, CtrlEvent, CtrlHello, DisconnectReason};
 use mbv_net::stream::SocketStream;
@@ -146,6 +146,7 @@ pub(super) fn read_server_hello(
     compatibility.supports_answered_queue_ops = info.supports_answered_queue_ops();
     compatibility.supports_owner_action = info.supports_owner_action();
     compatibility.supports_play_order = info.supports_play_order();
+    compatibility.supports_playback_output = info.supports_playback_output();
     tracing::info!(name: "remote.daemon_protocol_validation.succeeded", target: "remote", protocol_version = info.protocol_version, app_version = %info.app_version, capabilities = ?info.capabilities, "daemon protocol validated");
     Ok(compatibility)
 }
@@ -184,6 +185,16 @@ where
             }
         }
     };
+    // A Client connection negotiates `playback-output` (cast-owner-output
+    // design D3): the claim is what tells the Owner to cold-seed this
+    // connection with `CtrlEvent::PlaybackOutput` right after the initial
+    // state and include it in every output broadcast. Restricted-role
+    // hellos stay plain, so the Owner never seeds them an unread line.
+    if matches!(role, HandshakeRole::Client) {
+        client_hello
+            .capabilities
+            .push(mbv_ctrl::CTRL_CAP_PLAYBACK_OUTPUT.to_string());
+    }
     client_hello.protocol_version = compatibility.client_protocol_version;
     let client_hello = serde_json::to_string(&CtrlCmd::Hello(client_hello))
         .map_err(|e| crate::RemotePlayerError::protocol(e.to_string()))?;
@@ -221,4 +232,124 @@ pub(super) fn read_initial_state(
         } => Err(crate::RemotePlayerError::owner_shutting_down()),
         event => Ok(event),
     }
+}
+
+/// How long the handshake will wait, past the initial state, for the
+/// Owner's cold-seed playback-output event. An Owner that advertises
+/// `playback-output` writes it immediately after the initial state, before
+/// its command loop (`core_ctrl_spawn` order: state first, then the seed),
+/// so under normal conditions the line is already in the socket buffer.
+/// The timeout exists only so an absent or late seed can never hang the
+/// connect: if it fires, the seed (or any line arriving late) simply
+/// becomes the reader thread's first event instead.
+pub(super) const PLAYBACK_OUTPUT_SEED_READ_TIMEOUT: Duration = Duration::from_millis(500);
+
+/// Read the Owner's cold-seed playback-output event, tolerantly. Runs
+/// inside the handshake's hard bound, under its own short deadline: a
+/// timeout, an EOF, or an unparseable line all yield no event without
+/// failing the connect — an absent or late seed simply becomes the reader
+/// thread's first event instead, which is the pre-fix behavior and costs
+/// nothing but an event beat. A line that IS read is returned whole for
+/// the caller to apply, so a consumed line is never silently lost.
+///
+/// A partial line is never lost. The wait accumulates the bytes it reads
+/// and stops consuming exactly at the first `'\n'`; when the deadline
+/// expires before the line completes, whatever was consumed comes back in
+/// [`SeedLineRead::consumed`] and the caller replays it to the reader
+/// thread ahead of the live stream — so the reader thread still reads the
+/// whole line exactly as the daemon sent it, one event beat late. (A
+/// plain `read_line` under a read timeout would consume the prefix of a
+/// line split across two arrivals and lose it when the second half times
+/// out: `BufRead::read_line` consumes each buffered chunk as it goes, and
+/// the partial `String` is discarded on the error.) The read timeout is
+/// always cleared again before the reader thread takes the stream over,
+/// so no lingering timeout can ever end the event loop early.
+pub(super) fn read_playback_output_seed(reader: &mut BufReader<SocketStream>) -> SeedLineRead {
+    if reader
+        .get_mut()
+        .set_read_timeout(Some(PLAYBACK_OUTPUT_SEED_READ_TIMEOUT))
+        .is_err()
+    {
+        // Can't bound the wait on this stream: don't risk hanging the
+        // connect. The seed stays the reader thread's problem.
+        return SeedLineRead::default();
+    }
+    let seed = wait_for_seed_line(reader);
+    // Always clear the timeout before the reader thread takes over: a
+    // lingering one would end the event loop on its first quiet moment.
+    let _ = reader.get_mut().set_read_timeout(None);
+    seed
+}
+
+/// What the tolerant seed wait took from the stream. `event` is set when a
+/// full line arrived in time; `consumed` holds bytes taken from the stream
+/// that the caller must replay to the reader thread (empty otherwise — on
+/// success every consumed byte belongs to the returned line).
+#[derive(Default)]
+pub(super) struct SeedLineRead {
+    pub(super) event: Option<CtrlEvent>,
+    pub(super) consumed: Vec<u8>,
+}
+
+/// Waits, up to [`PLAYBACK_OUTPUT_SEED_READ_TIMEOUT`], for a
+/// `'\n'`-terminated line, consuming as it goes and stopping exactly at
+/// the newline. See [`read_playback_output_seed`] for the contract.
+fn wait_for_seed_line(reader: &mut BufReader<SocketStream>) -> SeedLineRead {
+    let deadline = Instant::now() + PLAYBACK_OUTPUT_SEED_READ_TIMEOUT;
+    // Bytes consumed so far. On the happy path they all belong to the
+    // returned line; on a give-up they are replayed to the reader thread.
+    let mut taken: Vec<u8> = Vec::new();
+    loop {
+        let Some(remaining) = deadline.checked_duration_since(Instant::now()) else {
+            return SeedLineRead {
+                event: None,
+                consumed: taken,
+            };
+        };
+        let _ = reader.get_mut().set_read_timeout(Some(remaining));
+        match reader.fill_buf() {
+            // EOF: hand back what was taken (replayed), then the reader
+            // thread observes the ending itself.
+            Ok([]) => {
+                return SeedLineRead {
+                    event: None,
+                    consumed: taken,
+                };
+            }
+            Ok(chunk) => {
+                if let Some(end) = chunk.iter().position(|&byte| byte == b'\n') {
+                    // The line completes inside this chunk: take exactly up
+                    // to and including the newline, leave the rest buffered
+                    // for the reader thread, and the line is whole in
+                    // `taken`.
+                    taken.extend_from_slice(&chunk[..=end]);
+                    reader.consume(end + 1);
+                    return SeedLineRead {
+                        event: parse_seed_line(&taken),
+                        consumed: Vec::new(),
+                    };
+                }
+                // No newline in this chunk: consume all of it and keep
+                // waiting — the next `fill_buf` goes to the socket under
+                // the remaining timeout.
+                taken.extend_from_slice(chunk);
+                let taken_so_far = chunk.len();
+                reader.consume(taken_so_far);
+            }
+            Err(error) if error.kind() == ErrorKind::Interrupted => {}
+            // Timed out or the stream errored: nothing more arrived in
+            // time; what was taken is replayed, nothing is lost.
+            Err(_) => {
+                return SeedLineRead {
+                    event: None,
+                    consumed: taken,
+                };
+            }
+        }
+    }
+}
+
+/// Parses one whole seed line (newline included in `line`).
+fn parse_seed_line(line: &[u8]) -> Option<CtrlEvent> {
+    serde_json::from_slice::<CtrlEvent>(line.trim_ascii_end()).ok()
 }

@@ -52,7 +52,7 @@ impl App {
         let active = self.player.status_snapshot().active;
         self.visualizer_enabled
             && self.connected_session_id.is_none()
-            && !self.is_cast_attached()
+            && !self.output_is_cast()
             && active
             && !audio_pipe_enabled
             && !self.visual_slot_hidden
@@ -138,13 +138,21 @@ mod tests {
     }
 
     #[test]
-    fn attached_cast_target_blocks_the_visualizer_gate() {
+    fn cast_output_blocks_the_visualizer_gate() {
         let mut app = crate::app::tests::make_app_stub();
         app.visualizer_enabled = true;
         app.player.update_status(|status| status.active = true);
         assert!(app.visualizer_should_run());
 
-        app.attach_cast("device-1".to_string(), "Living Room".to_string());
+        // A receiver as the owner's output means no local audio to capture
+        // (design D13 reads `CtrlEvent::PlaybackOutput`).
+        app.handle_player_event(mbv_ctrl::player::PlayerEvent::PlaybackOutput(
+            mbv_ctrl::OutputState::Cast {
+                receiver_id: "device-1".to_string(),
+                name: "Living Room".to_string(),
+                connection: mbv_ctrl::CastConnection::Connected,
+            },
+        ));
 
         assert!(!app.visualizer_should_run());
     }

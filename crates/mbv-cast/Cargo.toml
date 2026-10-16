@@ -10,6 +10,11 @@ categories.workspace = true
 description = "Google Cast discovery and playback integration for mbv."
 readme = "../../README.md"
 
+[features]
+# Exposes `FakeCastTransport`/`spawn_fake_cast_worker` to dependent crates'
+# tests, the same pattern as `mbv-player`'s `test` feature.
+test = []
+
 [lints]
 workspace = true
 

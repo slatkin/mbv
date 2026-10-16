@@ -26,20 +26,42 @@ impl EmbyClient {
         media_source_id: &MediaSourceId,
         session_id: &EmbySessionId,
     ) -> bool {
+        self.report_start_ids(
+            &ItemId::new(item.id.clone()),
+            media_source_id,
+            session_id,
+            item.playback_position_ticks,
+            item.runtime_ticks,
+        )
+    }
+
+    /// The start report from already-resolved session ids (design D9: the
+    /// Cast output's progress target carries ids, not an item payload): the
+    /// position and runtime come from the status the output presents. Same
+    /// body and retry as [`Self::report_start`].
+    #[must_use]
+    pub fn report_start_ids(
+        &self,
+        item_id: &ItemId,
+        media_source_id: &MediaSourceId,
+        session_id: &EmbySessionId,
+        position_ticks: i64,
+        runtime_ticks: i64,
+    ) -> bool {
         let body = serde_json::json!({
             "UserId": self.user_id,
-            "ItemId": item.id,
+            "ItemId": item_id.as_str(),
             "MediaSourceId": media_source_id.as_str(),
             "PlaySessionId": session_id.as_str(),
             "CanSeek": true,
             "IsPaused": false,
             "IsMuted": false,
             "PlayMethod": "DirectPlay",
-            "PositionTicks": item.playback_position_ticks,
-            "RunTimeTicks": item.runtime_ticks,
+            "PositionTicks": position_ticks,
+            "RunTimeTicks": runtime_ticks,
             "QueueableMediaTypes": ["Audio", "Video"],
         });
-        tracing::info!(name: "emby.playback_start.requested", target: "api", item = %item.id, media_source = %media_source_id, position_ticks = item.playback_position_ticks, "reporting playback start");
+        tracing::info!(name: "emby.playback_start.requested", target: "api", item = %item_id, media_source = %media_source_id, position_ticks, "reporting playback start");
         match self.post("/Sessions/Playing").send_json(body.clone()) {
             Ok(r) => {
                 tracing::info!(name: "emby.playback_start.reported", target: "api", http_response_status_code = r.status().as_u16(), "playback start reported");

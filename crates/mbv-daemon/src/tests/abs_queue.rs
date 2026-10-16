@@ -31,6 +31,7 @@ fn connect_old_unified_peer(clients: &mut CtrlClients) -> (u64, mpsc::Receiver<C
         CtrlTransport::Local,
         mbv_ctrl::CtrlAudiobookshelfCapabilities::default(),
         false,
+        false,
         None,
         crate::ctrl::CtrlConnectionRole::Client,
     );

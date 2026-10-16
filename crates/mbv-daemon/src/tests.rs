@@ -58,4 +58,11 @@ mod queue_ops;
 // Re-export helper from queue_ops
 pub use queue_ops::owner_with;
 
+mod cast_feed_events;
+mod cast_handoff;
+mod cast_output;
+mod cast_playback;
+mod cast_progress;
+mod cast_resolve;
+mod cast_status;
 mod r#loop;

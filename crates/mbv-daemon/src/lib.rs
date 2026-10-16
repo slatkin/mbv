@@ -35,6 +35,17 @@ pub(crate) use core::{
 };
 #[doc(inline)]
 pub use core::{DaemonPlayerHandle, DaemonRuntimeHooks, SwapDirection};
+mod cast;
+#[doc(inline)]
+pub use cast::{
+    CastConnectOutcome, CastConnectRequest, CastConnector, CastOwnerEvent, local_cast_connector,
+};
+mod cast_resolve;
+#[doc(inline)]
+pub use cast_resolve::{
+    AbsCastContext, CastProgressTarget, CastResolveContext, CastSource, Uncastable,
+    prepare_cast_source, spawn_cast_resolve,
+};
 mod owner_lock;
 #[doc(inline)]
 pub use owner_lock::{
@@ -42,7 +53,7 @@ pub use owner_lock::{
     try_lock, write_pid,
 };
 mod core_ctrl_spawn;
-pub(crate) use core_ctrl_spawn::spawn_ctrl_client;
+pub(crate) use core_ctrl_spawn::{DaemonHelloCaps, spawn_ctrl_client};
 mod play_order;
 pub(crate) use play_order::{
     forward_play_order_advance, next_up_slot, reset_play_order_for_queue_replacement,
@@ -57,6 +68,7 @@ pub use run::run_with_options;
 pub(crate) use run::{
     ConsumePolicy, apply_queue_enriched, apply_stopped_observation,
     apply_track_completed_observation, broadcast_player_event_if_not_replaced,
+    record_completed_slot,
 };
 mod event_loop;
 pub(crate) use event_loop::{DaemonLoop, LoopFlow, PendingSwapToken, PinSwapState, TrayState};

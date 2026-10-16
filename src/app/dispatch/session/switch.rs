@@ -25,6 +25,10 @@ impl App {
             return false;
         }
         self.player_endpoint = Some(endpoint.clone());
+        // The incoming owner's output is unknown until its cold-seed
+        // `PlaybackOutput` event arrives (cast-owner-output design D13 reset
+        // rule); the replaced owner's state must not leak into it.
+        self.playback_output = None;
         if current_is_home {
             // The suspended home link stays playing while suspended: it is
             // drained every tick (`drain_suspended_home_events`), so route
@@ -118,9 +122,10 @@ impl App {
     ) {
         // Attachment slots are mutually exclusive: a library-route switch can
         // be reached (via `apply_route_for_playback`) without going through
-        // `connect_to_session`'s sever, so a cast attachment must be severed
-        // here too. No-op when nothing is attached.
-        self.cast_attachment = None;
+        // `connect_to_session`'s sever. The owner's Cast output is handed
+        // back to Local first, exactly as a session connect does
+        // (design D13) — `self.player` is still the outgoing owner here.
+        self.hand_cast_output_back_to_local();
         let current_is_home = self.home_is_local_daemon && self.is_local_daemon();
         self.stop_visualizer_capture();
         let previous_route = self.active_route.clone();
@@ -204,6 +209,9 @@ impl App {
     }
 
     fn install_suspended_local(&mut self, suspended: SuspendedLocalSession) {
+        // The previously attached owner's output does not carry over
+        // (cast-owner-output design D13 reset rule).
+        self.playback_output = None;
         self.player = suspended.player;
         self.player_rx = suspended.player_rx;
         self.player_endpoint = Some(mbv_remote_player::DaemonEndpoint::Local);
@@ -309,6 +317,10 @@ impl App {
             return;
         }
         self.player.disconnect_remote();
+        // The disconnected owner's output is no longer the active one; a
+        // reconnect or restored suspension re-seeds it (cast-owner-output
+        // design D13 reset rule).
+        self.playback_output = None;
         let mut status = status.to_string();
         // Populated only when the local-daemon reconnect branch below
         // succeeds, so the tail can restore `local_view` / queue source
@@ -433,9 +445,8 @@ impl App {
     pub(in crate::app) fn connect_to_session(&mut self, sess: &mbv_emby::SessionInfo) {
         // Connecting to a new target severs the current one (attachment
         // slots are mutually exclusive): tears down an active library
-        // route, detaches any cast attachment, and clears a watched
-        // session before this connect, rather than holding both. A no-op
-        // when nothing is connected.
+        // route and clears a watched session before this connect, rather
+        // than holding both. A no-op when nothing is connected.
         self.sever_active_connection();
         let mut direct_upgrade_error = None;
         if self.player_owner_is_on_this_machine()

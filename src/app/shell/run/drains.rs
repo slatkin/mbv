@@ -114,6 +114,14 @@ impl Model {
                     self.prepare_pin_swap(&PinSwapLink::Home);
                 }
                 mbv_ctrl::player::PlayerEvent::SwapQuit => self.quit_swapped_out(),
+                // The suspended home link is not the active owner; its output
+                // state must never drive `App::playback_output`, which
+                // mirrors the active owner's last `CtrlEvent::PlaybackOutput`
+                // (cast-owner-output design D13). The active link's dispatch
+                // arm in `handle_player_event` owns that state.
+                mbv_ctrl::player::PlayerEvent::PlaybackOutput(_) => {
+                    tracing::debug!(name: "home_link.playback_output.ignored", target: "shell", "ignoring playback-output event from the suspended home link");
+                }
                 _ => {}
             }
         }
@@ -466,7 +474,7 @@ impl Model {
     }
 
     /// Periodic maintenance between ticks: delayed settings save, session
-    /// and cast status polls, websocket keepalive, capability refresh.
+    /// polls, websocket keepalive, capability refresh.
     pub(super) fn run_periodic_maintenance(&mut self) {
         if let Some(at) = self.app.settings_save_at
             && Instant::now() >= at
@@ -483,35 +491,6 @@ impl Model {
         {
             self.app.spawn_sessions_load();
         }
-
-        // Periodic status poll while attached to a cast target (6.1).
-        if self.app.cast_attachment.is_some()
-            && self.app.last_cast_poll.elapsed()
-                >= crate::app::dispatch::cast_status::CAST_STATUS_POLL_INTERVAL
-            && !self.app.cast_status_loading
-        {
-            self.app.spawn_cast_status_poll();
-        }
-
-        // The keep-alive heartbeat runs on its own, faster cadence than the
-        // status poll: the receiver terminates a sender whose pongs lapse
-        // (~7s observed), and a queue-load exchange occupying the worker
-        // must not stretch the gap past that deadline.
-        if self.app.cast_attachment.is_some()
-            && self.app.last_cast_keep_alive.elapsed()
-                >= crate::app::dispatch::cast_status::CAST_KEEP_ALIVE_INTERVAL
-        {
-            self.app.spawn_cast_keep_alive();
-        }
-
-        // Unresponsive-worker watchdog: rust_cast's operations have no
-        // socket timeout, so one unresponsive receiver exchange wedges the
-        // single worker thread forever -- status freezes and every later
-        // job queues behind it while the target still reads connected. No
-        // worker event within the answer bound is that wedge's only visible
-        // signature; recover the way a dropped connection is handled and
-        // reconnect (a fresh connect relaunches the receiver's app session).
-        self.app.check_cast_worker_responsive();
 
         // Keep this session visible to other Emby clients
         if let Some(ref tx) = self.app.ws_send_tx

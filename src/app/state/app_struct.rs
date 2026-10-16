@@ -5,7 +5,6 @@ use crate::app::state::playback::{PlaylistMutationState, SuspendedLocalSession, 
 use crate::app::state::queue_owner::QueueEpoch;
 use crate::app::state::queue_view::QueueView;
 use crate::app::state::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
-use crate::app::state::types::cast::CastAttachment;
 use indexmap::IndexMap;
 use mbv_config::TuiLaunchState;
 use mbv_ctrl::player::PlayerEvent;
@@ -355,24 +354,23 @@ pub struct App {
     pub(in crate::app) last_capabilities: Instant,
     pub(in crate::app) connected_session_id: Option<String>,
     pub(in crate::app) connected_session_state: Option<mbv_emby::SessionInfo>,
-    /// Cast attachment, beside `connected_session_id`/`connected_session_state`
-    /// above: `None` means no cast target is attached. See `cast_actions.rs`
-    /// for attach/detach and `cast_status_actions.rs` for status polling.
-    pub(in crate::app) cast_attachment: Option<CastAttachment>,
-    /// When the oldest cast job still awaiting any worker event was
-    /// submitted. The unresponsive-worker watchdog
-    /// (`check_cast_worker_responsive`) reads it: `rust_cast` operations
-    /// have no socket timeout, so one unresponsive receiver exchange blocks
-    /// the single worker thread forever -- status freezes and every later
-    /// job queues behind it while the target still reads connected.
-    pub(in crate::app) cast_job_sent: Option<Instant>,
-    pub(in crate::app) last_cast_poll: Instant,
-    /// When the last keep-alive pong was submitted
-    /// (`spawn_cast_keep_alive`), on its own cadence
-    /// (`CAST_KEEP_ALIVE_INTERVAL`) so the receiver's heartbeat deadline is
-    /// met even while a queue-load exchange occupies the worker.
-    pub(in crate::app) last_cast_keep_alive: Instant,
-    pub(in crate::app) cast_status_loading: bool,
+    /// The current Player owner's active playback output, mirrored from the
+    /// last `CtrlEvent::PlaybackOutput` (cast-owner-output design D13). It is
+    /// per-owner-connection state like `ctrl_compatibility`: `None` until the
+    /// owner reports, reset to `None` when the connection is replaced by
+    /// another owner or observed lost. Every owner built with
+    /// cast-owner-output cold-seeds it right after connect, so the `None`
+    /// window after a swap is one event beat. `None` reads as Local: an
+    /// owner that never reports (pre-change peer) has no Cast output.
+    ///
+    /// This mirror is drain-fed — it only moves when the shell drains
+    /// player events — so it is presentation truth, not control truth.
+    /// Launch auto-reconnect connects a session (and severs the old target)
+    /// before any drain ever happens, so control decisions that must not
+    /// wait for a beat read the owner connection's retained state instead
+    /// (`RemotePlayer::playback_output_state`, which the handshake fills at
+    /// the cold seed) — see `hand_cast_output_back_to_local` (8.2 fix).
+    pub(in crate::app) playback_output: Option<mbv_ctrl::OutputState>,
     pub(in crate::app) queue_epoch: QueueEpoch,
     pub(in crate::app) playlist_mutations: std::collections::HashMap<String, PlaylistMutationState>,
     pub(in crate::app) next_playlist_mutation: u64,
@@ -545,6 +543,19 @@ pub struct App {
 }
 
 impl App {
+    /// Whether the Player owner's active playback output is a Cast receiver,
+    /// per the last `CtrlEvent::PlaybackOutput` (cast-owner-output design
+    /// D13). A `Disconnected` Cast still counts: the spec's cast-session
+    /// control scenario keeps the target presented as disconnected and the
+    /// output selection usable. `None` (no report yet, or the connection was
+    /// replaced/lost) and `Local` both read as not-Cast.
+    pub(in crate::app) fn output_is_cast(&self) -> bool {
+        matches!(
+            self.playback_output,
+            Some(mbv_ctrl::OutputState::Cast { .. })
+        )
+    }
+
     /// Adopt the pinned panel handle for this launch (design D3). A pinned
     /// launch always starts with Panel focus on Queue, whatever the saved
     /// state holds (2026-10-05 user rule) — see

@@ -2104,6 +2104,7 @@ version = "0.25.5"
 dependencies = [
  "libc",
  "mbv-audiobookshelf",
+ "mbv-cast",
  "mbv-config",
  "mbv-core",
  "mbv-ctrl",
@@ -2115,6 +2116,7 @@ dependencies = [
  "mbv-queue",
  "mbv-ws",
  "nix 0.31.3",
+ "num-traits",
  "rstest",
  "serde_json",
  "tracing",

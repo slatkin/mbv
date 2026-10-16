@@ -19,6 +19,7 @@ mbv-player = { path = "../mbv-player" }
 mbv-emby = { path = "../mbv-emby" }
 mbv-emby-model = { path = "../mbv-emby-model" }
 mbv-audiobookshelf = { path = "../mbv-audiobookshelf" }
+mbv-cast = { path = "../mbv-cast" }
 mbv-ctrl = { path = "../mbv-ctrl" }
 mbv-config = { path = "../mbv-config" }
 mbv-queue = { path = "../mbv-queue" }
@@ -27,12 +28,14 @@ mbv-net = { path = "../mbv-net" }
 mbv-ws = { path = "../mbv-ws" }
 libc.workspace = true
 nix = { workspace = true, features = ["fs", "signal", "socket"] }
+num-traits.workspace = true
 uuid = { workspace = true, features = ["v4", "fast-rng"] }
 serde_json.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
 mbv-core = { path = "../mbv-core", features = ["test"] }
+mbv-cast = { path = "../mbv-cast", features = ["test"] }
 tracing-subscriber.workspace = true
 rstest.workspace = true
 mbv-player = { path = "../mbv-player", features = ["test"] }

@@ -20,6 +20,7 @@ pub(super) fn connect_op_requester(
             book_progress: true,
         },
         true,
+        false,
         None,
         crate::ctrl::CtrlConnectionRole::Client,
     );

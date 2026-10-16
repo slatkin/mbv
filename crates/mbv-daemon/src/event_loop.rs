@@ -1,6 +1,6 @@
 use super::{
-    AudiobookshelfOwnerContext, ClientRegistry, DaemonEvent, DaemonOwnerContext, DaemonPlayerOwner,
-    DaemonRole, EmbyOwnerContext, SharedQueueState, broadcast_queue_state,
+    AudiobookshelfOwnerContext, ClientRegistry, DaemonEvent, DaemonPlayerOwner, DaemonRole,
+    EmbyOwnerContext, SharedQueueState, broadcast_queue_state,
     cancel_pending_idle_queue_load_if_run_changed, expire_and_redispatch,
     expire_pending_idle_queue_load, persist_stay_alive_owner_queue, reset_slot_jumps,
 };
@@ -84,6 +84,9 @@ pub(crate) struct DaemonLoop {
     pub(super) tray: TrayState,
     /// Pin-swap state machine (tray-pin-swap design D3).
     pub(super) pin_swap: PinSwapState,
+    /// The runtime's Cast connector, when it supplies one (cast-owner-output
+    /// design D2). `None` keeps the Owner on local playback only.
+    pub(super) cast_connector: Option<crate::CastConnector>,
 }
 
 impl DaemonLoop {
@@ -108,6 +111,7 @@ impl DaemonLoop {
         }
         self.tray.poll(now, &self.owner_settings);
         self.pin_swap.poll(now);
+        super::cast::tick_cast(self, now);
     }
 
     /// Idle work performed when no event arrived within the poll timeout.
@@ -124,13 +128,7 @@ impl DaemonLoop {
                 self.owner.intents.invalidate_connection(connection_id);
             }
         }
-        expire_and_redispatch(&mut DaemonOwnerContext {
-            player: &self.player,
-            client: &self.client,
-            owner: &mut self.owner,
-            shared_queue: &self.shared_queue,
-            ctrl_clients: &self.ctrl_clients,
-        });
+        expire_and_redispatch(&mut super::cast::owner_context(self));
     }
 
     /// Processes exactly one event. Never exits the process: `Shutdown` is
@@ -217,6 +215,10 @@ impl DaemonLoop {
                     EventOutcome::CONTINUE
                 }
             }
+            DaemonEvent::Cast(event) => {
+                super::cast::handle_cast_event(self, event);
+                EventOutcome::CONTINUE
+            }
             DaemonEvent::Shutdown => self.handle_shutdown(),
         };
 
@@ -230,12 +232,21 @@ impl DaemonLoop {
     fn handle_transport(&mut self, command: mbv_ctrl::TransportCommand) -> EventOutcome {
         match command {
             mbv_ctrl::TransportCommand::Player(command) => {
-                self.player.send_command(command);
+                // The active output takes the command (design D4, row 5.3):
+                // the run on Local, the receiver on Cast.
+                super::cast::route_transport_command(&self.player, &mut self.owner.output, command);
             }
             mbv_ctrl::TransportCommand::Stop => {
                 // Mirror `CtrlCmd::Stop` (control.rs `handle_stop`): a stop
-                // makes every awaited transition identity unobservable.
-                self.player.stop();
+                // makes every awaited transition identity unobservable, and
+                // stops the active output's media — the local run on Local,
+                // the receiver media on Cast (design D4, row 5.3).
+                super::cast::stop_active_output(
+                    &self.player,
+                    &mut self.owner.output,
+                    &self.owner.core.queue,
+                    &self.ctrl_clients,
+                );
                 reset_slot_jumps(
                     &mut self.owner.core.transitions,
                     &mut self.owner.queued_transition_origin,
@@ -247,27 +258,10 @@ impl DaemonLoop {
                 let _ = owner_action::run(self, action);
             }
             mbv_ctrl::TransportCommand::Step(direction) => {
-                let target = self.owner.core.relative_step_target(direction);
-                if let mbv_player::owner_state::StepTarget::Jump(slot_id) = target {
-                    let (request_id, generation) = self.owner.core.transitions.mint_local_id();
-                    super::core::dispatch_slot_jump(
-                        &mut super::core::DaemonOwnerContext {
-                            player: &self.player,
-                            client: &self.client,
-                            owner: &mut self.owner,
-                            shared_queue: &self.shared_queue,
-                            ctrl_clients: &self.ctrl_clients,
-                        },
-                        super::core::JumpOrigin::Transport,
-                        mbv_player::transition::Transition::with_cause(
-                            request_id,
-                            generation,
-                            slot_id,
-                            mbv_player::transition::TransitionCause::Step(direction),
-                        ),
-                        None,
-                    );
-                }
+                // The owner's one step rule (design D7): the same funnel the
+                // natural advance uses. The transport path drops the outcome.
+                let mut ctx = super::cast::owner_context(self);
+                crate::play_order::dispatch_relative_step(&mut ctx, direction);
             }
         }
         EventOutcome::CONTINUE

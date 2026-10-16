@@ -10,11 +10,11 @@ use std::rc::Rc;
 use std::time::Instant;
 use tracing_subscriber::prelude::*;
 
-type Persisted = Rc<RefCell<Vec<RecordedSnapshot>>>;
+pub(super) type Persisted = Rc<RefCell<Vec<RecordedSnapshot>>>;
 
 /// Cloneable projection of a persisted snapshot (`StayAliveQueueState` is not
 /// `Clone`), holding the fields these tests assert on.
-struct RecordedSnapshot {
+pub(super) struct RecordedSnapshot {
     item_ids: Vec<String>,
     source: QueueSource,
     cursor: usize,
@@ -35,14 +35,14 @@ impl RecordedSnapshot {
     }
 }
 
-struct TestLoop {
-    event_loop: DaemonLoop,
-    persisted: Persisted,
-    settings: Arc<Mutex<OwnerSettings>>,
-    merged_rx: mpsc::Receiver<DaemonEvent>,
+pub(super) struct TestLoop {
+    pub(super) event_loop: DaemonLoop,
+    pub(super) persisted: Persisted,
+    pub(super) settings: Arc<Mutex<OwnerSettings>>,
+    pub(super) merged_rx: mpsc::Receiver<DaemonEvent>,
 }
 
-fn test_loop_with_role(role: crate::DaemonRole) -> TestLoop {
+pub(super) fn test_loop_with_role(role: crate::DaemonRole) -> TestLoop {
     test_loop_with_queue(role, Vec::new(), 0)
 }
 
@@ -98,7 +98,11 @@ fn audiobookshelf_acknowledged_progress_is_followed_by_queue_broadcast() {
     }
 }
 
-fn test_loop_with_queue(role: crate::DaemonRole, items: Vec<QueueItem>, active: usize) -> TestLoop {
+pub(super) fn test_loop_with_queue(
+    role: crate::DaemonRole,
+    items: Vec<QueueItem>,
+    active: usize,
+) -> TestLoop {
     let persisted: Persisted = Rc::new(RefCell::new(Vec::new()));
     let recorded = Rc::clone(&persisted);
     let (merged_tx, merged_rx) = mpsc::channel::<DaemonEvent>();
@@ -137,6 +141,7 @@ fn test_loop_with_queue(role: crate::DaemonRole, items: Vec<QueueItem>, active: 
         queue_persist_tx: None,
         tray: null_tray(),
         pin_swap,
+        cast_connector: None,
     };
     TestLoop {
         event_loop,

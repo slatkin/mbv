@@ -146,6 +146,7 @@ impl App {
                 self.handle_audiobookshelf_book_progress(&ev);
                 PlayerEventFlow::Proceed
             }
+            PlayerEvent::PlaybackOutput(state) => self.apply_playback_output(state),
             PlayerEvent::SwapPrepare | PlayerEvent::SwapQuit => {
                 // The shell drain intercepts both pin-swap events before they
                 // reach App dispatch (tray-pin-swap 4.4): the launch snapshot
@@ -154,6 +155,14 @@ impl App {
                 PlayerEventFlow::Proceed
             }
         }
+    }
+
+    /// Store the Owner's reported playback output (cast-owner-output design
+    /// D13): the last report is the App's mirror of the active owner's
+    /// output; the reset paths own clearing it.
+    fn apply_playback_output(&mut self, state: mbv_ctrl::OutputState) -> PlayerEventFlow {
+        self.playback_output = Some(state);
+        PlayerEventFlow::Proceed
     }
 
     fn handle_emby_authority_taken(&mut self, reason: String) {
@@ -216,6 +225,9 @@ impl App {
     }
 
     pub(in crate::app) fn handle_daemon_shutdown_announced(&mut self, from_home_link: bool) {
+        // The owner connection is gone; its playback output is no longer the
+        // active one (cast-owner-output design D13 reset rule).
+        self.playback_output = None;
         if from_home_link || self.is_local_daemon() {
             self.suspended_local = None;
             self.pending_exit_message =
@@ -556,6 +568,9 @@ impl App {
     /// `handle_player_event`): modal-or-reattach-or-fallback, always ending
     /// the tick.
     fn handle_remote_disconnected(&mut self, reason: &str) -> bool {
+        // The owner connection is gone; its playback output is no longer the
+        // active one (cast-owner-output design D13 reset rule).
+        self.playback_output = None;
         self.next_up_item = None;
         if self.is_local_daemon() {
             self.suspended_local = None;

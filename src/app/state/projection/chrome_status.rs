@@ -29,20 +29,23 @@ impl App {
         ))
     }
 
-    /// The label naming the attached cast receiver, if one is attached.
-    /// Shared by the status-bar remote pill and the queue header so both
-    /// name the receiver consistently; the attachment keeps the discovered
-    /// friendly name because the discovery list is rebuilt on every F3
-    /// browse and may no longer hold the attached receiver.
+    /// The label naming the cast receiver that is the owner's playback
+    /// output, per the last `CtrlEvent::PlaybackOutput` (design D13). Shared
+    /// by the status-bar remote pill and the queue header so both name the
+    /// receiver consistently; the owner's report carries the discovered
+    /// friendly name.
     fn cast_target_label(&self) -> Option<String> {
-        self.cast_attachment
-            .as_ref()
-            // A target marked disconnected (7.6) must not read as connected:
-            // the pill falls back to the local label until the reconnect
-            // lands, so it never contradicts the header's "Cast:
-            // disconnected".
-            .filter(|attachment| !attachment.disconnected)
-            .map(|attachment| attachment.receiver_name.clone())
+        match &self.playback_output {
+            // A target marked disconnected must not read as connected: the
+            // pill falls back to the local label until the reconnect lands,
+            // so it never contradicts the header's "Cast: disconnected".
+            Some(mbv_ctrl::OutputState::Cast {
+                connection: mbv_ctrl::CastConnection::Disconnected,
+                ..
+            }) => None,
+            Some(mbv_ctrl::OutputState::Cast { name, .. }) => Some(name.clone()),
+            _ => None,
+        }
     }
 
     /// Whether the remote pill shows its connected state: a cast receiver is
@@ -488,12 +491,18 @@ mod tests {
     use mbv_queue::PlayOrderMode;
 
     /// Same consistency contract as the queue header: the status-bar remote
-    /// pill names the attached receiver instead of this machine's device
+    /// pill names the owner's cast output instead of this machine's device
     /// name, with the remote-on styling.
     #[test]
     fn attached_cast_receiver_names_the_status_bar_pill() {
         let mut app = make_app_stub();
-        app.attach_cast("device-1".to_string(), "Living Room".to_string());
+        app.handle_player_event(mbv_ctrl::player::PlayerEvent::PlaybackOutput(
+            mbv_ctrl::OutputState::Cast {
+                receiver_id: "device-1".to_string(),
+                name: "Living Room".to_string(),
+                connection: mbv_ctrl::CastConnection::Connected,
+            },
+        ));
 
         let spans = app.remote_status_spans(RemoteSlotState::LocalDaemon, "endpoint");
 
@@ -506,14 +515,20 @@ mod tests {
         );
     }
 
-    /// The attached cast receiver names the queue header's host, matching
+    /// The owner's cast output names the queue header's host, matching
     /// the connected icon cast-session-control "Playing while attached"
     /// pairs with it: the header previously showed the connected icon but
     /// labelled the host with this machine's device name.
     #[test]
     fn attached_cast_receiver_names_the_queue_header_host() {
         let mut app = make_app_stub();
-        app.attach_cast("device-1".to_string(), "Living Room".to_string());
+        app.handle_player_event(mbv_ctrl::player::PlayerEvent::PlaybackOutput(
+            mbv_ctrl::OutputState::Cast {
+                receiver_id: "device-1".to_string(),
+                name: "Living Room".to_string(),
+                connection: mbv_ctrl::CastConnection::Connected,
+            },
+        ));
 
         let (host, is_remote) = app.playback_host_label_and_remote();
 
@@ -521,14 +536,20 @@ mod tests {
         assert!(is_remote);
     }
 
-    /// A cast target marked disconnected (7.6) must not read as connected:
-    /// the pill falls back to the local label until the reconnect lands, so
-    /// it never contradicts the header's "Cast: disconnected".
+    /// A cast output reported disconnected (7.6, D13) must not read as
+    /// connected: the pill falls back to the local label until the
+    /// reconnect lands, so it never contradicts the header's "Cast:
+    /// disconnected".
     #[test]
     fn a_disconnected_cast_target_stops_naming_the_status_bar_pill() {
         let mut app = make_app_stub();
-        app.attach_cast("device-1".to_string(), "Living Room".to_string());
-        app.cast_attachment.as_mut().unwrap().mark_disconnected();
+        app.handle_player_event(mbv_ctrl::player::PlayerEvent::PlaybackOutput(
+            mbv_ctrl::OutputState::Cast {
+                receiver_id: "device-1".to_string(),
+                name: "Living Room".to_string(),
+                connection: mbv_ctrl::CastConnection::Disconnected,
+            },
+        ));
 
         let spans = app.remote_status_spans(RemoteSlotState::LocalDaemon, "endpoint");
 

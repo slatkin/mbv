@@ -3,8 +3,9 @@ use super::{
     CtrlContext, DaemonOwnerContext, DaemonPlayerOwner, broadcast_queue_state, dispatch_slot_jump,
     handle_stop, mint_queue_lineage, reset_play_order_for_queue_replacement, send_to,
 };
-use mbv_ctrl::CtrlEvent;
+use crate::ctrl::CtrlClientId;
 use mbv_ctrl::player::PlayerCommand;
+use mbv_ctrl::{CtrlEvent, PlaybackGeneration, PlaybackRequestId};
 use mbv_emby::EmbyClient;
 use mbv_emby_model::EmbyItem;
 use mbv_player::PlayerOwnerState;
@@ -39,13 +40,20 @@ pub(super) fn spawn_item_lookup<F>(
 /// Plays a resolved-by-id playback intent. Replaces the legacy `PlayItems`
 /// wire command, which carried both the wire shape and this internal
 /// control-flow re-entry; the wire variant is gone (ADR 0020), so the
-/// resolved-play path now lives here as a plain function.
+/// resolved-play path now lives here as a plain function. `client_id`,
+/// `request_id`, and `generation` are the play intent's identity: on a Cast
+/// output they name the in-flight transition the load registers (design D4),
+/// so a resolve failure can reject the intent and a confirming receiver
+/// status can settle it.
 pub(crate) fn play_resolved_items(
     ctx: &mut DaemonOwnerContext<'_>,
     fetched: Vec<EmbyItem>,
     start_idx: usize,
     start_ticks: i64,
     new_source: mbv_queue::QueueSource,
+    client_id: CtrlClientId,
+    request_id: PlaybackRequestId,
+    generation: PlaybackGeneration,
 ) {
     let DaemonPlayerOwner {
         core: PlayerOwnerState { queue, source, .. },
@@ -73,6 +81,29 @@ pub(crate) fn play_resolved_items(
         &ctx.owner.core.transitions,
         None,
     );
+    if matches!(ctx.owner.output, crate::cast::PlaybackOutput::Cast(_)) {
+        // The receiver is the output (design D4): the queue is installed
+        // above, and only the selected slot's item is resolved and loaded on
+        // the receiver — never the whole queue (#944). The play registers as
+        // the in-flight transition under the intent's identity, so a
+        // confirming receiver status settles it and a resolve failure
+        // expires and reports it.
+        let Some(start_slot) = ctx.owner.core.queue.active_slot_id() else {
+            tracing::warn!(name: "daemon.cast_play.start_slot_missing", target: "daemon", "the resolved play has no start slot; nothing was loaded");
+            return;
+        };
+        let transition =
+            mbv_player::transition::Transition::new(request_id, generation, start_slot);
+        match ctx.owner.core.transitions.accept(transition) {
+            mbv_player::transition::DispatchDecision::DispatchNow(t) => {
+                crate::cast::dispatch_cast_load(ctx, t, start_ticks, Some(client_id));
+            }
+            mbv_player::transition::DispatchDecision::Queued { .. } => {
+                tracing::warn!(name: "daemon.cast_play.start_slot_missing", target: "daemon", "the resolved play's transition was queued behind another; nothing was loaded");
+            }
+        }
+        return;
+    }
     if fetched.len() == 1 {
         let mut play_item = fetched[0].clone();
         if start_ticks > 0 {
@@ -137,7 +168,26 @@ pub(super) fn handle_playback_intent(ctx: &mut CtrlContext<'_>, intent: mbv_ctrl
         ),
         mbv_ctrl::PlaybackIntentAction::Stop => handle_stop(ctx),
         mbv_ctrl::PlaybackIntentAction::SetPaused { paused } => {
-            if ctx.player.status.lock().unwrap().paused != paused {
+            if matches!(ctx.owner.output, crate::cast::PlaybackOutput::Cast(_)) {
+                // The receiver is the output (row 5.3 correction, spec "play,
+                // pause, next, previous, and stop from either Client act on
+                // that receiver"): the desired state translates to an
+                // explicit receiver pause or play, and the guarded intent
+                // settles now — the receiver's own pause change reports
+                // through the status poll (design D8), not a run event, so
+                // nothing else would settle it.
+                crate::cast::set_receiver_paused(&mut ctx.owner.output, paused);
+                if let Some(event) = ctx.owner.intents.applied_if_current(
+                    ctx.client_id,
+                    intent_request_id,
+                    intent_generation,
+                ) {
+                    ctx.ctrl_clients
+                        .lock()
+                        .unwrap()
+                        .send_to_client(ctx.client_id, &CtrlEvent::PlaybackIntent(event));
+                }
+            } else if ctx.player.status.lock().unwrap().paused != paused {
                 ctx.player.send_command(PlayerCommand::TogglePause);
             }
         }
@@ -219,6 +269,8 @@ fn step_to_neighbor_slot(
                 owner: &mut *ctx.owner,
                 shared_queue: ctx.shared_queue,
                 ctrl_clients: ctx.ctrl_clients,
+                merged_tx: ctx.merged_tx,
+                audiobookshelf: ctx.audiobookshelf,
             },
             super::super::core::JumpOrigin::Ctrl(ctx.client_id),
             mbv_player::transition::Transition::with_cause(

@@ -72,6 +72,12 @@ pub struct RemotePlayer {
     status: Arc<Mutex<PlayerStatus>>,
     subtitle_prefs: Arc<Mutex<mbv_ctrl::player::SubtitlePrefs>>,
     unified_queue: Arc<Mutex<Option<mbv_ctrl::UnifiedQueueStateData>>>,
+    /// The owner's active playback output as last reported on this
+    /// connection, retained from the handshake cold seed and every
+    /// `CtrlEvent::PlaybackOutput` since (cast-owner-output design D3).
+    /// Per-connection like every other retained state: a new connection
+    /// starts `None` until its own owner reports.
+    playback_output: Arc<Mutex<Option<mbv_ctrl::OutputState>>>,
     pub(crate) cmd_tx: mpsc::Sender<CtrlCmd>,
     pub(crate) disconnected: Arc<AtomicBool>,
     /// Set when the connection closed after the daemon announced a
@@ -430,6 +436,11 @@ impl RemotePlayer {
         self.ctrl_compatibility.supports_play_order
     }
 
+    #[must_use]
+    pub fn supports_playback_output(&self) -> bool {
+        self.ctrl_compatibility.supports_playback_output
+    }
+
     pub fn load_queue_idle(
         &self,
         request_id: mbv_ctrl::QueueLoadRequestId,
@@ -606,6 +617,37 @@ impl RemotePlayer {
         self.unified_queue.lock().unwrap().clone()
     }
 
+    /// The owner's active playback output as last reported on this
+    /// connection, retained from the handshake cold seed and every
+    /// `CtrlEvent::PlaybackOutput` since (cast-owner-output design D3).
+    /// Per-connection like every other retained state: a new connection
+    /// starts `None` until its own owner reports. The synchronous source
+    /// for control decisions that cannot wait for the Client's event
+    /// drain — launch auto-reconnect connects and connects again before
+    /// any drain happens (cast-owner-output 8.2 fix).
+    ///
+    /// # Panics
+    ///
+    /// Panics if the mutex is poisoned: a previous owner panicked while
+    /// holding it.
+    #[must_use]
+    pub fn playback_output_state(&self) -> Option<mbv_ctrl::OutputState> {
+        self.playback_output.lock().unwrap().clone()
+    }
+
+    /// Test-support seam: set the retained playback output directly, for
+    /// stubs that must present owner state the fake connection never
+    /// delivers over ctrl.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the mutex is poisoned: a previous owner panicked while
+    /// holding it.
+    #[cfg(any(test, feature = "test"))]
+    pub fn update_playback_output_for_test(&self, state: mbv_ctrl::OutputState) {
+        *self.playback_output.lock().unwrap() = Some(state);
+    }
+
     /// Test-support seam: in-place edit of the cached unified queue state
     /// (`None` stays `None`), for stubs that must present owner state the
     /// fake connection never delivers over ctrl.
@@ -684,6 +726,7 @@ impl RemotePlayer {
                 status,
                 subtitle_prefs,
                 unified_queue: Arc::new(Mutex::new(Some(unified_queue))),
+                playback_output: Arc::new(Mutex::new(None)),
                 cmd_tx,
                 disconnected,
                 shutdown_announced,

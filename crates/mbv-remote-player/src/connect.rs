@@ -2,7 +2,7 @@
 mod tests;
 
 use std::collections::HashMap;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Cursor, Read, Write};
 #[cfg(any(test, feature = "test"))]
 use std::os::unix::net::UnixStream;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -12,8 +12,8 @@ use std::sync::{Arc, Mutex, mpsc};
 use mbv_ctrl::CtrlHello;
 use mbv_ctrl::player::{PlayerEvent, PlayerStatus};
 use mbv_ctrl::{
-    CtrlCmd, CtrlEvent, DisconnectReason, PlaybackIntent, PlaybackIntentEvent, QueueOpId,
-    QueueOpOutcome, UnifiedQueueStateData,
+    CtrlCmd, CtrlCompatibility, CtrlEvent, DisconnectReason, PlaybackIntent, PlaybackIntentEvent,
+    QueueOpId, QueueOpOutcome, UnifiedQueueStateData,
 };
 use mbv_net::stream::SocketStream;
 
@@ -29,7 +29,8 @@ pub use endpoint::{DaemonEndpoint, resolve_library_route};
 pub use owner_actions::{run_local_owner_action, signal_local_daemon_service_setup};
 
 use handshake::{
-    DAEMON_HANDSHAKE_HARD_BOUND, HandshakeRole, PeerBuild, perform_handshake_with_role,
+    DAEMON_HANDSHAKE_HARD_BOUND, HandshakeRole, PeerBuild, SeedLineRead,
+    perform_handshake_with_role, read_playback_output_seed,
 };
 
 fn apply_ctrl_event(
@@ -60,9 +61,15 @@ fn apply_ctrl_event(
         CtrlEvent::QueueOpResult { op, outcome } => {
             apply_queue_op_result(op, outcome, status, unified_queue, event_tx, notify);
         }
+        CtrlEvent::PlaybackOutput(state) => {
+            send_if_notifying(notify, event_tx, PlayerEvent::PlaybackOutput(state));
+        }
         CtrlEvent::ShutdownAccepted | CtrlEvent::ShutdownRejected { .. } => {
             // Shutdown replies are handled by RemotePlayer's request-completion path.
         }
+        // Owner-service reconciliation events travel on a Client connection
+        // but this read loop keeps no service-setup state, so the event is a
+        // documented no-op here, grouped with the other reply-only no-ops.
         CtrlEvent::ServiceSetupApplied { .. } | CtrlEvent::ServiceSetupRejected { .. } => {
             log_ignored_service_setup_event();
         }
@@ -263,6 +270,7 @@ pub(crate) fn connect_endpoint(
 struct ReaderThreadState {
     status: Arc<Mutex<PlayerStatus>>,
     unified_queue: Arc<Mutex<Option<UnifiedQueueStateData>>>,
+    playback_output: Arc<Mutex<Option<mbv_ctrl::OutputState>>>,
     pending_playback: Arc<Mutex<HashMap<u64, PlaybackIntent>>>,
     disconnected: Arc<AtomicBool>,
     disconnect_notified: Arc<AtomicBool>,
@@ -276,6 +284,65 @@ struct ReaderThreadState {
 /// Split out of `connect_endpoint` so tests can drive the swap/disconnect
 /// bookkeeping over an in-memory `UnixStream` pair (`connect_stub_daemon_pair`)
 /// instead of a real listener.
+/// What the bounded client handshake hands back to `connect_stream`.
+struct HandshakeOutcome {
+    reader: BufReader<SocketStream>,
+    state_event: CtrlEvent,
+    ctrl_compatibility: CtrlCompatibility,
+    seed: SeedLineRead,
+}
+
+/// Runs the client handshake — hello exchange, initial state, and the
+/// tolerant playback-output seed read — on a worker thread bounded by
+/// `DAEMON_HANDSHAKE_HARD_BOUND`, independent of
+/// `endpoint::DAEMON_TCP_CONNECT_TIMEOUT` -- that only bounds the initial
+/// TCP-level connect, not these blocking reads (issue #191 fix #5).
+fn run_bounded_handshake(
+    handshake_stream: SocketStream,
+    peer_build: PeerBuild,
+    pinned: bool,
+    swap_token: Option<String>,
+) -> Result<HandshakeOutcome, crate::RemotePlayerError> {
+    mbv_net::bounded::run_with_hard_bound_or_error(
+        move || {
+            let (mut reader, state_event, ctrl_compatibility) = perform_handshake_with_role(
+                handshake_stream,
+                || Ok(mbv_config::load_or_create_control_credential()?),
+                HandshakeRole::Client,
+                peer_build,
+                pinned,
+                swap_token,
+            )?;
+            // An Owner that advertises `playback-output` cold-seeds a
+            // claiming Client with `CtrlEvent::PlaybackOutput` right after
+            // the initial state, before its command loop (`core_ctrl_spawn`
+            // order: state first, then the seed). Read that line here,
+            // inside the handshake's hard bound, tolerantly: the read
+            // carries its own short timeout, and an absent or late seed
+            // just returns None and degrades to the reader-thread path —
+            // the connect never fails or hangs on the seed.
+            let seed = if ctrl_compatibility.supports_playback_output {
+                read_playback_output_seed(&mut reader)
+            } else {
+                SeedLineRead::default()
+            };
+            Ok(HandshakeOutcome {
+                reader,
+                state_event,
+                ctrl_compatibility,
+                seed,
+            })
+        },
+        || {
+            crate::RemotePlayerError::connection(format!(
+                "timed out after {}s",
+                DAEMON_HANDSHAKE_HARD_BOUND.as_secs()
+            ))
+        },
+        DAEMON_HANDSHAKE_HARD_BOUND,
+    )
+}
+
 fn connect_stream(
     stream: SocketStream,
     peer_build: PeerBuild,
@@ -301,6 +368,7 @@ fn connect_stream(
     let status = Arc::new(Mutex::new(PlayerStatus::default()));
     let subtitle_prefs = Arc::new(Mutex::new(mbv_ctrl::player::SubtitlePrefs::default()));
     let unified_queue = Arc::new(Mutex::new(None));
+    let playback_output: Arc<Mutex<Option<mbv_ctrl::OutputState>>> = Arc::new(Mutex::new(None));
     let disconnected = Arc::new(AtomicBool::new(false));
     let disconnect_notified = Arc::new(AtomicBool::new(false));
     let shutdown_announced = Arc::new(AtomicBool::new(false));
@@ -313,32 +381,21 @@ fn connect_stream(
     let (event_tx, event_rx) = mpsc::channel::<PlayerEvent>();
     let (cmd_tx, cmd_rx) = mpsc::channel::<CtrlCmd>();
 
-    // The handshake (hello exchange + initial state) runs on a worker
-    // thread bounded by `DAEMON_HANDSHAKE_HARD_BOUND`, independent of
-    // `endpoint::DAEMON_TCP_CONNECT_TIMEOUT` -- that only bounds the initial
-    // TCP-level connect, not these blocking reads (issue #191 fix #5).
-    // `stream` itself is kept untouched on this thread for the writer
-    // thread spawned below; a clone goes to the worker thread instead.
-    let handshake_stream = stream.try_clone()?;
-    let (reader, state_event, ctrl_compatibility) = mbv_net::bounded::run_with_hard_bound_or_error(
-        move || {
-            perform_handshake_with_role(
-                handshake_stream,
-                || Ok(mbv_config::load_or_create_control_credential()?),
-                HandshakeRole::Client,
-                peer_build,
-                pinned,
-                swap_token,
-            )
-        },
-        || {
-            crate::RemotePlayerError::connection(format!(
-                "timed out after {}s",
-                DAEMON_HANDSHAKE_HARD_BOUND.as_secs()
-            ))
-        },
-        DAEMON_HANDSHAKE_HARD_BOUND,
-    )?;
+    // The handshake (hello exchange + initial state + tolerant playback-
+    // output seed read) runs bounded, on a worker thread — see
+    // `run_bounded_handshake`. `stream` itself is kept untouched on that
+    // thread for the writer thread spawned below; a clone goes to the
+    // worker thread instead.
+    let HandshakeOutcome {
+        reader,
+        state_event,
+        ctrl_compatibility,
+        seed,
+    } = run_bounded_handshake(stream.try_clone()?, peer_build, pinned, swap_token)?;
+    let SeedLineRead {
+        event: playback_output_seed,
+        consumed: replayed_bytes,
+    } = seed;
     tracing::info!(
         name: "ctrl.connection.established",
         target: "ctrl",
@@ -353,11 +410,22 @@ fn connect_stream(
         &pending_playback,
         false,
     );
+    apply_playback_output_seed(
+        playback_output_seed,
+        &playback_output,
+        &status,
+        &unified_queue,
+        &event_tx,
+        &pending_playback,
+    );
+
+    // Reader thread: deserializes CtrlEvent lines from daemon
 
     // Reader thread: deserializes CtrlEvent lines from daemon
     let reader_state = ReaderThreadState {
         status: Arc::clone(&status),
         unified_queue: Arc::clone(&unified_queue),
+        playback_output: Arc::clone(&playback_output),
         pending_playback: Arc::clone(&pending_playback),
         disconnected: Arc::clone(&disconnected),
         disconnect_notified: Arc::clone(&disconnect_notified),
@@ -365,6 +433,12 @@ fn connect_stream(
         shutdown_request: Arc::clone(&shutdown_request_tx),
         event_tx: event_tx.clone(),
     };
+    // The seed wait may have consumed bytes of a line that did not
+    // complete in time. They are never lost: replay them ahead of the
+    // live stream so the reader thread reads the whole line exactly as
+    // the daemon sent it (`read_remote_events` takes any `BufRead`; an
+    // empty replay cursor is a no-op prefix).
+    let reader = Cursor::new(replayed_bytes).chain(reader);
     std::thread::spawn(move || read_remote_events(reader, reader_state));
 
     // Writer thread: serializes CtrlCmd to daemon
@@ -384,6 +458,7 @@ fn connect_stream(
             status,
             subtitle_prefs,
             unified_queue,
+            playback_output,
             cmd_tx,
             disconnected,
             shutdown_announced,
@@ -398,10 +473,11 @@ fn connect_stream(
     ))
 }
 
-fn read_remote_events(reader: BufReader<SocketStream>, state: ReaderThreadState) {
+fn read_remote_events(reader: impl BufRead, state: ReaderThreadState) {
     let ReaderThreadState {
         status,
         unified_queue,
+        playback_output,
         pending_playback,
         disconnected,
         disconnect_notified,
@@ -419,6 +495,7 @@ fn read_remote_events(reader: BufReader<SocketStream>, state: ReaderThreadState)
                     &l,
                     &status,
                     &unified_queue,
+                    &playback_output,
                     &pending_playback,
                     &shutdown_request,
                     &event_tx,
@@ -461,12 +538,52 @@ fn read_remote_events(reader: BufReader<SocketStream>, state: ReaderThreadState)
     }
 }
 
+/// Retains the owner's playback output whenever a `PlaybackOutput` event
+/// crosses this connection — from the handshake cold seed or the reader
+/// thread — so the synchronous getter always reflects the last report.
+/// Applies the handshake's cold-seed playback-output event, if one was
+/// read: retains it on the connection synchronously — this is the state
+/// control decisions can read before any drain — then forwards it as a
+/// real `PlayerEvent` so the App's mirror receives it on the first drain,
+/// exactly as it would have if the reader thread had carried it. `None`
+/// (absent or late seed) is the pre-fix behavior: the reader thread owns
+/// whatever comes.
+fn apply_playback_output_seed(
+    seed: Option<CtrlEvent>,
+    playback_output: &Arc<Mutex<Option<mbv_ctrl::OutputState>>>,
+    status: &Arc<Mutex<PlayerStatus>>,
+    unified_queue: &Arc<Mutex<Option<UnifiedQueueStateData>>>,
+    event_tx: &mpsc::Sender<PlayerEvent>,
+    pending_playback: &Arc<Mutex<HashMap<u64, PlaybackIntent>>>,
+) {
+    let Some(seed) = seed else { return };
+    retain_playback_output(&seed, playback_output);
+    apply_ctrl_event(
+        seed,
+        status,
+        unified_queue,
+        event_tx,
+        pending_playback,
+        true,
+    );
+}
+
+fn retain_playback_output(
+    ev: &CtrlEvent,
+    playback_output: &Arc<Mutex<Option<mbv_ctrl::OutputState>>>,
+) {
+    if let CtrlEvent::PlaybackOutput(state) = ev {
+        *playback_output.lock().unwrap() = Some(state.clone());
+    }
+}
+
 /// Applies one decoded daemon line. Returns true when the line was a
 /// structured disconnect that closes the connection.
 fn handle_remote_line(
     line: &str,
     status: &Arc<Mutex<PlayerStatus>>,
     unified_queue: &Arc<Mutex<Option<UnifiedQueueStateData>>>,
+    playback_output: &Arc<Mutex<Option<mbv_ctrl::OutputState>>>,
     pending_playback: &Arc<Mutex<HashMap<u64, PlaybackIntent>>>,
     shutdown_request: &Arc<Mutex<Option<mpsc::Sender<crate::ShutdownResponse>>>>,
     event_tx: &mpsc::Sender<PlayerEvent>,
@@ -501,6 +618,7 @@ fn handle_remote_line(
         CtrlEvent::Disconnected { reason } => matches!(reason, DisconnectReason::DaemonShutdown),
         _ => false,
     };
+    retain_playback_output(&ev, playback_output);
     apply_ctrl_event(ev, status, unified_queue, event_tx, pending_playback, true);
     is_structured_disconnect
 }
@@ -551,7 +669,6 @@ pub fn connect_stub_daemon_pair() -> Result<
     ),
     String,
 > {
-    use std::io::Read;
     let (client, daemon) = UnixStream::pair().map_err(|e| e.to_string())?;
     let peer = std::thread::spawn(move || {
         let mut writer = daemon.try_clone().unwrap();

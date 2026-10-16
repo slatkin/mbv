@@ -336,6 +336,9 @@ pub fn run_local_daemon_main() -> ! {
                 Ok(detached_swap_command(&command_argv))
             }),
             notify: Box::new(crate::pin::notify),
+            // The Local daemon owns the Cast connector (cast-owner-output
+            // design D2): its Owner can make a receiver its playback output.
+            cast_connector: Some(mbv_daemon::local_cast_connector()),
         },
     );
     eprintln!("mbv: local daemon: {error}");

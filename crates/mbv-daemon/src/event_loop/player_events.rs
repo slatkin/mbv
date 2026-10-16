@@ -58,6 +58,8 @@ impl DaemonLoop {
                     owner: &mut self.owner,
                     shared_queue: &self.shared_queue,
                     ctrl_clients: &self.ctrl_clients,
+                    merged_tx: &self.merged_tx,
+                    audiobookshelf: self.audiobookshelf_runtime.as_ref(),
                 },
                 observed_request_id,
                 resolved_slot_id,

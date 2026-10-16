@@ -228,6 +228,7 @@ fn reconcile_abs_with_queue(
     let shared = shared_queue_state();
     let clients = Arc::new(Mutex::new(CtrlClients::default()));
     let client = Arc::new(Mutex::new(mbv_emby::EmbyClient::new(Config::default())));
+    let (merged_tx, _merged_rx) = mpsc::channel::<DaemonEvent>();
     let mut owner = DaemonPlayerOwner::default();
     owner.core.queue = std::mem::replace(queue, crate::tests::empty_queue());
     owner.core.source = std::mem::replace(source, QueueSource::Unknown);
@@ -240,6 +241,8 @@ fn reconcile_abs_with_queue(
             owner: &mut owner,
             shared_queue: &shared,
             ctrl_clients: &clients,
+            merged_tx: &merged_tx,
+            audiobookshelf: None,
         },
     );
     *queue = owner.core.queue;

@@ -298,12 +298,19 @@ fn persist_shutdown_queue(ctx: &CtrlContext<'_>, queue_state: &mbv_queue::QueueS
 /// verbatim by the `Stop` command and `PlaybackIntentAction::Stop`.
 fn handle_stop(ctx: &mut CtrlContext<'_>) {
     tracing::info!(name: "daemon.ctrl_stop.received", target: "daemon", client = %ctx.client_id, "ctrl stop received");
+    // The active output's media stops (design D4, row 5.3): the local run on
+    // Local, the receiver media and its loaded record on Cast.
+    crate::cast::stop_active_output(
+        ctx.player,
+        &mut ctx.owner.output,
+        &ctx.owner.core.queue,
+        ctx.ctrl_clients,
+    );
     let DaemonPlayerOwner {
         core: PlayerOwnerState { transitions, .. },
         queued_transition_origin,
         ..
     } = &mut *ctx.owner;
-    ctx.player.stop();
     reset_slot_jumps(transitions, queued_transition_origin);
 }
 
@@ -428,9 +435,7 @@ fn dispatch_ctrl_command(
     queue_lineage: mbv_queue::QueueLineage,
 ) {
     match cmd {
-        CtrlCmd::Hello(_) => {
-            tracing::warn!(name: "daemon.ctrl_client_hello.unexpected", target: "daemon", "unexpected ctrl protocol hello after negotiation");
-        }
+        CtrlCmd::Hello(_) => log_unexpected_hello_after_negotiation(),
         CtrlCmd::UnifiedAdoptQueue {
             items,
             cursor,
@@ -449,9 +454,7 @@ fn dispatch_ctrl_command(
                 ),
             );
         }
-        CtrlCmd::PlayerCmd(pc) => {
-            ctx.player.send_command(PlayerCommand::from(pc));
-        }
+        CtrlCmd::PlayerCmd(pc) => crate::cast::route_player_cmd(ctx, pc),
         CtrlCmd::Stop => handle_stop(ctx),
         CtrlCmd::PlaybackIntent(intent) => playback::handle_playback_intent(ctx, intent),
         CtrlCmd::RequestShutdown => {
@@ -465,17 +468,20 @@ fn dispatch_ctrl_command(
         // D2/D5): the core picks (or clears) and the run is told the advance
         // decision to obey.
         CtrlCmd::SetPlayOrder(mode) => handle_set_play_order(ctx, mode),
-        // The Pin-swap state machine consumes its target's `SwapPrepared` in
-        // the event loop (tray-pin-swap task 3.3) before role dispatch; this
-        // arm only covers direct `handle_ctrl_for_role` callers.
+        // The commands the event loop consumes before this dispatcher: the
+        // swap machine takes its target's `SwapPrepared` (tray-pin-swap task
+        // 3.3), the owner-action handler takes `RunOwnerAction` (task 3.5),
+        // and the Cast connector lives on the loop for `SelectPlaybackOutput`
+        // (cast-owner-output task 3.2). Direct callers that bypass the loop
+        // have no swap machine, owner-action path, or connector to consult.
         CtrlCmd::SwapPrepared => {
             tracing::debug!(name: "daemon.ctrl_swap_prepared.ignored", target: "daemon", "ignoring SwapPrepared outside the event-loop swap path");
         }
-        // Owner actions run through the event-loop owner-action handler
-        // (tray-pin-swap task 3.5); this arm only covers direct
-        // `handle_ctrl_for_role` callers.
         CtrlCmd::RunOwnerAction(_) => {
             tracing::debug!(name: "daemon.ctrl_owner_action.ignored", target: "daemon", "ignoring RunOwnerAction outside the event-loop owner-action path");
+        }
+        CtrlCmd::SelectPlaybackOutput(_) => {
+            tracing::debug!(name: "daemon.ctrl_select_output.ignored", target: "daemon", "ignoring SelectPlaybackOutput outside the event-loop selection path");
         }
         CtrlCmd::UnifiedQueueLoadIdle {
             request_id,
@@ -506,6 +512,7 @@ fn dispatch_ctrl_command(
         CtrlCmd::UnifiedQueueAppend { items, before, .. } => {
             queue_setup::handle_queue_append(ctx, queue_lineage, items, before);
         }
+        CtrlCmd::UnifiedQueueRefresh { .. } => queue_setup::handle_queue_refresh(ctx),
         CtrlCmd::UnifiedQueueRemoveSlot { slot_id, .. } => {
             queue_edit::handle_queue_remove_slot(ctx, queue_lineage, slot_id);
         }
@@ -523,11 +530,18 @@ fn dispatch_ctrl_command(
         CtrlCmd::UnifiedQueueClear | CtrlCmd::UnifiedQueueClearOp { .. } => {
             queue_edit::handle_queue_clear(ctx);
         }
-        CtrlCmd::UnifiedQueueRefresh { .. } => queue_setup::handle_queue_refresh(ctx),
         CtrlCmd::UnifiedQueueApplyProgress { updates, .. } => {
             queue_edit::handle_queue_apply_progress(ctx, updates);
         }
     }
+}
+
+fn log_unexpected_hello_after_negotiation() {
+    tracing::warn!(
+        name: "daemon.ctrl_client_hello.unexpected",
+        target: "daemon",
+        "unexpected ctrl protocol hello after negotiation"
+    );
 }
 
 pub(crate) fn owner_admin_transport_allowed(

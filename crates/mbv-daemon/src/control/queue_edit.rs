@@ -255,6 +255,8 @@ pub(super) fn handle_queue_play_slot(
             owner: &mut *ctx.owner,
             shared_queue: ctx.shared_queue,
             ctrl_clients: ctx.ctrl_clients,
+            merged_tx: ctx.merged_tx,
+            audiobookshelf: ctx.audiobookshelf,
         },
         super::super::core::JumpOrigin::Ctrl(ctx.client_id),
         mbv_player::transition::Transition::new(request_id, generation, sid),

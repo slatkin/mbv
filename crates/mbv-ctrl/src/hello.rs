@@ -2,8 +2,8 @@ use super::{
     CTRL_CAP_ABS_BOOK_PROGRESS, CTRL_CAP_ABS_BOOK_QUEUE, CTRL_CAP_ABS_PROGRESS, CTRL_CAP_ABS_QUEUE,
     CTRL_CAP_ANSWERED_QUEUE_OPS, CTRL_CAP_AUDIO_ONLY, CTRL_CAP_CONTROL_AUTH,
     CTRL_CAP_LIFECYCLE_SHUTDOWN, CTRL_CAP_OWNER_ACTION, CTRL_CAP_OWNER_QUEUE_LOAD,
-    CTRL_CAP_PIN_SWAP, CTRL_CAP_PINNED_SURFACE, CTRL_CAP_PLAY_ORDER, CTRL_CAP_QUEUE_STATE,
-    CTRL_CAP_SERVICE_SETUP_ADMIN, CTRL_CAP_START_INDEX, CTRL_CAP_STATUS_ONLY,
+    CTRL_CAP_PIN_SWAP, CTRL_CAP_PINNED_SURFACE, CTRL_CAP_PLAY_ORDER, CTRL_CAP_PLAYBACK_OUTPUT,
+    CTRL_CAP_QUEUE_STATE, CTRL_CAP_SERVICE_SETUP_ADMIN, CTRL_CAP_START_INDEX, CTRL_CAP_STATUS_ONLY,
     CTRL_PROTOCOL_VERSION,
 };
 use serde::{Deserialize, Serialize};
@@ -197,6 +197,13 @@ impl CtrlHello {
     }
 
     #[must_use]
+    pub fn supports_playback_output(&self) -> bool {
+        self.capabilities
+            .iter()
+            .any(|cap| cap == CTRL_CAP_PLAYBACK_OUTPUT)
+    }
+
+    #[must_use]
     pub fn supports_pin_swap(&self) -> bool {
         self.capabilities.iter().any(|cap| cap == CTRL_CAP_PIN_SWAP)
     }
@@ -263,6 +270,11 @@ pub struct CtrlCompatibility {
     /// `UnifiedQueueStateData`; set from the peer Hello's `play-order`
     /// capability by the Client's handshake.
     pub supports_play_order: bool,
+    /// The peer accepts `CtrlCmd::SelectPlaybackOutput` and reports
+    /// `CtrlEvent::PlaybackOutput` (cast-owner-output design D3); set from
+    /// the peer Hello's `playback-output` capability by the Client's
+    /// handshake.
+    pub supports_playback_output: bool,
 }
 
 impl CtrlCompatibility {
@@ -285,6 +297,7 @@ impl CtrlCompatibility {
                 supports_answered_queue_ops: false,
                 supports_owner_action: false,
                 supports_play_order: false,
+                supports_playback_output: false,
             }),
             _ => Err(CtrlError::incompatible_protocol(peer_protocol_version)),
         }

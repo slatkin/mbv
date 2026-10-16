@@ -117,14 +117,7 @@ impl App {
 }
 
 impl App {
-    /// Cast takes priority over an attached Emby session: the two are
-    /// mutually exclusive attachment slots (see `remote_slot_state.rs`), but
-    /// this ordering keeps the seam correct even if that invariant is ever
-    /// relaxed.
     pub(in crate::app) fn playback_target(&self) -> PlaybackTarget {
-        if self.cast_attachment.is_some() {
-            return PlaybackTarget::Cast(crate::app::CastPlaybackTarget);
-        }
         match self.connected_session_id.clone() {
             Some(session_id) => PlaybackTarget::Remote(RemotePlaybackTarget { session_id }),
             None => PlaybackTarget::Local(LocalPlaybackTarget),
@@ -132,7 +125,7 @@ impl App {
     }
 
     pub(in crate::app) fn playback_display_target(&self) -> PlaybackTarget {
-        if self.cast_attachment.is_some() || self.connected_session_state.is_some() {
+        if self.connected_session_state.is_some() {
             self.playback_target()
         } else {
             PlaybackTarget::Local(LocalPlaybackTarget)
@@ -216,10 +209,6 @@ impl App {
     ) {
         if self.player.is_remote_disconnected() {
             self.flash(CONNECTION_LOST_MESSAGE.into(), ToastSeverity::Warning);
-            return;
-        }
-        if self.is_cast_attached() {
-            self.play_items_routed_on_cast(items, start_idx, queue_source);
             return;
         }
         let mixed_unplayable = match self.playback_eligibility(&items) {
@@ -310,13 +299,6 @@ impl App {
             return;
         }
         tracing::info!(name: "library_route.play.requested", target: "library_route", item = %item.id, item_name = %item.name, "play requested");
-        if self.is_cast_attached() {
-            // cast-session-control "Playing while attached": the selection
-            // the local path would have queued is dispatched to the attached
-            // receiver instead, and local playback never starts.
-            self.play_item_on_cast(item);
-            return;
-        }
         if matches!(
             self.playback_eligibility(std::slice::from_ref(&item)),
             PlaybackEligibility::WhollyUnplayable { .. }
@@ -347,69 +329,14 @@ impl App {
         self.play_single_item(item, direct_remote, &label);
     }
 
-    /// The queue-view tail the library cast play arms share with their
-    /// local paths: the played scope becomes the viewed one, and focus
-    /// moves to the queue unless the play started in the library.
+    /// The queue-view tail the library play paths share: the played scope
+    /// becomes the viewed one, and focus moves to the queue unless the play
+    /// started in the library.
     fn adopt_played_queue_view(&mut self) {
         self.set_queue_scope(self.playing_queue_scope());
         if !matches!(self.effective_panel_focus(), PanelFocus::Library) {
             self.set_panel_focus(PanelFocus::Queue);
         }
-    }
-
-    /// The cast arm of `play_items_routed` (cast-session-control "Playing
-    /// while attached"): the library selection is dispatched to the attached
-    /// receiver and local playback never starts. The owner queue is loaded
-    /// idle (no playback-starting command) so the queue view still adopts
-    /// the selection, mirroring the attached-session path. Dispatch
-    /// resolution -- not owner admission -- gates what is castable, so the
-    /// local audio-only deferral does not apply here.
-    fn play_items_routed_on_cast(
-        &mut self,
-        items: Vec<EmbyItem>,
-        start_idx: usize,
-        queue_source: mbv_queue::QueueSource,
-    ) {
-        let queue_items: Vec<QueueItem> = items
-            .into_iter()
-            .map(|item| QueueItem::Emby(Box::new(item)))
-            .collect();
-        self.play_selection_on_cast(queue_items, start_idx, queue_source);
-        self.adopt_played_queue_view();
-    }
-
-    /// The cast arm of `play_item` (cast-session-control "Playing while
-    /// attached"): the selection the local path would have queued -- the
-    /// item alone, or the series continuation when always-play-next is on --
-    /// is dispatched to the attached receiver instead of starting local
-    /// playback, through the same cast arm `play_items_routed` uses.
-    fn play_item_on_cast(&mut self, item: EmbyItem) {
-        let Some((items, start_idx, source)) = self.cast_play_selection(item) else {
-            return;
-        };
-        self.play_items_routed_on_cast(items, start_idx, source);
-    }
-
-    /// The selection an Emby play covers: the series continuation when
-    /// always-play-next is on and the item belongs to a multi-episode
-    /// series, else the single item. `None` when the series lookup fails
-    /// (Emby unavailable) -- flashed, and the play stops, matching the local
-    /// path's series continuation.
-    fn cast_play_selection(
-        &mut self,
-        item: EmbyItem,
-    ) -> Option<(Vec<EmbyItem>, usize, mbv_queue::QueueSource)> {
-        if item.series_id.is_empty() || !self.player.always_play_next {
-            return Some((vec![item], 0, mbv_queue::QueueSource::Unknown));
-        }
-        let Some(episodes) = self.series_episodes_from(&item) else {
-            self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
-            return None;
-        };
-        if episodes.len() <= 1 {
-            return Some((vec![item], 0, mbv_queue::QueueSource::Unknown));
-        }
-        Some((episodes, 0, mbv_queue::QueueSource::Series))
     }
 
     /// Plays the rest of a series when "always play next" is on and the item
@@ -580,7 +507,7 @@ impl App {
         if !start_playback {
             return self.append_on_owner(scope, vec![item]);
         }
-        if !self.is_cast_attached() && self.player.is_remote_disconnected() {
+        if self.player.is_remote_disconnected() {
             self.flash(CONNECTION_LOST_MESSAGE.into(), ToastSeverity::Warning);
             return false;
         }
@@ -592,30 +519,20 @@ impl App {
             .0
             .remote()
             .supports_answered_queue_ops();
-        // While a cast target is attached, playing a selection dispatches it
-        // to the receiver instead of the local player (cast-session-control
-        // "Attaching to a cast target does not engage the local player") and
-        // must never begin local playback of it.
-        if self.is_cast_attached() {
-            if !self.play_selection_on_cast(vec![item], 0, mbv_queue::QueueSource::Unknown) {
-                return false;
-            }
-        } else {
-            // Row 5.3 (design D6): play replaces the owner queue with exactly
-            // this item and starts it, as an answered op when the owner
-            // negotiates `answered-queue-ops` (which also cold-starts a run
-            // when none is alive); legacy owners get the same replace in its
-            // legacy wire form.
-            let sent =
-                self.replace_queue_on_owner(scope, vec![item], 0, mbv_queue::QueueSource::Unknown);
-            if sent == QueueOpEdit::NotApplied {
-                return false;
-            }
-            if answered {
-                let _ = self
-                    .player
-                    .send_command(PlayerCommand::SetMute(self.mute_on));
-            }
+        // Row 5.3 (design D6): play replaces the owner queue with exactly
+        // this item and starts it, as an answered op when the owner
+        // negotiates `answered-queue-ops` (which also cold-starts a run
+        // when none is alive); legacy owners get the same replace in its
+        // legacy wire form.
+        let sent =
+            self.replace_queue_on_owner(scope, vec![item], 0, mbv_queue::QueueSource::Unknown);
+        if sent == QueueOpEdit::NotApplied {
+            return false;
+        }
+        if answered {
+            let _ = self
+                .player
+                .send_command(PlayerCommand::SetMute(self.mute_on));
         }
         self.set_queue_scope(scope);
         if !matches!(self.effective_panel_focus(), PanelFocus::Library) {

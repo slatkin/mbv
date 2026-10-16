@@ -174,18 +174,7 @@ fn active_file_jump_to_observed_slot_advances_when_the_run_confirms_via_track_ch
             op: std::cell::Cell::new(None),
         },
     );
-    let (jump_request_id, jump_generation) = match cmd_rx.recv().unwrap() {
-        PlayerCommand::JumpTo {
-            slot_id,
-            request_id,
-            generation,
-            ..
-        } => {
-            assert_eq!(slot_id, slot_b, "the jump targets the next slot");
-            (request_id, generation)
-        }
-        other => panic!("expected a JumpTo dispatch, got {other:?}"),
-    };
+    let (jump_request_id, jump_generation) = expect_jump_dispatch(&cmd_rx, slot_b);
 
     // Mock the active-file run's response (design D1): TrackChanged naming
     // the target slot and carrying the jump's request identity, then apply
@@ -204,6 +193,7 @@ fn active_file_jump_to_observed_slot_advances_when_the_run_confirms_via_track_ch
                 .observe_track_change(slot_id)
                 .expect("the run reports a slot the canonical queue still holds");
             let client = Arc::new(Mutex::new(mbv_emby::EmbyClient::new(Config::default())));
+            let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
             super::settle_and_redispatch(
                 &mut super::DaemonOwnerContext {
                     player: &player,
@@ -211,6 +201,8 @@ fn active_file_jump_to_observed_slot_advances_when_the_run_confirms_via_track_ch
                     owner: &mut owner,
                     shared_queue: &shared,
                     ctrl_clients: &registry,
+                    merged_tx: &dummy_merged_tx,
+                    audiobookshelf: None,
                 },
                 request_id,
                 resolved,
@@ -231,4 +223,24 @@ fn active_file_jump_to_observed_slot_advances_when_the_run_confirms_via_track_ch
         None,
         "the jump's transition settles on the run's confirmation"
     );
+}
+
+/// Expects the dispatched slot jump and returns the request identity the
+/// active-file run must echo in its `TrackChanged` confirmation.
+fn expect_jump_dispatch(
+    cmd_rx: &mpsc::Receiver<PlayerCommand>,
+    target: mbv_queue::QueueSlotId,
+) -> (u64, u64) {
+    match cmd_rx.recv().unwrap() {
+        PlayerCommand::JumpTo {
+            slot_id,
+            request_id,
+            generation,
+            ..
+        } => {
+            assert_eq!(slot_id, target, "the jump targets the next slot");
+            (request_id, generation)
+        }
+        other => panic!("expected a JumpTo dispatch, got {other:?}"),
+    }
 }

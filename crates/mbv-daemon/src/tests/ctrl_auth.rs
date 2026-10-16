@@ -20,7 +20,10 @@ fn start_ctrl_auth_test_peer(
         control_credential.map(str::to_owned),
         player.status,
         shared_queue_state(),
-        audio_only,
+        crate::core_ctrl_spawn::DaemonHelloCaps {
+            audio_only,
+            playback_output: false,
+        },
         role,
         crate::owner_settings::fixed_reader(false),
     );
@@ -80,6 +83,7 @@ fn admission_session(
             CtrlTransport::Local,
             mbv_ctrl::CtrlAudiobookshelfCapabilities::default(),
             false,
+            false,
             None,
             crate::ctrl::CtrlConnectionRole::Client,
         );
@@ -94,7 +98,7 @@ fn admission_session(
         None,
         player.status,
         shared_queue_state(),
-        false,
+        crate::core_ctrl_spawn::DaemonHelloCaps::default(),
         role,
         crate::owner_settings::fixed_reader(stay_alive),
     );

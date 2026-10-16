@@ -76,6 +76,7 @@ pub fn connect_client(clients: &mut CtrlClients) -> (u64, mpsc::Receiver<CtrlOut
             book_progress: true,
         },
         true,
+        false,
         None,
         crate::ctrl::CtrlConnectionRole::Client,
     );
@@ -107,6 +108,7 @@ pub fn shared_queue_state() -> SharedQueueState {
         lineage: Arc::new(Mutex::new(mbv_queue::QueueLineage::default())),
         observed_active_slot: Arc::new(Mutex::new(None)),
         play_order: Arc::new(Mutex::new(mbv_queue::PlayOrderMode::Sequential)),
+        playback_output: Arc::new(Mutex::new(mbv_ctrl::OutputState::Local)),
     }
 }
 

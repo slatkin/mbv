@@ -344,6 +344,43 @@ fn command_rejected_forwards_reason_as_player_event() {
 }
 
 #[test]
+fn playback_output_event_forwards_to_the_player_event_channel() {
+    // cast-owner-output design D3/D13 (rows 8.1/8.2 A): the owner's output
+    // state crosses the crate boundary as a `PlayerEvent`, no longer a
+    // documented no-op in the read loop.
+    let status = Arc::new(Mutex::new(status_with_idx(0)));
+    let unified_queue = Arc::new(Mutex::new(None));
+    let (tx, rx) = mpsc::channel();
+
+    apply_ctrl_event(
+        CtrlEvent::PlaybackOutput(mbv_ctrl::OutputState::Cast {
+            receiver_id: "r-1".to_string(),
+            name: "Living Room".to_string(),
+            connection: mbv_ctrl::CastConnection::Connected,
+        }),
+        &status,
+        &unified_queue,
+        &tx,
+        &Arc::new(Mutex::new(std::collections::HashMap::new())),
+        true,
+    );
+
+    match rx.recv().unwrap() {
+        PlayerEvent::PlaybackOutput(state) => {
+            assert_eq!(
+                state,
+                mbv_ctrl::OutputState::Cast {
+                    receiver_id: "r-1".to_string(),
+                    name: "Living Room".to_string(),
+                    connection: mbv_ctrl::CastConnection::Connected,
+                }
+            );
+        }
+        _ => panic!("expected PlaybackOutput"),
+    }
+}
+
+#[test]
 fn reconnect_replaces_queue_and_status_from_one_playback_snapshot() {
     use mbv_ctrl::{UnifiedQueueSlot, UnifiedQueueStateData};
 

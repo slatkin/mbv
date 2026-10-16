@@ -69,6 +69,10 @@ impl App {
         // Tear down the old (already-dead) connection before overwriting it,
         // mirroring `restore_local_mode`'s remote-to-remote swap (#233).
         self.player.disconnect_remote();
+        // The incoming owner's output is unknown until its cold-seed
+        // `PlaybackOutput` event arrives (cast-owner-output design D13 reset
+        // rule); the replaced owner's state must not leak into it.
+        self.playback_output = None;
         let always_play_next = self.config.lock().unwrap().always_play_next;
         self.player = PlayerProxy::from_remote(remote, always_play_next);
         self.player_rx = remote_rx;

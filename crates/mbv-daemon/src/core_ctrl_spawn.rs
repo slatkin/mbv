@@ -20,9 +20,19 @@ const CTRL_WRITE_TIMEOUT: Duration = Duration::from_secs(30);
 struct HelloClassification {
     audiobookshelf: CtrlAudiobookshelfCapabilities,
     supports_owner_queue_load: bool,
+    supports_playback_output: bool,
     role: CtrlConnectionRole,
     swap_surface: Option<SwapSurface>,
     swap_token: Option<String>,
+}
+
+/// Capabilities this runtime's daemon Hello advertises. Decided once at
+/// startup and passed to every ctrl accept (cast-owner-output design D2/D3:
+/// `playback-output` only when the runtime supplies a Cast connector).
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct DaemonHelloCaps {
+    pub(crate) audio_only: bool,
+    pub(crate) playback_output: bool,
 }
 
 fn ctrl_client_capabilities(
@@ -43,6 +53,7 @@ fn ctrl_client_capabilities(
                     book_progress: info.supports_abs_book_progress(),
                 },
                 supports_owner_queue_load: info.supports_owner_queue_load(),
+                supports_playback_output: info.supports_playback_output(),
                 role,
                 swap_surface: swap_surface_from_hello(&info),
                 swap_token: info.swap_token,
@@ -238,6 +249,23 @@ fn initial_queue_state_json(
     serde_json::to_string(&init_event).ok()
 }
 
+/// A Client that negotiated `playback-output` receives the owner's active
+/// output on connect, before any command (cast-owner-output design D3, spec
+/// "Client connects to an owner that is casting"). Split from the connect
+/// path so that path stays under the line-count lint.
+fn seed_playback_output(
+    shared_queue: &SharedQueueState,
+    hello: &HelloClassification,
+    ev_tx: &mpsc::Sender<CtrlOutbound>,
+) {
+    if hello.supports_playback_output {
+        let output = shared_queue.playback_output.lock().unwrap().clone();
+        if let Ok(json) = serde_json::to_string(&CtrlEvent::PlaybackOutput(output)) {
+            let _ = ev_tx.send(CtrlOutbound::Event(json));
+        }
+    }
+}
+
 /// The peer identity for the ctrl connect line (design D5): the Unix peer's
 /// process id from `SO_PEERCRED`, or the TCP peer address. Read before `stream`
 /// moves into the reader thread.
@@ -334,12 +362,14 @@ impl CtrlClientSession {
         if let Some(initial_state) = initial_state {
             let _ = ev_tx.send(CtrlOutbound::Event(initial_state));
         }
+        seed_playback_output(&shared_queue, &hello, &ev_tx);
         let reply_tx = ev_tx.clone();
         let client_id = clients.connect_with_role(
             ev_tx,
             transport,
             hello.audiobookshelf,
             hello.supports_owner_queue_load,
+            hello.supports_playback_output,
             hello.swap_surface,
             hello.role,
         );
@@ -394,7 +424,7 @@ pub(crate) fn spawn_ctrl_client(
     control_credential: Option<String>,
     player_status: Arc<Mutex<mbv_ctrl::player::PlayerStatus>>,
     shared_queue: SharedQueueState,
-    audio_only: bool,
+    caps: DaemonHelloCaps,
     role: DaemonRole,
     owner_settings: OwnerSettingsReader,
 ) {
@@ -418,10 +448,17 @@ pub(crate) fn spawn_ctrl_client(
             .capabilities
             .retain(|cap| cap != mbv_ctrl::CTRL_CAP_CONTROL_AUTH);
     }
-    if audio_only {
+    if caps.audio_only {
         daemon_hello
             .capabilities
             .push(mbv_ctrl::CTRL_CAP_AUDIO_ONLY.to_string());
+    }
+    // Only a runtime that supplies a Cast connector offers the playback
+    // output (cast-owner-output design D2).
+    if caps.playback_output {
+        daemon_hello
+            .capabilities
+            .push(mbv_ctrl::CTRL_CAP_PLAYBACK_OUTPUT.to_string());
     }
     if let Ok(hello_json) = serde_json::to_string(&CtrlEvent::Hello(daemon_hello)) {
         let _ = ev_tx.send(CtrlOutbound::Event(hello_json));
@@ -512,6 +549,7 @@ mod tests {
             CtrlTransport::Local,
             CtrlAudiobookshelfCapabilities::default(),
             false,
+            false,
             swap_surface_from_hello(&hello_with_caps(&[mbv_ctrl::CTRL_CAP_PINNED_SURFACE])),
             CtrlConnectionRole::Client,
         );
@@ -539,6 +577,7 @@ mod tests {
             client_tx,
             CtrlTransport::Local,
             CtrlAudiobookshelfCapabilities::default(),
+            false,
             false,
             None,
             CtrlConnectionRole::Client,

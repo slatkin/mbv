@@ -2,57 +2,72 @@
 // (ureq, no tokio). Connect/launch/load/transport/status are verified
 // against real Shield Android TV receivers; see design.md Risks for the
 // rust_cast 0.21 gaps this client works around (no wire support for
-// subtitle tracks or a queue-jump message; heartbeat requires an explicit
+// subtitle tracks; heartbeat requires an explicit
 // keep-alive pump).
 
 use crate::CastError;
 use crate::error::TransportKind;
 use rust_cast::CastDevice;
 use rust_cast::channels::media::{
-    Media, MediaQueue, PlayerState as CastPlayerState, StatusEntry, StreamType,
+    IdleReason, Media, PlayerState as CastPlayerState, StatusEntry, StreamType,
 };
-use rust_cast::channels::receiver::CastDeviceApp;
+use rust_cast::channels::receiver::{Application, CastDeviceApp};
+use rust_cast::errors::Error as RustCastError;
+// Trait only, for `Error::source()` in the LOADING parse-error match.
+use std::error::Error as _;
 
 const RECEIVER_PLATFORM_ID: &str = "receiver-0";
 
 /// A dispatched-and-forgotten cast session: mbv connects, launches the
-/// default media receiver, loads items, and controls transport. The
-/// receiver owns its queue once loaded (see design.md "receiver owns its
-/// queue").
+/// default media receiver, loads items, and controls transport.
 pub struct CastClient {
     device: CastDevice<'static>,
     transport_id: String,
     session_id: String,
     media_session_id: Option<i32>,
-    dispatched_queue: Option<DispatchedQueue>,
+    /// The URL of the last item `load` accepted, kept so a `LOADING`-report
+    /// status (design D7) can still name the loaded content id.
+    loaded_content_id: Option<String>,
+    /// The last status the receiver reported for the loaded item, so an
+    /// unparseable error report can still carry the position it ended at.
+    last_status: Option<CastStatus>,
 }
 
 impl std::fmt::Debug for CastClient {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // `device` (rust_cast) and `dispatched_queue` have no Debug; the
-        // queue is summarized by presence only.
+        // `device` (rust_cast) has no Debug.
         f.debug_struct("CastClient")
             .field("transport_id", &self.transport_id)
             .field("session_id", &self.session_id)
             .field("media_session_id", &self.media_session_id)
-            .field("has_dispatched_queue", &self.dispatched_queue.is_some())
             .finish_non_exhaustive()
     }
 }
 
-/// The last queue this client loaded, kept only so `next`/`previous` can
-/// replay it with a shifted `start_index` -- not a projection of mbv's
-/// queue, and never reissued except on an explicit transport action.
-struct DispatchedQueue {
-    queue: MediaQueue,
-    current_index: u16,
-}
-
-/// One item to dispatch to the receiver's queue.
+/// One item to dispatch to the receiver.
 #[derive(Debug)]
 pub struct CastMediaItem {
     pub url: String,
     pub content_type: String,
+}
+
+/// What `connect` is for: a user's first selection of this receiver, or an
+/// automatic reconnect after a connection loss (design D11). The mode only
+/// changes what happens when another application is running: a first
+/// selection still launches, a reconnect never takes the TV over.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConnectMode {
+    FirstSelect,
+    Reconnect,
+}
+
+/// Why a receiver reports an idle media session (`StatusEntry.idle_reason`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CastIdleReason {
+    Finished,
+    Cancelled,
+    Interrupted,
+    Error,
 }
 
 /// The receiver's reported playback state, decoupled from `rust_cast`'s own
@@ -65,6 +80,8 @@ pub struct CastStatus {
     pub state: CastPlaybackState,
     /// The URL of the currently loaded item, when the receiver reports one.
     pub playing_content_id: Option<String>,
+    /// Why the receiver went idle, when it reports one (design D7).
+    pub idle_reason: Option<CastIdleReason>,
 }
 
 impl CastStatus {
@@ -78,6 +95,40 @@ impl CastStatus {
             playback_rate: 1.0,
             state: CastPlaybackState::Idle,
             playing_content_id: None,
+            idle_reason: None,
+        }
+    }
+
+    /// A load that the receiver accepted and is still fetching media for:
+    /// `rust_cast` 0.21 cannot parse the receiver's `LOADING` player state
+    /// (design D7), so a load in progress is reported as this status rather
+    /// than as an error.
+    #[must_use]
+    pub fn buffering(content_id: Option<String>) -> Self {
+        Self {
+            position_seconds: None,
+            duration_seconds: None,
+            playback_rate: 1.0,
+            state: CastPlaybackState::Buffering,
+            playing_content_id: content_id,
+            idle_reason: None,
+        }
+    }
+}
+
+impl CastStatus {
+    /// The loaded item ended with an error report `rust_cast` cannot parse
+    /// (an undocumented `detailedErrorCode`): idle with `Error`, carrying the
+    /// position and duration of the last status that parsed, if any.
+    #[must_use]
+    pub fn errored(content_id: Option<String>, last: Option<&CastStatus>) -> Self {
+        Self {
+            position_seconds: last.and_then(|status| status.position_seconds),
+            duration_seconds: last.and_then(|status| status.duration_seconds),
+            playback_rate: 1.0,
+            state: CastPlaybackState::Idle,
+            playing_content_id: content_id,
+            idle_reason: Some(CastIdleReason::Error),
         }
     }
 }
@@ -91,16 +142,37 @@ pub enum CastPlaybackState {
 }
 
 impl CastClient {
-    /// Connects to a receiver at `host:port` and launches the default media
-    /// receiver app. Returns an error rather than panicking on any failure
-    /// (connection, app launch, or app-transport handshake).
-    pub fn connect(host: &str, port: u16) -> Result<Self, CastError> {
+    /// Connects to a receiver at `host:port` and either joins the default
+    /// media receiver app that is already running there or launches it
+    /// (design D11): the decision comes from the receiver's application
+    /// list, read before any launch. A reconnect that would have to launch
+    /// while another application runs is refused. Returns an error rather
+    /// than panicking on any failure (connection, app launch, or
+    /// app-transport handshake).
+    pub fn connect(host: &str, port: u16, mode: ConnectMode) -> Result<Self, CastError> {
         let device = CastDevice::connect_without_host_verification(host.to_string(), port)
             .map_err(|e| CastError::transport(TransportKind::Connect, e))?;
         device
             .connection
             .connect(RECEIVER_PLATFORM_ID)
             .map_err(|e| CastError::transport(TransportKind::ReceiverPlatformConnect, e))?;
+        let status = device
+            .receiver
+            .get_status()
+            .map_err(|e| CastError::transport(TransportKind::ReceiverStatus, e))?;
+        match decide_connect(&status.applications, mode) {
+            ConnectPlan::Join {
+                transport_id,
+                session_id,
+            } => Self::join_running(device, transport_id, session_id),
+            ConnectPlan::Launch => Self::launch(device),
+            ConnectPlan::Refuse => Err(CastError::reconnect_refused()),
+        }
+    }
+
+    /// The no-app-running path: launch the default media receiver and
+    /// connect to its new app transport.
+    fn launch(device: CastDevice<'static>) -> Result<Self, CastError> {
         let app = device
             .receiver
             .launch_app(&CastDeviceApp::DefaultMediaReceiver)
@@ -114,7 +186,43 @@ impl CastClient {
             transport_id: app.transport_id,
             session_id: app.session_id,
             media_session_id: None,
-            dispatched_queue: None,
+            loaded_content_id: None,
+            last_status: None,
+        })
+    }
+
+    /// The default-media-receiver-already-running path (design D11): connect
+    /// to the running app's transport and adopt its media session id.
+    fn join_running(
+        device: CastDevice<'static>,
+        transport_id: String,
+        session_id: String,
+    ) -> Result<Self, CastError> {
+        device
+            .connection
+            .connect(transport_id.as_str())
+            .map_err(|e| CastError::transport(TransportKind::AppTransportConnect, e))?;
+        let media_session_id = match device.media.get_status(transport_id.as_str(), None) {
+            Ok(status) => status.entries.first().map(|entry| entry.media_session_id),
+            Err(e) => {
+                // A session that is still LOADING is joinable; the media
+                // session id is adopted on the first status poll instead
+                // (design D7).
+                let error = CastError::transport(TransportKind::Status, e);
+                if is_loading_parse_error(&error) {
+                    None
+                } else {
+                    return Err(error);
+                }
+            }
+        };
+        Ok(Self {
+            device,
+            transport_id,
+            session_id,
+            media_session_id,
+            loaded_content_id: None,
+            last_status: None,
         })
     }
 
@@ -145,7 +253,7 @@ impl CastClient {
         start_position_seconds: f64,
     ) -> Result<(), CastError> {
         let media = build_media(&item.url, &item.content_type);
-        let status = self
+        match self
             .device
             .media
             .load_with_opts(
@@ -157,10 +265,33 @@ impl CastClient {
                     autoplay: true,
                 },
             )
-            .map_err(|e| CastError::transport(TransportKind::Load, e))?;
-        self.adopt_status(&status);
-        self.dispatched_queue = None;
-        Ok(())
+            .map_err(|e| CastError::transport(TransportKind::Load, e))
+        {
+            Ok(status) => {
+                self.adopt_status(&status);
+                self.record_accepted_load(&item.url);
+                Ok(())
+            }
+            Err(error) => {
+                // A receiver that accepted the load but is still fetching
+                // media answers with a `LOADING` state rust_cast cannot
+                // parse (design D7): the load was accepted, not lost. The
+                // same holds for an unsupported error code: the wait read
+                // the ended item's queued error status before the load's
+                // reply, and the load request itself was already sent.
+                if is_loading_parse_error(&error) || is_unsupported_error_code(&error) {
+                    self.record_accepted_load(&item.url);
+                    Ok(())
+                } else {
+                    Err(error)
+                }
+            }
+        }
+    }
+
+    fn record_accepted_load(&mut self, url: &str) {
+        self.loaded_content_id = Some(url.to_string());
+        self.last_status = None;
     }
 
     pub fn play(&mut self) -> Result<(), CastError> {
@@ -193,7 +324,6 @@ impl CastClient {
             .stop(self.transport_id.as_str(), id)
             .map_err(|e| CastError::transport(TransportKind::Stop, e))?;
         self.adopt_status_entry(&entry);
-        self.dispatched_queue = None;
         Ok(())
     }
 
@@ -205,41 +335,6 @@ impl CastClient {
             .seek(self.transport_id.as_str(), id, Some(position_seconds), None)
             .map_err(|e| CastError::transport(TransportKind::Seek, e))?;
         self.adopt_status_entry(&entry);
-        Ok(())
-    }
-
-    /// Advances to the next entry of the queue this client last loaded, by
-    /// reloading it with a shifted `start_index`. `rust_cast` 0.21 has no
-    /// `QUEUE_UPDATE/jump` message; see design.md Risks.
-    pub fn skip_next(&mut self) -> Result<(), CastError> {
-        self.jump(1)
-    }
-
-    pub fn skip_previous(&mut self) -> Result<(), CastError> {
-        self.jump(-1)
-    }
-
-    fn jump(&mut self, delta: i32) -> Result<(), CastError> {
-        let Some(dispatched) = &self.dispatched_queue else {
-            return Err(CastError::jump_no_queue());
-        };
-        let Some(next_index) = next_queue_index(
-            dispatched.current_index,
-            dispatched.queue.items.len(),
-            delta,
-        ) else {
-            return Err(CastError::jump_no_adjacent());
-        };
-        let queue = dispatched.queue.clone();
-        let status = self
-            .device
-            .media
-            .load_queue(self.transport_id.as_str(), self.session_id.as_str(), &queue)
-            .map_err(|e| CastError::transport(TransportKind::Jump, e))?;
-        self.adopt_status(&status);
-        if let Some(dispatched) = &mut self.dispatched_queue {
-            dispatched.current_index = next_index;
-        }
         Ok(())
     }
 
@@ -260,13 +355,35 @@ impl CastClient {
     }
 
     pub fn status(&mut self) -> Result<CastStatus, CastError> {
-        let status = self
+        match self
             .device
             .media
             .get_status(self.transport_id.as_str(), self.media_session_id)
-            .map_err(|e| CastError::transport(TransportKind::Status, e))?;
-        self.adopt_status(&status);
-        Ok(status_from_entries(&status.entries))
+            .map_err(|e| CastError::transport(TransportKind::Status, e))
+        {
+            Ok(status) => {
+                self.adopt_status(&status);
+                let status = status_from_entries(&status.entries);
+                self.last_status = Some(status.clone());
+                Ok(status)
+            }
+            Err(error) => {
+                // The receiver is reporting a load in progress it cannot be
+                // parsed from (design D7): a load in progress is not a
+                // disconnect, so it surfaces as a Buffering status for the
+                // loaded content id.
+                if is_loading_parse_error(&error) {
+                    Ok(CastStatus::buffering(self.loaded_content_id.clone()))
+                } else if is_unsupported_error_code(&error) {
+                    Ok(CastStatus::errored(
+                        self.loaded_content_id.clone(),
+                        self.last_status.as_ref(),
+                    ))
+                } else {
+                    Err(error)
+                }
+            }
+        }
     }
 
     fn adopt_status(&mut self, status: &rust_cast::channels::media::Status) {
@@ -294,17 +411,6 @@ fn build_media(url: &str, content_type: &str) -> Media {
     }
 }
 
-/// Pure index arithmetic for `next`/`previous`, kept separate from the
-/// network call so it is unit-testable without a device.
-fn next_queue_index(current: u16, len: usize, delta: i32) -> Option<u16> {
-    let len = u16::try_from(len).ok()?;
-    let target = i32::from(current) + delta;
-    if target < 0 || target >= i32::from(len) {
-        return None;
-    }
-    u16::try_from(target).ok()
-}
-
 fn cast_status_from_entry(entry: &StatusEntry) -> CastStatus {
     CastStatus {
         position_seconds: entry.current_time,
@@ -312,6 +418,78 @@ fn cast_status_from_entry(entry: &StatusEntry) -> CastStatus {
         playback_rate: entry.playback_rate,
         state: cast_playback_state(entry.player_state),
         playing_content_id: entry.media.as_ref().map(|m| m.content_id.clone()),
+        idle_reason: entry.idle_reason.map(cast_idle_reason),
+    }
+}
+
+fn cast_idle_reason(reason: IdleReason) -> CastIdleReason {
+    match reason {
+        IdleReason::Finished => CastIdleReason::Finished,
+        IdleReason::Cancelled => CastIdleReason::Cancelled,
+        IdleReason::Interrupted => CastIdleReason::Interrupted,
+        IdleReason::Error => CastIdleReason::Error,
+    }
+}
+
+/// The exact `rust_cast` 0.21 error text for the receiver's `LOADING`
+/// player state, which its `PlayerState::from_str` rejects (design D7). The
+/// pinned `rust_cast` version is part of this contract; a test owns it.
+const LOADING_PARSE_ERROR_TEXT: &str = "Unknown player state LOADING";
+
+/// Recognizes the one `rust_cast` parse error a receiver produces during
+/// every load (`Error::Internal` naming `LOADING`): `media.get_status` and
+/// `load` fail with it while the receiver fetches media (design D7). Every
+/// other error -- including any other `Error::Internal` -- stays an error.
+fn is_loading_parse_error(error: &CastError) -> bool {
+    matches!(
+        error.source().and_then(|source| source.downcast_ref::<RustCastError>()),
+        Some(RustCastError::Internal(text)) if text == LOADING_PARSE_ERROR_TEXT
+    )
+}
+
+/// Recognizes `rust_cast`'s rejection of a receiver `detailedErrorCode` it
+/// has no variant for (310, `HLS_NETWORK_UNKNOWN`, ends Emby HLS streams):
+/// its text is `media error code N is not supported`. The code only appears
+/// in an idle `ERROR` report. The pinned `rust_cast` version is part of this
+/// contract; a test owns it.
+fn is_unsupported_error_code(error: &CastError) -> bool {
+    matches!(
+        error.source().and_then(|source| source.downcast_ref::<RustCastError>()),
+        Some(RustCastError::Parsing(text)) if text.starts_with("media error code ")
+    )
+}
+
+/// What `connect` should do given the receiver's running applications and
+/// the connect mode (design D11). Pure so the three outcomes are
+/// unit-testable without a device.
+enum ConnectPlan {
+    /// Join the running default media receiver.
+    Join {
+        transport_id: String,
+        session_id: String,
+    },
+    /// Launch the default media receiver.
+    Launch,
+    /// Another application is running and a reconnect must not launch over
+    /// it: the output stays disconnected instead of taking the TV over.
+    Refuse,
+}
+
+fn decide_connect(applications: &[Application], mode: ConnectMode) -> ConnectPlan {
+    let expected = CastDeviceApp::DefaultMediaReceiver.to_string();
+    match applications
+        .iter()
+        .find(|app| app.app_id == expected)
+        .map(|app| ConnectPlan::Join {
+            transport_id: app.transport_id.clone(),
+            session_id: app.session_id.clone(),
+        }) {
+        Some(plan) => plan,
+        None if applications.is_empty() => ConnectPlan::Launch,
+        None => match mode {
+            ConnectMode::FirstSelect => ConnectPlan::Launch,
+            ConnectMode::Reconnect => ConnectPlan::Refuse,
+        },
     }
 }
 
@@ -340,6 +518,7 @@ fn cast_playback_state(state: CastPlayerState) -> CastPlaybackState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rstest::rstest;
 
     #[test]
     fn build_media_sets_url_and_content_type() {
@@ -347,18 +526,6 @@ mod tests {
         assert_eq!(media.content_id, "http://host/stream.mp4");
         assert_eq!(media.content_type, "video/mp4");
         assert_eq!(media.stream_type, StreamType::Buffered);
-    }
-
-    #[test]
-    fn next_queue_index_advances_within_bounds() {
-        assert_eq!(next_queue_index(0, 3, 1), Some(1));
-        assert_eq!(next_queue_index(2, 3, 1), None);
-    }
-
-    #[test]
-    fn next_queue_index_retreats_within_bounds() {
-        assert_eq!(next_queue_index(1, 3, -1), Some(0));
-        assert_eq!(next_queue_index(0, 3, -1), None);
     }
 
     // Real payload shape captured against a Shield Android TV during the
@@ -409,6 +576,139 @@ mod tests {
         assert_eq!(status.state, CastPlaybackState::Idle);
         assert_eq!(status.playing_content_id, None);
         assert_eq!(status.duration_seconds, None);
+    }
+
+    /// The receiver's idle reason must cross the crate boundary: the Owner
+    /// advance rule (design D7) reads it.
+    #[test]
+    fn cast_status_from_entry_maps_idle_finished_reason() {
+        let mut entry = recorded_playing_entry();
+        entry.player_state = CastPlayerState::Idle;
+        entry.media = None;
+        entry.idle_reason = Some(IdleReason::Finished);
+        let status = cast_status_from_entry(&entry);
+        assert_eq!(status.idle_reason, Some(CastIdleReason::Finished));
+    }
+
+    /// A load in progress is not a disconnect (design D7): the one
+    /// `rust_cast` parse error naming `LOADING` is recognized and becomes a
+    /// Buffering status for the loaded content id, while any other
+    /// `Error::Internal` stays an error. The pinned `rust_cast` version is
+    /// part of this contract.
+    #[test]
+    fn loading_parse_error_maps_to_buffering_other_internal_errors_stay_errors() {
+        let loading = CastError::transport(
+            TransportKind::Status,
+            RustCastError::Internal("Unknown player state LOADING".to_string()),
+        );
+        assert!(is_loading_parse_error(&loading));
+        let status = CastStatus::buffering(Some("http://host/stream".to_string()));
+        assert_eq!(status.state, CastPlaybackState::Buffering);
+        assert_eq!(
+            status.playing_content_id.as_deref(),
+            Some("http://host/stream")
+        );
+
+        let other = CastError::transport(
+            TransportKind::Status,
+            RustCastError::Internal("Unknown player state PAUSED".to_string()),
+        );
+        assert!(!is_loading_parse_error(&other));
+    }
+
+    /// An end report with an undocumented `detailedErrorCode` (310 ended the
+    /// Emby HLS item in the field) must not read as a broken connection: it
+    /// becomes an idle `Error` status that keeps the last known position.
+    #[test]
+    fn unsupported_error_code_maps_to_errored_status_with_last_position() {
+        let ended = CastError::transport(
+            TransportKind::Status,
+            RustCastError::Parsing("media error code 310 is not supported".to_string()),
+        );
+        assert!(is_unsupported_error_code(&ended));
+        let mut last = CastStatus::idle();
+        last.position_seconds = Some(540.0);
+        last.duration_seconds = Some(545.0);
+        let status = CastStatus::errored(Some("http://host/s".to_string()), Some(&last));
+        assert_eq!(status.idle_reason, Some(CastIdleReason::Error));
+        assert_eq!(status.position_seconds, Some(540.0));
+
+        let other = CastError::transport(
+            TransportKind::Status,
+            RustCastError::Parsing("Unknown player state X".to_string()),
+        );
+        assert!(!is_unsupported_error_code(&other));
+    }
+
+    /// A real receiver status payload's `applications` list is reduced to
+    /// its app ids here; only the ids the decision reads are filled in.
+    fn running_app(app_id: &str) -> Application {
+        Application {
+            app_id: app_id.to_string(),
+            session_id: "session-1".to_string(),
+            transport_id: "transport-1".to_string(),
+            namespaces: Vec::new(),
+            display_name: app_id.to_string(),
+            status_text: String::new(),
+        }
+    }
+
+    #[derive(Debug, PartialEq)]
+    enum ExpectedConnect {
+        Join,
+        Launch,
+        Refuse,
+    }
+
+    /// The connect decision (design D11), one case per distinct
+    /// outcome-and-input pair: join the running default media receiver,
+    /// launch when no app runs, refuse a reconnect when another app runs,
+    /// and still launch on a first selection when another app runs.
+    #[rstest]
+    #[case::joins_running_default_media_receiver(
+        ConnectMode::FirstSelect,
+        &["CC1AD845"],
+        ExpectedConnect::Join
+    )]
+    #[case::launches_when_no_app_runs(ConnectMode::FirstSelect, &[], ExpectedConnect::Launch)]
+    #[case::refuses_reconnect_when_another_app_runs(
+        ConnectMode::Reconnect,
+        &["youtube"],
+        ExpectedConnect::Refuse
+    )]
+    #[case::first_selection_launches_when_another_app_runs(
+        ConnectMode::FirstSelect,
+        &["youtube"],
+        ExpectedConnect::Launch
+    )]
+    fn connect_decision_matches_design_d11(
+        #[case] mode: ConnectMode,
+        #[case] app_ids: &[&str],
+        #[case] expected: ExpectedConnect,
+    ) {
+        let applications: Vec<Application> = app_ids.iter().copied().map(running_app).collect();
+        let plan = decide_connect(&applications, mode);
+        let actual = match &plan {
+            ConnectPlan::Join { transport_id, .. } => {
+                assert_eq!(transport_id, "transport-1");
+                ExpectedConnect::Join
+            }
+            ConnectPlan::Launch => ExpectedConnect::Launch,
+            ConnectPlan::Refuse => ExpectedConnect::Refuse,
+        };
+        assert_eq!(actual, expected);
+    }
+
+    /// Joining is mode-independent: a reconnect to a receiver that still
+    /// runs the default media receiver joins it (design D11; the reconnect
+    /// recovery of task 7.4 depends on it).
+    #[test]
+    fn reconnect_joins_running_default_media_receiver() {
+        let applications = vec![running_app("CC1AD845")];
+        assert!(matches!(
+            decide_connect(&applications, ConnectMode::Reconnect),
+            ConnectPlan::Join { .. }
+        ));
     }
 
     /// An idle receiver answers `get_status` with no entries at all (no

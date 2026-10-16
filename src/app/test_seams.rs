@@ -1,5 +1,4 @@
 use std::sync::{Mutex, mpsc};
-use std::time::Duration;
 
 pub(in crate::app) type DirectConnectFn = fn(
     &mbv_remote_player::DaemonEndpoint,
@@ -40,16 +39,3 @@ pub(in crate::app) static DAEMON_ROUTE_CONNECT_TEST_LOCK: Mutex<()> = Mutex::new
 pub(in crate::app) type SessionsLoadFn =
     fn(&mbv_emby::EmbyClient) -> Result<Vec<mbv_emby::SessionInfo>, mbv_emby::EmbyError>;
 pub(in crate::app) static SESSIONS_LOAD_OVERRIDE: Mutex<Option<SessionsLoadFn>> = Mutex::new(None);
-
-// Test seam for `App::connect_cast_receiver`'s resolve-and-connect step
-// (7.3/7.5), mirroring the overrides above: lets tests substitute a fake
-// worker instead of a real mDNS browse + `CastClient::connect`, without
-// making the reattach/attach-on-selection call sites themselves
-// test-aware.
-pub(in crate::app) type CastConnectFn =
-    fn(
-        &str,
-        Duration,
-    ) -> Result<mpsc::Sender<crate::app::state::types::cast::CastJob>, mbv_cast::CastError>;
-pub(in crate::app) static CAST_CONNECT_OVERRIDE: Mutex<Option<CastConnectFn>> = Mutex::new(None);
-pub(in crate::app) static CAST_CONNECT_TEST_LOCK: Mutex<()> = Mutex::new(());
