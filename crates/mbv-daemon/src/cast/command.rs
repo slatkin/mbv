@@ -3,9 +3,7 @@
 //! selection has no cast primitive and is rejected, and the mpv-script
 //! overlays are a documented no-op.
 
-use std::sync::mpsc;
-
-use mbv_cast::{CastError, CastJob, CastTransport};
+use mbv_cast::{CastError, CastTransport};
 
 use super::CastOutput;
 use super::PlaybackOutput;
@@ -70,8 +68,7 @@ pub fn set_receiver_paused(output: &mut super::PlaybackOutput, paused: bool) {
     {
         return;
     }
-    let worker = cast.worker.clone();
-    submit_command_job(&worker, "set_paused", move |transport| {
+    submit_command_job(cast, "set_paused", move |transport| {
         if paused {
             transport.pause()
         } else {
@@ -100,8 +97,7 @@ fn route_cast_command(
                 cast.last_status.as_ref().map(|status| status.state),
                 Some(mbv_cast::client::CastPlaybackState::Paused)
             );
-            let worker = cast.worker.clone();
-            submit_command_job(&worker, "toggle_pause", move |transport| {
+            submit_command_job(cast, "toggle_pause", move |transport| {
                 if paused {
                     transport.play()
                 } else {
@@ -124,15 +120,13 @@ fn route_cast_command(
         mbv_ctrl::WireCommand::SetVolume(volume) => {
             let volume = u8::try_from((*volume).clamp(0, 100)).unwrap_or(u8::MAX);
             let level = f32::from(volume) / 100.0;
-            let worker = cast.worker.clone();
-            submit_command_job(&worker, "set_volume", move |transport| {
+            submit_command_job(cast, "set_volume", move |transport| {
                 transport.set_volume(level)
             });
         }
         mbv_ctrl::WireCommand::SetMute(muted) => {
             let muted = *muted;
-            let worker = cast.worker.clone();
-            submit_command_job(&worker, "set_muted", move |transport| {
+            submit_command_job(cast, "set_muted", move |transport| {
                 transport.set_muted(muted)
             });
         }
@@ -173,8 +167,7 @@ fn submit_seek(cast: &mut CastOutput, requested_seconds: f64) {
     if cast.loaded.is_some() {
         cast.pending_seek = Some(cast.next_poll_id);
     }
-    let worker = cast.worker.clone();
-    submit_command_job(&worker, "seek", move |transport| transport.seek(target));
+    submit_command_job(cast, "seek", move |transport| transport.seek(target));
 }
 
 /// Refuses one audio or subtitle track-selection command (design D4): a
@@ -209,23 +202,33 @@ fn cast_seconds_f32(value: f64) -> Option<f32> {
 }
 
 /// Submits one receiver-command job (design D4, row 5.3): the operation runs
-/// on the Cast worker against the transport it owns; a failure is logged — a
-/// dead connection is reported by the next status poll, which disconnects
-/// and reconnects (design D8).
+/// on the Cast worker against the transport it owns. A failure is logged and
+/// sent back to the owner as `CastOwnerEvent::CommandFailed`, which names it
+/// to every Client (spec "Command is not supported by the receiver"). A dead
+/// connection is reported by the next status poll, which disconnects and
+/// reconnects (design D8).
 pub(super) fn submit_command_job(
-    worker: &mpsc::Sender<CastJob>,
+    cast: &CastOutput,
     command: &'static str,
     op: impl FnOnce(&mut dyn CastTransport) -> Result<(), CastError> + Send + 'static,
 ) {
-    let _ = worker.send(Box::new(move |transport: &mut dyn CastTransport| {
-        if let Err(error) = op(transport) {
-            tracing::warn!(
-                name: "cast.command.failed",
-                target: "cast",
-                command,
-                error = %error,
-                "the receiver refused the command"
-            );
-        }
-    }));
+    let events = cast.events.clone();
+    let _ = cast
+        .worker
+        .send(Box::new(move |transport: &mut dyn CastTransport| {
+            if let Err(error) = op(transport) {
+                tracing::warn!(
+                    name: "cast.command.failed",
+                    target: "cast",
+                    command,
+                    error = %error,
+                    "the receiver refused the command"
+                );
+                let _ = events.send(crate::DaemonEvent::Cast(
+                    super::CastOwnerEvent::CommandFailed {
+                        error: error.to_string(),
+                    },
+                ));
+            }
+        }));
 }

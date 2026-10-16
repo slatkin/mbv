@@ -69,6 +69,9 @@ pub(crate) struct CastOutput {
     /// thread and is never `Send`. `pub(super)` so the crate's tests can
     /// submit sentinel jobs that make asynchronous job order assertable.
     pub(super) worker: mpsc::Sender<CastJob>,
+    /// The owner's event sink: a receiver command the worker could not apply
+    /// returns through it as `CastOwnerEvent::CommandFailed`.
+    events: mpsc::Sender<DaemonEvent>,
     receiver: CastReceiver,
     connection: mbv_ctrl::CastConnection,
     last_status: Option<CastStatus>,
@@ -156,6 +159,7 @@ impl std::fmt::Debug for CastOutput {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("CastOutput")
             .field("worker", &self.worker)
+            .field("events", &self.events)
             .field("receiver", &self.receiver)
             .field("connection", &self.connection)
             .field("last_status", &self.last_status)
@@ -255,6 +259,9 @@ pub enum CastOwnerEvent {
     /// D5): the loaded record is dropped and the in-flight transition the
     /// load belonged to expires, so later steps are not wedged behind it.
     LoadFailed { slot: QueueSlotId, error: String },
+    /// A receiver command the worker could not apply (spec "Command is not
+    /// supported by the receiver"): the failure is named to every Client.
+    CommandFailed { error: String },
     /// The outcome of the Cast source resolve a successful hand-off to a
     /// receiver started for the captured slot (design D10, row 7.1), keyed
     /// by that slot. A result whose slot no longer matches the output's
@@ -295,6 +302,7 @@ pub(super) fn handle_cast_event(daemon: &mut DaemonLoop, event: CastOwnerEvent) 
             result,
         } => crate::cast_resolve::handle_cast_resolved(daemon, slot, generation, result),
         CastOwnerEvent::LoadFailed { slot, error } => handle_load_failed(daemon, slot, &error),
+        CastOwnerEvent::CommandFailed { error } => handle_command_failed(daemon, &error),
         CastOwnerEvent::HandoffResolved { slot, result } => {
             crate::cast_resolve::handle_handoff_resolved(daemon, slot, result);
         }
@@ -509,7 +517,6 @@ pub(super) fn stop_active_output(
             // position before the presentation is replaced (design D9): the
             // Client persists the Feed state file from it.
             feed_events::emit_stopped(ctrl_clients, cast, queue, position_ticks, generation);
-            let worker = cast.worker.clone();
             cast.loaded = None;
             // The stop ends any advance the loaded item's end started (design
             // D7): a stopped output advances nothing.
@@ -519,7 +526,7 @@ pub(super) fn stop_active_output(
             // 7.1): the user stopped the output before the hand-off's load
             // landed, so the resolve's late outcome must load nothing.
             cast.pending_handoff_load = None;
-            command::submit_command_job(&worker, "stop", |transport| transport.stop());
+            command::submit_command_job(cast, "stop", |transport| transport.stop());
             let base = player.status.lock().unwrap().clone();
             let presented = status::presented_player_status(
                 &base,
@@ -540,7 +547,7 @@ pub(super) fn stop_active_output(
 /// leave the app running. The Cast→Local hand-off (row 7.1 dispatch B) is
 /// the deliberate output change that calls it.
 pub(super) fn queue_teardown_job(cast: &CastOutput) {
-    command::submit_command_job(&cast.worker, "teardown", |transport| transport.teardown());
+    command::submit_command_job(cast, "teardown", |transport| transport.teardown());
 }
 
 /// The receiver refused the load (design D5, row 5.2): the loaded record is
@@ -559,6 +566,16 @@ fn handle_load_failed(daemon: &mut DaemonLoop, slot: QueueSlotId, error: &str) {
     status::refresh_presentation(daemon, Instant::now());
     let mut ctx = owner_context(daemon);
     expire_cast_transition(&mut ctx);
+}
+
+/// The receiver refused a transport command (spec "Command is not supported by
+/// the receiver"): the failure is named to every Client. The output keeps its
+/// state; a dead connection is still the status poll's to report (design D8).
+fn handle_command_failed(daemon: &DaemonLoop, error: &str) {
+    crate::core::broadcast(
+        &daemon.ctrl_clients,
+        &CtrlEvent::CommandRejected(format!("the receiver refused the command: {error}")),
+    );
 }
 
 /// Drops the loaded record when the load failure named the loaded slot

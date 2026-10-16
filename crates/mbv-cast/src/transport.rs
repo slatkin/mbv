@@ -17,6 +17,8 @@
 
 use crate::CastError;
 use crate::client::{CastClient, CastMediaItem, CastStatus};
+#[cfg(any(test, feature = "test"))]
+use crate::error::TransportKind;
 use std::sync::mpsc::Sender;
 
 /// The cast operations a caller needs, decoupled from the concrete
@@ -131,6 +133,26 @@ pub struct FakeCastTransport {
     // never-leaves-its-thread shape.
     pub calls: std::sync::Arc<std::sync::Mutex<Vec<String>>>,
     pub status: Option<CastStatus>,
+    /// When set, every receiver transport command (play, pause, stop,
+    /// teardown, seek, volume, mute) fails as a transport error. `load`,
+    /// `status`, and `keep_alive` still succeed, so a test can drive the
+    /// refused-command path (spec "Command is not supported by the receiver").
+    pub refuse_commands: bool,
+}
+
+#[cfg(any(test, feature = "test"))]
+impl FakeCastTransport {
+    /// The outcome of one transport command: a transport error while the fake
+    /// refuses commands, success otherwise.
+    fn command_result(&self, kind: TransportKind) -> Result<(), CastError> {
+        if self.refuse_commands {
+            return Err(CastError::transport(
+                kind,
+                std::io::Error::other("the receiver refused the command"),
+            ));
+        }
+        Ok(())
+    }
 }
 
 #[cfg(any(test, feature = "test"))]
@@ -144,40 +166,40 @@ impl CastTransport for FakeCastTransport {
     }
     fn play(&mut self) -> Result<(), CastError> {
         self.calls.lock().unwrap().push("play".to_string());
-        Ok(())
+        self.command_result(TransportKind::Play)
     }
     fn pause(&mut self) -> Result<(), CastError> {
         self.calls.lock().unwrap().push("pause".to_string());
-        Ok(())
+        self.command_result(TransportKind::Pause)
     }
     fn stop(&mut self) -> Result<(), CastError> {
         self.calls.lock().unwrap().push("stop".to_string());
-        Ok(())
+        self.command_result(TransportKind::Stop)
     }
     fn teardown(&mut self) -> Result<(), CastError> {
         self.calls.lock().unwrap().push("teardown".to_string());
-        Ok(())
+        self.command_result(TransportKind::Teardown)
     }
     fn seek(&mut self, position_seconds: f32) -> Result<(), CastError> {
         self.calls
             .lock()
             .unwrap()
             .push(format!("seek({position_seconds})"));
-        Ok(())
+        self.command_result(TransportKind::Seek)
     }
     fn set_volume(&self, level: f32) -> Result<(), CastError> {
         self.calls
             .lock()
             .unwrap()
             .push(format!("set_volume({level})"));
-        Ok(())
+        self.command_result(TransportKind::SetVolume)
     }
     fn set_muted(&self, muted: bool) -> Result<(), CastError> {
         self.calls
             .lock()
             .unwrap()
             .push(format!("set_muted({muted})"));
-        Ok(())
+        self.command_result(TransportKind::SetMuted)
     }
     fn status(&mut self) -> Result<CastStatus, CastError> {
         self.status

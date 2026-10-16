@@ -168,6 +168,7 @@ fn a_handoff_selection_connects_in_first_select_mode() {
             let transport = mbv_cast::FakeCastTransport {
                 calls: Arc::new(Mutex::new(Vec::new())),
                 status: None,
+                refuse_commands: false,
             };
             let (worker, _calls) = mbv_cast::spawn_fake_cast_worker(transport);
             let _ = request

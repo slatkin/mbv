@@ -369,6 +369,7 @@ fn install_connected_output(
 ) {
     let output = super::CastOutput {
         worker,
+        events: daemon.merged_tx.clone(),
         receiver,
         connection: CastConnection::Connected,
         last_status: None,

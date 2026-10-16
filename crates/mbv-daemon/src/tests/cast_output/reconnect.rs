@@ -22,6 +22,7 @@ fn recording_connector(status: Option<mbv_cast::CastStatus>) -> RecordedConnecto
         let transport = mbv_cast::FakeCastTransport {
             calls: Arc::clone(&log),
             status: status.clone(),
+            refuse_commands: false,
         };
         let (worker, _calls) = mbv_cast::spawn_fake_cast_worker(transport);
         let _ = request.reply.send(CastConnectOutcome::Connected(worker));
@@ -63,6 +64,7 @@ fn sequenced_connector(steps: Vec<SequencedConnect>) -> RecordedConnector {
                 let transport = mbv_cast::FakeCastTransport {
                     calls: Arc::clone(&log),
                     status,
+                    refuse_commands: false,
                 };
                 let (worker, _calls) = mbv_cast::spawn_fake_cast_worker(transport);
                 let _ = request.reply.send(CastConnectOutcome::Connected(worker));

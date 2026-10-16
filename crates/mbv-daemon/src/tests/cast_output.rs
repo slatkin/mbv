@@ -26,6 +26,7 @@ pub(super) fn fake_connector() -> (CastConnector, Arc<Mutex<Vec<String>>>) {
         let transport = mbv_cast::FakeCastTransport {
             calls: Arc::clone(&log),
             status: None,
+            refuse_commands: false,
         };
         let (worker, _calls) = mbv_cast::spawn_fake_cast_worker(transport);
         let _ = request.reply.send(CastConnectOutcome::Connected(worker));

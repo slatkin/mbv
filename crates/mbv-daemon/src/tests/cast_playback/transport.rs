@@ -84,6 +84,49 @@ fn a_routed_transport_command_lands_on_the_receiver(
     );
 }
 
+/// A Cast connector whose receiver refuses every transport command; its status
+/// is idle.
+fn refusing_connector() -> CastConnector {
+    let calls = Arc::new(Mutex::new(Vec::new()));
+    Box::new(move |request: CastConnectRequest| {
+        let transport = mbv_cast::FakeCastTransport {
+            calls: Arc::clone(&calls),
+            status: Some(mbv_cast::CastStatus::idle()),
+            refuse_commands: true,
+        };
+        let (worker, _calls) = mbv_cast::spawn_fake_cast_worker(transport);
+        let _ = request.reply.send(CastConnectOutcome::Connected(worker));
+    })
+}
+
+/// Contract: cast-owner-output spec "Command is not supported by the receiver"
+/// (row 5.3) — a transport command the receiver refuses reaches the Client as
+/// `CommandRejected` carrying the failure, instead of being logged only.
+#[test]
+fn a_command_the_receiver_refuses_is_reported_to_the_client() {
+    let mut t = test_loop_with_role(crate::DaemonRole::Local);
+    t.event_loop.cast_connector = Some(refusing_connector());
+    let (client_id, reply_tx, rx) = connect_output_client(&t.event_loop.ctrl_clients, true);
+    select_output(&mut t, client_id, &reply_tx, cast_selection());
+    pump_cast_event(&mut t);
+
+    t.event_loop.handle_event(DaemonEvent::Ctrl(
+        CtrlCmd::PlayerCmd(mbv_ctrl::WireCommand::TogglePause),
+        client_id,
+        mpsc::channel().0,
+    ));
+    wait_for_worker_jobs(&t.event_loop.owner.output);
+    pump(&mut t);
+
+    assert!(
+        drained_events(&rx).into_iter().any(|event| matches!(
+            event,
+            CtrlEvent::CommandRejected(report) if report.contains("receiver refused")
+        )),
+        "the refused pause is reported to the client"
+    );
+}
+
 /// Contract: cast-owner-output row 5.3 (design D4) — a track command has no
 /// cast primitive: it is rejected with `CommandRejected` and lands nothing
 /// on the receiver.
