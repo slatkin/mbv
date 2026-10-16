@@ -185,6 +185,16 @@ where
             }
         }
     };
+    // A Client connection negotiates `playback-output` (cast-owner-output
+    // design D3): the claim is what tells the Owner to cold-seed this
+    // connection with `CtrlEvent::PlaybackOutput` right after the initial
+    // state and include it in every output broadcast. Restricted-role
+    // hellos stay plain, so the Owner never seeds them an unread line.
+    if matches!(role, HandshakeRole::Client) {
+        client_hello
+            .capabilities
+            .push(mbv_ctrl::CTRL_CAP_PLAYBACK_OUTPUT.to_string());
+    }
     client_hello.protocol_version = compatibility.client_protocol_version;
     let client_hello = serde_json::to_string(&CtrlCmd::Hello(client_hello))
         .map_err(|e| crate::RemotePlayerError::protocol(e.to_string()))?;
@@ -221,5 +231,50 @@ pub(super) fn read_initial_state(
             reason: DisconnectReason::OwnerShuttingDown,
         } => Err(crate::RemotePlayerError::owner_shutting_down()),
         event => Ok(event),
+    }
+}
+
+/// How long the handshake will wait, past the initial state, for the
+/// Owner's cold-seed playback-output event. An Owner that advertises
+/// `playback-output` writes it immediately after the initial state, before
+/// its command loop (`core_ctrl_spawn` order: state first, then the seed),
+/// so under normal conditions the line is already in the socket buffer.
+/// The timeout exists only so an absent or late seed can never hang the
+/// connect: if it fires, the seed (or any line arriving late) simply
+/// becomes the reader thread's first event instead.
+pub(super) const PLAYBACK_OUTPUT_SEED_READ_TIMEOUT: Duration = Duration::from_millis(500);
+
+/// Read the Owner's cold-seed playback-output event, tolerantly. Runs
+/// inside the handshake's hard bound, under its own short read timeout:
+/// a timeout, an EOF, or an unparseable line all return `None` without
+/// failing the connect — an absent or late seed simply becomes the reader
+/// thread's first event instead, which is the pre-fix behavior and costs
+/// nothing but an event beat. Any line that IS read is returned whole for
+/// the caller to apply, so a consumed line is never silently lost. The
+/// read timeout is always cleared again before the reader thread takes
+/// the stream over, so no lingering timeout can ever end the event loop
+/// early; a timeout mid-line is safe because `BufReader` keeps whatever
+/// partial bytes it already buffered, and the reader thread completes
+/// the line normally.
+pub(super) fn read_playback_output_seed(reader: &mut BufReader<SocketStream>) -> Option<CtrlEvent> {
+    if reader
+        .get_mut()
+        .set_read_timeout(Some(PLAYBACK_OUTPUT_SEED_READ_TIMEOUT))
+        .is_err()
+    {
+        // Can't bound the wait on this stream: don't risk hanging the
+        // connect. The seed stays the reader thread's problem.
+        return None;
+    }
+    let mut line = String::new();
+    let read = reader.read_line(&mut line);
+    // Always clear the timeout before the reader thread takes over: a
+    // lingering one would end the event loop on its first quiet moment.
+    let _ = reader.get_mut().set_read_timeout(None);
+    match read {
+        // EOF or timed out: no seed available synchronously; the reader
+        // thread owns whatever comes next.
+        Ok(0) | Err(_) => None,
+        Ok(_) => serde_json::from_str::<CtrlEvent>(line.trim_end()).ok(),
     }
 }

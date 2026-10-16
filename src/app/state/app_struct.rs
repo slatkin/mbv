@@ -363,6 +363,14 @@ pub struct App {
     /// cast-owner-output cold-seeds it right after connect, so the `None`
     /// window after a swap is one event beat. `None` reads as Local: an
     /// owner that never reports (pre-change peer) has no Cast output.
+    ///
+    /// This mirror is drain-fed — it only moves when the shell drains
+    /// player events — so it is presentation truth, not control truth.
+    /// Launch auto-reconnect connects a session (and severs the old target)
+    /// before any drain ever happens, so control decisions that must not
+    /// wait for a beat read the owner connection's retained state instead
+    /// (`RemotePlayer::playback_output_state`, which the handshake fills at
+    /// the cold seed) — see `hand_cast_output_back_to_local` (8.2 fix).
     pub(in crate::app) playback_output: Option<mbv_ctrl::OutputState>,
     /// Cast attachment, beside `connected_session_id`/`connected_session_state`
     /// above: `None` means no cast target is attached. See `cast_actions.rs`

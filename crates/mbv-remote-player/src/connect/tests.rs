@@ -576,4 +576,94 @@ fn daemon_endpoint_rejects_unsupported_schemes() {
     DaemonEndpoint::parse("http://localhost:1234").unwrap_err();
 }
 
+/// A fake daemon whose Hello advertises `playback-output`, whose Client
+/// hello is captured for assertion, and which cold-seeds a Cast output
+/// right after the initial state — then holds the socket open.
+fn connect_with_cast_seed_daemon() -> (
+    crate::RemotePlayer,
+    mpsc::Receiver<PlayerEvent>,
+    std::thread::JoinHandle<()>,
+) {
+    use std::io::Read;
+
+    let (client, daemon) = UnixStream::pair().unwrap();
+    let peer = std::thread::spawn(move || {
+        let mut writer = daemon.try_clone().unwrap();
+        let mut reader = BufReader::new(daemon);
+        let mut hello = CtrlHello::current();
+        hello
+            .capabilities
+            .push(mbv_ctrl::CTRL_CAP_PLAYBACK_OUTPUT.to_string());
+        writeln!(
+            writer,
+            "{}",
+            serde_json::to_string(&CtrlEvent::Hello(hello)).unwrap()
+        )
+        .unwrap();
+        let mut client_hello = String::new();
+        reader.read_line(&mut client_hello).unwrap();
+        assert!(
+            client_hello.contains(mbv_ctrl::CTRL_CAP_PLAYBACK_OUTPUT),
+            "a Client-role hello must claim playback-output — the claim is what tells the Owner to cold-seed and broadcast to this connection"
+        );
+        let state = CtrlEvent::UnifiedQueueState(UnifiedQueueStateData {
+            status: PlayerStatus::default(),
+            slots: Vec::new(),
+            active_slot: None,
+            revision: 0,
+            source: QueueSource::Unknown,
+            lineage: mbv_queue::QueueLineage::default(),
+            in_flight_transition: None,
+            queued_latest_transition: None,
+        });
+        writeln!(writer, "{}", serde_json::to_string(&state).unwrap()).unwrap();
+        let seed = CtrlEvent::PlaybackOutput(mbv_ctrl::OutputState::Cast {
+            receiver_id: "r-1".to_string(),
+            name: "Living Room".to_string(),
+            connection: mbv_ctrl::CastConnection::Connected,
+        });
+        writeln!(writer, "{}", serde_json::to_string(&seed).unwrap()).unwrap();
+        let mut buf = [0u8; 256];
+        while let Ok(n) = reader.get_mut().read(&mut buf) {
+            if n == 0 {
+                break;
+            }
+        }
+    });
+    let (player, event_rx) =
+        connect_stream(SocketStream::Unix(client), PeerBuild::Any, false, None).unwrap();
+    (player, event_rx, peer)
+}
+
+#[test]
+fn playback_output_seed_is_retained_from_the_handshake() {
+    // cast-owner-output 8.2 fix: a Client that claims `playback-output` is
+    // cold-seeded right after the initial state (core_ctrl_spawn order:
+    // state first, then the seed). The handshake consumes that line
+    // synchronously, so the connection retains the state — readable before
+    // any event drain, which is what lets launch auto-reconnect's handback
+    // decision see Cast — and the event still forwards to the channel so
+    // the App mirror receives it on the first drain.
+    let (player, event_rx, peer) = connect_with_cast_seed_daemon();
+
+    let expected = mbv_ctrl::OutputState::Cast {
+        receiver_id: "r-1".to_string(),
+        name: "Living Room".to_string(),
+        connection: mbv_ctrl::CastConnection::Connected,
+    };
+    assert_eq!(
+        player.playback_output_state(),
+        Some(expected.clone()),
+        "the handshake must retain the cold seed on the connection, readable before any drain"
+    );
+    match event_rx.recv().unwrap() {
+        PlayerEvent::PlaybackOutput(state) => assert_eq!(state, expected),
+        other => panic!("expected PlaybackOutput, got {other:?}"),
+    }
+    // No Drop impl: disconnect() is what shuts the client end down, so
+    // the fake daemon's read loop observes EOF and the join completes.
+    player.disconnect();
+    peer.join().unwrap();
+}
+
 mod queue;
