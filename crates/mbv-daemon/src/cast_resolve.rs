@@ -306,6 +306,12 @@ pub(super) fn handle_cast_resolved(
             return;
         }
         let source = result.expect("checked Err arm above");
+        // The item the output still presents reports its stop before the new
+        // load's session can report its start (design D9); an already-ended
+        // item's reporting is gone, so this is a no-op there.
+        crate::cast::progress::stop_loaded_reporting(daemon);
+        let reporting =
+            crate::cast::progress::build_progress_reporting(daemon, slot, &source.progress);
         let PlaybackOutput::Cast(cast) = &mut daemon.owner.output else {
             return;
         };
@@ -330,6 +336,8 @@ pub(super) fn handle_cast_resolved(
             slot,
             content_id,
             progress: source.progress,
+            reporting,
+            start_reported: false,
             end_handled: false,
         });
         // The load ends any advance the step belonged to (design D7): its

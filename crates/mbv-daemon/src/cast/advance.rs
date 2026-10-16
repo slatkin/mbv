@@ -77,8 +77,16 @@ pub(super) fn apply_end_report(daemon: &mut DaemonLoop) {
         }
     };
     match report {
-        Some(EndReport::Step) => begin_advance(daemon),
-        Some(EndReport::ReportError) => report_receiver_error(daemon),
+        Some(EndReport::Step) => {
+            // The ended item's session reports its stop before the step's
+            // load can report the next item's start (design D9).
+            super::progress::stop_loaded_reporting(daemon);
+            begin_advance(daemon);
+        }
+        Some(EndReport::ReportError) => {
+            super::progress::stop_loaded_reporting(daemon);
+            report_receiver_error(daemon);
+        }
         None => {}
     }
 }

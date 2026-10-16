@@ -70,6 +70,10 @@ pub(super) fn handle_cast_status(
     }
     super::advance::apply_end_report(daemon);
     refresh_presentation(daemon, Instant::now());
+    // The applied status feeds the loaded item's provider reporting (design
+    // D9): the presented status the refresh installed is what the reporter
+    // snapshots, and the content-id gate is the presentation's own.
+    super::progress::report_presenting_status(daemon);
 }
 
 /// Whether a stored status settles the loaded item's transition (design D5,
@@ -87,7 +91,7 @@ fn settle_check(cast: &super::CastOutput) -> Option<mbv_queue::QueueSlotId> {
 /// loaded content id while the receiver plays, buffers, or pauses it. Every
 /// other report — idle, foreign content, no status yet — presents no active
 /// playback, and only a confirming status settles the load's transition.
-fn presents_loaded_item(loaded: &CastLoadedItem, status: &CastStatus) -> bool {
+pub(super) fn presents_loaded_item(loaded: &CastLoadedItem, status: &CastStatus) -> bool {
     matches!(
         status.state,
         CastPlaybackState::Playing | CastPlaybackState::Buffering | CastPlaybackState::Paused

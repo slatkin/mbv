@@ -347,7 +347,12 @@ pub(crate) use runtime::{
     shift_index_for_move, spawn_progress_reporter,
 };
 mod report_worker;
-use report_worker::{ReportJob, SessionReporter};
+use report_worker::ReportJob;
+/// The session reporter a playback output drives (design D9): the Cast
+/// output in `mbv-daemon` builds it from its resolved progress-target ids and
+/// feeds it from the status the Owner presents.
+#[doc(inline)]
+pub use report_worker::SessionReporter;
 mod reporting;
 pub(crate) use reporting::{
     ActiveItemLifecycle, AudiobookshelfBookPlaybackLifecycle, AudiobookshelfPlaybackLifecycle,

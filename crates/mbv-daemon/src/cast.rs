@@ -25,6 +25,7 @@ use super::core::DaemonEvent;
 pub(crate) mod advance;
 mod command;
 mod connect;
+pub(crate) mod progress;
 mod status;
 
 pub(super) use command::{route_player_cmd, route_transport_command, set_receiver_paused};
@@ -108,6 +109,15 @@ pub(crate) struct CastLoadedItem {
     /// reporting of task 6.4 feeds from it.
     pub(super) progress: crate::cast_resolve::CastProgressTarget,
     pub(super) end_handled: bool,
+    /// The provider reporting the loaded item drives (design D9, row 6.4):
+    /// `Some` for an Emby target — the `SessionReporter` built from the
+    /// target's ids — and `None` for the targets whose reporting joins in
+    /// their own pieces (the Audiobookshelf lifecycle, the Feed
+    /// `PlayerEvent`s).
+    pub(super) reporting: Option<Box<dyn progress::CastProgressReporting>>,
+    /// Whether the loaded item's session start went out (design D9): the
+    /// first receiver status that presents the loaded item reports it, once.
+    pub(super) start_reported: bool,
 }
 
 impl std::fmt::Debug for CastLoadedItem {
@@ -117,6 +127,8 @@ impl std::fmt::Debug for CastLoadedItem {
             .field("content_id", &self.content_id)
             .field("progress", &self.progress)
             .field("end_handled", &self.end_handled)
+            .field("reporting", &self.reporting.is_some())
+            .field("start_reported", &self.start_reported)
             .finish()
     }
 }
@@ -431,6 +443,15 @@ pub(super) fn stop_active_output(
     match output {
         PlaybackOutput::Local => player.stop(),
         PlaybackOutput::Cast(cast) => {
+            // The stop report goes out for the presented position before the
+            // presentation is replaced (design D9).
+            let position_ticks = player.status.lock().unwrap().position_ticks;
+            if let Some(loaded) = cast.loaded.as_ref()
+                && loaded.start_reported
+                && let Some(reporting) = loaded.reporting.as_ref()
+            {
+                reporting.report_stop(position_ticks);
+            }
             let worker = cast.worker.clone();
             cast.loaded = None;
             // The stop ends any advance the loaded item's end started (design
