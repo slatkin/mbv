@@ -355,6 +355,15 @@ pub struct App {
     pub(in crate::app) last_capabilities: Instant,
     pub(in crate::app) connected_session_id: Option<String>,
     pub(in crate::app) connected_session_state: Option<mbv_emby::SessionInfo>,
+    /// The current Player owner's active playback output, mirrored from the
+    /// last `CtrlEvent::PlaybackOutput` (cast-owner-output design D13). It is
+    /// per-owner-connection state like `ctrl_compatibility`: `None` until the
+    /// owner reports, reset to `None` when the connection is replaced by
+    /// another owner or observed lost. Every owner built with
+    /// cast-owner-output cold-seeds it right after connect, so the `None`
+    /// window after a swap is one event beat. `None` reads as Local: an
+    /// owner that never reports (pre-change peer) has no Cast output.
+    pub(in crate::app) playback_output: Option<mbv_ctrl::OutputState>,
     /// Cast attachment, beside `connected_session_id`/`connected_session_state`
     /// above: `None` means no cast target is attached. See `cast_actions.rs`
     /// for attach/detach and `cast_status_actions.rs` for status polling.
@@ -545,6 +554,26 @@ pub struct App {
 }
 
 impl App {
+    /// Whether the Player owner's active playback output is a Cast receiver,
+    /// per the last `CtrlEvent::PlaybackOutput` (cast-owner-output design
+    /// D13). A `Disconnected` Cast still counts: the spec's cast-session
+    /// control scenario keeps the target presented as disconnected and the
+    /// output selection usable. `None` (no report yet, or the connection was
+    /// replaced/lost) and `Local` both read as not-Cast.
+    ///
+    /// Gated on `cfg(test)` for this plumbing-only dispatch (cast-owner-output
+    /// rows 8.1/8.2 A): no production reader exists yet, the lint gate rejects
+    /// a never-called item, and the dispatch scope forbids wiring the mark,
+    /// the indicator, the keep-panel rule, or `sever_active_connection`. The
+    /// consuming dispatch drops the gate when it wires those readers.
+    #[cfg(test)]
+    pub(in crate::app) fn output_is_cast(&self) -> bool {
+        matches!(
+            self.playback_output,
+            Some(mbv_ctrl::OutputState::Cast { .. })
+        )
+    }
+
     /// Adopt the pinned panel handle for this launch (design D3). A pinned
     /// launch always starts with Panel focus on Queue, whatever the saved
     /// state holds (2026-10-05 user rule) — see

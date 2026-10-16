@@ -399,6 +399,12 @@ pub enum PlayerEvent {
     /// Book-shaped counterpart to `AudiobookshelfProgress`; keyed by
     /// `library_item_id` only.
     AudiobookshelfBookProgress(crate::AudiobookshelfBookProgressEvent),
+    /// The Owner's active playback output, forwarded from
+    /// `CtrlEvent::PlaybackOutput` (cast-owner-output design D3/D13). Sent on
+    /// cold seed and on every output change, only to peers that negotiated
+    /// `playback-output`; the TUI reads it for the connection mark, the output
+    /// indicator, and the idle keep-panel rule.
+    PlaybackOutput(crate::OutputState),
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]

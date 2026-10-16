@@ -60,18 +60,15 @@ fn apply_ctrl_event(
         CtrlEvent::QueueOpResult { op, outcome } => {
             apply_queue_op_result(op, outcome, status, unified_queue, event_tx, notify);
         }
-        CtrlEvent::ShutdownAccepted
-        | CtrlEvent::ShutdownRejected { .. }
-        | CtrlEvent::PlaybackOutput(_) => {
-            // Shutdown replies are handled by RemotePlayer's request-completion path.
-            // Playback-output state is presentation for a Client that negotiated
-            // `playback-output` (cast-owner-output design D3); this read loop
-            // keeps no output state, so the event is a documented no-op here.
+        CtrlEvent::PlaybackOutput(state) => {
+            send_if_notifying(notify, event_tx, PlayerEvent::PlaybackOutput(state));
         }
-        // Playback-output state is presentation for a Client that negotiated
-        // `playback-output` (cast-owner-output design D3); this read loop
-        // keeps no output state, so the event is a documented no-op here,
-        // grouped with the other reply-only no-ops.
+        CtrlEvent::ShutdownAccepted | CtrlEvent::ShutdownRejected { .. } => {
+            // Shutdown replies are handled by RemotePlayer's request-completion path.
+        }
+        // Owner-service reconciliation events travel on a Client connection
+        // but this read loop keeps no service-setup state, so the event is a
+        // documented no-op here, grouped with the other reply-only no-ops.
         CtrlEvent::ServiceSetupApplied { .. } | CtrlEvent::ServiceSetupRejected { .. } => {
             log_ignored_service_setup_event();
         }

@@ -219,6 +219,7 @@ impl App {
             last_capabilities: Instant::now(),
             connected_session_id: None,
             connected_session_state: None,
+            playback_output: None,
             cast_attachment: None,
             cast_job_sent: None,
             last_cast_poll: Instant::now()

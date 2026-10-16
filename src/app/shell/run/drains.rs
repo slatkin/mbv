@@ -114,6 +114,14 @@ impl Model {
                     self.prepare_pin_swap(&PinSwapLink::Home);
                 }
                 mbv_ctrl::player::PlayerEvent::SwapQuit => self.quit_swapped_out(),
+                // The suspended home link is not the active owner; its output
+                // state must never drive `App::playback_output`, which
+                // mirrors the active owner's last `CtrlEvent::PlaybackOutput`
+                // (cast-owner-output design D13). The active link's dispatch
+                // arm in `handle_player_event` owns that state.
+                mbv_ctrl::player::PlayerEvent::PlaybackOutput(_) => {
+                    tracing::debug!(name: "home_link.playback_output.ignored", target: "shell", "ignoring playback-output event from the suspended home link");
+                }
                 _ => {}
             }
         }

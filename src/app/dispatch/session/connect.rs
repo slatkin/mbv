@@ -201,6 +201,10 @@ impl App {
         // #233: tear down the dead connection before replacing it so its
         // reader thread observes the shutdown and exits instead of leaking.
         self.player.disconnect_remote();
+        // The incoming owner's output is unknown until its cold-seed
+        // `PlaybackOutput` event arrives (cast-owner-output design D13 reset
+        // rule); the replaced owner's state must not leak into it.
+        self.playback_output = None;
         self.player = PlayerProxy::from_remote(remote, always_play_next);
         self.player_rx = remote_rx;
         self.player_endpoint = Some(endpoint.clone());

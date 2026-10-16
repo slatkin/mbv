@@ -25,6 +25,10 @@ impl App {
             return false;
         }
         self.player_endpoint = Some(endpoint.clone());
+        // The incoming owner's output is unknown until its cold-seed
+        // `PlaybackOutput` event arrives (cast-owner-output design D13 reset
+        // rule); the replaced owner's state must not leak into it.
+        self.playback_output = None;
         if current_is_home {
             // The suspended home link stays playing while suspended: it is
             // drained every tick (`drain_suspended_home_events`), so route
@@ -204,6 +208,9 @@ impl App {
     }
 
     fn install_suspended_local(&mut self, suspended: SuspendedLocalSession) {
+        // The previously attached owner's output does not carry over
+        // (cast-owner-output design D13 reset rule).
+        self.playback_output = None;
         self.player = suspended.player;
         self.player_rx = suspended.player_rx;
         self.player_endpoint = Some(mbv_remote_player::DaemonEndpoint::Local);
@@ -309,6 +316,10 @@ impl App {
             return;
         }
         self.player.disconnect_remote();
+        // The disconnected owner's output is no longer the active one; a
+        // reconnect or restored suspension re-seeds it (cast-owner-output
+        // design D13 reset rule).
+        self.playback_output = None;
         let mut status = status.to_string();
         // Populated only when the local-daemon reconnect branch below
         // succeeds, so the tail can restore `local_view` / queue source
