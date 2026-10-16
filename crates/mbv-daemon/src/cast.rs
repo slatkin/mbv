@@ -518,6 +518,10 @@ pub(super) fn stop_active_output(
             // Client persists the Feed state file from it.
             feed_events::emit_stopped(ctrl_clients, cast, queue, position_ticks, generation);
             cast.loaded = None;
+            // The stop forgets the last report with the loaded item: a report
+            // from before the stop must not present the stopped media as
+            // foreign playback until the next poll (design D8).
+            cast.last_status = None;
             // The stop ends any advance the loaded item's end started (design
             // D7): a stopped output advances nothing.
             cast.advance = None;

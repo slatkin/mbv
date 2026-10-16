@@ -2,7 +2,8 @@
 //! result handler, the transition gate's Cast settle, and the Owner's
 //! presented `PlayerStatus`. While a receiver is the output the Owner is the
 //! presenter: it translates the receiver's status into its `PlayerStatus`
-//! (active slot, position, duration, paused), extrapolates the position on
+//! (active slot, position, duration, paused; media the Owner did not load is
+//! presented by the receiver's state alone), extrapolates the position on
 //! the daemon tick while the receiver plays, and the daemon's status
 //! broadcast thread (`run.rs` `spawn_status_broadcast`) publishes that status
 //! to Clients at the local broadcast cadence — so Clients present the
@@ -106,8 +107,8 @@ fn settle_check(cast: &super::CastOutput) -> Option<mbv_queue::QueueSlotId> {
 /// Whether the receiver's status presents the item the Owner loaded (spec
 /// "Displayed playback state comes from the receiver"): the status names the
 /// loaded content id while the receiver plays, buffers, or pauses it. Every
-/// other report — idle, foreign content, no status yet — presents no active
-/// playback, and only a confirming status settles the load's transition.
+/// other report — idle, foreign content, no status yet — does not present the
+/// loaded item, and only a confirming status settles the load's transition.
 pub(super) fn presents_loaded_item(loaded: &CastLoadedItem, status: &CastStatus) -> bool {
     matches!(
         status.state,
@@ -140,10 +141,11 @@ fn extrapolated_position_seconds(status: &CastStatus, elapsed: Duration) -> Opti
 
 /// The Owner's presented `PlayerStatus` for the Cast output's current state
 /// (design D8, row 6.1). When the receiver's status presents the loaded
-/// item, the loaded slot is the active slot with the receiver's reported
-/// duration and paused state and the extrapolated position; everything else
-/// presents no active playback, so an idle, stopped, or foreign-playing
-/// receiver never masquerades as the queue's active slot.
+/// item, the loaded slot is the active slot. Any other playing or paused
+/// receiver — media the Owner did not load, or a loaded slot edited out of
+/// the queue — is presented by its reported state alone, with no item
+/// identity. Only an idle receiver, or no report, presents no active
+/// playback.
 pub(super) fn presented_player_status(
     base: &PlayerStatus,
     queue: &PlaybackQueue,
@@ -151,21 +153,25 @@ pub(super) fn presented_player_status(
     last_status: Option<&CastStatus>,
     elapsed: Duration,
 ) -> PlayerStatus {
-    let presenting = loaded
-        .zip(last_status)
-        .filter(|(loaded, status)| presents_loaded_item(loaded, status));
-    let Some((loaded, status)) = presenting else {
+    let Some(status) = last_status.filter(|status| status.state != CastPlaybackState::Idle) else {
         return not_presenting(base, queue);
     };
-    let Some(slot) = queue.slot(loaded.slot) else {
-        // The active slot was edited out of the queue while the receiver
-        // still reports it: without a slot there is no active-slot identity
-        // to present, so the output presents no active playback.
-        return not_presenting(base, queue);
-    };
-    let index = queue.slot_index(loaded.slot).unwrap_or(0);
+    let loaded_slot = loaded
+        .filter(|loaded| presents_loaded_item(loaded, status))
+        .and_then(|loaded| queue.slot(loaded.slot).map(|slot| (loaded.slot, slot)));
     let mut presented = base.clone();
-    presented.seed_from_item(&slot.item, index, queue.len());
+    if let Some((slot_id, slot)) = loaded_slot {
+        let index = queue.slot_index(slot_id).unwrap_or(0);
+        presented.seed_from_item(&slot.item, index, queue.len());
+    } else {
+        // No item identity and no timing from the previous presentation:
+        // the receiver's own report fills what it states.
+        presented.clear_current_item_metadata();
+        presented.position_ticks = 0;
+        presented.runtime_ticks = 0;
+        presented.queue_len = queue.len();
+        presented.current_idx = queue.active_index().unwrap_or(0);
+    }
     if let Some(position) = extrapolated_position_seconds(status, elapsed) {
         presented.position_ticks = seconds_to_ticks(f64::from(position));
     }

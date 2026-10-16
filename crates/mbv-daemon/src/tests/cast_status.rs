@@ -198,32 +198,42 @@ fn an_idle_receiver_presents_no_active_playback() {
 }
 
 /// Contract: cast-owner-output row 6.1 (spec "Receiver plays something mbv
-/// did not dispatch") — media the Owner did not load is presented without
-/// treating it as an error and never as the queue's active slot: the
-/// presented status shows no active playback, because the owner cannot name
-/// a slot for media it did not load.
+/// did not dispatch") — media the Owner did not load is presented by the
+/// receiver's reported state without treating it as an error: active and
+/// playing, with the receiver's position and duration, and no item identity.
+/// It is never presented as the queue's loaded slot.
 #[test]
-fn a_receiver_playing_foreign_media_presents_no_active_playback() {
+fn a_receiver_playing_foreign_media_presents_its_state_without_an_item() {
     let mut t = test_loop_with_queue(
         crate::DaemonRole::Local,
         vec![feed_qi_with_url("a", "https://feed/a.mp3")],
         0,
     );
-    let (_client_id, _rx) =
-        casting_fixture(&mut t, playing_status_at("https://feed/other.mp3", 30.0));
+    let foreign = CastStatus {
+        duration_seconds: Some(600.0),
+        ..playing_status_at("https://feed/other.mp3", 30.0)
+    };
+    let (_client_id, _rx) = casting_fixture(&mut t, foreign);
 
-    // The receiver reports playing something else. A tick would otherwise
-    // extrapolate and present; the content-id guard holds the presentation.
     let t0 = std::time::Instant::now();
     t.event_loop.tick(t0);
     pump(&mut t);
 
     let status = t.event_loop.player.status.lock().unwrap().clone();
     assert!(
-        !status.active,
-        "foreign media is not presented as the queue's active slot"
+        status.active && !status.paused,
+        "the receiver's playing state is presented"
     );
-    assert_eq!(status.position_ticks, 0);
+    presented_near(&t, 30);
+    assert_eq!(
+        status.runtime_ticks,
+        600 * SECOND_TICKS,
+        "the receiver's reported duration is presented"
+    );
+    assert!(
+        status.title.is_empty(),
+        "the foreign media names no queue item"
+    );
 }
 
 /// Contract: cast-owner-output row 6.1 — stopping the receiver's media
