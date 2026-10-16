@@ -465,6 +465,35 @@ pub(super) fn expire_cast_transition(ctx: &mut super::core::DaemonOwnerContext<'
             dispatch_next = dispatch_next.is_some(),
             "the failed cast load expired its transition"
         );
+        // The expiry abandons the guarded intent that drove the transition,
+        // mirroring `expire_and_redispatch`: without the rejection the intent
+        // stays current and the next identical play coalesces into it and
+        // does nothing.
+        if let Some((connection_id, request_id, generation)) = ctx
+            .owner
+            .intents
+            .current
+            .as_ref()
+            .filter(|current| current.request_id == expired.request_id)
+            .map(|current| {
+                (
+                    current.connection_id,
+                    current.request_id,
+                    current.generation,
+                )
+            })
+            && let Some(event) = ctx.owner.intents.rejected_if_current(
+                connection_id,
+                request_id,
+                generation,
+                mbv_ctrl::PlaybackIntentRejection::Unavailable,
+            )
+        {
+            ctx.ctrl_clients
+                .lock()
+                .unwrap()
+                .send_to_client(connection_id, &CtrlEvent::PlaybackIntent(event));
+        }
         let origin = super::core::take_promoted_origin(ctx, dispatch_next.as_ref());
         if let Some(next) = dispatch_next {
             super::core::send_jump_or_cold_start(ctx, next, origin);

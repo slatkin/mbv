@@ -285,6 +285,26 @@ pub(super) fn handle_cast_resolved(
         return;
     };
     let Err(uncastable) = result else {
+        // The transition the resolve belonged to must still be in flight: one
+        // that expired in its bounded window (design D5, row 5.2) is no
+        // longer guarded, so a load now would never settle and would leave
+        // the receiver silently on the old slot.
+        if daemon
+            .owner
+            .core
+            .transitions
+            .in_flight()
+            .is_none_or(|t| t != pending.transition)
+        {
+            tracing::info!(
+                name: "daemon.cast_resolve.expired",
+                target: "transition",
+                slot = ?slot,
+                generation,
+                "the resolve's transition expired; the resolved source is dropped"
+            );
+            return;
+        }
         let source = result.expect("checked Err arm above");
         let PlaybackOutput::Cast(cast) = &mut daemon.owner.output else {
             return;

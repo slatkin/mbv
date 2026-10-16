@@ -29,10 +29,19 @@ fn feed_qi_with_url(guid: &str, url: &str) -> QueueItem {
 
 /// Arms the pending resolve record the way the row 5.1 funnel will: keyed by
 /// the transition the resolve belongs to (its target slot is the resolve's
-/// slot, its identity the transition's), carrying the start position.
+/// slot, its identity the transition's), carrying the start position. The
+/// transition is registered in flight, as every real dispatch does before a
+/// resolve runs: a resolve whose transition is no longer in flight loads
+/// nothing (row 5.2 review fix).
 fn arm_pending_resolve(t: &mut TestLoop, slot: mbv_queue::QueueSlotId, generation: u64) {
+    let transition = mbv_player::transition::Transition::new(generation, generation, slot);
+    t.event_loop
+        .owner
+        .core
+        .transitions
+        .set_in_flight(Some(transition));
     t.event_loop.owner.pending_cast_resolve = Some(crate::cast::PendingCastResolve {
-        transition: mbv_player::transition::Transition::new(generation, generation, slot),
+        transition,
         start_ticks: 0,
         origin: None,
     });

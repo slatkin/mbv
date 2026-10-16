@@ -412,6 +412,10 @@ pub(super) fn handle_queue_replace(
                 tracing::warn!(name: "daemon.cast_queue_replace.no_start_slot", target: "daemon", "the replaced queue's transition was queued behind another; nothing was loaded");
             }
         }
+        // The replacement installs a new lineage: reset the order (design
+        // D4) before the observation clear, mirroring the local path below
+        // and `play_resolved_items`'s Cast branch.
+        reset_play_order_for_queue_replacement(&mut ctx.owner.core, ctx.shared_queue, ctx.player);
         // The reset above cleared the observation; publish it so the shared
         // snapshot and the broadcast below agree (the local path publishes
         // after its cold start).

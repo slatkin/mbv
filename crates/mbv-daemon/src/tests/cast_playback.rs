@@ -303,3 +303,293 @@ fn playing_an_audiobookshelf_book_on_cast_loads_nothing_and_reports() {
     );
     assert!(t.event_loop.owner.pending_cast_resolve.is_none());
 }
+
+/// A feed queue item with no media URL at all: its Cast resolve fails as
+/// uncastable, with no service client involved.
+fn feed_qi_without_url(guid: &str) -> QueueItem {
+    QueueItem::Feed(FeedEntry {
+        enclosure_url: None,
+        ..feed_qi_with_url(guid, "unused").as_feed().unwrap().clone()
+    })
+}
+
+/// Drains a client's event channel without blocking: broadcasts land in the
+/// channel synchronously during `handle_event`, so nothing here waits.
+fn drained_events(rx: &mpsc::Receiver<CtrlOutbound>) -> Vec<CtrlEvent> {
+    let mut events = Vec::new();
+    while let Ok(outbound) = rx.try_recv() {
+        if let CtrlOutbound::Event(json) = outbound {
+            events.push(serde_json::from_str(&json).unwrap());
+        }
+    }
+    events
+}
+
+/// Contract: row 5.1 review fix — a Cast jump whose in-flight transition
+/// expires promotes the queued jump with its origin intact, so an uncastable
+/// promoted target still reports the item to the client that issued the
+/// queued jump (`expire_and_redispatch` must not clear the tracked origin
+/// before `take_promoted_origin` reads it).
+#[test]
+fn an_expired_jump_promotes_the_queued_jump_with_its_origin_so_the_failure_is_reported() {
+    let mut t = test_loop_with_queue(
+        crate::DaemonRole::Local,
+        vec![
+            feed_qi_with_url("a", "https://feed/a.mp3"),
+            feed_qi_with_url("b", "https://feed/b.mp3"),
+            feed_qi_without_url("c"),
+        ],
+        0,
+    );
+    let (client_id, rx, _calls) = select_cast_output(&mut t, mbv_cast::CastStatus::idle());
+
+    // First Next: in flight, loads slot b; the idle receiver never settles it.
+    t.event_loop.handle_event(DaemonEvent::Ctrl(
+        CtrlCmd::PlaybackIntent(PlaybackIntent {
+            request_id: 10,
+            generation: 10,
+            action: PlaybackIntentAction::Next,
+        }),
+        client_id,
+        mpsc::channel().0,
+    ));
+    pump(&mut t);
+    let target = t.event_loop.owner.core.queue.slots()[2].slot_id;
+    // A play-slot jump: queued behind the in-flight step, targeting
+    // uncastable c, with the issuing client as its origin.
+    t.event_loop.handle_event(DaemonEvent::Ctrl(
+        CtrlCmd::UnifiedQueuePlaySlot {
+            slot_id: mbv_ctrl::slot_id_to_u64(target),
+            op: None,
+        },
+        client_id,
+        mpsc::channel().0,
+    ));
+    assert!(
+        t.event_loop
+            .owner
+            .core
+            .transitions
+            .queued_latest()
+            .is_some(),
+        "the play-slot jump queues behind the in-flight step"
+    );
+
+    // The bounded window lapses: `expire` takes the clock as a parameter, so
+    // a first call with a backdated instant arms a deadline already in the
+    // past, and the next real-clock expiry pass abandons the in-flight step
+    // and promotes the queued jump.
+    let backdated = std::time::Instant::now()
+        .checked_sub(std::time::Duration::from_secs(10))
+        .expect("the monotonic clock reaches back ten seconds");
+    t.event_loop.owner.core.transitions.expire(backdated);
+    t.event_loop.on_recv_timeout(std::time::Instant::now());
+    assert!(
+        t.event_loop.owner.core.transitions.in_flight().is_some(),
+        "the queued jump is promoted into flight"
+    );
+    pump(&mut t);
+
+    let rejected = drained_events(&rx).into_iter().any(|event| {
+        matches!(event, CtrlEvent::CommandRejected(report) if report.contains("\"c\" has no media URL"))
+    });
+    assert!(
+        rejected,
+        "the promoted uncastable jump is reported to its origin client"
+    );
+    assert!(t.event_loop.owner.core.transitions.in_flight().is_none());
+}
+
+/// Contract: row 5.2 review fix — a receiver that refuses the load rejects
+/// the current play intent for the expired transition, so the next identical
+/// play is accepted and re-executed instead of coalescing into the dead
+/// intent and doing nothing.
+#[test]
+fn a_failed_receiver_load_rejects_the_current_play_intent_so_a_retry_is_accepted() {
+    let http = MockHttp::new();
+    http.respond(
+        200,
+        r#"{"MediaSources":[{"Id":"ms-1","SupportsDirectPlay":true}],"PlaySessionId":"ps-1"}"#,
+    );
+    let mut client = EmbyClient::new(Config {
+        // An IP literal: the mock transport ignores the host, but the default
+        // resolver must never attempt DNS for it (see tests/emby/client.rs).
+        server_url: "http://127.0.0.1:1".into(),
+        ..Config::default()
+    })
+    .with_test_agent(http.agent());
+    client.token = "test-token".to_string();
+    client.user_id = "test-user".to_string();
+    let mut t = test_loop_with_role(crate::DaemonRole::Local);
+    t.event_loop.client = Arc::new(Mutex::new(client));
+    let (client_id, rx, _calls) = select_cast_output(&mut t, mbv_cast::CastStatus::idle());
+
+    let intent = PlaybackIntent {
+        request_id: 7,
+        generation: 7,
+        action: PlaybackIntentAction::Play {
+            item_ids: vec!["movie".into()],
+            start_idx: 0,
+            start_ticks: 0,
+            source: QueueSource::Remote,
+        },
+    };
+    t.event_loop
+        .owner
+        .intents
+        .accept(client_id, intent.clone(), false);
+    t.event_loop.handle_event(DaemonEvent::PlaybackResolved {
+        start_idx: 0,
+        start_ticks: 0,
+        source: QueueSource::Remote,
+        client_id,
+        request_id: 7,
+        generation: 7,
+        fetched: Ok(vec![item("movie", "Video", "Movie")]),
+    });
+    pump(&mut t);
+    wait_for_worker_jobs(&t.event_loop.owner.output);
+    let slot = {
+        let PlaybackOutput::Cast(cast) = &t.event_loop.owner.output else {
+            panic!("the receiver is the output");
+        };
+        cast.loaded.as_ref().expect("the play loaded its slot").slot
+    };
+    assert!(t.event_loop.owner.core.transitions.in_flight().is_some());
+
+    // The receiver refuses the load.
+    t.event_loop
+        .handle_event(DaemonEvent::Cast(CastOwnerEvent::LoadFailed {
+            slot,
+            error: "receiver refused".into(),
+        }));
+
+    assert!(
+        t.event_loop.owner.intents.current.is_none(),
+        "the failed load abandons the guarded play intent"
+    );
+    let rejected = drained_events(&rx).into_iter().any(|event| {
+        matches!(
+            event,
+            CtrlEvent::PlaybackIntent(ev)
+                if ev.request_id == 7
+                    && matches!(
+                        ev.outcome,
+                        PlaybackIntentOutcome::Rejected {
+                            reason: mbv_ctrl::PlaybackIntentRejection::Unavailable,
+                        }
+                    )
+        )
+    });
+    assert!(rejected, "the failed load rejects the play intent");
+
+    let outcomes = t.event_loop.owner.intents.accept(client_id, intent, false);
+    assert!(
+        matches!(outcomes[0].outcome, PlaybackIntentOutcome::Accepted),
+        "the identical retry is accepted, not coalesced into the dead intent"
+    );
+}
+
+/// Contract: row 5.2 review fix — a Cast resolve that lands after its
+/// transition expired in the bounded window loads nothing: the owner no
+/// longer guards that transition, so a load would never settle and would
+/// leave the receiver silently on the old slot.
+#[test]
+fn a_resolve_that_lands_after_its_transition_expired_loads_nothing() {
+    let mut t = test_loop_with_queue(
+        crate::DaemonRole::Local,
+        vec![feed_qi_with_url("a", "https://feed/a.mp3")],
+        0,
+    );
+    let (client_id, _rx, calls) = select_cast_output(&mut t, mbv_cast::CastStatus::idle());
+    let slot = t.event_loop.owner.core.queue.slots()[0].slot_id;
+
+    t.event_loop.handle_event(DaemonEvent::Ctrl(
+        CtrlCmd::UnifiedQueuePlaySlot {
+            slot_id: mbv_ctrl::slot_id_to_u64(slot),
+            op: None,
+        },
+        client_id,
+        mpsc::channel().0,
+    ));
+    assert!(
+        t.event_loop.owner.pending_cast_resolve.is_some(),
+        "the jump resolves its target's cast source"
+    );
+    assert!(t.event_loop.owner.core.transitions.in_flight().is_some());
+
+    // The resolve's result is still queued, unpumped; the transition's
+    // bounded window lapses first: `expire` takes the clock as a parameter,
+    // so a first call with a backdated instant arms a deadline already in
+    // the past, and the next real-clock expiry pass abandons the transition.
+    let backdated = std::time::Instant::now()
+        .checked_sub(std::time::Duration::from_secs(10))
+        .expect("the monotonic clock reaches back ten seconds");
+    t.event_loop.owner.core.transitions.expire(backdated);
+    t.event_loop.on_recv_timeout(std::time::Instant::now());
+    assert!(t.event_loop.owner.core.transitions.in_flight().is_none());
+
+    pump(&mut t);
+    let PlaybackOutput::Cast(cast) = &t.event_loop.owner.output else {
+        panic!("the receiver is the output");
+    };
+    assert!(
+        cast.loaded.is_none(),
+        "the late resolve loads nothing once its transition expired"
+    );
+    assert!(
+        !calls
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|call| call.starts_with("load(")),
+        "the receiver is given no load for the expired transition"
+    );
+}
+
+/// Contract: design D4 — a Cast queue replacement resets the play order like
+/// the local path does, so a replacement does not inherit the old queue's
+/// shuffle state.
+#[test]
+fn a_cast_queue_replace_resets_the_play_order() {
+    let mut t = test_loop_with_queue(
+        crate::DaemonRole::Local,
+        vec![feed_qi_with_url("a", "https://feed/a.mp3")],
+        0,
+    );
+    let (client_id, _rx, _calls) = select_cast_output(&mut t, mbv_cast::CastStatus::idle());
+    t.event_loop
+        .owner
+        .core
+        .set_play_order(mbv_queue::PlayOrderMode::Shuffle);
+    *t.event_loop.shared_queue.play_order.lock().unwrap() = mbv_queue::PlayOrderMode::Shuffle;
+
+    t.event_loop.handle_event(DaemonEvent::Ctrl(
+        CtrlCmd::UnifiedQueueReplace {
+            items: vec![feed_qi_with_url("r", "https://feed/r.mp3")],
+            slots: vec![mbv_ctrl::UnifiedQueueSlot {
+                slot_id: 44,
+                item: feed_qi_with_url("r", "https://feed/r.mp3"),
+            }],
+            start_idx: Some(0),
+            source: QueueSource::Remote,
+            op: None,
+        },
+        client_id,
+        mpsc::channel().0,
+    ));
+    pump(&mut t);
+
+    assert!(
+        matches!(
+            t.event_loop.owner.core.play_order(),
+            mbv_queue::PlayOrder::Sequential
+        ),
+        "the replacement resets the owner core's play order"
+    );
+    assert_eq!(
+        *t.event_loop.shared_queue.play_order.lock().unwrap(),
+        mbv_queue::PlayOrderMode::Sequential,
+        "the replacement resets the shared snapshot's play order"
+    );
+}

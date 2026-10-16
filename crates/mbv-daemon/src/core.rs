@@ -642,7 +642,6 @@ pub(super) fn expire_and_redispatch(ctx: &mut DaemonOwnerContext<'_>) {
     else {
         return;
     };
-    ctx.owner.queued_transition_origin = None;
     // Emit a timeout to the abandoned request's origin when it is the current
     // guarded intent (Next/Previous). Owner-minted jumps carry no ctrl origin
     // and need no event.
