@@ -2,14 +2,14 @@
 // (ureq, no tokio). Connect/launch/load/transport/status are verified
 // against real Shield Android TV receivers; see design.md Risks for the
 // rust_cast 0.21 gaps this client works around (no wire support for
-// subtitle tracks or a queue-jump message; heartbeat requires an explicit
+// subtitle tracks; heartbeat requires an explicit
 // keep-alive pump).
 
 use crate::CastError;
 use crate::error::TransportKind;
 use rust_cast::CastDevice;
 use rust_cast::channels::media::{
-    IdleReason, Media, MediaQueue, PlayerState as CastPlayerState, StatusEntry, StreamType,
+    IdleReason, Media, PlayerState as CastPlayerState, StatusEntry, StreamType,
 };
 use rust_cast::channels::receiver::{Application, CastDeviceApp};
 use rust_cast::errors::Error as RustCastError;
@@ -19,15 +19,12 @@ use std::error::Error as _;
 const RECEIVER_PLATFORM_ID: &str = "receiver-0";
 
 /// A dispatched-and-forgotten cast session: mbv connects, launches the
-/// default media receiver, loads items, and controls transport. The
-/// receiver owns its queue once loaded (see design.md "receiver owns its
-/// queue").
+/// default media receiver, loads items, and controls transport.
 pub struct CastClient {
     device: CastDevice<'static>,
     transport_id: String,
     session_id: String,
     media_session_id: Option<i32>,
-    dispatched_queue: Option<DispatchedQueue>,
     /// The URL of the last item `load` accepted, kept so a `LOADING`-report
     /// status (design D7) can still name the loaded content id.
     loaded_content_id: Option<String>,
@@ -35,26 +32,16 @@ pub struct CastClient {
 
 impl std::fmt::Debug for CastClient {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // `device` (rust_cast) and `dispatched_queue` have no Debug; the
-        // queue is summarized by presence only.
+        // `device` (rust_cast) has no Debug.
         f.debug_struct("CastClient")
             .field("transport_id", &self.transport_id)
             .field("session_id", &self.session_id)
             .field("media_session_id", &self.media_session_id)
-            .field("has_dispatched_queue", &self.dispatched_queue.is_some())
             .finish_non_exhaustive()
     }
 }
 
-/// The last queue this client loaded, kept only so `next`/`previous` can
-/// replay it with a shifted `start_index` -- not a projection of mbv's
-/// queue, and never reissued except on an explicit transport action.
-struct DispatchedQueue {
-    queue: MediaQueue,
-    current_index: u16,
-}
-
-/// One item to dispatch to the receiver's queue.
+/// One item to dispatch to the receiver.
 #[derive(Debug)]
 pub struct CastMediaItem {
     pub url: String,
@@ -179,7 +166,6 @@ impl CastClient {
             transport_id: app.transport_id,
             session_id: app.session_id,
             media_session_id: None,
-            dispatched_queue: None,
             loaded_content_id: None,
         })
     }
@@ -214,7 +200,6 @@ impl CastClient {
             transport_id,
             session_id,
             media_session_id,
-            dispatched_queue: None,
             loaded_content_id: None,
         })
     }
@@ -281,7 +266,6 @@ impl CastClient {
 
     fn record_accepted_load(&mut self, url: &str) {
         self.loaded_content_id = Some(url.to_string());
-        self.dispatched_queue = None;
     }
 
     pub fn play(&mut self) -> Result<(), CastError> {
@@ -314,7 +298,6 @@ impl CastClient {
             .stop(self.transport_id.as_str(), id)
             .map_err(|e| CastError::transport(TransportKind::Stop, e))?;
         self.adopt_status_entry(&entry);
-        self.dispatched_queue = None;
         Ok(())
     }
 
@@ -326,41 +309,6 @@ impl CastClient {
             .seek(self.transport_id.as_str(), id, Some(position_seconds), None)
             .map_err(|e| CastError::transport(TransportKind::Seek, e))?;
         self.adopt_status_entry(&entry);
-        Ok(())
-    }
-
-    /// Advances to the next entry of the queue this client last loaded, by
-    /// reloading it with a shifted `start_index`. `rust_cast` 0.21 has no
-    /// `QUEUE_UPDATE/jump` message; see design.md Risks.
-    pub fn skip_next(&mut self) -> Result<(), CastError> {
-        self.jump(1)
-    }
-
-    pub fn skip_previous(&mut self) -> Result<(), CastError> {
-        self.jump(-1)
-    }
-
-    fn jump(&mut self, delta: i32) -> Result<(), CastError> {
-        let Some(dispatched) = &self.dispatched_queue else {
-            return Err(CastError::jump_no_queue());
-        };
-        let Some(next_index) = next_queue_index(
-            dispatched.current_index,
-            dispatched.queue.items.len(),
-            delta,
-        ) else {
-            return Err(CastError::jump_no_adjacent());
-        };
-        let queue = dispatched.queue.clone();
-        let status = self
-            .device
-            .media
-            .load_queue(self.transport_id.as_str(), self.session_id.as_str(), &queue)
-            .map_err(|e| CastError::transport(TransportKind::Jump, e))?;
-        self.adopt_status(&status);
-        if let Some(dispatched) = &mut self.dispatched_queue {
-            dispatched.current_index = next_index;
-        }
         Ok(())
     }
 
@@ -428,17 +376,6 @@ fn build_media(url: &str, content_type: &str) -> Media {
         metadata: None,
         duration: None,
     }
-}
-
-/// Pure index arithmetic for `next`/`previous`, kept separate from the
-/// network call so it is unit-testable without a device.
-fn next_queue_index(current: u16, len: usize, delta: i32) -> Option<u16> {
-    let len = u16::try_from(len).ok()?;
-    let target = i32::from(current) + delta;
-    if target < 0 || target >= i32::from(len) {
-        return None;
-    }
-    u16::try_from(target).ok()
 }
 
 fn cast_status_from_entry(entry: &StatusEntry) -> CastStatus {
@@ -544,18 +481,6 @@ mod tests {
         assert_eq!(media.content_id, "http://host/stream.mp4");
         assert_eq!(media.content_type, "video/mp4");
         assert_eq!(media.stream_type, StreamType::Buffered);
-    }
-
-    #[test]
-    fn next_queue_index_advances_within_bounds() {
-        assert_eq!(next_queue_index(0, 3, 1), Some(1));
-        assert_eq!(next_queue_index(2, 3, 1), None);
-    }
-
-    #[test]
-    fn next_queue_index_retreats_within_bounds() {
-        assert_eq!(next_queue_index(1, 3, -1), Some(0));
-        assert_eq!(next_queue_index(0, 3, -1), None);
     }
 
     // Real payload shape captured against a Shield Android TV during the

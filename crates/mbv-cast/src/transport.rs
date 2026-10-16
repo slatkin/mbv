@@ -33,8 +33,6 @@ pub trait CastTransport {
     /// attached, and never a media stop).
     fn teardown(&mut self) -> Result<(), CastError>;
     fn seek(&mut self, position_seconds: f32) -> Result<(), CastError>;
-    fn skip_next(&mut self) -> Result<(), CastError>;
-    fn skip_previous(&mut self) -> Result<(), CastError>;
     fn set_volume(&self, level: f32) -> Result<(), CastError>;
     fn set_muted(&self, muted: bool) -> Result<(), CastError>;
     fn status(&mut self) -> Result<CastStatus, CastError>;
@@ -59,12 +57,6 @@ impl CastTransport for CastClient {
     }
     fn seek(&mut self, position_seconds: f32) -> Result<(), CastError> {
         CastClient::seek(self, position_seconds)
-    }
-    fn skip_next(&mut self) -> Result<(), CastError> {
-        CastClient::skip_next(self)
-    }
-    fn skip_previous(&mut self) -> Result<(), CastError> {
-        CastClient::skip_previous(self)
     }
     fn set_volume(&self, level: f32) -> Result<(), CastError> {
         CastClient::set_volume(self, level)
@@ -181,14 +173,6 @@ impl CastTransport for FakeCastTransport {
             .lock()
             .unwrap()
             .push(format!("seek({position_seconds})"));
-        Ok(())
-    }
-    fn skip_next(&mut self) -> Result<(), CastError> {
-        self.calls.lock().unwrap().push("skip_next".to_string());
-        Ok(())
-    }
-    fn skip_previous(&mut self) -> Result<(), CastError> {
-        self.calls.lock().unwrap().push("skip_previous".to_string());
         Ok(())
     }
     fn set_volume(&self, level: f32) -> Result<(), CastError> {

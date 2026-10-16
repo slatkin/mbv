@@ -31,9 +31,6 @@ pub(crate) enum TransportKind {
     Pause,
     Stop,
     Seek,
-    Jump,
-    JumpNoQueue,
-    JumpNoAdjacent,
     SetVolume,
     SetMuted,
     Status,
@@ -93,14 +90,6 @@ impl CastError {
         E: Error + Send + Sync + 'static,
     {
         Self::with_source(CastErrorKind::Transport(kind), kind.context(), source)
-    }
-
-    pub(crate) fn jump_no_queue() -> Self {
-        Self::transport_message(TransportKind::JumpNoQueue)
-    }
-
-    pub(crate) fn jump_no_adjacent() -> Self {
-        Self::transport_message(TransportKind::JumpNoAdjacent)
     }
 
     #[must_use]
@@ -252,9 +241,6 @@ impl TransportKind {
             Self::Pause => "cast pause failed",
             Self::Stop => "cast stop failed",
             Self::Seek => "cast seek failed",
-            Self::Jump => "cast jump failed",
-            Self::JumpNoQueue => "cast jump failed: no dispatched queue to advance",
-            Self::JumpNoAdjacent => "cast jump failed: no adjacent queue item",
             Self::SetVolume => "cast set_volume failed",
             Self::SetMuted => "cast set_muted failed",
             Self::Status => "cast get_status failed",
@@ -278,9 +264,6 @@ impl TransportKind {
             Self::Pause => "cast.pause",
             Self::Stop => "cast.stop",
             Self::Seek => "cast.seek",
-            Self::Jump => "cast.jump",
-            Self::JumpNoQueue => "cast.jump_no_queue",
-            Self::JumpNoAdjacent => "cast.jump_no_adjacent",
             Self::SetVolume => "cast.set_volume",
             Self::SetMuted => "cast.set_muted",
             Self::Status => "cast.status",
