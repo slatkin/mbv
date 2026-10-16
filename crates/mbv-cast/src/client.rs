@@ -275,8 +275,11 @@ impl CastClient {
             Err(error) => {
                 // A receiver that accepted the load but is still fetching
                 // media answers with a `LOADING` state rust_cast cannot
-                // parse (design D7): the load was accepted, not lost.
-                if is_loading_parse_error(&error) {
+                // parse (design D7): the load was accepted, not lost. The
+                // same holds for an unsupported error code: the wait read
+                // the ended item's queued error status before the load's
+                // reply, and the load request itself was already sent.
+                if is_loading_parse_error(&error) || is_unsupported_error_code(&error) {
                     self.record_accepted_load(&item.url);
                     Ok(())
                 } else {
