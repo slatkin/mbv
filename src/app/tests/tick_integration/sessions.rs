@@ -377,7 +377,6 @@ fn tick_sessions_removed_target_request_is_noop_not_former_index_replacement() {
         &mut tv_resize,
     );
     assert!(harness.model().app.connected_session_id.is_none());
-    assert!(!harness.model().app.is_cast_attached());
 }
 
 #[test]

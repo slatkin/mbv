@@ -8,19 +8,6 @@ impl crate::app::App {
     pub(in crate::app) fn slotless_playback_title_parts(
         &self,
     ) -> Option<mbv_queue::PlaybackTitleParts> {
-        let cast_title = self
-            .cast_attachment
-            .as_ref()
-            .and_then(crate::app::App::cast_now_playing_title);
-        if let Some(title) = cast_title {
-            return Some(mbv_queue::PlaybackTitleParts {
-                title: mbv_queue::PlaybackTitlePart {
-                    role: mbv_queue::PlaybackTitlePartRole::Title,
-                    text: title,
-                },
-                context: None,
-            });
-        }
         let session = self.connected_session_state.as_ref()?;
         let title = session.now_playing.clone()?;
         // An Emby session's now-playing payload names the show for an episode;
@@ -73,8 +60,6 @@ impl Model {
             active_item
                 .map(|item| item.title().to_string())
                 .or_else(|| slotless_title_parts.map(|parts| parts.title.text))
-        } else if let Some(cast) = self.app.cast_attachment.as_ref() {
-            crate::app::App::cast_now_playing_title(cast)
         } else {
             self.app
                 .connected_session_state

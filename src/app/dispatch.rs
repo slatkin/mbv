@@ -3,7 +3,6 @@ pub(in crate::app) mod actions;
 pub(in crate::app) mod audio_subtitle;
 pub(in crate::app) mod audiobookshelf;
 pub(in crate::app) mod cast;
-pub(in crate::app) mod cast_status;
 pub(in crate::app) mod consume_quit;
 pub(in crate::app) mod context_menu;
 pub(in crate::app) mod feeds;

@@ -36,22 +36,6 @@ fn teardown_persists_active_library_route_when_auto_reconnect_enabled() {
 }
 
 #[test]
-fn teardown_issues_no_stop_for_an_attached_cast_target() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = make_app_stub();
-    app.attach_cast("device-1".to_string());
-    let (job_tx, calls) = mbv_cast::spawn_fake_cast_worker(mbv_cast::FakeCastTransport::default());
-    app.set_cast_client("device-1", job_tx);
-
-    app.teardown(
-        Duration::from_secs(1),
-        crate::app::dispatch::run_loop::teardown::test_quit_exit_kind(),
-    );
-
-    assert!(!calls.lock().unwrap().contains(&"stop".to_string()));
-}
-
-#[test]
 fn teardown_never_touches_persisted_state_when_auto_reconnect_disabled() {
     let _guard = crate::config::TestStateDirGuard::new();
     let _ = crate::config::save_last_remote_connection(Some(

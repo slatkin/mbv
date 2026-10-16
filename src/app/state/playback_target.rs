@@ -1,4 +1,3 @@
-mod cast;
 mod local;
 mod remote;
 
@@ -14,14 +13,10 @@ pub(in crate::app) struct RemotePlaybackTarget {
     pub session_id: String,
 }
 
-#[derive(Clone, Copy)]
-pub(in crate::app) struct CastPlaybackTarget;
-
 #[derive(Clone)]
 pub(in crate::app) enum PlaybackTarget {
     Local(LocalPlaybackTarget),
     Remote(RemotePlaybackTarget),
-    Cast(CastPlaybackTarget),
 }
 
 impl PlaybackTarget {
@@ -29,7 +24,6 @@ impl PlaybackTarget {
         match self {
             Self::Local(_) => LocalPlaybackTarget::toggle_play_pause(app),
             Self::Remote(target) => target.toggle_play_pause(app),
-            Self::Cast(_) => CastPlaybackTarget::toggle_play_pause(app),
         }
     }
 
@@ -37,7 +31,6 @@ impl PlaybackTarget {
         match self {
             Self::Local(_) => LocalPlaybackTarget::stop(app),
             Self::Remote(target) => target.stop(app),
-            Self::Cast(_) => CastPlaybackTarget::stop(app),
         }
     }
 
@@ -45,7 +38,6 @@ impl PlaybackTarget {
         match self {
             Self::Local(_) => LocalPlaybackTarget::seek_relative(app, delta),
             Self::Remote(target) => target.seek_relative(app, delta),
-            Self::Cast(_) => CastPlaybackTarget::seek_relative(app, delta),
         }
     }
 
@@ -53,7 +45,6 @@ impl PlaybackTarget {
         match self {
             Self::Local(_) => LocalPlaybackTarget::jump_track(app, step),
             Self::Remote(target) => target.jump_track(app, step, transport),
-            Self::Cast(_) => CastPlaybackTarget::jump_track(app, step),
         }
     }
 
@@ -61,7 +52,6 @@ impl PlaybackTarget {
         match self {
             Self::Local(_) => LocalPlaybackTarget::toggle_command_mute(app),
             Self::Remote(_) => RemotePlaybackTarget::toggle_command_mute(app),
-            Self::Cast(_) => CastPlaybackTarget::toggle_command_mute(app),
         }
     }
 
@@ -69,7 +59,6 @@ impl PlaybackTarget {
         match self {
             Self::Local(_) => LocalPlaybackTarget::cycle_audio(app),
             Self::Remote(target) => target.cycle_audio(app),
-            Self::Cast(_) => CastPlaybackTarget::cycle_audio(app),
         }
     }
 
@@ -77,7 +66,6 @@ impl PlaybackTarget {
         match self {
             Self::Local(_) => LocalPlaybackTarget::adjust_volume(app, delta),
             Self::Remote(target) => target.adjust_volume(app, delta),
-            Self::Cast(_) => CastPlaybackTarget::adjust_volume(app, delta),
         }
     }
 
@@ -85,7 +73,6 @@ impl PlaybackTarget {
         match self {
             Self::Local(_) => LocalPlaybackTarget::cycle_sub(app),
             Self::Remote(target) => target.cycle_sub(app),
-            Self::Cast(_) => CastPlaybackTarget::cycle_sub(app),
         }
     }
 
@@ -93,7 +80,6 @@ impl PlaybackTarget {
         match self {
             Self::Local(_) => LocalPlaybackTarget::displayed_volume(app),
             Self::Remote(_) => RemotePlaybackTarget::displayed_volume(app),
-            Self::Cast(_) => CastPlaybackTarget::displayed_volume(app),
         }
     }
 
@@ -101,7 +87,6 @@ impl PlaybackTarget {
         match self {
             Self::Local(_) => LocalPlaybackTarget::displayed_mute(app),
             Self::Remote(_) => RemotePlaybackTarget::displayed_mute(app),
-            Self::Cast(_) => CastPlaybackTarget::displayed_mute(app),
         }
     }
 
@@ -109,7 +94,6 @@ impl PlaybackTarget {
         match self {
             Self::Local(_) => LocalPlaybackTarget::indicator_data(app),
             Self::Remote(_) => RemotePlaybackTarget::indicator_data(app),
-            Self::Cast(_) => CastPlaybackTarget::indicator_data(app),
         }
     }
 }
@@ -117,21 +101,6 @@ impl PlaybackTarget {
 impl App {
     /// Returns the observed playback state for rendering.
     pub(in crate::app) fn effective_playback_state(&self) -> mbv_ui_model::playback::PlaybackState {
-        // The attached cast target wins only while it actually reports (or is
-        // optimistically awaiting) media. An attached receiver that is idle
-        // must not shadow real playback: attach-on-selection attaches
-        // optimistically before its status poll returns, so an idle
-        // attachment would otherwise collapse the now-playing panel for
-        // local and remote-session playback alike (cast-session-control's
-        // "receiver is idle" scenario governs the *cast* presentation, not
-        // every surface).
-        match self.cast_effective_playback_state() {
-            Some(state) if state.active => state,
-            _ => self.non_cast_playback_state(),
-        }
-    }
-
-    fn non_cast_playback_state(&self) -> mbv_ui_model::playback::PlaybackState {
         if let Some(ref remote) = self.connected_session_state {
             // The observed item is only a *local* playhead when the queue
             // holds it. A watched remote Session may be playing anything
@@ -278,49 +247,5 @@ mod now_playing_status_tests {
         // Paused counts as active.
         set_player(&app, true, true);
         assert_eq!(app.now_playing_status(), NowPlayingStatus::Paused);
-    }
-
-    /// Regression: a cast receiver reattached at launch is attached but idle
-    /// (and its status poll may fail outright, leaving no status at all).
-    /// That attachment must not shadow real local playback -- the now-playing
-    /// panel collapsed to Idle a few seconds into every video until this was
-    /// split.
-    #[test]
-    fn attached_but_idle_cast_does_not_shadow_local_playback() {
-        let mut app = make_app_stub();
-        app.attach_cast("device-1".to_string());
-
-        // Receiver reports no active media.
-        app.apply_cast_status("device-1", Ok(mbv_cast::client::CastStatus::idle()));
-        set_player(&app, true, false);
-        assert_eq!(app.now_playing_status(), NowPlayingStatus::Playing);
-
-        // Connection lost before any status arrived (the observed failure:
-        // "cast get_status returned no entries"), status stays None.
-        let mut app = make_app_stub();
-        app.attach_cast("device-1".to_string());
-        app.apply_cast_status("device-1", Err(mbv_cast::CastError::status_no_entries()));
-        set_player(&app, true, false);
-        assert_eq!(app.now_playing_status(), NowPlayingStatus::Playing);
-    }
-
-    /// An engaged cast target keeps priority over the local player.
-    #[test]
-    fn playing_cast_still_wins_over_the_local_player() {
-        let mut app = make_app_stub();
-        app.attach_cast("device-1".to_string());
-        app.apply_cast_status(
-            "device-1",
-            Ok(mbv_cast::client::CastStatus {
-                position_seconds: Some(1.0),
-                duration_seconds: Some(100.0),
-                playback_rate: 1.0,
-                state: mbv_cast::client::CastPlaybackState::Playing,
-                playing_content_id: None,
-                idle_reason: None,
-            }),
-        );
-        set_player(&app, false, false);
-        assert_eq!(app.now_playing_status(), NowPlayingStatus::Playing);
     }
 }

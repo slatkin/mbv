@@ -5,7 +5,6 @@ use crate::app::state::playback::{PlaylistMutationState, SuspendedLocalSession, 
 use crate::app::state::queue_owner::QueueEpoch;
 use crate::app::state::queue_view::QueueView;
 use crate::app::state::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
-use crate::app::state::types::cast::CastAttachment;
 use indexmap::IndexMap;
 use mbv_config::TuiLaunchState;
 use mbv_ctrl::player::PlayerEvent;
@@ -372,24 +371,6 @@ pub struct App {
     /// (`RemotePlayer::playback_output_state`, which the handshake fills at
     /// the cold seed) — see `hand_cast_output_back_to_local` (8.2 fix).
     pub(in crate::app) playback_output: Option<mbv_ctrl::OutputState>,
-    /// Cast attachment, beside `connected_session_id`/`connected_session_state`
-    /// above: `None` means no cast target is attached. See `cast_actions.rs`
-    /// for attach/detach and `cast_status_actions.rs` for status polling.
-    pub(in crate::app) cast_attachment: Option<CastAttachment>,
-    /// When the oldest cast job still awaiting any worker event was
-    /// submitted. The unresponsive-worker watchdog
-    /// (`check_cast_worker_responsive`) reads it: `rust_cast` operations
-    /// have no socket timeout, so one unresponsive receiver exchange blocks
-    /// the single worker thread forever -- status freezes and every later
-    /// job queues behind it while the target still reads connected.
-    pub(in crate::app) cast_job_sent: Option<Instant>,
-    pub(in crate::app) last_cast_poll: Instant,
-    /// When the last keep-alive pong was submitted
-    /// (`spawn_cast_keep_alive`), on its own cadence
-    /// (`CAST_KEEP_ALIVE_INTERVAL`) so the receiver's heartbeat deadline is
-    /// met even while a queue-load exchange occupies the worker.
-    pub(in crate::app) last_cast_keep_alive: Instant,
-    pub(in crate::app) cast_status_loading: bool,
     pub(in crate::app) queue_epoch: QueueEpoch,
     pub(in crate::app) playlist_mutations: std::collections::HashMap<String, PlaylistMutationState>,
     pub(in crate::app) next_playlist_mutation: u64,

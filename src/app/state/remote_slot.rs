@@ -118,13 +118,12 @@ impl App {
         }
     }
 
-    /// Connecting to a new target severs the current one: the cast
-    /// attachment, watched session, direct remote, and library-route slots
-    /// are mutually exclusive, so a new connect tears the old target down
-    /// instead of holding both. The owner's Cast output is handed back to
-    /// Local first (`hand_cast_output_back_to_local`); the severed cast
-    /// receiver is left as it is ("the receiver owns what it plays"); the
-    /// dropped transport ends mbv's connection to it. No-op when nothing
+    /// Connecting to a new target severs the current one: the watched
+    /// session, direct remote, and library-route slots are mutually
+    /// exclusive, so a new connect tears the old target down instead of
+    /// holding both. The owner's Cast output is handed back to Local first
+    /// (`hand_cast_output_back_to_local`); a severed cast receiver is left
+    /// as it is ("the receiver owns what it plays"). No-op when nothing
     /// else is connected.
     pub(in crate::app) fn sever_active_connection(&mut self) {
         self.hand_cast_output_back_to_local();
@@ -137,9 +136,6 @@ impl App {
     /// slot the new receiver must continue (spec scenario "A different cast
     /// target is selected while one is attached").
     pub(in crate::app) fn sever_connections_without_output_change(&mut self) {
-        if self.cast_attachment.take().is_some() {
-            self.stop_visualizer_capture();
-        }
         if self.active_route.is_some() {
             self.restore_local_mode("Local playback restored before connecting");
         }

@@ -40,7 +40,6 @@ impl App {
             // pill falls back to the local label until the reconnect lands,
             // so it never contradicts the header's "Cast: disconnected".
             Some(mbv_ctrl::OutputState::Cast {
-                name: _,
                 connection: mbv_ctrl::CastConnection::Disconnected,
                 ..
             }) => None,

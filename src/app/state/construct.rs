@@ -220,15 +220,6 @@ impl App {
             connected_session_id: None,
             connected_session_state: None,
             playback_output: None,
-            cast_attachment: None,
-            cast_job_sent: None,
-            last_cast_poll: Instant::now()
-                .checked_sub(Duration::from_secs(60))
-                .unwrap_or_else(Instant::now),
-            last_cast_keep_alive: Instant::now()
-                .checked_sub(Duration::from_secs(60))
-                .unwrap_or_else(Instant::now),
-            cast_status_loading: false,
             queue_epoch: crate::app::state::queue_owner::QueueEpoch::default(),
             playlist_mutations: std::collections::HashMap::new(),
             next_playlist_mutation: 1,

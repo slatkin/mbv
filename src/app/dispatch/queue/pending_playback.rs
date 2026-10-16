@@ -83,20 +83,6 @@ impl App {
         start_idx: usize,
         source: mbv_queue::QueueSource,
     ) {
-        // cast-session-control "Playing while attached": a deferred play
-        // confirmed while a cast target is attached dispatches to the
-        // receiver instead of starting local playback, exactly as the
-        // immediate play would have (the confirm prompt defers the local
-        // fall-through decision, it does not pre-commit to it).
-        if self.is_cast_attached() {
-            let queue_items: Vec<QueueItem> = items
-                .into_iter()
-                .map(|item| QueueItem::Emby(Box::new(item)))
-                .collect();
-            self.play_selection_on_cast(queue_items, start_idx, source);
-            self.set_queue_scope(self.playing_queue_scope());
-            return;
-        }
         // Attached Emby session: the queue is installed on the Player owner
         // through the idle-load path (ruling on row 5.3: the owner's Replace
         // op always starts playback, so it must not be used while another
