@@ -472,7 +472,8 @@ pub(crate) struct SharedQueueState {
     /// Mirror of the owner's active playback output, read by the ctrl accept
     /// path to seed newly-connecting Clients that negotiated
     /// `playback-output` (cast-owner-output design D3). The owner stays the
-    /// authority; the Cast handlers keep this in sync on every change.
+    /// authority. `cast/connect.rs` `broadcast_output_change` is the single
+    /// write site: any new output transition must update it there.
     pub(super) playback_output: Arc<Mutex<mbv_ctrl::OutputState>>,
 }
 
