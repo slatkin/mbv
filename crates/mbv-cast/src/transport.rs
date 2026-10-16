@@ -28,6 +28,10 @@ pub trait CastTransport {
     fn play(&mut self) -> Result<(), CastError>;
     fn pause(&mut self) -> Result<(), CastError>;
     fn stop(&mut self) -> Result<(), CastError>;
+    /// Stops the launched receiver app (design D12: only a deliberate
+    /// output change or detach calls it -- never mbv's own exit while
+    /// attached, and never a media stop).
+    fn teardown(&mut self) -> Result<(), CastError>;
     fn seek(&mut self, position_seconds: f32) -> Result<(), CastError>;
     fn skip_next(&mut self) -> Result<(), CastError>;
     fn skip_previous(&mut self) -> Result<(), CastError>;
@@ -49,6 +53,9 @@ impl CastTransport for CastClient {
     }
     fn stop(&mut self) -> Result<(), CastError> {
         CastClient::stop(self)
+    }
+    fn teardown(&mut self) -> Result<(), CastError> {
+        CastClient::teardown(self)
     }
     fn seek(&mut self, position_seconds: f32) -> Result<(), CastError> {
         CastClient::seek(self, position_seconds)
@@ -163,6 +170,10 @@ impl CastTransport for FakeCastTransport {
     }
     fn stop(&mut self) -> Result<(), CastError> {
         self.calls.lock().unwrap().push("stop".to_string());
+        Ok(())
+    }
+    fn teardown(&mut self) -> Result<(), CastError> {
+        self.calls.lock().unwrap().push("teardown".to_string());
         Ok(())
     }
     fn seek(&mut self, position_seconds: f32) -> Result<(), CastError> {

@@ -533,6 +533,17 @@ pub(super) fn stop_active_output(
     }
 }
 
+/// Queues a receiver-app teardown on the Cast output's worker (design D12:
+/// only a deliberate output change or detach tears down the receiver app).
+/// The job runs FIFO after any media-stop job the caller queued first. A
+/// user Stop (`stop_active_output`) never calls this: stopping media must
+/// leave the app running. Row 7.3 wires the callers; until then the daemon
+/// test is this helper's only caller.
+#[cfg(test)]
+pub(super) fn queue_teardown_job(cast: &CastOutput) {
+    command::submit_command_job(&cast.worker, "teardown", |transport| transport.teardown());
+}
+
 /// The receiver refused the load (design D5, row 5.2): the loaded record is
 /// dropped and the in-flight transition whose target was that slot expires.
 fn handle_load_failed(daemon: &mut DaemonLoop, slot: QueueSlotId, error: &str) {

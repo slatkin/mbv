@@ -720,6 +720,62 @@ fn a_stop_stops_the_receiver_media_and_forgets_the_loaded_item() {
     );
 }
 
+/// Contract: cast-owner-output row 7.1 B1 / design D12 — the receiver-app
+/// teardown is reachable from the Owner's Cast worker as a queued job, and
+/// it runs FIFO after a media-stop job, so a deliberate output change can
+/// stop the media before it tears down the app. A user Stop itself must not
+/// tear down: only the queued teardown job the caller submits does.
+#[test]
+fn a_queued_teardown_runs_after_the_media_stop_on_the_worker() {
+    let mut t = test_loop_with_queue(
+        crate::DaemonRole::Local,
+        vec![feed_qi_with_url("a", "https://feed/a.mp3")],
+        0,
+    );
+    let (client_id, _rx, calls) = select_cast_output(&mut t, mbv_cast::CastStatus::idle());
+    let slot = t.event_loop.owner.core.queue.slots()[0].slot_id;
+    t.event_loop.handle_event(DaemonEvent::Ctrl(
+        CtrlCmd::UnifiedQueuePlaySlot {
+            slot_id: mbv_ctrl::slot_id_to_u64(slot),
+            op: None,
+        },
+        client_id,
+        mpsc::channel().0,
+    ));
+    pump(&mut t);
+    wait_for_worker_jobs(&t.event_loop.owner.output);
+
+    t.event_loop.handle_event(DaemonEvent::Ctrl(
+        CtrlCmd::Stop,
+        client_id,
+        mpsc::channel().0,
+    ));
+    let PlaybackOutput::Cast(cast) = &t.event_loop.owner.output else {
+        panic!("the receiver is the output");
+    };
+    crate::cast::queue_teardown_job(cast);
+    wait_for_worker_jobs(&t.event_loop.owner.output);
+
+    let calls = calls.lock().unwrap();
+    assert_eq!(
+        calls.iter().filter(|call| *call == "teardown").count(),
+        1,
+        "the teardown lands on the receiver exactly once: {calls:?}"
+    );
+    let stop = calls
+        .iter()
+        .position(|call| *call == "stop")
+        .expect("the media stop lands on the receiver");
+    let teardown = calls
+        .iter()
+        .position(|call| *call == "teardown")
+        .expect("the teardown lands on the receiver");
+    assert!(
+        stop < teardown,
+        "the teardown runs after the media stop, in worker FIFO order: {calls:?}"
+    );
+}
+
 /// The loaded item's slot, when one is recorded.
 fn loaded_item_slot(t: &TestLoop) -> Option<mbv_queue::QueueSlotId> {
     let PlaybackOutput::Cast(cast) = &t.event_loop.owner.output else {
