@@ -17,7 +17,7 @@
 //! double-click and scrubs on a left-drag anchored inside its bar, recognized
 //! by the panel's own `MouseGestureState`.
 
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
@@ -31,6 +31,7 @@ use tuirealm::state::State;
 
 use super::library_playback_panel::PlaybackProjection;
 use crate::mouse::gesture::{MouseGesture, MouseGestureState};
+use crate::mouse::seekbar::admit_seekbar_scrub;
 use mbv_render::PlaybackStripAreas;
 use mbv_render::arrangements::chrome::QUEUE_TRANSPORT_ROWS;
 use mbv_render::components::chrome_player::TransportAvailability;
@@ -47,11 +48,6 @@ use mbv_ui_msg::{Msg, PlaybackRequest, ShellRequest};
 /// playback panel paints in every queue-visible layout (the former
 /// queue-only strip's identity, D10).
 const TRANSPORT_SURFACE: palette::Surface = palette::Surface::QueueOnlyPlaybackPanel;
-
-/// Seekbar scrub throttle. A drag reports every motion event, so the panel
-/// admits at most one scrub seek per interval (the legacy 150 ms cadence);
-/// without it one pointer sweep would queue a seek per terminal event.
-const SEEKBAR_SCRUB_INTERVAL: Duration = Duration::from_millis(150);
 
 #[derive(Debug)]
 pub struct QueuePlaybackPanel {
@@ -294,21 +290,8 @@ impl QueuePlaybackPanel {
     /// a drag that merely crossed the bar (a queue-row drag, say) is not a
     /// scrub of this bar. Admitted at most once per `SEEKBAR_SCRUB_INTERVAL`.
     fn scrub(&mut self, gesture: Option<MouseGesture>) -> Option<Msg> {
-        let MouseGesture::Drag { from, to } = gesture? else {
-            return None;
-        };
-        if !self.seekbar_area.contains(from) || !self.seekbar_area.contains(to) {
-            return None;
-        }
-        let now = Instant::now();
-        if self
-            .scrub_at
-            .is_some_and(|at| now.duration_since(at) < SEEKBAR_SCRUB_INTERVAL)
-        {
-            return None;
-        }
-        self.scrub_at = Some(now);
-        self.seek_intent(to.x)
+        let column = admit_seekbar_scrub(self.seekbar_area, &mut self.scrub_at, gesture)?;
+        self.seek_intent(column)
     }
 }
 

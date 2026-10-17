@@ -13,7 +13,7 @@
 //! `PlaybackProjection` — the shared transport projection both playback
 //! panels consume — is also defined here.
 
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
@@ -26,6 +26,7 @@ use tuirealm::props::{AttrValue, Attribute, Props, QueryResult};
 use tuirealm::state::State;
 
 use crate::mouse::gesture::{MouseGesture, MouseGestureState};
+use crate::mouse::seekbar::admit_seekbar_scrub;
 use mbv_queue::PlaybackTitleParts;
 use mbv_render::PlaybackStripAreas;
 use mbv_render::arrangements::chrome::PLAYER_BOX_HEIGHT;
@@ -35,11 +36,6 @@ use mbv_theme as palette;
 use mbv_ui_model::playback::{NowPlayingTitleSite, PlaybackState};
 use mbv_ui_msg::UserEvent;
 use mbv_ui_msg::{LeafKeyResult, Msg, PlaybackRequest};
-
-/// Seekbar scrub throttle. A drag reports every motion event, so the panel
-/// admits at most one scrub seek per interval (the legacy 150 ms cadence);
-/// without it one pointer sweep would queue a seek per terminal event.
-const SEEKBAR_SCRUB_INTERVAL: Duration = Duration::from_millis(150);
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct PlaybackProjection {
@@ -230,21 +226,8 @@ impl LibraryPlaybackPanel {
     /// a drag that merely crossed the bar is not a scrub of this bar.
     /// Admitted at most once per `SEEKBAR_SCRUB_INTERVAL`.
     fn scrub(&mut self, gesture: Option<MouseGesture>) -> Option<Msg> {
-        let MouseGesture::Drag { from, to } = gesture? else {
-            return None;
-        };
-        if !self.seekbar_area.contains(from) || !self.seekbar_area.contains(to) {
-            return None;
-        }
-        let now = Instant::now();
-        if self
-            .scrub_at
-            .is_some_and(|at| now.duration_since(at) < SEEKBAR_SCRUB_INTERVAL)
-        {
-            return None;
-        }
-        self.scrub_at = Some(now);
-        self.seek_intent(to.x)
+        let column = admit_seekbar_scrub(self.seekbar_area, &mut self.scrub_at, gesture)?;
+        self.seek_intent(column)
     }
 }
 
@@ -339,16 +322,6 @@ mod tests {
     fn click(column: u16, row: u16) -> Event<UserEvent> {
         Event::Mouse(tuirealm::event::MouseEvent {
             kind: MouseEventKind::Down(MouseButton::Left),
-            column,
-            row,
-            modifiers: KeyModifiers::NONE,
-        })
-    }
-
-    /// A left-button motion at the cell: the second half of a drag gesture.
-    fn motion(column: u16, row: u16) -> Event<UserEvent> {
-        Event::Mouse(tuirealm::event::MouseEvent {
-            kind: MouseEventKind::Drag(MouseButton::Left),
             column,
             row,
             modifiers: KeyModifiers::NONE,
@@ -536,43 +509,6 @@ mod tests {
             message,
             Some(Msg::Playback(PlaybackRequest::SeekTo(f))) if (f - 0.5).abs() < 1e-6
         ));
-    }
-
-    /// A seekbar scrub admits one seek per throttle interval, and only for a
-    /// drag that anchored inside the bar span: a drag that merely crosses the
-    /// bar is not a scrub of it. The throttle records the outcome of the
-    /// interval passing, so the test never sleeps.
-    #[test]
-    fn seekbar_scrub_needs_an_in_bar_anchor_and_one_seek_per_interval() {
-        let mut panel = painted_panel();
-        let seekbar = panel.seekbar_area;
-        let drag = |panel: &mut LibraryPlaybackPanel, from: u16, to: u16| {
-            // The press arms the drag anchor and resolves nothing on the bar.
-            let _ = panel.on(&click(from, seekbar.y));
-            panel.on(&motion(to, seekbar.y))
-        };
-
-        let target = seekbar.x + seekbar.width / 2;
-        assert!(
-            matches!(
-                drag(&mut panel, seekbar.x, target),
-                Some(Msg::Playback(PlaybackRequest::SeekTo(f))) if (f - 0.5).abs() < 1e-6
-            ),
-            "an in-bar drag scrubs to the pointer column"
-        );
-        assert!(
-            drag(&mut panel, seekbar.x + 1, target + 1).is_none(),
-            "a second scrub inside the interval is throttled"
-        );
-        panel.scrub_at = Instant::now().checked_sub(SEEKBAR_SCRUB_INTERVAL);
-        assert!(
-            drag(&mut panel, seekbar.x + 2, target + 1).is_some(),
-            "a scrub after the interval is admitted again"
-        );
-        assert!(
-            drag(&mut panel, seekbar.x - 1, target).is_none(),
-            "a drag that anchored outside the bar never scrubs"
-        );
     }
 
     #[test]

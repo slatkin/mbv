@@ -1,4 +1,5 @@
 use super::*;
+use crate::mouse::seekbar::SEEKBAR_SCRUB_INTERVAL;
 use mbv_ui_model::playback::NowPlayingTitleSite;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
