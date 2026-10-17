@@ -542,8 +542,29 @@ pub(super) fn stop_active_output(
         }
         // An Emby Session's stop sends the device `transport("Stop")` only
         // while it plays the loaded item (emby-session-owner-output design
-        // D9/D11, task 6.2); until then the stop is a documented no-op.
-        PlaybackOutput::EmbySession(_) => {}
+        // D9/D11, task 6.2); content the Owner did not load is left playing.
+        // Whatever happened, the loaded item and the end it may have started
+        // are gone, so a stopped output advances nothing.
+        PlaybackOutput::EmbySession(session) => {
+            let stopped = crate::emby_session::command::stop_loaded_item(session);
+            session.loaded = None;
+            session.advance = None;
+            session.pending_pause = false;
+            if stopped {
+                // The stopped item's observation would present it as foreign
+                // playback until the next poll (the same rule the Cast stop
+                // applies to its last report).
+                session.last_observation = None;
+                session.observed_at = None;
+            }
+            // The stop presents no active playback (the same rule the Cast
+            // arm applies): with the loaded item gone the Owner presents
+            // nothing until the next observation reports what the device
+            // does.
+            let base = player.status.lock().unwrap().clone();
+            let presented = crate::output::not_presenting(&base, queue);
+            *player.status.lock().unwrap() = presented;
+        }
     }
 }
 

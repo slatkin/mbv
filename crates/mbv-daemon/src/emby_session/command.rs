@@ -121,6 +121,16 @@ pub(crate) fn route_step(session: &mut EmbySessionOutput, direction: Direction) 
 /// Whether the Session plays an item the Owner did not load (design D6, D9):
 /// the observation presents an item, and it is not the loaded item.
 fn plays_foreign_item(session: &EmbySessionOutput) -> bool {
+    if !has_presented_item(session) {
+        return false;
+    }
+    !plays_loaded_item(session)
+}
+
+/// Whether the device currently presents the item the Owner loaded (design
+/// D6, D9, D11): the observation's now-playing item is the loaded one. A
+/// missing observation and an idle Session present nothing.
+fn plays_loaded_item(session: &EmbySessionOutput) -> bool {
     let Some(item_id) = session
         .last_observation
         .as_ref()
@@ -131,7 +141,27 @@ fn plays_foreign_item(session: &EmbySessionOutput) -> bool {
     session
         .loaded
         .as_ref()
-        .is_none_or(|loaded| loaded.item_id != item_id)
+        .is_some_and(|loaded| loaded.item_id == item_id)
+}
+
+/// Whether the observation presents any item at all.
+fn has_presented_item(session: &EmbySessionOutput) -> bool {
+    session
+        .last_observation
+        .as_ref()
+        .is_some_and(|observed| observed.now_playing_item_id.is_some())
+}
+
+/// Stops the item the Owner loaded on the Session (design D9, D11; task 6.2):
+/// the device gets `transport("Stop")` only while it plays that item, because
+/// content the Owner did not load is left playing. Returns whether a stop was
+/// sent, so the caller can tell a stopped item from a left-running device.
+pub(crate) fn stop_loaded_item(session: &EmbySessionOutput) -> bool {
+    if !plays_loaded_item(session) {
+        return false;
+    }
+    transport(session, "Stop");
+    true
 }
 
 /// Submits one seek, clamped at the start of the item (design D9).

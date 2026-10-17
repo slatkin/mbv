@@ -7,6 +7,7 @@
 use std::time::Instant;
 
 use super::cast_output::{connect_output_client_with_caps, select_output};
+use super::cast_playback::drained_events;
 use super::emby_session_output::{
     host_session_output, play_calls, poll_once, pump_session_event, session_selection,
     wait_for_session_jobs,
@@ -18,6 +19,7 @@ use mbv_ctrl::OutputSelection;
 
 use crate::cast::PlaybackOutput;
 use crate::emby_session::fake::{FakeSessionApi, SessionCall, session};
+use crate::emby_session::worker::EmbySessionJob;
 use mbv_emby::SessionInfo;
 
 /// One second of media in ticks.
@@ -94,6 +96,46 @@ fn play_slot(t: &mut TestLoop, client_id: u64, slot: mbv_queue::QueueSlotId) {
         mpsc::channel().0,
     ));
     wait_for_session_jobs(&t.event_loop.owner.output);
+}
+
+/// The Session worker's sender, kept after an output swap so a test can wait
+/// for the jobs the stop queued.
+fn session_worker(t: &TestLoop) -> mpsc::Sender<EmbySessionJob> {
+    let PlaybackOutput::EmbySession(output) = &t.event_loop.owner.output else {
+        panic!("the Session is the output");
+    };
+    output.worker.clone()
+}
+
+/// Waits until every job queued on the Session worker has run, so a test can
+/// assert on the fake's call log without a sleep. Takes the sender, because
+/// the stop a hand-off queues runs after the output has swapped already.
+fn wait_for_worker(worker: &mpsc::Sender<EmbySessionJob>) {
+    let (done_tx, done_rx) = mpsc::channel();
+    worker
+        .send(Box::new(move |_api| {
+            let _ = done_tx.send(());
+        }))
+        .expect("the Session worker accepts the sentinel");
+    done_rx
+        .recv_timeout(Duration::from_secs(2))
+        .expect("the queued jobs ran before the sentinel");
+}
+
+/// The `Stop` transport commands the fake recorded, in order.
+fn stop_calls(calls: &Arc<Mutex<Vec<SessionCall>>>) -> Vec<SessionCall> {
+    calls
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|call| {
+            matches!(
+                call,
+                SessionCall::Transport { command, .. } if command == "Stop"
+            )
+        })
+        .cloned()
+        .collect()
 }
 
 /// Contract: row 6.1 / design D11 and spec "An Emby Session is selected while
@@ -259,4 +301,117 @@ fn an_emby_session_hand_back_cold_starts_locally_at_the_estimated_position() {
     );
     let status = t.event_loop.player.status.lock().unwrap();
     assert!(status.active, "the local run continues the handed-off slot");
+}
+
+/// Contract: row 6.2 / design D11 and spec "Cast target is selected while a
+/// session is watched" — selecting Local while the device plays the loaded
+/// item sends exactly one `Stop` to it.
+#[test]
+fn selecting_local_while_the_loaded_item_plays_sends_one_stop() {
+    let fake = FakeSessionApi::with_sessions(vec![session("device-1", "session-1")]);
+    let script = fake.clone();
+    let (mut t, calls, _rx) =
+        session_output_with_queue(fake, vec![timed("movie", 600 * SECOND_TICKS)]);
+    let (client_id, _reply_tx, _client_rx) =
+        connect_output_client_with_caps(&t.event_loop.ctrl_clients, true, true);
+    let slot = t.event_loop.owner.core.queue.slots()[0].slot_id;
+    play_slot(&mut t, client_id, slot);
+    script.set_sessions(vec![session_presenting_at(
+        "movie",
+        100 * SECOND_TICKS,
+        600 * SECOND_TICKS,
+    )]);
+    poll_once(&mut t, Instant::now());
+    let worker = session_worker(&t);
+
+    select_output(
+        &mut t,
+        client_id,
+        &mpsc::channel().0,
+        OutputSelection::Local,
+    );
+    wait_for_worker(&worker);
+
+    assert_eq!(
+        stop_calls(&calls),
+        vec![SessionCall::Transport {
+            session_id: "session-1".to_string(),
+            command: "Stop".to_string(),
+        }],
+        "the stopped old output sends exactly one device stop"
+    );
+}
+
+/// Contract: row 6.2 / design D11 — stopping the old output leaves content the
+/// Owner did not load playing, so it sends no `Stop`.
+#[test]
+fn selecting_local_while_foreign_content_plays_sends_no_stop() {
+    let fake = FakeSessionApi::with_sessions(vec![session("device-1", "session-1")]);
+    let script = fake.clone();
+    let (mut t, calls, _rx) =
+        session_output_with_queue(fake, vec![timed("movie", 600 * SECOND_TICKS)]);
+    let (client_id, _reply_tx, _client_rx) =
+        connect_output_client_with_caps(&t.event_loop.ctrl_clients, true, true);
+    let slot = t.event_loop.owner.core.queue.slots()[0].slot_id;
+    play_slot(&mut t, client_id, slot);
+    script.set_sessions(vec![session_presenting_at(
+        "other-item",
+        10 * SECOND_TICKS,
+        600 * SECOND_TICKS,
+    )]);
+    poll_once(&mut t, Instant::now());
+    let worker = session_worker(&t);
+
+    select_output(
+        &mut t,
+        client_id,
+        &mpsc::channel().0,
+        OutputSelection::Local,
+    );
+    wait_for_worker(&worker);
+
+    assert!(
+        stop_calls(&calls).is_empty(),
+        "content the Owner did not load is left playing"
+    );
+    assert!(
+        matches!(t.event_loop.owner.output, PlaybackOutput::Local),
+        "the output still swaps to Local"
+    );
+}
+
+/// Contract: row 6.2 / design D11 (the Cast D12 rule) — Owner shutdown stops
+/// the output's worker with no device stop, so the Session keeps playing when
+/// the Owner exits.
+#[test]
+fn the_owner_shutdown_sends_no_stop_to_the_session() {
+    let fake = FakeSessionApi::with_sessions(vec![session("device-1", "session-1")]);
+    let script = fake.clone();
+    let (mut t, calls, rx) =
+        session_output_with_queue(fake, vec![timed("movie", 600 * SECOND_TICKS)]);
+    let (client_id, _reply_tx, _client_rx) =
+        connect_output_client_with_caps(&t.event_loop.ctrl_clients, true, true);
+    let slot = t.event_loop.owner.core.queue.slots()[0].slot_id;
+    play_slot(&mut t, client_id, slot);
+    script.set_sessions(vec![session_presenting_at(
+        "movie",
+        100 * SECOND_TICKS,
+        600 * SECOND_TICKS,
+    )]);
+    poll_once(&mut t, Instant::now());
+    let worker = session_worker(&t);
+
+    let _ = t.event_loop.handle_event(DaemonEvent::Shutdown);
+    wait_for_worker(&worker);
+
+    assert!(
+        stop_calls(&calls).is_empty(),
+        "the shutdown stops neither the device playback nor its app"
+    );
+    assert!(
+        !drained_events(&rx)
+            .into_iter()
+            .any(|event| matches!(event, CtrlEvent::CommandRejected(_))),
+        "the shutdown reports no failure"
+    );
 }
