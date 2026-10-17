@@ -165,7 +165,7 @@ fn a_local_handoff_plays_the_session_at_the_local_position() {
         play_calls(&calls),
         vec![SessionCall::Play {
             session_id: "session-1".to_string(),
-            item_id: "movie".to_string(),
+            item_ids: vec!["movie".to_string()],
             start_ticks: position,
         }],
         "the Session is given the handed-off item at the local position"

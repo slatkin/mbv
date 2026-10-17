@@ -35,7 +35,7 @@ fn session_playing(device_id: &str, session_id: &str, item_id: &str) -> SessionI
 fn play(item_id: &str) -> SessionCall {
     SessionCall::Play {
         session_id: "session-1".to_string(),
-        item_id: item_id.to_string(),
+        item_ids: vec![item_id.to_string()],
         start_ticks: 0,
     }
 }

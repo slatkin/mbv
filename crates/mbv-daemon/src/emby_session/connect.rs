@@ -265,6 +265,9 @@ fn install_output(
         last_observation: Some(session),
         observed_at: Some(Instant::now()),
         loaded: None,
+        // A fresh selection holds nothing queued on the device yet (design
+        // D14): the first load records what it sends.
+        queued_next: None,
         // A `play` cannot start paused (design D9): the captured pause waits
         // for the first observation that shows the loaded item.
         pending_pause: handoff.is_some_and(|handoff| handoff.paused),

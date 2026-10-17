@@ -284,6 +284,77 @@ fn ws_url_https_becomes_wss() {
     assert!(url.starts_with("wss://"));
 }
 
+// ── the two device-list commands (row 9.1, design D4, D14) ─────────────────
+
+/// The device-list command a case sends, so one table covers both.
+#[derive(Clone, Copy, Debug)]
+enum SessionPlayCommand {
+    Play,
+    PlayLast,
+}
+
+/// Sends `command` for the two-item list, from 120 ticks in.
+fn send_session_play(client: &EmbyClient, command: SessionPlayCommand) {
+    let item_ids = ["item-1", "item-2"];
+    let sent = match command {
+        SessionPlayCommand::Play => client.session_play("session-1", &item_ids, 120),
+        SessionPlayCommand::PlayLast => client.session_play_last("session-1", &item_ids),
+    };
+    sent.expect("the mock accepts the device-list command");
+}
+
+/// The body the wire carried: everything after the header block.
+fn request_body(request: &str) -> &str {
+    request
+        .split_once("\r\n\r\n")
+        .map(|(_, body)| body)
+        .expect("the mock logged the headers and the body")
+}
+
+/// Contract: row 9.1 / design D4, D14 — `play` replaces the device's list and
+/// starts it at `ItemIds[0]`, `play_last` appends a list after the item the
+/// device plays now, and both carry every id verbatim, so the device plays the
+/// list in order.
+#[rstest]
+#[case::play_now(
+    SessionPlayCommand::Play,
+    r#"{
+  "ItemIds": [
+    "item-1",
+    "item-2"
+  ],
+  "PlayCommand": "PlayNow",
+  "StartIndex": 0,
+  "StartPositionTicks": 120
+}"#
+)]
+#[case::play_last(
+    SessionPlayCommand::PlayLast,
+    r#"{
+  "ItemIds": [
+    "item-1",
+    "item-2"
+  ],
+  "PlayCommand": "PlayLast"
+}"#
+)]
+fn session_play_commands_send_the_whole_item_list(
+    #[case] command: SessionPlayCommand,
+    #[case] expected_body: &str,
+) {
+    let (client, http) = mock_client(TEST_URL);
+    http.respond(200, "");
+
+    send_session_play(&client, command);
+
+    let request = &http.requests()[0];
+    assert!(
+        request.starts_with("POST /Sessions/session-1/Playing"),
+        "the command goes to the Session's Playing endpoint: {request}"
+    );
+    assert_eq!(request_body(request), expected_body);
+}
+
 #[test]
 fn service_setup_validation_uses_setup_url_user_and_token() {
     let http = MockHttp::new();

@@ -648,7 +648,7 @@ fn playing_a_300_slot_queue_gives_the_session_one_play_job() {
         play_calls(&calls),
         vec![SessionCall::Play {
             session_id: "session-1".to_string(),
-            item_id: "item-5".to_string(),
+            item_ids: vec!["item-5".to_string()],
             start_ticks: 0,
         }],
         "the Session is given exactly one play job, for the selected slot's item"

@@ -16,8 +16,12 @@ pub(crate) enum SessionCall {
     GetSessions,
     Play {
         session_id: String,
-        item_id: String,
+        item_ids: Vec<String>,
         start_ticks: i64,
+    },
+    PlayLast {
+        session_id: String,
+        item_ids: Vec<String>,
     },
     Transport {
         session_id: String,
@@ -103,11 +107,18 @@ impl SessionApi for FakeSessionApi {
         self.recorded_sessions()
     }
 
-    fn play(&self, session_id: &str, item_id: &str, start_ticks: i64) -> Result<(), String> {
+    fn play(&self, session_id: &str, item_ids: &[&str], start_ticks: i64) -> Result<(), String> {
         self.record(SessionCall::Play {
             session_id: session_id.to_string(),
-            item_id: item_id.to_string(),
+            item_ids: item_ids.iter().map(|id| (*id).to_string()).collect(),
             start_ticks,
+        })
+    }
+
+    fn play_last(&self, session_id: &str, item_ids: &[&str]) -> Result<(), String> {
+        self.record(SessionCall::PlayLast {
+            session_id: session_id.to_string(),
+            item_ids: item_ids.iter().map(|id| (*id).to_string()).collect(),
         })
     }
 

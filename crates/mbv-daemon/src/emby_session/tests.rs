@@ -23,9 +23,14 @@ fn worker_runs_jobs_in_order_and_returns_the_poll_as_an_owner_event() {
 
     worker
         .send(Box::new(|api| {
-            let _ = api.play("session-1", "item-1", 30);
+            let _ = api.play("session-1", &["item-1"], 30);
         }))
         .expect("the worker accepts a play job");
+    worker
+        .send(Box::new(|api| {
+            let _ = api.play_last("session-1", &["item-2"]);
+        }))
+        .expect("the worker accepts a play_last job");
     let (events_tx, events_rx) = mpsc::channel();
     worker
         .send(Box::new(move |api| {
@@ -52,8 +57,12 @@ fn worker_runs_jobs_in_order_and_returns_the_poll_as_an_owner_event() {
         &[
             SessionCall::Play {
                 session_id: "session-1".to_string(),
-                item_id: "item-1".to_string(),
+                item_ids: vec!["item-1".to_string()],
                 start_ticks: 30,
+            },
+            SessionCall::PlayLast {
+                session_id: "session-1".to_string(),
+                item_ids: vec!["item-2".to_string()],
             },
             SessionCall::GetSessions,
         ]

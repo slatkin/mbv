@@ -118,9 +118,11 @@ pub(crate) fn dispatch(
 }
 
 /// Sends the one `play` job for `slot` to the Session's worker and records it
-/// as the loaded item (design D6, D7). A failed `play` re-enters the owner's
-/// loop as an `EmbySession` event, so the report and the expiry run where the
-/// transition lives. Returns whether the job was submitted.
+/// as the loaded item (design D6, D7). A load replaces what the device holds,
+/// so any queued next item is gone with it (design D14). A failed `play`
+/// re-enters the owner's loop as an `EmbySession` event, so the report and the
+/// expiry run where the transition lives. Returns whether the job was
+/// submitted.
 pub(crate) fn submit_play(
     output: &mut EmbySessionOutput,
     merged_tx: &mpsc::Sender<DaemonEvent>,
@@ -133,7 +135,7 @@ pub(crate) fn submit_play(
     let job_item_id = item_id.clone();
     let merged_tx = merged_tx.clone();
     let job: EmbySessionJob = Box::new(move |api: &dyn SessionApi| {
-        if let Err(error) = api.play(&session_id, &job_item_id, start_ticks) {
+        if let Err(error) = api.play(&session_id, &[&job_item_id], start_ticks) {
             let _ = merged_tx.send(DaemonEvent::EmbySession(EmbySessionEvent::PlayFailed {
                 slot,
                 error,
@@ -143,6 +145,12 @@ pub(crate) fn submit_play(
     if output.worker.send(job).is_err() {
         tracing::warn!(name: "daemon.emby_session_load.worker_gone", target: "daemon", slot = ?slot, "the Emby Session worker is not running; nothing was loaded");
         return false;
+    }
+    // A load replaces what the device holds, so whatever it held next is gone
+    // with it (design D14, "each load clears the stale mark"): the load's own
+    // window is recorded from here.
+    if let Some(replaced) = output.queued_next.take() {
+        tracing::debug!(name: "daemon.emby_session_load.queued_replaced", target: "daemon", slot = ?replaced.slot, stale = replaced.stale, "the load replaced the item the device held next");
     }
     output.loaded = Some(EmbySessionLoadedItem {
         slot,

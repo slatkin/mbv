@@ -227,10 +227,13 @@ impl EmbyClient {
         Ok(())
     }
 
+    /// Loads `item_ids` on the Session as one list, in that order, starting at
+    /// its first item (design D14): the device replaces what it plays with the
+    /// list, so the first id is the item that must start, at `start_ticks`.
     pub fn session_play(
         &self,
         id: &str,
-        item_id: &str,
+        item_ids: &[&str],
         start_ticks: i64,
     ) -> Result<(), crate::EmbyError> {
         self.post(&format!(
@@ -239,8 +242,24 @@ impl EmbyClient {
         ))
         .send_json(serde_json::json!({
             "PlayCommand": "PlayNow",
-            "ItemIds": [item_id],
+            "ItemIds": item_ids,
+            "StartIndex": 0,
             "StartPositionTicks": start_ticks
+        }))?;
+        Ok(())
+    }
+
+    /// Appends `item_ids` to the Session's play queue, in that order, without
+    /// touching the item it plays now (design D14, D15): the device keeps its
+    /// current item and plays the list after it.
+    pub fn session_play_last(&self, id: &str, item_ids: &[&str]) -> Result<(), crate::EmbyError> {
+        self.post(&format!(
+            "/Sessions/{}/Playing",
+            mbv_net::encode_path_segment(id)
+        ))
+        .send_json(serde_json::json!({
+            "PlayCommand": "PlayLast",
+            "ItemIds": item_ids
         }))?;
         Ok(())
     }

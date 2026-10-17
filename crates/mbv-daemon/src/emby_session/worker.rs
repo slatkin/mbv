@@ -19,8 +19,12 @@ pub(crate) trait SessionApi {
     /// Every Session the server lists, unfiltered (design D4): the filtered
     /// list would drop a device that is idle but still connected (#236).
     fn get_sessions(&self) -> Result<Vec<SessionInfo>, String>;
-    /// Loads one item on the Session from `start_ticks`.
-    fn play(&self, session_id: &str, item_id: &str, start_ticks: i64) -> Result<(), String>;
+    /// Loads `item_ids` on the Session as one list, in that order, starting at
+    /// the first id from `start_ticks` (design D14).
+    fn play(&self, session_id: &str, item_ids: &[&str], start_ticks: i64) -> Result<(), String>;
+    /// Appends `item_ids` to the Session's queue without interrupting the item
+    /// it plays now (design D14, D15).
+    fn play_last(&self, session_id: &str, item_ids: &[&str]) -> Result<(), String>;
     /// Sends one `/Playing/{command}` transport command.
     fn transport(&self, session_id: &str, command: &str) -> Result<(), String>;
     fn seek(&self, session_id: &str, ticks: i64) -> Result<(), String>;
@@ -36,8 +40,13 @@ impl SessionApi for EmbyClient {
             .map_err(|error| error.to_string())
     }
 
-    fn play(&self, session_id: &str, item_id: &str, start_ticks: i64) -> Result<(), String> {
-        self.session_play(session_id, item_id, start_ticks)
+    fn play(&self, session_id: &str, item_ids: &[&str], start_ticks: i64) -> Result<(), String> {
+        self.session_play(session_id, item_ids, start_ticks)
+            .map_err(|error| error.to_string())
+    }
+
+    fn play_last(&self, session_id: &str, item_ids: &[&str]) -> Result<(), String> {
+        self.session_play_last(session_id, item_ids)
             .map_err(|error| error.to_string())
     }
 

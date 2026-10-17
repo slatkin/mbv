@@ -126,6 +126,10 @@ pub(crate) struct EmbySessionOutput {
     pub(crate) observed_at: Option<Instant>,
     /// The item the Owner loaded onto the device (design D1).
     pub(crate) loaded: Option<EmbySessionLoadedItem>,
+    /// The next slot the device holds besides the loaded one (design D1,
+    /// D14): the device keeps it queued, so the Owner can tell a device
+    /// advance from content it did not load.
+    pub(crate) queued_next: Option<EmbySessionQueuedItem>,
     /// A pause the hand-off could not start with (design D9): the first
     /// observation that shows the loaded item sends `transport("Pause")`.
     pub(crate) pending_pause: bool,
@@ -180,16 +184,13 @@ impl EmbySessionOutput {
     /// The item the device presents that the Owner did not load (design D3,
     /// D10): the ctrl `OutputState::EmbySession::now_playing` value, which is
     /// sent when this item changes and not on every status broadcast. The
-    /// loaded item is presented from the queue instead, and an idle Session
-    /// presents nothing.
+    /// loaded item is presented from the queue instead, the queued next item
+    /// is the device's own window (design D14), and an idle Session presents
+    /// nothing.
     pub(crate) fn now_playing(&self) -> Option<SessionNowPlaying> {
         let observed = self.last_observation.as_ref()?;
         let item_id = observed.now_playing_item_id.clone()?;
-        if self
-            .loaded
-            .as_ref()
-            .is_some_and(|loaded| loaded.item_id == item_id)
-        {
+        if self.known_item(&item_id) {
             return None;
         }
         Some(SessionNowPlaying {
@@ -200,6 +201,19 @@ impl EmbySessionOutput {
             series_name: observed.now_playing_series_name.clone(),
             logo_tag: observed.now_playing_logo_etag.clone(),
         })
+    }
+
+    /// Whether the Owner put `item_id` on the device (design D3, D14): the
+    /// loaded item or the queued next one. Every other item is content the
+    /// Owner did not load.
+    fn known_item(&self, item_id: &str) -> bool {
+        self.loaded
+            .as_ref()
+            .is_some_and(|loaded| loaded.item_id == item_id)
+            || self
+                .queued_next
+                .as_ref()
+                .is_some_and(|queued| queued.item_id == item_id)
     }
 
     /// Whether the Session advertises audio as its only playable media kind
@@ -220,6 +234,20 @@ impl EmbySessionOutput {
 /// Owner did not load all present nothing.
 pub(crate) fn presents_item(observed: Option<&SessionInfo>, item_id: &str) -> bool {
     observed.and_then(|observed| observed.now_playing_item_id.as_deref()) == Some(item_id)
+}
+
+/// The item the Owner queued on an Emby Session after the loaded one (design
+/// D1, D14): the device holds only these two items, and the queue slot is what
+/// a queue edit can make stale.
+#[derive(Debug)]
+pub(crate) struct EmbySessionQueuedItem {
+    /// The queue slot the device holds next.
+    pub(crate) slot: QueueSlotId,
+    /// The Emby item id the device was given for that slot.
+    pub(crate) item_id: String,
+    /// Whether a queue edit made the queued item stale (design D14): the
+    /// device still holds it, but the queue no longer picks it next.
+    pub(crate) stale: bool,
 }
 
 /// The item the Owner loaded onto an Emby Session (design D1, D6). Emby
