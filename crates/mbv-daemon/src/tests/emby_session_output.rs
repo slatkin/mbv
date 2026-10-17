@@ -466,3 +466,132 @@ fn the_tick_polls_once_a_second_with_one_poll_in_flight() {
     };
     assert_eq!(*second_id, first_id + 1, "the poll id is monotonic");
 }
+
+/// A worker whose jobs are dropped unrun, so no lookup outcome races the ones
+/// the test injects: the selection bookkeeping is driven exactly.
+fn silent_session_worker() -> mpsc::Sender<crate::emby_session::worker::EmbySessionJob> {
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || for _job in rx {});
+    tx
+}
+
+/// A loop that hosts the Emby Session output with a worker that never answers,
+/// so each lookup outcome arrives when the test injects it.
+fn loop_with_injected_lookups() -> TestLoop {
+    let mut t = test_loop_with_role(DaemonRole::Local);
+    t.event_loop.emby_session_output = true;
+    t.event_loop.emby_runtime = Some(crate::EmbyOwnerContext::from_client(
+        t.event_loop.client.lock().unwrap().clone(),
+        1,
+    ));
+    t.event_loop.emby_session_worker = Some(Box::new(silent_session_worker));
+    t
+}
+
+/// The selection the TUI sends for `device_id`.
+fn session_selection_for(device_id: &str) -> OutputSelection {
+    OutputSelection::EmbySession {
+        device_id: device_id.to_string(),
+        name: "Living room TV".to_string(),
+    }
+}
+
+/// Injects one lookup outcome as the worker would have returned it.
+fn inject_lookup_outcome(t: &mut TestLoop, device_id: &str, session_id: &str) {
+    t.event_loop
+        .handle_event(DaemonEvent::EmbySession(EmbySessionEvent::Selected {
+            device_id: device_id.to_string(),
+            result: Ok(session(device_id, session_id)),
+        }));
+}
+
+/// Contract: row 3.2 review — a displaced selection's late lookup outcome must
+/// not consume the live pending selection, so the newest selection still
+/// installs when its own outcome arrives.
+#[test]
+fn a_stale_lookup_outcome_keeps_the_live_pending_selection() {
+    let mut t = loop_with_injected_lookups();
+    let (client_id, reply_tx, rx) =
+        connect_output_client_with_caps(&t.event_loop.ctrl_clients, true, true);
+
+    select_output(
+        &mut t,
+        client_id,
+        &reply_tx,
+        session_selection_for("device-1"),
+    );
+    select_output(
+        &mut t,
+        client_id,
+        &reply_tx,
+        session_selection_for("device-2"),
+    );
+    assert!(
+        matches!(
+            drained_events(&rx).as_slice(),
+            [CtrlEvent::CommandRejected(_)]
+        ),
+        "the displaced first selection is told it lost"
+    );
+
+    inject_lookup_outcome(&mut t, "device-1", "session-1");
+
+    assert!(
+        matches!(t.event_loop.owner.output, PlaybackOutput::Local),
+        "the stale outcome installs nothing"
+    );
+    assert_eq!(
+        t.event_loop
+            .owner
+            .pending_emby_session_select
+            .as_ref()
+            .map(|pending| pending.device_id.as_str()),
+        Some("device-2"),
+        "the live pending selection survives the stale outcome"
+    );
+
+    inject_lookup_outcome(&mut t, "device-2", "session-2");
+
+    let PlaybackOutput::EmbySession(output) = &t.event_loop.owner.output else {
+        panic!("the newest selection installs after its own outcome");
+    };
+    assert_eq!(output.device_id, "device-2");
+    assert_eq!(output.session_id.as_deref(), Some("session-2"));
+}
+
+/// Contract: row 3.2 review / design D11 — a Local selection after an Emby
+/// Session selection displaces the pending lookup across output kinds, so its
+/// late outcome installs nothing.
+#[test]
+fn a_local_selection_discards_a_pending_emby_session_outcome() {
+    let mut t = loop_with_injected_lookups();
+    let (client_id, reply_tx, rx) =
+        connect_output_client_with_caps(&t.event_loop.ctrl_clients, true, true);
+
+    select_output(&mut t, client_id, &reply_tx, session_selection());
+    select_output(&mut t, client_id, &reply_tx, OutputSelection::Local);
+
+    assert!(
+        matches!(
+            drained_events(&rx).as_slice(),
+            [CtrlEvent::CommandRejected(_)]
+        ),
+        "the displaced Session selection is told it lost"
+    );
+    assert!(t.event_loop.owner.pending_emby_session_select.is_none());
+
+    inject_lookup_outcome(&mut t, "device-1", "session-1");
+
+    assert!(
+        matches!(t.event_loop.owner.output, PlaybackOutput::Local),
+        "the late outcome installs nothing after a Local selection"
+    );
+    assert!(
+        drained_events(&rx).is_empty(),
+        "the late outcome reports nothing"
+    );
+    assert_eq!(
+        *t.event_loop.shared_queue.playback_output.lock().unwrap(),
+        OutputState::Local
+    );
+}

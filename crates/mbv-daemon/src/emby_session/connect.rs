@@ -67,6 +67,17 @@ pub(crate) fn select(
         );
         return;
     };
+    // A pending Cast connect loses to this newer Session selection (design
+    // D11, last selection wins): its selector is told now, so no Client hangs,
+    // and its late outcome matches no pending connect and is discarded. This
+    // runs before the no-op below, so even a selection that changes nothing
+    // still displaces the older choice.
+    if let Some(displaced) = daemon.owner.pending_cast_connect.take() {
+        send_to(
+            &displaced.reply_tx,
+            &CtrlEvent::CommandRejected("superseded by a newer Session selection".to_string()),
+        );
+    }
     // Selecting the device that already is the output is no hand-off (design
     // D11): the polls already follow it, so a fresh worker would only replace
     // the observation it holds.
@@ -97,6 +108,19 @@ pub(crate) fn select(
         name,
         reply_tx: reply_tx.clone(),
     });
+}
+
+/// Drops a pending Emby Session selection that a newer output selection of
+/// another kind displaces (design D11, last selection wins): the displaced
+/// selector is told now, and its late lookup finds no pending selection and is
+/// discarded.
+pub(crate) fn discard_pending_select(daemon: &mut DaemonLoop, reason: &str) {
+    if let Some(displaced) = daemon.owner.pending_emby_session_select.take() {
+        send_to(
+            &displaced.reply_tx,
+            &CtrlEvent::CommandRejected(reason.to_string()),
+        );
+    }
 }
 
 /// Submits the device lookup to the worker (design D4): the unfiltered
@@ -132,14 +156,20 @@ pub(super) fn handle_selected(
     device_id: String,
     result: Result<SessionInfo, String>,
 ) {
-    let Some(pending) = daemon.owner.pending_emby_session_select.take() else {
-        // No selection waits for this lookup: it belongs to a displaced
-        // selection (the last selection wins).
-        return;
-    };
-    if pending.device_id != device_id {
+    // The pending selection is compared before it is taken: a displaced
+    // selection's late lookup must not consume the live selection that a newer
+    // choice installed (design D11, last selection wins).
+    let matches_pending = daemon
+        .owner
+        .pending_emby_session_select
+        .as_ref()
+        .is_some_and(|pending| pending.device_id == device_id);
+    if !matches_pending {
         return;
     }
+    let Some(pending) = daemon.owner.pending_emby_session_select.take() else {
+        return;
+    };
     match result {
         Ok(session) => install_output(daemon, pending, session),
         Err(reason) => {

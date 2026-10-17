@@ -25,7 +25,9 @@ use super::status::refresh_presentation;
 /// selection.
 pub struct PendingCastConnect {
     receiver: CastReceiver,
-    reply_tx: CtrlSender,
+    /// `pub(crate)` so a newer Emby Session selection can tell the displaced
+    /// selector that its connect loses (design D11, last selection wins).
+    pub(crate) reply_tx: CtrlSender,
     handoff: Option<HandoffPlayback>,
 }
 
@@ -124,6 +126,13 @@ pub fn handle_select_playback_output(
                     ),
                 );
             }
+            // A pending Emby Session selection loses the same way: its late
+            // lookup must not install over the Local choice (design D11, last
+            // selection wins).
+            crate::emby_session::connect::discard_pending_select(
+                daemon,
+                "a newer selection chose local playback",
+            );
             // Selecting Local while a receiver is the output hands the
             // active slot back (design D10, row 7.1 dispatch B): capture,
             // stop and tear down the receiver, then continue the slot on a
@@ -151,6 +160,13 @@ pub fn handle_select_playback_output(
                     ),
                 );
             }
+            // A pending Emby Session selection loses to this newer receiver
+            // selection as well (design D11, last selection wins): its late
+            // lookup must not install over the receiver.
+            crate::emby_session::connect::discard_pending_select(
+                daemon,
+                "superseded by a newer receiver selection",
+            );
             // Selecting the receiver that is already the output is no
             // hand-off: the output is already where the selection asks it to
             // be, and a full connect-stop-teardown-reload cycle would only
