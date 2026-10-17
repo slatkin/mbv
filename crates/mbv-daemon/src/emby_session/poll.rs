@@ -99,7 +99,7 @@ pub(super) fn handle_sessions(
         match result {
             Ok(sessions) => {
                 let now = Instant::now();
-                (Some(observe(output, &sessions, now)), None)
+                (Some(observe(output, sessions, now)), None)
             }
             Err(error) => (None, Some(error)),
         }
@@ -191,9 +191,13 @@ impl Observation {
 /// so they run before the store. Returns the loaded slot when this observation
 /// presents it, so the caller settles its transition (design D6, D7), and
 /// whether it ended that item naturally.
-fn observe(output: &mut EmbySessionOutput, sessions: &[SessionInfo], now: Instant) -> Observation {
+fn observe(
+    output: &mut EmbySessionOutput,
+    sessions: Vec<SessionInfo>,
+    now: Instant,
+) -> Observation {
     let Some(session) = sessions
-        .iter()
+        .into_iter()
         .find(|session| session.device_id == output.device_id)
     else {
         output.misses = output.misses.saturating_add(1);
@@ -204,10 +208,10 @@ fn observe(output: &mut EmbySessionOutput, sessions: &[SessionInfo], now: Instan
     };
     output.misses = 0;
     output.session_id = Some(session.id.clone());
-    let ended_naturally = super::end::ended_naturally(output, session, now);
-    output.last_observation = Some(session.clone());
+    let ended_naturally = super::end::ended_naturally(output, &session, now);
+    let presented = presented_loaded_slot(output, &session);
+    output.last_observation = Some(session);
     output.observed_at = Some(now);
-    let presented = presented_loaded_slot(output, session);
     output.connection = OutputConnection::Connected;
     Observation {
         presented,

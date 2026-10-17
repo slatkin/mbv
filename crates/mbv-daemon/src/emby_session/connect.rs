@@ -11,14 +11,13 @@ use mbv_ctrl::{CtrlEvent, OutputConnection};
 use mbv_emby::SessionInfo;
 
 use crate::cast::{PlaybackOutput, broadcast_output_change};
-use crate::emby_session::load::admit;
+use crate::emby_session::load::{admit, submit_play};
 use crate::emby_session::worker::spawn_emby_session_worker;
 use crate::event_loop::DaemonLoop;
 use crate::output::handoff::HandoffPlayback;
 use crate::{CtrlSender, DaemonEvent, send_to};
 
 use super::EmbySessionEvent;
-use super::EmbySessionLoadedItem;
 use super::EmbySessionOutput;
 use super::worker::EmbySessionJob;
 use super::worker::SessionApi;
@@ -302,40 +301,20 @@ fn load_handoff(daemon: &mut DaemonLoop, handoff: HandoffPlayback, reply_tx: &Ct
         return;
     };
     let start_ticks = handoff.start_ticks;
-    let job_item_id = item_id.clone();
-    let slot_id = handoff.slot;
-    let merged_tx = daemon.merged_tx.clone();
-    let job: EmbySessionJob = Box::new(move |api: &dyn SessionApi| {
-        if let Err(error) = api.play(&session_id, &job_item_id, start_ticks) {
-            // The hand-off has no transition to expire, but the report path is
-            // the same one a load's failed `play` uses (design D6, D7).
-            let _ = merged_tx.send(DaemonEvent::EmbySession(EmbySessionEvent::PlayFailed {
-                slot: slot_id,
-                error,
-            }));
-        }
-    });
     let PlaybackOutput::EmbySession(output) = &mut daemon.owner.output else {
         return;
     };
-    if output.worker.send(job).is_err() {
-        tracing::warn!(
-            name: "daemon.emby_session_load.worker_gone",
-            target: "daemon",
-            slot = ?handoff.slot,
-            "the Emby Session worker is not running; nothing was loaded"
-        );
-        return;
-    }
-    output.loaded = Some(EmbySessionLoadedItem {
-        slot: handoff.slot,
+    if !submit_play(
+        output,
+        &daemon.merged_tx,
+        handoff.slot,
         item_id,
         runtime_ticks,
-        loaded_at: Instant::now(),
-        seen_playing: false,
-        end_handled: false,
-        failure_reported: false,
-    });
+        session_id,
+        start_ticks,
+    ) {
+        return;
+    }
     tracing::info!(
         name: "daemon.emby_session_load.handoff",
         target: "daemon",

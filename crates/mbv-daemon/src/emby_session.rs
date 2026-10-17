@@ -85,6 +85,7 @@ pub(crate) fn handle_event(daemon: &mut DaemonLoop, event: EmbySessionEvent) {
 /// by sending the device a `play` job; it never fetches the stream, so the
 /// loaded item is an identity plus the runtime the end estimate is capped at
 /// (design D6).
+#[derive(Debug)]
 pub(crate) struct EmbySessionOutput {
     /// The only path to the device (design D4): one worker thread runs every
     /// `/Sessions` call for this output in order, and dropping the sender ends
@@ -214,28 +215,6 @@ impl EmbySessionOutput {
     }
 }
 
-impl std::fmt::Debug for EmbySessionOutput {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("EmbySessionOutput")
-            .field("worker", &self.worker)
-            .field("device_id", &self.device_id)
-            .field("name", &self.name)
-            .field("session_id", &self.session_id)
-            .field("playable_media_types", &self.playable_media_types)
-            .field("connection", &self.connection)
-            .field("misses", &self.misses)
-            .field("poll_sent", &self.poll_sent)
-            .field("last_poll", &self.last_poll)
-            .field("next_poll_id", &self.next_poll_id)
-            .field("last_observation", &self.last_observation)
-            .field("observed_at", &self.observed_at)
-            .field("loaded", &self.loaded)
-            .field("pending_pause", &self.pending_pause)
-            .field("advance", &self.advance)
-            .finish()
-    }
-}
-
 /// Whether `observed` presents `item_id` (design D6): the Session's now-playing
 /// item is that item. An idle Session, a missing observation, and content the
 /// Owner did not load all present nothing.
@@ -248,6 +227,7 @@ pub(crate) fn presents_item(observed: Option<&SessionInfo>, item_id: &str) -> bo
 /// never started: `seen_playing` separates the two, `end_handled` keeps one
 /// end from advancing twice, and `failure_reported` names a load the Session
 /// never showed exactly once.
+#[derive(Debug)]
 pub(crate) struct EmbySessionLoadedItem {
     /// The queue slot this item is the occurrence of.
     pub(crate) slot: QueueSlotId,
@@ -264,18 +244,4 @@ pub(crate) struct EmbySessionLoadedItem {
     pub(crate) end_handled: bool,
     /// Whether the load that never started was already reported (design D6).
     pub(crate) failure_reported: bool,
-}
-
-impl std::fmt::Debug for EmbySessionLoadedItem {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("EmbySessionLoadedItem")
-            .field("slot", &self.slot)
-            .field("item_id", &self.item_id)
-            .field("runtime_ticks", &self.runtime_ticks)
-            .field("loaded_at", &self.loaded_at)
-            .field("seen_playing", &self.seen_playing)
-            .field("end_handled", &self.end_handled)
-            .field("failure_reported", &self.failure_reported)
-            .finish()
-    }
 }

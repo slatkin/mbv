@@ -10,6 +10,7 @@ use mbv_ctrl::{Direction, WireCommand};
 use mbv_emby_model::seconds_to_ticks;
 
 use super::EmbySessionOutput;
+use super::status::EMBY_SESSION_VOLUME_MAX;
 use super::worker::SessionApi;
 
 /// Routes one wire command onto the Session (design D9). `SetSub(0)` (off)
@@ -38,7 +39,7 @@ pub(crate) fn route_wire_command(
             Ok(())
         }
         WireCommand::SetVolume(volume) => {
-            let volume = (*volume).clamp(0, 100);
+            let volume = (*volume).clamp(0, EMBY_SESSION_VOLUME_MAX);
             submit(session, "set_volume", move |api, session_id| {
                 api.set_volume(session_id, volume)
             });

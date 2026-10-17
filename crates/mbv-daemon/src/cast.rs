@@ -437,17 +437,13 @@ pub(super) fn expire_remote_transition(ctx: &mut super::core::DaemonOwnerContext
     false
 }
 
-/// Reports a failed Cast resolve to its origin (row 5.1): the item and the
-/// reason reach the ctrl client that issued the play or jump, and a current
-/// guarded play intent keyed to the same request is rejected so it cannot
-/// wedge the guarded protocol.
-pub(super) fn report_resolve_failure(
+/// Rejects the current guarded play intent when it is keyed to `failed`, so a
+/// failed load cannot wedge the guarded protocol. Shared by the Cast resolve
+/// failure and the Emby Session admission failure.
+pub(crate) fn reject_current_intent(
     ctx: &mut super::core::DaemonOwnerContext<'_>,
     failed: &mbv_player::transition::Transition,
-    origin: Option<CtrlClientId>,
-    uncastable: &crate::cast_resolve::Uncastable,
 ) {
-    let report = format!("{} ({})", uncastable.item, uncastable.reason);
     if let Some((connection_id, request_id, generation)) = ctx
         .owner
         .intents
@@ -475,6 +471,20 @@ pub(super) fn report_resolve_failure(
             .unwrap()
             .send_to_client(connection_id, &CtrlEvent::PlaybackIntent(event));
     }
+}
+
+/// Reports a failed Cast resolve to its origin (row 5.1): the item and the
+/// reason reach the ctrl client that issued the play or jump, and a current
+/// guarded play intent keyed to the same request is rejected so it cannot
+/// wedge the guarded protocol.
+pub(super) fn report_resolve_failure(
+    ctx: &mut super::core::DaemonOwnerContext<'_>,
+    failed: &mbv_player::transition::Transition,
+    origin: Option<CtrlClientId>,
+    uncastable: &crate::cast_resolve::Uncastable,
+) {
+    let report = format!("{} ({})", uncastable.item, uncastable.reason);
+    reject_current_intent(ctx, failed);
     if let Some(connection_id) = origin {
         ctx.ctrl_clients
             .lock()

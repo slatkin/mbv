@@ -4,13 +4,14 @@
 //! receives. The device fetches its own stream, so there is no resolve step:
 //! the Owner sends the item id and the position, never the queue.
 
+use std::sync::mpsc;
 use std::time::Instant;
 
-use mbv_ctrl::{CtrlEvent, PlaybackIntentRejection};
-use mbv_queue::QueueItem;
+use mbv_ctrl::CtrlEvent;
+use mbv_queue::{QueueItem, QueueSlotId};
 
-use super::EmbySessionLoadedItem;
 use super::worker::{EmbySessionJob, SessionApi};
+use super::{EmbySessionLoadedItem, EmbySessionOutput};
 use crate::DaemonEvent;
 use crate::cast::PlaybackOutput;
 use crate::core::DaemonOwnerContext;
@@ -91,25 +92,18 @@ pub(crate) fn dispatch(
     let Some((item_id, runtime_ticks, session_id)) = load_target(ctx, &transition, origin) else {
         return false;
     };
-    let job_item_id = item_id.clone();
-    let merged_tx = ctx.merged_tx.clone();
-    let job: EmbySessionJob = Box::new(move |api: &dyn SessionApi| {
-        if let Err(error) = api.play(&session_id, &job_item_id, start_ticks) {
-            // A failed play expires the load and reports the item once (design
-            // D6, D7; task 4.3): the outcome re-enters the owner's loop as an
-            // `EmbySession` event, so the report and the expiry run where the
-            // transition lives.
-            let _ = merged_tx.send(DaemonEvent::EmbySession(EmbySessionEvent::PlayFailed {
-                slot: target,
-                error,
-            }));
-        }
-    });
     let PlaybackOutput::EmbySession(output) = &mut ctx.owner.output else {
         return false;
     };
-    if output.worker.send(job).is_err() {
-        tracing::warn!(name: "daemon.emby_session_load.worker_gone", target: "daemon", slot = ?target, "the Emby Session worker is not running; nothing was loaded");
+    if !submit_play(
+        output,
+        ctx.merged_tx,
+        target,
+        item_id,
+        runtime_ticks,
+        session_id,
+        start_ticks,
+    ) {
         return false;
     }
     let _ = ctx.owner.core.queue.set_active_slot(target);
@@ -119,8 +113,39 @@ pub(crate) fn dispatch(
     // load starts playing (review r6 P2-2).
     output.advance = None;
     output.pending_pause = false;
+    tracing::info!(name: "daemon.emby_session_load.started", target: "daemon", slot = ?target, start_ticks, "the Emby Session was given one item to play");
+    true
+}
+
+/// Sends the one `play` job for `slot` to the Session's worker and records it
+/// as the loaded item (design D6, D7). A failed `play` re-enters the owner's
+/// loop as an `EmbySession` event, so the report and the expiry run where the
+/// transition lives. Returns whether the job was submitted.
+pub(crate) fn submit_play(
+    output: &mut EmbySessionOutput,
+    merged_tx: &mpsc::Sender<DaemonEvent>,
+    slot: QueueSlotId,
+    item_id: String,
+    runtime_ticks: i64,
+    session_id: String,
+    start_ticks: i64,
+) -> bool {
+    let job_item_id = item_id.clone();
+    let merged_tx = merged_tx.clone();
+    let job: EmbySessionJob = Box::new(move |api: &dyn SessionApi| {
+        if let Err(error) = api.play(&session_id, &job_item_id, start_ticks) {
+            let _ = merged_tx.send(DaemonEvent::EmbySession(EmbySessionEvent::PlayFailed {
+                slot,
+                error,
+            }));
+        }
+    });
+    if output.worker.send(job).is_err() {
+        tracing::warn!(name: "daemon.emby_session_load.worker_gone", target: "daemon", slot = ?slot, "the Emby Session worker is not running; nothing was loaded");
+        return false;
+    }
     output.loaded = Some(EmbySessionLoadedItem {
-        slot: target,
+        slot,
         item_id,
         runtime_ticks,
         loaded_at: Instant::now(),
@@ -128,7 +153,6 @@ pub(crate) fn dispatch(
         end_handled: false,
         failure_reported: false,
     });
-    tracing::info!(name: "daemon.emby_session_load.started", target: "daemon", slot = ?target, start_ticks, "the Emby Session was given one item to play");
     true
 }
 
@@ -182,34 +206,7 @@ fn report_rejection(
 ) {
     tracing::warn!(name: "daemon.emby_session_load.unplayable", target: "daemon", slot = ?transition.target, item = %rejected.item, reason = %rejected.reason, "the slot's item cannot play on the Emby Session; nothing was loaded");
     let report = format!("{} ({})", rejected.item, rejected.reason);
-    if let Some((connection_id, request_id, generation)) = ctx
-        .owner
-        .intents
-        .current
-        .as_ref()
-        .filter(|current| {
-            current.request_id == transition.request_id
-                && current.generation == transition.generation
-        })
-        .map(|current| {
-            (
-                current.connection_id,
-                current.request_id,
-                current.generation,
-            )
-        })
-        && let Some(event) = ctx.owner.intents.rejected_if_current(
-            connection_id,
-            request_id,
-            generation,
-            PlaybackIntentRejection::ResolutionFailed,
-        )
-    {
-        ctx.ctrl_clients
-            .lock()
-            .unwrap()
-            .send_to_client(connection_id, &CtrlEvent::PlaybackIntent(event));
-    }
+    crate::cast::reject_current_intent(ctx, transition);
     match origin {
         Some(connection_id) => {
             ctx.ctrl_clients
