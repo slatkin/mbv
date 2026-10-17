@@ -307,13 +307,17 @@ fn load_handoff(daemon: &mut DaemonLoop, handoff: HandoffPlayback, reply_tx: &Ct
         return;
     };
     let start_ticks = handoff.start_ticks;
+    // Documented no-ops for Local and Cast: the hand-off loads the captured
+    // slot onto the Session this selection just made (design D7, D11), so no
+    // other output is the freshly selected one and there is no window to
+    // resolve.
     let (next, stepped) = match &daemon.owner.output {
+        PlaybackOutput::Local | PlaybackOutput::Cast(_) => return,
         PlaybackOutput::EmbySession(output) => next_admissible_slot(
             &daemon.owner.core,
             handoff.slot,
             &output.playable_media_types,
         ),
-        _ => return,
     };
     let load = SessionLoad {
         slot: handoff.slot,

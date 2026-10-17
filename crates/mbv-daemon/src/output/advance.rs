@@ -147,9 +147,12 @@ fn correct_stale_device_advance(
     };
     // The Session the jobs name must exist before anything is recorded as
     // observed: a correction that cannot reach the device changes nothing.
+    // Documented no-ops for Local and Cast: a device advance exists only on
+    // the Session output (design D14), so no other output has a stale device
+    // to correct and no session id to read.
     let session_id = match &daemon.owner.output {
+        PlaybackOutput::Local | PlaybackOutput::Cast(_) => return,
         PlaybackOutput::EmbySession(output) => output.session_id.clone(),
-        _ => return,
     };
     let Some(session_id) = session_id else {
         tracing::warn!(name: "daemon.emby_session_advance.no_session", target: "daemon", slot = ?slot, "the Emby Session output has no session id; the device keeps the stale item");
@@ -171,11 +174,14 @@ fn correct_stale_device_advance(
         start_ticks,
         next: after,
     };
+    // Documented no-ops for Local and Cast: the correction addresses the
+    // Session's device only (design D14), so no other output has a device to
+    // submit the corrected load to and nothing is submitted.
     let submitted = match &mut daemon.owner.output {
         PlaybackOutput::EmbySession(output) => {
             crate::emby_session::load::submit_play(output, &daemon.merged_tx, load)
         }
-        _ => false,
+        PlaybackOutput::Local | PlaybackOutput::Cast(_) => false,
     };
     if !submitted {
         return;
@@ -218,11 +224,14 @@ fn stop_stale_advance(daemon: &mut DaemonLoop, ended: QueueSlotId) {
 /// that showed it as its sighting, so no failure or end of the old item carries
 /// over. The runtime caps the end estimate (design D6).
 fn reset_loaded_item(daemon: &mut DaemonLoop, now: Instant) {
+    // Documented no-ops for Local and Cast: the queued next item is the
+    // record the Session's own `play_last` append keeps (design D14 step 4),
+    // so no other output holds a slot to make loaded.
     let queued_slot = match &daemon.owner.output {
         PlaybackOutput::EmbySession(output) => {
             output.queued_next.as_ref().map(|queued| queued.slot)
         }
-        _ => None,
+        PlaybackOutput::Local | PlaybackOutput::Cast(_) => None,
     };
     let Some(slot) = queued_slot else {
         return;
