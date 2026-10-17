@@ -119,11 +119,11 @@ Pending intent presentation SHALL be distinct from confirmed playback state. The
 - **THEN** the target remains pending and the daemon does not report the intent as Applied
 
 ### Requirement: Scope is limited to direct daemon playback
-The guarded playback-intent behavior SHALL apply to playback controlled through the direct `mbvd` route. Local playback and attached Emby-session control SHALL retain their existing behavior.
+The guarded playback-intent behavior SHALL apply to playback controlled through the direct `mbvd` route. Local playback and the Emby Session output SHALL retain their existing behavior.
 
-#### Scenario: Attached Emby session is controlled
-- **WHEN** the TUI controls an attached Emby session instead of direct `mbvd` playback
-- **THEN** the new daemon intent lifecycle and idempotency policy are not applied to that session command
+#### Scenario: The Emby Session output is active
+- **WHEN** the local owner's output is an Emby Session instead of direct `mbvd` playback
+- **THEN** the new daemon intent lifecycle and idempotency policy are not applied to that output's commands
 
 ### Requirement: Player-side mpv events are observed within a bounded latency
 

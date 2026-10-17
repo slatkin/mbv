@@ -749,16 +749,16 @@ to follow the owner's queue snapshot.
 
 ### Requirement: Queue edits reach the owner that holds the queue
 
-A Client SHALL dispatch every canonical-queue edit (slot removal, slot move, item append or insert, clear, refresh) to the Player owner that holds the queue being edited: the local daemon for Local scope, or the directly controlled remote Player owner for Remote scope. A Client has no canonical queue of its own: its displayed Local queue is the local daemon's Bound queue in every state, including while an attached Emby session or a cast receiver is the playback target, so its Local-scope edits SHALL reach that owner. Direct-remote queue management is unchanged: edits addressed to Remote scope reach that owner.
+A Client SHALL dispatch every canonical-queue edit (slot removal, slot move, item append or insert, clear, refresh) to the Player owner that holds the queue being edited: the local daemon for Local scope, or the directly controlled remote Player owner for Remote scope. A Client has no canonical queue of its own: its displayed Local queue is the local daemon's Bound queue in every state, including while an Emby Session output or a cast receiver is the playback target, so its Local-scope edits SHALL reach that owner. Direct-remote queue management is unchanged: edits addressed to Remote scope reach that owner.
 
 #### Scenario: Direct-remote edits still reach the owner
 
 - **WHEN** the user edits a directly controlled remote Player owner's queue in Remote scope
 - **THEN** the edit SHALL still be dispatched to that owner as a slot-addressed command
 
-#### Scenario: Local edit while a session or cast is the target
+#### Scenario: Local edit while the Session output or cast is the target
 
-- **WHEN** a Client is watching an attached Emby session or casting to a receiver and edits the Local queue
+- **WHEN** the local owner's output is an Emby Session or a cast receiver and the Client edits the Local queue
 - **THEN** the edit SHALL be dispatched to the local daemon
 - **AND** SHALL NOT be applied only to a private Client copy
 

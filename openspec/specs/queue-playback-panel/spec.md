@@ -41,20 +41,20 @@ In every layout that renders the queue column, the left column SHALL paint one h
 of its content, above the visual slot. The header SHALL always be painted, including
 while playback is idle.
 
-The header SHALL follow the effective playback target — cast, then connected session, then local —
-and SHALL NOT follow the queue scope being viewed.
+The header SHALL follow the effective playback target — cast, then the owner's Emby Session
+output, then local — and SHALL NOT follow the queue scope being viewed.
 
-#### Scenario: Active watched remote playback paints no playhead
+#### Scenario: Emby Session output playback of content the Owner did not load paints no playhead
 
-- **WHEN** a queue-visible layout is painted while attached to a Session that reports a
+- **WHEN** a queue-visible layout is painted while the owner's output is an Emby Session whose
   now-playing item the viewed queue does not hold (another device's own selection)
 - **THEN** no queue row SHALL be painted as the playhead
 
 #### Scenario: Header follows the playback target, not the viewed queue
 
-- **WHEN** the layout is queue-visible while attached to a remote session and the local queue scope is
-  selected for viewing
-- **THEN** the header SHALL describe the remote target's playback, not the local queue's
+- **WHEN** the layout is queue-visible while the owner's output is an Emby Session or Direct
+  remote control targets a remote owner, and the local queue scope is selected for viewing
+- **THEN** the header SHALL describe the playback target's playback, not the local queue's
 
 #### Scenario: No header when the queue column is hidden
 
