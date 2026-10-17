@@ -10,11 +10,20 @@ impl App {
     /// Returns the observed playback state for rendering.
     pub(in crate::app) fn effective_playback_state(&self) -> mbv_ui_model::playback::PlaybackState {
         let s = self.player.status_snapshot();
-        let active_idx = s.current_idx;
+        // The owner presents content it did not load from `OutputState`
+        // alone (design D12): the status' `current_idx` is then only the
+        // queue's loaded-slot marker, not a local playhead. Keep the slot
+        // slotless so presentation reads the `now_playing` payload instead
+        // of the loaded queue item (review r7).
+        let active_idx = if self.emby_session_now_playing().is_some() {
+            None
+        } else {
+            Some(s.current_idx)
+        };
         let (position_ticks, runtime_ticks) = (s.position_ticks, s.runtime_ticks);
         mbv_ui_model::playback::PlaybackState {
             active: s.active,
-            active_idx: Some(active_idx),
+            active_idx,
             position_ticks,
             runtime_ticks,
             paused: s.paused,

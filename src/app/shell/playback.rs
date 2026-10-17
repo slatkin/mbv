@@ -126,6 +126,7 @@ impl Model {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app::tests::QueueViewTestExt;
     use mbv_ui_msg::Msg;
     use rstest::rstest;
     use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
@@ -167,6 +168,51 @@ mod tests {
             parts.context.map(|part| part.text).as_deref(),
             expected_context
         );
+    }
+
+    /// Review r7: foreign content on the owner's Emby Session output must
+    /// present its own title, not the owner's loaded queue slot. The Owner's
+    /// status still carries that slot's index; the projection must treat the
+    /// output as slotless whenever it presents `now_playing`.
+    #[test]
+    fn foreign_emby_session_content_presents_its_own_transport_title() {
+        use mbv_emby_model::test_support::make_item;
+
+        let mut app = crate::app::tests::make_app_stub();
+        let mut loaded = make_item("Loaded Slot", "Movie");
+        loaded.id = "loaded-slot".into();
+        app.local_view.adopt_items(vec![loaded], 0);
+        app.player.update_status(|status| {
+            status.active = true;
+            status.current_idx = 0;
+            status.queue_len = 1;
+        });
+        app.playback_output = Some(mbv_ctrl::OutputState::EmbySession {
+            device_id: "device-1".to_string(),
+            name: "Living Room TV".to_string(),
+            connection: mbv_ctrl::OutputConnection::Connected,
+            audio_only: false,
+            now_playing: Some(mbv_ctrl::SessionNowPlaying {
+                item_id: "foreign-item".to_string(),
+                item_type: "Movie".to_string(),
+                name: "Foreign Item".to_string(),
+                series_id: None,
+                series_name: None,
+                logo_tag: None,
+            }),
+        });
+
+        let mut model = Model::new(app);
+        let projection = model.transport_projection();
+
+        assert_eq!(
+            projection
+                .title_parts
+                .as_ref()
+                .map(|parts| parts.title.text.as_str()),
+            Some("Foreign Item")
+        );
+        assert!(projection.state.active_idx.is_none());
     }
 
     #[test]
