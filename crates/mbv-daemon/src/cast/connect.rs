@@ -8,7 +8,7 @@ use std::sync::mpsc;
 use std::time::Instant;
 
 use mbv_cast::{CastClient, CastJob, CastReceiver, ConnectMode, spawn_cast_worker};
-use mbv_ctrl::{CastConnection, CtrlEvent, OutputSelection};
+use mbv_ctrl::{CtrlEvent, OutputConnection, OutputSelection};
 use mbv_queue::QueueSlotId;
 
 use crate::{CtrlSender, send_to};
@@ -219,6 +219,16 @@ pub fn handle_select_playback_output(
                 }
             });
         }
+        // Task 3.2 handles an Emby Session selection. No Owner hosts that
+        // output yet, so the selector is told instead of left waiting.
+        OutputSelection::EmbySession { .. } => {
+            send_to(
+                reply_tx,
+                &CtrlEvent::CommandRejected(
+                    "this owner cannot host an Emby Session playback output".to_string(),
+                ),
+            );
+        }
     }
 }
 
@@ -371,7 +381,7 @@ fn install_connected_output(
         worker,
         events: daemon.merged_tx.clone(),
         receiver,
-        connection: CastConnection::Connected,
+        connection: OutputConnection::Connected,
         last_status: None,
         status_at: None,
         loaded: None,
@@ -613,7 +623,7 @@ pub(super) fn handle_reconnect_outcome(
         match outcome {
             CastConnectOutcome::Connected(worker) => {
                 cast.worker = worker;
-                cast.connection = CastConnection::Connected;
+                cast.connection = OutputConnection::Connected;
                 cast.poll_sent = None;
                 cast.last_poll = Some(Instant::now());
                 cast.last_keep_alive = Instant::now();
@@ -648,7 +658,7 @@ pub(super) fn disconnect_and_reconnect(daemon: &mut DaemonLoop) {
         let PlaybackOutput::Cast(cast) = &daemon.owner.output else {
             return;
         };
-        if !matches!(cast.connection, CastConnection::Connected) {
+        if !matches!(cast.connection, OutputConnection::Connected) {
             return;
         }
         (
@@ -671,7 +681,7 @@ pub(super) fn disconnect_and_reconnect(daemon: &mut DaemonLoop) {
     let PlaybackOutput::Cast(cast) = &mut daemon.owner.output else {
         return;
     };
-    cast.connection = CastConnection::Disconnected;
+    cast.connection = OutputConnection::Disconnected;
     cast.poll_sent = None;
     cast.reconnecting = true;
     broadcast_output_change(daemon);

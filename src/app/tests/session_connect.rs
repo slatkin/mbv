@@ -26,7 +26,7 @@ fn playback_output_event_stores_cast_state_including_disconnected() {
         mbv_ctrl::OutputState::Cast {
             receiver_id: "r-1".to_string(),
             name: "Living Room".to_string(),
-            connection: mbv_ctrl::CastConnection::Connected,
+            connection: mbv_ctrl::OutputConnection::Connected,
         },
     ));
     assert!(
@@ -38,7 +38,7 @@ fn playback_output_event_stores_cast_state_including_disconnected() {
         mbv_ctrl::OutputState::Cast {
             receiver_id: "r-1".to_string(),
             name: "Living Room".to_string(),
-            connection: mbv_ctrl::CastConnection::Disconnected,
+            connection: mbv_ctrl::OutputConnection::Disconnected,
         },
     ));
     assert!(
@@ -73,7 +73,7 @@ fn session_connect_hands_a_cast_output_back_to_the_local_owner() {
         .update_playback_output_for_test(mbv_ctrl::OutputState::Cast {
             receiver_id: "r-1".to_string(),
             name: "Living Room".to_string(),
-            connection: mbv_ctrl::CastConnection::Connected,
+            connection: mbv_ctrl::OutputConnection::Connected,
         });
     assert!(
         !app.output_is_cast(),

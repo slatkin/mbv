@@ -356,7 +356,7 @@ fn playback_output_event_forwards_to_the_player_event_channel() {
         CtrlEvent::PlaybackOutput(mbv_ctrl::OutputState::Cast {
             receiver_id: "r-1".to_string(),
             name: "Living Room".to_string(),
-            connection: mbv_ctrl::CastConnection::Connected,
+            connection: mbv_ctrl::OutputConnection::Connected,
         }),
         &status,
         &unified_queue,
@@ -372,7 +372,7 @@ fn playback_output_event_forwards_to_the_player_event_channel() {
                 mbv_ctrl::OutputState::Cast {
                     receiver_id: "r-1".to_string(),
                     name: "Living Room".to_string(),
-                    connection: mbv_ctrl::CastConnection::Connected,
+                    connection: mbv_ctrl::OutputConnection::Connected,
                 }
             );
         }

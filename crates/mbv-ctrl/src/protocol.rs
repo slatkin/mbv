@@ -90,6 +90,12 @@ pub const CTRL_CAP_OWNER_ACTION: &str = "owner-action";
 /// (cast-owner-output design D3). Additive — no protocol-version bump. The
 /// Owner advertises it only when it can host a Cast output.
 pub const CTRL_CAP_PLAYBACK_OUTPUT: &str = "playback-output";
+/// Peer supports the Emby Session playback output: an
+/// `OutputSelection::EmbySession` and an `OutputState::EmbySession`
+/// (emby-session-owner-output design D3). Additive — no protocol-version
+/// bump. The Owner advertises it only when it can host an Emby Session
+/// output, and sends that output state only to peers that negotiated it.
+pub const CTRL_CAP_EMBY_SESSION_OUTPUT: &str = "emby-session-output";
 /// Peer supports `CtrlCmd::SetPlayOrder` for the Bound queue playback order.
 /// Additive — no protocol-version bump.
 pub const CTRL_CAP_PLAY_ORDER: &str = "play-order";

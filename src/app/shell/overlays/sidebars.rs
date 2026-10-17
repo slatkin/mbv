@@ -123,7 +123,9 @@ impl Model {
         // `Disconnected` report still names the target as the output.
         let cast_attachment_id = match self.app.playback_output.as_ref() {
             Some(mbv_ctrl::OutputState::Cast { receiver_id, .. }) => Some(receiver_id.as_str()),
-            Some(mbv_ctrl::OutputState::Local) | None => None,
+            // Task 7.2 marks a Session row by the output's `device_id`.
+            Some(mbv_ctrl::OutputState::EmbySession { .. } | mbv_ctrl::OutputState::Local)
+            | None => None,
         };
         if let Some(comp) = self.application.get_component_mut(&id)
             && let Some(sessions) = comp.as_any_mut().downcast_mut::<SessionsComponent>()

@@ -73,7 +73,7 @@ pub(crate) struct CastOutput {
     /// returns through it as `CastOwnerEvent::CommandFailed`.
     events: mpsc::Sender<DaemonEvent>,
     receiver: CastReceiver,
-    connection: mbv_ctrl::CastConnection,
+    connection: mbv_ctrl::OutputConnection,
     last_status: Option<CastStatus>,
     status_at: Option<Instant>,
     /// The item the receiver was told to play. `pub(super)` so the crate's
@@ -615,7 +615,7 @@ pub(super) fn tick_cast(daemon: &mut DaemonLoop, now: Instant) {
         let PlaybackOutput::Cast(cast) = &mut daemon.owner.output else {
             return;
         };
-        if matches!(cast.connection, mbv_ctrl::CastConnection::Connected) {
+        if matches!(cast.connection, mbv_ctrl::OutputConnection::Connected) {
             connected = true;
             let merged_tx = daemon.merged_tx.clone();
             if now.duration_since(cast.last_keep_alive) >= CAST_KEEP_ALIVE_INTERVAL {

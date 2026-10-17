@@ -646,13 +646,13 @@ fn playback_output_seed_is_retained_from_the_handshake() {
         connect_with_advertised_hello(Some(mbv_ctrl::OutputState::Cast {
             receiver_id: "r-1".to_string(),
             name: "Living Room".to_string(),
-            connection: mbv_ctrl::CastConnection::Connected,
+            connection: mbv_ctrl::OutputConnection::Connected,
         }));
 
     let expected = mbv_ctrl::OutputState::Cast {
         receiver_id: "r-1".to_string(),
         name: "Living Room".to_string(),
-        connection: mbv_ctrl::CastConnection::Connected,
+        connection: mbv_ctrl::OutputConnection::Connected,
     };
     assert_eq!(
         player.playback_output_state(),
@@ -702,7 +702,7 @@ fn a_late_partial_seed_line_is_never_consumed() {
     let cast_output = mbv_ctrl::OutputState::Cast {
         receiver_id: "r-1".to_string(),
         name: "Living Room".to_string(),
-        connection: mbv_ctrl::CastConnection::Connected,
+        connection: mbv_ctrl::OutputConnection::Connected,
     };
     // The line as the daemon sends it: JSON plus its terminating newline,
     // so both halves still end the line correctly when reassembled.
@@ -773,7 +773,7 @@ fn a_late_partial_seed_line_is_never_consumed() {
         Some(mbv_ctrl::OutputState::Cast {
             receiver_id: "r-1".to_string(),
             name: "Living Room".to_string(),
-            connection: mbv_ctrl::CastConnection::Connected,
+            connection: mbv_ctrl::OutputConnection::Connected,
         }),
         "the reader thread retains the late seed too"
     );

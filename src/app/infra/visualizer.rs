@@ -150,7 +150,7 @@ mod tests {
             mbv_ctrl::OutputState::Cast {
                 receiver_id: "device-1".to_string(),
                 name: "Living Room".to_string(),
-                connection: mbv_ctrl::CastConnection::Connected,
+                connection: mbv_ctrl::OutputConnection::Connected,
             },
         ));
 

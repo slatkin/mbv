@@ -54,7 +54,7 @@ fn a_cast_handoff_loads_the_new_receiver_at_the_old_receivers_position() {
         OutputState::Cast {
             receiver_id: "rcv-2".to_string(),
             name: "Kitchen".to_string(),
-            connection: mbv_ctrl::CastConnection::Connected,
+            connection: mbv_ctrl::OutputConnection::Connected,
         },
         "the selected receiver is the output after the hand-off"
     );
@@ -155,7 +155,7 @@ fn a_failed_cast_to_cast_connect_leaves_the_old_receiver_untouched() {
         OutputState::Cast {
             receiver_id: "rcv-1".to_string(),
             name: "Living room".to_string(),
-            connection: mbv_ctrl::CastConnection::Connected,
+            connection: mbv_ctrl::OutputConnection::Connected,
         },
         "the old receiver stays the output on a failed connect"
     );
@@ -284,7 +284,7 @@ fn a_swap_without_a_captured_handoff_still_tears_the_old_receiver_down() {
         OutputState::Cast {
             receiver_id: "rcv-2".to_string(),
             name: "Kitchen".to_string(),
-            connection: mbv_ctrl::CastConnection::Connected,
+            connection: mbv_ctrl::OutputConnection::Connected,
         },
         "the selected receiver is the output after the swap"
     );
@@ -368,7 +368,7 @@ fn selecting_the_current_receiver_displaces_a_pending_connect() {
         OutputState::Cast {
             receiver_id: "rcv-1".to_string(),
             name: "Living room".to_string(),
-            connection: mbv_ctrl::CastConnection::Connected,
+            connection: mbv_ctrl::OutputConnection::Connected,
         },
         "the output stays the receiver it already was"
     );

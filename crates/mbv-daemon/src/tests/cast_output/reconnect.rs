@@ -98,7 +98,7 @@ fn a_failed_status_poll_disconnects_broadcasts_and_reconnects() {
         matches!(
             recv_event(&rx),
             CtrlEvent::PlaybackOutput(OutputState::Cast {
-                connection: CastConnection::Connected,
+                connection: OutputConnection::Connected,
                 ..
             })
         ),
@@ -127,7 +127,7 @@ fn a_failed_status_poll_disconnects_broadcasts_and_reconnects() {
         OutputState::Cast {
             receiver_id: "rcv-1".to_string(),
             name: "Living room".to_string(),
-            connection: CastConnection::Connected,
+            connection: OutputConnection::Connected,
         },
         "a successful reconnect restores the connection"
     );
@@ -140,7 +140,7 @@ fn a_failed_status_poll_disconnects_broadcasts_and_reconnects() {
         matches!(
             recv_event(&rx),
             CtrlEvent::PlaybackOutput(OutputState::Cast {
-                connection: CastConnection::Disconnected,
+                connection: OutputConnection::Disconnected,
                 ..
             })
         ),
@@ -150,7 +150,7 @@ fn a_failed_status_poll_disconnects_broadcasts_and_reconnects() {
         matches!(
             recv_event(&rx),
             CtrlEvent::PlaybackOutput(OutputState::Cast {
-                connection: CastConnection::Connected,
+                connection: OutputConnection::Connected,
                 ..
             })
         ),
@@ -176,7 +176,7 @@ fn a_poll_with_no_worker_event_within_the_answer_bound_disconnects() {
         matches!(
             recv_event(&rx),
             CtrlEvent::PlaybackOutput(OutputState::Cast {
-                connection: CastConnection::Connected,
+                connection: OutputConnection::Connected,
                 ..
             })
         ),
@@ -194,7 +194,7 @@ fn a_poll_with_no_worker_event_within_the_answer_bound_disconnects() {
         OutputState::Cast {
             receiver_id: "rcv-1".to_string(),
             name: "Living room".to_string(),
-            connection: CastConnection::Disconnected,
+            connection: OutputConnection::Disconnected,
         },
         "the wedged worker's poll is treated as a lost connection"
     );
@@ -212,7 +212,7 @@ fn a_poll_with_no_worker_event_within_the_answer_bound_disconnects() {
         matches!(
             crate::cast::output_state(&t.event_loop.owner.output),
             OutputState::Cast {
-                connection: CastConnection::Connected,
+                connection: OutputConnection::Connected,
                 ..
             }
         ),
@@ -222,7 +222,7 @@ fn a_poll_with_no_worker_event_within_the_answer_bound_disconnects() {
         matches!(
             recv_event(&rx),
             CtrlEvent::PlaybackOutput(OutputState::Cast {
-                connection: CastConnection::Disconnected,
+                connection: OutputConnection::Disconnected,
                 ..
             })
         ),
@@ -271,7 +271,7 @@ fn a_returned_status_rearms_the_poll_and_keeps_the_connection() {
 }
 
 /// The owner's `OutputState` for the test receiver in `connection`.
-fn cast_output_state(connection: CastConnection) -> OutputState {
+fn cast_output_state(connection: OutputConnection) -> OutputState {
     OutputState::Cast {
         receiver_id: "rcv-1".to_string(),
         name: "Living room".to_string(),
@@ -304,7 +304,7 @@ fn a_late_result_from_the_old_worker_leaves_the_new_poll_alone() {
     pump_cast_event(&mut t);
     assert!(matches!(
         recv_event(&rx),
-        CtrlEvent::PlaybackOutput(state) if state == cast_output_state(CastConnection::Connected)
+        CtrlEvent::PlaybackOutput(state) if state == cast_output_state(OutputConnection::Connected)
     ));
 
     let start = std::time::Instant::now();
@@ -316,7 +316,7 @@ fn a_late_result_from_the_old_worker_leaves_the_new_poll_alone() {
         .tick(start + crate::cast::CAST_JOB_ANSWER_BOUND + std::time::Duration::from_secs(1));
     assert!(matches!(
         recv_event(&rx),
-        CtrlEvent::PlaybackOutput(state) if state == cast_output_state(CastConnection::Disconnected)
+        CtrlEvent::PlaybackOutput(state) if state == cast_output_state(OutputConnection::Disconnected)
     ));
 
     // W1's late result arrives while no poll is in flight: dropped silently.
@@ -332,7 +332,7 @@ fn a_late_result_from_the_old_worker_leaves_the_new_poll_alone() {
     assert!(rx.try_recv().is_err(), "the stale late result is silent");
     assert_eq!(
         crate::cast::output_state(&t.event_loop.owner.output),
-        cast_output_state(CastConnection::Disconnected),
+        cast_output_state(OutputConnection::Disconnected),
         "the stale late result causes no flap"
     );
 
@@ -344,7 +344,7 @@ fn a_late_result_from_the_old_worker_leaves_the_new_poll_alone() {
     t.event_loop.handle_event(event);
     assert!(matches!(
         recv_event(&rx),
-        CtrlEvent::PlaybackOutput(state) if state == cast_output_state(CastConnection::Connected)
+        CtrlEvent::PlaybackOutput(state) if state == cast_output_state(OutputConnection::Connected)
     ));
 
     // The next tick polls W2 (P2).
@@ -357,7 +357,7 @@ fn a_late_result_from_the_old_worker_leaves_the_new_poll_alone() {
     assert!(rx.try_recv().is_err(), "the stale late result is silent");
     assert_eq!(
         crate::cast::output_state(&t.event_loop.owner.output),
-        cast_output_state(CastConnection::Connected),
+        cast_output_state(OutputConnection::Connected),
         "the stale late result does not disconnect the restored worker"
     );
 
@@ -367,7 +367,7 @@ fn a_late_result_from_the_old_worker_leaves_the_new_poll_alone() {
         .tick(start + std::time::Duration::from_secs(40) + crate::cast::CAST_JOB_ANSWER_BOUND);
     assert!(matches!(
         recv_event(&rx),
-        CtrlEvent::PlaybackOutput(state) if state == cast_output_state(CastConnection::Disconnected)
+        CtrlEvent::PlaybackOutput(state) if state == cast_output_state(OutputConnection::Disconnected)
     ));
     // The reconnect the fired watchdog spawns is the only one after the
     // recovery: the stale late results spawned none.
@@ -492,7 +492,7 @@ fn a_reconnect_that_sees_the_loaded_item_finished_advances_once() {
         OutputState::Cast {
             receiver_id: "rcv-1".to_string(),
             name: "Living room".to_string(),
-            connection: CastConnection::Connected,
+            connection: OutputConnection::Connected,
         },
         "the restored connection stays the output"
     );
@@ -540,7 +540,7 @@ fn a_reconnect_refused_because_another_app_runs_stays_disconnected() {
         OutputState::Cast {
             receiver_id: "rcv-1".to_string(),
             name: "Living room".to_string(),
-            connection: CastConnection::Disconnected,
+            connection: OutputConnection::Disconnected,
         },
         "the refused reconnect leaves the output disconnected"
     );
@@ -572,7 +572,7 @@ fn a_reconnect_refused_because_another_app_runs_stays_disconnected() {
             .any(|event| matches!(event, CtrlEvent::PlaybackOutput(state) if *state == OutputState::Cast {
                 receiver_id: "rcv-1".to_string(),
                 name: "Living room".to_string(),
-                connection: CastConnection::Disconnected,
+                connection: OutputConnection::Disconnected,
             })),
         "the disconnect was broadcast"
     );

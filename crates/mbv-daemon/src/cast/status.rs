@@ -40,7 +40,7 @@ pub(super) fn handle_cast_status(
             return;
         };
         if cast.receiver.id != receiver_id
-            || !matches!(cast.connection, mbv_ctrl::CastConnection::Connected)
+            || !matches!(cast.connection, mbv_ctrl::OutputConnection::Connected)
             || cast
                 .poll_sent
                 .is_none_or(|(in_flight, _)| in_flight != poll_id)
@@ -210,7 +210,7 @@ pub(super) fn refresh_presentation(daemon: &mut DaemonLoop, now: Instant) {
     let PlaybackOutput::Cast(cast) = &daemon.owner.output else {
         return;
     };
-    let elapsed = if matches!(cast.connection, mbv_ctrl::CastConnection::Connected) {
+    let elapsed = if matches!(cast.connection, mbv_ctrl::OutputConnection::Connected) {
         cast.status_at
             .and_then(|at| now.checked_duration_since(at))
             .unwrap_or(Duration::ZERO)

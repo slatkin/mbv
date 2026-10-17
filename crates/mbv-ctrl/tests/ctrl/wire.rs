@@ -321,7 +321,7 @@ fn playback_output_event_round_trips_through_json() {
     let event = CtrlEvent::PlaybackOutput(OutputState::Cast {
         receiver_id: "receiver-1".into(),
         name: "Living Room".into(),
-        connection: CastConnection::Disconnected,
+        connection: OutputConnection::Disconnected,
     });
 
     let json = serde_json::to_string(&event).unwrap();
@@ -334,7 +334,7 @@ fn playback_output_event_round_trips_through_json() {
         CtrlEvent::PlaybackOutput(OutputState::Cast { receiver_id, name, connection })
             if receiver_id == "receiver-1"
                 && name == "Living Room"
-                && connection == CastConnection::Disconnected
+                && connection == OutputConnection::Disconnected
     ));
 
     let local: CtrlEvent = serde_json::from_str(r#"{"PlaybackOutput":"Local"}"#).unwrap();
@@ -342,4 +342,76 @@ fn playback_output_event_round_trips_through_json() {
         local,
         CtrlEvent::PlaybackOutput(OutputState::Local)
     ));
+}
+
+// emby-session-owner-output design D3: an Emby Session is selected by its
+// device identity, and the state names the device, its connection, and the
+// content that the Owner did not load.
+#[test]
+fn select_emby_session_output_round_trips_through_json() {
+    let command = CtrlCmd::SelectPlaybackOutput(OutputSelection::EmbySession {
+        device_id: "device-1".into(),
+        name: "Living Room TV".into(),
+    });
+
+    let json = serde_json::to_string(&command).unwrap();
+    assert!(
+        json.starts_with("{\"SelectPlaybackOutput\":"),
+        "tag changed: {json}"
+    );
+    assert!(matches!(
+        serde_json::from_str::<CtrlCmd>(&json).unwrap(),
+        CtrlCmd::SelectPlaybackOutput(OutputSelection::EmbySession { device_id, name })
+            if device_id == "device-1" && name == "Living Room TV"
+    ));
+}
+
+#[test]
+fn emby_session_output_event_round_trips_through_json() {
+    let event = CtrlEvent::PlaybackOutput(OutputState::EmbySession {
+        device_id: "device-1".into(),
+        name: "Living Room TV".into(),
+        connection: OutputConnection::Connected,
+        audio_only: true,
+        now_playing: Some(SessionNowPlaying {
+            item_id: "item-1".into(),
+            item_type: "Episode".into(),
+            name: "Pilot".into(),
+            series_id: Some("series-1".into()),
+            series_name: Some("Show".into()),
+            logo_tag: Some("logo-etag".into()),
+        }),
+    });
+
+    let json = serde_json::to_string(&event).unwrap();
+    assert!(
+        json.starts_with("{\"PlaybackOutput\":"),
+        "tag changed: {json}"
+    );
+    let decoded = serde_json::from_str::<CtrlEvent>(&json).unwrap();
+    let CtrlEvent::PlaybackOutput(OutputState::EmbySession {
+        device_id,
+        name,
+        connection,
+        audio_only,
+        now_playing,
+    }) = decoded
+    else {
+        panic!("round-trip changed the state: {json}");
+    };
+    assert_eq!(device_id, "device-1");
+    assert_eq!(name, "Living Room TV");
+    assert_eq!(connection, OutputConnection::Connected);
+    assert!(audio_only);
+    assert_eq!(
+        now_playing,
+        Some(SessionNowPlaying {
+            item_id: "item-1".into(),
+            item_type: "Episode".into(),
+            name: "Pilot".into(),
+            series_id: Some("series-1".into()),
+            series_name: Some("Show".into()),
+            logo_tag: Some("logo-etag".into()),
+        })
+    );
 }

@@ -7,7 +7,7 @@ use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::UnixStream;
 
 use mbv_cast::{CastStatus, ConnectMode};
-use mbv_ctrl::{CastConnection, OutputSelection, OutputState};
+use mbv_ctrl::{OutputConnection, OutputSelection, OutputState};
 
 use super::cast_playback::{drained_events, feed_qi_with_url, playing_status_at, pump};
 use super::cast_resolve::wait_for_worker_jobs;
@@ -235,7 +235,7 @@ fn a_successful_cast_selection_swaps_the_output_and_broadcasts_to_capable_peers(
     let expected = CtrlEvent::PlaybackOutput(OutputState::Cast {
         receiver_id: "rcv-1".to_string(),
         name: "Living room".to_string(),
-        connection: CastConnection::Connected,
+        connection: OutputConnection::Connected,
     });
     assert_eq!(
         format!("{:?}", recv_event(&capable_rx)),
@@ -248,7 +248,7 @@ fn a_successful_cast_selection_swaps_the_output_and_broadcasts_to_capable_peers(
         OutputState::Cast {
             receiver_id: "rcv-1".to_string(),
             name: "Living room".to_string(),
-            connection: CastConnection::Connected,
+            connection: OutputConnection::Connected,
         }
     );
     // The non-capable peer receives nothing from the broadcast: the next
@@ -355,7 +355,7 @@ fn a_second_cast_select_supersedes_the_pending_connect() {
         OutputState::Cast {
             receiver_id: "rcv-2".to_string(),
             name: "Bedroom".to_string(),
-            connection: CastConnection::Connected,
+            connection: OutputConnection::Connected,
         }
     );
 }

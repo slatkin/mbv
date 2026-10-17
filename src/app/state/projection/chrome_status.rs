@@ -36,15 +36,20 @@ impl App {
     /// friendly name.
     fn cast_target_label(&self) -> Option<String> {
         match &self.playback_output {
-            // A target marked disconnected must not read as connected: the
-            // pill falls back to the local label until the reconnect lands,
-            // so it never contradicts the header's "Cast: disconnected".
             Some(mbv_ctrl::OutputState::Cast {
-                connection: mbv_ctrl::CastConnection::Disconnected,
-                ..
-            }) => None,
-            Some(mbv_ctrl::OutputState::Cast { name, .. }) => Some(name.clone()),
-            _ => None,
+                connection, name, ..
+            }) => match connection {
+                // A target marked disconnected must not read as connected: the
+                // pill falls back to the local label until the reconnect lands,
+                // so it never contradicts the header's "Cast: disconnected".
+                mbv_ctrl::OutputConnection::Disconnected => None,
+                mbv_ctrl::OutputConnection::Connecting | mbv_ctrl::OutputConnection::Connected => {
+                    Some(name.clone())
+                }
+            },
+            // Task 7.2 names the Emby Session output in the chrome status.
+            Some(mbv_ctrl::OutputState::EmbySession { .. } | mbv_ctrl::OutputState::Local)
+            | None => None,
         }
     }
 
@@ -500,7 +505,7 @@ mod tests {
             mbv_ctrl::OutputState::Cast {
                 receiver_id: "device-1".to_string(),
                 name: "Living Room".to_string(),
-                connection: mbv_ctrl::CastConnection::Connected,
+                connection: mbv_ctrl::OutputConnection::Connected,
             },
         ));
 
@@ -526,7 +531,7 @@ mod tests {
             mbv_ctrl::OutputState::Cast {
                 receiver_id: "device-1".to_string(),
                 name: "Living Room".to_string(),
-                connection: mbv_ctrl::CastConnection::Connected,
+                connection: mbv_ctrl::OutputConnection::Connected,
             },
         ));
 
@@ -547,7 +552,7 @@ mod tests {
             mbv_ctrl::OutputState::Cast {
                 receiver_id: "device-1".to_string(),
                 name: "Living Room".to_string(),
-                connection: mbv_ctrl::CastConnection::Disconnected,
+                connection: mbv_ctrl::OutputConnection::Disconnected,
             },
         ));
 
