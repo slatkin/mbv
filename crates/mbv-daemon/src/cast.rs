@@ -34,6 +34,12 @@ mod feed_events;
 pub(crate) mod progress;
 mod status;
 
+/// The Feed side of the shared advance (emby-session-owner-output design D6):
+/// whether an ended slot needs a `TrackCompleted` event, and that event's
+/// emission. Both stay on the Cast side because Feed slots never pass Emby
+/// Session admission.
+pub(super) use feed_events::{emit_natural_end_track_completed, slot_is_feed};
+
 pub(super) use command::{route_player_cmd, route_transport_command, set_receiver_paused};
 pub use connect::{CastConnectOutcome, CastConnectRequest, CastConnector, local_cast_connector};
 pub(super) use connect::{PendingCastConnect, handle_select_playback_output};
@@ -95,9 +101,11 @@ pub(crate) struct CastOutput {
     reconnecting: bool,
     /// The advance a natural end started and that uncastable step targets
     /// may still be stepping through (design D7, row 6.2); `None` when the
-    /// output has no advance under way. `pub(super)` so the crate's resolve
-    /// handler can end it with the step's load.
-    pub(super) advance: Option<advance::CastAdvance>,
+    /// output has no advance under way. The state machine is shared with the
+    /// Emby Session output (`output/advance`, emby-session-owner-output design
+    /// D6). `pub(super)` so the crate's resolve handler can end it with the
+    /// step's load.
+    pub(super) advance: Option<crate::output::advance::OutputAdvance>,
     /// A seek was submitted for the loaded item and no receiver status
     /// issued after it has presented the item yet (design D9): the Feed
     /// `OutputStarted` fires when such a status settles the seek. The value

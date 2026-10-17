@@ -442,7 +442,7 @@ fn resolve_failed(
         "the slot's item cannot be cast; nothing was loaded"
     );
     let report = format!("{} ({})", uncastable.item, uncastable.reason);
-    if crate::cast::advance::step_failed(daemon, pending.transition.request_id) {
+    if crate::output::advance::step_failed(daemon, pending.transition.request_id) {
         // The failed step was the advance's own (design D7): it has no
         // issuing client, so the report goes to every Client (spec "Advance
         // reaches an uncastable slot"), and the advance steps over unless the
@@ -454,9 +454,9 @@ fn resolve_failed(
         );
         let mut ctx = crate::cast::owner_context(daemon);
         if crate::cast::expire_cast_transition(&mut ctx) {
-            crate::cast::advance::clear_advance(daemon);
+            crate::output::advance::clear_advance(daemon);
         } else {
-            crate::cast::advance::continue_after_failed_step(daemon, pending.transition.target);
+            crate::output::advance::continue_after_failed_step(daemon, pending.transition.target);
         }
     } else {
         let mut ctx = crate::cast::owner_context(daemon);

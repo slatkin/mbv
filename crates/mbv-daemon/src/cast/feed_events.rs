@@ -180,3 +180,18 @@ fn broadcast_loaded_event(daemon: &DaemonLoop, event: PlayerEvent) {
 pub(crate) fn slot_is_feed(queue: &PlaybackQueue, slot: QueueSlotId) -> bool {
     queue.slot(slot).is_some_and(|slot| slot.item.is_feed())
 }
+
+/// Emits the naturally ended Feed slot's `TrackCompleted` for the shared
+/// advance (emby-session-owner-output design D6): the advance records the
+/// completion and the Feed event stays on the Cast side, because Feed slots
+/// never pass Emby Session admission. The generation is the presented one, as
+/// the Cast advance read it.
+pub(crate) fn emit_natural_end_track_completed(
+    daemon: &DaemonLoop,
+    slot: QueueSlotId,
+    played: bool,
+    consume: bool,
+) {
+    let generation = daemon.player.status.lock().unwrap().sequence_generation;
+    emit_track_completed(daemon, slot, 0, played, consume, generation);
+}

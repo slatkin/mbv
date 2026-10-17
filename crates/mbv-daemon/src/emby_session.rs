@@ -11,6 +11,8 @@ use mbv_ctrl::OutputConnection;
 use mbv_emby::SessionInfo;
 use mbv_queue::QueueSlotId;
 
+use crate::output::advance::OutputAdvance;
+
 /// One Emby Session as the Owner's output (design D1). The Owner loads an item
 /// by sending the device a `play` job; it never fetches the stream, so the
 /// loaded item is an identity plus the runtime the end estimate is capped at
@@ -51,6 +53,10 @@ pub(crate) struct EmbySessionOutput {
     /// A pause the hand-off could not start with (design D9): the first
     /// observation that shows the loaded item sends `transport("Pause")`.
     pub(crate) pending_pause: bool,
+    /// The shared advance a natural end started (design D6). It lives on the
+    /// output, so a stop, an output change, or a replacing load ends it with
+    /// the output.
+    pub(crate) advance: Option<OutputAdvance>,
 }
 
 impl EmbySessionOutput {
@@ -82,6 +88,7 @@ impl std::fmt::Debug for EmbySessionOutput {
             .field("observed_at", &self.observed_at)
             .field("loaded", &self.loaded)
             .field("pending_pause", &self.pending_pause)
+            .field("advance", &self.advance)
             .finish()
     }
 }
