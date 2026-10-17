@@ -313,17 +313,36 @@ impl App {
     /// gone or the session list cannot be fetched.
     fn reconnect_direct_session(&mut self, device_name: &str) {
         tracing::info!(name: "auto_reconnect.state.loaded", target: "auto_reconnect", connection_type = "direct_session", device = %device_name, "auto-reconnect state loaded");
+        let Some(sess) = self.find_direct_session_by_device(device_name) else {
+            return;
+        };
+        self.connect_to_session(&sess);
+        self.log_direct_session_outcome(device_name);
+    }
+
+    /// Resolves the saved device to a Session that offers a direct endpoint.
+    /// A device that is gone flashes the not-found warning; a Session that
+    /// offers no direct endpoint stays local silently, because the owner holds
+    /// that output and a new Client presents it without selecting it (design
+    /// D12).
+    fn find_direct_session_by_device(
+        &mut self,
+        device_name: &str,
+    ) -> Option<mbv_emby::SessionInfo> {
         let Some(sess) = self.find_session_by_device(device_name) else {
             tracing::info!(name: "auto_reconnect.direct_session.not_found", target: "auto_reconnect", device = %device_name, "device not found in current sessions; staying local");
             self.flash(
                 format!("\u{26a0} {device_name} not found, using local playback"),
                 ToastSeverity::Warning,
             );
-            return;
+            return None;
         };
-        tracing::info!(name: "auto_reconnect.direct_session.resolved", target: "auto_reconnect", device = %device_name, session = %sess.id, "direct session resolved; connecting");
-        self.connect_to_session(&sess);
-        self.log_direct_session_outcome(device_name);
+        tracing::info!(name: "auto_reconnect.direct_session.resolved", target: "auto_reconnect", device = %device_name, session = %sess.id, "direct session resolved");
+        if self.session_direct_endpoint(&sess).is_none() {
+            tracing::info!(name: "auto_reconnect.direct_session.no_direct_endpoint", target: "auto_reconnect", device = %device_name, "session offers no direct endpoint; staying local");
+            return None;
+        }
+        Some(sess)
     }
 
     /// Finds the session whose device name matches `device_name`, or `None`
