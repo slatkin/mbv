@@ -606,6 +606,10 @@ fn connect_with_advertised_hello(
             client_hello.contains(mbv_ctrl::CTRL_CAP_PLAYBACK_OUTPUT),
             "a Client-role hello must claim playback-output — the claim is what tells the Owner to cold-seed and broadcast to this connection"
         );
+        assert!(
+            client_hello.contains(mbv_ctrl::CTRL_CAP_EMBY_SESSION_OUTPUT),
+            "live-test defect: a Client-role hello must claim emby-session-output — without it the Owner masks the selected Emby Session output to Local"
+        );
         let state = CtrlEvent::UnifiedQueueState(UnifiedQueueStateData {
             status: PlayerStatus::default(),
             slots: Vec::new(),
@@ -665,6 +669,16 @@ fn playback_output_seed_is_retained_from_the_handshake() {
     }
     // No Drop impl: disconnect() is what shuts the client end down, so
     // the fake daemon's read loop observes EOF and the join completes.
+    player.disconnect();
+    peer.join().unwrap();
+}
+
+/// Live-test defect: Enter on a Brave web-client Emby Session did nothing.
+/// The production hello must claim `emby-session-output` (asserted by the harness).
+#[test]
+fn production_client_hello_advertises_emby_session_output() {
+    let (player, _event_rx, peer) = connect_with_advertised_hello(None);
+
     player.disconnect();
     peer.join().unwrap();
 }

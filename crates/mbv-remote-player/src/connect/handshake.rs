@@ -189,12 +189,18 @@ where
     // A Client connection negotiates `playback-output` (cast-owner-output
     // design D3): the claim is what tells the Owner to cold-seed this
     // connection with `CtrlEvent::PlaybackOutput` right after the initial
-    // state and include it in every output broadcast. Restricted-role
-    // hellos stay plain, so the Owner never seeds them an unread line.
+    // state and include it in every output broadcast. It also negotiates
+    // `emby-session-output`: without that claim the Owner masks an Emby
+    // Session output to `Local` for this Client (design D3), so a selected
+    // Session appears to do nothing. Restricted-role hellos stay plain, so
+    // the Owner never seeds them an unread line.
     if matches!(role, HandshakeRole::Client) {
         client_hello
             .capabilities
             .push(mbv_ctrl::CTRL_CAP_PLAYBACK_OUTPUT.to_string());
+        client_hello
+            .capabilities
+            .push(mbv_ctrl::CTRL_CAP_EMBY_SESSION_OUTPUT.to_string());
     }
     client_hello.protocol_version = compatibility.client_protocol_version;
     let client_hello = serde_json::to_string(&CtrlCmd::Hello(client_hello))
