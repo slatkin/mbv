@@ -87,8 +87,12 @@ The inherited Playback-run output of packaged mbvd. The mpv `audio-device` prope
 _Avoid_: ALSA mode, direct audio, hardware output
 
 Playback output:
-The one place where a Player owner plays its active slot. It is local playback or one Cast receiver. It differs from *Clocked audio output*. *Clocked audio output* is the audio device of a Playback run. *Playback output* is where the active slot plays. When the output is a Cast receiver, *Cast attachment* names the relation of the Owner to that receiver.
+The one place where a Player owner plays its active slot. It is local playback, one Cast receiver, or one Emby Session. It differs from *Clocked audio output*. *Clocked audio output* is the audio device of a Playback run. *Playback output* is where the active slot plays. When the output is a Cast receiver, *Cast attachment* names the relation of the Owner to that receiver. When the output is an Emby Session, *Session output* names the relation of the Owner to that Session.
 _Avoid_: output target, active player, sink, enqueue, cast queue, load (bare)
+
+Session output:
+The relation of a Player owner to the Emby Session that is its *Playback output*. The Owner keys it by the Emby device identity and never by the Session identity. It observes the Session by polling the Emby Sessions and infers its end from the Session. A user selection makes the Session the output. A selection while local playback or a Cast receiver is the output is a hand-off of the active slot. It differs from Direct remote control and from a *Session* used as a remote-control target. Those are Client relations to another device. The Session output is an Owner output relation.
+_Avoid_: session watch, attach (bare), session attach, monitor, remote session (bare), tracked session, tracking
 
 mpv script set:
 The entry script `mbv.lua` and its sibling Lua fragments. They build the mpv on-screen control overlay (OSC) and the Next-Up prompt. Exactly one copy is live per playback run. It is the copy of the running build. It is never a leftover from the removed installer, a prior version, or another build. It differs from mpv configuration and user scripts. mbv never reads or edits those.
@@ -176,7 +180,7 @@ The recorded origin of a queue. The values are Playlist (with optional id and na
 _Avoid_: queue origin, queue type, source type
 
 Consume:
-Removal of an item from the queue after it finishes playing, as in ncmpcpp. It is only a queue operation. It says nothing about the queue origin. It never edits anything on the server. Only the authoritative Player owner playback lifecycle drives it. That owner is the local Owner process or a directly controlled remote Player owner. A Session watch of another device generic Emby Session never consumes. That observation carries no mbv queue authority. Consume addresses canonical slot identity. It removes only the consumed occurrence.
+Removal of an item from the queue after it finishes playing, as in ncmpcpp. It is only a queue operation. It says nothing about the queue origin. It never edits anything on the server. Only the authoritative Player owner playback lifecycle drives it. That owner is the local Owner process or a directly controlled remote Player owner. An Emby Session output consumes through the Owner, as every output does. Consume addresses canonical slot identity. It removes only the consumed occurrence.
 _Avoid_: auto-remove, playlist consume, consume-and-save, remote consume
 
 Save on consume:
@@ -345,7 +349,7 @@ The Queue-visible behavior of the shell when fully idle. It removes the card fro
 _Avoid_: idle hide, collapsed queue, empty player
 
 Playback target:
-The place where explicit playback actions go. It is the local in-process Player or a directly controlled remote Player owner through ctrl. It is an observed Emby Session through supported remote transport commands only, or an attached cast receiver. It resolves per action from queue scope, active route, and attachment. Only a Player owner target carries queue authority. Send to an observed Emby Session dispatches transport actions without giving queue or occurrence identity to that Session.
+The place where explicit playback actions go. It is the *Playback output* of the local Owner process, that is local playback, one Cast receiver, or one Emby Session, or a directly controlled remote Player owner through ctrl. It resolves per action from queue scope, active route, and attachment. Only a Player owner target carries queue authority.
 _Avoid_: play target, output target, active player
 
 Kind-qualified target:
@@ -603,19 +607,19 @@ An Emby-tracked record that some device plays something. It exists apart from mb
 _Avoid_: connection, stream, remote instance
 
 Session watch:
-A client that observes the generic Emby Session of another device. With respect to the mbv queue it is read-only. It can display directly observed position and title. It can dispatch supported remote transport commands (play, pause, seek, stop, next, previous, volume, mute, stream selection). It never changes mbv queue membership, order, slot snapshots, cursor, or playlist state. It never infers queue position, occurrence identity, completion, or consume from that Session. It is the fallback when Direct remote control to that device is not present.
-_Avoid_: attach, session attach, monitor, remote session (bare), tracked session, tracking
+Retired term. An Emby Session without a direct endpoint becomes a *Session output* of the Owner when the user selects it. No Client watches the Session of another device.
+_Avoid_: Session watch
 
 Direct remote control:
 A client with its own control-socket connection to the Player owner of another device. It gives the same queue management as local playback, that is reorder, remove, play next, and all of it. The device stays the connected row in the Sessions sidebar. Take of the control socket does not erase that. The Owner process is never Direct remote control. The aqua queue-scope pill shows it.
 _Avoid_: green pill, remote takeover, queue management (alone)
 
 Queue scope:
-Local or Remote. It tells which queue the queue panel shows. It shows the queue on the local side of the controlling terminal or the queue of the directly controlled remote Player owner. It exists during Sessions-sidebar Direct remote control and explicit remote owner attachment, not Session watch or a Library route. Remote scope is selectable only when a direct remote queue exists. Otherwise Local is forced.
+Local or Remote. It tells which queue the queue panel shows. It shows the queue on the local side of the controlling terminal or the queue of the directly controlled remote Player owner. It exists during Sessions-sidebar Direct remote control and explicit remote owner attachment, not a Session output or a Library route. Remote scope is selectable only when a direct remote queue exists. Otherwise Local is forced.
 _Avoid_: split view, pill state
 
 Library route:
-A stored per-library assignment that sends playback of that library to a selected device. It is set from the library-routing picker and not from the Sessions sidebar. It is stored as `lowercased name -> tcp://host:port` endpoint (device name is transient in the picker and resolves at once to an endpoint before storage). It is independent of Session watch and Direct remote control. Connection through the Sessions sidebar tears down an active route first. F2 Settings manages routes. Hand edit of `config.toml` is supported. Malformed non-`tcp://` values are logged and skipped.
+A stored per-library assignment that sends playback of that library to a selected device. It is set from the library-routing picker and not from the Sessions sidebar. It is stored as `lowercased name -> tcp://host:port` endpoint (device name is transient in the picker and resolves at once to an endpoint before storage). It is independent of Session output and Direct remote control. Connection through the Sessions sidebar tears down an active route first. F2 Settings manages routes. Hand edit of `config.toml` is supported. Malformed non-`tcp://` values are logged and skipped.
 _Avoid_: routing, daemon route
 
 ## Cast
@@ -625,7 +629,7 @@ A Google Cast device found on the LAN through mDNS. It appears as a row in the F
 _Avoid_: chromecast device, TV, cast device
 
 Cast attachment:
-The relation of a Player owner to the Cast receiver that is its *Playback output*. Selection of one makes that receiver the output of the Owner. A receiver becomes the output only by explicit user selection. The Owner never selects a receiver at start. When local playback is active, the Owner hands it over. It connects to the receiver first. Only after the connect succeeds does it stop the old output. It then loads the active slot on the receiver at its position. Playback targets are mutually exclusive. A cast output, a watched session, a direct remote, and a library route cannot be active at one time. When the user connects a session or a direct remote while a receiver is the output, the Owner stops the receiver and returns to local playback. While the output is a receiver, the Owner reconnects after a dropped connection. It joins the running receiver app and does not launch it again. It differs from Attach above. It is not a ctrl connection and makes no Client relation, even though both name one process that reaches a playback target.
+The relation of a Player owner to the Cast receiver that is its *Playback output*. Selection of one makes that receiver the output of the Owner. A receiver becomes the output only by explicit user selection. The Owner never selects a receiver at start. When local playback is active, the Owner hands it over. It connects to the receiver first. Only after the connect succeeds does it stop the old output. It then loads the active slot on the receiver at its position. Playback targets are mutually exclusive. A cast output, an Emby Session output, a direct remote, and a library route cannot be active at one time. A Session selection while a receiver is the output is a hand-off. When the user selects a Direct remote while a receiver is the output, the Owner stops the receiver and returns to local playback. While the output is a receiver, the Owner reconnects after a dropped connection. It joins the running receiver app and does not launch it again. It differs from Attach above. It is not a ctrl connection and makes no Client relation, even though both name one process that reaches a playback target.
 _Avoid_: attach (bare, without "cast"), cast session, cast connection
 
 Dispatch:
