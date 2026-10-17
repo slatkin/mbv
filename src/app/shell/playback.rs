@@ -173,7 +173,8 @@ mod tests {
     /// Review r7: foreign content on the owner's Emby Session output must
     /// present its own title, not the owner's loaded queue slot. The Owner's
     /// status still carries that slot's index; the projection must treat the
-    /// output as slotless whenever it presents `now_playing`.
+    /// output as slotless whenever it presents `now_playing`. Guards commit
+    /// bc7690c38 (present foreign Emby Session content as slotless).
     #[test]
     fn foreign_emby_session_content_presents_its_own_transport_title() {
         use mbv_emby_model::test_support::make_item;

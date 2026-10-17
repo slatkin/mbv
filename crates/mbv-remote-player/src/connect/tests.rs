@@ -675,6 +675,7 @@ fn playback_output_seed_is_retained_from_the_handshake() {
 
 /// Live-test defect: Enter on a Brave web-client Emby Session did nothing.
 /// The production hello must claim `emby-session-output` (asserted by the harness).
+/// Guards commit 4613fa8f8 (claim emby-session-output in the client hello).
 #[test]
 fn production_client_hello_advertises_emby_session_output() {
     let (player, _event_rx, peer) = connect_with_advertised_hello(None);

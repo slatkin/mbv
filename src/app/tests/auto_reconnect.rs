@@ -37,7 +37,8 @@ fn new_remote_does_not_auto_reconnect_for_an_explicit_remote_daemon() {
 /// emby-session-owner-output row 7.3, design D12, owner-playback-output spec
 /// "Saved record names a plain Session": launch auto-reconnect connects only
 /// when the found Session offers a direct endpoint. A saved plain-Session
-/// record selects no output and stays local.
+/// record selects no output and stays local. Guards commit 95a46f853 (restore
+/// only a direct endpoint at launch).
 #[test]
 fn saved_plain_session_record_stays_local_without_an_output_selection() {
     use mbv_net::mock_http::MockHttp;
