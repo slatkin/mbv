@@ -7,7 +7,8 @@ See proposal.md for the reasons. Current state that shapes the approach:
 - **The Cast output is the template.** `crates/mbv-daemon/src/cast.rs` holds `PlaybackOutput { Local, Cast(Box<CastOutput>) }`, `output_state()`, and the Cast output state. `cast/{advance,command,connect,status,progress,feed_events}.rs` hold the logic. The archived change `2026-10-16-cast-owner-output` (decisions D1–D14) explains it. This design reuses that shape and names only the differences.
 - **The attached Emby Session lives in the TUI.** It uses `connected_session_id` and `connected_session_state` (read in about 40 files), `RemotePlaybackTarget` (`src/app/state/playback_target/remote.rs`), the whole-queue push `submit_attached_sequence` and `session_jump_track` (`src/app/dispatch/session/command.rs`), the populate-only load before a session play (`load_idle_queue_on_owner`, only for this path), a 1 s `/Sessions` poll (`src/app/shell/run/drains.rs:489`), and position extrapolation and miss counting (`src/app/dispatch/run_loop/session.rs`).
 - **A connect only watches today.** `connect_to_session` (`src/app/dispatch/session/switch.rs:445`) sets `connected_session_id` and does not stop local playback. Plays then go to the device.
-- **The Emby session API is plain HTTP.** `session_play` (one item, `crates/mbv-emby/src/client_sessions.rs:229`) already exists. The attached-session path before this change sent the whole queue as one `PlayNow` with `ItemIds` and `StartIndex` (`session_play_items`). The device played that list in order, and the TUI found the active slot from `NowPlayingItem`. A device that holds only one item autoplays its own next episode at the end (live test of this change), so the Owner keeps the next slot on the device too (D14). So do the transport, seek, volume, mute, audio-index, and subtitle-index commands. No `!Send` client exists here.
+- **The Emby session API is plain HTTP.** `session_play` (one item, `crates/mbv-emby/src/client_sessions.rs:229`) already exists. So do the transport, seek, volume, mute, audio-index, and subtitle-index commands. No `!Send` client exists here.
+- **A device list plays in order.** The attached-session path before this change sent the whole queue as one `PlayNow` with `ItemIds` and `StartIndex` (`session_play_items`). The device played that list in order, and the TUI found the active slot from `NowPlayingItem`. A device that holds only one item autoplays its own next episode at the end (live test of this change), so the Owner keeps the next slot on the device too (D14). The old path never sent `PlayLast`; the live test checks it.
 - **Emby gives no end reason.** `/Sessions/Playing/Stopped` has the same body as the start body. The websocket has no stop message for other clients. The Owner sees only `NowPlayingItem` disappear.
 - **`SessionInfo` has no device id.** `/Sessions` returns `DeviceId`, but the parser only uses it to filter out mbv's own session (`client_sessions.rs:95`).
 - **Completion recording is provider-neutral.** `record_completed_slot` (`crates/mbv-daemon/src/run.rs:82`) changes only the canonical queue (progress fields and consume rules). It sends nothing to Emby.
@@ -179,17 +180,22 @@ In AGENTS.md "Playback and queue authority", an Emby Session joins Cast as an ou
 
 The device holds the active slot and the next slot. It never holds more. Without the next slot, the device app autoplays its own next episode at the end, and the 1 s poll sees no idle between the two items, so the D6 end rule never fires.
 
-- **Load** (every `play` job of D7, including Next, Previous, a jump, and a hand-off): `PlayNow` with `ItemIds = [active item, next item]`, `StartIndex = 0`, and the start ticks of the active item. The next item is the first slot after the active slot, in play order, that passes admission. If no slot passes, `ItemIds` holds only the active item. The output records that slot as the queued next item.
-- **Device advance:** an observation presents the queued next item, and the replaced observation presented the loaded item. The device moved on by itself, so playback must not stop. The Owner:
-  1. records completion of the old slot through `record_completed_slot` only when the estimate was within 10 s of its runtime (D6). A skip on the device is not a completion;
-  2. makes the queued slot the active slot and the loaded item, with `seen_playing` set, and settles;
-  3. finds the next admissible slot after it and sends `play_last` (`PlayCommand = PlayLast`) with its item id. That slot becomes the queued next item. If there is none, nothing is queued.
+- **Next admissible slot:** the slot that `relative_step_target(Next)` returns from the active slot, stepping past each slot that fails admission (D7), limited by the queue length. Under Shuffle this is the current `upcoming` pick, so the device holds the pick and nothing past it. When the Owner sends a slot to the device (a load, an append, or a correction), it reports each slot it stepped past, one time, by name and reason, as the advance of D6 does. The stale check below steps past slots with no report.
+- **Load** (every `play` job of D7, including Next, Previous, a jump, and a hand-off): `PlayNow` with `ItemIds = [active item, next admissible item]`, `StartIndex = 0`, and the start ticks of the active item. With no next admissible slot, `ItemIds` holds only the active item. The output records the next slot as the queued next item. Each load clears the stale mark.
+- **Device advance:** an observation presents the queued next item, and the replaced observation presented the loaded item. The device moved on by itself (at the end, or by its own Next), so playback must not stop. A new helper in `output/advance.rs` does the steps in this order:
+  1. `observe_slot(queued slot)`: the observed active slot, the Shuffle re-pick, and the forward play order;
+  2. if the estimate of the old slot was within 10 s of its runtime (D6), `record_natural_end(old slot, consume = true)`. A device Next before that point records no completion;
+  3. the queued slot becomes the loaded item: its slot, item id, and runtime, `loaded_at = now`, `seen_playing = true`, `end_handled = false`, and `failure_reported = false`. The output clears `advance` and the pending pause, and the Owner calls `publish_observed`;
+  4. the Owner finds the next admissible slot after the new active slot and sends `play_last` (`PlayCommand = PlayLast`) with its item id. That slot becomes the queued next item. With none, nothing is queued.
 
-  The Owner sends no `PlayNow` here.
-- **Same item in both slots:** the item id does not change, so a device advance is a position drop to less than 10 s after an estimate within 10 s of the runtime. The same three steps then apply.
-- **Queue edits:** the Sessions API can add items but cannot remove or reorder them on the device. When an edit changes the next admissible slot, the Owner never interrupts the active item:
-  - no item was queued and now one exists (an append at the end of the queue): send `play_last` with it;
-  - otherwise: mark the queued next item stale. On the device advance to a stale item, the Owner sends `PlayNow` with the correct next slot and the slot after it. Only that boundary is interrupted.
+  The Owner sends no `PlayNow`, and it does not call `begin_advance`, which steps with a `PlayNow`.
+- **Same item in both slots:** the item id does not change. A device advance is then a position drop to less than 10 s, after an estimate within 10 s of the runtime. The same four steps apply.
+- **Queue edits:** the Sessions API can add items but cannot remove or reorder them on the device. No hook for each edit is needed. On each observation and tick, the Owner computes the next admissible slot again and compares it with the queued next item:
+  - they match: the stale mark clears (an edit that restored the same slot);
+  - nothing is queued and a slot now exists (an append at the end of the queue): the Owner sends `play_last` with it;
+  - otherwise: the Owner marks the queued next item stale. The active item is never interrupted.
+- **The queue corrects the device:** when the device moves to a stale queued item, the Owner does not adopt it. It records completion of the old slot as in step 2 of the device advance. Then it loads the correct next admissible slot with `PlayNow` (the Load rule). If the queue has no next admissible slot, the Owner sends `transport("Stop")`, and the queue ends on the old slot. Only that boundary is interrupted.
+- **Previous on the device after an advance:** the device list still holds the old slot, so the device plays it again. That item is neither the loaded item nor the queued next item, so the Owner presents it as content it did not load (D6 last row).
 - **End of the queue:** with nothing queued, the device holds only the last item. An idle after it follows D6 (completion, then no next slot). If the device autoplays its own next episode, that item is content the Owner did not load (D6 last row), and the queue stays on the last slot.
 
 *Alternative:* push the whole queue as one list (the old attached-session path). This was rejected because queue edits after the push have no effect on the device (#945).
@@ -198,15 +204,15 @@ The device holds the active slot and the next slot. It never holds more. Without
 
 ### D15. Hand the rest of the queue to the device at Owner exit
 
-When the Owner exits, it gives up queue authority. The device must then play the rest of the queue by itself, and not stop after the queued next item or autoplay its own next episode. This applies only on `DaemonEvent::Shutdown`. A stay-alive Owner that outlives its Clients keeps the output and its authority, so a Client quit then hands over nothing.
+When the Owner exits, it gives up queue authority. The device must then play the rest of the queue by itself, and not stop after the queued next item or autoplay its own next episode. Every `DaemonEvent::Shutdown` hands over, including a SIGTERM to a stay-alive Owner. A Client quit while a stay-alive Owner keeps running is not an exit: the Owner keeps the output and its authority and hands over nothing.
 
 On `DaemonEvent::Shutdown` while the output is an Emby Session and the last observation presents the loaded item:
-1. The Owner collects every admissible slot after the queued next item, in play order. Slots before the active slot have played, and they are not sent.
+1. The Owner collects the admissible slots in play order after the queued next item, or after the active slot when nothing is queued. It steps past inadmissible slots with no report, because the Owner is exiting. Slots before the active slot have played, and they are not sent. Under Shuffle, the order past the current pick is not fixed, so the Owner collects nothing more.
 2. If the queued next item is current, the Owner sends one `play_last` with those item ids. The active item is not interrupted.
 3. If the queued next item is stale (D14), the Owner sends one `play` (`PlayNow`) with the active item, the correct next slot, and the rest, with the estimated position as the start ticks. The active item reloads one time at the exit, and the device never plays the stale item.
-4. The Owner waits for that one call, for at most 5 s, and then stops the worker as in D11 (no `Stop`). A failed or late call is logged, and the exit goes on.
+4. The job runs in `handle_shutdown`, after the shutdown `deadline` is set and before `self.player.stop_for_shutdown`. It carries a `sync_channel(0)` ack sender, and the Owner waits with `recv_timeout(remaining(deadline))`. So the wait shares the existing 5 s `SHUTDOWN_FINALIZE_HARD_BOUND` and also covers jobs queued ahead of it on the worker. A failed or late call is logged, and the exit goes on. The worker then stops as in D11 (no `Stop`).
 
-If the device is idle or presents content the Owner did not load, the Owner sends nothing. If nothing is after the queued next item, the Owner sends nothing.
+If the device is idle or presents content the Owner did not load, the Owner sends nothing. If there is nothing to collect and the queued item is current, the Owner sends nothing.
 
 `play_last` therefore takes a list of item ids (D4).
 
@@ -217,7 +223,8 @@ If the device is idle or presents content the Owner did not load, the Owner send
 - [A very long queue at exit] → One `play_last` carries every remaining item id. The old attached-session path sent the whole queue in one `PlayNow`, so the request size is known to work.
 
 - [A device app ignores `PlayLast`] → It autoplays its own next episode after the second item, and the Owner presents that as content it did not load. The live test of this change checks `PlayLast` on the Emby web Session. The old attached-session path used only `PlayNow`.
-- [A queue edit makes the queued next item stale] → The device starts the stale item, and the Owner replaces it at that boundary (D14). The active item is never interrupted.
+- [A queue edit makes the queued next item stale] → The device starts the stale item, and the Owner corrects the device at that boundary (D14). The active item is never interrupted.
+- [A device Next moves the queue with no completion] → Accepted. The device moved to the queued slot, so the Owner follows it (D14).
 
 - [A user stop in the last 10 s advances the queue] → Accepted and stated in the spec. Emby cannot separate it from an end. The credits usually play in that part of an item.
 - [Both the queue item and the Session report a runtime of 0] → No natural end is possible, and the idle counts as a user stop. The queue stops there. This is rare for Emby items, and the risk is accepted.

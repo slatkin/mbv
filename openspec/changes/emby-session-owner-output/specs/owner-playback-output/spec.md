@@ -25,7 +25,13 @@ A Player owner SHALL have exactly one active playback output at any time: local 
 
 ### Requirement: Only a natural end advances
 
-A stop by the user on the device, a replacement by another sender, or an error SHALL NOT advance the queue. On an error the owner SHALL report the failure and SHALL NOT skip ahead. An Emby Session reports no end reason, so for an Emby Session the owner SHALL apply the inferred end rule and the inferred load failure of this capability; a stop by the user near the end of the item is then a natural end.
+A stop by the user on the device, a replacement by another sender, or an error SHALL NOT advance the queue. On an error the owner SHALL report the failure and SHALL NOT skip ahead. An Emby Session reports no end reason, so for an Emby Session the owner SHALL apply the inferred end rule and the inferred load failure of this capability; a stop by the user near the end of the item is then a natural end. When an Emby Session device moves by itself from the loaded item to the queued next item, the owner SHALL follow it to that slot, and SHALL record completion of the old slot only for a natural end.
+
+#### Scenario: User presses next on the Emby Session device
+
+- **WHEN** the user presses next on the device 20 minutes before the end of the loaded item, and the device starts the queued next item
+- **THEN** the queued slot becomes the active slot
+- **AND** the owner records no completion for the old slot
 
 #### Scenario: User stops on the device
 
@@ -58,7 +64,7 @@ The owner SHALL treat the loaded item as ended when the Emby Session stops prese
 
 - **WHEN** the Emby Session played the loaded item and goes idle while the estimated position is 3 seconds before the runtime
 - **THEN** the owner records completion for the slot
-- **AND** loads only the next slot of its play order onto the Session
+- **AND** loads the next slot of its play order and the slot after it onto the Session
 
 #### Scenario: Idle before the item starts
 
@@ -91,9 +97,9 @@ The owner SHALL load onto an Emby Session only an Emby item whose media kind the
 
 #### Scenario: Feed slot is next
 
-- **WHEN** an Emby Session item ends and the next slot is a Feed entry followed by an Emby episode
-- **THEN** the owner reports the Feed entry
-- **AND** loads the Emby episode onto the Session
+- **WHEN** the owner picks the next slot for the Emby Session device and the slot after the active slot is a Feed entry followed by an Emby episode
+- **THEN** the owner reports the Feed entry one time
+- **AND** gives the Emby episode to the Session as the next item
 
 #### Scenario: Explicit play of a slot the Session cannot play
 
@@ -158,6 +164,17 @@ Each load on an Emby Session SHALL give the device the active item and the first
 - **THEN** the active item plays on without an interruption
 - **AND** when the device starts the removed item, the owner loads the new next slot in its place
 
+#### Scenario: Queue edit removes the only next slot
+
+- **WHEN** the user removes the slot that is queued next on the device and the queue has no other slot after the active slot
+- **THEN** the active item plays on without an interruption
+- **AND** when the device starts the removed item, the owner stops the device and the queue ends on the old slot
+
+#### Scenario: Shuffle is on
+
+- **WHEN** play order is Shuffle and the owner loads a slot onto an Emby Session
+- **THEN** the device receives the active item and the current shuffle pick as the next item
+
 #### Scenario: Queue grows after the last slot
 
 - **WHEN** nothing is queued on the device and the user appends a slot to the queue
@@ -188,6 +205,11 @@ When the owner exits while an Emby Session is the output and the device plays th
 - **WHEN** the owner exits while the device plays slot 3 of 10 and slot 4 is queued next on the device
 - **THEN** the device receives slots 5 to 10 appended after slot 4
 - **AND** slot 3 plays on without an interruption
+
+#### Scenario: Owner exits with Shuffle on
+
+- **WHEN** the owner exits while play order is Shuffle and the device holds the active item and the current shuffle pick
+- **THEN** the owner sends nothing more to the device
 
 #### Scenario: Client quits while the owner stays alive
 
