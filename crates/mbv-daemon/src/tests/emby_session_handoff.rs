@@ -9,8 +9,8 @@ use std::time::Instant;
 use super::cast_output::{connect_output_client_with_caps, select_output};
 use super::cast_playback::drained_events;
 use super::emby_session_output::{
-    host_session_output, play_calls, poll_once, pump_session_event, session_selection,
-    wait_for_session_jobs,
+    host_session_output, inject_lookup_outcome, loop_with_injected_lookups, play_calls, poll_once,
+    pump_session_event, session_selection, wait_for_session_jobs,
 };
 use super::r#loop::{TestLoop, test_loop_with_queue};
 use super::*;
@@ -413,5 +413,40 @@ fn the_owner_shutdown_sends_no_stop_to_the_session() {
             .into_iter()
             .any(|event| matches!(event, CtrlEvent::CommandRejected(_))),
         "the shutdown reports no failure"
+    );
+}
+
+/// Contract: review r6 [P2-1] / design D11 — local playback that starts after
+/// an Emby Session selection captured no hand-off is not discarded: the
+/// resolved selection is rejected and local playback keeps running.
+#[test]
+fn playback_started_while_the_session_lookup_ran_is_not_discarded() {
+    let mut t = loop_with_injected_lookups();
+    let (client_id, reply_tx, rx) =
+        connect_output_client_with_caps(&t.event_loop.ctrl_clients, true, true);
+    select_output(&mut t, client_id, &reply_tx, session_selection());
+    // The select-time capture found local playback idle; the user starts it
+    // while the device lookup runs.
+    let position = 42 * SECOND_TICKS;
+    {
+        let mut status = t.event_loop.player.status.lock().unwrap();
+        status.active = true;
+        status.position_ticks = position;
+    }
+
+    inject_lookup_outcome(&mut t, "device-1", "session-1");
+
+    assert!(
+        matches!(recv_event(&rx), CtrlEvent::CommandRejected(reason) if reason.contains("playback started")),
+        "the resolved selection is rejected with the reason"
+    );
+    assert!(
+        matches!(t.event_loop.owner.output, PlaybackOutput::Local),
+        "the old output stays"
+    );
+    let status = t.event_loop.player.status.lock().unwrap();
+    assert!(
+        status.active && status.position_ticks == position,
+        "the just-started local playback keeps running"
     );
 }

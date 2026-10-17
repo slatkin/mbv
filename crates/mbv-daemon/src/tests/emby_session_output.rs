@@ -485,7 +485,7 @@ fn silent_session_worker() -> mpsc::Sender<crate::emby_session::worker::EmbySess
 
 /// A loop that hosts the Emby Session output with a worker that never answers,
 /// so each lookup outcome arrives when the test injects it.
-fn loop_with_injected_lookups() -> TestLoop {
+pub(super) fn loop_with_injected_lookups() -> TestLoop {
     let mut t = test_loop_with_role(DaemonRole::Local);
     t.event_loop.emby_session_output = true;
     t.event_loop.emby_runtime = Some(crate::EmbyOwnerContext::from_client(
@@ -505,7 +505,7 @@ fn session_selection_for(device_id: &str) -> OutputSelection {
 }
 
 /// Injects one lookup outcome as the worker would have returned it.
-fn inject_lookup_outcome(t: &mut TestLoop, device_id: &str, session_id: &str) {
+pub(super) fn inject_lookup_outcome(t: &mut TestLoop, device_id: &str, session_id: &str) {
     t.event_loop
         .handle_event(DaemonEvent::EmbySession(EmbySessionEvent::Selected {
             device_id: device_id.to_string(),

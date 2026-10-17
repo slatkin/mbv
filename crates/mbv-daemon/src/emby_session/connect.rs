@@ -218,6 +218,27 @@ fn install_output(
         reply_tx,
         handoff,
     } = pending;
+    // Local playback may have started after the selection captured nothing
+    // active. Swapping now would discard it silently, so the resolved worker
+    // is dropped and the selection reported instead — the same rule a Cast
+    // connect applies (design D11: the Cast D10 sequence holds unchanged,
+    // review r6). The guard is narrow: it fires only while the output is still
+    // Local, so an Emby Session→Emby Session selection never trips it, even
+    // when the old device presents content the Owner did not load.
+    let local_playback_started = matches!(daemon.owner.output, PlaybackOutput::Local)
+        && handoff.is_none()
+        && daemon.player.status.lock().unwrap().active;
+    if local_playback_started {
+        drop(worker);
+        send_to(
+            &reply_tx,
+            &CtrlEvent::CommandRejected(
+                "playback started while connecting; stop playback before moving it to an Emby Session"
+                    .to_string(),
+            ),
+        );
+        return;
+    }
     // Every swap stops the old output (design D10 step 3, D11), whether or not
     // a hand-off was captured: the local run stops, the old receiver's media
     // stops with its app teardown, or the old Session's device stops only
