@@ -59,7 +59,7 @@ See proposal.md for the reasons. Current state that shapes the approach:
 
 An Emby Session output owns one worker thread with a job channel. That thread runs every HTTP call in order: the poll, play, and transport commands. Results come back as `DaemonEvent::EmbySession`. The event loop never waits on the network, and commands reach the device in the order that the user sent them. (The TUI today starts one thread for each command, so their order is not fixed.)
 
-The worker calls a small `SessionApi` trait (`get_sessions`, `play` (a `PlayNow` with one or two item ids, D14), `play_last` (D14), `transport`, `seek`, `set_volume`, `set_mute`, `set_audio_index`, `set_subtitle_index`). It is implemented for `EmbyClient`. Tests use a fake (the boundary mock, the same pattern as the Cast transport). The trait has no method that reports progress, so D8 holds by construction.
+The worker calls a small `SessionApi` trait (`get_sessions`, `play` (a `PlayNow` with a list of item ids: one or two in D14, the rest of the queue in D15), `play_last` (a `PlayLast` with a list of item ids, D14, D15), `transport`, `seek`, `set_volume`, `set_mute`, `set_audio_index`, `set_subtitle_index`). It is implemented for `EmbyClient`. Tests use a fake (the boundary mock, the same pattern as the Cast transport). The trait has no method that reports progress, so D8 holds by construction.
 
 The trait's `get_sessions` calls `EmbyClient::get_sessions_unfiltered`, not the filtered `get_sessions`. The filtered list (`ActiveWithinSeconds=600`) drops a device that is idle but still connected (#236), so the Owner would mark an idle TV `Disconnected`. A selection runs `get_sessions` on the worker and finds the entry whose `DeviceId` matches. If it finds none, or the call fails, the old output stays and the Owner reports the reason.
 
@@ -140,7 +140,7 @@ The Owner publishes `StatusOnly` at the local-playback cadence and extrapolates 
 
 ### D11. Hand-off and exit
 
-The Cast D10 sequence holds unchanged for every pair of outputs. "Connect" for an Emby Session is the device lookup of D4. "Stop the old output" for an Emby Session sends `transport("Stop")` only while the device plays the loaded item. Content that the Owner did not load is left playing. A selection of the device that is already the output does nothing. On Owner shutdown, the output stops its worker and sends no Stop (the same rule as Cast D12).
+The Cast D10 sequence holds unchanged for every pair of outputs. "Connect" for an Emby Session is the device lookup of D4. "Stop the old output" for an Emby Session sends `transport("Stop")` only while the device plays the loaded item. Content that the Owner did not load is left playing. A selection of the device that is already the output does nothing. On Owner shutdown, the output hands the rest of the queue to the device (D15), then stops its worker and sends no Stop (the same rule as Cast D12).
 
 ### D12. The TUI becomes a picker
 
@@ -196,7 +196,25 @@ The device holds the active slot and the next slot. It never holds more. Without
 
 *Alternative:* hold one item and replace the device's own autoplay with a `PlayNow` of the next slot. This was rejected because the autoplayed episode starts before the Owner replaces it, at each item boundary.
 
+### D15. Hand the rest of the queue to the device at Owner exit
+
+When the Owner exits, it gives up queue authority. The device must then play the rest of the queue by itself, and not stop after the queued next item or autoplay its own next episode. This applies only on `DaemonEvent::Shutdown`. A stay-alive Owner that outlives its Clients keeps the output and its authority, so a Client quit then hands over nothing.
+
+On `DaemonEvent::Shutdown` while the output is an Emby Session and the last observation presents the loaded item:
+1. The Owner collects every admissible slot after the queued next item, in play order. Slots before the active slot have played, and they are not sent.
+2. If the queued next item is current, the Owner sends one `play_last` with those item ids. The active item is not interrupted.
+3. If the queued next item is stale (D14), the Owner sends one `play` (`PlayNow`) with the active item, the correct next slot, and the rest, with the estimated position as the start ticks. The active item reloads one time at the exit, and the device never plays the stale item.
+4. The Owner waits for that one call, for at most 5 s, and then stops the worker as in D11 (no `Stop`). A failed or late call is logged, and the exit goes on.
+
+If the device is idle or presents content the Owner did not load, the Owner sends nothing. If nothing is after the queued next item, the Owner sends nothing.
+
+`play_last` therefore takes a list of item ids (D4).
+
+*Alternative:* push the whole queue with `PlayNow` and `StartIndex` at the active slot. This was rejected because it reloads the active item at each exit.
+
 ## Risks / Trade-offs
+
+- [A very long queue at exit] → One `play_last` carries every remaining item id. The old attached-session path sent the whole queue in one `PlayNow`, so the request size is known to work.
 
 - [A device app ignores `PlayLast`] → It autoplays its own next episode after the second item, and the Owner presents that as content it did not load. The live test of this change checks `PlayLast` on the Emby web Session. The old attached-session path used only `PlayNow`.
 - [A queue edit makes the queued next item stale] → The device starts the stale item, and the Owner replaces it at that boundary (D14). The active item is never interrupted.

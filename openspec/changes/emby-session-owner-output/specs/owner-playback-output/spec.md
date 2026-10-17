@@ -21,7 +21,7 @@ A Player owner SHALL have exactly one active playback output at any time: local 
 
 - **WHEN** the user plays a queue of several Emby items while an Emby Session is the active output
 - **THEN** the owner gives the Session the item of the active slot and the item of the next slot
-- **AND** never gives the Session more than two items
+- **AND** never gives the Session more than two items while the owner runs
 
 ### Requirement: Only a natural end advances
 
@@ -178,6 +178,26 @@ When an Emby Session presents an item that the owner did not load (neither the l
 - **WHEN** the user presses next while the Session plays an item the owner did not load
 - **THEN** the device receives its own next command
 - **AND** the owner loads nothing
+
+### Requirement: The owner hands the rest of the queue to the Emby Session at exit
+
+When the owner exits while an Emby Session is the output and the device plays the loaded item, the owner SHALL give the device every playable slot after the queued next item, in play order, so that the device plays the rest of the queue without the owner. The active item SHALL play on, unless a queue edit made the queued next item stale. A stay-alive owner that outlives its Clients SHALL hand over nothing.
+
+#### Scenario: Owner exits during a queue
+
+- **WHEN** the owner exits while the device plays slot 3 of 10 and slot 4 is queued next on the device
+- **THEN** the device receives slots 5 to 10 appended after slot 4
+- **AND** slot 3 plays on without an interruption
+
+#### Scenario: Client quits while the owner stays alive
+
+- **WHEN** a Client quits and the stay-alive owner keeps running with an Emby Session output
+- **THEN** the owner hands over nothing and keeps advancing the queue
+
+#### Scenario: Owner exits while the device plays other content
+
+- **WHEN** the owner exits while the device plays an item that the owner did not load
+- **THEN** the owner sends nothing to the device
 
 ### Requirement: Launch never selects an Emby Session output
 
