@@ -4,6 +4,7 @@ use crate::{SessionInfo, SessionMediaInfo};
 pub fn make_session(device_name: &str, client: &str) -> SessionInfo {
     SessionInfo {
         id: "sess-1".into(),
+        device_id: "device-1".into(),
         device_name: device_name.into(),
         client: client.into(),
         user_name: "user".into(),

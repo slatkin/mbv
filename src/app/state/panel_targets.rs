@@ -107,6 +107,7 @@ mod tests {
     fn session(id: &str) -> SessionInfo {
         SessionInfo {
             id: id.to_string(),
+            device_id: format!("device-{id}"),
             device_name: format!("device-{id}"),
             client: "Emby".to_string(),
             user_name: "user".to_string(),

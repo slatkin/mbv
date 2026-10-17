@@ -48,9 +48,7 @@ fn session_response(
     json!([session]).to_string()
 }
 
-fn parse_session_playable_media_types(
-    playable_media_types: Option<serde_json::Value>,
-) -> Vec<String> {
+fn parse_session(playable_media_types: Option<serde_json::Value>) -> mbv_emby::SessionInfo {
     let (mut client, http) = mock_client(TEST_URL);
     client.device_id = "this-device".into();
     let body = session_response(playable_media_types, None);
@@ -60,7 +58,6 @@ fn parse_session_playable_media_types(
         .unwrap()
         .pop()
         .expect("mock session must be retained")
-        .playable_media_types
 }
 
 #[rstest]
@@ -70,14 +67,13 @@ fn parse_session_playable_media_types(
 )]
 #[case::absent(None, Vec::new())]
 #[case::empty(Some(json!([])), Vec::new())]
-fn sessions_parse_playable_media_types(
+fn sessions_parse_device_id_and_playable_media_types(
     #[case] playable_media_types: Option<serde_json::Value>,
     #[case] expected: Vec<String>,
 ) {
-    assert_eq!(
-        parse_session_playable_media_types(playable_media_types),
-        expected
-    );
+    let session = parse_session(playable_media_types);
+    assert_eq!(session.device_id, "other-device");
+    assert_eq!(session.playable_media_types, expected);
 }
 
 fn parse_session_now_playing_item(item_type: &str) -> mbv_emby::SessionInfo {

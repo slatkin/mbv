@@ -108,6 +108,7 @@ impl EmbyClient {
                         let host = raw_host.rsplit(':').nth(1).unwrap_or(raw_host).to_string();
                         Some(SessionInfo {
                             id: v["Id"].as_str().unwrap_or("").to_string(),
+                            device_id: v["DeviceId"].as_str().unwrap_or("").to_string(),
                             device_name: v["DeviceName"].as_str().unwrap_or("").to_string(),
                             client: v["Client"].as_str().unwrap_or("").to_string(),
                             user_name: v["UserName"].as_str().unwrap_or("").to_string(),
