@@ -1,6 +1,6 @@
 use super::*;
 use crate::app::tests::{make_app_stub, make_remote_app_stub};
-use crate::app::{LibEvent, PlaylistEvent, QueueScope};
+use crate::app::{LibEvent, PlaylistEvent};
 use crossterm::event::KeyModifiers;
 
 fn key(code: KeyCode) -> KeyChord {
@@ -150,31 +150,6 @@ fn dispatch_toggle_mute_while_attached_to_session_mutes_the_session_not_local() 
 
 use crate::app::tests::make_items;
 use mbv_emby_model::test_support::make_item;
-
-fn set_local_queue(app: &mut crate::app::App, items: Vec<mbv_emby_model::EmbyItem>, cursor: usize) {
-    app.local_view.adopt_items(items, cursor);
-}
-
-#[test]
-fn queue_play_cursor_with_direct_remote_switches_to_remote_scope() {
-    let mut app = make_remote_app_stub(make_items(2), make_items(3));
-    set_local_queue(&mut app, make_items(2), 1);
-    app.set_queue_scope(QueueScope::Local);
-    app.connected_session_id = Some("session-1".into());
-
-    app.dispatch(&Command::QueuePlayCursor(1));
-
-    assert!(
-        app.status.contains("Requesting playback"),
-        "expected a remote-handoff status flash, got {:?}",
-        app.status
-    );
-    assert_eq!(
-        app.viewed_queue_scope(),
-        QueueScope::Remote,
-        "queue scope should switch to Remote when Direct remote control is active"
-    );
-}
 
 #[test]
 fn play_item_on_disconnected_remote_shows_connection_lost_not_requesting() {

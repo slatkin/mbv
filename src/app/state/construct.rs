@@ -223,7 +223,6 @@ impl App {
             queue_epoch: crate::app::state::queue_owner::QueueEpoch::default(),
             playlist_mutations: std::collections::HashMap::new(),
             next_playlist_mutation: 1,
-            next_owner_queue_load_request: 1,
             remote: crate::app::state::remote_tracking::RemoteTracking::new(),
             suspended_local: None,
             active_route: None,

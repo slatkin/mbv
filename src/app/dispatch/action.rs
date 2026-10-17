@@ -16,12 +16,9 @@ use crate::app::App;
 use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::dispatch::queue::QueueOpEdit;
 use crate::app::input::resolver::KeyChord;
-#[cfg(test)]
-use crate::app::tests::QueueViewTestExt;
 use crossterm::event::KeyCode;
 use mbv_ctrl::Direction;
 use mbv_ctrl::player::PlayerCommand;
-use mbv_emby_model::EmbyItem;
 use mbv_queue::QueueSlotId;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -449,10 +446,7 @@ impl App {
         if !self.validate_queue_play_feed(&item) {
             return;
         }
-        let (emby_items, all_slots, slot_id, emby_start) = self.queue_play_snapshot(t);
-        if self.handoff_queue_play_to_session(&item, &emby_items, emby_start) {
-            return;
-        }
+        let (all_slots, slot_id) = self.queue_play_snapshot(t);
         self.play_queue_cursor_locally(t, &item, slot_id, all_slots);
     }
 
@@ -521,57 +515,12 @@ impl App {
         true
     }
 
-    fn queue_play_snapshot(
-        &self,
-        t: usize,
-    ) -> (
-        Vec<EmbyItem>,
-        Vec<mbv_queue::ExecSlot>,
-        Option<QueueSlotId>,
-        usize,
-    ) {
+    fn queue_play_snapshot(&self, t: usize) -> (Vec<mbv_queue::ExecSlot>, Option<QueueSlotId>) {
         // Snapshot data from the queue before any mutable borrows.
         let queue = self.displayed_queue();
-        let emby_items = queue
-            .slots()
-            .iter()
-            .filter_map(|slot| slot.item.as_emby().cloned())
-            .collect();
         let all_slots = queue.slot_pairs();
         let slot_id = queue.slot_id_at(t);
-        // Pre-compute the Emby-only projection index for the cursor
-        // position, needed by the session API boundary.
-        let emby_start = queue
-            .slots()
-            .iter()
-            .take(t)
-            .filter(|slot| slot.item.as_emby().is_some())
-            .count();
-        (emby_items, all_slots, slot_id, emby_start)
-    }
-
-    fn handoff_queue_play_to_session(
-        &mut self,
-        item: &mbv_queue::QueueItem,
-        emby_items: &[EmbyItem],
-        emby_start: usize,
-    ) -> bool {
-        // Connected remote session: hand off Emby items to the
-        // session; Feed entries cannot cross the Emby session API
-        // so they fall through to the local/direct-remote path.
-        if let mbv_queue::QueueItem::Emby(_) = item
-            && let Some(conn_id) = self.connected_session_id.clone()
-        {
-            let label = item.display_name();
-            self.flash(
-                format!("Requesting playback: {label}"),
-                ToastSeverity::Neutral,
-            );
-            self.set_queue_scope(self.playing_queue_scope());
-            self.submit_attached_sequence(&conn_id, emby_items, emby_start);
-            return true;
-        }
-        false
+        (all_slots, slot_id)
     }
 
     fn play_queue_cursor_locally(

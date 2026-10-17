@@ -374,7 +374,6 @@ pub struct App {
     pub(in crate::app) queue_epoch: QueueEpoch,
     pub(in crate::app) playlist_mutations: std::collections::HashMap<String, PlaylistMutationState>,
     pub(in crate::app) next_playlist_mutation: u64,
-    pub(in crate::app) next_owner_queue_load_request: u64,
     pub(in crate::app) remote: crate::app::state::remote_tracking::RemoteTracking,
     pub(in crate::app) suspended_local: Option<SuspendedLocalSession>,
     /// The library route currently driving playback, if any (#223):

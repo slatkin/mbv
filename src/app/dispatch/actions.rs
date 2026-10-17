@@ -235,34 +235,6 @@ impl App {
             self.on_queue_replace_silent();
         }
         self.adopt_played_queue_view();
-        // Attached Emby session: the queue is installed on the Player owner
-        // through the idle-load path (ruling on row 5.3: the owner's Replace
-        // op always starts playback, so it must not be used while another
-        // target owns playback), then playback starts on the session.
-        if let Some(ref conn_id) = self.connected_session_id.clone() {
-            if !self.load_idle_queue_on_owner(
-                items
-                    .iter()
-                    .map(|item| QueueItem::Emby(Box::new(item.clone())))
-                    .collect(),
-                start_idx,
-                queue_source.clone(),
-            ) {
-                return;
-            }
-            self.clear_playback_overlays();
-            let id = conn_id.clone();
-            let label = items
-                .get(start_idx)
-                .map(mbv_emby_model::EmbyItem::playback_label)
-                .unwrap_or_default();
-            self.flash(
-                playback_request_message(&label, mixed_unplayable),
-                ToastSeverity::Neutral,
-            );
-            self.submit_attached_sequence(&id, &items, start_idx);
-            return;
-        }
         if direct_remote && let Some(item) = items.get(start_idx) {
             self.flash(
                 playback_request_message(&item.playback_label(), mixed_unplayable),
@@ -322,9 +294,6 @@ impl App {
             self.set_panel_focus(PanelFocus::Queue);
         }
         let label = item.playback_label();
-        if self.play_on_connected_session(&item, &label) {
-            return;
-        }
         if self.play_series_continuation(&item, direct_remote) {
             return;
         }
@@ -400,33 +369,12 @@ impl App {
             .send_command(PlayerCommand::SetMute(self.mute_on));
     }
 
-    /// Routes a play request through the connected Emby session when one is
-    /// attached. Returns `false` when playback is local and the caller should
-    /// fall through to the queue-replacement path.
-    fn play_on_connected_session(&mut self, item: &EmbyItem, label: &str) -> bool {
-        let Some(conn_id) = self.connected_session_id.clone() else {
-            return false;
-        };
-        self.advance_queue_epoch();
-        self.clear_playback_overlays();
-        let item_id = item.id.clone();
-        let start_ticks = item.playback_position_ticks;
-        self.flash(
-            format!("Requesting playback: {label}"),
-            ToastSeverity::Neutral,
-        );
-        self.do_session_command(move |c| c.session_play(&conn_id, &item_id, start_ticks));
-        true
-    }
-
     /// Defers an unplayable item for confirmation. The deferred play must carry
-    /// what the ordinary path would submit: session control plays the single
-    /// item, but the direct-remote/local path expands the series continuation
-    /// first, so deferring one episode would drop the rest of the series on
-    /// confirmation.
+    /// what the ordinary path would submit: the direct-remote/local path
+    /// expands the series continuation first, so deferring one episode would
+    /// drop the rest of the series on confirmation.
     fn defer_unplayable_play_item(&mut self, item: EmbyItem) {
-        if self.connected_session_id.is_none()
-            && !item.series_id.is_empty()
+        if !item.series_id.is_empty()
             && self.player.always_play_next
             && let Some(episodes) = self
                 .series_episodes_from(&item)

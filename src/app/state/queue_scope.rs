@@ -166,8 +166,8 @@ impl App {
     /// A connected remote session exposes no queue-position/length fields in
     /// `SessionInfo` (see `mbv_emby::SessionInfo`), so there is no way to
     /// tell whether it's at a queue boundary; both remain available there,
-    /// mirroring `Command::PreviousTrack`/`Command::NextTrack`'s dispatch, which
-    /// calls `session_jump_track` unconditionally for a connected session with
+    /// mirroring `Command::PreviousTrack`/`Command::NextTrack`'s dispatch,
+    /// which sends the device's own next/previous to a connected session with
     /// no boundary check. Local playback uses `PlayerStatus::previous_idx`/
     /// `next_idx`, which already fold in `active` and `queue_len`.
     pub(in crate::app) fn transport_prev_next_available(&self) -> (bool, bool) {

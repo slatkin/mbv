@@ -23,8 +23,9 @@ impl RemotePlaybackTarget {
         app.do_session_command(move |c| c.session_seek(&session_id, target));
     }
 
-    pub(in crate::app) fn jump_track(&self, app: &mut App, step: i64, transport: &'static str) {
-        app.session_jump_track(&self.session_id, step, transport);
+    pub(in crate::app) fn jump_track(&self, app: &mut App, _step: i64, transport: &'static str) {
+        let session_id = self.session_id.clone();
+        app.do_session_command(move |c| c.session_transport(&session_id, transport));
     }
 
     pub(in crate::app) fn toggle_command_mute(app: &mut App) {

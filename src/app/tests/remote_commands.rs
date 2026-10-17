@@ -74,23 +74,6 @@ fn capture_error(http: &MockHttp, app: &mut App, act: impl FnOnce(&mut App)) -> 
 }
 
 #[test]
-fn multi_item_play_dispatches_and_reports_errors_without_tracking() {
-    let (mut app, http) = remote_command_app();
-    let items = app.local_view.emby_items();
-    let request = capture_error(&http, &mut app, move |app| {
-        app.submit_attached_sequence("session", &items, 1);
-    });
-    assert!(request.starts_with("POST /Sessions/session/Playing HTTP/1.1"));
-    assert!(
-        request.contains("PlayCommand")
-            && request.contains("PlayNow")
-            && request.contains("ItemIds")
-            && request.contains("StartIndex")
-            && request.contains("StartPositionTicks")
-    );
-}
-
-#[test]
 fn seek_dispatches_and_reports_errors_without_tracking() {
     let (mut app, http) = remote_command_app();
     let request = capture_error(&http, &mut app, |app| {

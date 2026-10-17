@@ -244,24 +244,4 @@ impl EmbyClient {
         }))?;
         Ok(())
     }
-
-    pub fn session_play_items(
-        &self,
-        id: &str,
-        item_ids: &[String],
-        start_idx: usize,
-        start_ticks: i64,
-    ) -> Result<(), crate::EmbyError> {
-        self.post(&format!(
-            "/Sessions/{}/Playing",
-            mbv_net::encode_path_segment(id)
-        ))
-        .send_json(serde_json::json!({
-            "PlayCommand": "PlayNow",
-            "ItemIds": item_ids,
-            "StartIndex": start_idx,
-            "StartPositionTicks": start_ticks
-        }))?;
-        Ok(())
-    }
 }
