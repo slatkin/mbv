@@ -125,6 +125,25 @@ fn dispatch_resolved_remote(
     }
 }
 
+/// Resolves the resolved play's start slot and builds its transition under
+/// the intent's identity (design D4, D7): the queue's active slot is the one
+/// slot the play loads — a receiver and a Session each hold one item, so only
+/// that slot's item is resolved or admitted, never the whole queue (#944,
+/// #945). The in-flight transition under the intent's identity settles on a
+/// confirming receiver status or observation and expires and reports on a
+/// resolve failure or rejected item. `None` when the queue has no active
+/// slot; the caller reports that under its output's own event name.
+fn resolved_play_transition(
+    ctx: &mut DaemonOwnerContext<'_>,
+    request_id: PlaybackRequestId,
+    generation: PlaybackGeneration,
+) -> Option<mbv_player::transition::Transition> {
+    let start_slot = ctx.owner.core.queue.active_slot_id()?;
+    Some(mbv_player::transition::Transition::new(
+        request_id, generation, start_slot,
+    ))
+}
+
 /// Loads the active slot on the Cast receiver (design D4): the play registers
 /// as the in-flight transition under the intent's identity, so a confirming
 /// receiver status settles it and a resolve failure expires and reports it.
@@ -135,11 +154,10 @@ fn play_resolved_on_cast(
     request_id: PlaybackRequestId,
     generation: PlaybackGeneration,
 ) {
-    let Some(start_slot) = ctx.owner.core.queue.active_slot_id() else {
+    let Some(transition) = resolved_play_transition(ctx, request_id, generation) else {
         tracing::warn!(name: "daemon.cast_play.start_slot_missing", target: "daemon", "the resolved play has no start slot; nothing was loaded");
         return;
     };
-    let transition = mbv_player::transition::Transition::new(request_id, generation, start_slot);
     match ctx.owner.core.transitions.accept(transition) {
         mbv_player::transition::DispatchDecision::DispatchNow(t) => {
             crate::cast::dispatch_cast_load(ctx, t, start_ticks, Some(client_id));
@@ -162,25 +180,11 @@ fn play_resolved_on_session(
     request_id: PlaybackRequestId,
     generation: PlaybackGeneration,
 ) {
-    let Some(start_slot) = ctx.owner.core.queue.active_slot_id() else {
+    let Some(transition) = resolved_play_transition(ctx, request_id, generation) else {
         tracing::warn!(name: "daemon.emby_session_play.start_slot_missing", target: "daemon", "the resolved play has no start slot; nothing was loaded");
         return;
     };
-    let transition = mbv_player::transition::Transition::new(request_id, generation, start_slot);
-    crate::emby_session::dispatch_accepted(
-        &mut DaemonOwnerContext {
-            player: ctx.player,
-            client: ctx.client,
-            owner: &mut *ctx.owner,
-            shared_queue: ctx.shared_queue,
-            ctrl_clients: ctx.ctrl_clients,
-            merged_tx: ctx.merged_tx,
-            audiobookshelf: ctx.audiobookshelf,
-        },
-        transition,
-        start_ticks,
-        Some(client_id),
-    );
+    crate::emby_session::dispatch_accepted(ctx, transition, start_ticks, Some(client_id));
 }
 
 /// Plays the resolved items on the local run (design D4): one item is a plain
