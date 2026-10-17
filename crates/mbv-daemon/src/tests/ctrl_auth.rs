@@ -23,6 +23,7 @@ fn start_ctrl_auth_test_peer(
         crate::core_ctrl_spawn::DaemonHelloCaps {
             audio_only,
             playback_output: false,
+            emby_session_output: false,
         },
         role,
         crate::owner_settings::fixed_reader(false),
@@ -82,6 +83,7 @@ fn admission_session(
             existing_tx,
             CtrlTransport::Local,
             mbv_ctrl::CtrlAudiobookshelfCapabilities::default(),
+            false,
             false,
             false,
             None,

@@ -525,6 +525,11 @@ pub struct DaemonRuntimeHooks {
     /// Owner on local playback only and hides the `playback-output`
     /// capability from the Hello.
     pub cast_connector: Option<crate::cast::CastConnector>,
+    /// Whether this runtime can host an Emby Session output
+    /// (emby-session-owner-output design D2): the Local daemon sets it,
+    /// `mbvd` does not. It gates the `emby-session-output` capability in the
+    /// Hello and the Emby Session arms of the output selection.
+    pub emby_session_output: bool,
 }
 
 impl std::fmt::Debug for DaemonRuntimeHooks {
@@ -536,6 +541,7 @@ impl std::fmt::Debug for DaemonRuntimeHooks {
             .field("swap_command", &"<callback>")
             .field("notify", &"<callback>")
             .field("cast_connector", &self.cast_connector.is_some())
+            .field("emby_session_output", &self.emby_session_output)
             .finish()
     }
 }

@@ -697,16 +697,15 @@ pub(super) fn disconnect_and_reconnect(daemon: &mut DaemonLoop) {
 }
 
 /// Mirrors the owner's output into the shared state and broadcasts it to
-/// peers that negotiated `playback-output` (design D3).
+/// peers that negotiated `playback-output` (design D3); a peer without
+/// `emby-session-output` receives `Local` in its place
+/// (emby-session-owner-output design D3).
 fn broadcast_output_change(daemon: &DaemonLoop) {
     let state = super::output_state(&daemon.owner.output);
     *daemon.shared_queue.playback_output.lock().unwrap() = state.clone();
-    let Ok(json) = serde_json::to_string(&CtrlEvent::PlaybackOutput(state)) else {
-        return;
-    };
     daemon
         .ctrl_clients
         .lock()
         .unwrap()
-        .broadcast_playback_output_gated(&json);
+        .broadcast_playback_output_gated(&state);
 }

@@ -21,6 +21,7 @@ struct HelloClassification {
     audiobookshelf: CtrlAudiobookshelfCapabilities,
     supports_owner_queue_load: bool,
     supports_playback_output: bool,
+    supports_emby_session_output: bool,
     role: CtrlConnectionRole,
     swap_surface: Option<SwapSurface>,
     swap_token: Option<String>,
@@ -28,11 +29,14 @@ struct HelloClassification {
 
 /// Capabilities this runtime's daemon Hello advertises. Decided once at
 /// startup and passed to every ctrl accept (cast-owner-output design D2/D3:
-/// `playback-output` only when the runtime supplies a Cast connector).
+/// `playback-output` only when the runtime supplies a Cast connector;
+/// emby-session-owner-output design D2: `emby-session-output` only when the
+/// runtime hook enables it).
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct DaemonHelloCaps {
     pub(crate) audio_only: bool,
     pub(crate) playback_output: bool,
+    pub(crate) emby_session_output: bool,
 }
 
 fn ctrl_client_capabilities(
@@ -54,6 +58,7 @@ fn ctrl_client_capabilities(
                 },
                 supports_owner_queue_load: info.supports_owner_queue_load(),
                 supports_playback_output: info.supports_playback_output(),
+                supports_emby_session_output: info.supports_emby_session_output(),
                 role,
                 swap_surface: swap_surface_from_hello(&info),
                 swap_token: info.swap_token,
@@ -251,18 +256,22 @@ fn initial_queue_state_json(
 
 /// A Client that negotiated `playback-output` receives the owner's active
 /// output on connect, before any command (cast-owner-output design D3, spec
-/// "Client connects to an owner that is casting"). Split from the connect
-/// path so that path stays under the line-count lint.
+/// "Client connects to an owner that is casting"). A peer that did not
+/// negotiate `emby-session-output` receives `Local` in place of an Emby
+/// Session output (emby-session-owner-output design D3). Split from the
+/// connect path so that path stays under the line-count lint.
 fn seed_playback_output(
     shared_queue: &SharedQueueState,
     hello: &HelloClassification,
     ev_tx: &mpsc::Sender<CtrlOutbound>,
 ) {
-    if hello.supports_playback_output {
-        let output = shared_queue.playback_output.lock().unwrap().clone();
-        if let Ok(json) = serde_json::to_string(&CtrlEvent::PlaybackOutput(output)) {
-            let _ = ev_tx.send(CtrlOutbound::Event(json));
-        }
+    if !hello.supports_playback_output {
+        return;
+    }
+    let state = shared_queue.playback_output.lock().unwrap().clone();
+    let state = crate::ctrl::output_state_for_peer(&state, hello.supports_emby_session_output);
+    if let Ok(json) = serde_json::to_string(&CtrlEvent::PlaybackOutput(state)) {
+        let _ = ev_tx.send(CtrlOutbound::Event(json));
     }
 }
 
@@ -370,6 +379,7 @@ impl CtrlClientSession {
             hello.audiobookshelf,
             hello.supports_owner_queue_load,
             hello.supports_playback_output,
+            hello.supports_emby_session_output,
             hello.swap_surface,
             hello.role,
         );
@@ -459,6 +469,12 @@ pub(crate) fn spawn_ctrl_client(
         daemon_hello
             .capabilities
             .push(mbv_ctrl::CTRL_CAP_PLAYBACK_OUTPUT.to_string());
+    }
+    // Only a runtime whose hook enables the Emby Session output offers it.
+    if caps.emby_session_output {
+        daemon_hello
+            .capabilities
+            .push(mbv_ctrl::CTRL_CAP_EMBY_SESSION_OUTPUT.to_string());
     }
     if let Ok(hello_json) = serde_json::to_string(&CtrlEvent::Hello(daemon_hello)) {
         let _ = ev_tx.send(CtrlOutbound::Event(hello_json));
@@ -550,6 +566,7 @@ mod tests {
             CtrlAudiobookshelfCapabilities::default(),
             false,
             false,
+            false,
             swap_surface_from_hello(&hello_with_caps(&[mbv_ctrl::CTRL_CAP_PINNED_SURFACE])),
             CtrlConnectionRole::Client,
         );
@@ -577,6 +594,7 @@ mod tests {
             client_tx,
             CtrlTransport::Local,
             CtrlAudiobookshelfCapabilities::default(),
+            false,
             false,
             false,
             None,

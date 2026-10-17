@@ -77,6 +77,7 @@ pub fn connect_client(clients: &mut CtrlClients) -> (u64, mpsc::Receiver<CtrlOut
         },
         true,
         false,
+        false,
         None,
         crate::ctrl::CtrlConnectionRole::Client,
     );
