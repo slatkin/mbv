@@ -88,27 +88,7 @@ pub(crate) fn dispatch(
     origin: Option<CtrlClientId>,
 ) -> bool {
     let target = transition.target;
-    let Some(slot) = ctx.owner.core.queue.slot(target) else {
-        tracing::warn!(name: "daemon.emby_session_load.slot_missing", target: "daemon", slot = ?target, "the load target slot is absent; nothing was loaded");
-        return false;
-    };
-    let item = slot.item.clone();
-    let PlaybackOutput::EmbySession(output) = &ctx.owner.output else {
-        tracing::warn!(name: "daemon.emby_session_load.not_the_output", target: "daemon", slot = ?target, "the playback output is not an Emby Session; nothing was loaded");
-        return false;
-    };
-    let admitted = match admit(&item, &output.playable_media_types) {
-        Ok(emby_item) => emby_item,
-        Err(rejected) => {
-            report_rejection(ctx, &transition, origin, &rejected);
-            crate::cast::expire_remote_transition(ctx);
-            return false;
-        }
-    };
-    let item_id = admitted.id.clone();
-    let runtime_ticks = admitted.runtime_ticks;
-    let Some(session_id) = output.session_id.clone() else {
-        tracing::warn!(name: "daemon.emby_session_load.no_session", target: "daemon", slot = ?target, "the Emby Session output has no session id; nothing was loaded");
+    let Some((item_id, runtime_ticks, session_id)) = load_target(ctx, &transition, origin) else {
         return false;
     };
     let job_item_id = item_id.clone();
@@ -150,6 +130,43 @@ pub(crate) fn dispatch(
     });
     tracing::info!(name: "daemon.emby_session_load.started", target: "daemon", slot = ?target, start_ticks, "the Emby Session was given one item to play");
     true
+}
+
+/// Resolves what a load plays (design D7): the target slot's item, the active
+/// output's admission of it, and the session id the `play` job names. A
+/// missing slot, a non-Session output, an unplayable item, or a Session with
+/// no session id loads nothing; the rejection path reports the item and
+/// expires the transition, so the gate cannot stay wedged behind it.
+fn load_target(
+    ctx: &mut DaemonOwnerContext<'_>,
+    transition: &mbv_player::transition::Transition,
+    origin: Option<CtrlClientId>,
+) -> Option<(String, i64, String)> {
+    let target = transition.target;
+    let Some(slot) = ctx.owner.core.queue.slot(target) else {
+        tracing::warn!(name: "daemon.emby_session_load.slot_missing", target: "daemon", slot = ?target, "the load target slot is absent; nothing was loaded");
+        return None;
+    };
+    let item = slot.item.clone();
+    let PlaybackOutput::EmbySession(output) = &ctx.owner.output else {
+        tracing::warn!(name: "daemon.emby_session_load.not_the_output", target: "daemon", slot = ?target, "the playback output is not an Emby Session; nothing was loaded");
+        return None;
+    };
+    let admitted = match admit(&item, &output.playable_media_types) {
+        Ok(emby_item) => emby_item,
+        Err(rejected) => {
+            report_rejection(ctx, transition, origin, &rejected);
+            crate::cast::expire_remote_transition(ctx);
+            return None;
+        }
+    };
+    let item_id = admitted.id.clone();
+    let runtime_ticks = admitted.runtime_ticks;
+    let Some(session_id) = output.session_id.clone() else {
+        tracing::warn!(name: "daemon.emby_session_load.no_session", target: "daemon", slot = ?target, "the Emby Session output has no session id; nothing was loaded");
+        return None;
+    };
+    Some((item_id, runtime_ticks, session_id))
 }
 
 /// Reports a slot the Session cannot play (design D7): the item and the reason

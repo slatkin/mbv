@@ -296,46 +296,9 @@ fn install_output(
 /// selecting Client and loads nothing; the output still becomes the Session,
 /// as a Cast hand-off with an uncastable item does.
 fn load_handoff(daemon: &mut DaemonLoop, handoff: HandoffPlayback, reply_tx: &CtrlSender) {
-    let Some(slot) = daemon.owner.core.queue.slot(handoff.slot) else {
-        tracing::warn!(
-            name: "daemon.handoff.slot_missing",
-            target: "daemon",
-            slot = ?handoff.slot,
-            "the handed-off slot is absent; nothing was loaded"
-        );
-        return;
-    };
-    let item = slot.item.clone();
-    let PlaybackOutput::EmbySession(output) = &mut daemon.owner.output else {
-        return;
-    };
-    let emby_item = match admit(&item, &output.playable_media_types) {
-        Ok(emby_item) => emby_item,
-        Err(rejected) => {
-            tracing::warn!(
-                name: "daemon.emby_session_load.unplayable",
-                target: "daemon",
-                slot = ?handoff.slot,
-                item = %rejected.item,
-                reason = %rejected.reason,
-                "the handed-off item cannot play on the Emby Session; nothing was loaded"
-            );
-            send_to(
-                reply_tx,
-                &CtrlEvent::CommandRejected(format!("{} ({})", rejected.item, rejected.reason)),
-            );
-            return;
-        }
-    };
-    let item_id = emby_item.id.clone();
-    let runtime_ticks = emby_item.runtime_ticks;
-    let Some(session_id) = output.session_id.clone() else {
-        tracing::warn!(
-            name: "daemon.emby_session_load.no_session",
-            target: "daemon",
-            slot = ?handoff.slot,
-            "the Emby Session output has no session id; nothing was loaded"
-        );
+    let Some((item_id, runtime_ticks, session_id)) =
+        handoff_play_target(daemon, &handoff, reply_tx)
+    else {
         return;
     };
     let start_ticks = handoff.start_ticks;
@@ -352,6 +315,9 @@ fn load_handoff(daemon: &mut DaemonLoop, handoff: HandoffPlayback, reply_tx: &Ct
             }));
         }
     });
+    let PlaybackOutput::EmbySession(output) = &mut daemon.owner.output else {
+        return;
+    };
     if output.worker.send(job).is_err() {
         tracing::warn!(
             name: "daemon.emby_session_load.worker_gone",
@@ -378,4 +344,59 @@ fn load_handoff(daemon: &mut DaemonLoop, handoff: HandoffPlayback, reply_tx: &Ct
         paused = handoff.paused,
         "the handed-off slot loads on the Emby Session at the captured position"
     );
+}
+
+/// Resolves what a hand-off loads (design D7, D11): the item id, the runtime
+/// its end estimate caps at, and the session id the `play` job names. `None`
+/// when the handed-off slot is absent, the output is not a Session, the item
+/// is unplayable, or the Session has no session id; an unplayable item is
+/// reported to the selecting Client.
+fn handoff_play_target(
+    daemon: &DaemonLoop,
+    handoff: &HandoffPlayback,
+    reply_tx: &CtrlSender,
+) -> Option<(String, i64, String)> {
+    let Some(slot) = daemon.owner.core.queue.slot(handoff.slot) else {
+        tracing::warn!(
+            name: "daemon.handoff.slot_missing",
+            target: "daemon",
+            slot = ?handoff.slot,
+            "the handed-off slot is absent; nothing was loaded"
+        );
+        return None;
+    };
+    let item = slot.item.clone();
+    let PlaybackOutput::EmbySession(output) = &daemon.owner.output else {
+        return None;
+    };
+    let emby_item = match admit(&item, &output.playable_media_types) {
+        Ok(emby_item) => emby_item,
+        Err(rejected) => {
+            tracing::warn!(
+                name: "daemon.emby_session_load.unplayable",
+                target: "daemon",
+                slot = ?handoff.slot,
+                item = %rejected.item,
+                reason = %rejected.reason,
+                "the handed-off item cannot play on the Emby Session; nothing was loaded"
+            );
+            send_to(
+                reply_tx,
+                &CtrlEvent::CommandRejected(format!("{} ({})", rejected.item, rejected.reason)),
+            );
+            return None;
+        }
+    };
+    let item_id = emby_item.id.clone();
+    let runtime_ticks = emby_item.runtime_ticks;
+    let Some(session_id) = output.session_id.clone() else {
+        tracing::warn!(
+            name: "daemon.emby_session_load.no_session",
+            target: "daemon",
+            slot = ?handoff.slot,
+            "the Emby Session output has no session id; nothing was loaded"
+        );
+        return None;
+    };
+    Some((item_id, runtime_ticks, session_id))
 }
