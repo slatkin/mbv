@@ -15,7 +15,7 @@ A Player owner SHALL have exactly one active playback output at any time: local 
 
 - **WHEN** a remote receiver is the active playback output
 - **THEN** local playback is not running
-- **AND** the receiver has been given only the item of the active slot
+- **AND** the receiver has been given only the item of the active slot, and an Emby Session also the item of the next slot
 
 #### Scenario: An Emby Session is the output
 

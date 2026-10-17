@@ -21,7 +21,7 @@ shown, since none exists.
 - **THEN** the client SHALL send the item to the remote session
 - **THEN** the queue panel SHALL switch to show the Remote tab
 
-#### Scenario: Playing the cursor item while the output is an Emby Session stays on Local
+#### Scenario: Playing the cursor item on a plain attached session stays on Local
 
 - **WHEN** the local owner's output is an Emby Session and the user plays the item under the
   queue cursor
