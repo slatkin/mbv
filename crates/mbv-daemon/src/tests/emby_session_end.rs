@@ -229,6 +229,73 @@ fn an_idle_thirty_seconds_before_the_end_advances_nothing() {
     );
 }
 
+/// Contract: row 5.2 review r5 / design D6's last row — a Session that presents
+/// an item the Owner did not load ends nothing. The idle that follows such an
+/// item is that item's own stop: it records no completion for the loaded slot
+/// and advances nothing, so the loaded item's resume position survives.
+#[test]
+fn an_idle_after_foreign_content_completes_and_advances_nothing() {
+    let fake = FakeSessionApi::with_sessions(vec![idle_session()]);
+    let script = fake.clone();
+    let (mut t, calls, _rx) = session_output_with_queue(
+        fake,
+        vec![timed("a", RUNTIME_TICKS), timed("b", RUNTIME_TICKS)],
+    );
+    let (client_id, _reply_tx, _client_rx) =
+        connect_output_client_with_caps(&t.event_loop.ctrl_clients, true, true);
+    let slots = slot_ids(&t);
+    play_slot(&mut t, client_id, slots[0]);
+    let revision_before = t.event_loop.owner.core.queue.revision();
+    let t0 = Instant::now();
+
+    // The loaded item is seen playing, well before its end.
+    script.set_sessions(vec![session_presenting_at(
+        "a",
+        RUNTIME_TICKS / 2,
+        RUNTIME_TICKS,
+    )]);
+    poll_once(&mut t, t0);
+    // Someone else plays another item on the device to its own end.
+    script.set_sessions(vec![session_presenting_at(
+        "f",
+        RUNTIME_TICKS - SECOND_TICKS,
+        RUNTIME_TICKS,
+    )]);
+    poll_once(&mut t, t0 + EMBY_SESSION_POLL_INTERVAL);
+    script.set_sessions(vec![idle_session()]);
+    poll_once(&mut t, t0 + 2 * EMBY_SESSION_POLL_INTERVAL);
+
+    assert_eq!(
+        play_calls(&calls),
+        vec![play("a")],
+        "another item's end loads nothing"
+    );
+    assert!(
+        !end_handled(&t),
+        "the loaded item has no end from another item's stop"
+    );
+    assert_eq!(
+        t.event_loop.owner.core.queue.active_slot_id(),
+        Some(slots[0]),
+        "another item's end moves no active slot"
+    );
+    assert_eq!(
+        t.event_loop.owner.core.queue.revision(),
+        revision_before,
+        "no completion is recorded for the loaded slot"
+    );
+    let played = t
+        .event_loop
+        .owner
+        .core
+        .queue
+        .slot(slots[0])
+        .and_then(|slot| slot.item.as_emby())
+        .map(|item| item.played)
+        .expect("the loaded slot is still queued");
+    assert!(!played, "the loaded slot's resume state is untouched");
+}
+
 /// Contract: row 5.2 / design D6 and spec "Idle before the item starts" — an
 /// idle Session before the loaded item was ever presented is not an end, so it
 /// records no end and advances nothing.

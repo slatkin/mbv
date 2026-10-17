@@ -19,7 +19,7 @@ use mbv_ctrl::CtrlEvent;
 use mbv_emby::SessionInfo;
 use mbv_queue::QueueSlotId;
 
-use super::EmbySessionOutput;
+use super::{EmbySessionOutput, presents_item};
 use crate::DaemonLoop;
 use crate::cast::PlaybackOutput;
 
@@ -43,8 +43,11 @@ pub(crate) const EMBY_SESSION_END_MARGIN_TICKS: i64 = 10 * mbv_emby_model::TICKS
 ///
 /// Returns whether this observation ended the loaded item naturally. An idle
 /// Session before the loaded item was ever presented is not an end (the 30 s
-/// failure rule owns that case), and a Session that presents an item the Owner
-/// did not load ends nothing (design D6's last row).
+/// failure rule owns that case). The replaced observation must present the
+/// loaded item: a Session that presented an item the Owner did not load ends
+/// nothing (design D6's last row), and the idle that follows such an item is
+/// the other app's stop, not this item's end — its runtime and position belong
+/// to that item.
 pub(crate) fn ended_naturally(
     output: &mut EmbySessionOutput,
     session: &SessionInfo,
@@ -53,10 +56,11 @@ pub(crate) fn ended_naturally(
     if session.now_playing_item_id.is_some() {
         return false;
     }
-    let unhandled_sighting = output
-        .loaded
-        .as_ref()
-        .is_some_and(|loaded| loaded.seen_playing && !loaded.end_handled);
+    let unhandled_sighting = output.loaded.as_ref().is_some_and(|loaded| {
+        loaded.seen_playing
+            && !loaded.end_handled
+            && presents_item(output.last_observation.as_ref(), &loaded.item_id)
+    });
     if !unhandled_sighting {
         return false;
     }
