@@ -83,12 +83,11 @@ impl App {
     ///
     /// Short-circuits `false` (no conflict) whenever the app is currently
     /// in a thin-client mode that has nothing to do with library routing
-    /// (a Sessions-panel attached session, or a non-library-route direct
-    /// remote / local-daemon connection) -- both leave `active_route` at
-    /// `None`, so without this check any item resolving to a configured
-    /// `library_routes` entry would be wrongly rejected for a reason
-    /// unrelated to library routing. Mirrors the same condition Task 9
-    /// uses to gate `apply_route_for_playback`.
+    /// (a non-library-route direct remote / local-daemon connection) -- it
+    /// leaves `active_route` at `None`, so without this check any item
+    /// resolving to a configured `library_routes` entry would be wrongly
+    /// rejected for a reason unrelated to library routing. Mirrors the same
+    /// condition Task 9 uses to gate `apply_route_for_playback`.
     pub(in crate::app) fn enqueue_route_conflict(
         &mut self,
         resolved_name: Option<&String>,

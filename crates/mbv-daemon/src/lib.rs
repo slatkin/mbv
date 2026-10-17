@@ -41,6 +41,8 @@ pub use cast::{
     CastConnectOutcome, CastConnectRequest, CastConnector, CastOwnerEvent, local_cast_connector,
 };
 mod cast_resolve;
+mod emby_session;
+mod output;
 #[doc(inline)]
 pub use cast_resolve::{
     AbsCastContext, CastProgressTarget, CastResolveContext, CastSource, Uncastable,

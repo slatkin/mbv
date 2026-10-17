@@ -163,17 +163,9 @@ impl App {
     /// buttons and, implicitly, the `P`/`N` keys) are currently at a usable
     /// queue position: `(prev_available, next_available)`.
     ///
-    /// A connected remote session exposes no queue-position/length fields in
-    /// `SessionInfo` (see `mbv_emby::SessionInfo`), so there is no way to
-    /// tell whether it's at a queue boundary; both remain available there,
-    /// mirroring `Command::PreviousTrack`/`Command::NextTrack`'s dispatch, which
-    /// calls `session_jump_track` unconditionally for a connected session with
-    /// no boundary check. Local playback uses `PlayerStatus::previous_idx`/
-    /// `next_idx`, which already fold in `active` and `queue_len`.
+    /// `PlayerStatus::previous_idx`/`next_idx` fold in `active` and
+    /// `queue_len`, so they answer both questions from the owner's status.
     pub(in crate::app) fn transport_prev_next_available(&self) -> (bool, bool) {
-        if self.connected_session_id.is_some() {
-            return (true, true);
-        }
         let st = self.player.status_snapshot();
         (st.previous_idx().is_some(), st.next_idx().is_some())
     }

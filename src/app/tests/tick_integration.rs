@@ -211,18 +211,17 @@ fn arm_search_query(harness: &mut TickHarness, query: &str) {
     }
 }
 
-/// Phase 1 delivery proof (task 2.7): with Queue focused, a click on the
-/// seek-bar row still reaches the unfocused `LibraryPlaybackPanel` through its
-/// `mouse_sub()` subscription, and the component resolves the column against
-/// its own painted `seekbar_area` into a 0.0..=1.0 fraction. No other eligible
-/// surface claims the event (D2 exclusivity). The strip renders only where
-/// `RootFrame` places it (task 3.5), so this frame is library-only.
+/// Phase 1 delivery proof (task 2.7): with Queue focused, a double-click on
+/// the seek-bar row still reaches the unfocused `LibraryPlaybackPanel` through
+/// its `mouse_sub()` subscription, and the component resolves the column
+/// against its own painted `seekbar_area` into a 0.0..=1.0 fraction. No other
+/// eligible surface claims the event (D2 exclusivity). The strip renders only
+/// where `RootFrame` places it (task 3.5), so this frame is library-only.
 #[test]
-fn tick_delivers_seekbar_click_to_unfocused_playback_as_a_fraction() {
+fn tick_delivers_seekbar_double_click_to_unfocused_playback_as_a_fraction() {
     let mut app = make_app_stub();
     app.panel_mode = PanelMode::LibraryOnly;
     app.panel_focus = PanelFocus::Library;
-    app.connected_session_id = Some("session-1".into());
     app.layout.root_frame.library_playback = Some(Rect::new(10, 5, 40, 4));
     let mut harness = TickHarness::new(app);
     harness.model_mut().sync_mounted_surfaces();
@@ -236,15 +235,31 @@ fn tick_delivers_seekbar_click_to_unfocused_playback_as_a_fraction() {
         })
         .unwrap();
 
-    harness.inject(Event::Mouse(MouseEvent {
-        kind: MouseEventKind::Down(MouseButton::Left),
-        column: 30,
-        row: 5,
-        modifiers: KeyModifiers::NONE,
-    }));
+    // The strip seeks on a double-click: the press that opens the pair claims
+    // nothing, and the next step delivers the seek.
+    let press = || {
+        Event::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 30,
+            row: 5,
+            modifiers: KeyModifiers::NONE,
+        })
+    };
+    harness.inject(press());
     let outcome = harness.step();
 
     assert_eq!(outcome.pre_fold_focus, Some(ComponentId::Library));
+    assert!(
+        outcome
+            .raw_messages
+            .iter()
+            .all(|msg| !matches!(msg, Msg::Playback(PlaybackRequest::SeekTo(_)))),
+        "the first press of the pair claims no seek: {:?}",
+        outcome.raw_messages
+    );
+
+    harness.inject(press());
+    let outcome = harness.step();
     let seeks: Vec<f64> = outcome
         .raw_messages
         .iter()
@@ -253,7 +268,7 @@ fn tick_delivers_seekbar_click_to_unfocused_playback_as_a_fraction() {
             _ => None,
         })
         .collect();
-    assert_eq!(seeks.len(), 1, "exactly one surface claims the click");
+    assert_eq!(seeks.len(), 1, "exactly one surface claims the seek");
     assert!(
         (seeks[0] - 0.5).abs() < 1e-6,
         "column 30 of x10..w40 is 0.5"

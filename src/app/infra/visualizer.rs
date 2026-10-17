@@ -51,7 +51,7 @@ impl App {
         let audio_pipe_enabled = self.config.lock().unwrap().audio_pipe_enabled;
         let active = self.player.status_snapshot().active;
         self.visualizer_enabled
-            && self.connected_session_id.is_none()
+            && !self.output_is_emby_session()
             && !self.output_is_cast()
             && active
             && !audio_pipe_enabled
@@ -150,10 +150,27 @@ mod tests {
             mbv_ctrl::OutputState::Cast {
                 receiver_id: "device-1".to_string(),
                 name: "Living Room".to_string(),
-                connection: mbv_ctrl::CastConnection::Connected,
+                connection: mbv_ctrl::OutputConnection::Connected,
             },
         ));
 
+        assert!(!app.visualizer_should_run());
+
+        // The local owner's Emby Session output also has no local audio to
+        // capture (design D12 reads `OutputState::EmbySession`).
+        app.handle_player_event(mbv_ctrl::player::PlayerEvent::PlaybackOutput(
+            mbv_ctrl::OutputState::Local,
+        ));
+        assert!(app.visualizer_should_run());
+        app.handle_player_event(mbv_ctrl::player::PlayerEvent::PlaybackOutput(
+            mbv_ctrl::OutputState::EmbySession {
+                device_id: "device-1".to_string(),
+                name: "Living Room TV".to_string(),
+                connection: mbv_ctrl::OutputConnection::Connected,
+                audio_only: false,
+                now_playing: None,
+            },
+        ));
         assert!(!app.visualizer_should_run());
     }
 

@@ -17,18 +17,18 @@ const CAST_DISCOVERY_TIMEOUT: std::time::Duration = std::time::Duration::from_se
 impl App {
     /// Selecting a target from the F3 panel (design D13): the previously
     /// connected target is severed first (attachment slots are mutually
-    /// exclusive), then an Emby target reuses the existing
-    /// `connect_to_session` path unchanged; a cast target sends
-    /// `CtrlCmd::SelectPlaybackOutput(Cast)` to the owner whose
-    /// `playback-output` capability gated the row (D3). The owner performs
-    /// the hand-off itself — no `Stop` here, or the active slot the new
-    /// receiver must continue would be cleared (spec scenario "A different
-    /// cast target is selected while one is attached"). The Client holds no
-    /// receiver connection: the owner connects and broadcasts the resulting
-    /// `CtrlEvent::PlaybackOutput`.
+    /// exclusive), then an Emby target either keeps Direct remote control or
+    /// becomes the owner's Emby Session output (`activate_session_target`,
+    /// design D12); a cast target sends `CtrlCmd::SelectPlaybackOutput(Cast)`
+    /// to the owner whose `playback-output` capability gated the row (D3). The
+    /// owner performs the hand-off itself — no `Stop` here, or the active slot
+    /// the new receiver must continue would be cleared (spec scenario "A
+    /// different cast target is selected while one is attached"). The Client
+    /// holds no receiver connection: the owner connects and broadcasts the
+    /// resulting `CtrlEvent::PlaybackOutput`.
     pub(in crate::app) fn select_panel_target(&mut self, target: PanelTarget) {
         match target {
-            PanelTarget::Emby(session) => self.connect_to_session(&session),
+            PanelTarget::Emby(session) => self.activate_session_target(&session),
             PanelTarget::Cast(receiver) => {
                 self.sever_connections_without_output_change();
                 // Same panel-close-on-connect parity as the Emby path
@@ -150,26 +150,5 @@ mod tests {
             .map(|s| s.item.id().to_string())
             .collect();
         assert_eq!(before, after);
-    }
-
-    /// Selecting a cast target severs the watched session it replaces
-    /// (spec "Cast target is selected while a session is watched") but
-    /// sends no Cast hand-back: the owner performs the hand-off (D13).
-    #[test]
-    fn selecting_a_cast_target_severs_a_watched_session() {
-        let mut app = make_app_stub();
-        app.connected_session_id = Some("sess-1".to_string());
-        app.connected_session_state = Some(mbv_emby::test_support::make_session("tv", "mbv"));
-
-        let receiver = mbv_cast::discovery::CastReceiver {
-            id: "device-1".to_string(),
-            friendly_name: "Living Room".to_string(),
-            host: "192.168.0.5".to_string(),
-            port: 8009,
-        };
-        app.select_panel_target(PanelTarget::Cast(receiver));
-
-        assert!(app.connected_session_id.is_none());
-        assert!(app.connected_session_state.is_none());
     }
 }

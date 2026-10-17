@@ -21,7 +21,7 @@ impl App {
     /// Returns None if the local player is not active.
     /// Callers wrap these in [ ... ] with whatever surrounding style they need.
     pub(in crate::app) fn build_status_indicator_spans(&self) -> Option<Vec<Span<'static>>> {
-        let data = self.playback_indicator_target().indicator_data(self)?;
+        let data = crate::app::LocalPlaybackTarget::indicator_data(self)?;
         Some(indicators::indicator_spans(
             self.indicator_style,
             &data,
@@ -29,59 +29,57 @@ impl App {
         ))
     }
 
-    /// The label naming the cast receiver that is the owner's playback
-    /// output, per the last `CtrlEvent::PlaybackOutput` (design D13). Shared
-    /// by the status-bar remote pill and the queue header so both name the
-    /// receiver consistently; the owner's report carries the discovered
-    /// friendly name.
-    fn cast_target_label(&self) -> Option<String> {
+    /// The label naming the remote receiver that is the owner's playback
+    /// output, per the last `CtrlEvent::PlaybackOutput` (design D12/D13).
+    /// Shared by the status-bar remote pill and the queue header so both name
+    /// the output consistently; the owner's report carries the discovered or
+    /// device name. An Emby Session output names the Session device.
+    fn remote_output_label(&self) -> Option<String> {
         match &self.playback_output {
-            // A target marked disconnected must not read as connected: the
-            // pill falls back to the local label until the reconnect lands,
-            // so it never contradicts the header's "Cast: disconnected".
             Some(mbv_ctrl::OutputState::Cast {
-                connection: mbv_ctrl::CastConnection::Disconnected,
-                ..
-            }) => None,
-            Some(mbv_ctrl::OutputState::Cast { name, .. }) => Some(name.clone()),
-            _ => None,
+                connection, name, ..
+            }) => match connection {
+                // A target marked disconnected must not read as connected: the
+                // pill falls back to the local label until the reconnect lands,
+                // so it never contradicts the header's "Cast: disconnected".
+                mbv_ctrl::OutputConnection::Disconnected => None,
+                mbv_ctrl::OutputConnection::Connecting | mbv_ctrl::OutputConnection::Connected => {
+                    Some(name.clone())
+                }
+            },
+            Some(mbv_ctrl::OutputState::EmbySession {
+                connection, name, ..
+            }) => match connection {
+                mbv_ctrl::OutputConnection::Disconnected => None,
+                mbv_ctrl::OutputConnection::Connecting | mbv_ctrl::OutputConnection::Connected => {
+                    Some(name.clone())
+                }
+            },
+            Some(mbv_ctrl::OutputState::Local) | None => None,
         }
     }
 
-    /// Whether the remote pill shows its connected state: a cast receiver is
-    /// attached and live, or the remote slot names an attached session or direct route.
+    /// Whether the remote pill shows its connected state: a remote output
+    /// (Cast receiver or Emby Session) is attached and live, or the remote
+    /// slot names a direct route.
     fn remote_connected(&self, remote_state: RemoteSlotState) -> bool {
-        self.cast_target_label().is_some()
-            || matches!(
-                remote_state,
-                RemoteSlotState::AttachedSession | RemoteSlotState::DirectRemote
-            )
+        self.remote_output_label().is_some()
+            || matches!(remote_state, RemoteSlotState::DirectRemote)
     }
 
-    /// The remote pill label, gap included. An attached cast receiver names it
+    /// The remote pill label, gap included. An attached remote output names it
     /// first; otherwise the remote slot names it, and this machine's device
     /// name is the fallback. `or_else` leaves the slot unread while a receiver
     /// is attached.
     fn remote_label(&self, remote_state: RemoteSlotState, daemon_endpoint: &str) -> String {
         let gap = if self.use_nerd_fonts { " " } else { "  " };
-        let target = self.cast_target_label().or_else(|| match remote_state {
+        let target = self.remote_output_label().or_else(|| match remote_state {
             RemoteSlotState::LocalDaemon => None,
-            RemoteSlotState::AttachedSession => {
-                self.connected_session_state.as_ref().and_then(|session| {
-                    let device_name = session.device_name.trim();
-                    if device_name.is_empty() {
-                        let host = session.host.trim();
-                        (!host.is_empty()).then(|| host.to_string())
-                    } else {
-                        Some(device_name.to_string())
-                    }
-                })
-            }
             RemoteSlotState::DirectRemote => self
                 .active_route
                 .as_ref()
                 .map(|name| format!("route:{name}"))
-                .or_else(|| self.remote.direct_remote_label.clone())
+                .or_else(|| self.direct_remote_label.clone())
                 .or_else(|| daemon_endpoint_label(daemon_endpoint)),
         });
         match target {
@@ -139,14 +137,12 @@ impl App {
     }
 
     /// The playback target's host label plus whether it names a remote target
-    /// (a cast attachment, an attached session, or a direct-remote
-    /// route/label): the attached receiver's name, the connected session's
-    /// device name (falling back to its host), the direct-remote route/label,
-    /// or this machine's device name when playback is local — computed
-    /// together from one
-    /// `remote_slot_state()` resolution for callers (the queue header sync)
-    /// that need both every tick. Callers style the returned label and the
-    /// header row shows it verbatim.
+    /// (a cast attachment, an Emby Session output, or a direct-remote
+    /// route/label): the output's name, the direct-remote route/label, or
+    /// this machine's device name when playback is local -- computed together
+    /// from one `remote_slot_state()` resolution for callers (the queue header
+    /// sync) that need both every tick. Callers style the returned label and
+    /// the header row shows it verbatim.
     pub(in crate::app) fn playback_host_label_and_remote(&self) -> (String, bool) {
         let remote_state = self.remote_slot_state();
         let is_remote = self.remote_connected(remote_state);
@@ -228,38 +224,36 @@ impl App {
     }
 
     pub(in crate::app) fn mute_status_spans(&self) -> Option<Vec<Span<'static>>> {
-        self.playback_display_target()
-            .displayed_mute(self)
-            .then(|| {
-                vec![
-                    Span::styled(
-                        " ",
-                        Style::default().bg(mbv_theme::surface_colors(
-                            mbv_theme::Surface::StatusBarPill,
-                            false,
+        crate::app::LocalPlaybackTarget::displayed_mute(self).then(|| {
+            vec![
+                Span::styled(
+                    " ",
+                    Style::default().bg(mbv_theme::surface_colors(
+                        mbv_theme::Surface::StatusBarPill,
+                        false,
+                    )
+                    .fill),
+                ),
+                Span::styled(
+                    "muted",
+                    Style::default()
+                        .fg(mbv_theme::Role::StatusError.color())
+                        .bg(
+                            mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false)
+                                .fill,
                         )
-                        .fill),
-                    ),
-                    Span::styled(
-                        "muted",
-                        Style::default()
-                            .fg(mbv_theme::Role::StatusError.color())
-                            .bg(
-                                mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false)
-                                    .fill,
-                            )
-                            .add_modifier(Modifier::BOLD),
-                    ),
-                    Span::styled(
-                        " ",
-                        Style::default().bg(mbv_theme::surface_colors(
-                            mbv_theme::Surface::StatusBarPill,
-                            false,
-                        )
-                        .fill),
-                    ),
-                ]
-            })
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    " ",
+                    Style::default().bg(mbv_theme::surface_colors(
+                        mbv_theme::Surface::StatusBarPill,
+                        false,
+                    )
+                    .fill),
+                ),
+            ]
+        })
     }
 
     /// The prefix-armed pill (design D7, task 7.3): present only while
@@ -300,7 +294,7 @@ impl App {
     }
 
     pub(in crate::app) fn volume_status_spans(&self) -> Vec<Span<'static>> {
-        let volume = self.playback_display_target().displayed_volume(self);
+        let volume = crate::app::LocalPlaybackTarget::displayed_volume(self);
         // Speaker glyph reflects the volume state (0 / low / mid / high).
         let icon = if volume == 0 {
             "\u{1F507}"
@@ -500,7 +494,7 @@ mod tests {
             mbv_ctrl::OutputState::Cast {
                 receiver_id: "device-1".to_string(),
                 name: "Living Room".to_string(),
-                connection: mbv_ctrl::CastConnection::Connected,
+                connection: mbv_ctrl::OutputConnection::Connected,
             },
         ));
 
@@ -526,7 +520,7 @@ mod tests {
             mbv_ctrl::OutputState::Cast {
                 receiver_id: "device-1".to_string(),
                 name: "Living Room".to_string(),
-                connection: mbv_ctrl::CastConnection::Connected,
+                connection: mbv_ctrl::OutputConnection::Connected,
             },
         ));
 
@@ -547,7 +541,7 @@ mod tests {
             mbv_ctrl::OutputState::Cast {
                 receiver_id: "device-1".to_string(),
                 name: "Living Room".to_string(),
-                connection: mbv_ctrl::CastConnection::Disconnected,
+                connection: mbv_ctrl::OutputConnection::Disconnected,
             },
         ));
 

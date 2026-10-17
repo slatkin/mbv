@@ -11,14 +11,22 @@ use crate::ctrl::{CtrlSender, send_to};
 
 /// The cast side of `CtrlCmd::PlayerCmd` (design D4, row 5.3). Local
 /// forwards the command to the run unchanged; Cast routes through
-/// `route_cast_command` with the ctrl reply path for the rejections.
+/// `route_cast_command` with the ctrl reply path for the rejections; an Emby
+/// Session routes through its own table (emby-session-owner-output design D9,
+/// task 4.4), which refuses `SetSubtitlePrefs` through the same reply path.
 pub fn route_player_cmd(ctx: &mut crate::CtrlContext<'_>, cmd: mbv_ctrl::WireCommand) {
-    let PlaybackOutput::Cast(cast) = &mut ctx.owner.output else {
-        ctx.player
-            .send_command(mbv_ctrl::player::PlayerCommand::from(cmd));
-        return;
-    };
-    route_cast_command(cast, &cmd, Some(ctx.reply_tx));
+    match &mut ctx.owner.output {
+        PlaybackOutput::Cast(cast) => route_cast_command(cast, &cmd, Some(ctx.reply_tx)),
+        PlaybackOutput::EmbySession(session) => {
+            if let Err(reason) = crate::emby_session::command::route_wire_command(session, &cmd) {
+                send_to(ctx.reply_tx, &mbv_ctrl::CtrlEvent::CommandRejected(reason));
+            }
+        }
+        PlaybackOutput::Local => {
+            ctx.player
+                .send_command(mbv_ctrl::player::PlayerCommand::from(cmd));
+        }
+    }
 }
 
 /// The transport side of a tray/MPRIS `TransportCommand::Player` (design D4,
@@ -26,12 +34,38 @@ pub fn route_player_cmd(ctx: &mut crate::CtrlContext<'_>, cmd: mbv_ctrl::WireCom
 /// output a command with a wire form routes like the matching ctrl wire
 /// command; a local-only command (slot jumps, run playlist submission, the
 /// mpv next-up overlays) has no receiver counterpart and is a documented
-/// no-op — the canonical queue paths are output-agnostic.
+/// no-op — the canonical queue paths are output-agnostic. An Emby Session
+/// takes the same wire-form commands as its own output (design D9).
 pub fn route_transport_command(
     player: &mbv_player::Player,
     output: &mut super::PlaybackOutput,
     command: mbv_ctrl::player::PlayerCommand,
 ) {
+    if let PlaybackOutput::EmbySession(session) = output {
+        match mbv_ctrl::WireCommand::try_from_player_command(command) {
+            Ok(wire) => {
+                if let Err(reason) =
+                    crate::emby_session::command::route_wire_command(session, &wire)
+                {
+                    tracing::debug!(
+                        name: "emby_session.transport_command.refused",
+                        target: "emby_session",
+                        reason = %reason,
+                        "the transport path has no reply route; the refusal is logged"
+                    );
+                }
+            }
+            Err(command) => {
+                tracing::debug!(
+                    name: "emby_session.transport_command.ignored",
+                    target: "emby_session",
+                    command = ?command,
+                    "local-only player command has no Session counterpart"
+                );
+            }
+        }
+        return;
+    }
     let PlaybackOutput::Cast(cast) = output else {
         player.send_command(command);
         return;
@@ -49,13 +83,18 @@ pub fn route_transport_command(
     }
 }
 
-/// `PlaybackIntentAction::SetPaused` on a Cast output (row 5.3 correction:
+/// `PlaybackIntentAction::SetPaused` on a remote output (row 5.3 correction:
 /// spec "play, pause, next, previous, and stop from either Client act on
-/// that receiver"): the desired state translates to an explicit receiver
-/// pause or play — the intent carries the state, so no toggle is needed. The
-/// caller settles the guarded intent; the receiver's own pause change
-/// reports through the status poll (design D8), not through a run event.
+/// that receiver"): the desired state translates to an explicit receiver or
+/// Session pause or play — the intent carries the state, so no toggle is
+/// needed. The caller settles the guarded intent. A Cast output's own pause
+/// change reports through the status poll (design D8); a Session output's
+/// through its poll (emby-session-owner-output design D9).
 pub fn set_receiver_paused(output: &mut super::PlaybackOutput, paused: bool) {
+    if let PlaybackOutput::EmbySession(session) = output {
+        crate::emby_session::command::set_paused(session, paused);
+        return;
+    }
     let PlaybackOutput::Cast(cast) = output else {
         return;
     };

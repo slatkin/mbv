@@ -5,7 +5,6 @@ use super::{
     expire_pending_idle_queue_load, persist_stay_alive_owner_queue, reset_slot_jumps,
 };
 use mbv_ctrl::CtrlEvent;
-use mbv_ctrl::player::PlayerEvent;
 use mbv_emby::EmbyClient;
 use mbv_player::Player;
 use std::sync::mpsc;
@@ -87,6 +86,14 @@ pub(crate) struct DaemonLoop {
     /// The runtime's Cast connector, when it supplies one (cast-owner-output
     /// design D2). `None` keeps the Owner on local playback only.
     pub(super) cast_connector: Option<crate::CastConnector>,
+    /// Whether the runtime hosts an Emby Session output (emby-session-owner-output
+    /// design D2): the same hook the Hello advertises as the
+    /// `emby-session-output` capability, kept here so a selection can reject
+    /// when the output is off.
+    pub(super) emby_session_output: bool,
+    /// Builds the worker an Emby Session output owns (design D4). `None` builds
+    /// it from the owner's Emby client; tests substitute a recording fake.
+    pub(super) emby_session_worker: Option<crate::emby_session::EmbySessionWorkerFactory>,
 }
 
 impl DaemonLoop {
@@ -112,6 +119,7 @@ impl DaemonLoop {
         self.tray.poll(now, &self.owner_settings);
         self.pin_swap.poll(now);
         super::cast::tick_cast(self, now);
+        super::emby_session::poll::tick(self, now);
     }
 
     /// Idle work performed when no event arrived within the poll timeout.
@@ -139,23 +147,7 @@ impl DaemonLoop {
     /// once after the handler returns, instead of inline per mutation site.
     pub(super) fn handle_event(&mut self, ev: DaemonEvent) -> LoopFlow {
         let outcome = match ev {
-            DaemonEvent::Player(PlayerEvent::TrackChanged {
-                slot_id,
-                transition,
-            }) => self.handle_track_changed(slot_id, transition),
-            DaemonEvent::Player(PlayerEvent::NextUpThreshold {
-                series_id,
-                season,
-                episode,
-            }) => self.handle_next_up_threshold(series_id, season, episode),
-            DaemonEvent::Player(PlayerEvent::QueueNextUp { next_idx }) => {
-                self.handle_queue_next_up(next_idx)
-            }
-            DaemonEvent::Player(PlayerEvent::OutputStarted) => self.handle_output_started(),
-            DaemonEvent::Player(pe @ PlayerEvent::TrackCompleted { .. }) => {
-                self.handle_track_completed(pe)
-            }
-            DaemonEvent::Player(pe) => self.handle_player_event(pe),
+            DaemonEvent::Player(pe) => self.handle_player_observation(pe),
             DaemonEvent::Transport(command) => self.handle_transport(command),
             DaemonEvent::Ws { generation, event } => self.handle_ws_event(generation, event),
             DaemonEvent::QueueEnriched(items) => self.handle_queue_enriched(items),
@@ -217,6 +209,10 @@ impl DaemonLoop {
             }
             DaemonEvent::Cast(event) => {
                 super::cast::handle_cast_event(self, event);
+                EventOutcome::CONTINUE
+            }
+            DaemonEvent::EmbySession(event) => {
+                crate::emby_session::handle_event(self, event);
                 EventOutcome::CONTINUE
             }
             DaemonEvent::Shutdown => self.handle_shutdown(),

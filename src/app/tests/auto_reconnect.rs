@@ -33,3 +33,56 @@ fn new_remote_does_not_auto_reconnect_for_an_explicit_remote_daemon() {
 
     assert!(app.active_route.is_none());
 }
+
+/// emby-session-owner-output row 7.3, design D12, owner-playback-output spec
+/// "Saved record names a plain Session": launch auto-reconnect connects only
+/// when the found Session offers a direct endpoint. A saved plain-Session
+/// record selects no output and stays local. Guards commit 95a46f853 (restore
+/// only a direct endpoint at launch).
+#[test]
+fn saved_plain_session_record_stays_local_without_an_output_selection() {
+    use mbv_net::mock_http::MockHttp;
+
+    let _guard = crate::config::TestStateDirGuard::new();
+    let _ = crate::config::save_last_remote_connection(Some(
+        &crate::config::LastRemoteConnection::DirectSession {
+            device_name: "plain-tv".to_string(),
+        },
+    ));
+    let mut app = make_app_stub();
+    let command_rx = live_owner_channel(&mut app);
+    app.config.lock().unwrap().auto_reconnect = true;
+    app.config.lock().unwrap().server_url = "http://127.0.0.1:1".into();
+    let config = app.config.lock().unwrap().clone();
+    install_test_emby(&mut app, config);
+    let http = MockHttp::new();
+    http.respond(
+        200,
+        r#"[{"Id":"sess-1","DeviceId":"device-1","DeviceName":"plain-tv","Client":"Emby","UserName":"user"}]"#,
+    );
+    let client = app
+        .emby_runtime
+        .client
+        .as_ref()
+        .unwrap()
+        .lock()
+        .unwrap()
+        .clone()
+        .with_test_agent(http.agent());
+    app.emby_runtime = crate::app::state::service_runtime::EmbyRuntime::ready(std::sync::Arc::new(
+        std::sync::Mutex::new(client),
+    ));
+
+    app.try_auto_reconnect();
+
+    assert!(
+        !app.direct_remote_connected,
+        "a plain Session record connects no Direct remote control"
+    );
+    assert!(
+        command_rx
+            .try_iter()
+            .all(|command| !matches!(command, mbv_ctrl::CtrlCmd::SelectPlaybackOutput(_))),
+        "a plain Session record sends no output selection"
+    );
+}

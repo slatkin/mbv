@@ -478,6 +478,7 @@ mod tests {
             CtrlAudiobookshelfCapabilities::default(),
             false,
             false,
+            false,
             Some(SwapSurface::Terminal),
             CtrlConnectionRole::Client,
         );

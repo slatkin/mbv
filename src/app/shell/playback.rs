@@ -8,13 +8,14 @@ impl crate::app::App {
     pub(in crate::app) fn slotless_playback_title_parts(
         &self,
     ) -> Option<mbv_queue::PlaybackTitleParts> {
-        let session = self.connected_session_state.as_ref()?;
-        let title = session.now_playing.clone()?;
-        // An Emby session's now-playing payload names the show for an episode;
+        let now_playing = self.emby_session_now_playing()?;
+        let title = now_playing.name.clone();
+        // An Emby Session's now-playing payload names the show for an episode;
         // with it, the slotless path draws the same two-part title the local
-        // queue item draws (remote-session-overlay-parity, task 2.1).
-        let context = (session.now_playing_item_type.as_deref() == Some("Episode"))
-            .then(|| session.now_playing_series_name.clone())
+        // queue item draws (remote-session-overlay-parity, task 2.1;
+        // emby-session-owner-output task 7.2).
+        let context = (now_playing.item_type == "Episode")
+            .then(|| now_playing.series_name.clone())
             .flatten()
             .filter(|name| !name.trim().is_empty())
             .map(|text| mbv_queue::PlaybackTitlePart {
@@ -56,19 +57,16 @@ impl Model {
         let title_parts = active_item
             .map(|item| self.app.playback_title_parts(item))
             .or_else(|| slotless_title_parts.clone());
-        let title = if state.active {
-            active_item
-                .map(|item| item.title().to_string())
-                .or_else(|| slotless_title_parts.map(|parts| parts.title.text))
-        } else {
-            self.app
-                .connected_session_state
-                .as_ref()
-                .and_then(|session| session.now_playing.clone())
-        };
+        let title = state
+            .active
+            .then(|| {
+                active_item
+                    .map(|item| item.title().to_string())
+                    .or_else(|| slotless_title_parts.map(|parts| parts.title.text))
+            })
+            .flatten();
         let now_playing_title = title.map(|title| (title, palette::Role::PlaybackValueFg.color()));
-        let show_controls =
-            state.active || self.app.connected_session_id.is_some() || self.app.output_is_cast();
+        let show_controls = state.active || self.app.output_is_cast();
         let (prev_available, next_available) = self.app.transport_prev_next_available();
         PlaybackProjection {
             state,
@@ -92,7 +90,7 @@ impl Model {
             }),
             use_nerd_fonts: self.app.use_nerd_fonts,
             availability: TransportAvailability {
-                stop: self.app.connected_session_id.is_some() || state.active,
+                stop: state.active,
                 previous: prev_available,
                 next: next_available,
             },
@@ -128,14 +126,16 @@ impl Model {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app::tests::QueueViewTestExt;
     use mbv_ui_msg::Msg;
     use rstest::rstest;
     use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
-    /// A watched Emby session's now-playing episode draws the same two-part
-    /// title local playback draws when the payload names the show; every
-    /// payload without that fact keeps the one-part session-name title
-    /// (remote-session-overlay-parity, task 2.1).
+    /// The owner's Emby Session output presents an episode outside the local
+    /// queue; its now-playing payload draws the same two-part title local
+    /// playback draws when it names the show, and every payload without that
+    /// fact keeps the one-part title (remote-session-overlay-parity, task 2.1;
+    /// emby-session-owner-output task 7.2 reads the `OutputState` source).
     #[rstest]
     #[case::episode_with_series_name("Episode", Some("Show"), Some("Show"))]
     #[case::episode_without_series_name("Episode", None, None)]
@@ -145,13 +145,21 @@ mod tests {
         #[case] series_name: Option<&str>,
         #[case] expected_context: Option<&str>,
     ) {
-        let app = crate::app::tests::make_app_stub();
-        let mut session = mbv_emby::test_support::make_session("tv", "mbv");
-        session.now_playing = Some("Episode name".into());
-        session.now_playing_item_type = Some(item_type.to_string());
-        session.now_playing_series_name = series_name.map(str::to_string);
-        let mut app = app;
-        app.connected_session_state = Some(session);
+        let mut app = crate::app::tests::make_app_stub();
+        app.playback_output = Some(mbv_ctrl::OutputState::EmbySession {
+            device_id: "device-1".to_string(),
+            name: "Living Room TV".to_string(),
+            connection: mbv_ctrl::OutputConnection::Connected,
+            audio_only: false,
+            now_playing: Some(mbv_ctrl::SessionNowPlaying {
+                item_id: "device-episode".to_string(),
+                item_type: item_type.to_string(),
+                name: "Episode name".to_string(),
+                series_id: Some("device-series".to_string()),
+                series_name: series_name.map(str::to_string),
+                logo_tag: None,
+            }),
+        });
 
         let parts = app.slotless_playback_title_parts().expect("title present");
 
@@ -160,6 +168,52 @@ mod tests {
             parts.context.map(|part| part.text).as_deref(),
             expected_context
         );
+    }
+
+    /// Review r7: foreign content on the owner's Emby Session output must
+    /// present its own title, not the owner's loaded queue slot. The Owner's
+    /// status still carries that slot's index; the projection must treat the
+    /// output as slotless whenever it presents `now_playing`. Guards commit
+    /// bc7690c38 (present foreign Emby Session content as slotless).
+    #[test]
+    fn foreign_emby_session_content_presents_its_own_transport_title() {
+        use mbv_emby_model::test_support::make_item;
+
+        let mut app = crate::app::tests::make_app_stub();
+        let mut loaded = make_item("Loaded Slot", "Movie");
+        loaded.id = "loaded-slot".into();
+        app.local_view.adopt_items(vec![loaded], 0);
+        app.player.update_status(|status| {
+            status.active = true;
+            status.current_idx = 0;
+            status.queue_len = 1;
+        });
+        app.playback_output = Some(mbv_ctrl::OutputState::EmbySession {
+            device_id: "device-1".to_string(),
+            name: "Living Room TV".to_string(),
+            connection: mbv_ctrl::OutputConnection::Connected,
+            audio_only: false,
+            now_playing: Some(mbv_ctrl::SessionNowPlaying {
+                item_id: "foreign-item".to_string(),
+                item_type: "Movie".to_string(),
+                name: "Foreign Item".to_string(),
+                series_id: None,
+                series_name: None,
+                logo_tag: None,
+            }),
+        });
+
+        let mut model = Model::new(app);
+        let projection = model.transport_projection();
+
+        assert_eq!(
+            projection
+                .title_parts
+                .as_ref()
+                .map(|parts| parts.title.text.as_str()),
+            Some("Foreign Item")
+        );
+        assert!(projection.state.active_idx.is_none());
     }
 
     #[test]

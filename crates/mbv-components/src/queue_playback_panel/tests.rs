@@ -1,21 +1,38 @@
 use super::*;
+use crate::mouse::seekbar::SEEKBAR_SCRUB_INTERVAL;
 use mbv_ui_model::playback::NowPlayingTitleSite;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use tuirealm::event::KeyModifiers;
 
-/// Pointer input resolves against the panel's retained geometry: play/pause,
-/// a fractional seek, and prev/next each resolve to their own intent, while
-/// the time labels flanking the bar span resolve nothing.
-#[test]
-fn transport_clicks_resolve_against_retained_geometry() {
+fn mouse(kind: MouseEventKind, column: u16, row: u16) -> Event<UserEvent> {
+    Event::Mouse(MouseEvent {
+        kind,
+        column,
+        row,
+        modifiers: KeyModifiers::NONE,
+    })
+}
+
+/// A left press at the cell.
+fn click(column: u16, row: u16) -> Event<UserEvent> {
+    mouse(MouseEventKind::Down(MouseButton::Left), column, row)
+}
+
+/// A left-button motion at the cell: the second half of a drag gesture.
+fn motion(column: u16, row: u16) -> Event<UserEvent> {
+    mouse(MouseEventKind::Drag(MouseButton::Left), column, row)
+}
+
+/// A panel with a live transport painted into a 40x4 band, so the retained
+/// hit geometry is the geometry this frame painted. 37.5s of 5:00 lands
+/// mid-cell: the leading partial cell is a seek target like any other column.
+fn painted_panel() -> QueuePlaybackPanel {
     let mut panel = QueuePlaybackPanel::new();
     panel.set_header(NowPlayingStatus::Playing, String::new(), false);
     panel.transport.now_playing_title =
         Some(("Example".into(), palette::Role::PlaybackValueFg.color()));
     panel.transport.show_controls = true;
-    // 37.5s of 5:00 lands mid-cell: the leading partial cell is a seek target
-    // like any other column.
     panel.transport.state.position_ticks = 375_000_000;
     panel.transport.state.runtime_ticks = 300 * mbv_emby_model::TICKS_PER_SECOND;
     panel.set_transport_area(Some(Rect::new(0, 2, 40, 4)));
@@ -23,21 +40,27 @@ fn transport_clicks_resolve_against_retained_geometry() {
     terminal
         .draw(|frame| panel.view(frame, Rect::new(0, 0, 40, 8)))
         .unwrap();
+    panel
+}
 
+/// Pointer input resolves against the panel's retained geometry: play/pause,
+/// a fractional seek, and prev/next each resolve to their own intent, while
+/// the time labels flanking the bar span resolve nothing.
+#[test]
+fn transport_clicks_resolve_against_retained_geometry() {
+    let mut panel = painted_panel();
     let (play_pause, seekbar) = panel.transport_hits();
-    let click = |column: u16, row: u16| {
-        Event::Mouse(MouseEvent {
-            kind: MouseEventKind::Down(MouseButton::Left),
-            column,
-            row,
-            modifiers: KeyModifiers::NONE,
-        })
-    };
     assert!(matches!(
         panel.on(&click(play_pause.x + 1, play_pause.y)),
         Some(Msg::Playback(PlaybackRequest::TogglePlayPause))
     ));
     let partial_column = seekbar.x + 3;
+    // The bar needs a double-click: the press that opens the pair resolves
+    // nothing, so a stray single click cannot jump the position.
+    assert!(
+        panel.on(&click(partial_column, seekbar.y)).is_none(),
+        "the first press of a double-click resolves no seek"
+    );
     assert!(matches!(
         panel.on(&click(partial_column, seekbar.y)),
         Some(Msg::Playback(PlaybackRequest::SeekTo(f)))
@@ -65,6 +88,43 @@ fn transport_clicks_resolve_against_retained_geometry() {
     // A collapsed panel (no transport painted) resolves nothing.
     panel.set_transport_area(None);
     assert!(panel.on(&click(5, 4)).is_none());
+}
+
+/// A seekbar scrub admits one seek per throttle interval, and only for a
+/// drag that anchored inside the bar span: a drag that merely crosses the
+/// bar is not a scrub of it. The throttle records the outcome of the interval
+/// passing, so the test never sleeps.
+#[test]
+fn seekbar_scrub_needs_an_in_bar_anchor_and_one_seek_per_interval() {
+    let mut panel = painted_panel();
+    let (_, seekbar) = panel.transport_hits();
+    let drag = |panel: &mut QueuePlaybackPanel, from: u16, to: u16| {
+        // The press arms the drag anchor and resolves nothing on the bar.
+        let _ = panel.on(&click(from, seekbar.y));
+        panel.on(&motion(to, seekbar.y))
+    };
+
+    let target = seekbar.x + seekbar.width / 2;
+    assert!(
+        matches!(
+            drag(&mut panel, seekbar.x, target),
+            Some(Msg::Playback(PlaybackRequest::SeekTo(f))) if (f - 0.5).abs() < 1e-6
+        ),
+        "an in-bar drag scrubs to the pointer column"
+    );
+    assert!(
+        drag(&mut panel, seekbar.x + 1, target + 1).is_none(),
+        "a second scrub inside the interval is throttled"
+    );
+    panel.scrub_at = Instant::now().checked_sub(SEEKBAR_SCRUB_INTERVAL);
+    assert!(
+        drag(&mut panel, seekbar.x + 2, target + 1).is_some(),
+        "a scrub after the interval is admitted again"
+    );
+    assert!(
+        drag(&mut panel, seekbar.x - 1, target).is_none(),
+        "a drag that anchored outside the bar never scrubs"
+    );
 }
 
 /// The visual slot's right-click gesture: the panel reports the image anchor

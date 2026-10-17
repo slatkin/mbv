@@ -26,15 +26,6 @@ fn app_stub_starts_with_no_active_library_route() {
 }
 
 #[test]
-fn remote_slot_state_is_attached_session_when_connected_to_remote_session() {
-    let mut app = make_app_stub();
-    app.connected_session_id = Some("session-1".into());
-
-    assert_eq!(app.remote_slot_state(), RemoteSlotState::AttachedSession);
-    assert!(app.can_disconnect_remote());
-}
-
-#[test]
 fn remote_slot_state_direct_remote_display_does_not_imply_sessions_panel_disconnect() {
     let app = make_remote_app_stub(make_items(2), make_items(3));
 

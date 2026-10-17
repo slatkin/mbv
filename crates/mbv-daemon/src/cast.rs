@@ -1,7 +1,8 @@
-//! The Owner's playback output: local playback or one Cast receiver
-//! (cast-owner-output design D1/D2/D3). The Owner holds exactly one output;
-//! the Cast side owns the worker sender, the receiver identity, and the
-//! connection state, and every receiver call runs on the Cast worker.
+//! The Cast receiver as the Owner's playback output (cast-owner-output
+//! design D1/D2/D3). The Owner holds exactly one output, and the enum that
+//! names it lives in `output` (emby-session-owner-output design D1); the Cast
+//! side owns the worker sender, the receiver identity, and the connection
+//! state, and every receiver call runs on the Cast worker.
 //!
 //! The module splits along responsibility:
 //! - `connect`: output selection, connect and reconnect outcomes, and the
@@ -14,13 +15,17 @@ use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 use mbv_cast::{CastJob, CastReceiver, CastStatus};
-use mbv_ctrl::{CtrlEvent, OutputState, PlaybackGeneration};
+use mbv_ctrl::{CtrlEvent, PlaybackGeneration};
 use mbv_queue::QueueSlotId;
 
 use crate::CtrlClientId;
 
 use super::DaemonLoop;
 use super::core::DaemonEvent;
+
+/// The output enum and its ctrl projection live in `output` (emby-session-owner-output
+/// design D1); the Cast modules and the crate's tests name them through here.
+pub(crate) use super::output::{PlaybackOutput, output_state};
 
 pub(crate) mod advance;
 mod command;
@@ -29,9 +34,19 @@ mod feed_events;
 pub(crate) mod progress;
 mod status;
 
+/// The Feed side of the shared advance (emby-session-owner-output design D6):
+/// whether an ended slot needs a `TrackCompleted` event, and that event's
+/// emission. Both stay on the Cast side because Feed slots never pass Emby
+/// Session admission.
+pub(super) use feed_events::{emit_natural_end_track_completed, slot_is_feed};
+
 pub(super) use command::{route_player_cmd, route_transport_command, set_receiver_paused};
+pub(crate) use connect::broadcast_output_change;
 pub use connect::{CastConnectOutcome, CastConnectRequest, CastConnector, local_cast_connector};
 pub(super) use connect::{PendingCastConnect, handle_select_playback_output};
+/// Re-exported for `output::handoff`, which re-derives the presented status of
+/// whichever remote output is current before capturing a hand-off.
+pub(super) use status::refresh_presentation;
 
 /// The keep-alive cadence (design D8, task 3.3). The receiver terminates a
 /// sender whose PONGs lapse in well under ten seconds, and the 7s poll sat
@@ -48,17 +63,6 @@ pub(crate) const CAST_STATUS_POLL_INTERVAL: Duration = Duration::from_secs(7);
 /// worker thread forever; the reconnect is the recovery.
 pub(crate) const CAST_JOB_ANSWER_BOUND: Duration = Duration::from_secs(20);
 
-/// The single playback output a Player owner plays through (design D1): the
-/// type system makes two active outputs unrepresentable. The Cast side is
-/// boxed: it carries the worker sender, the last status, and the loaded item
-/// while `Local` carries nothing.
-#[derive(Default)]
-pub(crate) enum PlaybackOutput {
-    #[default]
-    Local,
-    Cast(Box<CastOutput>),
-}
-
 /// One Cast receiver as the Owner's output (design D1). The worker sender is
 /// the only path to the receiver: the `CastClient` itself lives on the worker
 /// thread and is never `Send`. `last_status` is the most recent poll result;
@@ -72,8 +76,12 @@ pub(crate) struct CastOutput {
     /// The owner's event sink: a receiver command the worker could not apply
     /// returns through it as `CastOwnerEvent::CommandFailed`.
     events: mpsc::Sender<DaemonEvent>,
-    receiver: CastReceiver,
-    connection: mbv_ctrl::CastConnection,
+    /// The receiver this output drives. `pub(super)` so `output::output_state`
+    /// projects the ctrl state from it.
+    pub(super) receiver: CastReceiver,
+    /// The connection the polls report. `pub(super)` so `output::output_state`
+    /// projects the ctrl state from it.
+    pub(super) connection: mbv_ctrl::OutputConnection,
     last_status: Option<CastStatus>,
     status_at: Option<Instant>,
     /// The item the receiver was told to play. `pub(super)` so the crate's
@@ -97,9 +105,11 @@ pub(crate) struct CastOutput {
     reconnecting: bool,
     /// The advance a natural end started and that uncastable step targets
     /// may still be stepping through (design D7, row 6.2); `None` when the
-    /// output has no advance under way. `pub(super)` so the crate's resolve
-    /// handler can end it with the step's load.
-    pub(super) advance: Option<advance::CastAdvance>,
+    /// output has no advance under way. The state machine is shared with the
+    /// Emby Session output (`output/advance`, emby-session-owner-output design
+    /// D6). `pub(super)` so the crate's resolve handler can end it with the
+    /// step's load.
+    pub(super) advance: Option<crate::output::advance::OutputAdvance>,
     /// A seek was submitted for the loaded item and no receiver status
     /// issued after it has presented the item yet (design D9): the Feed
     /// `OutputStarted` fires when such a status settles the seek. The value
@@ -177,18 +187,6 @@ impl std::fmt::Debug for CastOutput {
                 &self.pending_handoff_load.as_ref().map(|load| load.slot),
             )
             .finish()
-    }
-}
-
-/// The ctrl `OutputState` an output projects (design D3).
-pub(crate) fn output_state(output: &PlaybackOutput) -> OutputState {
-    match output {
-        PlaybackOutput::Local => OutputState::Local,
-        PlaybackOutput::Cast(cast) => OutputState::Cast {
-            receiver_id: cast.receiver.id.clone(),
-            name: cast.receiver.friendly_name.clone(),
-            connection: cast.connection,
-        },
     }
 }
 
@@ -375,21 +373,22 @@ pub(super) fn dispatch_cast_load(
     true
 }
 
-/// Expires the in-flight transition a failed Cast load or resolve belonged to
-/// (design D5, row 5.2), dispatching a queued transition the expiry promotes.
-/// The caller reports the failure; this helper owns the gate and the publish.
-/// Returns whether a queued transition was promoted, so the caller can tell a
-/// user takeover from an expiry that left the queue to the caller (design
-/// D7's step-over).
-pub(super) fn expire_cast_transition(ctx: &mut super::core::DaemonOwnerContext<'_>) -> bool {
+/// Expires the in-flight transition a failed remote load or resolve belonged
+/// to (cast-owner-output design D5 row 5.2, emby-session-owner-output design
+/// D7), dispatching a queued transition the expiry promotes. The caller
+/// reports the failure; this helper owns the gate and the publish. Returns
+/// whether a queued transition was promoted, so the caller can tell a user
+/// takeover from an expiry that left the queue to the caller (design D7's
+/// step-over).
+pub(super) fn expire_remote_transition(ctx: &mut super::core::DaemonOwnerContext<'_>) -> bool {
     if let Some((expired, dispatch_next)) = ctx.owner.core.transitions.expire_now() {
         tracing::info!(
-            name: "daemon.cast_transition.expired",
+            name: "daemon.transition.expired",
             target: "transition",
             request = %expired.request_id,
             slot = ?expired.target,
             dispatch_next = dispatch_next.is_some(),
-            "the failed cast load expired its transition"
+            "the failed remote load expired its transition"
         );
         // The expiry abandons the guarded intent that drove the transition,
         // mirroring `expire_and_redispatch`: without the rejection the intent
@@ -438,17 +437,13 @@ pub(super) fn expire_cast_transition(ctx: &mut super::core::DaemonOwnerContext<'
     false
 }
 
-/// Reports a failed Cast resolve to its origin (row 5.1): the item and the
-/// reason reach the ctrl client that issued the play or jump, and a current
-/// guarded play intent keyed to the same request is rejected so it cannot
-/// wedge the guarded protocol.
-pub(super) fn report_resolve_failure(
+/// Rejects the current guarded play intent when it is keyed to `failed`, so a
+/// failed load cannot wedge the guarded protocol. Shared by the Cast resolve
+/// failure and the Emby Session admission failure.
+pub(crate) fn reject_current_intent(
     ctx: &mut super::core::DaemonOwnerContext<'_>,
     failed: &mbv_player::transition::Transition,
-    origin: Option<CtrlClientId>,
-    uncastable: &crate::cast_resolve::Uncastable,
 ) {
-    let report = format!("{} ({})", uncastable.item, uncastable.reason);
     if let Some((connection_id, request_id, generation)) = ctx
         .owner
         .intents
@@ -476,6 +471,20 @@ pub(super) fn report_resolve_failure(
             .unwrap()
             .send_to_client(connection_id, &CtrlEvent::PlaybackIntent(event));
     }
+}
+
+/// Reports a failed Cast resolve to its origin (row 5.1): the item and the
+/// reason reach the ctrl client that issued the play or jump, and a current
+/// guarded play intent keyed to the same request is rejected so it cannot
+/// wedge the guarded protocol.
+pub(super) fn report_resolve_failure(
+    ctx: &mut super::core::DaemonOwnerContext<'_>,
+    failed: &mbv_player::transition::Transition,
+    origin: Option<CtrlClientId>,
+    uncastable: &crate::cast_resolve::Uncastable,
+) {
+    let report = format!("{} ({})", uncastable.item, uncastable.reason);
+    reject_current_intent(ctx, failed);
     if let Some(connection_id) = origin {
         ctx.ctrl_clients
             .lock()
@@ -541,6 +550,31 @@ pub(super) fn stop_active_output(
             );
             *player.status.lock().unwrap() = presented;
         }
+        // An Emby Session's stop sends the device `transport("Stop")` only
+        // while it plays the loaded item (emby-session-owner-output design
+        // D9/D11, task 6.2); content the Owner did not load is left playing.
+        // Whatever happened, the loaded item and the end it may have started
+        // are gone, so a stopped output advances nothing.
+        PlaybackOutput::EmbySession(session) => {
+            let stopped = crate::emby_session::command::stop_loaded_item(session);
+            session.loaded = None;
+            session.advance = None;
+            session.pending_pause = false;
+            if stopped {
+                // The stopped item's observation would present it as foreign
+                // playback until the next poll (the same rule the Cast stop
+                // applies to its last report).
+                session.last_observation = None;
+                session.observed_at = None;
+            }
+            // The stop presents no active playback (the same rule the Cast
+            // arm applies): with the loaded item gone the Owner presents
+            // nothing until the next observation reports what the device
+            // does.
+            let base = player.status.lock().unwrap().clone();
+            let presented = crate::output::not_presenting(&base, queue);
+            *player.status.lock().unwrap() = presented;
+        }
     }
 }
 
@@ -569,7 +603,7 @@ fn handle_load_failed(daemon: &mut DaemonLoop, slot: QueueSlotId, error: &str) {
     }
     status::refresh_presentation(daemon, Instant::now());
     let mut ctx = owner_context(daemon);
-    expire_cast_transition(&mut ctx);
+    expire_remote_transition(&mut ctx);
 }
 
 /// The receiver refused a transport command (spec "Command is not supported by
@@ -615,7 +649,7 @@ pub(super) fn tick_cast(daemon: &mut DaemonLoop, now: Instant) {
         let PlaybackOutput::Cast(cast) = &mut daemon.owner.output else {
             return;
         };
-        if matches!(cast.connection, mbv_ctrl::CastConnection::Connected) {
+        if matches!(cast.connection, mbv_ctrl::OutputConnection::Connected) {
             connected = true;
             let merged_tx = daemon.merged_tx.clone();
             if now.duration_since(cast.last_keep_alive) >= CAST_KEEP_ALIVE_INTERVAL {

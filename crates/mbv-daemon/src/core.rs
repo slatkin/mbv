@@ -24,7 +24,7 @@ mod transition_dispatch;
 
 pub(super) use transition_dispatch::{
     dispatch_slot_jump, expire_and_redispatch, reset_slot_jumps, send_jump_or_cold_start,
-    settle_and_redispatch, take_promoted_origin,
+    settle_and_redispatch, settle_remote_transition, take_promoted_origin,
 };
 
 pub(super) fn bind_ctrl_listener() -> Option<UnixListener> {
@@ -109,6 +109,9 @@ pub(super) enum DaemonEvent {
     /// output design D2/D8): connect and reconnect outcomes, and status-poll
     /// results from the Cast timers on the daemon tick.
     Cast(crate::cast::CastOwnerEvent),
+    /// One Emby Session worker outcome (emby-session-owner-output design D4):
+    /// poll results and, in later rows, load and transport outcomes.
+    EmbySession(crate::emby_session::EmbySessionEvent),
     Shutdown,
 }
 
@@ -402,10 +405,15 @@ pub(super) struct DaemonPlayerOwner {
     /// together.
     pub(super) queued_transition_origin: Option<(PlaybackRequestId, CtrlClientId)>,
     /// The Owner's single active playback output (cast-owner-output design
-    /// D1): local playback, or one Cast receiver. Starts and resets to Local.
-    pub(super) output: crate::cast::PlaybackOutput,
+    /// D1, emby-session-owner-output design D1): local playback, one Cast
+    /// receiver, or one Emby Session. Starts and resets to Local.
+    pub(super) output: crate::output::PlaybackOutput,
     /// The Cast selection waiting for its worker to connect (task 3.2).
     pub(super) pending_cast_connect: Option<crate::cast::PendingCastConnect>,
+    /// The Emby Session selection waiting for its worker's device lookup
+    /// (emby-session-owner-output task 3.2).
+    pub(super) pending_emby_session_select:
+        Option<crate::emby_session::connect::PendingEmbySessionSelect>,
     /// The Cast source resolve in flight for the output's next load (task
     /// 4.2). Its outcome re-enters through `CastOwnerEvent::Resolved` and is
     /// matched against it by slot and transition generation.
@@ -524,6 +532,11 @@ pub struct DaemonRuntimeHooks {
     /// Owner on local playback only and hides the `playback-output`
     /// capability from the Hello.
     pub cast_connector: Option<crate::cast::CastConnector>,
+    /// Whether this runtime can host an Emby Session output
+    /// (emby-session-owner-output design D2): the Local daemon sets it,
+    /// `mbvd` does not. It gates the `emby-session-output` capability in the
+    /// Hello and the Emby Session arms of the output selection.
+    pub emby_session_output: bool,
 }
 
 impl std::fmt::Debug for DaemonRuntimeHooks {
@@ -535,6 +548,7 @@ impl std::fmt::Debug for DaemonRuntimeHooks {
             .field("swap_command", &"<callback>")
             .field("notify", &"<callback>")
             .field("cast_connector", &self.cast_connector.is_some())
+            .field("emby_session_output", &self.emby_session_output)
             .finish()
     }
 }

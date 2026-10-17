@@ -1,6 +1,6 @@
 use super::*;
 use crate::app::tests::{make_app_stub, make_remote_app_stub};
-use crate::app::{LibEvent, PlaylistEvent, QueueScope};
+use crate::app::{LibEvent, PlaylistEvent};
 use crossterm::event::KeyModifiers;
 
 fn key(code: KeyCode) -> KeyChord {
@@ -33,39 +33,29 @@ fn focus_panel_keeps_the_card_checkpoint() {
 fn o_opens_an_idle_feed_link_only_when_available() {
     let o = key(KeyCode::Char('o'));
     let context =
-        |player_active, has_connected_session, playback_panel_present_idle, link_available| {
-            IdleFeedLinkContext {
-                player_active,
-                has_connected_session,
-                playback_panel_present_idle,
-                link_available,
-            }
+        |player_active, playback_panel_present_idle, link_available| IdleFeedLinkContext {
+            player_active,
+            playback_panel_present_idle,
+            link_available,
         };
     assert_eq!(
-        idle_feed_command_for_key(o, &context(false, false, false, true)),
+        idle_feed_command_for_key(o, &context(false, false, true)),
         Some(Command::OpenIdleFeedLink)
     );
     assert_eq!(
-        idle_feed_command_for_key(o, &context(true, false, false, true)),
+        idle_feed_command_for_key(o, &context(true, false, true)),
         None
     );
     assert_eq!(
-        idle_feed_command_for_key(o, &context(false, true, false, true)),
+        idle_feed_command_for_key(o, &context(false, false, false)),
         None
     );
     assert_eq!(
-        idle_feed_command_for_key(o, &context(false, false, false, false)),
+        idle_feed_command_for_key(o, &context(false, true, true)),
         None
     );
     assert_eq!(
-        idle_feed_command_for_key(o, &context(false, false, true, true)),
-        None
-    );
-    assert_eq!(
-        idle_feed_command_for_key(
-            key_ctrl(KeyCode::Char('o')),
-            &context(false, false, false, true)
-        ),
+        idle_feed_command_for_key(key_ctrl(KeyCode::Char('o')), &context(false, false, true)),
         None
     );
 }
@@ -121,60 +111,12 @@ fn dispatch_toggle_mute_flips_state_and_persists() {
     assert!(!app.mute_on);
 }
 
-#[test]
-fn dispatch_toggle_mute_while_attached_to_session_mutes_the_session_not_local() {
-    use mbv_emby::test_support::make_session;
-
-    let mut app = make_app_stub();
-    app.connected_session_id = Some("session-1".into());
-    let mut sess = make_session("remote-host", "Emby");
-    sess.muted = false;
-    app.connected_session_state = Some(sess);
-
-    app.dispatch(&Command::ToggleMute);
-
-    assert!(
-        app.connected_session_state.as_ref().unwrap().muted,
-        "pressing mute while attached to a session must mute that session \
-         (optimistically, before the network round-trip completes)"
-    );
-    assert!(
-        !app.mute_on,
-        "the local mute preference must not change while attached to a session"
-    );
-}
-
 // ── dispatch: QueuePlayCursor (issue #134) ───────────────────────────────
 // Shared by the queue tab's `Enter` key and a double-click on a queue row
 // (`handle_mouse`); see the `Command::QueuePlayCursor` doc comment.
 
 use crate::app::tests::make_items;
 use mbv_emby_model::test_support::make_item;
-
-fn set_local_queue(app: &mut crate::app::App, items: Vec<mbv_emby_model::EmbyItem>, cursor: usize) {
-    app.local_view.adopt_items(items, cursor);
-}
-
-#[test]
-fn queue_play_cursor_with_direct_remote_switches_to_remote_scope() {
-    let mut app = make_remote_app_stub(make_items(2), make_items(3));
-    set_local_queue(&mut app, make_items(2), 1);
-    app.set_queue_scope(QueueScope::Local);
-    app.connected_session_id = Some("session-1".into());
-
-    app.dispatch(&Command::QueuePlayCursor(1));
-
-    assert!(
-        app.status.contains("Requesting playback"),
-        "expected a remote-handoff status flash, got {:?}",
-        app.status
-    );
-    assert_eq!(
-        app.viewed_queue_scope(),
-        QueueScope::Remote,
-        "queue scope should switch to Remote when Direct remote control is active"
-    );
-}
 
 #[test]
 fn play_item_on_disconnected_remote_shows_connection_lost_not_requesting() {

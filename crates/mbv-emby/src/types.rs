@@ -75,6 +75,9 @@ fn device_id_in(data_home: &std::path::Path) -> String {
 #[derive(Debug, Clone)]
 pub struct SessionInfo {
     pub id: String,
+    /// The Emby device identity of the Session. It outlives the session id,
+    /// which changes when the device app restarts.
+    pub device_id: String,
     pub device_name: String,
     pub client: String,
     pub user_name: String,

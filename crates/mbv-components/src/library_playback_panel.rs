@@ -5,7 +5,10 @@
 //! the tab bar and the library: no header row, no visual slot) while the
 //! arrangement decides what the transport shows at the panel's width, the
 //! same arrangement the Queue playback panel's queue-column transport calls.
-//! Transport hit geometry is the panel's own retained paint state.
+//! Transport hit geometry is the panel's own retained paint state. A transport
+//! glyph resolves on a single press; the seekbar seeks on a double-click and
+//! scrubs on a left-drag anchored inside its bar, recognized by the panel's
+//! own `MouseGestureState`.
 //!
 //! `PlaybackProjection` — the shared transport projection both playback
 //! panels consume — is also defined here.
@@ -22,6 +25,8 @@ use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEven
 use tuirealm::props::{AttrValue, Attribute, Props, QueryResult};
 use tuirealm::state::State;
 
+use crate::mouse::gesture::{MouseGesture, MouseGestureState};
+use crate::mouse::seekbar::{scrub_fraction, seek_fraction};
 use mbv_queue::PlaybackTitleParts;
 use mbv_render::PlaybackStripAreas;
 use mbv_render::arrangements::chrome::PLAYER_BOX_HEIGHT;
@@ -64,6 +69,13 @@ pub struct LibraryPlaybackPanel {
     next_area: Rect,
     prev_area: Rect,
     seekbar_area: Rect,
+    /// Panel-local pointer recognition (ADR 0024, design.md D3): the
+    /// double-click window that separates a transport glyph's single press
+    /// from a seekbar seek, and the drag anchor a scrub needs.
+    mouse_gestures: MouseGestureState,
+    /// The last admitted seekbar scrub; `None` admits the next one. Set only
+    /// by an admitted scrub, so the throttle measures real scrubs.
+    scrub_at: Option<Instant>,
     marquee_text: String,
     marquee_started_at: Instant,
 }
@@ -93,6 +105,8 @@ impl LibraryPlaybackPanel {
             next_area: Rect::default(),
             prev_area: Rect::default(),
             seekbar_area: Rect::default(),
+            mouse_gestures: MouseGestureState::new(),
+            scrub_at: None,
             marquee_text: String::new(),
             marquee_started_at: Instant::now(),
         }
@@ -153,7 +167,14 @@ impl LibraryPlaybackPanel {
         Some(Msg::Playback(request))
     }
 
-    fn mouse(&self, event: tuirealm::event::MouseEvent) -> Option<Msg> {
+    /// Resolve one pointer event. The transport glyphs act on a single
+    /// press; the seekbar needs a recognized double-click, and a left-drag
+    /// anchored inside the bar scrubs it.
+    fn mouse(&mut self, event: tuirealm::event::MouseEvent) -> Option<Msg> {
+        // Every event reaches the recognizer, the ignored ones included: the
+        // first press of a pair must be remembered for the second to be a
+        // double-click, and that press arms the drag anchor.
+        let gesture = self.mouse_gestures.recognize(event);
         let point = (event.column, event.row).into();
         match event.kind {
             MouseEventKind::Down(MouseButton::Left) if self.play_pause_area.contains(point) => {
@@ -174,15 +195,36 @@ impl LibraryPlaybackPanel {
             {
                 Some(Msg::Playback(PlaybackRequest::Next))
             }
+            // A single press on the bar resolves nothing: only the second
+            // press of a pair is a seek, so a stray click cannot jump the
+            // position. The transport arms above keep the raw press because
+            // that second press recognizes as a double-click, not a click.
             MouseEventKind::Down(MouseButton::Left)
-                if self.seekbar_area.contains(point) && self.seekbar_area.width > 0 =>
+                if self.seekbar_area.width > 0
+                    && self.seekbar_area.contains(point)
+                    && matches!(gesture, Some(MouseGesture::DoubleClick(_))) =>
             {
-                let fraction = f64::from(event.column.saturating_sub(self.seekbar_area.x))
-                    / f64::from(self.seekbar_area.width);
-                Some(Msg::Playback(PlaybackRequest::SeekTo(fraction)))
+                self.seek_intent(event.column)
             }
+            MouseEventKind::Drag(MouseButton::Left) => self.scrub(gesture),
             _ => None,
         }
+    }
+
+    /// The seek intent a column resolves: its fraction of the painted bar
+    /// span. `None` when the panel painted no bar.
+    fn seek_intent(&self, column: u16) -> Option<Msg> {
+        seek_fraction(self.seekbar_area, column)
+            .map(|fraction| Msg::Playback(PlaybackRequest::SeekTo(fraction)))
+    }
+
+    /// Scrub the bar for one recognized left-drag motion. The drag must have
+    /// anchored inside the bar span and the pointer must still be over it —
+    /// a drag that merely crossed the bar is not a scrub of this bar.
+    /// Admitted at most once per `SEEKBAR_SCRUB_INTERVAL`.
+    fn scrub(&mut self, gesture: Option<MouseGesture>) -> Option<Msg> {
+        scrub_fraction(self.seekbar_area, &mut self.scrub_at, gesture)
+            .map(|fraction| Msg::Playback(PlaybackRequest::SeekTo(fraction)))
     }
 }
 
@@ -450,9 +492,15 @@ mod tests {
     }
 
     #[test]
-    fn seekbar_click_resolves_a_fraction_against_the_painted_seekbar_area() {
+    fn seekbar_double_click_resolves_a_fraction_against_the_painted_seekbar_area() {
         let mut panel = painted_panel();
-        // seekbar_area == panel row: x 10, width 40. Column 30 -> 0.5.
+        // seekbar_area == panel row: x 10, width 40. Column 30 -> 0.5. The
+        // press that opens the pair resolves nothing, so a stray single click
+        // cannot jump the position.
+        assert!(
+            panel.on(&click(30, 5)).is_none(),
+            "the first press of a double-click resolves no seek"
+        );
         let message = panel.on(&click(30, 5));
         assert!(matches!(
             message,

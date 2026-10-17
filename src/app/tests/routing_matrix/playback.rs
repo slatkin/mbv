@@ -158,7 +158,7 @@ fn playback_and_visualizer_commands_are_swallowed_under_blocking_overlay() {
 fn idle_feed_path_uses_connected_session_not_broad_playback_route() {
     let snapshot = RouterSnapshot {
         playback: crate::app::input::RouterPlaybackState {
-            remote_target: crate::app::input::RemotePlaybackTarget::DirectRemote,
+            remote_target: crate::app::input::RemoteControlTarget::DirectRemote,
             idle_feed_link_available: true,
             ..Default::default()
         },
@@ -230,22 +230,5 @@ fn idle_feed_path_uses_connected_session_not_broad_playback_route() {
             &default_keybinds()
         ),
         RouterOutcome::Command(Command::OpenIdleFeedLink)
-    );
-
-    let connected = RouterSnapshot {
-        playback: crate::app::input::RouterPlaybackState {
-            remote_target: crate::app::input::RemotePlaybackTarget::Session,
-            ..snapshot.playback
-        },
-        ..snapshot
-    };
-    assert_eq!(
-        resolve_router_outcome_with_focused(
-            key(KeyCode::Char('o')),
-            &connected,
-            None,
-            &default_keybinds()
-        ),
-        RouterOutcome::FallThrough
     );
 }

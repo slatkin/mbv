@@ -7,6 +7,7 @@
 
 pub mod gesture;
 pub mod hit;
+pub mod seekbar;
 
 use tuirealm::event::{KeyModifiers, MouseEventKind};
 use tuirealm::subscription::{EventClause, MouseEventClause, Sub, SubClause};

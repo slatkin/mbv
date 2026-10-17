@@ -1,7 +1,6 @@
 use super::{App, QueueOpEdit, ToastSeverity};
 use mbv_ctrl::player::PlayerCommand;
 use mbv_emby_model::EmbyItem;
-use mbv_queue::QueueItem;
 
 impl App {
     pub(super) fn execute_pending_play_items(
@@ -20,97 +19,12 @@ impl App {
         self.start_pending_queue_playback(items, start_idx, source);
     }
 
-    /// Sends the idle queue load to the current Player owner. Returns the
-    /// request id the load is correlated by; a failed send flashes and
-    /// reports `None`, so a session hand-off does not start playback of a
-    /// queue the owner never accepted.
-    pub(in crate::app) fn send_idle_queue_load(
-        &mut self,
-        items: Vec<QueueItem>,
-        start_idx: usize,
-        source: mbv_queue::QueueSource,
-    ) -> Option<mbv_ctrl::QueueLoadRequestId> {
-        let request_id = self.next_owner_queue_load_request;
-        self.next_owner_queue_load_request = self.next_owner_queue_load_request.saturating_add(1);
-        let slots = items
-            .into_iter()
-            .enumerate()
-            .map(|(index, item)| mbv_ctrl::UnifiedQueueSlot {
-                slot_id: (index + 1) as u64,
-                item,
-            })
-            .collect();
-        match self
-            .player
-            .remote()
-            .load_queue_idle(request_id, slots, start_idx, source)
-        {
-            Ok(()) => {
-                self.set_queue_scope(self.playing_queue_scope());
-                Some(request_id)
-            }
-            Err(_) if self.player.is_remote_disconnected() => {
-                self.flash(
-                    crate::app::dispatch::actions::CONNECTION_LOST_MESSAGE.into(),
-                    ToastSeverity::Warning,
-                );
-                None
-            }
-            Err(reason) => {
-                self.flash(reason.to_string(), ToastSeverity::Error);
-                None
-            }
-        }
-    }
-
-    /// Sends the idle queue load to the current Player owner. Returns whether
-    /// the request was sent (and so accepted for correlation); a failed send
-    /// flashes and reports `false`, so a session hand-off does not start
-    /// playback of a queue the owner never accepted.
-    pub(in crate::app) fn load_idle_queue_on_owner(
-        &mut self,
-        items: Vec<QueueItem>,
-        start_idx: usize,
-        source: mbv_queue::QueueSource,
-    ) -> bool {
-        self.send_idle_queue_load(items, start_idx, source)
-            .is_some()
-    }
-
     fn start_pending_queue_playback(
         &mut self,
         items: Vec<EmbyItem>,
         start_idx: usize,
         source: mbv_queue::QueueSource,
     ) {
-        // Attached Emby session: the queue is installed on the Player owner
-        // through the idle-load path (ruling on row 5.3: the owner's Replace
-        // op always starts playback, so it must not be used while another
-        // target owns playback), then playback starts on the session.
-        if let Some(ref conn_id) = self.connected_session_id.clone() {
-            if !self.load_idle_queue_on_owner(
-                items
-                    .iter()
-                    .map(|item| QueueItem::Emby(Box::new(item.clone())))
-                    .collect(),
-                start_idx,
-                source,
-            ) {
-                return;
-            }
-            self.clear_playback_overlays();
-            let label = items
-                .get(start_idx)
-                .map(mbv_emby_model::EmbyItem::playback_label)
-                .unwrap_or_default();
-            let id = conn_id.clone();
-            self.flash(
-                format!("Requesting playback: {label}"),
-                ToastSeverity::Neutral,
-            );
-            self.submit_attached_sequence(&id, &items, start_idx);
-            return;
-        }
         // Row 5.3 (design D6): the replacement is an answered owner op —
         // the owner replaces its canonical queue, begins playback at
         // `start_idx`, and the Client adopts the resulting snapshot; the

@@ -179,10 +179,9 @@ pub fn load_home_latest_launch() -> Option<u64> {
 /// (issue #236). `App::teardown` writes this; `App::new` reads it back at
 /// the next launch when `Config.auto_reconnect` is true. The two
 /// variants mirror `App`'s own separate `active_route` (#223 library
-/// routing) and `connected_session_id`/`connected_session_state`
-/// (Sessions-panel direct-remote/attached) fields -- #222 and #223 were
-/// distinct features and stay distinct here, even though both are
-/// restored under the same on/off switch.
+/// routing) and Direct remote control target (Sessions-panel) fields --
+/// #222 and #223 were distinct features and stay distinct here, even though
+/// both are restored under the same on/off switch.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "kind")]
 pub enum LastRemoteConnection {
@@ -191,10 +190,12 @@ pub enum LastRemoteConnection {
     /// `library_routes` at startup, not replayed verbatim -- if the config
     /// changed since the last exit, the new config wins.
     LibraryRoute { library: String },
-    /// A Sessions-panel direct-remote or attached session, keyed by the
-    /// other device's name (`SessionInfo.device_name`), not its session id
-    /// -- Emby session ids are ephemeral per-connection and would not
-    /// still identify the same device at the next launch.
+    /// A Sessions-panel Direct remote control target, keyed by the other
+    /// device's name (`SessionInfo.device_name`), not its session id --
+    /// Emby session ids are ephemeral per-connection and would not still
+    /// identify the same device at the next launch. A plain Session is not
+    /// saved: the owner holds that output (emby-session-owner-output design
+    /// D12).
     DirectSession { device_name: String },
 }
 

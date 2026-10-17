@@ -2,30 +2,8 @@ use crate::app::App;
 use crate::app::dispatch::notify::ToastSeverity;
 
 impl App {
-    /// Session-aware mute toggle for `Action::ToggleMute` (the `m` key) when
-    /// attached to a remote session. Mirrors `cycle_audio()`/`cycle_sub()`:
-    /// computes an explicit target state (not a blind server-side toggle),
-    /// writes it into `connected_session_state` optimistically, and fires the
-    /// outbound command asynchronously via `do_session_command`. Does not
-    /// touch local player mute state or the persisted `mute_on` preference --
-    /// those are exclusively the local (no-session) branch's concern.
-    pub(in crate::app) fn session_toggle_mute(&mut self) {
-        let Some(conn_id) = self.connected_session_id.clone() else {
-            return;
-        };
-        let current = self
-            .connected_session_state
-            .as_ref()
-            .is_some_and(|s| s.muted);
-        let next = !current;
-        if let Some(ref mut state) = self.connected_session_state {
-            state.muted = next;
-        }
-        self.do_session_command(move |c| c.session_set_mute(&conn_id, next));
-    }
-
     pub(in crate::app) fn cycle_audio(&mut self) {
-        self.playback_target().cycle_audio(self);
+        crate::app::LocalPlaybackTarget::cycle_audio(self);
     }
 
     /// Seeds a freshly attached daemon target's subtitle/audio-language
@@ -115,12 +93,10 @@ impl App {
 
     /// Returns the next entry in a subtitle-cycle sequence, wrapping around.
     /// `entries` is the ordered list of subtitle option ids -- the "off"
-    /// sentinel first (`0` for local playback, `-1` for remote sessions),
-    /// followed by each available track/index -- and `current` is the
-    /// presently active selection. Shared by the remote-session and local
-    /// branches of `cycle_sub` so both walk the exact same wraparound logic
-    /// (see #86: local `z` used to be a plain on/off toggle instead of
-    /// cycling through every track like the remote path).
+    /// sentinel first (`0`), followed by each available track/index -- and
+    /// `current` is the presently active selection. `cycle_sub` walks the
+    /// exact same wraparound logic for every track (see #86: local `z` used
+    /// to be a plain on/off toggle instead of cycling).
     pub(in crate::app) fn next_subtitle_entry(entries: &[i64], current: i64) -> i64 {
         if entries.is_empty() {
             return current;
@@ -129,33 +105,7 @@ impl App {
         entries[(cur_pos + 1) % entries.len()]
     }
 
-    /// Toggles between "off" and the last-selected subtitle index for a
-    /// remote session. The only remaining caller is `cycle_sub`'s
-    /// remote-session branch, as a fallback for when the session reports
-    /// zero subtitle tracks (nothing to cycle through). Local playback no
-    /// longer routes through here -- see #86, which replaced its on/off
-    /// toggle with full track-cycling in `cycle_sub`.
-    pub(in crate::app) fn toggle_sub(&mut self) {
-        let Some(conn_id) = self.connected_session_id.clone() else {
-            return;
-        };
-        let remote_indexes = self.remote_subtitle_indexes();
-        let idx = self
-            .connected_session_state
-            .as_ref()
-            .map_or(-1, |s| s.sub_index);
-        let next = if idx == -1 {
-            remote_indexes.first().copied().unwrap_or(1)
-        } else {
-            -1
-        };
-        if let Some(ref mut state) = self.connected_session_state {
-            state.sub_index = next;
-        }
-        self.do_session_command(move |c| c.session_set_subtitle_index(&conn_id, next));
-    }
-
     pub(in crate::app) fn cycle_sub(&mut self) {
-        self.playback_target().cycle_sub(self);
+        crate::app::LocalPlaybackTarget::cycle_sub(self);
     }
 }

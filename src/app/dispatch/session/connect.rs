@@ -4,7 +4,7 @@ use mbv_ctrl::player::PlayerEvent;
 use mbv_emby::parse_mbv_direct_tcp_port;
 use mbv_player::PlayerProxy;
 use std::sync::mpsc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 impl App {
     pub(in crate::app) fn session_direct_endpoint(
@@ -213,18 +213,8 @@ impl App {
             .as_ref()
             .map_or_else(QueueView::default, QueueView::from_snapshot);
         self.remote_view = Some(tab);
-        self.remote.direct_remote_connected = true;
+        self.direct_remote_connected = true;
         self.advance_queue_epoch();
-        self.remote.session_miss_count = 0;
-        self.remote.remote_pos_s = 0;
-        self.remote.remote_pos_at = Instant::now();
-        self.remote.remote_api_pos_advanced_at = Instant::now()
-            .checked_sub(Duration::from_secs(60))
-            .unwrap_or_else(Instant::now);
-        self.remote.remote_seek_pending_until = Instant::now()
-            .checked_sub(Duration::from_secs(1))
-            .unwrap_or_else(Instant::now);
-        self.remote.runtime_zero_since = None;
         self.next_up_item = None;
         self.display_peer_queue_on_connect();
         self.sync_subtitle_prefs_to_player();
@@ -313,17 +303,36 @@ impl App {
     /// gone or the session list cannot be fetched.
     fn reconnect_direct_session(&mut self, device_name: &str) {
         tracing::info!(name: "auto_reconnect.state.loaded", target: "auto_reconnect", connection_type = "direct_session", device = %device_name, "auto-reconnect state loaded");
+        let Some(sess) = self.find_direct_session_by_device(device_name) else {
+            return;
+        };
+        self.connect_to_session(&sess);
+        self.log_direct_session_outcome(device_name);
+    }
+
+    /// Resolves the saved device to a Session that offers a direct endpoint.
+    /// A device that is gone flashes the not-found warning; a Session that
+    /// offers no direct endpoint stays local silently, because the owner holds
+    /// that output and a new Client presents it without selecting it (design
+    /// D12).
+    fn find_direct_session_by_device(
+        &mut self,
+        device_name: &str,
+    ) -> Option<mbv_emby::SessionInfo> {
         let Some(sess) = self.find_session_by_device(device_name) else {
             tracing::info!(name: "auto_reconnect.direct_session.not_found", target: "auto_reconnect", device = %device_name, "device not found in current sessions; staying local");
             self.flash(
                 format!("\u{26a0} {device_name} not found, using local playback"),
                 ToastSeverity::Warning,
             );
-            return;
+            return None;
         };
-        tracing::info!(name: "auto_reconnect.direct_session.resolved", target: "auto_reconnect", device = %device_name, session = %sess.id, "direct session resolved; connecting");
-        self.connect_to_session(&sess);
-        self.log_direct_session_outcome(device_name);
+        tracing::info!(name: "auto_reconnect.direct_session.resolved", target: "auto_reconnect", device = %device_name, session = %sess.id, "direct session resolved");
+        if self.session_direct_endpoint(&sess).is_none() {
+            tracing::info!(name: "auto_reconnect.direct_session.no_direct_endpoint", target: "auto_reconnect", device = %device_name, "session offers no direct endpoint; staying local");
+            return None;
+        }
+        Some(sess)
     }
 
     /// Finds the session whose device name matches `device_name`, or `None`
@@ -349,10 +358,8 @@ impl App {
 
     /// Records how the direct-session connect attempt turned out.
     fn log_direct_session_outcome(&self, device_name: &str) {
-        if self.remote.direct_remote_connected {
+        if self.direct_remote_connected {
             tracing::info!(name: "auto_reconnect.direct_session.connected", target: "auto_reconnect", device = %device_name, outcome = "direct_daemon_upgrade", "direct session connected");
-        } else if self.connected_session_id.is_some() {
-            tracing::info!(name: "auto_reconnect.direct_session.connected", target: "auto_reconnect", device = %device_name, outcome = "emby_session_control", "direct session connected");
         } else {
             tracing::warn!(name: "auto_reconnect.direct_session.connect_failed", target: "auto_reconnect", device = %device_name, "direct session connection failed; staying local");
         }

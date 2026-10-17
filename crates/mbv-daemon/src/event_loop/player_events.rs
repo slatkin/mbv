@@ -335,6 +335,27 @@ impl DaemonLoop {
         }
     }
 
+    /// One player observation, routed to the handler that owns it. Every
+    /// event that carries queue or Next-Up evidence keeps its explicit arm;
+    /// any other player event goes to `handle_player_event`.
+    pub(super) fn handle_player_observation(&mut self, pe: PlayerEvent) -> EventOutcome {
+        match pe {
+            PlayerEvent::TrackChanged {
+                slot_id,
+                transition,
+            } => self.handle_track_changed(slot_id, transition),
+            PlayerEvent::NextUpThreshold {
+                series_id,
+                season,
+                episode,
+            } => self.handle_next_up_threshold(series_id, season, episode),
+            PlayerEvent::QueueNextUp { next_idx } => self.handle_queue_next_up(next_idx),
+            PlayerEvent::OutputStarted => self.handle_output_started(),
+            pe @ PlayerEvent::TrackCompleted { .. } => self.handle_track_completed(pe),
+            pe => self.handle_player_event(pe),
+        }
+    }
+
     /// Any other `PlayerEvent`: settle `Stopped`/`PausedChanged` intents and
     /// observations, then relay the event unless a committed replacement
     /// already published the new queue.

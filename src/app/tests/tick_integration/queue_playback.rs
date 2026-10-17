@@ -436,14 +436,23 @@ fn tick_clicks_play_pause_and_the_seekbar_in_both() {
         "play/pause click toggles: {intents:?}"
     );
 
+    // The seekbar seeks on a double-click: the press that opens the pair
+    // claims nothing, and the next step delivers the seek.
     let column = seekbar.x + seekbar.width / 2;
     harness.inject(click(column, seekbar.y));
     let outcome = harness.step();
+    assert!(
+        playback_intents(&outcome).is_empty(),
+        "the first press of the pair claims no seek: {:?}",
+        outcome.raw_messages
+    );
+    harness.inject(click(column, seekbar.y));
+    let outcome = harness.step();
     let intents = playback_intents(&outcome);
-    assert_eq!(intents.len(), 1, "exactly one surface claims the click");
+    assert_eq!(intents.len(), 1, "exactly one surface claims the seek");
     assert!(
         matches!(intents[0], PlaybackRequest::SeekTo(f) if (f - 0.5).abs() < 1e-6),
-        "the seekbar click resolves a fraction: {intents:?}"
+        "the seekbar double-click resolves a fraction: {intents:?}"
     );
 }
 
@@ -464,14 +473,23 @@ fn tick_clicks_play_pause_and_the_seekbar_in_mini_view_queue_only() {
         "play/pause click toggles: {intents:?}"
     );
 
+    // The seekbar seeks on a double-click: the press that opens the pair
+    // claims nothing, and the next step delivers the seek.
     let column = seekbar.x + seekbar.width / 2;
     harness.inject(click(column, seekbar.y));
     let outcome = harness.step();
+    assert!(
+        playback_intents(&outcome).is_empty(),
+        "the first press of the pair claims no seek: {:?}",
+        outcome.raw_messages
+    );
+    harness.inject(click(column, seekbar.y));
+    let outcome = harness.step();
     let intents = playback_intents(&outcome);
-    assert_eq!(intents.len(), 1, "exactly one surface claims the click");
+    assert_eq!(intents.len(), 1, "exactly one surface claims the seek");
     assert!(
         matches!(intents[0], PlaybackRequest::SeekTo(f) if (f - 0.5).abs() < 1e-6),
-        "the seekbar click resolves a fraction: {intents:?}"
+        "the seekbar double-click resolves a fraction: {intents:?}"
     );
 }
 

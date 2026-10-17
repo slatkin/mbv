@@ -99,6 +99,7 @@ fn idle_queue_load_from_unsupported_peer_is_rejected_without_mutation() {
         },
         false,
         false,
+        false,
         None,
         crate::ctrl::CtrlConnectionRole::Client,
     );

@@ -1,147 +1,32 @@
 mod local;
-mod remote;
 
 use crate::app::App;
-use mbv_render::indicators::IndicatorData;
 use mbv_ui_model::playback_target::NowPlayingStatus;
 
 #[derive(Clone, Copy)]
 pub(in crate::app) struct LocalPlaybackTarget;
 
-#[derive(Clone)]
-pub(in crate::app) struct RemotePlaybackTarget {
-    pub session_id: String,
-}
-
-#[derive(Clone)]
-pub(in crate::app) enum PlaybackTarget {
-    Local(LocalPlaybackTarget),
-    Remote(RemotePlaybackTarget),
-}
-
-impl PlaybackTarget {
-    pub(in crate::app) fn toggle_play_pause(&self, app: &mut App) {
-        match self {
-            Self::Local(_) => LocalPlaybackTarget::toggle_play_pause(app),
-            Self::Remote(target) => target.toggle_play_pause(app),
-        }
-    }
-
-    pub(in crate::app) fn stop(&self, app: &mut App) {
-        match self {
-            Self::Local(_) => LocalPlaybackTarget::stop(app),
-            Self::Remote(target) => target.stop(app),
-        }
-    }
-
-    pub(in crate::app) fn seek_relative(&self, app: &mut App, delta: f64) {
-        match self {
-            Self::Local(_) => LocalPlaybackTarget::seek_relative(app, delta),
-            Self::Remote(target) => target.seek_relative(app, delta),
-        }
-    }
-
-    pub(in crate::app) fn jump_track(&self, app: &mut App, step: i64, transport: &'static str) {
-        match self {
-            Self::Local(_) => LocalPlaybackTarget::jump_track(app, step),
-            Self::Remote(target) => target.jump_track(app, step, transport),
-        }
-    }
-
-    pub(in crate::app) fn toggle_command_mute(&self, app: &mut App) {
-        match self {
-            Self::Local(_) => LocalPlaybackTarget::toggle_command_mute(app),
-            Self::Remote(_) => RemotePlaybackTarget::toggle_command_mute(app),
-        }
-    }
-
-    pub(in crate::app) fn cycle_audio(&self, app: &mut App) {
-        match self {
-            Self::Local(_) => LocalPlaybackTarget::cycle_audio(app),
-            Self::Remote(target) => target.cycle_audio(app),
-        }
-    }
-
-    pub(in crate::app) fn adjust_volume(&self, app: &mut App, delta: i64) {
-        match self {
-            Self::Local(_) => LocalPlaybackTarget::adjust_volume(app, delta),
-            Self::Remote(target) => target.adjust_volume(app, delta),
-        }
-    }
-
-    pub(in crate::app) fn cycle_sub(&self, app: &mut App) {
-        match self {
-            Self::Local(_) => LocalPlaybackTarget::cycle_sub(app),
-            Self::Remote(target) => target.cycle_sub(app),
-        }
-    }
-
-    pub(in crate::app) fn displayed_volume(&self, app: &App) -> i64 {
-        match self {
-            Self::Local(_) => LocalPlaybackTarget::displayed_volume(app),
-            Self::Remote(_) => RemotePlaybackTarget::displayed_volume(app),
-        }
-    }
-
-    pub(in crate::app) fn displayed_mute(&self, app: &App) -> bool {
-        match self {
-            Self::Local(_) => LocalPlaybackTarget::displayed_mute(app),
-            Self::Remote(_) => RemotePlaybackTarget::displayed_mute(app),
-        }
-    }
-
-    pub(in crate::app) fn indicator_data(&self, app: &App) -> Option<IndicatorData> {
-        match self {
-            Self::Local(_) => LocalPlaybackTarget::indicator_data(app),
-            Self::Remote(_) => RemotePlaybackTarget::indicator_data(app),
-        }
-    }
-}
-
 impl App {
     /// Returns the observed playback state for rendering.
     pub(in crate::app) fn effective_playback_state(&self) -> mbv_ui_model::playback::PlaybackState {
-        if let Some(ref remote) = self.connected_session_state {
-            // The observed item is only a *local* playhead when the queue
-            // holds it. A watched remote Session may be playing anything
-            // (another device's own selection), so `active` follows the
-            // Session and the slot stays `None`; presentation falls back to
-            // the Session's own title and progress.
-            let maybe_active_idx = remote.now_playing_item_id.as_ref().and_then(|id| {
-                self.local_view
-                    .slots()
-                    .iter()
-                    .position(|s| s.item.id() == id)
-            });
-            let pos_ticks = {
-                let elapsed_s = if remote.is_paused {
-                    0.0
-                } else {
-                    self.remote.remote_pos_at.elapsed().as_secs_f64()
-                };
-                let remote_pos_s = mbv_emby_model::i64_to_f64_saturating(self.remote.remote_pos_s);
-                let runtime_s = mbv_emby_model::i64_to_f64_saturating(remote.runtime_s);
-                let pos_s = (remote_pos_s + elapsed_s).min(runtime_s);
-                mbv_emby_model::seconds_to_ticks(pos_s)
-            };
-            mbv_ui_model::playback::PlaybackState {
-                active: remote.now_playing.is_some(),
-                active_idx: maybe_active_idx,
-                position_ticks: pos_ticks,
-                runtime_ticks: remote.runtime_s * mbv_emby_model::TICKS_PER_SECOND,
-                paused: remote.is_paused,
-            }
+        let s = self.player.status_snapshot();
+        // The owner presents content it did not load from `OutputState`
+        // alone (design D12): the status' `current_idx` is then only the
+        // queue's loaded-slot marker, not a local playhead. Keep the slot
+        // slotless so presentation reads the `now_playing` payload instead
+        // of the loaded queue item (review r7).
+        let active_idx = if self.emby_session_now_playing().is_some() {
+            None
         } else {
-            let s = self.player.status_snapshot();
-            let active_idx = s.current_idx;
-            let (position_ticks, runtime_ticks) = (s.position_ticks, s.runtime_ticks);
-            mbv_ui_model::playback::PlaybackState {
-                active: s.active,
-                active_idx: Some(active_idx),
-                position_ticks,
-                runtime_ticks,
-                paused: s.paused,
-            }
+            Some(s.current_idx)
+        };
+        let (position_ticks, runtime_ticks) = (s.position_ticks, s.runtime_ticks);
+        mbv_ui_model::playback::PlaybackState {
+            active: s.active,
+            active_idx,
+            position_ticks,
+            runtime_ticks,
+            paused: s.paused,
         }
     }
 

@@ -16,58 +16,59 @@ impl App {
     }
 
     pub(in crate::app) fn remote_slot_state(&self) -> RemoteSlotState {
-        if self.connected_session_id.is_some() {
-            RemoteSlotState::AttachedSession
-        } else if self.has_remote_queue() {
+        if self.has_remote_queue() {
             RemoteSlotState::DirectRemote
         } else {
             RemoteSlotState::LocalDaemon
         }
     }
 
-    /// Whether the attached Emby session advertises an audio-only playable
-    /// media set. An absent or empty advertisement is unknown and therefore
-    /// treated as able to play video.
+    /// Whether the owner's Emby Session output advertises an audio-only
+    /// playable media set (design D12). An absent or empty advertisement is
+    /// unknown and therefore treated as able to play video.
     pub(in crate::app) fn session_owner_is_audio_only(&self) -> bool {
-        self.connected_session_id.is_some()
-            && self
-                .connected_session_state
-                .as_ref()
-                .is_some_and(|session| {
-                    !session.playable_media_types.is_empty()
-                        && session
-                            .playable_media_types
-                            .iter()
-                            .all(|media_type| media_type.eq_ignore_ascii_case("Audio"))
-                })
+        matches!(
+            &self.playback_output,
+            Some(mbv_ctrl::OutputState::EmbySession {
+                audio_only: true,
+                ..
+            })
+        )
     }
 
-    /// Emby session id the Sessions sidebar should mark. Session watch and
-    /// Direct remote control of a remote owner both count. The Stay-alive
-    /// process does not: it is not a remote session.
+    /// The item the owner's Emby Session output presents that the owner did
+    /// not load (design D12). The Owner sends this from `OutputState` alone;
+    /// the loaded item is presented from the queue.
+    pub(in crate::app) fn emby_session_now_playing(&self) -> Option<&mbv_ctrl::SessionNowPlaying> {
+        match &self.playback_output {
+            Some(mbv_ctrl::OutputState::EmbySession { now_playing, .. }) => now_playing.as_ref(),
+            Some(mbv_ctrl::OutputState::Cast { .. } | mbv_ctrl::OutputState::Local) | None => None,
+        }
+    }
+
+    /// Direct remote control's session id, which the Sessions sidebar marks.
+    /// The Stay-alive process does not count: it is not a remote session. An
+    /// Emby Session output marks by device id
+    /// (`sessions_panel_connected_device_id`).
     pub(in crate::app) fn sessions_panel_connected_id(&self) -> Option<&str> {
-        self.connected_session_id
-            .as_deref()
-            .or(self.remote.direct_remote_session_id.as_deref())
+        self.direct_remote_session_id.as_deref()
+    }
+
+    /// The device id of the owner's Emby Session output, which the Sessions
+    /// sidebar uses to mark its row (design D12).
+    pub(in crate::app) fn sessions_panel_connected_device_id(&self) -> Option<&str> {
+        match &self.playback_output {
+            Some(mbv_ctrl::OutputState::EmbySession { device_id, .. }) => Some(device_id),
+            Some(mbv_ctrl::OutputState::Cast { .. } | mbv_ctrl::OutputState::Local) | None => None,
+        }
     }
 
     pub(in crate::app) fn can_disconnect_remote(&self) -> bool {
-        self.connected_session_id.is_some()
-            || self.connected_session_state.is_some()
-            || self.remote.direct_remote_connected
+        self.direct_remote_connected
     }
 
     pub(in crate::app) fn disconnect_remote(&mut self) {
-        if self.connected_session_id.is_some() || self.connected_session_state.is_some() {
-            self.connected_session_id = None;
-            self.connected_session_state = None;
-            self.remote.session_miss_count = 0;
-            self.remote.remote_pos_s = 0;
-            self.flash(
-                "Disconnected from remote session".to_string(),
-                ToastSeverity::Success,
-            );
-        } else if self.remote.direct_remote_connected {
+        if self.direct_remote_connected {
             self.restore_local_mode("Disconnected from direct remote session");
         } else {
             self.flash("No session selected".to_string(), ToastSeverity::Neutral);
@@ -86,31 +87,31 @@ impl App {
             .send_ctrl_cmd(CtrlCmd::SelectPlaybackOutput(selection));
     }
 
-    /// Whether the current player connection's owner reports a Cast output,
-    /// read synchronously from the connection's retained state — not the
-    /// drained `playback_output` mirror, which stays `None` until the shell
-    /// drains the cold-seed event. Launch auto-reconnect connects a session
-    /// (and severs) before any drain ever happens, so the handback decision
-    /// reads the connection's own record, which the handshake fills at the
-    /// cold seed (cast-owner-output 8.2 fix).
-    fn player_output_is_cast(&self) -> bool {
+    /// Whether the current player connection's owner reports a remote output
+    /// (a Cast receiver or an Emby Session), read synchronously from the
+    /// connection's retained state — not the drained `playback_output` mirror,
+    /// which stays `None` until the shell drains the cold-seed event. Launch
+    /// auto-reconnect connects a session (and severs) before any drain ever
+    /// happens, so the hand-back decision reads the connection's own record,
+    /// which the handshake fills at the cold seed (cast-owner-output 8.2 fix).
+    fn player_output_is_remote(&self) -> bool {
         matches!(
             self.player.remote().playback_output_state(),
-            Some(mbv_ctrl::OutputState::Cast { .. })
+            Some(mbv_ctrl::OutputState::Cast { .. } | mbv_ctrl::OutputState::EmbySession { .. })
         )
     }
 
-    /// Hand the Local daemon owner's Cast output back to Local (design D13):
+    /// Hand the Local daemon owner's remote output back to Local (design D13):
     /// `Stop` first so no slot is active at the hand-off (D10 step 1), then
-    /// `SelectPlaybackOutput(Local)` — the receiver stops and local playback
-    /// does not start. The decision reads the current owner connection's
-    /// retained output state (`player_output_is_cast`), so the send happens
-    /// only when that owner is the Local daemon: a remote owner's own Cast
-    /// output is not ours to stop. Best-effort like every other
-    /// fire-and-forget player send.
-    pub(in crate::app) fn hand_cast_output_back_to_local(&mut self) {
-        if self.is_local_daemon() && self.player_output_is_cast() {
-            tracing::info!(name: "sessions.output_handback", target: "sessions", "stopping the receiver and returning the Local owner's output to Local");
+    /// `SelectPlaybackOutput(Local)` — a Cast receiver stops, an Emby Session
+    /// stops, and local playback does not start. The decision reads the
+    /// current owner connection's retained output state
+    /// (`player_output_is_remote`), so the send happens only when that owner is
+    /// the Local daemon: a remote owner's own output is not ours to stop.
+    /// Best-effort like every other fire-and-forget player send.
+    pub(in crate::app) fn hand_remote_output_back_to_local(&mut self) {
+        if self.is_local_daemon() && self.player_output_is_remote() {
+            tracing::info!(name: "sessions.output_handback", target: "sessions", "stopping the remote output and returning the Local owner's output to Local");
             let _ = self.player.send_ctrl_cmd(CtrlCmd::Stop);
             let _ = self
                 .player
@@ -121,12 +122,12 @@ impl App {
     /// Connecting to a new target severs the current one: the watched
     /// session, direct remote, and library-route slots are mutually
     /// exclusive, so a new connect tears the old target down instead of
-    /// holding both. The owner's Cast output is handed back to Local first
-    /// (`hand_cast_output_back_to_local`); a severed cast receiver is left
+    /// holding both. The owner's remote output is handed back to Local first
+    /// (`hand_remote_output_back_to_local`); a severed cast receiver is left
     /// as it is ("the receiver owns what it plays"). No-op when nothing
     /// else is connected.
     pub(in crate::app) fn sever_active_connection(&mut self) {
-        self.hand_cast_output_back_to_local();
+        self.hand_remote_output_back_to_local();
         self.sever_connections_without_output_change();
     }
 

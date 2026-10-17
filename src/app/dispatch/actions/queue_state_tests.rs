@@ -1,11 +1,8 @@
 use super::*;
-use crate::app::ContextAction;
-use mbv_emby_model::EmbyItem;
 use mbv_emby_model::test_support::make_item;
 use mbv_queue::{
     AudiobookshelfBookQueueItem, AudiobookshelfItem, AudiobookshelfQueueItem, FeedEntry,
 };
-use rstest::rstest;
 
 use crate::config::tests::SYS_ENV_LOCK as XDG_HOME_LOCK;
 
@@ -78,43 +75,6 @@ fn mixed_audiobookshelf_queue() -> Vec<QueueItem> {
             cover_path: None,
         })),
     ]
-}
-
-fn assert_attached_context_selection_preserves_local_queue(action: ContextAction) {
-    let mut app = crate::app::tests::make_app_stub();
-    app.connected_session_id = Some("session-1".into());
-    app.local_view
-        .adopt_items(crate::app::tests::make_items(2), app.local_view.cursor());
-    app.local_view.set_cursor(1);
-    let before: Vec<_> = app
-        .local_view
-        .slots()
-        .iter()
-        .map(|slot| (slot.slot_id, slot.item.id().to_string()))
-        .collect();
-
-    app.execute_context_action(Some(action), None);
-
-    let after: Vec<_> = app
-        .local_view
-        .slots()
-        .iter()
-        .map(|slot| (slot.slot_id, slot.item.id().to_string()))
-        .collect();
-    assert_eq!(after, before);
-    assert_eq!(app.local_view.cursor(), 1);
-}
-
-#[rstest]
-#[case::play(ContextAction::PlaySelection as fn(Vec<EmbyItem>) -> ContextAction)]
-fn attached_context_selection_preserves_local_queue(
-    #[case] action: fn(Vec<EmbyItem>) -> ContextAction,
-) {
-    let selected = vec![
-        make_item("selected", "Movie"),
-        make_item("selected-2", "Movie"),
-    ];
-    assert_attached_context_selection_preserves_local_queue(action(selected));
 }
 
 #[test]

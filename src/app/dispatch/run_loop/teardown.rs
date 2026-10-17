@@ -61,12 +61,11 @@ impl App {
     fn current_auto_reconnect_target(&self) -> Option<mbv_config::LastRemoteConnection> {
         if let Some(library) = self.active_route.clone() {
             Some(mbv_config::LastRemoteConnection::LibraryRoute { library })
-        } else if let Some(sess) = self.connected_session_state.as_ref() {
-            Some(mbv_config::LastRemoteConnection::DirectSession {
-                device_name: sess.device_name.clone(),
-            })
         } else {
-            self.remote.direct_remote_label.as_ref().map(|device_name| {
+            // Only Direct remote control is restorable at launch. A plain
+            // Session is not: the owner holds that output, and a new Client
+            // presents it without selecting it (design D12).
+            self.direct_remote_label.as_ref().map(|device_name| {
                 mbv_config::LastRemoteConnection::DirectSession {
                     device_name: device_name.clone(),
                 }

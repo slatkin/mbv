@@ -191,18 +191,25 @@ fn a_mode_gate_forces_the_header_back_from_the_artwork_site() {
     );
 }
 
-/// A watched remote session's now-playing episode whose id is absent from the
-/// local queue holds the slotless path: playback follows the session and no
-/// queue slot addresses the item.
+/// Content the owner's Emby Session output presents but did not load holds
+/// the slotless path: playback follows the `OutputState` `now_playing`
+/// payload and no queue slot addresses the item (design D12).
 fn slotless_session_app() -> App {
     let mut app = overlay_app();
-    let mut session = mbv_emby::test_support::make_session("tv", "mbv");
-    session.now_playing = Some("Episode name".into());
-    session.now_playing_item_id = Some("remote-ep".into());
-    session.now_playing_item_type = Some("Episode".to_string());
-    session.now_playing_series_id = Some("remote-series".into());
-    session.now_playing_series_name = Some("Show".into());
-    app.connected_session_state = Some(session);
+    app.playback_output = Some(mbv_ctrl::OutputState::EmbySession {
+        device_id: "device-1".to_string(),
+        name: "Living Room TV".to_string(),
+        connection: mbv_ctrl::OutputConnection::Connected,
+        audio_only: false,
+        now_playing: Some(mbv_ctrl::SessionNowPlaying {
+            item_id: "remote-ep".to_string(),
+            item_type: "Episode".to_string(),
+            name: "Episode name".to_string(),
+            series_id: Some("remote-series".to_string()),
+            series_name: Some("Show".to_string()),
+            logo_tag: None,
+        }),
+    });
     app
 }
 
@@ -270,10 +277,13 @@ fn slotless_session_episode_composes_the_logo_overlay_variant() {
 #[test]
 fn slotless_session_without_logo_reference_keeps_the_text_overlay() {
     let mut app = slotless_session_app();
-    let mut session = app.connected_session_state.take().expect("session set");
-    session.now_playing_series_id = None;
-    session.now_playing_series_name = None;
-    app.connected_session_state = Some(session);
+    if let Some(mbv_ctrl::OutputState::EmbySession { now_playing, .. }) =
+        app.playback_output.as_mut()
+        && let Some(now_playing) = now_playing
+    {
+        now_playing.series_id = None;
+        now_playing.series_name = None;
+    }
     let fetches_before = app.images.card_image_fetch_calls();
 
     app.refresh_queue_card_image(false);

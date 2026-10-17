@@ -7,6 +7,7 @@ use super::{
     submit_queue_slots_cold_start,
 };
 use crate::AudiobookshelfOwnerContext;
+use crate::ctrl::CtrlClientId;
 use mbv_emby::EmbyClient;
 use mbv_player::Player;
 use std::collections::HashSet;
@@ -443,6 +444,13 @@ pub(super) fn handle_queue_replace(
         );
         return;
     }
+    if matches!(
+        ctx.owner.output,
+        crate::cast::PlaybackOutput::EmbySession(_)
+    ) {
+        replace_on_emby_session(ctx, except_op_client);
+        return;
+    }
     submit_queue_slots_cold_start(
         ctx.player,
         ctx.owner.core.queue.slot_pairs(),
@@ -464,6 +472,56 @@ pub(super) fn handle_queue_replace(
     // next broadcast — the wrong-track flash this change removes.
     // Reborrowing `ctx.owner.core` here (rather than the handler's earlier
     // destructured fields) is what lets the publish follow the submit.
+    broadcast_queue_state(
+        ctx.ctrl_clients,
+        ctx.player,
+        ctx.shared_queue,
+        &ctx.owner.core.queue,
+        &ctx.owner.core.source,
+        &ctx.owner.core.transitions,
+        except_op_client,
+    );
+}
+
+/// Begins playback on an Emby Session output after a queue replacement
+/// (emby-session-owner-output design D7): only the start slot's item is
+/// admitted and loaded onto the Session — never the whole queue — and the
+/// replace registers the in-flight transition under an owner-minted
+/// identity, so an observation that shows the loaded item settles it and a
+/// rejected item expires and reports it to the replacing Client. The local
+/// run is never started.
+fn replace_on_emby_session(ctx: &mut CtrlContext<'_>, except_op_client: Option<CtrlClientId>) {
+    let Some(start_slot) = ctx.owner.core.queue.active_slot_id() else {
+        tracing::warn!(name: "daemon.emby_session_queue_replace.no_start_slot", target: "daemon", "the replaced queue has no start slot; nothing was loaded");
+        return;
+    };
+    let (request_id, generation) = ctx.owner.core.transitions.mint_local_id();
+    let transition = mbv_player::transition::Transition::new(request_id, generation, start_slot);
+    let resume_ticks =
+        mbv_player::resume_ticks_for_slot(&ctx.owner.core.queue, start_slot).unwrap_or(0);
+    crate::emby_session::dispatch_accepted(
+        &mut DaemonOwnerContext {
+            player: ctx.player,
+            client: ctx.client,
+            owner: &mut *ctx.owner,
+            shared_queue: ctx.shared_queue,
+            ctrl_clients: ctx.ctrl_clients,
+            merged_tx: ctx.merged_tx,
+            audiobookshelf: ctx.audiobookshelf,
+        },
+        transition,
+        resume_ticks,
+        Some(ctx.client_id),
+    );
+    // The replacement installs a new lineage: reset the order (design D4)
+    // before the observation clear, mirroring the local path and
+    // `play_resolved_items`'s remote branches.
+    reset_play_order_for_queue_replacement(&mut ctx.owner.core, ctx.shared_queue, ctx.player);
+    // The reset above cleared the observation; publish it so the shared
+    // snapshot and the broadcast below agree (the local path publishes after
+    // its cold start).
+    ctx.owner.core.note_observed_active_slot(None);
+    ctx.shared_queue.publish_observed(&ctx.owner.core);
     broadcast_queue_state(
         ctx.ctrl_clients,
         ctx.player,

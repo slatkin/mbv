@@ -29,6 +29,7 @@ impl PanelTarget {
         match self {
             Self::Emby(session) => SessionTargetRow::Emby {
                 id: session.id.clone(),
+                device_id: session.device_id.clone(),
                 device_name: session.device_name.clone(),
                 client: session.client.clone(),
                 user_name: session.user_name.clone(),
@@ -107,6 +108,7 @@ mod tests {
     fn session(id: &str) -> SessionInfo {
         SessionInfo {
             id: id.to_string(),
+            device_id: format!("device-{id}"),
             device_name: format!("device-{id}"),
             client: "Emby".to_string(),
             user_name: "user".to_string(),

@@ -87,6 +87,10 @@ struct CtrlClient {
     /// Whether the peer negotiated `playback-output` at Hello
     /// (cast-owner-output design D3); gates `CtrlEvent::PlaybackOutput`.
     supports_playback_output: bool,
+    /// Whether the peer negotiated `emby-session-output` at Hello
+    /// (emby-session-owner-output design D3); a peer without it receives
+    /// `OutputState::Local` in place of an Emby Session output.
+    supports_emby_session_output: bool,
     role: CtrlConnectionRole,
     swap_surface: Option<SwapSurface>,
 }
@@ -105,6 +109,22 @@ pub(crate) fn send_to(client: &CtrlSender, event: &CtrlEvent) {
 /// path instead of repeating `serde_json::to_string(event).ok()` inline.
 pub(crate) fn serialize_ctrl_event(event: &CtrlEvent) -> Option<String> {
     serde_json::to_string(event).ok()
+}
+
+/// The output state a peer receives (emby-session-owner-output design D3): a
+/// peer that did not negotiate `emby-session-output` sees `Local` instead of
+/// an Emby Session output, so an older Client never holds a state its wire
+/// shape cannot carry.
+pub(crate) fn output_state_for_peer(
+    state: &mbv_ctrl::OutputState,
+    supports_emby_session_output: bool,
+) -> mbv_ctrl::OutputState {
+    match state {
+        mbv_ctrl::OutputState::EmbySession { .. } if !supports_emby_session_output => {
+            mbv_ctrl::OutputState::Local
+        }
+        other => other.clone(),
+    }
 }
 
 impl CtrlClients {
@@ -160,6 +180,7 @@ impl CtrlClients {
         audiobookshelf: CtrlAudiobookshelfCapabilities,
         supports_owner_queue_load: bool,
         supports_playback_output: bool,
+        supports_emby_session_output: bool,
         swap_surface: Option<SwapSurface>,
         role: CtrlConnectionRole,
     ) -> CtrlClientId {
@@ -179,6 +200,7 @@ impl CtrlClients {
             audiobookshelf,
             supports_owner_queue_load,
             supports_playback_output,
+            supports_emby_session_output,
             role,
             swap_surface,
         });
@@ -350,12 +372,23 @@ impl CtrlClients {
         self.broadcast_gated(json, |client| client.audiobookshelf.book_progress);
     }
 
-    /// Sends the playback-output event `json` only to clients that negotiated
-    /// `playback-output` at Hello (cast-owner-output design D3). Peers
-    /// lacking the capability are silently skipped, mirroring
+    /// Sends the playback-output state only to clients that negotiated
+    /// `playback-output` at Hello (cast-owner-output design D3). A peer that
+    /// did not negotiate `emby-session-output` receives `Local` in its place
+    /// (emby-session-owner-output design D3), so it never keeps a stale Cast
+    /// state. Peers lacking `playback-output` are silently skipped, mirroring
     /// `broadcast_progress_gated`.
-    pub(crate) fn broadcast_playback_output_gated(&mut self, json: &str) {
-        self.broadcast_gated(json, |client| client.supports_playback_output);
+    pub(crate) fn broadcast_playback_output_gated(&mut self, state: &mbv_ctrl::OutputState) {
+        self.retain_clients(|client| {
+            if !client.supports_playback_output {
+                return true;
+            }
+            let state = output_state_for_peer(state, client.supports_emby_session_output);
+            let Some(json) = serialize_ctrl_event(&CtrlEvent::PlaybackOutput(state)) else {
+                return true;
+            };
+            client.tx.send(CtrlOutbound::Event(json)).is_ok()
+        });
     }
 
     /// Sends `json` to each client `wants` admits. Clients it rejects keep
@@ -447,6 +480,7 @@ mod tests {
             CtrlAudiobookshelfCapabilities::default(),
             false,
             false,
+            false,
             surface,
             CtrlConnectionRole::Client,
         )
@@ -514,6 +548,7 @@ mod tests {
             CtrlAudiobookshelfCapabilities::default(),
             false,
             false,
+            false,
             None,
             CtrlConnectionRole::OwnerAction,
         );
@@ -522,6 +557,7 @@ mod tests {
             tx,
             CtrlTransport::Local,
             CtrlAudiobookshelfCapabilities::default(),
+            false,
             false,
             false,
             None,
@@ -568,6 +604,7 @@ mod tests {
             tx,
             CtrlTransport::Local,
             CtrlAudiobookshelfCapabilities::default(),
+            false,
             false,
             false,
             None,

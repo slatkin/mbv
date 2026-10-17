@@ -73,8 +73,7 @@ impl App {
 
     /// Whether removing the slot at `pos` from `scope`'s playback queue needs
     /// the dedicated now-playing confirmation: the slot is the actively
-    /// playing item, or the attached session reports it as the remote
-    /// now-playing item. Non-playback scopes never need it.
+    /// playing item. Non-playback scopes never need it.
     pub(in crate::app) fn queue_pos_needs_active_confirm(
         &self,
         scope: QueueScope,
@@ -87,14 +86,7 @@ impl App {
             let s = self.player.status_snapshot();
             (s.active, s.current_idx)
         };
-        if active {
-            return current_idx == pos;
-        }
-        self.connected_session_state
-            .as_ref()
-            .and_then(|s| s.now_playing_item_id.as_ref())
-            .zip(self.queue_for_scope(scope).emby_item_at(pos))
-            .is_some_and(|(npid, item)| item.id == *npid)
+        active && current_idx == pos
     }
 
     /// Remove the slots named by `slot_ids` from `scope`'s queue as one

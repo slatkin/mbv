@@ -142,6 +142,8 @@ pub(super) fn test_loop_with_queue(
         tray: null_tray(),
         pin_swap,
         cast_connector: None,
+        emby_session_output: false,
+        emby_session_worker: None,
     };
     TestLoop {
         event_loop,

@@ -239,7 +239,7 @@ impl App {
     }
 
     fn replace_and_route_album_queue(&mut self, tracks: Vec<EmbyItem>, start_idx: usize) -> bool {
-        if self.connected_session_id.is_none() && self.emby_snapshot().is_none() {
+        if self.emby_snapshot().is_none() {
             self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
             return false;
         }

@@ -638,6 +638,10 @@ fn run() -> Result<(), DaemonError> {
             // local playback is its only output, so no Cast connector is
             // supplied and the Hello hides `playback-output`.
             cast_connector: None,
+            // mbvd is a headless server daemon (emby-session-owner-output
+            // design D2): it never hosts an Emby Session output, a state that
+            // belongs with a user's desktop Client.
+            emby_session_output: false,
         },
     );
     Err(DaemonError::failure(format!("mbvd: {error}")))

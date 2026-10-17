@@ -19,7 +19,7 @@ use mbv_queue::PlaybackQueue;
 
 use super::super::DaemonLoop;
 use super::{CastLoadedItem, PlaybackOutput};
-use mbv_ctrl::CtrlEvent;
+use crate::output::not_presenting;
 
 /// One status-poll result (design D8, task 3.3). Only the result whose id
 /// matches the in-flight poll — the same id stamped into that poll's job —
@@ -40,7 +40,7 @@ pub(super) fn handle_cast_status(
             return;
         };
         if cast.receiver.id != receiver_id
-            || !matches!(cast.connection, mbv_ctrl::CastConnection::Connected)
+            || !matches!(cast.connection, mbv_ctrl::OutputConnection::Connected)
             || cast
                 .poll_sent
                 .is_none_or(|(in_flight, _)| in_flight != poll_id)
@@ -81,7 +81,7 @@ pub(super) fn handle_cast_status(
         return;
     }
     if let Some(loaded_slot) = settle_slot {
-        settle_cast_transition(daemon, loaded_slot);
+        crate::core::settle_remote_transition(daemon, loaded_slot);
     }
     super::advance::apply_end_report(daemon);
     refresh_presentation(daemon, Instant::now());
@@ -183,21 +183,6 @@ pub(super) fn presented_player_status(
     presented
 }
 
-/// The `PlayerStatus` for a Cast output with nothing to present (design D8,
-/// row 6.1): no active playback, no position, no now-playing metadata. The
-/// queue length and the queue's own active marker stay coherent so
-/// status-only consumers never index a slot the queue no longer holds.
-fn not_presenting(base: &PlayerStatus, queue: &PlaybackQueue) -> PlayerStatus {
-    let mut inactive = base.clone();
-    inactive.active = false;
-    inactive.paused = false;
-    inactive.position_ticks = 0;
-    inactive.clear_current_item_metadata();
-    inactive.queue_len = queue.len();
-    inactive.current_idx = queue.active_index().unwrap_or(0);
-    inactive
-}
-
 /// Re-derives the Owner's presented `PlayerStatus` from the Cast output's
 /// state and installs it as the player's shared status (design D8, row 6.1).
 /// The status-broadcast thread publishes it to Clients at the local cadence;
@@ -206,89 +191,23 @@ fn not_presenting(base: &PlayerStatus, queue: &PlaybackQueue) -> PlayerStatus {
 /// still be playing it, and the first report after the reconnect corrects
 /// the presentation — so extrapolation never runs on a connection that can
 /// no longer report.
-pub(super) fn refresh_presentation(daemon: &mut DaemonLoop, now: Instant) {
+pub(crate) fn refresh_presentation(daemon: &mut DaemonLoop, now: Instant) {
     let PlaybackOutput::Cast(cast) = &daemon.owner.output else {
         return;
     };
-    let elapsed = if matches!(cast.connection, mbv_ctrl::CastConnection::Connected) {
+    let elapsed = if matches!(cast.connection, mbv_ctrl::OutputConnection::Connected) {
         cast.status_at
             .and_then(|at| now.checked_duration_since(at))
             .unwrap_or(Duration::ZERO)
     } else {
         Duration::ZERO
     };
-    let base = daemon.player.status.lock().unwrap().clone();
-    let presented = presented_player_status(
-        &base,
+    let mut status = daemon.player.status.lock().unwrap();
+    *status = presented_player_status(
+        &status,
         &daemon.owner.core.queue,
         cast.loaded.as_ref(),
         cast.last_status.as_ref(),
         elapsed,
-    );
-    *daemon.player.status.lock().unwrap() = presented;
-}
-
-/// Settles the in-flight transition a confirming receiver status closes (row
-/// 5.2): the loaded slot becomes the observed active slot, the transition
-/// settles, a queued transition the settle promotes is dispatched, and the
-/// guarded play intent the load carried is applied. Mirrors the run's
-/// `TrackChanged` handling (observe → settle → publish).
-fn settle_cast_transition(daemon: &mut DaemonLoop, loaded_slot: mbv_queue::QueueSlotId) {
-    // Only the transition the loaded item belongs to settles here: a newer
-    // in-flight transition targets a slot the receiver has not confirmed.
-    let Some(in_flight) = daemon
-        .owner
-        .core
-        .transitions
-        .in_flight()
-        .filter(|t| t.target == loaded_slot)
-    else {
-        return;
-    };
-    let mut ctx = super::owner_context(daemon);
-    let order_before = ctx.owner.core.play_order();
-    ctx.owner.core.note_observed_active_slot(Some(loaded_slot));
-    if ctx.owner.core.play_order() != order_before {
-        crate::forward_play_order_advance(&ctx.owner.core, ctx.player);
-    }
-    crate::core::settle_and_redispatch(&mut ctx, in_flight.request_id, loaded_slot);
-    // The guarded play intent the load registered under settles with its
-    // transition; without this a Cast play would sit unresolved and coalesce
-    // every later play from its connection.
-    if let Some((connection_id, request_id, generation)) = ctx
-        .owner
-        .intents
-        .current
-        .as_ref()
-        .filter(|current| {
-            current.request_id == in_flight.request_id
-                && matches!(current.action, mbv_ctrl::PlaybackIntentAction::Play { .. })
-        })
-        .map(|current| {
-            (
-                current.connection_id,
-                current.request_id,
-                current.generation,
-            )
-        })
-        && let Some(event) =
-            ctx.owner
-                .intents
-                .applied_if_current(connection_id, request_id, generation)
-    {
-        ctx.ctrl_clients
-            .lock()
-            .unwrap()
-            .send_to_client(connection_id, &CtrlEvent::PlaybackIntent(event));
-    }
-    ctx.shared_queue.publish_observed(&ctx.owner.core);
-    crate::broadcast_queue_state(
-        ctx.ctrl_clients,
-        ctx.player,
-        ctx.shared_queue,
-        &ctx.owner.core.queue,
-        &ctx.owner.core.source,
-        &ctx.owner.core.transitions,
-        None,
     );
 }

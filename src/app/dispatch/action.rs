@@ -16,12 +16,9 @@ use crate::app::App;
 use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::dispatch::queue::QueueOpEdit;
 use crate::app::input::resolver::KeyChord;
-#[cfg(test)]
-use crate::app::tests::QueueViewTestExt;
 use crossterm::event::KeyCode;
 use mbv_ctrl::Direction;
 use mbv_ctrl::player::PlayerCommand;
-use mbv_emby_model::EmbyItem;
 use mbv_queue::QueueSlotId;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -36,12 +33,9 @@ pub(in crate::app) enum Command {
     NextTrack,
     PreviousTrack,
     /// `z`: `dispatch` always calls `cycle_sub()`, which cycles through all
-    /// available subtitle tracks (plus "off") for both remote sessions and
-    /// local playback -- unified in #86 so the two backends no longer
-    /// diverge (local used to be a plain on/off `toggle_sub()`). The
+    /// available subtitle tracks (plus "off") for local playback (#86). The
     /// local-idle fallback (cycling the default subtitle *mode* when there's
-    /// no active player) still lives inside `cycle_sub()`, since it has no
-    /// session equivalent to unify with.
+    /// no active player) still lives inside `cycle_sub()`.
     CycleOrToggleSubtitle,
     AdjustVolume(i64),
     /// The `m` key: flips `mute_on` and sends `PlayerCommand::SetMute`.
@@ -54,8 +48,7 @@ pub(in crate::app) enum Command {
     /// tab, or a double-click on a queue row (`handle_mouse`'s
     /// `is_double`/queue branch — the two were already made to match in
     /// a70ad7a, before either went through `Command`; this variant is the
-    /// single implementation both now share). Session-attached: hands the
-    /// item off to the remote session. Otherwise: seeks to the top if it's
+    /// single implementation both now share). It seeks to the top if it's
     /// the already-playing audio item, jumps to it if it's elsewhere in the
     /// active playback queue, or replaces the local playback queue and plays
     /// from this index if the visible queue isn't the one currently playing.
@@ -105,13 +98,8 @@ pub(in crate::app) enum Command {
 /// queue-visible layout, so the gate follows it instead of the panel mode and
 /// the link is gated off in idle `both` and `queue-only`, on in idle
 /// `library-only` where the strip displays the feed.
-#[expect(
-    clippy::struct_excessive_bools,
-    reason = "four independently-derived idle-feed gate facts (player active, connected session, idle panel presence, link availability); the command fires only when all activity gates are false AND the link is available; any combination is reachable (design analysis, issue #804)"
-)]
 pub(in crate::app) struct IdleFeedLinkContext {
     pub player_active: bool,
-    pub has_connected_session: bool,
     pub playback_panel_present_idle: bool,
     pub link_available: bool,
 }
@@ -124,7 +112,6 @@ pub(in crate::app) fn idle_feed_command_for_key(
         KeyCode::Char('o')
             if chord.mods.is_empty()
                 && !context.player_active
-                && !context.has_connected_session
                 && !context.playback_panel_present_idle
                 && context.link_available =>
         {
@@ -241,22 +228,20 @@ impl App {
             "transport command dispatched"
         );
         match *command {
-            Command::TogglePlayPause => self.playback_target().toggle_play_pause(self),
-            Command::Stop => self.playback_target().stop(self),
-            Command::SeekRelative(delta) => self.playback_target().seek_relative(self, delta),
-            Command::NextTrack => self.playback_target().jump_track(self, 1, "NextTrack"),
-            Command::PreviousTrack => self.playback_target().jump_track(self, -1, "PreviousTrack"),
+            Command::TogglePlayPause => crate::app::LocalPlaybackTarget::toggle_play_pause(self),
+            Command::Stop => crate::app::LocalPlaybackTarget::stop(self),
+            Command::SeekRelative(delta) => {
+                crate::app::LocalPlaybackTarget::seek_relative(self, delta);
+            }
+            Command::NextTrack => crate::app::LocalPlaybackTarget::jump_track(self, 1),
+            Command::PreviousTrack => crate::app::LocalPlaybackTarget::jump_track(self, -1),
             Command::CycleOrToggleSubtitle => {
-                // cycle_sub() branches internally on connected_session_id,
-                // and falls back to the idle subtitle-mode cycle itself when
-                // local playback has no active player (see #86).
                 self.cycle_sub();
             }
             Command::AdjustVolume(delta) => {
-                // adjust_volume already branches session vs. local internally.
                 self.adjust_volume(delta);
             }
-            Command::ToggleMute => self.playback_target().toggle_command_mute(self),
+            Command::ToggleMute => crate::app::LocalPlaybackTarget::toggle_command_mute(self),
             Command::CycleAudio => self.cycle_audio(),
             _ => unreachable!("dispatch_playback_command only accepts playback commands"),
         }
@@ -449,10 +434,7 @@ impl App {
         if !self.validate_queue_play_feed(&item) {
             return;
         }
-        let (emby_items, all_slots, slot_id, emby_start) = self.queue_play_snapshot(t);
-        if self.handoff_queue_play_to_session(&item, &emby_items, emby_start) {
-            return;
-        }
+        let (all_slots, slot_id) = self.queue_play_snapshot(t);
         self.play_queue_cursor_locally(t, &item, slot_id, all_slots);
     }
 
@@ -521,57 +503,12 @@ impl App {
         true
     }
 
-    fn queue_play_snapshot(
-        &self,
-        t: usize,
-    ) -> (
-        Vec<EmbyItem>,
-        Vec<mbv_queue::ExecSlot>,
-        Option<QueueSlotId>,
-        usize,
-    ) {
+    fn queue_play_snapshot(&self, t: usize) -> (Vec<mbv_queue::ExecSlot>, Option<QueueSlotId>) {
         // Snapshot data from the queue before any mutable borrows.
         let queue = self.displayed_queue();
-        let emby_items = queue
-            .slots()
-            .iter()
-            .filter_map(|slot| slot.item.as_emby().cloned())
-            .collect();
         let all_slots = queue.slot_pairs();
         let slot_id = queue.slot_id_at(t);
-        // Pre-compute the Emby-only projection index for the cursor
-        // position, needed by the session API boundary.
-        let emby_start = queue
-            .slots()
-            .iter()
-            .take(t)
-            .filter(|slot| slot.item.as_emby().is_some())
-            .count();
-        (emby_items, all_slots, slot_id, emby_start)
-    }
-
-    fn handoff_queue_play_to_session(
-        &mut self,
-        item: &mbv_queue::QueueItem,
-        emby_items: &[EmbyItem],
-        emby_start: usize,
-    ) -> bool {
-        // Connected remote session: hand off Emby items to the
-        // session; Feed entries cannot cross the Emby session API
-        // so they fall through to the local/direct-remote path.
-        if let mbv_queue::QueueItem::Emby(_) = item
-            && let Some(conn_id) = self.connected_session_id.clone()
-        {
-            let label = item.display_name();
-            self.flash(
-                format!("Requesting playback: {label}"),
-                ToastSeverity::Neutral,
-            );
-            self.set_queue_scope(self.playing_queue_scope());
-            self.submit_attached_sequence(&conn_id, emby_items, emby_start);
-            return true;
-        }
-        false
+        (all_slots, slot_id)
     }
 
     fn play_queue_cursor_locally(

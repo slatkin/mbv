@@ -484,14 +484,6 @@ impl Model {
             self.app.settings_save_at = None;
         }
 
-        // Periodic session poll when connected to a remote session
-        if self.app.connected_session_id.is_some()
-            && self.app.remote.last_session_poll.elapsed() >= Duration::from_secs(1)
-            && !self.app.sessions_loading
-        {
-            self.app.spawn_sessions_load();
-        }
-
         // Keep this session visible to other Emby clients
         if let Some(ref tx) = self.app.ws_send_tx
             && self.app.last_keepalive.elapsed() >= Duration::from_secs(30)

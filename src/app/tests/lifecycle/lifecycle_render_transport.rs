@@ -52,20 +52,15 @@ fn auto_reconnect_settings_row_displays_and_toggles_current_session() {
 }
 
 #[rstest]
-#[case::transport_prev_next_unavailable_when_player_inactive(false, 0, 0, false, (false, false))]
-#[case::transport_prev_unavailable_on_first_item(true, 3, 0, false, (false, true))]
-#[case::transport_prev_next_both_available_for_connected_remote_session_regardless_of_local_status(true, 3, 2, true, (true, true))]
+#[case::transport_prev_next_unavailable_when_player_inactive(false, 0, 0, (false, false))]
+#[case::transport_prev_unavailable_on_first_item(true, 3, 0, (false, true))]
 fn transport_prev_next(
     #[case] active: bool,
     #[case] queue_len: usize,
     #[case] current_idx: usize,
-    #[case] connected: bool,
     #[case] expected: (bool, bool),
 ) {
-    let mut app = make_app_stub();
-    if connected {
-        app.connected_session_id = Some("session-1".into());
-    }
+    let app = make_app_stub();
     {
         app.player.update_status(|st| {
             st.active = active;
@@ -74,16 +69,4 @@ fn transport_prev_next(
         });
     };
     assert_eq!(app.transport_prev_next_available(), expected);
-}
-
-#[test]
-fn remote_position_extrapolation_does_not_round_up_partial_seconds() {
-    assert_eq!(
-        App::extrapolated_remote_position(10, Duration::from_millis(1600)),
-        11
-    );
-    assert_eq!(
-        App::extrapolated_remote_position(10, Duration::from_secs(2)),
-        12
-    );
 }

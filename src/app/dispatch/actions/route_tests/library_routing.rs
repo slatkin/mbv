@@ -1,4 +1,7 @@
 use super::*;
+use crate::app::tests::install_test_emby;
+use crate::app::{BrowseLevel, LibraryTab};
+use mbv_net::mock_http::MockHttp;
 use mbv_ui_model::browse::ServerRows;
 
 #[test]
@@ -10,17 +13,6 @@ fn enqueue_route_conflict_rejects_mismatched_route() {
 }
 
 #[test]
-fn enqueue_route_conflict_allows_enqueue_while_attached_to_a_session() {
-    // A Sessions-panel attached session (`connected_session_id`) has
-    // its own, separate queue-scope rules -- the library-routing
-    // invariant must not fire a "Can't mix libraries" toast for a
-    // reason unrelated to library routing.
-    let mut app = make_app_stub();
-    app.connected_session_id = Some("sess-1".to_string());
-    assert!(!app.enqueue_route_conflict(Some(&"music".to_string())));
-}
-
-#[test]
 fn enqueue_route_conflict_allows_enqueue_while_on_a_non_route_direct_remote() {
     let mut app = make_app_stub();
     let (remote, remote_rx) = mbv_remote_player::RemotePlayer::stub(make_items(1), 0);
@@ -29,26 +21,6 @@ fn enqueue_route_conflict_allows_enqueue_while_on_a_non_route_direct_remote() {
     // active_route stays None: this is a Sessions-panel direct-remote
     // connection, not a library route.
     assert!(!app.enqueue_route_conflict(Some(&"music".to_string())));
-}
-
-#[test]
-fn play_item_skips_library_routing_when_attached_to_a_session() {
-    let mut app = make_app_stub();
-    app.library_routes
-        .insert("music".to_string(), "living-room-pc".to_string());
-    app.connected_session_id = Some("sess-1".to_string());
-    let mut lib_item = make_item("Music", "CollectionFolder");
-    lib_item.id = "lib-music".to_string();
-    app.libs.push(LibraryTab::new(lib_item));
-    let mut item = make_item("Song", "Audio");
-    item.id = "song-1".to_string();
-
-    // No DAEMON_ROUTE_CONNECT_OVERRIDE set -- if library routing
-    // engaged here it would attempt a real connection and this test
-    // would hang/fail rather than reach the assertion below.
-    app.play_item(item);
-
-    assert!(app.active_route.is_none());
 }
 
 #[test]

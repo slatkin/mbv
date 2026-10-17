@@ -2,7 +2,7 @@ mod browse_dispatch;
 mod confirm_keys;
 mod key_policy;
 pub(in crate::app) use key_policy::{
-    OverlayFocus, RemotePlaybackTarget, RouterOverlayState, RouterPlaybackState,
+    OverlayFocus, RemoteControlTarget, RouterOverlayState, RouterPlaybackState,
 };
 mod lib_keys;
 mod playlist_keys;

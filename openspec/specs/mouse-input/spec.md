@@ -99,11 +99,11 @@ no behaviour SHALL depend on the subscription clause filtering by event kind.
 
 #### Scenario: Chrome that never holds focus is still clickable
 
-- **WHEN** the user clicks a transport control or the seek bar in the playback
-  chrome, which never receives keyboard focus
-- **THEN** the playback component resolves the click against its painted control
-  geometry and emits the corresponding transport intent, or a seek intent
-  carrying a resolved position fraction
+- **WHEN** the user clicks a transport control in the playback chrome, or
+  double-clicks its seek bar, none of which ever receives keyboard focus
+- **THEN** the playback component resolves the gesture against its painted
+  control geometry and emits the corresponding transport intent, or a seek
+  intent carrying a resolved position fraction
 - **AND** the shell handler for that intent does not read the seek bar's
   rectangle
 

@@ -164,7 +164,7 @@ struct OverlayLogoSource {
     series_id: String,
 }
 
-/// The key rules both the queue-item path and the watched remote session's
+/// The key rules both the queue-item path and the Emby Session output's
 /// slotless path share (remote-session-overlay-parity, task 3.1): a Movie's
 /// logo key carries its image etag, an Episode's show logo keys on the series
 /// id alone. `logo_etag` is empty when the payload carries none, which leaves
@@ -376,6 +376,12 @@ impl App {
         &self,
         playback: mbv_ui_model::playback::PlaybackState,
     ) -> Option<(usize, EmbyItem)> {
+        // The owner's Emby Session output presents content it did not load
+        // from `OutputState` alone, never from the active queue slot (design
+        // D12). The slotless path owns that card.
+        if self.emby_session_now_playing().is_some() {
+            return None;
+        }
         let slotless_active = playback.active && playback.active_idx.is_none();
         let active = if playback.active {
             playback.active_idx.and_then(|idx| {
@@ -399,21 +405,19 @@ impl App {
         })
     }
 
-    /// A watched remote Session names an item outside the local queue, never the selected row.
+    /// Content the owner's Emby Session output presents but the owner did not
+    /// load names an item outside the local queue, never the selected row.
     fn project_slotless_session(&mut self, projection: &mut QueueCardProjection) -> bool {
-        let Some((item_id, item_type, series_id)) =
-            self.connected_session_state.as_ref().and_then(|session| {
-                Some((
-                    session.now_playing_item_id.clone()?,
-                    session.now_playing_item_type.as_deref(),
-                    session.now_playing_series_id.clone().unwrap_or_default(),
-                ))
-            })
-        else {
+        let Some(now_playing) = self.emby_session_now_playing() else {
             return true;
         };
-        let cache_key = card_cache_key_for_id(&item_id, item_type);
-        let image_types = slotless_card_image_types(item_type);
+        let (item_id, item_type, series_id) = (
+            now_playing.item_id.clone(),
+            now_playing.item_type.clone(),
+            now_playing.series_id.clone().unwrap_or_default(),
+        );
+        let cache_key = card_cache_key_for_id(&item_id, Some(item_type.as_str()));
+        let image_types = slotless_card_image_types(Some(item_type.as_str()));
         self.fetch_card_image(cache_key.clone(), item_id, series_id, image_types);
         projection.cache_key = Some(cache_key);
         true
@@ -534,7 +538,10 @@ impl App {
 
         // Presentation follows a selected-but-unconfirmed slot, switching artwork with its highlight.
         let playback = self.displayed_playback_state();
-        let slotless_active = playback.active && playback.active_idx.is_none();
+        // Content the owner's Emby Session output presents but did not load
+        // is slotless regardless of the queue's active marker (design D12).
+        let slotless_active = self.emby_session_now_playing().is_some()
+            || (playback.active && playback.active_idx.is_none());
         let Some((cursor, item)) = self.queue_card_emby_source(playback) else {
             if slotless_active {
                 self.project_slotless_session(&mut projection);
@@ -563,8 +570,9 @@ impl App {
         column_resizing: bool,
     ) {
         let (height, width) = self.images.last_card_size();
-        let slotless_active =
-            playback.active && playback.active_idx.is_none() && projection.cache_key.is_some();
+        let slotless_active = (self.emby_session_now_playing().is_some()
+            || (playback.active && playback.active_idx.is_none()))
+            && projection.cache_key.is_some();
         let item = if slotless_active {
             None
         } else {
@@ -634,15 +642,16 @@ impl App {
         // The logo owner is resolved before the overlay builds so its fetch
         // starts as early as the overlay path itself (design D7); a pending
         // or failed fetch simply leaves `ready_logo_key` empty below. The
-        // slotless path derives the same owner from the watched session's
-        // now-playing payload (remote-session-overlay-parity, task 3.2).
+        // slotless path derives the same owner from the Emby Session output's
+        // now-playing payload (remote-session-overlay-parity, task 3.2;
+        // emby-session-owner-output task 7.2).
         let logo_owner = if slotless_active {
-            self.connected_session_state.as_ref().and_then(|session| {
+            self.emby_session_now_playing().and_then(|now_playing| {
                 overlay_logo_source_for(
-                    session.now_playing_item_type.as_deref().unwrap_or(""),
-                    session.now_playing_item_id.as_deref().unwrap_or(""),
-                    session.now_playing_series_id.as_deref().unwrap_or(""),
-                    session.now_playing_logo_etag.as_deref().unwrap_or(""),
+                    &now_playing.item_type,
+                    &now_playing.item_id,
+                    now_playing.series_id.as_deref().unwrap_or(""),
+                    now_playing.logo_tag.as_deref().unwrap_or(""),
                 )
             })
         } else {

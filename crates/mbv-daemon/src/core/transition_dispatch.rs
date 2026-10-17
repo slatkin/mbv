@@ -34,11 +34,8 @@ pub(crate) fn send_jump_or_cold_start(
     transition: mbv_player::transition::Transition,
     origin: Option<CtrlClientId>,
 ) -> bool {
-    if matches!(ctx.owner.output, crate::cast::PlaybackOutput::Cast(_)) {
-        let resume_ticks =
-            mbv_player::resume_ticks_for_slot(&ctx.owner.core.queue, transition.target)
-                .unwrap_or(0);
-        return crate::cast::dispatch_cast_load(ctx, transition, resume_ticks, origin);
+    if let Some(started) = dispatch_remote_load(ctx, transition, origin) {
+        return started;
     }
     let target = transition.target;
     let resume_ticks = mbv_player::resume_ticks_for_slot(&ctx.owner.core.queue, target);
@@ -52,6 +49,51 @@ pub(crate) fn send_jump_or_cold_start(
         &mut ctx.owner.core.transitions,
         &mut ctx.owner.queued_transition_origin,
     );
+    cold_start_at_slot(ctx, target)
+}
+
+/// Loads an accepted transition's target on a remote output, which holds one
+/// item at a time (design D4, D5, D7): the Cast receiver resolves the target
+/// slot off-thread and loads it, and the Emby Session admits the target and
+/// loads it, so neither starts the local run. Returns `None` when the output is
+/// the local run, which takes the jump itself.
+fn dispatch_remote_load(
+    ctx: &mut DaemonOwnerContext<'_>,
+    transition: mbv_player::transition::Transition,
+    origin: Option<CtrlClientId>,
+) -> Option<bool> {
+    match ctx.owner.output {
+        crate::cast::PlaybackOutput::Cast(_) => {
+            let resume_ticks =
+                mbv_player::resume_ticks_for_slot(&ctx.owner.core.queue, transition.target)
+                    .unwrap_or(0);
+            Some(crate::cast::dispatch_cast_load(
+                ctx,
+                transition,
+                resume_ticks,
+                origin,
+            ))
+        }
+        crate::cast::PlaybackOutput::EmbySession(_) => {
+            let resume_ticks =
+                mbv_player::resume_ticks_for_slot(&ctx.owner.core.queue, transition.target)
+                    .unwrap_or(0);
+            Some(crate::emby_session::dispatch(
+                ctx,
+                transition,
+                resume_ticks,
+                origin,
+            ))
+        }
+        crate::cast::PlaybackOutput::Local => None,
+    }
+}
+
+/// Cold-starts the queue at `target` after the jump found no live run: point
+/// the canonical queue's active marker at the target slot, drop the dead run's
+/// stale observation, and submit the whole queue starting at the target slot,
+/// which spawns a fresh run. Returns whether the submission was accepted.
+fn cold_start_at_slot(ctx: &mut DaemonOwnerContext<'_>, target: QueueSlotId) -> bool {
     let Some(start_idx) = ctx.owner.core.queue.slot_index(target) else {
         tracing::warn!(name: "daemon.transition_dispatch.cold_start.skipped", target: "transition", slot = ?target, "no live playback run and the target slot is absent; jump dropped");
         return false;
@@ -167,6 +209,76 @@ pub(crate) fn take_promoted_origin(
     };
     ctx.owner.queued_transition_origin = None;
     origin
+}
+
+/// Settle the in-flight transition one remote output's observation of the
+/// loaded item closes (cast-owner-output row 5.2, emby-session-owner-output
+/// design D6/D7): the loaded slot becomes the observed active slot, the
+/// transition settles, a queued transition the settle promotes is dispatched,
+/// and the guarded play intent the load carried is applied. This mirrors the
+/// run's `TrackChanged` handling (observe → settle → publish) for both remote
+/// outputs: the Cast status poll and the Emby Session `/Sessions` poll.
+pub(crate) fn settle_remote_transition(
+    daemon: &mut crate::event_loop::DaemonLoop,
+    loaded_slot: QueueSlotId,
+) {
+    // Only the transition the loaded item belongs to settles here: a newer
+    // in-flight transition targets a slot the output has not confirmed.
+    let Some(in_flight) = daemon
+        .owner
+        .core
+        .transitions
+        .in_flight()
+        .filter(|t| t.target == loaded_slot)
+    else {
+        return;
+    };
+    let mut ctx = crate::cast::owner_context(daemon);
+    let order_before = ctx.owner.core.play_order();
+    ctx.owner.core.note_observed_active_slot(Some(loaded_slot));
+    if ctx.owner.core.play_order() != order_before {
+        forward_play_order_advance(&ctx.owner.core, ctx.player);
+    }
+    settle_and_redispatch(&mut ctx, in_flight.request_id, loaded_slot);
+    // The guarded play intent the load registered under settles with its
+    // transition; without this a remote play would sit unresolved and coalesce
+    // every later play from its connection.
+    if let Some((connection_id, request_id, generation)) = ctx
+        .owner
+        .intents
+        .current
+        .as_ref()
+        .filter(|current| {
+            current.request_id == in_flight.request_id
+                && matches!(current.action, mbv_ctrl::PlaybackIntentAction::Play { .. })
+        })
+        .map(|current| {
+            (
+                current.connection_id,
+                current.request_id,
+                current.generation,
+            )
+        })
+        && let Some(event) =
+            ctx.owner
+                .intents
+                .applied_if_current(connection_id, request_id, generation)
+    {
+        ctx.ctrl_clients
+            .lock()
+            .unwrap()
+            .send_to_client(connection_id, &CtrlEvent::PlaybackIntent(event));
+    }
+    ctx.shared_queue.publish_observed(&ctx.owner.core);
+    broadcast_queue_state(
+        ctx.ctrl_clients,
+        ctx.player,
+        ctx.shared_queue,
+        &ctx.owner.core.queue,
+        &ctx.owner.core.source,
+        &ctx.owner.core.transitions,
+        None,
+    );
 }
 
 /// Settle the in-flight transition against a Playback-run observation and, if

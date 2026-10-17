@@ -117,13 +117,16 @@ impl Model {
             return;
         }
         let panel_area = crate::app::shell::chrome_panels::sync_panel_area(&self.app);
-        let connected_session_id = self.app.sessions_panel_connected_id();
+        let direct_remote_session_id = self.app.sessions_panel_connected_id();
         // The connection mark follows the owner's reported playback output
-        // (design D13): the owner holds the receiver connection, and a
-        // `Disconnected` report still names the target as the output.
+        // (design D12/D13): the owner holds the output, a `Disconnected`
+        // report still names the target as the output, and an Emby Session
+        // row is marked by its `device_id`.
+        let emby_output_device_id = self.app.sessions_panel_connected_device_id();
         let cast_attachment_id = match self.app.playback_output.as_ref() {
             Some(mbv_ctrl::OutputState::Cast { receiver_id, .. }) => Some(receiver_id.as_str()),
-            Some(mbv_ctrl::OutputState::Local) | None => None,
+            Some(mbv_ctrl::OutputState::EmbySession { .. } | mbv_ctrl::OutputState::Local)
+            | None => None,
         };
         if let Some(comp) = self.application.get_component_mut(&id)
             && let Some(sessions) = comp.as_any_mut().downcast_mut::<SessionsComponent>()
@@ -143,7 +146,8 @@ impl Model {
                     .map(crate::app::state::panel_targets::PanelTarget::row)
                     .collect::<Vec<_>>(),
                 self.app.sessions_loading,
-                connected_session_id,
+                direct_remote_session_id,
+                emby_output_device_id,
                 cast_attachment_id,
                 self.app.can_disconnect_remote(),
                 panel_area,

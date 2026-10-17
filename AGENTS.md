@@ -7,7 +7,7 @@ mbv is a Rust terminal media client for Emby, Audiobookshelf, and Feeds. It embe
 * Read `CONTEXT.md` before you name domain concepts. Its *Avoid* terms name the words you must not use. Add new terms with the change. Ask before you rename or collide.
 * Architecture work follows fixed sources. `docs/adr/` holds accepted decisions (the why). `openspec/specs/` holds current behavior. For in-progress work, read the full `openspec/changes/<name>/` directory. Its delta specs overlay main specs until archived. Do not edit archived changes.
 * `docs/invariants/` holds properties that the code must maintain but that no type enforces. It tells why they matter, how the code upholds them today, and where they still fail. Read it before you touch queue, progress, or playback-lifecycle state. Add one when you find or fix this kind of bug. Do not leave the lesson only in a commit message.
-* Write durable plans in OpenSpec markdown, not in chat. Commit plans, specs, and docs with code. Sync applied deltas into `openspec/specs/`. Archive when done.
+* Write durable plans in OpenSpec markdown, not in chat. Commit plans, specs, and docs with code. Sync applied deltas into `openspec/specs/` and archive the change only when the user approves the PR for merge, as the last commit before the merge. Never sync or archive when you open a PR: the change stays open while review and live tests can still change it.
 * Probe the real service before you plan API work. If the design of a feature depends on what a remote API returns, probe that endpoint first. Emby, Audiobookshelf, feeds, and any remote endpoint are examples.
 * Change source-of-truth types before callers. Ask only about material design and product choices.
 * Commit your changes or undo them. Never leave a dirty worktree.
@@ -71,6 +71,7 @@ ADRs 0022 through 0024, `openspec/specs/interactive-component-framework/spec.md`
 * A Composed or Bound queue has one canonical ordered sequence of `QueueItem` slots. Use stable `QueueSlotId` for occurrences. Do not recreate parallel Emby, Feed, or Audiobookshelf lists. Do not use content identity to address a slot.
 * The Player owner is authoritative for Bound queue state, the active slot, and the playback lifecycle. mpv is a source and output projection (and can load only the active file). It is never queue authority.
 * A Cast receiver is an output projection of the Owner, like mpv. It holds only the active item. The Owner keeps the canonical queue and the active slot.
+* An Emby Session is an output projection of the Owner, like mpv and a Cast receiver: the Owner drives the device through the Emby Sessions API, keeps the canonical queue and the active slot, and the Session holds the active item and the next item, never more. The TUI is a picker and has no attached-session play path.
 * Owner admission is the capability boundary. Media kind, required Service setup, and negotiated ctrl transport decide what enters a Bound queue. Components can edit Composed content. They never perform admission and never mutate the canonical queue directly. Shell and Player paths do that work.
 
 ## TUI work

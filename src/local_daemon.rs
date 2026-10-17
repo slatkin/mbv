@@ -339,6 +339,10 @@ pub fn run_local_daemon_main() -> ! {
             // The Local daemon owns the Cast connector (cast-owner-output
             // design D2): its Owner can make a receiver its playback output.
             cast_connector: Some(mbv_daemon::local_cast_connector()),
+            // The Local daemon hosts an Emby Session output
+            // (emby-session-owner-output design D2): it is the desktop-adjacent
+            // owner whose Client selects the Session.
+            emby_session_output: true,
         },
     );
     eprintln!("mbv: local daemon: {error}");

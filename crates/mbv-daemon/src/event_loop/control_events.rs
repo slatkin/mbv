@@ -302,6 +302,10 @@ impl DaemonLoop {
         // open (design D6). Persisting after the stop keeps the snapshot's
         // active slot consistent with the stopped player.
         let deadline = Instant::now() + SHUTDOWN_FINALIZE_HARD_BOUND;
+        // An Emby Session device keeps the rest of the queue when the Owner
+        // exits (design D15): the hand-over job's ack shares this shutdown
+        // bound, and the active item plays on.
+        crate::emby_session::handover::hand_over(self, deadline);
         self.player.stop_for_shutdown(remaining(deadline));
         self.player.join_or_timeout(remaining(deadline));
         if let Some(tx) = &self.queue_persist_tx {

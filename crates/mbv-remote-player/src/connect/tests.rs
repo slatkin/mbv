@@ -7,8 +7,6 @@ use mbv_emby_model::EmbyImageTags;
 use mbv_emby_model::EmbyItem;
 use mbv_queue::QueueSource;
 use mbv_queue::{FeedEntry, QueueItem};
-use std::net::SocketAddr;
-use std::path::PathBuf;
 
 fn make_media_item(id: &str) -> EmbyItem {
     EmbyItem {
@@ -330,70 +328,6 @@ fn connect_endpoint_maps_owner_admission_refusals() {
 }
 
 #[test]
-fn daemon_endpoint_parses_local_and_unix_paths() {
-    assert_eq!(
-        DaemonEndpoint::parse("local").unwrap(),
-        DaemonEndpoint::Local
-    );
-    assert_eq!(DaemonEndpoint::parse("").unwrap(), DaemonEndpoint::Local);
-    assert_eq!(
-        DaemonEndpoint::parse("unix:///tmp/mbv.sock").unwrap(),
-        DaemonEndpoint::Unix(PathBuf::from("/tmp/mbv.sock"))
-    );
-    assert_eq!(
-        DaemonEndpoint::parse("/tmp/mbv.sock").unwrap(),
-        DaemonEndpoint::Unix(PathBuf::from("/tmp/mbv.sock"))
-    );
-    assert_eq!(
-        DaemonEndpoint::parse("tcp://localhost:1234").unwrap(),
-        DaemonEndpoint::Tcp(SocketAddr::from(([127, 0, 0, 1], 1234)))
-    );
-    assert_eq!(
-        DaemonEndpoint::parse("tcp://127.0.0.1:1234").unwrap(),
-        DaemonEndpoint::Tcp(SocketAddr::from(([127, 0, 0, 1], 1234)))
-    );
-    assert_eq!(
-        DaemonEndpoint::parse("tcp://127.0.0.2:1234").unwrap(),
-        DaemonEndpoint::Tcp(SocketAddr::from(([127, 0, 0, 2], 1234)))
-    );
-}
-
-#[test]
-fn resolve_library_route_has_no_wildcard_fallback() {
-    let mut routes = std::collections::BTreeMap::new();
-    routes.insert("music".to_string(), "tcp://192.168.0.104:47788".to_string());
-    assert_eq!(
-        resolve_library_route(&routes, "Music"),
-        Some(DaemonEndpoint::Tcp("192.168.0.104:47788".parse().unwrap()))
-    );
-    assert_eq!(resolve_library_route(&routes, "movies"), None);
-}
-
-#[test]
-fn resolve_library_route_rejects_a_bare_device_name_as_malformed() {
-    // A stale pre-#256 config entry (device name, no scheme) must
-    // NOT silently resolve -- DaemonEndpoint::parse would otherwise
-    // accept it as a bogus Unix(PathBuf) socket path. Library routing
-    // is tcp://-only (#239 addendum), so anything that doesn't parse
-    // to Tcp(_) is treated as malformed: logged and skipped.
-    let mut routes = std::collections::BTreeMap::new();
-    routes.insert("music".to_string(), "living-room-pc".to_string());
-    assert_eq!(resolve_library_route(&routes, "music"), None);
-}
-
-#[test]
-fn resolve_library_route_rejects_unix_and_local_endpoints() {
-    // Library routing is remote-only -- a unix:// or bare "local"
-    // value is well-formed as a DaemonEndpoint but not a valid
-    // library route, so it must still resolve to None.
-    let mut routes = std::collections::BTreeMap::new();
-    routes.insert("music".to_string(), "unix:///run/mbvd.sock".to_string());
-    routes.insert("movies".to_string(), "local".to_string());
-    assert_eq!(resolve_library_route(&routes, "music"), None);
-    assert_eq!(resolve_library_route(&routes, "movies"), None);
-}
-
-#[test]
 // Issue #559: the build gate fires on the Owner's hello, before the Client
 // sends its own hello/control credential (design D1).
 fn local_handshake_rejects_different_owner_build_before_client_hello() {
@@ -565,17 +499,6 @@ fn handshake_without_audio_only_capability_defaults_to_video_capable() {
     peer.join().unwrap();
 }
 
-#[test]
-fn daemon_endpoint_rejects_unsupported_schemes() {
-    assert_eq!(
-        DaemonEndpoint::parse("tcp://10.0.0.1:1234").unwrap(),
-        DaemonEndpoint::Tcp(SocketAddr::from(([10, 0, 0, 1], 1234)))
-    );
-    DaemonEndpoint::parse("tcp://[::1]:4321").unwrap_err();
-    DaemonEndpoint::parse("unix://").unwrap_err();
-    DaemonEndpoint::parse("http://localhost:1234").unwrap_err();
-}
-
 /// A fake daemon whose Hello advertises `playback-output`, whose Client
 /// hello is captured for assertion, and which — after the initial state —
 /// optionally cold-seeds a Cast output, then holds the socket open.
@@ -605,6 +528,10 @@ fn connect_with_advertised_hello(
         assert!(
             client_hello.contains(mbv_ctrl::CTRL_CAP_PLAYBACK_OUTPUT),
             "a Client-role hello must claim playback-output — the claim is what tells the Owner to cold-seed and broadcast to this connection"
+        );
+        assert!(
+            client_hello.contains(mbv_ctrl::CTRL_CAP_EMBY_SESSION_OUTPUT),
+            "live-test defect: a Client-role hello must claim emby-session-output — without it the Owner masks the selected Emby Session output to Local"
         );
         let state = CtrlEvent::UnifiedQueueState(UnifiedQueueStateData {
             status: PlayerStatus::default(),
@@ -646,13 +573,13 @@ fn playback_output_seed_is_retained_from_the_handshake() {
         connect_with_advertised_hello(Some(mbv_ctrl::OutputState::Cast {
             receiver_id: "r-1".to_string(),
             name: "Living Room".to_string(),
-            connection: mbv_ctrl::CastConnection::Connected,
+            connection: mbv_ctrl::OutputConnection::Connected,
         }));
 
     let expected = mbv_ctrl::OutputState::Cast {
         receiver_id: "r-1".to_string(),
         name: "Living Room".to_string(),
-        connection: mbv_ctrl::CastConnection::Connected,
+        connection: mbv_ctrl::OutputConnection::Connected,
     };
     assert_eq!(
         player.playback_output_state(),
@@ -665,6 +592,17 @@ fn playback_output_seed_is_retained_from_the_handshake() {
     }
     // No Drop impl: disconnect() is what shuts the client end down, so
     // the fake daemon's read loop observes EOF and the join completes.
+    player.disconnect();
+    peer.join().unwrap();
+}
+
+/// Live-test defect: Enter on a Brave web-client Emby Session did nothing.
+/// The production hello must claim `emby-session-output` (asserted by the harness).
+/// Guards commit 4613fa8f8 (claim emby-session-output in the client hello).
+#[test]
+fn production_client_hello_advertises_emby_session_output() {
+    let (player, _event_rx, peer) = connect_with_advertised_hello(None);
+
     player.disconnect();
     peer.join().unwrap();
 }
@@ -702,7 +640,7 @@ fn a_late_partial_seed_line_is_never_consumed() {
     let cast_output = mbv_ctrl::OutputState::Cast {
         receiver_id: "r-1".to_string(),
         name: "Living Room".to_string(),
-        connection: mbv_ctrl::CastConnection::Connected,
+        connection: mbv_ctrl::OutputConnection::Connected,
     };
     // The line as the daemon sends it: JSON plus its terminating newline,
     // so both halves still end the line correctly when reassembled.
@@ -773,7 +711,7 @@ fn a_late_partial_seed_line_is_never_consumed() {
         Some(mbv_ctrl::OutputState::Cast {
             receiver_id: "r-1".to_string(),
             name: "Living Room".to_string(),
-            connection: mbv_ctrl::CastConnection::Connected,
+            connection: mbv_ctrl::OutputConnection::Connected,
         }),
         "the reader thread retains the late seed too"
     );
@@ -783,4 +721,5 @@ fn a_late_partial_seed_line_is_never_consumed() {
     peer.join().unwrap();
 }
 
+mod daemon_endpoint;
 mod queue;

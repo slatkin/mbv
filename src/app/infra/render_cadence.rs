@@ -2,13 +2,6 @@ use super::super::App;
 use std::time::{Duration, Instant};
 
 impl App {
-    pub(in crate::app) fn extrapolated_remote_position(
-        remote_pos_s: i64,
-        elapsed: Duration,
-    ) -> i64 {
-        remote_pos_s + i64::try_from(elapsed.as_secs()).unwrap_or(i64::MAX)
-    }
-
     pub(in crate::app) fn ui_config_snapshot(&self) -> crate::config::UiConfig {
         let indicator_style = match self.indicator_style {
             mbv_render::indicators::IndicatorStyle::Brackets => "brackets",
@@ -52,10 +45,7 @@ impl App {
             return Duration::from_millis(16);
         }
         let playback = self.effective_playback_state();
-        if playback.active
-            || self.connected_session_state.is_some()
-            || self.images.has_loading_images()
-        {
+        if playback.active || self.images.has_loading_images() {
             Duration::from_millis(150)
         } else {
             Duration::from_secs(1)

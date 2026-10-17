@@ -193,6 +193,9 @@ struct DaemonStarted {
     /// The runtime's Cast connector, when the runtime supplies one
     /// (cast-owner-output design D2). Lives on the event loop.
     cast_connector: Option<crate::CastConnector>,
+    /// Whether the runtime hosts an Emby Session output (emby-session-owner-output
+    /// design D2), advertised as the `emby-session-output` capability.
+    emby_session_output: bool,
 }
 
 fn spawn_queue_persistence_worker(
@@ -364,6 +367,7 @@ fn start_daemon(
         pending_swap,
         attached_clients,
         cast_connector: hooks.cast_connector,
+        emby_session_output: hooks.emby_session_output,
     })
 }
 
@@ -644,11 +648,13 @@ pub fn run_with_options(
         pending_swap,
         attached_clients,
         cast_connector,
+        emby_session_output,
     } = started;
     let (owner, shared_queue) = initialize_queue(role, &player);
     let caps = crate::DaemonHelloCaps {
         audio_only,
         playback_output: cast_connector.is_some(),
+        emby_session_output,
     };
     // Owner restore runs the same progress refresh as cold adoption and a
     // manual queue refresh: the restored queue carries no Service positions
@@ -717,6 +723,8 @@ pub fn run_with_options(
         tray,
         pin_swap,
         cast_connector,
+        emby_session_output,
+        emby_session_worker: None,
     };
     run_daemon_loop(&mut daemon_loop, &merged_rx)
 }
