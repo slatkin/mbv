@@ -293,6 +293,37 @@ pub(crate) fn submit_play(
     true
 }
 
+/// Sends one `play_last` job for the slot the device should hold after the
+/// active one (design D14, task 9.3) and records it as the queued next item.
+/// The active item plays on, so a refused call is logged rather than reported
+/// as a failed load. Returns whether the job was submitted.
+pub(crate) fn submit_play_last(
+    output: &mut EmbySessionOutput,
+    slot: QueueSlotId,
+    item_id: String,
+) -> bool {
+    let Some(session_id) = output.session_id.clone() else {
+        tracing::warn!(name: "daemon.emby_session_load.no_session", target: "daemon", slot = ?slot, "the Emby Session output has no session id; nothing was queued");
+        return false;
+    };
+    let job_item_id = item_id.clone();
+    let job: EmbySessionJob = Box::new(move |api: &dyn SessionApi| {
+        if let Err(error) = api.play_last(&session_id, &[job_item_id.as_str()]) {
+            tracing::warn!(name: "daemon.emby_session_load.play_last_failed", target: "daemon", slot = ?slot, error = %error, "the device refused the slot queued after the active one");
+        }
+    });
+    if output.worker.send(job).is_err() {
+        tracing::warn!(name: "daemon.emby_session_load.worker_gone", target: "daemon", slot = ?slot, "the Emby Session worker is not running; nothing was queued");
+        return false;
+    }
+    output.queued_next = Some(EmbySessionQueuedItem {
+        slot,
+        item_id,
+        stale: false,
+    });
+    true
+}
+
 /// Resolves what a load plays (design D7): the target slot's item, the active
 /// output's admission of it, and the session id the `play` job names. A
 /// missing slot, a non-Session output, an unplayable item, or a Session with

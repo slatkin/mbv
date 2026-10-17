@@ -11,6 +11,14 @@
 //! one `OutputAdvance`, and the code here reaches the active one through the
 //! output's accessors. Only the end report that starts an advance differs per
 //! output: the Cast receiver's `CastStatus` end table stays in `cast/advance`.
+//!
+//! An Emby Session's device advance (emby-session-owner-output design D14) is
+//! not a step: the device already moved to the queued slot, so
+//! [`apply_device_advance`] follows it to that slot, records the old slot's
+//! completion when the item ended naturally, and appends the slot after the
+//! new active one with a `play_last`.
+
+use std::time::Instant;
 
 use mbv_ctrl::{Direction, PlaybackRequestId};
 use mbv_player::owner_state::StepTarget;
@@ -18,6 +26,8 @@ use mbv_queue::QueueSlotId;
 
 use super::PlaybackOutput;
 use crate::DaemonLoop;
+use crate::emby_session::EmbySessionLoadedItem;
+use crate::emby_session::end::DeviceAdvance;
 use crate::emby_session::load::SessionAdmission;
 
 /// The advance one natural end started (design D6): the step this advance has
@@ -63,6 +73,99 @@ pub(crate) fn begin_advance(daemon: &mut DaemonLoop) {
         remaining,
     }));
     step_target_advance(daemon, target);
+}
+
+/// Applies the device advance of design D14 (task 9.3): the Session moved from
+/// the loaded item to the queued next one by itself, so the Owner follows it to
+/// that slot. The four steps run in the design's order, and none of them loads
+/// the active item again: the Owner sends no `PlayNow`, and it does not call
+/// [`begin_advance`], which steps with one.
+pub(crate) fn apply_device_advance(daemon: &mut DaemonLoop, advance: DeviceAdvance, now: Instant) {
+    let Some(ended) = daemon.owner.output.loaded_slot() else {
+        return;
+    };
+    // 1. The observed active slot: the queued slot the device started, with the
+    // Shuffle re-pick and the forward play order that follow it.
+    observe_slot(daemon, advance.queued);
+    // 2. A natural end records the old slot's completion and its consume rules
+    // (design D6's end row); a device next before the end margin records none.
+    if advance.completes {
+        record_natural_end(daemon, ended, true);
+    }
+    // 3. The queued slot becomes the loaded item, so the end rule and the
+    // position estimate hold the item the device plays now. The replaced item's
+    // advance and its owed pause belong to the item the device left.
+    reset_loaded_item(daemon, now);
+    daemon.shared_queue.publish_observed(&daemon.owner.core);
+    // 4. The device holds the active item alone now: append the next admissible
+    // slot, so it never reaches its own next-episode autoplay (design D14).
+    append_next_slot(daemon, advance.queued);
+}
+
+/// Makes the queued next item the loaded one after the device's own move
+/// (design D14 step 3): its slot, item id, and runtime, with the observation
+/// that showed it as its sighting, so no failure or end of the old item carries
+/// over. The runtime caps the end estimate (design D6).
+fn reset_loaded_item(daemon: &mut DaemonLoop, now: Instant) {
+    let queued_slot = match &daemon.owner.output {
+        PlaybackOutput::EmbySession(output) => {
+            output.queued_next.as_ref().map(|queued| queued.slot)
+        }
+        _ => None,
+    };
+    let Some(slot) = queued_slot else {
+        return;
+    };
+    let runtime_ticks = daemon
+        .owner
+        .core
+        .queue
+        .slot(slot)
+        .and_then(|queued| queued.item.as_emby())
+        .map_or(0, |item| item.runtime_ticks);
+    let PlaybackOutput::EmbySession(output) = &mut daemon.owner.output else {
+        return;
+    };
+    let Some(queued) = output.queued_next.take() else {
+        return;
+    };
+    output.loaded = Some(EmbySessionLoadedItem {
+        slot,
+        item_id: queued.item_id,
+        runtime_ticks,
+        loaded_at: now,
+        seen_playing: true,
+        end_handled: false,
+        failure_reported: false,
+    });
+    output.advance = None;
+    output.pending_pause = false;
+}
+
+/// Appends the slot after the new active one to the device (design D14 step 4):
+/// one `play_last` with its item id, recorded as the queued next item. With no
+/// slot the Session can play after the active one, nothing is queued, and each
+/// slot the search stepped past is reported only when a slot was sent.
+fn append_next_slot(daemon: &mut DaemonLoop, active: QueueSlotId) {
+    let (next, stepped) = {
+        let PlaybackOutput::EmbySession(output) = &daemon.owner.output else {
+            return;
+        };
+        crate::emby_session::load::next_admissible_slot(
+            &daemon.owner.core,
+            active,
+            &output.playable_media_types,
+        )
+    };
+    let Some((slot, item_id)) = next else {
+        return;
+    };
+    let PlaybackOutput::EmbySession(output) = &mut daemon.owner.output else {
+        return;
+    };
+    if crate::emby_session::load::submit_play_last(output, slot, item_id) {
+        crate::emby_session::load::report_stepped_slots(&daemon.ctrl_clients, &stepped);
+    }
 }
 
 /// Records the ended slot's completion through the same observation funnel

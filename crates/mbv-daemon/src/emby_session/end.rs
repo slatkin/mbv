@@ -1,10 +1,13 @@
 //! The loaded item's fate on the Emby Session output (emby-session-owner-
-//! output design D6, D7; task 4.3). Because Emby reports no end reason and the
-//! device fetches its own stream, the Owner infers both the start and the
-//! failure of a load:
+//! output design D6, D7; tasks 4.3 and 9.3). Because Emby reports no end reason
+//! and the device fetches its own stream, the Owner infers both the start and
+//! the failure of a load:
 //!
 //! - an observation that presents the loaded item settles its transition, so a
 //!   step queued behind the load dispatches;
+//! - an observation that presents the queued next item after one that
+//!   presented the loaded item is the device's own move, which the Owner
+//!   follows (design D14);
 //! - a `play` job the device refuses, or 30 seconds of observations that never
 //!   present the item, report the item once and expire the transition without
 //!   advancing anything.
@@ -72,6 +75,57 @@ pub(crate) fn ended_naturally(
     // A loaded slot whose queue item and Session both report no runtime has no
     // end to infer (design D6, risks): the idle counts as a stop on the device.
     runtime > 0 && estimate.saturating_add(EMBY_SESSION_END_MARGIN_TICKS) >= runtime
+}
+
+/// The device advance one observation shows (design D6's end table, D14; task
+/// 9.3): the Session moved from the loaded item to the queued next one by
+/// itself, so the Owner follows it to that slot. The decision is taken before
+/// the observation replaces the one the position estimate reads, because the
+/// end margin is measured on the replaced observation.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct DeviceAdvance {
+    /// The queued slot the Session started.
+    pub(crate) queued: QueueSlotId,
+    /// Whether the old slot's estimate was within
+    /// [`EMBY_SESSION_END_MARGIN_TICKS`] of its runtime: only then does the
+    /// advance record the old slot's completion (design D14 step 2).
+    pub(crate) completes: bool,
+}
+
+/// Whether this observation shows the device move of design D14: the Session
+/// presents the queued next item, and the replaced observation presented the
+/// loaded item. The same item in both slots does not change the id the Session
+/// shows, so that move is a position drop to less than 10 seconds after an
+/// estimate within the end margin.
+///
+/// An item the Owner did not load is not an advance, and neither is a Session
+/// that presents the queued item when the replaced observation presented
+/// something else (design D6's last row).
+pub(crate) fn device_advance(
+    output: &EmbySessionOutput,
+    session: &SessionInfo,
+    now: Instant,
+) -> Option<DeviceAdvance> {
+    let loaded = output.loaded.as_ref()?;
+    let queued = output.queued_next.as_ref()?;
+    if !presents_item(output.last_observation.as_ref(), &loaded.item_id)
+        || !presents_item(Some(session), &queued.item_id)
+    {
+        return None;
+    }
+    let runtime = output.presented_runtime_ticks();
+    let estimate = output.estimate_ticks(now);
+    let completes =
+        runtime > 0 && estimate.saturating_add(EMBY_SESSION_END_MARGIN_TICKS) >= runtime;
+    if loaded.item_id == queued.item_id
+        && !(completes && session.position_ticks < EMBY_SESSION_END_MARGIN_TICKS)
+    {
+        return None;
+    }
+    Some(DeviceAdvance {
+        queued: queued.slot,
+        completes,
+    })
 }
 
 /// Handles the natural-end row of design D6's end table (task 5.2): the shared

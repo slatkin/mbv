@@ -11,6 +11,7 @@ use std::time::{Duration, Instant};
 use mbv_ctrl::OutputConnection;
 use mbv_emby::SessionInfo;
 
+use super::end::DeviceAdvance;
 use super::worker::{EmbySessionJob, SessionApi};
 use super::{EmbySessionEvent, EmbySessionOutput};
 use crate::DaemonEvent;
@@ -85,6 +86,7 @@ pub(super) fn handle_sessions(
     poll_id: u64,
     result: Result<Vec<SessionInfo>, String>,
 ) {
+    let now = Instant::now();
     let (observation, failed) = {
         let PlaybackOutput::EmbySession(output) = &mut daemon.owner.output else {
             return;
@@ -97,10 +99,7 @@ pub(super) fn handle_sessions(
         }
         output.poll_sent = None;
         match result {
-            Ok(sessions) => {
-                let now = Instant::now();
-                (Some(observe(output, sessions, now)), None)
-            }
+            Ok(sessions) => (Some(observe(output, sessions, now)), None),
             Err(error) => (None, Some(error)),
         }
     };
@@ -113,12 +112,14 @@ pub(super) fn handle_sessions(
             "the Emby Session poll failed; the output is unchanged"
         );
     }
-    // The observation that shows the loaded item settles its transition
-    // (design D6, D7, task 4.3); a step queued behind the load then dispatches.
-    if let Some(loaded_slot) = observation
-        .as_ref()
-        .and_then(|observation| observation.presented)
-    {
+    // The observation that shows the queued next item after one that showed
+    // the loaded item is the device's own move (design D6, D14, task 9.3): the
+    // Owner follows it to that slot without a load. An observation of the
+    // loaded item that does not move settles its transition (design D6, D7,
+    // task 4.3), and a step queued behind the load then dispatches.
+    if let Some(advance) = observation.and_then(|observation| observation.device_advance) {
+        crate::output::advance::apply_device_advance(daemon, advance, now);
+    } else if let Some(loaded_slot) = observation.and_then(|observation| observation.presented) {
         super::end::settle_loaded_item(daemon, loaded_slot);
         // The first sighting is also when a hand-off's pause applies (design
         // D9, task 6.1): a `play` job cannot start paused.
@@ -134,10 +135,10 @@ pub(super) fn handle_sessions(
     // An observation that does not show the loaded item is also when the 30 s
     // load timeout is measured (design D6); this poll's own reading is the
     // observation time.
-    super::end::expire_unseen_load(daemon, Instant::now());
+    super::end::expire_unseen_load(daemon, now);
     // The fresh observation re-presents the Owner's status from it (design
     // D10), so Clients see the device's position, pause, and track state.
-    super::status::refresh_presentation(daemon, Instant::now());
+    super::status::refresh_presentation(daemon, now);
     // The state the peers hold is what the Owner last broadcast, not what this
     // poll changed: a load replaces the loaded item without any observation,
     // so an observation that reads the same as the previous one can still
@@ -167,12 +168,15 @@ fn apply_pending_pause(daemon: &mut DaemonLoop) {
 }
 
 /// What one `/Sessions` observation changed (design D5, D6): the loaded slot
-/// the observation presents, and whether it ended the loaded item naturally.
-/// Whether the ctrl peers' state changed is decided by comparing the projected
-/// state with the one the Owner last broadcast (`handle_sessions`).
+/// the observation presents, whether it ended the loaded item naturally, and
+/// the device advance it shows (design D14). Whether the ctrl peers' state
+/// changed is decided by comparing the projected state with the one the Owner
+/// last broadcast (`handle_sessions`).
+#[derive(Clone, Copy)]
 struct Observation {
     presented: Option<QueueSlotId>,
     ended_naturally: bool,
+    device_advance: Option<DeviceAdvance>,
 }
 
 impl Observation {
@@ -180,6 +184,7 @@ impl Observation {
     const UNCHANGED: Self = Self {
         presented: None,
         ended_naturally: false,
+        device_advance: None,
     };
 }
 
@@ -188,9 +193,10 @@ impl Observation {
 /// reset the miss count; a missing entry counts one miss and, at the
 /// threshold, reports the output `Disconnected`. The end table's idle rows read
 /// the position estimate from the observation this one replaces (design D6),
-/// so they run before the store. Returns the loaded slot when this observation
-/// presents it, so the caller settles its transition (design D6, D7), and
-/// whether it ended that item naturally.
+/// so they run before the store, and so does the device advance's end margin
+/// (design D14). Returns the loaded slot when this observation presents it, so
+/// the caller settles its transition (design D6, D7), whether it ended that
+/// item naturally, and the device advance it shows.
 fn observe(
     output: &mut EmbySessionOutput,
     sessions: Vec<SessionInfo>,
@@ -208,6 +214,7 @@ fn observe(
     };
     output.misses = 0;
     output.session_id = Some(session.id.clone());
+    let device_advance = super::end::device_advance(output, &session, now);
     let ended_naturally = super::end::ended_naturally(output, &session, now);
     let presented = presented_loaded_slot(output, &session);
     output.last_observation = Some(session);
@@ -216,6 +223,7 @@ fn observe(
     Observation {
         presented,
         ended_naturally,
+        device_advance,
     }
 }
 
