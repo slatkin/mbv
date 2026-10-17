@@ -11,6 +11,7 @@ use std::sync::mpsc;
 use std::time::Instant;
 
 use mbv_ctrl::CtrlEvent;
+use mbv_ids::{EmbySessionId, ItemId};
 use mbv_player::PlayerOwnerState;
 use mbv_queue::{PlayOrder, QueueItem, QueueSlotId};
 
@@ -133,11 +134,11 @@ pub(crate) struct SessionLoad {
     /// The slot the load makes active.
     pub(crate) slot: QueueSlotId,
     /// The Emby item id the device is told to play now.
-    pub(crate) item_id: String,
+    pub(crate) item_id: ItemId,
     /// The loaded slot's runtime in ticks (design D6).
     pub(crate) runtime_ticks: i64,
     /// The session id the job names (design D5 adopts it).
-    pub(crate) session_id: String,
+    pub(crate) session_id: EmbySessionId,
     /// The position the active item starts at: the resume position or the
     /// hand-off's capture.
     pub(crate) start_ticks: i64,
@@ -334,12 +335,12 @@ pub(crate) fn submit_play(
         start_ticks,
         next,
     } = load;
-    let mut job_item_ids = vec![item_id.clone()];
+    let mut job_item_ids = vec![item_id.as_str().to_owned()];
     job_item_ids.extend(next.as_ref().map(|(_, next_item_id)| next_item_id.clone()));
     let merged_tx = merged_tx.clone();
     let job: EmbySessionJob = Box::new(move |api: &dyn SessionApi| {
         let item_ids: Vec<&str> = job_item_ids.iter().map(String::as_str).collect();
-        if let Err(error) = api.play(&session_id, &item_ids, start_ticks) {
+        if let Err(error) = api.play(session_id.as_str(), &item_ids, start_ticks) {
             let _ = merged_tx.send(DaemonEvent::EmbySession(EmbySessionEvent::PlayFailed {
                 slot,
                 error,
@@ -364,7 +365,7 @@ pub(crate) fn submit_play(
     }
     output.loaded = Some(EmbySessionLoadedItem {
         slot,
-        item_id,
+        item_id: item_id.as_str().to_owned(),
         runtime_ticks,
         loaded_at: Instant::now(),
         seen_playing: false,
@@ -414,7 +415,7 @@ fn load_target(
     ctx: &mut DaemonOwnerContext<'_>,
     transition: &mbv_player::transition::Transition,
     origin: Option<CtrlClientId>,
-) -> Option<(String, i64, String)> {
+) -> Option<(ItemId, i64, EmbySessionId)> {
     let target = transition.target;
     let Some(slot) = ctx.owner.core.queue.slot(target) else {
         tracing::warn!(name: "daemon.emby_session_load.slot_missing", target: "daemon", slot = ?target, "the load target slot is absent; nothing was loaded");
@@ -433,13 +434,13 @@ fn load_target(
             return None;
         }
     };
-    let item_id = admitted.id.clone();
+    let item_id = ItemId::new(admitted.id.clone());
     let runtime_ticks = admitted.runtime_ticks;
     let Some(session_id) = output.session_id.clone() else {
         tracing::warn!(name: "daemon.emby_session_load.no_session", target: "daemon", slot = ?target, "the Emby Session output has no session id; nothing was loaded");
         return None;
     };
-    Some((item_id, runtime_ticks, session_id))
+    Some((item_id, runtime_ticks, EmbySessionId::new(session_id)))
 }
 
 /// Reports a slot the Session cannot play (design D7): the item and the reason

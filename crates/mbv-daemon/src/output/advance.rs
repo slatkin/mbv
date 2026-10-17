@@ -24,6 +24,7 @@
 use std::time::Instant;
 
 use mbv_ctrl::{Direction, PlaybackRequestId};
+use mbv_ids::{EmbySessionId, ItemId};
 use mbv_player::owner_state::StepTarget;
 use mbv_queue::QueueSlotId;
 
@@ -164,9 +165,9 @@ fn correct_stale_device_advance(
         mbv_player::resume_ticks_for_slot(&daemon.owner.core.queue, slot).unwrap_or(0);
     let load = crate::emby_session::load::SessionLoad {
         slot,
-        item_id,
+        item_id: ItemId::new(item_id),
         runtime_ticks,
-        session_id,
+        session_id: EmbySessionId::new(session_id),
         start_ticks,
         next: after,
     };

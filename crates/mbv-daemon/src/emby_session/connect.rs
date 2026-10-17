@@ -9,6 +9,7 @@ use std::time::Instant;
 
 use mbv_ctrl::{CtrlEvent, OutputConnection};
 use mbv_emby::SessionInfo;
+use mbv_ids::{EmbySessionId, ItemId};
 
 use crate::cast::{PlaybackOutput, broadcast_output_change};
 use crate::emby_session::load::{
@@ -348,7 +349,7 @@ fn handoff_play_target(
     daemon: &DaemonLoop,
     handoff: &HandoffPlayback,
     reply_tx: &CtrlSender,
-) -> Option<(String, i64, String)> {
+) -> Option<(ItemId, i64, EmbySessionId)> {
     let Some(slot) = daemon.owner.core.queue.slot(handoff.slot) else {
         tracing::warn!(
             name: "daemon.handoff.slot_missing",
@@ -380,7 +381,7 @@ fn handoff_play_target(
             return None;
         }
     };
-    let item_id = emby_item.id.clone();
+    let item_id = ItemId::new(emby_item.id.clone());
     let runtime_ticks = emby_item.runtime_ticks;
     let Some(session_id) = output.session_id.clone() else {
         tracing::warn!(
@@ -391,5 +392,5 @@ fn handoff_play_target(
         );
         return None;
     };
-    Some((item_id, runtime_ticks, session_id))
+    Some((item_id, runtime_ticks, EmbySessionId::new(session_id)))
 }
