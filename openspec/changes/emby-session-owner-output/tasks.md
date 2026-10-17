@@ -45,7 +45,7 @@
 
 ## 8. Integration
 
-- [ ] 8.1 Run the full gate: `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run --workspace`. Verify: all three pass.
+- [x] 8.1 Run the full gate: `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run --workspace`. Verify: all three pass.
 
 ## Workflow follow-up
 
