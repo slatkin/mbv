@@ -120,6 +120,14 @@ pub(crate) fn apply_device_advance(daemon: &mut DaemonLoop, advance: DeviceAdvan
 /// under the Load rule — that slot and the slot after it, with the new item's
 /// resume position — or stops the device when the queue has no next admissible
 /// slot, which leaves the queue on the old slot.
+///
+/// The correction registers no in-flight transition, because the Owner issued
+/// it: nothing about it can coalesce with a user request. So the observation
+/// that settles an ordinary load's transition never runs for it, and the
+/// corrected slot is recorded as the observed active slot here, with the
+/// published slot the non-stale device advance publishes (design D14 step 1,
+/// 3). Without it a Next would step from the item the device left and Clients
+/// would highlight the wrong row.
 fn correct_stale_device_advance(
     daemon: &mut DaemonLoop,
     advance: DeviceAdvance,
@@ -136,6 +144,20 @@ fn correct_stale_device_advance(
         stop_stale_advance(daemon, ended);
         return;
     };
+    // The Session the jobs name must exist before anything is recorded as
+    // observed: a correction that cannot reach the device changes nothing.
+    let session_id = match &daemon.owner.output {
+        PlaybackOutput::EmbySession(output) => output.session_id.clone(),
+        _ => return,
+    };
+    let Some(session_id) = session_id else {
+        tracing::warn!(name: "daemon.emby_session_advance.no_session", target: "daemon", slot = ?slot, "the Emby Session output has no session id; the device keeps the stale item");
+        return;
+    };
+    // The corrected slot is where the device plays from now: the observation
+    // comes before the window it is the base of, so a Shuffle re-pick is the
+    // window the load sends.
+    observe_slot(daemon, slot);
     let (after, after_stepped) = window(daemon, slot);
     let runtime_ticks = daemon
         .owner
@@ -146,14 +168,6 @@ fn correct_stale_device_advance(
         .map_or(0, |item| item.runtime_ticks);
     let start_ticks =
         mbv_player::resume_ticks_for_slot(&daemon.owner.core.queue, slot).unwrap_or(0);
-    let session_id = match &daemon.owner.output {
-        PlaybackOutput::EmbySession(output) => output.session_id.clone(),
-        _ => return,
-    };
-    let Some(session_id) = session_id else {
-        tracing::warn!(name: "daemon.emby_session_advance.no_session", target: "daemon", slot = ?slot, "the Emby Session output has no session id; the device keeps the stale item");
-        return;
-    };
     let load = crate::emby_session::load::SessionLoad {
         slot,
         item_id,
@@ -175,6 +189,7 @@ fn correct_stale_device_advance(
     stepped.extend(after_stepped);
     crate::emby_session::load::report_stepped_slots(&daemon.ctrl_clients, &stepped);
     let _ = daemon.owner.core.queue.set_active_slot(slot);
+    daemon.shared_queue.publish_observed(&daemon.owner.core);
     if let PlaybackOutput::EmbySession(output) = &mut daemon.owner.output {
         // The corrected load replaces the item the device holds, so the stale
         // item's advance and any pause a hand-off still owed go with it.

@@ -9,6 +9,8 @@
 
 use super::*;
 
+use mbv_player::owner_state::StepTarget;
+
 /// The one `play_last` call the Session receives for `item_ids` (design D14),
 /// the slot the device holds after the active one.
 fn play_last(item_ids: &[&str]) -> SessionCall {
@@ -297,6 +299,31 @@ fn a_removed_queued_slot_is_corrected_with_the_queue_next_slot(
         output.queued_next.as_ref().map(|queued| queued.slot),
         queued_index.map(|index| slots[index]),
         "the window after the corrected slot is what the queue holds"
+    );
+    // The corrected slot is what the device plays now, so the queue records it
+    // as the observed slot: a following Next steps from it instead of reloading
+    // it from the slot the device left, and Clients highlight that row.
+    assert_eq!(
+        t.event_loop.owner.core.observed_active_slot(),
+        Some(slots[2]),
+        "the corrected slot is the observed active slot"
+    );
+    assert_eq!(
+        *t.event_loop
+            .shared_queue
+            .observed_active_slot
+            .lock()
+            .unwrap(),
+        Some(slots[2]),
+        "the published queue names the corrected slot"
+    );
+    assert_eq!(
+        t.event_loop
+            .owner
+            .core
+            .relative_step_target(mbv_ctrl::Direction::Next),
+        queued_index.map_or(StepTarget::AtEdge, |index| StepTarget::Jump(slots[index])),
+        "a following Next steps from the corrected slot"
     );
 }
 
