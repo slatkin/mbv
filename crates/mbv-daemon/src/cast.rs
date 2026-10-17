@@ -1,7 +1,8 @@
-//! The Owner's playback output: local playback or one Cast receiver
-//! (cast-owner-output design D1/D2/D3). The Owner holds exactly one output;
-//! the Cast side owns the worker sender, the receiver identity, and the
-//! connection state, and every receiver call runs on the Cast worker.
+//! The Cast receiver as the Owner's playback output (cast-owner-output
+//! design D1/D2/D3). The Owner holds exactly one output, and the enum that
+//! names it lives in `output` (emby-session-owner-output design D1); the Cast
+//! side owns the worker sender, the receiver identity, and the connection
+//! state, and every receiver call runs on the Cast worker.
 //!
 //! The module splits along responsibility:
 //! - `connect`: output selection, connect and reconnect outcomes, and the
@@ -14,13 +15,17 @@ use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 use mbv_cast::{CastJob, CastReceiver, CastStatus};
-use mbv_ctrl::{CtrlEvent, OutputState, PlaybackGeneration};
+use mbv_ctrl::{CtrlEvent, PlaybackGeneration};
 use mbv_queue::QueueSlotId;
 
 use crate::CtrlClientId;
 
 use super::DaemonLoop;
 use super::core::DaemonEvent;
+
+/// The output enum and its ctrl projection live in `output` (emby-session-owner-output
+/// design D1); the Cast modules and the crate's tests name them through here.
+pub(crate) use super::output::{PlaybackOutput, output_state};
 
 pub(crate) mod advance;
 mod command;
@@ -48,17 +53,6 @@ pub(crate) const CAST_STATUS_POLL_INTERVAL: Duration = Duration::from_secs(7);
 /// worker thread forever; the reconnect is the recovery.
 pub(crate) const CAST_JOB_ANSWER_BOUND: Duration = Duration::from_secs(20);
 
-/// The single playback output a Player owner plays through (design D1): the
-/// type system makes two active outputs unrepresentable. The Cast side is
-/// boxed: it carries the worker sender, the last status, and the loaded item
-/// while `Local` carries nothing.
-#[derive(Default)]
-pub(crate) enum PlaybackOutput {
-    #[default]
-    Local,
-    Cast(Box<CastOutput>),
-}
-
 /// One Cast receiver as the Owner's output (design D1). The worker sender is
 /// the only path to the receiver: the `CastClient` itself lives on the worker
 /// thread and is never `Send`. `last_status` is the most recent poll result;
@@ -72,8 +66,12 @@ pub(crate) struct CastOutput {
     /// The owner's event sink: a receiver command the worker could not apply
     /// returns through it as `CastOwnerEvent::CommandFailed`.
     events: mpsc::Sender<DaemonEvent>,
-    receiver: CastReceiver,
-    connection: mbv_ctrl::OutputConnection,
+    /// The receiver this output drives. `pub(super)` so `output::output_state`
+    /// projects the ctrl state from it.
+    pub(super) receiver: CastReceiver,
+    /// The connection the polls report. `pub(super)` so `output::output_state`
+    /// projects the ctrl state from it.
+    pub(super) connection: mbv_ctrl::OutputConnection,
     last_status: Option<CastStatus>,
     status_at: Option<Instant>,
     /// The item the receiver was told to play. `pub(super)` so the crate's
@@ -177,18 +175,6 @@ impl std::fmt::Debug for CastOutput {
                 &self.pending_handoff_load.as_ref().map(|load| load.slot),
             )
             .finish()
-    }
-}
-
-/// The ctrl `OutputState` an output projects (design D3).
-pub(crate) fn output_state(output: &PlaybackOutput) -> OutputState {
-    match output {
-        PlaybackOutput::Local => OutputState::Local,
-        PlaybackOutput::Cast(cast) => OutputState::Cast {
-            receiver_id: cast.receiver.id.clone(),
-            name: cast.receiver.friendly_name.clone(),
-            connection: cast.connection,
-        },
     }
 }
 
@@ -541,6 +527,10 @@ pub(super) fn stop_active_output(
             );
             *player.status.lock().unwrap() = presented;
         }
+        // An Emby Session's stop sends the device `transport("Stop")` only
+        // while it plays the loaded item (emby-session-owner-output design
+        // D9/D11, task 6.2); until then the stop is a documented no-op.
+        PlaybackOutput::EmbySession(_) => {}
     }
 }
 

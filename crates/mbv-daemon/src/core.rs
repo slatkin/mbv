@@ -402,8 +402,9 @@ pub(super) struct DaemonPlayerOwner {
     /// together.
     pub(super) queued_transition_origin: Option<(PlaybackRequestId, CtrlClientId)>,
     /// The Owner's single active playback output (cast-owner-output design
-    /// D1): local playback, or one Cast receiver. Starts and resets to Local.
-    pub(super) output: crate::cast::PlaybackOutput,
+    /// D1, emby-session-owner-output design D1): local playback, one Cast
+    /// receiver, or one Emby Session. Starts and resets to Local.
+    pub(super) output: crate::output::PlaybackOutput,
     /// The Cast selection waiting for its worker to connect (task 3.2).
     pub(super) pending_cast_connect: Option<crate::cast::PendingCastConnect>,
     /// The Cast source resolve in flight for the output's next load (task
