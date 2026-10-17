@@ -2,9 +2,10 @@
 //! D1/D5/D6): the device identity that outlives the session id, the session
 //! id the polls adopt, the connection the misses decide, the last observation
 //! and its time, and the item the Owner loaded. Every `/Sessions` call for
-//! this output runs on its own worker thread, in order; the job sender and
-//! the worker join the output in task 3.1.
+//! this output runs on its own worker thread, in order; the job sender is the
+//! only path to the device.
 
+use std::sync::mpsc;
 use std::time::Instant;
 
 use mbv_ctrl::OutputConnection;
@@ -13,11 +14,40 @@ use mbv_queue::QueueSlotId;
 
 use crate::output::advance::OutputAdvance;
 
+pub(crate) mod worker;
+
+#[cfg(test)]
+pub(crate) mod fake;
+
+#[cfg(test)]
+mod tests;
+
+use worker::EmbySessionJob;
+
+/// One Emby Session worker outcome (design D4), carried to the owner's event
+/// loop as `DaemonEvent::EmbySession`: the worker returns results instead of
+/// the event loop waiting on the network.
+#[derive(Debug)]
+pub(crate) enum EmbySessionEvent {
+    /// One `/Sessions` poll result (design D5), stamped with the poll id so a
+    /// late result from a replaced worker cannot match the current poll. The
+    /// error is the rendered `EmbyError`: a failed poll is not a missing
+    /// device.
+    Sessions {
+        poll_id: u64,
+        result: Result<Vec<SessionInfo>, String>,
+    },
+}
+
 /// One Emby Session as the Owner's output (design D1). The Owner loads an item
 /// by sending the device a `play` job; it never fetches the stream, so the
 /// loaded item is an identity plus the runtime the end estimate is capped at
 /// (design D6).
 pub(crate) struct EmbySessionOutput {
+    /// The only path to the device (design D4): one worker thread runs every
+    /// `/Sessions` call for this output in order, and dropping the sender ends
+    /// the worker.
+    pub(crate) worker: mpsc::Sender<EmbySessionJob>,
     /// The device that owns the Session (design D1): it outlives the session
     /// id, so selections, poll matches, and the F3 mark key by it.
     pub(crate) device_id: String,
@@ -76,6 +106,7 @@ impl EmbySessionOutput {
 impl std::fmt::Debug for EmbySessionOutput {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("EmbySessionOutput")
+            .field("worker", &self.worker)
             .field("device_id", &self.device_id)
             .field("name", &self.name)
             .field("session_id", &self.session_id)

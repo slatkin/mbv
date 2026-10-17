@@ -219,6 +219,10 @@ impl DaemonLoop {
                 super::cast::handle_cast_event(self, event);
                 EventOutcome::CONTINUE
             }
+            // Tasks 3.2/3.3 apply the worker outcomes to the output; until an
+            // Emby Session output can be selected, a result has no owner state
+            // to update.
+            DaemonEvent::EmbySession(_) => EventOutcome::CONTINUE,
             DaemonEvent::Shutdown => self.handle_shutdown(),
         };
 

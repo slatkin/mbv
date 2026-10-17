@@ -109,6 +109,9 @@ pub(super) enum DaemonEvent {
     /// output design D2/D8): connect and reconnect outcomes, and status-poll
     /// results from the Cast timers on the daemon tick.
     Cast(crate::cast::CastOwnerEvent),
+    /// One Emby Session worker outcome (emby-session-owner-output design D4):
+    /// poll results and, in later rows, load and transport outcomes.
+    EmbySession(crate::emby_session::EmbySessionEvent),
     Shutdown,
 }
 
