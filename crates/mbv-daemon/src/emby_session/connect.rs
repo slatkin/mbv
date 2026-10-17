@@ -176,6 +176,7 @@ fn install_output(
         connection: OutputConnection::Connected,
         misses: 0,
         poll_sent: None,
+        last_poll: None,
         next_poll_id: 0,
         last_observation: Some(session),
         observed_at: Some(Instant::now()),

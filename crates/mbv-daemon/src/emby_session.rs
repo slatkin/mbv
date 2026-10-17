@@ -16,6 +16,7 @@ use crate::event_loop::DaemonLoop;
 use crate::output::advance::OutputAdvance;
 
 pub(crate) mod connect;
+pub(crate) mod poll;
 pub(crate) mod worker;
 
 #[cfg(test)]
@@ -59,8 +60,9 @@ pub(crate) fn handle_event(daemon: &mut DaemonLoop, event: EmbySessionEvent) {
         EmbySessionEvent::Selected { device_id, result } => {
             connect::handle_selected(daemon, device_id, result);
         }
-        // The poll's observations apply in task 3.3.
-        EmbySessionEvent::Sessions { .. } => {}
+        EmbySessionEvent::Sessions { poll_id, result } => {
+            poll::handle_sessions(daemon, poll_id, result);
+        }
     }
 }
 
@@ -94,6 +96,9 @@ pub(crate) struct EmbySessionOutput {
     /// The poll in flight, by id and submission time (design D5), so a late
     /// result from a replaced worker cannot match the current poll.
     pub(crate) poll_sent: Option<(u64, Instant)>,
+    /// When the last poll was submitted; it paces the 1 s cadence while no
+    /// poll is in flight (design D5).
+    pub(crate) last_poll: Option<Instant>,
     /// Mints the monotonic id of the next poll (design D5).
     pub(crate) next_poll_id: u64,
     /// The last `/Sessions` entry for this device and when it was observed
@@ -139,6 +144,7 @@ impl std::fmt::Debug for EmbySessionOutput {
             .field("connection", &self.connection)
             .field("misses", &self.misses)
             .field("poll_sent", &self.poll_sent)
+            .field("last_poll", &self.last_poll)
             .field("next_poll_id", &self.next_poll_id)
             .field("last_observation", &self.last_observation)
             .field("observed_at", &self.observed_at)

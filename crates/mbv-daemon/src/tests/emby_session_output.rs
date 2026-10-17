@@ -10,7 +10,9 @@ use super::*;
 use mbv_ctrl::{OutputConnection, OutputSelection, OutputState};
 
 use crate::cast::PlaybackOutput;
+use crate::emby_session::EmbySessionEvent;
 use crate::emby_session::fake::{FakeSessionApi, SessionCall, session};
+use crate::emby_session::poll::{EMBY_SESSION_DISCONNECT_MISSES, EMBY_SESSION_POLL_INTERVAL};
 use crate::emby_session::worker::spawn_emby_session_worker;
 
 /// The selection the TUI sends for the fake's Session: the device id keys the
@@ -179,4 +181,288 @@ fn selecting_the_device_that_is_already_the_output_does_nothing() {
         &[SessionCall::GetSessions],
         "no second device lookup runs"
     );
+}
+
+/// Selects the fake's Session as the output and pumps its lookup, returning
+/// the loop and the fake's call log. The fake stays scriptable through a
+/// clone the test keeps.
+fn session_output(fake: FakeSessionApi) -> (TestLoop, Arc<Mutex<Vec<SessionCall>>>) {
+    let calls = fake.calls();
+    let mut t = loop_with_session(fake);
+    let (client_id, reply_tx, _rx) =
+        connect_output_client_with_caps(&t.event_loop.ctrl_clients, true, true);
+    select_output(&mut t, client_id, &reply_tx, session_selection());
+    pump_session_event(&mut t);
+    (t, calls)
+}
+
+/// Waits until every job queued on the Session worker has run, so a test can
+/// assert on the fake's call log without a sleep.
+fn wait_for_session_jobs(output: &PlaybackOutput) {
+    let PlaybackOutput::EmbySession(output) = output else {
+        panic!("the Session is the output");
+    };
+    let (done_tx, done_rx) = mpsc::channel();
+    output
+        .worker
+        .send(Box::new(move |_api| {
+            let _ = done_tx.send(());
+        }))
+        .expect("the Session worker accepts the sentinel");
+    done_rx
+        .recv_timeout(Duration::from_secs(2))
+        .expect("the queued jobs ran before the sentinel");
+}
+
+/// Drives one poll: the tick submits it, the fake answers, and the result
+/// re-enters the loop. Returns the poll id the worker stamped.
+fn poll_once(t: &mut TestLoop, at: std::time::Instant) -> u64 {
+    t.event_loop.tick(at);
+    let event = t.merged_rx.recv().expect("the poll reports a result");
+    let DaemonEvent::EmbySession(EmbySessionEvent::Sessions { poll_id, .. }) = &event else {
+        panic!("the tick's poll result is the returned event");
+    };
+    let poll_id = *poll_id;
+    t.event_loop.handle_event(event);
+    poll_id
+}
+
+/// The number of `/Sessions` calls the fake has seen, including the
+/// selection's lookup.
+fn sessions_calls(calls: &Arc<Mutex<Vec<SessionCall>>>) -> usize {
+    calls
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|call| matches!(call, SessionCall::GetSessions))
+        .count()
+}
+
+/// The output state the disconnected test asserts was broadcast.
+fn disconnected_state() -> OutputState {
+    OutputState::EmbySession {
+        device_id: "device-1".to_string(),
+        name: "Living room TV".to_string(),
+        connection: OutputConnection::Disconnected,
+        audio_only: false,
+        now_playing: None,
+    }
+}
+
+/// Contract: row 3.3 / design D5 and spec "The Emby Session output follows the
+/// device" — three observations in a row that do not list the device broadcast
+/// the output as disconnected and leave the queue revision unchanged.
+#[test]
+fn three_missing_polls_disconnect_the_output_and_leave_the_queue_unchanged() {
+    let fake = FakeSessionApi::with_sessions(vec![session("device-1", "session-1")]);
+    let script = fake.clone();
+    let (mut t, _calls) = session_output(fake);
+    let (_monitor_id, _monitor_tx, monitor_rx) =
+        connect_output_client_with_caps(&t.event_loop.ctrl_clients, true, true);
+    let revision_before = t.event_loop.owner.core.queue.revision();
+    script.set_sessions(Vec::new());
+
+    let t0 = std::time::Instant::now();
+    poll_once(&mut t, t0);
+    poll_once(&mut t, t0 + EMBY_SESSION_POLL_INTERVAL);
+    assert!(
+        monitor_rx.try_recv().is_err(),
+        "two misses do not disconnect the output"
+    );
+    poll_once(&mut t, t0 + 2 * EMBY_SESSION_POLL_INTERVAL);
+
+    assert_eq!(
+        format!("{:?}", recv_event(&monitor_rx)),
+        format!("{:?}", CtrlEvent::PlaybackOutput(disconnected_state())),
+        "the third miss broadcasts the disconnected output"
+    );
+    assert_eq!(
+        t.event_loop.owner.core.queue.revision(),
+        revision_before,
+        "the misses change no queue revision"
+    );
+    assert!(t.event_loop.owner.core.queue.slots().is_empty());
+    let PlaybackOutput::EmbySession(output) = &t.event_loop.owner.output else {
+        panic!("the Session stays the output");
+    };
+    assert_eq!(output.connection, OutputConnection::Disconnected);
+    assert_eq!(output.misses, EMBY_SESSION_DISCONNECT_MISSES);
+}
+
+/// Contract: row 3.3 / design D5 — the device reappearing under a new session
+/// id reconnects the output, adopts that id, and the next command addresses
+/// it (the command paths of task 4.4 read the adopted id).
+#[test]
+fn a_reattached_device_under_a_new_session_id_reconnects_and_commands_use_it() {
+    let fake = FakeSessionApi::with_sessions(vec![session("device-1", "session-1")]);
+    let script = fake.clone();
+    let (mut t, calls) = session_output(fake);
+    let (_monitor_id, _monitor_tx, monitor_rx) =
+        connect_output_client_with_caps(&t.event_loop.ctrl_clients, true, true);
+
+    script.set_sessions(Vec::new());
+    let t0 = std::time::Instant::now();
+    poll_once(&mut t, t0);
+    poll_once(&mut t, t0 + EMBY_SESSION_POLL_INTERVAL);
+    poll_once(&mut t, t0 + 2 * EMBY_SESSION_POLL_INTERVAL);
+    assert!(matches!(
+        recv_event(&monitor_rx),
+        CtrlEvent::PlaybackOutput(OutputState::EmbySession {
+            connection: OutputConnection::Disconnected,
+            ..
+        })
+    ));
+
+    script.set_sessions(vec![session("device-1", "session-2")]);
+    poll_once(&mut t, t0 + 3 * EMBY_SESSION_POLL_INTERVAL);
+
+    assert_eq!(
+        format!("{:?}", recv_event(&monitor_rx)),
+        format!("{:?}", CtrlEvent::PlaybackOutput(session_state())),
+        "the reappearing device broadcasts the connected output again"
+    );
+    let PlaybackOutput::EmbySession(output) = &t.event_loop.owner.output else {
+        panic!("the Session is the output");
+    };
+    assert_eq!(output.connection, OutputConnection::Connected);
+    assert_eq!(output.misses, 0);
+    assert_eq!(
+        output.session_id.as_deref(),
+        Some("session-2"),
+        "the observation adopts the new session id"
+    );
+
+    // The next command goes to the adopted id: every command path addresses
+    // the Session through this id, so a transport submitted with it reaches
+    // the device under the new session.
+    let session_id = output
+        .session_id
+        .clone()
+        .expect("the observation adopted a session id");
+    output
+        .worker
+        .send(Box::new(move |api| {
+            let _ = api.transport(&session_id, "Pause");
+        }))
+        .expect("the Session worker accepts the command");
+    wait_for_session_jobs(&t.event_loop.owner.output);
+    assert_eq!(
+        calls.lock().unwrap().last(),
+        Some(&SessionCall::Transport {
+            session_id: "session-2".to_string(),
+            command: "Pause".to_string(),
+        }),
+        "the command goes to the new session id"
+    );
+}
+
+/// Contract: row 3.3 / design D5 — a late result carrying an old poll id is
+/// ignored: it adds no miss, leaves the new poll in flight, and changes no
+/// state that the current poll's own result then applies.
+#[test]
+fn a_late_poll_result_with_an_old_poll_id_is_ignored() {
+    let fake = FakeSessionApi::with_sessions(vec![session("device-1", "session-1")]);
+    let (mut t, _calls) = session_output(fake);
+    let (_monitor_id, _monitor_tx, monitor_rx) =
+        connect_output_client_with_caps(&t.event_loop.ctrl_clients, true, true);
+    let t0 = std::time::Instant::now();
+
+    t.event_loop.tick(t0);
+    let first = t.merged_rx.recv().expect("the first poll reports");
+    let DaemonEvent::EmbySession(EmbySessionEvent::Sessions {
+        poll_id: first_id, ..
+    }) = &first
+    else {
+        panic!("the first poll result is the returned event");
+    };
+    let first_id = *first_id;
+    t.event_loop.handle_event(first);
+
+    t.event_loop.tick(t0 + EMBY_SESSION_POLL_INTERVAL);
+    t.event_loop
+        .handle_event(DaemonEvent::EmbySession(EmbySessionEvent::Sessions {
+            poll_id: first_id,
+            result: Ok(Vec::new()),
+        }));
+
+    let PlaybackOutput::EmbySession(output) = &t.event_loop.owner.output else {
+        panic!("the Session is the output");
+    };
+    assert_eq!(
+        output.poll_sent.map(|(id, _)| id),
+        Some(first_id + 1),
+        "the stale result leaves the current poll in flight"
+    );
+    assert_eq!(output.misses, 0, "the stale result adds no miss");
+    assert_eq!(output.session_id.as_deref(), Some("session-1"));
+    assert!(
+        monitor_rx.try_recv().is_err(),
+        "the stale result broadcasts nothing"
+    );
+
+    let second = t.merged_rx.recv().expect("the current poll reports");
+    let DaemonEvent::EmbySession(EmbySessionEvent::Sessions {
+        poll_id: second_id, ..
+    }) = &second
+    else {
+        panic!("the current poll result is the returned event");
+    };
+    assert_eq!(*second_id, first_id + 1, "the poll id is monotonic");
+    t.event_loop.handle_event(second);
+    let PlaybackOutput::EmbySession(output) = &t.event_loop.owner.output else {
+        panic!("the Session is the output");
+    };
+    assert!(output.poll_sent.is_none(), "the current poll settles");
+    assert_eq!(output.misses, 0);
+}
+
+/// Contract: row 3.3 / design D5 — the tick polls at most once a second and
+/// never with a poll already in flight; the poll id is monotonic.
+#[test]
+fn the_tick_polls_once_a_second_with_one_poll_in_flight() {
+    let fake = FakeSessionApi::with_sessions(vec![session("device-1", "session-1")]);
+    let (mut t, calls) = session_output(fake);
+    let base = sessions_calls(&calls);
+    let t0 = std::time::Instant::now();
+
+    t.event_loop.tick(t0);
+    wait_for_session_jobs(&t.event_loop.owner.output);
+    assert_eq!(sessions_calls(&calls), base + 1, "the first tick polls");
+
+    t.event_loop.tick(t0 + Duration::from_millis(500));
+    wait_for_session_jobs(&t.event_loop.owner.output);
+    assert_eq!(
+        sessions_calls(&calls),
+        base + 1,
+        "a poll in flight excludes a second one"
+    );
+
+    let first = t.merged_rx.recv().expect("the first poll reports");
+    let DaemonEvent::EmbySession(EmbySessionEvent::Sessions {
+        poll_id: first_id, ..
+    }) = &first
+    else {
+        panic!("the first poll result is the returned event");
+    };
+    let first_id = *first_id;
+    t.event_loop.handle_event(first);
+
+    t.event_loop.tick(t0 + Duration::from_millis(900));
+    wait_for_session_jobs(&t.event_loop.owner.output);
+    assert_eq!(
+        sessions_calls(&calls),
+        base + 1,
+        "the cadence is one second, not one tick"
+    );
+
+    t.event_loop.tick(t0 + EMBY_SESSION_POLL_INTERVAL);
+    wait_for_session_jobs(&t.event_loop.owner.output);
+    let second = t.merged_rx.recv().expect("the second poll reports");
+    let DaemonEvent::EmbySession(EmbySessionEvent::Sessions {
+        poll_id: second_id, ..
+    }) = &second
+    else {
+        panic!("the second poll result is the returned event");
+    };
+    assert_eq!(*second_id, first_id + 1, "the poll id is monotonic");
 }
