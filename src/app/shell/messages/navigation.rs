@@ -165,23 +165,28 @@ impl super::super::Model {
                 }
             }
             ShellRequest::DetachSessions => {
-                // The owner's output decides (design D13): when a cast target
-                // is the output, detach sends `SelectPlaybackOutput(Local)`
-                // and the owner tears the receiver app down (D12).
+                // The owner's output decides (design D13): when a cast target is
+                // the output, detach sends `SelectPlaybackOutput(Local)` and the
+                // owner tears the receiver app down (D12). An Emby Session output
+                // detaches the same way (emby-session-owner-output design D12).
                 let cast_output = self.app.output_is_cast();
+                let session_output = self.app.output_is_emby_session();
+                let remote_output = cast_output || session_output;
                 // Skip disconnect_remote's "No session selected" toast when a
-                // cast target is the detach target; the output hand-back
+                // remote output is the detach target; the output hand-back
                 // below is the real action in that case.
-                if self.app.can_disconnect_remote() || !cast_output {
+                if self.app.can_disconnect_remote() || !remote_output {
                     self.app.disconnect_remote();
                 }
-                if cast_output {
+                if remote_output {
                     self.app
                         .select_playback_output(mbv_ctrl::OutputSelection::Local);
-                    self.app.flash(
-                        "Detached from cast target".to_string(),
-                        ToastSeverity::Success,
-                    );
+                    let message = if cast_output {
+                        "Detached from cast target"
+                    } else {
+                        "Detached from Emby Session"
+                    };
+                    self.app.flash(message.to_string(), ToastSeverity::Success);
                 }
                 self.dismiss_sidebar(super::super::SidebarId::Sessions);
             }

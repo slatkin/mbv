@@ -108,3 +108,39 @@ fn session_connect_hands_a_cast_output_back_to_the_local_owner() {
         "a connect on a Local output sends no handback command"
     );
 }
+
+/// emby-session-owner-output row 7.1, design D12, cast-session-control spec
+/// "A session or direct remote is connected while a cast target is attached",
+/// extended to the Emby Session output: `hand_remote_output_back_to_local`
+/// sends `Stop` first and then `SelectPlaybackOutput(Local)`.
+#[test]
+fn session_connect_hands_an_emby_session_output_back_to_the_local_owner() {
+    let mut app = make_app_stub();
+    let cmd_rx = live_owner_channel(&mut app);
+    app.player_endpoint = Some(mbv_remote_player::DaemonEndpoint::Local);
+    app.player
+        .remote()
+        .update_playback_output_for_test(mbv_ctrl::OutputState::EmbySession {
+            device_id: "device-1".to_string(),
+            name: "Living Room TV".to_string(),
+            connection: mbv_ctrl::OutputConnection::Connected,
+            audio_only: false,
+            now_playing: None,
+        });
+    app.connect_to_session(&make_session("remote-host", "mbv"));
+    assert!(
+        matches!(cmd_rx.try_recv().unwrap(), mbv_ctrl::CtrlCmd::Stop),
+        "the handback stops the Emby Session first"
+    );
+    assert!(
+        matches!(
+            cmd_rx.try_recv().unwrap(),
+            mbv_ctrl::CtrlCmd::SelectPlaybackOutput(mbv_ctrl::OutputSelection::Local)
+        ),
+        "the handback then selects Local as the owner's output"
+    );
+    assert!(
+        cmd_rx.try_recv().is_err(),
+        "the handback sends exactly the two commands"
+    );
+}

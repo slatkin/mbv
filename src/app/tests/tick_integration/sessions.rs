@@ -26,6 +26,7 @@ fn sessions(ids: &[&str]) -> Vec<crate::app::state::panel_targets::PanelTarget> 
         .map(|id| {
             let mut session = mbv_emby::test_support::make_session(id, "mbv");
             session.id = (*id).into();
+            session.device_id = format!("device-{id}");
             crate::app::state::panel_targets::PanelTarget::Emby(Box::new(session))
         })
         .collect()
@@ -47,15 +48,41 @@ fn playback_output_owner_app() -> (
     crate::app::App,
     std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>,
 ) {
+    capability_owner_app(false)
+}
+
+/// An app whose owner advertises `playback-output` and, when `emby_session`
+/// is set, `emby-session-output` (emby-session-owner-output design D3/D12).
+fn capability_owner_app(
+    emby_session: bool,
+) -> (
+    crate::app::App,
+    std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>,
+) {
     let mut app = make_app_stub();
     let (mut remote, player_rx, cmd_rx) =
         mbv_remote_player::RemotePlayer::stub_with_command_rx(Vec::new(), 0);
     let mut compatibility = mbv_ctrl::CtrlCompatibility::current();
     compatibility.supports_playback_output = true;
+    compatibility.supports_emby_session_output = emby_session;
     remote.set_ctrl_compatibility_for_test(compatibility);
     app.player = mbv_player::PlayerProxy::from_remote(remote, false);
     app.player_rx = player_rx;
     (app, cmd_rx)
+}
+
+/// Injected direct-connect failure for row 7.1: the Session advertises a
+/// direct endpoint, but the connect itself fails.
+fn failed_direct_connect(
+    _endpoint: &mbv_remote_player::DaemonEndpoint,
+) -> Result<
+    (
+        mbv_remote_player::RemotePlayer,
+        std::sync::mpsc::Receiver<mbv_ctrl::player::PlayerEvent>,
+    ),
+    mbv_remote_player::RemotePlayerError,
+> {
+    Err(mbv_remote_player::RemotePlayerError::owner_build_mismatch_for_test("test"))
 }
 
 fn apply_messages(harness: &mut TickHarness, outcome: StepOutcome) {
@@ -329,7 +356,7 @@ fn tick_sessions_unchanged_sync_keeps_painted_pointer_target_without_redraw() {
 
 #[test]
 fn tick_sessions_reordered_snapshot_activates_selected_identity() {
-    let mut app = make_app_stub();
+    let (mut app, cmd_rx) = capability_owner_app(true);
     app.panel_targets = sessions(&["first", "selected"]);
     let mut harness = TickHarness::new(app);
     open_sessions(&mut harness);
@@ -354,9 +381,15 @@ fn tick_sessions_reordered_snapshot_activates_selected_identity() {
         &mut music_resize,
         &mut tv_resize,
     );
-    assert_eq!(
-        harness.model().app.connected_session_id.as_deref(),
-        Some("selected")
+    assert!(
+        matches!(
+            cmd_rx.try_recv().unwrap(),
+            mbv_ctrl::CtrlCmd::SelectPlaybackOutput(mbv_ctrl::OutputSelection::EmbySession {
+                ref device_id,
+                ..
+            }) if device_id == "device-selected"
+        ),
+        "the activation selects the reordered row's device identity"
     );
 }
 
@@ -436,5 +469,105 @@ fn tick_sessions_cast_row_activation_sends_the_owner_output_selection() {
     assert!(
         cmd_rx.try_recv().is_err(),
         "no command precedes the selection: the owner performs the hand-off"
+    );
+}
+
+/// emby-session-owner-output row 7.1, design D12, cast-session-control spec
+/// "An Emby Session is selected while a cast target is attached": activating
+/// an Emby row without a direct endpoint severs the previous Client target
+/// and sends `SelectPlaybackOutput(EmbySession)` to the owner, with no `Stop`
+/// — the owner performs the Cast-to-Session hand-off and continues the
+/// active slot.
+#[test]
+fn tick_sessions_emby_row_without_direct_endpoint_selects_the_owner_output() {
+    let (mut app, cmd_rx) = capability_owner_app(true);
+    app.terminal_width = 100;
+    app.terminal_height = 14;
+    app.player_endpoint = Some(mbv_remote_player::DaemonEndpoint::Local);
+    let mut session = mbv_emby::test_support::make_session("Living Room TV", "Emby");
+    session.id = "sess-tv".into();
+    session.device_id = "device-tv".into();
+    app.panel_targets = vec![PanelTarget::Emby(Box::new(session))];
+    app.connected_session_id = Some("old-session".into());
+    let mut harness = TickHarness::new(app);
+    open_sessions(&mut harness);
+
+    let request = enter_request(&mut harness);
+    assert_eq!(request, SessionTargetKey::Emby("sess-tv".into()));
+    let (mut music_resize, mut tv_resize) = (false, false);
+    harness.model_mut().handle_terminal_message(
+        Msg::Shell(Box::new(ShellRequest::SelectSession(request))),
+        &mut music_resize,
+        &mut tv_resize,
+    );
+
+    assert!(
+        matches!(
+            cmd_rx.try_recv().unwrap(),
+            mbv_ctrl::CtrlCmd::SelectPlaybackOutput(mbv_ctrl::OutputSelection::EmbySession {
+                ref device_id,
+                ref name,
+            }) if device_id == "device-tv" && name == "Living Room TV"
+        ),
+        "the activation selects that Session as the owner's output"
+    );
+    assert!(
+        cmd_rx.try_recv().is_err(),
+        "no command precedes the selection: the owner performs the hand-off"
+    );
+    assert!(
+        harness.model().app.connected_session_id.is_none(),
+        "activating a Session output severs the previous attached session"
+    );
+}
+
+/// emby-session-owner-output row 7.1, design D12: a Session that advertises a
+/// direct endpoint reports a failed direct connect and then, when the owner
+/// advertises `emby-session-output`, selects the same Session as its output.
+#[test]
+fn tick_sessions_emby_row_with_failed_direct_connect_reports_and_selects_the_owner_output() {
+    use crate::app::{DIRECT_CONNECT_OVERRIDE, DIRECT_CONNECT_TEST_LOCK};
+
+    let _guard = DIRECT_CONNECT_TEST_LOCK.lock().unwrap();
+    *DIRECT_CONNECT_OVERRIDE.lock().unwrap() = Some(failed_direct_connect);
+    let (mut app, cmd_rx) = capability_owner_app(true);
+    app.terminal_width = 100;
+    app.terminal_height = 14;
+    app.player_endpoint = Some(mbv_remote_player::DaemonEndpoint::Local);
+    let mut session = mbv_emby::test_support::make_session("remote-host", "mbv");
+    session.device_id = "device-direct".into();
+    session.host = "192.168.1.20".into();
+    session.supported_commands = vec![mbv_emby::mbv_direct_tcp_port_command(47788)];
+    app.panel_targets = vec![PanelTarget::Emby(Box::new(session))];
+    let mut harness = TickHarness::new(app);
+    open_sessions(&mut harness);
+
+    let request = enter_request(&mut harness);
+    assert_eq!(request, SessionTargetKey::Emby("sess-1".into()));
+    let (mut music_resize, mut tv_resize) = (false, false);
+    harness.model_mut().handle_terminal_message(
+        Msg::Shell(Box::new(ShellRequest::SelectSession(request))),
+        &mut music_resize,
+        &mut tv_resize,
+    );
+    *DIRECT_CONNECT_OVERRIDE.lock().unwrap() = None;
+
+    assert!(
+        harness
+            .model()
+            .app
+            .status
+            .contains("Direct mbv control failed"),
+        "the failed direct connect is reported"
+    );
+    assert!(
+        matches!(
+            cmd_rx.try_recv().unwrap(),
+            mbv_ctrl::CtrlCmd::SelectPlaybackOutput(mbv_ctrl::OutputSelection::EmbySession {
+                ref device_id,
+                ref name,
+            }) if device_id == "device-direct" && name == "remote-host"
+        ),
+        "the failed direct connect falls back to the Session output selection"
     );
 }

@@ -441,6 +441,11 @@ impl RemotePlayer {
         self.ctrl_compatibility.supports_playback_output
     }
 
+    #[must_use]
+    pub fn supports_emby_session_output(&self) -> bool {
+        self.ctrl_compatibility.supports_emby_session_output
+    }
+
     pub fn load_queue_idle(
         &self,
         request_id: mbv_ctrl::QueueLoadRequestId,

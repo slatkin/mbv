@@ -12,6 +12,7 @@ pub(in crate::app) type DirectConnectFn = fn(
 
 pub(in crate::app) static DIRECT_CONNECT_OVERRIDE: Mutex<Option<DirectConnectFn>> =
     Mutex::new(None);
+pub(in crate::app) static DIRECT_CONNECT_TEST_LOCK: Mutex<()> = Mutex::new(());
 
 // Separate from DIRECT_CONNECT_OVERRIDE above (Sessions-panel "Direct
 // Remote" upgrade, keyed off a discovered SessionInfo): this is issue

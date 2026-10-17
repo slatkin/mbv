@@ -86,31 +86,31 @@ impl App {
             .send_ctrl_cmd(CtrlCmd::SelectPlaybackOutput(selection));
     }
 
-    /// Whether the current player connection's owner reports a Cast output,
-    /// read synchronously from the connection's retained state — not the
-    /// drained `playback_output` mirror, which stays `None` until the shell
-    /// drains the cold-seed event. Launch auto-reconnect connects a session
-    /// (and severs) before any drain ever happens, so the handback decision
-    /// reads the connection's own record, which the handshake fills at the
-    /// cold seed (cast-owner-output 8.2 fix).
-    fn player_output_is_cast(&self) -> bool {
+    /// Whether the current player connection's owner reports a remote output
+    /// (a Cast receiver or an Emby Session), read synchronously from the
+    /// connection's retained state — not the drained `playback_output` mirror,
+    /// which stays `None` until the shell drains the cold-seed event. Launch
+    /// auto-reconnect connects a session (and severs) before any drain ever
+    /// happens, so the hand-back decision reads the connection's own record,
+    /// which the handshake fills at the cold seed (cast-owner-output 8.2 fix).
+    fn player_output_is_remote(&self) -> bool {
         matches!(
             self.player.remote().playback_output_state(),
-            Some(mbv_ctrl::OutputState::Cast { .. })
+            Some(mbv_ctrl::OutputState::Cast { .. } | mbv_ctrl::OutputState::EmbySession { .. })
         )
     }
 
-    /// Hand the Local daemon owner's Cast output back to Local (design D13):
+    /// Hand the Local daemon owner's remote output back to Local (design D13):
     /// `Stop` first so no slot is active at the hand-off (D10 step 1), then
-    /// `SelectPlaybackOutput(Local)` — the receiver stops and local playback
-    /// does not start. The decision reads the current owner connection's
-    /// retained output state (`player_output_is_cast`), so the send happens
-    /// only when that owner is the Local daemon: a remote owner's own Cast
-    /// output is not ours to stop. Best-effort like every other
-    /// fire-and-forget player send.
-    pub(in crate::app) fn hand_cast_output_back_to_local(&mut self) {
-        if self.is_local_daemon() && self.player_output_is_cast() {
-            tracing::info!(name: "sessions.output_handback", target: "sessions", "stopping the receiver and returning the Local owner's output to Local");
+    /// `SelectPlaybackOutput(Local)` — a Cast receiver stops, an Emby Session
+    /// stops, and local playback does not start. The decision reads the
+    /// current owner connection's retained output state
+    /// (`player_output_is_remote`), so the send happens only when that owner is
+    /// the Local daemon: a remote owner's own output is not ours to stop.
+    /// Best-effort like every other fire-and-forget player send.
+    pub(in crate::app) fn hand_remote_output_back_to_local(&mut self) {
+        if self.is_local_daemon() && self.player_output_is_remote() {
+            tracing::info!(name: "sessions.output_handback", target: "sessions", "stopping the remote output and returning the Local owner's output to Local");
             let _ = self.player.send_ctrl_cmd(CtrlCmd::Stop);
             let _ = self
                 .player
@@ -121,12 +121,12 @@ impl App {
     /// Connecting to a new target severs the current one: the watched
     /// session, direct remote, and library-route slots are mutually
     /// exclusive, so a new connect tears the old target down instead of
-    /// holding both. The owner's Cast output is handed back to Local first
-    /// (`hand_cast_output_back_to_local`); a severed cast receiver is left
+    /// holding both. The owner's remote output is handed back to Local first
+    /// (`hand_remote_output_back_to_local`); a severed cast receiver is left
     /// as it is ("the receiver owns what it plays"). No-op when nothing
     /// else is connected.
     pub(in crate::app) fn sever_active_connection(&mut self) {
-        self.hand_cast_output_back_to_local();
+        self.hand_remote_output_back_to_local();
         self.sever_connections_without_output_change();
     }
 

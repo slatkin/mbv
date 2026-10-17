@@ -15,7 +15,7 @@ mod test_seams;
 #[cfg(test)]
 pub(in crate::app) use self::test_seams::{
     DAEMON_ROUTE_CONNECT_OVERRIDE, DAEMON_ROUTE_CONNECT_TEST_LOCK, DIRECT_CONNECT_OVERRIDE,
-    SESSIONS_LOAD_OVERRIDE,
+    DIRECT_CONNECT_TEST_LOCK, SESSIONS_LOAD_OVERRIDE,
 };
 mod shell;
 use self::dispatch::notify::ToastSeverity;

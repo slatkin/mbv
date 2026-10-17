@@ -369,7 +369,7 @@ pub struct App {
     /// before any drain ever happens, so control decisions that must not
     /// wait for a beat read the owner connection's retained state instead
     /// (`RemotePlayer::playback_output_state`, which the handshake fills at
-    /// the cold seed) — see `hand_cast_output_back_to_local` (8.2 fix).
+    /// the cold seed) — see `hand_remote_output_back_to_local` (8.2 fix).
     pub(in crate::app) playback_output: Option<mbv_ctrl::OutputState>,
     pub(in crate::app) queue_epoch: QueueEpoch,
     pub(in crate::app) playlist_mutations: std::collections::HashMap<String, PlaylistMutationState>,
@@ -553,6 +553,18 @@ impl App {
         matches!(
             self.playback_output,
             Some(mbv_ctrl::OutputState::Cast { .. })
+        )
+    }
+
+    /// Whether the Player owner's active playback output is an Emby Session,
+    /// per the last `CtrlEvent::PlaybackOutput` (emby-session-owner-output
+    /// design D12). A `Disconnected` Session still counts, like a
+    /// `Disconnected` Cast target. `None` and `Local` both read as not an
+    /// Emby Session.
+    pub(in crate::app) fn output_is_emby_session(&self) -> bool {
+        matches!(
+            self.playback_output,
+            Some(mbv_ctrl::OutputState::EmbySession { .. })
         )
     }
 
