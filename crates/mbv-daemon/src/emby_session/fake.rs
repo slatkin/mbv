@@ -57,11 +57,6 @@ pub(crate) struct FakeSessionApi {
 }
 
 impl FakeSessionApi {
-    /// A fake with no Sessions and no scripted failure.
-    pub(crate) fn new() -> Self {
-        Self::default()
-    }
-
     /// A fake whose `get_sessions` returns `sessions`.
     pub(crate) fn with_sessions(sessions: Vec<SessionInfo>) -> Self {
         Self {
