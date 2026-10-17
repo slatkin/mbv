@@ -47,9 +47,17 @@
 
 - [x] 8.1 Run the full gate: `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run --workspace`. Verify: all three pass.
 
+## 9. Two items on the device
+
+- [ ] 9.1 Change `SessionApi::play` to take one or two item ids (`PlayNow` with `ItemIds` and `StartIndex = 0`), and add `play_last` (`PlayCommand = PlayLast`, one item id). Add the matching `EmbyClient` calls in `crates/mbv-emby/src/client_sessions.rs` and record both in the fake (design D4, D14). Add the queued next item to `EmbySessionOutput` (design D1). Verify: `cargo check -p mbv-daemon`. 9.2 onward exercise the fake.
+- [ ] 9.2 Every `play` job of design D7 sends the active item and the next admissible slot, and records that slot as the queued next item. The last admissible slot sends one item id (design D14). Verify: change the #945 regression test of 4.2: a 300-slot queue gives exactly one `play` call with two item ids. Add one test: playing the last slot sends one item id.
+- [ ] 9.3 Apply the device advance of design D14 in the D6 observation handling: the queued slot becomes the active slot with no `play` call, completion is recorded only within 10 s of the runtime, and `play_last` appends the next admissible slot. Include the same-item position-drop rule. Verify: tests with the fake: a device advance near the end records completion, makes the queued slot active, sends no `play`, and sends one `play_last` of the slot after it; a device advance 60 s before the end records no completion; an inadmissible slot after the queued one is skipped by the append.
+- [ ] 9.4 Handle queue edits that change the next admissible slot (design D14): with nothing queued, send `play_last`; otherwise mark the queued item stale, and on the device advance to a stale item send `play` with the correct next slot and the slot after it. Verify: tests with the fake: removing the queued slot sends nothing at once, and the advance to it sends one `play` of the new next slot; appending to a queue with nothing queued sends one `play_last`.
+- [ ] 9.5 Run the full gate of 8.1. Verify: all three pass.
+
 ## Workflow follow-up
 
-- Manual live test by the user: select a TV Session in F3, let an episode end, and check that the next slot loads. Stop early and check that nothing advances.
+- Manual live test by the user: select a TV Session in F3, let an episode end, and check that the next slot plays (not the device's own next episode) and that the slot after it is appended. Stop early and check that nothing advances. Remove the queued next slot and check that the active item plays on.
 - Run `make check-code-file-lines` before push.
 - When the user approves the PR for merge, sync the delta specs and archive the change. Not before. At sync, reword the watched-session text in main specs that this change has no delta for: `queue-playback-panel` (header order and its two scenarios), `system-audio-visualizer`, `pipe-playout-latency`, `local-daemon-thin-client` (the "direct session" record and the attached-Session sentences), `daemon-playback-intents` (scope requirement), `queue-artwork-title-overlay`, and `unified-playback-queue` (the canonical-queue edit requirement).
-- Close #945. Open a follow-up for the removal of the ctrl `UnifiedQueueLoadIdle` command and for adopting device autoplay.
+- Close #945. Open a follow-up for the removal of the ctrl `UnifiedQueueLoadIdle` command.

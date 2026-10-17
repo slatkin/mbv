@@ -4,7 +4,7 @@
 
 ### Requirement: A Player owner has exactly one active playback output
 
-A Player owner SHALL have exactly one active playback output at any time: local playback, one Cast receiver, or one Emby Session. A Cast receiver and an Emby Session are remote receivers. The owner SHALL hold the queue, the active slot, and the play order for every output. An output SHALL play only the item of the active slot. An output SHALL never hold, advance, or reconcile a copy of the queue.
+A Player owner SHALL have exactly one active playback output at any time: local playback, one Cast receiver, or one Emby Session. A Cast receiver and an Emby Session are remote receivers. The owner SHALL hold the queue, the active slot, and the play order for every output. An output SHALL play only the item of the active slot. An Emby Session SHALL also hold the item of the next slot, so that the device plays it in place of its own autoplay. An output SHALL never hold, advance, or reconcile a copy of the queue.
 
 #### Scenario: Owner starts
 
@@ -20,8 +20,8 @@ A Player owner SHALL have exactly one active playback output at any time: local 
 #### Scenario: An Emby Session is the output
 
 - **WHEN** the user plays a queue of several Emby items while an Emby Session is the active output
-- **THEN** the owner gives the Session only the item of the active slot
-- **AND** never gives the Session a list of items
+- **THEN** the owner gives the Session the item of the active slot and the item of the next slot
+- **AND** never gives the Session more than two items
 
 ### Requirement: Only a natural end advances
 
@@ -131,9 +131,41 @@ The owner SHALL identify the Emby Session output by its Emby device identity, no
 - **THEN** every Client presents the Emby Session output as disconnected
 - **AND** the owner does not advance
 
+### Requirement: The Emby Session device holds the active item and the next item
+
+Each load on an Emby Session SHALL give the device the active item and the first slot after it, in play order, that the Session can play. When the device moves from the loaded item to the queued next item by itself, the owner SHALL make that slot the active slot without a new load, SHALL record completion of the old slot only when it ended within 10 seconds of its runtime, and SHALL append the next playable slot to the device. A queue edit SHALL NOT interrupt the active item on the device.
+
+#### Scenario: Device moves to the queued next item
+
+- **WHEN** the loaded episode ends on the device and the device starts the queued next item
+- **THEN** the owner records completion for the old slot
+- **AND** the queued slot becomes the active slot with no new load on the device
+- **AND** the owner appends the slot after it to the device
+
+#### Scenario: Device does not autoplay its own next episode
+
+- **WHEN** the loaded episode ends on the device and the queue has a next slot
+- **THEN** the device plays the item of the next slot, not the next episode of the series
+
+#### Scenario: Last slot of the queue
+
+- **WHEN** the owner loads the last playable slot of the queue on an Emby Session
+- **THEN** the device receives only that item
+
+#### Scenario: Queue edit removes the queued next slot
+
+- **WHEN** the user removes the slot that is queued next on the device while the active item plays
+- **THEN** the active item plays on without an interruption
+- **AND** when the device starts the removed item, the owner loads the new next slot in its place
+
+#### Scenario: Queue grows after the last slot
+
+- **WHEN** nothing is queued on the device and the user appends a slot to the queue
+- **THEN** the owner appends that slot to the device without an interruption
+
 ### Requirement: Content the owner did not load is presented, not advanced
 
-When an Emby Session presents an item that the owner did not load, the owner SHALL present that item, its position, and its pause state to every Client and SHALL NOT advance, record completion, or change the active slot. Play, pause, seek, volume, mute, and track commands SHALL act on that item. Next and previous SHALL be sent to the device as its own next and previous commands.
+When an Emby Session presents an item that the owner did not load (neither the loaded item nor the queued next item), the owner SHALL present that item, its position, and its pause state to every Client and SHALL NOT advance, record completion, or change the active slot. Play, pause, seek, volume, mute, and track commands SHALL act on that item. Next and previous SHALL be sent to the device as its own next and previous commands.
 
 #### Scenario: Another app starts an item on the device
 

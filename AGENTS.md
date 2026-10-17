@@ -71,7 +71,7 @@ ADRs 0022 through 0024, `openspec/specs/interactive-component-framework/spec.md`
 * A Composed or Bound queue has one canonical ordered sequence of `QueueItem` slots. Use stable `QueueSlotId` for occurrences. Do not recreate parallel Emby, Feed, or Audiobookshelf lists. Do not use content identity to address a slot.
 * The Player owner is authoritative for Bound queue state, the active slot, and the playback lifecycle. mpv is a source and output projection (and can load only the active file). It is never queue authority.
 * A Cast receiver is an output projection of the Owner, like mpv. It holds only the active item. The Owner keeps the canonical queue and the active slot.
-* An Emby Session is an output projection of the Owner, like mpv and a Cast receiver: the Owner drives the device through the Emby Sessions API, keeps the canonical queue and the active slot, and the Session holds one item at a time. The TUI is a picker and has no attached-session play path.
+* An Emby Session is an output projection of the Owner, like mpv and a Cast receiver: the Owner drives the device through the Emby Sessions API, keeps the canonical queue and the active slot, and the Session holds the active item and the next item, never more. The TUI is a picker and has no attached-session play path.
 * Owner admission is the capability boundary. Media kind, required Service setup, and negotiated ctrl transport decide what enters a Bound queue. Components can edit Composed content. They never perform admission and never mutate the canonical queue directly. Shell and Player paths do that work.
 
 ## TUI work

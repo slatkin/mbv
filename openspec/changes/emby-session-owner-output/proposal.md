@@ -8,7 +8,7 @@ The Cast output (#944, PR #947) fixed the same problem for Cast receivers. The `
 
 ## What Changes
 
-- **An Emby Session becomes a Playback output of the Owner.** `PlaybackOutput` gets an Emby Session variant. The Owner holds the queue and the active slot. It sends only the active slot to the device (`session_play` with one item) and never sends a list.
+- **An Emby Session becomes a Playback output of the Owner.** `PlaybackOutput` gets an Emby Session variant. The Owner holds the queue and the active slot. It sends the active slot and the next slot to the device, never more. When the device moves to the next slot by itself, the Owner appends the slot after it. Without the next slot on the device, the device app autoplays its own next episode.
 - **A connect in F3 selects the output.** Activation of an Emby Session row sends `SelectPlaybackOutput`. The Owner hands the active slot off to the device at its position (the same D10 hand-off as Cast). There is no watch-only mode. If a Session offers Direct remote control but that connect fails, the TUI reports the failure and selects the Session as the output.
 - **The Owner observes the Session.** The Owner polls `/Sessions` every 1 s while the Session is the output. It presents the position, pause state, volume, and tracks to every Client through its normal status broadcast.
 - **The Owner infers a natural end.** Emby reports no end reason. The Owner counts an end when the Session goes idle after it played the loaded item and the estimated position is within 10 s of the item runtime. A stop in the last 10 s therefore counts as an end. That is a stated limit.

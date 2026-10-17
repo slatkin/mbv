@@ -7,7 +7,7 @@ See proposal.md for the reasons. Current state that shapes the approach:
 - **The Cast output is the template.** `crates/mbv-daemon/src/cast.rs` holds `PlaybackOutput { Local, Cast(Box<CastOutput>) }`, `output_state()`, and the Cast output state. `cast/{advance,command,connect,status,progress,feed_events}.rs` hold the logic. The archived change `2026-10-16-cast-owner-output` (decisions D1–D14) explains it. This design reuses that shape and names only the differences.
 - **The attached Emby Session lives in the TUI.** It uses `connected_session_id` and `connected_session_state` (read in about 40 files), `RemotePlaybackTarget` (`src/app/state/playback_target/remote.rs`), the whole-queue push `submit_attached_sequence` and `session_jump_track` (`src/app/dispatch/session/command.rs`), the populate-only load before a session play (`load_idle_queue_on_owner`, only for this path), a 1 s `/Sessions` poll (`src/app/shell/run/drains.rs:489`), and position extrapolation and miss counting (`src/app/dispatch/run_loop/session.rs`).
 - **A connect only watches today.** `connect_to_session` (`src/app/dispatch/session/switch.rs:445`) sets `connected_session_id` and does not stop local playback. Plays then go to the device.
-- **The Emby session API is plain HTTP.** `session_play` (one item, `crates/mbv-emby/src/client_sessions.rs:229`) already exists. So do the transport, seek, volume, mute, audio-index, and subtitle-index commands. No `!Send` client exists here.
+- **The Emby session API is plain HTTP.** `session_play` (one item, `crates/mbv-emby/src/client_sessions.rs:229`) already exists. The attached-session path before this change sent the whole queue as one `PlayNow` with `ItemIds` and `StartIndex` (`session_play_items`). The device played that list in order, and the TUI found the active slot from `NowPlayingItem`. A device that holds only one item autoplays its own next episode at the end (live test of this change), so the Owner keeps the next slot on the device too (D14). So do the transport, seek, volume, mute, audio-index, and subtitle-index commands. No `!Send` client exists here.
 - **Emby gives no end reason.** `/Sessions/Playing/Stopped` has the same body as the start body. The websocket has no stop message for other clients. The Owner sees only `NowPlayingItem` disappear.
 - **`SessionInfo` has no device id.** `/Sessions` returns `DeviceId`, but the parser only uses it to filter out mbv's own session (`client_sessions.rs:95`).
 - **Completion recording is provider-neutral.** `record_completed_slot` (`crates/mbv-daemon/src/run.rs:82`) changes only the canonical queue (progress fields and consume rules). It sends nothing to Emby.
@@ -21,7 +21,7 @@ See proposal.md for the reasons. Current state that shapes the approach:
 - Cast and the Emby Session share one advance and step-over state machine.
 
 **Non-Goals:**
-- Adopting a device's own next-episode autoplay as the next slot.
+- Adopting a device's own next-episode autoplay as a slot. The two-item window (D14) prevents the autoplay while the queue has a next slot.
 - A slower poll while the output is disconnected.
 - Removing the ctrl `UnifiedQueueLoadIdle` command. It loses its last TUI sender. Its removal is a separate change.
 - Changes to *Direct remote control* or Library routes.
@@ -35,6 +35,7 @@ See proposal.md for the reasons. Current state that shapes the approach:
 - the connection state, the miss count, the poll in flight (poll id and time), and the job sender;
 - the last observation and its time;
 - the loaded item: `QueueSlotId`, Emby item id, runtime ticks, the time of the load, `seen_playing`, `end_handled`, and `failure_reported`;
+- the queued next item on the device (D14): `QueueSlotId` and Emby item id, and whether a queue edit made it stale;
 - a pending pause (D9) and the shared advance state (D6).
 
 *Alternative:* add the variant inside `cast.rs`. This was rejected because the file would go over 800 lines, and an Emby type does not belong in a Cast module.
@@ -58,7 +59,7 @@ See proposal.md for the reasons. Current state that shapes the approach:
 
 An Emby Session output owns one worker thread with a job channel. That thread runs every HTTP call in order: the poll, play, and transport commands. Results come back as `DaemonEvent::EmbySession`. The event loop never waits on the network, and commands reach the device in the order that the user sent them. (The TUI today starts one thread for each command, so their order is not fixed.)
 
-The worker calls a small `SessionApi` trait (`get_sessions`, `play`, `transport`, `seek`, `set_volume`, `set_mute`, `set_audio_index`, `set_subtitle_index`). It is implemented for `EmbyClient`. Tests use a fake (the boundary mock, the same pattern as the Cast transport). The trait has no method that reports progress, so D8 holds by construction.
+The worker calls a small `SessionApi` trait (`get_sessions`, `play` (a `PlayNow` with one or two item ids, D14), `play_last` (D14), `transport`, `seek`, `set_volume`, `set_mute`, `set_audio_index`, `set_subtitle_index`). It is implemented for `EmbyClient`. Tests use a fake (the boundary mock, the same pattern as the Cast transport). The trait has no method that reports progress, so D8 holds by construction.
 
 The trait's `get_sessions` calls `EmbyClient::get_sessions_unfiltered`, not the filtered `get_sessions`. The filtered list (`ActiveWithinSeconds=600`) drops a device that is idle but still connected (#236), so the Owner would mark an idle TV `Disconnected`. A selection runs `get_sessions` on the worker and finds the entry whose `DeviceId` matches. If it finds none, or the call fails, the old output stays and the Owner reports the reason.
 
@@ -77,11 +78,12 @@ On each observation:
 | Observation | Owner action |
 |---|---|
 | Session presents the loaded item | Set `seen_playing`, settle the transition (D7), send a pending pause (D9) |
+| Session presents the queued next item, and the replaced observation presented the loaded item | The device moved on by itself. Apply the device advance of D14 |
 | Session idle, `seen_playing`, not `end_handled`, estimate >= runtime − 10 s | Set `end_handled`. Record completion through `record_completed_slot`. Step with `relative_step_target(Next)` |
 | Session idle, `seen_playing`, estimate < runtime − 10 s | Set `end_handled`. Present no active playback. No advance |
 | Session idle, not `seen_playing`, less than 30 s after the load | Wait |
 | Not `seen_playing`, 30 s or more after the load, not `failure_reported` | Report the failure by item name. Expire the transition. No advance |
-| Session presents an item that the Owner did not load | Put it in `now_playing` (D3). No advance and no completion |
+| Session presents an item that the Owner did not load (not the loaded item and not the queued next item) | Put it in `now_playing` (D3). No advance and no completion |
 
 The 30 s check also runs on the tick, so a Session that is idle and unchanged still gets the timeout.
 
@@ -93,7 +95,7 @@ The advance and step-over code in `cast/advance.rs` (`CastAdvance`, `begin_advan
 
 The same four branch points as Cast D4 (`play_resolved_items`, `handle_queue_replace`, the cold path of `send_jump_or_cold_start`, and `dispatch_slot_jump`) get an `EmbySession` arm:
 1. Admission: a pure function `admit(item, playable_media_types)`. Emby items pass when the Session advertises their media kind, or advertises no kinds. All other items fail, with the reason.
-2. If the item passes, the Owner sets the active slot, registers the in-flight transition, and sends a `play(session_id, item_id, start_ticks)` job. `start_ticks` is the resume position, or the position from the hand-off.
+2. If the item passes, the Owner sets the active slot, registers the in-flight transition, and sends a `play(session_id, [item_id, next_item_id], start_ticks)` job (D14). `start_ticks` is the resume position, or the position from the hand-off.
 3. An explicit play or jump of an item that fails admission reports the item and loads nothing.
 
 There is no resolve step, because the device fetches its own stream. When an observation shows the loaded item, the transition settles. A failed `play` call or the 30 s timeout expires it. Quick repeated next presses coalesce through the existing gate.
@@ -173,11 +175,35 @@ In `CONTEXT.md`:
 
 In AGENTS.md "Playback and queue authority", an Emby Session joins Cast as an output projection.
 
+### D14. Two items on the device
+
+The device holds the active slot and the next slot. It never holds more. Without the next slot, the device app autoplays its own next episode at the end, and the 1 s poll sees no idle between the two items, so the D6 end rule never fires.
+
+- **Load** (every `play` job of D7, including Next, Previous, a jump, and a hand-off): `PlayNow` with `ItemIds = [active item, next item]`, `StartIndex = 0`, and the start ticks of the active item. The next item is the first slot after the active slot, in play order, that passes admission. If no slot passes, `ItemIds` holds only the active item. The output records that slot as the queued next item.
+- **Device advance:** an observation presents the queued next item, and the replaced observation presented the loaded item. The device moved on by itself, so playback must not stop. The Owner:
+  1. records completion of the old slot through `record_completed_slot` only when the estimate was within 10 s of its runtime (D6). A skip on the device is not a completion;
+  2. makes the queued slot the active slot and the loaded item, with `seen_playing` set, and settles;
+  3. finds the next admissible slot after it and sends `play_last` (`PlayCommand = PlayLast`) with its item id. That slot becomes the queued next item. If there is none, nothing is queued.
+
+  The Owner sends no `PlayNow` here.
+- **Same item in both slots:** the item id does not change, so a device advance is a position drop to less than 10 s after an estimate within 10 s of the runtime. The same three steps then apply.
+- **Queue edits:** the Sessions API can add items but cannot remove or reorder them on the device. When an edit changes the next admissible slot, the Owner never interrupts the active item:
+  - no item was queued and now one exists (an append at the end of the queue): send `play_last` with it;
+  - otherwise: mark the queued next item stale. On the device advance to a stale item, the Owner sends `PlayNow` with the correct next slot and the slot after it. Only that boundary is interrupted.
+- **End of the queue:** with nothing queued, the device holds only the last item. An idle after it follows D6 (completion, then no next slot). If the device autoplays its own next episode, that item is content the Owner did not load (D6 last row), and the queue stays on the last slot.
+
+*Alternative:* push the whole queue as one list (the old attached-session path). This was rejected because queue edits after the push have no effect on the device (#945).
+
+*Alternative:* hold one item and replace the device's own autoplay with a `PlayNow` of the next slot. This was rejected because the autoplayed episode starts before the Owner replaces it, at each item boundary.
+
 ## Risks / Trade-offs
+
+- [A device app ignores `PlayLast`] → It autoplays its own next episode after the second item, and the Owner presents that as content it did not load. The live test of this change checks `PlayLast` on the Emby web Session. The old attached-session path used only `PlayNow`.
+- [A queue edit makes the queued next item stale] → The device starts the stale item, and the Owner replaces it at that boundary (D14). The active item is never interrupted.
 
 - [A user stop in the last 10 s advances the queue] → Accepted and stated in the spec. Emby cannot separate it from an end. The credits usually play in that part of an item.
 - [Both the queue item and the Session report a runtime of 0] → No natural end is possible, and the idle counts as a user stop. The queue stops there. This is rare for Emby items, and the risk is accepted.
-- [The device app autoplays the next episode] → It shows as content that the Owner did not load, and the queue stays on the ended slot. Adopting it is deferred (Non-Goal).
+- [The device app autoplays its own next episode after the last slot] → It shows as content that the Owner did not load, and the queue stays on the last slot (D14). Adopting it is a Non-Goal.
 - [A paused hand-off plays for about one poll interval before the pause] → Accepted. Emby `PlayNow` has no start-paused flag.
 - [A 1 s `/Sessions` poll loads the server] → The TUI polls at the same rate today. The Owner polls only while the output is an Emby Session.
 - [A slow command delays the poll on the shared worker] → Accepted, because order matters more. The poll skips while one is in flight, and the 30 s timeout uses Owner time, not poll time.
