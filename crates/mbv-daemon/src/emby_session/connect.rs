@@ -169,7 +169,7 @@ fn dispatch_lookup(
 /// output and reports the reason to the selecting Client.
 pub(super) fn handle_selected(
     daemon: &mut DaemonLoop,
-    device_id: String,
+    device_id: &str,
     result: Result<Box<SessionInfo>, String>,
 ) {
     // The pending selection is compared before it is taken: a displaced

@@ -70,7 +70,7 @@ pub(crate) type EmbySessionWorkerFactory = Box<dyn Fn() -> mpsc::Sender<EmbySess
 pub(crate) fn handle_event(daemon: &mut DaemonLoop, event: EmbySessionEvent) {
     match event {
         EmbySessionEvent::Selected { device_id, result } => {
-            connect::handle_selected(daemon, device_id, result);
+            connect::handle_selected(daemon, &device_id, result);
         }
         EmbySessionEvent::Sessions { poll_id, result } => {
             poll::handle_sessions(daemon, poll_id, result);
