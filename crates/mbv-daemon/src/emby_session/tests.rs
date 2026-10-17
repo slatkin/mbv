@@ -4,15 +4,16 @@
 
 use std::sync::mpsc;
 
-use mbv_queue::QueueItem;
+use mbv_player::PlayerOwnerState;
+use mbv_queue::{PlayOrder, PlaybackQueue, QueueItem, QueueRevisionMint, QueueSlotId};
 use rstest::rstest;
 
 use crate::DaemonEvent;
-use crate::tests::{emby_qi, video_feed_qi};
+use crate::tests::{emby_qi, item, video_feed_qi};
 
 use super::EmbySessionEvent;
 use super::fake::{FakeSessionApi, SessionCall, session};
-use super::load::admit;
+use super::load::{admit, next_admissible_slot};
 use super::worker::spawn_emby_session_worker;
 
 #[test]
@@ -89,5 +90,53 @@ fn admission_admits_only_emby_items_the_session_plays(
     assert_eq!(
         rejection.map(|rejected| (rejected.item, rejected.reason)),
         expected_rejection.map(|(item, reason)| (item.to_string(), reason.to_string()))
+    );
+}
+
+/// Contract: row 9.2 / design D1, D14 and spec "Two items on the device" —
+/// under Shuffle the device is given the pick and nothing past it, and a pick
+/// that names the slot being loaded is not a slot after it: the Owner queues
+/// nothing rather than the same item twice, because the pick re-picks on the
+/// next observation of the active slot (design D2).
+#[test]
+fn the_shuffle_pick_is_the_only_next_slot_and_never_the_loaded_one() {
+    let queue = PlaybackQueue::from_items(
+        vec![item("a", "Video", "Movie"), item("b", "Video", "Movie")],
+        Some(0),
+        std::sync::Arc::new(QueueRevisionMint::default()),
+    );
+    let slots: Vec<QueueSlotId> = queue.slots().iter().map(|slot| slot.slot_id).collect();
+    let mut owner = PlayerOwnerState::new(queue, mbv_queue::QueueSource::default());
+    owner.set_play_order(mbv_queue::PlayOrderMode::Shuffle);
+    let PlayOrder::Shuffle {
+        upcoming: Some(pick),
+    } = owner.play_order()
+    else {
+        panic!("shuffle over two slots picks one");
+    };
+    let loaded = slots
+        .iter()
+        .copied()
+        .find(|slot| *slot != pick)
+        .expect("the pick is one of the two slots");
+
+    let (next, stepped) = next_admissible_slot(&owner, loaded, &[]);
+
+    assert_eq!(
+        next.map(|(slot, _)| slot),
+        Some(pick),
+        "the device is given the pick"
+    );
+    assert!(stepped.is_empty(), "an admissible pick steps past nothing");
+
+    let (next, stepped) = next_admissible_slot(&owner, pick, &[]);
+
+    assert_eq!(
+        next, None,
+        "the pick names no slot after the slot being loaded"
+    );
+    assert!(
+        stepped.is_empty(),
+        "the skipped pick is not reported as stepped past"
     );
 }

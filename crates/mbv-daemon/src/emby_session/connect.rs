@@ -11,7 +11,9 @@ use mbv_ctrl::{CtrlEvent, OutputConnection};
 use mbv_emby::SessionInfo;
 
 use crate::cast::{PlaybackOutput, broadcast_output_change};
-use crate::emby_session::load::{admit, submit_play};
+use crate::emby_session::load::{
+    SessionLoad, admit, next_admissible_slot, report_stepped_slots, submit_play,
+};
 use crate::emby_session::worker::spawn_emby_session_worker;
 use crate::event_loop::DaemonLoop;
 use crate::output::handoff::HandoffPlayback;
@@ -304,20 +306,29 @@ fn load_handoff(daemon: &mut DaemonLoop, handoff: HandoffPlayback, reply_tx: &Ct
         return;
     };
     let start_ticks = handoff.start_ticks;
-    let PlaybackOutput::EmbySession(output) = &mut daemon.owner.output else {
-        return;
+    let (next, stepped) = match &daemon.owner.output {
+        PlaybackOutput::EmbySession(output) => next_admissible_slot(
+            &daemon.owner.core,
+            handoff.slot,
+            &output.playable_media_types,
+        ),
+        _ => return,
     };
-    if !submit_play(
-        output,
-        &daemon.merged_tx,
-        handoff.slot,
+    let load = SessionLoad {
+        slot: handoff.slot,
         item_id,
         runtime_ticks,
         session_id,
         start_ticks,
-    ) {
+        next,
+    };
+    let PlaybackOutput::EmbySession(output) = &mut daemon.owner.output else {
+        return;
+    };
+    if !submit_play(output, &daemon.merged_tx, load) {
         return;
     }
+    report_stepped_slots(&daemon.ctrl_clients, &stepped);
     tracing::info!(
         name: "daemon.emby_session_load.handoff",
         target: "daemon",

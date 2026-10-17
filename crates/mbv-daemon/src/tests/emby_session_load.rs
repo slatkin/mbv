@@ -30,12 +30,12 @@ fn session_playing(device_id: &str, session_id: &str, item_id: &str) -> SessionI
     }
 }
 
-/// The `play` call the Session receives for `item_id` (design D7): one item,
-/// from the start.
-fn play(item_id: &str) -> SessionCall {
+/// The `play` call the Session receives for `item_ids` (design D7, D14), from
+/// the start: the active item and the next admissible slot beside it.
+fn play(item_ids: &[&str]) -> SessionCall {
     SessionCall::Play {
         session_id: "session-1".to_string(),
-        item_ids: vec![item_id.to_string()],
+        item_ids: item_ids.iter().map(|id| (*id).to_string()).collect(),
         start_ticks: 0,
     }
 }
@@ -117,7 +117,11 @@ fn two_quick_next_steps_settle_into_one_final_play_two_slots_ahead() {
     let slot_b = t.event_loop.owner.core.queue.slots()[1].slot_id;
     let slot_c = t.event_loop.owner.core.queue.slots()[2].slot_id;
     play_slot(&mut t, client_id, slot_b);
-    assert_eq!(play_calls(&calls), vec![play("b")], "B is loading");
+    assert_eq!(
+        play_calls(&calls),
+        vec![play(&["b", "c"])],
+        "B is loading with C queued behind it"
+    );
 
     // Two quick Next commands: the first steps from the in-flight B and queues
     // C, the second coalesces into that step.
@@ -130,7 +134,7 @@ fn two_quick_next_steps_settle_into_one_final_play_two_slots_ahead() {
     wait_for_session_jobs(&t.event_loop.owner.output);
     assert_eq!(
         play_calls(&calls),
-        vec![play("b")],
+        vec![play(&["b", "c"])],
         "a step queued behind the unsettled load loads nothing yet"
     );
 
@@ -141,7 +145,7 @@ fn two_quick_next_steps_settle_into_one_final_play_two_slots_ahead() {
 
     assert_eq!(
         play_calls(&calls),
-        vec![play("b"), play("c")],
+        vec![play(&["b", "c"]), play(&["c", "d"])],
         "the final play is the slot two ahead of the queue's first slot"
     );
     let PlaybackOutput::EmbySession(output) = &t.event_loop.owner.output else {
@@ -225,7 +229,7 @@ fn a_load_the_session_never_presents_is_reported_once_and_advances_nothing() {
     );
     assert_eq!(
         play_calls(&calls),
-        vec![play("a")],
+        vec![play(&["a", "b"])],
         "the timeout loads no other slot"
     );
 }

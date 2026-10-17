@@ -604,12 +604,18 @@ fn a_local_selection_discards_a_pending_emby_session_outcome() {
     );
 }
 
-/// Contract: row 4.2 / design D7 and spec "An Emby Session is the output" —
-/// playing a several-hundred-slot queue gives the Session exactly one `play`
-/// job carrying one item id, never the whole queue (#945), and local playback
-/// does not start.
-#[test]
-fn playing_a_300_slot_queue_gives_the_session_one_play_job() {
+/// Contract: row 9.2 / design D7 and D14 and spec "An Emby Session is the
+/// output" — playing a several-hundred-slot queue gives the Session exactly
+/// one `play` job, never the whole queue (#945), carrying the selected item
+/// and the next admissible slot; the last slot has no slot after it, so the
+/// device is given that one item alone.
+#[rstest]
+#[case::a_middle_slot(5, &["item-5", "item-6"])]
+#[case::the_last_slot(299, &["item-299"])]
+fn playing_a_300_slot_queue_gives_the_session_one_play_job(
+    #[case] start_idx: usize,
+    #[case] item_ids: &[&str],
+) {
     let fake = FakeSessionApi::with_sessions(vec![session("device-1", "session-1")]);
     let (mut t, calls) = session_output(fake);
     let (client_id, _reply_tx, _rx) =
@@ -621,8 +627,8 @@ fn playing_a_300_slot_queue_gives_the_session_one_play_job() {
             request_id,
             generation,
             action: PlaybackIntentAction::Play {
-                item_ids: vec!["item-5".into()],
-                start_idx: 5,
+                item_ids: vec![format!("item-{start_idx}")],
+                start_idx,
                 start_ticks: 0,
                 source: QueueSource::Remote,
             },
@@ -634,7 +640,7 @@ fn playing_a_300_slot_queue_gives_the_session_one_play_job() {
         .collect();
 
     t.event_loop.handle_event(DaemonEvent::PlaybackResolved {
-        start_idx: 5,
+        start_idx,
         start_ticks: 0,
         source: QueueSource::Remote,
         client_id,
@@ -648,10 +654,10 @@ fn playing_a_300_slot_queue_gives_the_session_one_play_job() {
         play_calls(&calls),
         vec![SessionCall::Play {
             session_id: "session-1".to_string(),
-            item_ids: vec!["item-5".to_string()],
+            item_ids: item_ids.iter().map(|id| (*id).to_string()).collect(),
             start_ticks: 0,
         }],
-        "the Session is given exactly one play job, for the selected slot's item"
+        "the Session is given exactly one play job, for the selected slot's item and the one after it"
     );
     assert_eq!(
         t.event_loop.owner.core.queue.len(),

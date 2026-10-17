@@ -55,11 +55,13 @@ fn idle_session() -> SessionInfo {
     session("device-1", "session-1")
 }
 
-/// The one `play` call the Session receives for `item_id`, from the start.
-fn play(item_id: &str) -> SessionCall {
+/// The one `play` call the Session receives for `item_ids` (design D7, D14),
+/// from the start: the active item and, when the queue has one, the next
+/// admissible slot beside it.
+fn play(item_ids: &[&str]) -> SessionCall {
     SessionCall::Play {
         session_id: "session-1".to_string(),
-        item_ids: vec![item_id.to_string()],
+        item_ids: item_ids.iter().map(|id| (*id).to_string()).collect(),
         start_ticks: 0,
     }
 }
@@ -162,7 +164,7 @@ fn the_same_idle_near_the_end_in_two_polls_plays_the_next_slot_once() {
 
     assert_eq!(
         play_calls(&calls),
-        vec![play("a"), play("b")],
+        vec![play(&["a", "b"]), play(&["b"])],
         "the inferred end loads the next slot of the play order"
     );
     assert_eq!(
@@ -176,7 +178,7 @@ fn the_same_idle_near_the_end_in_two_polls_plays_the_next_slot_once() {
 
     assert_eq!(
         play_calls(&calls),
-        vec![play("a"), play("b")],
+        vec![play(&["a", "b"]), play(&["b"])],
         "the same idle in a later poll advances nothing"
     );
     assert_eq!(
@@ -214,7 +216,7 @@ fn an_idle_thirty_seconds_before_the_end_advances_nothing() {
 
     assert_eq!(
         play_calls(&calls),
-        vec![play("a")],
+        vec![play(&["a", "b"])],
         "an early stop loads nothing"
     );
     assert!(end_handled(&t), "the early stop still records the end once");
@@ -267,7 +269,7 @@ fn an_idle_after_foreign_content_completes_and_advances_nothing() {
 
     assert_eq!(
         play_calls(&calls),
-        vec![play("a")],
+        vec![play(&["a", "b"])],
         "another item's end loads nothing"
     );
     assert!(
@@ -318,7 +320,7 @@ fn an_idle_before_the_first_sighting_advances_nothing() {
 
     assert_eq!(
         play_calls(&calls),
-        vec![play("a")],
+        vec![play(&["a", "b"])],
         "an idle Session before the first sighting loads nothing"
     );
     assert!(
@@ -332,9 +334,11 @@ fn an_idle_before_the_first_sighting_advances_nothing() {
     );
 }
 
-/// Contract: row 5.2 / design D6, D7 and spec "Feed slot is next" — a step
-/// target the Session cannot play is reported by name and reason, and the next
-/// target is picked in the same advance, so the Emby slot after it is loaded.
+/// Contract: row 9.2 / design D1, D7, D14 and spec "Feed slot is next" — the
+/// Feed entry is stepped past and reported once, by name and reason, when the
+/// slot after the active slot is picked for the device; the inferred end of
+/// the active item then steps past it once more and loads the Emby slot after
+/// it.
 #[test]
 fn a_feed_next_slot_is_reported_and_the_emby_slot_after_it_is_loaded() {
     let fake = FakeSessionApi::with_sessions(vec![idle_session()]);
@@ -351,9 +355,26 @@ fn a_feed_next_slot_is_reported_and_the_emby_slot_after_it_is_loaded() {
         connect_output_client_with_caps(&t.event_loop.ctrl_clients, true, true);
     let slots = slot_ids(&t);
     play_slot(&mut t, client_id, slots[0]);
-    let _ = drained_events(&rx);
-    let t0 = Instant::now();
 
+    let window_reports = rejections(&rx);
+    assert_eq!(
+        window_reports.len(),
+        1,
+        "the Feed entry stepped over for the device's window is reported once"
+    );
+    assert!(
+        window_reports[0].contains("episode-1")
+            && window_reports[0].contains("plays only Emby items"),
+        "the report names the Feed entry and the reason: {}",
+        window_reports[0]
+    );
+    assert_eq!(
+        play_calls(&calls),
+        vec![play(&["a", "b"])],
+        "the device is given the active item and the slot past the Feed entry"
+    );
+
+    let t0 = Instant::now();
     script.set_sessions(vec![session_presenting_at(
         "a",
         RUNTIME_TICKS - 3 * SECOND_TICKS,
@@ -373,7 +394,7 @@ fn a_feed_next_slot_is_reported_and_the_emby_slot_after_it_is_loaded() {
     );
     assert_eq!(
         play_calls(&calls),
-        vec![play("a"), play("b")],
+        vec![play(&["a", "b"]), play(&["b"])],
         "the advance steps past the Feed entry and loads the Emby slot after it"
     );
     let PlaybackOutput::EmbySession(output) = &t.event_loop.owner.output else {
@@ -413,7 +434,7 @@ fn a_queue_item_with_no_runtime_uses_the_session_runtime() {
 
     assert_eq!(
         play_calls(&calls),
-        vec![play("a"), play("b")],
+        vec![play(&["a", "b"]), play(&["b"])],
         "the Session's runtime stands in for the queue item's absent one"
     );
 }
