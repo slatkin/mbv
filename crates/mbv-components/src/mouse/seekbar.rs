@@ -1,7 +1,7 @@
-//! Seekbar scrub admission shared by the playback panels (ADR 0024).
-//!
-//! A left-drag that anchors inside a seekbar scrubs it. A drag reports every
-//! motion event, so admission is throttled to one scrub per interval.
+//! Seekbar pointer geometry shared by the playback panels (ADR 0024): the
+//! seek fraction a column resolves against the painted bar, and the scrub
+//! admission for a left-drag anchored inside it. A drag reports every motion
+//! event, so admission is throttled to one scrub per interval.
 
 use std::time::{Duration, Instant};
 
@@ -36,4 +36,25 @@ pub fn admit_seekbar_scrub(
     }
     *last_scrub = Some(now);
     Some(to.x)
+}
+
+/// The seek fraction a pointer column resolves against a painted bar: its
+/// fraction of the bar span, with columns before the bar resolving 0. `None`
+/// when the panel painted no bar (`bar.width == 0`). The zero-width guard and
+/// the column clamp live here, so a fix to either lands on every bar that
+/// seeks.
+#[must_use]
+pub fn seek_fraction(bar: Rect, column: u16) -> Option<f64> {
+    (bar.width > 0).then(|| f64::from(column.saturating_sub(bar.x)) / f64::from(bar.width))
+}
+
+/// Admits one scrub of `bar` for a recognized left-drag and returns the seek
+/// fraction the pointer column resolves to: [`admit_seekbar_scrub`]'s
+/// admission, then [`seek_fraction`]'s fraction.
+pub fn scrub_fraction(
+    bar: Rect,
+    last_scrub: &mut Option<Instant>,
+    gesture: Option<MouseGesture>,
+) -> Option<f64> {
+    seek_fraction(bar, admit_seekbar_scrub(bar, last_scrub, gesture)?)
 }

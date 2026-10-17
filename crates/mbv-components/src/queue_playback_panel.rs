@@ -31,7 +31,7 @@ use tuirealm::state::State;
 
 use super::library_playback_panel::PlaybackProjection;
 use crate::mouse::gesture::{MouseGesture, MouseGestureState};
-use crate::mouse::seekbar::admit_seekbar_scrub;
+use crate::mouse::seekbar::{scrub_fraction, seek_fraction};
 use mbv_render::PlaybackStripAreas;
 use mbv_render::arrangements::chrome::QUEUE_TRANSPORT_ROWS;
 use mbv_render::components::chrome_player::TransportAvailability;
@@ -278,11 +278,8 @@ impl QueuePlaybackPanel {
     /// The seek intent a column resolves: its fraction of the painted bar
     /// span. `None` when the panel painted no bar.
     fn seek_intent(&self, column: u16) -> Option<Msg> {
-        (self.seekbar_area.width > 0).then(|| {
-            let fraction = f64::from(column.saturating_sub(self.seekbar_area.x))
-                / f64::from(self.seekbar_area.width);
-            Msg::Playback(PlaybackRequest::SeekTo(fraction))
-        })
+        seek_fraction(self.seekbar_area, column)
+            .map(|fraction| Msg::Playback(PlaybackRequest::SeekTo(fraction)))
     }
 
     /// Scrub the bar for one recognized left-drag motion. The drag must have
@@ -290,8 +287,8 @@ impl QueuePlaybackPanel {
     /// a drag that merely crossed the bar (a queue-row drag, say) is not a
     /// scrub of this bar. Admitted at most once per `SEEKBAR_SCRUB_INTERVAL`.
     fn scrub(&mut self, gesture: Option<MouseGesture>) -> Option<Msg> {
-        let column = admit_seekbar_scrub(self.seekbar_area, &mut self.scrub_at, gesture)?;
-        self.seek_intent(column)
+        scrub_fraction(self.seekbar_area, &mut self.scrub_at, gesture)
+            .map(|fraction| Msg::Playback(PlaybackRequest::SeekTo(fraction)))
     }
 }
 
