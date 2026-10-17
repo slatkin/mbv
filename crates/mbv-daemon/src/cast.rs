@@ -44,6 +44,9 @@ pub(super) use command::{route_player_cmd, route_transport_command, set_receiver
 pub(crate) use connect::broadcast_output_change;
 pub use connect::{CastConnectOutcome, CastConnectRequest, CastConnector, local_cast_connector};
 pub(super) use connect::{PendingCastConnect, handle_select_playback_output};
+/// Re-exported for `output::handoff`, which re-derives the presented status of
+/// whichever remote output is current before capturing a hand-off.
+pub(super) use status::refresh_presentation;
 
 /// The keep-alive cadence (design D8, task 3.3). The receiver terminates a
 /// sender whose PONGs lapse in well under ten seconds, and the 7s poll sat

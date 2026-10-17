@@ -14,6 +14,7 @@ use crate::cast::CastOutput;
 use crate::emby_session::EmbySessionOutput;
 
 pub(crate) mod advance;
+pub(crate) mod handoff;
 
 /// The single playback output a Player owner plays through (design D1). The
 /// remote sides are boxed: they carry the worker sender, the connection, and

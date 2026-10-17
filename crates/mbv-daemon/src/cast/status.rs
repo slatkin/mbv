@@ -191,7 +191,7 @@ pub(super) fn presented_player_status(
 /// still be playing it, and the first report after the reconnect corrects
 /// the presentation — so extrapolation never runs on a connection that can
 /// no longer report.
-pub(super) fn refresh_presentation(daemon: &mut DaemonLoop, now: Instant) {
+pub(crate) fn refresh_presentation(daemon: &mut DaemonLoop, now: Instant) {
     let PlaybackOutput::Cast(cast) = &daemon.owner.output else {
         return;
     };

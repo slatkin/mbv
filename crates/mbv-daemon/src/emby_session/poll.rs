@@ -120,6 +120,9 @@ pub(super) fn handle_sessions(
         .and_then(|observation| observation.presented)
     {
         super::end::settle_loaded_item(daemon, loaded_slot);
+        // The first sighting is also when a hand-off's pause applies (design
+        // D9, task 6.1): a `play` job cannot start paused.
+        apply_pending_pause(daemon);
     }
     // The observation that went idle after a sighting of the loaded item ends
     // it (design D6, task 5.2): near the runtime the owner records its
@@ -146,6 +149,21 @@ pub(super) fn handle_sessions(
     if state_changed {
         broadcast_output_change(daemon);
     }
+}
+
+/// Sends the pause a hand-off could not start with (design D9, task 6.1):
+/// the first observation that shows the loaded item pauses it. The flag is
+/// spent either way, because an observation that already reports paused needs
+/// no command (`set_paused` sends nothing when the states match).
+fn apply_pending_pause(daemon: &mut DaemonLoop) {
+    let PlaybackOutput::EmbySession(output) = &mut daemon.owner.output else {
+        return;
+    };
+    if !output.pending_pause {
+        return;
+    }
+    output.pending_pause = false;
+    super::command::set_paused(output, true);
 }
 
 /// What one `/Sessions` observation changed (design D5, D6): the loaded slot
