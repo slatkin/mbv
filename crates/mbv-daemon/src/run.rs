@@ -723,6 +723,8 @@ pub fn run_with_options(
         tray,
         pin_swap,
         cast_connector,
+        emby_session_output,
+        emby_session_worker: None,
     };
     run_daemon_loop(&mut daemon_loop, &merged_rx)
 }

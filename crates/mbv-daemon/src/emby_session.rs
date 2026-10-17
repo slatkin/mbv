@@ -12,8 +12,10 @@ use mbv_ctrl::OutputConnection;
 use mbv_emby::SessionInfo;
 use mbv_queue::QueueSlotId;
 
+use crate::event_loop::DaemonLoop;
 use crate::output::advance::OutputAdvance;
 
+pub(crate) mod connect;
 pub(crate) mod worker;
 
 #[cfg(test)]
@@ -29,6 +31,13 @@ use worker::EmbySessionJob;
 /// the event loop waiting on the network.
 #[derive(Debug)]
 pub(crate) enum EmbySessionEvent {
+    /// One selection's device lookup (design D4, task 3.2): the Session that
+    /// matched the selected device, or the reason no Session matched it. The
+    /// lookup runs on the output's worker, so its result arrives here.
+    Selected {
+        device_id: String,
+        result: Result<SessionInfo, String>,
+    },
     /// One `/Sessions` poll result (design D5), stamped with the poll id so a
     /// late result from a replaced worker cannot match the current poll. The
     /// error is the rendered `EmbyError`: a failed poll is not a missing
@@ -37,6 +46,22 @@ pub(crate) enum EmbySessionEvent {
         poll_id: u64,
         result: Result<Vec<SessionInfo>, String>,
     },
+}
+
+/// Builds the one worker an output owns (design D4). The Local daemon builds
+/// it from the owner's Emby client at each selection; tests substitute one
+/// whose `SessionApi` is a recording fake, so no test reaches the network.
+pub(crate) type EmbySessionWorkerFactory = Box<dyn Fn() -> mpsc::Sender<EmbySessionJob>>;
+
+/// Applies one worker outcome to the owner's output (design D4).
+pub(crate) fn handle_event(daemon: &mut DaemonLoop, event: EmbySessionEvent) {
+    match event {
+        EmbySessionEvent::Selected { device_id, result } => {
+            connect::handle_selected(daemon, device_id, result);
+        }
+        // The poll's observations apply in task 3.3.
+        EmbySessionEvent::Sessions { .. } => {}
+    }
 }
 
 /// One Emby Session as the Owner's output (design D1). The Owner loads an item

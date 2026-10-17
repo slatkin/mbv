@@ -65,4 +65,5 @@ mod cast_playback;
 mod cast_progress;
 mod cast_resolve;
 mod cast_status;
+mod emby_session_output;
 mod r#loop;

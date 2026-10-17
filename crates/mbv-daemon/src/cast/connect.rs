@@ -219,15 +219,10 @@ pub fn handle_select_playback_output(
                 }
             });
         }
-        // Task 3.2 handles an Emby Session selection. No Owner hosts that
-        // output yet, so the selector is told instead of left waiting.
-        OutputSelection::EmbySession { .. } => {
-            send_to(
-                reply_tx,
-                &CtrlEvent::CommandRejected(
-                    "this owner cannot host an Emby Session playback output".to_string(),
-                ),
-            );
+        // The Emby Session selection resolves its device on the Session's own
+        // worker (emby-session-owner-output design D4, task 3.2).
+        OutputSelection::EmbySession { device_id, name } => {
+            crate::emby_session::connect::select(daemon, reply_tx, device_id, name);
         }
     }
 }
@@ -700,7 +695,7 @@ pub(super) fn disconnect_and_reconnect(daemon: &mut DaemonLoop) {
 /// peers that negotiated `playback-output` (design D3); a peer without
 /// `emby-session-output` receives `Local` in its place
 /// (emby-session-owner-output design D3).
-fn broadcast_output_change(daemon: &DaemonLoop) {
+pub(crate) fn broadcast_output_change(daemon: &DaemonLoop) {
     let state = super::output_state(&daemon.owner.output);
     *daemon.shared_queue.playback_output.lock().unwrap() = state.clone();
     daemon

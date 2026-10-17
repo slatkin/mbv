@@ -410,6 +410,10 @@ pub(super) struct DaemonPlayerOwner {
     pub(super) output: crate::output::PlaybackOutput,
     /// The Cast selection waiting for its worker to connect (task 3.2).
     pub(super) pending_cast_connect: Option<crate::cast::PendingCastConnect>,
+    /// The Emby Session selection waiting for its worker's device lookup
+    /// (emby-session-owner-output task 3.2).
+    pub(super) pending_emby_session_select:
+        Option<crate::emby_session::connect::PendingEmbySessionSelect>,
     /// The Cast source resolve in flight for the output's next load (task
     /// 4.2). Its outcome re-enters through `CastOwnerEvent::Resolved` and is
     /// matched against it by slot and transition generation.

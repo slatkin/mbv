@@ -87,6 +87,14 @@ pub(crate) struct DaemonLoop {
     /// The runtime's Cast connector, when it supplies one (cast-owner-output
     /// design D2). `None` keeps the Owner on local playback only.
     pub(super) cast_connector: Option<crate::CastConnector>,
+    /// Whether the runtime hosts an Emby Session output (emby-session-owner-output
+    /// design D2): the same hook the Hello advertises as the
+    /// `emby-session-output` capability, kept here so a selection can reject
+    /// when the output is off.
+    pub(super) emby_session_output: bool,
+    /// Builds the worker an Emby Session output owns (design D4). `None` builds
+    /// it from the owner's Emby client; tests substitute a recording fake.
+    pub(super) emby_session_worker: Option<crate::emby_session::EmbySessionWorkerFactory>,
 }
 
 impl DaemonLoop {
@@ -219,10 +227,10 @@ impl DaemonLoop {
                 super::cast::handle_cast_event(self, event);
                 EventOutcome::CONTINUE
             }
-            // Tasks 3.2/3.3 apply the worker outcomes to the output; until an
-            // Emby Session output can be selected, a result has no owner state
-            // to update.
-            DaemonEvent::EmbySession(_) => EventOutcome::CONTINUE,
+            DaemonEvent::EmbySession(event) => {
+                crate::emby_session::handle_event(self, event);
+                EventOutcome::CONTINUE
+            }
             DaemonEvent::Shutdown => self.handle_shutdown(),
         };
 

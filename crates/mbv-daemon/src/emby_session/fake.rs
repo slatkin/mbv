@@ -46,8 +46,10 @@ pub(crate) enum SessionCall {
 }
 
 /// The recording `SessionApi` double (design D4). Handles are `Arc`s so a test
-/// keeps reading them after the fake itself moved into the worker thread.
-#[derive(Debug, Default)]
+/// keeps reading them after the fake itself moved into the worker thread;
+/// `Clone` shares those handles, so a test can build one fake per selected
+/// output and still assert on a single call log.
+#[derive(Debug, Default, Clone)]
 pub(crate) struct FakeSessionApi {
     calls: Arc<Mutex<Vec<SessionCall>>>,
     sessions: Arc<Mutex<Vec<SessionInfo>>>,

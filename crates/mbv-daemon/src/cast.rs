@@ -41,6 +41,7 @@ mod status;
 pub(super) use feed_events::{emit_natural_end_track_completed, slot_is_feed};
 
 pub(super) use command::{route_player_cmd, route_transport_command, set_receiver_paused};
+pub(crate) use connect::broadcast_output_change;
 pub use connect::{CastConnectOutcome, CastConnectRequest, CastConnector, local_cast_connector};
 pub(super) use connect::{PendingCastConnect, handle_select_playback_output};
 
