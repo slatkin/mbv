@@ -178,6 +178,51 @@ fn confirmed_local_fall_through_stops_and_detaches_remote_owner() {
     );
 }
 
+/// emby-session-owner-output row 7.2, design D12, non-audio-fall-through
+/// spec "Emby session owner": an accepted fall-through with an audio-only
+/// Emby Session output stops the owner, selects Local, and only then plays the
+/// selection locally.
+#[test]
+fn accepted_fall_through_with_an_audio_only_emby_session_output_stops_and_selects_local() {
+    let (mut app, command_rx) =
+        crate::app::tests::make_local_daemon_app_stub_with_cmd_rx(make_items(1));
+    command_rx.try_iter().for_each(drop);
+    let output = mbv_ctrl::OutputState::EmbySession {
+        device_id: "device-1".to_string(),
+        name: "Living Room TV".to_string(),
+        connection: mbv_ctrl::OutputConnection::Connected,
+        audio_only: true,
+        now_playing: None,
+    };
+    app.playback_output = Some(output.clone());
+    app.player.remote().update_playback_output_for_test(output);
+    let mut item = make_item("Movie", "Movie");
+    item.id = "movie-1".into();
+
+    app.play_item(item);
+    assert!(
+        app.queue_deferrals.has_local_play(),
+        "an audio-only Emby Session output defers the video play"
+    );
+
+    confirm_local_fall_through(&mut app);
+
+    let commands: Vec<_> = command_rx.try_iter().collect();
+    assert!(
+        matches!(commands.first(), Some(CtrlCmd::Stop)),
+        "the fall-through stops the Session output first: {commands:?}"
+    );
+    assert!(
+        matches!(
+            commands.get(1),
+            Some(CtrlCmd::SelectPlaybackOutput(
+                mbv_ctrl::OutputSelection::Local
+            ))
+        ),
+        "the fall-through then selects Local as the owner's output: {commands:?}"
+    );
+}
+
 #[test]
 fn wholly_playable_play_keeps_the_existing_play_path() {
     let (mut app, command_rx) =

@@ -64,7 +64,9 @@ impl App {
     /// Empty/unknown selections and Library routes remain on today's path.
     pub(in crate::app) fn playback_eligibility(&self, items: &[EmbyItem]) -> PlaybackEligibility {
         let attached = true;
-        let owner_is_audio_only = if self.connected_session_id.is_some() {
+        // The owner's Emby Session output carries its own playable-media
+        // capability (design D12); every other owner uses the ctrl handshake.
+        let owner_is_audio_only = if self.output_is_emby_session() {
             self.session_owner_is_audio_only()
         } else {
             self.player.owner_is_audio_only()

@@ -37,6 +37,9 @@ pub struct SessionsComponent {
     content_dirty: bool,
     projected_width: Option<u16>,
     connected_session_id: Option<String>,
+    /// The device identity of the owner's Emby Session output; an Emby row
+    /// whose `device_id` matches carries the connection mark (design D12).
+    emby_output_device_id: Option<String>,
     cast_attachment_id: Option<String>,
     can_disconnect: bool,
     display: SessionsDisplayContext,
@@ -58,6 +61,7 @@ impl SessionsComponent {
             content_dirty: true,
             projected_width: None,
             connected_session_id: None,
+            emby_output_device_id: None,
             cast_attachment_id: None,
             can_disconnect: false,
             display: SessionsDisplayContext {
@@ -77,6 +81,7 @@ impl SessionsComponent {
         targets: &[SessionTargetRow],
         loading: bool,
         connected_session_id: Option<&str>,
+        emby_output_device_id: Option<&str>,
         cast_attachment_id: Option<&str>,
         can_disconnect: bool,
         panel_area: Option<Rect>,
@@ -90,6 +95,7 @@ impl SessionsComponent {
         self.targets = targets.to_vec();
         self.loading = loading;
         self.connected_session_id = connected_session_id.map(str::to_owned);
+        self.emby_output_device_id = emby_output_device_id.map(str::to_owned);
         self.cast_attachment_id = cast_attachment_id.map(str::to_owned);
         self.can_disconnect = can_disconnect;
         self.requested_panel_area = panel_area;
@@ -162,7 +168,11 @@ impl SessionsComponent {
                 .selected_target()
                 .cloned()
                 .map(|key| Msg::Shell(Box::new(ShellRequest::SelectSession(key)))),
-            Key::Char('d') if self.can_disconnect || self.cast_attachment_id.is_some() => {
+            Key::Char('d')
+                if self.can_disconnect
+                    || self.cast_attachment_id.is_some()
+                    || self.emby_output_device_id.is_some() =>
+            {
                 Some(Msg::Shell(Box::new(ShellRequest::DetachSessions)))
             }
             _ => None,
@@ -206,8 +216,11 @@ impl SessionsComponent {
 
     fn target_connected(&self, target: &SessionTargetRow) -> bool {
         match target {
-            SessionTargetRow::Emby { id, .. } => {
+            // Direct remote control marks the Session by its own id; the
+            // owner's Emby Session output marks the device (design D12).
+            SessionTargetRow::Emby { id, device_id, .. } => {
                 self.connected_session_id.as_deref() == Some(id.as_str())
+                    || self.emby_output_device_id.as_deref() == Some(device_id.as_str())
             }
             SessionTargetRow::Cast { id, .. } => {
                 self.cast_attachment_id.as_deref() == Some(id.as_str())
@@ -480,6 +493,7 @@ mod tests {
     fn emby_target(id: &str) -> SessionTargetRow {
         SessionTargetRow::Emby {
             id: id.to_string(),
+            device_id: format!("device-{id}"),
             device_name: format!("device-{id}"),
             client: "mbv".to_string(),
             user_name: "user".to_string(),
@@ -503,6 +517,7 @@ mod tests {
         component.set_content(
             &targets,
             false,
+            None,
             None,
             None,
             false,
@@ -586,6 +601,7 @@ mod tests {
         component.set_content(
             &targets,
             false,
+            None,
             None,
             None,
             false,

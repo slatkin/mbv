@@ -29,6 +29,7 @@ impl PanelTarget {
         match self {
             Self::Emby(session) => SessionTargetRow::Emby {
                 id: session.id.clone(),
+                device_id: session.device_id.clone(),
                 device_name: session.device_name.clone(),
                 client: session.client.clone(),
                 user_name: session.user_name.clone(),

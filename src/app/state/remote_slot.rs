@@ -25,30 +25,44 @@ impl App {
         }
     }
 
-    /// Whether the attached Emby session advertises an audio-only playable
-    /// media set. An absent or empty advertisement is unknown and therefore
-    /// treated as able to play video.
+    /// Whether the owner's Emby Session output advertises an audio-only
+    /// playable media set (design D12). An absent or empty advertisement is
+    /// unknown and therefore treated as able to play video.
     pub(in crate::app) fn session_owner_is_audio_only(&self) -> bool {
-        self.connected_session_id.is_some()
-            && self
-                .connected_session_state
-                .as_ref()
-                .is_some_and(|session| {
-                    !session.playable_media_types.is_empty()
-                        && session
-                            .playable_media_types
-                            .iter()
-                            .all(|media_type| media_type.eq_ignore_ascii_case("Audio"))
-                })
+        matches!(
+            &self.playback_output,
+            Some(mbv_ctrl::OutputState::EmbySession {
+                audio_only: true,
+                ..
+            })
+        )
     }
 
-    /// Emby session id the Sessions sidebar should mark. Session watch and
-    /// Direct remote control of a remote owner both count. The Stay-alive
-    /// process does not: it is not a remote session.
+    /// The item the owner's Emby Session output presents that the owner did
+    /// not load (design D12). The Owner sends this from `OutputState` alone;
+    /// the loaded item is presented from the queue.
+    pub(in crate::app) fn emby_session_now_playing(&self) -> Option<&mbv_ctrl::SessionNowPlaying> {
+        match &self.playback_output {
+            Some(mbv_ctrl::OutputState::EmbySession { now_playing, .. }) => now_playing.as_ref(),
+            Some(mbv_ctrl::OutputState::Cast { .. } | mbv_ctrl::OutputState::Local) | None => None,
+        }
+    }
+
+    /// Direct remote control's session id, which the Sessions sidebar marks.
+    /// The Stay-alive process does not count: it is not a remote session. An
+    /// Emby Session output marks by device id
+    /// (`sessions_panel_connected_device_id`).
     pub(in crate::app) fn sessions_panel_connected_id(&self) -> Option<&str> {
-        self.connected_session_id
-            .as_deref()
-            .or(self.remote.direct_remote_session_id.as_deref())
+        self.remote.direct_remote_session_id.as_deref()
+    }
+
+    /// The device id of the owner's Emby Session output, which the Sessions
+    /// sidebar uses to mark its row (design D12).
+    pub(in crate::app) fn sessions_panel_connected_device_id(&self) -> Option<&str> {
+        match &self.playback_output {
+            Some(mbv_ctrl::OutputState::EmbySession { device_id, .. }) => Some(device_id),
+            Some(mbv_ctrl::OutputState::Cast { .. } | mbv_ctrl::OutputState::Local) | None => None,
+        }
     }
 
     pub(in crate::app) fn can_disconnect_remote(&self) -> bool {

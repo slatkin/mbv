@@ -271,6 +271,12 @@ impl App {
             }
         };
         let already_local = prepared.is_none();
+        // An accepted fall-through ends the owner's Emby Session output before
+        // local playback starts: `Stop`, then `SelectPlaybackOutput(Local)`
+        // (emby-session-owner-output design D12).
+        if self.output_is_emby_session() {
+            self.hand_remote_output_back_to_local();
+        }
         if !already_local {
             self.player.stop();
             self.player.disconnect_remote();

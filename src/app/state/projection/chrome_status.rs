@@ -29,12 +29,12 @@ impl App {
         ))
     }
 
-    /// The label naming the cast receiver that is the owner's playback
-    /// output, per the last `CtrlEvent::PlaybackOutput` (design D13). Shared
-    /// by the status-bar remote pill and the queue header so both name the
-    /// receiver consistently; the owner's report carries the discovered
-    /// friendly name.
-    fn cast_target_label(&self) -> Option<String> {
+    /// The label naming the remote receiver that is the owner's playback
+    /// output, per the last `CtrlEvent::PlaybackOutput` (design D12/D13).
+    /// Shared by the status-bar remote pill and the queue header so both name
+    /// the output consistently; the owner's report carries the discovered or
+    /// device name. An Emby Session output names the Session device.
+    fn remote_output_label(&self) -> Option<String> {
         match &self.playback_output {
             Some(mbv_ctrl::OutputState::Cast {
                 connection, name, ..
@@ -47,29 +47,36 @@ impl App {
                     Some(name.clone())
                 }
             },
-            // Task 7.2 names the Emby Session output in the chrome status.
-            Some(mbv_ctrl::OutputState::EmbySession { .. } | mbv_ctrl::OutputState::Local)
-            | None => None,
+            Some(mbv_ctrl::OutputState::EmbySession {
+                connection, name, ..
+            }) => match connection {
+                mbv_ctrl::OutputConnection::Disconnected => None,
+                mbv_ctrl::OutputConnection::Connecting | mbv_ctrl::OutputConnection::Connected => {
+                    Some(name.clone())
+                }
+            },
+            Some(mbv_ctrl::OutputState::Local) | None => None,
         }
     }
 
-    /// Whether the remote pill shows its connected state: a cast receiver is
-    /// attached and live, or the remote slot names an attached session or direct route.
+    /// Whether the remote pill shows its connected state: a remote output
+    /// (Cast receiver or Emby Session) is attached and live, or the remote
+    /// slot names an attached session or direct route.
     fn remote_connected(&self, remote_state: RemoteSlotState) -> bool {
-        self.cast_target_label().is_some()
+        self.remote_output_label().is_some()
             || matches!(
                 remote_state,
                 RemoteSlotState::AttachedSession | RemoteSlotState::DirectRemote
             )
     }
 
-    /// The remote pill label, gap included. An attached cast receiver names it
+    /// The remote pill label, gap included. An attached remote output names it
     /// first; otherwise the remote slot names it, and this machine's device
     /// name is the fallback. `or_else` leaves the slot unread while a receiver
     /// is attached.
     fn remote_label(&self, remote_state: RemoteSlotState, daemon_endpoint: &str) -> String {
         let gap = if self.use_nerd_fonts { " " } else { "  " };
-        let target = self.cast_target_label().or_else(|| match remote_state {
+        let target = self.remote_output_label().or_else(|| match remote_state {
             RemoteSlotState::LocalDaemon => None,
             RemoteSlotState::AttachedSession => {
                 self.connected_session_state.as_ref().and_then(|session| {

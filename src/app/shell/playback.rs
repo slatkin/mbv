@@ -8,13 +8,14 @@ impl crate::app::App {
     pub(in crate::app) fn slotless_playback_title_parts(
         &self,
     ) -> Option<mbv_queue::PlaybackTitleParts> {
-        let session = self.connected_session_state.as_ref()?;
-        let title = session.now_playing.clone()?;
-        // An Emby session's now-playing payload names the show for an episode;
+        let now_playing = self.emby_session_now_playing()?;
+        let title = now_playing.name.clone();
+        // An Emby Session's now-playing payload names the show for an episode;
         // with it, the slotless path draws the same two-part title the local
-        // queue item draws (remote-session-overlay-parity, task 2.1).
-        let context = (session.now_playing_item_type.as_deref() == Some("Episode"))
-            .then(|| session.now_playing_series_name.clone())
+        // queue item draws (remote-session-overlay-parity, task 2.1;
+        // emby-session-owner-output task 7.2).
+        let context = (now_playing.item_type == "Episode")
+            .then(|| now_playing.series_name.clone())
             .flatten()
             .filter(|name| !name.trim().is_empty())
             .map(|text| mbv_queue::PlaybackTitlePart {
@@ -132,10 +133,11 @@ mod tests {
     use rstest::rstest;
     use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
-    /// A watched Emby session's now-playing episode draws the same two-part
-    /// title local playback draws when the payload names the show; every
-    /// payload without that fact keeps the one-part session-name title
-    /// (remote-session-overlay-parity, task 2.1).
+    /// The owner's Emby Session output presents an episode outside the local
+    /// queue; its now-playing payload draws the same two-part title local
+    /// playback draws when it names the show, and every payload without that
+    /// fact keeps the one-part title (remote-session-overlay-parity, task 2.1;
+    /// emby-session-owner-output task 7.2 reads the `OutputState` source).
     #[rstest]
     #[case::episode_with_series_name("Episode", Some("Show"), Some("Show"))]
     #[case::episode_without_series_name("Episode", None, None)]
@@ -145,13 +147,21 @@ mod tests {
         #[case] series_name: Option<&str>,
         #[case] expected_context: Option<&str>,
     ) {
-        let app = crate::app::tests::make_app_stub();
-        let mut session = mbv_emby::test_support::make_session("tv", "mbv");
-        session.now_playing = Some("Episode name".into());
-        session.now_playing_item_type = Some(item_type.to_string());
-        session.now_playing_series_name = series_name.map(str::to_string);
-        let mut app = app;
-        app.connected_session_state = Some(session);
+        let mut app = crate::app::tests::make_app_stub();
+        app.playback_output = Some(mbv_ctrl::OutputState::EmbySession {
+            device_id: "device-1".to_string(),
+            name: "Living Room TV".to_string(),
+            connection: mbv_ctrl::OutputConnection::Connected,
+            audio_only: false,
+            now_playing: Some(mbv_ctrl::SessionNowPlaying {
+                item_id: "device-episode".to_string(),
+                item_type: item_type.to_string(),
+                name: "Episode name".to_string(),
+                series_id: Some("device-series".to_string()),
+                series_name: series_name.map(str::to_string),
+                logo_tag: None,
+            }),
+        });
 
         let parts = app.slotless_playback_title_parts().expect("title present");
 

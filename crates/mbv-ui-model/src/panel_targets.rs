@@ -3,6 +3,9 @@
 pub enum SessionTargetRow {
     Emby {
         id: String,
+        /// The Emby device identity, which the owner's Emby Session output
+        /// names (emby-session-owner-output design D12).
+        device_id: String,
         device_name: String,
         client: String,
         user_name: String,
