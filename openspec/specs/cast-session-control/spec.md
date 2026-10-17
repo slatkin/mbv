@@ -109,33 +109,22 @@ The exit of a Client SHALL NOT affect the receiver. The owner SHALL continue to 
 
 ### Requirement: Playback targets are mutually exclusive
 
-Connecting to a new playback target SHALL sever the currently connected one. A cast output, an Emby Session output, a direct remote, and a library route are mutually exclusive targets of a Client. Selecting a cast target or an Emby Session SHALL return the Client to its Local daemon owner before the owner selects it. When one remote output replaces the other, the owner SHALL hand off the active slot. The owner SHALL NOT select a cast receiver when it starts: a receiver becomes the output only by explicit user selection.
-
-#### Scenario: Cast target is selected while a direct remote or library route is connected
-
-- **WHEN** the user selects a cast target while mbv has a direct remote or a library route
-- **THEN** that connection is severed
-- **AND** the Local daemon owner makes the receiver its active output
+Connecting to a new playback target SHALL sever the currently connected one. A cast output, watched session, direct remote, and library route are mutually exclusive targets of a Client. Selecting a cast target SHALL return the Client to its Local daemon owner before the owner selects the receiver. The owner SHALL NOT select a cast receiver when it starts: a receiver becomes the output only by explicit user selection.
 
 #### Scenario: Cast target is selected while a session is watched
 
-- **WHEN** the user selects a cast target while an Emby Session is the owner's output
-- **THEN** the Session stops
-- **AND** the receiver continues the active slot
+- **WHEN** the user selects a cast target while mbv is attached to a watched session,
+  direct remote, or library route
+- **THEN** that connection is severed
+- **AND** the Local daemon owner makes the receiver its active output
 
 #### Scenario: A session or direct remote is connected while a cast target is attached
 
-- **WHEN** the user connects to Direct remote control (Sessions panel or auto-reconnect)
+- **WHEN** the user connects to an Emby session (Sessions panel or auto-reconnect)
   while a cast target is the active output
 - **THEN** the owner stops the receiver and selects local playback as its output
 - **AND** local playback does not start
 - **AND** the newly connected target becomes the one active target
-
-#### Scenario: An Emby Session is selected while a cast target is attached
-
-- **WHEN** the user selects an Emby Session in the Sessions panel while a cast receiver is the output
-- **THEN** the receiver stops
-- **AND** the Session continues the active slot
 
 #### Scenario: A different cast target is selected while one is attached
 
