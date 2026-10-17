@@ -77,11 +77,12 @@ pub(crate) fn ended_naturally(
     runtime > 0 && estimate.saturating_add(EMBY_SESSION_END_MARGIN_TICKS) >= runtime
 }
 
-/// The device advance one observation shows (design D6's end table, D14; task
-/// 9.3): the Session moved from the loaded item to the queued next one by
-/// itself, so the Owner follows it to that slot. The decision is taken before
-/// the observation replaces the one the position estimate reads, because the
-/// end margin is measured on the replaced observation.
+/// The device advance one observation shows (design D6's end table, D14; tasks
+/// 9.3 and 9.4): the Session moved from the loaded item to the queued next one
+/// by itself, so the Owner follows it to that slot — or corrects it when a
+/// queue edit made that slot stale. The decision is taken before the
+/// observation replaces the one the position estimate reads, because the end
+/// margin is measured on the replaced observation.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct DeviceAdvance {
     /// The queued slot the Session started.
@@ -90,6 +91,10 @@ pub(crate) struct DeviceAdvance {
     /// [`EMBY_SESSION_END_MARGIN_TICKS`] of its runtime: only then does the
     /// advance record the old slot's completion (design D14 step 2).
     pub(crate) completes: bool,
+    /// Whether the queue no longer picks the queued slot (design D14 "the
+    /// queue corrects the device"): the Owner must not adopt it, and loads the
+    /// correct next slot instead.
+    pub(crate) stale: bool,
 }
 
 /// Whether this observation shows the device move of design D14: the Session
@@ -125,6 +130,7 @@ pub(crate) fn device_advance(
     Some(DeviceAdvance {
         queued: queued.slot,
         completes,
+        stale: queued.stale,
     })
 }
 

@@ -22,6 +22,8 @@ use crate::emby_session::fake::{FakeSessionApi, SessionCall, session};
 use crate::emby_session::poll::EMBY_SESSION_POLL_INTERVAL;
 use mbv_emby::SessionInfo;
 
+mod device_window;
+
 /// One second of media in ticks.
 const SECOND_TICKS: i64 = mbv_emby_model::TICKS_PER_SECOND;
 
@@ -64,39 +66,6 @@ fn play(item_ids: &[&str]) -> SessionCall {
         item_ids: item_ids.iter().map(|id| (*id).to_string()).collect(),
         start_ticks: 0,
     }
-}
-
-/// The one `play_last` call the Session receives for `item_ids` (design D14),
-/// the slot the device holds after the active one.
-fn play_last(item_ids: &[&str]) -> SessionCall {
-    SessionCall::PlayLast {
-        session_id: "session-1".to_string(),
-        item_ids: item_ids.iter().map(|id| (*id).to_string()).collect(),
-    }
-}
-
-/// The `play_last` calls the Session received, in order: the slots the Owner
-/// appended to the device (design D14).
-fn play_last_calls(calls: &Arc<Mutex<Vec<SessionCall>>>) -> Vec<SessionCall> {
-    calls
-        .lock()
-        .unwrap()
-        .iter()
-        .filter(|call| matches!(call, SessionCall::PlayLast { .. }))
-        .cloned()
-        .collect()
-}
-
-/// Whether the slot's Emby item was recorded as played (design D6, D14).
-fn slot_played(t: &TestLoop, slot: mbv_queue::QueueSlotId) -> bool {
-    t.event_loop
-        .owner
-        .core
-        .queue
-        .slot(slot)
-        .and_then(|slot| slot.item.as_emby())
-        .map(|item| item.played)
-        .expect("the slot is still queued")
 }
 
 /// Selects the fake's Session as the output over a scripted queue, returning
@@ -437,120 +406,6 @@ fn a_feed_next_slot_is_reported_and_the_emby_slot_after_it_is_loaded() {
         output.loaded.as_ref().map(|loaded| loaded.slot),
         Some(slots[2]),
         "the loaded item is the step's second target"
-    );
-}
-
-/// Contract: row 9.3 / design D14 and spec "The Emby Session device holds the
-/// active item and the next item" — the device moves to the queued next item
-/// by itself: that slot becomes the active one with no `play`, the old slot's
-/// completion is recorded only within 10 seconds of its runtime, and the slot
-/// after the new active one is appended with one `play_last`. The same item in
-/// both slots does not change the id the Session shows, so that move is the
-/// position drop to the item's start.
-#[rstest]
-#[case::the_loaded_item_ends_and_the_device_starts_the_queued_slot(
-    &["a", "b", "c"],
-    true
-)]
-#[case::a_device_next_60_seconds_before_the_end_records_no_completion(
-    &["a", "b", "c"],
-    false
-)]
-#[case::the_same_item_in_both_slots_advances_on_the_position_drop(&["a", "a", "b"], true)]
-fn the_device_advance_follows_the_device_with_one_play_last(
-    #[case] names: &[&str],
-    #[case] near_end: bool,
-) {
-    let fake = FakeSessionApi::with_sessions(vec![idle_session()]);
-    let script = fake.clone();
-    let (mut t, calls, _rx) = session_output_with_queue(
-        fake,
-        names
-            .iter()
-            .map(|name| timed(name, RUNTIME_TICKS))
-            .collect(),
-    );
-    let (client_id, _reply_tx, _client_rx) =
-        connect_output_client_with_caps(&t.event_loop.ctrl_clients, true, true);
-    let slots = slot_ids(&t);
-    play_slot(&mut t, client_id, slots[0]);
-    assert_eq!(
-        play_calls(&calls),
-        vec![play(&[names[0], names[1]])],
-        "the load gives the device the active item and the queued next one"
-    );
-    let t0 = Instant::now();
-
-    // The sighting of the loaded item: within 10 seconds of the runtime is a
-    // natural end, 60 seconds before it is a next on the device.
-    let position = if near_end {
-        RUNTIME_TICKS - 3 * SECOND_TICKS
-    } else {
-        RUNTIME_TICKS - 60 * SECOND_TICKS
-    };
-    script.set_sessions(vec![session_presenting_at(
-        names[0],
-        position - SECOND_TICKS,
-        RUNTIME_TICKS,
-    )]);
-    poll_once(&mut t, t0);
-    // A second sighting of the loaded item is no advance, however near its end
-    // it is: the same item in both slots moves only on a drop to its start.
-    script.set_sessions(vec![session_presenting_at(
-        names[0],
-        position,
-        RUNTIME_TICKS,
-    )]);
-    poll_once(&mut t, t0 + EMBY_SESSION_POLL_INTERVAL);
-    assert_eq!(
-        t.event_loop.owner.core.queue.active_slot_id(),
-        Some(slots[0]),
-        "a sighting of the loaded item is no advance"
-    );
-    assert!(
-        play_last_calls(&calls).is_empty(),
-        "nothing is appended while the loaded item still shows"
-    );
-    // The device starts the queued slot by itself, at its start.
-    script.set_sessions(vec![session_presenting_at(names[1], 0, RUNTIME_TICKS)]);
-    poll_once(&mut t, t0 + 2 * EMBY_SESSION_POLL_INTERVAL);
-    wait_for_session_jobs(&t.event_loop.owner.output);
-
-    assert_eq!(
-        play_calls(&calls),
-        vec![play(&[names[0], names[1]])],
-        "the device's own move loads nothing"
-    );
-    assert_eq!(
-        play_last_calls(&calls),
-        vec![play_last(&[names[2]])],
-        "the slot after the new active one is appended to the device"
-    );
-    assert_eq!(
-        t.event_loop.owner.core.queue.active_slot_id(),
-        Some(slots[1]),
-        "the queued slot becomes the active slot without a load"
-    );
-    assert_eq!(
-        slot_played(&t, slots[0]),
-        near_end,
-        "completion is recorded only for an end within 10 seconds of the runtime"
-    );
-    let PlaybackOutput::EmbySession(output) = &t.event_loop.owner.output else {
-        panic!("the Session is the output");
-    };
-    assert_eq!(
-        output.loaded.as_ref().map(|loaded| loaded.slot),
-        Some(slots[1]),
-        "the queued slot is the loaded item without a load"
-    );
-    assert_eq!(
-        output
-            .queued_next
-            .as_ref()
-            .map(|queued| (queued.slot, queued.item_id.as_str())),
-        Some((slots[2], names[2])),
-        "the appended slot is the queued next item"
     );
 }
 

@@ -27,13 +27,17 @@ pub(crate) const EMBY_SESSION_POLL_INTERVAL: Duration = Duration::from_secs(1);
 /// reports `Disconnected` (design D5).
 pub(crate) const EMBY_SESSION_DISCONNECT_MISSES: u8 = 3;
 
-/// Submits this tick's poll (design D5) and runs the load timeout (design D6,
-/// task 4.3). The timeout runs on every tick, not only when a poll is due, so
-/// a Session that is idle and unchanged still expires a load it never showed.
-/// The tick also re-derives the presented status from the last observation
-/// (design D10), so the position estimate advances between polls.
+/// Submits this tick's poll (design D5), reconciles the device's window with the
+/// queue (design D14, task 9.4), and runs the load timeout (design D6, task
+/// 4.3). The timeout runs on every tick, not only when a poll is due, so a
+/// Session that is idle and unchanged still expires a load it never showed, and
+/// the window check runs on every tick too, so a queue edit reaches the device
+/// without a new observation. The tick also re-derives the presented status
+/// from the last observation (design D10), so the position estimate advances
+/// between polls.
 pub(crate) fn tick(daemon: &mut DaemonLoop, now: Instant) {
     submit_due_poll(daemon, now);
+    super::load::check_queued_next(daemon);
     super::end::expire_unseen_load(daemon, now);
     super::status::refresh_presentation(daemon, now);
 }
@@ -114,9 +118,15 @@ pub(super) fn handle_sessions(
     }
     // The observation that shows the queued next item after one that showed
     // the loaded item is the device's own move (design D6, D14, task 9.3): the
-    // Owner follows it to that slot without a load. An observation of the
-    // loaded item that does not move settles its transition (design D6, D7,
-    // task 4.3), and a step queued behind the load then dispatches.
+    // Owner follows it to that slot without a load, or corrects the device when
+    // a queue edit made that slot stale (task 9.4). The window is reconciled
+    // with the queue first, so an edit that landed between two polls makes the
+    // move stale before it is judged. An observation of the loaded item that
+    // does not move settles its transition (design D6, D7, task 4.3), and a
+    // step queued behind the load then dispatches.
+    if observation.is_some() {
+        super::load::check_queued_next(daemon);
+    }
     if let Some(advance) = observation.and_then(|observation| observation.device_advance) {
         crate::output::advance::apply_device_advance(daemon, advance, now);
     } else if let Some(loaded_slot) = observation.and_then(|observation| observation.presented) {

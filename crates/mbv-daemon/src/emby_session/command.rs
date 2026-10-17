@@ -165,6 +165,13 @@ pub(crate) fn stop_loaded_item(session: &EmbySessionOutput) -> bool {
     true
 }
 
+/// Stops the device because the queue has no next admissible slot to correct it
+/// with (design D14 "the queue corrects the device", task 9.4): the device must
+/// not play the item a queue edit made stale.
+pub(crate) fn stop(session: &EmbySessionOutput) {
+    transport(session, "Stop");
+}
+
 /// Submits one seek, clamped at the start of the item (design D9).
 fn seek(session: &EmbySessionOutput, ticks: i64) {
     let ticks = ticks.max(0);

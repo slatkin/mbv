@@ -21,6 +21,7 @@ use crate::cast::PlaybackOutput;
 use crate::core::DaemonOwnerContext;
 use crate::ctrl::{ClientRegistry, CtrlClientId};
 use crate::emby_session::EmbySessionEvent;
+use crate::event_loop::DaemonLoop;
 
 /// Why a slot cannot play on an Emby Session output (design D7): the item's
 /// name for the report, and the reason. A rejected slot is reported, never
@@ -231,6 +232,61 @@ fn load_window(
         return (None, Vec::new());
     };
     next_admissible_slot(&ctx.owner.core, slot, &output.playable_media_types)
+}
+
+/// Reconciles the item the device holds next with the queue's next admissible
+/// slot (design D14 "Queue edits", task 9.4), on each observation and each
+/// tick: a match clears a stale mark a queue edit restored, an empty window
+/// with a slot after the active one (an append at the end of the queue) sends
+/// that slot with one `play_last`, and anything else marks the queued item
+/// stale. The active item is never interrupted here. Only the correction, when
+/// the device moves to the stale item, touches the device.
+///
+/// The slots the search steps past are not reported: the report belongs to the
+/// window a slot is sent for, and nothing is sent here.
+pub(crate) fn check_queued_next(daemon: &mut DaemonLoop) {
+    let (next, queued) = {
+        let PlaybackOutput::EmbySession(output) = &daemon.owner.output else {
+            return;
+        };
+        let Some(loaded) = output.loaded.as_ref() else {
+            return;
+        };
+        let (next, _stepped) = next_admissible_slot(
+            &daemon.owner.core,
+            loaded.slot,
+            &output.playable_media_types,
+        );
+        (next, output.queued_next.as_ref().map(|queued| queued.slot))
+    };
+    match (next, queued) {
+        (Some((slot, item_id)), None) => {
+            let PlaybackOutput::EmbySession(output) = &mut daemon.owner.output else {
+                return;
+            };
+            submit_play_last(output, slot, item_id);
+        }
+        (None, None) => {}
+        (Some((slot, _)), Some(queued)) if slot == queued => set_queued_next_stale(daemon, false),
+        (Some(_) | None, Some(_)) => set_queued_next_stale(daemon, true),
+    }
+}
+
+/// Marks the queued next item stale, or clears the mark once the queue picks
+/// that slot again (design D14): the device still holds the item either way,
+/// and the mark only decides what the Owner does when the device moves to it.
+fn set_queued_next_stale(daemon: &mut DaemonLoop, stale: bool) {
+    let PlaybackOutput::EmbySession(output) = &mut daemon.owner.output else {
+        return;
+    };
+    let Some(queued) = output.queued_next.as_mut() else {
+        return;
+    };
+    if queued.stale == stale {
+        return;
+    }
+    queued.stale = stale;
+    tracing::debug!(name: "daemon.emby_session_load.stale", target: "daemon", slot = ?queued.slot, stale, "the item the device holds next was reconciled against the queue's next admissible slot");
 }
 
 /// Sends the one `play` job for the load's window to the Session's worker and

@@ -16,7 +16,10 @@
 //! not a step: the device already moved to the queued slot, so
 //! [`apply_device_advance`] follows it to that slot, records the old slot's
 //! completion when the item ended naturally, and appends the slot after the
-//! new active one with a `play_last`.
+//! new active one with a `play_last`. A slot a queue edit made stale is never
+//! adopted: [`correct_stale_device_advance`] records the same completion and
+//! loads the queue's correct next slot, or stops the device when the queue has
+//! none.
 
 use std::time::Instant;
 
@@ -80,10 +83,18 @@ pub(crate) fn begin_advance(daemon: &mut DaemonLoop) {
 /// that slot. The four steps run in the design's order, and none of them loads
 /// the active item again: the Owner sends no `PlayNow`, and it does not call
 /// [`begin_advance`], which steps with one.
+///
+/// A queued slot a queue edit made stale is never adopted (task 9.4): the Owner
+/// records the old slot's completion as step 2 does and corrects the device
+/// instead ([`correct_stale_device_advance`]).
 pub(crate) fn apply_device_advance(daemon: &mut DaemonLoop, advance: DeviceAdvance, now: Instant) {
     let Some(ended) = daemon.owner.output.loaded_slot() else {
         return;
     };
+    if advance.stale {
+        correct_stale_device_advance(daemon, advance, ended);
+        return;
+    }
     // 1. The observed active slot: the queued slot the device started, with the
     // Shuffle re-pick and the forward play order that follow it.
     observe_slot(daemon, advance.queued);
@@ -100,6 +111,96 @@ pub(crate) fn apply_device_advance(daemon: &mut DaemonLoop, advance: DeviceAdvan
     // 4. The device holds the active item alone now: append the next admissible
     // slot, so it never reaches its own next-episode autoplay (design D14).
     append_next_slot(daemon, advance.queued);
+}
+
+/// Corrects the device after it moved to a queued slot a queue edit made stale
+/// (design D14 "the queue corrects the device", task 9.4): the Owner does not
+/// adopt the stale slot. It records the old slot's completion as step 2 of the
+/// device advance does, then loads the queue's correct next admissible slot
+/// under the Load rule — that slot and the slot after it, with the new item's
+/// resume position — or stops the device when the queue has no next admissible
+/// slot, which leaves the queue on the old slot.
+fn correct_stale_device_advance(
+    daemon: &mut DaemonLoop,
+    advance: DeviceAdvance,
+    ended: QueueSlotId,
+) {
+    // The window is resolved while the old slot is still in the queue: the
+    // completion record's consume rules can remove it, and the search has no
+    // base to step from once the slot it names is gone.
+    let (correct, stepped) = window(daemon, ended);
+    if advance.completes {
+        record_natural_end(daemon, ended, true);
+    }
+    let Some((slot, item_id)) = correct else {
+        stop_stale_advance(daemon, ended);
+        return;
+    };
+    let (after, after_stepped) = window(daemon, slot);
+    let runtime_ticks = daemon
+        .owner
+        .core
+        .queue
+        .slot(slot)
+        .and_then(|slot| slot.item.as_emby())
+        .map_or(0, |item| item.runtime_ticks);
+    let start_ticks =
+        mbv_player::resume_ticks_for_slot(&daemon.owner.core.queue, slot).unwrap_or(0);
+    let session_id = match &daemon.owner.output {
+        PlaybackOutput::EmbySession(output) => output.session_id.clone(),
+        _ => return,
+    };
+    let Some(session_id) = session_id else {
+        tracing::warn!(name: "daemon.emby_session_advance.no_session", target: "daemon", slot = ?slot, "the Emby Session output has no session id; the device keeps the stale item");
+        return;
+    };
+    let load = crate::emby_session::load::SessionLoad {
+        slot,
+        item_id,
+        runtime_ticks,
+        session_id,
+        start_ticks,
+        next: after,
+    };
+    let submitted = match &mut daemon.owner.output {
+        PlaybackOutput::EmbySession(output) => {
+            crate::emby_session::load::submit_play(output, &daemon.merged_tx, load)
+        }
+        _ => false,
+    };
+    if !submitted {
+        return;
+    }
+    let mut stepped = stepped;
+    stepped.extend(after_stepped);
+    crate::emby_session::load::report_stepped_slots(&daemon.ctrl_clients, &stepped);
+    let _ = daemon.owner.core.queue.set_active_slot(slot);
+    if let PlaybackOutput::EmbySession(output) = &mut daemon.owner.output {
+        // The corrected load replaces the item the device holds, so the stale
+        // item's advance and any pause a hand-off still owed go with it.
+        output.advance = None;
+        output.pending_pause = false;
+    }
+    tracing::info!(name: "daemon.emby_session_advance.corrected", target: "daemon", slot = ?slot, start_ticks, "the device moved to a stale queued item; the queue's next admissible slot was loaded");
+}
+
+/// Stops the device when the queue has no next admissible slot to correct it
+/// with (design D14): the device must not play the item a queue edit made
+/// stale, and the queue ends on the old slot. With the loaded item gone and the
+/// stale observation dropped, the output presents nothing until the next
+/// observation reports what the device does, as a user stop does.
+fn stop_stale_advance(daemon: &mut DaemonLoop, ended: QueueSlotId) {
+    let PlaybackOutput::EmbySession(output) = &mut daemon.owner.output else {
+        return;
+    };
+    crate::emby_session::command::stop(output);
+    output.loaded = None;
+    output.queued_next = None;
+    output.advance = None;
+    output.pending_pause = false;
+    output.last_observation = None;
+    output.observed_at = None;
+    tracing::info!(name: "daemon.emby_session_advance.stopped", target: "daemon", slot = ?ended, "the device moved to a stale queued item and the queue has no next admissible slot; the device was told to stop");
 }
 
 /// Makes the queued next item the loaded one after the device's own move
@@ -147,16 +248,7 @@ fn reset_loaded_item(daemon: &mut DaemonLoop, now: Instant) {
 /// slot the Session can play after the active one, nothing is queued, and each
 /// slot the search stepped past is reported only when a slot was sent.
 fn append_next_slot(daemon: &mut DaemonLoop, active: QueueSlotId) {
-    let (next, stepped) = {
-        let PlaybackOutput::EmbySession(output) = &daemon.owner.output else {
-            return;
-        };
-        crate::emby_session::load::next_admissible_slot(
-            &daemon.owner.core,
-            active,
-            &output.playable_media_types,
-        )
-    };
+    let (next, stepped) = window(daemon, active);
     let Some((slot, item_id)) = next else {
         return;
     };
@@ -166,6 +258,23 @@ fn append_next_slot(daemon: &mut DaemonLoop, active: QueueSlotId) {
     if crate::emby_session::load::submit_play_last(output, slot, item_id) {
         crate::emby_session::load::report_stepped_slots(&daemon.ctrl_clients, &stepped);
     }
+}
+
+/// The window the queue puts after `active` on the Session output (design D14):
+/// the next admissible slot and its Emby item id, with the slots the search
+/// stepped past. It is the window a load, an append, or a correction sends.
+fn window(
+    daemon: &DaemonLoop,
+    active: QueueSlotId,
+) -> (Option<(QueueSlotId, String)>, Vec<SessionAdmission>) {
+    let PlaybackOutput::EmbySession(output) = &daemon.owner.output else {
+        return (None, Vec::new());
+    };
+    crate::emby_session::load::next_admissible_slot(
+        &daemon.owner.core,
+        active,
+        &output.playable_media_types,
+    )
 }
 
 /// Records the ended slot's completion through the same observation funnel
