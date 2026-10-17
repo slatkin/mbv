@@ -16,8 +16,11 @@ use crate::event_loop::DaemonLoop;
 use crate::output::advance::OutputAdvance;
 
 pub(crate) mod connect;
+pub(crate) mod load;
 pub(crate) mod poll;
 pub(crate) mod worker;
+
+pub(crate) use load::{dispatch, dispatch_accepted};
 
 #[cfg(test)]
 pub(crate) mod fake;

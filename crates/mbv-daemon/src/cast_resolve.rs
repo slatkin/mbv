@@ -453,7 +453,7 @@ fn resolve_failed(
             &mbv_ctrl::CtrlEvent::CommandRejected(report),
         );
         let mut ctx = crate::cast::owner_context(daemon);
-        if crate::cast::expire_cast_transition(&mut ctx) {
+        if crate::cast::expire_remote_transition(&mut ctx) {
             crate::output::advance::clear_advance(daemon);
         } else {
             crate::output::advance::continue_after_failed_step(daemon, pending.transition.target);
@@ -466,7 +466,7 @@ fn resolve_failed(
             pending.origin,
             uncastable,
         );
-        crate::cast::expire_cast_transition(&mut ctx);
+        crate::cast::expire_remote_transition(&mut ctx);
     }
 }
 

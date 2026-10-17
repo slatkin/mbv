@@ -4,10 +4,15 @@
 
 use std::sync::mpsc;
 
+use mbv_queue::QueueItem;
+use rstest::rstest;
+
 use crate::DaemonEvent;
+use crate::tests::{emby_qi, video_feed_qi};
 
 use super::EmbySessionEvent;
 use super::fake::{FakeSessionApi, SessionCall, session};
+use super::load::admit;
 use super::worker::spawn_emby_session_worker;
 
 #[test]
@@ -52,5 +57,28 @@ fn worker_runs_jobs_in_order_and_returns_the_poll_as_an_owner_event() {
             },
             SessionCall::GetSessions,
         ]
+    );
+}
+
+/// Contract: row 4.1 / design D7 and spec "An Emby Session plays only Emby
+/// items it can play" — an Emby item passes when the Session advertises its
+/// media kind or advertises no kinds, and every other item fails with the
+/// reason the Owner reports.
+#[rstest]
+#[case::video_on_a_session_with_no_advertised_kinds(&[], emby_qi("movie", "Video", "Movie"), None)]
+#[case::video_on_an_audio_only_session(&["Audio"], emby_qi("movie", "Video", "Movie"), Some(("movie", "the Session does not play Video items")))]
+#[case::feed_entry_on_any_session(&[], video_feed_qi("episode-1"), Some(("episode-1", "the Emby Session output plays only Emby items")))]
+fn admission_admits_only_emby_items_the_session_plays(
+    #[case] advertised: &[&str],
+    #[case] item: QueueItem,
+    #[case] expected_rejection: Option<(&str, &str)>,
+) {
+    let advertised: Vec<String> = advertised.iter().map(|kind| (*kind).to_string()).collect();
+
+    let rejection = admit(&item, &advertised).err();
+
+    assert_eq!(
+        rejection.map(|rejected| (rejected.item, rejected.reason)),
+        expected_rejection.map(|(item, reason)| (item.to_string(), reason.to_string()))
     );
 }

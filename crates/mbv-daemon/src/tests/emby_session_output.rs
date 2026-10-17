@@ -5,7 +5,7 @@
 
 use super::cast_output::{connect_output_client_with_caps, select_output};
 use super::cast_playback::drained_events;
-use super::r#loop::{TestLoop, test_loop_with_role};
+use super::r#loop::{TestLoop, test_loop_with_queue, test_loop_with_role};
 use super::*;
 use mbv_ctrl::{OutputConnection, OutputSelection, OutputState};
 
@@ -40,6 +40,15 @@ fn session_state() -> OutputState {
 /// is `fake`, so no test reaches the network.
 fn loop_with_session(fake: FakeSessionApi) -> TestLoop {
     let mut t = test_loop_with_role(DaemonRole::Local);
+    host_session_output(&mut t, fake);
+    t
+}
+
+/// Gives `t` the runtime hosting an Emby Session output (design D2, D4): the
+/// hook, the Emby owner context a selection needs, and a worker whose
+/// `SessionApi` is `fake`. A loop built with [`test_loop_with_queue`] calls
+/// this to keep a scripted queue while the Session is the output.
+fn host_session_output(t: &mut TestLoop, fake: FakeSessionApi) {
     t.event_loop.emby_session_output = true;
     t.event_loop.emby_runtime = Some(crate::EmbyOwnerContext::from_client(
         t.event_loop.client.lock().unwrap().clone(),
@@ -49,7 +58,6 @@ fn loop_with_session(fake: FakeSessionApi) -> TestLoop {
         let fake = fake.clone();
         spawn_emby_session_worker(move || fake)
     }));
-    t
 }
 
 /// Pumps the one `DaemonEvent::EmbySession` the selection's lookup produced
@@ -594,4 +602,128 @@ fn a_local_selection_discards_a_pending_emby_session_outcome() {
         *t.event_loop.shared_queue.playback_output.lock().unwrap(),
         OutputState::Local
     );
+}
+
+/// Contract: row 4.2 / design D7 and spec "An Emby Session is the output" —
+/// playing a several-hundred-slot queue gives the Session exactly one `play`
+/// job carrying one item id, never the whole queue (#945), and local playback
+/// does not start.
+#[test]
+fn playing_a_300_slot_queue_gives_the_session_one_play_job() {
+    let fake = FakeSessionApi::with_sessions(vec![session("device-1", "session-1")]);
+    let (mut t, calls) = session_output(fake);
+    let (client_id, _reply_tx, _rx) =
+        connect_output_client_with_caps(&t.event_loop.ctrl_clients, true, true);
+    let (request_id, generation) = (7, 7);
+    t.event_loop.owner.intents.accept(
+        client_id,
+        PlaybackIntent {
+            request_id,
+            generation,
+            action: PlaybackIntentAction::Play {
+                item_ids: vec!["item-5".into()],
+                start_idx: 5,
+                start_ticks: 0,
+                source: QueueSource::Remote,
+            },
+        },
+        false,
+    );
+    let fetched: Vec<EmbyItem> = (0..300)
+        .map(|index| item(&format!("item-{index}"), "Video", "Movie"))
+        .collect();
+
+    t.event_loop.handle_event(DaemonEvent::PlaybackResolved {
+        start_idx: 5,
+        start_ticks: 0,
+        source: QueueSource::Remote,
+        client_id,
+        request_id,
+        generation,
+        fetched: Ok(fetched),
+    });
+    wait_for_session_jobs(&t.event_loop.owner.output);
+
+    assert_eq!(
+        play_calls(&calls),
+        vec![SessionCall::Play {
+            session_id: "session-1".to_string(),
+            item_id: "item-5".to_string(),
+            start_ticks: 0,
+        }],
+        "the Session is given exactly one play job, for the selected slot's item"
+    );
+    assert_eq!(
+        t.event_loop.owner.core.queue.len(),
+        300,
+        "the owner keeps the whole queue"
+    );
+    assert!(
+        !t.event_loop.player.status.lock().unwrap().active,
+        "local playback does not start while the Session is the output"
+    );
+}
+
+/// Contract: row 4.2 / design D7 and spec "Explicit play of a slot the
+/// Session cannot play" — playing an Audiobookshelf slot while the Session is
+/// the output reports the item and the reason, sends no `play`, and expires
+/// the in-flight transition the jump registered.
+#[test]
+fn playing_an_audiobookshelf_slot_on_the_session_loads_nothing_and_reports() {
+    let fake = FakeSessionApi::with_sessions(vec![session("device-1", "session-1")]);
+    let calls = fake.calls();
+    let mut t = test_loop_with_queue(
+        DaemonRole::Local,
+        vec![book_qi("li_1"), emby_qi("movie", "Video", "Movie")],
+        0,
+    );
+    host_session_output(&mut t, fake);
+    let (client_id, reply_tx, rx) =
+        connect_output_client_with_caps(&t.event_loop.ctrl_clients, true, true);
+    select_output(&mut t, client_id, &reply_tx, session_selection());
+    pump_session_event(&mut t);
+    let _ = drained_events(&rx);
+    let slot = t.event_loop.owner.core.queue.slots()[0].slot_id;
+
+    t.event_loop.handle_event(DaemonEvent::Ctrl(
+        CtrlCmd::UnifiedQueuePlaySlot {
+            slot_id: mbv_ctrl::slot_id_to_u64(slot),
+            op: None,
+        },
+        client_id,
+        mpsc::channel().0,
+    ));
+    wait_for_session_jobs(&t.event_loop.owner.output);
+
+    assert!(
+        play_calls(&calls).is_empty(),
+        "the Session is given no play job for an item it cannot play"
+    );
+    let rejection = drained_events(&rx)
+        .into_iter()
+        .find_map(|event| match event {
+            CtrlEvent::CommandRejected(reason) => Some(reason),
+            _ => None,
+        })
+        .expect("the unplayable item is reported");
+    assert!(
+        rejection.contains("Test Book") && rejection.contains("plays only Emby items"),
+        "the report names the item and the reason: {rejection}"
+    );
+    assert!(
+        t.event_loop.owner.core.transitions.in_flight().is_none(),
+        "the rejected jump expires the in-flight transition"
+    );
+}
+
+/// The `play` jobs the fake has recorded, in order, so a test can assert the
+/// Session received exactly the item it should.
+fn play_calls(calls: &Arc<Mutex<Vec<SessionCall>>>) -> Vec<SessionCall> {
+    calls
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|call| matches!(call, SessionCall::Play { .. }))
+        .cloned()
+        .collect()
 }

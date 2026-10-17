@@ -370,21 +370,22 @@ pub(super) fn dispatch_cast_load(
     true
 }
 
-/// Expires the in-flight transition a failed Cast load or resolve belonged to
-/// (design D5, row 5.2), dispatching a queued transition the expiry promotes.
-/// The caller reports the failure; this helper owns the gate and the publish.
-/// Returns whether a queued transition was promoted, so the caller can tell a
-/// user takeover from an expiry that left the queue to the caller (design
-/// D7's step-over).
-pub(super) fn expire_cast_transition(ctx: &mut super::core::DaemonOwnerContext<'_>) -> bool {
+/// Expires the in-flight transition a failed remote load or resolve belonged
+/// to (cast-owner-output design D5 row 5.2, emby-session-owner-output design
+/// D7), dispatching a queued transition the expiry promotes. The caller
+/// reports the failure; this helper owns the gate and the publish. Returns
+/// whether a queued transition was promoted, so the caller can tell a user
+/// takeover from an expiry that left the queue to the caller (design D7's
+/// step-over).
+pub(super) fn expire_remote_transition(ctx: &mut super::core::DaemonOwnerContext<'_>) -> bool {
     if let Some((expired, dispatch_next)) = ctx.owner.core.transitions.expire_now() {
         tracing::info!(
-            name: "daemon.cast_transition.expired",
+            name: "daemon.transition.expired",
             target: "transition",
             request = %expired.request_id,
             slot = ?expired.target,
             dispatch_next = dispatch_next.is_some(),
-            "the failed cast load expired its transition"
+            "the failed remote load expired its transition"
         );
         // The expiry abandons the guarded intent that drove the transition,
         // mirroring `expire_and_redispatch`: without the rejection the intent
@@ -568,7 +569,7 @@ fn handle_load_failed(daemon: &mut DaemonLoop, slot: QueueSlotId, error: &str) {
     }
     status::refresh_presentation(daemon, Instant::now());
     let mut ctx = owner_context(daemon);
-    expire_cast_transition(&mut ctx);
+    expire_remote_transition(&mut ctx);
 }
 
 /// The receiver refused a transport command (spec "Command is not supported by

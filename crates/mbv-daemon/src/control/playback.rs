@@ -104,6 +104,35 @@ pub(crate) fn play_resolved_items(
         }
         return;
     }
+    if let crate::cast::PlaybackOutput::EmbySession(_) = ctx.owner.output {
+        // The Session is the output (emby-session-owner-output design D7): the
+        // queue is installed above, and only the selected slot's item is
+        // admitted and loaded onto the Session — never the whole queue (#945).
+        // The play registers as the in-flight transition under the intent's
+        // identity, so an observation that shows the loaded item settles it
+        // and a rejected item expires and reports it.
+        let Some(start_slot) = ctx.owner.core.queue.active_slot_id() else {
+            tracing::warn!(name: "daemon.emby_session_play.start_slot_missing", target: "daemon", "the resolved play has no start slot; nothing was loaded");
+            return;
+        };
+        let transition =
+            mbv_player::transition::Transition::new(request_id, generation, start_slot);
+        crate::emby_session::dispatch_accepted(
+            &mut DaemonOwnerContext {
+                player: ctx.player,
+                client: ctx.client,
+                owner: &mut *ctx.owner,
+                shared_queue: ctx.shared_queue,
+                ctrl_clients: ctx.ctrl_clients,
+                merged_tx: ctx.merged_tx,
+                audiobookshelf: ctx.audiobookshelf,
+            },
+            transition,
+            start_ticks,
+            Some(client_id),
+        );
+        return;
+    }
     if fetched.len() == 1 {
         let mut play_item = fetched[0].clone();
         if start_ticks > 0 {

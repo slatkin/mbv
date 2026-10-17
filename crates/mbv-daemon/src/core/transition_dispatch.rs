@@ -40,6 +40,19 @@ pub(crate) fn send_jump_or_cold_start(
                 .unwrap_or(0);
         return crate::cast::dispatch_cast_load(ctx, transition, resume_ticks, origin);
     }
+    if matches!(
+        ctx.owner.output,
+        crate::cast::PlaybackOutput::EmbySession(_)
+    ) {
+        // The Session is the output (emby-session-owner-output design D7): the
+        // accepted transition's target is admitted and loaded on the Session,
+        // and the local run is never started. A slot the Session cannot play
+        // expires the transition and reports it; the output stays idle.
+        let resume_ticks =
+            mbv_player::resume_ticks_for_slot(&ctx.owner.core.queue, transition.target)
+                .unwrap_or(0);
+        return crate::emby_session::dispatch(ctx, transition, resume_ticks, origin);
+    }
     let target = transition.target;
     let resume_ticks = mbv_player::resume_ticks_for_slot(&ctx.owner.core.queue, target);
     if ctx.player.send_command(transition.into_jump(resume_ticks)) {
