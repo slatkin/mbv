@@ -86,6 +86,18 @@ impl SessionApi for EmbyClient {
 /// sender. The closure is `Send`; the API itself never leaves its thread.
 pub(crate) type EmbySessionJob = Box<dyn FnOnce(&dyn SessionApi) + Send>;
 
+/// Wraps one job so it acks on `ack` after it ran (design D15): Owner exit
+/// submits the queue hand-over and waits on a `sync_channel(0)` within the
+/// shutdown deadline, and that wait also covers every job queued ahead of it. A
+/// receiver that already gave up drops the channel, so the send fails instead
+/// of stalling the worker.
+pub(crate) fn acknowledged(ack: mpsc::SyncSender<()>, job: EmbySessionJob) -> EmbySessionJob {
+    Box::new(move |api: &dyn SessionApi| {
+        job(api);
+        let _ = ack.send(());
+    })
+}
+
 /// Spawns the worker thread that owns the `SessionApi` for one output, and
 /// returns the `Sender` the output holds instead of the API (design D4).
 /// `build` runs on the new thread, so the API never needs to be `Send`; each

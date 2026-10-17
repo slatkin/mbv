@@ -206,6 +206,31 @@ fn step_candidates(core: &PlayerOwnerState, loaded: QueueSlotId) -> Vec<QueueSlo
     }
 }
 
+/// Every admissible slot the play order visits after `from` (design D15), for
+/// the exit hand-over: the candidates one Next step walks, in play order, from
+/// which the slots the Session cannot play are dropped. Nothing is reported,
+/// because the Owner is exiting and no Client is left to tell (design D15 step
+/// 1). Under Shuffle only the current pick follows `from`, so nothing past it
+/// is collected (design D14).
+///
+/// Returns the slots and their Emby item ids, in the order the device is given
+/// them: the active item plays first, and the rest follow it.
+pub(crate) fn admissible_after(
+    core: &PlayerOwnerState,
+    from: QueueSlotId,
+    playable_media_types: &[String],
+) -> Vec<(QueueSlotId, String)> {
+    step_candidates(core, from)
+        .into_iter()
+        .filter_map(|slot_id| {
+            let slot = core.queue.slot(slot_id)?;
+            admit(&slot.item, playable_media_types)
+                .ok()
+                .map(|item| (slot_id, item.id.clone()))
+        })
+        .collect()
+}
+
 /// Reports each slot the window search stepped past (design D1, D14), one
 /// time each, and only when the load sent a slot: the report belongs to the
 /// window the device receives. The owner picked that window, so the item and

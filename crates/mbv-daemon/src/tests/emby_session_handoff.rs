@@ -19,6 +19,7 @@ use mbv_ctrl::OutputSelection;
 
 use crate::cast::PlaybackOutput;
 use crate::emby_session::fake::{FakeSessionApi, SessionCall, session};
+use crate::emby_session::poll::EMBY_SESSION_POLL_INTERVAL;
 use crate::emby_session::worker::EmbySessionJob;
 use mbv_emby::SessionInfo;
 
@@ -380,21 +381,101 @@ fn selecting_local_while_foreign_content_plays_sends_no_stop() {
     );
 }
 
-/// Contract: row 6.2 / design D11 (the Cast D12 rule) — Owner shutdown stops
-/// the output's worker with no device stop, so the Session keeps playing when
-/// the Owner exits.
+/// The one `play` call the Session receives for `item_ids`, from the start:
+/// the load's window (design D14) or the exit hand-over's reload (design D15).
+fn play(item_ids: &[&str]) -> SessionCall {
+    play_at(item_ids, 0)
+}
+
+/// The one `play` call the Session receives for `item_ids` from
+/// `start_ticks`.
+fn play_at(item_ids: &[&str], start_ticks: i64) -> SessionCall {
+    SessionCall::Play {
+        session_id: "session-1".to_string(),
+        item_ids: item_ids.iter().map(|id| (*id).to_string()).collect(),
+        start_ticks,
+    }
+}
+
+/// The one `play_last` call the Session receives for `item_ids` (design D15):
+/// the slots appended after the item the device holds next.
+fn play_last(item_ids: &[&str]) -> SessionCall {
+    SessionCall::PlayLast {
+        session_id: "session-1".to_string(),
+        item_ids: item_ids.iter().map(|id| (*id).to_string()).collect(),
+    }
+}
+
+/// The `play_last` calls the Session received, in order.
+fn play_last_calls(calls: &Arc<Mutex<Vec<SessionCall>>>) -> Vec<SessionCall> {
+    calls
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|call| matches!(call, SessionCall::PlayLast { .. }))
+        .cloned()
+        .collect()
+}
+
+/// The Session entry that presents `item_id` paused at `position_ticks`, so the
+/// exit hand-over's position estimate is the observed position itself — a
+/// paused Session adds no elapsed time (design D6).
+fn session_paused_at(item_id: &str, position_ticks: i64, runtime_ticks: i64) -> SessionInfo {
+    SessionInfo {
+        is_paused: true,
+        ..session_presenting_at(item_id, position_ticks, runtime_ticks)
+    }
+}
+
+/// Removes `slot` from the owner's queue through the queue edit command, so a
+/// test drives the queue edit that makes the queued next item stale (design
+/// D14).
+fn remove_slot(t: &mut TestLoop, client_id: u64, slot: mbv_queue::QueueSlotId) {
+    t.event_loop.handle_event(DaemonEvent::Ctrl(
+        CtrlCmd::UnifiedQueueRemoveSlot {
+            slot_id: mbv_ctrl::slot_id_to_u64(slot),
+            op: None,
+        },
+        client_id,
+        mpsc::channel().0,
+    ));
+}
+
+/// The queue's slot ids, in order.
+fn queue_slot_ids(t: &TestLoop) -> Vec<mbv_queue::QueueSlotId> {
+    t.event_loop
+        .owner
+        .core
+        .queue
+        .slots()
+        .iter()
+        .map(|slot| slot.slot_id)
+        .collect()
+}
+
+/// Contract: row 6.2 / design D11 (the Cast D12 rule) and row 9.5 / design
+/// D15 — Owner shutdown stops the output's worker with no device stop, so the
+/// Session keeps playing when the Owner exits, and the exit hands the rest of
+/// the queue to the device with one `play_last` that interrupts nothing.
 #[test]
 fn the_owner_shutdown_sends_no_stop_to_the_session() {
     let fake = FakeSessionApi::with_sessions(vec![session("device-1", "session-1")]);
     let script = fake.clone();
-    let (mut t, calls, rx) =
-        session_output_with_queue(fake, vec![timed("movie", 600 * SECOND_TICKS)]);
+    let (mut t, calls, rx) = session_output_with_queue(
+        fake,
+        vec![
+            timed("a", 600 * SECOND_TICKS),
+            timed("b", 600 * SECOND_TICKS),
+            timed("c", 600 * SECOND_TICKS),
+            timed("d", 600 * SECOND_TICKS),
+        ],
+    );
     let (client_id, _reply_tx, _client_rx) =
         connect_output_client_with_caps(&t.event_loop.ctrl_clients, true, true);
-    let slot = t.event_loop.owner.core.queue.slots()[0].slot_id;
-    play_slot(&mut t, client_id, slot);
+    let slots = queue_slot_ids(&t);
+    play_slot(&mut t, client_id, slots[0]);
     script.set_sessions(vec![session_presenting_at(
-        "movie",
+        "a",
         100 * SECOND_TICKS,
         600 * SECOND_TICKS,
     )]);
@@ -404,6 +485,16 @@ fn the_owner_shutdown_sends_no_stop_to_the_session() {
     let _ = t.event_loop.handle_event(DaemonEvent::Shutdown);
     wait_for_worker(&worker);
 
+    assert_eq!(
+        play_last_calls(&calls),
+        vec![play_last(&["c", "d"])],
+        "the exit appends every playable slot after the queued next item"
+    );
+    assert_eq!(
+        play_calls(&calls),
+        vec![play(&["a", "b"])],
+        "the exit interrupts nothing: the active item is not reloaded"
+    );
     assert!(
         stop_calls(&calls).is_empty(),
         "the shutdown stops neither the device playback nor its app"
@@ -414,6 +505,64 @@ fn the_owner_shutdown_sends_no_stop_to_the_session() {
             .any(|event| matches!(event, CtrlEvent::CommandRejected(_))),
         "the shutdown reports no failure"
     );
+}
+
+/// Contract: row 9.5 / design D15 and spec "The owner hands the rest of the
+/// queue to the Emby Session at exit" — the exit hands the rest of the queue
+/// over only while the device plays the loaded item: a queued next item that a
+/// queue edit made stale (design D14) reloads the active item at its estimated
+/// position with the queue's correct window, and content the Owner did not load
+/// takes nothing.
+#[rstest]
+#[case::a_stale_queued_item_reloads_the_active_item("a", Some(&["a", "c"][..]))]
+#[case::foreign_content_takes_nothing("other-item", None)]
+fn the_shutdown_hands_over_only_what_the_device_plays(
+    #[case] presented: &str,
+    #[case] exit_play: Option<&[&str]>,
+) {
+    let position = 100 * SECOND_TICKS;
+    let fake = FakeSessionApi::with_sessions(vec![session("device-1", "session-1")]);
+    let script = fake.clone();
+    let (mut t, calls, _rx) = session_output_with_queue(
+        fake,
+        vec![
+            timed("a", 600 * SECOND_TICKS),
+            timed("b", 600 * SECOND_TICKS),
+            timed("c", 600 * SECOND_TICKS),
+        ],
+    );
+    let (client_id, _reply_tx, _client_rx) =
+        connect_output_client_with_caps(&t.event_loop.ctrl_clients, true, true);
+    let slots = queue_slot_ids(&t);
+    play_slot(&mut t, client_id, slots[0]);
+    let t0 = Instant::now();
+    script.set_sessions(vec![session_paused_at("a", position, 600 * SECOND_TICKS)]);
+    poll_once(&mut t, t0);
+    // The edit removes the slot the device holds next, so the next window check
+    // marks the queued item stale (design D14).
+    remove_slot(&mut t, client_id, slots[1]);
+    script.set_sessions(vec![session_paused_at(
+        presented,
+        position,
+        600 * SECOND_TICKS,
+    )]);
+    poll_once(&mut t, t0 + EMBY_SESSION_POLL_INTERVAL);
+    let worker = session_worker(&t);
+
+    let _ = t.event_loop.handle_event(DaemonEvent::Shutdown);
+    wait_for_worker(&worker);
+
+    let exit_calls: Vec<SessionCall> = play_calls(&calls).into_iter().skip(1).collect();
+    assert_eq!(
+        exit_calls,
+        exit_play.map_or_else(Vec::new, |item_ids| vec![play_at(item_ids, position)]),
+        "the exit reloads the active item with the queue's window, or sends nothing"
+    );
+    assert!(
+        play_last_calls(&calls).is_empty(),
+        "a stale queued item is never appended after"
+    );
+    assert!(stop_calls(&calls).is_empty(), "the shutdown sends no stop");
 }
 
 /// Contract: review r6 [P2-1] / design D11 — local playback that starts after
