@@ -428,11 +428,10 @@ fn playback_started_while_the_session_lookup_ran_is_not_discarded() {
     // The select-time capture found local playback idle; the user starts it
     // while the device lookup runs.
     let position = 42 * SECOND_TICKS;
-    {
-        let mut status = t.event_loop.player.status.lock().unwrap();
-        status.active = true;
-        status.position_ticks = position;
-    }
+    let mut status = t.event_loop.player.status.lock().unwrap();
+    status.active = true;
+    status.position_ticks = position;
+    drop(status);
 
     inject_lookup_outcome(&mut t, "device-1", "session-1");
 
@@ -448,5 +447,71 @@ fn playback_started_while_the_session_lookup_ran_is_not_discarded() {
     assert!(
         status.active && status.position_ticks == position,
         "the just-started local playback keeps running"
+    );
+}
+
+/// Contract: review r6 [P2-2] / design D9 — a pause a hand-off still owed
+/// belongs to the item that load replaced: when A is never presented and the
+/// user plays B, B starts playing instead of inheriting the pause.
+#[test]
+fn a_replacing_load_does_not_inherit_a_pending_handoff_pause() {
+    let fake = FakeSessionApi::with_sessions(vec![session("device-1", "session-1")]);
+    let script = fake.clone();
+    let mut t = test_loop_with_queue(
+        DaemonRole::Local,
+        vec![
+            timed("a", 600 * SECOND_TICKS),
+            timed("b", 600 * SECOND_TICKS),
+        ],
+        0,
+    );
+    let calls = fake.calls();
+    host_session_output(&mut t, fake);
+    let slots: Vec<mbv_queue::QueueSlotId> = t
+        .event_loop
+        .owner
+        .core
+        .queue
+        .slots()
+        .iter()
+        .map(|slot| slot.slot_id)
+        .collect();
+    local_playing(&mut t, slots[0], 10 * SECOND_TICKS, true);
+    let (client_id, reply_tx, _rx) =
+        connect_output_client_with_caps(&t.event_loop.ctrl_clients, true, true);
+    select_output(&mut t, client_id, &reply_tx, session_selection());
+    pump_session_event(&mut t);
+    wait_for_session_jobs(&t.event_loop.owner.output);
+    let PlaybackOutput::EmbySession(output) = &t.event_loop.owner.output else {
+        panic!("the Session is the output after the hand-off");
+    };
+    assert!(output.pending_pause, "the paused hand-off owes a pause");
+
+    // A is never presented; the user plays B, which replaces the loaded item.
+    play_slot(&mut t, client_id, slots[1]);
+
+    let PlaybackOutput::EmbySession(output) = &t.event_loop.owner.output else {
+        panic!("the Session is still the output");
+    };
+    assert_eq!(
+        output.loaded.as_ref().map(|loaded| loaded.slot),
+        Some(slots[1]),
+        "the new load replaced the hand-off's item"
+    );
+    assert!(
+        !output.pending_pause,
+        "the replaced item's pause does not leak into the new load"
+    );
+
+    script.set_sessions(vec![session_presenting_at("b", 0, 600 * SECOND_TICKS)]);
+    poll_once(&mut t, Instant::now());
+    wait_for_session_jobs(&t.event_loop.owner.output);
+
+    assert!(
+        !calls.lock().unwrap().iter().any(|call| matches!(
+            call,
+            SessionCall::Transport { command, .. } if command == "Pause"
+        )),
+        "the first sighting of B sends no inherited pause"
     );
 }

@@ -134,8 +134,11 @@ pub(crate) fn dispatch(
     }
     let _ = ctx.owner.core.queue.set_active_slot(target);
     // The new load replaces the item the output had: the end an earlier item
-    // started belongs to the replaced load, so it ends here (design D6).
+    // started belongs to the replaced load, so it ends here (design D6), and a
+    // pause a hand-off still owed belongs to that replaced item too — the new
+    // load starts playing (review r6 P2-2).
     output.advance = None;
+    output.pending_pause = false;
     output.loaded = Some(EmbySessionLoadedItem {
         slot: target,
         item_id,
