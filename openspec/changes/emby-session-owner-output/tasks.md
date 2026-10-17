@@ -2,8 +2,8 @@
 
 ## 1. Emby client and ctrl vocabulary
 
-- [ ] 1.1 In `crates/mbv-emby`, add `SessionInfo.device_id`, parsed from `DeviceId` in `get_sessions` (`client_sessions.rs`). Verify: extend an existing session parse test in `crates/mbv-emby/tests/emby/client.rs` (the tests built on `session_response`) to assert `device_id` (contract: the device identity crosses the crate boundary).
-- [ ] 1.2 In `crates/mbv-ctrl`, rename `CastConnection` to `OutputConnection`. Add `OutputSelection::EmbySession { device_id, name }`, `OutputState::EmbySession { device_id, name, connection, audio_only, now_playing }`, `SessionNowPlaying` (item id, item type, name, series id, series name, logo tag), and the capability `emby-session-output` (design D3). No protocol version bump. Verify: in `crates/mbv-ctrl/tests/ctrl/wire.rs`, add one serde round-trip for the new selection and one for the new state. The existing `OutputState::Cast` round-trip covers the rename: serde writes variant names, not type names, so no rename test is added.
+- [x] 1.1 In `crates/mbv-emby`, add `SessionInfo.device_id`, parsed from `DeviceId` in `get_sessions` (`client_sessions.rs`). Verify: extend an existing session parse test in `crates/mbv-emby/tests/emby/client.rs` (the tests built on `session_response`) to assert `device_id` (contract: the device identity crosses the crate boundary).
+- [x] 1.2 In `crates/mbv-ctrl`, rename `CastConnection` to `OutputConnection`. Add `OutputSelection::EmbySession { device_id, name }`, `OutputState::EmbySession { device_id, name, connection, audio_only, now_playing }`, `SessionNowPlaying` (item id, item type, name, series id, series name, logo tag), and the capability `emby-session-output` (design D3). No protocol version bump. Verify: in `crates/mbv-ctrl/tests/ctrl/wire.rs`, add one serde round-trip for the new selection and one for the new state. The existing `OutputState::Cast` round-trip covers the rename: serde writes variant names, not type names, so no rename test is added.
 
 ## 2. Owner output model and hosting
 
