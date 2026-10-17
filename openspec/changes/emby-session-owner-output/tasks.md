@@ -51,5 +51,5 @@
 
 - Manual live test by the user: select a TV Session in F3, let an episode end, and check that the next slot loads. Stop early and check that nothing advances.
 - Run `make check-code-file-lines` before push.
-- Sync the delta specs and archive the change. At sync, reword the watched-session text in main specs that this change has no delta for: `queue-playback-panel` (header order and its two scenarios), `system-audio-visualizer`, `pipe-playout-latency`, `local-daemon-thin-client` (the "direct session" record and the attached-Session sentences), `daemon-playback-intents` (scope requirement), `queue-artwork-title-overlay`, and `unified-playback-queue` (the canonical-queue edit requirement).
+- When the user approves the PR for merge, sync the delta specs and archive the change. Not before. At sync, reword the watched-session text in main specs that this change has no delta for: `queue-playback-panel` (header order and its two scenarios), `system-audio-visualizer`, `pipe-playout-latency`, `local-daemon-thin-client` (the "direct session" record and the attached-Session sentences), `daemon-playback-intents` (scope requirement), `queue-artwork-title-overlay`, and `unified-playback-queue` (the canonical-queue edit requirement).
 - Close #945. Open a follow-up for the removal of the ctrl `UnifiedQueueLoadIdle` command and for adopting device autoplay.
