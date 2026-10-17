@@ -43,7 +43,9 @@ pub(crate) enum EmbySessionEvent {
     /// lookup runs on the output's worker, so its result arrives here.
     Selected {
         device_id: String,
-        result: Result<SessionInfo, String>,
+        /// Boxed because a `SessionInfo` is large and this enum crosses the
+        /// owner's event channel on every worker outcome.
+        result: Result<Box<SessionInfo>, String>,
     },
     /// One `/Sessions` poll result (design D5), stamped with the poll id so a
     /// late result from a replaced worker cannot match the current poll. The

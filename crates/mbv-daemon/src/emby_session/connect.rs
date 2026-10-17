@@ -147,12 +147,15 @@ fn dispatch_lookup(
 ) -> bool {
     let wanted = device_id.clone();
     let job: EmbySessionJob = Box::new(move |api: &dyn SessionApi| {
-        let result = api.get_sessions().and_then(|sessions| {
-            sessions
-                .into_iter()
-                .find(|session| session.device_id == wanted)
-                .ok_or_else(|| format!("no Session for the device {wanted} is listed"))
-        });
+        let result = api
+            .get_sessions()
+            .and_then(|sessions| {
+                sessions
+                    .into_iter()
+                    .find(|session| session.device_id == wanted)
+                    .ok_or_else(|| format!("no Session for the device {wanted} is listed"))
+            })
+            .map(Box::new);
         let _ = events.send(DaemonEvent::EmbySession(EmbySessionEvent::Selected {
             device_id,
             result,
@@ -167,7 +170,7 @@ fn dispatch_lookup(
 pub(super) fn handle_selected(
     daemon: &mut DaemonLoop,
     device_id: String,
-    result: Result<SessionInfo, String>,
+    result: Result<Box<SessionInfo>, String>,
 ) {
     // The pending selection is compared before it is taken: a displaced
     // selection's late lookup must not consume the live selection that a newer
@@ -184,7 +187,7 @@ pub(super) fn handle_selected(
         return;
     };
     match result {
-        Ok(session) => install_output(daemon, pending, session),
+        Ok(session) => install_output(daemon, pending, *session),
         Err(reason) => {
             tracing::warn!(
                 name: "daemon.emby_session_output.select_failed",

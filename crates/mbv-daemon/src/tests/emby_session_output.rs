@@ -509,7 +509,7 @@ pub(super) fn inject_lookup_outcome(t: &mut TestLoop, device_id: &str, session_i
     t.event_loop
         .handle_event(DaemonEvent::EmbySession(EmbySessionEvent::Selected {
             device_id: device_id.to_string(),
-            result: Ok(session(device_id, session_id)),
+            result: Ok(Box::new(session(device_id, session_id))),
         }));
 }
 
