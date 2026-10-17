@@ -11,9 +11,11 @@ use mbv_queue::QueueItem;
 
 use super::EmbySessionLoadedItem;
 use super::worker::{EmbySessionJob, SessionApi};
+use crate::DaemonEvent;
 use crate::cast::PlaybackOutput;
 use crate::core::DaemonOwnerContext;
 use crate::ctrl::CtrlClientId;
+use crate::emby_session::EmbySessionEvent;
 
 /// Why a slot cannot play on an Emby Session output (design D7): the item's
 /// name for the report, and the reason. A rejected slot is reported, never
@@ -110,11 +112,17 @@ pub(crate) fn dispatch(
         return false;
     };
     let job_item_id = item_id.clone();
+    let merged_tx = ctx.merged_tx.clone();
     let job: EmbySessionJob = Box::new(move |api: &dyn SessionApi| {
         if let Err(error) = api.play(&session_id, &job_item_id, start_ticks) {
-            // A failed play expires the load in task 4.3; here the failure is
-            // only named, because the 30 s rule still owns the report.
-            tracing::warn!(name: "daemon.emby_session_load.play_failed", target: "daemon", error = %error, "the Emby Session refused the play job");
+            // A failed play expires the load and reports the item once (design
+            // D6, D7; task 4.3): the outcome re-enters the owner's loop as an
+            // `EmbySession` event, so the report and the expiry run where the
+            // transition lives.
+            let _ = merged_tx.send(DaemonEvent::EmbySession(EmbySessionEvent::PlayFailed {
+                slot: target,
+                error,
+            }));
         }
     });
     let PlaybackOutput::EmbySession(output) = &mut ctx.owner.output else {

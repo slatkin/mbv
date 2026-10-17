@@ -24,7 +24,7 @@ mod transition_dispatch;
 
 pub(super) use transition_dispatch::{
     dispatch_slot_jump, expire_and_redispatch, reset_slot_jumps, send_jump_or_cold_start,
-    settle_and_redispatch, take_promoted_origin,
+    settle_and_redispatch, settle_remote_transition, take_promoted_origin,
 };
 
 pub(super) fn bind_ctrl_listener() -> Option<UnixListener> {

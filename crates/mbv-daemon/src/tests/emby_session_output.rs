@@ -17,7 +17,7 @@ use crate::emby_session::worker::spawn_emby_session_worker;
 
 /// The selection the TUI sends for the fake's Session: the device id keys the
 /// lookup, the name is the label the ctrl state carries.
-fn session_selection() -> OutputSelection {
+pub(super) fn session_selection() -> OutputSelection {
     OutputSelection::EmbySession {
         device_id: "device-1".to_string(),
         name: "Living room TV".to_string(),
@@ -48,7 +48,7 @@ fn loop_with_session(fake: FakeSessionApi) -> TestLoop {
 /// hook, the Emby owner context a selection needs, and a worker whose
 /// `SessionApi` is `fake`. A loop built with [`test_loop_with_queue`] calls
 /// this to keep a scripted queue while the Session is the output.
-fn host_session_output(t: &mut TestLoop, fake: FakeSessionApi) {
+pub(super) fn host_session_output(t: &mut TestLoop, fake: FakeSessionApi) {
     t.event_loop.emby_session_output = true;
     t.event_loop.emby_runtime = Some(crate::EmbyOwnerContext::from_client(
         t.event_loop.client.lock().unwrap().clone(),
@@ -62,7 +62,7 @@ fn host_session_output(t: &mut TestLoop, fake: FakeSessionApi) {
 
 /// Pumps the one `DaemonEvent::EmbySession` the selection's lookup produced
 /// into the loop.
-fn pump_session_event(t: &mut TestLoop) {
+pub(super) fn pump_session_event(t: &mut TestLoop) {
     let event = t.merged_rx.recv().expect("the worker returns the lookup");
     assert!(
         matches!(&event, DaemonEvent::EmbySession(_)),
@@ -206,7 +206,7 @@ fn session_output(fake: FakeSessionApi) -> (TestLoop, Arc<Mutex<Vec<SessionCall>
 
 /// Waits until every job queued on the Session worker has run, so a test can
 /// assert on the fake's call log without a sleep.
-fn wait_for_session_jobs(output: &PlaybackOutput) {
+pub(super) fn wait_for_session_jobs(output: &PlaybackOutput) {
     let PlaybackOutput::EmbySession(output) = output else {
         panic!("the Session is the output");
     };
@@ -224,7 +224,7 @@ fn wait_for_session_jobs(output: &PlaybackOutput) {
 
 /// Drives one poll: the tick submits it, the fake answers, and the result
 /// re-enters the loop. Returns the poll id the worker stamped.
-fn poll_once(t: &mut TestLoop, at: std::time::Instant) -> u64 {
+pub(super) fn poll_once(t: &mut TestLoop, at: std::time::Instant) -> u64 {
     t.event_loop.tick(at);
     let event = t.merged_rx.recv().expect("the poll reports a result");
     let DaemonEvent::EmbySession(EmbySessionEvent::Sessions { poll_id, .. }) = &event else {
@@ -718,7 +718,7 @@ fn playing_an_audiobookshelf_slot_on_the_session_loads_nothing_and_reports() {
 
 /// The `play` jobs the fake has recorded, in order, so a test can assert the
 /// Session received exactly the item it should.
-fn play_calls(calls: &Arc<Mutex<Vec<SessionCall>>>) -> Vec<SessionCall> {
+pub(super) fn play_calls(calls: &Arc<Mutex<Vec<SessionCall>>>) -> Vec<SessionCall> {
     calls
         .lock()
         .unwrap()

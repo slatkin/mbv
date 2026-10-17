@@ -16,6 +16,7 @@ use crate::event_loop::DaemonLoop;
 use crate::output::advance::OutputAdvance;
 
 pub(crate) mod connect;
+pub(crate) mod end;
 pub(crate) mod load;
 pub(crate) mod poll;
 pub(crate) mod worker;
@@ -50,6 +51,10 @@ pub(crate) enum EmbySessionEvent {
         poll_id: u64,
         result: Result<Vec<SessionInfo>, String>,
     },
+    /// One `play` job the device refused (design D6, D7; task 4.3): the Owner
+    /// reports the loaded item once and expires the transition the load
+    /// registered, so the load gate cannot stay wedged behind it.
+    PlayFailed { slot: QueueSlotId, error: String },
 }
 
 /// Builds the one worker an output owns (design D4). The Local daemon builds
@@ -65,6 +70,9 @@ pub(crate) fn handle_event(daemon: &mut DaemonLoop, event: EmbySessionEvent) {
         }
         EmbySessionEvent::Sessions { poll_id, result } => {
             poll::handle_sessions(daemon, poll_id, result);
+        }
+        EmbySessionEvent::PlayFailed { slot, error } => {
+            end::handle_play_failed(daemon, slot, &error);
         }
     }
 }

@@ -182,6 +182,76 @@ pub(crate) fn take_promoted_origin(
     origin
 }
 
+/// Settle the in-flight transition one remote output's observation of the
+/// loaded item closes (cast-owner-output row 5.2, emby-session-owner-output
+/// design D6/D7): the loaded slot becomes the observed active slot, the
+/// transition settles, a queued transition the settle promotes is dispatched,
+/// and the guarded play intent the load carried is applied. This mirrors the
+/// run's `TrackChanged` handling (observe → settle → publish) for both remote
+/// outputs: the Cast status poll and the Emby Session `/Sessions` poll.
+pub(crate) fn settle_remote_transition(
+    daemon: &mut crate::event_loop::DaemonLoop,
+    loaded_slot: QueueSlotId,
+) {
+    // Only the transition the loaded item belongs to settles here: a newer
+    // in-flight transition targets a slot the output has not confirmed.
+    let Some(in_flight) = daemon
+        .owner
+        .core
+        .transitions
+        .in_flight()
+        .filter(|t| t.target == loaded_slot)
+    else {
+        return;
+    };
+    let mut ctx = crate::cast::owner_context(daemon);
+    let order_before = ctx.owner.core.play_order();
+    ctx.owner.core.note_observed_active_slot(Some(loaded_slot));
+    if ctx.owner.core.play_order() != order_before {
+        forward_play_order_advance(&ctx.owner.core, ctx.player);
+    }
+    settle_and_redispatch(&mut ctx, in_flight.request_id, loaded_slot);
+    // The guarded play intent the load registered under settles with its
+    // transition; without this a remote play would sit unresolved and coalesce
+    // every later play from its connection.
+    if let Some((connection_id, request_id, generation)) = ctx
+        .owner
+        .intents
+        .current
+        .as_ref()
+        .filter(|current| {
+            current.request_id == in_flight.request_id
+                && matches!(current.action, mbv_ctrl::PlaybackIntentAction::Play { .. })
+        })
+        .map(|current| {
+            (
+                current.connection_id,
+                current.request_id,
+                current.generation,
+            )
+        })
+        && let Some(event) =
+            ctx.owner
+                .intents
+                .applied_if_current(connection_id, request_id, generation)
+    {
+        ctx.ctrl_clients
+            .lock()
+            .unwrap()
+            .send_to_client(connection_id, &CtrlEvent::PlaybackIntent(event));
+    }
+    ctx.shared_queue.publish_observed(&ctx.owner.core);
+    broadcast_queue_state(
+        ctx.ctrl_clients,
+        ctx.player,
+        ctx.shared_queue,
+        &ctx.owner.core.queue,
+        &ctx.owner.core.source,
+        &ctx.owner.core.transitions,
+        None,
+    );
+}
+
 /// Settle the in-flight transition against a Playback-run observation and, if
 /// a newer transition was queued behind it, dispatch that one now (task 3.3).
 pub(crate) fn settle_and_redispatch(
