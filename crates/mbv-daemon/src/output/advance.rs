@@ -16,7 +16,9 @@ use mbv_ctrl::{Direction, PlaybackRequestId};
 use mbv_player::owner_state::StepTarget;
 use mbv_queue::QueueSlotId;
 
+use super::PlaybackOutput;
 use crate::DaemonLoop;
+use crate::emby_session::load::SessionAdmission;
 
 /// The advance one natural end started (design D6): the step this advance has
 /// in resolve, the slot of the last failed step it is stepping over, and the
@@ -126,28 +128,82 @@ fn step_advance(daemon: &mut DaemonLoop) {
 /// slot out from under. A jump dispatches the load whose resolve outcome
 /// continues or ends the advance; the edge and a coalesced step leave the
 /// same-direction step already loading the next slot in charge.
+///
+/// The Emby Session's admission is synchronous (design D6, D7), so it runs
+/// here, before the dispatch: a rejection inside the dispatch could never
+/// match the step record this function writes after it returns, and the
+/// advance would wedge. A rejected target is reported and the next one is
+/// picked from after it, bounded by the queue length — the same report and
+/// step again a Cast resolve failure drives.
 fn step_target_advance(daemon: &mut DaemonLoop, target: StepTarget) {
-    let dispatched = match target {
-        StepTarget::Jump(slot_id) => {
-            let mut ctx = crate::cast::owner_context(daemon);
-            Some(crate::play_order::dispatch_step_target(
-                &mut ctx,
-                slot_id,
-                Direction::Next,
-            ))
-        }
-        StepTarget::Coalesced | StepTarget::AtEdge => None,
+    let StepTarget::Jump(slot_id) = target else {
+        // The edge or a coalesced step ended the advance: the output stays
+        // idle (design D6), or the step already loading the next slot takes
+        // over.
+        clear_advance(daemon);
+        return;
     };
-    if let Some(request_id) = dispatched {
-        if let Some(advance) = daemon.owner.output.advance_mut() {
-            advance.remaining -= 1;
-            advance.step_request = Some(request_id);
-        }
+    if let Some(rejected) = unplayable_step_target(daemon, slot_id) {
+        report_step_rejection(daemon, &rejected);
+        step_past_rejected_target(daemon, slot_id);
         return;
     }
-    // The edge or a coalesced step ended the advance: the output stays idle
-    // (design D6), or the step already loading the next slot takes over.
-    clear_advance(daemon);
+    let request_id = {
+        let mut ctx = crate::cast::owner_context(daemon);
+        crate::play_order::dispatch_step_target(&mut ctx, slot_id, Direction::Next)
+    };
+    if let Some(advance) = daemon.owner.output.advance_mut() {
+        advance.remaining -= 1;
+        advance.step_request = Some(request_id);
+    }
+}
+
+/// The reason the active output cannot play `slot`, when it is an Emby Session
+/// and the item fails its admission (design D6, D7). Only the Emby Session
+/// needs this check ahead of the dispatch: its load reports a rejection
+/// synchronously, while a Cast resolve failure re-enters the loop as an event
+/// and reaches `step_failed`.
+fn unplayable_step_target(daemon: &DaemonLoop, slot: QueueSlotId) -> Option<SessionAdmission> {
+    let PlaybackOutput::EmbySession(output) = &daemon.owner.output else {
+        return None;
+    };
+    let item = &daemon.owner.core.queue.slot(slot)?.item;
+    crate::emby_session::load::admit(item, &output.playable_media_types).err()
+}
+
+/// Reports a step target the Session cannot play (design D6, D7). The owner
+/// issued the step itself, so the item and the reason go to every Client, as
+/// a Cast advance's uncastable slot is reported.
+fn report_step_rejection(daemon: &DaemonLoop, rejected: &SessionAdmission) {
+    tracing::warn!(
+        name: "daemon.emby_session_advance.step_over",
+        target: "daemon",
+        item = %rejected.item,
+        reason = %rejected.reason,
+        "the advance's step target cannot play on the Emby Session; stepping over it"
+    );
+    crate::core::broadcast(
+        &daemon.ctrl_clients,
+        &mbv_ctrl::CtrlEvent::CommandRejected(format!("{} ({})", rejected.item, rejected.reason)),
+    );
+}
+
+/// Steps past a slot the Session cannot play (design D6, D7): the attempt is
+/// spent, so the queue length still bounds the loop, and the next target is
+/// resolved from after the rejected slot.
+fn step_past_rejected_target(daemon: &mut DaemonLoop, slot_id: QueueSlotId) {
+    let remaining = match daemon.owner.output.advance_mut() {
+        Some(advance) => {
+            advance.remaining = advance.remaining.saturating_sub(1);
+            advance.remaining
+        }
+        None => return,
+    };
+    if remaining == 0 {
+        clear_advance(daemon);
+        return;
+    }
+    continue_after_failed_step(daemon, slot_id);
 }
 
 /// Ends the advance without a step: the queue has no target for it, or a

@@ -16,14 +16,68 @@
 use std::time::{Duration, Instant};
 
 use mbv_ctrl::CtrlEvent;
+use mbv_emby::SessionInfo;
 use mbv_queue::QueueSlotId;
 
+use super::EmbySessionOutput;
 use crate::DaemonLoop;
 use crate::cast::PlaybackOutput;
 
 /// How long a load may go without an observation presenting it before the
 /// Owner reports that it never started (design D6, task 4.3).
 pub(crate) const EMBY_SESSION_LOAD_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// How close to the runtime the estimated position must be for an idle
+/// Session to count as the loaded item's natural end (design D6, spec "The
+/// owner infers a natural end on an Emby Session"): Emby reports no end
+/// reason, so a stop this near the end is the item's end.
+pub(crate) const EMBY_SESSION_END_MARGIN_TICKS: i64 = 10 * mbv_emby_model::TICKS_PER_SECOND;
+
+/// Applies the idle rows of design D6's end table to one observation (task
+/// 5.2), before that observation replaces the one the position estimate reads:
+/// an idle Session after a sighting of the loaded item ends it whatever the
+/// position. Near the runtime it is the natural end the Owner advances from;
+/// earlier it is a stop on the device, which presents no active playback and
+/// advances nothing. `end_handled` records either outcome, so the second poll
+/// of the same idle advances at most once.
+///
+/// Returns whether this observation ended the loaded item naturally. An idle
+/// Session before the loaded item was ever presented is not an end (the 30 s
+/// failure rule owns that case), and a Session that presents an item the Owner
+/// did not load ends nothing (design D6's last row).
+pub(crate) fn ended_naturally(
+    output: &mut EmbySessionOutput,
+    session: &SessionInfo,
+    now: Instant,
+) -> bool {
+    if session.now_playing_item_id.is_some() {
+        return false;
+    }
+    let unhandled_sighting = output
+        .loaded
+        .as_ref()
+        .is_some_and(|loaded| loaded.seen_playing && !loaded.end_handled);
+    if !unhandled_sighting {
+        return false;
+    }
+    let runtime = output.presented_runtime_ticks();
+    let estimate = output.estimate_ticks(now);
+    if let Some(loaded) = output.loaded.as_mut() {
+        loaded.end_handled = true;
+    }
+    // A loaded slot whose queue item and Session both report no runtime has no
+    // end to infer (design D6, risks): the idle counts as a stop on the device.
+    runtime > 0 && estimate.saturating_add(EMBY_SESSION_END_MARGIN_TICKS) >= runtime
+}
+
+/// Handles the natural-end row of design D6's end table (task 5.2): the shared
+/// advance records the ended slot's completion through `record_completed_slot`
+/// and steps the queue through `OutputAdvance`, which reports and steps past a
+/// slot this output cannot play. It is the same advance a Cast natural end
+/// starts, so the two outputs never drift apart.
+pub(crate) fn advance_from_natural_end(daemon: &mut DaemonLoop) {
+    crate::output::advance::begin_advance(daemon);
+}
 
 /// Settles the in-flight transition that the observation presenting the
 /// loaded item closes (design D6, D7). The settle promotes a step queued
