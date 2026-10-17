@@ -11,8 +11,8 @@ and detach from that owner when the user accepts.
 
 Fall-through SHALL apply when the client is attached to a Player owner that the
 client knows cannot play the selection: a ctrl-attached daemon that advertised
-audio-only, or an Emby session the client controls whose advertised playable
-media types exclude the selection's media kind. It SHALL NOT apply through a
+audio-only, or a local owner whose Emby Session output advertises playable
+media types that exclude the selection's media kind. It SHALL NOT apply through a
 Library route, through a session the client does not control, or to an owner
 whose playable-media capability the client does not know.
 
@@ -25,7 +25,7 @@ whose playable-media capability the client does not know.
 - **THEN** the client SHALL treat that play as eligible for fall-through
 
 #### Scenario: Emby session owner is eligible
-- **WHEN** the client controls an Emby session whose advertised playable media types are audio only and the user explicitly plays a video
+- **WHEN** the local owner's output is an Emby Session whose advertised playable media types are audio only and the user explicitly plays a video
 - **THEN** the client SHALL treat that play as eligible for fall-through
 
 #### Scenario: Library route is ineligible
@@ -95,8 +95,8 @@ SHALL retain the enqueue behavior the client already has for the attached owner.
 
 The client SHALL retain each attached owner's advertised playable-media
 capability and consult it before routing an explicit play. A ctrl peer's
-audio-only advertisement and a controlled Emby session's advertised playable
-media types SHALL both be available to that decision. An owner that advertises
+audio-only advertisement and the advertised playable media types of the owner's
+Emby Session output SHALL both be available to that decision. An owner that advertises
 no playable-media capability SHALL be treated as able to play the selection, and
 an advertised capability the client does not recognize SHALL NOT prevent the
 connection.
@@ -110,8 +110,8 @@ connection.
 - **THEN** the client SHALL treat that owner as able to play the selection
 
 #### Scenario: Emby session advertises audio playable media types only
-- **WHEN** the client's session list reports a session whose playable media types are audio only
-- **THEN** the client SHALL treat that owner as unable to play video
+- **WHEN** the owner presents an Emby Session output whose playable media types are audio only
+- **THEN** the client SHALL treat that owner as unable to play video while that Session is the output
 
 #### Scenario: Unrecognized advertised capability
 - **WHEN** a peer's handshake advertises a capability the client does not recognize
@@ -124,7 +124,8 @@ When the prompt is accepted, the client SHALL stop the attached owner, then end
 the attachment, then play the selection as local playback. It SHALL stop the
 owner rather than pause it, so the owner does not keep playing underneath the
 local item, and it SHALL NOT control, command, or present that owner's Bound
-queue after the fall-through.
+queue after the fall-through. For an Emby Session output, ending the attachment
+SHALL return the local owner's output to local playback.
 
 #### Scenario: Playing a film locally
 - **WHEN** the user confirms playing a film locally while attached to an audio-only owner
@@ -134,9 +135,9 @@ queue after the fall-through.
 - **THEN** the client SHALL NOT present the owner's Bound queue
 
 #### Scenario: Emby session owner
-- **WHEN** the user confirms playing a film locally while controlling an audio-only Emby session
-- **THEN** the client SHALL stop that session's playback
-- **THEN** the client SHALL end the session control relationship
+- **WHEN** the user confirms playing a film locally while the local owner's output is an audio-only Emby Session
+- **THEN** the client SHALL stop playback on the Session
+- **THEN** the client SHALL select local playback as the owner's output
 - **THEN** the client SHALL play the selection as local playback
 
 #### Scenario: Former owner after the fall-through
