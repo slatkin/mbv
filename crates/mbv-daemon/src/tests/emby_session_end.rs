@@ -8,13 +8,12 @@
 
 use std::time::Instant;
 
-use super::cast_output::{connect_output_client_with_caps, select_output};
-use super::cast_playback::drained_events;
-use super::emby_session_output::{
-    host_session_output, play_calls, poll_once, pump_session_event, session_selection,
-    wait_for_session_jobs,
+use super::cast_output::connect_output_client_with_caps;
+use super::emby_session_output::{play_calls, poll_once, wait_for_session_jobs};
+use super::emby_session_support::{
+    play, play_slot, rejections, session_output_with_queue, session_presenting_at, timed,
 };
-use super::r#loop::{TestLoop, test_loop_with_queue};
+use super::r#loop::TestLoop;
 use super::*;
 
 use crate::cast::PlaybackOutput;
@@ -30,76 +29,10 @@ const SECOND_TICKS: i64 = mbv_emby_model::TICKS_PER_SECOND;
 /// The 600 seconds of media every scripted item carries.
 const RUNTIME_TICKS: i64 = 600 * SECOND_TICKS;
 
-/// An Emby queue item with a runtime, so the end rule has one to compare the
-/// position estimate with.
-fn timed(name: &str, runtime_ticks: i64) -> QueueItem {
-    let mut emby = item(name, "Video", "Movie");
-    emby.runtime_ticks = runtime_ticks;
-    QueueItem::Emby(Box::new(emby))
-}
-
-/// The Session entry that presents the loaded item at `position_ticks` of
-/// `runtime_ticks` — the sighting that makes an idle Session an end.
-fn session_presenting_at(item_id: &str, position_ticks: i64, runtime_ticks: i64) -> SessionInfo {
-    SessionInfo {
-        now_playing: Some(item_id.to_string()),
-        now_playing_item_id: Some(item_id.to_string()),
-        now_playing_item_type: Some("Movie".to_string()),
-        position_ticks,
-        runtime_ticks,
-        ..session("device-1", "session-1")
-    }
-}
-
 /// The Session entry of a device that presents nothing: the idle observation
 /// the end table reads.
 fn idle_session() -> SessionInfo {
     session("device-1", "session-1")
-}
-
-/// The one `play` call the Session receives for `item_ids` (design D7, D14),
-/// from the start: the active item and, when the queue has one, the next
-/// admissible slot beside it.
-fn play(item_ids: &[&str]) -> SessionCall {
-    SessionCall::Play {
-        session_id: "session-1".to_string(),
-        item_ids: item_ids.iter().map(|id| (*id).to_string()).collect(),
-        start_ticks: 0,
-    }
-}
-
-/// Selects the fake's Session as the output over a scripted queue, returning
-/// the loop, the fake's call log, and the selecting Client's event receiver.
-fn session_output_with_queue(
-    fake: FakeSessionApi,
-    items: Vec<QueueItem>,
-) -> (
-    TestLoop,
-    Arc<Mutex<Vec<SessionCall>>>,
-    mpsc::Receiver<CtrlOutbound>,
-) {
-    let calls = fake.calls();
-    let mut t = test_loop_with_queue(DaemonRole::Local, items, 0);
-    host_session_output(&mut t, fake);
-    let (client_id, reply_tx, rx) =
-        connect_output_client_with_caps(&t.event_loop.ctrl_clients, true, true);
-    select_output(&mut t, client_id, &reply_tx, session_selection());
-    pump_session_event(&mut t);
-    (t, calls, rx)
-}
-
-/// Plays `slot` through the queue's own play-slot command and lets the
-/// Session's job run.
-fn play_slot(t: &mut TestLoop, client_id: u64, slot: mbv_queue::QueueSlotId) {
-    t.event_loop.handle_event(DaemonEvent::Ctrl(
-        CtrlCmd::UnifiedQueuePlaySlot {
-            slot_id: mbv_ctrl::slot_id_to_u64(slot),
-            op: None,
-        },
-        client_id,
-        mpsc::channel().0,
-    ));
-    wait_for_session_jobs(&t.event_loop.owner.output);
 }
 
 /// The queue's slot ids, in order.
@@ -123,17 +56,6 @@ fn end_handled(t: &TestLoop) -> bool {
         .loaded
         .as_ref()
         .is_some_and(|loaded| loaded.end_handled)
-}
-
-/// The `CommandRejected` reports a client received, in order.
-fn rejections(rx: &mpsc::Receiver<CtrlOutbound>) -> Vec<String> {
-    drained_events(rx)
-        .into_iter()
-        .filter_map(|event| match event {
-            CtrlEvent::CommandRejected(reason) => Some(reason),
-            _ => None,
-        })
-        .collect()
 }
 
 /// Contract: row 5.2 / design D6 and spec "The owner infers a natural end on

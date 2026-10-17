@@ -70,5 +70,6 @@ mod emby_session_handoff;
 mod emby_session_load;
 mod emby_session_output;
 mod emby_session_status;
+mod emby_session_support;
 mod emby_session_transport;
 mod r#loop;

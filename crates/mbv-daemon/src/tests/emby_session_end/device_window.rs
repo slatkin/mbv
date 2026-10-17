@@ -7,30 +7,10 @@
 // slot stops it. The polls are driven with their own injected times, so no test
 // waits.
 
+use super::super::emby_session_support::{play_last, play_last_calls, remove_slot};
 use super::*;
 
 use mbv_player::owner_state::StepTarget;
-
-/// The one `play_last` call the Session receives for `item_ids` (design D14),
-/// the slot the device holds after the active one.
-fn play_last(item_ids: &[&str]) -> SessionCall {
-    SessionCall::PlayLast {
-        session_id: "session-1".to_string(),
-        item_ids: item_ids.iter().map(|id| (*id).to_string()).collect(),
-    }
-}
-
-/// The `play_last` calls the Session received, in order: the slots the Owner
-/// appended to the device (design D14).
-fn play_last_calls(calls: &Arc<Mutex<Vec<SessionCall>>>) -> Vec<SessionCall> {
-    calls
-        .lock()
-        .unwrap()
-        .iter()
-        .filter(|call| matches!(call, SessionCall::PlayLast { .. }))
-        .cloned()
-        .collect()
-}
 
 /// The one `transport("Stop")` call the Session receives (design D14).
 fn stop() -> SessionCall {
@@ -49,19 +29,6 @@ fn transport_calls(calls: &Arc<Mutex<Vec<SessionCall>>>) -> Vec<SessionCall> {
         .filter(|call| matches!(call, SessionCall::Transport { .. }))
         .cloned()
         .collect()
-}
-
-/// Removes `slot` from the owner's queue through the queue edit command, so a
-/// test drives a queue edit after the load put the slot on the device.
-fn remove_slot(t: &mut TestLoop, client_id: u64, slot: mbv_queue::QueueSlotId) {
-    t.event_loop.handle_event(DaemonEvent::Ctrl(
-        CtrlCmd::UnifiedQueueRemoveSlot {
-            slot_id: mbv_ctrl::slot_id_to_u64(slot),
-            op: None,
-        },
-        client_id,
-        mpsc::channel().0,
-    ));
 }
 
 /// Appends `item` to the owner's queue through the queue edit command.

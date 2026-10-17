@@ -82,6 +82,17 @@ fn capture_local_handoff(daemon: &DaemonLoop) -> Option<HandoffPlayback> {
     })
 }
 
+/// Hands `slot` over at the presented position and pause state, while the
+/// output presents it as playing. An idle or stopped output hands nothing over.
+fn presented_handoff(daemon: &DaemonLoop, slot: QueueSlotId) -> Option<HandoffPlayback> {
+    let status = daemon.player.status.lock().unwrap();
+    status.active.then(|| HandoffPlayback {
+        slot,
+        start_ticks: status.position_ticks,
+        paused: status.paused,
+    })
+}
+
 /// Captures the Cast output's active playback (design D10 step 1, row 7.1
 /// dispatch B): the loaded slot with the presented position and pause state —
 /// the last receiver report extrapolated, never a fresh poll. The presented
@@ -93,12 +104,7 @@ fn capture_cast_handoff(daemon: &DaemonLoop) -> Option<HandoffPlayback> {
         return None;
     };
     let loaded = cast.loaded.as_ref()?;
-    let status = daemon.player.status.lock().unwrap();
-    status.active.then(|| HandoffPlayback {
-        slot: loaded.slot,
-        start_ticks: status.position_ticks,
-        paused: status.paused,
-    })
+    presented_handoff(daemon, loaded.slot)
 }
 
 /// Captures the Emby Session output's active playback (design D11): the loaded
@@ -114,12 +120,7 @@ fn capture_emby_session_handoff(daemon: &DaemonLoop) -> Option<HandoffPlayback> 
     if !crate::emby_session::presents_item(session.last_observation.as_ref(), &loaded.item_id) {
         return None;
     }
-    let status = daemon.player.status.lock().unwrap();
-    status.active.then(|| HandoffPlayback {
-        slot: loaded.slot,
-        start_ticks: status.position_ticks,
-        paused: status.paused,
-    })
+    presented_handoff(daemon, loaded.slot)
 }
 
 /// Stops the old output for a successful swap (design D10 step 3): the local

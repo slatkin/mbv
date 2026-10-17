@@ -9,9 +9,9 @@ use std::time::Instant;
 use mbv_ctrl::{Direction, WireCommand};
 use mbv_emby_model::seconds_to_ticks;
 
-use super::EmbySessionOutput;
 use super::status::EMBY_SESSION_VOLUME_MAX;
 use super::worker::SessionApi;
+use super::{EmbySessionOutput, presents_item};
 
 /// Routes one wire command onto the Session (design D9). `SetSub(0)` (off)
 /// becomes the Emby disabled index −1, a relative `Seek` starts from the D6
@@ -122,35 +122,21 @@ pub(crate) fn route_step(session: &mut EmbySessionOutput, direction: Direction) 
 /// Whether the Session plays an item the Owner did not load (design D6, D9):
 /// the observation presents an item, and it is not the loaded item.
 fn plays_foreign_item(session: &EmbySessionOutput) -> bool {
-    if !has_presented_item(session) {
-        return false;
-    }
-    !plays_loaded_item(session)
+    session
+        .last_observation
+        .as_ref()
+        .is_some_and(|observed| observed.now_playing_item_id.is_some())
+        && !plays_loaded_item(session)
 }
 
 /// Whether the device currently presents the item the Owner loaded (design
 /// D6, D9, D11): the observation's now-playing item is the loaded one. A
 /// missing observation and an idle Session present nothing.
 fn plays_loaded_item(session: &EmbySessionOutput) -> bool {
-    let Some(item_id) = session
-        .last_observation
-        .as_ref()
-        .and_then(|observed| observed.now_playing_item_id.as_deref())
-    else {
-        return false;
-    };
     session
         .loaded
         .as_ref()
-        .is_some_and(|loaded| loaded.item_id == item_id)
-}
-
-/// Whether the observation presents any item at all.
-fn has_presented_item(session: &EmbySessionOutput) -> bool {
-    session
-        .last_observation
-        .as_ref()
-        .is_some_and(|observed| observed.now_playing_item_id.is_some())
+        .is_some_and(|loaded| presents_item(session.last_observation.as_ref(), &loaded.item_id))
 }
 
 /// Stops the item the Owner loaded on the Session (design D9, D11; task 6.2):

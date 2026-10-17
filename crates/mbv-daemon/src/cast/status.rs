@@ -202,13 +202,12 @@ pub(crate) fn refresh_presentation(daemon: &mut DaemonLoop, now: Instant) {
     } else {
         Duration::ZERO
     };
-    let base = daemon.player.status.lock().unwrap().clone();
-    let presented = presented_player_status(
-        &base,
+    let mut status = daemon.player.status.lock().unwrap();
+    *status = presented_player_status(
+        &status,
         &daemon.owner.core.queue,
         cast.loaded.as_ref(),
         cast.last_status.as_ref(),
         elapsed,
     );
-    *daemon.player.status.lock().unwrap() = presented;
 }

@@ -159,13 +159,7 @@ fn correct_stale_device_advance(
     // window the load sends.
     observe_slot(daemon, slot);
     let (after, after_stepped) = window(daemon, slot);
-    let runtime_ticks = daemon
-        .owner
-        .core
-        .queue
-        .slot(slot)
-        .and_then(|slot| slot.item.as_emby())
-        .map_or(0, |item| item.runtime_ticks);
+    let runtime_ticks = slot_runtime_ticks(&daemon.owner.core.queue, slot);
     let start_ticks =
         mbv_player::resume_ticks_for_slot(&daemon.owner.core.queue, slot).unwrap_or(0);
     let load = crate::emby_session::load::SessionLoad {
@@ -232,13 +226,7 @@ fn reset_loaded_item(daemon: &mut DaemonLoop, now: Instant) {
     let Some(slot) = queued_slot else {
         return;
     };
-    let runtime_ticks = daemon
-        .owner
-        .core
-        .queue
-        .slot(slot)
-        .and_then(|queued| queued.item.as_emby())
-        .map_or(0, |item| item.runtime_ticks);
+    let runtime_ticks = slot_runtime_ticks(&daemon.owner.core.queue, slot);
     let PlaybackOutput::EmbySession(output) = &mut daemon.owner.output else {
         return;
     };
@@ -273,6 +261,15 @@ fn append_next_slot(daemon: &mut DaemonLoop, active: QueueSlotId) {
     if crate::emby_session::load::submit_play_last(output, slot, item_id) {
         crate::emby_session::load::report_stepped_slots(&daemon.ctrl_clients, &stepped);
     }
+}
+
+/// The runtime of the Emby item in `slot`, in ticks; 0 when the slot is gone or
+/// holds no Emby item.
+fn slot_runtime_ticks(queue: &mbv_queue::PlaybackQueue, slot: QueueSlotId) -> i64 {
+    queue
+        .slot(slot)
+        .and_then(|slot| slot.item.as_emby())
+        .map_or(0, |item| item.runtime_ticks)
 }
 
 /// The window the queue puts after `active` on the Session output (design D14):

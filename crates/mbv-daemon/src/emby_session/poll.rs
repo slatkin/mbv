@@ -124,23 +124,23 @@ pub(super) fn handle_sessions(
     // move stale before it is judged. An observation of the loaded item that
     // does not move settles its transition (design D6, D7, task 4.3), and a
     // step queued behind the load then dispatches.
-    if observation.is_some() {
+    if let Some(observation) = observation {
         super::load::check_queued_next(daemon);
-    }
-    if let Some(advance) = observation.and_then(|observation| observation.device_advance) {
-        crate::output::advance::apply_device_advance(daemon, advance, now);
-    } else if let Some(loaded_slot) = observation.and_then(|observation| observation.presented) {
-        super::end::settle_loaded_item(daemon, loaded_slot);
-        // The first sighting is also when a hand-off's pause applies (design
-        // D9, task 6.1): a `play` job cannot start paused.
-        apply_pending_pause(daemon);
-    }
-    // The observation that went idle after a sighting of the loaded item ends
-    // it (design D6, task 5.2): near the runtime the owner records its
-    // completion and steps the queue, and earlier it presents nothing and
-    // advances nothing.
-    if observation.is_some_and(|observation| observation.ended_naturally) {
-        super::end::advance_from_natural_end(daemon);
+        if let Some(advance) = observation.device_advance {
+            crate::output::advance::apply_device_advance(daemon, advance, now);
+        } else if let Some(loaded_slot) = observation.presented {
+            super::end::settle_loaded_item(daemon, loaded_slot);
+            // The first sighting is also when a hand-off's pause applies (design
+            // D9, task 6.1): a `play` job cannot start paused.
+            apply_pending_pause(daemon);
+        }
+        // The observation that went idle after a sighting of the loaded item ends
+        // it (design D6, task 5.2): near the runtime the owner records its
+        // completion and steps the queue, and earlier it presents nothing and
+        // advances nothing.
+        if observation.ended_naturally {
+            super::end::advance_from_natural_end(daemon);
+        }
     }
     // An observation that does not show the loaded item is also when the 30 s
     // load timeout is measured (design D6); this poll's own reading is the

@@ -12,6 +12,10 @@ use super::emby_session_output::{
     host_session_output, inject_lookup_outcome, loop_with_injected_lookups, play_calls, poll_once,
     pump_session_event, session_selection, wait_for_session_jobs,
 };
+use super::emby_session_support::{
+    play, play_at, play_last, play_last_calls, play_slot, remove_slot, session_output_with_queue,
+    session_presenting_at, timed,
+};
 use super::r#loop::{TestLoop, test_loop_with_queue};
 use super::*;
 
@@ -25,14 +29,6 @@ use mbv_emby::SessionInfo;
 
 /// One second of media in ticks.
 const SECOND_TICKS: i64 = mbv_emby_model::TICKS_PER_SECOND;
-
-/// An Emby queue item with a runtime, so the position estimate is capped and
-/// the captured hand-off position is predictable.
-fn timed(name: &str, runtime_ticks: i64) -> QueueItem {
-    let mut emby = item(name, "Video", "Movie");
-    emby.runtime_ticks = runtime_ticks;
-    QueueItem::Emby(Box::new(emby))
-}
 
 /// Stamps the Local output as playing `slot` at `position_ticks`, in the pause
 /// state `paused` — the presented state a live local run produces, and the
@@ -51,52 +47,6 @@ fn local_playing(
     status.active = true;
     status.position_ticks = position_ticks;
     status.paused = paused;
-}
-
-/// The Session entry that presents `item_id` at `position_ticks`.
-fn session_presenting_at(item_id: &str, position_ticks: i64, runtime_ticks: i64) -> SessionInfo {
-    SessionInfo {
-        now_playing: Some(item_id.to_string()),
-        now_playing_item_id: Some(item_id.to_string()),
-        now_playing_item_type: Some("Movie".to_string()),
-        position_ticks,
-        runtime_ticks,
-        ..session("device-1", "session-1")
-    }
-}
-
-/// Selects the fake's Session as the output over a scripted queue, returning
-/// the loop, the fake's call log, and the selecting Client's event receiver.
-fn session_output_with_queue(
-    fake: FakeSessionApi,
-    items: Vec<QueueItem>,
-) -> (
-    TestLoop,
-    Arc<Mutex<Vec<SessionCall>>>,
-    mpsc::Receiver<CtrlOutbound>,
-) {
-    let calls = fake.calls();
-    let mut t = test_loop_with_queue(DaemonRole::Local, items, 0);
-    host_session_output(&mut t, fake);
-    let (client_id, reply_tx, rx) =
-        connect_output_client_with_caps(&t.event_loop.ctrl_clients, true, true);
-    select_output(&mut t, client_id, &reply_tx, session_selection());
-    pump_session_event(&mut t);
-    (t, calls, rx)
-}
-
-/// Plays `slot` through the queue's own play-slot command and lets the
-/// Session's job run.
-fn play_slot(t: &mut TestLoop, client_id: u64, slot: mbv_queue::QueueSlotId) {
-    t.event_loop.handle_event(DaemonEvent::Ctrl(
-        CtrlCmd::UnifiedQueuePlaySlot {
-            slot_id: mbv_ctrl::slot_id_to_u64(slot),
-            op: None,
-        },
-        client_id,
-        mpsc::channel().0,
-    ));
-    wait_for_session_jobs(&t.event_loop.owner.output);
 }
 
 /// The Session worker's sender, kept after an output swap so a test can wait
@@ -381,42 +331,6 @@ fn selecting_local_while_foreign_content_plays_sends_no_stop() {
     );
 }
 
-/// The one `play` call the Session receives for `item_ids`, from the start:
-/// the load's window (design D14) or the exit hand-over's reload (design D15).
-fn play(item_ids: &[&str]) -> SessionCall {
-    play_at(item_ids, 0)
-}
-
-/// The one `play` call the Session receives for `item_ids` from
-/// `start_ticks`.
-fn play_at(item_ids: &[&str], start_ticks: i64) -> SessionCall {
-    SessionCall::Play {
-        session_id: "session-1".to_string(),
-        item_ids: item_ids.iter().map(|id| (*id).to_string()).collect(),
-        start_ticks,
-    }
-}
-
-/// The one `play_last` call the Session receives for `item_ids` (design D15):
-/// the slots appended after the item the device holds next.
-fn play_last(item_ids: &[&str]) -> SessionCall {
-    SessionCall::PlayLast {
-        session_id: "session-1".to_string(),
-        item_ids: item_ids.iter().map(|id| (*id).to_string()).collect(),
-    }
-}
-
-/// The `play_last` calls the Session received, in order.
-fn play_last_calls(calls: &Arc<Mutex<Vec<SessionCall>>>) -> Vec<SessionCall> {
-    calls
-        .lock()
-        .unwrap()
-        .iter()
-        .filter(|call| matches!(call, SessionCall::PlayLast { .. }))
-        .cloned()
-        .collect()
-}
-
 /// The Session entry that presents `item_id` paused at `position_ticks`, so the
 /// exit hand-over's position estimate is the observed position itself — a
 /// paused Session adds no elapsed time (design D6).
@@ -425,20 +339,6 @@ fn session_paused_at(item_id: &str, position_ticks: i64, runtime_ticks: i64) -> 
         is_paused: true,
         ..session_presenting_at(item_id, position_ticks, runtime_ticks)
     }
-}
-
-/// Removes `slot` from the owner's queue through the queue edit command, so a
-/// test drives the queue edit that makes the queued next item stale (design
-/// D14).
-fn remove_slot(t: &mut TestLoop, client_id: u64, slot: mbv_queue::QueueSlotId) {
-    t.event_loop.handle_event(DaemonEvent::Ctrl(
-        CtrlCmd::UnifiedQueueRemoveSlot {
-            slot_id: mbv_ctrl::slot_id_to_u64(slot),
-            op: None,
-        },
-        client_id,
-        mpsc::channel().0,
-    ));
 }
 
 /// The queue's slot ids, in order.

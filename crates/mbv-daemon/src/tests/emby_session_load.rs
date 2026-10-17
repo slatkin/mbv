@@ -11,6 +11,7 @@ use super::emby_session_output::{
     host_session_output, play_calls, poll_once, pump_session_event, session_selection,
     wait_for_session_jobs,
 };
+use super::emby_session_support::{play, play_slot, rejections};
 use super::r#loop::{TestLoop, test_loop_with_queue};
 use super::*;
 
@@ -27,16 +28,6 @@ fn session_playing(device_id: &str, session_id: &str, item_id: &str) -> SessionI
         now_playing: Some(item_id.to_string()),
         now_playing_item_id: Some(item_id.to_string()),
         ..session(device_id, session_id)
-    }
-}
-
-/// The `play` call the Session receives for `item_ids` (design D7, D14), from
-/// the start: the active item and the next admissible slot beside it.
-fn play(item_ids: &[&str]) -> SessionCall {
-    SessionCall::Play {
-        session_id: "session-1".to_string(),
-        item_ids: item_ids.iter().map(|id| (*id).to_string()).collect(),
-        start_ticks: 0,
     }
 }
 
@@ -57,20 +48,6 @@ fn session_output_with_queue(
     (t, calls)
 }
 
-/// Plays `slot` through the queue's own play-slot command (the transition an
-/// explicit play registers) and lets the Session's job run.
-fn play_slot(t: &mut TestLoop, client_id: u64, slot: mbv_queue::QueueSlotId) {
-    t.event_loop.handle_event(DaemonEvent::Ctrl(
-        CtrlCmd::UnifiedQueuePlaySlot {
-            slot_id: mbv_ctrl::slot_id_to_u64(slot),
-            op: None,
-        },
-        client_id,
-        mpsc::channel().0,
-    ));
-    wait_for_session_jobs(&t.event_loop.owner.output);
-}
-
 /// The time the Session's loaded item was sent, so a test can drive the
 /// injected tick clock from it instead of waiting.
 fn loaded_at(t: &TestLoop) -> std::time::Instant {
@@ -82,17 +59,6 @@ fn loaded_at(t: &TestLoop) -> std::time::Instant {
         .as_ref()
         .expect("the Session holds a loaded item")
         .loaded_at
-}
-
-/// The `CommandRejected` reports a client received, in order.
-fn rejections(rx: &mpsc::Receiver<CtrlOutbound>) -> Vec<String> {
-    drained_events(rx)
-        .into_iter()
-        .filter_map(|event| match event {
-            CtrlEvent::CommandRejected(reason) => Some(reason),
-            _ => None,
-        })
-        .collect()
 }
 
 /// Contract: row 4.3 / design D6 and D7 — an observation that presents the

@@ -36,9 +36,8 @@ pub(crate) fn refresh_presentation(daemon: &mut DaemonLoop, now: Instant) {
     let PlaybackOutput::EmbySession(output) = &daemon.owner.output else {
         return;
     };
-    let base = daemon.player.status.lock().unwrap().clone();
-    let presented = presented_player_status(&base, &daemon.owner.core.queue, output, now);
-    *daemon.player.status.lock().unwrap() = presented;
+    let mut status = daemon.player.status.lock().unwrap();
+    *status = presented_player_status(&status, &daemon.owner.core.queue, output, now);
 }
 
 /// The Owner's presented `PlayerStatus` for the Session output's current
