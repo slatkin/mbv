@@ -56,14 +56,14 @@ Every buffering deadline SHALL be bound to its control connection and Play gener
 - **THEN** the expiration has no effect on B or authoritative playback state
 
 ### Requirement: Pipe latency presentation is route-specific
-Startup phase and buffering presentation SHALL appear only for a TUI directly controlling pipe-output `mbvd`. Local playback, the Emby Session output, and non-pipe daemon output SHALL retain existing presentation.
+Startup phase and buffering presentation SHALL appear only for a TUI directly controlling pipe-output `mbvd`. Local playback, attached Emby sessions, and non-pipe daemon output SHALL retain existing presentation.
 
 #### Scenario: Direct pipe-output route is active
 - **WHEN** the TUI has a pending Play against pipe-output `mbvd`
 - **THEN** it presents the current phase and any configured approximate remaining delay
 
 #### Scenario: Another playback route is active
-- **WHEN** playback is local, on the Emby Session output, or non-pipe daemon output
+- **WHEN** playback is local, attached to Emby, or non-pipe daemon output
 - **THEN** pipe phases and delay estimates are not presented
 
 ### Requirement: Phase timing is diagnosable

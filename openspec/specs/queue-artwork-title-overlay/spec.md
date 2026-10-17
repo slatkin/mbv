@@ -11,7 +11,7 @@ artwork or the header row carries the title.
 ### Requirement: The title is drawn onto live queue artwork
 
 While the queue column's visual slot shows real artwork through the configured Kitty, Sixel or
-iTerm2 image protocol and local playback or the Emby Session output is active (paused included), the now-playing title SHALL be drawn onto the
+iTerm2 image protocol and local or watched playback is active (paused included), the now-playing title SHALL be drawn onto the
 artwork itself, over a scrim. A title with no context part SHALL be drawn as one row at the top
 of the artwork, unless it splits across two rows under the one-part split rule. A title with a context part (artist and song, show and episode) SHALL be drawn
 as two rows: the context part at the top and the title part at the bottom. Each row SHALL be a
@@ -121,21 +121,21 @@ the title.
 - **WHEN** the title contains a character the embedded font has no glyph for
 - **THEN** no title is drawn onto the artwork for that track and the header row carries it
 
-#### Scenario: Playing on the Emby Session output
+#### Scenario: Playing on a remote target
 
-- **WHEN** an item plays on the owner's Emby Session output that the Owner did not load, and
+- **WHEN** an item plays on a watched remote Emby session with no local queue slot, and
   the card shows that item's artwork
 - **THEN** the title is drawn onto the artwork with the same part split local playback draws:
-  an episode whose now-playing report carries a series name draws the show name as the context part
+  an episode whose session payload carries a series name draws the show name as the context part
   and the episode name as the title part, and any other item draws a one-part title from the
-  now-playing name
+  session's now-playing name
 - **AND** the header row carries no title text
 
-#### Scenario: The now-playing report lacks the series name
+#### Scenario: Remote session payload lacks the series name
 
-- **WHEN** an episode plays on the owner's Emby Session output that the Owner did not load and its
-  now-playing report carries no series name
-- **THEN** the title is drawn onto the artwork as a one-part title from the
+- **WHEN** an episode plays on a watched remote Emby session with no local queue slot and its
+  session payload carries no series name
+- **THEN** the title is drawn onto the artwork as a one-part title from the session's
   now-playing name
 
 #### Scenario: Dimmed backdrop does not flip the site
@@ -151,11 +151,10 @@ logo SHALL be drawn in the upper-left corner of the artwork in place of the top 
 its scrim. A movie uses its own logo; an episode uses its show's logo. A two-part title SHALL keep
 its bottom title row; a one-part title SHALL then be drawn as the logo alone. The logo SHALL be
 scaled to fit, preserving its aspect ratio, within a box inset from the artwork's top-left and
-sized relative to the terminal cell, not the artwork. The same rule SHALL apply to the Emby
-Session output's now-playing item that the Owner did not load: an episode resolves its show's logo
-from the series id of the now-playing report, and a movie resolves its own logo when the
-now-playing report advertises a logo image.
-An item with no logo, a logo still loading or failed, an item whose now-playing report carries no
+sized relative to the terminal cell, not the artwork. The same rule SHALL apply to a watched
+remote Emby session's now-playing item: an episode resolves its show's logo from the session's
+series id, and a movie resolves its own logo when the session payload advertises a logo image.
+An item with no logo, a logo still loading or failed, an item whose session payload carries no
 resolvable logo reference, and items that are not Emby movies or episodes SHALL keep the text row.
 
 #### Scenario: Episode with a show logo
@@ -181,22 +180,21 @@ resolvable logo reference, and items that are not Emby movies or episodes SHALL 
 
 #### Scenario: Remote episode uses its show's logo
 
-- **WHEN** an episode plays on the owner's Emby Session output that the Owner did not load and its
-  now-playing report carries a series id
+- **WHEN** an episode plays on a watched remote Emby session with no local queue slot and its
+  session payload carries a series id
 - **THEN** the show's logo is fetched and drawn in the upper-left corner in place of the top
   text row, exactly as local playback draws it
 - **AND** the episode title is drawn in the bottom row
 
 #### Scenario: Remote movie with an advertised logo
 
-- **WHEN** a movie plays on the owner's Emby Session output that the Owner did not load and its
-  now-playing report advertises a logo image
+- **WHEN** a movie plays on a watched remote Emby session with no local queue slot and its
+  session payload advertises a logo image
 - **THEN** only that logo is drawn, in the upper-left corner, and no title text is drawn
 
 #### Scenario: Remote item without a resolvable logo reference
 
-- **WHEN** the now-playing item of the owner's Emby Session output that the Owner did not load
-  carries no series id (episode)
+- **WHEN** the now-playing item of a watched remote Emby session carries no series id (episode)
   or no advertised logo image (movie), or the logo fetch fails
 - **THEN** the text overlay is unchanged
 
@@ -205,7 +203,7 @@ resolvable logo reference, and items that are not Emby movies or episodes SHALL 
 The Queue card's artwork key and fetch chain SHALL depend on the item type. A Movie SHALL use the
 landscape key `{id}:QB` and fetch `Backdrop` then `Primary`, without `Logo`. An Episode SHALL
 keep the portrait key `{id}:P` and fetch `Primary`, `Thumb`, `Backdrop`, `Logo`, so its card shows
-the episode's own still and never the series' art. The Emby Session output's now-playing item held
+the episode's own still and never the series' art. A watched Session's now-playing item held
 without an item record SHALL choose key and chain by its item type with the same split. MPRIS art
 SHALL fall back to the landscape key when the portrait key is not cached.
 

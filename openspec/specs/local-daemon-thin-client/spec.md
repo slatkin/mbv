@@ -103,13 +103,13 @@ The client SHALL also write a clear auto-reconnect record when no remote connect
 #### Scenario: Local-daemon client starts with a saved auto-reconnect record
 
 - **WHEN** a client attaches to a same-host local daemon and auto-reconnect is enabled
-- **WHEN** a previous session saved an auto-reconnect record (a library route or a Direct remote control)
+- **WHEN** a previous session saved an auto-reconnect record (a library route or a direct session)
 - **THEN** the client SHALL attempt to restore that connection on startup
 
 #### Scenario: Local-daemon client exits with a tracked connection
 
-- **WHEN** a client of a same-host local daemon exits with a library route or a Direct remote
-  control connection currently tracked
+- **WHEN** a client of a same-host local daemon exits with a library route, direct session, or
+  direct-remote connection currently tracked
 - **THEN** the client SHALL write that connection as the auto-reconnect record
 
 #### Scenario: Local-daemon client exits with nothing tracked
@@ -138,7 +138,7 @@ The client SHALL also write a clear auto-reconnect record when no remote connect
 
 ### Requirement: Every local Client shows the owner's accepted queue
 
-A Client attached to the local daemon SHALL use that owner's Bound queue, queue source, and playback status as its displayed Local queue state in every state, including while an Emby Session output or a cast receiver is the playback target. An Emby Session output or a cast receiver is a playback target, not a queue owner; a Client has no separate Local queue of its own. Loading a playlist, editing the queue, Save As source changes, and clearing the queue SHALL be visible to other attached Clients through owner-accepted state; none SHALL create a private replacement that hides a different playing owner queue. A Client SHALL NOT claim a load succeeded until the owner has accepted it. An unavailable owner SHALL leave the last confirmed state visible, indicate disconnection or failure, and reconcile from the owner on reconnect instead of later submitting a private replacement.
+A Client attached to the local daemon SHALL use that owner's Bound queue, queue source, and playback status as its displayed Local queue state in every state, including while an attached Session or cast receiver is the playback target. An attached Session or cast is a playback target, not a queue owner; a Client has no separate Local queue of its own. Loading a playlist, editing the queue, Save As source changes, and clearing the queue SHALL be visible to other attached Clients through owner-accepted state; none SHALL create a private replacement that hides a different playing owner queue. A Client SHALL NOT claim a load succeeded until the owner has accepted it. An unavailable owner SHALL leave the last confirmed state visible, indicate disconnection or failure, and reconcile from the owner on reconnect instead of later submitting a private replacement.
 
 #### Scenario: Two Clients see a load
 
@@ -164,9 +164,9 @@ A Client attached to the local daemon SHALL use that owner's Bound queue, queue 
 - **THEN** the updated Playlist source SHALL be reflected by the owner and all attached Clients
 - **AND** queue contents and playback state SHALL remain unchanged
 
-#### Scenario: A Client presents the Session output or casts
+#### Scenario: A stay-alive Client watches a session or casts
 
-- **WHEN** the local owner's output is an Emby Session or a cast receiver
+- **WHEN** a Client attached to the local daemon is watching an attached Emby Session or casting to a receiver
 - **THEN** its displayed Local queue SHALL remain the owner's Bound queue
 - **AND** queue edits SHALL still be accepted by that owner rather than becoming a private queue
 
