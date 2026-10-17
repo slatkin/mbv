@@ -197,14 +197,18 @@ pub(super) fn handle_playback_intent(ctx: &mut CtrlContext<'_>, intent: mbv_ctrl
         ),
         mbv_ctrl::PlaybackIntentAction::Stop => handle_stop(ctx),
         mbv_ctrl::PlaybackIntentAction::SetPaused { paused } => {
-            if matches!(ctx.owner.output, crate::cast::PlaybackOutput::Cast(_)) {
-                // The receiver is the output (row 5.3 correction, spec "play,
-                // pause, next, previous, and stop from either Client act on
-                // that receiver"): the desired state translates to an
-                // explicit receiver pause or play, and the guarded intent
-                // settles now — the receiver's own pause change reports
-                // through the status poll (design D8), not a run event, so
-                // nothing else would settle it.
+            if matches!(
+                ctx.owner.output,
+                crate::cast::PlaybackOutput::Cast(_) | crate::cast::PlaybackOutput::EmbySession(_)
+            ) {
+                // A remote output is the output (row 5.3 correction, spec
+                // "play, pause, next, previous, and stop from either Client
+                // act on that receiver"; emby-session-owner-output design D9):
+                // the desired state translates to an explicit pause or play
+                // on the receiver or the Session, and the guarded intent
+                // settles now — the output's own pause change reports through
+                // its poll (Cast design D8, Session design D5), not a run
+                // event, so nothing else would settle it.
                 crate::cast::set_receiver_paused(&mut ctx.owner.output, paused);
                 if let Some(event) = ctx.owner.intents.applied_if_current(
                     ctx.client_id,
@@ -273,7 +277,19 @@ fn step_to_neighbor_slot(
     request_id: mbv_ctrl::PlaybackRequestId,
     generation: mbv_ctrl::PlaybackGeneration,
 ) {
-    let direction = Option::<mbv_ctrl::Direction>::from(action).expect("relative action");
+    // Only a relative action reaches this step; any other action has no
+    // neighbor to move to.
+    let Some(direction) = Option::<mbv_ctrl::Direction>::from(action) else {
+        return;
+    };
+    // Content the Owner did not load is the device's own playback (design
+    // D9): next and previous go to the device as its own commands, and the
+    // Owner loads nothing.
+    if let crate::cast::PlaybackOutput::EmbySession(session) = &mut ctx.owner.output
+        && crate::emby_session::command::route_step(session, direction)
+    {
+        return;
+    }
     let queue = &ctx.owner.core.queue;
     let transitions = &ctx.owner.core.transitions;
     let observed_active_slot = ctx.owner.core.observed_active_slot();

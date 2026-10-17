@@ -15,6 +15,7 @@ use mbv_queue::QueueSlotId;
 use crate::event_loop::DaemonLoop;
 use crate::output::advance::OutputAdvance;
 
+pub(crate) mod command;
 pub(crate) mod connect;
 pub(crate) mod end;
 pub(crate) mod load;
@@ -131,6 +132,34 @@ pub(crate) struct EmbySessionOutput {
 }
 
 impl EmbySessionOutput {
+    /// The Session's position estimate (design D6): the last observed position
+    /// plus the time since that observation while the Session plays, capped at
+    /// the loaded slot's runtime — or the Session's own runtime when the slot
+    /// has none. The seek routing reads it (design D9); the status projection
+    /// reads it too.
+    pub(crate) fn estimate_ticks(&self, now: Instant) -> i64 {
+        let Some(observed) = self.last_observation.as_ref() else {
+            return 0;
+        };
+        let mut ticks = observed.position_ticks;
+        if !observed.is_paused
+            && let Some(observed_at) = self.observed_at
+            && let Some(elapsed) = now.checked_duration_since(observed_at)
+        {
+            ticks = ticks.saturating_add(mbv_emby_model::seconds_to_ticks(elapsed.as_secs_f64()));
+        }
+        let runtime = self
+            .loaded
+            .as_ref()
+            .map(|loaded| loaded.runtime_ticks)
+            .filter(|runtime| *runtime > 0)
+            .unwrap_or(observed.runtime_ticks);
+        if runtime > 0 {
+            ticks = ticks.min(runtime);
+        }
+        ticks
+    }
+
     /// Whether the Session advertises audio as its only playable media kind
     /// (ctrl `OutputState::EmbySession::audio_only`, design D3). An empty list
     /// is the Session's unknown capability, which counts as able to play every

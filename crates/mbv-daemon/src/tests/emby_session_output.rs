@@ -194,7 +194,7 @@ fn selecting_the_device_that_is_already_the_output_does_nothing() {
 /// Selects the fake's Session as the output and pumps its lookup, returning
 /// the loop and the fake's call log. The fake stays scriptable through a
 /// clone the test keeps.
-fn session_output(fake: FakeSessionApi) -> (TestLoop, Arc<Mutex<Vec<SessionCall>>>) {
+pub(super) fn session_output(fake: FakeSessionApi) -> (TestLoop, Arc<Mutex<Vec<SessionCall>>>) {
     let calls = fake.calls();
     let mut t = loop_with_session(fake);
     let (client_id, reply_tx, _rx) =

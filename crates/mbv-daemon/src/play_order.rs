@@ -40,6 +40,14 @@ pub(crate) fn dispatch_relative_step(
     ctx: &mut DaemonOwnerContext<'_>,
     direction: Direction,
 ) -> Option<PlaybackRequestId> {
+    // Content the Owner did not load is the device's own playback
+    // (emby-session-owner-output design D9): next and previous go to the
+    // Session as its own commands, and the Owner loads nothing.
+    if let crate::cast::PlaybackOutput::EmbySession(session) = &mut ctx.owner.output
+        && crate::emby_session::command::route_step(session, direction)
+    {
+        return None;
+    }
     let mbv_player::owner_state::StepTarget::Jump(slot_id) =
         ctx.owner.core.relative_step_target(direction)
     else {
