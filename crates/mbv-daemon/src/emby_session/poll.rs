@@ -14,7 +14,7 @@ use mbv_emby::SessionInfo;
 use super::worker::{EmbySessionJob, SessionApi};
 use super::{EmbySessionEvent, EmbySessionOutput};
 use crate::DaemonEvent;
-use crate::cast::{PlaybackOutput, broadcast_output_change};
+use crate::cast::{PlaybackOutput, broadcast_output_change, output_state};
 use crate::event_loop::DaemonLoop;
 use mbv_queue::QueueSlotId;
 
@@ -113,9 +113,6 @@ pub(super) fn handle_sessions(
             "the Emby Session poll failed; the output is unchanged"
         );
     }
-    let changed = observation
-        .as_ref()
-        .is_some_and(|changed| changed.broadcast);
     // The observation that shows the loaded item settles its transition
     // (design D6, D7, task 4.3); a step queued behind the load then dispatches.
     if let Some(loaded_slot) = observation
@@ -138,25 +135,31 @@ pub(super) fn handle_sessions(
     // The fresh observation re-presents the Owner's status from it (design
     // D10), so Clients see the device's position, pause, and track state.
     super::status::refresh_presentation(daemon, Instant::now());
-    if changed {
+    // The state the peers hold is what the Owner last broadcast, not what this
+    // poll changed: a load replaces the loaded item without any observation,
+    // so an observation that reads the same as the previous one can still
+    // project to a different state — the item peers saw as `now_playing` is
+    // now the loaded item, or an earlier item that is still playing became
+    // foreign content (design D3, D10; review r5).
+    let state_changed =
+        output_state(&daemon.owner.output) != *daemon.shared_queue.playback_output.lock().unwrap();
+    if state_changed {
         broadcast_output_change(daemon);
     }
 }
 
-/// What one `/Sessions` observation changed (design D5, D6): whether the state
-/// the ctrl peers hold changed, the loaded slot the observation presents, and
-/// whether it ended the loaded item naturally.
+/// What one `/Sessions` observation changed (design D5, D6): the loaded slot
+/// the observation presents, and whether it ended the loaded item naturally.
+/// Whether the ctrl peers' state changed is decided by comparing the projected
+/// state with the one the Owner last broadcast (`handle_sessions`).
 struct Observation {
-    broadcast: bool,
     presented: Option<QueueSlotId>,
     ended_naturally: bool,
 }
 
 impl Observation {
-    /// The observation nothing changed: a missing device below the disconnect
-    /// threshold, or a failed poll.
+    /// The observation nothing changed: a missing device, or a failed poll.
     const UNCHANGED: Self = Self {
-        broadcast: false,
         presented: None,
         ended_naturally: false,
     };
@@ -167,42 +170,28 @@ impl Observation {
 /// reset the miss count; a missing entry counts one miss and, at the
 /// threshold, reports the output `Disconnected`. The end table's idle rows read
 /// the position estimate from the observation this one replaces (design D6),
-/// so they run before the store. Reports whether the broadcast state changed —
-/// the connection, or the item the device presents that the Owner did not load
-/// (design D3, D10) — the loaded slot when this observation presents it, so the
-/// caller settles its transition (design D6, D7), and whether it ended that
-/// item naturally.
+/// so they run before the store. Returns the loaded slot when this observation
+/// presents it, so the caller settles its transition (design D6, D7), and
+/// whether it ended that item naturally.
 fn observe(output: &mut EmbySessionOutput, sessions: &[SessionInfo], now: Instant) -> Observation {
     let Some(session) = sessions
         .iter()
         .find(|session| session.device_id == output.device_id)
     else {
         output.misses = output.misses.saturating_add(1);
-        if output.misses < EMBY_SESSION_DISCONNECT_MISSES
-            || output.connection == OutputConnection::Disconnected
-        {
-            return Observation::UNCHANGED;
+        if output.misses >= EMBY_SESSION_DISCONNECT_MISSES {
+            output.connection = OutputConnection::Disconnected;
         }
-        output.connection = OutputConnection::Disconnected;
-        return Observation {
-            broadcast: true,
-            ..Observation::UNCHANGED
-        };
+        return Observation::UNCHANGED;
     };
     output.misses = 0;
     output.session_id = Some(session.id.clone());
-    // The state the ctrl peers hold changes only when the device's own item
-    // changes, not on every poll (design D3, D10).
-    let now_playing_before = output.now_playing();
     let ended_naturally = super::end::ended_naturally(output, session, now);
     output.last_observation = Some(session.clone());
     output.observed_at = Some(now);
     let presented = presented_loaded_slot(output, session);
-    let now_playing_changed = output.now_playing() != now_playing_before;
-    let was_connected = output.connection == OutputConnection::Connected;
     output.connection = OutputConnection::Connected;
     Observation {
-        broadcast: now_playing_changed || !was_connected,
         presented,
         ended_naturally,
     }

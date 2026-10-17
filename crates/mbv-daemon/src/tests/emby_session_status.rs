@@ -268,3 +268,104 @@ fn content_the_owner_did_not_load_sets_now_playing_and_keeps_the_active_slot() {
         "an unchanged now-playing item broadcasts no second state"
     );
 }
+
+/// The output states a client received, in order: a load or a poll can publish
+/// queue state around the output event, so a test reads only these.
+fn output_events(rx: &mpsc::Receiver<CtrlOutbound>) -> Vec<OutputState> {
+    drained_events(rx)
+        .into_iter()
+        .filter_map(|event| match event {
+            CtrlEvent::PlaybackOutput(state) => Some(state),
+            _ => None,
+        })
+        .collect()
+}
+
+/// The item an output state presents as content the Owner did not load.
+fn now_playing_item(state: &OutputState) -> Option<&str> {
+    match state {
+        OutputState::EmbySession { now_playing, .. } => {
+            now_playing.as_ref().map(|item| item.item_id.as_str())
+        }
+        OutputState::Local | OutputState::Cast { .. } => None,
+    }
+}
+
+/// The loop with the fake's Session selected as the output over `items` and
+/// nothing loaded onto it, plus the fake's script handle and the client that
+/// receives the output states.
+fn session_output_with_client(
+    items: Vec<QueueItem>,
+) -> (
+    TestLoop,
+    FakeSessionApi,
+    u64,
+    CtrlSender,
+    mpsc::Receiver<CtrlOutbound>,
+) {
+    let fake = FakeSessionApi::with_sessions(vec![session("device-1", "session-1")]);
+    let mut t = test_loop_with_queue(crate::DaemonRole::Local, items, 0);
+    host_session_output(&mut t, fake.clone());
+    let (client_id, reply_tx, rx) =
+        connect_output_client_with_caps(&t.event_loop.ctrl_clients, true, true);
+    select_output(&mut t, client_id, &reply_tx, session_selection());
+    pump_session_event(&mut t);
+    (t, fake, client_id, reply_tx, rx)
+}
+
+/// Contract: row 5.1 review r5 / design D3 and D10 — a load replaces the item
+/// the Owner presents without any observation, so the state the peers hold is
+/// compared with the projection. When the device already plays the item the
+/// Owner then loads, the next poll withdraws the stale `now_playing` even
+/// though both observations present the same device item.
+#[test]
+fn loading_the_item_the_device_plays_withdraws_its_now_playing_state() {
+    let (mut t, script, client_id, reply_tx, rx) = session_output_with_client(vec![
+        emby_qi("movie", "Video", "Movie"),
+        emby_qi("other", "Video", "Movie"),
+    ]);
+    script.set_sessions(vec![session_presenting("other")]);
+
+    poll_once(&mut t, Instant::now());
+
+    let before_load = output_events(&rx);
+    assert_eq!(
+        before_load.last().and_then(|state| now_playing_item(state)),
+        Some("other"),
+        "the device's own item is presented as now_playing"
+    );
+
+    // The Owner loads the item the device already plays: only the loaded item
+    // changes, and the load itself broadcasts no output state.
+    let slot = t.event_loop.owner.core.queue.slots()[1].slot_id;
+    t.event_loop.handle_event(DaemonEvent::Ctrl(
+        CtrlCmd::UnifiedQueuePlaySlot {
+            slot_id: mbv_ctrl::slot_id_to_u64(slot),
+            op: None,
+        },
+        client_id,
+        reply_tx,
+    ));
+    wait_for_session_jobs(&t.event_loop.owner.output);
+    let _ = drained_events(&rx);
+
+    poll_once(&mut t, Instant::now() + EMBY_SESSION_POLL_INTERVAL);
+
+    let after_load = output_events(&rx);
+    assert_eq!(
+        after_load.len(),
+        1,
+        "the stale now_playing is withdrawn exactly once"
+    );
+    assert!(
+        matches!(
+            &after_load[0],
+            OutputState::EmbySession {
+                now_playing: None,
+                ..
+            }
+        ),
+        "the loaded item is presented from the queue, not as now_playing: {:?}",
+        after_load[0]
+    );
+}
