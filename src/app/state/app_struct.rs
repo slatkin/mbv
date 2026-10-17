@@ -198,10 +198,9 @@ pub struct App {
     pub(in crate::app) status_severity: crate::app::dispatch::notify::ToastSeverity,
     /// `true` only for instances built via `App::new_remote` (the
     /// `--connect-daemon` / local-daemon-auto-detect thin-client launch
-    /// path). Those instances never populate `active_route` or
-    /// `connected_session_state` (those are set by runtime library-route
-    /// switches / session attaches that only apply to `App::new` instances),
-    /// so `teardown`'s auto-reconnect persistence (#236) must skip this flag
+    /// path). Those instances never populate `active_route` (set by runtime
+    /// library-route switches, which only apply to `App::new` instances), so
+    /// `teardown`'s auto-reconnect persistence (#236) must skip this flag
     /// entirely rather than compute (and save) a bogus `None` record that
     /// would wipe out a real record saved by a different `App::new` session.
     pub(in crate::app) launched_as_remote: bool,
@@ -352,8 +351,6 @@ pub struct App {
     pub(in crate::app) ws_send_tx: Option<mbv_ws::WsSender>,
     pub(in crate::app) last_keepalive: Instant,
     pub(in crate::app) last_capabilities: Instant,
-    pub(in crate::app) connected_session_id: Option<String>,
-    pub(in crate::app) connected_session_state: Option<mbv_emby::SessionInfo>,
     /// The current Player owner's active playback output, mirrored from the
     /// last `CtrlEvent::PlaybackOutput` (cast-owner-output design D13). It is
     /// per-owner-connection state like `ctrl_compatibility`: `None` until the
@@ -374,17 +371,24 @@ pub struct App {
     pub(in crate::app) queue_epoch: QueueEpoch,
     pub(in crate::app) playlist_mutations: std::collections::HashMap<String, PlaylistMutationState>,
     pub(in crate::app) next_playlist_mutation: u64,
-    pub(in crate::app) remote: crate::app::state::remote_tracking::RemoteTracking,
+    /// Direct remote control target state. The owner holds any Emby Session
+    /// output; only the Direct remote control connection is tracked here.
+    pub(in crate::app) direct_remote_connected: bool,
+    pub(in crate::app) direct_remote_label: Option<String>,
+    /// Emby session id of a remote owner under Direct remote control, so the
+    /// Sessions sidebar can still mark that row after the control socket
+    /// takes over. Never set for the Stay-alive process: that process is not
+    /// a remote session.
+    pub(in crate::app) direct_remote_session_id: Option<String>,
     pub(in crate::app) suspended_local: Option<SuspendedLocalSession>,
     /// The library route currently driving playback, if any (#223):
     /// `Some(name)` holds the lowercased library name whose configured
     /// daemon is the active player target. `None` means local playback,
-    /// or a Sessions-panel direct remote (`connected_session_id` /
-    /// `direct_remote_label`) -- a separate concept, never conflated with
-    /// this one. Fixed for the life of the current queue: a *new* queue
-    /// re-evaluates it (see `apply_route_for_playback`), but enqueuing
-    /// into the existing queue must match it or be rejected (see
-    /// `enqueue_route_conflict`).
+    /// or a Sessions-panel direct remote (`direct_remote_label`) -- a
+    /// separate concept, never conflated with this one. Fixed for the life
+    /// of the current queue: a *new* queue re-evaluates it (see
+    /// `apply_route_for_playback`), but enqueuing into the existing queue
+    /// must match it or be rejected (see `enqueue_route_conflict`).
     pub(in crate::app) active_route: Option<String>,
     /// Per-item cache of ancestor-lookup library-route resolution for
     /// cross-library aggregate views (Continue Watching/Next Up,

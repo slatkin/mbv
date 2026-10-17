@@ -21,7 +21,7 @@ impl App {
     /// Returns None if the local player is not active.
     /// Callers wrap these in [ ... ] with whatever surrounding style they need.
     pub(in crate::app) fn build_status_indicator_spans(&self) -> Option<Vec<Span<'static>>> {
-        let data = self.playback_indicator_target().indicator_data(self)?;
+        let data = crate::app::LocalPlaybackTarget::indicator_data(self)?;
         Some(indicators::indicator_spans(
             self.indicator_style,
             &data,
@@ -61,13 +61,10 @@ impl App {
 
     /// Whether the remote pill shows its connected state: a remote output
     /// (Cast receiver or Emby Session) is attached and live, or the remote
-    /// slot names an attached session or direct route.
+    /// slot names a direct route.
     fn remote_connected(&self, remote_state: RemoteSlotState) -> bool {
         self.remote_output_label().is_some()
-            || matches!(
-                remote_state,
-                RemoteSlotState::AttachedSession | RemoteSlotState::DirectRemote
-            )
+            || matches!(remote_state, RemoteSlotState::DirectRemote)
     }
 
     /// The remote pill label, gap included. An attached remote output names it
@@ -78,22 +75,11 @@ impl App {
         let gap = if self.use_nerd_fonts { " " } else { "  " };
         let target = self.remote_output_label().or_else(|| match remote_state {
             RemoteSlotState::LocalDaemon => None,
-            RemoteSlotState::AttachedSession => {
-                self.connected_session_state.as_ref().and_then(|session| {
-                    let device_name = session.device_name.trim();
-                    if device_name.is_empty() {
-                        let host = session.host.trim();
-                        (!host.is_empty()).then(|| host.to_string())
-                    } else {
-                        Some(device_name.to_string())
-                    }
-                })
-            }
             RemoteSlotState::DirectRemote => self
                 .active_route
                 .as_ref()
                 .map(|name| format!("route:{name}"))
-                .or_else(|| self.remote.direct_remote_label.clone())
+                .or_else(|| self.direct_remote_label.clone())
                 .or_else(|| daemon_endpoint_label(daemon_endpoint)),
         });
         match target {
@@ -151,14 +137,12 @@ impl App {
     }
 
     /// The playback target's host label plus whether it names a remote target
-    /// (a cast attachment, an attached session, or a direct-remote
-    /// route/label): the attached receiver's name, the connected session's
-    /// device name (falling back to its host), the direct-remote route/label,
-    /// or this machine's device name when playback is local — computed
-    /// together from one
-    /// `remote_slot_state()` resolution for callers (the queue header sync)
-    /// that need both every tick. Callers style the returned label and the
-    /// header row shows it verbatim.
+    /// (a cast attachment, an Emby Session output, or a direct-remote
+    /// route/label): the output's name, the direct-remote route/label, or
+    /// this machine's device name when playback is local -- computed together
+    /// from one `remote_slot_state()` resolution for callers (the queue header
+    /// sync) that need both every tick. Callers style the returned label and
+    /// the header row shows it verbatim.
     pub(in crate::app) fn playback_host_label_and_remote(&self) -> (String, bool) {
         let remote_state = self.remote_slot_state();
         let is_remote = self.remote_connected(remote_state);
@@ -240,38 +224,36 @@ impl App {
     }
 
     pub(in crate::app) fn mute_status_spans(&self) -> Option<Vec<Span<'static>>> {
-        self.playback_display_target()
-            .displayed_mute(self)
-            .then(|| {
-                vec![
-                    Span::styled(
-                        " ",
-                        Style::default().bg(mbv_theme::surface_colors(
-                            mbv_theme::Surface::StatusBarPill,
-                            false,
+        crate::app::LocalPlaybackTarget::displayed_mute(self).then(|| {
+            vec![
+                Span::styled(
+                    " ",
+                    Style::default().bg(mbv_theme::surface_colors(
+                        mbv_theme::Surface::StatusBarPill,
+                        false,
+                    )
+                    .fill),
+                ),
+                Span::styled(
+                    "muted",
+                    Style::default()
+                        .fg(mbv_theme::Role::StatusError.color())
+                        .bg(
+                            mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false)
+                                .fill,
                         )
-                        .fill),
-                    ),
-                    Span::styled(
-                        "muted",
-                        Style::default()
-                            .fg(mbv_theme::Role::StatusError.color())
-                            .bg(
-                                mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false)
-                                    .fill,
-                            )
-                            .add_modifier(Modifier::BOLD),
-                    ),
-                    Span::styled(
-                        " ",
-                        Style::default().bg(mbv_theme::surface_colors(
-                            mbv_theme::Surface::StatusBarPill,
-                            false,
-                        )
-                        .fill),
-                    ),
-                ]
-            })
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    " ",
+                    Style::default().bg(mbv_theme::surface_colors(
+                        mbv_theme::Surface::StatusBarPill,
+                        false,
+                    )
+                    .fill),
+                ),
+            ]
+        })
     }
 
     /// The prefix-armed pill (design D7, task 7.3): present only while
@@ -312,7 +294,7 @@ impl App {
     }
 
     pub(in crate::app) fn volume_status_spans(&self) -> Vec<Span<'static>> {
-        let volume = self.playback_display_target().displayed_volume(self);
+        let volume = crate::app::LocalPlaybackTarget::displayed_volume(self);
         // Speaker glyph reflects the volume state (0 / low / mid / high).
         let icon = if volume == 0 {
             "\u{1F507}"

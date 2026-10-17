@@ -222,7 +222,6 @@ fn tick_delivers_seekbar_double_click_to_unfocused_playback_as_a_fraction() {
     let mut app = make_app_stub();
     app.panel_mode = PanelMode::LibraryOnly;
     app.panel_focus = PanelFocus::Library;
-    app.connected_session_id = Some("session-1".into());
     app.layout.root_frame.library_playback = Some(Rect::new(10, 5, 40, 4));
     let mut harness = TickHarness::new(app);
     harness.model_mut().sync_mounted_surfaces();

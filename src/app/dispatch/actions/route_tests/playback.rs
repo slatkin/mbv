@@ -97,17 +97,11 @@ fn confirm_local_fall_through(app: &mut App) {
 #[test]
 fn confirmed_fall_through_keeps_the_current_home_link_connected() {
     let (mut app, home_commands) = make_home_audio_only_owner();
-    app.connected_session_id = Some("controlled-session".into());
-    let mut session = make_session("controlled-session", "Emby");
-    session.media_info.audio_only = true;
-    session.playable_media_types = vec!["Audio".into()];
-    app.connected_session_state = Some(session);
     app.play_item(make_item("Movie", "Movie"));
 
     confirm_local_fall_through(&mut app);
 
     assert!(app.is_local_daemon());
-    assert!(app.connected_session_id.is_none());
     assert!(
         !home_commands.try_iter().any(|command| matches!(
             command,
@@ -162,7 +156,6 @@ fn confirmed_local_fall_through_stops_and_detaches_remote_owner() {
     assert!(!app.queue_deferrals.has_local_play());
     assert!(app.is_local_daemon());
     assert_eq!(app.queue_scope, QueueScope::Local);
-    assert!(app.connected_session_id.is_none());
     let commands: Vec<_> = command_rx.try_iter().collect();
     assert!(commands.iter().any(|command| {
         matches!(

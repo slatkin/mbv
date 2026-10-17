@@ -33,39 +33,29 @@ fn focus_panel_keeps_the_card_checkpoint() {
 fn o_opens_an_idle_feed_link_only_when_available() {
     let o = key(KeyCode::Char('o'));
     let context =
-        |player_active, has_connected_session, playback_panel_present_idle, link_available| {
-            IdleFeedLinkContext {
-                player_active,
-                has_connected_session,
-                playback_panel_present_idle,
-                link_available,
-            }
+        |player_active, playback_panel_present_idle, link_available| IdleFeedLinkContext {
+            player_active,
+            playback_panel_present_idle,
+            link_available,
         };
     assert_eq!(
-        idle_feed_command_for_key(o, &context(false, false, false, true)),
+        idle_feed_command_for_key(o, &context(false, false, true)),
         Some(Command::OpenIdleFeedLink)
     );
     assert_eq!(
-        idle_feed_command_for_key(o, &context(true, false, false, true)),
+        idle_feed_command_for_key(o, &context(true, false, true)),
         None
     );
     assert_eq!(
-        idle_feed_command_for_key(o, &context(false, true, false, true)),
+        idle_feed_command_for_key(o, &context(false, false, false)),
         None
     );
     assert_eq!(
-        idle_feed_command_for_key(o, &context(false, false, false, false)),
+        idle_feed_command_for_key(o, &context(false, true, true)),
         None
     );
     assert_eq!(
-        idle_feed_command_for_key(o, &context(false, false, true, true)),
-        None
-    );
-    assert_eq!(
-        idle_feed_command_for_key(
-            key_ctrl(KeyCode::Char('o')),
-            &context(false, false, false, true)
-        ),
+        idle_feed_command_for_key(key_ctrl(KeyCode::Char('o')), &context(false, false, true)),
         None
     );
 }
@@ -119,29 +109,6 @@ fn dispatch_toggle_mute_flips_state_and_persists() {
 
     app.dispatch(&Command::ToggleMute);
     assert!(!app.mute_on);
-}
-
-#[test]
-fn dispatch_toggle_mute_while_attached_to_session_mutes_the_session_not_local() {
-    use mbv_emby::test_support::make_session;
-
-    let mut app = make_app_stub();
-    app.connected_session_id = Some("session-1".into());
-    let mut sess = make_session("remote-host", "Emby");
-    sess.muted = false;
-    app.connected_session_state = Some(sess);
-
-    app.dispatch(&Command::ToggleMute);
-
-    assert!(
-        app.connected_session_state.as_ref().unwrap().muted,
-        "pressing mute while attached to a session must mute that session \
-         (optimistically, before the network round-trip completes)"
-    );
-    assert!(
-        !app.mute_on,
-        "the local mute preference must not change while attached to a session"
-    );
 }
 
 // ── dispatch: QueuePlayCursor (issue #134) ───────────────────────────────

@@ -355,9 +355,6 @@ pub enum SessionEvent {
     Loaded {
         sessions: Vec<mbv_emby::SessionInfo>,
     },
-    CommandError {
-        error: String,
-    },
     PlaylistMutationComplete {
         mutation_id: u64,
         playlist_id: String,

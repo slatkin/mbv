@@ -3,7 +3,6 @@ use crate::app::{App, QueueScope, QueueView, SuspendedLocalSession};
 use mbv_ctrl::player::PlayerEvent;
 use mbv_player::PlayerProxy;
 use std::sync::mpsc;
-use std::time::{Duration, Instant};
 
 fn replacement_view(snapshot: Option<&mbv_ctrl::UnifiedQueueStateData>) -> QueueView {
     snapshot.map_or_else(QueueView::default, QueueView::from_snapshot)
@@ -74,27 +73,16 @@ impl App {
         if !self.attach_remote_owner(remote, remote_rx, endpoint, current_is_home) {
             return;
         }
-        self.connected_session_id = None;
-        self.connected_session_state = None;
-        self.remote.direct_remote_connected = true;
-        self.remote.direct_remote_label = {
+        self.direct_remote_connected = true;
+        self.direct_remote_label = {
             let name = sess.device_name.trim();
             (!name.is_empty()).then(|| name.to_string())
         };
-        // The control socket replaces Session watch, but the device the user
-        // connected to stays the Sessions-sidebar row. The Stay-alive process
-        // (Local endpoint) is not a remote session and is never marked.
-        self.remote.direct_remote_session_id = (!endpoint.is_local()).then(|| sess.id.clone());
-        self.remote.session_miss_count = 0;
-        self.remote.remote_pos_s = 0;
-        self.remote.remote_pos_at = Instant::now();
-        self.remote.remote_api_pos_advanced_at = Instant::now()
-            .checked_sub(Duration::from_secs(60))
-            .unwrap_or_else(Instant::now);
-        self.remote.remote_seek_pending_until = Instant::now()
-            .checked_sub(Duration::from_secs(1))
-            .unwrap_or_else(Instant::now);
-        self.remote.runtime_zero_since = None;
+        // The control socket replaces the device's Session control, but the
+        // device the user connected to stays the Sessions-sidebar row. The
+        // Stay-alive process (Local endpoint) is not a remote session and is
+        // never marked.
+        self.direct_remote_session_id = (!endpoint.is_local()).then(|| sess.id.clone());
         self.next_up_item = None;
         self.display_peer_queue_on_connect();
         self.request_sidebar_dismiss(mbv_ui_model::overlay::SidebarId::Sessions);
@@ -107,8 +95,7 @@ impl App {
     /// Sibling to `switch_to_direct_remote` for library-scoped daemon
     /// routing (#223): same suspend-local/connect-remote shape, but
     /// targets a device name resolved live from `library_routes` instead
-    /// of a discovered `SessionInfo`, and tracks
-    /// `active_route` instead of `connected_session_id`/
+    /// of a discovered `SessionInfo`, and tracks `active_route` instead of
     /// `direct_remote_label` -- library routing and the Sessions-panel
     /// direct-remote flow are two independent ways to end up thin-client
     /// and must not be conflated in App state. This is a new sibling
@@ -132,18 +119,9 @@ impl App {
         if !self.attach_remote_owner(remote, remote_rx, endpoint, current_is_home) {
             return;
         }
-        self.remote.direct_remote_connected = false;
-        self.remote.direct_remote_session_id = None;
+        self.direct_remote_connected = false;
+        self.direct_remote_session_id = None;
         self.active_route = Some(library_name.to_string());
-        self.remote.remote_pos_s = 0;
-        self.remote.remote_pos_at = Instant::now();
-        self.remote.remote_api_pos_advanced_at = Instant::now()
-            .checked_sub(Duration::from_secs(60))
-            .unwrap_or_else(Instant::now);
-        self.remote.remote_seek_pending_until = Instant::now()
-            .checked_sub(Duration::from_secs(1))
-            .unwrap_or_else(Instant::now);
-        self.remote.runtime_zero_since = None;
         self.next_up_item = None;
         self.display_peer_queue_on_connect();
         tracing::info!(name: "library_route.playback_route.switched", target: "library_route", previous_route = ?previous_route, next_route = %library_name, "playback route switched");
@@ -240,15 +218,11 @@ impl App {
         }
         self.remote_view = None;
         self.set_queue_scope(QueueScope::Local);
-        self.connected_session_id = None;
-        self.connected_session_state = None;
         self.advance_queue_epoch();
-        self.remote.direct_remote_connected = false;
-        self.remote.direct_remote_label = None;
-        self.remote.direct_remote_session_id = None;
+        self.direct_remote_connected = false;
+        self.direct_remote_label = None;
+        self.direct_remote_session_id = None;
         self.active_route = None;
-        self.remote.session_miss_count = 0;
-        self.remote.remote_pos_s = 0;
         self.next_up_item = None;
         self.rebind_mpris_to_current_player();
         self.flash(status, ToastSeverity::Warning);
@@ -280,9 +254,6 @@ impl App {
         if !already_local {
             self.player.stop();
             self.player.disconnect_remote();
-        }
-        if self.connected_session_id.is_some() {
-            self.playback_target().stop(self);
         }
         if let Some(suspended) = prepared {
             self.install_suspended_local(suspended);
@@ -485,37 +456,21 @@ impl App {
     }
 
     pub(in crate::app) fn connect_to_session(&mut self, sess: &mbv_emby::SessionInfo) {
-        // Connecting to a new target severs the current one (attachment
-        // slots are mutually exclusive): tears down an active library
-        // route and clears a watched session before this connect, rather
-        // than holding both. A no-op when nothing is connected.
+        // Connecting to a new target severs the current one (targets are
+        // mutually exclusive): tears down an active library route before this
+        // connect rather than holding both. A no-op when nothing is
+        // connected.
         self.sever_active_connection();
-        let direct_upgrade_error = match self.connect_direct_session(sess) {
-            Ok(true) => return,
-            Ok(false) => None,
-            Err(e) => Some(e),
-        };
-
-        let id = sess.id.clone();
-        let name = sess.device_name.clone();
-        tracing::info!(name: "sessions.connect.started", target: "sessions", device = %name, position_seconds = sess.position_s, runtime_seconds = sess.runtime_s, "connecting to session");
-        self.connected_session_id = Some(id);
-        self.connected_session_state = Some(sess.clone());
-        self.advance_queue_epoch();
-        self.remote.session_miss_count = 0;
-        self.remote.remote_pos_s = sess.position_s;
-        self.remote.remote_pos_at = Instant::now();
-        self.remote.remote_api_pos_advanced_at = Instant::now();
-        self.request_sidebar_dismiss(mbv_ui_model::overlay::SidebarId::Sessions);
-        if let Some(error) = direct_upgrade_error {
-            self.flash(
-                format!("Direct mbv control failed: {error}; using attached session {name}"),
+        match self.connect_direct_session(sess) {
+            Ok(true) => {}
+            Ok(false) => {
+                tracing::info!(name: "sessions.connect.no_direct_endpoint", target: "sessions", device = %sess.device_name, "session offers no direct endpoint; staying local");
+            }
+            Err(error) => self.flash(
+                format!("Direct mbv control failed: {error}"),
                 ToastSeverity::Warning,
-            );
-        } else {
-            self.flash(format!("Connected to {name}"), ToastSeverity::Success);
+            ),
         }
-        self.spawn_sessions_load();
     }
 
     /// Activate an Emby Session row from the F3 panel (emby-session-owner-output

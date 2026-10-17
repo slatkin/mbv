@@ -263,11 +263,7 @@ impl Model {
         let snapshot = RouterSnapshot {
             playback: crate::app::input::RouterPlaybackState {
                 player_active,
-                remote_target: if self.app.connected_session_id.is_some() {
-                    crate::app::input::RemotePlaybackTarget::Session
-                } else {
-                    crate::app::input::RemotePlaybackTarget::DirectRemote
-                },
+                remote_target: crate::app::input::RemoteControlTarget::DirectRemote,
                 queue_only_idle: self.application.mounted(&ComponentId::QueuePlaybackPanel)
                     && !self.app.effective_playback_state().active,
                 idle_feed_link_available: self.app.idle_feed_link_available(),

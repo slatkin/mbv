@@ -164,7 +164,7 @@ struct OverlayLogoSource {
     series_id: String,
 }
 
-/// The key rules both the queue-item path and the watched remote session's
+/// The key rules both the queue-item path and the Emby Session output's
 /// slotless path share (remote-session-overlay-parity, task 3.1): a Movie's
 /// logo key carries its image etag, an Episode's show logo keys on the series
 /// id alone. `logo_etag` is empty when the payload carries none, which leaves

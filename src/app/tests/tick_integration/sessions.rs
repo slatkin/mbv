@@ -409,7 +409,6 @@ fn tick_sessions_removed_target_request_is_noop_not_former_index_replacement() {
         &mut music_resize,
         &mut tv_resize,
     );
-    assert!(harness.model().app.connected_session_id.is_none());
 }
 
 #[test]
@@ -488,7 +487,6 @@ fn tick_sessions_emby_row_without_direct_endpoint_selects_the_owner_output() {
     session.id = "sess-tv".into();
     session.device_id = "device-tv".into();
     app.panel_targets = vec![PanelTarget::Emby(Box::new(session))];
-    app.connected_session_id = Some("old-session".into());
     let mut harness = TickHarness::new(app);
     open_sessions(&mut harness);
 
@@ -514,10 +512,6 @@ fn tick_sessions_emby_row_without_direct_endpoint_selects_the_owner_output() {
     assert!(
         cmd_rx.try_recv().is_err(),
         "no command precedes the selection: the owner performs the hand-off"
-    );
-    assert!(
-        harness.model().app.connected_session_id.is_none(),
-        "activating a Session output severs the previous attached session"
     );
 }
 

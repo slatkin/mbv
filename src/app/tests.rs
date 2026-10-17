@@ -24,7 +24,6 @@ mod panel_focus;
 mod pinned_view_toggle;
 mod podcast;
 mod queue;
-mod remote_commands;
 pub(crate) mod render_fixtures;
 mod route_state;
 mod routing_matrix;
@@ -186,8 +185,6 @@ fn apply_app_stub_defaults(app: &mut App) {
     // `build` doubles the configured image cache size; the stub keeps its
     // original (undoubled) budget so eviction behaviour is unchanged.
     app.images.set_cache_capacity_for_test(50);
-    // Never start with a session poll already due.
-    app.remote.last_session_poll = Instant::now();
     // Ignore any on-disk feed entry state; a stub starts empty.
     app.feed_entry_state = mbv_feed::FeedEntryStore::default();
     // Default to "focused, past grace window" so existing mouse tests dispatch

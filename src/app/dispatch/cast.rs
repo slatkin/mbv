@@ -151,25 +151,4 @@ mod tests {
             .collect();
         assert_eq!(before, after);
     }
-
-    /// Selecting a cast target severs the watched session it replaces
-    /// (spec "Cast target is selected while a session is watched") but
-    /// sends no Cast hand-back: the owner performs the hand-off (D13).
-    #[test]
-    fn selecting_a_cast_target_severs_a_watched_session() {
-        let mut app = make_app_stub();
-        app.connected_session_id = Some("sess-1".to_string());
-        app.connected_session_state = Some(mbv_emby::test_support::make_session("tv", "mbv"));
-
-        let receiver = mbv_cast::discovery::CastReceiver {
-            id: "device-1".to_string(),
-            friendly_name: "Living Room".to_string(),
-            host: "192.168.0.5".to_string(),
-            port: 8009,
-        };
-        app.select_panel_target(PanelTarget::Cast(receiver));
-
-        assert!(app.connected_session_id.is_none());
-        assert!(app.connected_session_state.is_none());
-    }
 }

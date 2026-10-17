@@ -11,12 +11,11 @@ use mbv_keybinds::{Keybinds, action_by_id};
 use mbv_ui_model::playback::VOLUME_STEP;
 use mbv_ui_model::settings::{PanelFocus, PanelMode};
 
-/// Which attached playback target currently owns remote-control shortcuts.
+/// Which remote-control target currently owns transport shortcuts.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub(in crate::app) enum RemotePlaybackTarget {
+pub(in crate::app) enum RemoteControlTarget {
     #[default]
     None,
-    Session,
     DirectRemote,
 }
 
@@ -24,7 +23,7 @@ pub(in crate::app) enum RemotePlaybackTarget {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(in crate::app) struct RouterPlaybackState {
     pub player_active: bool,
-    pub remote_target: RemotePlaybackTarget,
+    pub remote_target: RemoteControlTarget,
     pub queue_only_idle: bool,
     pub idle_feed_link_available: bool,
 }
@@ -252,7 +251,7 @@ fn playback_allowed(snapshot: &RouterSnapshot) -> bool {
     !snapshot.overlays.focus.blocking()
         && !snapshot.overlays.text_entry_focused
         && (snapshot.playback.player_active
-            || snapshot.playback.remote_target != RemotePlaybackTarget::None)
+            || snapshot.playback.remote_target != RemoteControlTarget::None)
 }
 
 fn idle_feed_link_allowed(chord: KeyChord, snapshot: &RouterSnapshot) -> bool {
@@ -262,8 +261,6 @@ fn idle_feed_link_allowed(chord: KeyChord, snapshot: &RouterSnapshot) -> bool {
             chord,
             &IdleFeedLinkContext {
                 player_active: snapshot.playback.player_active,
-                has_connected_session: snapshot.playback.remote_target
-                    == RemotePlaybackTarget::Session,
                 playback_panel_present_idle: snapshot.playback.queue_only_idle,
                 link_available: snapshot.playback.idle_feed_link_available,
             },

@@ -1,5 +1,4 @@
 use crate::app::SidebarId;
-use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::{
     App, ConfirmAction, ConfirmModal, PanelFocus, PendingQueueAction, QueueScope,
     SavePlaylistDialog, SavePlaylistStage,
@@ -215,11 +214,7 @@ impl App {
             return;
         }
         self.pending_delete_selection = Some(live);
-        if self.connected_session_id.is_some() {
-            self.playback_target().stop(self);
-        } else {
-            self.player.stop();
-        }
+        self.player.stop();
         if self.local_queue_metadata_applies(scope) {
             self.queue_dirty = true;
         }
@@ -234,11 +229,7 @@ impl App {
         let slot_id = self.queue_for_scope_mut(scope).slot_id_at(pos);
         if let Some(slot_id) = slot_id {
             self.pending_delete_slot = Some(slot_id);
-            if self.connected_session_id.is_some() {
-                self.playback_target().stop(self);
-            } else {
-                self.player.stop();
-            }
+            self.player.stop();
             if self.local_queue_metadata_applies(scope) {
                 self.queue_dirty = true;
             }
@@ -251,17 +242,8 @@ impl App {
         let scope = self.viewed_queue_scope();
         // Legacy `handle_key_clear_queue_prompt` refused a Queue-focused remote
         // scope outright, which also swallowed `c` for a socket-attached mbvd
-        // whose queue the confirm's `y` handler can clear. Narrow the refusal to
-        // a connected Emby session (queue owned on the remote device); the
-        // direct-remote daemon queue falls through to the same prompt a local
-        // queue gets.
-        if scope == QueueScope::Remote && self.connected_session_id.is_some() {
-            self.flash(
-                "Remote queue is controlled by the daemon".into(),
-                ToastSeverity::Error,
-            );
-            return;
-        }
+        // whose queue the confirm's `y` handler can clear. The direct-remote
+        // daemon queue falls through to the same prompt a local queue gets.
         if self.queue_for_scope(scope).total_queue_len() == 0 {
             return;
         }

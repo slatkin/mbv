@@ -4,7 +4,7 @@ use mbv_ctrl::player::PlayerEvent;
 use mbv_emby::parse_mbv_direct_tcp_port;
 use mbv_player::PlayerProxy;
 use std::sync::mpsc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 impl App {
     pub(in crate::app) fn session_direct_endpoint(
@@ -213,18 +213,8 @@ impl App {
             .as_ref()
             .map_or_else(QueueView::default, QueueView::from_snapshot);
         self.remote_view = Some(tab);
-        self.remote.direct_remote_connected = true;
+        self.direct_remote_connected = true;
         self.advance_queue_epoch();
-        self.remote.session_miss_count = 0;
-        self.remote.remote_pos_s = 0;
-        self.remote.remote_pos_at = Instant::now();
-        self.remote.remote_api_pos_advanced_at = Instant::now()
-            .checked_sub(Duration::from_secs(60))
-            .unwrap_or_else(Instant::now);
-        self.remote.remote_seek_pending_until = Instant::now()
-            .checked_sub(Duration::from_secs(1))
-            .unwrap_or_else(Instant::now);
-        self.remote.runtime_zero_since = None;
         self.next_up_item = None;
         self.display_peer_queue_on_connect();
         self.sync_subtitle_prefs_to_player();
@@ -368,10 +358,8 @@ impl App {
 
     /// Records how the direct-session connect attempt turned out.
     fn log_direct_session_outcome(&self, device_name: &str) {
-        if self.remote.direct_remote_connected {
+        if self.direct_remote_connected {
             tracing::info!(name: "auto_reconnect.direct_session.connected", target: "auto_reconnect", device = %device_name, outcome = "direct_daemon_upgrade", "direct session connected");
-        } else if self.connected_session_id.is_some() {
-            tracing::info!(name: "auto_reconnect.direct_session.connected", target: "auto_reconnect", device = %device_name, outcome = "emby_session_control", "direct session connected");
         } else {
             tracing::warn!(name: "auto_reconnect.direct_session.connect_failed", target: "auto_reconnect", device = %device_name, "direct session connection failed; staying local");
         }

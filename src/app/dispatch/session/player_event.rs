@@ -17,11 +17,11 @@ pub(in crate::app) enum PlayerEventFlow {
 impl App {
     /// Mirror mpv's actual volume into `ui_volume` and persist it, so volume
     /// changes made inside the mpv window (not just via mbv's keys) are kept and
-    /// restored on the next launch. Skipped while controlling a remote session
-    /// (the remote owns its volume) and while temporarily muted (so a mute
-    /// doesn't clobber the saved level with 0).
+    /// restored on the next launch. Skipped while the owner's Emby Session
+    /// output holds the volume (D10 puts it in `PlayerStatus`) and while
+    /// temporarily muted (so a mute doesn't clobber the saved level with 0).
     pub(in crate::app) fn sync_volume_from_player(&mut self) {
-        if self.connected_session_id.is_some() {
+        if self.output_is_emby_session() {
             return;
         }
         if self.pre_mute_volume.is_some() {

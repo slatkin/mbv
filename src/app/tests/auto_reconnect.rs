@@ -75,11 +75,7 @@ fn saved_plain_session_record_stays_local_without_an_output_selection() {
     app.try_auto_reconnect();
 
     assert!(
-        app.connected_session_id.is_none() && app.connected_session_state.is_none(),
-        "a plain Session record attaches no Session"
-    );
-    assert!(
-        !app.remote.direct_remote_connected,
+        !app.direct_remote_connected,
         "a plain Session record connects no Direct remote control"
     );
     assert!(

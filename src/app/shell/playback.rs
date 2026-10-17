@@ -57,19 +57,16 @@ impl Model {
         let title_parts = active_item
             .map(|item| self.app.playback_title_parts(item))
             .or_else(|| slotless_title_parts.clone());
-        let title = if state.active {
-            active_item
-                .map(|item| item.title().to_string())
-                .or_else(|| slotless_title_parts.map(|parts| parts.title.text))
-        } else {
-            self.app
-                .connected_session_state
-                .as_ref()
-                .and_then(|session| session.now_playing.clone())
-        };
+        let title = state
+            .active
+            .then(|| {
+                active_item
+                    .map(|item| item.title().to_string())
+                    .or_else(|| slotless_title_parts.map(|parts| parts.title.text))
+            })
+            .flatten();
         let now_playing_title = title.map(|title| (title, palette::Role::PlaybackValueFg.color()));
-        let show_controls =
-            state.active || self.app.connected_session_id.is_some() || self.app.output_is_cast();
+        let show_controls = state.active || self.app.output_is_cast();
         let (prev_available, next_available) = self.app.transport_prev_next_available();
         PlaybackProjection {
             state,
@@ -93,7 +90,7 @@ impl Model {
             }),
             use_nerd_fonts: self.app.use_nerd_fonts,
             availability: TransportAvailability {
-                stop: self.app.connected_session_id.is_some() || state.active,
+                stop: state.active,
                 previous: prev_available,
                 next: next_available,
             },

@@ -2,9 +2,7 @@ use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::dispatch::queue::QueueOpEdit;
 #[cfg(test)]
 use crate::app::tests::QueueViewTestExt;
-use crate::app::{
-    App, LocalPlaybackTarget, PanelFocus, PendingQueueAction, PlaybackTarget, RemotePlaybackTarget,
-};
+use crate::app::{App, PanelFocus, PendingQueueAction};
 pub(in crate::app) use mbv_ctrl::player::CONNECTION_LOST_MESSAGE;
 use mbv_ctrl::player::PlayerCommand;
 use mbv_emby_model::EmbyItem;
@@ -119,60 +117,6 @@ impl App {
 }
 
 impl App {
-    pub(in crate::app) fn playback_target(&self) -> PlaybackTarget {
-        match self.connected_session_id.clone() {
-            Some(session_id) => PlaybackTarget::Remote(RemotePlaybackTarget { session_id }),
-            None => PlaybackTarget::Local(LocalPlaybackTarget),
-        }
-    }
-
-    pub(in crate::app) fn playback_display_target(&self) -> PlaybackTarget {
-        if self.connected_session_state.is_some() {
-            self.playback_target()
-        } else {
-            PlaybackTarget::Local(LocalPlaybackTarget)
-        }
-    }
-
-    pub(in crate::app) fn playback_indicator_target(&self) -> PlaybackTarget {
-        let local_active = self.player.status_snapshot().active;
-        if local_active {
-            PlaybackTarget::Local(LocalPlaybackTarget)
-        } else {
-            self.playback_display_target()
-        }
-    }
-}
-
-impl App {
-    pub(in crate::app) fn remote_audio_indexes(&self) -> Vec<i64> {
-        self.connected_session_state
-            .as_ref()
-            .map(|state| {
-                state
-                    .media_info
-                    .audio_streams
-                    .iter()
-                    .map(|stream| stream.index)
-                    .collect()
-            })
-            .unwrap_or_default()
-    }
-
-    pub(in crate::app) fn remote_subtitle_indexes(&self) -> Vec<i64> {
-        self.connected_session_state
-            .as_ref()
-            .map(|state| {
-                state
-                    .media_info
-                    .subtitle_streams
-                    .iter()
-                    .map(|stream| stream.index)
-                    .collect()
-            })
-            .unwrap_or_default()
-    }
-
     pub(in crate::app) fn lib_page_size(&self) -> usize {
         // The library list is rendered into the right panel; use the panel
         // height directly (rows are single-line; subtract 1 for the

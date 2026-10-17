@@ -3,37 +3,14 @@
 use crate::app::App;
 use crate::app::dispatch::action::Command;
 use mbv_ctrl::player::PlayerCommand;
-use mbv_emby_model::{EmbyItem, i64_to_f64_saturating, seconds_to_ticks};
+use mbv_emby_model::EmbyItem;
 use mbv_ui_msg::TvHit;
-use std::time::{Duration, Instant};
 
 impl App {
     /// Seek to a 0.0..=1.0 `fraction` of the runtime. `LibraryPlaybackPanel`
     /// resolves the click column against its own painted `seekbar_area`, so the
     /// shell never reads that component-owned geometry.
     pub(in crate::app) fn seek_to_fraction(&mut self, fraction: f64) {
-        if let Some(ref conn_id) = self.connected_session_id.clone() {
-            let runtime_s = self
-                .connected_session_state
-                .as_ref()
-                .map_or(0, |s| s.runtime_s);
-            if runtime_s == 0 {
-                return;
-            }
-            let runtime_s_f64 = i64_to_f64_saturating(runtime_s);
-            let ticks = seconds_to_ticks(fraction * runtime_s_f64);
-            let id = conn_id.clone();
-            #[expect(
-                clippy::cast_possible_truncation,
-                reason = "fractional remote seek is truncated to integer seconds"
-            )]
-            let remote_pos_s = (fraction * runtime_s_f64) as i64;
-            self.remote.remote_pos_s = remote_pos_s;
-            self.remote.remote_pos_at = Instant::now();
-            self.remote.remote_seek_pending_until = Instant::now() + Duration::from_secs(4);
-            self.do_session_command(move |c| c.session_seek(&id, ticks));
-            return;
-        }
         let runtime_ticks = self.player.status_snapshot().runtime_ticks;
         if runtime_ticks == 0 {
             return;

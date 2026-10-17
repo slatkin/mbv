@@ -65,7 +65,7 @@ impl App {
             // Only Direct remote control is restorable at launch. A plain
             // Session is not: the owner holds that output, and a new Client
             // presents it without selecting it (design D12).
-            self.remote.direct_remote_label.as_ref().map(|device_name| {
+            self.direct_remote_label.as_ref().map(|device_name| {
                 mbv_config::LastRemoteConnection::DirectSession {
                     device_name: device_name.clone(),
                 }

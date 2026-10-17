@@ -59,7 +59,6 @@ pub(in crate::app) enum UndoEntry {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(in crate::app) enum RemoteSlotState {
-    AttachedSession,
     DirectRemote,
     LocalDaemon,
 }
@@ -168,7 +167,7 @@ pub(in crate::app) enum RoutedReplacementPrep {
     /// direct-remote owner holds the queue.
     ShuffleFolder,
     /// Context-menu Play/Shuffle selection: rebuild and save only when this
-    /// process owns the local queue (no direct remote, no attached session),
+    /// process owns the local queue (no direct remote),
     /// routed default focus.
     Selection,
 }

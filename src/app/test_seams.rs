@@ -19,9 +19,8 @@ pub(in crate::app) static DIRECT_CONNECT_TEST_LOCK: Mutex<()> = Mutex::new(());
 // #222's lazy daemon-route connect primitive, targeting a statically
 // configured DaemonEndpoint with no session discovery. Kept as its own
 // override/lock pair so the two connect paths -- and the App state they
-// eventually drive (`connected_session_id`/`direct_remote_label` vs. a
-// future #223 `active_route`) -- stay independently testable and are
-// never conflated, per #223's explicit "must not be conflated" rule.
+// drive (`direct_remote_label` vs. `active_route`) -- stay independently
+// testable and are never conflated, per #223's explicit rule.
 pub(in crate::app) type DaemonRouteConnectFn = fn(
     &mbv_remote_player::DaemonEndpoint,
 ) -> (
