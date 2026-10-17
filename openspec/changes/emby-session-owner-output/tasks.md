@@ -32,8 +32,8 @@
 
 ## 6. Hand-off and lifecycle
 
-- [ ] 6.1 Implement the hand-off of design D11 for Local↔Emby Session and Cast↔Emby Session, with the pending pause of design D9. Verify: tests: Local playing at a position gives a `play` at that position; a paused state sends `Pause` after the first observation that shows the item; a device that is not listed leaves local playback running; Emby Session→Local cold-starts locally at the estimated position.
-- [ ] 6.2 Stopping the old output sends `transport("Stop")` only while the device plays the loaded item. Owner shutdown stops the worker with no Stop (design D11). Verify: tests: select Local while the loaded item plays records one Stop; select Local while content that the Owner did not load plays records no Stop; shutdown records no Stop.
+- [x] 6.1 Implement the hand-off of design D11 for Local↔Emby Session and Cast↔Emby Session, with the pending pause of design D9. Verify: tests: Local playing at a position gives a `play` at that position; a paused state sends `Pause` after the first observation that shows the item; a device that is not listed leaves local playback running; Emby Session→Local cold-starts locally at the estimated position.
+- [x] 6.2 Stopping the old output sends `transport("Stop")` only while the device plays the loaded item. Owner shutdown stops the worker with no Stop (design D11). Verify: tests: select Local while the loaded item plays records one Stop; select Local while content that the Owner did not load plays records no Stop; shutdown records no Stop.
 
 ## 7. TUI becomes a picker
 
