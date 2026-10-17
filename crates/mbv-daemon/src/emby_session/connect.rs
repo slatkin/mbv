@@ -222,5 +222,6 @@ fn install_output(
         "the Emby Session is now the playback output"
     );
     daemon.owner.output = PlaybackOutput::EmbySession(Box::new(output));
+    crate::emby_session::status::refresh_presentation(daemon, Instant::now());
     broadcast_output_change(daemon);
 }

@@ -19,6 +19,7 @@ use mbv_queue::PlaybackQueue;
 
 use super::super::DaemonLoop;
 use super::{CastLoadedItem, PlaybackOutput};
+use crate::output::not_presenting;
 
 /// One status-poll result (design D8, task 3.3). Only the result whose id
 /// matches the in-flight poll — the same id stamped into that poll's job —
@@ -180,21 +181,6 @@ pub(super) fn presented_player_status(
     presented.paused = status.state == CastPlaybackState::Paused;
     presented.active = true;
     presented
-}
-
-/// The `PlayerStatus` for a Cast output with nothing to present (design D8,
-/// row 6.1): no active playback, no position, no now-playing metadata. The
-/// queue length and the queue's own active marker stay coherent so
-/// status-only consumers never index a slot the queue no longer holds.
-fn not_presenting(base: &PlayerStatus, queue: &PlaybackQueue) -> PlayerStatus {
-    let mut inactive = base.clone();
-    inactive.active = false;
-    inactive.paused = false;
-    inactive.position_ticks = 0;
-    inactive.clear_current_item_metadata();
-    inactive.queue_len = queue.len();
-    inactive.current_idx = queue.active_index().unwrap_or(0);
-    inactive
 }
 
 /// Re-derives the Owner's presented `PlayerStatus` from the Cast output's

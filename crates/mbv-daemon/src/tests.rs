@@ -67,5 +67,6 @@ mod cast_resolve;
 mod cast_status;
 mod emby_session_load;
 mod emby_session_output;
+mod emby_session_status;
 mod emby_session_transport;
 mod r#loop;

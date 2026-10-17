@@ -8,7 +8,7 @@
 use std::sync::mpsc;
 use std::time::Instant;
 
-use mbv_ctrl::OutputConnection;
+use mbv_ctrl::{OutputConnection, SessionNowPlaying};
 use mbv_emby::SessionInfo;
 use mbv_queue::QueueSlotId;
 
@@ -20,6 +20,7 @@ pub(crate) mod connect;
 pub(crate) mod end;
 pub(crate) mod load;
 pub(crate) mod poll;
+pub(crate) mod status;
 pub(crate) mod worker;
 
 pub(crate) use load::{dispatch, dispatch_accepted};
@@ -148,16 +149,54 @@ impl EmbySessionOutput {
         {
             ticks = ticks.saturating_add(mbv_emby_model::seconds_to_ticks(elapsed.as_secs_f64()));
         }
-        let runtime = self
-            .loaded
-            .as_ref()
-            .map(|loaded| loaded.runtime_ticks)
-            .filter(|runtime| *runtime > 0)
-            .unwrap_or(observed.runtime_ticks);
+        let runtime = self.presented_runtime_ticks();
         if runtime > 0 {
             ticks = ticks.min(runtime);
         }
         ticks
+    }
+
+    /// The runtime the estimate and the presented status hold the item to
+    /// (design D6, D10): the loaded slot's runtime while the Session presents
+    /// the loaded item, and the Session's own reported runtime for every other
+    /// observation — a loaded slot with no runtime, an idle Session, or
+    /// content the Owner did not load.
+    pub(crate) fn presented_runtime_ticks(&self) -> i64 {
+        let observed = self.last_observation.as_ref();
+        let session_runtime = observed.map_or(0, |observed| observed.runtime_ticks);
+        let loaded = self
+            .loaded
+            .as_ref()
+            .filter(|loaded| presents_item(observed, &loaded.item_id));
+        match loaded.map(|loaded| loaded.runtime_ticks) {
+            Some(runtime) if runtime > 0 => runtime,
+            _ => session_runtime,
+        }
+    }
+
+    /// The item the device presents that the Owner did not load (design D3,
+    /// D10): the ctrl `OutputState::EmbySession::now_playing` value, which is
+    /// sent when this item changes and not on every status broadcast. The
+    /// loaded item is presented from the queue instead, and an idle Session
+    /// presents nothing.
+    pub(crate) fn now_playing(&self) -> Option<SessionNowPlaying> {
+        let observed = self.last_observation.as_ref()?;
+        let item_id = observed.now_playing_item_id.clone()?;
+        if self
+            .loaded
+            .as_ref()
+            .is_some_and(|loaded| loaded.item_id == item_id)
+        {
+            return None;
+        }
+        Some(SessionNowPlaying {
+            item_id,
+            item_type: observed.now_playing_item_type.clone().unwrap_or_default(),
+            name: observed.now_playing.clone().unwrap_or_default(),
+            series_id: observed.now_playing_series_id.clone(),
+            series_name: observed.now_playing_series_name.clone(),
+            logo_tag: observed.now_playing_logo_etag.clone(),
+        })
     }
 
     /// Whether the Session advertises audio as its only playable media kind
@@ -193,6 +232,13 @@ impl std::fmt::Debug for EmbySessionOutput {
             .field("advance", &self.advance)
             .finish()
     }
+}
+
+/// Whether `observed` presents `item_id` (design D6): the Session's now-playing
+/// item is that item. An idle Session, a missing observation, and content the
+/// Owner did not load all present nothing.
+pub(crate) fn presents_item(observed: Option<&SessionInfo>, item_id: &str) -> bool {
+    observed.and_then(|observed| observed.now_playing_item_id.as_deref()) == Some(item_id)
 }
 
 /// The item the Owner loaded onto an Emby Session (design D1, D6). Emby

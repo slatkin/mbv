@@ -6,7 +6,8 @@
 //! device identity, the poll bookkeeping, and the loaded item.
 
 use mbv_ctrl::OutputState;
-use mbv_queue::QueueSlotId;
+use mbv_ctrl::player::PlayerStatus;
+use mbv_queue::{PlaybackQueue, QueueSlotId};
 
 use self::advance::OutputAdvance;
 use crate::cast::CastOutput;
@@ -42,11 +43,29 @@ pub(crate) fn output_state(output: &PlaybackOutput) -> OutputState {
             name: session.name.clone(),
             connection: session.connection,
             audio_only: session.audio_only(),
-            // Content that the Owner did not load reaches the state from the
-            // observed item (task 5.1).
-            now_playing: None,
+            // Content the Owner did not load reaches the state from the
+            // observed item; the loaded item is presented from the queue
+            // (design D3, D10).
+            now_playing: session.now_playing(),
         },
     }
+}
+
+/// The `PlayerStatus` a remote output with nothing to present projects (design
+/// D8, D10): no active playback, no position, no now-playing metadata. The
+/// queue length and the queue's own active marker stay coherent, so status-only
+/// consumers never index a slot the queue no longer holds. Shared by the Cast
+/// receiver and the Emby Session, which both present a report of their own
+/// state rather than a local run.
+pub(crate) fn not_presenting(base: &PlayerStatus, queue: &PlaybackQueue) -> PlayerStatus {
+    let mut inactive = base.clone();
+    inactive.active = false;
+    inactive.paused = false;
+    inactive.position_ticks = 0;
+    inactive.clear_current_item_metadata();
+    inactive.queue_len = queue.len();
+    inactive.current_idx = queue.active_index().unwrap_or(0);
+    inactive
 }
 
 impl PlaybackOutput {

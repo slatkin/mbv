@@ -29,9 +29,12 @@ pub(crate) const EMBY_SESSION_DISCONNECT_MISSES: u8 = 3;
 /// Submits this tick's poll (design D5) and runs the load timeout (design D6,
 /// task 4.3). The timeout runs on every tick, not only when a poll is due, so
 /// a Session that is idle and unchanged still expires a load it never showed.
+/// The tick also re-derives the presented status from the last observation
+/// (design D10), so the position estimate advances between polls.
 pub(crate) fn tick(daemon: &mut DaemonLoop, now: Instant) {
     submit_due_poll(daemon, now);
     super::end::expire_unseen_load(daemon, now);
+    super::status::refresh_presentation(daemon, now);
 }
 
 /// Submits this tick's poll when one is due: one in flight at a time, at most
@@ -119,6 +122,9 @@ pub(super) fn handle_sessions(
     // load timeout is measured (design D6); this poll's own reading is the
     // observation time.
     super::end::expire_unseen_load(daemon, Instant::now());
+    // The fresh observation re-presents the Owner's status from it (design
+    // D10), so Clients see the device's position, pause, and track state.
+    super::status::refresh_presentation(daemon, Instant::now());
     if changed {
         broadcast_output_change(daemon);
     }
@@ -127,10 +133,11 @@ pub(super) fn handle_sessions(
 /// Applies one `/Sessions` observation of this device (design D5): store the
 /// entry, adopt its session id (a reattach after the device app restarts), and
 /// reset the miss count; a missing entry counts one miss and, at the
-/// threshold, reports the output `Disconnected`. Returns whether the
-/// connection changed, so the caller broadcasts the transition, and the loaded
-/// slot when this observation presents it, so the caller settles its
-/// transition (design D6, D7).
+/// threshold, reports the output `Disconnected`. Returns whether the broadcast
+/// state changed — the connection, or the item the device presents that the
+/// Owner did not load (design D3, D10) — so the caller broadcasts the
+/// transition, and the loaded slot when this observation presents it, so the
+/// caller settles its transition (design D6, D7).
 fn observe(
     output: &mut EmbySessionOutput,
     sessions: &[SessionInfo],
@@ -150,11 +157,15 @@ fn observe(
     };
     output.misses = 0;
     output.session_id = Some(session.id.clone());
+    // The state the ctrl peers hold changes only when the device's own item
+    // changes, not on every poll (design D3, D10).
+    let now_playing_before = output.now_playing();
     output.last_observation = Some(session.clone());
     output.observed_at = Some(Instant::now());
     let presented = presented_loaded_slot(output, session);
+    let now_playing_changed = output.now_playing() != now_playing_before;
     if output.connection == OutputConnection::Connected {
-        return (false, presented);
+        return (now_playing_changed, presented);
     }
     output.connection = OutputConnection::Connected;
     (true, presented)
