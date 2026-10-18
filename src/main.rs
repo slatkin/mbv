@@ -20,13 +20,13 @@ fn cap_glibc_arenas() {
 
 mod app;
 mod config;
+mod launch;
 mod local_daemon;
 mod owner_restart;
 mod pin;
 mod single_instance;
 
 use crate::app::state::home_latest::{capture_launch_window, current_launch_secs};
-use crate::pin::PinnedPanel;
 use app::{App, Model};
 use config::load_config;
 use mbv_core::applog;
@@ -36,12 +36,14 @@ use mbv_emby::EmbyClient;
 use mbv_remote_player as remote_player;
 
 /// Captures the launch window, initializes image pickers, and runs the TUI
-/// with the launch window available to the model. `pinned_panel` is the live
-/// panel handle when this is a `--pin` launch (design D3).
-fn run_tui(mut app: App, pinned_panel: Option<PinnedPanel>) {
+/// with the launch window available to the model. A pinned Client always
+/// starts with Panel focus on Queue (design D3).
+fn run_tui(mut app: App) {
     let launch_window = capture_launch_window(current_launch_secs());
     app.init_image_pickers();
-    app.set_pinned_panel(pinned_panel);
+    if pin::is_pinned() {
+        app.pin_launch_focus_to_queue();
+    }
     if let Err(e) = Model::new_with_launch_window(app, launch_window).run() {
         eprintln!("Error: {e}");
         std::process::exit(1);
@@ -68,10 +70,9 @@ fn run_remote_app(
     player_rx: std::sync::mpsc::Receiver<PlayerEvent>,
     endpoint: &remote_player::DaemonEndpoint,
     config: config::Config,
-    pinned_panel: Option<PinnedPanel>,
 ) {
     let app = App::new_remote_optional_with_config(client, remote, player_rx, endpoint, config);
-    run_tui(app, pinned_panel);
+    run_tui(app);
 }
 
 fn parse_log_level_arg(
@@ -229,10 +230,10 @@ fn print_usage() {
     println!("      --connect-daemon <endpoint>");
     println!("                             Attach as a client to a running mbvd daemon at");
     println!("                             <endpoint> instead of owning a local Player.");
-    println!("      --pin                  Run the TUI docked in a Wayland layer-shell");
-    println!("                             panel instead of this terminal.");
-    println!("      --toggle               Show or hide the running pinned panel");
-    println!("                             (bind this to a compositor key).");
+    println!("      --pin                  Run the TUI in the pinwin panel named mbv.");
+    println!("                             The panel hosts a terminal that runs mbv.");
+    println!("      --toggle               Show or hide the running pinwin panel named");
+    println!("                             mbv (bind this to a compositor key).");
     for action in OwnerAction::ALL {
         println!("      {:<23}{}", action.cli_flag(), action.help());
     }
@@ -388,32 +389,22 @@ fn main() {
         "configuration loaded"
     );
 
-    // Decide and start the pinned panel after `load_config` and before any
-    // terminal setup or output, including the remote-client connection line
-    // (design D3/D5). The decision is the parsed flag alone: the environment
-    // and the instance-socket bind enter as start failures, never as decision
-    // inputs. When a pinned mbv already runs on this display, the running
-    // panel was asked to show and this process exits 0 with no TUI and no
-    // second panel (design D2). `report_start_failure` has already exited
-    // when there is no terminal to fall back to.
-    let pinned_panel = if startup.pin_requested {
-        match pin::start(&config.panel) {
-            Ok(pin::PinLaunch::Started(panel)) => Some(panel),
-            Ok(pin::PinLaunch::ShownExisting) => return,
-            Err(error) => {
-                pin::report_start_failure(&error);
-                None
-            }
-        }
-    } else {
-        None
-    };
+    // Start the panel host after `load_config` and before any terminal setup
+    // or output, including the remote-client connection line (design D1/D2).
+    // The decision is the parsed flag alone; the environment, the terminal
+    // argv and `pinwin` itself enter as start failures, never as decision
+    // inputs. A pre-check failure falls back to this terminal when there is
+    // one; `launch` otherwise waits for `pinwin run` and exits with its
+    // status. A pinned Client then runs as unpinned if no panel started.
+    if startup.pin_requested {
+        let log_level_arg = startup.log_level.as_ref().map(ToString::to_string);
+        pin::launch(&config.panel, log_level_arg.as_deref());
+    }
 
     run_configured_startup(
         startup.log_level.as_ref(),
         startup.cli_daemon_endpoint,
         &config,
-        pinned_panel,
     );
 }
 
@@ -421,7 +412,6 @@ fn run_configured_startup(
     log_level: Option<&applog::LogSpec>,
     cli_daemon_endpoint: Option<String>,
     config: &config::Config,
-    pinned_panel: Option<PinnedPanel>,
 ) {
     let explicit_daemon_endpoint = cli_daemon_endpoint
         .or_else(|| {
@@ -455,14 +445,7 @@ fn run_configured_startup(
         ) {
             Ok((remote, player_rx)) => {
                 tracing::info!(name: "startup.daemon.connected", target: "startup", "daemon endpoint connected");
-                run_remote_app(
-                    client,
-                    remote,
-                    player_rx,
-                    &endpoint,
-                    config.clone(),
-                    pinned_panel,
-                );
+                run_remote_app(client, remote, player_rx, &endpoint, config.clone());
                 return;
             }
             Err(e) => {
@@ -473,18 +456,12 @@ fn run_configured_startup(
         }
     }
 
-    run_local_instance(config, log_level, pinned_panel);
+    run_local_instance(config, log_level);
 }
 
-fn run_local_instance(
-    config: &config::Config,
-    log_level: Option<&applog::LogSpec>,
-    pinned_panel: Option<PinnedPanel>,
-) {
+fn run_local_instance(config: &config::Config, log_level: Option<&applog::LogSpec>) {
     // Every local launch is a Client; a fresh launch transfers the lock to
-    // the owner process before attaching. The panel handle is consumed only
-    // when the TUI finally runs, so retries keep the panel alive.
-    let mut pinned_panel = pinned_panel;
+    // the owner process before attaching.
     let lock_path = mbv_config::owner_lock_path();
     let socket_path = single_instance::socket_path();
     let mut resolution = match single_instance::resolve(&socket_path, &lock_path) {
@@ -527,7 +504,7 @@ fn run_local_instance(
             single_instance::Resolution::Refuse => refuse_local_owner(&lock_path),
         }
 
-        match attach_owner_process(config, &mut pinned_panel) {
+        match attach_owner_process(config) {
             Ok(()) => return,
             Err(error) => match owner_restart::follow_up(&error, restart_requested) {
                 owner_restart::FollowUp::WaitForOwnerExit => {
@@ -573,10 +550,7 @@ fn run_local_instance(
     }
 }
 
-fn attach_owner_process(
-    config: &config::Config,
-    pinned_panel: &mut Option<PinnedPanel>,
-) -> Result<(), remote_player::RemotePlayerError> {
+fn attach_owner_process(config: &config::Config) -> Result<(), remote_player::RemotePlayerError> {
     let client = cached_emby_client(config);
     let (remote, player_rx) = remote_player::RemotePlayer::connect_endpoint(
         &remote_player::DaemonEndpoint::Local,
@@ -589,7 +563,6 @@ fn attach_owner_process(
         player_rx,
         &remote_player::DaemonEndpoint::Local,
         config.clone(),
-        pinned_panel.take(),
     );
     Ok(())
 }

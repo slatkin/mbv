@@ -2,9 +2,9 @@
 //! retired pty start-up (`pin-mbv-in-pinwin`).
 
 use super::{
-    PanelGutter, PanelIdentity, PanelReserve, PinnedWidth, StartFailureAction, failure_action,
-    layout_from_config, request_result, run_argv, set_edge_argv, set_gutters_argv, set_size_argv,
-    terminal_argv, toggle_argv,
+    PanelExitAction, PanelGutter, PanelIdentity, PanelReserve, PinnedWidth, StartFailureAction,
+    exit_action, failure_action, layout_from_config, request_result, run_argv, set_edge_argv,
+    set_gutters_argv, set_size_argv, terminal_argv, toggle_argv,
 };
 use mbv_config::{PanelConfig, PanelSide};
 use std::ffi::OsStr;
@@ -44,6 +44,21 @@ fn layout_from_config_selects_the_active_width(
 fn start_failure_falls_back_to_the_terminal_only_for_a_tty_stdin() {
     assert_eq!(failure_action(true), StartFailureAction::WarnInTerminal);
     assert_eq!(failure_action(false), StartFailureAction::NotifyAndExit);
+}
+
+/// Design D2: a successful `pinwin run` exits quietly; a failure is logged,
+/// and a desktop launch also notifies because it has no stderr to read.
+#[rstest::rstest]
+#[case::success_is_quiet(true, true, PanelExitAction::Quiet)]
+#[case::success_without_a_tty_is_quiet(true, false, PanelExitAction::Quiet)]
+#[case::terminal_failure_is_logged(false, true, PanelExitAction::Log)]
+#[case::desktop_failure_notifies(false, false, PanelExitAction::LogAndNotify)]
+fn exit_action_reports_a_failure_only_outside_a_terminal(
+    #[case] success: bool,
+    #[case] stdin_is_terminal: bool,
+    #[case] expected: PanelExitAction,
+) {
+    assert_eq!(exit_action(success, stdin_is_terminal), expected);
 }
 
 /// Issue #898 (`pinned-expand-covers-collapsed-pushes`): the collapsed

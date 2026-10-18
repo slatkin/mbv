@@ -16,6 +16,7 @@ use std::os::fd::{AsRawFd, FromRawFd};
 use std::process::Command;
 use std::sync::OnceLock;
 
+use crate::launch::launch_exe;
 use mbv_config::PanelConfig;
 use mbv_ctrl::SWAP_TOKEN_ENV;
 use pinwin::instance::{InstanceError, InstanceName, InstanceSocket, Request, SendError};
@@ -92,6 +93,12 @@ pub(crate) enum PinStartError {
     Panel(pinwin::PinwinError),
     /// The stdio hand-over failed after the panel started.
     HandOver(std::io::Error),
+    /// No terminal argv resolved for the panel host (design D1).
+    Terminal(String),
+    /// The mbv binary could not be located.
+    Executable(std::io::Error),
+    /// `pinwin` could not be spawned (design D2).
+    Spawn(std::io::Error),
 }
 
 impl fmt::Display for PinStartError {
@@ -105,6 +112,12 @@ impl fmt::Display for PinStartError {
             Self::Pty(error) => write!(f, "could not open a pty pair: {error}"),
             Self::Panel(error) => write!(f, "{error}"),
             Self::HandOver(error) => write!(f, "terminal hand-over failed: {error}"),
+            Self::Terminal(reason) => f.write_str(reason),
+            Self::Executable(error) => write!(f, "cannot locate the mbv binary: {error}"),
+            Self::Spawn(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                f.write_str("pinwin is not installed")
+            }
+            Self::Spawn(error) => write!(f, "pinwin could not start: {error}"),
         }
     }
 }
@@ -112,11 +125,14 @@ impl fmt::Display for PinStartError {
 impl std::error::Error for PinStartError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
-            Self::Pty(error) | Self::HandOver(error) => Some(error),
+            Self::Pty(error)
+            | Self::HandOver(error)
+            | Self::Executable(error)
+            | Self::Spawn(error) => Some(error),
             Self::Panel(error) => Some(error),
             Self::Instance(error) => Some(error),
             Self::ShowExisting(error) => Some(error),
-            Self::NoWaylandDisplay => None,
+            Self::NoWaylandDisplay | Self::Terminal(_) => None,
         }
     }
 }
@@ -288,9 +304,7 @@ fn terminal_argv(
         (Some(prefix), _) => Ok(prefix.to_vec()),
         (None, Some(terminal)) => Ok(vec![terminal.to_string(), "-e".to_string()]),
         (None, None) => Err(
-            "cannot start the pinned panel: neither [panel] pin_terminal \
-             (config) nor TERMINAL (environment) is set"
-                .to_string(),
+            "neither [panel] pin_terminal (config) nor TERMINAL (environment) is set".to_string(),
         ),
     }
 }
@@ -423,6 +437,106 @@ fn request(argv: &[String]) -> Result<(), String> {
     )
 }
 
+/// What a finished `pinwin run` reports (design D2): a success exits with
+/// its status, a failure is always logged, and a desktop launch also
+/// notifies because it has no stderr to read.
+#[derive(Debug, PartialEq, Eq)]
+enum PanelExitAction {
+    /// Exit with the child's status and report nothing.
+    Quiet,
+    /// Log the failure status, then exit with it.
+    Log,
+    /// Log the failure status, notify, then exit with it.
+    LogAndNotify,
+}
+
+fn exit_action(success: bool, stdin_is_terminal: bool) -> PanelExitAction {
+    match (success, stdin_is_terminal) {
+        (true, _) => PanelExitAction::Quiet,
+        (false, true) => PanelExitAction::Log,
+        (false, false) => PanelExitAction::LogAndNotify,
+    }
+}
+
+/// Start the panel host and wait for it (design D1, D2).
+///
+/// The pre-checks need no Wayland code: `WAYLAND_DISPLAY`, the terminal argv,
+/// the mbv binary and the `pinwin` program itself. Each failure takes the
+/// start-failure path, so a terminal launch falls back to this terminal and a
+/// desktop launch notifies and exits 1. Once `pinwin run` is spawned there is
+/// no fallback: this process waits and exits with the child's status.
+pub(crate) fn launch(config: &PanelConfig, log_level: Option<&str>) {
+    if std::env::var_os("WAYLAND_DISPLAY").is_none_or(|value| value.is_empty()) {
+        report_start_failure(&PinStartError::NoWaylandDisplay);
+        return;
+    }
+    let terminal_env = std::env::var("TERMINAL").ok();
+    let terminal = match terminal_argv(config.pin_terminal.as_deref(), terminal_env.as_deref()) {
+        Ok(terminal) => terminal,
+        Err(reason) => {
+            report_start_failure(&PinStartError::Terminal(reason));
+            return;
+        }
+    };
+    let current = match std::env::current_exe() {
+        Ok(current) => current,
+        Err(error) => {
+            report_start_failure(&PinStartError::Executable(error));
+            return;
+        }
+    };
+    let exe = launch_exe(&current, std::process::id());
+    let mut command = Command::new("pinwin");
+    command.args(run_argv(config, &terminal, exe.as_os_str(), log_level));
+    if let Some(token) = swap_token() {
+        command.env(SWAP_TOKEN_ENV, token);
+    }
+    let mut child = match command.spawn() {
+        Ok(child) => child,
+        Err(error) => {
+            report_start_failure(&PinStartError::Spawn(error));
+            return;
+        }
+    };
+    match child.wait() {
+        Ok(status) => finish(status),
+        Err(error) => {
+            tracing::warn!(
+                name: "startup.pin.wait_failed",
+                target: "startup",
+                { error = %error },
+                "pinned panel wait failed"
+            );
+            if !std::io::stdin().is_terminal() {
+                notify(&format!("mbv: cannot wait for the pinned panel: {error}"));
+            }
+            std::process::exit(1);
+        }
+    }
+}
+
+/// Exit with the child's status, logging and, on a desktop launch, notifying
+/// a failure (design D2).
+fn finish(status: std::process::ExitStatus) -> ! {
+    let action = exit_action(status.success(), std::io::stdin().is_terminal());
+    if action != PanelExitAction::Quiet {
+        tracing::warn!(
+            name: "startup.pin.exited",
+            target: "startup",
+            status = %status,
+            "pinwin run ended with a failure status"
+        );
+    }
+    if action == PanelExitAction::LogAndNotify {
+        let reason = match status.code() {
+            Some(code) => format!("the pinned panel ended with status {code}"),
+            None => "the pinned panel ended by a signal".to_string(),
+        };
+        notify(&format!("mbv: {reason}"));
+    }
+    std::process::exit(status.code().unwrap_or(1));
+}
+
 /// Start the pinned panel and hand this process's stdio to its pty (design
 /// D2). The Wayland check comes first, then the instance socket bind: a
 /// duplicate leaves the environment, the pty and the terminal untouched, and
@@ -491,20 +605,13 @@ fn start_panel(config: &PanelConfig, socket: InstanceSocket) -> Result<PinnedPan
     Ok(panel)
 }
 
-/// Ask the running pinned mbv on this display to toggle its panel (design
-/// D3): hide it if shown, show it if hidden. Exits 1 with a report when no
-/// panel is listening or the request fails; exits 0 silently on success.
+/// Ask pinwin on the current Wayland display to toggle the `mbv` panel
+/// (design D8): hide it if shown, show it if hidden. Exits 1 with pinwin's
+/// reason when no panel runs or the request fails; exits 0 silently on
+/// success.
 pub(crate) fn toggle_running() {
-    match pinwin::instance::send(&instance_name(), Request::Toggle) {
-        Ok(()) => {}
-        Err(SendError::NotListening { .. }) => {
-            report_toggle_failure("no pinned mbv is running");
-        }
-        // `SendError` is non-exhaustive, so mbv reports its `Display` and
-        // does not re-classify it.
-        Err(error) => {
-            report_toggle_failure(&format!("cannot toggle the pinned panel: {error}"));
-        }
+    if let Err(reason) = request(&toggle_argv(PANEL_NAME)) {
+        report_toggle_failure(&reason);
     }
 }
 

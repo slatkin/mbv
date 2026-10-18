@@ -571,18 +571,6 @@ impl App {
         )
     }
 
-    /// Adopt the pinned panel handle for this launch (design D3). A pinned
-    /// launch always starts with Panel focus on Queue, whatever the saved
-    /// state holds (2026-10-05 user rule) — see
-    /// [`App::pin_launch_focus_to_queue`].
-    pub(crate) fn set_pinned_panel(&mut self, panel: Option<crate::pin::PinnedPanel>) {
-        let pinned = panel.is_some();
-        self.pinned_panel = panel;
-        if pinned {
-            self.pin_launch_focus_to_queue();
-        }
-    }
-
     /// A pinned launch's default screen is always the Queue panel, never the
     /// Library: it overrides both saved sources of Panel focus — the persisted
     /// `panel_focus` pref read at construct and the saved launch snapshot's
@@ -591,7 +579,7 @@ impl App {
     /// Library column. Runs before the restore settles, so only the
     /// `Pending` snapshot can exist here; the user can still switch focus
     /// once the session runs, and teardown keeps saving the actual focus.
-    pub(in crate::app) fn pin_launch_focus_to_queue(&mut self) {
+    pub(crate) fn pin_launch_focus_to_queue(&mut self) {
         // Written directly, not through `set_panel_focus`: at construct time
         // the terminal size is still the placeholder 80, and this rule must
         // not depend on which branch a size-dependent setter would take.

@@ -17,9 +17,10 @@ use std::ffi::OsStr;
 use std::io::{self, Read};
 use std::os::unix::net::UnixStream;
 use std::os::unix::process::CommandExt;
-use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
+
+use crate::launch::launch_exe;
 
 const READY_TIMEOUT: Duration = Duration::from_secs(5);
 const READY_POLL_INTERVAL: Duration = Duration::from_millis(20);
@@ -131,20 +132,6 @@ fn swap_argv(
                     .to_string()),
             }
         }
-    }
-}
-
-/// The binary path a launch starts from (spec pin-swap "Launches start the
-/// Owner's own build after its binary file changes").
-///
-/// After the started file is unlinked, Linux `current_exe()` ends in
-/// ` (deleted)` and spawn fails with ENOENT. Then start from the Owner's
-/// `/proc/{owner_pid}/exe`, which names the same build while the Owner runs.
-fn launch_exe(current: &Path, owner_pid: u32) -> PathBuf {
-    if current.to_string_lossy().ends_with(" (deleted)") {
-        PathBuf::from(format!("/proc/{owner_pid}/exe"))
-    } else {
-        current.to_path_buf()
     }
 }
 
@@ -442,27 +429,5 @@ mod tests {
         )
         .expect_err("Unpin without a terminal must fail");
         assert!(error.contains(named), "error must name the source");
-    }
-
-    /// Regression for the Owner log `daemon.pin_swap.spawn_failed …
-    /// "… (deleted)"` (2026-10-10 and 2026-10-11): when `current_exe()` ends
-    /// in ` (deleted)` the started file is gone, so the launch falls back to
-    /// the Owner's `/proc/<pid>/exe`; a live path is returned unchanged.
-    #[rstest]
-    #[case::live_path_is_returned_unchanged("/usr/bin/mbv", 4242, "/usr/bin/mbv")]
-    #[case::deleted_suffix_falls_back_to_owner_proc_exe(
-        "/home/u/target/debug/mbv (deleted)",
-        4242,
-        "/proc/4242/exe"
-    )]
-    fn launch_exe_falls_back_to_the_owner_binary_when_current_is_deleted(
-        #[case] current: &str,
-        #[case] owner_pid: u32,
-        #[case] expected: &str,
-    ) {
-        assert_eq!(
-            launch_exe(Path::new(current), owner_pid),
-            PathBuf::from(expected)
-        );
     }
 }
