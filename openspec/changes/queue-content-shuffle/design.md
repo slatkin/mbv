@@ -6,9 +6,9 @@ See `proposal.md` for the motivation. Today the owner holds a `PlayOrder` (queue
 
 Facts that shape the approach (all observed in the code):
 
-- Queue edits already follow one pattern: a `CtrlCmd::UnifiedQueue*` handler in `crates/mbv-daemon/src/control/queue_edit.rs` edits the canonical `PlaybackQueue`, calls `broadcast_queue_state` once, then forwards per-slot `PlayerCommand`s to the playback run (`QueueMove`, `QueueRemove`).
+- Queue edits already follow one pattern: a `CtrlCmd::UnifiedQueue*` handler in `crates/mbv-daemon/src/control/queue_edit.rs` edits the canonical `PlaybackQueue`, calls `broadcast_queue_state` once, then forwards `PlayerCommand`s to the playback run (`QueueMove`, `QueueRemove`). Shuffle sends one `QueueReorder` instead of a move list.
 - `PlaybackQueue::move_slot` bumps the revision on each call. Nothing reorders many slots in one revision.
-- The run keeps its own queue copy and applies `QueueMove` with `cmd_queue_move`. That function also moves the mpv playlist entry (unless `active_file`) and shifts `current_idx`.
+- The run keeps its own queue copy and applies `QueueMove` with `cmd_queue_move`. That function also moves the mpv playlist entry (unless `active_file`) and shifts `current_idx`. The Shuffle's `cmd_queue_reorder` reuses this seam per planned move.
 - The Emby Session output already copes with a queue edit that changes the queued next item: `check_queued_next` marks it stale, and the device is corrected when it moves to the stale item. A Cast receiver holds only the active item.
 - `rand` is already a dependency of `mbv-player` (used by the pick being removed) and of the TUI crate.
 
@@ -33,8 +33,8 @@ Facts that shape the approach (all observed in the code):
 **D2. One new `PlaybackQueue` method reorders all slots in one revision.** `PlaybackQueue::reorder_slots(order: &[QueueSlotId])` replaces the slot sequence and bumps the revision once. It requires `order` to hold exactly the current slot ids and returns `NotFound` otherwise. The shuffle itself (pure function: active slot first, rest shuffled with an injected `Rng`) lives beside it, so tests inject a seeded RNG and need no sleep or randomness.
 *Alternative:* call `move_slot` per slot. Rejected: N revisions, and a Client could see an intermediate order.
 
-**D3. The run receives a move list, not a new command.** After one `broadcast_queue_state`, the handler sends `PlayerCommand::QueueMove(slot, index)` for each position whose slot is not yet in place (target index `k` from 0 up). `cmd_queue_move` already keeps the mpv playlist and `current_idx` right for each move, and the active slot moves first, so `current_idx` ends at 0.
-*Alternative:* a new `PlayerCommand::QueueReorder(Vec<QueueSlotId>)` that rewrites the mpv playlist. Rejected for now: a second implementation of playlist surgery for mpv. The risk below covers the one thing a move list can lose.
+**D3. The run receives one `QueueReorder` command.** After one `broadcast_queue_state`, the handler sends `PlayerCommand::QueueReorder(order)` once. The run's `cmd_queue_reorder` checks that the order names exactly the run's slots and discards a stale order with a warning (an owner reorder can land between mint and delivery). Then it applies the move plan (`reorder_move_plan` -> `playlist_move_args` -> mpv `playlist-move`, plus `apply_queue_move` per pair) inside that one handler. The active slot moves first, so `current_idx` ends at 0. The run drains `cmd_rx` with `try_recv` per tick, and `Empty` is not a batch boundary: the mpv event drain can process an `EndFile` against a partially applied order. One command closes that window. `QueueReorder` does not add a second playlist-surgery implementation because it reuses the move seams.
+*Alternative:* forward a `QueueMove(slot, index)` list, one command per position. Rejected: a natural end can land between two commands, and `advance_next_index` then computes `current_idx + 1` on the intermediate order.
 
 **D4. The ctrl command mirrors the other queue edits.** `CtrlCmd::UnifiedQueueShuffle { op: Option<QueueOpId> }`, gated by a new hello capability `queue-shuffle` (`supports_queue_shuffle` on the peer hello, `PlayerProxy::supports_queue_shuffle` and `shuffle_queue`). The capability is additive, so there is no protocol version bump (ctrl-protocol: capability rule). `queue_op_id` and the role-gate lists in `commands.rs` get the new variant with an exhaustive arm (AGENTS.md: no wildcard on boundary requests).
 
@@ -49,8 +49,8 @@ Facts that shape the approach (all observed in the code):
 
 ## Risks / Trade-offs
 
-- [The run applies the move list in several commands, and a natural end could land between two moves] → The owner's event loop sends all moves back to back in one handler call, and the run drains its command channel per loop turn. Task 3.3 adds a run-level test that a natural advance after the full list follows the new order, and a check of the drain loop; if the drain is not atomic, switch to the `QueueReorder` alternative in D3.
-- [Moving the active slot to index 0 shifts mpv's current index] → `cmd_queue_move` and `shift_index_for_move` already own this. Task 3.2 tests a Shuffle with the active slot in the middle and at the end.
+- [A natural end lands between two moves of one Shuffle] → Resolved by D3: the owner sends one `QueueReorder`, and the run applies the whole plan inside that handler before the next mpv event drain. A run-level test covers a natural advance after the reorder.
+- [Moving the active slot to index 0 shifts mpv's current index] → `cmd_queue_reorder` and `shift_index_for_move` already own this. Task 3.2 tests a Shuffle with the active slot in the middle and at the end.
 - [Breaking removal of `play-order` and `SetPlayOrder`] → Mixed versions work: the new owner never advertises `play-order`, so an old Client hides its toggle; an old owner never advertises `queue-shuffle`, so a new Client hides Shuffle.
 - [A saved queue written while Shuffle was on] → The play order was never persisted, so nothing to migrate.
 - [Emby Session next item goes stale] → Covered by existing `check_queued_next`; task 4.2 tests that a Shuffle marks it stale.
