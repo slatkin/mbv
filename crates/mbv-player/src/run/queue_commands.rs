@@ -75,24 +75,29 @@ impl PlaybackRun {
         None
     }
 
-    pub(super) fn cmd_queue_move(&mut self, slot_id: QueueSlotId, to: usize, mpv: &Mpv) {
+    pub(crate) fn cmd_queue_move(&mut self, slot_id: QueueSlotId, to: usize, mpv: &Mpv) {
         let Some(from) = self.queue.slot_index(slot_id) else {
             return;
         };
         if from >= self.queue_len() || to >= self.queue_len() || from == to {
             return;
         }
-        // mpv's playlist-move index2 names the *pre-move* slot the
-        // entry should end up next to, not its post-move index: for
-        // from < to the entry actually lands at to - 1, not to (mpv
-        // manual's own "paradox" note, confirmed against mpv 0.41).
-        // Passing to + 1 (one past the end when to == n - 1, which
-        // mpv also accepts as "move to end") makes mpv's result
-        // match this struct's from/to bookkeeping below.
         if !self.active_file {
-            let mpv_to = if from < to { to + 1 } else { to };
-            let _ = mpv.command("playlist-move", &[&from.to_string(), &mpv_to.to_string()]);
+            let (mpv_from, mpv_to) = playlist_move_args(from, to);
+            let _ = mpv.command(
+                "playlist-move",
+                &[&mpv_from.to_string(), &mpv_to.to_string()],
+            );
         }
+        self.apply_queue_move(slot_id, from, to);
+    }
+
+    /// The bookkeeping one queue move applies to the run's queue mirror and
+    /// its tracked mpv index. Split from [`Self::cmd_queue_move`] so the
+    /// Shuffle move list (queue-content-shuffle task 3.2) can be driven in
+    /// tests without a live mpv handle; the mpv playlist command itself is
+    /// pinned by the `playlist_move_args` test.
+    pub(crate) fn apply_queue_move(&mut self, slot_id: QueueSlotId, from: usize, to: usize) {
         let _ = self.queue.move_slot(slot_id, to);
         // `current_idx` is this run's mpv-local coordinate; adjust it
         // for the move directly (design D2) rather than recomputing
@@ -100,4 +105,16 @@ impl PlaybackRun {
         self.current_idx = shift_index_for_move(self.current_idx, from, to);
         self.sync_status_position();
     }
+}
+
+/// mpv's `playlist-move` arguments for moving the entry at `from` to `to`.
+///
+/// mpv's index2 names the *pre-move* slot the entry should end up next to,
+/// not its post-move index: for `from < to` the entry actually lands at
+/// `to - 1`, not `to` (mpv manual's own "paradox" note, confirmed against
+/// mpv 0.41). Passing `to + 1` (one past the end when `to == n - 1`, which
+/// mpv also accepts as "move to end") makes mpv's result match the run's
+/// from/to bookkeeping in [`PlaybackRun::apply_queue_move`].
+pub(crate) fn playlist_move_args(from: usize, to: usize) -> (usize, usize) {
+    (from, if from < to { to + 1 } else { to })
 }

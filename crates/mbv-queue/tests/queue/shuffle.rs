@@ -29,6 +29,30 @@ fn reorder_slots_bumps_revision_once_and_keeps_slot_ids() {
     assert_eq!(queue.slot_index(active), Some(0));
 }
 
+/// The contract: the Shuffle move list reaches the target with moves that
+/// never disturb the positions already placed, and the active slot moves
+/// first so a run applying the list holds it at index 0 from the first move
+/// on (design D3).
+#[test]
+fn reorder_move_plan_applies_as_incremental_moves_and_reaches_the_target() {
+    let mut queue = queue_from_items(vec![item("a"), item("b"), item("c"), item("d")], Some(2));
+    let before = slot_ids(&queue);
+    let active = queue.active_slot_id().unwrap();
+    let target = vec![active, before[3], before[1], before[0]];
+
+    let plan = reorder_move_plan(&before, &target);
+    for (slot_id, to) in &plan {
+        queue.move_slot(*slot_id, *to);
+    }
+
+    assert_eq!(slot_ids(&queue), target);
+    assert_eq!(plan[0], (active, 0), "the active slot moves first");
+    assert!(
+        plan.windows(2).all(|pair| pair[0].1 < pair[1].1),
+        "targets go from 0 up, so no move disturbs the placed positions"
+    );
+}
+
 /// The contract: an order that is not exactly the current slots is rejected
 /// and leaves the queue untouched (design D2).
 #[test]

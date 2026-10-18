@@ -671,6 +671,34 @@ impl FetchedItemMatches {
     }
 }
 
+/// The incremental moves that turn the slot order `current` into `target`:
+/// one `(slot, new index)` pair per position whose slot is not already in
+/// place, target index from 0 up. Applying the pairs with `move_slot` in
+/// order reaches `target` and never disturbs the positions already placed,
+/// so a move list whose first pair moves the active slot to index 0 leaves
+/// it there (the Shuffle handler forwards exactly this list to the run).
+/// `target` must name the same slots as `current`; a foreign id is skipped.
+#[must_use]
+pub fn reorder_move_plan(
+    current: &[QueueSlotId],
+    target: &[QueueSlotId],
+) -> Vec<(QueueSlotId, usize)> {
+    let mut order: Vec<QueueSlotId> = current.to_vec();
+    let mut moves = Vec::new();
+    for (to, slot_id) in target.iter().enumerate() {
+        let Some(from) = order.iter().position(|id| id == slot_id) else {
+            continue;
+        };
+        if from == to {
+            continue;
+        }
+        order.remove(from);
+        order.insert(to, *slot_id);
+        moves.push((*slot_id, to));
+    }
+    moves
+}
+
 /// Returns `true` when `order` names exactly the slots in `current`, each once.
 fn is_slot_permutation(current: impl Iterator<Item = QueueSlotId>, order: &[QueueSlotId]) -> bool {
     let mut current: Vec<QueueSlotId> = current.collect();

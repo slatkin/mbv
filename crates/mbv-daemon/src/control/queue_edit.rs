@@ -191,6 +191,8 @@ pub(super) fn handle_queue_shuffle(ctx: &mut CtrlContext<'_>, rng: &mut impl ran
         ..
     } = &mut *ctx.owner;
     let order = queue.shuffled_slot_order(rng);
+    let current: Vec<QueueSlotId> = queue.slots().iter().map(|slot| slot.slot_id).collect();
+    let moves = mbv_queue::reorder_move_plan(&current, &order);
     if matches!(
         queue.reorder_slots(&order),
         mbv_queue::QueueMutationResult::Applied(())
@@ -204,6 +206,13 @@ pub(super) fn handle_queue_shuffle(ctx: &mut CtrlContext<'_>, rng: &mut impl ran
             transitions,
             except_op_client,
         );
+        // Design D3: the run receives the reorder as the per-slot `QueueMove`
+        // list; the active slot moves first, so the run's `current_idx` ends
+        // at 0 and each later move leaves the placed positions alone.
+        for (slot_id, to) in moves {
+            ctx.player
+                .send_command(PlayerCommand::QueueMove(slot_id, to));
+        }
     }
 }
 

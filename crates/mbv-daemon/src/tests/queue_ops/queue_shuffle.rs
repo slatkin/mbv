@@ -5,6 +5,39 @@ use std::collections::HashSet;
 
 use super::*;
 
+/// The contract for the forwarded reorder (design D3): the run receives the
+/// per-slot `QueueMove` list, the active slot moves first, targets go from 0
+/// up, and applying the list reaches exactly the shuffled order.
+fn assert_forwarded_moves_reach_the_shuffled_order(
+    cmd_rx: &mpsc::Receiver<PlayerCommand>,
+    before_order: &[mbv_queue::QueueSlotId],
+    after_order: &[mbv_queue::QueueSlotId],
+    active: mbv_queue::QueueSlotId,
+) {
+    let mut moves = Vec::new();
+    while let Ok(cmd) = cmd_rx.try_recv() {
+        match cmd {
+            PlayerCommand::QueueMove(slot_id, to) => moves.push((slot_id, to)),
+            other => panic!("expected a QueueMove, got {other:?}"),
+        }
+    }
+    assert_eq!(moves[0], (active, 0), "the active slot moves first");
+    assert!(
+        moves.windows(2).all(|pair| pair[0].1 < pair[1].1),
+        "targets go from 0 up"
+    );
+    let mut forwarded: Vec<mbv_queue::QueueSlotId> = before_order.to_vec();
+    for (slot_id, to) in moves {
+        let from = forwarded
+            .iter()
+            .position(|id| *id == slot_id)
+            .expect("a forwarded move names a queue slot");
+        forwarded.remove(from);
+        forwarded.insert(to, slot_id);
+    }
+    assert_eq!(forwarded, after_order);
+}
+
 #[test]
 fn unified_queue_shuffle_reorders_once_with_the_active_slot_first_and_the_same_slots() {
     let player = cold_player();
@@ -28,6 +61,13 @@ fn unified_queue_shuffle_reorders_once_with_the_active_slot_first_and_the_same_s
     );
     let active = owner.core.queue.slots()[2].slot_id;
     let before_revision = owner.core.queue.revision().raw();
+    let before_order: Vec<_> = owner
+        .core
+        .queue
+        .slots()
+        .iter()
+        .map(|slot| slot.slot_id)
+        .collect();
     let before_slots: HashSet<String> = owner
         .core
         .queue
@@ -83,6 +123,14 @@ fn unified_queue_shuffle_reorders_once_with_the_active_slot_first_and_the_same_s
         other => panic!("expected an applied QueueOpResult, got {other:?}"),
     }
 
-    // Forwarding the reorder to the playback run is row 3.2.
-    assert!(cmd_rx.try_recv().is_err(), "no player command yet");
+    // The run receives the reorder as the per-slot QueueMove list (design
+    // D3); the helper owns the full contract.
+    let after_order: Vec<_> = owner
+        .core
+        .queue
+        .slots()
+        .iter()
+        .map(|slot| slot.slot_id)
+        .collect();
+    assert_forwarded_moves_reach_the_shuffled_order(&cmd_rx, &before_order, &after_order, active);
 }

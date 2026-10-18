@@ -437,6 +437,11 @@ impl RemotePlayer {
     }
 
     #[must_use]
+    pub fn supports_queue_shuffle(&self) -> bool {
+        self.ctrl_compatibility.supports_queue_shuffle
+    }
+
+    #[must_use]
     pub fn supports_playback_output(&self) -> bool {
         self.ctrl_compatibility.supports_playback_output
     }
