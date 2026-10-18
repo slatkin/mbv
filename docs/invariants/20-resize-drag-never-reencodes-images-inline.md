@@ -67,8 +67,9 @@ variant on the tick thread.
 - During a drag the queue card's `ThreadProtocol` still posts one worker
   resize job per event (off-thread; UI stays responsive, the worker churns
   and the card shows the placeholder between responses).
-- The pinned panel's width tween changes panel geometry per frame with no
-  shell-visible tween-in-progress signal, so the hero re-encodes inline per
-  tween frame (invariant 17 documents the tween's remaining costs). A
-  pinwin-side tween-progress signal would let `refresh_resize_drag_hold`
-  cover it.
+- A pinned width change (`x` or an F2 width row) arrives as one ordinary
+  terminal `Resize` with no pointer drag, so `refresh_resize_drag_hold` never
+  covers it: the hero's cover-fit re-encode runs inline once on the sync pass
+  that adopts the resize. The 0.4 model sends one new size per change, so a
+  change costs one re-encode (~5–12 ms), not one per frame, but the sync
+  thread still pays it.
