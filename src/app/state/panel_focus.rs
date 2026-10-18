@@ -35,8 +35,8 @@ impl App {
     }
 
     /// Whether the two-panel layout's queue column is hidden this frame
-    /// because the displayed queue has no slots (design D1, change
-    /// `hide-empty-queue-column`). Mini view and queue-only keep the
+    /// because the displayed queue has no slots. Mini view and queue-only keep
+    /// the
     /// empty-queue placeholder, so only the wide two-panel layout hides.
     /// The stored `panel_mode` is never written: the `x` cycle reads the
     /// stored mode and still advances `both -> queue-only` while hidden.
@@ -50,7 +50,7 @@ impl App {
     /// Below `MINI_VIEW_THRESHOLD` columns the Power View ignores the stored
     /// three-state `panel_mode` and derives a two-state mini view from the
     /// ephemeral `mini_view_focus`; at 80+ columns the stored mode is used,
-    /// except that an empty displayed queue renders library-only (D1).
+    /// except that an empty displayed queue renders library-only.
     pub(in crate::app) fn effective_panel_mode(&self) -> PanelMode {
         if self.is_mini_view() {
             match self.mini_view_focus {
@@ -67,7 +67,7 @@ impl App {
     /// The panel focus actually in effect for input routing this frame. Below
     /// `MINI_VIEW_THRESHOLD` columns this is `mini_view_focus`; at 80+ columns
     /// the stored `panel_focus` is returned, except that a hidden empty queue
-    /// column never holds focus (D2).
+    /// column never holds focus.
     pub(in crate::app) fn effective_panel_focus(&self) -> PanelFocus {
         if self.is_mini_view() {
             self.mini_view_focus

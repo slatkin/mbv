@@ -1,4 +1,4 @@
-//! Unit tests for the pinwin boundary (`pinwin-app-host` design D1 to D8).
+//! Unit tests for the pinwin boundary.
 
 use super::{
     PanelExitAction, PanelGutter, PanelIdentity, PinSpawnError, StartFailureAction, exit_action,
@@ -14,7 +14,7 @@ fn strings(items: &[&str]) -> Vec<String> {
     items.iter().map(|item| (*item).to_string()).collect()
 }
 
-/// Design D5: a failed pinned start falls back to the terminal only when
+/// A failed pinned start falls back to the terminal only when
 /// there is one; otherwise it notifies and exits 1.
 #[test]
 fn start_failure_falls_back_to_the_terminal_only_for_a_tty_stdin() {
@@ -22,7 +22,7 @@ fn start_failure_falls_back_to_the_terminal_only_for_a_tty_stdin() {
     assert_eq!(failure_action(false), StartFailureAction::NotifyAndExit);
 }
 
-/// Design D2: a successful `pinwin run` exits quietly; a failure is logged,
+/// A successful `pinwin run` exits quietly; a failure is logged,
 /// and a desktop launch also notifies because it has no stderr to read.
 #[rstest::rstest]
 #[case::success_is_quiet(true, true, PanelExitAction::Quiet)]
@@ -36,7 +36,7 @@ fn exit_action_reports_a_failure_only_outside_a_terminal(
     assert_eq!(exit_action(success, stdin_is_terminal), expected);
 }
 
-/// Design D3: a set panel name makes the launch pinned; an empty or unset
+/// A set panel name makes the launch pinned; an empty or unset
 /// value leaves it unpinned.
 #[rstest::rstest]
 #[case::set(Some("mbv"), true)]
@@ -49,7 +49,7 @@ fn panel_identity_is_pinned_only_for_a_set_panel_name(
     assert_eq!(identity.name.is_some(), expected);
 }
 
-/// Design D3: an empty socket counts as unset, so a request never points at
+/// An empty socket counts as unset, so a request never points at
 /// an empty path.
 #[rstest::rstest]
 #[case::set(
@@ -65,7 +65,7 @@ fn panel_identity_keeps_a_socket_only_when_set(
     assert_eq!(identity.socket.as_deref(), expected);
 }
 
-/// Design D1/D2/D5/D8: the launcher argv names the panel, shows an existing
+/// The launcher argv names the panel, shows an existing
 /// panel, passes every layout value mbv owns, and puts the terminal, the mbv
 /// exe and the log level after `--`.
 #[rstest::rstest]
@@ -114,7 +114,7 @@ fn run_argv_carries_the_layout_the_terminal_and_the_log_level(
     );
 }
 
-/// Design D1: `[panel] pin_terminal` wins over `TERMINAL`, and an empty
+/// `[panel] pin_terminal` wins over `TERMINAL`, and an empty
 /// prefix counts as unset.
 #[rstest::rstest]
 #[case::config_prefix_wins(
@@ -135,7 +135,7 @@ fn terminal_prefix_prefers_the_config_prefix_then_the_environment(
     );
 }
 
-/// Design D1: with neither source set, the reason names both.
+/// With neither source set, the reason names both.
 #[test]
 fn terminal_prefix_without_a_source_names_both() {
     let error = terminal_prefix(None, None, "pin_terminal").expect_err("no terminal must fail");
@@ -146,7 +146,7 @@ fn terminal_prefix_without_a_source_names_both() {
     assert!(error.contains("TERMINAL"), "error must name environment");
 }
 
-/// Design D6: the requested view picks both the saved width and the reserve
+/// The requested view picks both the saved width and the reserve
 /// mode, so one `x` press is one panel change and no tiled window moves.
 #[rstest::rstest]
 #[case::collapsed_pushes_at_width(
@@ -169,7 +169,7 @@ fn pinned_width_argv_sends_the_views_width_and_reserve_mode(
     assert_eq!(pinned_width_argv("mbv", &config, width), strings(&expected));
 }
 
-/// Design D7: a side change names the panel and the new edge.
+/// A side change names the panel and the new edge.
 #[rstest::rstest]
 #[case::left("mbv", PanelSide::Left, vec!["set-edge", "mbv", "left"])]
 #[case::right("mbv", PanelSide::Right, vec!["set-edge", "mbv", "right"])]
@@ -181,7 +181,7 @@ fn set_edge_argv_sends_the_side(
     assert_eq!(set_edge_argv(panel, side), strings(&expected));
 }
 
-/// Design D7: one gutter row edits one gutter, including a negative inset.
+/// One gutter row edits one gutter, including a negative inset.
 #[rstest::rstest]
 #[case::top("mbv", PanelGutter::Top, -10, vec!["set-gutters", "mbv", "--top", "-10"])]
 #[case::right("tunes", PanelGutter::Right, 6, vec!["set-gutters", "tunes", "--right", "6"])]
@@ -194,7 +194,7 @@ fn set_gutters_argv_sends_the_edited_gutter(
     assert_eq!(set_gutters_argv(panel, gutter, value), strings(&expected));
 }
 
-/// Design D8: `--toggle` names the panel it toggles.
+/// `--toggle` names the panel it toggles.
 #[test]
 fn toggle_argv_names_the_panel() {
     assert_eq!(toggle_argv("mbv"), strings(&["toggle", "mbv"]));
@@ -215,7 +215,7 @@ fn pin_spawn_error_names_the_cause(#[case] kind: std::io::ErrorKind, #[case] exp
     );
 }
 
-/// Design D4: exit 0 is success, exit 1 is pinwin's own reason, exit 2 is a
+/// Exit 0 is success, exit 1 is pinwin's own reason, exit 2 is a
 /// usage mismatch, and any other ending names the ending.
 #[rstest::rstest]
 #[case::success(Some(0), "", Ok(()))]

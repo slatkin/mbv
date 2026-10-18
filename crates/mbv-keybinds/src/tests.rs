@@ -1,8 +1,8 @@
 use super::*;
 
-// ── Task 1.1: declaration ───────────────────────────────────────────────
+// ── declaration ─────────────────────────────────────────────────────────
 
-/// Mirrors `SETTING_SECTIONS`' names and order (design D4) plus `Global`.
+/// Mirrors `SETTING_SECTIONS`' names and order plus `Global`.
 const EXPECTED_SECTIONS: &[&str] = &[
     "Services", "Playback", "Display", "Session", "Library", "Queue", "Mpv", "Feeds", "Actions",
     "Global",
@@ -31,7 +31,7 @@ const GLOBAL_ACTION_IDS: &[&str] = &[
     "library_tab_jump",
 ];
 
-/// The split transport actions (the `playback` bucket, task 5.1).
+/// The split transport actions (the `playback` bucket).
 const TRANSPORT_ACTION_IDS: &[&str] = &[
     "toggle_play_pause",
     "stop",
@@ -175,7 +175,7 @@ fn non_prefix_addressable_actions_are_the_documented_exceptions() {
     }
 }
 
-// ── Task 1.2: parser and defaults ───────────────────────────────────────
+// ── parser and defaults ─────────────────────────────────────────────────
 
 fn chord_case(input: &'static str, mods: KeyMods, key: Key) -> (&'static str, Chord) {
     (input, Chord { mods, key })
@@ -348,7 +348,7 @@ fn partial_override_patches_only_the_configured_action() {
     );
 }
 
-// ── Task 1.3: load-time validation ──────────────────────────────────────
+// ── load-time validation ────────────────────────────────────────────────
 
 fn raw_router(section: &str, entries: &[(&str, &str)]) -> (String, RawSection) {
     (
@@ -640,7 +640,7 @@ fn reserved_chord_list_is_the_documented_set() {
     }
 }
 
-// ── Keys-row summary count (task 7.2, design D7) ────────────────────────
+// ── Keys-row summary count ──────────────────────────────────────────────
 
 #[test]
 fn override_count_counts_distinct_overridden_action_ids() {

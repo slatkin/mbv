@@ -1,5 +1,4 @@
-//! Panel-row contracts of the pinned settings path (change `pinwin-app-host`,
-//! design D7).
+//! Panel-row contracts of the pinned settings path.
 //!
 //! The `pinwin` request runner spawns a real process, so the save/flash half
 //! takes the request outcome as its argument: `apply_panel_setting_outcome`
@@ -27,7 +26,7 @@ fn candidate() -> PanelConfig {
     }
 }
 
-/// Design D7: a width row asks for the width it edited, a `Side` row moves the
+/// A width row asks for the width it edited, a `Side` row moves the
 /// panel, a gutter row changes only that gutter, and an accent row takes no
 /// panel request.
 #[rstest]
@@ -67,7 +66,7 @@ fn pinned_setting_request_names_the_rows_panel_change(
     assert_eq!(pinned_setting_request(key, &candidate()), expected);
 }
 
-/// Design D7: an accepted request saves the candidate, arms the settings save,
+/// An accepted request saves the candidate, arms the settings save,
 /// and records the width the row switched the panel to.
 #[test]
 fn accepted_pinned_request_saves_the_candidate() {
@@ -86,7 +85,7 @@ fn accepted_pinned_request_saves_the_candidate() {
     assert!(app.settings_save_at.is_some(), "the save is armed");
 }
 
-/// Design D7: a refused request flashes pinwin's reason and saves nothing, so
+/// A refused request flashes pinwin's reason and saves nothing, so
 /// the row keeps its previous value and the panel keeps its width.
 #[test]
 fn refused_pinned_request_keeps_the_value_and_the_panel() {
@@ -108,7 +107,7 @@ fn refused_pinned_request_keeps_the_value_and_the_panel() {
     assert_eq!(app.status_severity, ToastSeverity::Warning);
 }
 
-/// Design D3/D7: an accent row saves without a panel request and, while pinned,
+/// An accent row saves without a panel request and, while pinned,
 /// announces that the change applies on the next launch.
 #[test]
 fn accent_row_while_pinned_saves_and_announces_the_next_launch() {
@@ -128,7 +127,7 @@ fn accent_row_while_pinned_saves_and_announces_the_next_launch() {
     assert_eq!(app.status_severity, ToastSeverity::Neutral);
 }
 
-/// Design D7: a launch outside the panel saves the value with no request, no
+/// A launch outside the panel saves the value with no request, no
 /// width record, and no launch toast.
 #[test]
 fn unpinned_row_saves_without_recording_a_pinned_width() {

@@ -5,7 +5,7 @@ use rstest::rstest;
 /// The Tray row (labelled `Show systray icon`) shows whether the Tray is
 /// enabled, not the stored preference: with stay-alive on the row reads on
 /// even when the preference is off (contract `local-daemon-tray` "Row while
-/// stay-alive is on", design D3).
+/// stay-alive is on").
 #[test]
 fn tray_row_reads_on_while_stay_alive_is_on() {
     let cfg = mbv_config::Config {
@@ -19,8 +19,7 @@ fn tray_row_reads_on_while_stay_alive_is_on() {
     assert_eq!(value, bool_val(true));
 }
 
-/// The `Accent color` row's cycle contract (change
-/// `pinned-panel-focus-accent`, design D3; issue #875): the row steps through
+/// The `Accent color` row's cycle contract (issue #875): the row steps through
 /// the fixed palette, then through the custom colour the shell holds (if
 /// any), then wraps to the palette's first entry — so a custom colour is
 /// reachable again after a full round trip.
@@ -59,8 +58,8 @@ fn accent_color_cycle_steps_through_the_palette_then_the_held_custom_colour(
     assert_eq!(stepped.accent_color, expected);
 }
 
-/// Panel stepper rows step by their base unit (change `pinwin-app-host`,
-/// design D5): a width row moves 10 logical pixels per press and 100 with
+/// Panel stepper rows step by their base unit: a width row moves 10 logical
+/// pixels per press and 100 with
 /// Shift, while a gutter row keeps its step of 1 and 10 with Shift.
 #[rstest]
 #[case::width_steps_ten(SettingKey::PanelWidth, 1, 410, 1100, 0)]

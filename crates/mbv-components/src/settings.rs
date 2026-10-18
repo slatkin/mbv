@@ -34,7 +34,7 @@ pub struct SettingsSnapshot {
     pub destination: SettingsDestination,
     pub rows: Vec<SettingsRow>,
     pub services: Vec<ServiceRow>,
-    /// The read-only Keys destination's content (design D7): group-header
+    /// The read-only Keys destination's content: group-header
     /// rows (`section: true`) for each populated `KeySection` plus one row
     /// per declared registry action with its configured chords. The
     /// destination is read-only — chords change in the config file, never
@@ -57,11 +57,11 @@ pub struct SettingsComponent {
     scroll: usize,
     area: Rect,
     geometry: SettingsRenderGeometry,
-    /// Irregular painted chrome (task 5.2, design.md D6): the
+    /// Irregular painted chrome: the
     /// cursor-activatable rows, repopulated in `view()` from the geometry
     /// the painter just produced. Tag = the row's cursor index.
     hit_rows: HitRegions<usize>,
-    /// Private per-parent gesture recognition (ADR 0024, design.md D3).
+    /// Private per-parent gesture recognition (ADR 0024).
     mouse_gestures: MouseGestureState,
     initialized: bool,
 }
@@ -271,7 +271,7 @@ impl SettingsComponent {
                 self.clamp_keys_cursor_to_window();
                 None
             }
-            // Read-only destination (design D7): Enter/Space select
+            // Read-only destination: Enter/Space select
             // nothing — the chord changes in the config file, never in
             // place (ADR 0023). Returning None lets `on()`'s fallback
             // claim them like the cursor moves.
@@ -347,8 +347,8 @@ impl SettingsComponent {
         }
     }
 
-    /// The intent for a value key on the main or Panel list (design D6,
-    /// change `pin-mbv-in-pinwin`): a Panel stepper row steps — Left down,
+    /// The intent for a value key on the main or Panel list: a Panel stepper
+    /// row steps — Left down,
     /// Right/Space/Enter up — while every other row activates. The delta is
     /// the step count (±1, or ±10 with Shift); the settings model scales it
     /// by the row's base step, so a width row moves 10 pixels and 100 with
@@ -374,13 +374,13 @@ impl SettingsComponent {
         }
     }
 
-    /// Mouse handling (task 5.2): recognition via the component's own
-    /// `MouseGestureState` (ADR 0024, design.md D3); row geometry via
-    /// `HitRegions` (D6). Behaviour unchanged from the ad-hoc handler: a
+    /// Mouse handling: recognition via the component's own
+    /// `MouseGestureState` (ADR 0024); row geometry via
+    /// `HitRegions`. Behaviour unchanged from the ad-hoc handler: a
     /// click outside the panel dismisses, a click on a cursor-activatable
     /// row selects and activates it (the Enter/Space equivalent), and the
     /// focused overlay's wheel scrolls the document by one step (three
-    /// document lines; wheel-scrolls-viewport D1, design.md D7).
+    /// document lines).
     fn handle_mouse(&mut self, mouse: MouseEvent) -> Option<Msg> {
         if matches!(mouse.kind, MouseEventKind::Moved) {
             return None;
@@ -463,7 +463,7 @@ impl Component for SettingsComponent {
             &mut self.geometry,
         );
         // Adopt the cursor-activatable rows the painter just produced into
-        // the irregular-chrome registry (task 5.2, design.md D6). The
+        // the irregular-chrome registry. The
         // painter's `cursor_lines` are document line numbers indexed by
         // cursor; document line `line` paints at `content_area.y + line -
         // scroll`.

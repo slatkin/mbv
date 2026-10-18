@@ -94,8 +94,8 @@ pub(in crate::app) struct RouterSnapshot {
     /// Space (`media-list-multi-select` spec) takes Space ahead of the global
     /// play/pause toggle.
     pub visual_selection_active: bool,
-    /// Whether prefix mode is armed (change `add-configurable-keybinds`,
-    /// design D6, task 6.1): the mirror of the App-owned bit. While true, the
+    /// Whether prefix mode is armed: the mirror of the App-owned bit. While
+    /// true, the
     /// next chord resolves against the prefix namespace only; arming is
     /// suppressed while a text entry owns focus or a blocking overlay is
     /// open (the `prefix_arm` layer's gate).
@@ -151,10 +151,10 @@ pub(in crate::app) enum KeyPolicyBinding {
     OpenIdleFeedLink,
     CtrlL,
     F5,
-    /// The prefix-arming layer's identity (design D6): matches the
+    /// The prefix-arming layer's identity: matches the
     /// configured prefix chord, not a literal — the chord is resolved
     /// against `&Keybinds` in `entry_matches` because the layer is not a
-    /// registry action (D9). Always blocking: arming swallows.
+    /// registry action. Always blocking: arming swallows.
     PrefixArm,
 }
 
@@ -163,8 +163,8 @@ impl KeyPolicyBinding {
     /// action (`sessions_sidebar_escape`, `queue_column_width`, and the
     /// blocking `alt_swallow`). Every declared action — the split transport
     /// set included — instead matches its configured chords from `&Keybinds`
-    /// in `resolve_policy` (design D1/D2); these keep their literals,
-    /// including the swallow guard that blocks rather than commands (D9).
+    /// in `resolve_policy`; these keep their literals,
+    /// including the swallow guard that blocks rather than commands.
     fn matches(self, chord: KeyChord) -> bool {
         match self {
             Self::SessionsDismiss => chord.code == KeyCode::Esc,
@@ -193,16 +193,16 @@ pub(in crate::app) enum KeyPolicyGate {
     /// remote session (Space, Esc, `<`/`>`, N, P, `a` today). The shared
     /// `Playback` label is the routing bucket, not one uniform condition —
     /// each split action carries the condition its key had before the
-    /// bucket split (task 5.1, design D2).
+    /// bucket split.
     Playback,
     /// Transport keys with no session/activity condition (`z`, `m`, `-`,
     /// `+`/`=` today). Modifier exclusions are structural: exact-chord
-    /// matching makes Ctrl+chords inert (design D3).
+    /// matching makes Ctrl+chords inert.
     PlaybackUngated,
     /// The idle-feed link shortcut (`o`): its own availability condition,
     /// owned by `idle_feed_command_for_key`.
     IdleFeedLink,
-    /// Prefix arming (design D6, task 6.2): the prefix chord must not arm
+    /// Prefix arming: the prefix chord must not arm
     /// while a text-entry surface owns focus or a blocking overlay is open;
     /// in those states it routes as it does without the change.
     PrefixArming,
@@ -269,7 +269,7 @@ fn idle_feed_link_allowed(chord: KeyChord, snapshot: &RouterSnapshot) -> bool {
 
 /// The ordered keyboard policy. Entries are first-match-wins.
 pub(in crate::app) const KEY_POLICY: &[KeyPolicyEntry] = &[
-    // Prefix arming (design D6, task 6.2): the top layer. Its chord is
+    // Prefix arming: the top layer. Its chord is
     // validated at load never to collide with any configured or declared
     // binding, so first-match order cannot shadow another entry; a closed
     // gate (text entry / blocking overlay) falls through to the ordinary
@@ -379,7 +379,7 @@ pub(in crate::app) const KEY_POLICY: &[KeyPolicyEntry] = &[
         gate: KeyPolicyGate::SessionsSidebarOpen,
         blocking: false,
     },
-    // The split transport set (task 5.1, design D2): one entry per registry
+    // The split transport set: one entry per registry
     // action, each named by its action id so chord matching resolves through
     // the registry, each carrying its own eligibility gate. Order below the
     // sessions sidebar escape preserves today's precedence (Esc closes the
@@ -530,7 +530,7 @@ pub(in crate::app) const KEY_POLICY: &[KeyPolicyEntry] = &[
 
 /// Resolve the first policy layer that matches this chord and snapshot. A
 /// declared action matches the chords configured for it in `keybinds`
-/// (falling back to its declared defaults when unconfigured, design D1/D3);
+/// (falling back to its declared defaults when unconfigured);
 /// entries without a declared action keep their literal match.
 pub(in crate::app) fn resolve_policy(
     key: KeyChord,
@@ -546,7 +546,7 @@ pub(in crate::app) fn resolve_policy(
 /// action's configured chords when the entry names one, otherwise from the
 /// entry's literal match.
 fn entry_matches(entry: &KeyPolicyEntry, key: KeyChord, keybinds: &Keybinds) -> bool {
-    // The prefix-arming layer is not a registry action (D9): it matches the
+    // The prefix-arming layer is not a registry action: it matches the
     // configured prefix chord, which no literal or registry lookup carries.
     if entry.binding == KeyPolicyBinding::PrefixArm {
         return keybinds.prefix.map(KeyChord::from_keybinds_chord) == Some(key);
@@ -561,7 +561,7 @@ fn entry_matches(entry: &KeyPolicyEntry, key: KeyChord, keybinds: &Keybinds) -> 
 }
 
 /// Translate a matched router binding into the semantic command it owns.
-/// The transport split (task 5.1) binds each payload-carrying variant to its
+/// The transport split binds each payload-carrying variant to its
 /// fixed call-site value here — the single site the old
 /// `playback_command_for_key` table bound them — so the eligibility gate and
 /// registry chord matching in `resolve_policy` fully decide whether a
@@ -615,7 +615,7 @@ fn command_for_navigation_binding(binding: KeyPolicyBinding, key: KeyChord) -> O
 
 fn command_for_transport_binding(binding: KeyPolicyBinding) -> Option<Command> {
     // The split transport set: each action binds the fixed payload its key's
-    // call site carried before the bucket split (design D2).
+    // call site carried before the bucket split.
     match binding {
         KeyPolicyBinding::TogglePlayPause => Some(Command::TogglePlayPause),
         KeyPolicyBinding::Stop => Some(Command::Stop),
@@ -633,7 +633,7 @@ fn command_for_transport_binding(binding: KeyPolicyBinding) -> Option<Command> {
     }
 }
 // ---------------------------------------------------------------------------
-// Mouse subscription pattern (design D8)
+// Mouse subscription pattern
 // ---------------------------------------------------------------------------
 //
 // Per-surface conversion tasks follow this pattern for mouse routing:

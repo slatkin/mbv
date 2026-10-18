@@ -1,5 +1,4 @@
-//! App-dispatch contracts for the pinned view toggle (change
-//! `pinned-view-toggle`, design D2/D3; `pinwin-app-host` design D6).
+//! App-dispatch contracts for the pinned view toggle.
 //!
 //! The `pinwin` request runner spawns a real process, so these drive the
 //! post-request dispatch step directly: `apply_pinned_view` takes the request
@@ -13,7 +12,7 @@ use mbv_components::QueuePlaybackPanel;
 use mbv_ui_model::settings::PinnedWidth;
 use mbv_ui_msg::ComponentId;
 
-/// Design D2/D3: from the collapsed width, an accepted expand records the
+/// From the collapsed width, an accepted expand records the
 /// expanded width and stores the library view. `terminal_width` is held at the
 /// pre-toggle collapsed width, so a `set_panel_focus` call would take its
 /// mini-view branch and leave `panel_focus` stale at `Queue`.
@@ -38,7 +37,7 @@ fn pinned_expand_applies_the_library_view_from_the_stale_collapsed_width() {
     );
 }
 
-/// Design D2/D3: from the expanded width, an accepted collapse records the
+/// From the expanded width, an accepted collapse records the
 /// collapsed width and stores the queue view (mini view at the sub-80
 /// collapsed width), mirroring the expand assertions.
 #[test]
@@ -62,7 +61,7 @@ fn pinned_collapse_applies_the_queue_view_from_the_stale_expanded_width() {
     );
 }
 
-/// Design D2: a rejected target width flashes the reason and changes neither
+/// A rejected target width flashes the reason and changes neither
 /// the width nor the displayed panel mode.
 #[test]
 fn rejected_pinned_expand_flashes_and_leaves_the_view_alone() {
@@ -89,7 +88,7 @@ fn rejected_pinned_expand_flashes_and_leaves_the_view_alone() {
     assert_eq!(app.status_severity, ToastSeverity::Warning);
 }
 
-/// Design D6: recording an accepted width records only the width, so the
+/// Recording an accepted width records only the width, so the
 /// stored panel mode and its focus survive a change in both directions.
 #[test]
 fn recording_the_toggled_width_leaves_the_panel_mode_alone() {

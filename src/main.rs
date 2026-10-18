@@ -37,7 +37,7 @@ use mbv_remote_player as remote_player;
 
 /// Captures the launch window, initializes image pickers, and runs the TUI
 /// with the launch window available to the model. A pinned Client always
-/// starts with Panel focus on Queue (design D3).
+/// starts with Panel focus on Queue.
 fn run_tui(mut app: App) {
     let launch_window = capture_launch_window(current_launch_secs());
     app.init_image_pickers();
@@ -293,15 +293,15 @@ fn pre_config_startup() -> Option<StartupArgs> {
     }
 
     // `--toggle` asks the running pinned panel to show or hide; like `-q`, it
-    // is handled before applog, config migration and `load_config` (design
-    // D3). It exits 1 itself when the request fails.
+    // is handled before applog, config migration and `load_config`. It exits 1
+    // itself when the request fails.
     if has_flag(&args, "--toggle") {
         pin::toggle_running();
         return None;
     }
 
     // An Owner-action flag asks the running Owner process to run the action
-    // through the same path the Tray uses (design D7); like `--toggle`, it is
+    // through the same path the Tray uses; like `--toggle`, it is
     // handled before applog, config migration and `load_config`, and no TUI
     // starts. The first argument `from_cli_flag` accepts selects the action;
     // other arguments are ignored, the same as `-q`.
@@ -322,7 +322,7 @@ fn pre_config_startup() -> Option<StartupArgs> {
         std::process::exit(1);
     }
 
-    // `--pin` asks for the pinned panel; it is a runtime flag (design D5).
+    // `--pin` asks for the pinned panel; it is a runtime flag.
     let pin_requested = has_flag(&args, "--pin");
 
     Some(StartupArgs {
@@ -345,7 +345,7 @@ fn stop_running_instance() {
 
 fn main() {
     // The fallback runtime directory is checked once at the process
-    // boundary (design D4) so `-q`, `--toggle`, the Owner-action flags, and
+    // boundary so `-q`, `--toggle`, the Owner-action flags, and
     // every single-instance resolution see a valid private directory.
     if let Err(error) = mbv_config::ensure_runtime_dir() {
         eprintln!("mbv: {error}");
@@ -353,9 +353,8 @@ fn main() {
     }
 
     // Claim the Pin-swap token and the panel identity before anything else
-    // spawns a worker or child process (tray-pin-swap design D2,
-    // `pinwin-app-host` design D3): the Owner process and every other child
-    // must not inherit the panel identity.
+    // spawns a worker or child process: the Owner process and every other
+    // child must not inherit the panel identity.
     pin::claim_swap_token();
     pin::claim_panel_identity();
 
@@ -390,7 +389,7 @@ fn main() {
     );
 
     // Start the panel host after `load_config` and before any terminal setup
-    // or output, including the remote-client connection line (design D1/D2).
+    // or output, including the remote-client connection line.
     // The decision is the parsed flag alone; the environment, the terminal
     // argv and `pinwin` itself enter as start failures, never as decision
     // inputs. A pre-check failure falls back to this terminal when there is

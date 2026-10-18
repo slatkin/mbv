@@ -1,6 +1,5 @@
-//! The `pinwin` CLI boundary: the panel identity (change `pinwin-app-host`,
-//! design D3), the argv of every panel request (design D4 to D8), and the
-//! pinned launch and its failure reporting (design D1, D2).
+//! The `pinwin` CLI boundary: the panel identity, the argv of every panel
+//! request, and the pinned launch and its failure reporting.
 //!
 //! The pinned panel is a process-wide singleton: `pinwin` allows one panel at
 //! a time and a second `--pin` shows the running panel. Every panel request
@@ -45,16 +44,16 @@ impl std::error::Error for PinSpawnError {
     }
 }
 
-/// Why a pinned launch did not reach `pinwin run` (design D2, D5).
+/// Why a pinned launch did not reach `pinwin run`.
 #[derive(Debug)]
 pub(crate) enum PinStartError {
     /// `WAYLAND_DISPLAY` is unset or empty.
     NoWaylandDisplay,
-    /// No terminal argv resolved for the panel host (design D1).
+    /// No terminal argv resolved for the panel host.
     Terminal(String),
     /// The mbv binary could not be located.
     Executable(std::io::Error),
-    /// `pinwin` could not be spawned (design D2).
+    /// `pinwin` could not be spawned.
     Spawn(PinSpawnError),
 }
 
@@ -106,18 +105,18 @@ impl std::error::Error for PinRequestError {
     }
 }
 
-/// The panel name every pinned mbv runs under (design D1, D8).
+/// The panel name every pinned mbv runs under.
 pub(crate) const PANEL_NAME: &str = "mbv";
 
 /// The variable pinwin sets on the Client it runs inside a panel: the name of
-/// that panel (design D3).
+/// that panel.
 const PINWIN_PANEL_ENV: &str = "PINWIN_PANEL";
 
 /// The variable pinwin sets beside [`PINWIN_PANEL_ENV`]: the daemon socket
-/// that serves that panel (design D3).
+/// that serves that panel.
 const PINWIN_SOCKET_ENV: &str = "PINWIN_SOCKET";
 
-/// The panel identity this launch was started with (design D3).
+/// The panel identity this launch was started with.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 struct PanelIdentity {
     /// The panel name, `None` when this launch runs outside a panel.
@@ -127,9 +126,9 @@ struct PanelIdentity {
 }
 
 impl PanelIdentity {
-    /// Map the raw `PINWIN_PANEL` and `PINWIN_SOCKET` values to the identity
-    /// (design D3): a non-empty panel name means pinned, and an empty value
-    /// counts as unset.
+    /// Map the raw `PINWIN_PANEL` and `PINWIN_SOCKET` values to the identity:
+    /// a non-empty panel name means pinned, and an empty value counts as
+    /// unset.
     fn new(panel: Option<String>, socket: Option<String>) -> Self {
         Self {
             name: panel.filter(|name| !name.is_empty()),
@@ -141,7 +140,7 @@ impl PanelIdentity {
 /// The panel identity this launch was started with, claimed once at start-up.
 static PANEL_IDENTITY: OnceLock<PanelIdentity> = OnceLock::new();
 
-/// Whether this launch runs in a pinned panel (design D3).
+/// Whether this launch runs in a pinned panel.
 #[must_use]
 pub(crate) fn is_pinned() -> bool {
     identity().name.is_some()
@@ -159,7 +158,7 @@ fn claim_env_once(name: &str) -> Option<String> {
 }
 
 /// Read `PINWIN_PANEL` and `PINWIN_SOCKET` and remove both from this
-/// process's environment (design D3). Called once at start-up, on the main
+/// process's environment. Called once at start-up, on the main
 /// thread next to [`claim_swap_token`], before any worker or child process
 /// spawns, so the Owner process and every other child run unpinned.
 pub(crate) fn claim_panel_identity() {
@@ -177,8 +176,8 @@ fn identity() -> &'static PanelIdentity {
 /// `None` for every launch the user started.
 static SWAP_TOKEN: OnceLock<Option<String>> = OnceLock::new();
 
-/// Read `MBV_SWAP_TOKEN` and remove it from this process's environment
-/// (tray-pin-swap design D2). Called once, before any worker or child process
+/// Read `MBV_SWAP_TOKEN` and remove it from this process's environment.
+/// Called once, before any worker or child process
 /// spawns, so the token is neither read twice nor inherited by a spawned
 /// daemon.
 pub(crate) fn claim_swap_token() {
@@ -191,7 +190,7 @@ pub(crate) fn swap_token() -> Option<String> {
     SWAP_TOKEN.get().cloned().flatten()
 }
 
-/// The reserve mode a panel change asks for (design D6): the collapsed panel
+/// The reserve mode a panel change asks for: the collapsed panel
 /// pushes the tiled windows aside, the expanded one covers them.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum PanelReserve {
@@ -212,7 +211,7 @@ impl PanelReserve {
     }
 }
 
-/// One of the panel's four gutters (design D5, D7).
+/// One of the panel's four gutters.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum PanelGutter {
     /// Inset from the output's top edge.
@@ -238,8 +237,8 @@ impl PanelGutter {
     }
 }
 
-/// The one `pinwin` request a Panel row sends while pinned (change
-/// `pinwin-app-host`, design D7). A width row asks for the width it edits, so
+/// The one `pinwin` request a Panel row sends while pinned. A width row asks
+/// for the width it edits, so
 /// the edited value is the width pinwin validates; a side or gutter row applies
 /// at the panel's current width.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -265,13 +264,13 @@ impl PinnedSettingRequest {
     }
 }
 
-/// A width in the pinwin size grammar: logical pixels (design D5).
+/// A width in the pinwin size grammar: logical pixels.
 #[must_use]
 fn size_arg(width: u16) -> String {
     format!("{width}px")
 }
 
-/// The `--focus-ring` value of a `run` (design D5): `off`, or the configured
+/// The `--focus-ring` value of a `run`: `off`, or the configured
 /// colour and width. Only a launch reads it; a running panel keeps its ring.
 #[must_use]
 fn focus_ring_arg(config: &PanelConfig) -> String {
@@ -282,7 +281,7 @@ fn focus_ring_arg(config: &PanelConfig) -> String {
     }
 }
 
-/// The terminal argv prefix that hosts a Client (design D1): the configured
+/// The terminal argv prefix that hosts a Client: the configured
 /// prefix when set, else `TERMINAL -e`. With neither set the launch fails with
 /// a reason that names both sources; `config_key` is the configuration key the
 /// caller reads the prefix from.
@@ -303,7 +302,7 @@ pub(crate) fn terminal_prefix(
 }
 
 /// The `pinwin run` argv that docks the terminal as the `mbv` panel and runs
-/// mbv in it (design D1, D2, D8). `--show-existing` makes a second `--pin`
+/// mbv in it. `--show-existing` makes a second `--pin`
 /// show the running panel instead of opening a second one, and the launcher
 /// always passes its four gutters so pinwin's own config never applies them.
 #[must_use]
@@ -346,7 +345,7 @@ fn run_argv(
     argv
 }
 
-/// `set-size <panel> <N>px --reserve push|cover` (design D6): one press of `x`
+/// `set-size <panel> <N>px --reserve push|cover`: one press of `x`
 /// and one F2 width step each send one change with the width and the reserve
 /// mode, so no tiled window moves.
 #[must_use]
@@ -360,7 +359,7 @@ fn set_size_argv(panel: &str, width: u16, reserve: PanelReserve) -> Vec<String> 
     ]
 }
 
-/// The `set-size` argv one pinned-view change sends (design D6): the
+/// The `set-size` argv one pinned-view change sends: the
 /// collapsed view pushes at `width`, the expanded view covers at
 /// `width_expanded`, so one press changes the width and the reserve mode in
 /// one request.
@@ -373,8 +372,7 @@ fn pinned_width_argv(panel: &str, config: &PanelConfig, width: PinnedWidth) -> V
     set_size_argv(panel, pixels, reserve)
 }
 
-/// The claimed panel name of this launch, or the reason there is none
-/// (design D3, D4).
+/// The claimed panel name of this launch, or the reason there is none.
 fn panel_name() -> Result<&'static str, String> {
     identity()
         .name
@@ -382,7 +380,7 @@ fn panel_name() -> Result<&'static str, String> {
         .ok_or_else(|| "this launch is not pinned".to_string())
 }
 
-/// Send one panel request to the running panel (design D6, D7). The requested
+/// Send one panel request to the running panel. The requested
 /// view decides the width request, never the terminal size, so a resize mbv did
 /// not request leaves [`PinnedWidth`] untouched. An unpinned launch, or a
 /// refused request, reports the reason and changes nothing.
@@ -399,7 +397,7 @@ pub(crate) fn apply_pinned(
     run_request(&argv).map_err(|error| error.to_string())
 }
 
-/// `set-edge <panel> left|right` (design D7).
+/// `set-edge <panel> left|right`.
 #[must_use]
 fn set_edge_argv(panel: &str, side: mbv_config::PanelSide) -> Vec<String> {
     vec![
@@ -409,7 +407,7 @@ fn set_edge_argv(panel: &str, side: mbv_config::PanelSide) -> Vec<String> {
     ]
 }
 
-/// `set-gutters <panel> --<gutter> N` (design D7): the F2 row edits one
+/// `set-gutters <panel> --<gutter> N`: the F2 row edits one
 /// gutter, so one gutter changes at the panel's current width.
 #[must_use]
 fn set_gutters_argv(panel: &str, gutter: PanelGutter, value: i32) -> Vec<String> {
@@ -421,13 +419,13 @@ fn set_gutters_argv(panel: &str, gutter: PanelGutter, value: i32) -> Vec<String>
     ]
 }
 
-/// `toggle <panel>` (design D8).
+/// `toggle <panel>`.
 #[must_use]
 fn toggle_argv(panel: &str) -> Vec<String> {
     vec!["toggle".to_string(), panel.to_string()]
 }
 
-/// The result a finished `pinwin` request reports (design D4): exit 0 is
+/// The result a finished `pinwin` request reports: exit 0 is
 /// success, exit 1 is pinwin's own reason from stderr, exit 2 is a usage
 /// mismatch between mbv and pinwin, and any other ending is a failure that
 /// names it.
@@ -451,7 +449,7 @@ fn request_result(code: Option<i32>, stderr: &str) -> Result<(), String> {
     }
 }
 
-/// Run one `pinwin` request against the claimed panel daemon (design D4). The
+/// Run one `pinwin` request against the claimed panel daemon. The
 /// child is the untested boundary; the argv it runs and the result it maps to
 /// are pure.
 fn run_request(argv: &[String]) -> Result<(), PinRequestError> {
@@ -470,7 +468,7 @@ fn run_request(argv: &[String]) -> Result<(), PinRequestError> {
     .map_err(PinRequestError::Refused)
 }
 
-/// What a finished `pinwin run` reports (design D2): a success exits with
+/// What a finished `pinwin run` reports: a success exits with
 /// its status, a failure is always logged, and a desktop launch also
 /// notifies because it has no stderr to read.
 #[derive(Debug, PartialEq, Eq)]
@@ -491,7 +489,7 @@ fn exit_action(success: bool, stdin_is_terminal: bool) -> PanelExitAction {
     }
 }
 
-/// Start the panel host and wait for it (design D1, D2).
+/// Start the panel host and wait for it.
 ///
 /// The pre-checks need no Wayland code: `WAYLAND_DISPLAY`, the terminal argv,
 /// the mbv binary and the `pinwin` program itself. Each failure takes the
@@ -553,7 +551,7 @@ pub(crate) fn launch(config: &PanelConfig, log_level: Option<&str>) {
 }
 
 /// Exit with the child's status, logging and, on a desktop launch, notifying
-/// a failure (design D2).
+/// a failure.
 fn finish(status: std::process::ExitStatus) -> ! {
     let action = exit_action(status.success(), std::io::stdin().is_terminal());
     if action != PanelExitAction::Quiet {
@@ -574,8 +572,8 @@ fn finish(status: std::process::ExitStatus) -> ! {
     std::process::exit(status.code().unwrap_or(1));
 }
 
-/// Ask pinwin on the current Wayland display to toggle the `mbv` panel
-/// (design D8): hide it if shown, show it if hidden. Exits 1 with pinwin's
+/// Ask pinwin on the current Wayland display to toggle the `mbv` panel:
+/// hide it if shown, show it if hidden. Exits 1 with pinwin's
 /// reason when no panel runs or the request fails; exits 0 silently on
 /// success.
 pub(crate) fn toggle_running() {
@@ -584,7 +582,7 @@ pub(crate) fn toggle_running() {
     }
 }
 
-/// Report a failed `--toggle` and exit 1 (design D3): stderr when stdin is a
+/// Report a failed `--toggle` and exit 1: stderr when stdin is a
 /// terminal, otherwise a desktop notification, because a compositor key has
 /// no terminal.
 fn report_toggle_failure(reason: &str) -> ! {
@@ -600,7 +598,7 @@ fn report_toggle_failure(reason: &str) -> ! {
     std::process::exit(1);
 }
 
-/// What a failed pinned start does next (design D5).
+/// What a failed pinned start does next.
 #[derive(Debug, PartialEq, Eq)]
 enum StartFailureAction {
     /// stdin is a terminal: print one line and keep running in it.
@@ -617,7 +615,7 @@ fn failure_action(stdin_is_terminal: bool) -> StartFailureAction {
     }
 }
 
-/// Report a pinned launch that never reached `pinwin run` (design D2, D5).
+/// Report a pinned launch that never reached `pinwin run`.
 fn report_start_failure(reason: &PinStartError) {
     let reason = reason.to_string();
     tracing::warn!(
@@ -638,7 +636,7 @@ fn report_start_failure(reason: &PinStartError) {
     }
 }
 
-/// Report a fatal start-up failure of the TUI inside the panel (design D5):
+/// Report a fatal start-up failure of the TUI inside the panel:
 /// the panel is the only output and vanishes with the process, so the reason
 /// is logged and sent as a notification instead of printed.
 pub(crate) fn fatal(message: impl fmt::Display) -> ! {
@@ -658,9 +656,8 @@ pub(crate) fn fatal(message: impl fmt::Display) -> ! {
 }
 
 /// Best-effort `notify-send`, matching the TUI's system notifications; a
-/// missing binary is only logged (design D5). Also the swap-failure
-/// notification path for the daemon's `notify` hook (`local_daemon.rs`,
-/// tray-pin-swap D5).
+/// missing binary is only logged. Also the swap-failure notification path for
+/// the daemon's `notify` hook (`local_daemon.rs`).
 pub(crate) fn notify(message: &str) {
     let result = std::process::Command::new("notify-send")
         .arg("--app-name=mbv")

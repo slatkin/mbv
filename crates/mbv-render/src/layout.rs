@@ -61,8 +61,8 @@ pub struct CardGeometry {
 }
 
 /// Test-only row/hero/pill geometry shape, mirroring the fields the deleted
-/// destination components (Home/TV/Music) used to publish onto legacy chrome geometry
-/// (task 12.3). It exists solely so the shared characterization test helpers
+/// destination components (Home/TV/Music) used to publish onto legacy chrome
+/// geometry. It exists solely so the shared characterization test helpers
 /// keep one common return shape; production code never constructs it — each
 /// owning component answers real requests (mouse-hit, context-menu anchor)
 /// from its own retained fields instead.
@@ -75,7 +75,7 @@ pub struct PaintedRowGeometry {
 /// Root/chrome frame geometry computed paint-free by
 /// `App::compute_frame_layout` and consumed by the shell draw path and the
 /// chrome painters. This is the partial typed subresult of the staged
-/// geometry/paint split (D2, task 2.1a): it owns the root/chrome fields only.
+/// geometry/paint split: it owns the root/chrome fields only.
 /// The full `AppLayout` remains the aggregate shared by every surface family;
 /// non-migrated fields (queue/list/card/etc.) keep their legacy computation
 /// until their own family rows migrate them.
@@ -95,9 +95,9 @@ pub struct FrameChromeGeometry {
     pub tab_bar_area: Rect,
     /// Whether the right panel is visible this frame (`panel_mode != QueueOnly`).
     pub right_visible: bool,
-    /// The root frame's panel placements for the current Panel mode (design
-    /// D1, task 1.3): data only, consumed by later panel slices and by the
-    /// mounted `QueueBoundaryComponent` (task 1.4).
+    /// The root frame's panel placements for the current Panel mode: data only,
+    /// consumed by later panel slices and by the mounted
+    /// `QueueBoundaryComponent`.
     pub root: RootFrame,
 }
 
@@ -115,7 +115,7 @@ pub struct AppLayout {
     pub card: CardGeometry,
     /// The last fully rendered frame's root panel placements (`RootFrame`).
     /// Published with the rest of the chrome checkpoint in
-    /// root frame composition and read by the sync pass (the queue
-    /// boundary's mount/rect source, task 1.4).
+    /// root frame composition and read by the sync pass (the queue boundary's
+    /// mount/rect source).
     pub root_frame: RootFrame,
 }

@@ -52,8 +52,8 @@ pub(in crate::app) enum Command {
     /// the already-playing audio item, jumps to it if it's elsewhere in the
     /// active playback queue, or replaces the local playback queue and plays
     /// from this index if the visible queue isn't the one currently playing.
-    /// The target index is carried explicitly (split-queue-cursor-ownership
-    /// D2): the shell resolves the slot the user selected and passes it
+    /// The target index is carried explicitly: the shell resolves the slot the
+    /// user selected and passes it
     /// rather than this command re-reading `queue.cursor()` as an
     /// ambient argument channel.
     QueuePlayCursor(usize),
@@ -83,13 +83,13 @@ pub(in crate::app) enum Command {
 }
 
 /// Resolve the idle-feed link shortcut. The link's eligibility is its own
-/// condition, separate from the transport bindings (task 5.1 keeps it as the
-/// `open_idle_feed_link` action's gate), so `o` remains available to the view
+/// condition, separate from the transport bindings (`open_idle_feed_link`
+/// keeps its own gate), so `o` remains available to the view
 /// when no link is displayed. A daemon-backed
 /// player is still an idle feed view when no Emby session is connected, so the
 /// playback backend and connected-session gates stay separate here. The
 /// `playback_panel_present_idle` input is the Queue playback panel's presence
-/// with nothing playing (task 3.8): the panel is mounted in every
+/// with nothing playing: the panel is mounted in every
 /// queue-visible layout, so the gate follows it instead of the panel mode and
 /// the link is gated off in idle `both` and `queue-only`, on in idle
 /// `library-only` where the strip displays the feed.
@@ -131,7 +131,7 @@ impl App {
         if self.reject_disconnected_remote_jump() {
             return false;
         }
-        // Row 5.3 (design D6): the jump is an answered owner operation, so
+        // The jump is an answered owner operation, so
         // the playing slot changes only through the owner's answer.
         let sent = self.queue_op(
             self.playing_queue_scope(),
@@ -286,13 +286,13 @@ impl App {
         }
     }
 
-    /// `panel_mode_cycle_x` while pinned (change `pinned-view-toggle`, design
-    /// D2/D3): flip the running panel between its two pinned views, one
+    /// `panel_mode_cycle_x` while pinned: flip the running panel between its
+    /// two pinned views, one
     /// `set-size` request per press. The expanded width shows library-only
     /// with library focus; the collapsed width shows queue-only with queue
     /// focus and re-runs the mini-view initial-item path. A refused target
     /// width keeps the current width and flashes the reason.
-    /// `cycle_panel_mode` guards pinned-ness (D1), so the not-pinned arm here
+    /// `cycle_panel_mode` guards pinned-ness, so the not-pinned arm here
     /// is unreachable.
     pub(crate) fn pinned_view_toggle(&mut self) {
         let width = self.pinned_width.toggled();
@@ -302,7 +302,7 @@ impl App {
 
     /// Ask the running panel for `width`. The config is cloned out first so
     /// callers can mutate `self` after the request; `cycle_panel_mode` already
-    /// guards pinned-ness (D1).
+    /// guards pinned-ness.
     fn request_pinned_width(
         &self,
         width: mbv_ui_model::settings::PinnedWidth,
@@ -312,7 +312,7 @@ impl App {
     }
 
     /// Take an accepted target width and assign the matching pinned view, or
-    /// flash a refused request's reason and touch nothing (design D2/D3).
+    /// flash a refused request's reason and touch nothing.
     ///
     /// The view fields are written directly: at dispatch time `terminal_width`
     /// still holds the pre-toggle width (the terminal's `Resize` event arrives
@@ -347,8 +347,8 @@ impl App {
     }
 
     fn cycle_panel_mode(&mut self) {
-        // A pinned panel binds `x` to its two view states (change
-        // `pinned-view-toggle`, design D1/D2); the three-state cycle and the
+        // A pinned panel binds `x` to its two view states; the three-state
+        // cycle and the
         // mini-view toggle are unreachable while pinned.
         if crate::pin::is_pinned() {
             self.pinned_view_toggle();

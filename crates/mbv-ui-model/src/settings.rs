@@ -109,7 +109,7 @@ pub static SETTING_SECTIONS: &[(&str, &[SettingKey])] = &[
     // Navigation-only entry (opens the read-only Keys destination); not a
     // config section, so `KeySection` has no `Keys` variant.
     ("Keys", &[SettingKey::Keys]),
-    // Navigation-only entry for the pinned-panel page (design D6).
+    // Navigation-only entry for the pinned-panel page.
     ("Panel", &[SettingKey::Panel]),
     (
         "Playback",
@@ -348,14 +348,14 @@ fn setting_key_value(key: SettingKey, cfg: &Config) -> Option<String> {
     match key {
         SettingKey::Services => Some("Emby, Audiobookshelf, Feeds".into()),
         // Navigation-only entry: the destination row summarizes the saved
-        // layout (design D6, row 4.3).
+        // layout.
         SettingKey::Panel => Some(format!(
             "{} · {} px",
             cfg.panel.side.as_str(),
             cfg.panel.width
         )),
         SettingKey::Keys => {
-            // Live keybind summary (design D7): the configured prefix and
+            // Live keybind summary: the configured prefix and
             // the number of actions whose router binding deviates from the
             // declared default, both from the loaded configuration.
             let keys = &cfg.keybinds;
@@ -388,7 +388,7 @@ fn setting_boolean_value(key: SettingKey, cfg: &Config) -> Option<String> {
         SettingKey::NoScripts => cfg.no_scripts,
         SettingKey::Autoload => cfg.autoload,
         // The Tray is enabled while stay-alive is on, whatever the stored
-        // preference (design D3, change `stay-alive-is-lifetime-only`).
+        // preference.
         SettingKey::ShowSysTrayIcon => cfg.tray_enabled(),
         SettingKey::SystemNotifications => cfg.system_notifications,
         SettingKey::MouseSupport => cfg.mouse_support,
@@ -501,9 +501,8 @@ pub fn bool_val(v: bool) -> String {
     if v { "on".into() } else { "off".into() }
 }
 
-/// The Panel destination's rows, in paint and cursor order (design D6, row
-/// 4.3): `Side` first, then the six stepper rows, then the three accent rows
-/// (change `pinned-panel-focus-accent`).
+/// The Panel destination's rows, in paint and cursor order: `Side` first,
+/// then the six stepper rows, then the three accent rows.
 pub const PANEL_SETTING_KEYS: [SettingKey; 10] = [
     SettingKey::PanelSide,
     SettingKey::PanelWidth,
@@ -532,7 +531,7 @@ pub fn settings_cursor_to_key(cursor: usize) -> SettingKey {
     SettingKey::LogOut
 }
 
-/// Panel-destination cursor ordinal to `SettingKey` (design D6, row 4.3).
+/// Panel-destination cursor ordinal to `SettingKey`.
 #[must_use]
 pub fn panel_cursor_to_key(cursor: usize) -> SettingKey {
     PANEL_SETTING_KEYS
@@ -541,7 +540,7 @@ pub fn panel_cursor_to_key(cursor: usize) -> SettingKey {
         .unwrap_or(SettingKey::PanelSide)
 }
 
-/// Whether a Panel row is one of the three accent rows (design D3): accent
+/// Whether a Panel row is one of the three accent rows: accent
 /// rows are not part of the layout, never touch the running panel, and apply
 /// on the next `mbv --pin` launch.
 #[must_use]
@@ -552,7 +551,7 @@ pub fn is_panel_accent_row(key: SettingKey) -> bool {
     )
 }
 
-/// Which of the two saved widths the running panel shows (design D1). The
+/// Which of the two saved widths the running panel shows. The
 /// active width is runtime state on `App`; it is never persisted, so every
 /// pinned launch starts collapsed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
@@ -563,7 +562,7 @@ pub enum PinnedWidth {
 }
 
 impl PinnedWidth {
-    /// The other width (design D3).
+    /// The other width.
     #[must_use]
     pub fn toggled(self) -> Self {
         match self {
@@ -574,7 +573,7 @@ impl PinnedWidth {
 }
 
 /// Which pinned width the edited Panel row belongs to, or `None` for a row
-/// that validates at the caller's current width (design D4): `Width` validates
+/// that validates at the caller's current width: `Width` validates
 /// `width`, and `Expanded width` validates `width_expanded`.
 #[must_use]
 pub fn panel_row_edited_width(key: SettingKey) -> Option<PinnedWidth> {
@@ -585,12 +584,12 @@ pub fn panel_row_edited_width(key: SettingKey) -> Option<PinnedWidth> {
     }
 }
 
-/// A Panel width row's step in logical pixels (design D5). The component
+/// A Panel width row's step in logical pixels. The component
 /// sends ±1, or ±10 while Shift is held, so a width row moves by 10 pixels
 /// and by 100 with Shift.
 const PANEL_WIDTH_STEP: i32 = 10;
 
-/// The base step of one Panel stepper row in its own unit (design D5): a
+/// The base step of one Panel stepper row in its own unit: a
 /// width row steps by 10 logical pixels, every other row by 1 (gutter rows
 /// keep 1, or 10 with Shift). The interaction's own multiplier still applies
 /// on top, so a width row moves 100 pixels when Shift is held.
@@ -613,8 +612,7 @@ fn stepped_width(width: u16, delta: i32) -> u16 {
     .unwrap_or(u16::MAX)
 }
 
-/// Step the accent stroke's width by `delta`, clamped to `1..=65535`
-/// (`pinned-panel-focus-accent`, design D3).
+/// Step the accent stroke's width by `delta`, clamped to `1..=65535`.
 fn stepped_accent_width(width: std::num::NonZeroU16, delta: i32) -> std::num::NonZeroU16 {
     let next = i32::from(width.get())
         .saturating_add(delta)
@@ -646,7 +644,7 @@ pub fn accent_color_outside_cycle(
     (!ACCENT_CYCLE.contains(&configured)).then_some(configured)
 }
 
-/// The next `Accent color` value (design D3): the fixed palette followed by
+/// The next `Accent color` value: the fixed palette followed by
 /// the held custom colour, if any, then back to the palette's first. A
 /// colour in neither steps to the palette's first.
 fn next_accent_color(
@@ -661,7 +659,7 @@ fn next_accent_color(
     cycle[next]
 }
 
-/// Apply one Panel-row interaction (design D6, row 4.3): `Side` toggles
+/// Apply one Panel-row interaction: `Side` toggles
 /// left/right, and each numeric row steps by `delta` times its base step
 /// (`panel_row_step`) clamped to its Rust range. `delta` is already scaled
 /// to ±1/±10 by the caller for Shift. `None` for any key that is not a Panel

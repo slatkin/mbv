@@ -34,7 +34,7 @@ pub fn parse_config(text: &str) -> Result<Config, ConfigError> {
     let audiobookshelf_setup = parse_audiobookshelf_section(doc.get("audiobookshelf"));
     let library_routes = parse_library_routes_section(doc.get("library_routes"));
 
-    // `[keys]` (change `add-configurable-keybinds`): parsed into the raw
+    // `[keys]`: parsed into the raw
     // section-outer shape, then compiled through the keybind registry so
     // every entry — unknown sections and actions, section mismatches,
     // reserved chords, and both collision classes — is rejected here, at
@@ -360,7 +360,7 @@ struct LibrarySettings {
     feed_view_libraries: Vec<String>,
 }
 
-/// Parse `[panel]` into validated values (design D5): every key is optional,
+/// Parse `[panel]` into validated values: every key is optional,
 /// and an out-of-range or malformed value falls back to its own default with
 /// a logged warning while the other keys keep their values. No geometry
 /// validation happens here — that needs live monitor metrics (pinwin's job).
@@ -386,8 +386,8 @@ fn parse_panel_section(panel: Option<&toml::Value>) -> PanelConfig {
     }
 }
 
-/// The `[panel] cols` and `cols_expanded` keys of an earlier version (design
-/// D5): read only to log one warning that names whichever of the two the file
+/// The `[panel] cols` and `cols_expanded` keys of an earlier version: read
+/// only to log one warning that names whichever of the two the file
 /// still sets, then ignored, because `width` and `width_expanded` are logical
 /// pixels. A save writes `[panel]` in full, so it drops them.
 fn warn_old_panel_width_keys(panel: &toml::Value) {
@@ -482,8 +482,8 @@ fn panel_fallback<T>(key: &str, value: &toml::Value, default: T) -> T {
     default
 }
 
-/// A `[panel]` terminal argv prefix: `terminal` (`tray-pin-swap`, design D5)
-/// and `pin_terminal` (design D1). An absent key is `None` silently; a present
+/// A `[panel]` terminal argv prefix: `terminal`
+/// and `pin_terminal`. An absent key is `None` silently; a present
 /// value that is not a non-empty array of strings (a non-array value, a
 /// non-string element, or an empty array) is malformed and falls back to
 /// `None` with the same per-key warning as the other `[panel]` keys.
@@ -631,7 +631,7 @@ fn parse_prefix_chord<'a>(
     })
 }
 
-/// Parse the `[keys]` table into the raw section-outer shape (design D3):
+/// Parse the `[keys]` table into the raw section-outer shape:
 /// `prefix` is a string chord, each other entry a per-section table whose
 /// string keys are router-scope overrides and whose `prefix` sub-table
 /// holds prefix-namespace assignments. Shape errors are reported here;

@@ -40,25 +40,25 @@ impl App {
         }
     }
 
-    /// Apply and persist one Panel value change (design D6, change
-    /// `pin-mbv-in-pinwin`): an activate steps the row up by one step (`Side`
+    /// Apply and persist one Panel value change: an activate steps the row up
+    /// by one step (`Side`
     /// cycles and ignores the delta), a step applies the component's signed
     /// delta (±1, or ±10 with Shift), and a width row counts each step as 10
     /// logical pixels while every other row counts 1.
     ///
     /// While pinned, the row sends one `pinwin` request and only an accepted
-    /// request is saved (change `pinwin-app-host`, design D7): a width row asks
-    /// for the width it edited, a `Side` row moves the panel, and a gutter row
+    /// request is saved: a width row asks for the width it edited, a `Side`
+    /// row moves the panel, and a gutter row
     /// changes that gutter at the panel's current width. A refusal keeps the
     /// previous value and flashes pinwin's reason as a Warning toast.
     ///
     /// While pinned, the width recorded is the one the edited row belongs to:
     /// `Width` is `width`, `Expanded width` is `width_expanded`, any other row
-    /// keeps the current width (change `panel-expand-toggle`, design D4). An
-    /// unpinned launch never changes the active width.
+    /// keeps the current width. An unpinned launch never changes the active
+    /// width.
     ///
-    /// The accent rows (`pinned-panel-focus-accent`, design D3) are not part
-    /// of the layout and the accent is fixed at panel start, so they send no
+    /// The accent rows are not part of the layout and the accent is fixed at
+    /// panel start, so they send no
     /// panel request; while pinned a `Neutral` toast announces that the change
     /// applies on the next `mbv --pin` launch.
     pub(crate) fn apply_panel_setting(&mut self, key: SettingKey, delta: i32) {
@@ -84,12 +84,12 @@ impl App {
         self.apply_panel_setting_outcome(pinned, key, edited_width, candidate, applied);
     }
 
-    /// Apply a Panel row's candidate once the panel's request outcome is known
-    /// (change `pinwin-app-host`, design D7): only an accepted request saves,
+    /// Apply a Panel row's candidate once the panel's request outcome is known:
+    /// only an accepted request saves,
     /// and a refusal flashes pinwin's reason and keeps both the row's value and
     /// the panel. A width row records the width it switched the panel to (the
     /// request already derived it), and an accent row while pinned announces
-    /// the next launch (design D3).
+    /// the next launch.
     pub(in crate::app) fn apply_panel_setting_outcome(
         &mut self,
         pinned: bool,
@@ -190,8 +190,7 @@ impl App {
             // The Tray row shows `tray_enabled()` — the single source of the
             // tray-enable rule — not the stored preference, so its toggle is
             // refused when flipping the preference cannot change that value:
-            // while stay-alive forces the Tray on (design D3, change
-            // `stay-alive-is-lifetime-only`). `toggle_config_setting` holds
+            // while stay-alive forces the Tray on. `toggle_config_setting` holds
             // the config lock, so the refusal is decided here where flashing
             // is possible; a refused toggle is reverted so the stored
             // preference stays untouched.
@@ -290,8 +289,8 @@ impl App {
     }
 }
 
-/// The request a Panel row sends while pinned (design D7), or `None` for a row
-/// that takes none: an accent row is fixed at panel start (design D3) and any
+/// The request a Panel row sends while pinned, or `None` for a row
+/// that takes none: an accent row is fixed at panel start and any
 /// other Settings row is not a Panel layout value.
 fn pinned_setting_request(
     key: SettingKey,

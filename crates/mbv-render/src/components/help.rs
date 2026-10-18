@@ -40,10 +40,10 @@ pub enum HelpDestination {
 
 /// Compute the help destination from panel focus and selected tab.
 ///
-/// Extracted from `App::help_destination` so the shell can call it
-/// without `App` access in the Interactive Component path (design D5: the
-/// shell computes the presentation model and writes it into the component
-/// via `get_component_mut`+downcast).
+/// Extracted from `App::help_destination` so the shell can call it without
+/// `App` access in the Interactive Component path: the shell computes the
+/// presentation model and writes it into the component via
+/// `get_component_mut`+downcast.
 #[must_use]
 pub fn help_destination(panel_focus: PanelFocus, tab: TabSelection) -> HelpDestination {
     if matches!(panel_focus, PanelFocus::Queue) {
@@ -103,7 +103,7 @@ impl HelpSection {
 
 /// One-line help label per declared Playback action. Only the labels live
 /// here; the row set and the key chords come from the declared registry and
-/// the loaded `Keybinds` (design D7), so help cannot drift from routing.
+/// the loaded `Keybinds`, so help cannot drift from routing.
 fn playback_label(action_id: &str) -> &'static str {
     match action_id {
         "toggle_play_pause" => "Pause/Resume",
@@ -169,8 +169,8 @@ fn help_blank() -> Line<'static> {
 /// configuration: its configured/declared chords joined with ` / `, or the
 /// positional set's range (`1 – 9`) when the declaration carries more than
 /// two chords (the tab-jump digits). The registry and the loaded `Keybinds`
-/// are the only sources — the hand-written Global chord strings are gone
-/// (design D7), so a rebind is reflected here without a second table.
+/// are the only sources — the hand-written Global chord strings are gone, so
+/// a rebind is reflected here without a second table.
 fn action_keys(keybinds: &Keybinds, id: &str) -> String {
     let action = action_by_id(id).expect("help references a declared action");
     let chords: Vec<String> = keybinds
@@ -236,7 +236,7 @@ fn build_global_section(key_w: usize, keybinds: &Keybinds) -> Vec<Line<'static>>
         "Switch panels",
     ));
     // Leaf-local, non-configurable rows stay hand-written: the registry
-    // declares only router-owned chords (design D7).
+    // declares only router-owned chords.
     sec_global.push(help_line(key_w, "↑ / ↓", "Move cursor"));
     sec_global.push(help_line(key_w, "PgUp / PgDn", "Page scroll"));
     sec_global.push(help_line(key_w, "Home / End", "First/last item"));
@@ -260,13 +260,13 @@ fn build_global_section(key_w: usize, keybinds: &Keybinds) -> Vec<Line<'static>>
     sec_global
 }
 
-/// The Playback section, rendered from the declared registry (design D7): one
+/// The Playback section, rendered from the declared registry: one
 /// row per Playback action, its keys the chords it actually fires on for the
 /// loaded configuration, so the section cannot silently drift from routing.
 fn build_playback_section(key_w: usize, keybinds: &Keybinds) -> Vec<Line<'static>> {
     let mut sec_playback = vec![help_section_line("Playback")];
-    // The transport bucket: the Playback-section actions gated `Playback`
-    // (design D2). `visualizer` shares the section but is presented in the
+    // The transport bucket: the Playback-section actions gated `Playback`.
+    // `visualizer` shares the section but is presented in the
     // Global rows above, where it lived before the split.
     for action in KEYBIND_ACTIONS
         .iter()
@@ -370,8 +370,8 @@ fn static_help_sections(key_w: usize) -> Vec<(HelpSection, Vec<Line<'static>>)> 
 /// Render the help sidebar panel.
 ///
 /// Extracted from `App::render_help_panel` so the Interactive Component
-/// (`crates/mbv-components/src/help.rs`) can call it in `view()` without `App` access
-/// (design D9: a component's `view()` calls the existing render substrate).
+/// (`crates/mbv-components/src/help.rs`) can call it in `view()` without `App`
+/// access (a component's `view` calls the existing render substrate).
 /// The shell-owned scroll offset and destination are passed in; the function
 /// clamps scroll to the visible content and mutates the caller's `scroll`.
 //

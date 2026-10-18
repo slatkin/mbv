@@ -372,7 +372,7 @@ side = "right"
     assert_eq!(cfg.panel.side, PanelSide::Right);
 }
 
-/// Contract (task 2.1 of `tray-pin-swap`): `[panel] terminal` parses a
+/// Contract: `[panel] terminal` parses a
 /// non-empty array of strings into the argv prefix; an absent, empty, or
 /// otherwise malformed key gives `None` without disturbing the other
 /// `[panel]` keys.

@@ -374,12 +374,11 @@ fn write_playback_section(table: &mut toml::map::Map<String, toml::Value>, cfg: 
     }
 }
 
-// `[keys]` (change `add-configurable-keybinds`): patched like any other
-// section through the read-patch-write path, in the section-outer file
-// shape (design D3, lowercase section names) that `parse_raw_keybinds`
-// reads back. An all-defaults configuration — or one whose sections all
-// lost their entries — prunes the whole table; a section with no
-// surviving entries contributes no table.
+// `[keys]`: patched like any other section through the read-patch-write path,
+// in the section-outer file shape that `parse_raw_keybinds` reads back. An
+// all-defaults configuration — or one whose sections all lost their entries —
+// prunes the whole table; a section with no surviving entries contributes no
+// table.
 fn write_keys_section(table: &mut toml::map::Map<String, toml::Value>, cfg: &Config) {
     let mut keys_table = toml::map::Map::new();
     if let Some(prefix) = &cfg.keybinds.prefix {
@@ -421,13 +420,13 @@ fn write_keys_section(table: &mut toml::map::Map<String, toml::Value>, cfg: &Con
     }
 }
 
-// `[panel]` (change `pinwin-app-host`, design D5): written in full like
+// `[panel]`: written in full like
 // `[session]`/`[display]`, so a default layout is explicit in the file and the
 // old `cols`/`cols_expanded` keys are dropped on the first save.
 fn write_panel_section(table: &mut toml::map::Map<String, toml::Value>, cfg: &Config) {
     let panel = section(table, "panel");
     // The retired column keys are dropped from an existing file, not kept
-    // beside the pixel widths (design D5).
+    // beside the pixel widths.
     panel.remove("cols");
     panel.remove("cols_expanded");
     panel.insert(

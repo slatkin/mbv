@@ -101,7 +101,7 @@ fn session_display_env() -> Option<Vec<(&'static str, String)>> {
     env
 }
 
-/// Pure argv resolution for the swap-launch command (tray-pin-swap D5).
+/// Pure argv resolution for the swap-launch command.
 ///
 /// Pin runs `exe --pin` (a new pinned panel Client, no terminal involved).
 /// Unpin prefixes `exe` with the `[panel] terminal` argv prefix when set,
@@ -126,7 +126,7 @@ fn swap_argv(
     }
 }
 
-/// Detached launch of the replacement Client (tray-pin-swap D5): stdin,
+/// Detached launch of the replacement Client: stdin,
 /// stdout and stderr null, and `setsid` in `pre_exec`, the same as
 /// [`spawn_detached`]. The Owner's environment already carries the session
 /// display variables.
@@ -298,7 +298,7 @@ pub fn run_local_daemon_main() -> ! {
                     .map_err(|e| format!("cannot locate the mbv binary: {e}"))?;
                 let exe = launch_exe(&current, std::process::id());
                 // The `[panel] terminal` value is re-read from the config file
-                // on every swap (design D5), like `owner_settings::reader`:
+                // on every swap, like `owner_settings::reader`:
                 // a config edit reaches the next Unpin without a restart.
                 let panel_terminal = std::fs::read_to_string(mbv_config::config_path())
                     .ok()
@@ -314,12 +314,11 @@ pub fn run_local_daemon_main() -> ! {
                 Ok(detached_swap_command(&command_argv))
             }),
             notify: Box::new(crate::pin::notify),
-            // The Local daemon owns the Cast connector (cast-owner-output
-            // design D2): its Owner can make a receiver its playback output.
+            // The Local daemon owns the Cast connector: its Owner can make a
+            // receiver its playback output.
             cast_connector: Some(mbv_daemon::local_cast_connector()),
-            // The Local daemon hosts an Emby Session output
-            // (emby-session-owner-output design D2): it is the desktop-adjacent
-            // owner whose Client selects the Session.
+            // The Local daemon hosts an Emby Session output: it is the
+            // desktop-adjacent owner whose Client selects the Session.
             emby_session_output: true,
         },
     );

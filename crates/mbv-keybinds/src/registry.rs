@@ -1,5 +1,5 @@
 //! Declared keybind action registry — the single source of truth for every
-//! configurable keyboard action (change `add-configurable-keybinds`, D1).
+//! configurable keyboard action.
 //!
 //! One table (`KEYBIND_ACTIONS`) declares each configurable action with its
 //! stable id (reusing `KeyPolicyEntry.name` so routing, config keys, and
@@ -18,7 +18,7 @@
 //! policy's `KeyPolicyGate`: every transport action collapses to one
 //! `Playback` variant here, while `KeyPolicyGate` splits that bucket into
 //! `Playback`/`PlaybackUngated`/`IdleFeedLink` per-key eligibility
-//! conditions (task 5.1). `KeyGate` is used only to select which declared
+//! conditions. `KeyGate` is used only to select which declared
 //! actions render in the help/settings-Keys Playback group, never for
 //! routing eligibility — that stays owned by the policy split.
 
@@ -40,11 +40,10 @@ pub enum KeyGate {
 }
 
 /// The settings UI's section vocabulary plus `Global`, in `SETTING_SECTIONS`
-/// order with `Global` appended (design D4). The settings main list's
-/// navigation-only `Keys` entry is not a config section and has no variant
-/// here. Config section names match the vocabulary case-insensitively
-/// (design D3's file shape spells them lowercase); the canonical spelling is
-/// `name()`.
+/// order with `Global` appended. The settings main list's navigation-only
+/// `Keys` entry is not a config section and has no variant here. Config
+/// section names match the vocabulary case-insensitively; the canonical
+/// spelling is `name()`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum KeySection {
     Services,
@@ -114,7 +113,7 @@ pub struct KeybindAction {
     pub gate: KeyGate,
     /// The `KEY_POLICY` entry this action's matching replaces. For the split
     /// transport set this records the single `playback` bucket entry the
-    /// actions were split out of (task 5.1); each action's own id is its
+    /// actions were split out of; each action's own id is its
     /// `KEY_POLICY` entry name now.
     pub policy: &'static str,
     /// Router-scope override allowed. Every declared action is rebindable:
@@ -147,7 +146,7 @@ impl KeybindAction {
 pub const RESERVED_CHORDS: &[&str] = &["Ctrl+q"];
 
 /// The declared action table: 20 router-owned global chords plus the 12
-/// split transport actions, sectioned per design D4.
+/// split transport actions, grouped by section.
 pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
     // ── Global (chrome not tied to one settings domain) ─────────────────
     KeybindAction {
@@ -218,7 +217,7 @@ pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
     KeybindAction {
         id: "library_tab_jump",
         section: KeySection::Library,
-        // Positional: the digit pressed resolves the tab (kept per design D2).
+        // Positional: the digit pressed resolves the tab.
         default_chords: &["1", "2", "3", "4", "5", "6", "7", "8", "9"],
         gate: KeyGate::NoBlockingOverlay,
         policy: "library_tab_jump",
