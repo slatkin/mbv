@@ -25,10 +25,10 @@ Read `design.md` first. Run `cargo fmt` after each Rust change. Add no lint supp
 
 ## 5. Remove the playback order
 
-- [ ] 5.1 Delete the TUI side: `ContextAction::SetPlayOrder`, `QueueView.play_order`, the footer shuffle indicator in `chrome_status.rs` and its test, and `PlayerProxy::supports_play_order`/`set_play_order`. Verify with `cargo check -p mbv` and the footer tests passing.
-- [ ] 5.2 Delete the wire side: `CtrlCmd::SetPlayOrder`, `PlayerStatus.play_order`, `PlayerCommand::SetUpcoming`, the `play-order` capability, and the remote-player handshake flag. Verify with `cargo check --workspace`; a payload that carries `play_order` still decodes (unknown field ignored) in a `wire.rs` case.
-- [ ] 5.3 Delete the owner side: `PlayOrder`/`PlayOrderMode` and `crates/mbv-queue/src/play_order.rs`, the order field and hooks in `owner_state.rs`, `SharedQueueState.play_order`, the order hooks in `mbv-daemon` (`play_order.rs`, `queue_edit.rs`, `queue_setup.rs`, `queue_load.rs`, `output/`, `emby_session/`), `PlayerRunState.upcoming`, and the run's advance reverts to `current_idx + 1`. Delete `crates/mbv-daemon/src/tests/queue_ops/play_order.rs` and the tests of removed code. Verify with `cargo check --workspace` and `cargo nextest run -p mbv-player -p mbv-daemon -p mbv-queue`.
-- [ ] 5.4 MPRIS: `Shuffle` reports false and `CanGoPrevious` follows the queue; remove the order helpers and their tests in `crates/mbv-desktop/src/mpris.rs`. Verify with `cargo nextest run -p mbv-desktop`.
+- [x] 5.1 Delete the TUI side: `ContextAction::SetPlayOrder`, `QueueView.play_order`, the footer shuffle indicator in `chrome_status.rs` and its test, and `PlayerProxy::supports_play_order`/`set_play_order`. Verify with `cargo check -p mbv` and the footer tests passing.
+- [x] 5.2 Delete the wire side: `CtrlCmd::SetPlayOrder`, `PlayerStatus.play_order`, `PlayerCommand::SetUpcoming`, the `play-order` capability, and the remote-player handshake flag. Verify with `cargo check --workspace`; a payload that carries `play_order` still decodes (unknown field ignored) in a `wire.rs` case.
+- [x] 5.3 Delete the owner side: `PlayOrder`/`PlayOrderMode` and `crates/mbv-queue/src/play_order.rs`, the order field and hooks in `owner_state.rs`, `SharedQueueState.play_order`, the order hooks in `mbv-daemon` (`play_order.rs`, `queue_edit.rs`, `queue_setup.rs`, `queue_load.rs`, `output/`, `emby_session/`), `PlayerRunState.upcoming`, and the run's advance reverts to `current_idx + 1`. Delete `crates/mbv-daemon/src/tests/queue_ops/play_order.rs` and the tests of removed code. Verify with `cargo check --workspace` and `cargo nextest run -p mbv-player -p mbv-daemon -p mbv-queue`.
+- [x] 5.4 MPRIS: `Shuffle` reports false and `CanGoPrevious` follows the queue; remove the order helpers and their tests in `crates/mbv-desktop/src/mpris.rs`. Verify with `cargo nextest run -p mbv-desktop`.
 
 ## 6. Docs and final checks
 
