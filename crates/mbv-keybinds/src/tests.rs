@@ -433,6 +433,23 @@ fn load_accepts_an_absent_keys_section_and_a_redundant_default_override() {
     load(&raw).unwrap();
 }
 
+/// A retired action is ignored: an old config still binds
+/// `pinned_width_toggle`, the load succeeds, and no action is bound. Other
+/// unknown actions keep their load error (see
+/// `load_rejects_every_validation_class`).
+#[test]
+fn load_ignores_the_retired_pinned_width_toggle_action() {
+    let raw = RawKeybinds {
+        prefix: None,
+        sections: vec![raw_router("global", &[("pinned_width_toggle", "Ctrl+e")])],
+    };
+
+    let keybinds = load(&raw).expect("a retired action must not fail the load");
+
+    assert_eq!(keybinds.router_override("pinned_width_toggle"), None);
+    assert_eq!(keybinds.override_count(), 0);
+}
+
 /// Each rejection class, with the expected error naming the offending entry
 /// (both entries for the collision classes).
 #[test]

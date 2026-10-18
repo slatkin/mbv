@@ -2108,6 +2108,9 @@ dependencies = [
 [[package]]
 name = "mbv-keybinds"
 version = "0.25.6"
+dependencies = [
+ "tracing",
+]
 
 [[package]]
 name = "mbv-net"
