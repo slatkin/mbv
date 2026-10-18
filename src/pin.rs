@@ -18,6 +18,33 @@ use mbv_config::PanelConfig;
 use mbv_ctrl::SWAP_TOKEN_ENV;
 use mbv_ui_model::settings::PinnedWidth;
 
+/// Why the `pinwin` program could not be spawned. A missing binary asks for an
+/// install; any other failure names its cause.
+#[derive(Debug)]
+pub(crate) struct PinSpawnError(std::io::Error);
+
+impl PinSpawnError {
+    fn new(error: std::io::Error) -> Self {
+        Self(error)
+    }
+}
+
+impl fmt::Display for PinSpawnError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.0.kind() == std::io::ErrorKind::NotFound {
+            f.write_str("pinwin is not installed")
+        } else {
+            write!(f, "pinwin could not start: {}", self.0)
+        }
+    }
+}
+
+impl std::error::Error for PinSpawnError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(&self.0)
+    }
+}
+
 /// Why a pinned launch did not reach `pinwin run` (design D2, D5).
 #[derive(Debug)]
 pub(crate) enum PinStartError {
@@ -28,7 +55,7 @@ pub(crate) enum PinStartError {
     /// The mbv binary could not be located.
     Executable(std::io::Error),
     /// `pinwin` could not be spawned (design D2).
-    Spawn(std::io::Error),
+    Spawn(PinSpawnError),
 }
 
 impl fmt::Display for PinStartError {
@@ -37,10 +64,7 @@ impl fmt::Display for PinStartError {
             Self::NoWaylandDisplay => f.write_str("WAYLAND_DISPLAY is unset"),
             Self::Terminal(reason) => f.write_str(reason),
             Self::Executable(error) => write!(f, "cannot locate the mbv binary: {error}"),
-            Self::Spawn(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                f.write_str("pinwin is not installed")
-            }
-            Self::Spawn(error) => write!(f, "pinwin could not start: {error}"),
+            Self::Spawn(error) => error.fmt(f),
         }
     }
 }
@@ -48,8 +72,36 @@ impl fmt::Display for PinStartError {
 impl std::error::Error for PinStartError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
-            Self::Executable(error) | Self::Spawn(error) => Some(error),
+            Self::Executable(error) => Some(error),
+            Self::Spawn(error) => Some(error),
             Self::NoWaylandDisplay | Self::Terminal(_) => None,
+        }
+    }
+}
+
+/// Why one `pinwin` request did not finish.
+#[derive(Debug)]
+enum PinRequestError {
+    /// The `pinwin` program could not be spawned.
+    Spawn(PinSpawnError),
+    /// `pinwin` ran and refused the request.
+    Refused(String),
+}
+
+impl fmt::Display for PinRequestError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Spawn(error) => error.fmt(f),
+            Self::Refused(reason) => f.write_str(reason),
+        }
+    }
+}
+
+impl std::error::Error for PinRequestError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Spawn(error) => Some(error),
+            Self::Refused(_) => None,
         }
     }
 }
@@ -344,7 +396,7 @@ pub(crate) fn apply_pinned(
         PinnedSettingRequest::Side(side) => set_edge_argv(panel, side),
         PinnedSettingRequest::Gutter(gutter, value) => set_gutters_argv(panel, gutter, value),
     };
-    run_request(&argv)
+    run_request(&argv).map_err(|error| error.to_string())
 }
 
 /// `set-edge <panel> left|right` (design D7).
@@ -402,19 +454,20 @@ fn request_result(code: Option<i32>, stderr: &str) -> Result<(), String> {
 /// Run one `pinwin` request against the claimed panel daemon (design D4). The
 /// child is the untested boundary; the argv it runs and the result it maps to
 /// are pure.
-fn run_request(argv: &[String]) -> Result<(), String> {
+fn run_request(argv: &[String]) -> Result<(), PinRequestError> {
     let mut command = Command::new("pinwin");
     command.args(argv);
     if let Some(socket) = identity().socket.as_deref() {
         command.env(PINWIN_SOCKET_ENV, socket);
     }
-    let Ok(output) = command.output() else {
-        return Err("pinwin is not installed".to_string());
-    };
+    let output = command
+        .output()
+        .map_err(|error| PinRequestError::Spawn(PinSpawnError::new(error)))?;
     request_result(
         output.status.code(),
         &String::from_utf8_lossy(&output.stderr),
     )
+    .map_err(PinRequestError::Refused)
 }
 
 /// What a finished `pinwin run` reports (design D2): a success exits with
@@ -478,7 +531,7 @@ pub(crate) fn launch(config: &PanelConfig, log_level: Option<&str>) {
     let mut child = match command.spawn() {
         Ok(child) => child,
         Err(error) => {
-            report_start_failure(&PinStartError::Spawn(error));
+            report_start_failure(&PinStartError::Spawn(PinSpawnError::new(error)));
             return;
         }
     };
@@ -526,8 +579,8 @@ fn finish(status: std::process::ExitStatus) -> ! {
 /// reason when no panel runs or the request fails; exits 0 silently on
 /// success.
 pub(crate) fn toggle_running() {
-    if let Err(reason) = run_request(&toggle_argv(PANEL_NAME)) {
-        report_toggle_failure(&reason);
+    if let Err(error) = run_request(&toggle_argv(PANEL_NAME)) {
+        report_toggle_failure(&error.to_string());
     }
 }
 

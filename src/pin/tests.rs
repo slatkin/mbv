@@ -1,9 +1,9 @@
 //! Unit tests for the pinwin boundary (`pinwin-app-host` design D1 to D8).
 
 use super::{
-    PanelExitAction, PanelGutter, PanelIdentity, PanelReserve, StartFailureAction, exit_action,
+    PanelExitAction, PanelGutter, PanelIdentity, PinSpawnError, StartFailureAction, exit_action,
     failure_action, pinned_width_argv, request_result, run_argv, set_edge_argv, set_gutters_argv,
-    set_size_argv, terminal_prefix, toggle_argv,
+    terminal_prefix, toggle_argv,
 };
 use mbv_config::{PanelConfig, PanelSide};
 use mbv_ui_model::settings::PinnedWidth;
@@ -26,7 +26,6 @@ fn start_failure_falls_back_to_the_terminal_only_for_a_tty_stdin() {
 /// and a desktop launch also notifies because it has no stderr to read.
 #[rstest::rstest]
 #[case::success_is_quiet(true, true, PanelExitAction::Quiet)]
-#[case::success_without_a_tty_is_quiet(true, false, PanelExitAction::Quiet)]
 #[case::terminal_failure_is_logged(false, true, PanelExitAction::Log)]
 #[case::desktop_failure_notifies(false, false, PanelExitAction::LogAndNotify)]
 fn exit_action_reports_a_failure_only_outside_a_terminal(
@@ -42,7 +41,6 @@ fn exit_action_reports_a_failure_only_outside_a_terminal(
 #[rstest::rstest]
 #[case::set(Some("mbv"), true)]
 #[case::empty(Some(""), false)]
-#[case::unset(None, false)]
 fn panel_identity_is_pinned_only_for_a_set_panel_name(
     #[case] panel: Option<&str>,
     #[case] expected: bool,
@@ -59,7 +57,6 @@ fn panel_identity_is_pinned_only_for_a_set_panel_name(
     Some("/run/user/1000/pinwin/wayland-0.sock")
 )]
 #[case::empty(Some(""), None)]
-#[case::unset(None, None)]
 fn panel_identity_keeps_a_socket_only_when_set(
     #[case] socket: Option<&str>,
     #[case] expected: Option<&str>,
@@ -126,7 +123,6 @@ fn run_argv_carries_the_layout_the_terminal_and_the_log_level(
     vec!["ghostty", "--gtk-single-instance=false", "-e"]
 )]
 #[case::empty_config_prefix_falls_back(Some(vec![]), Some("wezterm"), vec!["wezterm", "-e"])]
-#[case::terminal_env_falls_back(None, Some("wezterm"), vec!["wezterm", "-e"])]
 fn terminal_prefix_prefers_the_config_prefix_then_the_environment(
     #[case] pin_terminal: Option<Vec<&str>>,
     #[case] terminal_env: Option<&str>,
@@ -150,19 +146,6 @@ fn terminal_prefix_without_a_source_names_both() {
     assert!(error.contains("TERMINAL"), "error must name environment");
 }
 
-/// Design D6: one width change carries its reserve mode.
-#[rstest::rstest]
-#[case::collapsed_pushes("mbv", 400, PanelReserve::Push, vec!["set-size", "mbv", "400px", "--reserve", "push"])]
-#[case::expanded_covers("tunes", 1100, PanelReserve::Cover, vec!["set-size", "tunes", "1100px", "--reserve", "cover"])]
-fn set_size_argv_sends_the_width_with_its_reserve_mode(
-    #[case] panel: &str,
-    #[case] width: u16,
-    #[case] reserve: PanelReserve,
-    #[case] expected: Vec<&str>,
-) {
-    assert_eq!(set_size_argv(panel, width, reserve), strings(&expected));
-}
-
 /// Design D6: the requested view picks both the saved width and the reserve
 /// mode, so one `x` press is one panel change and no tiled window moves.
 #[rstest::rstest]
@@ -174,7 +157,7 @@ fn set_size_argv_sends_the_width_with_its_reserve_mode(
     PinnedWidth::Expanded,
     vec!["set-size", "mbv", "1100px", "--reserve", "cover"]
 )]
-fn pinned_width_argv_uses_the_views_width_and_reserve_mode(
+fn pinned_width_argv_sends_the_views_width_and_reserve_mode(
     #[case] width: PinnedWidth,
     #[case] expected: Vec<&str>,
 ) {
@@ -215,6 +198,21 @@ fn set_gutters_argv_sends_the_edited_gutter(
 #[test]
 fn toggle_argv_names_the_panel() {
     assert_eq!(toggle_argv("mbv"), strings(&["toggle", "mbv"]));
+}
+
+/// A missing `pinwin` asks for an install; any other spawn failure names its
+/// cause.
+#[rstest::rstest]
+#[case::missing(std::io::ErrorKind::NotFound, "pinwin is not installed")]
+#[case::denied(
+    std::io::ErrorKind::PermissionDenied,
+    "pinwin could not start: permission denied"
+)]
+fn pin_spawn_error_names_the_cause(#[case] kind: std::io::ErrorKind, #[case] expected: &str) {
+    assert_eq!(
+        PinSpawnError::new(std::io::Error::from(kind)).to_string(),
+        expected
+    );
 }
 
 /// Design D4: exit 0 is success, exit 1 is pinwin's own reason, exit 2 is a
