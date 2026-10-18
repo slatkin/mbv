@@ -351,9 +351,12 @@ fn main() {
         std::process::exit(1);
     }
 
-    // Claim the Pin-swap token before anything else spawns a worker or child
-    // process (tray-pin-swap design D2).
+    // Claim the Pin-swap token and the panel identity before anything else
+    // spawns a worker or child process (tray-pin-swap design D2,
+    // `pinwin-app-host` design D3): the Owner process and every other child
+    // must not inherit the panel identity.
     pin::claim_swap_token();
+    pin::claim_panel_identity();
 
     let Some(startup) = pre_config_startup() else {
         return;
