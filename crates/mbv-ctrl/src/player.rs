@@ -447,6 +447,13 @@ pub enum PlayerCommand {
     /// a gap in the post-move sequence, resolved immediately by the receiver,
     /// and never crosses back out.
     QueueMove(QueueSlotId, usize),
+    /// Apply a whole-queue order in one handler (queue-content-shuffle task
+    /// 3.3): the run drains its command channel per tick, so per-slot moves
+    /// leave a window where an mpv `EndFile` is processed against a partially
+    /// applied order. The order names every slot exactly once, active slot
+    /// first. In-process only — never crosses the ctrl wire, like
+    /// `QueueMove`.
+    QueueReorder(Vec<QueueSlotId>),
     SetVolume(i64),
     Seek(f64),
     SeekAbsolute(f64),

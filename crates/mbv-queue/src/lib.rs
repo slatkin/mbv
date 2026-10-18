@@ -675,8 +675,8 @@ impl FetchedItemMatches {
 /// one `(slot, new index)` pair per position whose slot is not already in
 /// place, target index from 0 up. Applying the pairs with `move_slot` in
 /// order reaches `target` and never disturbs the positions already placed,
-/// so a move list whose first pair moves the active slot to index 0 leaves
-/// it there (the Shuffle handler forwards exactly this list to the run).
+/// so a plan whose first pair moves the active slot to index 0 leaves
+/// it there (the run's `QueueReorder` handler applies exactly this plan).
 /// `target` must name the same slots as `current`; a foreign id is skipped.
 #[must_use]
 pub fn reorder_move_plan(

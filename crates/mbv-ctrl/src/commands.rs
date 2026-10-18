@@ -410,6 +410,7 @@ impl WireCommand {
             PlayerCommand::QueueAppend { .. }
             | PlayerCommand::QueueRemove(_)
             | PlayerCommand::QueueMove(..)
+            | PlayerCommand::QueueReorder(_)
             | PlayerCommand::JumpTo { .. }
             | PlayerCommand::SetUpcoming(_)
             | PlayerCommand::LoadNew { .. }

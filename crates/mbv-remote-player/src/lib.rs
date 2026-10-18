@@ -300,7 +300,8 @@ impl RemotePlayer {
             // path (`RemotePlayer::send_queue_op`, `PlayerProxy::submit_queue_slots`).
             PlayerCommand::QueueAppend { .. }
             | PlayerCommand::QueueRemove(_)
-            | PlayerCommand::QueueMove(..) => {
+            | PlayerCommand::QueueMove(..)
+            | PlayerCommand::QueueReorder(_) => {
                 tracing::warn!(name: "remote.command_send.refused", target: "remote", "queue mutation not sendable over legacy ctrl; use a unified queue command");
                 return false;
             }

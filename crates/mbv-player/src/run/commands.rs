@@ -36,6 +36,9 @@ impl PlaybackRun {
             PlayerCommand::QueueMove(slot_id, to) => {
                 self.cmd_queue_move(slot_id, to, mpv);
             }
+            PlayerCommand::QueueReorder(order) => {
+                self.cmd_queue_reorder(&order, mpv);
+            }
             PlayerCommand::SetAudio(id) => {
                 if id > 0 {
                     let _ = mpv.set_property("aid", id);
