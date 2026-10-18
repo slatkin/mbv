@@ -47,7 +47,7 @@ comp
 * `crates/mbv-images/`: image cache, loading and processing, terminal image protocol support.
 * `crates/mbv-ui-model/`: plain presentation models shared by UI crates.
 * `crates/mbv-ui-msg/`: typed messages crossing the interactive-component boundary.
-* `pinwin`: the Rust pinwin crate (Wayland layer-shell panel, separate repo `slatkin/pinwin`). It docks the mbv pinned panel beside tiled windows. `src/pin.rs` is the only boundary. It is a git-rev dependency pinned in `Cargo.toml` (`pinwin = { git = "https://github.com/slatkin/pinwin", rev = "<sha>" }`). Update the pin by changing `rev` there. Fix pinwin bugs upstream, never here.
+* `pinwin`: the external Rust program (Wayland layer-shell panel, separate repo `slatkin/pinwin`, minimum version 0.4.1). It docks the mbv pinned panel beside tiled windows. `src/pin.rs` is the only caller: it builds every `pinwin` argv and runs the program. mbv links no pinwin library. Fix pinwin bugs upstream, never here.
 
 ## Interactive architecture
 

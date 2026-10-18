@@ -375,7 +375,7 @@ The app-wide layout state. It is one of Mini, Narrow, or Wide. The three values 
 _Avoid_: layout mode, view mode, panel state, responsive mode, breakpoint mode
 
 Pinned panel:
-The Wayland layer-shell surface that pinwin shows beside tiled windows. It holds the mbv TUI drawn to a pty that the panel owns. It is a desktop window made only by a pinned launch. It is not one of the in-TUI Panel regions, that is Tab, Library, Queue, and the rest. A plain terminal launch draws the same TUI with no pinned panel. It can be hidden and shown with `mbv --toggle` while mbv keeps running.
+The Wayland layer-shell surface that pinwin shows beside tiled windows. pinwin hosts the Pin terminal in it, and that terminal runs the mbv TUI. It is a desktop window made only by a pinned launch. It is not one of the in-TUI Panel regions, that is Tab, Library, Queue, and the rest. A plain terminal launch draws the same TUI with no pinned panel. At most one panel named `mbv` runs per Wayland display. It can be hidden and shown with `mbv --toggle` while mbv keeps running, and a second `--pin` shows it.
 _Avoid_: panel (bare — reserved for the in-TUI regions), layer-shell panel, dock, sidebar, tray
 
 Pinned panel width:
@@ -391,7 +391,7 @@ The fixed covering rule of the Pinned panel. The collapsed panel always pushes: 
 _Avoid_: cover mode, overlay, always on top
 
 Pinned launch:
-A launch that runs the mbv TUI in the Pinned panel in the same process instead of the current terminal. Only the `--pin` flag selects it. It selects where the TUI draws, not who owns the Player. No configuration setting starts one. When the panel cannot start, mbv reports the reason. It then falls back to the current terminal or exits with a non-zero status.
+A launch that runs the mbv TUI in the Pinned panel instead of the current terminal. Only the `--pin` flag selects it. It runs `pinwin run`, which docks the Pin terminal as the panel, and that terminal runs mbv. The launcher waits until the panel's terminal ends and exits with that status. It selects where the TUI draws, not who owns the Player. No configuration setting starts one. When the panel cannot start before pinwin is run, mbv reports the reason, then falls back to the current terminal or exits with a non-zero status. When pinwin was run and ends with a failure status, mbv reports it and exits with that status without a terminal fallback.
 _Avoid_: pin mode, desktop mode, Panel mode (reserved for the in-TUI layout state)
 
 Pin terminal:
@@ -399,7 +399,7 @@ The argv prefix for the terminal that hosts the mbv TUI in the Pinned panel. It 
 _Avoid_: panel terminal, terminal command, fallback terminal
 
 `--pin`:
-The launch flag that requests a Pinned launch. It starts no separate program. It opens one panel per launch. It closes that panel when mbv exits.
+The launch flag that requests a Pinned launch. It runs `pinwin run` as a separate program and waits for it. One panel named `mbv` exists per Wayland display: the first `--pin` opens it, and a later `--pin` shows the running panel through `pinwin run --show-existing`, opens no second panel, and exits with status 0. The panel closes when mbv in it exits.
 _Avoid_: `--desktop`, pin setting, pinning option
 
 Panel gutter:
