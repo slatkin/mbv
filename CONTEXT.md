@@ -179,6 +179,10 @@ Queue source:
 The recorded origin of a queue. The values are Playlist (with optional id and name), Album, Series, Shuffle, Remote, Collection (with collection type), or Unknown. It survives restore. It serves UI display and save-on-consume decisions.
 _Avoid_: queue origin, queue type, source type
 
+Queue shuffle:
+The one-time random reordering of the slots of a Bound queue, offered by the Shuffle entry of every Queue row. The slot that plays stays first and keeps playing. Every other slot is reordered at random. It is one queue edit, so it persists with the queue and reaches every Client in one snapshot. It is not the `Shuffle` Queue source value, which records how a queue was made. It is not the library Shuffle entry, which replaces the queue.
+_Avoid_: shuffle play, shuffle mode, play order, upcoming pick
+
 Consume:
 Removal of an item from the queue after it finishes playing, as in ncmpcpp. It is only a queue operation. It says nothing about the queue origin. It never edits anything on the server. Only the authoritative Player owner playback lifecycle drives it. That owner is the local Owner process or a directly controlled remote Player owner. An Emby Session output consumes through the Owner, as every output does. Consume addresses canonical slot identity. It removes only the consumed occurrence.
 _Avoid_: auto-remove, playlist consume, consume-and-save, remote consume
@@ -637,7 +641,7 @@ The relation of a Player owner to the Cast receiver that is its *Playback output
 _Avoid_: attach (bare, without "cast"), cast session, cast connection
 
 Dispatch:
-Retired term. The receiver holds no queue of its own. The Owner loads the active slot on it and advances through its own PlayOrder. Use *Playback output* and *Cast attachment*.
+Retired term. The receiver holds no queue of its own. The Owner loads the active slot on it and advances through the canonical queue. Use *Playback output* and *Cast attachment*.
 _Avoid_: Dispatch, dispatched queue
 
 Uncastable:
