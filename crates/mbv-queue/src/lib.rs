@@ -9,6 +9,7 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use mbv_emby_model::EmbyItem;
+use rand::seq::SliceRandom;
 
 // FeedEntry and QueueItem — the two item kinds a playback queue slot can
 // hold, plus QueueItem's custom (kind-tagged, legacy-fallback) Deserialize.
@@ -424,6 +425,49 @@ impl PlaybackQueue {
         }
     }
 
+    /// Replace the slot sequence with `order` in a single revision.
+    ///
+    /// `order` must name exactly the current slots, each once. Otherwise the
+    /// queue is left untouched and this returns [`QueueMutationResult::NotFound`].
+    pub fn reorder_slots(&mut self, order: &[QueueSlotId]) -> QueueMutationResult<()> {
+        if !is_slot_permutation(self.slots.iter().map(|slot| slot.slot_id), order) {
+            return QueueMutationResult::NotFound;
+        }
+
+        let mut by_id: HashMap<QueueSlotId, QueueSlot> = self
+            .slots
+            .drain(..)
+            .map(|slot| (slot.slot_id, slot))
+            .collect();
+        // The permutation check guarantees each id in `order` is present once.
+        self.slots = order
+            .iter()
+            .filter_map(|slot_id| by_id.remove(slot_id))
+            .collect();
+        self.revision.bump(&self.mint);
+        QueueMutationResult::Applied(())
+    }
+
+    /// The slot order a Shuffle produces: the active slot first, then the rest at random.
+    ///
+    /// The queue itself is not changed. The caller supplies `rng` so tests can
+    /// seed it and so the owner owns the randomness source.
+    #[must_use]
+    pub fn shuffled_slot_order(&self, rng: &mut impl rand::Rng) -> Vec<QueueSlotId> {
+        let active_slot_id = self.active_slot_id;
+        let mut order: Vec<QueueSlotId> = self
+            .slots
+            .iter()
+            .map(|slot| slot.slot_id)
+            .filter(|slot_id| Some(*slot_id) != active_slot_id)
+            .collect();
+        order.shuffle(rng);
+        if let Some(active_slot_id) = active_slot_id {
+            order.insert(0, active_slot_id);
+        }
+        order
+    }
+
     pub fn move_slot(&mut self, slot_id: QueueSlotId, to_index: usize) -> QueueMutationResult<()> {
         let Some(from_index) = self.slot_index(slot_id) else {
             return QueueMutationResult::NotFound;
@@ -625,6 +669,18 @@ impl FetchedItemMatches {
         self.next_index = self.next_index.saturating_add(1);
         self.items[index].clone()
     }
+}
+
+/// Returns `true` when `order` names exactly the slots in `current`, each once.
+fn is_slot_permutation(current: impl Iterator<Item = QueueSlotId>, order: &[QueueSlotId]) -> bool {
+    let mut current: Vec<QueueSlotId> = current.collect();
+    if current.len() != order.len() {
+        return false;
+    }
+    current.sort_unstable();
+    let mut requested = order.to_vec();
+    requested.sort_unstable();
+    current == requested
 }
 
 fn queue_items_equal(left: &QueueItem, right: &QueueItem) -> bool {
