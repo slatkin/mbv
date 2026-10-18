@@ -16,6 +16,10 @@ pub(in crate::app) struct RuntimeChannels {
     pub(in crate::app) cast_rx: mpsc::Receiver<CastEvent>,
     pub(in crate::app) notif_action_tx: mpsc::Sender<String>,
     pub(in crate::app) notif_action_rx: mpsc::Receiver<String>,
+    /// Outcomes of panel requests that run on a worker thread, drained by
+    /// the shell and applied through the pinned view/settings handlers.
+    pub(in crate::app) pinned_tx: mpsc::Sender<Result<(), String>>,
+    pub(in crate::app) pinned_rx: mpsc::Receiver<Result<(), String>>,
 }
 
 impl RuntimeChannels {
@@ -25,6 +29,7 @@ impl RuntimeChannels {
         let (sessions_tx, sessions_rx) = mpsc::channel();
         let (cast_tx, cast_rx) = mpsc::channel();
         let (notif_action_tx, notif_action_rx) = mpsc::channel();
+        let (pinned_tx, pinned_rx) = mpsc::channel();
         Self {
             lib_tx,
             lib_rx,
@@ -36,6 +41,8 @@ impl RuntimeChannels {
             cast_rx,
             notif_action_tx,
             notif_action_rx,
+            pinned_tx,
+            pinned_rx,
         }
     }
 }

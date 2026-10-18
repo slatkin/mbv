@@ -41,7 +41,7 @@ impl Model {
         self.app.resolve_launch_tab_on_sync();
         self.app.normalize_stale_browse_destination();
         // Apply App-owned effect handoffs to their mounted components.
-        // `sync_home` was deleted (task 5.3d, sync_home mirror deletion):
+        // `sync_home` was deleted:
         // Home content/focus is projected event-driven by
         // `push_home_content` at the seams above.
         self.sync_modal_requests();
@@ -65,40 +65,39 @@ impl Model {
         // too, but the sync pass is the backstop that direct App writers
         // (and the tests driving them) rely on.
         self.push_music_workspace_content();
-        // Task 8.4: the TV owner is installed/pushed before the panel's
+        // The TV owner is installed/pushed before the panel's
         // owner-retention and active-pointer pass below.
         self.sync_tv_content();
-        // Task 5.9: the Library panel mounts with the library column and
+        // The Library panel mounts with the library column and
         // drives its owner map (retention + the active pointer) before the
         // focus pass routes to the active surface.
         self.sync_library_panel();
-        // Task 3.2: restore the selected destination's main Selector before
+        // Restore the selected destination's main Selector before
         // its library item, then consume the pending intent exactly once.
         self.reanchor_pending_launch_destination();
-        // Task 3.1: a landing that completed during this iteration's lib-event
+        // A landing that completed during this iteration's lib-event
         // drain owes the Series detail hand-off. Consume it here, after the
         // panel's active pointer follows the landed tab and before the hero
         // image / focus passes so they see the opened presentation.
         self.drain_series_navigation_handoff();
-        // Task 6.1: a navigated episode's workspace selection retries as its
+        // A navigated episode's workspace selection retries as its
         // series detail / season episodes drain (each retry may arm the next
         // season fetch; absence clears it silently).
         self.drain_pending_episode_selection();
-        // Task 5.10 (design D9): the active owner's hero image projection —
+        // The active owner's hero image projection —
         // the fetches and the cover-fit box re-encode — runs here, before the
         // draw, so painting reads projected state only.
         self.sync_library_hero_images();
         // Retire destination components whose Service library left the
-        // catalog before the focus pass routes to the active destination
-        // (keep-destination-components-mounted tasks 1.3).
+        // catalog before the focus pass routes to the active destination.
         self.sync_active_destination();
-        // ADR 0024 D2: mouse eligibility is derived off the same
-        // active-destination derivation, in the same pass, right after it.
+        // Mouse eligibility is derived off the same active-destination
+        // derivation, in the same pass, right after it.
         self.sync_mouse_subscriptions();
     }
 
-    /// Terminal-resize side effects, applied in the sync pass before any draw
-    /// (task 1.2). A size drift against the size this pass last handled runs
+    /// Terminal-resize side effects, applied in the sync pass before any
+    /// draw. A size drift against the size this pass last handled runs
     /// the former draw-time mutations: the queue-column clamp + prefs save
     /// (this also picks up the startup draw's size normalization and any
     /// direct-frame normalization). The card-image clear those mutations used
@@ -106,21 +105,9 @@ impl Model {
     /// only when the Resize observer armed it -- the real terminal-resize
     /// event, whose pre-resize width the marker still holds.
     pub(super) fn sync_terminal_resize(&mut self) {
-        // Change `panel-expand-toggle`: a pinned width apply resizes the pty
-        // synchronously inside the apply call, so the new size is knowable
-        // before the terminal-event worker delivers its `Resize` observer
-        // event (measured ~50 ms later). Adopt it here, so the frame in this
-        // iteration is painted at the new width instead of painting the old
-        // one and waiting a second time for the event -- a stale wide paint
-        // that also wrote ~36 KB into the pty while the panel's width tween
-        // was running.
-        if std::mem::take(&mut self.app.pinned_resize_pending)
-            && let Ok((width, height)) = crossterm::terminal::size()
-        {
-            self.app.terminal_width = width;
-            self.app.terminal_height = height;
-            self.pending_terminal_resize = true;
-        }
+        // A pinned width change is one `pinwin set-size` request; the new size
+        // reaches mbv only as the terminal's own `Resize` observer event, which
+        // this pass adopts like any other resize (invariant 17).
         let size = (self.app.terminal_width, self.app.terminal_height);
         let resize_event = std::mem::take(&mut self.pending_terminal_resize);
         if self.handled_terminal_size == size && !resize_event {
@@ -132,7 +119,7 @@ impl Model {
         // protocol resize path re-encodes from the decoded sources at the new
         // geometry; wiping the cache here (a second clear next to the
         // observer's) only forced HTTP refetches and a longer placeholder
-        // window on every pinned width toggle.
+        // window on every pinned width change.
         // Crossing into mini view on a real resize hands focus to the queue;
         // the stored wide focus is untouched.
         if resize_event && was_wide && size.0 < mbv_render::layout::MINI_VIEW_THRESHOLD {
@@ -143,7 +130,7 @@ impl Model {
         }
     }
 
-    /// The sole frame orchestrator (D3): root placement publication, mounted
+    /// The sole frame orchestrator: root placement publication, mounted
     /// component views, deferred protocol-image paint, and overlay stack.
     pub(in crate::app) fn draw_frame(
         &mut self,
@@ -154,7 +141,7 @@ impl Model {
         // The legacy base frame reads the blocking-overlay state for its dim
         // backdrop and stay-alive indicator; that fact now lives in TuiRealm
         // mount state, so the shell computes it once per frame (the deleted
-        // App-level `blocking_overlay_active` adapter, task 5.3d).
+        // App-level `blocking_overlay_active` adapter).
         self.app.dim_backdrop_active = self.blocking_overlay_active();
         self.app.compose_root_frame(f);
         // Root composition is data-driven: this is the sole panel paint loop.
@@ -210,7 +197,7 @@ impl Model {
                 img_opt,
                 self.app.current_protocol_suffix(),
             );
-            // Artist artwork (task 6.2, design D7): a fetch reserved through
+            // Artist artwork: a fetch reserved through
             // the typed artist request identity completes as its own typed
             // event; the generic image cache stays provider/generic.
             let artist_completion =
@@ -353,8 +340,8 @@ impl Model {
             let drained_abs_events = self.app.drain_audiobookshelf_events();
             had_events |= drained_abs_events;
             // ABS startup/refresh reset the browse state and reconcile
-            // per-episode progress; re-project the active podcast browser
-            // (task 5.3d.11 U6). Only project when the drain actually reported
+            // per-episode progress; re-project the active podcast browser.
+            // Only project when the drain actually reported
             // an event.
             if drained_abs_events {
                 self.push_audiobookshelf_podcast_content();
@@ -393,7 +380,7 @@ impl Model {
 
         self.teardown(quit_timeout);
         let _ = restore_terminal(terminal); // ignore errors — terminal may be gone (SIGHUP)
-        // Printed only after the terminal is restored (task 7.2): anything
+        // Printed only after the terminal is restored: anything
         // written while still in the alternate screen would never be
         // visible once it's left.
         if let Some(msg) = self.app.pending_exit_message.take() {
@@ -455,6 +442,7 @@ impl Model {
 
         *had_events |= self.app.drain_session_events();
         *had_events |= self.app.drain_cast_events();
+        *had_events |= self.app.drain_pinned_requests();
 
         // Feed results update their embedded destination owner.
         if self.app.drain_feed_tab_results() {

@@ -8,7 +8,7 @@ use tuirealm::event::Event;
 /// The appearance-focus contract: unpinned mini view always rests; pinned
 /// mini view follows the window focus and the effective focus; wide view
 /// ignores the window focus and the focus bit selects the palette per panel.
-/// (`pinwin::Panel` cannot be built hermetically, so the pure decision is
+/// (A pinned launch needs the `PINWIN_PANEL` claim, so the pure decision is
 /// tabled rather than driven through `App`.)
 #[rstest]
 #[case::unpinned_mini_focused(PanelPresentation::MiniUnpinned, PanelFocus::Library, false)]
@@ -158,7 +158,7 @@ fn resize_tick_selects_mini_queue_without_changing_wide_focus() {
         })
     )));
 
-    // Production order (task 1.2): the resize observer message is dispatched
+    // Production order: the resize observer message is dispatched
     // and the sync pass runs before the next draw. The resize side effects --
     // including the mini-view focus hand-off -- belong to the sync pass now;
     // the draw path only reads geometry.
@@ -197,7 +197,7 @@ fn resize_tick_selects_mini_queue_without_changing_wide_focus() {
     assert_eq!(harness.model().app.panel_focus, PanelFocus::Library);
 }
 
-/// Task 1.2: the mini-view threshold crossing is a sync-pass side effect now.
+/// The mini-view threshold crossing is a sync-pass side effect now.
 /// After one `tick()` + sync pass and without drawing, the ephemeral mini-view
 /// focus has moved to Queue while the stored wide focus is untouched.
 #[test]
@@ -289,8 +289,8 @@ fn entering_queue_focus_defaults_invalid_queue_cursor_to_first_item() {
     assert_eq!(app.local_view.cursor(), 0);
 }
 
-/// Contract: "Two-panel layout hides an empty queue column" (change
-/// `hide-empty-queue-column`, D1). At 80+ columns with `both` and an empty
+/// Contract: "Two-panel layout hides an empty queue column". At 80+ columns
+/// with `both` and an empty
 /// displayed queue, the effective mode is library-only while the stored mode
 /// stays `both` -- the `x` cycle reads the stored mode, so it still advances
 /// from `both`.
@@ -304,8 +304,8 @@ fn empty_displayed_queue_derives_library_only_while_stored_mode_stays_both() {
     assert_eq!(app.panel_mode, PanelMode::Both);
 }
 
-/// Contract: "Cycle continues from both" (change `hide-empty-queue-column`,
-/// D1). With the queue column hidden because the displayed queue is empty,
+/// Contract: "Cycle continues from both". With the queue column hidden because
+/// the displayed queue is empty,
 /// the `x` cycle still reads the stored `both` and advances to queue-only.
 #[test]
 fn cycle_from_hidden_empty_queue_advances_stored_mode_to_queue_only() {
@@ -319,7 +319,7 @@ fn cycle_from_hidden_empty_queue_advances_stored_mode_to_queue_only() {
 }
 
 /// Contract: "Hidden empty queue moves focus to the library" and "Focus
-/// stays on the library on refill" (change `hide-empty-queue-column`, D2).
+/// stays on the library on refill".
 /// The queue held focus; emptying it and syncing moves the stored focus to
 /// the library, and a later slot adoption leaves it there.
 #[test]

@@ -10,6 +10,7 @@ pub(in crate::app) mod music_artist_detail;
 pub(in crate::app) mod music_grouping;
 pub(in crate::app) mod panel_focus;
 pub(in crate::app) mod panel_targets;
+pub(in crate::app) mod pinned_request;
 pub(in crate::app) mod playback_target;
 pub(in crate::app) mod projection;
 pub(in crate::app) mod queue_deferrals;

@@ -1,18 +1,18 @@
-//! App-dispatch contracts for the pinned view toggle (change
-//! `pinned-view-toggle`, design D2/D3).
+//! App-dispatch contracts for the pinned view toggle.
 //!
-//! The live `pinwin::Panel` cannot be built hermetically, so these drive the
-//! post-apply dispatch step directly: `apply_pinned_view` owns the width-first
-//! view assignment and the rejection flash, and `pinned_view_toggle` only adds
-//! the panel apply in front of it.
+//! `apply_pinned_view` owns the width-first view assignment and the rejection
+//! flash. `pinned_view_toggle` builds the `set-size` request and hands it to a
+//! worker; the tests inject the worker's outcome through the pin test seam, so
+//! no `pinwin` process runs and nothing sleeps.
 
 use super::*;
 use crate::app::tests::tick_integration::harness::TickHarness;
-use crate::pin::PinnedWidth;
+use crate::pin::{PINNED_REQUEST_OVERRIDE, PINNED_REQUEST_TEST_LOCK, PINNED_REQUESTS};
 use mbv_components::QueuePlaybackPanel;
+use mbv_ui_model::settings::PinnedWidth;
 use mbv_ui_msg::ComponentId;
 
-/// Design D2/D3: from the collapsed width, an accepted expand records the
+/// From the collapsed width, an accepted expand records the
 /// expanded width and stores the library view. `terminal_width` is held at the
 /// pre-toggle collapsed width, so a `set_panel_focus` call would take its
 /// mini-view branch and leave `panel_focus` stale at `Queue`.
@@ -37,7 +37,7 @@ fn pinned_expand_applies_the_library_view_from_the_stale_collapsed_width() {
     );
 }
 
-/// Design D2/D3: from the expanded width, an accepted collapse records the
+/// From the expanded width, an accepted collapse records the
 /// collapsed width and stores the queue view (mini view at the sub-80
 /// collapsed width), mirroring the expand assertions.
 #[test]
@@ -61,7 +61,7 @@ fn pinned_collapse_applies_the_queue_view_from_the_stale_expanded_width() {
     );
 }
 
-/// Design D2: a rejected target width flashes the reason and changes neither
+/// A rejected target width flashes the reason and changes neither
 /// the width nor the displayed panel mode.
 #[test]
 fn rejected_pinned_expand_flashes_and_leaves_the_view_alone() {
@@ -88,8 +88,59 @@ fn rejected_pinned_expand_flashes_and_leaves_the_view_alone() {
     assert_eq!(app.status_severity, ToastSeverity::Warning);
 }
 
-/// Design D4: `Ctrl+e`'s success mutation records only the width, so the
-/// stored panel mode and its focus survive a toggle in both directions.
+/// The one-in-flight contract: an `x` press while the first request is
+/// pending sends no second request and queues none.
+#[test]
+fn a_second_x_press_while_a_request_is_pending_sends_nothing() {
+    let _guard = PINNED_REQUEST_TEST_LOCK.lock().unwrap();
+    *PINNED_REQUEST_OVERRIDE.lock().unwrap() = Some(Ok(()));
+    PINNED_REQUESTS.lock().unwrap().clear();
+    let mut app = make_app_stub();
+    app.pinned_width = PinnedWidth::Collapsed;
+
+    app.pinned_view_toggle();
+    app.pinned_view_toggle();
+
+    assert_eq!(
+        PINNED_REQUESTS.lock().unwrap().len(),
+        1,
+        "the pending press is ignored, not queued"
+    );
+    assert!(app.pinned_request_pending.is_some());
+    *PINNED_REQUEST_OVERRIDE.lock().unwrap() = None;
+}
+
+/// The worker's outcome reaches the same handler as before: the view stays
+/// untouched while the request is pending and the drained outcome applies it.
+#[test]
+fn a_drained_outcome_applies_the_pinned_view() {
+    let _guard = PINNED_REQUEST_TEST_LOCK.lock().unwrap();
+    *PINNED_REQUEST_OVERRIDE.lock().unwrap() = Some(Ok(()));
+    PINNED_REQUESTS.lock().unwrap().clear();
+    let mut app = make_app_stub();
+    app.terminal_width = 40;
+    app.pinned_width = PinnedWidth::Collapsed;
+    app.panel_mode = PanelMode::QueueOnly;
+    app.panel_focus = PanelFocus::Queue;
+
+    app.pinned_view_toggle();
+
+    assert_eq!(
+        app.pinned_width,
+        PinnedWidth::Collapsed,
+        "no wait for pinwin"
+    );
+    assert!(app.drain_pinned_requests());
+    assert_eq!(app.pinned_width, PinnedWidth::Expanded);
+    assert!(
+        app.pinned_request_pending.is_none(),
+        "the slot is free again"
+    );
+    *PINNED_REQUEST_OVERRIDE.lock().unwrap() = None;
+}
+
+/// Recording an accepted width records only the width, so the
+/// stored panel mode and its focus survive a change in both directions.
 #[test]
 fn recording_the_toggled_width_leaves_the_panel_mode_alone() {
     let mut app = make_app_stub();

@@ -1,6 +1,6 @@
 use super::{
     AudiobookshelfSetup, Config, ConfigError, DEFAULT_VIDEO_CACHE_BACK_MB,
-    DEFAULT_VIDEO_CACHE_FORWARD_MB, EmbySetup, FeedKind, FeedSubscription, PANEL_COLS_MIN,
+    DEFAULT_VIDEO_CACHE_FORWARD_MB, EmbySetup, FeedKind, FeedSubscription, PANEL_WIDTH_MIN,
     PanelAccentColor, PanelConfig, PanelSide, config_path, default_audio_pipe_path,
     default_daemon_server_tcp_listen, is_valid_audio_device,
 };
@@ -34,7 +34,7 @@ pub fn parse_config(text: &str) -> Result<Config, ConfigError> {
     let audiobookshelf_setup = parse_audiobookshelf_section(doc.get("audiobookshelf"));
     let library_routes = parse_library_routes_section(doc.get("library_routes"));
 
-    // `[keys]` (change `add-configurable-keybinds`): parsed into the raw
+    // `[keys]`: parsed into the raw
     // section-outer shape, then compiled through the keybind registry so
     // every entry — unknown sections and actions, section mismatches,
     // reserved chords, and both collision classes — is rejected here, at
@@ -360,7 +360,7 @@ struct LibrarySettings {
     feed_view_libraries: Vec<String>,
 }
 
-/// Parse `[panel]` into validated values (design D6): every key is optional,
+/// Parse `[panel]` into validated values: every key is optional,
 /// and an out-of-range or malformed value falls back to its own default with
 /// a logged warning while the other keys keep their values. No geometry
 /// validation happens here — that needs live monitor metrics (pinwin's job).
@@ -369,10 +369,11 @@ fn parse_panel_section(panel: Option<&toml::Value>) -> PanelConfig {
     let Some(panel) = panel else {
         return defaults;
     };
+    warn_old_panel_width_keys(panel);
     PanelConfig {
         side: panel_side(panel, defaults.side),
-        cols: panel_cols(panel, "cols", defaults.cols),
-        cols_expanded: panel_cols(panel, "cols_expanded", defaults.cols_expanded),
+        width: panel_width(panel, "width", defaults.width),
+        width_expanded: panel_width(panel, "width_expanded", defaults.width_expanded),
         gutter_top: panel_gutter(panel, "gutter_top", defaults.gutter_top),
         gutter_bottom: panel_gutter(panel, "gutter_bottom", defaults.gutter_bottom),
         gutter_left: panel_gutter(panel, "gutter_left", defaults.gutter_left),
@@ -380,8 +381,29 @@ fn parse_panel_section(panel: Option<&toml::Value>) -> PanelConfig {
         accent: panel_bool(panel, "accent", defaults.accent),
         accent_color: panel_accent_color(panel, "accent_color", defaults.accent_color),
         accent_width: panel_accent_width(panel, "accent_width", defaults.accent_width),
-        terminal: panel_terminal(panel),
+        terminal: panel_argv_prefix(panel, "terminal"),
+        pin_terminal: panel_argv_prefix(panel, "pin_terminal"),
     }
+}
+
+/// The `[panel] cols` and `cols_expanded` keys of an earlier version: read
+/// only to log one warning that names whichever of the two the file
+/// still sets, then ignored, because `width` and `width_expanded` are logical
+/// pixels. A save writes `[panel]` in full, so it drops them.
+fn warn_old_panel_width_keys(panel: &toml::Value) {
+    let present: Vec<&str> = ["cols", "cols_expanded"]
+        .into_iter()
+        .filter(|key| panel.get(*key).is_some())
+        .collect();
+    if present.is_empty() {
+        return;
+    }
+    tracing::warn!(
+        name: "config.panel.old_width_keys",
+        target: "config",
+        keys = %present.join(", "),
+        "ignoring old [panel] column keys; use width and width_expanded in logical pixels"
+    );
 }
 
 fn panel_side(panel: &toml::Value, default: PanelSide) -> PanelSide {
@@ -394,13 +416,13 @@ fn panel_side(panel: &toml::Value, default: PanelSide) -> PanelSide {
     }
 }
 
-fn panel_cols(panel: &toml::Value, key: &str, default: u16) -> u16 {
+fn panel_width(panel: &toml::Value, key: &str, default: u16) -> u16 {
     match panel.get(key) {
         None => default,
         Some(value) => value
             .as_integer()
             .and_then(|v| u16::try_from(v).ok())
-            .filter(|v| *v >= PANEL_COLS_MIN)
+            .filter(|v| *v >= PANEL_WIDTH_MIN)
             .unwrap_or_else(|| panel_fallback(key, value, default)),
     }
 }
@@ -460,13 +482,13 @@ fn panel_fallback<T>(key: &str, value: &toml::Value, default: T) -> T {
     default
 }
 
-/// `[panel] terminal` (`tray-pin-swap`, design D5): the terminal argv prefix
-/// the Owner relaunches the TUI through. An absent key is `None` silently; a
-/// present value that is not a non-empty array of strings (a non-array value,
-/// a non-string element, or an empty array) is malformed and falls back to
+/// A `[panel]` terminal argv prefix: `terminal`
+/// and `pin_terminal`. An absent key is `None` silently; a present
+/// value that is not a non-empty array of strings (a non-array value, a
+/// non-string element, or an empty array) is malformed and falls back to
 /// `None` with the same per-key warning as the other `[panel]` keys.
-fn panel_terminal(panel: &toml::Value) -> Option<Vec<String>> {
-    match panel.get("terminal") {
+fn panel_argv_prefix(panel: &toml::Value, key: &str) -> Option<Vec<String>> {
+    match panel.get(key) {
         None => None,
         Some(value) => value
             .as_array()
@@ -476,7 +498,7 @@ fn panel_terminal(panel: &toml::Value) -> Option<Vec<String>> {
                     .collect::<Option<Vec<_>>>()
             })
             .filter(|argv| !argv.is_empty())
-            .or_else(|| panel_fallback("terminal", value, None)),
+            .or_else(|| panel_fallback(key, value, None)),
     }
 }
 
@@ -609,7 +631,7 @@ fn parse_prefix_chord<'a>(
     })
 }
 
-/// Parse the `[keys]` table into the raw section-outer shape (design D3):
+/// Parse the `[keys]` table into the raw section-outer shape:
 /// `prefix` is a string chord, each other entry a per-section table whose
 /// string keys are router-scope overrides and whose `prefix` sub-table
 /// holds prefix-namespace assignments. Shape errors are reported here;

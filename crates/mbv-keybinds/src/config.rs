@@ -322,6 +322,30 @@ struct LoadedSections {
     prefix_namespace: Vec<(&'static KeybindAction, Chord)>,
 }
 
+/// Action identifiers that a past release declared and this one retired. A
+/// `[keys]` entry that still names one is ignored with one logged warning, so
+/// an old config does not stop startup. Every other unknown identifier keeps
+/// the load error.
+const RETIRED_ACTION_IDS: &[&str] = &["pinned_width_toggle"];
+
+/// Whether `id` names a retired action. The first retired entry logs one
+/// warning that names the action; later entries are dropped silently.
+fn skip_retired_action(id: &str, warned: &mut bool) -> bool {
+    if !RETIRED_ACTION_IDS.contains(&id) {
+        return false;
+    }
+    if !*warned {
+        *warned = true;
+        tracing::warn!(
+            name: "config.keys.retired_action",
+            target: "config",
+            action = id,
+            "retired keybind action; the entry is ignored"
+        );
+    }
+    true
+}
+
 fn load_sections(
     raw_sections: &[(String, RawSection)],
     reserved: &[Chord],
@@ -336,6 +360,7 @@ fn load_sections(
         router: Vec::new(),
         prefix_namespace: Vec::new(),
     };
+    let mut retired_action_warned = false;
 
     for (section_name, raw_section) in raw_sections {
         if let Some(first) = seen_sections
@@ -355,6 +380,9 @@ fn load_sections(
         })?;
         let mut bindings = SectionBindings::default();
         for (id, chord) in &raw_section.router {
+            if skip_retired_action(id, &mut retired_action_warned) {
+                continue;
+            }
             let action = lookup_in_section(id, section_name)?;
             let entry = format!("keys.{section_name}.{id}");
             let parsed = parse_configured(chord, &entry, reserved)?;
@@ -362,6 +390,9 @@ fn load_sections(
             bindings.router.push((action.id, parsed));
         }
         for (id, chord) in &raw_section.prefix {
+            if skip_retired_action(id, &mut retired_action_warned) {
+                continue;
+            }
             let action = lookup_in_section(id, section_name)?;
             if !action.prefix_addressable {
                 return Err(KeybindsError::new(

@@ -1,5 +1,4 @@
-//! `[panel]` layout settings for the pinned panel (change `pin-mbv-in-pinwin`,
-//! design D6).
+//! `[panel]` layout settings for the pinned panel.
 //!
 //! Values are validated here with plain Rust range checks only; whether a
 //! layout actually fits the output needs live monitor metrics, so it is
@@ -40,14 +39,14 @@ impl PanelSide {
     }
 }
 
-/// The pinned panel's width in terminal columns: `1..=65535` (design D6).
-pub const PANEL_COLS_MIN: u16 = 1;
-/// The `[panel] cols` default (design D6).
-pub const DEFAULT_PANEL_COLS: u16 = 40;
-/// The `[panel] cols_expanded` default (`panel-expand-toggle`, design D2).
-pub const DEFAULT_PANEL_COLS_EXPANDED: u16 = 120;
+/// The pinned panel's width in logical pixels: `1..=65535`.
+pub const PANEL_WIDTH_MIN: u16 = 1;
+/// The `[panel] width` default in logical pixels.
+pub const DEFAULT_PANEL_WIDTH: u16 = 400;
+/// The `[panel] width_expanded` default in logical pixels.
+pub const DEFAULT_PANEL_WIDTH_EXPANDED: u16 = 1100;
 
-/// The `[panel] accent_color` default (`pinned-panel-focus-accent`, design D2).
+/// The `[panel] accent_color` default.
 pub const DEFAULT_PANEL_ACCENT_COLOR: PanelAccentColor = PanelAccentColor([0xda, 0xbc, 0x7f]);
 /// The `[panel] accent_width` default in pixels (`pinned-panel-focus-accent`).
 pub const DEFAULT_PANEL_ACCENT_WIDTH: NonZeroU16 = NonZeroU16::MIN;
@@ -77,20 +76,20 @@ impl std::fmt::Display for PanelAccentColor {
     }
 }
 
-/// The `[panel]` section: docking side, width in columns, four gutters in
-/// logical pixels (negative values are allowed), and the focus accent stroke
-/// (flag, colour, width in pixels). Every value is already validated; an
+/// The `[panel]` section: docking side, collapsed and expanded widths in
+/// logical pixels, four gutters in logical pixels (negative values are
+/// allowed), the focus accent stroke (flag, colour, width in pixels), and the
+/// two terminal argv prefixes. Every value is already validated; an
 /// out-of-range or malformed TOML value was replaced with its default while
-/// parsing (design D6).
+/// parsing.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PanelConfig {
     /// The edge the panel docks to.
     pub side: PanelSide,
-    /// Panel width in terminal columns (collapsed).
-    pub cols: u16,
-    /// Panel width in terminal columns when expanded (`panel-expand-toggle`,
-    /// design D2).
-    pub cols_expanded: u16,
+    /// Panel width in logical pixels (collapsed).
+    pub width: u16,
+    /// Panel width in logical pixels when expanded.
+    pub width_expanded: u16,
     /// Inset from the output's top edge.
     pub gutter_top: i32,
     /// Inset from the output's bottom edge.
@@ -99,26 +98,34 @@ pub struct PanelConfig {
     pub gutter_left: i32,
     /// Inset from the output's right edge.
     pub gutter_right: i32,
-    /// Whether the focus accent stroke is drawn (`pinned-panel-focus-accent`).
+    /// Whether the focus accent stroke is drawn.
     pub accent: bool,
     /// The focus accent stroke's colour.
     pub accent_color: PanelAccentColor,
     /// The focus accent stroke's width in pixels.
     pub accent_width: NonZeroU16,
     /// Terminal emulator argv prefix used to relaunch the TUI when the Owner
-    /// process swaps the pinned panel for a terminal Client (`tray-pin-swap`,
-    /// design D5): the Owner appends `mbv` and runs the argv. `None` when the
+    /// process swaps the pinned panel for a terminal Client: the Owner appends
+    /// `mbv` and runs the argv. `None` when the
     /// key is absent, empty, or malformed; callers fall back to `$TERMINAL -e`.
     /// Not a F2 Panel row: it is edited in `config.toml` only.
     pub terminal: Option<Vec<String>>,
+    /// Terminal emulator argv prefix that runs mbv inside the panel: `--pin`
+    /// appends the mbv exe and runs the argv. `None` when the key
+    /// is absent, empty, or malformed; callers fall back to `$TERMINAL -e`.
+    /// Kept apart from `terminal` because the panel's terminal must open its
+    /// window in the process `pinwin run` starts, which a terminal that hands
+    /// the launch to a running copy does not. Not a F2 Panel row: it is edited
+    /// in `config.toml` only.
+    pub pin_terminal: Option<Vec<String>>,
 }
 
 impl Default for PanelConfig {
     fn default() -> Self {
         Self {
             side: PanelSide::Left,
-            cols: DEFAULT_PANEL_COLS,
-            cols_expanded: DEFAULT_PANEL_COLS_EXPANDED,
+            width: DEFAULT_PANEL_WIDTH,
+            width_expanded: DEFAULT_PANEL_WIDTH_EXPANDED,
             gutter_top: 0,
             gutter_bottom: 0,
             gutter_left: 0,
@@ -127,6 +134,7 @@ impl Default for PanelConfig {
             accent_color: DEFAULT_PANEL_ACCENT_COLOR,
             accent_width: DEFAULT_PANEL_ACCENT_WIDTH,
             terminal: None,
+            pin_terminal: None,
         }
     }
 }

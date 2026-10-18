@@ -58,24 +58,6 @@ fn hide_visual_slot_routes_to_command_without_overlay() {
     );
 }
 
-/// `pinned_width_toggle` (change `panel-expand-toggle`, task 3.1): the
-/// declared default `Ctrl+e` resolves to its command under the default
-/// snapshot, pinning the `command_for_simple_binding` arm whose absence the
-/// `_ => None` fallthrough would hide as a silently dead key.
-#[test]
-fn pinned_width_toggle_default_routes_to_its_command() {
-    let key = crossterm::event::KeyEvent::new(KeyCode::Char('e'), KeyModifiers::CONTROL);
-    assert_eq!(
-        crate::app::input::router::resolve_router_outcome_with_focused(
-            key,
-            &snapshot(),
-            None,
-            &keybinds()
-        ),
-        crate::app::input::router::RouterOutcome::Command(Command::TogglePinnedWidth)
-    );
-}
-
 #[test]
 fn playback_gate_uses_per_key_resolution_and_idle_feed_path() {
     let mut active = snapshot();
@@ -139,7 +121,7 @@ fn playback_gate_uses_per_key_resolution_and_idle_feed_path() {
     );
 }
 
-/// Task 5.1: `gate: Playback` is a routing bucket, not a shared
+/// `gate: Playback` is a routing bucket, not a shared
 /// eligibility condition. Each split action resolves from its default
 /// chord under exactly the condition its key had before the split —
 /// gated keys need an active player or a remote session, ungated keys
@@ -203,7 +185,7 @@ fn rebound_transport_action_fires_on_configured_chord_only() {
     );
 }
 
-/// Task 5.2 (D9): the blocking swallow guard stays outside the registry —
+/// The blocking swallow guard stays outside the registry —
 /// not configurable, not listed — and keeps its literal match.
 #[test]
 fn alt_swallow_stays_outside_the_registry_and_still_swallows() {
@@ -214,7 +196,7 @@ fn alt_swallow_stays_outside_the_registry_and_still_swallows() {
     for entry in KEY_POLICY.iter().filter(|entry| entry.blocking) {
         assert!(
             action_by_id(entry.name).is_none(),
-            "blocking entry `{}` must stay outside the registry (D9)",
+            "blocking entry `{}` must stay outside the registry",
             entry.name
         );
     }
@@ -236,7 +218,7 @@ fn alt_swallow_stays_outside_the_registry_and_still_swallows() {
     );
 }
 
-/// Task 5.1: the split transport entries are exactly the registry's
+/// The split transport entries are exactly the registry's
 /// `Playback`-gated actions, one policy layer each, still named by the
 /// action id so chord matching resolves through the registry.
 #[test]
@@ -257,7 +239,7 @@ fn clear_queue_is_gated_when_context_menu_is_open() {
 
 #[test]
 fn exact_chord_narrowing_keeps_accidental_superset_chords_inert() {
-    // Deliberate exact-chord semantics (design D3): only the declared
+    // Deliberate exact-chord semantics: only the declared
     // chords fire an action. Chords that the old permissive literals
     // happened to catch — Ctrl+C for the clear-queue prompt, the
     // Ctrl+Shift terminal encodings of `/` for search — stay inert.
@@ -289,7 +271,7 @@ fn exact_chord_narrowing_keeps_accidental_superset_chords_inert() {
 fn defaults_reproduce_todays_resolution() {
     // With the default configuration every declared action matches
     // exactly its declared default chords, under the snapshot condition
-    // its key carries (task 5.1: per-action transport eligibility).
+    // its key carries (per-action transport eligibility).
     let keybinds = Keybinds::default();
     for action in KEYBIND_ACTIONS {
         for chord_str in action.default_chords {

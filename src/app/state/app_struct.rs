@@ -38,8 +38,8 @@ pub(in crate::app) enum LaunchRestore {
     Done,
 }
 
-/// Lifecycle of the one background album-artist request per music level
-/// (design D4 of `fix-music-artist-resolution-batching`). `Failed` levels are
+/// Lifecycle of the one background album-artist request per music level.
+/// `Failed` levels are
 /// not terminal across candidates: the next candidate creation for the level
 /// retries, and unresolved albums settle via `SETTLE_WINDOW` regardless.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -93,7 +93,7 @@ pub(in crate::app) enum LevelFillAction {
 }
 
 impl LevelFillState {
-    /// Unified interpretation of a level-fill state (design D4):
+    /// Unified interpretation of a level-fill state:
     /// `Loading`/`Filled` levels do no work; a fresh or `Failed` level
     /// (re)starts the fill.
     pub(in crate::app) fn action_for(state: Option<&LevelFillState>) -> LevelFillAction {
@@ -139,9 +139,9 @@ pub struct App {
     pub(in crate::app) setup: crate::app::state::service_setup::ServiceSetup,
     pub(in crate::app) audiobookshelf_libraries: Vec<mbv_audiobookshelf::AudiobookshelfLibrary>,
     /// Most-recent `Newest Episodes` shelf per podcast library (async shelf
-    /// fetch, Task 6.2), keyed by library id. `fetch_home()` rebuilds Home's
+    /// fetch), keyed by library id. `fetch_home()` rebuilds Home's
     /// Audiobookshelf Latest pills from this cache — never a blocking network
-    /// call — and the shelf-fetch handler refreshes it (Task 6.3).
+    /// call — and the shelf-fetch handler refreshes it.
     pub(in crate::app) audiobookshelf_shelf_cache:
         std::collections::HashMap<String, Vec<mbv_queue::AudiobookshelfEpisodeCatalog>>,
     /// Podcast libraries whose default-Latest shelf fetch was already
@@ -176,7 +176,7 @@ pub struct App {
     pub(in crate::app) mpris: Option<mbv_desktop::mpris::MprisHandle>,
     pub(in crate::app) player_rx: mpsc::Receiver<PlayerEvent>,
     /// Player events the answer pump set aside while waiting for a queue-op
-    /// answer (row 5.1, design D6). `drain_player_events` takes these before
+    /// answer. `drain_player_events` takes these before
     /// `player_rx`, so deferred disconnects, restarts, and projections keep
     /// running at the tick level, in order.
     pub(in crate::app) deferred_player_events: std::collections::VecDeque<PlayerEvent>,
@@ -239,7 +239,7 @@ pub struct App {
     /// component owns the modal after the next Model tick.
     pub(in crate::app) pending_overlay: Option<mbv_ui_model::overlay::OverlayRequest>,
     /// Set right before requesting a clean exit on an announced daemon
-    /// shutdown (task 7.2); printed once by `run()` after the terminal is
+    /// shutdown; printed once by `run` after the terminal is
     /// restored, since anything written while still in the alternate screen
     /// would never be visible. `None` on every other exit path.
     pub(in crate::app) pending_exit_message: Option<String>,
@@ -273,8 +273,8 @@ pub struct App {
     pub(in crate::app) panel_mode: PanelMode,
     /// The one startup snapshot and its tab-scoped destination re-anchor.
     pub(in crate::app) launch_restore: LaunchRestore,
-    /// Deferred tab switch for a `NavigateLanding::Album` landing (design D4
-    /// of change `per-destination-item-navigation`): set when the recursive
+    /// Deferred tab switch for a `NavigateLanding::Album` landing: set when the
+    /// recursive
     /// album activation spawns, consumed on its `RecursiveAlbumActivated`
     /// drain once the landed nav stack has replaced the saved position, so
     /// the switch's activation never restores a stale position. Consumed only
@@ -291,14 +291,13 @@ pub struct App {
     /// `PendingSeriesLanding` for the full lifecycle.
     pub(in crate::app) pending_series_landing: Option<PendingSeriesLanding>,
     /// A landing that completed and still owes the shell's Series detail
-    /// hand-off (task 3.1, design D3): armed by the landing success path and
+    /// hand-off: armed by the landing success path and
     /// consumed by the shell's sync pass, which runs the Inline Search series
     /// presentation sequence. The deferred `PendingSeriesLanding` retry arms
     /// it the same way, so the hand-off fires at the actual landing
     /// completion, not at the original `NavigateTo` drain.
     pub(in crate::app) pending_series_handoff: Option<PendingSeriesHandoff>,
-    /// Deep selection (task 6.2, design D6 of change
-    /// `per-destination-item-navigation`): the chosen track from a
+    /// Deep selection: the chosen track from a
     /// `NavigateLanding::Album`, armed when the recursive album activation
     /// spawns and bound to the activated album at the shell's
     /// `RecursiveAlbumActivated` drain. Keyed by the target library so a
@@ -306,7 +305,7 @@ pub struct App {
     pub(in crate::app) pending_track_selection: Option<(usize, String)>,
     pub(in crate::app) last_played_item_id: Option<String>,
     pub(in crate::app) last_played_completed: bool,
-    /// The queue visual slot's image projection (task 3.4, D9): the queue
+    /// The queue visual slot's image projection: the queue
     /// projection issues every fetch for the now-playing item and projects
     /// the slot's image state; the painter reads this and paints. Refreshed
     /// by `Model::sync_queue`'s push while playback is active.
@@ -326,7 +325,7 @@ pub struct App {
     /// Whether the global Search sidebar overlay is open. The
     /// `SearchSidebarComponent` owns the sidebar state (query, cursor, scroll,
     /// results, debounce); this flag tells the legacy render/input path the
-    /// overlay is active (task 3.2).
+    /// overlay is active.
     pub(in crate::app) sessions: Vec<mbv_emby::SessionInfo>,
     /// Last cast discovery browse result (8.1), independent of `sessions`'s
     /// own reload cadence -- see `panel_targets::build_panel_targets`.
@@ -352,7 +351,7 @@ pub struct App {
     pub(in crate::app) last_keepalive: Instant,
     pub(in crate::app) last_capabilities: Instant,
     /// The current Player owner's active playback output, mirrored from the
-    /// last `CtrlEvent::PlaybackOutput` (cast-owner-output design D13). It is
+    /// last `CtrlEvent::PlaybackOutput`. It is
     /// per-owner-connection state like `ctrl_compatibility`: `None` until the
     /// owner reports, reset to `None` when the connection is replaced by
     /// another owner or observed lost. Every owner built with
@@ -401,8 +400,8 @@ pub struct App {
     /// requiring an app restart (#223, post-grilling revision item 5).
     pub(in crate::app) library_route_cache:
         std::collections::HashMap<String, (Option<String>, Instant)>,
-    /// Whether prefix mode is armed (change `add-configurable-keybinds`,
-    /// design D6, task 6.1): the App-owned bit the keyboard policy sees as
+    /// Whether prefix mode is armed: the App-owned bit the keyboard policy sees
+    /// as
     /// `RouterSnapshot.prefix_armed`. Armed by the `prefix_arm` policy layer,
     /// disarmed by an armed-dispatch outcome, and silently cleared on any
     /// mouse event. Sticky until a disarm event; no timed expiry.
@@ -448,8 +447,7 @@ pub struct App {
     /// never refetches; an evicted album would keep its fallback label. Cleared
     /// on Service swap.
     pub(in crate::app) album_artist_cache: std::collections::HashMap<String, String>,
-    /// Per-level album-artist fill lifecycle (design D4 of
-    /// `fix-music-artist-resolution-batching`): one background request fills
+    /// Per-level album-artist fill lifecycle: one background request fills
     /// every album bucket in a level, so the fill state is keyed by level id
     /// rather than album id. Concurrent candidate creations and startup
     /// warm-up dedupe on this state.
@@ -467,8 +465,8 @@ pub struct App {
     /// session cannot keep every fetched list reachable.
     pub(in crate::app) album_tracks_cache: IndexMap<String, Vec<EmbyItem>>,
     pub(in crate::app) album_tracks_loading: std::collections::HashSet<String>,
-    /// Fallback artist per-album track fetches waiting for a bounded slot
-    /// (design D7, task 6.3). A fallback root's scope can be the whole
+    /// Fallback artist per-album track fetches waiting for a bounded slot.
+    /// A fallback root's scope can be the whole
     /// settled catalog, so `enqueue_artist_album_tracks` arms at most
     /// `MAX_ARTIST_FALLBACK_TRACK_FETCHES` at a time and each arrival frees
     /// a slot for the next album.
@@ -478,8 +476,8 @@ pub struct App {
     /// these slots.
     pub(in crate::app) artist_album_track_fetches_in_flight: std::collections::HashSet<String>,
     /// Artist detail tracks keyed by destination, Service setup generation,
-    /// stable `ArtistItems` identity, and settled catalog revision (design
-    /// D7, tasks 6.1–6.3). Shell-owned; the component never sees the cache.
+    /// stable `ArtistItems` identity, and settled catalog revision. Shell-owned;
+    /// the component never sees the cache.
     pub(in crate::app) artist_detail_cache: std::collections::HashMap<
         mbv_ui_model::music_artist_detail::ArtistDetailKey,
         mbv_ui_model::music_artist_detail::ArtistDetailCacheEntry,
@@ -521,23 +519,19 @@ pub struct App {
     /// position. This prevents ordinary output restarts (buffering,
     /// startup) from becoming state writes.
     pub(in crate::app) feed_seek_pending_slot: Option<mbv_queue::QueueSlotId>,
-    /// The running pinned panel, when this launch was `--pin` (change
-    /// `pin-mbv-in-pinwin`, design D3). Dropping the handle stops the panel
-    /// before process exit.
-    pub(in crate::app) pinned_panel: Option<crate::pin::PinnedPanel>,
-    /// The active width of the running pinned panel (change
-    /// `panel-expand-toggle`, design D1); never persisted, so a launch always
-    /// starts collapsed.
-    pub(in crate::app) pinned_width: crate::pin::PinnedWidth,
+    /// The active width of the pinned panel; never persisted, so a launch
+    /// always starts collapsed.
+    /// Whether this launch is pinned at all comes from `pin::is_pinned()`,
+    /// the panel identity claimed at start-up.
+    pub(in crate::app) pinned_width: mbv_ui_model::settings::PinnedWidth,
+    /// The one panel request whose `pinwin` child is still running. While it
+    /// is set, `x` and F2 Panel steps are ignored (design D4/D6/D7).
+    pub(in crate::app) pinned_request_pending:
+        Option<crate::app::state::pinned_request::PinnedRequestPending>,
     /// The configured `Accent color` when it lay outside the row's fixed
     /// palette, held while Settings is open so cycling can return to it
     /// (issue #875). Cleared each time Settings mounts; never persisted.
     pub(in crate::app) accent_custom: Option<mbv_config::PanelAccentColor>,
-    /// Set when a pinned panel accepted a layout (change
-    /// `panel-expand-toggle`): the apply call resized the pty synchronously,
-    /// so the shell adopts the new size in that same loop iteration instead of
-    /// waiting for the terminal-event worker's `Resize` event.
-    pub(in crate::app) pinned_resize_pending: bool,
     /// The last sync pass that saw a live resize drag; starts the settle
     /// window (invariant 20). The live bit stays with the gesture components.
     pub(in crate::app) resize_drag_activity: Option<std::time::Instant>,
@@ -547,8 +541,8 @@ pub struct App {
 
 impl App {
     /// Whether the Player owner's active playback output is a Cast receiver,
-    /// per the last `CtrlEvent::PlaybackOutput` (cast-owner-output design
-    /// D13). A `Disconnected` Cast still counts: the spec's cast-session
+    /// per the last `CtrlEvent::PlaybackOutput`. A `Disconnected` Cast still
+    /// counts: the spec's cast-session
     /// control scenario keeps the target presented as disconnected and the
     /// output selection usable. `None` (no report yet, or the connection was
     /// replaced/lost) and `Local` both read as not-Cast.
@@ -560,8 +554,8 @@ impl App {
     }
 
     /// Whether the Player owner's active playback output is an Emby Session,
-    /// per the last `CtrlEvent::PlaybackOutput` (emby-session-owner-output
-    /// design D12). A `Disconnected` Session still counts, like a
+    /// per the last `CtrlEvent::PlaybackOutput`. A `Disconnected` Session still
+    /// counts, like a
     /// `Disconnected` Cast target. `None` and `Local` both read as not an
     /// Emby Session.
     pub(in crate::app) fn output_is_emby_session(&self) -> bool {
@@ -569,18 +563,6 @@ impl App {
             self.playback_output,
             Some(mbv_ctrl::OutputState::EmbySession { .. })
         )
-    }
-
-    /// Adopt the pinned panel handle for this launch (design D3). A pinned
-    /// launch always starts with Panel focus on Queue, whatever the saved
-    /// state holds (2026-10-05 user rule) — see
-    /// [`App::pin_launch_focus_to_queue`].
-    pub(crate) fn set_pinned_panel(&mut self, panel: Option<crate::pin::PinnedPanel>) {
-        let pinned = panel.is_some();
-        self.pinned_panel = panel;
-        if pinned {
-            self.pin_launch_focus_to_queue();
-        }
     }
 
     /// A pinned launch's default screen is always the Queue panel, never the
@@ -591,7 +573,7 @@ impl App {
     /// Library column. Runs before the restore settles, so only the
     /// `Pending` snapshot can exist here; the user can still switch focus
     /// once the session runs, and teardown keeps saving the actual focus.
-    pub(in crate::app) fn pin_launch_focus_to_queue(&mut self) {
+    pub(crate) fn pin_launch_focus_to_queue(&mut self) {
         // Written directly, not through `set_panel_focus`: at construct time
         // the terminal size is still the placeholder 80, and this rule must
         // not depend on which branch a size-dependent setter would take.

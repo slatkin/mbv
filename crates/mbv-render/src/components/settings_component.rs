@@ -66,11 +66,12 @@ fn render_settings_panel(frame: &mut Frame, area: Rect, model: &SettingsRenderMo
     } else if model.destination == SettingsDestination::Services {
         "[↵]select [Esc]back"
     } else if model.destination == SettingsDestination::Keys {
-        // Read-only destination (design D7): nothing to activate.
+        // Read-only destination: nothing to activate.
         "[↑↓]browse [Esc]back"
     } else if model.destination == SettingsDestination::Panel {
-        // Stepper destination (design D6): Left/Right step, Shift steps by 10.
-        "[←→]step [Esc]back"
+        // Stepper destination:
+        // Left/Right step, Shift steps by 10.
+        "[←→]step [Shift]×10 [Esc]back"
     } else {
         "[Space]toggle [Esc]close"
     };
@@ -265,7 +266,7 @@ pub struct SettingsRow {
     pub value: String,
     pub section: bool,
     pub cursor: Option<usize>,
-    /// The row's value interaction (design D6, change `pin-mbv-in-pinwin`):
+    /// The row's value interaction:
     /// a `Stepper` row's value keys step its number instead of cycling it.
     pub kind: SettingValueKind,
 }

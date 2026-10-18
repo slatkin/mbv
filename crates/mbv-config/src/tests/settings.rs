@@ -228,17 +228,17 @@ feed_view_libraries = ["YouTube"]
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// Contract (task 4.2 of `pin-mbv-in-pinwin`): an out-of-range or malformed
-/// `[panel]` value falls back to its own default without changing the other
-/// keys, and a valid `[panel]` section round-trips through save.
+/// An out-of-range or malformed `[panel]` value falls back to its own default
+/// without changing the other keys, and a valid `[panel]` section round-trips
+/// through save.
 #[test]
 fn panel_values_fall_back_per_key_and_a_valid_section_round_trips() {
     let cfg = parse_config(
         r#"
 [panel]
 side = "up"
-cols = 0
-cols_expanded = "wide"
+width = 0
+width_expanded = "wide"
 gutter_top = 12
 gutter_bottom = 3000000000
 gutter_left = -5
@@ -250,8 +250,11 @@ accent_width = 0
     )
     .unwrap();
     assert_eq!(cfg.panel.side, PanelSide::Left);
-    assert_eq!(cfg.panel.cols, crate::DEFAULT_PANEL_COLS);
-    assert_eq!(cfg.panel.cols_expanded, crate::DEFAULT_PANEL_COLS_EXPANDED);
+    assert_eq!(cfg.panel.width, crate::DEFAULT_PANEL_WIDTH);
+    assert_eq!(
+        cfg.panel.width_expanded,
+        crate::DEFAULT_PANEL_WIDTH_EXPANDED
+    );
     assert_eq!(cfg.panel.gutter_top, 12);
     assert_eq!(cfg.panel.gutter_bottom, 0);
     assert_eq!(cfg.panel.gutter_left, -5);
@@ -274,8 +277,8 @@ accent_width = 0
 
     let expected = PanelConfig {
         side: PanelSide::Right,
-        cols: 55,
-        cols_expanded: 70,
+        width: 1400,
+        width_expanded: 1700,
         gutter_top: 1,
         gutter_bottom: -2,
         gutter_left: 3,
@@ -284,6 +287,10 @@ accent_width = 0
         accent_color: PanelAccentColor([0x12, 0x34, 0x56]),
         accent_width: NonZeroU16::new(2).unwrap(),
         terminal: Some(vec!["foot".to_string(), "-e".to_string()]),
+        pin_terminal: Some(vec![
+            "ghostty".to_string(),
+            "--gtk-single-instance=false".to_string(),
+        ]),
     };
     save_config_settings(&Config {
         panel: expected.clone(),
@@ -302,7 +309,70 @@ accent_width = 0
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// Contract (task 2.1 of `tray-pin-swap`): `[panel] terminal` parses a
+/// The pinned widths are logical pixels and accept their full `1..=65535`
+/// range.
+#[test]
+fn panel_widths_accept_the_full_logical_pixel_range() {
+    let cfg = parse_config("[panel]\nwidth = 1\nwidth_expanded = 65535\n").unwrap();
+    assert_eq!(cfg.panel.width, 1);
+    assert_eq!(cfg.panel.width_expanded, 65535);
+}
+
+/// Saving a config rewrites the `[panel]` section and drops the retired column
+/// keys.
+#[test]
+fn save_config_settings_drops_the_retired_panel_column_keys() {
+    let _g = SYS_ENV_LOCK.lock().unwrap();
+    let dir = std::env::temp_dir().join(format!(
+        "mbv-config-test-{}",
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(dir.join("mbv")).unwrap();
+    crate::set_test_env_var("XDG_CONFIG_HOME", &dir);
+    crate::remove_test_env_var("MBV_SYSTEM");
+    std::fs::write(config_path(), "[panel]\ncols = 40\ncols_expanded = 120\n").unwrap();
+
+    save_config_settings(&Config::default()).unwrap();
+
+    let saved = std::fs::read_to_string(config_path()).unwrap();
+    let saved_doc: toml::Value = toml::from_str(&saved).unwrap();
+    let panel_table = saved_doc["panel"].as_table().unwrap();
+    assert!(
+        !panel_table.contains_key("cols") && !panel_table.contains_key("cols_expanded"),
+        "saved config drops the retired column keys:\n{saved}"
+    );
+
+    crate::remove_test_env_var("XDG_CONFIG_HOME");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Contract (spec `panel-mode`, scenario "Old column keys"): `cols` and
+/// `cols_expanded` from an earlier version are ignored after one logged
+/// warning that names them, and `width` and the other keys keep their values.
+#[test]
+fn panel_old_column_keys_are_ignored() {
+    let cfg = parse_config(
+        r#"
+[panel]
+cols = 40
+cols_expanded = 120
+width = 512
+side = "right"
+"#,
+    )
+    .unwrap();
+    assert_eq!(cfg.panel.width, 512);
+    assert_eq!(
+        cfg.panel.width_expanded,
+        crate::DEFAULT_PANEL_WIDTH_EXPANDED
+    );
+    assert_eq!(cfg.panel.side, PanelSide::Right);
+}
+
+/// Contract: `[panel] terminal` parses a
 /// non-empty array of strings into the argv prefix; an absent, empty, or
 /// otherwise malformed key gives `None` without disturbing the other
 /// `[panel]` keys.

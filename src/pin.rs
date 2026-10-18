@@ -1,106 +1,69 @@
-//! `--pin` start-up: pty hand-over, panel lifetime and failure reporting
-//! (change `pin-mbv-in-pinwin`, design D3/D5).
+//! The `pinwin` CLI boundary: the panel identity, the argv of every panel
+//! request, and the pinned launch and its failure reporting.
 //!
 //! The pinned panel is a process-wide singleton: `pinwin` allows one panel at
-//! a time, so a launch either completes the stdio hand-over once or the TUI
-//! keeps running in the terminal it was started from.
+//! a time and a second `--pin` shows the running panel. Every panel request
+//! leaves this process as one `pinwin` child, and the panel identity is
+//! claimed from the environment at start-up.
 
+use std::ffi::OsStr;
 use std::fmt;
 use std::io::IsTerminal;
-use std::num::NonZeroU16;
-use std::os::fd::{AsRawFd, FromRawFd};
+use std::process::Command;
 use std::sync::OnceLock;
-use std::sync::atomic::{AtomicBool, Ordering};
 
+use crate::launch::launch_exe;
 use mbv_config::PanelConfig;
 use mbv_ctrl::SWAP_TOKEN_ENV;
-use pinwin::instance::{InstanceError, InstanceName, InstanceSocket, Request, SendError};
-use pinwin::layout::{Accent, Keyboard, Layout, Side};
-use pinwin::panel::Startup;
+use mbv_ui_model::settings::PinnedWidth;
 
-/// The running panel handle the shell owns.
-pub(crate) type PinnedPanel = pinwin::Panel;
+/// Why the `pinwin` program could not be spawned. A missing binary asks for an
+/// install; any other failure names its cause.
+#[derive(Debug)]
+pub(crate) struct PinSpawnError(std::io::Error);
 
-/// The fixed instance name every pinned mbv listens under (design D1):
-/// pinwin scopes the socket path by `WAYLAND_DISPLAY`, so this names one
-/// pinned panel per display.
-fn instance_name() -> InstanceName {
-    InstanceName::parse("mbv").expect("the fixed instance name is valid")
+impl PinSpawnError {
+    fn new(error: std::io::Error) -> Self {
+        Self(error)
+    }
 }
 
-/// The animated apply duration (design D3): the C ABI wrapper carried this
-/// default, the Rust crate only clamps it, so mbv owns the value.
-const ANIM_DEFAULT_MS: u32 = 200;
-
-/// Which of the two saved widths the running panel shows (design D1). The
-/// active width is runtime state on `App`; it is never persisted, so every
-/// pinned launch starts collapsed.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub(crate) enum PinnedWidth {
-    #[default]
-    Collapsed,
-    Expanded,
-}
-
-impl PinnedWidth {
-    /// The other width (design D3).
-    #[must_use]
-    pub(crate) fn toggled(self) -> Self {
-        match self {
-            Self::Collapsed => Self::Expanded,
-            Self::Expanded => Self::Collapsed,
+impl fmt::Display for PinSpawnError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.0.kind() == std::io::ErrorKind::NotFound {
+            f.write_str("pinwin is not installed")
+        } else {
+            write!(f, "pinwin could not start: {}", self.0)
         }
     }
 }
 
-/// Apply a full `[panel]` layout to the live panel at `width` (design D6).
-pub(crate) fn apply_layout(
-    panel: &PinnedPanel,
-    config: &PanelConfig,
-    width: PinnedWidth,
-) -> Result<(), String> {
-    panel
-        .apply_layout_animated(layout_from_config(config, width), ANIM_DEFAULT_MS)
-        .map_err(|error| error.to_string())
+impl std::error::Error for PinSpawnError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(&self.0)
+    }
 }
 
-/// What a pinned launch did (design D2).
-#[derive(Debug)]
-pub(crate) enum PinLaunch {
-    /// This process owns the panel.
-    Started(PinnedPanel),
-    /// A pinned mbv already runs on this display and was asked to show.
-    ShownExisting,
-}
-
-/// Why a pinned launch did not reach the stdio hand-over (design D5).
+/// Why a pinned launch did not reach `pinwin run`.
 #[derive(Debug)]
 pub(crate) enum PinStartError {
     /// `WAYLAND_DISPLAY` is unset or empty.
     NoWaylandDisplay,
-    /// The instance socket could not be bound.
-    Instance(InstanceError),
-    /// A running pinned mbv did not answer the show request.
-    ShowExisting(SendError),
-    /// The pty pair could not be opened.
-    Pty(std::io::Error),
-    /// `pinwin` refused to start the panel.
-    Panel(pinwin::PinwinError),
-    /// The stdio hand-over failed after the panel started.
-    HandOver(std::io::Error),
+    /// No terminal argv resolved for the panel host.
+    Terminal(String),
+    /// The mbv binary could not be located.
+    Executable(std::io::Error),
+    /// `pinwin` could not be spawned.
+    Spawn(PinSpawnError),
 }
 
 impl fmt::Display for PinStartError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::NoWaylandDisplay => f.write_str("WAYLAND_DISPLAY is unset"),
-            Self::Instance(error) => write!(f, "the instance socket could not be bound: {error}"),
-            Self::ShowExisting(error) => {
-                write!(f, "the running pinned panel did not show: {error}")
-            }
-            Self::Pty(error) => write!(f, "could not open a pty pair: {error}"),
-            Self::Panel(error) => write!(f, "{error}"),
-            Self::HandOver(error) => write!(f, "terminal hand-over failed: {error}"),
+            Self::Terminal(reason) => f.write_str(reason),
+            Self::Executable(error) => write!(f, "cannot locate the mbv binary: {error}"),
+            Self::Spawn(error) => error.fmt(f),
         }
     }
 }
@@ -108,39 +71,126 @@ impl fmt::Display for PinStartError {
 impl std::error::Error for PinStartError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
-            Self::Pty(error) | Self::HandOver(error) => Some(error),
-            Self::Panel(error) => Some(error),
-            Self::Instance(error) => Some(error),
-            Self::ShowExisting(error) => Some(error),
-            Self::NoWaylandDisplay => None,
+            Self::Executable(error) => Some(error),
+            Self::Spawn(error) => Some(error),
+            Self::NoWaylandDisplay | Self::Terminal(_) => None,
         }
     }
 }
 
-/// Set once the stdio hand-over has completed: the panel is then the TUI's
-/// only output.
-static HANDED_OVER: AtomicBool = AtomicBool::new(false);
+/// Why one `pinwin` request did not finish.
+#[derive(Debug)]
+enum PinRequestError {
+    /// The `pinwin` program could not be spawned.
+    Spawn(PinSpawnError),
+    /// `pinwin` ran and refused the request.
+    Refused(String),
+}
+
+impl fmt::Display for PinRequestError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Spawn(error) => error.fmt(f),
+            Self::Refused(reason) => f.write_str(reason),
+        }
+    }
+}
+
+impl std::error::Error for PinRequestError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Spawn(error) => Some(error),
+            Self::Refused(_) => None,
+        }
+    }
+}
+
+/// The panel name every pinned mbv runs under.
+pub(crate) const PANEL_NAME: &str = "mbv";
+
+/// The hidden launch flag that marks an mbv pinwin started inside a panel.
+/// It is parsed but never shown in `--help`; a panel environment without it
+/// leaves the launch unpinned.
+pub(crate) const IN_PANEL_FLAG: &str = "--in-panel";
+
+/// The variable pinwin sets on the Client it runs inside a panel: the name of
+/// that panel.
+const PINWIN_PANEL_ENV: &str = "PINWIN_PANEL";
+
+/// The variable pinwin sets beside [`PINWIN_PANEL_ENV`]: the daemon socket
+/// that serves that panel.
+const PINWIN_SOCKET_ENV: &str = "PINWIN_SOCKET";
+
+/// The panel identity this launch was started with.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct PanelIdentity {
+    /// The panel name, `None` when this launch runs outside a panel.
+    name: Option<String>,
+    /// The daemon socket that serves that panel.
+    socket: Option<String>,
+}
+
+impl PanelIdentity {
+    /// Map the raw `PINWIN_PANEL` and `PINWIN_SOCKET` values and the hidden
+    /// launch flag to the identity: a non-empty panel name means pinned only
+    /// together with the flag, and an empty value counts as unset. The socket
+    /// is kept either way; it is scrubbed from the environment whether this
+    /// launch is pinned or not.
+    fn new(panel: Option<String>, socket: Option<String>, in_panel: bool) -> Self {
+        Self {
+            name: panel.filter(|name| !name.is_empty()).filter(|_| in_panel),
+            socket: socket.filter(|socket| !socket.is_empty()),
+        }
+    }
+}
+
+/// The panel identity this launch was started with, claimed once at start-up.
+static PANEL_IDENTITY: OnceLock<PanelIdentity> = OnceLock::new();
 
 /// Whether this launch runs in a pinned panel.
 #[must_use]
 pub(crate) fn is_pinned() -> bool {
-    HANDED_OVER.load(Ordering::Relaxed)
+    identity().name.is_some()
+}
+
+/// Read `name` from the environment and remove it from this process's
+/// environment, so no spawned child inherits it. Called once at start-up, on
+/// the main thread before any thread exists.
+fn claim_env_once(name: &str) -> Option<String> {
+    let value = std::env::var(name).ok();
+    // SAFETY: this runs on the main thread before any thread exists, so no
+    // other thread can observe the environment mid-update.
+    unsafe { std::env::remove_var(name) };
+    value
+}
+
+/// Read `PINWIN_PANEL` and `PINWIN_SOCKET` and remove both from this
+/// process's environment. Called once at start-up, on the main
+/// thread next to [`claim_swap_token`], before any worker or child process
+/// spawns, so the Owner process and every other child run unpinned. The
+/// launch is pinned only when `in_panel` (the hidden launch flag) is also
+/// set, but the variables are scrubbed either way.
+pub(crate) fn claim_panel_identity(in_panel: bool) {
+    let panel = claim_env_once(PINWIN_PANEL_ENV);
+    let socket = claim_env_once(PINWIN_SOCKET_ENV);
+    let _ = PANEL_IDENTITY.set(PanelIdentity::new(panel, socket, in_panel));
+}
+
+/// The claimed panel identity, the empty identity when nothing was claimed.
+fn identity() -> &'static PanelIdentity {
+    PANEL_IDENTITY.get_or_init(PanelIdentity::default)
 }
 
 /// The swap token this launch was started with, claimed once at startup.
 /// `None` for every launch the user started.
 static SWAP_TOKEN: OnceLock<Option<String>> = OnceLock::new();
 
-/// Read `MBV_SWAP_TOKEN` and remove it from this process's environment
-/// (tray-pin-swap design D2). Called once, before any worker or child process
+/// Read `MBV_SWAP_TOKEN` and remove it from this process's environment.
+/// Called once, before any worker or child process
 /// spawns, so the token is neither read twice nor inherited by a spawned
 /// daemon.
 pub(crate) fn claim_swap_token() {
-    let token = std::env::var(SWAP_TOKEN_ENV).ok();
-    // SAFETY: this runs on the main thread before any thread exists, so no
-    // other thread can observe the environment mid-update.
-    unsafe { std::env::remove_var(SWAP_TOKEN_ENV) };
-    let _ = SWAP_TOKEN.set(token);
+    let _ = SWAP_TOKEN.set(claim_env_once(SWAP_TOKEN_ENV));
 }
 
 /// The claimed swap token, `None` for every launch the user started.
@@ -149,93 +199,431 @@ pub(crate) fn swap_token() -> Option<String> {
     SWAP_TOKEN.get().cloned().flatten()
 }
 
-/// Start the pinned panel and hand this process's stdio to its pty (design
-/// D2). The Wayland check comes first, then the instance socket bind: a
-/// duplicate leaves the environment, the pty and the terminal untouched, and
-/// only asks the running panel to show. The terminal environment is restored
-/// if anything fails after the bind completes.
-pub(crate) fn start(config: &PanelConfig) -> Result<PinLaunch, PinStartError> {
-    if std::env::var_os("WAYLAND_DISPLAY").is_none_or(|value| value.is_empty()) {
-        return Err(PinStartError::NoWaylandDisplay);
-    }
-    let name = instance_name();
-    let socket = match InstanceSocket::bind(&name) {
-        Ok(socket) => socket,
-        // A pinned mbv already owns the name on this display: ask it to
-        // show and report that no second panel opened (design D2).
-        Err(InstanceError::Duplicate) => {
-            return match pinwin::instance::send(&name, Request::Show) {
-                Ok(()) => Ok(PinLaunch::ShownExisting),
-                Err(error) => Err(PinStartError::ShowExisting(error)),
-            };
-        }
-        Err(error) => return Err(PinStartError::Instance(error)),
-    };
-    let saved_env = PanelEnv::apply();
-    match start_panel(config, socket) {
-        Ok(panel) => Ok(PinLaunch::Started(panel)),
-        Err(error) => {
-            saved_env.restore();
-            Err(error)
+/// The reserve mode a panel change asks for: the collapsed panel
+/// pushes the tiled windows aside, the expanded one covers them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum PanelReserve {
+    /// Reserve a strip beside the panel and move the tiled windows.
+    Push,
+    /// Draw over the tiled windows, holding the strip of the last push.
+    Cover,
+}
+
+impl PanelReserve {
+    /// The `--reserve` value.
+    #[must_use]
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Push => "push",
+            Self::Cover => "cover",
         }
     }
 }
 
-/// The pty pair, the panel, and the stdio hand-over. A failure after
-/// `Panel::start` succeeded drops the panel, which stops it and removes the
-/// instance socket file (design D3).
-fn start_panel(config: &PanelConfig, socket: InstanceSocket) -> Result<PinnedPanel, PinStartError> {
-    let (master, slave) = open_pty()?;
-    // The panel reads the master fd for its whole life and the library never
-    // closes it (design D7), so the fd must stay open even though `Panel` no
-    // longer borrows it: the owned fd is leaked for the life of the process,
-    // which the panel's whole life fits inside.
-    let master: &'static std::os::fd::OwnedFd = Box::leak(Box::new(master));
-    let panel = pinwin::Panel::start(
-        Startup::new(
-            master.as_raw_fd(),
-            layout_from_config(config, PinnedWidth::default()),
-            Keyboard::OnDemand,
-            config
-                .accent
-                .then(|| Accent::new(config.accent_color.0, config.accent_width)),
-        )
-        // A panel started with a socket serves `toggle` and `show` on a
-        // detached thread until the `Panel` drops (design D2).
-        .with_instance(socket),
-    )
-    .map_err(PinStartError::Panel)?;
-    detach_controlling_terminal()?;
-    hand_over_stdio(&slave)?;
-    // `openpty` may reuse a closed standard fd for the slave; only close the
-    // extra descriptor when it is not one of the duplicates.
-    if slave.as_raw_fd() > libc::STDERR_FILENO {
-        drop(slave);
+/// One of the panel's four gutters.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum PanelGutter {
+    /// Inset from the output's top edge.
+    Top,
+    /// Inset from the output's bottom edge.
+    Bottom,
+    /// Inset from the output's left edge.
+    Left,
+    /// Inset from the output's right edge.
+    Right,
+}
+
+impl PanelGutter {
+    /// The `set-gutters` option that carries this gutter.
+    #[must_use]
+    fn flag(self) -> &'static str {
+        match self {
+            Self::Top => "--top",
+            Self::Bottom => "--bottom",
+            Self::Left => "--left",
+            Self::Right => "--right",
+        }
+    }
+}
+
+/// The one `pinwin` request a Panel row sends while pinned. A width row asks
+/// for the width it edits, so
+/// the edited value is the width pinwin validates; a side or gutter row applies
+/// at the panel's current width.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum PinnedSettingRequest {
+    /// `Width` (`Collapsed`) or `Expanded width` (`Expanded`): one `set-size`
+    /// with the candidate width and its reserve mode.
+    Width(PinnedWidth),
+    /// `Side`: one `set-edge`.
+    Side(mbv_config::PanelSide),
+    /// A gutter row: one `set-gutters` that carries only the edited gutter.
+    Gutter(PanelGutter, i32),
+}
+
+impl PinnedSettingRequest {
+    /// The pinned width this request validates, `None` for a row that applies
+    /// at the panel's current width.
+    #[must_use]
+    pub(crate) fn edited_width(self) -> Option<PinnedWidth> {
+        match self {
+            Self::Width(width) => Some(width),
+            Self::Side(_) | Self::Gutter(..) => None,
+        }
+    }
+}
+
+/// A width in the pinwin size grammar: logical pixels.
+#[must_use]
+fn size_arg(width: u16) -> String {
+    format!("{width}px")
+}
+
+/// The `--focus-ring` value of a `run`: `off`, or the configured
+/// colour and width. Only a launch reads it; a running panel keeps its ring.
+#[must_use]
+fn focus_ring_arg(config: &PanelConfig) -> String {
+    if config.accent {
+        format!("{}:{}", config.accent_color, config.accent_width)
     } else {
-        std::mem::forget(slave);
+        "off".to_string()
     }
-    HANDED_OVER.store(true, Ordering::Relaxed);
-    Ok(panel)
 }
 
-/// Ask the running pinned mbv on this display to toggle its panel (design
-/// D3): hide it if shown, show it if hidden. Exits 1 with a report when no
-/// panel is listening or the request fails; exits 0 silently on success.
-pub(crate) fn toggle_running() {
-    match pinwin::instance::send(&instance_name(), Request::Toggle) {
-        Ok(()) => {}
-        Err(SendError::NotListening { .. }) => {
-            report_toggle_failure("no pinned mbv is running");
+/// The terminal argv prefix that hosts a Client: the configured
+/// prefix when set, else `TERMINAL -e`. With neither set the launch fails with
+/// a reason that names both sources; `config_key` is the configuration key the
+/// caller reads the prefix from.
+pub(crate) fn terminal_prefix(
+    configured: Option<&[String]>,
+    terminal_env: Option<&str>,
+    config_key: &str,
+) -> Result<Vec<String>, String> {
+    let prefix = configured.filter(|argv| !argv.is_empty());
+    let terminal = terminal_env.filter(|terminal| !terminal.trim().is_empty());
+    match (prefix, terminal) {
+        (Some(prefix), _) => Ok(prefix.to_vec()),
+        (None, Some(terminal)) => Ok(vec![terminal.to_string(), "-e".to_string()]),
+        (None, None) => Err(format!(
+            "neither [panel] {config_key} (config) nor TERMINAL (environment) is set"
+        )),
+    }
+}
+
+/// The `pinwin run` argv that docks the terminal as the `mbv` panel and runs
+/// mbv in it. `--show-existing` makes a second `--pin`
+/// show the running panel instead of opening a second one, and the launcher
+/// always passes its four gutters so pinwin's own config never applies them.
+#[must_use]
+fn run_argv(
+    config: &PanelConfig,
+    terminal: &[String],
+    exe: &OsStr,
+    log_level: Option<&str>,
+) -> Vec<String> {
+    let mut argv: Vec<String> = [
+        "run".to_string(),
+        "--name".to_string(),
+        PANEL_NAME.to_string(),
+        "--show-existing".to_string(),
+        "--edge".to_string(),
+        config.side.as_str().to_string(),
+        "--size".to_string(),
+        size_arg(config.width),
+        "--reserve".to_string(),
+        PanelReserve::Push.as_str().to_string(),
+        "--gutter-top".to_string(),
+        config.gutter_top.to_string(),
+        "--gutter-bottom".to_string(),
+        config.gutter_bottom.to_string(),
+        "--gutter-left".to_string(),
+        config.gutter_left.to_string(),
+        "--gutter-right".to_string(),
+        config.gutter_right.to_string(),
+        "--focus-ring".to_string(),
+        focus_ring_arg(config),
+        "--".to_string(),
+    ]
+    .into();
+    argv.extend_from_slice(terminal);
+    argv.push(exe.to_string_lossy().into_owned());
+    argv.push(IN_PANEL_FLAG.to_string());
+    if let Some(log_level) = log_level {
+        argv.push("--log-level".to_string());
+        argv.push(log_level.to_string());
+    }
+    argv
+}
+
+/// `set-size <panel> <N>px --reserve push|cover`: one press of `x`
+/// and one F2 width step each send one change with the width and the reserve
+/// mode, so no tiled window moves.
+#[must_use]
+fn set_size_argv(panel: &str, width: u16, reserve: PanelReserve) -> Vec<String> {
+    vec![
+        "set-size".to_string(),
+        panel.to_string(),
+        size_arg(width),
+        "--reserve".to_string(),
+        reserve.as_str().to_string(),
+    ]
+}
+
+/// The `set-size` argv one pinned-view change sends: the
+/// collapsed view pushes at `width`, the expanded view covers at
+/// `width_expanded`, so one press changes the width and the reserve mode in
+/// one request.
+#[must_use]
+fn pinned_width_argv(panel: &str, config: &PanelConfig, width: PinnedWidth) -> Vec<String> {
+    let (pixels, reserve) = match width {
+        PinnedWidth::Collapsed => (config.width, PanelReserve::Push),
+        PinnedWidth::Expanded => (config.width_expanded, PanelReserve::Cover),
+    };
+    set_size_argv(panel, pixels, reserve)
+}
+
+/// The claimed panel name of this launch, or the reason there is none.
+fn panel_name() -> Result<&'static str, String> {
+    identity()
+        .name
+        .as_deref()
+        .ok_or_else(|| "this launch is not pinned".to_string())
+}
+
+/// Start one panel request on a worker thread. The argv is built on the
+/// caller's thread, so an unpinned launch reports its reason before any
+/// worker exists; only the `pinwin` child runs behind the worker and its
+/// outcome comes back on `tx`. At most one request is in flight because the
+/// caller holds the pending record that ignores further presses.
+pub(crate) fn spawn_pinned_request(
+    config: &PanelConfig,
+    request: PinnedSettingRequest,
+    tx: std::sync::mpsc::Sender<Result<(), String>>,
+) -> Result<(), String> {
+    #[cfg(test)]
+    if let Some(outcome) = PINNED_REQUEST_OVERRIDE.lock().unwrap().clone() {
+        PINNED_REQUESTS.lock().unwrap().push(request);
+        let _ = tx.send(outcome);
+        return Ok(());
+    }
+    let panel = panel_name()?;
+    let argv = match request {
+        PinnedSettingRequest::Width(width) => pinned_width_argv(panel, config, width),
+        PinnedSettingRequest::Side(side) => set_edge_argv(panel, side),
+        PinnedSettingRequest::Gutter(gutter, value) => set_gutters_argv(panel, gutter, value),
+    };
+    std::thread::Builder::new()
+        .name("pinwin-request".to_string())
+        .spawn(move || {
+            let outcome = run_request(&argv).map_err(|error| error.to_string());
+            let _ = tx.send(outcome);
+        })
+        .map(|_| ())
+        .map_err(|error| format!("pinwin request worker could not start: {error}"))
+}
+
+/// Test seam: when set, `spawn_pinned_request` records the request and
+/// delivers this injected outcome on the caller's thread instead of running
+/// the `pinwin` child. Test callers hold [`PINNED_REQUEST_TEST_LOCK`].
+#[cfg(test)]
+pub(crate) static PINNED_REQUEST_OVERRIDE: std::sync::Mutex<Option<Result<(), String>>> =
+    std::sync::Mutex::new(None);
+
+/// The requests the test seam delivered, in order.
+#[cfg(test)]
+pub(crate) static PINNED_REQUESTS: std::sync::Mutex<Vec<PinnedSettingRequest>> =
+    std::sync::Mutex::new(Vec::new());
+
+/// Serializes tests that install [`PINNED_REQUEST_OVERRIDE`].
+#[cfg(test)]
+pub(crate) static PINNED_REQUEST_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// `set-edge <panel> left|right`.
+#[must_use]
+fn set_edge_argv(panel: &str, side: mbv_config::PanelSide) -> Vec<String> {
+    vec![
+        "set-edge".to_string(),
+        panel.to_string(),
+        side.as_str().to_string(),
+    ]
+}
+
+/// `set-gutters <panel> --<gutter> N`: the F2 row edits one
+/// gutter, so one gutter changes at the panel's current width.
+#[must_use]
+fn set_gutters_argv(panel: &str, gutter: PanelGutter, value: i32) -> Vec<String> {
+    vec![
+        "set-gutters".to_string(),
+        panel.to_string(),
+        gutter.flag().to_string(),
+        value.to_string(),
+    ]
+}
+
+/// `toggle <panel>`.
+#[must_use]
+fn toggle_argv(panel: &str) -> Vec<String> {
+    vec!["toggle".to_string(), panel.to_string()]
+}
+
+/// The result a finished `pinwin` request reports: exit 0 is
+/// success, exit 1 is pinwin's own reason from stderr, exit 2 is a usage
+/// mismatch between mbv and pinwin, and any other ending is a failure that
+/// names it.
+fn request_result(code: Option<i32>, stderr: &str) -> Result<(), String> {
+    match code {
+        Some(0) => Ok(()),
+        Some(1) => {
+            let reason = stderr.trim();
+            if reason.is_empty() {
+                Err("pinwin refused the request".to_string())
+            } else {
+                Err(reason.to_string())
+            }
         }
-        // `SendError` is non-exhaustive, so mbv reports its `Display` and
-        // does not re-classify it.
+        Some(2) => Err(
+            "pinwin rejected the command line: mbv and pinwin disagree on the pinwin CLI"
+                .to_string(),
+        ),
+        Some(code) => Err(format!("pinwin exited with status {code}")),
+        None => Err("pinwin ended by a signal".to_string()),
+    }
+}
+
+/// Run one `pinwin` request against the claimed panel daemon. The
+/// child is the untested boundary; the argv it runs and the result it maps to
+/// are pure.
+fn run_request(argv: &[String]) -> Result<(), PinRequestError> {
+    let mut command = Command::new("pinwin");
+    command.args(argv);
+    if let Some(socket) = identity().socket.as_deref() {
+        command.env(PINWIN_SOCKET_ENV, socket);
+    }
+    let output = command
+        .output()
+        .map_err(|error| PinRequestError::Spawn(PinSpawnError::new(error)))?;
+    request_result(
+        output.status.code(),
+        &String::from_utf8_lossy(&output.stderr),
+    )
+    .map_err(PinRequestError::Refused)
+}
+
+/// What a finished `pinwin run` reports: a success exits with
+/// its status, a failure is always logged, and a desktop launch also
+/// notifies because it has no stderr to read.
+#[derive(Debug, PartialEq, Eq)]
+enum PanelExitAction {
+    /// Exit with the child's status and report nothing.
+    Quiet,
+    /// Log the failure status, then exit with it.
+    Log,
+    /// Log the failure status, notify, then exit with it.
+    LogAndNotify,
+}
+
+fn exit_action(success: bool, stdin_is_terminal: bool) -> PanelExitAction {
+    match (success, stdin_is_terminal) {
+        (true, _) => PanelExitAction::Quiet,
+        (false, true) => PanelExitAction::Log,
+        (false, false) => PanelExitAction::LogAndNotify,
+    }
+}
+
+/// Start the panel host and wait for it.
+///
+/// The pre-checks need no Wayland code: `WAYLAND_DISPLAY`, the terminal argv,
+/// the mbv binary and the `pinwin` program itself. Each failure takes the
+/// start-failure path, so a terminal launch falls back to this terminal and a
+/// desktop launch notifies and exits 1. Once `pinwin run` is spawned there is
+/// no fallback: this process waits and exits with the child's status.
+pub(crate) fn launch(config: &PanelConfig, log_level: Option<&str>) {
+    if std::env::var_os("WAYLAND_DISPLAY").is_none_or(|value| value.is_empty()) {
+        report_start_failure(&PinStartError::NoWaylandDisplay);
+        return;
+    }
+    let terminal_env = std::env::var("TERMINAL").ok();
+    let terminal = match terminal_prefix(
+        config.pin_terminal.as_deref(),
+        terminal_env.as_deref(),
+        "pin_terminal",
+    ) {
+        Ok(terminal) => terminal,
+        Err(reason) => {
+            report_start_failure(&PinStartError::Terminal(reason));
+            return;
+        }
+    };
+    let current = match std::env::current_exe() {
+        Ok(current) => current,
         Err(error) => {
-            report_toggle_failure(&format!("cannot toggle the pinned panel: {error}"));
+            report_start_failure(&PinStartError::Executable(error));
+            return;
+        }
+    };
+    let exe = launch_exe(&current, std::process::id());
+    let mut command = Command::new("pinwin");
+    command.args(run_argv(config, &terminal, exe.as_os_str(), log_level));
+    if let Some(token) = swap_token() {
+        command.env(SWAP_TOKEN_ENV, token);
+    }
+    let mut child = match command.spawn() {
+        Ok(child) => child,
+        Err(error) => {
+            report_start_failure(&PinStartError::Spawn(PinSpawnError::new(error)));
+            return;
+        }
+    };
+    match child.wait() {
+        Ok(status) => finish(status),
+        Err(error) => {
+            tracing::warn!(
+                name: "startup.pin.wait_failed",
+                target: "startup",
+                { error = %error },
+                "pinned panel wait failed"
+            );
+            if !std::io::stdin().is_terminal() {
+                notify(&format!("mbv: cannot wait for the pinned panel: {error}"));
+            }
+            std::process::exit(1);
         }
     }
 }
 
-/// Report a failed `--toggle` and exit 1 (design D3): stderr when stdin is a
+/// Exit with the child's status, logging and, on a desktop launch, notifying
+/// a failure.
+fn finish(status: std::process::ExitStatus) -> ! {
+    let action = exit_action(status.success(), std::io::stdin().is_terminal());
+    if action != PanelExitAction::Quiet {
+        tracing::warn!(
+            name: "startup.pin.exited",
+            target: "startup",
+            status = %status,
+            "pinwin run ended with a failure status"
+        );
+    }
+    if action == PanelExitAction::LogAndNotify {
+        let reason = match status.code() {
+            Some(code) => format!("the pinned panel could not open (status {code})"),
+            None => "the pinned panel could not open (it ended by a signal)".to_string(),
+        };
+        notify(&format!("mbv: {reason}"));
+    }
+    std::process::exit(status.code().unwrap_or(1));
+}
+
+/// Ask pinwin on the current Wayland display to toggle the `mbv` panel:
+/// hide it if shown, show it if hidden. Exits 1 with pinwin's
+/// reason when no panel runs or the request fails; exits 0 silently on
+/// success.
+pub(crate) fn toggle_running() {
+    if let Err(error) = run_request(&toggle_argv(PANEL_NAME)) {
+        report_toggle_failure(&error.to_string());
+    }
+}
+
+/// Report a failed `--toggle` and exit 1: stderr when stdin is a
 /// terminal, otherwise a desktop notification, because a compositor key has
 /// no terminal.
 fn report_toggle_failure(reason: &str) -> ! {
@@ -251,170 +639,7 @@ fn report_toggle_failure(reason: &str) -> ! {
     std::process::exit(1);
 }
 
-fn layout_from_config(config: &PanelConfig, width: PinnedWidth) -> Layout {
-    let side = match config.side {
-        mbv_config::PanelSide::Left => Side::Left,
-        mbv_config::PanelSide::Right => Side::Right,
-    };
-    let cols = match width {
-        PinnedWidth::Collapsed => config.cols,
-        PinnedWidth::Expanded => config.cols_expanded,
-    };
-    let layout = Layout::new(
-        side,
-        // The fallback is unreachable: config clamps panel widths to at
-        // least one column on parse and on every F2 step.
-        NonZeroU16::new(cols).unwrap_or(NonZeroU16::MIN),
-        config.gutter_top,
-        config.gutter_bottom,
-        config.gutter_left,
-        config.gutter_right,
-    );
-    // The collapsed panel pushes (the compositor reserves a strip beside it)
-    // and the expanded panel covers (it draws over the tiled windows while
-    // holding that strip); the width alone decides, for the start layout and
-    // every later apply alike, with no setting or runtime lever (issue #898,
-    // change `pinned-expand-covers-collapsed-pushes`).
-    match width {
-        PinnedWidth::Collapsed => layout,
-        PinnedWidth::Expanded => layout.covering(),
-    }
-}
-
-fn open_pty() -> Result<(std::os::fd::OwnedFd, std::os::fd::OwnedFd), PinStartError> {
-    let mut master = -1;
-    let mut slave = -1;
-    // SAFETY: `openpty` writes two owned fds on success; null termios and
-    // winsize request the platform defaults.
-    let opened = unsafe {
-        libc::openpty(
-            &raw mut master,
-            &raw mut slave,
-            std::ptr::null_mut(),
-            std::ptr::null(),
-            std::ptr::null(),
-        )
-    };
-    if opened != 0 {
-        return Err(PinStartError::Pty(std::io::Error::last_os_error()));
-    }
-    // SAFETY: a successful `openpty` returned two fresh fds this process owns.
-    unsafe {
-        Ok((
-            std::os::fd::OwnedFd::from_raw_fd(master),
-            std::os::fd::OwnedFd::from_raw_fd(slave),
-        ))
-    }
-}
-
-fn detach_controlling_terminal() -> Result<(), PinStartError> {
-    // A process has a controlling terminal iff `/dev/tty` opens; only then is
-    // there anything to detach from. Detaching through that fd also handles a
-    // launch whose stdin is redirected.
-    // SAFETY: probing `/dev/tty` with `O_NOCTTY` so it cannot become ours.
-    let tty = unsafe { libc::open(c"/dev/tty".as_ptr(), libc::O_RDWR | libc::O_NOCTTY) };
-    if tty < 0 {
-        return Ok(());
-    }
-
-    // `SIGHUP` is ignored across `TIOCNOTTY`: when mbv is the session leader
-    // (a terminal emulator started it directly), detaching hangs up its own
-    // foreground group (design D3).
-    // SAFETY: the disposition is process-wide and is restored below; no other
-    // thread relies on `SIGHUP` across this call.
-    let previous = unsafe { libc::signal(libc::SIGHUP, libc::SIG_IGN) };
-    // SAFETY: `TIOCNOTTY` takes no argument and detaches the terminal behind
-    // the `/dev/tty` fd opened just above.
-    let detached = unsafe { libc::ioctl(tty, libc::TIOCNOTTY) };
-    // SAFETY: restoring the disposition saved above.
-    unsafe { libc::signal(libc::SIGHUP, previous) };
-    // SAFETY: `tty` is the valid fd opened just above.
-    unsafe { libc::close(tty) };
-    if detached != 0 {
-        return Err(PinStartError::HandOver(std::io::Error::last_os_error()));
-    }
-    Ok(())
-}
-
-fn hand_over_stdio(slave: &std::os::fd::OwnedFd) -> Result<(), PinStartError> {
-    for target in [libc::STDIN_FILENO, libc::STDOUT_FILENO] {
-        // SAFETY: `dup2` duplicates the live slave fd onto a standard fd.
-        if unsafe { libc::dup2(slave.as_raw_fd(), target) } < 0 {
-            return Err(PinStartError::HandOver(std::io::Error::last_os_error()));
-        }
-    }
-    redirect_stderr()
-}
-
-/// Point fd 2 at the application log (opened for append), falling back to
-/// `/dev/null`: after the hand-over, native libraries (Wayland, xkbcommon,
-/// fontconfig) writing to stderr must not draw over the panel. mbv reports fatal
-/// post-hand-over errors via the log and a notification (design D5), so the
-/// TUI does not need fd 2.
-fn redirect_stderr() -> Result<(), PinStartError> {
-    let file = crate::open_crash_log()
-        .or_else(|_| std::fs::OpenOptions::new().write(true).open("/dev/null"))
-        .map_err(PinStartError::HandOver)?;
-    // SAFETY: `dup2` duplicates the fd owned by `file` onto stderr.
-    if unsafe { libc::dup2(file.as_raw_fd(), libc::STDERR_FILENO) } < 0 {
-        return Err(PinStartError::HandOver(std::io::Error::last_os_error()));
-    }
-    // If fd 2 was closed, the open above may have taken fd 2 itself; never
-    // close the target it now aliases.
-    if file.as_raw_fd() == libc::STDERR_FILENO {
-        std::mem::forget(file);
-    }
-    Ok(())
-}
-
-/// The terminal environment a pinned launch runs with, saved so a failed start
-/// can restore it (design D3).
-struct PanelEnv {
-    saved: Vec<(&'static str, Option<std::ffi::OsString>)>,
-}
-
-const PANEL_ENV_SET: [(&str, &str); 2] = [("TERM", "xterm-256color"), ("COLORTERM", "truecolor")];
-const PANEL_ENV_REMOVED: [&str; 2] = ["TERM_PROGRAM", "TERM_PROGRAM_VERSION"];
-
-impl PanelEnv {
-    fn apply() -> Self {
-        let mut saved = Vec::with_capacity(PANEL_ENV_SET.len() + PANEL_ENV_REMOVED.len());
-        for (name, _) in PANEL_ENV_SET {
-            saved.push((name, std::env::var_os(name)));
-        }
-        for name in PANEL_ENV_REMOVED {
-            saved.push((name, std::env::var_os(name)));
-        }
-        // SAFETY: this runs before any thread that reads or writes the process
-        // environment exists: the pinwin panel thread is not started yet, and
-        // the TUI has not spawned its workers.
-        unsafe {
-            for (name, value) in PANEL_ENV_SET {
-                std::env::set_var(name, value);
-            }
-            for name in PANEL_ENV_REMOVED {
-                std::env::remove_var(name);
-            }
-        }
-        Self { saved }
-    }
-
-    fn restore(self) {
-        // SAFETY: a failed start leaves no pinwin panel thread running
-        // (upstream addition 3) and the TUI has not spawned its workers, so no
-        // other thread reads the environment across these writes.
-        unsafe {
-            for (name, value) in self.saved {
-                match value {
-                    Some(value) => std::env::set_var(name, value),
-                    None => std::env::remove_var(name),
-                }
-            }
-        }
-    }
-}
-
-/// What a failed pinned start does next (design D5).
+/// What a failed pinned start does next.
 #[derive(Debug, PartialEq, Eq)]
 enum StartFailureAction {
     /// stdin is a terminal: print one line and keep running in it.
@@ -431,8 +656,8 @@ fn failure_action(stdin_is_terminal: bool) -> StartFailureAction {
     }
 }
 
-/// Report a pinned launch that never reached the hand-over (design D5).
-pub(crate) fn report_start_failure(reason: &PinStartError) {
+/// Report a pinned launch that never reached `pinwin run`.
+fn report_start_failure(reason: &PinStartError) {
     let reason = reason.to_string();
     tracing::warn!(
         name: "startup.pin.failed",
@@ -452,9 +677,9 @@ pub(crate) fn report_start_failure(reason: &PinStartError) {
     }
 }
 
-/// Report a fatal start-up failure after the hand-over (design D5): the panel
-/// is the only output and vanishes with the process, so the reason is logged
-/// and sent as a notification instead of printed.
+/// Report a fatal start-up failure of the TUI inside the panel:
+/// the panel is the only output and vanishes with the process, so the reason
+/// is logged and sent as a notification instead of printed.
 pub(crate) fn fatal(message: impl fmt::Display) -> ! {
     let message = message.to_string();
     tracing::error!(
@@ -472,9 +697,8 @@ pub(crate) fn fatal(message: impl fmt::Display) -> ! {
 }
 
 /// Best-effort `notify-send`, matching the TUI's system notifications; a
-/// missing binary is only logged (design D5). Also the swap-failure
-/// notification path for the daemon's `notify` hook (`local_daemon.rs`,
-/// tray-pin-swap D5).
+/// missing binary is only logged. Also the swap-failure notification path for
+/// the daemon's `notify` hook (`local_daemon.rs`).
 pub(crate) fn notify(message: &str) {
     let result = std::process::Command::new("notify-send")
         .arg("--app-name=mbv")
@@ -502,54 +726,4 @@ pub(crate) fn notify(message: &str) {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{PinnedWidth, StartFailureAction, failure_action, layout_from_config};
-    use mbv_config::PanelConfig;
-    use std::num::NonZeroU16;
-
-    /// Design D2/D4: the active width selects `cols` (collapsed) or
-    /// `cols_expanded` (expanded); nothing constrains which value is larger.
-    #[rstest::rstest]
-    #[case::collapsed_uses_cols(PinnedWidth::Collapsed, 40, 80, 40)]
-    #[case::expanded_uses_cols_expanded(PinnedWidth::Expanded, 40, 80, 80)]
-    #[case::expanded_below_collapsed_still_wins(PinnedWidth::Expanded, 60, 30, 30)]
-    fn layout_from_config_selects_the_active_width(
-        #[case] width: PinnedWidth,
-        #[case] cols: u16,
-        #[case] cols_expanded: u16,
-        #[case] expected: u16,
-    ) {
-        let config = PanelConfig {
-            cols,
-            cols_expanded,
-            ..PanelConfig::default()
-        };
-        assert_eq!(
-            layout_from_config(&config, width).cols(),
-            NonZeroU16::new(expected).expect("test columns are non-zero")
-        );
-    }
-
-    /// Design D5: a failed pinned start falls back to the terminal only when
-    /// there is one; otherwise it notifies and exits 1.
-    #[test]
-    fn start_failure_falls_back_to_the_terminal_only_for_a_tty_stdin() {
-        assert_eq!(failure_action(true), StartFailureAction::WarnInTerminal);
-        assert_eq!(failure_action(false), StartFailureAction::NotifyAndExit);
-    }
-
-    /// Issue #898 (`pinned-expand-covers-collapsed-pushes`): the collapsed
-    /// panel pushes and the expanded panel covers; no setting takes part.
-    #[rstest::rstest]
-    #[case::collapsed_pushes(PinnedWidth::Collapsed, pinwin::layout::Coverage::Push)]
-    #[case::expanded_covers(PinnedWidth::Expanded, pinwin::layout::Coverage::Cover)]
-    fn layout_from_config_coverage_follows_the_width(
-        #[case] width: PinnedWidth,
-        #[case] expected: pinwin::layout::Coverage,
-    ) {
-        assert_eq!(
-            layout_from_config(&PanelConfig::default(), width).coverage(),
-            expected
-        );
-    }
-}
+mod tests;

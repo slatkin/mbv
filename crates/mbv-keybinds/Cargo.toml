@@ -12,3 +12,6 @@ readme = "../../README.md"
 
 [lints]
 workspace = true
+
+[dependencies]
+tracing.workspace = true

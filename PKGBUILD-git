@@ -7,6 +7,7 @@ arch=('x86_64')
 url="https://github.com/slatkin/mbv"
 license=('MIT')
 depends=('mpv' 'openssl' 'wayland' 'libxkbcommon' 'fontconfig')
+optdepends=('pinwin>=0.4.1: pinned panel support')
 makedepends=('rust' 'cargo' 'nasm' 'git' 'zig' 'wayland' 'libxkbcommon' 'fontconfig')
 provides=('mbv')
 conflicts=('mbv')

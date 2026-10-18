@@ -374,12 +374,11 @@ fn write_playback_section(table: &mut toml::map::Map<String, toml::Value>, cfg: 
     }
 }
 
-// `[keys]` (change `add-configurable-keybinds`): patched like any other
-// section through the read-patch-write path, in the section-outer file
-// shape (design D3, lowercase section names) that `parse_raw_keybinds`
-// reads back. An all-defaults configuration — or one whose sections all
-// lost their entries — prunes the whole table; a section with no
-// surviving entries contributes no table.
+// `[keys]`: patched like any other section through the read-patch-write path,
+// in the section-outer file shape that `parse_raw_keybinds` reads back. An
+// all-defaults configuration — or one whose sections all lost their entries —
+// prunes the whole table; a section with no surviving entries contributes no
+// table.
 fn write_keys_section(table: &mut toml::map::Map<String, toml::Value>, cfg: &Config) {
     let mut keys_table = toml::map::Map::new();
     if let Some(prefix) = &cfg.keybinds.prefix {
@@ -421,21 +420,26 @@ fn write_keys_section(table: &mut toml::map::Map<String, toml::Value>, cfg: &Con
     }
 }
 
-// `[panel]` (change `pin-mbv-in-pinwin`, design D6): written in full like
-// `[session]`/`[display]`, so a default layout is explicit in the file.
+// `[panel]`: written in full like
+// `[session]`/`[display]`, so a default layout is explicit in the file and the
+// old `cols`/`cols_expanded` keys are dropped on the first save.
 fn write_panel_section(table: &mut toml::map::Map<String, toml::Value>, cfg: &Config) {
     let panel = section(table, "panel");
+    // The retired column keys are dropped from an existing file, not kept
+    // beside the pixel widths.
+    panel.remove("cols");
+    panel.remove("cols_expanded");
     panel.insert(
         "side".to_string(),
         toml::Value::String(cfg.panel.side.as_str().to_string()),
     );
     panel.insert(
-        "cols".to_string(),
-        toml::Value::Integer(i64::from(cfg.panel.cols)),
+        "width".to_string(),
+        toml::Value::Integer(i64::from(cfg.panel.width)),
     );
     panel.insert(
-        "cols_expanded".to_string(),
-        toml::Value::Integer(i64::from(cfg.panel.cols_expanded)),
+        "width_expanded".to_string(),
+        toml::Value::Integer(i64::from(cfg.panel.width_expanded)),
     );
     panel.insert(
         "gutter_top".to_string(),
@@ -462,18 +466,22 @@ fn write_panel_section(table: &mut toml::map::Map<String, toml::Value>, cfg: &Co
         "accent_width".to_string(),
         toml::Value::Integer(i64::from(cfg.panel.accent_width.get())),
     );
-    // `[panel] terminal` (`tray-pin-swap`, design D5) has no default value to
-    // write: an unset key stays absent, which parses back to `None`.
-    if let Some(terminal) = &cfg.panel.terminal {
-        panel.insert(
-            "terminal".to_string(),
-            toml::Value::Array(
-                terminal
-                    .iter()
-                    .map(|arg| toml::Value::String(arg.clone()))
-                    .collect(),
-            ),
-        );
+    // The two terminal argv prefixes have no default value to write: an unset
+    // key stays absent, which parses back to `None`.
+    for (key, argv) in [
+        ("terminal", cfg.panel.terminal.as_ref()),
+        ("pin_terminal", cfg.panel.pin_terminal.as_ref()),
+    ] {
+        if let Some(argv) = argv {
+            panel.insert(
+                key.to_string(),
+                toml::Value::Array(
+                    argv.iter()
+                        .map(|arg| toml::Value::String(arg.clone()))
+                        .collect(),
+                ),
+            );
+        }
     }
 }
 

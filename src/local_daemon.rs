@@ -17,9 +17,10 @@ use std::ffi::OsStr;
 use std::io::{self, Read};
 use std::os::unix::net::UnixStream;
 use std::os::unix::process::CommandExt;
-use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
+
+use crate::launch::launch_exe;
 
 const READY_TIMEOUT: Duration = Duration::from_secs(5);
 const READY_POLL_INTERVAL: Duration = Duration::from_millis(20);
@@ -100,7 +101,7 @@ fn session_display_env() -> Option<Vec<(&'static str, String)>> {
     env
 }
 
-/// Pure argv resolution for the swap-launch command (tray-pin-swap D5).
+/// Pure argv resolution for the swap-launch command.
 ///
 /// Pin runs `exe --pin` (a new pinned panel Client, no terminal involved).
 /// Unpin prefixes `exe` with the `[panel] terminal` argv prefix when set,
@@ -117,38 +118,15 @@ fn swap_argv(
     match direction {
         mbv_daemon::SwapDirection::Pin => Ok(vec![exe, "--pin".to_string()]),
         mbv_daemon::SwapDirection::Unpin => {
-            let prefix = panel_terminal.filter(|argv| !argv.is_empty());
-            let terminal = terminal_env.filter(|terminal| !terminal.trim().is_empty());
-            match (prefix, terminal) {
-                (Some(prefix), _) => {
-                    let mut argv = prefix.to_vec();
-                    argv.push(exe);
-                    Ok(argv)
-                }
-                (None, Some(terminal)) => Ok(vec![terminal.to_string(), "-e".to_string(), exe]),
-                (None, None) => Err("cannot start a terminal Client: neither [panel] terminal \
-                     (config) nor TERMINAL (environment) is set"
-                    .to_string()),
-            }
+            let mut argv = crate::pin::terminal_prefix(panel_terminal, terminal_env, "terminal")
+                .map_err(|reason| format!("cannot start a terminal Client: {reason}"))?;
+            argv.push(exe);
+            Ok(argv)
         }
     }
 }
 
-/// The binary path a launch starts from (spec pin-swap "Launches start the
-/// Owner's own build after its binary file changes").
-///
-/// After the started file is unlinked, Linux `current_exe()` ends in
-/// ` (deleted)` and spawn fails with ENOENT. Then start from the Owner's
-/// `/proc/{owner_pid}/exe`, which names the same build while the Owner runs.
-fn launch_exe(current: &Path, owner_pid: u32) -> PathBuf {
-    if current.to_string_lossy().ends_with(" (deleted)") {
-        PathBuf::from(format!("/proc/{owner_pid}/exe"))
-    } else {
-        current.to_path_buf()
-    }
-}
-
-/// Detached launch of the replacement Client (tray-pin-swap D5): stdin,
+/// Detached launch of the replacement Client: stdin,
 /// stdout and stderr null, and `setsid` in `pre_exec`, the same as
 /// [`spawn_detached`]. The Owner's environment already carries the session
 /// display variables.
@@ -320,7 +298,7 @@ pub fn run_local_daemon_main() -> ! {
                     .map_err(|e| format!("cannot locate the mbv binary: {e}"))?;
                 let exe = launch_exe(&current, std::process::id());
                 // The `[panel] terminal` value is re-read from the config file
-                // on every swap (design D5), like `owner_settings::reader`:
+                // on every swap, like `owner_settings::reader`:
                 // a config edit reaches the next Unpin without a restart.
                 let panel_terminal = std::fs::read_to_string(mbv_config::config_path())
                     .ok()
@@ -336,12 +314,11 @@ pub fn run_local_daemon_main() -> ! {
                 Ok(detached_swap_command(&command_argv))
             }),
             notify: Box::new(crate::pin::notify),
-            // The Local daemon owns the Cast connector (cast-owner-output
-            // design D2): its Owner can make a receiver its playback output.
+            // The Local daemon owns the Cast connector: its Owner can make a
+            // receiver its playback output.
             cast_connector: Some(mbv_daemon::local_cast_connector()),
-            // The Local daemon hosts an Emby Session output
-            // (emby-session-owner-output design D2): it is the desktop-adjacent
-            // owner whose Client selects the Session.
+            // The Local daemon hosts an Emby Session output: it is the
+            // desktop-adjacent owner whose Client selects the Session.
             emby_session_output: true,
         },
     );
@@ -442,27 +419,5 @@ mod tests {
         )
         .expect_err("Unpin without a terminal must fail");
         assert!(error.contains(named), "error must name the source");
-    }
-
-    /// Regression for the Owner log `daemon.pin_swap.spawn_failed …
-    /// "… (deleted)"` (2026-10-10 and 2026-10-11): when `current_exe()` ends
-    /// in ` (deleted)` the started file is gone, so the launch falls back to
-    /// the Owner's `/proc/<pid>/exe`; a live path is returned unchanged.
-    #[rstest]
-    #[case::live_path_is_returned_unchanged("/usr/bin/mbv", 4242, "/usr/bin/mbv")]
-    #[case::deleted_suffix_falls_back_to_owner_proc_exe(
-        "/home/u/target/debug/mbv (deleted)",
-        4242,
-        "/proc/4242/exe"
-    )]
-    fn launch_exe_falls_back_to_the_owner_binary_when_current_is_deleted(
-        #[case] current: &str,
-        #[case] owner_pid: u32,
-        #[case] expected: &str,
-    ) {
-        assert_eq!(
-            launch_exe(Path::new(current), owner_pid),
-            PathBuf::from(expected)
-        );
     }
 }

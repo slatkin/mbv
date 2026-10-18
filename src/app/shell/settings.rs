@@ -26,7 +26,7 @@ impl Model {
             || self
                 .application
                 .mounted(&ComponentId::Popup(PopupId::FeedManage));
-        // Prefix-armed capture (design D6, task 6.1) holds focus off while
+        // Prefix-armed capture holds focus off while
         // armed; the disarm restores what the arm displaced.
         if !child_open && self.application.focus() != Some(&id) && !self.app.prefix_armed {
             self.application.active(&id).expect("activate Settings");
@@ -122,9 +122,8 @@ impl Model {
         }
     }
 
-    /// The Panel destination's ten value rows, in paint and cursor order
-    /// (design D6, change `pin-mbv-in-pinwin`; accent rows added by
-    /// `pinned-panel-focus-accent`).
+    /// The Panel destination's ten value rows, in paint and cursor order,
+    /// including the accent rows.
     fn panel_settings_rows(cfg: &Config, ui: &UiConfig) -> Vec<SettingsRow> {
         settings::PANEL_SETTING_KEYS
             .iter()
@@ -182,7 +181,7 @@ impl Model {
         }
     }
 
-    /// The Keys destination's read-only content (design D7), derived from
+    /// The Keys destination's read-only content, derived from
     /// the registry and the loaded `Keybinds`: group-header rows for every
     /// populated `KeySection` in shared-vocabulary order, then one row per
     /// declared action with its router chord(s) and, where assigned, its
@@ -338,7 +337,8 @@ impl Model {
             SettingsIntent::Quit => self.app.try_quit(),
             SettingsIntent::Activate(cursor) => {
                 if self.app.settings_destination == SettingsDestination::Panel {
-                    // An activate steps a Panel row by one (`Side` cycles).
+                    // An activate steps a Panel row up by its base step
+                    // (`Side` cycles; a width row steps 10 pixels).
                     self.app.apply_panel_setting(
                         mbv_ui_model::settings::panel_cursor_to_key(cursor),
                         1,
@@ -396,7 +396,7 @@ mod tests {
     }
 
     /// The settings main list's Keys row summarizes the live configuration
-    /// (task 7.2, design D7): the configured prefix plus the number of
+    /// The configured prefix plus the number of
     /// actions whose router binding deviates from the declared default.
     #[test]
     fn keys_row_summary_follows_the_loaded_configuration() {
@@ -435,7 +435,7 @@ mod tests {
     }
 
     /// The Keys destination's content is a projection of the registry and
-    /// the loaded `Keybinds` (task 7.1, design D7): groups equal the shared
+    /// the loaded `Keybinds`: groups equal the shared
     /// section list (populated `KeySection`s in order), action rows equal
     /// the registry set, and an override renders the configured chord.
     #[test]

@@ -76,23 +76,24 @@ pub const CTRL_CAP_SERVICE_SETUP_ADMIN: &str = "service-setup-admin";
 /// Client handles `SwapPrepare` and `SwapQuit`, so the Owner may replace it
 /// with a Client in the other surface mode. Additive — no protocol-version bump.
 pub const CTRL_CAP_PIN_SWAP: &str = "pin-swap";
-/// Client runs in a pinned panel (`pin::is_pinned()` settled before the
-/// Owner connection). Additive — no protocol-version bump.
+/// Client runs in a pinwin panel (`pin::is_pinned()` claimed from
+/// `PINWIN_PANEL` before the Owner connection). Additive — no
+/// protocol-version bump.
 pub const CTRL_CAP_PINNED_SURFACE: &str = "pinned-surface";
 /// The environment variable the Owner sets on a Client it started for a Pin
-/// swap, carrying the one-shot swap token (tray-pin-swap design D2).
+/// swap, carrying the one-shot swap token.
 pub const SWAP_TOKEN_ENV: &str = "MBV_SWAP_TOKEN";
 /// Connection may run one Owner action (`CtrlCmd::RunOwnerAction`). Additive —
 /// no protocol-version bump.
 pub const CTRL_CAP_OWNER_ACTION: &str = "owner-action";
 /// Peer supports the owner playback-output surface:
-/// `CtrlCmd::SelectPlaybackOutput` and `CtrlEvent::PlaybackOutput`
-/// (cast-owner-output design D3). Additive — no protocol-version bump. The
+/// `CtrlCmd::SelectPlaybackOutput` and `CtrlEvent::PlaybackOutput`.
+/// Additive — no protocol-version bump. The
 /// Owner advertises it only when it can host a Cast output.
 pub const CTRL_CAP_PLAYBACK_OUTPUT: &str = "playback-output";
 /// Peer supports the Emby Session playback output: an
-/// `OutputSelection::EmbySession` and an `OutputState::EmbySession`
-/// (emby-session-owner-output design D3). Additive — no protocol-version
+/// `OutputSelection::EmbySession` and an `OutputState::EmbySession`.
+/// Additive — no protocol-version
 /// bump. The Owner advertises it only when it can host an Emby Session
 /// output, and sends that output state only to peers that negotiated it.
 pub const CTRL_CAP_EMBY_SESSION_OUTPUT: &str = "emby-session-output";
@@ -129,9 +130,9 @@ pub struct UnifiedQueueSlot {
     pub item: QueueItem,
 }
 
-/// Summary of a pending playback transition carried in the owner snapshot
-/// (design D5). Kept independent of internal queue types — the target slot is
-/// a raw u64, matching `UnifiedQueueSlot::slot_id`.
+/// Summary of a pending playback transition carried in the owner snapshot.
+/// Kept independent of internal queue types — the target slot is a raw u64,
+/// matching `UnifiedQueueSlot::slot_id`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TransitionSummary {
     pub request_id: PlaybackRequestId,
@@ -153,12 +154,12 @@ pub struct UnifiedQueueStateData {
     /// Owner-minted identity for the current whole-queue replacement lineage.
     #[serde(default)]
     pub lineage: QueueLineage,
-    /// Transition dispatched to the Playback run and awaiting observation
-    /// (design D5). `None` when no transition is in flight.
+    /// Transition dispatched to the Playback run and awaiting observation.
+    /// `None` when no transition is in flight.
     #[serde(default)]
     pub in_flight_transition: Option<TransitionSummary>,
-    /// Newest queued transition held back behind the in-flight one (design
-    /// D4/D5). `None` when nothing is queued.
+    /// Newest queued transition held back behind the in-flight one. `None`
+    /// when nothing is queued.
     #[serde(default)]
     pub queued_latest_transition: Option<TransitionSummary>,
 }
