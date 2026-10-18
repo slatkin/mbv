@@ -2,7 +2,7 @@
 
 ## 0. Gate
 
-- [ ] 0.1 Confirm that pinwin 0.4.1 with slatkin/pinwin#55 is released: `pinwin run --help` lists `--show-existing`, `pinwin set-size --help` lists `--reserve`, `pinwin run --help` lists the `--gutter-*` options, `pinwin set-gutters` exists, and a `pinwin run` app has `PINWIN_PANEL` and `PINWIN_SOCKET` in its environment. Do not start group 2 before this holds.
+- [x] 0.1 Confirm that pinwin 0.4.1 with slatkin/pinwin#55 is released: `pinwin run --help` lists `--show-existing`, `pinwin set-size --help` lists `--reserve`, `pinwin run --help` lists the `--gutter-*` options, `pinwin set-gutters` exists, and a `pinwin run` app has `PINWIN_PANEL` and `PINWIN_SOCKET` in its environment. Do not start group 2 before this holds.
 
 ## 1. `[panel]` settings (design D5)
 
