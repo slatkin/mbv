@@ -3,7 +3,7 @@
 use super::{
     PanelExitAction, PanelGutter, PanelIdentity, PanelReserve, StartFailureAction, exit_action,
     failure_action, pinned_width_argv, request_result, run_argv, set_edge_argv, set_gutters_argv,
-    set_size_argv, terminal_argv, toggle_argv,
+    set_size_argv, terminal_prefix, toggle_argv,
 };
 use mbv_config::{PanelConfig, PanelSide};
 use mbv_ui_model::settings::PinnedWidth;
@@ -48,7 +48,7 @@ fn panel_identity_is_pinned_only_for_a_set_panel_name(
     #[case] expected: bool,
 ) {
     let identity = PanelIdentity::new(panel.map(str::to_owned), None);
-    assert_eq!(identity.is_pinned(), expected);
+    assert_eq!(identity.name.is_some(), expected);
 }
 
 /// Design D3: an empty socket counts as unset, so a request never points at
@@ -127,22 +127,22 @@ fn run_argv_carries_the_layout_the_terminal_and_the_log_level(
 )]
 #[case::empty_config_prefix_falls_back(Some(vec![]), Some("wezterm"), vec!["wezterm", "-e"])]
 #[case::terminal_env_falls_back(None, Some("wezterm"), vec!["wezterm", "-e"])]
-fn terminal_argv_prefers_the_config_prefix_then_the_environment(
+fn terminal_prefix_prefers_the_config_prefix_then_the_environment(
     #[case] pin_terminal: Option<Vec<&str>>,
     #[case] terminal_env: Option<&str>,
     #[case] expected: Vec<&str>,
 ) {
     let pin_terminal = pin_terminal.map(|argv| strings(&argv));
     assert_eq!(
-        terminal_argv(pin_terminal.as_deref(), terminal_env),
+        terminal_prefix(pin_terminal.as_deref(), terminal_env, "pin_terminal"),
         Ok(strings(&expected))
     );
 }
 
 /// Design D1: with neither source set, the reason names both.
 #[test]
-fn terminal_argv_without_a_source_names_both() {
-    let error = terminal_argv(None, None).expect_err("no terminal must fail");
+fn terminal_prefix_without_a_source_names_both() {
+    let error = terminal_prefix(None, None, "pin_terminal").expect_err("no terminal must fail");
     assert!(
         error.contains("[panel] pin_terminal"),
         "error must name config"

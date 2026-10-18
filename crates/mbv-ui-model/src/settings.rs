@@ -594,8 +594,7 @@ const PANEL_WIDTH_STEP: i32 = 10;
 /// width row steps by 10 logical pixels, every other row by 1 (gutter rows
 /// keep 1, or 10 with Shift). The interaction's own multiplier still applies
 /// on top, so a width row moves 100 pixels when Shift is held.
-#[must_use]
-pub fn panel_row_step(key: SettingKey) -> i32 {
+fn panel_row_step(key: SettingKey) -> i32 {
     match key {
         SettingKey::PanelWidth | SettingKey::PanelWidthExpanded => PANEL_WIDTH_STEP,
         _ => 1,
@@ -664,7 +663,7 @@ fn next_accent_color(
 
 /// Apply one Panel-row interaction (design D6, row 4.3): `Side` toggles
 /// left/right, and each numeric row steps by `delta` times its base step
-/// ([`panel_row_step`]) clamped to its Rust range. `delta` is already scaled
+/// (`panel_row_step`) clamped to its Rust range. `delta` is already scaled
 /// to ±1/±10 by the caller for Shift. `None` for any key that is not a Panel
 /// value row. `accent_custom` is the colour the shell holds from
 /// [`accent_color_outside_cycle`]; it joins the `Accent color` cycle.

@@ -118,19 +118,10 @@ fn swap_argv(
     match direction {
         mbv_daemon::SwapDirection::Pin => Ok(vec![exe, "--pin".to_string()]),
         mbv_daemon::SwapDirection::Unpin => {
-            let prefix = panel_terminal.filter(|argv| !argv.is_empty());
-            let terminal = terminal_env.filter(|terminal| !terminal.trim().is_empty());
-            match (prefix, terminal) {
-                (Some(prefix), _) => {
-                    let mut argv = prefix.to_vec();
-                    argv.push(exe);
-                    Ok(argv)
-                }
-                (None, Some(terminal)) => Ok(vec![terminal.to_string(), "-e".to_string(), exe]),
-                (None, None) => Err("cannot start a terminal Client: neither [panel] terminal \
-                     (config) nor TERMINAL (environment) is set"
-                    .to_string()),
-            }
+            let mut argv = crate::pin::terminal_prefix(panel_terminal, terminal_env, "terminal")
+                .map_err(|reason| format!("cannot start a terminal Client: {reason}"))?;
+            argv.push(exe);
+            Ok(argv)
         }
     }
 }

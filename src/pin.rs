@@ -84,12 +84,6 @@ impl PanelIdentity {
             socket: socket.filter(|socket| !socket.is_empty()),
         }
     }
-
-    /// Whether this launch runs in a pinned panel.
-    #[must_use]
-    fn is_pinned(&self) -> bool {
-        self.name.is_some()
-    }
 }
 
 /// The panel identity this launch was started with, claimed once at start-up.
@@ -98,7 +92,18 @@ static PANEL_IDENTITY: OnceLock<PanelIdentity> = OnceLock::new();
 /// Whether this launch runs in a pinned panel (design D3).
 #[must_use]
 pub(crate) fn is_pinned() -> bool {
-    identity().is_pinned()
+    identity().name.is_some()
+}
+
+/// Read `name` from the environment and remove it from this process's
+/// environment, so no spawned child inherits it. Called once at start-up, on
+/// the main thread before any thread exists.
+fn claim_env_once(name: &str) -> Option<String> {
+    let value = std::env::var(name).ok();
+    // SAFETY: this runs on the main thread before any thread exists, so no
+    // other thread can observe the environment mid-update.
+    unsafe { std::env::remove_var(name) };
+    value
 }
 
 /// Read `PINWIN_PANEL` and `PINWIN_SOCKET` and remove both from this
@@ -106,14 +111,8 @@ pub(crate) fn is_pinned() -> bool {
 /// thread next to [`claim_swap_token`], before any worker or child process
 /// spawns, so the Owner process and every other child run unpinned.
 pub(crate) fn claim_panel_identity() {
-    let panel = std::env::var(PINWIN_PANEL_ENV).ok();
-    let socket = std::env::var(PINWIN_SOCKET_ENV).ok();
-    // SAFETY: this runs on the main thread before any thread exists, so no
-    // other thread can observe the environment mid-update.
-    unsafe { std::env::remove_var(PINWIN_PANEL_ENV) };
-    // SAFETY: as above, and the second removal is still before any thread
-    // exists.
-    unsafe { std::env::remove_var(PINWIN_SOCKET_ENV) };
+    let panel = claim_env_once(PINWIN_PANEL_ENV);
+    let socket = claim_env_once(PINWIN_SOCKET_ENV);
     let _ = PANEL_IDENTITY.set(PanelIdentity::new(panel, socket));
 }
 
@@ -131,11 +130,7 @@ static SWAP_TOKEN: OnceLock<Option<String>> = OnceLock::new();
 /// spawns, so the token is neither read twice nor inherited by a spawned
 /// daemon.
 pub(crate) fn claim_swap_token() {
-    let token = std::env::var(SWAP_TOKEN_ENV).ok();
-    // SAFETY: this runs on the main thread before any thread exists, so no
-    // other thread can observe the environment mid-update.
-    unsafe { std::env::remove_var(SWAP_TOKEN_ENV) };
-    let _ = SWAP_TOKEN.set(token);
+    let _ = SWAP_TOKEN.set(claim_env_once(SWAP_TOKEN_ENV));
 }
 
 /// The claimed swap token, `None` for every launch the user started.
@@ -235,21 +230,23 @@ fn focus_ring_arg(config: &PanelConfig) -> String {
     }
 }
 
-/// The terminal argv prefix that hosts the panel (design D1): the `[panel]
-/// pin_terminal` value when set, else `TERMINAL -e`. With neither set the
-/// launch fails with a reason that names both sources.
-fn terminal_argv(
-    pin_terminal: Option<&[String]>,
+/// The terminal argv prefix that hosts a Client (design D1): the configured
+/// prefix when set, else `TERMINAL -e`. With neither set the launch fails with
+/// a reason that names both sources; `config_key` is the configuration key the
+/// caller reads the prefix from.
+pub(crate) fn terminal_prefix(
+    configured: Option<&[String]>,
     terminal_env: Option<&str>,
+    config_key: &str,
 ) -> Result<Vec<String>, String> {
-    let prefix = pin_terminal.filter(|argv| !argv.is_empty());
+    let prefix = configured.filter(|argv| !argv.is_empty());
     let terminal = terminal_env.filter(|terminal| !terminal.trim().is_empty());
     match (prefix, terminal) {
         (Some(prefix), _) => Ok(prefix.to_vec()),
         (None, Some(terminal)) => Ok(vec![terminal.to_string(), "-e".to_string()]),
-        (None, None) => Err(
-            "neither [panel] pin_terminal (config) nor TERMINAL (environment) is set".to_string(),
-        ),
+        (None, None) => Err(format!(
+            "neither [panel] {config_key} (config) nor TERMINAL (environment) is set"
+        )),
     }
 }
 
@@ -454,7 +451,11 @@ pub(crate) fn launch(config: &PanelConfig, log_level: Option<&str>) {
         return;
     }
     let terminal_env = std::env::var("TERMINAL").ok();
-    let terminal = match terminal_argv(config.pin_terminal.as_deref(), terminal_env.as_deref()) {
+    let terminal = match terminal_prefix(
+        config.pin_terminal.as_deref(),
+        terminal_env.as_deref(),
+        "pin_terminal",
+    ) {
         Ok(terminal) => terminal,
         Err(reason) => {
             report_start_failure(&PinStartError::Terminal(reason));
@@ -564,7 +565,7 @@ fn failure_action(stdin_is_terminal: bool) -> StartFailureAction {
 }
 
 /// Report a pinned launch that never reached `pinwin run` (design D2, D5).
-pub(crate) fn report_start_failure(reason: &PinStartError) {
+fn report_start_failure(reason: &PinStartError) {
     let reason = reason.to_string();
     tracing::warn!(
         name: "startup.pin.failed",
