@@ -32,8 +32,8 @@ Read `design.md` first. Run `cargo fmt` after each Rust change. Add no lint supp
 
 ## 6. Docs and final checks
 
-- [ ] 6.1 Update `CONTEXT.md` (the retired Cast receiver entry that names `PlayOrder`; check *Avoid* terms before any new term). Verify with `rg -n "PlayOrder|play order" CONTEXT.md docs openspec/specs` showing only archived or intended mentions.
-- [ ] 6.2 Run `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run --workspace`; run `make check-code-file-lines` just before push. Verify all pass.
+- [x] 6.1 Update `CONTEXT.md` (the retired Cast receiver entry that names `PlayOrder`; check *Avoid* terms before any new term). Verify with `rg -n "PlayOrder|play order" CONTEXT.md docs openspec/specs` showing only archived or intended mentions.
+- [x] 6.2 Run `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run --workspace`; run `make check-code-file-lines` just before push. Verify all pass.
 - [ ] 6.3 Ask the user for a live test of the contract: Shuffle on a playing queue keeps the playing item first and plays on; Next follows the new order. Do not run anything live before the user agrees.
 
 ## Workflow follow-up
