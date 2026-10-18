@@ -263,11 +263,9 @@ impl App {
         Self::push_play_state_context_action(entries, item);
     }
 
-    /// The queue-row shuffle-order toggle (queue-play-order design D6). The
-    /// one place that decides the opposite of the current mode and its
-    /// label; the dispatch arm only sends the command. The label is a paint
-    /// choice: "Shuffle Play" turns Shuffle on from Sequential, "Stop
-    /// Shuffle" turns it off from Shuffle.
+    /// The queue-row shuffle entry (queue-content-shuffle design D6). It
+    /// pushes only when the owner advertises the `queue-shuffle`
+    /// capability; the dispatch arm only sends the command.
     fn push_queue_shuffle_entry(entries: &mut Vec<ContextMenuEntry>) {
         Self::push_context_action(entries, "Shuffle", ContextAction::ShuffleQueue);
     }
