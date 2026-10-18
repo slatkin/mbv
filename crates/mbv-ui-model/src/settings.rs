@@ -350,9 +350,9 @@ fn setting_key_value(key: SettingKey, cfg: &Config) -> Option<String> {
         // Navigation-only entry: the destination row summarizes the saved
         // layout (design D6, row 4.3).
         SettingKey::Panel => Some(format!(
-            "{} · {} cols",
+            "{} · {} px",
             cfg.panel.side.as_str(),
-            cfg.panel.cols
+            cfg.panel.width
         )),
         SettingKey::Keys => {
             // Live keybind summary (design D7): the configured prefix and
@@ -426,8 +426,8 @@ fn setting_text_value(key: SettingKey, cfg: &Config, ui: &UiConfig) -> Option<St
 
 fn setting_stepper_value(key: SettingKey, cfg: &Config) -> Option<String> {
     match key {
-        SettingKey::PanelCols => Some(cfg.panel.cols.to_string()),
-        SettingKey::PanelColsExpanded => Some(cfg.panel.cols_expanded.to_string()),
+        SettingKey::PanelCols => Some(cfg.panel.width.to_string()),
+        SettingKey::PanelColsExpanded => Some(cfg.panel.width_expanded.to_string()),
         SettingKey::PanelGutterTop => Some(cfg.panel.gutter_top.to_string()),
         SettingKey::PanelGutterBottom => Some(cfg.panel.gutter_bottom.to_string()),
         SettingKey::PanelGutterLeft => Some(cfg.panel.gutter_left.to_string()),
@@ -572,13 +572,14 @@ pub fn panel_row_edited_width(key: SettingKey) -> Option<PanelEditedWidth> {
     }
 }
 
-/// Step a column count by `delta`, clamped to `PANEL_COLS_MIN..=u16::MAX`
-/// (a step past `u16::MAX` fails `try_from` and saturates at the top).
-fn stepped_cols(cols: u16, delta: i32) -> u16 {
+/// Step a panel width in logical pixels by `delta`, clamped to
+/// `PANEL_WIDTH_MIN..=u16::MAX` (a step past `u16::MAX` fails `try_from` and
+/// saturates at the top).
+fn stepped_width(width: u16, delta: i32) -> u16 {
     u16::try_from(
-        i32::from(cols)
+        i32::from(width)
             .saturating_add(delta)
-            .max(i32::from(mbv_config::PANEL_COLS_MIN)),
+            .max(i32::from(mbv_config::PANEL_WIDTH_MIN)),
     )
     .unwrap_or(u16::MAX)
 }
@@ -653,9 +654,9 @@ pub fn changed_panel_config(
                 PanelSide::Right => PanelSide::Left,
             };
         }
-        SettingKey::PanelCols => next.cols = stepped_cols(next.cols, delta),
+        SettingKey::PanelCols => next.width = stepped_width(next.width, delta),
         SettingKey::PanelColsExpanded => {
-            next.cols_expanded = stepped_cols(next.cols_expanded, delta);
+            next.width_expanded = stepped_width(next.width_expanded, delta);
         }
         SettingKey::PanelGutterTop => next.gutter_top = next.gutter_top.saturating_add(delta),
         SettingKey::PanelGutterBottom => {

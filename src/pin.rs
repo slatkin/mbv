@@ -256,9 +256,12 @@ fn layout_from_config(config: &PanelConfig, width: PinnedWidth) -> Layout {
         mbv_config::PanelSide::Left => Side::Left,
         mbv_config::PanelSide::Right => Side::Right,
     };
+    // The pinwin 0.3.4 layout takes terminal columns; `[panel]` now holds
+    // logical pixels, and the pinwin CLI `--size <N>px` replaces this call in
+    // this change (design D5, D6).
     let cols = match width {
-        PinnedWidth::Collapsed => config.cols,
-        PinnedWidth::Expanded => config.cols_expanded,
+        PinnedWidth::Collapsed => config.width,
+        PinnedWidth::Expanded => config.width_expanded,
     };
     let layout = Layout::new(
         side,
@@ -507,21 +510,21 @@ mod tests {
     use mbv_config::PanelConfig;
     use std::num::NonZeroU16;
 
-    /// Design D2/D4: the active width selects `cols` (collapsed) or
-    /// `cols_expanded` (expanded); nothing constrains which value is larger.
+    /// Design D2/D4: the active width selects `width` (collapsed) or
+    /// `width_expanded` (expanded); nothing constrains which value is larger.
     #[rstest::rstest]
-    #[case::collapsed_uses_cols(PinnedWidth::Collapsed, 40, 80, 40)]
-    #[case::expanded_uses_cols_expanded(PinnedWidth::Expanded, 40, 80, 80)]
+    #[case::collapsed_uses_width(PinnedWidth::Collapsed, 40, 80, 40)]
+    #[case::expanded_uses_width_expanded(PinnedWidth::Expanded, 40, 80, 80)]
     #[case::expanded_below_collapsed_still_wins(PinnedWidth::Expanded, 60, 30, 30)]
     fn layout_from_config_selects_the_active_width(
         #[case] width: PinnedWidth,
-        #[case] cols: u16,
-        #[case] cols_expanded: u16,
+        #[case] collapsed: u16,
+        #[case] expanded: u16,
         #[case] expected: u16,
     ) {
         let config = PanelConfig {
-            cols,
-            cols_expanded,
+            width: collapsed,
+            width_expanded: expanded,
             ..PanelConfig::default()
         };
         assert_eq!(
