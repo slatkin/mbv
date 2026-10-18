@@ -123,6 +123,10 @@ pub enum ContextAction {
     /// (queue-play-order design D6). The menu builds the opposite of the
     /// current mode; this action only carries the requested mode.
     SetPlayOrder(PlayOrderMode),
+    /// Reorder the Bound queue once at random with the playing slot first
+    /// (queue-content-shuffle design D6). The queue's own order becomes the
+    /// playback order; this action carries no mode.
+    ShuffleQueue,
     /// Select the queue visual slot's system-audio visualizer (the visual
     /// slot's chrome menu). The menu resolves the current selection when it
     /// builds, so this action carries the target content, never a toggle.

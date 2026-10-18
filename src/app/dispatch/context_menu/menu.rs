@@ -1,7 +1,7 @@
 use crate::app::state::context_menu_capabilities::ItemCapabilities;
 use crate::app::{App, ContextAction, ContextMenuAnchor, ContextMenuEntry, PanelFocus};
 use mbv_emby_model::EmbyItem;
-use mbv_queue::{PlayOrderMode, QueueItem};
+use mbv_queue::QueueItem;
 use mbv_ui_model::context_menu::AudiobookshelfMenuTarget;
 use mbv_ui_model::context_menu::BulkRemoveTarget;
 use mbv_ui_model::context_menu::ContextMenu;
@@ -110,20 +110,18 @@ impl App {
             }
         }
 
-        // The queue-row shuffle-order toggle (queue-play-order design D6):
+        // The Queue list Shuffle entry (queue-content-shuffle design D6):
         // every Queue row's menu offers it, appended last after the Emby
         // entries, and a Feed or Audiobookshelf Queue row gets a menu with
-        // only the toggle. The entry hides entirely when the owner lacks the
-        // `play-order` ctrl capability. The current order is read from the
-        // playing queue — the same queue the footer reads and the queue the
-        // command targets — so the label is always the opposite of the mode
-        // the command will change, even when another queue scope is viewed.
+        // only the entry. The entry reorders the existing queue once and
+        // carries no mode. It hides entirely when the owner lacks the
+        // `queue-shuffle` ctrl capability.
         if matches!(
             self.effective_panel_focus(),
             mbv_ui_model::settings::PanelFocus::Queue
-        ) && self.player.supports_play_order()
+        ) && self.player.supports_queue_shuffle()
         {
-            Self::push_play_order_toggle(&mut entries, self.playback_queue().play_order());
+            Self::push_queue_shuffle_entry(&mut entries);
         }
 
         if entries.iter().all(|entry| entry.action.is_none()) {
@@ -270,12 +268,8 @@ impl App {
     /// label; the dispatch arm only sends the command. The label is a paint
     /// choice: "Shuffle Play" turns Shuffle on from Sequential, "Stop
     /// Shuffle" turns it off from Shuffle.
-    fn push_play_order_toggle(entries: &mut Vec<ContextMenuEntry>, current: PlayOrderMode) {
-        let (label, next) = match current {
-            PlayOrderMode::Sequential => ("Shuffle Play", PlayOrderMode::Shuffle),
-            PlayOrderMode::Shuffle => ("Stop Shuffle", PlayOrderMode::Sequential),
-        };
-        Self::push_context_action(entries, label, ContextAction::SetPlayOrder(next));
+    fn push_queue_shuffle_entry(entries: &mut Vec<ContextMenuEntry>) {
+        Self::push_context_action(entries, "Shuffle", ContextAction::ShuffleQueue);
     }
 
     fn push_play_state_context_action(entries: &mut Vec<ContextMenuEntry>, item: &EmbyItem) {

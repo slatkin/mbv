@@ -242,6 +242,14 @@ impl App {
         action: Option<ContextAction>,
     ) -> Option<ContextAction> {
         match action {
+            Some(ContextAction::ShuffleQueue) => {
+                // queue-content-shuffle design D6: the menu only offers the
+                // entry when the owner advertises the `queue-shuffle`
+                // capability, so this is a plain send; the next queue
+                // snapshot reports the new order.
+                self.player.shuffle_queue();
+                None
+            }
             Some(ContextAction::SetPlayOrder(mode)) => {
                 // queue-play-order design D6: the menu only offers the entry
                 // when the owner advertises the `play-order` capability, so
@@ -416,6 +424,7 @@ impl App {
                 | ContextAction::RemoveFromContinueWatching
                 | ContextAction::RemoveFromQueue(_)
                 | ContextAction::SetPlayOrder(_)
+                | ContextAction::ShuffleQueue
                 | ContextAction::FeedsPlay(_)
                 | ContextAction::FeedsShuffle(_)
                 | ContextAction::FeedsEnqueue(_)
