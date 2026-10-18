@@ -43,6 +43,46 @@ fn feed_home_video_group_view_requires_homevideos_and_feed_config() {
     assert!(app.is_feed_home_video_group_view(0));
 }
 
+/// Regression (user report 2026-10-18): once every `YouTube` video is played,
+/// the unplayed-only aggregate completes empty and the pill row (Latest, All,
+/// groups) vanished with it. A completed empty aggregate keeps the group
+/// view, per destination-latest-modes ("its Latest pill remains selectable").
+#[test]
+fn feed_home_video_group_view_survives_an_empty_aggregate() {
+    let mut app = make_app_stub();
+    let mut library = make_item("YouTube", "CollectionFolder");
+    library.id = "lib-youtube".into();
+    library.collection_type = "homevideos".into();
+    library.is_folder = true;
+
+    app.libs.push(LibraryTab {
+        nav_stack: vec![BrowseLevel {
+            rows: ServerRows::new(0),
+            parent_id: "lib-youtube".into(),
+            title: "YouTube".into(),
+            items: vec![],
+
+            resting: BrowseResting::new(0, 0),
+            item_types: None,
+            unplayed_only: false,
+            sort_by: "SortName".into(),
+            sort_order: "Ascending".into(),
+            loading: false,
+            all_items: None,
+            letter_filter: None,
+            tv_content_mode: None,
+            music_grouping: None,
+        }],
+        // The aggregate completed with zero unplayed videos: not loading,
+        // no groups, no items.
+        feed_home_video: Some(FeedHomeVideoState::default()),
+        ..LibraryTab::new(library)
+    });
+    app.config.lock().unwrap().feed_view_libraries = vec!["youtube".into()];
+
+    assert!(app.is_feed_home_video_group_view(0));
+}
+
 #[test]
 fn select_feed_folder_group_zero_pushes_all_videos_level() {
     let mut app = make_app_stub();

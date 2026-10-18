@@ -276,9 +276,14 @@ impl App {
 
     pub(in crate::app) fn is_feed_home_video_group_view(&self, lib_idx: usize) -> bool {
         let lib = &self.libs[lib_idx];
-        let has_state = lib.feed_home_video.as_ref().is_some_and(|state| {
-            state.loading || !state.groups.is_empty() || !state.all_items.is_empty()
-        });
+        // Any present state keeps the group view: an aggregate that completed
+        // empty (every video played, so the unplayed-only fetch returns none)
+        // must still paint its pill row — the destination-latest-modes spec
+        // keeps a Latest pill selectable with an empty source (user report
+        // 2026-10-18: the YouTube tab lost Latest/All once everything was
+        // watched). Every state writer guards on the configured feed-view
+        // library check below, so presence alone cannot widen the view.
+        let has_state = lib.feed_home_video.is_some();
         if !has_state {
             return false;
         }
