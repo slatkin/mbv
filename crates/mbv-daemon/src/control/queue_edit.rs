@@ -176,6 +176,37 @@ pub(super) fn handle_queue_remove_slots(ctx: &mut CtrlContext<'_>, slot_ids: Vec
     }
 }
 
+/// `CtrlCmd::UnifiedQueueShuffle`: reorder the whole queue once at random,
+/// with the active slot first, and publish the new order as one snapshot.
+pub(super) fn handle_queue_shuffle(ctx: &mut CtrlContext<'_>, rng: &mut impl rand::Rng) {
+    let except_op_client = ctx.except_op_client();
+    let DaemonPlayerOwner {
+        core:
+            PlayerOwnerState {
+                queue,
+                source,
+                transitions,
+                ..
+            },
+        ..
+    } = &mut *ctx.owner;
+    let order = queue.shuffled_slot_order(rng);
+    if matches!(
+        queue.reorder_slots(&order),
+        mbv_queue::QueueMutationResult::Applied(())
+    ) {
+        broadcast_queue_state(
+            ctx.ctrl_clients,
+            ctx.player,
+            ctx.shared_queue,
+            queue,
+            source,
+            transitions,
+            except_op_client,
+        );
+    }
+}
+
 /// `CtrlCmd::UnifiedQueueMoveSlot`: move the slot identified by `slot_id` to
 /// `to_index`.
 pub(super) fn handle_queue_move_slot(

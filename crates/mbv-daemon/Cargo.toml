@@ -29,6 +29,7 @@ mbv-ws = { path = "../mbv-ws" }
 libc.workspace = true
 nix = { workspace = true, features = ["fs", "signal", "socket"] }
 num-traits.workspace = true
+rand.workspace = true
 uuid = { workspace = true, features = ["v4", "fast-rng"] }
 serde_json.workspace = true
 tracing.workspace = true
