@@ -276,6 +276,9 @@ accent_width = 0
     crate::set_test_env_var("XDG_CONFIG_HOME", &dir);
     crate::remove_test_env_var("MBV_SYSTEM");
 
+    // An existing file keeps its retired column keys until the next save.
+    std::fs::write(config_path(), "[panel]\ncols = 40\ncols_expanded = 120\n").unwrap();
+
     let bounds = parse_config("[panel]\nwidth = 1\nwidth_expanded = 65535\n").unwrap();
     assert_eq!(bounds.panel.width, 1);
     assert_eq!(bounds.panel.width_expanded, 65535);
@@ -312,6 +315,12 @@ accent_width = 0
     assert!(
         saved.contains("[panel]"),
         "saved config writes the panel section:\n{saved}"
+    );
+    let saved_doc: toml::Value = toml::from_str(&saved).unwrap();
+    let panel_table = saved_doc["panel"].as_table().unwrap();
+    assert!(
+        !panel_table.contains_key("cols") && !panel_table.contains_key("cols_expanded"),
+        "saved config drops the retired column keys:\n{saved}"
     );
     let reparsed = parse_config(&saved).unwrap();
     assert_eq!(reparsed.panel, expected);

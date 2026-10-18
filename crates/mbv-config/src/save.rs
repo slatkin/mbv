@@ -426,6 +426,10 @@ fn write_keys_section(table: &mut toml::map::Map<String, toml::Value>, cfg: &Con
 // old `cols`/`cols_expanded` keys are dropped on the first save.
 fn write_panel_section(table: &mut toml::map::Map<String, toml::Value>, cfg: &Config) {
     let panel = section(table, "panel");
+    // The retired column keys are dropped from an existing file, not kept
+    // beside the pixel widths (design D5).
+    panel.remove("cols");
+    panel.remove("cols_expanded");
     panel.insert(
         "side".to_string(),
         toml::Value::String(cfg.panel.side.as_str().to_string()),
