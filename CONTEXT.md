@@ -379,7 +379,7 @@ The Wayland layer-shell surface that pinwin shows beside tiled windows. It holds
 _Avoid_: panel (bare — reserved for the in-TUI regions), layer-shell panel, dock, sidebar, tray
 
 Pinned panel width:
-The active saved width of the Pinned panel. Collapsed (`cols`) and expanded (`cols_expanded`) are the two values. The running panel switches between them with the `pinned_width_toggle` keybind (`Ctrl+e` by default). Every pinned launch starts at the collapsed width. The active width is never stored. While pinned, `x` also switches the width and sets the Panel mode with it. Expanded is Library-only. Collapsed is Queue-only. `Ctrl+e` changes only the width.
+The active saved width of the Pinned panel. Collapsed (`width`) and expanded (`width_expanded`) are the two values, in logical pixels. Every pinned launch starts at the collapsed width. The active width is never stored. The running panel switches between the two values with `x` only. `x` sets the Panel mode with the width it requests. Expanded is Library-only. Collapsed is Queue-only. A resize that mbv did not request changes neither value. The F2 Panel page edits the two saved values.
 _Avoid_: panel mode, expand mode, panel size
 
 Focus accent:
@@ -393,6 +393,10 @@ _Avoid_: cover mode, overlay, always on top
 Pinned launch:
 A launch that runs the mbv TUI in the Pinned panel in the same process instead of the current terminal. Only the `--pin` flag selects it. It selects where the TUI draws, not who owns the Player. No configuration setting starts one. When the panel cannot start, mbv reports the reason. It then falls back to the current terminal or exits with a non-zero status.
 _Avoid_: pin mode, desktop mode, Panel mode (reserved for the in-TUI layout state)
+
+Pin terminal:
+The argv prefix for the terminal that hosts the mbv TUI in the Pinned panel. It is the `[panel] pin_terminal` value when set, otherwise the `TERMINAL` environment variable followed by `-e`. There is no other fallback. The terminal must open its window in the process that pinwin starts, so it is separate from the Unpin `[panel]` `terminal` prefix.
+_Avoid_: panel terminal, terminal command, fallback terminal
 
 `--pin`:
 The launch flag that requests a Pinned launch. It starts no separate program. It opens one panel per launch. It closes that panel when mbv exits.
