@@ -137,7 +137,7 @@ fn unpinned_row_saves_without_recording_a_pinned_width() {
     app.apply_panel_setting_outcome(
         false,
         SettingKey::PanelWidth,
-        Some(PinnedWidth::Collapsed),
+        Some(PinnedWidth::Expanded),
         candidate(),
         Ok(()),
     );

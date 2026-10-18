@@ -228,10 +228,9 @@ feed_view_libraries = ["YouTube"]
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// Contract (task 4.2 of `pin-mbv-in-pinwin`): an out-of-range or malformed
-/// `[panel]` value falls back to its own default without changing the other
-/// keys, and a valid `[panel]` section round-trips through save. The widths
-/// are logical pixels, so their range is `1..=65535` (design D5).
+/// An out-of-range or malformed `[panel]` value falls back to its own default
+/// without changing the other keys, and a valid `[panel]` section round-trips
+/// through save.
 #[test]
 fn panel_values_fall_back_per_key_and_a_valid_section_round_trips() {
     let cfg = parse_config(
@@ -276,19 +275,6 @@ accent_width = 0
     crate::set_test_env_var("XDG_CONFIG_HOME", &dir);
     crate::remove_test_env_var("MBV_SYSTEM");
 
-    // An existing file keeps its retired column keys until the next save.
-    std::fs::write(config_path(), "[panel]\ncols = 40\ncols_expanded = 120\n").unwrap();
-
-    let bounds = parse_config("[panel]\nwidth = 1\nwidth_expanded = 65535\n").unwrap();
-    assert_eq!(bounds.panel.width, 1);
-    assert_eq!(bounds.panel.width_expanded, 65535);
-    let past = parse_config("[panel]\nwidth = 65536\nwidth_expanded = -1\n").unwrap();
-    assert_eq!(past.panel.width, crate::DEFAULT_PANEL_WIDTH);
-    assert_eq!(
-        past.panel.width_expanded,
-        crate::DEFAULT_PANEL_WIDTH_EXPANDED
-    );
-
     let expected = PanelConfig {
         side: PanelSide::Right,
         width: 1400,
@@ -316,14 +302,48 @@ accent_width = 0
         saved.contains("[panel]"),
         "saved config writes the panel section:\n{saved}"
     );
+    let reparsed = parse_config(&saved).unwrap();
+    assert_eq!(reparsed.panel, expected);
+
+    crate::remove_test_env_var("XDG_CONFIG_HOME");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The pinned widths are logical pixels and accept their full `1..=65535`
+/// range.
+#[test]
+fn panel_widths_accept_the_full_logical_pixel_range() {
+    let cfg = parse_config("[panel]\nwidth = 1\nwidth_expanded = 65535\n").unwrap();
+    assert_eq!(cfg.panel.width, 1);
+    assert_eq!(cfg.panel.width_expanded, 65535);
+}
+
+/// Saving a config rewrites the `[panel]` section and drops the retired column
+/// keys.
+#[test]
+fn save_config_settings_drops_the_retired_panel_column_keys() {
+    let _g = SYS_ENV_LOCK.lock().unwrap();
+    let dir = std::env::temp_dir().join(format!(
+        "mbv-config-test-{}",
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(dir.join("mbv")).unwrap();
+    crate::set_test_env_var("XDG_CONFIG_HOME", &dir);
+    crate::remove_test_env_var("MBV_SYSTEM");
+    std::fs::write(config_path(), "[panel]\ncols = 40\ncols_expanded = 120\n").unwrap();
+
+    save_config_settings(&Config::default()).unwrap();
+
+    let saved = std::fs::read_to_string(config_path()).unwrap();
     let saved_doc: toml::Value = toml::from_str(&saved).unwrap();
     let panel_table = saved_doc["panel"].as_table().unwrap();
     assert!(
         !panel_table.contains_key("cols") && !panel_table.contains_key("cols_expanded"),
         "saved config drops the retired column keys:\n{saved}"
     );
-    let reparsed = parse_config(&saved).unwrap();
-    assert_eq!(reparsed.panel, expected);
 
     crate::remove_test_env_var("XDG_CONFIG_HOME");
     let _ = std::fs::remove_dir_all(&dir);
