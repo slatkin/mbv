@@ -38,8 +38,8 @@
 
 ## 5. Integration checks
 
-- [ ] 5.1 Run `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings` and `cargo nextest run --workspace`; all pass.
-- [ ] 5.2 Run `make check-code-file-lines` just before the push; no file is over 800 lines.
+- [x] 5.1 Run `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings` and `cargo nextest run --workspace`; all pass.
+- [x] 5.2 Run `make check-code-file-lines` just before the push; no file is over 800 lines.
 - [ ] 5.3 Hand the user a live checklist (the user runs it): desktop-entry launch; `x` expand and collapse with no tiled window moving; `mbv --toggle` from a compositor key; a second `mbv --pin` shows the panel; Tray Pin and Unpin; F2 width and side while pinned; a launch on a session without layer-shell notifies; the Owner process environment has no `PINWIN_*`. Record the result in the PR.
 
 ## Workflow follow-up
