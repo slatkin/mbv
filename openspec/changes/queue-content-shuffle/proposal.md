@@ -57,7 +57,7 @@ must stay first so playback is not interrupted; everything under it is reordered
   `CtrlCmd::SetPlayOrder` with `CtrlCmd::UnifiedQueueShuffle`; replace the `play-order`
   capability with `queue-shuffle` in `hello.rs`.
 - `crates/mbv-daemon`: delete `play_order.rs` and every order hook; add the shuffle handler and
-  the move list that forwards the reorder to the playback run.
+  one `QueueReorder` command that carries the new order to the playback run.
 - `crates/mbv-desktop/src/mpris.rs`: `Shuffle` reports false and `CanGoPrevious` true, with the
   helpers and their tests removed.
 - `src/app/`: replace the context-menu action and label, drop `QueueView.play_order`, and drop
