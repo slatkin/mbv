@@ -178,7 +178,7 @@ pub(super) fn handle_queue_remove_slots(ctx: &mut CtrlContext<'_>, slot_ids: Vec
 
 /// `CtrlCmd::UnifiedQueueShuffle`: reorder the whole queue once at random,
 /// with the active slot first, and publish the new order as one snapshot.
-pub(super) fn handle_queue_shuffle(ctx: &mut CtrlContext<'_>, rng: &mut impl rand::Rng) {
+pub(crate) fn handle_queue_shuffle(ctx: &mut CtrlContext<'_>, rng: &mut impl rand::Rng) {
     let except_op_client = ctx.except_op_client();
     let DaemonPlayerOwner {
         core:

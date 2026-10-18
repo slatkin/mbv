@@ -55,6 +55,8 @@ pub(crate) fn intent_span(
 }
 
 pub(crate) use playback::play_resolved_items;
+#[cfg(test)]
+pub(crate) use queue_edit::handle_queue_shuffle;
 pub(crate) use queue_load::{
     cancel_pending_idle_queue_load, cancel_pending_idle_queue_load_if_run_changed,
     complete_pending_idle_queue_load, expire_pending_idle_queue_load,
