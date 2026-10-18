@@ -14,8 +14,9 @@ pinwin 0.4.1 (slatkin/pinwin#55) gives mbv these facts to build on:
   replaces itself with the command. The first top-level window of the command becomes the
   panel. The panel ends when the command has exited and no Wayland connection to it is left.
 - Run options: `--name`, `--edge`, `--size <N>px`, `--reserve push|cover`, `--keyboard`,
-  `--focus-ring off|#RRGGBB:<w>`, `--show-existing`. Gutters exist only in pinwin's config file.
-- Client commands (`toggle`, `set-size … --reserve … --ms …`, `set-edge`, …) exit 0 on
+  `--focus-ring off|#RRGGBB:<w>`, `--show-existing`, `--gutter-top|bottom|left|right N`.
+- Client commands (`toggle`, `set-size … --reserve … --ms …`, `set-edge`,
+  `set-gutters <name> [--top N] [--bottom N] [--left N] [--right N]`, …) exit 0 on
   success, 1 with pinwin's message on stderr for a daemon error or no daemon, and 2 for a usage
   error. Clients find the daemon through `PINWIN_SOCKET` when it is set.
 - A covering panel holds the strip from its last pushing size. A change from cover back to push
@@ -32,7 +33,8 @@ pinwin 0.4.1 (slatkin/pinwin#55) gives mbv these facts to build on:
 **Non-Goals:**
 
 - A native Wayland backend or an embedded terminal in mbv.
-- Gutter settings in mbv, or writes to pinwin's config file.
+- Writes to pinwin's config file. mbv passes every layout value it owns as a run option or a
+  command.
 - Pinned behavior for a resize that mbv did not request (a compositor key, the pinwin tray).
   Such a resize gets the normal width rules only.
 - Runtime focus-ring changes.
@@ -104,14 +106,17 @@ shows as text, and it copies pinwin's wire format into mbv with no compiler chec
 | `side` | `left`, `right` | `left` | `--edge`; while pinned `pinwin set-edge` |
 | `width` | logical pixels, 1..=65535 | 400 | `--size`; `x` collapse; F2 while pinned |
 | `width_expanded` | logical pixels, 1..=65535 | 1100 | `x` expand; F2 while pinned |
+| `gutter_top`, `gutter_bottom`, `gutter_left`, `gutter_right` | pixels, may be negative | 0 | `--gutter-*`; while pinned `pinwin set-gutters` |
 | `accent`, `accent_color`, `accent_width` | as today | as today | `--focus-ring`, next launch only |
 | `pin_terminal` | argv prefix | unset | D1 |
 | `terminal` | argv prefix | unset | Unpin and Open, unchanged |
 
-`cols`, `cols_expanded` and the four `gutter_*` keys are read only to log one warning that names
-them, and are then ignored. A save writes `[panel]` in full and so drops them. mbv-config checks
-ranges only, and pinwin decides whether a width fits. F2 width rows step by 10, or 100 with
-Shift. The gutter rows go away.
+`cols` and `cols_expanded` are read only to log one warning that names them, and are then
+ignored. A save writes `[panel]` in full and so drops them. The gutter keys keep their names and
+values. mbv always passes all four gutters at launch, so a `[panel.mbv]` gutter in pinwin's
+config never applies to the mbv panel. mbv-config checks ranges only, and pinwin decides whether
+a layout fits. F2 width rows step by 10, or 100 with Shift. Gutter rows keep their step of 1, or
+10 with Shift.
 
 ### D6. `x` keeps today's model with one request
 
@@ -139,7 +144,8 @@ comes from the terminal.
 
 A `width` step sends the collapsed request of D6 with the candidate value, and a
 `width_expanded` step sends the expanded one, so the edited value is the width that pinwin
-validates (as today). A `Side` step sends `set-edge`. Only an accepted request saves the value.
+validates (as today). A `Side` step sends `set-edge`. A gutter step sends `set-gutters` with
+only the edited gutter, at the current width. Only an accepted request saves the value.
 Accent rows save and show the "next launch" toast, as today. Unpinned, every row saves with no
 request.
 
@@ -168,8 +174,8 @@ library to app host and D1 to D4.
   rule and the Ghostty flag.
 - [A `pinwin` call blocks the UI thread] → The pinwin client has a bounded reply time, and the
   calls come only from key presses and F2 steps, as `apply_layout_animated` did.
-- [Users lose `cols` widths and gutters] → One logged warning that names the keys; release
-  notes give the new keys and the pinwin `[panel.mbv]` table.
+- [Users lose their `cols` widths] → One logged warning that names the keys; release notes give
+  the new pixel keys.
 - [A rebound `pinned_width_toggle` becomes an unknown keybind action] → Release notes. Only a
   user who rebound that key sees it.
 - [`x` goes the wrong way once after an outside resize] → Accepted (D6).
@@ -177,6 +183,6 @@ library to app host and D1 to D4.
 ## Migration Plan
 
 1. Wait for pinwin 0.4.1 with #55.
-2. Land this change and release it with notes for the `[panel]` keys, `pin_terminal`, gutters
-   in pinwin's config, `Ctrl+e`, and the pinwin dependency.
+2. Land this change and release it with notes for the `[panel]` width keys, `pin_terminal`,
+   `Ctrl+e`, and the pinwin dependency.
 3. Rollback: revert the change, which restores the `pinwin` 0.3.4 crate dependency.

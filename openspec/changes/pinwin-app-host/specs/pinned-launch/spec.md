@@ -104,23 +104,24 @@ sent as a desktop notification.
 ### Requirement: Panel layout settings
 The `[panel]` section of `config.toml` SHALL hold `side` (`"left"` or `"right"`, default `"left"`),
 `width` (integer logical pixels 1 through 65535, default 400), `width_expanded` (integer logical
-pixels 1 through 65535, default 1100), `accent` (boolean, default `true`), `accent_color`
-(`"#RRGGBB"` or `"RRGGBB"`, default `"#dabc7f"`), `accent_width` (integer pixels 1 through 65535,
-default 1), `pin_terminal` (argv prefix, default unset) and `terminal` (argv prefix, default
-unset). An out-of-range or malformed value SHALL fall back to its default with a logged warning,
-without changing the other keys. A `cover` key left in the section by an earlier version SHALL be
-ignored without a warning. `cols`, `cols_expanded`, `gutter_top`, `gutter_bottom`, `gutter_left`
-and `gutter_right` left by an earlier version SHALL be ignored with one logged warning that names
-them. The panel's gutters SHALL come from pinwin's own configuration. The F2 settings screen SHALL
+pixels 1 through 65535, default 1100), `gutter_top`, `gutter_bottom`, `gutter_left`,
+`gutter_right` (integers in pixels, may be negative, default 0), `accent` (boolean, default
+`true`), `accent_color` (`"#RRGGBB"` or `"RRGGBB"`, default `"#dabc7f"`), `accent_width` (integer
+pixels 1 through 65535, default 1), `pin_terminal` (argv prefix, default unset) and `terminal`
+(argv prefix, default unset). An out-of-range or malformed value SHALL fall back to its default
+with a logged warning, without changing the other keys. A `cover` key left in the section by an
+earlier version SHALL be ignored without a warning. `cols` and `cols_expanded` left by an earlier
+version SHALL be ignored with one logged warning that names them. The panel SHALL start with
+mbv's four gutters, whatever pinwin's own configuration sets. The F2 settings screen SHALL
 provide a Panel page with one row per value except the two argv prefixes: `Side` cycles between
 left and right, `Accent` toggles on and off, `Accent color` cycles through a fixed colour list
 that always includes the configured value, the width rows step down and up by 10, or by 100 with
-Shift, and `Accent width` steps by 1, or by 10 with Shift, within their ranges. Whether a layout
-fits the output is pinwin's decision.
+Shift, and the gutter rows and `Accent width` step by 1, or by 10 with Shift, within their
+ranges. Whether a layout fits the output is pinwin's decision.
 
 While pinned, a change to `Width` SHALL switch the panel to its collapsed width and a change to
 `Expanded width` SHALL switch it to its expanded width, so the edited value is the width the panel
-validates; a change to `Side` SHALL move the panel to that edge at its current width. A change to
+validates; a change to a side or gutter row SHALL apply at the panel's current width. A change to
 an accent row SHALL NOT touch the running panel.
 
 #### Scenario: Live change while pinned
@@ -132,8 +133,8 @@ an accent row SHALL NOT touch the running panel.
 - **THEN** the panel switches to its expanded width using the new value, and the value is saved
 
 #### Scenario: Gutter change while expanded
-- **WHEN** mbv runs in the panel at its expanded width and the user edits a gutter in pinwin's `[panel.mbv]` table
-- **THEN** the running panel keeps its gutters and width, mbv's F2 Panel page offers no gutter row, and the new gutter applies at the next `mbv --pin` launch
+- **WHEN** mbv runs in the panel at its expanded width and the user steps a gutter
+- **THEN** the panel stays at its expanded width with the new gutter, and the gutter is saved
 
 #### Scenario: Side change while expanded
 - **WHEN** mbv runs in the panel at its expanded width and the user steps `Side`
@@ -147,9 +148,13 @@ an accent row SHALL NOT touch the running panel.
 - **WHEN** mbv runs in the panel and a step would leave the panel's output with no width
 - **THEN** a warning toast names the reason, the row keeps its previous value, and neither the panel nor `config.toml` changes
 
-#### Scenario: Old column and gutter keys
-- **WHEN** `config.toml` still sets `cols = 40` and `gutter_top = 8` under `[panel]`
+#### Scenario: Old column keys
+- **WHEN** `config.toml` still sets `cols = 40` and `cols_expanded = 120` under `[panel]`
 - **THEN** both keys are ignored, one logged warning names them, and `width` and the other keys keep their values
+
+#### Scenario: mbv gutters win over pinwin's configuration
+- **WHEN** `[panel] gutter_top = 8` in mbv and pinwin's `[panel.mbv]` sets `gutter_top = 30`, and the user runs `mbv --pin`
+- **THEN** the panel starts 8 pixels below the output's top edge
 
 #### Scenario: Malformed accent colour
 - **WHEN** `config.toml` sets `accent_color = "orange"`

@@ -6,8 +6,8 @@ pinwin 0.4.0 changes from a terminal library into a layer-shell app host for any
 It removes the library API, the pty hand-over and the instance socket, and mbv uses all three
 (issue #953). mbv stays on the 0.3.4 tag until it migrates, but 0.3.x gets no more work. pinwin
 0.4.1 (slatkin/pinwin#55) adds what mbv needs to drive its own panel: `PINWIN_PANEL` and
-`PINWIN_SOCKET` in the app environment, size and reserve mode in one request, and
-`pinwin run --show-existing`.
+`PINWIN_SOCKET` in the app environment, size and reserve mode in one request,
+`pinwin run --show-existing`, and gutters as run options and a live `set-gutters` command.
 
 ## What Changes
 
@@ -23,8 +23,8 @@ It removes the library API, the pty hand-over and the instance socket, and mbv u
   its window in the process that `pinwin run` starts.
 - **BREAKING** `[panel] cols` and `cols_expanded` (terminal columns) become `width` and
   `width_expanded` in logical pixels. mbv ignores the old keys with a logged warning.
-- **BREAKING** The four `[panel]` gutters and their F2 rows go away. pinwin 0.4 accepts gutters
-  only from its own config file (`[panel.mbv]`), so the user sets them there.
+- The four `[panel]` gutters stay in mbv with their F2 rows. `--pin` passes them as
+  `--gutter-*` run options, and a gutter step while pinned runs `pinwin set-gutters`.
 - `x` while pinned sends one request: `set-size <width_expanded> --reserve cover` to expand,
   `set-size <width> --reserve push` to collapse. Tiled windows do not move.
 - **BREAKING** The `pinned_width_toggle` keybind (`Ctrl+e`) goes away. `x` is the only pinned
@@ -46,7 +46,7 @@ None.
 ### Modified Capabilities
 
 - `pinned-launch`: the pin flag becomes a pinwin launcher; start failures, layout settings
-  (pixel widths, no gutters, `pin_terminal`), the toggle, the focus accent, push and cover by
+  (pixel widths, `pin_terminal`), the toggle, the focus accent, push and cover by
   width and the hidden-panel rule change; the width-toggle requirement is removed; the
   library-isolation requirement becomes "mbv links no panel library".
 - `panel-mode`: `Pinned launches bind x to the pinned views` uses pixel widths and one pinwin
@@ -62,9 +62,9 @@ None.
   `mbv-ui-model`, `mbv-components` and `mbv-render`.
 - Dependencies: `pinwin` crate and its Wayland, font and raster stack leave the build. `pinwin`
   0.4.1 or later becomes a PKGBUILD `optdepends`.
-- Docs: `CONTEXT.md` (Pinned panel, Pinned panel width, Focus accent, Gutter, Pinned launch),
+- Docs: `CONTEXT.md` (Pinned panel, Pinned panel width, Focus accent, Pinned launch),
   `AGENTS.md` (pinwin entry), invariants 17 and 20 (pinwin tween wording), a new ADR for the
   move from library to app host.
-- Users: existing `[panel]` widths and gutters stop working; compositor bindings to
+- Users: existing `[panel]` column widths stop working; compositor bindings to
   `mbv --toggle` keep working; a binding that rebinds `pinned_width_toggle` becomes an unknown
   keybind action.
