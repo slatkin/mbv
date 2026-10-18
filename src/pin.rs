@@ -390,22 +390,53 @@ fn panel_name() -> Result<&'static str, String> {
         .ok_or_else(|| "this launch is not pinned".to_string())
 }
 
-/// Send one panel request to the running panel. The requested
-/// view decides the width request, never the terminal size, so a resize mbv did
-/// not request leaves [`PinnedWidth`] untouched. An unpinned launch, or a
-/// refused request, reports the reason and changes nothing.
-pub(crate) fn apply_pinned(
+/// Start one panel request on a worker thread. The argv is built on the
+/// caller's thread, so an unpinned launch reports its reason before any
+/// worker exists; only the `pinwin` child runs behind the worker and its
+/// outcome comes back on `tx`. At most one request is in flight because the
+/// caller holds the pending record that ignores further presses.
+pub(crate) fn spawn_pinned_request(
     config: &PanelConfig,
     request: PinnedSettingRequest,
+    tx: std::sync::mpsc::Sender<Result<(), String>>,
 ) -> Result<(), String> {
+    #[cfg(test)]
+    if let Some(outcome) = PINNED_REQUEST_OVERRIDE.lock().unwrap().clone() {
+        PINNED_REQUESTS.lock().unwrap().push(request);
+        let _ = tx.send(outcome);
+        return Ok(());
+    }
     let panel = panel_name()?;
     let argv = match request {
         PinnedSettingRequest::Width(width) => pinned_width_argv(panel, config, width),
         PinnedSettingRequest::Side(side) => set_edge_argv(panel, side),
         PinnedSettingRequest::Gutter(gutter, value) => set_gutters_argv(panel, gutter, value),
     };
-    run_request(&argv).map_err(|error| error.to_string())
+    std::thread::Builder::new()
+        .name("pinwin-request".to_string())
+        .spawn(move || {
+            let outcome = run_request(&argv).map_err(|error| error.to_string());
+            let _ = tx.send(outcome);
+        })
+        .map(|_| ())
+        .map_err(|error| format!("pinwin request worker could not start: {error}"))
 }
+
+/// Test seam: when set, `spawn_pinned_request` records the request and
+/// delivers this injected outcome on the caller's thread instead of running
+/// the `pinwin` child. Test callers hold [`PINNED_REQUEST_TEST_LOCK`].
+#[cfg(test)]
+pub(crate) static PINNED_REQUEST_OVERRIDE: std::sync::Mutex<Option<Result<(), String>>> =
+    std::sync::Mutex::new(None);
+
+/// The requests the test seam delivered, in order.
+#[cfg(test)]
+pub(crate) static PINNED_REQUESTS: std::sync::Mutex<Vec<PinnedSettingRequest>> =
+    std::sync::Mutex::new(Vec::new());
+
+/// Serializes tests that install [`PINNED_REQUEST_OVERRIDE`].
+#[cfg(test)]
+pub(crate) static PINNED_REQUEST_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 /// `set-edge <panel> left|right`.
 #[must_use]

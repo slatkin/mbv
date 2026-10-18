@@ -524,6 +524,10 @@ pub struct App {
     /// Whether this launch is pinned at all comes from `pin::is_pinned()`,
     /// the panel identity claimed at start-up.
     pub(in crate::app) pinned_width: mbv_ui_model::settings::PinnedWidth,
+    /// The one panel request whose `pinwin` child is still running. While it
+    /// is set, `x` and F2 Panel steps are ignored (design D4/D6/D7).
+    pub(in crate::app) pinned_request_pending:
+        Option<crate::app::state::pinned_request::PinnedRequestPending>,
     /// The configured `Accent color` when it lay outside the row's fixed
     /// palette, held while Settings is open so cycling can return to it
     /// (issue #875). Cleared each time Settings mounts; never persisted.

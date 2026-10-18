@@ -1,13 +1,13 @@
 //! App-dispatch contracts for the pinned view toggle.
 //!
-//! The `pinwin` request runner spawns a real process, so these drive the
-//! post-request dispatch step directly: `apply_pinned_view` takes the request
-//! outcome as its argument and owns the width-first view assignment and the
-//! rejection flash, and `pinned_view_toggle` only adds the `set-size` request
-//! in front of it.
+//! `apply_pinned_view` owns the width-first view assignment and the rejection
+//! flash. `pinned_view_toggle` builds the `set-size` request and hands it to a
+//! worker; the tests inject the worker's outcome through the pin test seam, so
+//! no `pinwin` process runs and nothing sleeps.
 
 use super::*;
 use crate::app::tests::tick_integration::harness::TickHarness;
+use crate::pin::{PINNED_REQUEST_OVERRIDE, PINNED_REQUEST_TEST_LOCK, PINNED_REQUESTS};
 use mbv_components::QueuePlaybackPanel;
 use mbv_ui_model::settings::PinnedWidth;
 use mbv_ui_msg::ComponentId;
@@ -86,6 +86,57 @@ fn rejected_pinned_expand_flashes_and_leaves_the_view_alone() {
         "the rejection reason is flashed"
     );
     assert_eq!(app.status_severity, ToastSeverity::Warning);
+}
+
+/// The one-in-flight contract: an `x` press while the first request is
+/// pending sends no second request and queues none.
+#[test]
+fn a_second_x_press_while_a_request_is_pending_sends_nothing() {
+    let _guard = PINNED_REQUEST_TEST_LOCK.lock().unwrap();
+    *PINNED_REQUEST_OVERRIDE.lock().unwrap() = Some(Ok(()));
+    PINNED_REQUESTS.lock().unwrap().clear();
+    let mut app = make_app_stub();
+    app.pinned_width = PinnedWidth::Collapsed;
+
+    app.pinned_view_toggle();
+    app.pinned_view_toggle();
+
+    assert_eq!(
+        PINNED_REQUESTS.lock().unwrap().len(),
+        1,
+        "the pending press is ignored, not queued"
+    );
+    assert!(app.pinned_request_pending.is_some());
+    *PINNED_REQUEST_OVERRIDE.lock().unwrap() = None;
+}
+
+/// The worker's outcome reaches the same handler as before: the view stays
+/// untouched while the request is pending and the drained outcome applies it.
+#[test]
+fn a_drained_outcome_applies_the_pinned_view() {
+    let _guard = PINNED_REQUEST_TEST_LOCK.lock().unwrap();
+    *PINNED_REQUEST_OVERRIDE.lock().unwrap() = Some(Ok(()));
+    PINNED_REQUESTS.lock().unwrap().clear();
+    let mut app = make_app_stub();
+    app.terminal_width = 40;
+    app.pinned_width = PinnedWidth::Collapsed;
+    app.panel_mode = PanelMode::QueueOnly;
+    app.panel_focus = PanelFocus::Queue;
+
+    app.pinned_view_toggle();
+
+    assert_eq!(
+        app.pinned_width,
+        PinnedWidth::Collapsed,
+        "no wait for pinwin"
+    );
+    assert!(app.drain_pinned_requests());
+    assert_eq!(app.pinned_width, PinnedWidth::Expanded);
+    assert!(
+        app.pinned_request_pending.is_none(),
+        "the slot is free again"
+    );
+    *PINNED_REQUEST_OVERRIDE.lock().unwrap() = None;
 }
 
 /// Recording an accepted width records only the width, so the

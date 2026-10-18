@@ -442,6 +442,7 @@ impl Model {
 
         *had_events |= self.app.drain_session_events();
         *had_events |= self.app.drain_cast_events();
+        *had_events |= self.app.drain_pinned_requests();
 
         // Feed results update their embedded destination owner.
         if self.app.drain_feed_tab_results() {

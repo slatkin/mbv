@@ -139,6 +139,7 @@ impl App {
             terminal_width: 80,
             terminal_height: 24,
             pinned_width: mbv_ui_model::settings::PinnedWidth::default(),
+            pinned_request_pending: None,
             accent_custom: None,
             resize_drag_activity: None,
 

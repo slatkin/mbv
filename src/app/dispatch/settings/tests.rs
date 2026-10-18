@@ -7,7 +7,10 @@
 
 use super::*;
 use crate::app::tests::make_app_stub;
-use crate::pin::{PanelGutter, PinnedSettingRequest};
+use crate::pin::{
+    PINNED_REQUEST_OVERRIDE, PINNED_REQUEST_TEST_LOCK, PINNED_REQUESTS, PanelGutter,
+    PinnedSettingRequest,
+};
 use mbv_config::{PanelConfig, PanelSide};
 use rstest::rstest;
 
@@ -105,6 +108,61 @@ fn refused_pinned_request_keeps_the_value_and_the_panel() {
     assert!(app.settings_save_at.is_none(), "no save is armed");
     assert_eq!(app.status, "the panel does not fit this output");
     assert_eq!(app.status_severity, ToastSeverity::Warning);
+}
+
+/// The one-in-flight contract: a second F2 step while the first request is
+/// pending sends nothing, and the accepted candidate saves only when the
+/// first outcome arrives.
+#[test]
+fn a_second_panel_step_while_a_request_is_pending_is_ignored() {
+    let _guard = PINNED_REQUEST_TEST_LOCK.lock().unwrap();
+    *PINNED_REQUEST_OVERRIDE.lock().unwrap() = Some(Ok(()));
+    PINNED_REQUESTS.lock().unwrap().clear();
+    let mut app = make_app_stub();
+    let previous = app.config.lock().unwrap().panel.width_expanded;
+
+    app.apply_panel_setting_pinned(SettingKey::PanelWidthExpanded, 1, true);
+    app.apply_panel_setting_pinned(SettingKey::PanelWidthExpanded, 1, true);
+
+    assert_eq!(
+        PINNED_REQUESTS.lock().unwrap().len(),
+        1,
+        "the pending step is ignored, not queued"
+    );
+    assert!(
+        app.settings_save_at.is_none(),
+        "nothing saves before acceptance"
+    );
+    assert_eq!(app.config.lock().unwrap().panel.width_expanded, previous);
+
+    assert!(app.drain_pinned_requests());
+    assert_eq!(
+        app.config.lock().unwrap().panel.width_expanded,
+        previous + 10
+    );
+    assert!(app.settings_save_at.is_some(), "the accepted value saves");
+    *PINNED_REQUEST_OVERRIDE.lock().unwrap() = None;
+}
+
+/// A refusal delivered through the worker channel flashes pinwin's reason and
+/// saves nothing, so the row keeps its previous value.
+#[test]
+fn a_refused_panel_request_saves_nothing_when_its_outcome_arrives() {
+    let _guard = PINNED_REQUEST_TEST_LOCK.lock().unwrap();
+    *PINNED_REQUEST_OVERRIDE.lock().unwrap() =
+        Some(Err("the panel does not fit this output".into()));
+    PINNED_REQUESTS.lock().unwrap().clear();
+    let mut app = make_app_stub();
+    let previous = app.config.lock().unwrap().panel.width_expanded;
+
+    app.apply_panel_setting_pinned(SettingKey::PanelWidthExpanded, 1, true);
+    assert!(app.drain_pinned_requests());
+
+    assert_eq!(app.config.lock().unwrap().panel.width_expanded, previous);
+    assert!(app.settings_save_at.is_none(), "a refusal arms no save");
+    assert_eq!(app.status, "the panel does not fit this output");
+    assert_eq!(app.status_severity, ToastSeverity::Warning);
+    *PINNED_REQUEST_OVERRIDE.lock().unwrap() = None;
 }
 
 /// An accent row saves without a panel request and, while pinned,

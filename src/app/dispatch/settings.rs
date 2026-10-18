@@ -62,6 +62,22 @@ impl App {
     /// panel request; while pinned a `Neutral` toast announces that the change
     /// applies on the next `mbv --pin` launch.
     pub(crate) fn apply_panel_setting(&mut self, key: SettingKey, delta: i32) {
+        self.apply_panel_setting_pinned(key, delta, crate::pin::is_pinned());
+    }
+
+    /// The Panel-row path with the pinned decision supplied, so a test can
+    /// drive the pinned branch without claiming the process-wide identity.
+    pub(in crate::app) fn apply_panel_setting_pinned(
+        &mut self,
+        key: SettingKey,
+        delta: i32,
+        pinned: bool,
+    ) {
+        // One request in flight: an F2 step while pinwin is still working is
+        // ignored, with no queue (design D4/D7).
+        if pinned && self.pinned_request_pending.is_some() {
+            return;
+        }
         let candidate = {
             let panel = self.config.lock().unwrap().panel.clone();
             self.accent_custom = self
@@ -72,16 +88,23 @@ impl App {
         let Some(candidate) = candidate else {
             return;
         };
-        let pinned = crate::pin::is_pinned();
         let request = pinned_setting_request(key, &candidate);
         // Outside a panel, and for a row that takes no request (an accent
         // row), the candidate saves as it is.
-        let applied = match request {
-            Some(request) if pinned => crate::pin::apply_pinned(&candidate, request),
-            _ => Ok(()),
-        };
+        if let (Some(request), true) = (request, pinned) {
+            let edited_width = request.edited_width();
+            let pending = crate::app::state::pinned_request::PinnedRequestPending::Setting {
+                key,
+                edited_width,
+                candidate: candidate.clone(),
+            };
+            if let Err(reason) = self.begin_pinned_request(pending, &candidate, request) {
+                self.apply_panel_setting_outcome(true, key, edited_width, candidate, Err(reason));
+            }
+            return;
+        }
         let edited_width = request.and_then(PinnedSettingRequest::edited_width);
-        self.apply_panel_setting_outcome(pinned, key, edited_width, candidate, applied);
+        self.apply_panel_setting_outcome(pinned, key, edited_width, candidate, Ok(()));
     }
 
     /// Apply a Panel row's candidate once the panel's request outcome is known:

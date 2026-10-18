@@ -295,20 +295,21 @@ impl App {
     /// `cycle_panel_mode` guards pinned-ness, so the not-pinned arm here
     /// is unreachable.
     pub(crate) fn pinned_view_toggle(&mut self) {
+        // One request in flight: a press while pinwin is still working is
+        // ignored, with no queue (design D4/D6).
+        if self.pinned_request_pending.is_some() {
+            return;
+        }
         let width = self.pinned_width.toggled();
-        let applied = self.request_pinned_width(width);
-        self.apply_pinned_view(width, applied);
-    }
-
-    /// Ask the running panel for `width`. The config is cloned out first so
-    /// callers can mutate `self` after the request; `cycle_panel_mode` already
-    /// guards pinned-ness.
-    fn request_pinned_width(
-        &self,
-        width: mbv_ui_model::settings::PinnedWidth,
-    ) -> Result<(), String> {
         let config = self.config.lock().unwrap().panel.clone();
-        crate::pin::apply_pinned(&config, crate::pin::PinnedSettingRequest::Width(width))
+        let pending = crate::app::state::pinned_request::PinnedRequestPending::View(width);
+        if let Err(reason) = self.begin_pinned_request(
+            pending,
+            &config,
+            crate::pin::PinnedSettingRequest::Width(width),
+        ) {
+            self.apply_pinned_view(width, Err(reason));
+        }
     }
 
     /// Take an accepted target width and assign the matching pinned view, or
