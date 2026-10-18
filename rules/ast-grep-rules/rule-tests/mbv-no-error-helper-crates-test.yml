@@ -1,0 +1,11 @@
+---
+id: mbv-no-error-helper-crates
+valid:
+  - "use std::fmt;"
+  - "use crate::mpv_error::MpvError;"
+  - "pub struct AudiobookshelfError { kind: Kind }"
+invalid:
+  - "use anyhow::Context;"
+  - "use anyhow;"
+  - "use thiserror::Error;"
+  - "use eyre::WrapErr;"

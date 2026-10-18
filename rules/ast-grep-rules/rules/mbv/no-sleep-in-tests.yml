@@ -1,0 +1,80 @@
+---
+# AGENTS.md (testing): "Use no real sleeps in tests... Inject the outcome,
+# not the delay." No lint enforces it today; clippy has no sleep-in-test
+# lint and the rule is prose-only.
+#
+# Census (ast-grep 0.44.1 dry-run over mbv @ 2026-10-18): 5 hits inside
+# test items. Three are the hang-simulator idiom — a spawned or abandoned
+# closure whose whole body is one sleep, a prop the test never waits on —
+# suppressed structurally below, not by prose. Residual 3 hits: 2 real
+# policy violations awaiting triage (mbv-remote-player connect/tests.rs,
+# mbv-audiobookshelf playback.rs) and 1 documented variant — a
+# run_with_hard_bound simulator closure carrying a result value after the
+# sleep; that one gets a per-instance ast-grep-ignore with a reason during
+# triage rather than a broader exclusion. Production sleeps (retry
+# backoff, poll loops) are out of scope; the test-item binding makes that
+# precise, and the fixtures guard every binding in both directions.
+id: mbv-no-sleep-in-tests
+language: Rust
+severity: warning
+message: "No real sleeps in tests; inject the outcome, not the delay"
+note: |
+  A test that sleeps asserts the wrong thing and slows the suite. Inject
+  the terminal state, a zeroed timeout, or a seam that observes attempts
+  instead. Fires only inside items attributed #[test], #[rstest] and
+  friends, or a #[cfg(test)] module; production backoff and poll sleeps
+  are legitimate.
+
+  BAD:  #[test]
+        fn t() { thread::sleep(Duration::from_millis(50)); }
+  GOOD: #[test]
+        fn t() { assert_eq!(seam.observed_attempts(), 3); }
+rule:
+  all:
+    - any:
+        - pattern: thread::sleep($$$A)
+        - pattern: std::thread::sleep($$$A)
+        - pattern: tokio::time::sleep($$$A)
+        - pattern: tokio::time::sleep_until($$$A)
+    - inside:
+        matches: test-item
+        stopBy: end
+    # A closure whose entire body is one sleep statement is the hang
+    # simulator: the test never waits on that thread, so no timing is
+    # asserted. Anything else in the closure body (a flag write, a result
+    # value) means the sleep shapes real timing and must fire.
+    - not:
+        inside:
+          any:
+            - pattern: '|| { thread::sleep($$$A); }'
+            - pattern: '|| { std::thread::sleep($$$A); }'
+          stopBy: end
+utils:
+  test-attr:
+    kind: attribute_item
+    regex: '^#\[(cfg\(test\)|(\w+::)*test(_case)?\b|rstest\b)'
+  test-item:
+    any:
+      - kind: function_item
+      - kind: mod_item
+      - kind: impl_item
+    follows:
+      matches: test-attr
+      stopBy:
+        not:
+          any:
+            - kind: attribute_item
+            - kind: line_comment
+            - kind: block_comment
+has_fix: false
+tags:
+  - rust
+  - mbv
+  - testing
+examples:
+  bad: |-
+    #[test]
+    fn t() { thread::sleep(std::time::Duration::from_millis(50)); }
+  good: |-
+    #[test]
+    fn t() { assert_eq!(seam.observed_attempts(), 3); }

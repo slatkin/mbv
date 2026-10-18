@@ -1,0 +1,52 @@
+---
+# AGENTS.md (Interactive architecture): "Msgs carry semantic intent and
+# stable opaque identities. They never carry raw events or coordinates for
+# shell re-resolution." mbv-ui-msg IS that boundary; a raw event type in its
+# surface crosses it.
+#
+# Census (ast-grep 0.44.1 dry-run over mbv @ 2026-10-18): 0 hits inside
+# crates/mbv-ui-msg. The same pattern has ~300 legitimate hits elsewhere
+# (components interpret raw events by design), so this rule is scoped to
+# the crate here instead of running repo-wide.
+#
+# Blind spot: only the five crossterm/tuirealm event types below; a new
+# raw-input type needs a regex addition.
+id: mbv-ui-msg-no-raw-input
+language: Rust
+severity: warning
+message: "Raw event type in mbv-ui-msg; Msgs carry intent, not events"
+note: |
+  Msg payloads name semantic intents (SettingsIntent, PodcastEpisodeTarget)
+  and stable opaque ids, never crossterm/tuirealm event values or screen
+  coordinates. The shell re-resolves raw input; components translate it
+  before sending a Msg.
+rule:
+  all:
+    - kind: type_identifier
+    - regex: '^(KeyEvent|MouseEvent|KeyCode|KeyEventKind|MouseEventKind)$'
+    - not:
+        inside:
+          matches: test-item
+          stopBy: end
+utils:
+  test-attr:
+    kind: attribute_item
+    regex: '^#\[(cfg\(test\)|(\w+::)*test(_case)?\b|rstest\b)'
+  test-item:
+    any:
+      - kind: function_item
+      - kind: mod_item
+      - kind: impl_item
+    follows:
+      matches: test-attr
+      stopBy:
+        not:
+          any:
+            - kind: attribute_item
+            - kind: line_comment
+            - kind: block_comment
+has_fix: false
+tags:
+  - rust
+  - mbv
+  - interactive-architecture

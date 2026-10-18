@@ -1,0 +1,24 @@
+---
+id: mbv-components-no-shell-types
+valid:
+  - "fn update(&mut self, target: PodcastEpisodeTarget) {}"
+  - "struct Link { to: HeroTarget }"
+  # items under #[cfg(test)] are excluded — dev-dependencies may construct
+  # service fixtures inside tests
+  - |-
+    #[cfg(test)]
+    mod tests {
+        fn helper(client: EmbyClient) {}
+    }
+invalid:
+  # a service client as a component parameter crosses the boundary
+  - "fn update(&mut self, client: EmbyClient) {}"
+  # a shell-owned proxy as a component field does too
+  - "struct Host { proxy: PlayerProxy }"
+  # a channel handle as a field does too
+  - "struct Pipe { out: CtrlSender }"
+  # the binding guard: the same shape outside #[cfg(test)] must fire
+  - |-
+    mod tests {
+        fn helper(client: EmbyClient) {}
+    }

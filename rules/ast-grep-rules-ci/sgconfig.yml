@@ -1,0 +1,13 @@
+---
+# CI-scoped ast-grep rules for mbv. NOT loaded by pi-lens: pi-lens discovers
+# only rules/ast-grep-rules/ and rules/ast-grep-rules/coderabbit/, and this
+# directory name deliberately differs.
+#
+# Stock ast-grep honors no per-rule path globs, so each scoped rule is run
+# with an explicit path argument, e.g.:
+#   ast-grep scan --config rules/ast-grep-rules-ci/sgconfig.yml \
+#     crates/mbv-ui-msg
+ruleDirs:
+  - ./rules
+testConfigs:
+  - testDir: ./rule-tests

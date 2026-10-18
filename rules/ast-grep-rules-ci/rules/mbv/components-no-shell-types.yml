@@ -1,0 +1,57 @@
+---
+# AGENTS.md (Interactive architecture): "Components never receive App,
+# Service clients, credentials, Config, PlayerProxy, protocol objects,
+# integration locks, or channels." Crate layering only enforces the App
+# case; mbv-components depends on mbv-config, mbv-queue and the provider
+# crates, so nothing else stops a Config parameter or a CtrlSender field
+# today. This tripwire does.
+#
+# Census (ast-grep 0.44.1 dry-run over mbv @ 2026-10-18): 0 hits inside
+# crates/mbv-components, including with a broader suffix scan.
+#
+# Blind spots (documented, deliberate): the suffix list can name a
+# component-local lookalike (no *Config/*Client types exist there today);
+# mbv-ctrl protocol objects beyond CtrlCmd/CtrlEvent are not listed.
+id: mbv-components-no-shell-types
+language: Rust
+severity: warning
+message: "Interactive component receives a shell-owned type"
+note: |
+  A mounted AppComponent owns local interaction state and talks to the
+  shell through typed Msgs with opaque identities. Service clients, the
+  app Config, PlayerProxy, credentials, protocol objects, locks and
+  channel handles stay on the shell side of the boundary.
+rule:
+  all:
+    - kind: type_identifier
+    - regex: '(Client|Proxy|Credentials|Sender|Receiver|Channel|Config)$'
+    - inside:
+        any:
+          - kind: parameter
+          - kind: field_declaration
+    - not:
+        inside:
+          matches: test-item
+          stopBy: end
+utils:
+  test-attr:
+    kind: attribute_item
+    regex: '^#\[(cfg\(test\)|(\w+::)*test(_case)?\b|rstest\b)'
+  test-item:
+    any:
+      - kind: function_item
+      - kind: mod_item
+      - kind: impl_item
+    follows:
+      matches: test-attr
+      stopBy:
+        not:
+          any:
+            - kind: attribute_item
+            - kind: line_comment
+            - kind: block_comment
+has_fix: false
+tags:
+  - rust
+  - mbv
+  - interactive-architecture

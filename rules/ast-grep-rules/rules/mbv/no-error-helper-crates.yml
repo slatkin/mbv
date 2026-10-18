@@ -1,0 +1,33 @@
+---
+# mbv bans anyhow/thiserror/eyre outright (AGENTS.md, Tooling): error values
+# are custom domain types (e.g. AudiobookshelfError, MpvError). No lint
+# enforces the ban today; this tripwire does.
+#
+# Census (ast-grep 0.44.1 dry-run over mbv @ 2026-10-18): 0 hits in the
+# whole repo, so any future hit is a policy break, not a known idiom.
+id: mbv-no-error-helper-crates
+language: Rust
+severity: warning
+message: "mbv bans anyhow/thiserror/eyre; write a custom domain error type"
+note: |
+  Error values in mbv are hand-rolled domain types with explicit Display and
+  std::error::Error impls. anyhow, thiserror and eyre are banned, including
+  transitive use inside workspace crates.
+
+  BAD:  use anyhow::Context;
+  GOOD: use crate::mpv_error::MpvError;
+rule:
+  all:
+    - kind: use_declaration
+    - has:
+        kind: identifier
+        regex: '^(anyhow|thiserror|eyre)$'
+        stopBy: end
+has_fix: false
+tags:
+  - rust
+  - mbv
+  - error-handling
+examples:
+  bad: "use anyhow::Context;"
+  good: "use crate::mpv_error::MpvError;"

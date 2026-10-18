@@ -1,0 +1,21 @@
+---
+id: mbv-ui-msg-no-raw-input
+valid:
+  - "enum Msg { Play(PodcastEpisodeTarget) }"
+  - "struct Draft { at: u16 }"
+  # items under #[cfg(test)] are excluded
+  - |-
+    #[cfg(test)]
+    mod tests {
+        #[test]
+        fn t() {
+            let k: KeyEvent = todo!();
+        }
+    }
+invalid:
+  # a variant payload carrying a raw event crosses the boundary
+  - "enum Msg { Key(KeyEvent) }"
+  # a struct field carrying raw pointer coordinates does too
+  - "struct Draft { at: MouseEvent }"
+  # KeyCode as a named type in the crate surface does too
+  - "fn from_code(code: KeyCode) -> Msg { Msg::None }"

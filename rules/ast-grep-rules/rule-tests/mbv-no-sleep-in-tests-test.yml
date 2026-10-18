@@ -1,0 +1,56 @@
+---
+id: mbv-no-sleep-in-tests
+valid:
+  # production backoff sleeps are legitimate — outside a test item
+  - |-
+    fn backoff() {
+        thread::sleep(Duration::from_millis(50));
+    }
+  # a test that does not sleep must not fire
+  - |-
+    #[test]
+    fn t() {
+        let d = Duration::from_millis(50);
+    }
+  # a non-sleep call inside a test must not fire
+  - |-
+    #[test]
+    fn t() {
+        thread::yield_now();
+    }
+  # the hang simulator: a closure whose whole body is one sleep is a prop
+  # the test never waits on — suppressed
+  - |-
+    #[test]
+    fn t() {
+        let h = thread::spawn(|| { thread::sleep(Duration::from_secs(5)); });
+    }
+invalid:
+  # the idiom the rule exists for
+  - |-
+    #[test]
+    fn t() {
+        thread::sleep(Duration::from_millis(50));
+    }
+  # fully-qualified spelling must fire too
+  - |-
+    #[test]
+    fn t() {
+        std::thread::sleep(Duration::from_millis(50));
+    }
+  # async spelling under rstest must fire too
+  - |-
+    #[rstest]
+    fn t() {
+        tokio::time::sleep(Duration::from_millis(50));
+    }
+  # binding guard: sleep plus a sibling statement inside the closure is
+  # real timing and must NOT be suppressed
+  - |-
+    #[test]
+    fn t() {
+        thread::spawn(|| {
+            thread::sleep(Duration::from_secs(5));
+            counter.fetch_add(1);
+        });
+    }
