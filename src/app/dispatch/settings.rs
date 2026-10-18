@@ -44,21 +44,20 @@ impl App {
     /// `pin-mbv-in-pinwin`): an activate steps the row up by one step (`Side`
     /// cycles and ignores the delta), a step applies the component's signed
     /// delta (±1, or ±10 with Shift), and a width row counts each step as 10
-    /// logical pixels while every other row counts 1. The running panel
-    /// validates the candidate layout first, and only an accepted layout is
-    /// saved. A rejection keeps the previous value and shows its reason as a
-    /// Warning toast.
+    /// logical pixels while every other row counts 1. Once task 4.3 of
+    /// `pinwin-app-host` lands, the running panel's request must accept the
+    /// candidate before it is saved, and a refusal keeps the previous value and
+    /// shows its reason as a Warning toast.
     ///
-    /// While pinned, the width applied is the one the edited row belongs to:
-    /// `Width` validates `width`, `Expanded width` `width_expanded`, any other
-    /// row at the current width (change `panel-expand-toggle`, design D4).
-    /// That width is stored only when a panel accepted the candidate, so an
+    /// While pinned, the width recorded is the one the edited row belongs to:
+    /// `Width` is `width`, `Expanded width` is `width_expanded`, any other row
+    /// keeps the current width (change `panel-expand-toggle`, design D4). An
     /// unpinned launch never changes the active width.
     ///
     /// The accent rows (`pinned-panel-focus-accent`, design D3) are not part
-    /// of the layout and the accent is fixed at panel start, so they save
-    /// without `pin::apply_layout`; while pinned a `Neutral` toast announces
-    /// that the change applies on the next `mbv --pin` launch.
+    /// of the layout and the accent is fixed at panel start, so they send no
+    /// panel request; while pinned a `Neutral` toast announces that the change
+    /// applies on the next `mbv --pin` launch.
     pub(crate) fn apply_panel_setting(&mut self, key: SettingKey, delta: i32) {
         let accent_row = mbv_ui_model::settings::is_panel_accent_row(key);
         let candidate = {
@@ -76,15 +75,15 @@ impl App {
             Some(PanelEditedWidth::Expanded) => PinnedWidth::Expanded,
             None => self.pinned_width,
         };
-        // While pinned, the running panel validates the candidate layout and
-        // only an accepted one is saved (design D6); a launch without a panel
-        // saves without geometry validation. An accent row never touches the
-        // running panel (design D3).
-        let applied = match (&self.pinned_panel, accent_row) {
-            (_, true) | (None, _) => Ok(None),
-            (Some(panel), false) => {
-                crate::pin::apply_layout(panel, &candidate, width).map(|()| Some(width))
-            }
+        // Task 4.3 of `pinwin-app-host` sends the edited row's pinwin request
+        // here and saves only an accepted candidate. Until it lands, a pinned
+        // launch saves the candidate and records the row's width with no panel
+        // check; a launch outside a panel saves the same way, and an accent row
+        // never touches the panel (design D3).
+        let applied = if crate::pin::is_pinned() && !accent_row {
+            Ok(Some(width))
+        } else {
+            Ok(None)
         };
         match applied {
             Ok(width) => {
@@ -93,7 +92,7 @@ impl App {
                     self.note_pinned_width_applied(width);
                 }
                 self.settings_save_at = Some(Instant::now() + Duration::from_millis(500));
-                if accent_row && self.pinned_panel.is_some() {
+                if accent_row && crate::pin::is_pinned() {
                     self.flash(
                         "Accent changes apply on the next mbv --pin launch".into(),
                         ToastSeverity::Neutral,
@@ -105,13 +104,12 @@ impl App {
     }
 
     /// Record the width a running panel accepted (change
-    /// `panel-expand-toggle`): store it as the active width and arm the
-    /// same-iteration pty-size adoption, so the shell does not paint a stale
-    /// frame while the terminal-event worker's `Resize` event is in flight.
-    /// Both the width toggle and a Panel settings step record through here.
+    /// `panel-expand-toggle`): the active width only. The new terminal size
+    /// arrives as a normal `Resize` observer event and leaves the image cache
+    /// and `force_clear` alone (invariant 17). Both the width toggle and a
+    /// Panel settings step record through here.
     pub(in crate::app) fn note_pinned_width_applied(&mut self, width: PinnedWidth) {
         self.pinned_width = width;
-        self.pinned_resize_pending = true;
     }
 
     fn open_settings_destination(&mut self, key: SettingKey) -> bool {

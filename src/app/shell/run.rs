@@ -106,21 +106,9 @@ impl Model {
     /// only when the Resize observer armed it -- the real terminal-resize
     /// event, whose pre-resize width the marker still holds.
     pub(super) fn sync_terminal_resize(&mut self) {
-        // Change `panel-expand-toggle`: a pinned width apply resizes the pty
-        // synchronously inside the apply call, so the new size is knowable
-        // before the terminal-event worker delivers its `Resize` observer
-        // event (measured ~50 ms later). Adopt it here, so the frame in this
-        // iteration is painted at the new width instead of painting the old
-        // one and waiting a second time for the event -- a stale wide paint
-        // that also wrote ~36 KB into the pty while the panel's width tween
-        // was running.
-        if std::mem::take(&mut self.app.pinned_resize_pending)
-            && let Ok((width, height)) = crossterm::terminal::size()
-        {
-            self.app.terminal_width = width;
-            self.app.terminal_height = height;
-            self.pending_terminal_resize = true;
-        }
+        // A pinned width change is one `pinwin set-size` request; the new size
+        // reaches mbv only as the terminal's own `Resize` observer event, which
+        // this pass adopts like any other resize (invariant 17).
         let size = (self.app.terminal_width, self.app.terminal_height);
         let resize_event = std::mem::take(&mut self.pending_terminal_resize);
         if self.handled_terminal_size == size && !resize_event {

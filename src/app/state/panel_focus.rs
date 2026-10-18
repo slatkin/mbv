@@ -12,7 +12,7 @@ pub(in crate::app) enum PanelPresentation {
 }
 
 /// The appearance-focus decision, a pure function so tests can exercise the
-/// pinned-mini branch without a constructible `pinwin::Panel`.
+/// pinned-mini branch without the `PINWIN_PANEL` claim a pinned launch needs.
 pub(in crate::app) fn panel_appearance_focus_decision(
     presentation: PanelPresentation,
     focus: PanelFocus,
@@ -88,7 +88,7 @@ impl App {
     /// `effective_panel_focus`; this bit is for appearance (surface palette
     /// selection) only.
     pub(in crate::app) fn panel_appearance_focus(&self, panel: PanelFocus) -> bool {
-        let presentation = match (self.is_mini_view(), self.pinned_panel.is_some()) {
+        let presentation = match (self.is_mini_view(), crate::pin::is_pinned()) {
             (false, _) => PanelPresentation::Wide,
             (true, false) => PanelPresentation::MiniUnpinned,
             (true, true) => PanelPresentation::MiniPinned {

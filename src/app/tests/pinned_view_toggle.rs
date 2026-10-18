@@ -1,10 +1,11 @@
 //! App-dispatch contracts for the pinned view toggle (change
-//! `pinned-view-toggle`, design D2/D3).
+//! `pinned-view-toggle`, design D2/D3; `pinwin-app-host` design D6).
 //!
-//! The live `pinwin::Panel` cannot be built hermetically, so these drive the
-//! post-apply dispatch step directly: `apply_pinned_view` owns the width-first
-//! view assignment and the rejection flash, and `pinned_view_toggle` only adds
-//! the panel apply in front of it.
+//! The `pinwin` request runner spawns a real process, so these drive the
+//! post-request dispatch step directly: `apply_pinned_view` takes the request
+//! outcome as its argument and owns the width-first view assignment and the
+//! rejection flash, and `pinned_view_toggle` only adds the `set-size` request
+//! in front of it.
 
 use super::*;
 use crate::app::tests::tick_integration::harness::TickHarness;
@@ -88,8 +89,8 @@ fn rejected_pinned_expand_flashes_and_leaves_the_view_alone() {
     assert_eq!(app.status_severity, ToastSeverity::Warning);
 }
 
-/// Design D4: `Ctrl+e`'s success mutation records only the width, so the
-/// stored panel mode and its focus survive a toggle in both directions.
+/// Design D6: recording an accepted width records only the width, so the
+/// stored panel mode and its focus survive a change in both directions.
 #[test]
 fn recording_the_toggled_width_leaves_the_panel_mode_alone() {
     let mut app = make_app_stub();

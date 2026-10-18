@@ -521,23 +521,15 @@ pub struct App {
     /// position. This prevents ordinary output restarts (buffering,
     /// startup) from becoming state writes.
     pub(in crate::app) feed_seek_pending_slot: Option<mbv_queue::QueueSlotId>,
-    /// The running pinned panel, when this launch was `--pin` (change
-    /// `pin-mbv-in-pinwin`, design D3). Dropping the handle stops the panel
-    /// before process exit.
-    pub(in crate::app) pinned_panel: Option<crate::pin::PinnedPanel>,
-    /// The active width of the running pinned panel (change
-    /// `panel-expand-toggle`, design D1); never persisted, so a launch always
-    /// starts collapsed.
+    /// The active width of the pinned panel (change `panel-expand-toggle`,
+    /// design D1); never persisted, so a launch always starts collapsed.
+    /// Whether this launch is pinned at all comes from `pin::is_pinned()`,
+    /// the panel identity claimed at start-up.
     pub(in crate::app) pinned_width: crate::pin::PinnedWidth,
     /// The configured `Accent color` when it lay outside the row's fixed
     /// palette, held while Settings is open so cycling can return to it
     /// (issue #875). Cleared each time Settings mounts; never persisted.
     pub(in crate::app) accent_custom: Option<mbv_config::PanelAccentColor>,
-    /// Set when a pinned panel accepted a layout (change
-    /// `panel-expand-toggle`): the apply call resized the pty synchronously,
-    /// so the shell adopts the new size in that same loop iteration instead of
-    /// waiting for the terminal-event worker's `Resize` event.
-    pub(in crate::app) pinned_resize_pending: bool,
     /// The last sync pass that saw a live resize drag; starts the settle
     /// window (invariant 20). The live bit stays with the gesture components.
     pub(in crate::app) resize_drag_activity: Option<std::time::Instant>,

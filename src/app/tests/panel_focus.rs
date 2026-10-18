@@ -8,7 +8,7 @@ use tuirealm::event::Event;
 /// The appearance-focus contract: unpinned mini view always rests; pinned
 /// mini view follows the window focus and the effective focus; wide view
 /// ignores the window focus and the focus bit selects the palette per panel.
-/// (`pinwin::Panel` cannot be built hermetically, so the pure decision is
+/// (A pinned launch needs the `PINWIN_PANEL` claim, so the pure decision is
 /// tabled rather than driven through `App`.)
 #[rstest]
 #[case::unpinned_mini_focused(PanelPresentation::MiniUnpinned, PanelFocus::Library, false)]

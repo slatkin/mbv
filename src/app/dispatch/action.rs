@@ -64,7 +64,7 @@ pub(in crate::app) enum Command {
     CyclePanelMode,
 
     /// `pinned_width_toggle`: flip the running pinned panel between its
-    /// collapsed (`cols`) and expanded (`cols_expanded`) saved widths
+    /// collapsed (`width`) and expanded (`width_expanded`) saved widths
     /// (change `panel-expand-toggle`, design D3).
     TogglePinnedWidth,
 
@@ -295,11 +295,11 @@ impl App {
     /// `pinned_width_toggle` (change `panel-expand-toggle`, design D3): flip
     /// the running panel to the other saved `[panel]` width. A launch without
     /// a panel says so and changes nothing; the running panel validates the
-    /// other width first, and a rejected layout keeps the current width and
+    /// other width first, and a refused request keeps the current width and
     /// shows the reason as a Warning toast.
     pub(crate) fn toggle_pinned_width(&mut self) {
         let width = self.pinned_width.toggled();
-        match self.apply_pinned_layout(width) {
+        match self.request_pinned_width(width) {
             None => self.flash(
                 "Width toggle needs a pinned launch (mbv --pin)".into(),
                 ToastSeverity::Neutral,
@@ -310,37 +310,38 @@ impl App {
     }
 
     /// `panel_mode_cycle_x` while pinned (change `pinned-view-toggle`, design
-    /// D2/D3): flip the running panel between its two pinned views through the
-    /// same resize path as the width toggle. The expanded width shows
-    /// library-only with library focus; the collapsed width shows queue-only
-    /// with queue focus and re-runs the mini-view initial-item path. A
-    /// rejected target width keeps the current width and flashes the reason.
+    /// D2/D3): flip the running panel between its two pinned views, one
+    /// `set-size` request per press. The expanded width shows library-only
+    /// with library focus; the collapsed width shows queue-only with queue
+    /// focus and re-runs the mini-view initial-item path. A refused target
+    /// width keeps the current width and flashes the reason.
     /// `cycle_panel_mode` guards pinned-ness (D1), so the not-pinned arm here
     /// is unreachable.
     pub(crate) fn pinned_view_toggle(&mut self) {
         let width = self.pinned_width.toggled();
-        if let Some(result) = self.apply_pinned_layout(width) {
+        if let Some(result) = self.request_pinned_width(width) {
             self.apply_pinned_view(width, result);
         }
     }
 
-    /// Resize the pinned panel to `width`; `None` when not pinned. The panic-free
-    /// `map` keeps the `pinned_panel` borrow local so callers can mutate `self`.
-    fn apply_pinned_layout(&self, width: crate::pin::PinnedWidth) -> Option<Result<(), String>> {
+    /// Ask the running panel for `width`; `None` when this launch is not
+    /// pinned. The config is cloned out first so callers can mutate `self`
+    /// after the request.
+    fn request_pinned_width(&self, width: crate::pin::PinnedWidth) -> Option<Result<(), String>> {
+        if !crate::pin::is_pinned() {
+            return None;
+        }
         let config = self.config.lock().unwrap().panel.clone();
-        self.pinned_panel
-            .as_ref()
-            .map(|panel| crate::pin::apply_layout(panel, &config, width))
+        Some(crate::pin::apply_pinned_width(&config, width))
     }
 
     /// Take an accepted target width and assign the matching pinned view, or
-    /// flash a rejected layout's reason and touch nothing (design D2/D3).
+    /// flash a refused request's reason and touch nothing (design D2/D3).
     ///
     /// The view fields are written directly: at dispatch time `terminal_width`
-    /// still holds the pre-toggle width (the pty resize is only observed a
-    /// frame later through `pinned_resize_pending`), so on expand
-    /// `set_panel_focus` would take its mini-view early return and leave the
-    /// stored `panel_focus` stale.
+    /// still holds the pre-toggle width (the terminal's `Resize` event arrives
+    /// later), so on expand `set_panel_focus` would take its mini-view early
+    /// return and leave the stored `panel_focus` stale.
     pub(in crate::app) fn apply_pinned_view(
         &mut self,
         width: crate::pin::PinnedWidth,
@@ -373,7 +374,7 @@ impl App {
         // A pinned panel binds `x` to its two view states (change
         // `pinned-view-toggle`, design D1/D2); the three-state cycle and the
         // mini-view toggle are unreachable while pinned.
-        if self.pinned_panel.is_some() {
+        if crate::pin::is_pinned() {
             self.pinned_view_toggle();
             return;
         }

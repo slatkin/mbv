@@ -138,10 +138,8 @@ impl App {
             layout: layout::AppLayout::default(),
             terminal_width: 80,
             terminal_height: 24,
-            pinned_panel: None,
             pinned_width: crate::pin::PinnedWidth::default(),
             accent_custom: None,
-            pinned_resize_pending: false,
             resize_drag_activity: None,
 
             pending_overlay: None,

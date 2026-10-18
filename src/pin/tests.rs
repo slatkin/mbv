@@ -3,8 +3,8 @@
 
 use super::{
     PanelExitAction, PanelGutter, PanelIdentity, PanelReserve, PinnedWidth, StartFailureAction,
-    exit_action, failure_action, layout_from_config, request_result, run_argv, set_edge_argv,
-    set_gutters_argv, set_size_argv, terminal_argv, toggle_argv,
+    exit_action, failure_action, layout_from_config, pinned_width_argv, request_result, run_argv,
+    set_edge_argv, set_gutters_argv, set_size_argv, terminal_argv, toggle_argv,
 };
 use mbv_config::{PanelConfig, PanelSide};
 use std::ffi::OsStr;
@@ -200,6 +200,29 @@ fn set_size_argv_sends_the_width_with_its_reserve_mode(
     #[case] expected: Vec<&str>,
 ) {
     assert_eq!(set_size_argv(panel, width, reserve), strings(&expected));
+}
+
+/// Design D6: the requested view picks both the saved width and the reserve
+/// mode, so one `x` press is one panel change and no tiled window moves.
+#[rstest::rstest]
+#[case::collapsed_pushes_at_width(
+    PinnedWidth::Collapsed,
+    vec!["set-size", "mbv", "320px", "--reserve", "push"]
+)]
+#[case::expanded_covers_at_width_expanded(
+    PinnedWidth::Expanded,
+    vec!["set-size", "mbv", "1100px", "--reserve", "cover"]
+)]
+fn pinned_width_argv_uses_the_views_width_and_reserve_mode(
+    #[case] width: PinnedWidth,
+    #[case] expected: Vec<&str>,
+) {
+    let config = PanelConfig {
+        width: 320,
+        width_expanded: 1100,
+        ..PanelConfig::default()
+    };
+    assert_eq!(pinned_width_argv("mbv", &config, width), strings(&expected));
 }
 
 /// Design D7: a side change names the panel and the new edge.

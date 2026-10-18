@@ -367,6 +367,31 @@ fn set_size_argv(panel: &str, width: u16, reserve: PanelReserve) -> Vec<String> 
     ]
 }
 
+/// The `set-size` argv one pinned-view change sends (design D6): the
+/// collapsed view pushes at `width`, the expanded view covers at
+/// `width_expanded`, so one press changes the width and the reserve mode in
+/// one request.
+#[must_use]
+fn pinned_width_argv(panel: &str, config: &PanelConfig, width: PinnedWidth) -> Vec<String> {
+    let (pixels, reserve) = match width {
+        PinnedWidth::Collapsed => (config.width, PanelReserve::Push),
+        PinnedWidth::Expanded => (config.width_expanded, PanelReserve::Cover),
+    };
+    set_size_argv(panel, pixels, reserve)
+}
+
+/// Ask the running panel for `width` (design D6). The requested view decides
+/// the request, never the terminal size, so a resize mbv did not request
+/// leaves [`PinnedWidth`] untouched. An unpinned launch, or a refused request,
+/// reports the reason and changes nothing.
+pub(crate) fn apply_pinned_width(config: &PanelConfig, width: PinnedWidth) -> Result<(), String> {
+    let panel = identity()
+        .name
+        .as_deref()
+        .ok_or_else(|| "this launch is not pinned".to_string())?;
+    request(&pinned_width_argv(panel, config, width))
+}
+
 /// `set-edge <panel> left|right` (design D7).
 #[must_use]
 fn set_edge_argv(panel: &str, side: mbv_config::PanelSide) -> Vec<String> {
