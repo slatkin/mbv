@@ -43,9 +43,10 @@ pinwin 0.4.1 (slatkin/pinwin#55) gives mbv these facts to build on:
 
 ### D1. A terminal hosts the TUI in the panel
 
-`--pin` runs `pinwin run … -- <terminal argv> <mbv exe>`. The terminal argv comes from the new
-`[panel] pin_terminal` prefix, else `TERMINAL` followed by `-e`, else the launch fails with a
-reason that names both, as Unpin does. The mbv exe follows the `launch_exe` rule in
+`--pin` runs `pinwin run … -- <terminal argv> <mbv exe> --in-panel`. The terminal argv comes
+from the new `[panel] pin_terminal` prefix, else `TERMINAL` followed by `-e`, else the launch
+fails with a reason that names both, as Unpin does. The hidden `--in-panel` flag is the launch
+marker of D3. The mbv exe follows the `launch_exe` rule in
 `src/local_daemon.rs`: `current_exe()`, or `/proc/<launcher pid>/exe` when the file was replaced
 (`… (deleted)`). The launcher waits for its child (D2), so that path stays valid while the
 terminal starts mbv, and a Pin swap starts the Owner's own build (`pin-swap`).
@@ -64,23 +65,34 @@ terminal argv resolves, and `pinwin` starts. A failure there takes today's start
 (terminal fallback when stdin is a terminal, else a notification and exit 1).
 
 Then it spawns `pinwin run` as a child, waits, and exits with the child's status. A non-zero
-status is logged, and reported with a notification when stdin is not a terminal, because a
-desktop launch has no stderr to read (no layer-shell, an invalid pinwin config). After the spawn
-there is no terminal fallback: the status cannot tell a pinwin failure from a terminal that
-ended with an error after a long session.
+status is logged, and reported with a notification that says the panel could not open when stdin
+is not a terminal, because a desktop launch has no stderr to read (no layer-shell, an invalid
+pinwin config). A fatal start-up error of the mbv Client in the panel is logged and sent as a
+desktop notification too. After the spawn there is no terminal fallback: the status cannot tell
+a pinwin failure from a terminal that ended with an error after a long session.
 
 Alternative: `exec` into `pinwin run`. It saves one idle process, but a desktop launch on a
 compositor without layer-shell then fails with no notification. Rejected.
 
-### D3. Pinned means `PINWIN_PANEL` is set
+### D3. Pinned means both `PINWIN_PANEL` and `--in-panel` are present
 
 At start, on the main thread and before any thread exists, mbv reads `PINWIN_PANEL` and
 `PINWIN_SOCKET` into a `OnceLock` and removes both from its environment, the same way it claims
-`MBV_SWAP_TOKEN`. A non-empty `PINWIN_PANEL` means pinned, and its value is the panel name for
-every request. So:
+`MBV_SWAP_TOKEN`. It also reads the hidden `--in-panel` launch flag from its argv. mbv is pinned
+only when both a non-empty `PINWIN_PANEL` and `--in-panel` are present, and the panel value is
+the panel name for every request. The `--pin` launcher appends `--in-panel` after the mbv exe in
+the command it gives `pinwin run`, so only the mbv that pinwin started in a panel carries both.
+
+`PINWIN_PANEL` alone is not enough. A shell or tmux started in the panel terminal inherits that
+variable, and an mbv started there must run unpinned. That mbv still removes `PINWIN_*` from its
+environment, so its children do not inherit the panel identity. A user who starts a panel by
+hand writes `pinwin run … -- mbv --in-panel`. The flag is hidden from `--help` and has no other
+effect. So:
 
 - The Owner process, mpv and every other child do not inherit the panel identity. A stay-alive
   Owner cannot think that it is pinned.
+- A shell, tmux or other program started in the panel terminal that runs mbv without the flag
+  gets an unpinned Client, which matches what the user sees.
 - A terminal that gave the launch to a running copy starts mbv without the variable, so mbv runs
   as an unpinned Client, which matches what the user sees.
 - The `HANDED_OVER` flag, the pty code, `PanelEnv` and the stderr redirect go away.
@@ -90,11 +102,14 @@ the Pin swap reaches the pinned Client.
 
 ### D4. Panel requests run the `pinwin` CLI
 
-Each request is one synchronous `pinwin <command>` child with `PINWIN_SOCKET` set from D3. Exit 0
-is success. Exit 1 gives pinwin's stderr line as the Warning toast text. Exit 2 or a spawn
-failure gives a fixed toast that names the cause (usage mismatch, `pinwin` not installed). The
-argv builders are pure functions, and unit tests cover them. The process call is the mocked
-boundary.
+Each request is one `pinwin <command>` child with `PINWIN_SOCKET` set from D3. The request runs on
+a worker thread, not the TUI thread, so pinwin's bounded wait (about 5 s) cannot freeze the TUI.
+At most one request is in flight. An `x` press or an F2 step while a request is pending is
+ignored, with no queue. The outcome is delivered back to the existing success and failure
+handlers. Exit 0 is success. Exit 1 gives pinwin's stderr line as the Warning toast text. Exit 2
+or a spawn failure gives a fixed toast that names the cause (usage mismatch, `pinwin` not
+installed). The argv builders are pure functions, and unit tests cover them. The process call is
+the mocked boundary.
 
 Alternative: write JSON lines to the daemon socket. It gives typed error kinds that mbv only
 shows as text, and it copies pinwin's wire format into mbv with no compiler check. Rejected.
@@ -129,7 +144,8 @@ and invariant 17 still applies.
 
 The view follows the request, not the resize. A resize that mbv did not request does not
 change `PinnedWidth`, so the next `x` can ask for the width the panel already has. It then only
-sets the matching view, and the `x` after that is correct.
+sets the matching view, and the `x` after that is correct. While a request is pending, another
+`x` press is ignored, so no second request is sent.
 
 Alternative: derive the view from the resize crossing 80 columns. It fails for a collapsed
 width of 80 columns or more, which `panel-mode` allows. A rule based on the resize direction
@@ -145,9 +161,10 @@ comes from the terminal.
 A `width` step sends the collapsed request of D6 with the candidate value, and a
 `width_expanded` step sends the expanded one, so the edited value is the width that pinwin
 validates (as today). A `Side` step sends `set-edge`. A gutter step sends `set-gutters` with
-only the edited gutter, at the current width. Only an accepted request saves the value.
-Accent rows save and show the "next launch" toast, as today. Unpinned, every row saves with no
-request.
+only the edited gutter, at the current width. Only an accepted request saves the value, and a
+refusal flashes pinwin's reason and saves nothing. A step that arrives while a request is
+pending is ignored. Accent rows save and show the "next launch" toast, as today. Unpinned, every
+row saves with no request.
 
 ### D8. `--toggle` and the duplicate `--pin`
 
@@ -172,12 +189,13 @@ library to app host and D1 to D4.
 - [A `pin_terminal` that gives the launch to a running copy leaves the panel empty] → D3 makes
   that mbv run unpinned, so the failure is visible and safe; the `pin_terminal` docs name the
   rule and the Ghostty flag.
-- [A `pinwin` call blocks the UI thread] → The pinwin client has a bounded reply time, and the
-  calls come only from key presses and F2 steps, as `apply_layout_animated` did.
+- [A panel request finishes after the user moved on] → At most one request is in flight, presses
+  during it are ignored, and the delivered outcome goes to the existing handlers; the ignored
+  presses leave the view and the config untouched.
 - [Users lose their `cols` widths] → One logged warning that names the keys; release notes give
   the new pixel keys.
-- [A rebound `pinned_width_toggle` becomes an unknown keybind action] → Release notes. Only a
-  user who rebound that key sees it.
+- [A config still binds `pinned_width_toggle`] → One logged warning names the retired action,
+  startup continues, and release notes name the removal.
 - [`x` goes the wrong way once after an outside resize] → Accepted (D6).
 
 ## Migration Plan

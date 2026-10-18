@@ -12,9 +12,12 @@ tiled windows and show library-only with library focus; from the expanded width
 and the covering mode in one panel change. If the panel rejects the target width, a warning toast
 SHALL name the reason and neither the width nor the displayed panel mode SHALL change. The
 collapsed or expanded state SHALL change only through `x` and the F2 Panel width rows; a resize
-that mbv did not request SHALL NOT change it. The three-state `x` cycle and the mini-view `x`
-toggle SHALL NOT be reachable while pinned. Outside the pinned panel this requirement SHALL NOT
-apply.
+that mbv did not request SHALL NOT change it. Each press SHALL send at most one panel request,
+off the TUI thread. While a request is pending, a further `x` press SHALL be ignored, with no
+queue. The outcome SHALL set the view on success or flash the reason on failure; a refusal SHALL
+leave both the width and the displayed panel mode unchanged. The three-state `x` cycle and the
+mini-view `x` toggle SHALL NOT be reachable while pinned. Outside the pinned panel this
+requirement SHALL NOT apply.
 
 #### Scenario: x expands to the library view
 
@@ -37,6 +40,11 @@ apply.
   would leave the output no width
 - **THEN** a warning toast names the reason, the panel keeps its collapsed width, and the displayed
   panel mode is unchanged
+
+#### Scenario: x while a request is pending
+
+- **WHEN** mbv runs in the pinned panel and the user presses `x` again before the first request finishes
+- **THEN** the second press is ignored, no second request is sent, and the view follows the first request's outcome
 
 #### Scenario: Resize from outside mbv
 

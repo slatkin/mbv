@@ -14,11 +14,13 @@ It removes the library API, the pty hand-over and the instance socket, and mbv u
 - **BREAKING** mbv no longer links pinwin. The `pinwin` crate goes out of `Cargo.toml`, and the
   `pinwin` program (0.4.1 or later) becomes an optional runtime dependency that mbv runs.
 - **BREAKING** `mbv --pin` becomes a launcher. It runs
-  `pinwin run --name mbv --show-existing <options> -- <pin_terminal> <mbv>`, so the TUI runs in a
-  terminal that pinwin docks as the panel. mbv opens no pty and gives no stdio to a panel. A
-  second `--pin` shows the running panel.
-- mbv knows that it runs pinned from `PINWIN_PANEL`, not from a hand-over. It sends every panel
-  request with the `pinwin` CLI through `PINWIN_SOCKET`.
+  `pinwin run --name mbv --show-existing <options> -- <pin_terminal> <mbv> --in-panel`, so the TUI
+  runs in a terminal that pinwin docks as the panel. mbv opens no pty and gives no stdio to a
+  panel. A second `--pin` shows the running panel.
+- mbv knows that it runs pinned from `PINWIN_PANEL` together with the hidden `--in-panel` launch
+  marker, not from a hand-over. It sends every panel request with the `pinwin` CLI through
+  `PINWIN_SOCKET`. A program that inherits `PINWIN_PANEL` from the panel terminal but passes no
+  marker runs mbv unpinned.
 - New `[panel] pin_terminal` argv prefix: the terminal that runs mbv in the panel. It must open
   its window in the process that `pinwin run` starts.
 - **BREAKING** `[panel] cols` and `cols_expanded` (terminal columns) become `width` and

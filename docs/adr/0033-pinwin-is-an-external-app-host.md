@@ -29,14 +29,14 @@ pinwin is an external program that mbv runs. mbv links no panel library, and
 
 ### D1. A terminal hosts the TUI in the panel
 
-`--pin` runs `pinwin run … -- <terminal argv> <mbv exe>`. The terminal argv
-comes from the `[panel] pin_terminal` prefix, else `TERMINAL` followed by
-`-e`, else the launch fails with a reason that names both. The terminal must
-open its window in the process that `pinwin run` starts. That is why
-`pin_terminal` is separate from the Unpin `[panel] terminal` prefix, which can
-give the launch to a running copy. The mbv executable follows the existing
+`--pin` runs `pinwin run … -- <terminal argv> <mbv exe> --in-panel`. The
+terminal argv comes from the `[panel] pin_terminal` prefix, else `TERMINAL`
+followed by `-e`, else the launch fails with a reason that names both. The
+terminal must open its window in the process that `pinwin run` starts. That is
+why `pin_terminal` is separate from the Unpin `[panel] terminal` prefix, which
+can give the launch to a running copy. The mbv executable follows the existing
 `launch_exe` rule, so the launcher's own build runs even when the file on disk
-was replaced.
+was replaced. The hidden `--in-panel` flag is the launch marker of D3.
 
 ### D2. `--pin` spawns `pinwin run` and waits for it
 
@@ -46,18 +46,30 @@ start-failure path: fall back to the current terminal when stdin is a
 terminal, else notify and exit non-zero.
 
 Then it spawns `pinwin run` as a child, waits, and exits with the child's
-status. A non-zero status is logged, and reported with a notification when
-stdin is not a terminal, because a desktop launch has no stderr to read. After
-the spawn there is no terminal fallback: the status cannot tell a pinwin
-failure from a terminal that ended with an error after a long session.
+status. A non-zero status is logged, and reported with a notification that
+says the panel could not open when stdin is not a terminal, because a desktop
+launch has no stderr to read. A fatal start-up error of the mbv Client in the
+panel is logged and sent as a desktop notification too. After the spawn there
+is no terminal fallback: the status cannot tell a pinwin failure from a
+terminal that ended with an error after a long session.
 
-### D3. Pinned means `PINWIN_PANEL` is set
+### D3. Pinned means both `PINWIN_PANEL` and `--in-panel` are present
 
 At start, on the main thread and before any thread exists, mbv reads
 `PINWIN_PANEL` and `PINWIN_SOCKET` into a `OnceLock` and removes both from its
-environment, the same way it claims `MBV_SWAP_TOKEN`. A non-empty
-`PINWIN_PANEL` means pinned, and its value is the panel name for every
-request.
+environment, the same way it claims `MBV_SWAP_TOKEN`. It also reads the hidden
+`--in-panel` launch flag from its argv. mbv is pinned only when both a
+non-empty `PINWIN_PANEL` and `--in-panel` are present, and the panel value is
+the panel name for every request. The `--pin` launcher appends `--in-panel`
+after the mbv exe in the command it gives `pinwin run`, so only the mbv that
+pinwin started in a panel carries both.
+
+`PINWIN_PANEL` alone is not enough. A shell or tmux started in the panel
+terminal inherits that variable, and an mbv started there must run unpinned.
+That mbv still removes `PINWIN_*` from its environment, so its children do not
+inherit the panel identity. A user who starts a panel by hand writes
+`pinwin run … -- mbv --in-panel`. The flag is hidden from `--help` and has no
+other effect.
 
 The Owner process, mpv, and every other child therefore do not inherit the
 panel identity. A stay-alive Owner cannot think that it is pinned. A terminal
@@ -68,14 +80,17 @@ mbv runs as an unpinned Client, which matches what the user sees. The
 The `--pin` launcher sets `MBV_SWAP_TOKEN` on the `pinwin run` child from the
 claimed token, so the Pin swap reaches the pinned Client.
 
-### D4. Panel requests run the `pinwin` CLI
+### D4. Panel requests run the `pinwin` CLI off the TUI thread
 
-Each request is one synchronous `pinwin <command>` child with
-`PINWIN_SOCKET` set from D3. Exit 0 is success. Exit 1 gives pinwin's stderr
-line as the Warning toast text. Exit 2 or a spawn failure gives a fixed toast
-that names the cause: usage mismatch or `pinwin` not installed. The argv
-builders are pure functions with unit tests. The process call is the mocked
-boundary.
+Each request is one `pinwin <command>` child with `PINWIN_SOCKET` set from D3.
+The request runs on a worker thread, not the TUI thread, so pinwin's bounded
+wait (about 5 s) cannot freeze the TUI. At most one request is in flight. An
+`x` press or an F2 step while a request is pending is ignored, with no queue.
+The outcome is delivered back to the existing success and failure handlers.
+Exit 0 is success. Exit 1 gives pinwin's stderr line as the Warning toast
+text. Exit 2 or a spawn failure gives a fixed toast that names the cause:
+usage mismatch or `pinwin` not installed. The argv builders are pure functions
+with unit tests. The process call is the mocked boundary.
 
 ## Considered options
 
@@ -101,6 +116,13 @@ boundary.
 - pinwin CLI changes break mbv at runtime with no compiler check. One minimum
   version in `PKGBUILD` and `AGENTS.md`, argv builders that keep every flag in
   one file, and a manual pinned check at each pinwin release limit that risk.
+- Pinned identity needs the panel environment and the launch flag. A program
+  that inherits `PINWIN_PANEL` from the panel terminal still runs mbv
+  unpinned unless it also passes `--in-panel`.
+- A panel request no longer blocks the TUI. One request is in flight at a
+  time, and presses during it are ignored rather than queued.
+- A `[keys]` entry that still names the retired `pinned_width_toggle` action
+  logs one warning and does not stop startup.
 - There is one panel per `--pin` launch, and it ends with that launch. A
   second `--pin` shows the running panel through `--show-existing`.
 - Related decisions: [ADR 0030](0030-owner-process-is-the-only-local-player-owner.md)

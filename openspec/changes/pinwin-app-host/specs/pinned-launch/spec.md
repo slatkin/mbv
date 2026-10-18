@@ -4,13 +4,26 @@
 
 ### Requirement: Pinned Client identity
 An mbv Client SHALL run as pinned exactly when pinwin started it inside a panel, whatever started
-the panel. Its panel requests SHALL go to that panel and its daemon. A Client started outside a
-panel SHALL run as unpinned, also when `--pin` asked for the panel. A process that mbv starts,
-including the Owner process, SHALL NOT be pinned because its starter was.
+the panel. It SHALL be pinned only when its environment holds a non-empty `PINWIN_PANEL` and its
+argv holds the hidden `--in-panel` launch flag. A Client with `PINWIN_PANEL` but without the flag
+SHALL run as unpinned. The `--pin` launcher SHALL append `--in-panel` to the mbv command it gives
+`pinwin run`. An mbv that starts in a panel SHALL remove `PINWIN_PANEL` and `PINWIN_SOCKET` from
+its environment whether it is pinned or not, so no child inherits them. Its panel requests SHALL
+go to that panel and its daemon. A Client started outside a panel SHALL run as unpinned, also
+when `--pin` asked for the panel. A process that mbv starts, including the Owner process, SHALL
+NOT be pinned because its starter was.
 
 #### Scenario: Panel started by hand
-- **WHEN** the user runs `pinwin run --name tunes -- ghostty --gtk-single-instance=false -e mbv`
+- **WHEN** the user runs `pinwin run --name tunes -- ghostty --gtk-single-instance=false -e mbv --in-panel`
 - **THEN** that mbv runs as pinned, and `x` resizes the `tunes` panel
+
+#### Scenario: Panel started by hand without the launch flag
+- **WHEN** the user runs `pinwin run --name tunes -- ghostty --gtk-single-instance=false -e mbv`
+- **THEN** that mbv runs as unpinned, `x` keeps its normal behavior, and its children inherit no `PINWIN_*`
+
+#### Scenario: Shell started inside the panel
+- **WHEN** a shell or tmux started in the panel terminal starts `mbv` without `--in-panel`
+- **THEN** that mbv runs as unpinned even though it inherited `PINWIN_PANEL`, and its children inherit no `PINWIN_*`
 
 #### Scenario: Terminal gives the launch to a running copy
 - **WHEN** `mbv --pin` runs with a pin terminal that gives its launch to a running copy of itself
@@ -46,12 +59,21 @@ mbv binary SHALL link GTK or gtk4-layer-shell.
 - **WHEN** `pinwin` is not installed and the user runs `mbv --pin` in a terminal
 - **THEN** one line says that pinwin is not installed and mbv runs in that terminal
 
+### Requirement: Retired pinned width keybinding
+A `[keys]` entry that names the retired `pinned_width_toggle` action SHALL be ignored with one
+logged warning that names the action. It SHALL NOT stop startup, and it SHALL NOT bind any
+action. Other unknown action identifiers SHALL keep the existing load error.
+
+#### Scenario: Config still binds the retired action
+- **WHEN** `config.toml` contains a `[keys]` entry for `pinned_width_toggle`
+- **THEN** mbv logs one warning that names the retired action, starts normally, and no key runs a pinned width toggle
+
 ## MODIFIED Requirements
 
 ### Requirement: Pin flag
 mbv SHALL accept `--pin`, which runs the TUI in a pinwin panel named `mbv`: pinwin docks the pin
-terminal as the panel, and that terminal runs mbv. The process that ran `--pin` SHALL wait until
-the panel's terminal ends. Without `--pin`, mbv SHALL start in the current terminal exactly as
+terminal as the panel, and that terminal runs mbv with the hidden `--in-panel` flag. The process
+that ran `--pin` SHALL wait until the panel's terminal ends. Without `--pin`, mbv SHALL start in the current terminal exactly as
 before; no config setting starts the panel. `--pin` SHALL combine with `--log-level`, and the mbv
 in the panel SHALL run with that log level. `-h`, `-V`, `-q`, `--toggle` and `--__local-daemon`
 SHALL never start a panel. The panel SHALL close when mbv in it exits. At most one panel named
@@ -85,9 +107,10 @@ terminal, mbv SHALL print one line naming the reason to stderr and run in that t
 is not a terminal, mbv SHALL send a desktop notification naming the reason and exit with status 1.
 When pinwin was run and ends with a failure status (no layer-shell, an invalid pinwin config, a
 layout that does not fit the output, a command that cannot run), mbv SHALL log the status, send a
-desktop notification naming it when stdin is not a terminal, and exit with that status; it SHALL
-NOT then run in the terminal. A fatal start-up error of the mbv in the panel SHALL be logged and
-sent as a desktop notification.
+desktop notification that says the panel could not open and names the status when stdin is not a
+terminal, and exit with that status; it SHALL NOT then run in the terminal. A fatal start-up
+error of the mbv in the panel SHALL be logged and sent as a desktop notification that names the
+error.
 
 #### Scenario: Terminal fallback
 - **WHEN** the user types `mbv --pin` in a terminal with `WAYLAND_DISPLAY` unset
@@ -99,7 +122,11 @@ sent as a desktop notification.
 
 #### Scenario: Desktop launch without layer-shell
 - **WHEN** the desktop entry is launched on GNOME or X11
-- **THEN** a notification says the panel could not open, and mbv exits with a non-zero status
+- **THEN** a notification says the panel could not open, the status stays in the log, and mbv exits with a non-zero status
+
+#### Scenario: Fatal start-up error in the panel
+- **WHEN** mbv in the pinned panel hits a fatal start-up error
+- **THEN** the error is logged and a desktop notification names it
 
 ### Requirement: Panel layout settings
 The `[panel]` section of `config.toml` SHALL hold `side` (`"left"` or `"right"`, default `"left"`),
@@ -122,7 +149,10 @@ ranges. Whether a layout fits the output is pinwin's decision.
 While pinned, a change to `Width` SHALL switch the panel to its collapsed width and a change to
 `Expanded width` SHALL switch it to its expanded width, so the edited value is the width the panel
 validates; a change to a side or gutter row SHALL apply at the panel's current width. A change to
-an accent row SHALL NOT touch the running panel.
+an accent row SHALL NOT touch the running panel. A pinned panel request SHALL run off the TUI
+thread, and at most one SHALL be in flight. A step that arrives while a request is pending SHALL
+be ignored, with no queue. The outcome SHALL reach the same success or failure handling; only an
+accepted request saves the value, and a refusal flashes pinwin's reason and saves nothing.
 
 #### Scenario: Live change while pinned
 - **WHEN** mbv runs in the panel and the user steps the width in F2's Panel page
@@ -147,6 +177,10 @@ an accent row SHALL NOT touch the running panel.
 #### Scenario: Rejected layout while pinned
 - **WHEN** mbv runs in the panel and a step would leave the panel's output with no width
 - **THEN** a warning toast names the reason, the row keeps its previous value, and neither the panel nor `config.toml` changes
+
+#### Scenario: Second step while a request is pending
+- **WHEN** mbv runs in the panel, a step's request is still pending, and the user steps a Panel row
+- **THEN** the second step is ignored, no second request is sent, and the row keeps its value until the first outcome arrives
 
 #### Scenario: Old column keys
 - **WHEN** `config.toml` still sets `cols = 40` and `cols_expanded = 120` under `[panel]`
@@ -211,4 +245,4 @@ back at the width it had.
 
 ### Requirement: Pinned panel width toggle
 **Reason**: `x` is the only pinned width control; the width-only toggle had no remaining use.
-**Migration**: Use `x` while pinned. A config that rebinds `pinned_width_toggle` must drop that entry.
+**Migration**: Use `x` while pinned. A `[keys]` entry for `pinned_width_toggle` is ignored with one logged warning.
