@@ -44,10 +44,13 @@ impl App {
     /// `pin-mbv-in-pinwin`): an activate steps the row up by one step (`Side`
     /// cycles and ignores the delta), a step applies the component's signed
     /// delta (±1, or ±10 with Shift), and a width row counts each step as 10
-    /// logical pixels while every other row counts 1. Once task 4.3 of
-    /// `pinwin-app-host` lands, the running panel's request must accept the
-    /// candidate before it is saved, and a refusal keeps the previous value and
-    /// shows its reason as a Warning toast.
+    /// logical pixels while every other row counts 1.
+    ///
+    /// While pinned, the row sends one `pinwin` request and only an accepted
+    /// request is saved (change `pinwin-app-host`, design D7): a width row asks
+    /// for the width it edited, a `Side` row moves the panel, and a gutter row
+    /// changes that gutter at the panel's current width. A refusal keeps the
+    /// previous value and flashes pinwin's reason as a Warning toast.
     ///
     /// While pinned, the width recorded is the one the edited row belongs to:
     /// `Width` is `width`, `Expanded width` is `width_expanded`, any other row
@@ -59,7 +62,6 @@ impl App {
     /// panel request; while pinned a `Neutral` toast announces that the change
     /// applies on the next `mbv --pin` launch.
     pub(crate) fn apply_panel_setting(&mut self, key: SettingKey, delta: i32) {
-        let accent_row = mbv_ui_model::settings::is_panel_accent_row(key);
         let candidate = {
             let panel = self.config.lock().unwrap().panel.clone();
             self.accent_custom = self
@@ -70,36 +72,45 @@ impl App {
         let Some(candidate) = candidate else {
             return;
         };
-        let width = match mbv_ui_model::settings::panel_row_edited_width(key) {
-            Some(PanelEditedWidth::Collapsed) => PinnedWidth::Collapsed,
-            Some(PanelEditedWidth::Expanded) => PinnedWidth::Expanded,
-            None => self.pinned_width,
+        let pinned = crate::pin::is_pinned();
+        // Outside a panel, and for a row that takes no request (an accent
+        // row), the candidate saves as it is.
+        let applied = match pinned_setting_request(key, &candidate) {
+            Some(request) if pinned => request.send(&candidate),
+            _ => Ok(()),
         };
-        // Task 4.3 of `pinwin-app-host` sends the edited row's pinwin request
-        // here and saves only an accepted candidate. Until it lands, a pinned
-        // launch saves the candidate and records the row's width with no panel
-        // check; a launch outside a panel saves the same way, and an accent row
-        // never touches the panel (design D3).
-        let applied = if crate::pin::is_pinned() && !accent_row {
-            Ok(Some(width))
-        } else {
-            Ok(None)
-        };
-        match applied {
-            Ok(width) => {
-                self.config.lock().unwrap().panel = candidate;
-                if let Some(width) = width {
-                    self.note_pinned_width_applied(width);
-                }
-                self.settings_save_at = Some(Instant::now() + Duration::from_millis(500));
-                if accent_row && crate::pin::is_pinned() {
-                    self.flash(
-                        "Accent changes apply on the next mbv --pin launch".into(),
-                        ToastSeverity::Neutral,
-                    );
-                }
-            }
-            Err(reason) => self.flash(reason, ToastSeverity::Warning),
+        self.apply_panel_setting_outcome(pinned, key, candidate, applied);
+    }
+
+    /// Apply a Panel row's candidate once the panel's request outcome is known
+    /// (change `pinwin-app-host`, design D7): only an accepted request saves,
+    /// and a refusal flashes pinwin's reason and keeps both the row's value and
+    /// the panel. A width row records the width it switched the panel to, and
+    /// an accent row while pinned announces the next launch (design D3).
+    pub(in crate::app) fn apply_panel_setting_outcome(
+        &mut self,
+        pinned: bool,
+        key: SettingKey,
+        candidate: mbv_config::PanelConfig,
+        applied: Result<(), String>,
+    ) {
+        if let Err(reason) = applied {
+            self.flash(reason, ToastSeverity::Warning);
+            return;
+        }
+        self.config.lock().unwrap().panel = candidate;
+        if pinned && let Some(edited) = mbv_ui_model::settings::panel_row_edited_width(key) {
+            self.note_pinned_width_applied(match edited {
+                PanelEditedWidth::Collapsed => PinnedWidth::Collapsed,
+                PanelEditedWidth::Expanded => PinnedWidth::Expanded,
+            });
+        }
+        self.settings_save_at = Some(Instant::now() + Duration::from_millis(500));
+        if pinned && mbv_ui_model::settings::is_panel_accent_row(key) {
+            self.flash(
+                "Accent changes apply on the next mbv --pin launch".into(),
+                ToastSeverity::Neutral,
+            );
         }
     }
 
@@ -277,3 +288,70 @@ impl App {
         }
     }
 }
+
+/// The one `pinwin` request a Panel row sends while pinned (change
+/// `pinwin-app-host`, design D7). A width row asks for the width it edits, so
+/// the edited value is the width pinwin validates; a side or gutter row applies
+/// at the panel's current width.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PinnedSettingRequest {
+    /// `Width` (`Collapsed`) or `Expanded width` (`Expanded`): one `set-size`
+    /// with the candidate width and its reserve mode.
+    Width(PinnedWidth),
+    /// `Side`: one `set-edge`.
+    Side(mbv_config::PanelSide),
+    /// A gutter row: one `set-gutters` that carries only the edited gutter.
+    Gutter(crate::pin::PanelGutter, i32),
+}
+
+impl PinnedSettingRequest {
+    /// Send the request to the running panel and report pinwin's reason when it
+    /// refuses it.
+    fn send(self, candidate: &mbv_config::PanelConfig) -> Result<(), String> {
+        match self {
+            Self::Width(width) => crate::pin::apply_pinned_width(candidate, width),
+            Self::Side(side) => crate::pin::apply_pinned_side(side),
+            Self::Gutter(gutter, value) => crate::pin::apply_pinned_gutter(gutter, value),
+        }
+    }
+}
+
+/// The request a Panel row sends while pinned (design D7), or `None` for a row
+/// that takes none: an accent row is fixed at panel start (design D3).
+fn pinned_setting_request(
+    key: SettingKey,
+    candidate: &mbv_config::PanelConfig,
+) -> Option<PinnedSettingRequest> {
+    match mbv_ui_model::settings::panel_row_edited_width(key) {
+        Some(PanelEditedWidth::Collapsed) => {
+            return Some(PinnedSettingRequest::Width(PinnedWidth::Collapsed));
+        }
+        Some(PanelEditedWidth::Expanded) => {
+            return Some(PinnedSettingRequest::Width(PinnedWidth::Expanded));
+        }
+        None => {}
+    }
+    match key {
+        SettingKey::PanelSide => Some(PinnedSettingRequest::Side(candidate.side)),
+        SettingKey::PanelGutterTop => Some(PinnedSettingRequest::Gutter(
+            crate::pin::PanelGutter::Top,
+            candidate.gutter_top,
+        )),
+        SettingKey::PanelGutterBottom => Some(PinnedSettingRequest::Gutter(
+            crate::pin::PanelGutter::Bottom,
+            candidate.gutter_bottom,
+        )),
+        SettingKey::PanelGutterLeft => Some(PinnedSettingRequest::Gutter(
+            crate::pin::PanelGutter::Left,
+            candidate.gutter_left,
+        )),
+        SettingKey::PanelGutterRight => Some(PinnedSettingRequest::Gutter(
+            crate::pin::PanelGutter::Right,
+            candidate.gutter_right,
+        )),
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests;

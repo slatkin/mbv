@@ -380,16 +380,32 @@ fn pinned_width_argv(panel: &str, config: &PanelConfig, width: PinnedWidth) -> V
     set_size_argv(panel, pixels, reserve)
 }
 
+/// The claimed panel name of this launch, or the reason there is none
+/// (design D3, D4).
+fn panel_name() -> Result<&'static str, String> {
+    identity()
+        .name
+        .as_deref()
+        .ok_or_else(|| "this launch is not pinned".to_string())
+}
+
 /// Ask the running panel for `width` (design D6). The requested view decides
 /// the request, never the terminal size, so a resize mbv did not request
 /// leaves [`PinnedWidth`] untouched. An unpinned launch, or a refused request,
 /// reports the reason and changes nothing.
 pub(crate) fn apply_pinned_width(config: &PanelConfig, width: PinnedWidth) -> Result<(), String> {
-    let panel = identity()
-        .name
-        .as_deref()
-        .ok_or_else(|| "this launch is not pinned".to_string())?;
-    request(&pinned_width_argv(panel, config, width))
+    request(&pinned_width_argv(panel_name()?, config, width))
+}
+
+/// Move the running panel to `side` (design D7). The panel keeps its width.
+pub(crate) fn apply_pinned_side(side: mbv_config::PanelSide) -> Result<(), String> {
+    request(&set_edge_argv(panel_name()?, side))
+}
+
+/// Change one gutter of the running panel at its current width (design D7):
+/// the F2 row edits one gutter, so one gutter changes.
+pub(crate) fn apply_pinned_gutter(gutter: PanelGutter, value: i32) -> Result<(), String> {
+    request(&set_gutters_argv(panel_name()?, gutter, value))
 }
 
 /// `set-edge <panel> left|right` (design D7).
