@@ -365,10 +365,10 @@ mod run;
 #[cfg(test)]
 pub(crate) use run::{
     AdvanceDecisionInput, CompletedMedia, Drained, FinishReason, NextUp, NextUpDecision,
-    NextUpFire, StopReport, active_item_state, advance_decision, advance_next_index,
-    is_clocked_audio_error, is_superseded_jump_end_file, playlist_move_args,
-    provider_lifecycle_close_pos, queue_next_up_decision, reject_stale_jump, resolve_jump_target,
-    seek_decision, standalone_next_up_decision, volume_decision,
+    NextUpFire, StopReport, active_item_state, advance_decision, is_clocked_audio_error,
+    is_superseded_jump_end_file, playlist_move_args, provider_lifecycle_close_pos,
+    queue_next_up_decision, reject_stale_jump, resolve_jump_target, seek_decision,
+    standalone_next_up_decision, volume_decision,
 };
 pub(crate) use run::{IntroState, PlaybackOrigin, PlaybackRun, RunInit, mpv_url_for_queue_item};
 // `run/` keeps the hot-loop files physically grouped while the controller and

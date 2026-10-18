@@ -107,11 +107,10 @@ impl DaemonLoop {
         season: i64,
         episode: i64,
     ) -> EventOutcome {
-        // One pick drives every forward advance (queue-play-order spec): the
-        // card names the Shuffle pick in Shuffle and the queue neighbor in
-        // Sequential; a Shuffle order with no pick means the queue ends here,
-        // so no card is shown (queue-shuffle-play-order task 4.2).
-        if let Some(slot_id) = next_up_slot(&self.owner.core, &self.owner.core.queue)
+        // The card names the queue neighbor after the active slot; at the
+        // end of the queue there is no card (queue-shuffle-play-order task
+        // 4.2, now neighbor-only).
+        if let Some(slot_id) = next_up_slot(&self.owner.core.queue)
             && let Some(slot) = self.owner.core.queue.slot(slot_id)
             && let Some(emby) = slot.item.as_emby()
         {

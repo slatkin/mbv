@@ -108,7 +108,6 @@ pub fn shared_queue_state() -> SharedQueueState {
         source: Arc::new(Mutex::new(QueueSource::Unknown)),
         lineage: Arc::new(Mutex::new(mbv_queue::QueueLineage::default())),
         observed_active_slot: Arc::new(Mutex::new(None)),
-        play_order: Arc::new(Mutex::new(mbv_queue::PlayOrderMode::Sequential)),
         playback_output: Arc::new(Mutex::new(mbv_ctrl::OutputState::Local)),
     }
 }

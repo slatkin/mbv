@@ -455,8 +455,6 @@ fn initialize_queue(role: DaemonRole, player: &Player) -> (DaemonPlayerOwner, Sh
         source: Arc::new(Mutex::new(initial_source.clone())),
         lineage: Arc::new(Mutex::new(initial_lineage)),
         observed_active_slot: Arc::new(Mutex::new(None)),
-        // A new owner starts in Sequential (queue-shuffle-play-order D5).
-        play_order: Arc::new(Mutex::new(mbv_queue::PlayOrderMode::Sequential)),
         // A new owner starts on local playback (cast-owner-output spec
         // "Owner starts").
         playback_output: Arc::new(Mutex::new(mbv_ctrl::OutputState::Local)),

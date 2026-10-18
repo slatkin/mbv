@@ -13,7 +13,7 @@ use std::time::Instant;
 use mbv_ctrl::CtrlEvent;
 use mbv_ids::{EmbySessionId, ItemId};
 use mbv_player::PlayerOwnerState;
-use mbv_queue::{PlayOrder, QueueItem, QueueSlotId};
+use mbv_queue::{QueueItem, QueueSlotId};
 
 use super::worker::{EmbySessionJob, SessionApi};
 use super::{EmbySessionLoadedItem, EmbySessionOutput, EmbySessionQueuedItem};
@@ -149,10 +149,9 @@ pub(crate) struct SessionLoad {
 }
 
 /// The next admissible slot the device holds beside the loaded one (design
-/// D1, D14): the slot the Next step picks from `loaded` — the queue neighbor
-/// in Sequential, the Shuffle pick — stepping past every slot the Session
-/// cannot play, with the queue length as the bound. The device holds the pick
-/// and nothing past it under Shuffle, as the step rule does.
+/// D1, D14): the slot the Next step picks from `loaded` — the queue neighbor —
+/// stepping past every slot the Session cannot play, with the queue length as
+/// the bound.
 ///
 /// Returns the slot and the Emby item id the load sends with the active item,
 /// and the slots the search stepped past so the caller can report each one
@@ -181,38 +180,24 @@ pub(crate) fn next_admissible_slot(
     (None, stepped)
 }
 
-/// The slots one Next step walks from `loaded` (design D14), in play order:
-/// the Shuffle pick alone, because the device holds the pick and nothing past
-/// it, and in Sequential every slot after `loaded`, so a rejected one can be
-/// stepped past within the queue length.
-///
-/// A pick that names the slot being loaded is not a slot after it: the pick
-/// re-picks when the next observation of the active slot changes it (design
-/// D2), so within that window it names nothing the device should hold next.
+/// The slots one Next step walks from `loaded` (design D14): every slot after
+/// `loaded`, so a rejected one can be stepped past within the queue length.
 fn step_candidates(core: &PlayerOwnerState, loaded: QueueSlotId) -> Vec<QueueSlotId> {
-    match core.play_order() {
-        PlayOrder::Shuffle { upcoming } => upcoming
-            .into_iter()
-            .filter(|pick| *pick != loaded)
-            .collect(),
-        PlayOrder::Sequential => core
-            .queue
-            .slot_index(loaded)
-            .map_or_else(Vec::new, |index| {
-                core.queue.slots()[index + 1..]
-                    .iter()
-                    .map(|slot| slot.slot_id)
-                    .collect()
-            }),
-    }
+    core.queue
+        .slot_index(loaded)
+        .map_or_else(Vec::new, |index| {
+            core.queue.slots()[index + 1..]
+                .iter()
+                .map(|slot| slot.slot_id)
+                .collect()
+        })
 }
 
-/// Every admissible slot the play order visits after `from` (design D15), for
-/// the exit hand-over: the candidates one Next step walks, in play order, from
-/// which the slots the Session cannot play are dropped. Nothing is reported,
-/// because the Owner is exiting and no Client is left to tell (design D15 step
-/// 1). Under Shuffle only the current pick follows `from`, so nothing past it
-/// is collected (design D14).
+/// Every admissible slot the queue visits after `from` (design D15), for
+/// the exit hand-over: the candidates one Next step walks, in queue order,
+/// from which the slots the Session cannot play are dropped. Nothing is
+/// reported, because the Owner is exiting and no Client is left to tell
+/// (design D15 step 1).
 ///
 /// Returns the slots and their Emby item ids, in the order the device is given
 /// them: the active item plays first, and the rest follow it.

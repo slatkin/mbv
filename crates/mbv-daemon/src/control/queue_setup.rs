@@ -2,8 +2,8 @@ use super::{
     CtrlContext, DaemonEvent, DaemonOwnerContext, DaemonPlayerOwner, EmbyItem, ExecSlot,
     PlaybackQueue, PlayerCommand, PlayerOwnerState, QueueItem, QueueSlotId, RejectContext,
     abs_queue_transport_rejection, admit_queue_items, admit_queue_slots, audio_only_rejection,
-    broadcast_queue_state, daemon_admits, mint_queue_lineage, reject_command,
-    reset_play_order_for_queue_replacement, reset_slot_jumps, submit_queue_slots_cold_start,
+    broadcast_queue_state, daemon_admits, mint_queue_lineage, reject_command, reset_slot_jumps,
+    submit_queue_slots_cold_start,
 };
 use crate::AudiobookshelfOwnerContext;
 use crate::ctrl::CtrlClientId;
@@ -86,10 +86,8 @@ pub(super) fn handle_adopt_queue(
     let mint = ctx.owner.core.queue.revision_mint();
     ctx.owner.core.queue = PlaybackQueue::from_queue_items(items, Some(next_cursor), mint);
     ctx.owner.core.source = new_source;
-    // Adoption installs a new lineage: the whole-queue replacement that
-    // resets the order (design D4).
+    // Adoption installs a new lineage.
     mint_queue_lineage(ctx.shared_queue);
-    reset_play_order_for_queue_replacement(&mut ctx.owner.core, ctx.shared_queue);
     broadcast_queue_state(
         ctx.ctrl_clients,
         ctx.player,
@@ -420,11 +418,10 @@ pub(super) fn handle_queue_replace(
                 tracing::warn!(name: "daemon.cast_queue_replace.no_start_slot", target: "daemon", "the replaced queue's transition was queued behind another; nothing was loaded");
             }
         }
-        // The replacement installs a new lineage: reset the order (design
-        // D4) before the observation clear, mirroring the local path below
-        // and `play_resolved_items`'s Cast branch.
-        reset_play_order_for_queue_replacement(&mut ctx.owner.core, ctx.shared_queue);
-        // The reset above cleared the observation; publish it so the shared
+        // The replacement installs a new lineage before the observation
+        // clear, mirroring the local path below and
+        // `play_resolved_items`'s Cast branch.
+        // The clear above reset the observation; publish it so the shared
         // snapshot and the broadcast below agree (the local path publishes
         // after its cold start).
         ctx.owner.core.note_observed_active_slot(None);
@@ -453,10 +450,7 @@ pub(super) fn handle_queue_replace(
         next_cursor,
         ctx.client,
     );
-    // The replacement installs a new lineage: reset the order (design D4)
-    // before the observation clear, so the re-pick hook inside it sees the
-    // Sequential order and does nothing.
-    reset_play_order_for_queue_replacement(&mut ctx.owner.core, ctx.shared_queue);
+    // The replacement installs a new lineage before the observation clear.
     ctx.owner.core.note_observed_active_slot(None);
     ctx.shared_queue.publish_observed(&ctx.owner.core);
     // Publish after the submit, not before: the snapshot resolves its
@@ -509,11 +503,9 @@ fn replace_on_emby_session(ctx: &mut CtrlContext<'_>, except_op_client: Option<C
         resume_ticks,
         Some(ctx.client_id),
     );
-    // The replacement installs a new lineage: reset the order (design D4)
-    // before the observation clear, mirroring the local path and
-    // `play_resolved_items`'s remote branches.
-    reset_play_order_for_queue_replacement(&mut ctx.owner.core, ctx.shared_queue);
-    // The reset above cleared the observation; publish it so the shared
+    // The replacement installs a new lineage before the observation clear,
+    // mirroring the local path and `play_resolved_items`'s remote branches.
+    // The clear above reset the observation; publish it so the shared
     // snapshot and the broadcast below agree (the local path publishes after
     // its cold start).
     ctx.owner.core.note_observed_active_slot(None);
@@ -645,10 +637,6 @@ pub(super) fn handle_queue_append(
         transitions,
         except_op_client,
     );
-    // The append can make a Shuffle pick possible where none was; the owner
-    // core re-picks inside `note_queue_slot_appended` (queue-content-shuffle
-    // removes the forwarding).
-    ctx.owner.core.note_queue_slot_appended();
     // Append to the player's queue rather than replacing the whole queue.
     // A following move keeps the run's order aligned with canonical inserts.
     forward_queue_append(ctx.player, items_for_player, before, index);

@@ -383,7 +383,7 @@ fn step_target_advance(daemon: &mut DaemonLoop, target: StepTarget) {
     }
     let request_id = {
         let mut ctx = crate::cast::owner_context(daemon);
-        crate::play_order::dispatch_step_target(&mut ctx, slot_id, Direction::Next)
+        crate::step::dispatch_step_target(&mut ctx, slot_id, Direction::Next)
     };
     if let Some(advance) = daemon.owner.output.advance_mut() {
         advance.remaining -= 1;

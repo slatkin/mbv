@@ -472,11 +472,6 @@ pub(crate) struct SharedQueueState {
     pub(super) source: Arc<Mutex<mbv_queue::QueueSource>>,
     pub(super) lineage: Arc<Mutex<mbv_queue::QueueLineage>>,
     pub(super) observed_active_slot: Arc<Mutex<Option<QueueSlotId>>>,
-    /// Mirror of the owner core's order mode, read by snapshots built off the
-    /// shared state (cold ctrl-client seeds and queue broadcasts). The owner
-    /// core stays the authority; `publish_observed` and the order-change sites
-    /// keep this in sync (queue-shuffle-play-order design D5).
-    pub(super) play_order: Arc<Mutex<mbv_queue::PlayOrderMode>>,
     /// Mirror of the owner's active playback output, read by the ctrl accept
     /// path to seed newly-connecting Clients that negotiated
     /// `playback-output` (cast-owner-output design D3). The owner stays the
@@ -488,7 +483,6 @@ pub(crate) struct SharedQueueState {
 impl SharedQueueState {
     pub(crate) fn publish_observed(&self, owner: &mbv_player::PlayerOwnerState) {
         *self.observed_active_slot.lock().unwrap() = owner.observed_active_slot();
-        *self.play_order.lock().unwrap() = owner.play_order().mode();
     }
 }
 

@@ -1,7 +1,7 @@
 use super::super::core::DaemonEvent;
 use super::{
     CtrlContext, DaemonOwnerContext, DaemonPlayerOwner, broadcast_queue_state, dispatch_slot_jump,
-    handle_stop, mint_queue_lineage, reset_play_order_for_queue_replacement, send_to,
+    handle_stop, mint_queue_lineage, send_to,
 };
 use crate::ctrl::CtrlClientId;
 use mbv_ctrl::player::PlayerCommand;
@@ -84,10 +84,8 @@ fn install_resolved_queue(
     let mint = queue.revision_mint();
     *queue = PlaybackQueue::from_queue_items(queue_items, Some(start_idx), mint);
     *source = new_source;
-    // The resolved play installs a new lineage: the whole-queue replacement
-    // that resets the order (design D4).
+    // The resolved play installs a new lineage.
     mint_queue_lineage(ctx.shared_queue);
-    reset_play_order_for_queue_replacement(&mut ctx.owner.core, ctx.shared_queue);
     broadcast_queue_state(
         ctx.ctrl_clients,
         ctx.player,

@@ -1,7 +1,6 @@
 use super::super::{
     Mpv, NextUpFire, PlaybackOrigin, PlaybackRun, PlayerEvent, QueueItem, QueueSlotId,
-    TICKS_PER_SECOND, advance_next_index, handle_intro, queue_next_up_decision,
-    standalone_next_up_decision,
+    TICKS_PER_SECOND, handle_intro, queue_next_up_decision, standalone_next_up_decision,
 };
 
 impl PlaybackRun {
@@ -28,17 +27,12 @@ impl PlaybackRun {
     /// 60 s before end. Minimum episode: 10 min. Minimum remaining when shown: 20 s.
     fn maybe_fire_queue_next_up(&mut self, ticks: i64) {
         let runtime = self.status.lock().unwrap().runtime_ticks;
-        // The stored advance decides the next slot (design D2); a picked slot
-        // that is gone, or an index past the end, means there is no Next Up.
+        // The queue neighbor decides the next slot; an index past the end
+        // means there is no Next Up.
         let current_is_episode = self.active_item().is_some_and(QueueItem::is_tv_episode);
-        // Next Up needs an episode on both sides, so skip the pick lookup otherwise.
+        // Next Up needs an episode on both sides, so skip the lookup otherwise.
         let next_idx = current_is_episode
-            .then(|| {
-                advance_next_index(self.upcoming, self.current_idx, |slot_id| {
-                    self.queue.slot_index(slot_id)
-                })
-            })
-            .flatten()
+            .then(|| self.current_idx + 1)
             .filter(|next_idx| *next_idx < self.queue_len());
         let next_is_episode = next_idx
             .is_some_and(|next_idx| self.item_at(next_idx).is_some_and(QueueItem::is_tv_episode));

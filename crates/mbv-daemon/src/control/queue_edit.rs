@@ -1,7 +1,7 @@
 use super::{
     CtrlContext, DaemonOwnerContext, DaemonPlayerOwner, PlayerCommand, PlayerOwnerState,
     QueueSlotId, RejectContext, broadcast_queue_state, dispatch_slot_jump, mint_queue_lineage,
-    reject_command, reset_play_order_for_queue_replacement, reset_slot_jumps,
+    reject_command, reset_slot_jumps,
 };
 
 /// `CtrlCmd::UnifiedQueueRemoveSlot`: remove the slot identified by
@@ -65,10 +65,6 @@ pub(super) fn handle_queue_remove_slot(
             reset_slot_jumps(transitions, queued_transition_origin);
             ctx.player.send_command(PlayerCommand::QueueRemove(sid));
         }
-        // The edit can drop the Shuffle pick; the owner core re-picks inside
-        // `note_queue_slot_removed` (queue-content-shuffle removes the
-        // forwarding).
-        ctx.owner.core.note_queue_slot_removed(sid);
     } else {
         queue.remove_slot(sid);
         broadcast_queue_state(
@@ -80,10 +76,6 @@ pub(super) fn handle_queue_remove_slot(
             transitions,
             except_op_client,
         );
-        // The edit can drop the Shuffle pick; the owner core re-picks inside
-        // `note_queue_slot_removed` (queue-content-shuffle removes the
-        // forwarding).
-        ctx.owner.core.note_queue_slot_removed(sid);
         ctx.player.send_command(PlayerCommand::QueueRemove(sid));
     }
 }
@@ -149,18 +141,11 @@ pub(super) fn handle_queue_remove_slots(ctx: &mut CtrlContext<'_>, slot_ids: Vec
         });
         ctx.player.stop();
         reset_slot_jumps(transitions, queued_transition_origin);
-        for sid in &removed {
-            ctx.owner.core.note_queue_slot_removed(*sid);
-        }
     } else {
         // The player run keeps its own queue copy; its per-slot edits
         // are not published, so one command per removed slot is fine
         // and lets it resolve the active-slot hand-off itself.
         for sid in &removed {
-            // Each edit can drop the Shuffle pick; the owner core re-picks
-            // inside `note_queue_slot_removed` (queue-content-shuffle removes
-            // the forwarding).
-            ctx.owner.core.note_queue_slot_removed(*sid);
             ctx.player.send_command(PlayerCommand::QueueRemove(*sid));
         }
     }
@@ -334,12 +319,10 @@ pub(super) fn handle_queue_apply_progress(
 /// `CtrlCmd::UnifiedQueueClear`: clear all slots and stop playback.
 pub(super) fn handle_queue_clear(ctx: &mut CtrlContext<'_>) {
     let except_op_client = ctx.except_op_client();
-    // Clearing installs a new lineage: the whole-queue replacement that
-    // resets the order (design D4).
+    // Clearing installs a new lineage: the whole-queue replacement.
     ctx.owner.core.queue.clear();
     ctx.owner.core.source = mbv_queue::QueueSource::Unknown;
     mint_queue_lineage(ctx.shared_queue);
-    reset_play_order_for_queue_replacement(&mut ctx.owner.core, ctx.shared_queue);
     ctx.player.advance_sequence_generation();
     ctx.player.send_command(PlayerCommand::SubmitQueue {
         items: Vec::new(),
