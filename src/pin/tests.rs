@@ -1,41 +1,16 @@
-//! Unit tests for the pinwin boundary (`pinwin-app-host` design D3/D4) and the
-//! retired pty start-up (`pin-mbv-in-pinwin`).
+//! Unit tests for the pinwin boundary (`pinwin-app-host` design D1 to D8).
 
 use super::{
     PanelExitAction, PanelGutter, PanelIdentity, PanelReserve, PinnedWidth, StartFailureAction,
-    exit_action, failure_action, layout_from_config, pinned_width_argv, request_result, run_argv,
-    set_edge_argv, set_gutters_argv, set_size_argv, terminal_argv, toggle_argv,
+    exit_action, failure_action, pinned_width_argv, request_result, run_argv, set_edge_argv,
+    set_gutters_argv, set_size_argv, terminal_argv, toggle_argv,
 };
 use mbv_config::{PanelConfig, PanelSide};
 use std::ffi::OsStr;
-use std::num::NonZeroU16;
 
 /// The argv a test expects, as owned strings.
 fn strings(items: &[&str]) -> Vec<String> {
     items.iter().map(|item| (*item).to_string()).collect()
-}
-
-/// Design D2/D4: the active width selects `width` (collapsed) or
-/// `width_expanded` (expanded); nothing constrains which value is larger.
-#[rstest::rstest]
-#[case::collapsed_uses_width(PinnedWidth::Collapsed, 40, 80, 40)]
-#[case::expanded_uses_width_expanded(PinnedWidth::Expanded, 40, 80, 80)]
-#[case::expanded_below_collapsed_still_wins(PinnedWidth::Expanded, 60, 30, 30)]
-fn layout_from_config_selects_the_active_width(
-    #[case] width: PinnedWidth,
-    #[case] collapsed: u16,
-    #[case] expanded: u16,
-    #[case] expected: u16,
-) {
-    let config = PanelConfig {
-        width: collapsed,
-        width_expanded: expanded,
-        ..PanelConfig::default()
-    };
-    assert_eq!(
-        layout_from_config(&config, width).cols(),
-        NonZeroU16::new(expected).expect("test columns are non-zero")
-    );
 }
 
 /// Design D5: a failed pinned start falls back to the terminal only when
@@ -59,21 +34,6 @@ fn exit_action_reports_a_failure_only_outside_a_terminal(
     #[case] expected: PanelExitAction,
 ) {
     assert_eq!(exit_action(success, stdin_is_terminal), expected);
-}
-
-/// Issue #898 (`pinned-expand-covers-collapsed-pushes`): the collapsed
-/// panel pushes and the expanded panel covers; no setting takes part.
-#[rstest::rstest]
-#[case::collapsed_pushes(PinnedWidth::Collapsed, pinwin::layout::Coverage::Push)]
-#[case::expanded_covers(PinnedWidth::Expanded, pinwin::layout::Coverage::Cover)]
-fn layout_from_config_coverage_follows_the_width(
-    #[case] width: PinnedWidth,
-    #[case] expected: pinwin::layout::Coverage,
-) {
-    assert_eq!(
-        layout_from_config(&PanelConfig::default(), width).coverage(),
-        expected
-    );
 }
 
 /// Design D3: a set panel name makes the launch pinned; an empty or unset
