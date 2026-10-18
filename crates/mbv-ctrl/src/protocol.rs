@@ -100,6 +100,9 @@ pub const CTRL_CAP_EMBY_SESSION_OUTPUT: &str = "emby-session-output";
 /// Peer supports `CtrlCmd::SetPlayOrder` for the Bound queue playback order.
 /// Additive — no protocol-version bump.
 pub const CTRL_CAP_PLAY_ORDER: &str = "play-order";
+/// Peer supports `CtrlCmd::UnifiedQueueShuffle`, the one-time reorder of the
+/// queue contents. Additive — no protocol-version bump.
+pub const CTRL_CAP_QUEUE_SHUFFLE: &str = "queue-shuffle";
 /// Peer supports correlated owner-answered queue operations.
 /// Additive — no protocol-version bump.
 pub const CTRL_CAP_ANSWERED_QUEUE_OPS: &str = "answered-queue-ops";

@@ -20,6 +20,19 @@ fn hello_rejects_missing_capability() {
     assert!(hello.validate_peer().is_err());
 }
 
+// queue-content-shuffle task 2.2: the queue-shuffle capability is additive,
+// so the current hello advertises it and a peer without it reads false.
+#[test]
+fn peer_without_queue_shuffle_capability_reads_false() {
+    assert!(CtrlHello::current().supports_queue_shuffle());
+
+    let mut peer = CtrlHello::current();
+    peer.capabilities
+        .retain(|cap| cap != CTRL_CAP_QUEUE_SHUFFLE);
+    assert!(!peer.supports_queue_shuffle());
+    peer.validate_peer().unwrap();
+}
+
 #[test]
 fn current_hello_has_no_service_credential_field() {
     let json = serde_json::to_string(&CtrlHello::current()).unwrap();
