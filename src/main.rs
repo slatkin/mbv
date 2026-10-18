@@ -45,8 +45,7 @@ fn run_tui(mut app: App) {
         app.pin_launch_focus_to_queue();
     }
     if let Err(e) = Model::new_with_launch_window(app, launch_window).run() {
-        eprintln!("Error: {e}");
-        std::process::exit(1);
+        pin::fatal(format!("mbv: {e}"));
     }
 }
 

@@ -574,8 +574,8 @@ fn finish(status: std::process::ExitStatus) -> ! {
     }
     if action == PanelExitAction::LogAndNotify {
         let reason = match status.code() {
-            Some(code) => format!("the pinned panel ended with status {code}"),
-            None => "the pinned panel ended by a signal".to_string(),
+            Some(code) => format!("the pinned panel could not open (status {code})"),
+            None => "the pinned panel could not open (it ended by a signal)".to_string(),
         };
         notify(&format!("mbv: {reason}"));
     }
