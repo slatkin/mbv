@@ -87,7 +87,7 @@ fn install_resolved_queue(
     // The resolved play installs a new lineage: the whole-queue replacement
     // that resets the order (design D4).
     mint_queue_lineage(ctx.shared_queue);
-    reset_play_order_for_queue_replacement(&mut ctx.owner.core, ctx.shared_queue, ctx.player);
+    reset_play_order_for_queue_replacement(&mut ctx.owner.core, ctx.shared_queue);
     broadcast_queue_state(
         ctx.ctrl_clients,
         ctx.player,

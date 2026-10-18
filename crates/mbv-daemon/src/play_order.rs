@@ -6,9 +6,8 @@
 //! core's order.
 
 use crate::SharedQueueState;
-use mbv_ctrl::player::PlayerCommand;
 use mbv_ctrl::{Direction, PlaybackRequestId};
-use mbv_player::{Player, PlayerOwnerState};
+use mbv_player::PlayerOwnerState;
 use mbv_queue::{PlayOrder, PlaybackQueue, QueueSlotId};
 
 use crate::core::DaemonOwnerContext;
@@ -80,21 +79,13 @@ pub(crate) fn dispatch_step_target(
     request_id
 }
 
-/// Forward the owner's current play order to the Playback run. Called after
-/// every owner-core hook that can change the pick or the order.
-pub(crate) fn forward_play_order_advance(owner: &PlayerOwnerState, player: &Player) {
-    player.send_command(PlayerCommand::SetUpcoming(owner.play_order()));
-}
-
 /// Reset the order for a whole-queue replacement (design D4): Sequential in
-/// the owner core, in the shared snapshot, and in the Playback run. Called
-/// where the daemon mints a new `QueueLineage`.
+/// the owner core and in the shared snapshot. Called where the daemon mints a
+/// new `QueueLineage`.
 pub(crate) fn reset_play_order_for_queue_replacement(
     owner: &mut PlayerOwnerState,
     shared_queue: &SharedQueueState,
-    player: &Player,
 ) {
     owner.note_queue_replaced();
     *shared_queue.play_order.lock().unwrap() = mbv_queue::PlayOrderMode::Sequential;
-    forward_play_order_advance(owner, player);
 }

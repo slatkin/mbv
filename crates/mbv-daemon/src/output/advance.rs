@@ -319,7 +319,6 @@ fn record_natural_end(daemon: &mut DaemonLoop, ended: QueueSlotId, consume: bool
     let consume_policy = (daemon.owner_settings)().consume;
     crate::record_completed_slot(
         &mut daemon.owner,
-        &daemon.player,
         &daemon.shared_queue,
         ended,
         0,
@@ -448,15 +447,10 @@ pub(crate) fn clear_advance(daemon: &mut DaemonLoop) {
 }
 
 /// Records `slot` as the owner's observed active slot (the only path for that
-/// record), forwarding the play order when the note re-picked the Shuffle
-/// pick — the settle path's pattern.
+/// record) — the settle path's pattern.
 fn observe_slot(daemon: &mut DaemonLoop, slot: QueueSlotId) {
     let crate::core::DaemonPlayerOwner { core, .. } = &mut daemon.owner;
-    let order_before = core.play_order();
     core.note_observed_active_slot(Some(slot));
-    if core.play_order() != order_before {
-        crate::forward_play_order_advance(core, &daemon.player);
-    }
 }
 
 /// Re-bases the shared step funnel on the slot the failed step targeted

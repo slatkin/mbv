@@ -2,8 +2,8 @@ use super::core::DaemonEvent;
 use super::{
     AuthorityHolder, ClientRegistry, CtrlClientId, CtrlSender, CtrlTransport, DaemonOwnerContext,
     DaemonPlayerOwner, PendingIdleQueueLoad, SharedQueueState, audio_only_rejection,
-    dispatch_slot_jump, forward_play_order_advance, reset_play_order_for_queue_replacement,
-    reset_slot_jumps, send_to, submit_queue_slots_cold_start,
+    dispatch_slot_jump, reset_play_order_for_queue_replacement, reset_slot_jumps, send_to,
+    submit_queue_slots_cold_start,
 };
 use mbv_ctrl::player::PlayerCommand;
 use mbv_ctrl::{
@@ -118,7 +118,6 @@ impl CtrlContext<'_> {
             source: &self.owner.core.source,
             lineage,
             op: &self.op,
-            play_order: *self.shared_queue.play_order.lock().unwrap(),
         }
     }
 
@@ -140,9 +139,6 @@ struct RejectContext<'a> {
     source: &'a mbv_queue::QueueSource,
     lineage: mbv_queue::QueueLineage,
     op: &'a std::cell::Cell<Option<QueueOpId>>,
-    /// The owner's order mode at rejection time, so the resync snapshot
-    /// carries it (queue-shuffle-play-order design D5).
-    play_order: mbv_queue::PlayOrderMode,
 }
 
 /// Sends a command rejection to the requesting client and re-publishes the
@@ -157,7 +153,6 @@ fn reject_command(ctx: &RejectContext<'_>, reason: &str) {
         source,
         lineage,
         op,
-        play_order,
     } = *ctx;
     if let Some(op) = op.take() {
         send_to(
@@ -188,7 +183,6 @@ fn reject_command(ctx: &RejectContext<'_>, reason: &str) {
             None,
             supports_abs_queue,
             supports_abs_book_queue,
-            play_order,
         ),
     );
 }
@@ -398,7 +392,6 @@ fn answer_queue_op(ctx: &CtrlContext<'_>, op: QueueOpId) {
         queued_latest,
         supports_abs_queue,
         supports_abs_book_queue,
-        *ctx.shared_queue.play_order.lock().unwrap(),
     );
     let CtrlEvent::UnifiedQueueState(state) = event else {
         unreachable!("queue projection always returns UnifiedQueueState")
@@ -409,26 +402,6 @@ fn answer_queue_op(ctx: &CtrlContext<'_>, op: QueueOpId) {
             op,
             outcome: QueueOpOutcome::Applied(Box::new(state)),
         },
-    );
-}
-
-/// `CtrlCmd::SetPlayOrder`: turn the owner's playback order (design D2/D5).
-/// The core picks (or clears) its next slot, the shared snapshot mirror and
-/// every connected Client learn the new mode, and the Playback run is told
-/// the advance decision to obey on its next unforced end-of-file advance.
-fn handle_set_play_order(ctx: &mut CtrlContext<'_>, mode: mbv_queue::PlayOrderMode) {
-    tracing::info!(name: "daemon.play_order.set", target: "daemon", client = %ctx.client_id, mode = ?mode, "play order set");
-    ctx.owner.core.set_play_order(mode);
-    *ctx.shared_queue.play_order.lock().unwrap() = mode;
-    forward_play_order_advance(&ctx.owner.core, ctx.player);
-    broadcast_queue_state(
-        ctx.ctrl_clients,
-        ctx.player,
-        ctx.shared_queue,
-        &ctx.owner.core.queue,
-        &ctx.owner.core.source,
-        &ctx.owner.core.transitions,
-        None,
     );
 }
 
@@ -467,10 +440,6 @@ fn dispatch_ctrl_command(
         // `ApplyServiceSetup` runs on the packaged daemon's owner-admin
         // path.
         CtrlCmd::ApplyServiceSetup { .. } => {}
-        // Turn the owner's playback order (queue-shuffle-play-order design
-        // D2/D5): the core picks (or clears) and the run is told the advance
-        // decision to obey.
-        CtrlCmd::SetPlayOrder(mode) => handle_set_play_order(ctx, mode),
         // The commands the event loop consumes before this dispatcher: the
         // swap machine takes its target's `SwapPrepared` (tray-pin-swap task
         // 3.3), the owner-action handler takes `RunOwnerAction` (task 3.5),

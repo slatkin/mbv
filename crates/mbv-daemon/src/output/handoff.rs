@@ -246,11 +246,7 @@ fn continue_slot_on_local(
     // becomes playback truth (the same bookkeeping the cold-start slot jump
     // applies).
     let _ = daemon.owner.core.queue.set_active_slot(handoff.slot);
-    let order_before = daemon.owner.core.play_order();
     daemon.owner.core.note_observed_active_slot(None);
-    if daemon.owner.core.play_order() != order_before {
-        crate::forward_play_order_advance(&daemon.owner.core, &daemon.player);
-    }
     daemon.shared_queue.publish_observed(&daemon.owner.core);
     crate::broadcast_queue_state(
         &daemon.ctrl_clients,

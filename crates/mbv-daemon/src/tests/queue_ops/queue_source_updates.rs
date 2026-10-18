@@ -278,12 +278,8 @@ fn matching_source_update_publishes_without_replacing_queue_or_playback() {
         ),
         status_before,
     );
-    // The idle load's order reset forwards its store-only advance
-    // (queue-shuffle-play-order task 4.1); the source update itself sends none.
-    assert!(matches!(
-        fx.commands.try_recv(),
-        Ok(PlayerCommand::SetUpcoming(mbv_queue::PlayOrder::Sequential))
-    ));
+    // The idle load's order reset stays owner-local now (queue-content-shuffle
+    // task 5.2): the source update itself sends no command.
     assert!(matches!(
         fx.commands.try_recv(),
         Err(mpsc::TryRecvError::Empty)
@@ -377,14 +373,8 @@ fn delayed_source_update_is_rejected_after_another_client_replaces_queue() {
             .collect::<Vec<_>>(),
         slots_before,
     );
-    // Each committed idle load's order reset forwards its store-only advance
-    // (queue-shuffle-play-order task 4.1); the source update itself sends none.
-    for _ in 0..2 {
-        assert!(matches!(
-            fx.commands.try_recv(),
-            Ok(PlayerCommand::SetUpcoming(mbv_queue::PlayOrder::Sequential))
-        ));
-    }
+    // Each committed idle load's order reset stays owner-local now
+    // (queue-content-shuffle task 5.2); the source update itself sends none.
     assert!(matches!(
         fx.commands.try_recv(),
         Err(mpsc::TryRecvError::Empty)

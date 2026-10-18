@@ -4,8 +4,7 @@
 use super::super::{
     DaemonLoop, DaemonOwnerContext, apply_stopped_observation, apply_track_completed_observation,
     broadcast, broadcast_player_event_if_not_replaced, cancel_pending_idle_queue_load,
-    complete_pending_idle_queue_load, forward_play_order_advance, next_up_slot,
-    settle_and_redispatch,
+    complete_pending_idle_queue_load, next_up_slot, settle_and_redispatch,
 };
 use super::EventOutcome;
 use mbv_ctrl::player::{PlayerCommand, PlayerEvent};
@@ -30,17 +29,14 @@ impl DaemonLoop {
         // evidence about which surviving slot was intended, so it is
         // discarded and logged without touching canonical queue or
         // observed slot (design D6).
-        let order_before = self.owner.core.play_order();
         let Some((observed_idx, resolved_slot_id)) = self.owner.core.observe_track_change(slot_id)
         else {
             tracing::warn!(name: "daemon.queue_track_change.discarded", target: "queue", slot = ?slot_id, "discarding track change for unknown slot");
             return EventOutcome::CONTINUE;
         };
-        // An observed active-slot change re-picks the Shuffle advance; forward
-        // the new decision when it changed (queue-shuffle-play-order D2).
-        if self.owner.core.play_order() != order_before {
-            forward_play_order_advance(&self.owner.core, &self.player);
-        }
+        // An observed active-slot change re-picks the Shuffle advance inside
+        // `observe_track_change` (queue-content-shuffle removes the
+        // forwarding).
         broadcast(
             &self.ctrl_clients,
             &CtrlEvent::Player(PlayerEvent::TrackChanged {

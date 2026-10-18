@@ -238,7 +238,6 @@ fn initial_queue_state_json(
     let source = shared_queue.source.lock().unwrap().clone();
     let observed_active_slot = *shared_queue.observed_active_slot.lock().unwrap();
     let lineage = *shared_queue.lineage.lock().unwrap();
-    let play_order = *shared_queue.play_order.lock().unwrap();
     let init_event = unified_queue_state_for_peer(
         &status,
         &q,
@@ -249,7 +248,6 @@ fn initial_queue_state_json(
         None,
         supports_abs_queue,
         supports_abs_book_queue,
-        play_order,
     );
     serde_json::to_string(&init_event).ok()
 }

@@ -273,17 +273,20 @@ fn queue_shuffle_payload_without_op_decodes() {
     ));
 }
 
-// The ctrl wire carries the playback order only on `PlayerStatus.play_order`
-// (design D5, wire authority named in the queue-play-order spec): a payload
-// from an owner built before the field decodes as Sequential, and
-// `UnifiedQueueStateData` carries the order only through its `status` field.
+// The playback order left the wire (queue-content-shuffle task 5.2): a
+// payload from a peer built before the change that still carries
+// `play_order` decodes with the unknown field ignored.
 #[test]
-fn player_status_without_play_order_field_decodes_as_sequential() {
+fn player_status_with_legacy_play_order_field_still_decodes() {
     let mut value = serde_json::to_value(PlayerStatus::default()).unwrap();
-    value.as_object_mut().unwrap().remove("play_order").unwrap();
+    value
+        .as_object_mut()
+        .unwrap()
+        .insert("play_order".to_string(), serde_json::json!("Shuffle"));
 
     let decoded: PlayerStatus = serde_json::from_value(value).unwrap();
-    assert_eq!(decoded.play_order, mbv_queue::PlayOrderMode::Sequential);
+    assert!(!decoded.active);
+    assert_eq!(decoded.queue_len, 0);
 }
 
 #[rstest::rstest]

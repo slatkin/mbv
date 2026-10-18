@@ -57,9 +57,7 @@ pub use owner_lock::{
 mod core_ctrl_spawn;
 pub(crate) use core_ctrl_spawn::{DaemonHelloCaps, spawn_ctrl_client};
 mod play_order;
-pub(crate) use play_order::{
-    forward_play_order_advance, next_up_slot, reset_play_order_for_queue_replacement,
-};
+pub(crate) use play_order::{next_up_slot, reset_play_order_for_queue_replacement};
 mod run_shutdown;
 pub(crate) use run_shutdown::setup_shutdown_signal;
 mod run;

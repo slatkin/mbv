@@ -433,11 +433,6 @@ impl RemotePlayer {
     }
 
     #[must_use]
-    pub fn supports_play_order(&self) -> bool {
-        self.ctrl_compatibility.supports_play_order
-    }
-
-    #[must_use]
     pub fn supports_queue_shuffle(&self) -> bool {
         self.ctrl_compatibility.supports_queue_shuffle
     }

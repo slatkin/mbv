@@ -38,7 +38,7 @@ fn install_idle_queue_load(
     // The load installs a new lineage: the whole-queue replacement that
     // resets the order (design D4).
     mint_queue_lineage(shared_queue);
-    reset_play_order_for_queue_replacement(&mut owner.core, shared_queue, player);
+    reset_play_order_for_queue_replacement(&mut owner.core, shared_queue);
     owner.core.note_observed_active_slot(None);
     shared_queue.publish_observed(&owner.core);
     broadcast_queue_state(
