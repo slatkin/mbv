@@ -4,8 +4,8 @@ Read `design.md` first. Run `cargo fmt` after each Rust change. Add no lint supp
 
 ## 1. Queue core: one-revision reorder
 
-- [ ] 1.1 Add `PlaybackQueue::reorder_slots(&[QueueSlotId])` in `crates/mbv-queue/src/lib.rs`: replace the slot sequence, bump the revision once, return `NotFound` when the ids are not exactly the current slots. Verify with a `crates/mbv-queue/tests/` case for the contract "one revision bump, slot ids unchanged, mismatched ids leave the queue untouched".
-- [ ] 1.2 Add the pure shuffle function (active slot first, rest shuffled with an injected `Rng`, no active slot shuffles all). Verify with a seeded-RNG test per spec scenario "Shuffle with a playing item / nothing playing / one slot": active first, same id set, one-slot queue unchanged.
+- [x] 1.1 Add `PlaybackQueue::reorder_slots(&[QueueSlotId])` in `crates/mbv-queue/src/lib.rs`: replace the slot sequence, bump the revision once, return `NotFound` when the ids are not exactly the current slots. Verify with a `crates/mbv-queue/tests/` case for the contract "one revision bump, slot ids unchanged, mismatched ids leave the queue untouched".
+- [x] 1.2 Add the pure shuffle function (active slot first, rest shuffled with an injected `Rng`, no active slot shuffles all). Verify with a seeded-RNG test per spec scenario "Shuffle with a playing item / nothing playing / one slot": active first, same id set, one-slot queue unchanged.
 
 ## 2. Ctrl: command and capability (additive)
 
