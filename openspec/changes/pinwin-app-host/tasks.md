@@ -6,10 +6,10 @@
 
 ## 1. `[panel]` settings (design D5)
 
-- [ ] 1.1 In `crates/mbv-config/src/panel.rs`, replace `cols` / `cols_expanded` with `width` / `width_expanded` (logical pixels, 1..=65535, defaults 400 and 1100), and add `pin_terminal: Option<Vec<String>>`. The four `gutter_*` fields stay. Update `parse.rs` and `save.rs` to match: `save` writes `[panel]` in full with the new keys only. Verify: `cargo check -p mbv-config`.
-- [ ] 1.2 In `parse.rs`, ignore `cols` and `cols_expanded` with one logged warning that names the keys present; keep the silent ignore of `cover`. Extend the existing `[panel]` range contract test in `crates/mbv-config/src/tests/settings.rs` (task 4.2 of `pin-mbv-in-pinwin`) with the new width bounds, and add one test for the "Old column keys" scenario. Verify: `cargo nextest run -p mbv-config`.
-- [ ] 1.3 In `crates/mbv-ui-model/src/settings.rs`, rename the width `SettingKey`s and `PanelEditedWidth` mapping to `Width` / `Expanded width`, and step the width rows by 10 (100 with Shift). The gutter rows stay unchanged. Update the Panel page rows in `crates/mbv-components/src/settings.rs` and `crates/mbv-render/src/components/settings_component.rs`. Verify: `cargo nextest run -p mbv-ui-model -p mbv-components -p mbv-render`.
-- [ ] 1.4 Update `CONTEXT.md`: "Pinned panel width" (pixel keys, `x` only) and add "Pin terminal". "Gutter" keeps its meaning. Verify: `qmd query "pinned panel width"` returns the new text.
+- [x] 1.1 In `crates/mbv-config/src/panel.rs`, replace `cols` / `cols_expanded` with `width` / `width_expanded` (logical pixels, 1..=65535, defaults 400 and 1100), and add `pin_terminal: Option<Vec<String>>`. The four `gutter_*` fields stay. Update `parse.rs` and `save.rs` to match: `save` writes `[panel]` in full with the new keys only. Verify: `cargo check -p mbv-config`.
+- [x] 1.2 In `parse.rs`, ignore `cols` and `cols_expanded` with one logged warning that names the keys present; keep the silent ignore of `cover`. Extend the existing `[panel]` range contract test in `crates/mbv-config/src/tests/settings.rs` (task 4.2 of `pin-mbv-in-pinwin`) with the new width bounds, and add one test for the "Old column keys" scenario. Verify: `cargo nextest run -p mbv-config`.
+- [x] 1.3 In `crates/mbv-ui-model/src/settings.rs`, rename the width `SettingKey`s and `PanelEditedWidth` mapping to `Width` / `Expanded width`, and step the width rows by 10 (100 with Shift). The gutter rows stay unchanged. Update the Panel page rows in `crates/mbv-components/src/settings.rs` and `crates/mbv-render/src/components/settings_component.rs`. Verify: `cargo nextest run -p mbv-ui-model -p mbv-components -p mbv-render`.
+- [x] 1.4 Update `CONTEXT.md`: "Pinned panel width" (pixel keys, `x` only) and add "Pin terminal". "Gutter" keeps its meaning. Verify: `qmd query "pinned panel width"` returns the new text.
 
 ## 2. pinwin boundary in `src/pin.rs` (design D3, D4)
 
