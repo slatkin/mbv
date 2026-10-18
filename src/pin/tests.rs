@@ -1,9 +1,9 @@
 //! Unit tests for the pinwin boundary.
 
 use super::{
-    PanelExitAction, PanelGutter, PanelIdentity, PinSpawnError, StartFailureAction, exit_action,
-    failure_action, pinned_width_argv, request_result, run_argv, set_edge_argv, set_gutters_argv,
-    terminal_prefix, toggle_argv,
+    PanelExitAction, PanelGutter, PanelIdentity, PinSpawnError, StartFailureAction,
+    claim_panel_identity, exit_action, failure_action, is_pinned, pinned_width_argv,
+    request_result, run_argv, set_edge_argv, set_gutters_argv, terminal_prefix, toggle_argv,
 };
 use mbv_config::{PanelConfig, PanelSide};
 use mbv_ui_model::settings::PinnedWidth;
@@ -36,33 +36,51 @@ fn exit_action_reports_a_failure_only_outside_a_terminal(
     assert_eq!(exit_action(success, stdin_is_terminal), expected);
 }
 
-/// A set panel name makes the launch pinned; an empty or unset
-/// value leaves it unpinned.
+/// A non-empty panel name makes the launch pinned only together with the
+/// hidden launch flag. The socket is kept even without the flag, so the
+/// variables are scrubbed whether the launch is pinned or not.
 #[rstest::rstest]
-#[case::set(Some("mbv"), true)]
-#[case::empty(Some(""), false)]
-fn panel_identity_is_pinned_only_for_a_set_panel_name(
-    #[case] panel: Option<&str>,
-    #[case] expected: bool,
-) {
-    let identity = PanelIdentity::new(panel.map(str::to_owned), None);
-    assert_eq!(identity.name.is_some(), expected);
-}
-
-/// An empty socket counts as unset, so a request never points at
-/// an empty path.
-#[rstest::rstest]
-#[case::set(
+#[case::panel_and_flag(
+    Some("mbv"),
     Some("/run/user/1000/pinwin/wayland-0.sock"),
-    Some("/run/user/1000/pinwin/wayland-0.sock")
+    true,
+    Some("mbv")
 )]
-#[case::empty(Some(""), None)]
-fn panel_identity_keeps_a_socket_only_when_set(
+#[case::panel_without_flag(Some("mbv"), Some("/run/user/1000/pinwin/wayland-0.sock"), false, None)]
+#[case::empty_panel_with_flag(Some(""), None, true, None)]
+#[case::unset_panel_with_flag(None, None, true, None)]
+fn panel_identity_is_pinned_only_for_a_panel_name_and_the_launch_flag(
+    #[case] panel: Option<&str>,
     #[case] socket: Option<&str>,
+    #[case] in_panel: bool,
     #[case] expected: Option<&str>,
 ) {
-    let identity = PanelIdentity::new(Some("mbv".to_string()), socket.map(str::to_owned));
-    assert_eq!(identity.socket.as_deref(), expected);
+    let identity = PanelIdentity::new(
+        panel.map(str::to_owned),
+        socket.map(str::to_owned),
+        in_panel,
+    );
+    assert_eq!(identity.name.as_deref(), expected);
+    assert_eq!(
+        identity.socket.as_deref(),
+        socket.filter(|socket| !socket.is_empty())
+    );
+}
+
+/// A panel environment without the launch flag leaves the launch unpinned,
+/// and both variables leave this process's environment so no child inherits
+/// the panel identity.
+#[test]
+fn panel_environment_without_the_flag_is_scrubbed_and_unpinned() {
+    let _env = crate::config::tests::SYS_ENV_LOCK.lock().unwrap();
+    mbv_config::set_test_env_var("PINWIN_PANEL", "mbv");
+    mbv_config::set_test_env_var("PINWIN_SOCKET", "/run/user/1000/pinwin/wayland-0.sock");
+
+    claim_panel_identity(false);
+
+    assert!(!is_pinned());
+    assert!(std::env::var_os("PINWIN_PANEL").is_none());
+    assert!(std::env::var_os("PINWIN_SOCKET").is_none());
 }
 
 /// The launcher argv names the panel, shows an existing
@@ -76,7 +94,7 @@ fn panel_identity_keeps_a_socket_only_when_set(
         "run", "--name", "mbv", "--show-existing", "--edge", "left", "--size", "400px",
         "--reserve", "push", "--gutter-top", "0", "--gutter-bottom", "0", "--gutter-left", "0",
         "--gutter-right", "0", "--focus-ring", "#dabc7f:1", "--", "ghostty", "-e",
-        "/usr/bin/mbv",
+        "/usr/bin/mbv", "--in-panel",
     ]
 )]
 #[case::right_side_gutters_accent_off_and_log_level(
@@ -95,7 +113,7 @@ fn panel_identity_keeps_a_socket_only_when_set(
         "run", "--name", "mbv", "--show-existing", "--edge", "right", "--size", "320px",
         "--reserve", "push", "--gutter-top", "4", "--gutter-bottom", "-8", "--gutter-left", "2",
         "--gutter-right", "6", "--focus-ring", "off", "--", "ghostty", "-e", "/usr/bin/mbv",
-        "--log-level", "mbv=debug",
+        "--in-panel", "--log-level", "mbv=debug",
     ]
 )]
 fn run_argv_carries_the_layout_the_terminal_and_the_log_level(

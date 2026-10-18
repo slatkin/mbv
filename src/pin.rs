@@ -108,6 +108,11 @@ impl std::error::Error for PinRequestError {
 /// The panel name every pinned mbv runs under.
 pub(crate) const PANEL_NAME: &str = "mbv";
 
+/// The hidden launch flag that marks an mbv pinwin started inside a panel.
+/// It is parsed but never shown in `--help`; a panel environment without it
+/// leaves the launch unpinned.
+pub(crate) const IN_PANEL_FLAG: &str = "--in-panel";
+
 /// The variable pinwin sets on the Client it runs inside a panel: the name of
 /// that panel.
 const PINWIN_PANEL_ENV: &str = "PINWIN_PANEL";
@@ -126,12 +131,14 @@ struct PanelIdentity {
 }
 
 impl PanelIdentity {
-    /// Map the raw `PINWIN_PANEL` and `PINWIN_SOCKET` values to the identity:
-    /// a non-empty panel name means pinned, and an empty value counts as
-    /// unset.
-    fn new(panel: Option<String>, socket: Option<String>) -> Self {
+    /// Map the raw `PINWIN_PANEL` and `PINWIN_SOCKET` values and the hidden
+    /// launch flag to the identity: a non-empty panel name means pinned only
+    /// together with the flag, and an empty value counts as unset. The socket
+    /// is kept either way; it is scrubbed from the environment whether this
+    /// launch is pinned or not.
+    fn new(panel: Option<String>, socket: Option<String>, in_panel: bool) -> Self {
         Self {
-            name: panel.filter(|name| !name.is_empty()),
+            name: panel.filter(|name| !name.is_empty()).filter(|_| in_panel),
             socket: socket.filter(|socket| !socket.is_empty()),
         }
     }
@@ -160,11 +167,13 @@ fn claim_env_once(name: &str) -> Option<String> {
 /// Read `PINWIN_PANEL` and `PINWIN_SOCKET` and remove both from this
 /// process's environment. Called once at start-up, on the main
 /// thread next to [`claim_swap_token`], before any worker or child process
-/// spawns, so the Owner process and every other child run unpinned.
-pub(crate) fn claim_panel_identity() {
+/// spawns, so the Owner process and every other child run unpinned. The
+/// launch is pinned only when `in_panel` (the hidden launch flag) is also
+/// set, but the variables are scrubbed either way.
+pub(crate) fn claim_panel_identity(in_panel: bool) {
     let panel = claim_env_once(PINWIN_PANEL_ENV);
     let socket = claim_env_once(PINWIN_SOCKET_ENV);
-    let _ = PANEL_IDENTITY.set(PanelIdentity::new(panel, socket));
+    let _ = PANEL_IDENTITY.set(PanelIdentity::new(panel, socket, in_panel));
 }
 
 /// The claimed panel identity, the empty identity when nothing was claimed.
@@ -338,6 +347,7 @@ fn run_argv(
     .into();
     argv.extend_from_slice(terminal);
     argv.push(exe.to_string_lossy().into_owned());
+    argv.push(IN_PANEL_FLAG.to_string());
     if let Some(log_level) = log_level {
         argv.push("--log-level".to_string());
         argv.push(log_level.to_string());

@@ -248,19 +248,17 @@ struct StartupArgs {
     pin_requested: bool,
 }
 
-fn pre_config_startup() -> Option<StartupArgs> {
+fn pre_config_startup(args: &[String]) -> Option<StartupArgs> {
     cap_glibc_arenas();
     install_panic_hook();
     install_signal_handlers();
 
-    let args: Vec<String> = std::env::args().skip(1).collect();
-
-    if has_flag(&args, "-h") || has_flag(&args, "--help") {
+    if has_flag(args, "-h") || has_flag(args, "--help") {
         print_usage();
         return None;
     }
 
-    let log_level = match parse_log_level_arg(&args) {
+    let log_level = match parse_log_level_arg(args) {
         Ok(level) => level,
         Err(error) => {
             print_usage();
@@ -270,11 +268,11 @@ fn pre_config_startup() -> Option<StartupArgs> {
     };
 
     // Hidden local-daemon self-spawn is checked before other CLI parsing.
-    if has_flag(&args, "--__local-daemon") {
+    if has_flag(args, "--__local-daemon") {
         local_daemon::run_local_daemon_main();
     }
 
-    let cli_daemon_endpoint = match connect_daemon_arg(&args) {
+    let cli_daemon_endpoint = match connect_daemon_arg(args) {
         Ok(endpoint) => endpoint,
         Err(e) => {
             eprintln!("{e}");
@@ -282,12 +280,12 @@ fn pre_config_startup() -> Option<StartupArgs> {
         }
     };
 
-    if has_flag(&args, "--version") || has_flag(&args, "-V") {
+    if has_flag(args, "--version") || has_flag(args, "-V") {
         println!("mbv {}", env!("CARGO_PKG_VERSION"));
         return None;
     }
 
-    if has_flag(&args, "-q") {
+    if has_flag(args, "-q") {
         stop_running_instance();
         return None;
     }
@@ -295,7 +293,7 @@ fn pre_config_startup() -> Option<StartupArgs> {
     // `--toggle` asks the running pinned panel to show or hide; like `-q`, it
     // is handled before applog, config migration and `load_config`. It exits 1
     // itself when the request fails.
-    if has_flag(&args, "--toggle") {
+    if has_flag(args, "--toggle") {
         pin::toggle_running();
         return None;
     }
@@ -314,7 +312,7 @@ fn pre_config_startup() -> Option<StartupArgs> {
     }
 
     // Reject the removed -d argument before startup side effects.
-    if has_flag(&args, "-d") {
+    if has_flag(args, "-d") {
         eprintln!("mbv: the `-d` flag has been removed.");
         eprintln!(
             "mbv: to keep the local daemon running after quit, enable `stay_alive` in config or the settings overlay."
@@ -323,7 +321,7 @@ fn pre_config_startup() -> Option<StartupArgs> {
     }
 
     // `--pin` asks for the pinned panel; it is a runtime flag.
-    let pin_requested = has_flag(&args, "--pin");
+    let pin_requested = has_flag(args, "--pin");
 
     Some(StartupArgs {
         log_level,
@@ -355,10 +353,11 @@ fn main() {
     // Claim the Pin-swap token and the panel identity before anything else
     // spawns a worker or child process: the Owner process and every other
     // child must not inherit the panel identity.
+    let args: Vec<String> = std::env::args().skip(1).collect();
     pin::claim_swap_token();
-    pin::claim_panel_identity();
+    pin::claim_panel_identity(has_flag(&args, pin::IN_PANEL_FLAG));
 
-    let Some(startup) = pre_config_startup() else {
+    let Some(startup) = pre_config_startup(&args) else {
         return;
     };
 
