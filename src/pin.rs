@@ -16,27 +16,7 @@ use std::sync::OnceLock;
 use crate::launch::launch_exe;
 use mbv_config::PanelConfig;
 use mbv_ctrl::SWAP_TOKEN_ENV;
-
-/// Which of the two saved widths the running panel shows (design D1). The
-/// active width is runtime state on `App`; it is never persisted, so every
-/// pinned launch starts collapsed.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub(crate) enum PinnedWidth {
-    #[default]
-    Collapsed,
-    Expanded,
-}
-
-impl PinnedWidth {
-    /// The other width (design D3).
-    #[must_use]
-    pub(crate) fn toggled(self) -> Self {
-        match self {
-            Self::Collapsed => Self::Expanded,
-            Self::Expanded => Self::Collapsed,
-        }
-    }
-}
+use mbv_ui_model::settings::PinnedWidth;
 
 /// Why a pinned launch did not reach `pinwin run` (design D2, D5).
 #[derive(Debug)]
@@ -211,6 +191,33 @@ impl PanelGutter {
     }
 }
 
+/// The one `pinwin` request a Panel row sends while pinned (change
+/// `pinwin-app-host`, design D7). A width row asks for the width it edits, so
+/// the edited value is the width pinwin validates; a side or gutter row applies
+/// at the panel's current width.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum PinnedSettingRequest {
+    /// `Width` (`Collapsed`) or `Expanded width` (`Expanded`): one `set-size`
+    /// with the candidate width and its reserve mode.
+    Width(PinnedWidth),
+    /// `Side`: one `set-edge`.
+    Side(mbv_config::PanelSide),
+    /// A gutter row: one `set-gutters` that carries only the edited gutter.
+    Gutter(PanelGutter, i32),
+}
+
+impl PinnedSettingRequest {
+    /// The pinned width this request validates, `None` for a row that applies
+    /// at the panel's current width.
+    #[must_use]
+    pub(crate) fn edited_width(self) -> Option<PinnedWidth> {
+        match self {
+            Self::Width(width) => Some(width),
+            Self::Side(_) | Self::Gutter(..) => None,
+        }
+    }
+}
+
 /// A width in the pinwin size grammar: logical pixels (design D5).
 #[must_use]
 fn size_arg(width: u16) -> String {
@@ -326,23 +333,21 @@ fn panel_name() -> Result<&'static str, String> {
         .ok_or_else(|| "this launch is not pinned".to_string())
 }
 
-/// Ask the running panel for `width` (design D6). The requested view decides
-/// the request, never the terminal size, so a resize mbv did not request
-/// leaves [`PinnedWidth`] untouched. An unpinned launch, or a refused request,
-/// reports the reason and changes nothing.
-pub(crate) fn apply_pinned_width(config: &PanelConfig, width: PinnedWidth) -> Result<(), String> {
-    request(&pinned_width_argv(panel_name()?, config, width))
-}
-
-/// Move the running panel to `side` (design D7). The panel keeps its width.
-pub(crate) fn apply_pinned_side(side: mbv_config::PanelSide) -> Result<(), String> {
-    request(&set_edge_argv(panel_name()?, side))
-}
-
-/// Change one gutter of the running panel at its current width (design D7):
-/// the F2 row edits one gutter, so one gutter changes.
-pub(crate) fn apply_pinned_gutter(gutter: PanelGutter, value: i32) -> Result<(), String> {
-    request(&set_gutters_argv(panel_name()?, gutter, value))
+/// Send one panel request to the running panel (design D6, D7). The requested
+/// view decides the width request, never the terminal size, so a resize mbv did
+/// not request leaves [`PinnedWidth`] untouched. An unpinned launch, or a
+/// refused request, reports the reason and changes nothing.
+pub(crate) fn apply_pinned(
+    config: &PanelConfig,
+    request: PinnedSettingRequest,
+) -> Result<(), String> {
+    let panel = panel_name()?;
+    let argv = match request {
+        PinnedSettingRequest::Width(width) => pinned_width_argv(panel, config, width),
+        PinnedSettingRequest::Side(side) => set_edge_argv(panel, side),
+        PinnedSettingRequest::Gutter(gutter, value) => set_gutters_argv(panel, gutter, value),
+    };
+    run_request(&argv)
 }
 
 /// `set-edge <panel> left|right` (design D7).
@@ -400,7 +405,7 @@ fn request_result(code: Option<i32>, stderr: &str) -> Result<(), String> {
 /// Run one `pinwin` request against the claimed panel daemon (design D4). The
 /// child is the untested boundary; the argv it runs and the result it maps to
 /// are pure.
-fn request(argv: &[String]) -> Result<(), String> {
+fn run_request(argv: &[String]) -> Result<(), String> {
     let mut command = Command::new("pinwin");
     command.args(argv);
     if let Some(socket) = identity().socket.as_deref() {
@@ -520,7 +525,7 @@ fn finish(status: std::process::ExitStatus) -> ! {
 /// reason when no panel runs or the request fails; exits 0 silently on
 /// success.
 pub(crate) fn toggle_running() {
-    if let Err(reason) = request(&toggle_argv(PANEL_NAME)) {
+    if let Err(reason) = run_request(&toggle_argv(PANEL_NAME)) {
         report_toggle_failure(&reason);
     }
 }

@@ -525,7 +525,7 @@ pub struct App {
     /// design D1); never persisted, so a launch always starts collapsed.
     /// Whether this launch is pinned at all comes from `pin::is_pinned()`,
     /// the panel identity claimed at start-up.
-    pub(in crate::app) pinned_width: crate::pin::PinnedWidth,
+    pub(in crate::app) pinned_width: mbv_ui_model::settings::PinnedWidth,
     /// The configured `Accent color` when it lay outside the row's fixed
     /// palette, held while Settings is open so cycling can return to it
     /// (issue #875). Cleared each time Settings mounts; never persisted.

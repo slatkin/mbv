@@ -8,7 +8,7 @@
 
 use super::*;
 use crate::app::tests::make_app_stub;
-use crate::pin::{PanelGutter, PinnedWidth};
+use crate::pin::{PanelGutter, PinnedSettingRequest};
 use mbv_config::{PanelConfig, PanelSide};
 use rstest::rstest;
 
@@ -73,7 +73,13 @@ fn pinned_setting_request_names_the_rows_panel_change(
 fn accepted_pinned_request_saves_the_candidate() {
     let mut app = make_app_stub();
 
-    app.apply_panel_setting_outcome(true, SettingKey::PanelWidthExpanded, candidate(), Ok(()));
+    app.apply_panel_setting_outcome(
+        true,
+        SettingKey::PanelWidthExpanded,
+        Some(PinnedWidth::Expanded),
+        candidate(),
+        Ok(()),
+    );
 
     assert_eq!(app.config.lock().unwrap().panel.width_expanded, 1200);
     assert_eq!(app.pinned_width, PinnedWidth::Expanded);
@@ -90,6 +96,7 @@ fn refused_pinned_request_keeps_the_value_and_the_panel() {
     app.apply_panel_setting_outcome(
         true,
         SettingKey::PanelWidthExpanded,
+        Some(PinnedWidth::Expanded),
         candidate(),
         Err("the panel does not fit this output".into()),
     );
@@ -111,7 +118,7 @@ fn accent_row_while_pinned_saves_and_announces_the_next_launch() {
         ..candidate()
     };
 
-    app.apply_panel_setting_outcome(true, SettingKey::PanelAccent, next, Ok(()));
+    app.apply_panel_setting_outcome(true, SettingKey::PanelAccent, None, next, Ok(()));
 
     assert!(!app.config.lock().unwrap().panel.accent);
     assert_eq!(
@@ -127,7 +134,13 @@ fn accent_row_while_pinned_saves_and_announces_the_next_launch() {
 fn unpinned_row_saves_without_recording_a_pinned_width() {
     let mut app = make_app_stub();
 
-    app.apply_panel_setting_outcome(false, SettingKey::PanelWidth, candidate(), Ok(()));
+    app.apply_panel_setting_outcome(
+        false,
+        SettingKey::PanelWidth,
+        Some(PinnedWidth::Collapsed),
+        candidate(),
+        Ok(()),
+    );
 
     assert_eq!(app.config.lock().unwrap().panel.width, 480);
     assert_eq!(app.pinned_width, PinnedWidth::Collapsed);

@@ -1,11 +1,12 @@
 //! Unit tests for the pinwin boundary (`pinwin-app-host` design D1 to D8).
 
 use super::{
-    PanelExitAction, PanelGutter, PanelIdentity, PanelReserve, PinnedWidth, StartFailureAction,
-    exit_action, failure_action, pinned_width_argv, request_result, run_argv, set_edge_argv,
-    set_gutters_argv, set_size_argv, terminal_argv, toggle_argv,
+    PanelExitAction, PanelGutter, PanelIdentity, PanelReserve, StartFailureAction, exit_action,
+    failure_action, pinned_width_argv, request_result, run_argv, set_edge_argv, set_gutters_argv,
+    set_size_argv, terminal_argv, toggle_argv,
 };
 use mbv_config::{PanelConfig, PanelSide};
+use mbv_ui_model::settings::PinnedWidth;
 use std::ffi::OsStr;
 
 /// The argv a test expects, as owned strings.

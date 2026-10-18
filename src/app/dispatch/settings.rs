@@ -1,9 +1,9 @@
 use super::super::super::App;
 use super::notify::ToastSeverity;
-use crate::pin::PinnedWidth;
+use crate::pin::PinnedSettingRequest;
 use mbv_ui_model::context_menu::MultiSelectKind;
 use mbv_ui_model::overlay::OverlayRequest;
-use mbv_ui_model::settings::PanelEditedWidth;
+use mbv_ui_model::settings::PinnedWidth;
 use mbv_ui_model::settings::SettingKey;
 use mbv_ui_model::settings::SettingsDestination;
 use mbv_ui_model::ui_util::{cycle_lang, next_subtitle_mode};
@@ -73,24 +73,28 @@ impl App {
             return;
         };
         let pinned = crate::pin::is_pinned();
+        let request = pinned_setting_request(key, &candidate);
         // Outside a panel, and for a row that takes no request (an accent
         // row), the candidate saves as it is.
-        let applied = match pinned_setting_request(key, &candidate) {
-            Some(request) if pinned => request.send(&candidate),
+        let applied = match request {
+            Some(request) if pinned => crate::pin::apply_pinned(&candidate, request),
             _ => Ok(()),
         };
-        self.apply_panel_setting_outcome(pinned, key, candidate, applied);
+        let edited_width = request.and_then(PinnedSettingRequest::edited_width);
+        self.apply_panel_setting_outcome(pinned, key, edited_width, candidate, applied);
     }
 
     /// Apply a Panel row's candidate once the panel's request outcome is known
     /// (change `pinwin-app-host`, design D7): only an accepted request saves,
     /// and a refusal flashes pinwin's reason and keeps both the row's value and
-    /// the panel. A width row records the width it switched the panel to, and
-    /// an accent row while pinned announces the next launch (design D3).
+    /// the panel. A width row records the width it switched the panel to (the
+    /// request already derived it), and an accent row while pinned announces
+    /// the next launch (design D3).
     pub(in crate::app) fn apply_panel_setting_outcome(
         &mut self,
         pinned: bool,
         key: SettingKey,
+        edited_width: Option<PinnedWidth>,
         candidate: mbv_config::PanelConfig,
         applied: Result<(), String>,
     ) {
@@ -99,11 +103,8 @@ impl App {
             return;
         }
         self.config.lock().unwrap().panel = candidate;
-        if pinned && let Some(edited) = mbv_ui_model::settings::panel_row_edited_width(key) {
-            self.note_pinned_width_applied(match edited {
-                PanelEditedWidth::Collapsed => PinnedWidth::Collapsed,
-                PanelEditedWidth::Expanded => PinnedWidth::Expanded,
-            });
+        if pinned && let Some(edited) = edited_width {
+            self.note_pinned_width_applied(edited);
         }
         self.settings_save_at = Some(Instant::now() + Duration::from_millis(500));
         if pinned && mbv_ui_model::settings::is_panel_accent_row(key) {
@@ -289,49 +290,17 @@ impl App {
     }
 }
 
-/// The one `pinwin` request a Panel row sends while pinned (change
-/// `pinwin-app-host`, design D7). A width row asks for the width it edits, so
-/// the edited value is the width pinwin validates; a side or gutter row applies
-/// at the panel's current width.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum PinnedSettingRequest {
-    /// `Width` (`Collapsed`) or `Expanded width` (`Expanded`): one `set-size`
-    /// with the candidate width and its reserve mode.
-    Width(PinnedWidth),
-    /// `Side`: one `set-edge`.
-    Side(mbv_config::PanelSide),
-    /// A gutter row: one `set-gutters` that carries only the edited gutter.
-    Gutter(crate::pin::PanelGutter, i32),
-}
-
-impl PinnedSettingRequest {
-    /// Send the request to the running panel and report pinwin's reason when it
-    /// refuses it.
-    fn send(self, candidate: &mbv_config::PanelConfig) -> Result<(), String> {
-        match self {
-            Self::Width(width) => crate::pin::apply_pinned_width(candidate, width),
-            Self::Side(side) => crate::pin::apply_pinned_side(side),
-            Self::Gutter(gutter, value) => crate::pin::apply_pinned_gutter(gutter, value),
-        }
-    }
-}
-
 /// The request a Panel row sends while pinned (design D7), or `None` for a row
-/// that takes none: an accent row is fixed at panel start (design D3).
+/// that takes none: an accent row is fixed at panel start (design D3) and any
+/// other Settings row is not a Panel layout value.
 fn pinned_setting_request(
     key: SettingKey,
     candidate: &mbv_config::PanelConfig,
 ) -> Option<PinnedSettingRequest> {
-    match mbv_ui_model::settings::panel_row_edited_width(key) {
-        Some(PanelEditedWidth::Collapsed) => {
-            return Some(PinnedSettingRequest::Width(PinnedWidth::Collapsed));
-        }
-        Some(PanelEditedWidth::Expanded) => {
-            return Some(PinnedSettingRequest::Width(PinnedWidth::Expanded));
-        }
-        None => {}
-    }
     match key {
+        SettingKey::PanelWidth | SettingKey::PanelWidthExpanded => {
+            mbv_ui_model::settings::panel_row_edited_width(key).map(PinnedSettingRequest::Width)
+        }
         SettingKey::PanelSide => Some(PinnedSettingRequest::Side(candidate.side)),
         SettingKey::PanelGutterTop => Some(PinnedSettingRequest::Gutter(
             crate::pin::PanelGutter::Top,
@@ -349,7 +318,39 @@ fn pinned_setting_request(
             crate::pin::PanelGutter::Right,
             candidate.gutter_right,
         )),
-        _ => None,
+        SettingKey::PanelAccent | SettingKey::PanelAccentColor | SettingKey::PanelAccentWidth => {
+            None
+        }
+        SettingKey::Services
+        | SettingKey::Keys
+        | SettingKey::Panel
+        | SettingKey::StayAlive
+        | SettingKey::AutoReconnect
+        | SettingKey::SavePlaylistOnQuit
+        | SettingKey::AlwaysPlayNext
+        | SettingKey::ConsumeVideos
+        | SettingKey::ConsumeAudio
+        | SettingKey::SavePlaylistOnConsume
+        | SettingKey::SavePlaylistOnConsumeAudio
+        | SettingKey::AlwaysSkipIntro
+        | SettingKey::ImageProtocol
+        | SettingKey::HiddenLibraries
+        | SettingKey::ShowAudioWindow
+        | SettingKey::UseMpvConfig
+        | SettingKey::NoScripts
+        | SettingKey::Autoload
+        | SettingKey::ShowSysTrayIcon
+        | SettingKey::SystemNotifications
+        | SettingKey::MouseSupport
+        | SettingKey::MyLanguages
+        | SettingKey::SubtitleMode
+        | SettingKey::FeedViewLibraries
+        | SettingKey::LibraryRoutes
+        | SettingKey::SubtitleLanguage
+        | SettingKey::AudioLanguage
+        | SettingKey::ManageFeeds
+        | SettingKey::ResetUiState
+        | SettingKey::LogOut => None,
     }
 }
 

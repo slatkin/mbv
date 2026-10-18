@@ -552,22 +552,35 @@ pub fn is_panel_accent_row(key: SettingKey) -> bool {
     )
 }
 
-/// The pinned width a Panel row's candidate layout is validated at (design
-/// D4): `Width` validates `width`, `Expanded width` validates
-/// `width_expanded`, and any other row the caller's current width.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum PanelEditedWidth {
+/// Which of the two saved widths the running panel shows (design D1). The
+/// active width is runtime state on `App`; it is never persisted, so every
+/// pinned launch starts collapsed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum PinnedWidth {
+    #[default]
     Collapsed,
     Expanded,
 }
 
+impl PinnedWidth {
+    /// The other width (design D3).
+    #[must_use]
+    pub fn toggled(self) -> Self {
+        match self {
+            Self::Collapsed => Self::Expanded,
+            Self::Expanded => Self::Collapsed,
+        }
+    }
+}
+
 /// Which pinned width the edited Panel row belongs to, or `None` for a row
-/// that validates at the caller's current width (design D4).
+/// that validates at the caller's current width (design D4): `Width` validates
+/// `width`, and `Expanded width` validates `width_expanded`.
 #[must_use]
-pub fn panel_row_edited_width(key: SettingKey) -> Option<PanelEditedWidth> {
+pub fn panel_row_edited_width(key: SettingKey) -> Option<PinnedWidth> {
     match key {
-        SettingKey::PanelWidth => Some(PanelEditedWidth::Collapsed),
-        SettingKey::PanelWidthExpanded => Some(PanelEditedWidth::Expanded),
+        SettingKey::PanelWidth => Some(PinnedWidth::Collapsed),
+        SettingKey::PanelWidthExpanded => Some(PinnedWidth::Expanded),
         _ => None,
     }
 }

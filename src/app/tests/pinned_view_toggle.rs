@@ -9,8 +9,8 @@
 
 use super::*;
 use crate::app::tests::tick_integration::harness::TickHarness;
-use crate::pin::PinnedWidth;
 use mbv_components::QueuePlaybackPanel;
+use mbv_ui_model::settings::PinnedWidth;
 use mbv_ui_msg::ComponentId;
 
 /// Design D2/D3: from the collapsed width, an accepted expand records the

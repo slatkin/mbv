@@ -296,20 +296,19 @@ impl App {
     /// is unreachable.
     pub(crate) fn pinned_view_toggle(&mut self) {
         let width = self.pinned_width.toggled();
-        if let Some(result) = self.request_pinned_width(width) {
-            self.apply_pinned_view(width, result);
-        }
+        let applied = self.request_pinned_width(width);
+        self.apply_pinned_view(width, applied);
     }
 
-    /// Ask the running panel for `width`; `None` when this launch is not
-    /// pinned. The config is cloned out first so callers can mutate `self`
-    /// after the request.
-    fn request_pinned_width(&self, width: crate::pin::PinnedWidth) -> Option<Result<(), String>> {
-        if !crate::pin::is_pinned() {
-            return None;
-        }
+    /// Ask the running panel for `width`. The config is cloned out first so
+    /// callers can mutate `self` after the request; `cycle_panel_mode` already
+    /// guards pinned-ness (D1).
+    fn request_pinned_width(
+        &self,
+        width: mbv_ui_model::settings::PinnedWidth,
+    ) -> Result<(), String> {
         let config = self.config.lock().unwrap().panel.clone();
-        Some(crate::pin::apply_pinned_width(&config, width))
+        crate::pin::apply_pinned(&config, crate::pin::PinnedSettingRequest::Width(width))
     }
 
     /// Take an accepted target width and assign the matching pinned view, or
@@ -321,7 +320,7 @@ impl App {
     /// return and leave the stored `panel_focus` stale.
     pub(in crate::app) fn apply_pinned_view(
         &mut self,
-        width: crate::pin::PinnedWidth,
+        width: mbv_ui_model::settings::PinnedWidth,
         applied: Result<(), String>,
     ) {
         if let Err(reason) = applied {
@@ -330,11 +329,11 @@ impl App {
         }
         self.note_pinned_width_applied(width);
         let (mode, focus) = match width {
-            crate::pin::PinnedWidth::Expanded => (
+            mbv_ui_model::settings::PinnedWidth::Expanded => (
                 mbv_ui_model::settings::PanelMode::LibraryOnly,
                 mbv_ui_model::settings::PanelFocus::Library,
             ),
-            crate::pin::PinnedWidth::Collapsed => (
+            mbv_ui_model::settings::PinnedWidth::Collapsed => (
                 mbv_ui_model::settings::PanelMode::QueueOnly,
                 mbv_ui_model::settings::PanelFocus::Queue,
             ),
@@ -342,7 +341,7 @@ impl App {
         self.panel_mode = mode;
         self.mini_view_focus = focus;
         self.panel_focus = focus;
-        if width == crate::pin::PinnedWidth::Collapsed {
+        if width == mbv_ui_model::settings::PinnedWidth::Collapsed {
             self.focus_queue_initial_item();
         }
     }
