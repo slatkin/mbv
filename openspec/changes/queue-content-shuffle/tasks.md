@@ -9,8 +9,8 @@ Read `design.md` first. Run `cargo fmt` after each Rust change. Add no lint supp
 
 ## 2. Ctrl: command and capability (additive)
 
-- [ ] 2.1 Add `CtrlCmd::UnifiedQueueShuffle { op: Option<QueueOpId> }` in `crates/mbv-ctrl/src/commands.rs` with exhaustive arms in the role-gate and queue-op lists, and `queue_op_id` in `crates/mbv-daemon/src/control.rs`. Verify with `cargo check --workspace` and a wire round-trip case in `crates/mbv-ctrl/tests/ctrl/wire.rs` (a payload without `op` decodes).
-- [ ] 2.2 Add the `queue-shuffle` hello capability and `supports_queue_shuffle` in `crates/mbv-ctrl/src/hello.rs` and `protocol.rs`, with no protocol version change. Verify with a hello test: a peer without the capability reads false.
+- [x] 2.1 Add `CtrlCmd::UnifiedQueueShuffle { op: Option<QueueOpId> }` in `crates/mbv-ctrl/src/commands.rs` with exhaustive arms in the role-gate and queue-op lists, and `queue_op_id` in `crates/mbv-daemon/src/control.rs`. Verify with `cargo check --workspace` and a wire round-trip case in `crates/mbv-ctrl/tests/ctrl/wire.rs` (a payload without `op` decodes).
+- [x] 2.2 Add the `queue-shuffle` hello capability and `supports_queue_shuffle` in `crates/mbv-ctrl/src/hello.rs` and `protocol.rs`, with no protocol version change. Verify with a hello test: a peer without the capability reads false.
 
 ## 3. Owner: shuffle handler and run reorder
 
