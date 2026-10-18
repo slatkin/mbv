@@ -179,11 +179,13 @@ fn terminal_resize_observer_applies_new_size_before_paint() {
     assert!(model.app.is_right_panel_wide());
 }
 
-/// Regression guard for the default pinned expanded panel: at 120 columns
-/// (`DEFAULT_PANEL_COLS_EXPANDED`) in Both mode, the queue column (40) and
-/// the `TAB_LEFT_PAD` insets leave the library content exactly
-/// `TWO_COLUMN_THRESHOLD` columns wide, and wide mode must hold. Restoring
-/// the old 80 threshold silently re-narrowed the pinned panel by 4 columns.
+/// Regression guard for an expanded pinned panel at 120 columns, the width
+/// `TWO_COLUMN_THRESHOLD` is tuned for (the configured panel width is in
+/// logical pixels, so its column count depends on the terminal cell size): in
+/// Both mode, the queue column (40) and the `TAB_LEFT_PAD` insets leave the
+/// library content exactly `TWO_COLUMN_THRESHOLD` columns wide, and wide mode
+/// must hold. Restoring the old 80 threshold silently re-narrowed the pinned
+/// panel by 4 columns.
 #[test]
 fn the_default_pinned_expanded_width_is_wide() {
     let mut model = Model::new(make_app_stub());

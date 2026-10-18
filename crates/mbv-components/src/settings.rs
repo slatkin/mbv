@@ -349,7 +349,10 @@ impl SettingsComponent {
 
     /// The intent for a value key on the main or Panel list (design D6,
     /// change `pin-mbv-in-pinwin`): a Panel stepper row steps — Left down,
-    /// Right/Space/Enter up, Shift ×10 — while every other row activates.
+    /// Right/Space/Enter up — while every other row activates. The delta is
+    /// the step count (±1, or ±10 with Shift); the settings model scales it
+    /// by the row's base step, so a width row moves 10 pixels and 100 with
+    /// Shift while a gutter row moves 1 and 10.
     fn activation_intent(&self, key: &KeyEvent) -> SettingsIntent {
         let is_stepper = self.destination == SettingsDestination::Panel
             && self

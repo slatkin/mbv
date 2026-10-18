@@ -24,11 +24,13 @@ pub const LEFT_WIDTH_STEP: u16 = 5;
 /// which the view switches to a two-column layout. Every screen and
 /// arrangement reads this one constant instead of testing width itself.
 ///
-/// 76 = the default pinned expanded panel (120 cols,
-/// `DEFAULT_PANEL_COLS_EXPANDED`) minus the 40-col queue column
+/// 76 = a 120-column expanded panel minus the 40-col queue column
 /// (`queue_column_width`) and the two `TAB_LEFT_PAD` insets on the library
-/// content area, so the default expanded panel lays out two-column. A pinned
-/// `LibraryOnly` layout at 120 cols yields 118 and passes either way.
+/// content area, so an expanded panel at 120 columns lays out two-column.
+/// The panel width itself is configured in logical pixels
+/// (`DEFAULT_PANEL_WIDTH_EXPANDED`), so its column count depends on the
+/// terminal cell size; 120 columns is the width this breakpoint is tuned for.
+/// A pinned `LibraryOnly` layout at 120 cols yields 118 and passes either way.
 pub const TWO_COLUMN_THRESHOLD: u16 = 76;
 /// The narrow-terminal breakpoint below which the Power View uses the
 /// two-state "mini view" (`x` toggles library-only <-> queue-only) instead of

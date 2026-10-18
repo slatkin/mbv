@@ -338,7 +338,8 @@ impl Model {
             SettingsIntent::Quit => self.app.try_quit(),
             SettingsIntent::Activate(cursor) => {
                 if self.app.settings_destination == SettingsDestination::Panel {
-                    // An activate steps a Panel row by one (`Side` cycles).
+                    // An activate steps a Panel row up by its base step
+                    // (`Side` cycles; a width row steps 10 pixels).
                     self.app.apply_panel_setting(
                         mbv_ui_model::settings::panel_cursor_to_key(cursor),
                         1,

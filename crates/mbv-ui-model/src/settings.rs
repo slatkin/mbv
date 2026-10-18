@@ -30,8 +30,8 @@ pub enum SettingKey {
     Keys,
     Panel,
     PanelSide,
-    PanelCols,
-    PanelColsExpanded,
+    PanelWidth,
+    PanelWidthExpanded,
     PanelGutterTop,
     PanelGutterBottom,
     PanelGutterLeft,
@@ -243,8 +243,8 @@ fn setting_stepper_label(key: SettingKey) -> &'static str {
     label_for(
         key,
         &[
-            (SettingKey::PanelCols, "Cols"),
-            (SettingKey::PanelColsExpanded, "Expanded cols"),
+            (SettingKey::PanelWidth, "Width"),
+            (SettingKey::PanelWidthExpanded, "Expanded width"),
             (SettingKey::PanelGutterTop, "Gutter top"),
             (SettingKey::PanelGutterBottom, "Gutter bottom"),
             (SettingKey::PanelGutterLeft, "Gutter left"),
@@ -315,8 +315,8 @@ pub fn setting_kind(key: SettingKey) -> SettingValueKind {
         | K::AudioLanguage
         | K::PanelSide
         | K::PanelAccentColor => V::Text,
-        K::PanelCols
-        | K::PanelColsExpanded
+        K::PanelWidth
+        | K::PanelWidthExpanded
         | K::PanelGutterTop
         | K::PanelGutterBottom
         | K::PanelGutterLeft
@@ -426,8 +426,8 @@ fn setting_text_value(key: SettingKey, cfg: &Config, ui: &UiConfig) -> Option<St
 
 fn setting_stepper_value(key: SettingKey, cfg: &Config) -> Option<String> {
     match key {
-        SettingKey::PanelCols => Some(cfg.panel.width.to_string()),
-        SettingKey::PanelColsExpanded => Some(cfg.panel.width_expanded.to_string()),
+        SettingKey::PanelWidth => Some(cfg.panel.width.to_string()),
+        SettingKey::PanelWidthExpanded => Some(cfg.panel.width_expanded.to_string()),
         SettingKey::PanelGutterTop => Some(cfg.panel.gutter_top.to_string()),
         SettingKey::PanelGutterBottom => Some(cfg.panel.gutter_bottom.to_string()),
         SettingKey::PanelGutterLeft => Some(cfg.panel.gutter_left.to_string()),
@@ -506,8 +506,8 @@ pub fn bool_val(v: bool) -> String {
 /// (change `pinned-panel-focus-accent`).
 pub const PANEL_SETTING_KEYS: [SettingKey; 10] = [
     SettingKey::PanelSide,
-    SettingKey::PanelCols,
-    SettingKey::PanelColsExpanded,
+    SettingKey::PanelWidth,
+    SettingKey::PanelWidthExpanded,
     SettingKey::PanelGutterTop,
     SettingKey::PanelGutterBottom,
     SettingKey::PanelGutterLeft,
@@ -553,8 +553,8 @@ pub fn is_panel_accent_row(key: SettingKey) -> bool {
 }
 
 /// The pinned width a Panel row's candidate layout is validated at (design
-/// D4): `Cols` validates the collapsed width, `Expanded cols` the expanded
-/// one, and any other row the caller's current width.
+/// D4): `Width` validates `width`, `Expanded width` validates
+/// `width_expanded`, and any other row the caller's current width.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PanelEditedWidth {
     Collapsed,
@@ -566,9 +566,26 @@ pub enum PanelEditedWidth {
 #[must_use]
 pub fn panel_row_edited_width(key: SettingKey) -> Option<PanelEditedWidth> {
     match key {
-        SettingKey::PanelCols => Some(PanelEditedWidth::Collapsed),
-        SettingKey::PanelColsExpanded => Some(PanelEditedWidth::Expanded),
+        SettingKey::PanelWidth => Some(PanelEditedWidth::Collapsed),
+        SettingKey::PanelWidthExpanded => Some(PanelEditedWidth::Expanded),
         _ => None,
+    }
+}
+
+/// A Panel width row's step in logical pixels (design D5). The component
+/// sends ±1, or ±10 while Shift is held, so a width row moves by 10 pixels
+/// and by 100 with Shift.
+const PANEL_WIDTH_STEP: i32 = 10;
+
+/// The base step of one Panel stepper row in its own unit (design D5): a
+/// width row steps by 10 logical pixels, every other row by 1 (gutter rows
+/// keep 1, or 10 with Shift). The interaction's own multiplier still applies
+/// on top, so a width row moves 100 pixels when Shift is held.
+#[must_use]
+pub fn panel_row_step(key: SettingKey) -> i32 {
+    match key {
+        SettingKey::PanelWidth | SettingKey::PanelWidthExpanded => PANEL_WIDTH_STEP,
+        _ => 1,
     }
 }
 
@@ -633,10 +650,11 @@ fn next_accent_color(
 }
 
 /// Apply one Panel-row interaction (design D6, row 4.3): `Side` toggles
-/// left/right, and each numeric row steps by `delta` (already scaled to
-/// ±1/±10 by the caller) clamped to its Rust range. `None` for any key that
-/// is not a Panel value row. `accent_custom` is the colour the shell holds
-/// from [`accent_color_outside_cycle`]; it joins the `Accent color` cycle.
+/// left/right, and each numeric row steps by `delta` times its base step
+/// ([`panel_row_step`]) clamped to its Rust range. `delta` is already scaled
+/// to ±1/±10 by the caller for Shift. `None` for any key that is not a Panel
+/// value row. `accent_custom` is the colour the shell holds from
+/// [`accent_color_outside_cycle`]; it joins the `Accent color` cycle.
 #[must_use]
 pub fn changed_panel_config(
     key: SettingKey,
@@ -646,6 +664,7 @@ pub fn changed_panel_config(
 ) -> Option<mbv_config::PanelConfig> {
     use mbv_config::PanelSide;
 
+    let delta = delta.saturating_mul(panel_row_step(key));
     let mut next = panel;
     match key {
         SettingKey::PanelSide => {
@@ -654,8 +673,8 @@ pub fn changed_panel_config(
                 PanelSide::Right => PanelSide::Left,
             };
         }
-        SettingKey::PanelCols => next.width = stepped_width(next.width, delta),
-        SettingKey::PanelColsExpanded => {
+        SettingKey::PanelWidth => next.width = stepped_width(next.width, delta),
+        SettingKey::PanelWidthExpanded => {
             next.width_expanded = stepped_width(next.width_expanded, delta);
         }
         SettingKey::PanelGutterTop => next.gutter_top = next.gutter_top.saturating_add(delta),

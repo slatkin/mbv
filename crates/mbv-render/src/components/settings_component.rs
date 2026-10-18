@@ -69,8 +69,9 @@ fn render_settings_panel(frame: &mut Frame, area: Rect, model: &SettingsRenderMo
         // Read-only destination (design D7): nothing to activate.
         "[↑↓]browse [Esc]back"
     } else if model.destination == SettingsDestination::Panel {
-        // Stepper destination (design D6): Left/Right step, Shift steps by 10.
-        "[←→]step [Esc]back"
+        // Stepper destination (design D6, and D5 of `pinwin-app-host`):
+        // Left/Right step, Shift steps by 10.
+        "[←→]step [Shift]×10 [Esc]back"
     } else {
         "[Space]toggle [Esc]close"
     };

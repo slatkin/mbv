@@ -41,17 +41,19 @@ impl App {
     }
 
     /// Apply and persist one Panel value change (design D6, change
-    /// `pin-mbv-in-pinwin`): an activate steps by one (`Side` cycles and
-    /// ignores the delta), a step applies the component's signed delta (±1, or
-    /// ±10 with Shift). The running panel validates the candidate layout
-    /// first, and only an accepted layout is saved. A rejection keeps the
-    /// previous value and shows its reason as a Warning toast.
+    /// `pin-mbv-in-pinwin`): an activate steps the row up by one step (`Side`
+    /// cycles and ignores the delta), a step applies the component's signed
+    /// delta (±1, or ±10 with Shift), and a width row counts each step as 10
+    /// logical pixels while every other row counts 1. The running panel
+    /// validates the candidate layout first, and only an accepted layout is
+    /// saved. A rejection keeps the previous value and shows its reason as a
+    /// Warning toast.
     ///
     /// While pinned, the width applied is the one the edited row belongs to:
-    /// `Cols` validates collapsed, `Expanded cols` expanded, any other row at
-    /// the current width (change `panel-expand-toggle`, design D4). That width
-    /// is stored only when a panel accepted the candidate, so an unpinned
-    /// launch never changes the active width.
+    /// `Width` validates `width`, `Expanded width` `width_expanded`, any other
+    /// row at the current width (change `panel-expand-toggle`, design D4).
+    /// That width is stored only when a panel accepted the candidate, so an
+    /// unpinned launch never changes the active width.
     ///
     /// The accent rows (`pinned-panel-focus-accent`, design D3) are not part
     /// of the layout and the accent is fixed at panel start, so they save
