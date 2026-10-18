@@ -21,7 +21,7 @@ Read `design.md` first. Run `cargo fmt` after each Rust change. Add no lint supp
 
 ## 4. TUI: the Shuffle entry
 
-- [ ] 4.1 Replace `push_play_order_toggle` in `src/app/dispatch/context_menu/menu.rs` with `push_queue_shuffle_entry` (label "Shuffle", gated on `supports_queue_shuffle`), add `ContextAction::ShuffleQueue`, and route it in `actions.rs` to `player.shuffle_queue()`. Update `src/app/tests/context_menu_entries.rs` for the contract "every Queue row offers Shuffle; library rows do not; owner without the capability hides it". Verify with `cargo nextest run -p mbv`.
+- [x] 4.1 Replace `push_play_order_toggle` in `src/app/dispatch/context_menu/menu.rs` with `push_queue_shuffle_entry` (label "Shuffle", gated on `supports_queue_shuffle`), add `ContextAction::ShuffleQueue`, and route it in `actions.rs` to `player.shuffle_queue()`. Update `src/app/tests/context_menu_entries.rs` for the contract "every Queue row offers Shuffle; library rows do not; owner without the capability hides it". Verify with `cargo nextest run -p mbv`.
 
 ## 5. Remove the playback order
 
