@@ -88,7 +88,7 @@ fn content_has_one_selector_row_for_state_and_show_pills() {
     assert_eq!(
         pills(&content),
         [
-            "Latest",
+            "New",
             "All",
             "Unplayed",
             "Played",

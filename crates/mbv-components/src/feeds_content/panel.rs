@@ -166,7 +166,7 @@ impl LibraryContentOwner for FeedsContent {
         // the row never paints two All choices). Group/filter selection
         // remains owner-local.
         let selector = has_subs.then(|| SelectorRow {
-            pills: std::iter::once("Latest".to_string())
+            pills: std::iter::once("New".to_string())
                 .chain(
                     [
                         WatchedFilter::All,

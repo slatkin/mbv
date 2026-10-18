@@ -567,7 +567,7 @@ impl PodcastContent {
         // One Selector bar carries Latest, state pills, then one pill per
         // show in show order (design D3). Both selections are owner-local.
         let selector = Some(SelectorRow {
-            pills: std::iter::once("Latest".to_string())
+            pills: std::iter::once("New".to_string())
                 .chain(
                     AudiobookshelfEpisodeFilter::ALL
                         .iter()

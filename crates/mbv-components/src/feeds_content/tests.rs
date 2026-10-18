@@ -53,7 +53,7 @@ fn content_has_one_selector_row_for_filter_and_groups() {
     let selector = content.selector.as_ref().expect("feed-group pills");
     assert_eq!(
         selector.pills,
-        ["Latest", "All", "Played", "Unplayed", "A", "B"]
+        ["New", "All", "Played", "Unplayed", "A", "B"]
     );
     // A fresh owner opens on Latest (user rule, 2026-10-11).
     assert_eq!(selector.active, Some(0));

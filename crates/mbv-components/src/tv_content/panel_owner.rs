@@ -131,7 +131,7 @@ impl TvContent {
             .list
             .library_total
             .is_some_and(|total| total > mbv_render::LIBRARY_PILL_THRESHOLD);
-        let mut pills = vec!["Latest".to_string(), "Upcoming".to_string()];
+        let mut pills = vec!["New".to_string(), "Upcoming".to_string()];
         if large {
             pills.extend(LetterFilter::labels_for_kind(LetterFilterKind::Tv));
         } else {
