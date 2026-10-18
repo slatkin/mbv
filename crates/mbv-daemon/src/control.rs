@@ -366,6 +366,7 @@ fn queue_op_id(cmd: &CtrlCmd) -> Option<QueueOpId> {
         | CtrlCmd::UnifiedQueueRemoveSlot { op, .. }
         | CtrlCmd::UnifiedQueueRemoveSlots { op, .. }
         | CtrlCmd::UnifiedQueueMoveSlot { op, .. }
+        | CtrlCmd::UnifiedQueueShuffle { op }
         | CtrlCmd::UnifiedQueuePlaySlot { op, .. }
         | CtrlCmd::UnifiedQueueSourceUpdate { op, .. } => *op,
         CtrlCmd::UnifiedQueueClearOp { op }
@@ -523,6 +524,12 @@ fn dispatch_ctrl_command(
             slot_id, to_index, ..
         } => {
             queue_edit::handle_queue_move_slot(ctx, queue_lineage, slot_id, to_index);
+        }
+        // The shuffle handler (`queue_edit::handle_queue_shuffle`) lands with
+        // the owner-side unit. Until then the command is accepted and does
+        // nothing, and no queue operation is answered.
+        CtrlCmd::UnifiedQueueShuffle { .. } => {
+            tracing::debug!(name: "daemon.ctrl_queue_shuffle.ignored", target: "daemon", "ignoring UnifiedQueueShuffle: owner shuffle handler not installed");
         }
         CtrlCmd::UnifiedQueuePlaySlot { slot_id, .. } => {
             queue_edit::handle_queue_play_slot(ctx, queue_lineage, slot_id);

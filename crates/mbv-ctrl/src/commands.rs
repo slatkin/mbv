@@ -106,6 +106,13 @@ pub enum CtrlCmd {
         #[serde(default)]
         op: Option<QueueOpId>,
     },
+    /// Reorder the queue contents at random as one queue edit, keeping the
+    /// active slot first. Requires the `queue-shuffle` capability; additive —
+    /// no protocol-version bump.
+    UnifiedQueueShuffle {
+        #[serde(default)]
+        op: Option<QueueOpId>,
+    },
     /// Begin playback of an existing slot identified by `slot_id`.
     UnifiedQueuePlaySlot {
         slot_id: u64,
@@ -199,6 +206,7 @@ impl CtrlCmd {
             | CtrlCmd::UnifiedQueueRemoveSlot { .. }
             | CtrlCmd::UnifiedQueueRemoveSlots { .. }
             | CtrlCmd::UnifiedQueueMoveSlot { .. }
+            | CtrlCmd::UnifiedQueueShuffle { .. }
             | CtrlCmd::UnifiedQueuePlaySlot { .. }
             | CtrlCmd::UnifiedQueueClear
             | CtrlCmd::UnifiedQueueClearOp { .. }
@@ -222,6 +230,7 @@ impl CtrlCmd {
             | CtrlCmd::UnifiedQueueRemoveSlot { .. }
             | CtrlCmd::UnifiedQueueRemoveSlots { .. }
             | CtrlCmd::UnifiedQueueMoveSlot { .. }
+            | CtrlCmd::UnifiedQueueShuffle { .. }
             | CtrlCmd::UnifiedQueueClear
             | CtrlCmd::UnifiedQueueClearOp { .. }
             | CtrlCmd::UnifiedQueueRefresh { .. }
