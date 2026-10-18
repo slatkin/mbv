@@ -168,17 +168,6 @@ pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
         rebindable: true,
         prefix_addressable: true,
     },
-    KeybindAction {
-        id: "pinned_width_toggle",
-        section: KeySection::Global,
-        // Lowercase, like `ctrl_l_force_clear`: crossterm delivers Ctrl+E as
-        // `Char('e')` + CONTROL and the chord grammar maps a letter verbatim.
-        default_chords: &["Ctrl+e"],
-        gate: KeyGate::NoBlockingOverlay,
-        policy: "pinned_width_toggle",
-        rebindable: true,
-        prefix_addressable: true,
-    },
     // ── Session ─────────────────────────────────────────────────────────
     KeybindAction {
         id: "quit",

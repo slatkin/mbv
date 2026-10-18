@@ -63,11 +63,6 @@ pub(in crate::app) enum Command {
     /// toggles queue-only and library-only.
     CyclePanelMode,
 
-    /// `pinned_width_toggle`: flip the running pinned panel between its
-    /// collapsed (`width`) and expanded (`width_expanded`) saved widths
-    /// (change `panel-expand-toggle`, design D3).
-    TogglePinnedWidth,
-
     // ── destination-independent routing ─────────────────────────────────
     /// Quit the client through the normal dirty-queue/prefs shutdown path.
     Quit,
@@ -200,7 +195,7 @@ impl App {
             Command::RefreshCurrentView => {
                 unreachable!("RefreshCurrentView is dispatched by Model")
             }
-            Command::FocusPanel(_) | Command::CyclePanelMode | Command::TogglePinnedWidth => {
+            Command::FocusPanel(_) | Command::CyclePanelMode => {
                 self.dispatch_panel_command(command);
             }
         }
@@ -287,25 +282,7 @@ impl App {
                 // shrank between image and seekbar.
             }
             Command::CyclePanelMode => self.cycle_panel_mode(),
-            Command::TogglePinnedWidth => self.toggle_pinned_width(),
             _ => unreachable!("dispatch_panel_command only accepts panel commands"),
-        }
-    }
-
-    /// `pinned_width_toggle` (change `panel-expand-toggle`, design D3): flip
-    /// the running panel to the other saved `[panel]` width. A launch without
-    /// a panel says so and changes nothing; the running panel validates the
-    /// other width first, and a refused request keeps the current width and
-    /// shows the reason as a Warning toast.
-    pub(crate) fn toggle_pinned_width(&mut self) {
-        let width = self.pinned_width.toggled();
-        match self.request_pinned_width(width) {
-            None => self.flash(
-                "Width toggle needs a pinned launch (mbv --pin)".into(),
-                ToastSeverity::Neutral,
-            ),
-            Some(Ok(())) => self.note_pinned_width_applied(width),
-            Some(Err(reason)) => self.flash(reason, ToastSeverity::Warning),
         }
     }
 

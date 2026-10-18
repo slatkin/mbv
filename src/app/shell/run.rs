@@ -120,7 +120,7 @@ impl Model {
         // protocol resize path re-encodes from the decoded sources at the new
         // geometry; wiping the cache here (a second clear next to the
         // observer's) only forced HTTP refetches and a longer placeholder
-        // window on every pinned width toggle.
+        // window on every pinned width change.
         // Crossing into mini view on a real resize hands focus to the queue;
         // the stored wide focus is untouched.
         if resize_event && was_wide && size.0 < mbv_render::layout::MINI_VIEW_THRESHOLD {

@@ -29,7 +29,6 @@ const GLOBAL_ACTION_IDS: &[&str] = &[
     "alt_previous_library_tab",
     "alt_next_library_tab",
     "library_tab_jump",
-    "pinned_width_toggle",
 ];
 
 /// The split transport actions (the `playback` bucket, task 5.1).
@@ -302,7 +301,6 @@ const EXPECTED_DEFAULTS: &[(&str, &[&str])] = &[
     ("panel_right", &["Ctrl+Right"]),
     ("panel_left", &["Ctrl+Left"]),
     ("ctrl_l_force_clear", &["Ctrl+l"]),
-    ("pinned_width_toggle", &["Ctrl+e"]),
 ];
 
 #[test]
