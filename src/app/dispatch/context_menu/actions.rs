@@ -508,17 +508,11 @@ impl App {
     }
 
     fn remove_played_item_from_library(&mut self, lib_idx: usize, item_id: &str) {
-        if self.is_feed_home_video_group_view(lib_idx) {
-            if let Some(state) = self
-                .libs
-                .get_mut(lib_idx)
-                .and_then(|lib| lib.feed_home_video.as_mut())
-            {
-                state.loading = true;
-            }
-            self.remove_item_from_feed_home_video_cache(lib_idx, item_id);
-            self.log_feed_home_video_state(lib_idx, "context_set_played_feed");
-        } else if let Some(lvl) = self
+        // A feed-view group keeps its loaded selection rows when a video is
+        // marked played (spec `feed-home-video-group-view`, "Marking played
+        // keeps the row"); only unplayed-only levels of ordinary libraries
+        // drop the row.
+        if let Some(lvl) = self
             .libs
             .get_mut(lib_idx)
             .and_then(|lib| lib.nav_stack.last_mut())
@@ -626,13 +620,14 @@ impl App {
     /// 4.3, R1): the live path is the item-taking
     /// `toggle_watched_item(lib_idx, item)` the shell routes
     /// `EmbyLibraryToggleWatched` through. Folder/audio guards, mark played/
-    /// unplayed API behavior, unplayed-only/feed-home-video removal, refresh,
+    /// unplayed API behavior, unplayed-only removal, refresh,
     /// and unavailable-Service/error toasts are preserved exactly. The
     /// unplayed-only removal previously used `lvl.cursor` (the App cursor,
     /// which the legacy call always resolves to the toggled item); it now
     /// targets the supplied item's identity — identical in the legacy flow,
     /// and correct when the component-selected item differs from a parked
-    /// App cursor.
+    /// App cursor. Feed-view groups keep their rows when a video is marked
+    /// played (task 4.1, design D4).
     pub(in crate::app) fn toggle_watched_item(&mut self, lib_idx: usize, item: &EmbyItem) {
         if item.is_folder || item.is_audio() {
             return;
@@ -663,13 +658,11 @@ impl App {
     }
 
     fn remove_watched_item_from_library(&mut self, lib_idx: usize, item_id: &str) {
-        if self.is_feed_home_video_group_view(lib_idx) {
-            if let Some(state) = self.libs[lib_idx].feed_home_video.as_mut() {
-                state.loading = true;
-            }
-            self.remove_item_from_feed_home_video_cache(lib_idx, item_id);
-            self.log_feed_home_video_state(lib_idx, "toggle_watched_feed");
-        } else if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut()
+        // Feed-view groups keep their loaded selection rows when a video is
+        // marked watched (spec `feed-home-video-group-view`, "Marking played
+        // keeps the row"); only unplayed-only levels of ordinary libraries
+        // drop the row.
+        if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut()
             && lvl.unplayed_only
             && let Some(pos) = lvl.items.iter().position(|item| item.id == item_id)
         {

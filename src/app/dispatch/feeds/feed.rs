@@ -119,25 +119,6 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn remove_item_from_feed_home_video_cache(
-        &mut self,
-        lib_idx: usize,
-        item_id: &str,
-    ) {
-        let Some(state) = self
-            .libs
-            .get_mut(lib_idx)
-            .and_then(|lib| lib.feed_home_video.as_mut())
-        else {
-            return;
-        };
-        for items in state.items.values_mut() {
-            items.retain(|item| item.id != item_id);
-        }
-        self.clamp_feed_home_video_state(lib_idx);
-        self.log_feed_home_video_state(lib_idx, "remove_from_cache");
-    }
-
     pub(in crate::app) fn ensure_feed_home_video_group_level(&mut self, lib_idx: usize) {
         let Some(lib) = self.libs.get(lib_idx) else {
             return;
