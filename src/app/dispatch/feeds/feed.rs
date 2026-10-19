@@ -439,7 +439,12 @@ impl App {
     /// listing requests no count fields) and nothing here lists any videos.
     /// Without `force`, a listing whose folders all hold count entries
     /// already spawns nothing; a refresh forces a re-query of every folder
-    /// because the refreshed counts replace the map.
+    /// because the refreshed counts replace the map — immediately when the
+    /// refreshed listing is fully loaded, otherwise deferred through the
+    /// state's `pending_count_refresh` marker to the listing's final page
+    /// append. The marker clears exactly here, when the forced fan-out is
+    /// actually requested; without a Service client it survives and the next
+    /// listing completion retries.
     pub(in crate::app) fn spawn_feed_home_video_folder_counts(
         &mut self,
         lib_idx: usize,
@@ -477,6 +482,18 @@ impl App {
             return;
         }
         let parent_id = root.parent_id.clone();
+        // The deferred refresh force is consumed exactly at the commit point:
+        // a forced request that reached here passed the non-forced dedupe, so
+        // the marker's clearing proves the fan-out was requested (review P2,
+        // 9e454b62d..8e5ce710a).
+        if force
+            && let Some(state) = self
+                .libs
+                .get_mut(lib_idx)
+                .and_then(|lib| lib.feed_home_video.as_mut())
+        {
+            state.pending_count_refresh = false;
+        }
         let tx = self.channels.lib_tx.clone();
         tracing::debug!(name: "feed.home_video.counts_spawned", target: "feedhv", library_index = lib_idx, folders = folder_ids.len(), "folder video-count fan-out spawned");
         std::thread::spawn(move || {
@@ -594,8 +611,17 @@ impl App {
         {
             state.loading = false;
         }
+        // A partial refresh deferred its forced count re-query to this
+        // completion (review P2, 9e454b62d..8e5ce710a): carry the marker's
+        // force into the fan-out; the fan-out consumes the marker when the
+        // forced request commits.
+        let force_counts = self
+            .libs
+            .get(lib_idx)
+            .and_then(|lib| lib.feed_home_video.as_ref())
+            .is_some_and(|state| state.pending_count_refresh);
         self.resolve_feed_home_video_pending_selection(lib_idx);
-        self.spawn_feed_home_video_folder_counts(lib_idx, false);
+        self.spawn_feed_home_video_folder_counts(lib_idx, force_counts);
         self.log_feed_home_video_state(lib_idx, "listing_completed");
     }
 
@@ -608,13 +634,16 @@ impl App {
     /// (the library total grew since the last full pagination) must not
     /// replace `folder_counts` from its page-1 folders, nor clamp or
     /// re-resolve the pill index against the shrunken pill row while
-    /// `selection` keeps a later-page folder. The listing's final page append
-    /// completes the deferred work through
-    /// `maybe_complete_feed_home_video_listing`'s non-forced fan-out.
+    /// `selection` keeps a later-page folder. A full refresh forces the count
+    /// re-query now; a partial one arms `pending_count_refresh` so the
+    /// listing's final page append runs exactly one forced fan-out — even
+    /// when the folder set is unchanged and the non-forced dedupe would skip
+    /// it (review P2, 9e454b62d..8e5ce710a).
     pub(in crate::app) fn complete_feed_home_video_refresh(&mut self, lib_idx: usize) {
         if !self.is_feed_home_video_library(lib_idx) {
             return;
         }
+        let fully_loaded = self.feed_home_video_root_listing_completed(lib_idx);
         if let Some(state) = self
             .libs
             .get_mut(lib_idx)
@@ -622,8 +651,9 @@ impl App {
         {
             state.items.clear();
             state.loading = false;
+            state.pending_count_refresh = !fully_loaded;
         }
-        if self.feed_home_video_root_listing_completed(lib_idx) {
+        if fully_loaded {
             self.resolve_feed_home_video_pending_selection(lib_idx);
             self.spawn_feed_home_video_folder_counts(lib_idx, true);
         }

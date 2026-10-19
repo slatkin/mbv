@@ -207,6 +207,10 @@ impl App {
             state.selected_group = 0;
             state.video_cursor = 0;
             state.video_scroll = 0;
+            // A reset discards the refresh that armed it; a stuck deferred
+            // force would fire an unrelated forced fan-out at some later
+            // listing completion (review P2, 9e454b62d..8e5ce710a).
+            state.pending_count_refresh = false;
         }
     }
 }

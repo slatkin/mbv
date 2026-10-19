@@ -29,6 +29,14 @@ pub struct FeedHomeVideoState {
     /// Persisted through `LibraryPosition::feed_selected_group` and resolved
     /// into `selection` against the root listing once the listing has loaded.
     pub selected_group: usize,
+    /// Whether a refresh deferred its forced count re-query to the root
+    /// listing's next completion: a partial refresh must not replace the
+    /// counts from its page-1 folders, but it still owes the session a forced
+    /// re-query of every folder once the listing fully repaginates. The
+    /// listing-completion path passes it to the fan-out, which consumes it
+    /// exactly when the forced fan-out is requested. Session-local; never
+    /// persisted.
+    pub pending_count_refresh: bool,
     pub video_cursor: usize,
     pub video_scroll: usize,
 }

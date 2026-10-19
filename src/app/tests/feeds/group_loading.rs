@@ -535,3 +535,81 @@ fn partial_root_refresh_keeps_counts_and_the_later_page_pill(make_home_video_app
         FeedHomeVideoSelection::Folder("folder-c".into())
     );
 }
+
+/// Regression (review P2, 9e454b62d..8e5ce710a): a partial refresh whose
+/// folder set is unchanged still owes its forced count re-query — the
+/// deferred force marker survives the partial window and the final page
+/// append consumes it by committing the forced fan-out, even though every
+/// folder already holds a count entry (the non-forced dedupe would have
+/// skipped the spawn and left the marker set).
+#[rstest]
+fn partial_refresh_defers_a_forced_count_fanout_to_the_final_page_append(make_home_video_app: App) {
+    let mut app = make_home_video_app;
+    // The fan-out's spawn seam needs a Service client; the stub client's
+    // queries fail against the default config and the assertions read only
+    // the synchronous decision marks.
+    install_test_emby(&mut app, crate::config::Config::default());
+    for id in ["folder-a", "folder-b", "folder-c"] {
+        seed_folder_counts(&mut app, id, 1);
+    }
+    app.handle_lib_event(LibEvent::Browse(BrowseEvent::Loaded {
+        lib_idx: 0,
+        parent_id: "lib-youtube".into(),
+        level: Box::new(BrowseLevel {
+            rows: ServerRows::loaded(3, 3),
+            parent_id: "lib-youtube".into(),
+            title: "YouTube".into(),
+            items: vec![
+                make_root_folder("folder-a", "Channel A"),
+                make_root_folder("folder-b", "Channel B"),
+                make_root_folder("folder-c", "Channel C"),
+            ],
+            resting: BrowseResting::new(0, 0),
+            item_types: None,
+            unplayed_only: false,
+            sort_by: "SortName".into(),
+            sort_order: "Ascending".into(),
+            loading: false,
+            all_items: None,
+            letter_filter: None,
+            tv_content_mode: None,
+            music_grouping: None,
+        }),
+    }));
+
+    app.handle_lib_event(LibEvent::Browse(BrowseEvent::Refreshed {
+        lib_idx: 0,
+        parent_id: "lib-youtube".into(),
+        item_types: None,
+        unplayed_only: false,
+        items: vec![make_root_folder("folder-a", "Channel A")],
+        total_count: 3,
+    }));
+
+    let state = app.libs[0].feed_home_video.as_ref().unwrap();
+    assert!(
+        state.pending_count_refresh,
+        "the partial refresh defers its forced re-query"
+    );
+    assert_eq!(
+        state.folder_counts.len(),
+        3,
+        "all folders still hold count entries"
+    );
+
+    app.handle_lib_event(LibEvent::Browse(BrowseEvent::PageAppended {
+        lib_idx: 0,
+        parent_id: "lib-youtube".into(),
+        items: vec![
+            make_root_folder("folder-b", "Channel B"),
+            make_root_folder("folder-c", "Channel C"),
+        ],
+        total_count: 3,
+    }));
+
+    let state = app.libs[0].feed_home_video.as_ref().unwrap();
+    assert!(
+        !state.pending_count_refresh,
+        "the final page append committed the forced fan-out"
+    );
+}
