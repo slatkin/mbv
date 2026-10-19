@@ -417,6 +417,112 @@ impl App {
         });
     }
 
+    /// The count fan-out (design D1 (b), task 3.3): one background thread
+    /// queries the per-folder videos-only count for every folder directly
+    /// under the root listing, sequentially, and sends ONE result event
+    /// carrying the successfully obtained pairs. A failed query omits its
+    /// folder — it gets no pill until a later listing completion or refresh
+    /// retries. The listing's `child_count` is not consulted (the root
+    /// listing requests no count fields) and nothing here lists any videos.
+    /// Without `force`, a listing whose folders all hold count entries
+    /// already spawns nothing; a refresh forces a re-query of every folder
+    /// because the refreshed counts replace the map.
+    pub(in crate::app) fn spawn_feed_home_video_folder_counts(
+        &mut self,
+        lib_idx: usize,
+        force: bool,
+    ) {
+        if !self.is_feed_home_video_library(lib_idx) {
+            return;
+        }
+        let Some(client) = self.emby_snapshot() else {
+            // No Service client yet: the next listing completion or refresh
+            // retries.
+            return;
+        };
+        let Some(lib) = self.libs.get(lib_idx) else {
+            return;
+        };
+        let Some(state) = lib.feed_home_video.as_ref() else {
+            return;
+        };
+        let Some(root) = lib.nav_stack.first() else {
+            return;
+        };
+        let folder_ids: Vec<String> = root
+            .items
+            .iter()
+            .filter(|item| item.is_folder)
+            .map(|item| item.id.clone())
+            .collect();
+        if folder_ids.is_empty()
+            || (!force
+                && folder_ids
+                    .iter()
+                    .all(|id| state.folder_counts.contains_key(id)))
+        {
+            return;
+        }
+        let parent_id = root.parent_id.clone();
+        let tx = self.channels.lib_tx.clone();
+        tracing::debug!(name: "feed.home_video.counts_spawned", target: "feedhv", library_index = lib_idx, folders = folder_ids.len(), "folder video-count fan-out spawned");
+        std::thread::spawn(move || {
+            let mut counts = Vec::with_capacity(folder_ids.len());
+            for folder_id in folder_ids {
+                match client.get_folder_video_count(&folder_id) {
+                    Ok(count) => counts.push((folder_id, count)),
+                    Err(error) => {
+                        tracing::warn!(name: "feed.home_video.folder_count_failed", target: "feedhv", folder = %folder_id, error = %error, "folder video-count query failed");
+                    }
+                }
+            }
+            let _ = tx.send(LibEvent::Browse(
+                BrowseEvent::FeedHomeVideoFolderCountsLoaded {
+                    lib_idx,
+                    parent_id,
+                    counts,
+                },
+            ));
+        });
+    }
+
+    /// The `FeedHomeVideoFolderCountsLoaded` arm (task 3.3). Stale guard: a
+    /// result serves the library only while its root parent still matches the
+    /// current root listing's parent — a library switch or a replaced root
+    /// drops it. The pairs replace the count map wholesale (a refresh
+    /// re-queries every folder), then the pending persisted pill index
+    /// resolves against the new pill row and the cursor clamps to it. The
+    /// selection's own fetch stays with the shown-pass trigger (design D2);
+    /// nothing here lists any videos.
+    pub(in crate::app) fn handle_feed_home_video_folder_counts_loaded(
+        &mut self,
+        lib_idx: usize,
+        parent_id: &str,
+        counts: Vec<(String, usize)>,
+    ) {
+        let stale = self.libs.get(lib_idx).is_none_or(|lib| {
+            lib.feed_home_video.is_none()
+                || lib
+                    .nav_stack
+                    .first()
+                    .is_none_or(|root| root.parent_id != parent_id)
+        });
+        if stale {
+            self.log_feed_home_video_state(lib_idx, "folder_counts_dropped_stale");
+            return;
+        }
+        if let Some(state) = self
+            .libs
+            .get_mut(lib_idx)
+            .and_then(|lib| lib.feed_home_video.as_mut())
+        {
+            state.folder_counts = counts.into_iter().collect();
+        }
+        self.resolve_feed_home_video_pending_selection(lib_idx);
+        self.clamp_feed_home_video_state(lib_idx);
+        self.log_feed_home_video_state(lib_idx, "folder_counts_loaded");
+    }
+
     /// The `FeedHomeVideoSelectionLoaded` arm. Stale guard: a result serves
     /// the library only while its root parent still matches (an All fetch's
     /// source listing) and its selection is still the state's current one; a
@@ -476,6 +582,7 @@ impl App {
             state.loading = false;
         }
         self.resolve_feed_home_video_pending_selection(lib_idx);
+        self.spawn_feed_home_video_folder_counts(lib_idx, false);
         self.log_feed_home_video_state(lib_idx, "listing_completed");
     }
 
@@ -496,6 +603,7 @@ impl App {
             state.loading = false;
         }
         self.resolve_feed_home_video_pending_selection(lib_idx);
+        self.spawn_feed_home_video_folder_counts(lib_idx, true);
         self.log_feed_home_video_state(lib_idx, "refresh_completed");
     }
 

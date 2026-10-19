@@ -50,6 +50,13 @@ impl App {
             } => {
                 self.handle_feed_home_video_selection_loaded(lib_idx, &parent_id, selection, items);
             }
+            BrowseEvent::FeedHomeVideoFolderCountsLoaded {
+                lib_idx,
+                parent_id,
+                counts,
+            } => {
+                self.handle_feed_home_video_folder_counts_loaded(lib_idx, &parent_id, counts);
+            }
             BrowseEvent::NavigateTo {
                 lib_idx,
                 landing,
