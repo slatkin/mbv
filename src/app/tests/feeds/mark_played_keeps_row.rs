@@ -87,8 +87,6 @@ fn playback_completion_keeps_the_feed_view_selection_rows_in_place() {
     http.respond(200, r#"{"Items":[]}"#); // fetch_home: latest
     http.respond(200, r#"{"Items":[],"TotalRecordCount":0}"#); // the lib's refresh fetch
     let mut app = app_with_feed_view_library(&http);
-    app.last_played_completed = true;
-    app.last_played_item_id = Some("video-a1".into());
 
     app.refresh_after_stop();
 

@@ -32,8 +32,6 @@ impl App {
         self.pending_delete_slot = None;
         self.pending_delete_selection = None;
         self.next_up_item = None;
-        self.last_played_item_id = None;
-        self.last_played_completed = false;
         // Home content is Model-owned (task 5.3d): clearing it is delivered
         // through lib_tx; the shell wipes `home_content` (items, cursor,
         // latest — the `loading` flag is intentionally left alone, matching
