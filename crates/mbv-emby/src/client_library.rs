@@ -371,6 +371,33 @@ impl EmbyClient {
         ])
     }
 
+    /// Counts the videos under a folder with one count-only query.
+    ///
+    /// `GET /Users/{UserId}/Items?ParentId=<folder>&Recursive=true
+    /// &IncludeItemTypes=Video&Limit=1&EnableTotalRecordCount=true`, read
+    /// `TotalRecordCount`. Feed-home-video pill membership uses this instead
+    /// of `RecursiveItemCount`, because no source defines what that count
+    /// spans and it cannot prove a folder holds a video (design D1 (b)). No
+    /// `IsPlayed` filter runs, so watched videos count. A missing
+    /// `TotalRecordCount` reads as zero.
+    pub fn get_folder_video_count(&self, folder_id: &str) -> Result<usize, crate::EmbyError> {
+        let resp: Value = self
+            .get(&format!(
+                "/Users/{}/Items",
+                mbv_net::encode_path_segment(&self.user_id)
+            ))
+            .query("ParentId", folder_id)
+            .query("Recursive", "true")
+            .query("IncludeItemTypes", "Video")
+            .query("Limit", "1")
+            .query("EnableTotalRecordCount", "true")
+            .call()?
+            .body_mut()
+            .read_json()?;
+        let count = resp["TotalRecordCount"].as_u64().unwrap_or(0);
+        Ok(usize::try_from(count).unwrap_or(usize::MAX))
+    }
+
     /// Fetches one artist's Audio tracks via Emby's
     /// `ArtistIds=<id>&IncludeItemTypes=Audio&Recursive=true` query.
     ///
