@@ -16,7 +16,7 @@
 
 ## 4. Marking played keeps rows
 
-- [ ] 4.1 Remove the feed-view branches from `remove_watched_item_from_library` and `remove_played_item_from_library`, drop `refresh_completed_feed_home_videos`'s feed-view cache stripping, and delete `remove_item_from_feed_home_video_cache` once orphaned (design D4). Verify: a unit test asserts marking played in the feed view leaves the selection's items in place, and `cargo nextest run -p mbv` passes.
+- [x] 4.1 Remove the feed-view branches from `remove_watched_item_from_library` and `remove_played_item_from_library`, drop `refresh_completed_feed_home_videos`'s feed-view cache stripping, and delete `remove_item_from_feed_home_video_cache` once orphaned (design D4). Verify: a unit test asserts marking played in the feed view leaves the selection's items in place, and `cargo nextest run -p mbv` passes.
 
 ## 5. Delete the aggregate machinery
 
