@@ -16,7 +16,7 @@ use std::time::{Duration, Instant};
 
 use mbv_cast::{CastJob, CastReceiver, CastStatus};
 use mbv_ctrl::{CtrlEvent, PlaybackGeneration};
-use mbv_queue::QueueSlotId;
+use mbv_queue::{PlaybackQueue, QueueSlotId};
 
 use crate::CtrlClientId;
 
@@ -26,6 +26,21 @@ use super::core::DaemonEvent;
 /// The output enum and its ctrl projection live in `output` (emby-session-owner-output
 /// design D1); the Cast modules and the crate's tests name them through here.
 pub(crate) use super::output::{PlaybackOutput, output_state};
+
+/// Whether the receiver currently presents the item the Owner loaded and that
+/// item is still the queue's active slot (queue-content-shuffle): the Shuffle
+/// pins the active slot first only then. Foreign content — media the Owner did
+/// not load — names no queue slot and never pins (PR #957 review).
+pub(crate) fn presents_active_queue_slot(cast: &CastOutput, queue: &PlaybackQueue) -> bool {
+    let Some(loaded) = cast.loaded.as_ref() else {
+        return false;
+    };
+    Some(loaded.slot) == queue.active_slot_id()
+        && cast
+            .last_status
+            .as_ref()
+            .is_some_and(|status| status::presents_loaded_item(loaded, status))
+}
 
 pub(crate) mod advance;
 mod command;

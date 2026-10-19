@@ -10,8 +10,8 @@ use mbv_ctrl::player::PlayerStatus;
 use mbv_queue::{PlaybackQueue, QueueSlotId};
 
 use self::advance::OutputAdvance;
-use crate::cast::CastOutput;
-use crate::emby_session::EmbySessionOutput;
+use crate::cast::{self, CastOutput};
+use crate::emby_session::{EmbySessionOutput, status as emby_session_status};
 
 pub(crate) mod advance;
 pub(crate) mod handoff;
@@ -111,6 +111,22 @@ impl PlaybackOutput {
             PlaybackOutput::Cast(cast) => cast.loaded.as_ref().map(|loaded| loaded.slot),
             PlaybackOutput::EmbySession(session) => {
                 session.loaded.as_ref().map(|loaded| loaded.slot)
+            }
+        }
+    }
+
+    /// Whether the output's presented item is the queue's active slot
+    /// (queue-content-shuffle): the Shuffle pins the active slot first only
+    /// when the presented item is that slot. Local playback plays only items
+    /// the Owner loaded, so it always presents a queue slot; a remote output
+    /// can present foreign content — media the Owner did not load — which
+    /// names no queue slot (PR #957 review).
+    pub(super) fn presents_active_queue_slot(&self, queue: &PlaybackQueue) -> bool {
+        match self {
+            PlaybackOutput::Local => true,
+            PlaybackOutput::Cast(cast) => cast::presents_active_queue_slot(cast, queue),
+            PlaybackOutput::EmbySession(session) => {
+                emby_session_status::presents_active_queue_slot(session, queue)
             }
         }
     }

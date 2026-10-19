@@ -137,6 +137,25 @@ fn shuffled_slot_order_does_not_pin_an_idle_play_anchor() {
     );
 }
 
+/// The contract: an order that already matches the current sequence is no
+/// edit — the queue applies nothing and keeps the revision, the same no-change
+/// rule `update_slot_item` and `apply_progress` apply (spec scenario "Queue
+/// with one slot"; PR #957 review).
+#[test]
+fn reorder_slots_with_the_current_order_keeps_the_revision() {
+    let mut queue = queue_from_items(vec![item("a"), item("b"), item("c")], Some(0));
+    let before_revision = queue.revision().raw();
+    let ids = slot_ids(&queue);
+
+    assert!(matches!(
+        queue.reorder_slots(&ids),
+        QueueMutationResult::Applied(())
+    ));
+
+    assert_eq!(queue.revision().raw(), before_revision);
+    assert_eq!(slot_ids(&queue), ids);
+}
+
 /// The contract: a queue with one slot does not change (spec scenario
 /// "Queue with one slot").
 #[test]

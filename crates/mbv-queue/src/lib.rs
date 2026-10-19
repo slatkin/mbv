@@ -426,7 +426,18 @@ impl PlaybackQueue {
     ///
     /// `order` must name exactly the current slots, each once. Otherwise the
     /// queue is left untouched and this returns [`QueueMutationResult::NotFound`].
+    /// An `order` that already matches the current sequence edits nothing and
+    /// keeps the revision — the same no-change rule `update_slot_item` and
+    /// `apply_progress` apply.
     pub fn reorder_slots(&mut self, order: &[QueueSlotId]) -> QueueMutationResult<()> {
+        if self
+            .slots
+            .iter()
+            .map(|slot| slot.slot_id)
+            .eq(order.iter().copied())
+        {
+            return QueueMutationResult::Applied(());
+        }
         if !is_slot_permutation(self.slots.iter().map(|slot| slot.slot_id), order) {
             return QueueMutationResult::NotFound;
         }
