@@ -6,7 +6,7 @@
 
 ## 2. Folder listing carries counts
 
-- [ ] 2.1 Add the per-folder videos-only count query to the Emby client (D1 (b)): `GET /Users/{UserId}/Items?ParentId=<folder>&Recursive=true&IncludeItemTypes=Video&Limit=1&EnableTotalRecordCount=true`, and read `TotalRecordCount`. Verify: the client's request/parse unit test asserts the count request and that `TotalRecordCount` is read, and `cargo nextest run -p mbv-emby` passes.
+- [x] 2.1 Add the per-folder videos-only count query to the Emby client (D1 (b)): `GET /Users/{UserId}/Items?ParentId=<folder>&Recursive=true&IncludeItemTypes=Video&Limit=1&EnableTotalRecordCount=true`, and read `TotalRecordCount`. Verify: the client's request/parse unit test asserts the count request and that `TotalRecordCount` is read, and `cargo nextest run -p mbv-emby` passes.
 
 ## 3. Feed-view state, lazy fetch, and count-driven pills
 
