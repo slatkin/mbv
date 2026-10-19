@@ -380,3 +380,61 @@ fn folder_counts_event_for_a_foreign_root_is_dropped(make_home_video_app: App) {
     let state = app.libs[0].feed_home_video.as_ref().unwrap();
     assert!(state.folder_counts.is_empty());
 }
+
+/// Regression (review P1 on b603f329b..9e454b62d): selecting an uncached
+/// pill while another selection's fetch is in flight must hand `loading`
+/// over to the new selection — the previous fetch's result is stale-dropped,
+/// so a leftover mark would wedge the view with a spinner and no fetch for
+/// the shown selection.
+#[rstest]
+fn selecting_an_uncached_pill_while_a_fetch_is_in_flight_hands_loading_over(
+    make_home_video_app: App,
+) {
+    let mut app = make_home_video_app;
+    install_test_emby(&mut app, crate::config::Config::default());
+    let active = seed_home_video_root_loaded(&mut app);
+    seed_folder_counts(&mut app, &active.id, 2);
+
+    // The All selection's fetch is in flight (`loading` set by its spawn).
+    app.maybe_fetch_feed_home_video_selection(0);
+    assert!(app.libs[0].feed_home_video.as_ref().unwrap().loading);
+
+    // The Service drops before the folder pill is selected, so the new
+    // selection's spawn must retry through the shown pass — which the
+    // hand-off below keeps possible.
+    app.emby_runtime = crate::app::state::service_runtime::EmbyRuntime::default();
+
+    app.select_feed_folder_group(0, 1);
+
+    let state = app.libs[0].feed_home_video.as_ref().unwrap();
+    assert_eq!(
+        state.selection,
+        FeedHomeVideoSelection::Folder(active.id.clone())
+    );
+    assert!(
+        !state.loading,
+        "the stale mark belongs to the old selection"
+    );
+    assert!(
+        app.feed_home_video_selection_awaits_fetch(0),
+        "the shown pass can spawn the new selection's fetch"
+    );
+
+    // The old selection's late result is stale-dropped and leaves the
+    // hand-off intact.
+    app.handle_lib_event(LibEvent::Browse(
+        BrowseEvent::FeedHomeVideoSelectionLoaded {
+            lib_idx: 0,
+            parent_id: "lib-youtube".into(),
+            selection: FeedHomeVideoSelection::All,
+            items: vec![make_item("Stale", "Movie")],
+        },
+    ));
+
+    let state = app.libs[0].feed_home_video.as_ref().unwrap();
+    assert!(state.items.is_empty(), "the stale result stored nothing");
+    assert!(
+        app.feed_home_video_selection_awaits_fetch(0),
+        "the shown selection still awaits its fetch"
+    );
+}

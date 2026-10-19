@@ -273,8 +273,9 @@ impl App {
         let Some(selection) = selection else {
             return;
         };
+        let mut changed = false;
         if let Some(state) = self.libs[lib_idx].feed_home_video.as_mut() {
-            let changed = state.selection != selection;
+            changed = state.selection != selection;
             state.selected_group = group_idx;
             state.selection = selection.clone();
             if changed {
@@ -289,11 +290,14 @@ impl App {
             }
         }
         self.clamp_feed_home_video_state(lib_idx);
-        // Lazy fetch (design D2): a newly selected, uncached selection fetches
-        // at selection time; a cached one reuses the session cache and sets no
-        // fetch. The spawn bypasses `loading` because an outstanding fetch for
-        // the previous selection is stale-dropped, not a fetch for this one.
-        self.fetch_feed_home_video_selection_after_change(lib_idx);
+        // Lazy fetch (design D2): a newly selected, uncached selection
+        // fetches at selection time; a cached one reuses the session cache
+        // and sets no fetch. An unchanged selection leaves the outstanding
+        // fetch — if any — alone; the shown pass covers the transient
+        // uncached case.
+        if changed {
+            self.fetch_feed_home_video_selection_after_change(lib_idx);
+        }
         self.log_feed_home_video_state(lib_idx, "select_group");
     }
 
@@ -325,16 +329,25 @@ impl App {
     /// Selection-change trigger for the lazy per-selection fetch (design D2):
     /// spawns whenever the new selection is uncached, even while a fetch for
     /// the previous selection is still outstanding — that result is
-    /// stale-dropped on arrival, so `loading` here describes this selection.
+    /// stale-dropped on arrival. The outstanding `loading` describes the
+    /// previous selection, so an uncached change clears it before the spawn
+    /// (review P1, b603f329b..9e454b62d): leaving it set would wedge the view
+    /// with a spinner and no fetch for the shown selection.
     fn fetch_feed_home_video_selection_after_change(&mut self, lib_idx: usize) {
         if !self.is_feed_home_video_library(lib_idx) {
             return;
         }
         let uncached = self
             .libs
-            .get(lib_idx)
-            .and_then(|lib| lib.feed_home_video.as_ref())
-            .is_some_and(|state| !state.items.contains_key(&state.selection));
+            .get_mut(lib_idx)
+            .and_then(|lib| lib.feed_home_video.as_mut())
+            .is_some_and(|state| {
+                let uncached = !state.items.contains_key(&state.selection);
+                if uncached {
+                    state.loading = false;
+                }
+                uncached
+            });
         if uncached {
             self.fetch_feed_home_video_selection_now(lib_idx);
         }
