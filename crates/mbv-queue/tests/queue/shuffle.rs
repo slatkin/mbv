@@ -5,7 +5,7 @@ use rand::SeedableRng;
 use super::*;
 
 fn seeded_rng() -> rand::rngs::SmallRng {
-    rand::rngs::SmallRng::seed_from_u64(7)
+    rand::rngs::SmallRng::seed_from_u64(1)
 }
 
 /// The contract: a reorder replaces the slot sequence in one revision and
@@ -83,31 +83,58 @@ fn reorder_slots_with_ids_that_are_not_the_current_slots_leaves_the_queue_untouc
 /// The contract: Shuffle keeps the playing slot first and shuffles the rest
 /// (spec scenario "Shuffle with a playing item").
 #[test]
-fn shuffled_slot_order_puts_the_playing_slot_first() {
+fn shuffled_slot_order_pins_the_playing_slot_first_when_playback_is_active() {
     let queue = queue_from_items(vec![item("a"), item("b"), item("c"), item("d")], Some(2));
     let active = queue.active_slot_id().unwrap();
     let expected: HashSet<QueueSlotId> = slot_ids(&queue).into_iter().collect();
 
-    let order = queue.shuffled_slot_order(&mut seeded_rng());
+    let order = queue.shuffled_slot_order(&mut seeded_rng(), true);
 
     assert_eq!(order[0], active);
     assert_eq!(order.len(), expected.len());
     assert_eq!(order.into_iter().collect::<HashSet<_>>(), expected);
 }
 
-/// The contract: without a playing slot, Shuffle reorders every slot
+/// The contract: with no active slot, Shuffle reorders every slot
 /// (spec scenario "Shuffle with nothing playing").
 #[test]
-fn shuffled_slot_order_without_a_playing_slot_shuffles_all_slots() {
+fn shuffled_slot_order_without_an_active_slot_shuffles_all_slots() {
     let queue = queue_from_items(vec![item("a"), item("b"), item("c"), item("d")], None);
     let before = slot_ids(&queue);
     let expected: HashSet<QueueSlotId> = before.iter().copied().collect();
 
-    let order = queue.shuffled_slot_order(&mut seeded_rng());
+    let order = queue.shuffled_slot_order(&mut seeded_rng(), false);
 
     assert_eq!(order.len(), expected.len());
     assert_eq!(order.iter().copied().collect::<HashSet<_>>(), expected);
     assert_ne!(order, before, "the seeded order is not the queue order");
+}
+
+/// The contract: an idle queue keeps its active marker as the resolved-play
+/// anchor (idle load and owner restore set it), and Shuffle must not pin that
+/// anchor first — every slot reorders, and the anchor keeps its slot identity
+/// (spec scenario "Shuffle with nothing playing"; live-test finding,
+/// queue-content-shuffle task 6.4).
+#[test]
+fn shuffled_slot_order_does_not_pin_an_idle_play_anchor() {
+    let mut queue = queue_from_items(vec![item("a"), item("b"), item("c"), item("d")], Some(0));
+    let anchor = queue.active_slot_id().unwrap();
+    let before = slot_ids(&queue);
+    let expected: HashSet<QueueSlotId> = before.iter().copied().collect();
+
+    let order = queue.shuffled_slot_order(&mut seeded_rng(), false);
+    assert!(matches!(
+        queue.reorder_slots(&order),
+        QueueMutationResult::Applied(())
+    ));
+
+    assert_eq!(order.iter().copied().collect::<HashSet<_>>(), expected);
+    assert_eq!(queue.active_slot_id(), Some(anchor));
+    assert_ne!(
+        queue.slot_index(anchor),
+        Some(0),
+        "the seeded shuffle does not pin the anchor"
+    );
 }
 
 /// The contract: a queue with one slot does not change (spec scenario
@@ -116,7 +143,7 @@ fn shuffled_slot_order_without_a_playing_slot_shuffles_all_slots() {
 fn shuffled_slot_order_with_one_slot_keeps_that_slot() {
     let queue = queue_from_items(vec![item("a")], Some(0));
 
-    let order = queue.shuffled_slot_order(&mut seeded_rng());
+    let order = queue.shuffled_slot_order(&mut seeded_rng(), true);
 
     assert_eq!(order, slot_ids(&queue));
 }

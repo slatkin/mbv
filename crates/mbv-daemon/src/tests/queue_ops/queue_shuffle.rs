@@ -4,6 +4,7 @@
 use std::collections::HashSet;
 
 use mbv_player::owner_state::StepTarget;
+use rand::SeedableRng;
 
 use super::*;
 
@@ -52,6 +53,9 @@ fn unified_queue_shuffle_reorders_once_with_the_active_slot_first_and_the_same_s
     );
     let active = owner.core.queue.slots()[2].slot_id;
     let before_revision = owner.core.queue.revision().raw();
+    // A playing queue: the shuffle pins the playing slot first (spec
+    // scenario "Shuffle with a playing item").
+    player.status.lock().unwrap().active = true;
     let before_slots: HashSet<String> = owner
         .core
         .queue
@@ -126,4 +130,103 @@ fn unified_queue_shuffle_reorders_once_with_the_active_slot_first_and_the_same_s
         StepTarget::Jump(after_order[1]),
         "a Next after the shuffle follows the new order"
     );
+}
+
+/// Contract (live-test finding, queue-content-shuffle task 6.4): an idle
+/// queue keeps its active marker as the resolved-play anchor — an idle queue
+/// load and an owner restore both set it — and Shuffle must not pin that
+/// anchor first. Every slot reorders while the anchor keeps its slot identity
+/// (spec scenario "Shuffle with nothing playing").
+#[test]
+fn an_idle_shuffle_reorders_every_slot_and_keeps_the_play_anchor() {
+    use crate::control::handle_queue_shuffle;
+
+    let player = cold_player();
+    let cmd_rx = player.spy_on_commands();
+    let client = queue_op_client("test-token");
+    let registry = Arc::new(Mutex::new(CtrlClients::default()));
+    let (client_id, _op_client_rx) = connect_client(&mut registry.lock().unwrap());
+    let (_observer_id, observer_rx) = connect_client(&mut registry.lock().unwrap());
+    let (reply_tx, _reply_rx) = mpsc::channel();
+    let (merged_tx, _merged_rx) = mpsc::channel();
+
+    let mut owner = owner_with(
+        vec![
+            emby_qi("a", "Video", "Movie"),
+            emby_qi("b", "Video", "Movie"),
+            emby_qi("c", "Video", "Movie"),
+            emby_qi("d", "Video", "Movie"),
+            emby_qi("e", "Video", "Movie"),
+            emby_qi("f", "Video", "Movie"),
+        ],
+        0,
+    );
+    let anchor = owner.core.queue.slots()[0].slot_id;
+    let before_revision = owner.core.queue.revision().raw();
+    let before_ids: HashSet<String> = owner
+        .core
+        .queue
+        .slots()
+        .iter()
+        .map(|slot| slot.item.id().to_string())
+        .collect();
+
+    handle_queue_shuffle(
+        &mut CtrlContext {
+            reply_tx: &reply_tx,
+            client_id,
+            client: &client,
+            player: &player,
+            audio_only: false,
+            owner: &mut owner,
+            shared_queue: &shared_queue_state(),
+            ctrl_clients: &registry,
+            audiobookshelf: None,
+            merged_tx: &merged_tx,
+            owner_settings: crate::owner_settings::fixed_reader(false),
+            role: crate::DaemonRole::Local,
+            op: std::cell::Cell::new(Some(mbv_ctrl::QueueOpId(7))),
+        },
+        &mut rand::rngs::SmallRng::seed_from_u64(5),
+    );
+
+    // One revision, every slot still present, and the anchor keeps its slot
+    // identity without being pinned first.
+    assert_eq!(owner.core.queue.revision().raw(), before_revision + 1);
+    let after_ids: HashSet<String> = owner
+        .core
+        .queue
+        .slots()
+        .iter()
+        .map(|slot| slot.item.id().to_string())
+        .collect();
+    assert_eq!(after_ids, before_ids);
+    assert_eq!(owner.core.queue.active_slot_id(), Some(anchor));
+    assert_ne!(
+        owner.core.queue.slot_index(anchor),
+        Some(0),
+        "the seeded shuffle does not leave the anchor first"
+    );
+
+    // Exactly one client snapshot, and an idle owner publishes no playing row.
+    match recv_event(&observer_rx) {
+        CtrlEvent::UnifiedQueueState(state) => assert_eq!(state.active_slot, None),
+        other => panic!("expected one UnifiedQueueState, got {other:?}"),
+    }
+    assert!(observer_rx.try_recv().is_err(), "no second snapshot");
+
+    // The op answer is `handle_ctrl_for_role`'s contract (it owns
+    // `answer_queue_op` after dispatch, covered by the other queue-op tests
+    // through `run_queue_cmd`); this test calls the handler directly for the
+    // seeded rng, so it asserts only the handler's own effects.
+
+    // The run receives one QueueReorder carrying the applied order (task 3.3).
+    let after_order: Vec<_> = owner
+        .core
+        .queue
+        .slots()
+        .iter()
+        .map(|slot| slot.slot_id)
+        .collect();
+    assert_one_queue_reorder_carries_the_shuffled_order(&cmd_rx, &after_order);
 }

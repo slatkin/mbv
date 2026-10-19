@@ -35,6 +35,7 @@ Read `design.md` first. Run `cargo fmt` after each Rust change. Add no lint supp
 - [x] 6.1 Update `CONTEXT.md` (the retired Cast receiver entry that names `PlayOrder`; check *Avoid* terms before any new term). Verify with `rg -n "PlayOrder|play order" CONTEXT.md docs openspec/specs` showing only archived or intended mentions.
 - [x] 6.2 Run `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run --workspace`; run `make check-code-file-lines` just before push. Verify all pass.
 - [x] 6.3 Live test passed (user, 2026-10-19): Shuffle on a playing queue keeps the playing item first and plays on; Next follows the new order.
+- [x] 6.4 Live-test finding (user, 2026-10-19): with an idle queue whose playlist was restored or loaded without playback, the first queue item never shuffled — the canonical active marker doubles as the resolved-play anchor while idle (`install_idle_queue_load`, owner restore), and `shuffled_slot_order` pinned it unconditionally, violating the "Shuffle with nothing playing" scenario. Fix: the shuffle pins the active slot only when `PlayerStatus.active`; idle reorders every slot while the anchor keeps its slot identity. Tests: `shuffled_slot_order_does_not_pin_an_idle_play_anchor` (mbv-queue), `an_idle_shuffle_reorders_every_slot_and_keeps_the_play_anchor` (mbv-daemon); the playing-pin test now sets `PlayerStatus.active`.
 
 ## Workflow follow-up
 

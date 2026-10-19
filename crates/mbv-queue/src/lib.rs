@@ -445,13 +445,24 @@ impl PlaybackQueue {
         QueueMutationResult::Applied(())
     }
 
-    /// The slot order a Shuffle produces: the active slot first, then the rest at random.
+    /// The slot order a Shuffle produces.
+    ///
+    /// When a slot is playing, that slot comes first and the rest follow at
+    /// random (spec scenario "Shuffle with a playing item"). When nothing
+    /// plays, every slot is reordered at random: the queue's active marker
+    /// then carries only the resolved-play anchor (idle load and owner
+    /// restore), which keeps its slot identity but is not pinned (spec
+    /// scenario "Shuffle with nothing playing").
     ///
     /// The queue itself is not changed. The caller supplies `rng` so tests can
     /// seed it and so the owner owns the randomness source.
     #[must_use]
-    pub fn shuffled_slot_order(&self, rng: &mut impl rand::Rng) -> Vec<QueueSlotId> {
-        let active_slot_id = self.active_slot_id;
+    pub fn shuffled_slot_order(
+        &self,
+        rng: &mut impl rand::Rng,
+        pin_active_first: bool,
+    ) -> Vec<QueueSlotId> {
+        let active_slot_id = self.active_slot_id.filter(|_| pin_active_first);
         let mut order: Vec<QueueSlotId> = self
             .slots
             .iter()

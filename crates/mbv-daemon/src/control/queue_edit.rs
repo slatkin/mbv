@@ -165,7 +165,13 @@ pub(crate) fn handle_queue_shuffle(ctx: &mut CtrlContext<'_>, rng: &mut impl ran
             },
         ..
     } = &mut *ctx.owner;
-    let order = queue.shuffled_slot_order(rng);
+    // The canonical active slot doubles as the resolved-play anchor while
+    // nothing plays (an idle queue load and an owner restore both set it), so
+    // the shuffle pins it first only when a slot is actually playing. Idle,
+    // every slot reorders (spec "Shuffle with nothing playing") and the
+    // anchor keeps its slot identity through `reorder_slots`.
+    let pin_active_first = ctx.player.status.lock().unwrap().active;
+    let order = queue.shuffled_slot_order(rng, pin_active_first);
     if matches!(
         queue.reorder_slots(&order),
         mbv_queue::QueueMutationResult::Applied(())
