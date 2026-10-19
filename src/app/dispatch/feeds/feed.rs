@@ -602,7 +602,15 @@ impl App {
     /// The refresh-completion hook (design D2): the refreshed folder listing
     /// invalidates the whole session cache — the current selection refetches
     /// through the shown projection's lazy-fetch trigger, and unloaded pills
-    /// stay unloaded.
+    /// stay unloaded. The count replacement and the pill-index re-resolution
+    /// wait for the refreshed root listing to fully paginate (review P2,
+    /// b603f329b..9e454b62d): a refresh that lands only part of the folders
+    /// (the library total grew since the last full pagination) must not
+    /// replace `folder_counts` from its page-1 folders, nor clamp or
+    /// re-resolve the pill index against the shrunken pill row while
+    /// `selection` keeps a later-page folder. The listing's final page append
+    /// completes the deferred work through
+    /// `maybe_complete_feed_home_video_listing`'s non-forced fan-out.
     pub(in crate::app) fn complete_feed_home_video_refresh(&mut self, lib_idx: usize) {
         if !self.is_feed_home_video_library(lib_idx) {
             return;
@@ -615,8 +623,10 @@ impl App {
             state.items.clear();
             state.loading = false;
         }
-        self.resolve_feed_home_video_pending_selection(lib_idx);
-        self.spawn_feed_home_video_folder_counts(lib_idx, true);
+        if self.feed_home_video_root_listing_completed(lib_idx) {
+            self.resolve_feed_home_video_pending_selection(lib_idx);
+            self.spawn_feed_home_video_folder_counts(lib_idx, true);
+        }
         self.log_feed_home_video_state(lib_idx, "refresh_completed");
     }
 

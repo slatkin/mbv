@@ -324,19 +324,27 @@ impl App {
         // through the shown projection's lazy-fetch trigger; unloaded pills
         // stay unloaded. Legacy unplayed-video refresh completions (swallowed
         // above, revisit in task 5.1) are not listing refreshes.
-        if self.is_feed_home_video_library(lib_idx)
+        let is_feed_root_refresh = self.is_feed_home_video_library(lib_idx)
             && self.libs.get(lib_idx).is_some_and(|lib| {
                 lib.nav_stack.len() == 1 && lib.nav_stack[0].parent_id == parent_id
-            })
-        {
+            });
+        if is_feed_root_refresh {
             self.complete_feed_home_video_refresh(lib_idx);
         }
         self.spawn_all_items_prefetch(lib_idx);
         // A group switch (music) or pill switch / stop-refresh (TV series
         // root) refreshes the level in place -- no `Loaded` event, no
         // App-side cursor movement -- so re-arm completion pagination here;
-        // see `is_music_group_view` and `is_tv_series_root_view`.
-        if self.is_music_group_view(lib_idx) || self.is_tv_series_root_view(lib_idx) {
+        // see `is_music_group_view` and `is_tv_series_root_view`. A feed-view
+        // root listing refresh that landed only part of the folders (the
+        // library total grew since the last full pagination) resumes its
+        // unconditional pagination the same way: the refresh-completion work
+        // waits for the full listing, and the final page append completes it
+        // (review P2, b603f329b..9e454b62d).
+        if self.is_music_group_view(lib_idx)
+            || self.is_tv_series_root_view(lib_idx)
+            || is_feed_root_refresh
+        {
             self.maybe_fetch_next_page(lib_idx, 0);
         }
     }

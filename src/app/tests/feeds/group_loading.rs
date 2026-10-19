@@ -438,3 +438,100 @@ fn selecting_an_uncached_pill_while_a_fetch_is_in_flight_hands_loading_over(
         "the shown selection still awaits its fetch"
     );
 }
+
+fn make_root_folder(id: &str, name: &str) -> EmbyItem {
+    let mut folder = make_item(name, "Folder");
+    folder.id = id.into();
+    folder.is_folder = true;
+    folder
+}
+
+/// Regression (review P2, b603f329b..9e454b62d): a refresh that lands only
+/// the first page of a multi-page root listing must not replace
+/// `folder_counts` from its page-1 folders, nor clamp or re-resolve the pill
+/// index against the partial listing while `selection` keeps a later-page
+/// folder. The final page append completes the refresh: the pill row
+/// re-derives from the full listing and the selection stays the folder the
+/// user picked.
+#[rstest]
+fn partial_root_refresh_keeps_counts_and_the_later_page_pill(make_home_video_app: App) {
+    let mut app = make_home_video_app;
+    app.handle_lib_event(LibEvent::Browse(BrowseEvent::Loaded {
+        lib_idx: 0,
+        parent_id: "lib-youtube".into(),
+        level: Box::new(BrowseLevel {
+            rows: ServerRows::loaded(3, 3),
+            parent_id: "lib-youtube".into(),
+            title: "YouTube".into(),
+            items: vec![
+                make_root_folder("folder-a", "Channel A"),
+                make_root_folder("folder-b", "Channel B"),
+                make_root_folder("folder-c", "Channel C"),
+            ],
+            resting: BrowseResting::new(0, 0),
+            item_types: None,
+            unplayed_only: false,
+            sort_by: "SortName".into(),
+            sort_order: "Ascending".into(),
+            loading: false,
+            all_items: None,
+            letter_filter: None,
+            tv_content_mode: None,
+            music_grouping: None,
+        }),
+    }));
+    for id in ["folder-a", "folder-b", "folder-c"] {
+        seed_folder_counts(&mut app, id, 1);
+    }
+    if let Some(state) = app.libs[0].feed_home_video.as_mut() {
+        state.selection = FeedHomeVideoSelection::Folder("folder-c".into());
+        state.selected_group = 3;
+    }
+
+    app.handle_lib_event(LibEvent::Browse(BrowseEvent::Refreshed {
+        lib_idx: 0,
+        parent_id: "lib-youtube".into(),
+        item_types: None,
+        unplayed_only: false,
+        items: vec![make_root_folder("folder-a", "Channel A")],
+        total_count: 3,
+    }));
+
+    let state = app.libs[0].feed_home_video.as_ref().unwrap();
+    assert_eq!(
+        state.folder_counts.len(),
+        3,
+        "the partial refresh did not replace the counts"
+    );
+    assert_eq!(state.selected_group, 3, "the pill index did not shrink");
+    assert_eq!(
+        state.selection,
+        FeedHomeVideoSelection::Folder("folder-c".into())
+    );
+
+    app.handle_lib_event(LibEvent::Browse(BrowseEvent::PageAppended {
+        lib_idx: 0,
+        parent_id: "lib-youtube".into(),
+        items: vec![
+            make_root_folder("folder-b", "Channel B"),
+            make_root_folder("folder-c", "Channel C"),
+        ],
+        total_count: 3,
+    }));
+
+    assert_eq!(
+        app.feed_home_video_counted_folders(0)
+            .iter()
+            .map(|folder| folder.id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["folder-a", "folder-b", "folder-c"],
+        "the repaginated listing restores the pill row"
+    );
+    let state = app.libs[0].feed_home_video.as_ref().unwrap();
+    assert_eq!(state.folder_counts.len(), 3);
+    assert_eq!(state.selected_group, 3);
+    assert_eq!(
+        state.selection,
+        FeedHomeVideoSelection::Folder("folder-c".into())
+    );
+}
