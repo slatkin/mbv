@@ -2,7 +2,7 @@
 
 ## 1. Count-source findings from documentation (design D6)
 
-- [ ] 1.1 Record the Emby count-field semantics from public documentation (no live calls) in `api-findings.md` and the D1 choice it implies. Verify: `api-findings.md` exists in the change directory and names the choice.
+- [x] 1.1 Record the Emby count-field semantics from public documentation (no live calls) in `api-findings.md` and the D1 choice it implies. Verify: `api-findings.md` exists in the change directory and names the choice.
 
 ## 2. Folder listing carries counts
 
