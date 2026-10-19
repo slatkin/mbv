@@ -140,16 +140,13 @@ fn unified_queue_shuffle_reorders_once_with_the_active_slot_first_and_the_same_s
 /// (spec scenario "Shuffle with nothing playing").
 #[test]
 fn an_idle_shuffle_reorders_every_slot_and_keeps_the_play_anchor() {
-    use crate::control::handle_queue_shuffle;
-
     let player = cold_player();
     let cmd_rx = player.spy_on_commands();
     let client = queue_op_client("test-token");
     let registry = Arc::new(Mutex::new(CtrlClients::default()));
     let (client_id, _op_client_rx) = connect_client(&mut registry.lock().unwrap());
     let (_observer_id, observer_rx) = connect_client(&mut registry.lock().unwrap());
-    let (reply_tx, _reply_rx) = mpsc::channel();
-    let (merged_tx, _merged_rx) = mpsc::channel();
+    let (reply_tx, reply_rx) = mpsc::channel();
 
     let mut owner = owner_with(
         vec![
@@ -162,6 +159,11 @@ fn an_idle_shuffle_reorders_every_slot_and_keeps_the_play_anchor() {
         ],
         0,
     );
+    // The Owner's own shuffle rng, seeded (queue-content-shuffle design D1):
+    // the dispatch path stays deterministic, and the permutation-level
+    // no-pin contract itself lives at the mbv-queue layer
+    // (shuffled_slot_order_does_not_pin_an_idle_play_anchor).
+    owner.rng = rand::rngs::SmallRng::seed_from_u64(5);
     let anchor = owner.core.queue.slots()[0].slot_id;
     let before_revision = owner.core.queue.revision().raw();
     let before_ids: HashSet<String> = owner
@@ -172,23 +174,16 @@ fn an_idle_shuffle_reorders_every_slot_and_keeps_the_play_anchor() {
         .map(|slot| slot.item.id().to_string())
         .collect();
 
-    handle_queue_shuffle(
-        &mut CtrlContext {
-            reply_tx: &reply_tx,
-            client_id,
-            client: &client,
-            player: &player,
-            audio_only: false,
-            owner: &mut owner,
-            shared_queue: &shared_queue_state(),
-            ctrl_clients: &registry,
-            audiobookshelf: None,
-            merged_tx: &merged_tx,
-            owner_settings: crate::owner_settings::fixed_reader(false),
-            role: crate::DaemonRole::Local,
-            op: std::cell::Cell::new(Some(mbv_ctrl::QueueOpId(7))),
+    run_queue_cmd(
+        CtrlCmd::UnifiedQueueShuffle {
+            op: Some(mbv_ctrl::QueueOpId(7)),
         },
-        &mut rand::rngs::SmallRng::seed_from_u64(5),
+        client_id,
+        &reply_tx,
+        &client,
+        &player,
+        &mut owner,
+        &registry,
     );
 
     // One revision, every slot still present, and the anchor keeps its slot
@@ -216,10 +211,17 @@ fn an_idle_shuffle_reorders_every_slot_and_keeps_the_play_anchor() {
     }
     assert!(observer_rx.try_recv().is_err(), "no second snapshot");
 
-    // The op answer is `handle_ctrl_for_role`'s contract (it owns
-    // `answer_queue_op` after dispatch, covered by the other queue-op tests
-    // through `run_queue_cmd`); this test calls the handler directly for the
-    // seeded rng, so it asserts only the handler's own effects.
+    // The op is answered with the applied state through the dispatch path.
+    match recv_event(&reply_rx) {
+        CtrlEvent::QueueOpResult {
+            op: mbv_ctrl::QueueOpId(7),
+            outcome: mbv_ctrl::QueueOpOutcome::Applied(state),
+        } => {
+            assert_eq!(state.slots.len(), 6);
+            assert_eq!(state.active_slot, None);
+        }
+        other => panic!("expected an applied QueueOpResult, got {other:?}"),
+    }
 
     // The run receives one QueueReorder carrying the applied order (task 3.3).
     let after_order: Vec<_> = owner
@@ -279,16 +281,13 @@ fn foreign_content_session_output(
 /// reorders instead (spec scenario "Shuffle with nothing playing").
 #[test]
 fn a_shuffle_while_a_session_presents_foreign_content_does_not_pin_the_stale_active_slot() {
-    use crate::control::handle_queue_shuffle;
-
     let player = cold_player();
     let cmd_rx = player.spy_on_commands();
     let client = queue_op_client("test-token");
     let registry = Arc::new(Mutex::new(CtrlClients::default()));
     let (client_id, _op_client_rx) = connect_client(&mut registry.lock().unwrap());
     let (_observer_id, observer_rx) = connect_client(&mut registry.lock().unwrap());
-    let (reply_tx, _reply_rx) = mpsc::channel();
-    let (merged_tx, _merged_rx) = mpsc::channel();
+    let (reply_tx, reply_rx) = mpsc::channel();
 
     let mut owner = owner_with(
         vec![
@@ -303,6 +302,11 @@ fn a_shuffle_while_a_session_presents_foreign_content_does_not_pin_the_stale_act
     );
     let anchor = owner.core.queue.slots()[0].slot_id;
     owner.output = foreign_content_session_output(anchor);
+    // The Owner's own shuffle rng, seeded (queue-content-shuffle design D1):
+    // the dispatch path stays deterministic, and the presentation-level
+    // no-pin decision itself is covered by the playing and idle cases here
+    // plus the presentation predicate's own contract.
+    owner.rng = rand::rngs::SmallRng::seed_from_u64(5);
     let before_revision = owner.core.queue.revision().raw();
     let before_ids: HashSet<String> = owner
         .core
@@ -315,23 +319,16 @@ fn a_shuffle_while_a_session_presents_foreign_content_does_not_pin_the_stale_act
     // included (emby-session-owner-output design D10).
     player.status.lock().unwrap().active = true;
 
-    handle_queue_shuffle(
-        &mut CtrlContext {
-            reply_tx: &reply_tx,
-            client_id,
-            client: &client,
-            player: &player,
-            audio_only: false,
-            owner: &mut owner,
-            shared_queue: &shared_queue_state(),
-            ctrl_clients: &registry,
-            audiobookshelf: None,
-            merged_tx: &merged_tx,
-            owner_settings: crate::owner_settings::fixed_reader(false),
-            role: crate::DaemonRole::Local,
-            op: std::cell::Cell::new(Some(mbv_ctrl::QueueOpId(11))),
+    run_queue_cmd(
+        CtrlCmd::UnifiedQueueShuffle {
+            op: Some(mbv_ctrl::QueueOpId(11)),
         },
-        &mut rand::rngs::SmallRng::seed_from_u64(5),
+        client_id,
+        &reply_tx,
+        &client,
+        &player,
+        &mut owner,
+        &registry,
     );
 
     // The shuffle applied as one edit, every slot still present, and the
@@ -358,6 +355,15 @@ fn a_shuffle_while_a_session_presents_foreign_content_does_not_pin_the_stale_act
         other => panic!("expected one UnifiedQueueState, got {other:?}"),
     }
     assert!(observer_rx.try_recv().is_err(), "no second snapshot");
+
+    // The op is answered with the applied state through the dispatch path.
+    match recv_event(&reply_rx) {
+        CtrlEvent::QueueOpResult {
+            op: mbv_ctrl::QueueOpId(11),
+            outcome: mbv_ctrl::QueueOpOutcome::Applied(state),
+        } => assert_eq!(state.slots.len(), 6),
+        other => panic!("expected an applied QueueOpResult, got {other:?}"),
+    }
 
     // The run receives one QueueReorder carrying the applied order.
     let after_order: Vec<_> = owner

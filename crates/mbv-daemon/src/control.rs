@@ -54,8 +54,6 @@ pub(crate) fn intent_span(
 }
 
 pub(crate) use playback::play_resolved_items;
-#[cfg(test)]
-pub(crate) use queue_edit::handle_queue_shuffle;
 pub(crate) use queue_load::{
     cancel_pending_idle_queue_load, cancel_pending_idle_queue_load_if_run_changed,
     complete_pending_idle_queue_load, expire_pending_idle_queue_load,
@@ -496,7 +494,7 @@ fn dispatch_ctrl_command(
             queue_edit::handle_queue_move_slot(ctx, queue_lineage, slot_id, to_index);
         }
         CtrlCmd::UnifiedQueueShuffle { .. } => {
-            queue_edit::handle_queue_shuffle(ctx, &mut rand::rng());
+            queue_edit::handle_queue_shuffle(ctx);
         }
         CtrlCmd::UnifiedQueuePlaySlot { slot_id, .. } => {
             queue_edit::handle_queue_play_slot(ctx, queue_lineage, slot_id);

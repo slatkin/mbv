@@ -152,8 +152,11 @@ pub(super) fn handle_queue_remove_slots(ctx: &mut CtrlContext<'_>, slot_ids: Vec
 }
 
 /// `CtrlCmd::UnifiedQueueShuffle`: reorder the whole queue once at random,
-/// with the active slot first, and publish the new order as one snapshot.
-pub(crate) fn handle_queue_shuffle(ctx: &mut CtrlContext<'_>, rng: &mut impl rand::Rng) {
+/// with the active slot first, and publish the new order as one snapshot. The
+/// permutation comes from the Owner's own rng (queue-content-shuffle design
+/// D1), so a test seeds `owner.rng` and drives this dispatch path
+/// deterministically.
+pub(crate) fn handle_queue_shuffle(ctx: &mut CtrlContext<'_>) {
     let except_op_client = ctx.except_op_client();
     let DaemonPlayerOwner {
         core:
@@ -164,6 +167,7 @@ pub(crate) fn handle_queue_shuffle(ctx: &mut CtrlContext<'_>, rng: &mut impl ran
                 ..
             },
         output,
+        rng,
         ..
     } = &mut *ctx.owner;
     // The canonical active slot doubles as the resolved-play anchor while

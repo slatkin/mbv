@@ -10,7 +10,6 @@
 use super::super::emby_session_support::{play_last, play_last_calls, remove_slot};
 use super::*;
 
-use crate::control::handle_queue_shuffle;
 use mbv_player::owner_state::StepTarget;
 use rand::SeedableRng;
 
@@ -371,9 +370,9 @@ fn a_removed_only_next_slot_stops_the_device_when_it_moves_to_it() {
     );
 }
 
-/// Runs the owner's Shuffle handler with a seeded rng (queue-content-shuffle
-/// design D1: the handler takes the rng so tests inject a seeded one), so the
-/// permutation it produces is deterministic.
+/// Runs the owner's Shuffle through the ctrl dispatch path with the Owner's
+/// seeded rng (queue-content-shuffle design D1: tests inject a seeded one), so
+/// the permutation it produces is deterministic.
 fn shuffle_with_seeded_rng(t: &mut TestLoop, client_id: u64) {
     let (reply_tx, _reply_rx) = mpsc::channel();
     let crate::DaemonLoop {
@@ -387,8 +386,10 @@ fn shuffle_with_seeded_rng(t: &mut TestLoop, client_id: u64) {
         role,
         ..
     } = &mut t.event_loop;
-    handle_queue_shuffle(
-        &mut CtrlContext {
+    owner.rng = rand::rngs::SmallRng::seed_from_u64(1);
+    handle_ctrl_for_role(
+        CtrlCmd::UnifiedQueueShuffle { op: None },
+        CtrlContext {
             reply_tx: &reply_tx,
             client_id,
             client,
@@ -403,7 +404,6 @@ fn shuffle_with_seeded_rng(t: &mut TestLoop, client_id: u64) {
             role: *role,
             op: std::cell::Cell::new(None),
         },
-        &mut rand::rngs::SmallRng::seed_from_u64(1),
     );
 }
 

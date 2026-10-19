@@ -386,11 +386,11 @@ impl PlaybackIntentState {
 }
 
 use mbv_player::PlayerOwnerState;
+use rand::SeedableRng;
 
 /// The daemon's Player owner: the reusable [`PlayerOwnerState`] core plus the
 /// daemon-only guarded direct-playback lifecycle coordinator. The daemon event
 /// loop owns exactly one of these.
-#[derive(Default)]
 pub(super) struct DaemonPlayerOwner {
     pub(super) core: PlayerOwnerState,
     pub(super) pending_idle_load: Option<PendingIdleQueueLoad>,
@@ -418,6 +418,26 @@ pub(super) struct DaemonPlayerOwner {
     /// 4.2). Its outcome re-enters through `CastOwnerEvent::Resolved` and is
     /// matched against it by slot and transition generation.
     pub(super) pending_cast_resolve: Option<crate::cast::PendingCastResolve>,
+    /// The Owner's shuffle randomness (queue-content-shuffle design D1): the
+    /// Shuffle draws its permutation from the Owner's own rng, so a test seeds
+    /// this field and drives the dispatch path deterministically.
+    pub(super) rng: rand::rngs::SmallRng,
+}
+
+impl Default for DaemonPlayerOwner {
+    fn default() -> Self {
+        Self {
+            core: PlayerOwnerState::default(),
+            pending_idle_load: None,
+            intents: PlaybackIntentState::default(),
+            queued_transition_origin: None,
+            output: crate::output::PlaybackOutput::default(),
+            pending_cast_connect: None,
+            pending_emby_session_select: None,
+            pending_cast_resolve: None,
+            rng: rand::rngs::SmallRng::from_rng(&mut rand::rng()),
+        }
+    }
 }
 
 pub(crate) struct PendingIdleQueueLoad {
