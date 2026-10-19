@@ -40,18 +40,19 @@ impl PlayerProxy {
     }
 
     #[must_use]
-    pub fn supports_play_order(&self) -> bool {
-        self.remote.supports_play_order()
+    pub fn supports_queue_shuffle(&self) -> bool {
+        self.remote.supports_queue_shuffle()
     }
 
-    /// Send `CtrlCmd::SetPlayOrder` to the Player owner, but only when the
-    /// owner advertises the `play-order` ctrl capability (design D5): an
-    /// older owner gets nothing and the menu hides the entry instead.
-    pub fn set_play_order(&self, mode: mbv_queue::PlayOrderMode) {
-        if self.remote.supports_play_order() {
+    /// Send `CtrlCmd::UnifiedQueueShuffle` to the Player owner, but only
+    /// when the owner advertises the `queue-shuffle` ctrl capability
+    /// (design D4): an older owner gets nothing and the menu hides the
+    /// entry instead.
+    pub fn shuffle_queue(&self) {
+        if self.remote.supports_queue_shuffle() {
             let _ = self
                 .remote
-                .send_ctrl_cmd(mbv_ctrl::CtrlCmd::SetPlayOrder(mode));
+                .send_ctrl_cmd(mbv_ctrl::CtrlCmd::UnifiedQueueShuffle { op: None });
         }
     }
 

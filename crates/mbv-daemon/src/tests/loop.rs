@@ -4,7 +4,6 @@
 // time through `handle_event` so the process never exits.
 
 use super::*;
-use mbv_ids::ItemId;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::Instant;
@@ -508,72 +507,6 @@ fn playback_resolved_failure_line_carries_intent_client_and_request() {
         }),
         "no failure line carrying the intent ids: {lines:?}"
     );
-}
-
-/// In Shuffle, the Next-Up threshold card names the slot the core picked, not
-/// the queue neighbor (queue-shuffle-play-order task 4.2; queue-play-order
-/// spec: one pick drives every forward advance).
-#[test]
-fn next_up_threshold_in_shuffle_names_the_picked_slot() {
-    let mut fixture = test_loop_with_queue(
-        crate::DaemonRole::Local,
-        vec![
-            emby_qi("a", "Video", "Movie"),
-            emby_qi("b", "Video", "Movie"),
-            emby_qi("c", "Video", "Movie"),
-        ],
-        0,
-    );
-    let cmd_rx = fixture.event_loop.player.spy_on_commands();
-    let slots: Vec<_> = fixture
-        .event_loop
-        .owner
-        .core
-        .queue
-        .slots()
-        .iter()
-        .map(|slot| slot.slot_id)
-        .collect();
-    fixture
-        .event_loop
-        .owner
-        .core
-        .note_observed_active_slot(Some(slots[0]));
-    fixture
-        .event_loop
-        .owner
-        .core
-        .set_play_order(mbv_queue::PlayOrderMode::Shuffle);
-    let mbv_queue::PlayOrder::Shuffle {
-        upcoming: Some(picked),
-    } = fixture.event_loop.owner.core.play_order()
-    else {
-        panic!("shuffle over two other slots must pick one");
-    };
-    // The pick can land on the queue neighbor by chance; moving it to the
-    // tail keeps the card's source unambiguous for either outcome.
-    fixture.event_loop.owner.core.queue.move_slot(picked, 2);
-    let picked_item_id = fixture
-        .event_loop
-        .owner
-        .core
-        .queue
-        .slot(picked)
-        .map(|slot| slot.item.id().to_string())
-        .unwrap();
-
-    fixture
-        .event_loop
-        .handle_event(DaemonEvent::Player(PlayerEvent::NextUpThreshold {
-            series_id: ItemId::new("series"),
-            season: 1,
-            episode: 1,
-        }));
-
-    match cmd_rx.recv().unwrap() {
-        PlayerCommand::NextUpShow { item_id, .. } => assert_eq!(item_id, picked_item_id),
-        other => panic!("expected NextUpShow, got {other:?}"),
-    }
 }
 
 mod persistence;

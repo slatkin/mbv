@@ -86,6 +86,8 @@ pub fn owner_with(items: Vec<QueueItem>, active: usize) -> DaemonPlayerOwner {
 
 // Queue mutations preserve canonical order and mirror changes to the player.
 mod queue_mutations;
+// Shuffle reorders the queue once with the active slot first.
+mod queue_shuffle;
 // Queue state persists and is taken over across owner restarts.
 mod queue_persistence;
 // Idle queue loads validate peers and commit only after playback stops.
@@ -96,5 +98,3 @@ mod queue_source_updates;
 mod queue_refresh_progress;
 // Slot jumps start playback even on a cold owner whose run is not alive.
 mod queue_play_slot;
-// SetPlayOrder turns the owner order, forwards the advance, and projects the mode.
-mod play_order;

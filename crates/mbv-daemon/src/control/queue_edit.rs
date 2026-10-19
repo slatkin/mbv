@@ -1,8 +1,7 @@
 use super::{
     CtrlContext, DaemonOwnerContext, DaemonPlayerOwner, PlayerCommand, PlayerOwnerState,
-    QueueSlotId, RejectContext, broadcast_queue_state, dispatch_slot_jump,
-    forward_play_order_advance, mint_queue_lineage, reject_command,
-    reset_play_order_for_queue_replacement, reset_slot_jumps,
+    QueueSlotId, RejectContext, broadcast_queue_state, dispatch_slot_jump, mint_queue_lineage,
+    reject_command, reset_slot_jumps,
 };
 
 /// `CtrlCmd::UnifiedQueueRemoveSlot`: remove the slot identified by
@@ -13,7 +12,6 @@ pub(super) fn handle_queue_remove_slot(
     slot_id: u64,
 ) {
     let except_op_client = ctx.except_op_client();
-    let order_before = ctx.owner.core.play_order();
     let DaemonPlayerOwner {
         core:
             PlayerOwnerState {
@@ -37,7 +35,6 @@ pub(super) fn handle_queue_remove_slot(
                 source: &*source,
                 lineage,
                 op: &ctx.op,
-                play_order: *ctx.shared_queue.play_order.lock().unwrap(),
             },
             "slot not found; remove skipped",
         );
@@ -68,12 +65,6 @@ pub(super) fn handle_queue_remove_slot(
             reset_slot_jumps(transitions, queued_transition_origin);
             ctx.player.send_command(PlayerCommand::QueueRemove(sid));
         }
-        // The edit can drop the Shuffle pick; re-pick and forward the new
-        // advance decision (queue-shuffle-play-order design D2).
-        ctx.owner.core.note_queue_slot_removed(sid);
-        if ctx.owner.core.play_order() != order_before {
-            forward_play_order_advance(&ctx.owner.core, ctx.player);
-        }
     } else {
         queue.remove_slot(sid);
         broadcast_queue_state(
@@ -85,12 +76,6 @@ pub(super) fn handle_queue_remove_slot(
             transitions,
             except_op_client,
         );
-        // The edit can drop the Shuffle pick; re-pick and forward the new
-        // advance decision (queue-shuffle-play-order design D2).
-        ctx.owner.core.note_queue_slot_removed(sid);
-        if ctx.owner.core.play_order() != order_before {
-            forward_play_order_advance(&ctx.owner.core, ctx.player);
-        }
         ctx.player.send_command(PlayerCommand::QueueRemove(sid));
     }
 }
@@ -100,7 +85,6 @@ pub(super) fn handle_queue_remove_slot(
 /// one row per round trip.
 pub(super) fn handle_queue_remove_slots(ctx: &mut CtrlContext<'_>, slot_ids: Vec<u64>) {
     let except_op_client = ctx.except_op_client();
-    let order_before = ctx.owner.core.play_order();
     let DaemonPlayerOwner {
         core:
             PlayerOwnerState {
@@ -157,22 +141,77 @@ pub(super) fn handle_queue_remove_slots(ctx: &mut CtrlContext<'_>, slot_ids: Vec
         });
         ctx.player.stop();
         reset_slot_jumps(transitions, queued_transition_origin);
-        for sid in &removed {
-            ctx.owner.core.note_queue_slot_removed(*sid);
-        }
     } else {
         // The player run keeps its own queue copy; its per-slot edits
         // are not published, so one command per removed slot is fine
         // and lets it resolve the active-slot hand-off itself.
         for sid in &removed {
-            // Each edit can drop the Shuffle pick; re-pick before the
-            // advance decision is forwarded once below (design D2).
-            ctx.owner.core.note_queue_slot_removed(*sid);
             ctx.player.send_command(PlayerCommand::QueueRemove(*sid));
         }
     }
-    if ctx.owner.core.play_order() != order_before {
-        forward_play_order_advance(&ctx.owner.core, ctx.player);
+}
+
+/// `CtrlCmd::UnifiedQueueShuffle`: reorder the whole queue once at random,
+/// with the active slot first, and publish the new order as one snapshot. The
+/// permutation comes from the Owner's own rng (queue-content-shuffle design
+/// D1), so a test seeds `owner.rng` and drives this dispatch path
+/// deterministically.
+pub(crate) fn handle_queue_shuffle(ctx: &mut CtrlContext<'_>) {
+    let except_op_client = ctx.except_op_client();
+    let DaemonPlayerOwner {
+        core:
+            PlayerOwnerState {
+                queue,
+                source,
+                transitions,
+                ..
+            },
+        output,
+        rng,
+        ..
+    } = &mut *ctx.owner;
+    // The canonical active slot doubles as the resolved-play anchor while
+    // nothing plays (an idle queue load and an owner restore both set it), so
+    // the shuffle pins it first only when the output presents that queue
+    // slot. `active` alone is not enough: a remote output that plays foreign
+    // content — media the Owner did not load — presents `active` while the
+    // loaded queue slot is not what plays, and pinning the stale anchor first
+    // would freeze it at the head of a shuffle that owns every slot (spec
+    // scenario "Shuffle with nothing playing"; PR #957 review).
+    let pin_active_first =
+        ctx.player.status.lock().unwrap().active && output.presents_active_queue_slot(queue);
+    let order = queue.shuffled_slot_order(rng, pin_active_first);
+    // An order that matches the current one edits nothing: the one-slot queue
+    // and a random draw that reproduces the order change nothing, so there is
+    // no revision, no client snapshot, and no player reorder (spec scenario
+    // "Queue with one slot"; PR #957 review).
+    if queue
+        .slots()
+        .iter()
+        .map(|slot| slot.slot_id)
+        .eq(order.iter().copied())
+    {
+        return;
+    }
+    if matches!(
+        queue.reorder_slots(&order),
+        mbv_queue::QueueMutationResult::Applied(())
+    ) {
+        broadcast_queue_state(
+            ctx.ctrl_clients,
+            ctx.player,
+            ctx.shared_queue,
+            queue,
+            source,
+            transitions,
+            except_op_client,
+        );
+        // One command carries the whole new order (queue-content-shuffle
+        // task 3.3): the run drains its command channel per tick, so a
+        // move list could leave an mpv EndFile processed against a
+        // partially applied order. The run applies the order inside one
+        // handler, active slot first, so its `current_idx` ends at 0.
+        ctx.player.send_command(PlayerCommand::QueueReorder(order));
     }
 }
 
@@ -207,7 +246,6 @@ pub(super) fn handle_queue_move_slot(
                 source: &*source,
                 lineage,
                 op: &ctx.op,
-                play_order: *ctx.shared_queue.play_order.lock().unwrap(),
             },
             "slot not found; move skipped",
         );
@@ -308,12 +346,10 @@ pub(super) fn handle_queue_apply_progress(
 /// `CtrlCmd::UnifiedQueueClear`: clear all slots and stop playback.
 pub(super) fn handle_queue_clear(ctx: &mut CtrlContext<'_>) {
     let except_op_client = ctx.except_op_client();
-    // Clearing installs a new lineage: the whole-queue replacement that
-    // resets the order (design D4).
+    // Clearing installs a new lineage: the whole-queue replacement.
     ctx.owner.core.queue.clear();
     ctx.owner.core.source = mbv_queue::QueueSource::Unknown;
     mint_queue_lineage(ctx.shared_queue);
-    reset_play_order_for_queue_replacement(&mut ctx.owner.core, ctx.shared_queue, ctx.player);
     ctx.player.advance_sequence_generation();
     ctx.player.send_command(PlayerCommand::SubmitQueue {
         items: Vec::new(),

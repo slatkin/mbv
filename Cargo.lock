@@ -2014,6 +2014,7 @@ dependencies = [
  "mbv-ws",
  "nix 0.31.3",
  "num-traits",
+ "rand 0.10.3",
  "rstest",
  "serde_json",
  "tracing",
@@ -2140,7 +2141,6 @@ dependencies = [
  "mbv-queue",
  "mbv-remote-player",
  "mbv-ws",
- "rand 0.10.3",
  "rstest",
  "serde",
  "serde_json",
@@ -2153,6 +2153,7 @@ name = "mbv-queue"
 version = "0.25.6"
 dependencies = [
  "mbv-emby-model",
+ "rand 0.10.3",
  "rstest",
  "serde",
  "serde_json",

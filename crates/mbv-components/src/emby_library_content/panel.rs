@@ -94,7 +94,7 @@ impl LibraryContentOwner for EmbyLibraryContent {
             }
         });
         let selector = if self.selector_mode == super::EmbySelectorMode::FeedGroups {
-            let pills: Vec<String> = std::iter::once("Latest".to_string())
+            let pills: Vec<String> = std::iter::once("New".to_string())
                 .chain(std::iter::once("All".to_string()))
                 .chain(
                     self.feed_groups
@@ -113,7 +113,7 @@ impl LibraryContentOwner for EmbyLibraryContent {
                 }),
             })
         } else if self.selector_mode == super::EmbySelectorMode::Letters {
-            let pills: Vec<String> = std::iter::once("Latest".to_string())
+            let pills: Vec<String> = std::iter::once("New".to_string())
                 .chain(LetterFilter::labels())
                 .collect();
             let markers = super::super::selector_markers(pills.len(), self.latest_marker);

@@ -2,9 +2,10 @@ use super::{
     CTRL_CAP_ABS_BOOK_PROGRESS, CTRL_CAP_ABS_BOOK_QUEUE, CTRL_CAP_ABS_PROGRESS, CTRL_CAP_ABS_QUEUE,
     CTRL_CAP_ANSWERED_QUEUE_OPS, CTRL_CAP_AUDIO_ONLY, CTRL_CAP_CONTROL_AUTH,
     CTRL_CAP_EMBY_SESSION_OUTPUT, CTRL_CAP_LIFECYCLE_SHUTDOWN, CTRL_CAP_OWNER_ACTION,
-    CTRL_CAP_OWNER_QUEUE_LOAD, CTRL_CAP_PIN_SWAP, CTRL_CAP_PINNED_SURFACE, CTRL_CAP_PLAY_ORDER,
-    CTRL_CAP_PLAYBACK_OUTPUT, CTRL_CAP_QUEUE_STATE, CTRL_CAP_SERVICE_SETUP_ADMIN,
-    CTRL_CAP_START_INDEX, CTRL_CAP_STATUS_ONLY, CTRL_PROTOCOL_VERSION,
+    CTRL_CAP_OWNER_QUEUE_LOAD, CTRL_CAP_PIN_SWAP, CTRL_CAP_PINNED_SURFACE,
+    CTRL_CAP_PLAYBACK_OUTPUT, CTRL_CAP_QUEUE_SHUFFLE, CTRL_CAP_QUEUE_STATE,
+    CTRL_CAP_SERVICE_SETUP_ADMIN, CTRL_CAP_START_INDEX, CTRL_CAP_STATUS_ONLY,
+    CTRL_PROTOCOL_VERSION,
 };
 use serde::{Deserialize, Serialize};
 
@@ -43,7 +44,7 @@ impl CtrlHello {
                 CTRL_CAP_ABS_BOOK_PROGRESS.to_string(),
                 CTRL_CAP_OWNER_QUEUE_LOAD.to_string(),
                 CTRL_CAP_ANSWERED_QUEUE_OPS.to_string(),
-                CTRL_CAP_PLAY_ORDER.to_string(),
+                CTRL_CAP_QUEUE_SHUFFLE.to_string(),
             ],
             control_token: None,
             swap_token: None,
@@ -189,11 +190,13 @@ impl CtrlHello {
             .any(|cap| cap == CTRL_CAP_OWNER_ACTION)
     }
 
+    /// The peer accepts `CtrlCmd::UnifiedQueueShuffle`, the one-time reorder
+    /// of the queue contents (queue-content-shuffle design D4).
     #[must_use]
-    pub fn supports_play_order(&self) -> bool {
+    pub fn supports_queue_shuffle(&self) -> bool {
         self.capabilities
             .iter()
-            .any(|cap| cap == CTRL_CAP_PLAY_ORDER)
+            .any(|cap| cap == CTRL_CAP_QUEUE_SHUFFLE)
     }
 
     #[must_use]
@@ -275,10 +278,9 @@ pub struct CtrlCompatibility {
     /// The peer runs Owner actions (`CtrlCmd::RunOwnerAction`); set from the
     /// peer Hello's `owner-action` capability by the Client's handshake.
     pub supports_owner_action: bool,
-    /// The peer accepts `CtrlCmd::SetPlayOrder` and reports `play_order` on
-    /// `UnifiedQueueStateData`; set from the peer Hello's `play-order`
-    /// capability by the Client's handshake.
-    pub supports_play_order: bool,
+    /// The peer accepts `CtrlCmd::UnifiedQueueShuffle`; set from the peer
+    /// Hello's `queue-shuffle` capability by the Client's handshake.
+    pub supports_queue_shuffle: bool,
     /// The peer accepts `CtrlCmd::SelectPlaybackOutput` and reports
     /// `CtrlEvent::PlaybackOutput` (cast-owner-output design D3); set from
     /// the peer Hello's `playback-output` capability by the Client's
@@ -309,7 +311,7 @@ impl CtrlCompatibility {
                 supports_owner_queue_load: false,
                 supports_answered_queue_ops: false,
                 supports_owner_action: false,
-                supports_play_order: false,
+                supports_queue_shuffle: false,
                 supports_playback_output: false,
                 supports_emby_session_output: false,
             }),

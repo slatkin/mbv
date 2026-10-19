@@ -5,7 +5,7 @@
 use std::sync::mpsc;
 
 use mbv_player::PlayerOwnerState;
-use mbv_queue::{PlayOrder, PlaybackQueue, QueueItem, QueueRevisionMint, QueueSlotId};
+use mbv_queue::{PlaybackQueue, QueueItem, QueueRevisionMint, QueueSlotId};
 use rstest::rstest;
 
 use crate::DaemonEvent;
@@ -94,49 +94,36 @@ fn admission_admits_only_emby_items_the_session_plays(
 }
 
 /// Contract: row 9.2 / design D1, D14 and spec "Two items on the device" —
-/// under Shuffle the device is given the pick and nothing past it, and a pick
-/// that names the slot being loaded is not a slot after it: the Owner queues
-/// nothing rather than the same item twice, because the pick re-picks on the
-/// next observation of the active slot (design D2).
+/// the device is given the queue neighbor and a loaded slot is never a slot
+/// after itself: the Owner queues nothing rather than the same item twice.
 #[test]
-fn the_shuffle_pick_is_the_only_next_slot_and_never_the_loaded_one() {
+fn the_next_slot_is_the_queue_neighbor_and_never_the_loaded_one() {
     let queue = PlaybackQueue::from_items(
         vec![item("a", "Video", "Movie"), item("b", "Video", "Movie")],
         Some(0),
         std::sync::Arc::new(QueueRevisionMint::default()),
     );
     let slots: Vec<QueueSlotId> = queue.slots().iter().map(|slot| slot.slot_id).collect();
-    let mut owner = PlayerOwnerState::new(queue, mbv_queue::QueueSource::default());
-    owner.set_play_order(mbv_queue::PlayOrderMode::Shuffle);
-    let PlayOrder::Shuffle {
-        upcoming: Some(pick),
-    } = owner.play_order()
-    else {
-        panic!("shuffle over two slots picks one");
-    };
-    let loaded = slots
-        .iter()
-        .copied()
-        .find(|slot| *slot != pick)
-        .expect("the pick is one of the two slots");
+    let owner = PlayerOwnerState::new(queue, mbv_queue::QueueSource::default());
+    let loaded = slots[0];
 
     let (next, stepped) = next_admissible_slot(&owner, loaded, &[]);
 
     assert_eq!(
         next.map(|(slot, _)| slot),
-        Some(pick),
-        "the device is given the pick"
-    );
-    assert!(stepped.is_empty(), "an admissible pick steps past nothing");
-
-    let (next, stepped) = next_admissible_slot(&owner, pick, &[]);
-
-    assert_eq!(
-        next, None,
-        "the pick names no slot after the slot being loaded"
+        Some(slots[1]),
+        "the device is given the queue neighbor"
     );
     assert!(
         stepped.is_empty(),
-        "the skipped pick is not reported as stepped past"
+        "an admissible neighbor steps past nothing"
     );
+
+    let (next, stepped) = next_admissible_slot(&owner, slots[1], &[]);
+
+    assert_eq!(
+        next, None,
+        "the queue ends after the last slot: no slot follows the loaded one"
+    );
+    assert!(stepped.is_empty(), "nothing is reported as stepped past");
 }

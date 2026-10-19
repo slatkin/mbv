@@ -257,7 +257,7 @@ impl DaemonLoop {
                 // The owner's one step rule (design D7): the same funnel the
                 // natural advance uses. The transport path drops the outcome.
                 let mut ctx = super::cast::owner_context(self);
-                crate::play_order::dispatch_relative_step(&mut ctx, direction);
+                crate::step::dispatch_relative_step(&mut ctx, direction);
             }
         }
         EventOutcome::CONTINUE

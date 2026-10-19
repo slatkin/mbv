@@ -82,16 +82,12 @@ impl PlaybackRun {
         if from >= self.queue_len() || to >= self.queue_len() || from == to {
             return;
         }
-        // mpv's playlist-move index2 names the *pre-move* slot the
-        // entry should end up next to, not its post-move index: for
-        // from < to the entry actually lands at to - 1, not to (mpv
-        // manual's own "paradox" note, confirmed against mpv 0.41).
-        // Passing to + 1 (one past the end when to == n - 1, which
-        // mpv also accepts as "move to end") makes mpv's result
-        // match this struct's from/to bookkeeping below.
         if !self.active_file {
-            let mpv_to = if from < to { to + 1 } else { to };
-            let _ = mpv.command("playlist-move", &[&from.to_string(), &mpv_to.to_string()]);
+            let (mpv_from, mpv_to) = playlist_move_args(from, to);
+            let _ = mpv.command_async(
+                "playlist-move",
+                &[&mpv_from.to_string(), &mpv_to.to_string()],
+            );
         }
         let _ = self.queue.move_slot(slot_id, to);
         // `current_idx` is this run's mpv-local coordinate; adjust it
@@ -100,4 +96,36 @@ impl PlaybackRun {
         self.current_idx = shift_index_for_move(self.current_idx, from, to);
         self.sync_status_position();
     }
+
+    /// `PlayerCommand::QueueReorder`: apply the owner's full new order inside
+    /// one command handler (queue-content-shuffle task 3.3). The run drains
+    /// its command channel per tick, so a move list leaves a window where an
+    /// mpv `EndFile` is processed against a partially applied order; one
+    /// command closes it. The playlist surgery reuses the move seam: the
+    /// incremental plan from `reorder_move_plan` drives `cmd_queue_move`, and
+    /// the active slot moves first, so `current_idx` ends at 0. An order that
+    /// does not name exactly this run's slots (a stale reorder) is discarded
+    /// untouched.
+    pub(crate) fn cmd_queue_reorder(&mut self, order: &[QueueSlotId], mpv: &Mpv) {
+        let before: Vec<QueueSlotId> = self.queue.slots().iter().map(|slot| slot.slot_id).collect();
+        if !mbv_queue::is_slot_permutation(before.iter().copied(), order) {
+            tracing::warn!(name: "player.queue_reorder.stale", target: "player", held = before.len(), requested = order.len(), "queue reorder discarded: the order does not name this run's slots");
+            return;
+        }
+        for (slot_id, to) in mbv_queue::reorder_move_plan(&before, order) {
+            self.cmd_queue_move(slot_id, to, mpv);
+        }
+    }
+}
+
+/// mpv's `playlist-move` arguments for moving the entry at `from` to `to`.
+///
+/// mpv's index2 names the *pre-move* slot the entry should end up next to,
+/// not its post-move index: for `from < to` the entry actually lands at
+/// `to - 1`, not `to` (mpv manual's own "paradox" note, confirmed against
+/// mpv 0.41). Passing `to + 1` (one past the end when `to == n - 1`, which
+/// mpv also accepts as "move to end") makes mpv's result match the run's
+/// from/to bookkeeping in [`PlaybackRun::cmd_queue_move`].
+pub(crate) fn playlist_move_args(from: usize, to: usize) -> (usize, usize) {
+    (from, if from < to { to + 1 } else { to })
 }

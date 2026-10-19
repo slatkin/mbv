@@ -11,6 +11,7 @@ use super::super::emby_session_support::{play_last, play_last_calls, remove_slot
 use super::*;
 
 use mbv_player::owner_state::StepTarget;
+use rand::SeedableRng;
 
 /// The one `transport("Stop")` call the Session receives (design D14).
 fn stop() -> SessionCall {
@@ -366,6 +367,142 @@ fn a_removed_only_next_slot_stops_the_device_when_it_moves_to_it() {
     assert!(
         output.loaded.is_none() && output.queued_next.is_none(),
         "the stopped device holds none of the Owner's items"
+    );
+}
+
+/// Runs the owner's Shuffle through the ctrl dispatch path with the Owner's
+/// seeded rng (queue-content-shuffle design D1: tests inject a seeded one), so
+/// the permutation it produces is deterministic.
+fn shuffle_with_seeded_rng(t: &mut TestLoop, client_id: u64) {
+    let (reply_tx, _reply_rx) = mpsc::channel();
+    let crate::DaemonLoop {
+        owner,
+        player,
+        shared_queue,
+        ctrl_clients,
+        client,
+        merged_tx,
+        audio_only,
+        role,
+        ..
+    } = &mut t.event_loop;
+    owner.rng = rand::rngs::SmallRng::seed_from_u64(1);
+    handle_ctrl_for_role(
+        CtrlCmd::UnifiedQueueShuffle { op: None },
+        CtrlContext {
+            reply_tx: &reply_tx,
+            client_id,
+            client,
+            player: &*player,
+            audio_only: *audio_only,
+            owner,
+            shared_queue,
+            ctrl_clients,
+            audiobookshelf: None,
+            merged_tx,
+            owner_settings: crate::owner_settings::fixed_reader(false),
+            role: *role,
+            op: std::cell::Cell::new(None),
+        },
+    );
+}
+
+/// Contract: queue-content-shuffle task 3.4 / spec scenario "Queue Shuffle
+/// changes the queued next slot" — a Shuffle that puts a different slot first
+/// after the active one marks the device's queued next item stale and
+/// interrupts nothing; when the device starts the old queued item, the Owner
+/// loads the queue's new next slot in its place.
+#[test]
+fn a_shuffle_that_changes_the_queued_next_slot_marks_it_stale_and_interrupts_nothing() {
+    let fake = FakeSessionApi::with_sessions(vec![idle_session()]);
+    let script = fake.clone();
+    let (mut t, calls, _rx) = session_output_with_queue(
+        fake,
+        vec![
+            timed("a", RUNTIME_TICKS),
+            timed("b", RUNTIME_TICKS),
+            timed("c", RUNTIME_TICKS),
+        ],
+    );
+    let (client_id, _reply_tx, _client_rx) =
+        connect_output_client_with_caps(&t.event_loop.ctrl_clients, true, true);
+    let slots = slot_ids(&t);
+    play_slot(&mut t, client_id, slots[0]);
+    assert_eq!(
+        play_calls(&calls),
+        vec![play(&["a", "b"])],
+        "the load gives the device the active item and the queued next one"
+    );
+    let t0 = Instant::now();
+
+    // A sighting of the loaded item, so the later move to the stale item is a
+    // device advance and not a load the Owner never saw.
+    script.set_sessions(vec![session_presenting_at(
+        "a",
+        RUNTIME_TICKS - 3 * SECOND_TICKS,
+        RUNTIME_TICKS,
+    )]);
+    poll_once(&mut t, t0);
+
+    shuffle_with_seeded_rng(&mut t, client_id);
+    assert_eq!(
+        slot_ids(&t)[1],
+        slots[2],
+        "the seeded shuffle puts c where b was, so the device's next item is no longer the queue's"
+    );
+    poll_once(&mut t, t0 + EMBY_SESSION_POLL_INTERVAL);
+
+    assert_eq!(
+        play_calls(&calls),
+        vec![play(&["a", "b"])],
+        "the shuffle sends nothing to the device: the active item plays on"
+    );
+    assert!(
+        transport_calls(&calls).is_empty(),
+        "the active item is never interrupted"
+    );
+    let PlaybackOutput::EmbySession(output) = &t.event_loop.owner.output else {
+        panic!("the Session is the output");
+    };
+    assert_eq!(
+        output
+            .queued_next
+            .as_ref()
+            .map(|queued| (queued.slot, queued.stale)),
+        Some((slots[1], true)),
+        "the item the device holds next is marked stale"
+    );
+
+    // The device starts the old queued item by itself: the Owner does not
+    // adopt it, and loads the queue's new next slot with the one after it.
+    script.set_sessions(vec![session_presenting_at("b", 0, RUNTIME_TICKS)]);
+    poll_once(&mut t, t0 + 2 * EMBY_SESSION_POLL_INTERVAL);
+    wait_for_session_jobs(&t.event_loop.owner.output);
+
+    assert_eq!(
+        play_calls(&calls),
+        vec![play(&["a", "b"]), play(&["c", "b"])],
+        "the move to the stale item loads the queue's new next slot and the one after it"
+    );
+    assert!(
+        transport_calls(&calls).is_empty(),
+        "the correction does not stop the device"
+    );
+    assert_eq!(
+        t.event_loop.owner.core.queue.active_slot_id(),
+        Some(slots[2]),
+        "the corrected slot becomes the active slot"
+    );
+    let PlaybackOutput::EmbySession(output) = &t.event_loop.owner.output else {
+        panic!("the Session is the output");
+    };
+    assert_eq!(
+        output
+            .queued_next
+            .as_ref()
+            .map(|queued| (queued.slot, queued.stale)),
+        Some((slots[1], false)),
+        "the slot after the corrected one is the fresh queued next item"
     );
 }
 

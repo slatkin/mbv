@@ -22,6 +22,8 @@ mod commands;
 mod queue;
 mod queue_commands;
 pub(crate) use queue::*;
+#[cfg(test)]
+pub(crate) use queue_commands::playlist_move_args;
 mod events;
 #[cfg(test)]
 pub(crate) use events::{

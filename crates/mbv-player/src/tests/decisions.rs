@@ -3,8 +3,8 @@ use rstest::rstest;
 use crate::tracks::{TrackInfo, parse_tracks, select_tracks};
 use crate::{
     AdvanceDecisionInput, CompletedMedia, FinishReason, NextUp, NextUpFire, SubtitlePrefs,
-    active_item_state, advance_decision, advance_next_index, queue_next_up_decision,
-    resolve_jump_target, seek_decision, standalone_next_up_decision, volume_decision,
+    active_item_state, advance_decision, queue_next_up_decision, resolve_jump_target,
+    seek_decision, standalone_next_up_decision, volume_decision,
 };
 use mbv_ctrl::player::SubtitleChoice;
 
@@ -152,29 +152,6 @@ fn volume_decision_clamps_and_maps_sqrt_curve(
     #[case] expected: (i64, i64),
 ) {
     assert_eq!(volume_decision(requested, maximum), expected);
-}
-
-/// The contract: the stored advance decides the next index (design D2,
-/// queue-shuffle-play-order) — Sequential takes the neighbor, a pick takes
-/// the picked slot's index (falling back to the neighbor when the slot is
-/// gone), and End has no next index.
-#[rstest]
-#[case::sequential_takes_the_neighbor(mbv_queue::PlayOrder::Sequential, 1, None, Some(2))]
-#[case::pick_takes_the_picked_slot_index(mbv_queue::PlayOrder::Shuffle { upcoming: Some(picked_slot()) }, 1, Some(2), Some(2))]
-#[case::gone_pick_falls_back_to_the_neighbor(mbv_queue::PlayOrder::Shuffle { upcoming: Some(picked_slot()) }, 1, None, Some(2))]
-#[case::end_has_no_next_index(mbv_queue::PlayOrder::Shuffle { upcoming: None }, 1, Some(2), None)]
-fn advance_resolves_the_next_index(
-    #[case] advance: mbv_queue::PlayOrder,
-    #[case] current_idx: usize,
-    #[case] picked_index: Option<usize>,
-    #[case] expected: Option<usize>,
-) {
-    let resolve = |slot: mbv_queue::QueueSlotId| picked_index.filter(|_| slot == picked_slot());
-    assert_eq!(advance_next_index(advance, current_idx, resolve), expected);
-}
-
-fn picked_slot() -> mbv_queue::QueueSlotId {
-    mbv_queue::QueueSlotId::from_raw(9)
 }
 
 #[rstest]

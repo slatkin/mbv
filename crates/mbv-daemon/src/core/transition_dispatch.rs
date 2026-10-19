@@ -10,7 +10,6 @@ use mbv_queue::QueueSlotId;
 
 use crate::control_queue::broadcast_queue_state;
 use crate::ctrl::CtrlClientId;
-use crate::forward_play_order_advance;
 
 use super::{DaemonOwnerContext, JumpOrigin, submit_queue_slots_cold_start};
 
@@ -113,11 +112,7 @@ fn cold_start_at_slot(ctx: &mut DaemonOwnerContext<'_>, target: QueueSlotId) -> 
     // is dropped, so the broadcast that follows resolves the requested slot
     // as active instead of the restored cursor's slot.
     let _ = ctx.owner.core.queue.set_active_slot(target);
-    let order_before = ctx.owner.core.play_order();
     ctx.owner.core.note_observed_active_slot(None);
-    if ctx.owner.core.play_order() != order_before {
-        forward_play_order_advance(&ctx.owner.core, ctx.player);
-    }
     ctx.shared_queue.publish_observed(&ctx.owner.core);
     true
 }
@@ -234,11 +229,7 @@ pub(crate) fn settle_remote_transition(
         return;
     };
     let mut ctx = crate::cast::owner_context(daemon);
-    let order_before = ctx.owner.core.play_order();
     ctx.owner.core.note_observed_active_slot(Some(loaded_slot));
-    if ctx.owner.core.play_order() != order_before {
-        forward_play_order_advance(&ctx.owner.core, ctx.player);
-    }
     settle_and_redispatch(&mut ctx, in_flight.request_id, loaded_slot);
     // The guarded play intent the load registered under settles with its
     // transition; without this a remote play would sit unresolved and coalesce

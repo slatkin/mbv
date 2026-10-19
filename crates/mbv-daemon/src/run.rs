@@ -7,7 +7,6 @@ use super::{
     start_queue_enrichment,
 };
 use crate::PinSwapState;
-use crate::forward_play_order_advance;
 use crate::owner_lock::{OwnerLockError, PidFileLock, lock_pid_file};
 use crate::{ClientRegistry, CtrlClients};
 use mbv_ctrl::player::PlayerEvent;
@@ -62,7 +61,6 @@ pub(super) fn apply_track_completed_observation(
     }
     record_completed_slot(
         owner,
-        player,
         shared_queue,
         slot_id,
         position_ticks,
@@ -74,14 +72,12 @@ pub(super) fn apply_track_completed_observation(
 
 /// The completion recording every natural end shares (cast-owner-output row
 /// 6.3, design D7's Finished row): progress into the slot's canonical state,
-/// the consume rules, the Shuffle re-pick forward, and the shared snapshot
-/// publish. Local playback reaches it through
+/// the consume rules, and the shared snapshot publish. Local playback reaches it through
 /// [`apply_track_completed_observation`]'s run-identity guard; a Cast natural
 /// end records through it directly, because a receiver's end report carries no
 /// local run identity to guard.
 pub(super) fn record_completed_slot(
     owner: &mut DaemonPlayerOwner,
-    player: &Player,
     shared_queue: &SharedQueueState,
     slot_id: QueueSlotId,
     position_ticks: i64,
@@ -100,7 +96,6 @@ pub(super) fn record_completed_slot(
             observation.played(),
         );
     }
-    let order_before = owner.core.play_order();
     if owner.core.consume_completed_slot(
         slot_id,
         consume,
@@ -108,11 +103,6 @@ pub(super) fn record_completed_slot(
         consume_policy.audio,
     ) {
         tracing::info!(name: "daemon.queue_slot.consumed", target: "consume", slot = ?slot_id, "completed track consumed");
-    }
-    // Consuming the Shuffle pick re-picks inside the core; forward the new
-    // advance decision when the order changed (queue-shuffle-play-order D2).
-    if owner.core.play_order() != order_before {
-        forward_play_order_advance(&owner.core, player);
     }
     shared_queue.publish_observed(&owner.core);
     true
@@ -464,8 +454,6 @@ fn initialize_queue(role: DaemonRole, player: &Player) -> (DaemonPlayerOwner, Sh
         source: Arc::new(Mutex::new(initial_source.clone())),
         lineage: Arc::new(Mutex::new(initial_lineage)),
         observed_active_slot: Arc::new(Mutex::new(None)),
-        // A new owner starts in Sequential (queue-shuffle-play-order D5).
-        play_order: Arc::new(Mutex::new(mbv_queue::PlayOrderMode::Sequential)),
         // A new owner starts on local playback (cast-owner-output spec
         // "Owner starts").
         playback_output: Arc::new(Mutex::new(mbv_ctrl::OutputState::Local)),
@@ -596,7 +584,6 @@ fn serve_tcp_control(
 fn spawn_status_broadcast(
     client: &Arc<Mutex<EmbyClient>>,
     player: &Player,
-    shared_queue: &SharedQueueState,
     clients: &ClientRegistry,
 ) {
     // Broadcast current PlayerStatus to connected TUIs so the
@@ -604,7 +591,6 @@ fn spawn_status_broadcast(
     let broadcast_interval =
         std::time::Duration::from_millis(client.lock().unwrap().config.daemon_broadcast_ms);
     let player_status = Arc::clone(&player.status);
-    let shared_queue = shared_queue.clone();
     let ctrl_clients = Arc::clone(clients);
     std::thread::spawn(move || {
         loop {
@@ -612,11 +598,7 @@ fn spawn_status_broadcast(
             if !ctrl_clients.lock().unwrap().has_driver() {
                 continue;
             }
-            // The order rides on the status so snapshot consumers that read
-            // only the status (MPRIS, tray) see the same order the queue
-            // projection reports (queue-play-order design D7).
-            let mut status = player_status.lock().unwrap().clone();
-            status.play_order = *shared_queue.play_order.lock().unwrap();
+            let status = player_status.lock().unwrap().clone();
             broadcast(&ctrl_clients, &CtrlEvent::StatusOnly(status));
         }
     });
@@ -699,7 +681,7 @@ pub fn run_with_options(
         control_credential.as_ref(),
         Arc::clone(&owner_settings),
     );
-    spawn_status_broadcast(&client, &player, &shared_queue, &ctrl_clients);
+    spawn_status_broadcast(&client, &player, &ctrl_clients);
 
     let queue_persist_tx = spawn_queue_persistence_worker(merged_tx.clone());
     let mut daemon_loop = DaemonLoop {

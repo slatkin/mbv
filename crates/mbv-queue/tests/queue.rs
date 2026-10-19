@@ -428,6 +428,7 @@ mod queue {
     mod persistence;
     mod progress;
     mod revision;
+    mod shuffle;
     fn feed(guid: &str) -> FeedEntry {
         FeedEntry {
             guid: guid.to_string(),

@@ -246,23 +246,54 @@ fn local_only_command_is_refused_without_wire_encoding() {
     );
 }
 
-// The ctrl wire carries the playback order only on `PlayerStatus.play_order`
-// (design D5, wire authority named in the queue-play-order spec): a payload
-// from an owner built before the field decodes as Sequential, and
-// `UnifiedQueueStateData` carries the order only through its `status` field.
+// queue-content-shuffle task 2.1: the shuffle command carries an optional
+// queue operation id, so a peer that sends none still decodes and the owner
+// answers it like any other queue edit.
 #[test]
-fn player_status_without_play_order_field_decodes_as_sequential() {
+fn queue_shuffle_payload_without_op_decodes() {
+    let decoded: CtrlCmd = serde_json::from_str(r#"{"UnifiedQueueShuffle":{}}"#).unwrap();
+    let CtrlCmd::UnifiedQueueShuffle { op } = decoded else {
+        panic!("decoded to another command")
+    };
+    assert_eq!(op, None);
+
+    let command = CtrlCmd::UnifiedQueueShuffle {
+        op: Some(QueueOpId(9)),
+    };
+    let json = serde_json::to_string(&command).unwrap();
+    assert!(
+        json.starts_with("{\"UnifiedQueueShuffle\":"),
+        "tag changed: {json}"
+    );
+    assert!(matches!(
+        serde_json::from_str::<CtrlCmd>(&json).unwrap(),
+        CtrlCmd::UnifiedQueueShuffle {
+            op: Some(QueueOpId(9))
+        }
+    ));
+}
+
+// The playback order left the wire (queue-content-shuffle task 5.2): a
+// payload from a peer built before the change that still carries
+// `play_order` decodes with the unknown field ignored.
+#[test]
+fn player_status_with_legacy_play_order_field_still_decodes() {
     let mut value = serde_json::to_value(PlayerStatus::default()).unwrap();
-    value.as_object_mut().unwrap().remove("play_order").unwrap();
+    value
+        .as_object_mut()
+        .unwrap()
+        .insert("play_order".to_string(), serde_json::json!("Shuffle"));
 
     let decoded: PlayerStatus = serde_json::from_value(value).unwrap();
-    assert_eq!(decoded.play_order, mbv_queue::PlayOrderMode::Sequential);
+    assert!(!decoded.active);
+    assert_eq!(decoded.queue_len, 0);
 }
 
 #[rstest::rstest]
 #[case::remove_slot(CtrlCmd::UnifiedQueueRemoveSlot { slot_id: 1, op: None }, true)]
 #[case::remove_slots(CtrlCmd::UnifiedQueueRemoveSlots { slot_ids: vec![1, 2], op: None }, true)]
 #[case::move_slot(CtrlCmd::UnifiedQueueMoveSlot { slot_id: 1, to_index: 0, op: None }, true)]
+#[case::shuffle(CtrlCmd::UnifiedQueueShuffle { op: None }, true)]
 #[case::clear(CtrlCmd::UnifiedQueueClear, true)]
 #[case::clear_op(CtrlCmd::UnifiedQueueClearOp { op: QueueOpId(1) }, true)]
 #[case::refresh(CtrlCmd::UnifiedQueueRefresh { op: QueueOpId(1) }, true)]

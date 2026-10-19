@@ -9,6 +9,7 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use mbv_emby_model::EmbyItem;
+use rand::seq::SliceRandom;
 
 // FeedEntry and QueueItem — the two item kinds a playback queue slot can
 // hold, plus QueueItem's custom (kind-tagged, legacy-fallback) Deserialize.
@@ -34,9 +35,6 @@ pub use state::{
 mod execution_sequence;
 #[doc(inline)]
 pub use execution_sequence::{ExecSlot, ExecutionSequence};
-mod play_order;
-#[doc(inline)]
-pub use play_order::{PlayOrder, PlayOrderMode};
 mod progress;
 pub(crate) use progress::apply_progress_to_queue_item;
 #[doc(inline)]
@@ -424,6 +422,71 @@ impl PlaybackQueue {
         }
     }
 
+    /// Replace the slot sequence with `order` in a single revision.
+    ///
+    /// `order` must name exactly the current slots, each once. Otherwise the
+    /// queue is left untouched and this returns [`QueueMutationResult::NotFound`].
+    /// An `order` that already matches the current sequence edits nothing and
+    /// keeps the revision — the same no-change rule `update_slot_item` and
+    /// `apply_progress` apply.
+    pub fn reorder_slots(&mut self, order: &[QueueSlotId]) -> QueueMutationResult<()> {
+        if self
+            .slots
+            .iter()
+            .map(|slot| slot.slot_id)
+            .eq(order.iter().copied())
+        {
+            return QueueMutationResult::Applied(());
+        }
+        if !is_slot_permutation(self.slots.iter().map(|slot| slot.slot_id), order) {
+            return QueueMutationResult::NotFound;
+        }
+
+        let mut by_id: HashMap<QueueSlotId, QueueSlot> = self
+            .slots
+            .drain(..)
+            .map(|slot| (slot.slot_id, slot))
+            .collect();
+        // The permutation check guarantees each id in `order` is present once.
+        self.slots = order
+            .iter()
+            .filter_map(|slot_id| by_id.remove(slot_id))
+            .collect();
+        self.revision.bump(&self.mint);
+        QueueMutationResult::Applied(())
+    }
+
+    /// The slot order a Shuffle produces.
+    ///
+    /// When a slot is playing, that slot comes first and the rest follow at
+    /// random (spec scenario "Shuffle with a playing item"). When nothing
+    /// plays, every slot is reordered at random: the queue's active marker
+    /// then carries only the resolved-play anchor (idle load and owner
+    /// restore), which keeps its slot identity but is not pinned (spec
+    /// scenario "Shuffle with nothing playing").
+    ///
+    /// The queue itself is not changed. The caller supplies `rng` so tests can
+    /// seed it and so the owner owns the randomness source.
+    #[must_use]
+    pub fn shuffled_slot_order(
+        &self,
+        rng: &mut impl rand::Rng,
+        pin_active_first: bool,
+    ) -> Vec<QueueSlotId> {
+        let active_slot_id = self.active_slot_id.filter(|_| pin_active_first);
+        let mut order: Vec<QueueSlotId> = self
+            .slots
+            .iter()
+            .map(|slot| slot.slot_id)
+            .filter(|slot_id| Some(*slot_id) != active_slot_id)
+            .collect();
+        order.shuffle(rng);
+        if let Some(active_slot_id) = active_slot_id {
+            order.insert(0, active_slot_id);
+        }
+        order
+    }
+
     pub fn move_slot(&mut self, slot_id: QueueSlotId, to_index: usize) -> QueueMutationResult<()> {
         let Some(from_index) = self.slot_index(slot_id) else {
             return QueueMutationResult::NotFound;
@@ -625,6 +688,49 @@ impl FetchedItemMatches {
         self.next_index = self.next_index.saturating_add(1);
         self.items[index].clone()
     }
+}
+
+/// The incremental moves that turn the slot order `current` into `target`:
+/// one `(slot, new index)` pair per position whose slot is not already in
+/// place, target index from 0 up. Applying the pairs with `move_slot` in
+/// order reaches `target` and never disturbs the positions already placed,
+/// so a plan whose first pair moves the active slot to index 0 leaves
+/// it there (the run's `QueueReorder` handler applies exactly this plan).
+/// `target` must name the same slots as `current`; a foreign id is skipped.
+#[must_use]
+pub fn reorder_move_plan(
+    current: &[QueueSlotId],
+    target: &[QueueSlotId],
+) -> Vec<(QueueSlotId, usize)> {
+    let mut order: Vec<QueueSlotId> = current.to_vec();
+    let mut moves = Vec::new();
+    for (to, slot_id) in target.iter().enumerate() {
+        let Some(from) = order.iter().position(|id| id == slot_id) else {
+            continue;
+        };
+        if from == to {
+            continue;
+        }
+        order.remove(from);
+        order.insert(to, *slot_id);
+        moves.push((*slot_id, to));
+    }
+    moves
+}
+
+/// Returns `true` when `order` names exactly the slots in `current`, each once.
+pub fn is_slot_permutation(
+    current: impl Iterator<Item = QueueSlotId>,
+    order: &[QueueSlotId],
+) -> bool {
+    let mut current: Vec<QueueSlotId> = current.collect();
+    if current.len() != order.len() {
+        return false;
+    }
+    current.sort_unstable();
+    let mut requested = order.to_vec();
+    requested.sort_unstable();
+    current == requested
 }
 
 fn queue_items_equal(left: &QueueItem, right: &QueueItem) -> bool {

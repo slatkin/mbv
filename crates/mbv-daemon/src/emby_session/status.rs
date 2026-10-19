@@ -116,6 +116,22 @@ fn presented_observation(output: &EmbySessionOutput) -> Option<&SessionInfo> {
 /// D10): the queue row the presented title fields come from. A slot edited out
 /// of the queue presents from the observation instead, like foreign content —
 /// the queue cannot name an occurrence it no longer holds.
+///
+/// Whether the Session currently presents the item the Owner loaded and that
+/// item is still the queue's active slot (queue-content-shuffle): the Shuffle
+/// pins the active slot first only then. Foreign content — media the Owner did
+/// not load — names no queue slot and never pins (PR #957 review).
+pub(crate) fn presents_active_queue_slot(
+    session: &EmbySessionOutput,
+    queue: &PlaybackQueue,
+) -> bool {
+    let Some(loaded) = session.loaded.as_ref() else {
+        return false;
+    };
+    Some(loaded.slot) == queue.active_slot_id()
+        && presents_item(presented_observation(session), &loaded.item_id)
+}
+
 fn presented_loaded_slot<'a>(
     queue: &'a PlaybackQueue,
     output: &'a EmbySessionOutput,

@@ -36,6 +36,9 @@ impl PlaybackRun {
             PlayerCommand::QueueMove(slot_id, to) => {
                 self.cmd_queue_move(slot_id, to, mpv);
             }
+            PlayerCommand::QueueReorder(order) => {
+                self.cmd_queue_reorder(&order, mpv);
+            }
             PlayerCommand::SetAudio(id) => {
                 if id > 0 {
                     let _ = mpv.set_property("aid", id);
@@ -86,12 +89,6 @@ impl PlaybackRun {
                 }
                 self.cmd_submit_queue(items, start_idx, mpv, progress);
                 cancel_stop = true;
-            }
-            PlayerCommand::SetUpcoming(upcoming) => {
-                // Store-only: the decision takes effect on the next unforced
-                // end-of-file advance (design D2). It must not cancel a
-                // pending stop.
-                self.upcoming = upcoming;
             }
             command => self.handle_simple_command(command, mpv),
         }

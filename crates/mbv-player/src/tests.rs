@@ -5,6 +5,7 @@ mod basic;
 mod decisions;
 mod pipe;
 mod proxy;
+mod queue_move;
 mod resume_refresh;
 mod session;
 mod session_feed;

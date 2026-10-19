@@ -300,7 +300,8 @@ impl RemotePlayer {
             // path (`RemotePlayer::send_queue_op`, `PlayerProxy::submit_queue_slots`).
             PlayerCommand::QueueAppend { .. }
             | PlayerCommand::QueueRemove(_)
-            | PlayerCommand::QueueMove(..) => {
+            | PlayerCommand::QueueMove(..)
+            | PlayerCommand::QueueReorder(_) => {
                 tracing::warn!(name: "remote.command_send.refused", target: "remote", "queue mutation not sendable over legacy ctrl; use a unified queue command");
                 return false;
             }
@@ -432,8 +433,8 @@ impl RemotePlayer {
     }
 
     #[must_use]
-    pub fn supports_play_order(&self) -> bool {
-        self.ctrl_compatibility.supports_play_order
+    pub fn supports_queue_shuffle(&self) -> bool {
+        self.ctrl_compatibility.supports_queue_shuffle
     }
 
     #[must_use]

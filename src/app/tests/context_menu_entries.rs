@@ -107,28 +107,22 @@ fn mixed_selection_with_a_music_track_drops_the_mark_entries() {
     );
 }
 
-/// A stub app whose owner advertises the `play-order` ctrl capability, so
-/// the queue-row toggle entry is offered (queue-play-order design D6).
-fn play_order_capable_app() -> App {
+/// A stub app whose owner advertises the `queue-shuffle` ctrl capability, so
+/// the Queue list Shuffle entry is offered (queue-content-shuffle design D6).
+fn queue_shuffle_capable_app() -> App {
     let (mut remote, _events, _cmd) =
         mbv_remote_player::RemotePlayer::stub_with_command_rx(Vec::new(), 0);
     let mut compat = mbv_ctrl::CtrlCompatibility::current();
-    compat.supports_play_order = true;
+    compat.supports_queue_shuffle = true;
     remote.set_ctrl_compatibility_for_test(compat);
     let mut app = make_app_stub();
     app.player = mbv_player::PlayerProxy::from_remote(remote, false);
     app
 }
 
-fn queue_state(
-    items: Vec<mbv_queue::QueueItem>,
-    play_order: mbv_queue::PlayOrderMode,
-) -> mbv_ctrl::UnifiedQueueStateData {
+fn queue_state(items: Vec<mbv_queue::QueueItem>) -> mbv_ctrl::UnifiedQueueStateData {
     mbv_ctrl::UnifiedQueueStateData {
-        status: mbv_ctrl::player::PlayerStatus {
-            play_order,
-            ..Default::default()
-        },
+        status: mbv_ctrl::player::PlayerStatus::default(),
         active_slot: Some(1),
         slots: items
             .into_iter()
@@ -151,34 +145,84 @@ fn opened_menu_labels(app: &mut App) -> Vec<&'static str> {
     pending_menu_labels(app)
 }
 
-/// queue-play-order spec, "The Queue list menu toggles Shuffle": an Emby
-/// Queue row keeps its usual entries and the shuffle-order toggle is the
-/// last entry, built as the opposite of the owner-reported order.
+/// queue-content-shuffle spec, "The Queue list menu offers Shuffle": an Emby
+/// Queue row keeps its usual entries and the Shuffle entry is the last one.
 #[test]
-fn an_emby_queue_row_menu_ends_with_the_play_order_toggle() {
-    let mut app = play_order_capable_app();
+fn an_emby_queue_row_menu_ends_with_the_shuffle_entry() {
+    let mut app = queue_shuffle_capable_app();
     app.panel_focus = PanelFocus::Queue;
-    app.local_view = QueueView::from_snapshot(&queue_state(
-        vec![mbv_queue::QueueItem::Emby(Box::new(leaf_item(
-            "queued movie",
-            "Movie",
-            "Video",
-            false,
-        )))],
-        mbv_queue::PlayOrderMode::Sequential,
-    ));
+    app.local_view = QueueView::from_snapshot(&queue_state(vec![mbv_queue::QueueItem::Emby(
+        Box::new(leaf_item("queued movie", "Movie", "Video", false)),
+    )]));
 
     let labels = opened_menu_labels(&mut app);
 
-    assert_eq!(labels.last(), Some(&"Shuffle Play"));
+    assert_eq!(labels.last(), Some(&"Shuffle"));
 }
 
-/// queue-play-order spec, "The Queue list menu toggles Shuffle" (Non-Emby
-/// Queue row): a Feed Queue row opens a menu that offers only the
-/// shuffle-order toggle — here from Shuffle, so it reads "Stop Shuffle".
+/// queue-content-shuffle spec, "The Queue list menu offers Shuffle" (Non-Emby
+/// Queue rows): a Feed Queue row and an Audiobookshelf Queue row open a menu
+/// that offers only the Shuffle entry.
+#[rstest]
+#[case::feed(mbv_queue::QueueItem::Feed(feed_episode()))]
+#[case::audiobookshelf(mbv_queue::QueueItem::Audiobookshelf(
+    mbv_queue::AudiobookshelfItem::Episode(mbv_queue::AudiobookshelfQueueItem {
+        library_item_id: "abs-lib".into(),
+        episode_id: "abs-episode".into(),
+        title: "abs episode".into(),
+        show_title: None,
+        author: None,
+        description: None,
+        duration_ticks: None,
+        position_ticks: 0,
+        played: false,
+        pub_date_secs: None,
+        is_finished: false,
+        cover_path: None,
+    }),
+))]
+fn a_non_emby_queue_row_menu_offers_only_the_shuffle_entry(#[case] item: mbv_queue::QueueItem) {
+    let mut app = queue_shuffle_capable_app();
+    app.panel_focus = PanelFocus::Queue;
+    app.local_view = QueueView::from_snapshot(&queue_state(vec![item]));
+
+    let labels = opened_menu_labels(&mut app);
+
+    assert_eq!(labels, vec!["Shuffle"]);
+}
+
+/// queue-content-shuffle spec, "The Queue list menu offers Shuffle" (Library
+/// row): no menu outside the Queue list offers the Queue list Shuffle entry,
+/// even when the owner advertises the capability.
 #[test]
-fn a_feed_queue_row_menu_offers_only_the_play_order_toggle() {
-    let entry = mbv_queue::FeedEntry {
+fn a_library_row_menu_has_no_queue_shuffle_entry() {
+    let mut app = queue_shuffle_capable_app();
+    app.panel_focus = PanelFocus::Library;
+    app.tab = TabSelection::EmbyLibrary(0);
+
+    let labels = menu_labels_for(&mut app, leaf_item("movie", "Movie", "Video", false));
+
+    assert!(!labels.contains(&"Shuffle"));
+}
+
+/// queue-content-shuffle spec, "The Queue list menu offers Shuffle" (Owner
+/// without the capability): the entry hides when the owner does not advertise
+/// the `queue-shuffle` ctrl capability, leaving the row's other entries.
+#[test]
+fn a_queue_row_menu_hides_shuffle_without_the_capability() {
+    let mut app = make_app_stub();
+    app.panel_focus = PanelFocus::Queue;
+    app.local_view = QueueView::from_snapshot(&queue_state(vec![mbv_queue::QueueItem::Emby(
+        Box::new(leaf_item("queued movie", "Movie", "Video", false)),
+    )]));
+
+    let labels = opened_menu_labels(&mut app);
+
+    assert!(!labels.contains(&"Shuffle"));
+}
+
+fn feed_episode() -> mbv_queue::FeedEntry {
+    mbv_queue::FeedEntry {
         guid: "feed-episode".into(),
         title: "Feed episode".into(),
         enclosure_url: Some("https://example.test/episode.mp3".into()),
@@ -190,32 +234,7 @@ fn a_feed_queue_row_menu_offers_only_the_play_order_toggle() {
         feed_id: None,
         position_ticks: 0,
         played: false,
-    };
-    let mut app = play_order_capable_app();
-    app.panel_focus = PanelFocus::Queue;
-    app.local_view = QueueView::from_snapshot(&queue_state(
-        vec![mbv_queue::QueueItem::Feed(entry)],
-        mbv_queue::PlayOrderMode::Shuffle,
-    ));
-
-    let labels = opened_menu_labels(&mut app);
-
-    assert_eq!(labels, vec!["Stop Shuffle"]);
-}
-
-/// queue-play-order spec, "The Queue list menu toggles Shuffle" (Library
-/// row): no menu outside the Queue list offers the shuffle-order entry,
-/// even when the owner advertises the capability.
-#[test]
-fn a_library_row_menu_has_no_play_order_toggle() {
-    let mut app = play_order_capable_app();
-    app.panel_focus = PanelFocus::Library;
-    app.tab = TabSelection::EmbyLibrary(0);
-
-    let labels = menu_labels_for(&mut app, leaf_item("movie", "Movie", "Video", false));
-
-    assert!(!labels.contains(&"Shuffle Play"));
-    assert!(!labels.contains(&"Stop Shuffle"));
+    }
 }
 
 /// Context-menu spec, "Every painted library row resolves its own menu"

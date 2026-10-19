@@ -386,11 +386,11 @@ impl PlaybackIntentState {
 }
 
 use mbv_player::PlayerOwnerState;
+use rand::SeedableRng;
 
 /// The daemon's Player owner: the reusable [`PlayerOwnerState`] core plus the
 /// daemon-only guarded direct-playback lifecycle coordinator. The daemon event
 /// loop owns exactly one of these.
-#[derive(Default)]
 pub(super) struct DaemonPlayerOwner {
     pub(super) core: PlayerOwnerState,
     pub(super) pending_idle_load: Option<PendingIdleQueueLoad>,
@@ -418,6 +418,26 @@ pub(super) struct DaemonPlayerOwner {
     /// 4.2). Its outcome re-enters through `CastOwnerEvent::Resolved` and is
     /// matched against it by slot and transition generation.
     pub(super) pending_cast_resolve: Option<crate::cast::PendingCastResolve>,
+    /// The Owner's shuffle randomness (queue-content-shuffle design D1): the
+    /// Shuffle draws its permutation from the Owner's own rng, so a test seeds
+    /// this field and drives the dispatch path deterministically.
+    pub(super) rng: rand::rngs::SmallRng,
+}
+
+impl Default for DaemonPlayerOwner {
+    fn default() -> Self {
+        Self {
+            core: PlayerOwnerState::default(),
+            pending_idle_load: None,
+            intents: PlaybackIntentState::default(),
+            queued_transition_origin: None,
+            output: crate::output::PlaybackOutput::default(),
+            pending_cast_connect: None,
+            pending_emby_session_select: None,
+            pending_cast_resolve: None,
+            rng: rand::rngs::SmallRng::from_rng(&mut rand::rng()),
+        }
+    }
 }
 
 pub(crate) struct PendingIdleQueueLoad {
@@ -472,11 +492,6 @@ pub(crate) struct SharedQueueState {
     pub(super) source: Arc<Mutex<mbv_queue::QueueSource>>,
     pub(super) lineage: Arc<Mutex<mbv_queue::QueueLineage>>,
     pub(super) observed_active_slot: Arc<Mutex<Option<QueueSlotId>>>,
-    /// Mirror of the owner core's order mode, read by snapshots built off the
-    /// shared state (cold ctrl-client seeds and queue broadcasts). The owner
-    /// core stays the authority; `publish_observed` and the order-change sites
-    /// keep this in sync (queue-shuffle-play-order design D5).
-    pub(super) play_order: Arc<Mutex<mbv_queue::PlayOrderMode>>,
     /// Mirror of the owner's active playback output, read by the ctrl accept
     /// path to seed newly-connecting Clients that negotiated
     /// `playback-output` (cast-owner-output design D3). The owner stays the
@@ -488,7 +503,6 @@ pub(crate) struct SharedQueueState {
 impl SharedQueueState {
     pub(crate) fn publish_observed(&self, owner: &mbv_player::PlayerOwnerState) {
         *self.observed_active_slot.lock().unwrap() = owner.observed_active_slot();
-        *self.play_order.lock().unwrap() = owner.play_order().mode();
     }
 }
 

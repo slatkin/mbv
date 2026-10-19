@@ -96,8 +96,7 @@ pub(crate) fn apply_device_advance(daemon: &mut DaemonLoop, advance: DeviceAdvan
         correct_stale_device_advance(daemon, advance, ended);
         return;
     }
-    // 1. The observed active slot: the queued slot the device started, with the
-    // Shuffle re-pick and the forward play order that follow it.
+    // 1. The observed active slot: the queued slot the device started.
     observe_slot(daemon, advance.queued);
     // 2. A natural end records the old slot's completion and its consume rules
     // (design D6's end row); a device next before the end margin records none.
@@ -159,8 +158,7 @@ fn correct_stale_device_advance(
         return;
     };
     // The corrected slot is where the device plays from now: the observation
-    // comes before the window it is the base of, so a Shuffle re-pick is the
-    // window the load sends.
+    // comes before the window it is the base of.
     observe_slot(daemon, slot);
     let (after, after_stepped) = window(daemon, slot);
     let runtime_ticks = slot_runtime_ticks(&daemon.owner.core.queue, slot);
@@ -319,7 +317,6 @@ fn record_natural_end(daemon: &mut DaemonLoop, ended: QueueSlotId, consume: bool
     let consume_policy = (daemon.owner_settings)().consume;
     crate::record_completed_slot(
         &mut daemon.owner,
-        &daemon.player,
         &daemon.shared_queue,
         ended,
         0,
@@ -384,7 +381,7 @@ fn step_target_advance(daemon: &mut DaemonLoop, target: StepTarget) {
     }
     let request_id = {
         let mut ctx = crate::cast::owner_context(daemon);
-        crate::play_order::dispatch_step_target(&mut ctx, slot_id, Direction::Next)
+        crate::step::dispatch_step_target(&mut ctx, slot_id, Direction::Next)
     };
     if let Some(advance) = daemon.owner.output.advance_mut() {
         advance.remaining -= 1;
@@ -448,22 +445,16 @@ pub(crate) fn clear_advance(daemon: &mut DaemonLoop) {
 }
 
 /// Records `slot` as the owner's observed active slot (the only path for that
-/// record), forwarding the play order when the note re-picked the Shuffle
-/// pick — the settle path's pattern.
+/// record) — the settle path's pattern.
 fn observe_slot(daemon: &mut DaemonLoop, slot: QueueSlotId) {
     let crate::core::DaemonPlayerOwner { core, .. } = &mut daemon.owner;
-    let order_before = core.play_order();
     core.note_observed_active_slot(Some(slot));
-    if core.play_order() != order_before {
-        crate::forward_play_order_advance(core, &daemon.player);
-    }
 }
 
 /// Re-bases the shared step funnel on the slot the failed step targeted
 /// (design D6's step-over): that slot becomes the desired active slot, so the
-/// funnel steps from after it and the Shuffle pick re-picks past it. A failed
-/// slot an edit removed ends the advance: the edited queue has no order past
-/// it.
+/// funnel steps from after it. A failed slot an edit removed ends the advance:
+/// the edited queue has no order past it.
 fn rebase_on_failed_step(daemon: &mut DaemonLoop) {
     let Some(failed) = daemon
         .owner

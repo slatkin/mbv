@@ -29,7 +29,6 @@ mbv-ids = { path = "../mbv-ids" }
 mbv-net = { path = "../mbv-net" }
 mbv-ws = { path = "../mbv-ws" }
 libc.workspace = true
-rand.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tracing.workspace = true

@@ -16,7 +16,7 @@ A relative Next or Previous resolves from the observed slot. If the slot still n
 
 - A settled load: `settle_remote_transition` records the loaded slot, settles the transition, and publishes.
 - A device-driven advance: `apply_device_advance` calls `observe_slot` for the slot the device plays, then publishes.
-- A stale-device correction: `correct_stale_device_advance` checks the Session id, then calls `observe_slot` before it resolves the window. A Shuffle re-pick is therefore the window the load sends. It publishes the corrected slot after that.
+- A stale-device correction: `correct_stale_device_advance` checks the Session id, then calls `observe_slot` before it resolves the window. It publishes the corrected slot after that.
 - Guard test: `a_removed_queued_slot_is_corrected_with_the_queue_next_slot` in `crates/mbv-daemon/src/tests/emby_session_end/device_window.rs` asserts the observed slot, the published slot, and that a following Next steps from the corrected slot.
 
 ## Where it currently fails / how it could regress
