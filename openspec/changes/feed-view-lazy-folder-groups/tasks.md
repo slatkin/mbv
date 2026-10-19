@@ -20,7 +20,7 @@
 
 ## 5. Delete the aggregate machinery
 
-- [ ] 5.1 Delete `spawn_feed_home_video_aggregate`, the `FeedHomeVideoAggregated` event with its exhaustive dispatch arm, the `maybe_aggregate_feed_*` and `maybe_refresh_feed_groups_after_refresh` re-spawn chain, and stale aggregate-only helpers; refresh the `is_feed_home_video_group_view` comment (design D5). Verify: `cargo check -p mbv` shows no orphaned variants (dispatch arms stay exhaustive) and the aggregate has no remaining references.
+- [x] 5.1 Delete `spawn_feed_home_video_aggregate`, the `FeedHomeVideoAggregated` event with its exhaustive dispatch arm, the `maybe_aggregate_feed_*` and `maybe_refresh_feed_groups_after_refresh` re-spawn chain, and stale aggregate-only helpers; refresh the `is_feed_home_video_group_view` comment (design D5). Verify: `cargo check -p mbv` shows no orphaned variants (dispatch arms stay exhaustive) and the aggregate has no remaining references.
 
 ## 6. Integration checks
 
