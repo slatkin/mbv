@@ -24,7 +24,7 @@
 
 ## 6. Integration checks
 
-- [ ] 6.1 Run `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt`, `cargo nextest run -p mbv`, and `make check-code-file-lines`; fix or split anything they surface. Verify: all four pass.
+- [x] 6.1 Run `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt`, `cargo nextest run -p mbv`, and `make check-code-file-lines`; fix or split anything they surface. Verify: all four pass.
 
 ## Workflow follow-up
 
