@@ -138,10 +138,10 @@ impl App {
 
     pub(in crate::app) fn is_feed_home_video_group_view(&self, lib_idx: usize) -> bool {
         let lib = &self.libs[lib_idx];
-        // Any present state keeps the group view: an aggregate that completed
-        // empty (every video played, so the unplayed-only fetch returns none)
-        // must still paint its pill row — the destination-latest-modes spec
-        // keeps a Latest pill selectable with an empty source (user report
+        // Any present state keeps the group view: a state whose count fan-out
+        // has not produced pills yet (or whose folders hold no videos) must
+        // still paint its pill row — the destination-latest-modes spec keeps a
+        // Latest pill selectable with an empty source (user report
         // 2026-10-18: the YouTube tab lost Latest/All once everything was
         // watched). Every state writer guards on the configured feed-view
         // library check below, so presence alone cannot widen the view.
@@ -381,8 +381,9 @@ impl App {
                     return;
                 }
             };
-            // Initial page then total refill (design D2): the same shape the
-            // deleted aggregate used, minus the unplayed filter and grouping.
+            // Initial page then total refill (design D2): the first page
+            // arrives fast, then a refill replaces it with the parent's full
+            // item set when the total exceeds the page.
             if total_count > items.len() {
                 match client.get_items_sorted(
                     &parent_id,

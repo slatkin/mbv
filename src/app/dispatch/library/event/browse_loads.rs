@@ -288,33 +288,28 @@ impl App {
         &mut self,
         lib_idx: usize,
         parent_id: &str,
-        item_types: Option<&str>,
-        unplayed_only: bool,
+        _item_types: Option<&str>,
+        _unplayed_only: bool,
         items: Vec<EmbyItem>,
         total_count: usize,
     ) {
-        let is_feed_video_refresh = self.is_feed_home_video_library(lib_idx)
-            && item_types == Some("Video")
-            && unplayed_only;
-        if !is_feed_video_refresh {
-            let mut items = Some(items);
-            let updated = self.update_current_browse_level(lib_idx, parent_id, false, |last| {
-                last.items = items.take().unwrap();
-                last.rows = ServerRows::loaded(last.items.len(), total_count);
-                last.loading = false;
-            });
-            if updated {
-                let grouped_music = self.is_grouped_music_library(lib_idx);
-                if let Some(level) = self
-                    .libs
-                    .get_mut(lib_idx)
-                    .and_then(|lib| lib.nav_stack.last_mut())
-                {
-                    crate::app::dispatch::library::browse::retain_grouped_music_level_items(
-                        level,
-                        grouped_music,
-                    );
-                }
+        let mut items = Some(items);
+        let updated = self.update_current_browse_level(lib_idx, parent_id, false, |last| {
+            last.items = items.take().unwrap();
+            last.rows = ServerRows::loaded(last.items.len(), total_count);
+            last.loading = false;
+        });
+        if updated {
+            let grouped_music = self.is_grouped_music_library(lib_idx);
+            if let Some(level) = self
+                .libs
+                .get_mut(lib_idx)
+                .and_then(|lib| lib.nav_stack.last_mut())
+            {
+                crate::app::dispatch::library::browse::retain_grouped_music_level_items(
+                    level,
+                    grouped_music,
+                );
             }
         }
         self.normalize_current_browse_level_items(lib_idx);
@@ -322,8 +317,7 @@ impl App {
         // A feed-view root listing refresh re-reads the folder listing (design
         // D2): the session cache drops and the current selection refetches
         // through the shown projection's lazy-fetch trigger; unloaded pills
-        // stay unloaded. Legacy unplayed-video refresh completions (swallowed
-        // above, revisit in task 5.1) are not listing refreshes.
+        // stay unloaded.
         let is_feed_root_refresh = self.is_feed_home_video_library(lib_idx)
             && self.libs.get(lib_idx).is_some_and(|lib| {
                 lib.nav_stack.len() == 1 && lib.nav_stack[0].parent_id == parent_id
