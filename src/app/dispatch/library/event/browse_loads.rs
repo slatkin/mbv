@@ -42,12 +42,6 @@ impl App {
                 parent_id,
                 items,
             } => self.handle_all_items_prefetched(lib_idx, &parent_id, items),
-            BrowseEvent::FeedHomeVideoAggregated {
-                lib_idx,
-                parent_id,
-                all_items,
-                groups,
-            } => self.handle_feed_home_video_aggregated(lib_idx, &parent_id, all_items, groups),
             BrowseEvent::NavigateTo {
                 lib_idx,
                 landing,
@@ -155,7 +149,6 @@ impl App {
         self.maybe_capture_library_total_and_apply_default_pill(lib_idx);
         self.maybe_auto_push_tv_season_level(lib_idx);
         self.maybe_auto_push_music_group_level(lib_idx);
-        self.maybe_aggregate_feed_after_loaded(lib_idx);
         self.maybe_fetch_next_page(
             lib_idx,
             self.libs[lib_idx]
@@ -265,7 +258,6 @@ impl App {
         });
         self.normalize_current_browse_level_items(lib_idx);
         self.start_or_supersede_music_grouping(lib_idx);
-        self.maybe_aggregate_feed_after_page_append(lib_idx, parent_id);
         self.maybe_fetch_next_page(
             lib_idx,
             self.libs[lib_idx]
@@ -310,7 +302,6 @@ impl App {
         }
         self.normalize_current_browse_level_items(lib_idx);
         self.start_or_supersede_music_grouping(lib_idx);
-        self.maybe_refresh_feed_groups_after_refresh(lib_idx);
         self.spawn_all_items_prefetch(lib_idx);
         // A group switch (music) or pill switch / stop-refresh (TV series
         // root) refreshes the level in place -- no `Loaded` event, no
@@ -472,7 +463,6 @@ impl App {
         // saves that already have `library_total` set (see the function's
         // own early-return checks).
         self.maybe_capture_library_total_and_apply_default_pill(lib_idx);
-        self.maybe_refresh_feed_groups_after_refresh(lib_idx);
         let restored = self
             .libs
             .get(lib_idx)

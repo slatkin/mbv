@@ -78,7 +78,7 @@ impl Model {
             feed_group: lib
                 .feed_home_video
                 .as_ref()
-                .map(mbv_ui_model::feed::FeedHomeVideoState::selected_group_index),
+                .map(|_| self.app.feed_home_video_selected_group_index(index)),
         }
     }
 
@@ -162,16 +162,15 @@ impl Model {
         // Keep the painted names and launch identities aligned from one
         // structural source; the snapshot resolves a selected group to its
         // folder content ID, never to the display name.
-        let (feed_groups, feed_group_ids): (Vec<String>, Vec<String>) = self.app.libs[index]
-            .feed_home_video
-            .as_ref()
-            .map(|s| {
-                s.groups
-                    .iter()
-                    .map(|g| (g.folder.name.clone(), g.folder.id.clone()))
-                    .unzip()
-            })
-            .unwrap_or_default();
+        // Pill membership follows the root listing and the per-folder video
+        // counts (design D3): a folder with no counted videos offers no pill,
+        // so the fan-out's empty count map leaves only New and All until it
+        // fills (task 3.3 owns the count fan-out).
+        let counted = self.app.feed_home_video_counted_folders(index);
+        let (feed_groups, feed_group_ids): (Vec<String>, Vec<String>) = counted
+            .iter()
+            .map(|folder| (folder.name.clone(), folder.id.clone()))
+            .unzip();
         let feed_group_cursor = self.app.feed_home_video_selected_group_index(index);
         let poster_window = items.clone();
         let library_id = self.app.libs[index].library.id.clone();

@@ -25,6 +25,7 @@ use mbv_components::emby_library_content::EmbyLibraryContent as BrowserOwner;
 use mbv_components::library_panel::LibraryPanel;
 use mbv_ui_model::browse::ServerRows;
 use mbv_ui_msg::{ComponentId, Msg, ShellRequest};
+use std::collections::HashMap;
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
 
 fn folder_items(prefix: &str, item_type: &str, n: usize) -> Vec<mbv_emby_model::EmbyItem> {
@@ -257,11 +258,16 @@ fn feed_home_video_group_app() -> App {
             music_grouping: None,
         }],
         feed_home_video: Some(FeedHomeVideoState {
-            all_items: vec![first.clone(), second.clone()],
-            groups: vec![FeedHomeVideoGroup {
-                folder,
-                items: vec![first, second],
-            }],
+            items: HashMap::from([
+                (
+                    FeedHomeVideoSelection::All,
+                    vec![first.clone(), second.clone()],
+                ),
+                (
+                    FeedHomeVideoSelection::Folder(folder.id.clone()),
+                    vec![first, second],
+                ),
+            ]),
             loading: false,
             ..FeedHomeVideoState::default()
         }),
@@ -287,11 +293,11 @@ fn feed_home_video_group_browser_wheel_scrolls_viewport_and_reports_reach() {
     app.panel_focus = PanelFocus::Library;
     app.panel_mode = PanelMode::LibraryOnly;
     let state = app.libs[0].feed_home_video.as_mut().unwrap();
+    let all = state.items.get_mut(&FeedHomeVideoSelection::All).unwrap();
     for i in 0..30 {
         let mut item = make_item(&format!("Video extra {i}"), "Movie");
         item.id = format!("video-extra-{i}");
-        state.groups[0].items.push(item.clone());
-        state.all_items.push(item);
+        all.push(item);
     }
     let mut model = Model::new(app);
     model.sync_mounted_surfaces();

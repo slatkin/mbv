@@ -3,7 +3,6 @@ use mbv_core::service_runtime::SetupGeneration;
 use mbv_emby_model::EmbyItem;
 use mbv_queue::QueueItem;
 use mbv_ui_model::browse::{AlbumPathPart, AlbumSearchEntry, BrowseLevel};
-use mbv_ui_model::feed::FeedHomeVideoGroup;
 
 /// Per-kind landing payload for cross-surface item navigation (design D2 of
 /// change `per-destination-item-navigation`): the Movie/generic arm keeps the
@@ -109,12 +108,6 @@ pub enum BrowseEvent {
         lib_idx: usize,
         parent_id: String,
         items: Vec<EmbyItem>,
-    },
-    FeedHomeVideoAggregated {
-        lib_idx: usize,
-        parent_id: String,
-        all_items: Vec<EmbyItem>,
-        groups: Vec<FeedHomeVideoGroup>,
     },
     /// `switch_tab`: true for user-initiated navigation (switch to the lib tab),
     /// false for startup restore (just populate `nav_stack`, stay on current tab).

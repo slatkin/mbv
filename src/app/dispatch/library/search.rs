@@ -327,13 +327,14 @@ impl App {
         if lvl.is_fully_loaded() {
             return;
         }
-        // The root folder listing of a feed-home-video library isn't scrolled by
-        // the user directly -- it's aggregated in the background into grouped
-        // sections, and that aggregation can't start until every page has
-        // loaded. Waiting for the cursor to approach the loaded edge (as normal
-        // browse levels do) would stall pagination forever for libraries with
-        // more folders than PAGE_SIZE + PREFETCH_AHEAD, since nothing moves the
-        // cursor on that hidden level. Paginate it to completion unconditionally.
+        // The root folder listing of a feed-home-video library isn't scrolled
+        // by the user directly -- it sources the pill row's folder pills and
+        // their per-folder video counts, so the pills can't decide membership
+        // from a partially loaded listing. Waiting for the cursor to approach
+        // the loaded edge (as normal browse levels do) would stall pagination
+        // forever for libraries with more folders than PAGE_SIZE +
+        // PREFETCH_AHEAD, since nothing moves the cursor on that hidden
+        // level. Paginate it to completion unconditionally.
         let is_feed_home_video_root =
             lib.nav_stack.len() == 1 && self.is_feed_home_video_library(lib_idx);
         // The Grouped Music album level groups its flat items by artist

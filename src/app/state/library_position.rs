@@ -158,16 +158,14 @@ impl App {
     fn activate_unchanged_library_position(&mut self, lib_idx: usize, current_is_none: bool) {
         if current_is_none {
             self.ensure_lib_loaded_for(lib_idx);
-        } else if self.is_feed_home_video_library(lib_idx) {
-            if let Some(lib) = self.libs.get_mut(lib_idx)
-                && lib.feed_home_video.is_none()
-            {
-                lib.feed_home_video = Some(FeedHomeVideoState {
-                    loading: true,
-                    ..FeedHomeVideoState::default()
-                });
-            }
-            self.maybe_refresh_feed_groups_after_refresh(lib_idx);
+        } else if self.is_feed_home_video_library(lib_idx)
+            && let Some(lib) = self.libs.get_mut(lib_idx)
+            && lib.feed_home_video.is_none()
+        {
+            lib.feed_home_video = Some(FeedHomeVideoState {
+                loading: true,
+                ..FeedHomeVideoState::default()
+            });
         }
     }
 

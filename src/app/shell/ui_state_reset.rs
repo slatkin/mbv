@@ -25,6 +25,7 @@ use mbv_components::queue::QueueComponent;
 use mbv_queue::TvContentMode;
 use mbv_render::layout::LEFT_WIDTH_DEFAULT;
 use mbv_ui_model::browse::BrowseResting;
+use mbv_ui_model::feed::FeedHomeVideoSelection;
 use mbv_ui_model::settings::SettingsDestination;
 use mbv_ui_msg::{ComponentId, PopupId};
 
@@ -202,6 +203,7 @@ impl App {
         lib.tv_content_mode = tv_mode;
         // A feed-view library's root scope is its first group.
         if let Some(state) = lib.feed_home_video.as_mut() {
+            state.selection = FeedHomeVideoSelection::All;
             state.selected_group = 0;
             state.video_cursor = 0;
             state.video_scroll = 0;

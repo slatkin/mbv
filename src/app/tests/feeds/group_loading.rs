@@ -79,50 +79,7 @@ fn seed_home_video_root_loaded(app: &mut App) -> EmbyItem {
 }
 
 #[rstest]
-fn feed_home_video_aggregated_populates_groups_and_all_items(make_home_video_app: App) {
-    let mut app = make_home_video_app;
-    let active = seed_home_video_root_loaded(&mut app);
-
-    let mut video = make_item("Episode 1", "Movie");
-    video.path = "/videos/active/ep1.mp4".into();
-
-    app.handle_lib_event(LibEvent::Browse(BrowseEvent::FeedHomeVideoAggregated {
-        lib_idx: 0,
-        parent_id: "lib-youtube".into(),
-        all_items: vec![video.clone()],
-        groups: vec![FeedHomeVideoGroup {
-            folder: active,
-            items: vec![video],
-        }],
-    }));
-
-    assert_eq!(
-        app.libs[0]
-            .feed_home_video
-            .as_ref()
-            .map(|state| state.groups.len()),
-        Some(1)
-    );
-    assert_eq!(
-        app.libs[0]
-            .feed_home_video
-            .as_ref()
-            .and_then(|state| state.groups.first())
-            .map(|group| group.folder.id.as_str()),
-        Some("folder-active")
-    );
-    assert_eq!(
-        app.libs[0]
-            .feed_home_video
-            .as_ref()
-            .map(|state| state.all_items.len()),
-        Some(1)
-    );
-    assert_eq!(app.libs[0].nav_stack.len(), 1);
-}
-
-#[rstest]
-fn feed_home_video_aggregated_ensure_group_level_does_not_push_and_resolves_selected_items(
+fn ensure_feed_home_video_group_level_does_not_push_and_resolves_selected_items(
     make_home_video_app: App,
 ) {
     let mut app = make_home_video_app;
@@ -131,15 +88,13 @@ fn feed_home_video_aggregated_ensure_group_level_does_not_push_and_resolves_sele
     let mut video = make_item("Episode 1", "Movie");
     video.path = "/videos/active/ep1.mp4".into();
 
-    app.handle_lib_event(LibEvent::Browse(BrowseEvent::FeedHomeVideoAggregated {
-        lib_idx: 0,
-        parent_id: "lib-youtube".into(),
-        all_items: vec![video.clone()],
-        groups: vec![FeedHomeVideoGroup {
-            folder: active,
-            items: vec![video],
-        }],
-    }));
+    let state = app.libs[0].feed_home_video.as_mut().unwrap();
+    state.loading = false;
+    state.selection = FeedHomeVideoSelection::Folder(active.id.clone());
+    state.items.insert(
+        FeedHomeVideoSelection::Folder(active.id.clone()),
+        vec![video],
+    );
 
     app.ensure_feed_home_video_group_level(0);
     assert_eq!(app.libs[0].nav_stack.len(), 1);

@@ -1,10 +1,8 @@
-use crate::app::BrowseEvent;
 use crate::app::dispatch::notify::ToastSeverity;
-use crate::app::{App, BrowseLevel, FeedHomeVideoGroup, FeedHomeVideoState, LibEvent, PAGE_SIZE};
+use crate::app::{App, BrowseLevel, FeedHomeVideoSelection, FeedHomeVideoState};
 use mbv_emby_model::EmbyItem;
 use mbv_feed::fetch_and_parse_rss;
 use mbv_ui_model::browse::{BrowseResting, ServerRows};
-use std::collections::{HashMap, HashSet};
 use std::time::Instant;
 
 impl App {
@@ -15,44 +13,63 @@ impl App {
         };
         let root = lib.nav_stack.first();
         let feed = lib.feed_home_video.as_ref();
-        tracing::debug!(name: "feed.home_video.state_observed", target: "feedhv", context, library_index = lib_idx, library = %lib.library.name, navigation_length = lib.nav_stack.len(), root_parent = root.map_or("", |level| level.parent_id.as_str()), root_item_count = root.map_or(0, |level| level.items.len()), root_loading = root.is_some_and(|level| level.loading), feed_present = feed.is_some(), feed_loading = feed.is_some_and(|state| state.loading), selected_group = feed.map_or(0, |state| state.selected_group), group_count = feed.map_or(0, |state| state.groups.len()), item_count = feed.map_or(0, |state| state.all_items.len()), video_cursor = feed.map_or(0, |state| state.video_cursor), video_scroll = feed.map_or(0, |state| state.video_scroll), group_view = self.is_feed_home_video_group_view(lib_idx), "feed home-video state observed");
+        let selected_group = feed.map_or(0, |state| {
+            state
+                .selected_group
+                .min(self.feed_home_video_visible_group_count(lib_idx))
+        });
+        tracing::debug!(name: "feed.home_video.state_observed", target: "feedhv", context, library_index = lib_idx, library = %lib.library.name, navigation_length = lib.nav_stack.len(), root_parent = root.map_or("", |level| level.parent_id.as_str()), root_item_count = root.map_or(0, |level| level.items.len()), root_loading = root.is_some_and(|level| level.loading), feed_present = feed.is_some(), feed_loading = feed.is_some_and(|state| state.loading), selected_group, item_count = feed.map_or(0, FeedHomeVideoState::selected_len), video_cursor = feed.map_or(0, |state| state.video_cursor), video_scroll = feed.map_or(0, |state| state.video_scroll), group_view = self.is_feed_home_video_group_view(lib_idx), "feed home-video state observed");
+    }
+
+    /// Root-listing folders whose per-folder video count is positive: the
+    /// folders the pill row offers, in listing order (design D3). The count
+    /// fan-out fills `folder_counts`; until it does, no folder pill shows.
+    pub(in crate::app) fn feed_home_video_counted_folders(&self, lib_idx: usize) -> Vec<EmbyItem> {
+        let Some(lib) = self.libs.get(lib_idx) else {
+            return Vec::new();
+        };
+        let Some(state) = lib.feed_home_video.as_ref() else {
+            return Vec::new();
+        };
+        let Some(root) = lib.nav_stack.first() else {
+            return Vec::new();
+        };
+        root.items
+            .iter()
+            .filter(|folder| {
+                state
+                    .folder_counts
+                    .get(&folder.id)
+                    .copied()
+                    .unwrap_or_default()
+                    > 0
+            })
+            .cloned()
+            .collect()
     }
 
     fn feed_home_video_visible_group_count(&self, lib_idx: usize) -> usize {
-        self.libs
-            .get(lib_idx)
-            .and_then(|lib| lib.feed_home_video.as_ref())
-            .map_or(0, |state| state.groups.len())
+        self.feed_home_video_counted_folders(lib_idx).len()
     }
 
     pub(in crate::app) fn feed_home_video_selected_group_index(&self, lib_idx: usize) -> usize {
         self.libs
             .get(lib_idx)
             .and_then(|lib| lib.feed_home_video.as_ref())
-            .map_or(
-                0,
-                mbv_ui_model::feed::FeedHomeVideoState::selected_group_index,
-            )
+            .map_or(0, |state| {
+                state
+                    .selected_group
+                    .min(self.feed_home_video_visible_group_count(lib_idx))
+            })
     }
 
     pub(in crate::app) fn feed_home_video_selected_items(&self, lib_idx: usize) -> Vec<EmbyItem> {
-        let Some(state) = self
-            .libs
+        self.libs
             .get(lib_idx)
             .and_then(|lib| lib.feed_home_video.as_ref())
-        else {
-            return Vec::new();
-        };
-        let selected_group = state.selected_group_index();
-        if selected_group == 0 {
-            state.all_items.clone()
-        } else {
-            state
-                .groups
-                .get(selected_group - 1)
-                .map(|group| group.items.clone())
-                .unwrap_or_default()
-        }
+            .and_then(|state| state.items.get(&state.selection))
+            .cloned()
+            .unwrap_or_default()
     }
 
     pub(in crate::app) fn feed_home_video_selected_parent_id(
@@ -60,21 +77,15 @@ impl App {
         lib_idx: usize,
     ) -> Option<String> {
         let lib = self.libs.get(lib_idx)?;
-        let root = lib.nav_stack.first()?;
         let state = lib.feed_home_video.as_ref()?;
-        let selected_group = state.selected_group_index();
-        if selected_group == 0 {
-            Some(root.parent_id.clone())
-        } else {
-            state
-                .groups
-                .get(selected_group - 1)
-                .map(|group| group.folder.id.clone())
-        }
+        Some(match &state.selection {
+            FeedHomeVideoSelection::All => lib.nav_stack.first()?.parent_id.clone(),
+            FeedHomeVideoSelection::Folder(id) => id.clone(),
+        })
     }
 
     /// Returns the item currently under the cursor without cloning the whole
-    /// selected-group item list (see `feed_home_video_selected_items`, which
+    /// selected item list (see `feed_home_video_selected_items`, which
     /// does clone the full list and remains the right choice for callers that
     /// actually need it).
     pub(in crate::app) fn selected_feed_home_video_item(&self, lib_idx: usize) -> Option<EmbyItem> {
@@ -82,22 +93,13 @@ impl App {
             .libs
             .get(lib_idx)
             .and_then(|lib| lib.feed_home_video.as_ref())?;
-        let idx = state
-            .video_cursor
-            .min(state.selected_len().saturating_sub(1));
-        let group = state.selected_group_index();
-        if group == 0 {
-            state.all_items.get(idx).cloned()
-        } else {
-            state
-                .groups
-                .get(group - 1)
-                .and_then(|g| g.items.get(idx))
-                .cloned()
-        }
+        let items = state.items.get(&state.selection)?;
+        let idx = state.video_cursor.min(items.len().saturating_sub(1));
+        items.get(idx).cloned()
     }
 
     pub(in crate::app) fn clamp_feed_home_video_state(&mut self, lib_idx: usize) {
+        let folder_count = self.feed_home_video_visible_group_count(lib_idx);
         let Some(state) = self
             .libs
             .get_mut(lib_idx)
@@ -105,7 +107,7 @@ impl App {
         else {
             return;
         };
-        state.selected_group = state.selected_group_index();
+        state.selected_group = state.selected_group.min(folder_count);
         let items_len = state.selected_len();
         if items_len == 0 {
             state.video_cursor = 0;
@@ -128,11 +130,9 @@ impl App {
         else {
             return;
         };
-        state.all_items.retain(|item| item.id != item_id);
-        for group in &mut state.groups {
-            group.items.retain(|item| item.id != item_id);
+        for items in state.items.values_mut() {
+            items.retain(|item| item.id != item_id);
         }
-        state.groups.retain(|group| !group.items.is_empty());
         self.clamp_feed_home_video_state(lib_idx);
         self.log_feed_home_video_state(lib_idx, "remove_from_cache");
     }
@@ -152,126 +152,6 @@ impl App {
             return;
         }
         self.clamp_feed_home_video_state(lib_idx);
-    }
-
-    /// Common guard for kicking off `spawn_feed_home_video_aggregate` once a
-    /// grouped library's root folder listing has fully paginated: mbv is
-    /// showing this library's tab, it's a feed-home-video library, and its
-    /// root nav level has loaded every item. `extra_ok` carries the
-    /// caller-specific condition (e.g. which event/level this check is
-    /// reacting to).
-    fn should_aggregate_feed(
-        &self,
-        lib_idx: usize,
-        extra_ok: impl FnOnce(&BrowseLevel) -> bool,
-    ) -> bool {
-        self.tab.emby_library_index() == Some(lib_idx)
-            && self.is_feed_home_video_library(lib_idx)
-            && self.libs.get(lib_idx).is_some_and(|lib| {
-                lib.nav_stack.len() == 1
-                    && lib.nav_stack[0].is_fully_loaded()
-                    && extra_ok(&lib.nav_stack[0])
-            })
-    }
-
-    fn spawn_feed_home_video_aggregate(&self, lib_idx: usize) {
-        if !self.is_feed_home_video_library(lib_idx) {
-            return;
-        }
-        let Some(lib) = self.libs.get(lib_idx) else {
-            return;
-        };
-        let Some(root) = lib.nav_stack.first() else {
-            return;
-        };
-        if root.loading {
-            return;
-        }
-        let parent_id = root.parent_id.clone();
-        let candidate_folders = root.items.clone();
-        let Some(client) = self.emby_snapshot() else {
-            return;
-        };
-        let tx = self.channels.lib_tx.clone();
-        std::thread::spawn(move || {
-            let (mut all_items, total_count) = match client.get_items_sorted(
-                &parent_id,
-                Some("Video"),
-                true,
-                0,
-                PAGE_SIZE,
-                "DateCreated",
-                "Ascending",
-            ) {
-                Ok(items) => items,
-                Err(e) => {
-                    let _ = tx.send(LibEvent::Error(e.to_string()));
-                    return;
-                }
-            };
-            if total_count > all_items.len() {
-                match client.get_items_sorted(
-                    &parent_id,
-                    Some("Video"),
-                    true,
-                    0,
-                    total_count,
-                    "DateCreated",
-                    "Ascending",
-                ) {
-                    Ok((items, _)) => all_items = items,
-                    Err(e) => {
-                        let _ = tx.send(LibEvent::Error(e.to_string()));
-                        return;
-                    }
-                }
-            }
-
-            let folder_ids: HashSet<String> = candidate_folders
-                .iter()
-                .map(|folder| folder.id.clone())
-                .collect();
-            let mut grouped: HashMap<String, Vec<EmbyItem>> = HashMap::new();
-            for video in &all_items {
-                if folder_ids.is_empty() {
-                    break;
-                }
-                let ancestors = match client.get_ancestors(&video.id) {
-                    Ok(ancestors) => ancestors,
-                    Err(e) => {
-                        let _ = tx.send(LibEvent::Error(e.to_string()));
-                        return;
-                    }
-                };
-                if let Some(folder) = ancestors
-                    .iter()
-                    .find(|ancestor| folder_ids.contains(&ancestor.id))
-                {
-                    grouped
-                        .entry(folder.id.clone())
-                        .or_default()
-                        .push(video.clone());
-                }
-            }
-
-            let groups = candidate_folders
-                .into_iter()
-                .filter_map(|folder| {
-                    let items = grouped.remove(&folder.id).unwrap_or_default();
-                    if items.is_empty() {
-                        None
-                    } else {
-                        Some(FeedHomeVideoGroup { folder, items })
-                    }
-                })
-                .collect();
-            let _ = tx.send(LibEvent::Browse(BrowseEvent::FeedHomeVideoAggregated {
-                lib_idx,
-                parent_id,
-                all_items,
-                groups,
-            }));
-        });
     }
 
     pub(in crate::app) fn is_feed_home_video_group_view(&self, lib_idx: usize) -> bool {
@@ -377,57 +257,29 @@ impl App {
         if group_idx > n {
             return;
         }
+        // Resolve the pill's folder id from the root listing (design D3): the
+        // listing, not a state-held group list, is the pill row's source. A
+        // folder with no counted videos has no pill, so its index resolves to
+        // nothing and the selection stays as it is.
+        let counted = self.feed_home_video_counted_folders(lib_idx);
+        let selection = if group_idx == 0 {
+            Some(FeedHomeVideoSelection::All)
+        } else {
+            counted
+                .get(group_idx - 1)
+                .map(|folder| FeedHomeVideoSelection::Folder(folder.id.clone()))
+        };
+        let Some(selection) = selection else {
+            return;
+        };
         if let Some(state) = self.libs[lib_idx].feed_home_video.as_mut() {
             state.selected_group = group_idx;
+            state.selection = selection;
             state.video_cursor = 0;
             state.video_scroll = 0;
         }
         self.clamp_feed_home_video_state(lib_idx);
         self.log_feed_home_video_state(lib_idx, "select_group");
-    }
-
-    pub(in crate::app) fn maybe_aggregate_feed_after_loaded(&self, lib_idx: usize) {
-        let should_aggregate_feed = self.should_aggregate_feed(lib_idx, |root| {
-            root.item_types.is_none() && !root.unplayed_only
-        });
-        if should_aggregate_feed {
-            self.log_feed_home_video_state(lib_idx, "loaded_before_aggregate");
-            self.spawn_feed_home_video_aggregate(lib_idx);
-        }
-    }
-
-    pub(in crate::app) fn maybe_aggregate_feed_after_page_append(
-        &self,
-        lib_idx: usize,
-        parent_id: &str,
-    ) {
-        let should_aggregate_feed =
-            self.should_aggregate_feed(lib_idx, |root| root.parent_id == parent_id);
-        if should_aggregate_feed {
-            self.log_feed_home_video_state(lib_idx, "page_appended_before_aggregate");
-            self.spawn_feed_home_video_aggregate(lib_idx);
-        }
-    }
-
-    pub(in crate::app) fn maybe_refresh_feed_groups_after_refresh(&mut self, lib_idx: usize) {
-        let should_refresh_feed_groups = self.libs.get(lib_idx).is_some_and(|lib| {
-            self.tab.emby_library_index() == Some(lib_idx)
-                && self.is_feed_home_video_library(lib_idx)
-                && lib
-                    .nav_stack
-                    .first()
-                    .is_some_and(BrowseLevel::is_fully_loaded)
-        });
-        if should_refresh_feed_groups {
-            if let Some(lib) = self.libs.get_mut(lib_idx) {
-                let state = lib
-                    .feed_home_video
-                    .get_or_insert_with(FeedHomeVideoState::default);
-                state.loading = true;
-            }
-            self.log_feed_home_video_state(lib_idx, "refreshed_before_aggregate");
-            self.spawn_feed_home_video_aggregate(lib_idx);
-        }
     }
 
     /// Spawn a background thread to fetch and parse the idle RSS feed.
