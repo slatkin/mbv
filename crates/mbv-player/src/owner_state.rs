@@ -68,8 +68,6 @@ impl PlayerOwnerState {
         } else {
             self.queue.clear_active_slot();
         }
-        // A synced queue can drop slots the owner observed; the observed
-        // active slot is filtered above, so nothing else to repair.
     }
 
     /// Record a Playback-run observation of the active file. The only path
@@ -150,17 +148,12 @@ impl PlayerOwnerState {
             return StepTarget::AtEdge;
         };
         let neighbor = match direction {
-            Direction::Next => index.checked_add(1).filter(|&i| i < self.queue.len()),
+            Direction::Next => index.checked_add(1),
             Direction::Previous => index.checked_sub(1),
         };
         neighbor
-            .and_then(|i| {
-                self.queue
-                    .slots()
-                    .get(i)
-                    .map(|s| StepTarget::Jump(s.slot_id))
-            })
-            .unwrap_or(StepTarget::AtEdge)
+            .and_then(|i| self.queue.slots().get(i))
+            .map_or(StepTarget::AtEdge, |slot| StepTarget::Jump(slot.slot_id))
     }
 
     /// The last Playback-run-observed active slot (design D3).

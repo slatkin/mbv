@@ -697,7 +697,10 @@ pub fn reorder_move_plan(
 }
 
 /// Returns `true` when `order` names exactly the slots in `current`, each once.
-fn is_slot_permutation(current: impl Iterator<Item = QueueSlotId>, order: &[QueueSlotId]) -> bool {
+pub fn is_slot_permutation(
+    current: impl Iterator<Item = QueueSlotId>,
+    order: &[QueueSlotId],
+) -> bool {
     let mut current: Vec<QueueSlotId> = current.collect();
     if current.len() != order.len() {
         return false;

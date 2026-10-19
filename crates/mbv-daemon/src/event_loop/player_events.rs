@@ -34,9 +34,6 @@ impl DaemonLoop {
             tracing::warn!(name: "daemon.queue_track_change.discarded", target: "queue", slot = ?slot_id, "discarding track change for unknown slot");
             return EventOutcome::CONTINUE;
         };
-        // An observed active-slot change re-picks the Shuffle advance inside
-        // `observe_track_change` (queue-content-shuffle removes the
-        // forwarding).
         broadcast(
             &self.ctrl_clients,
             &CtrlEvent::Player(PlayerEvent::TrackChanged {
@@ -108,8 +105,7 @@ impl DaemonLoop {
         episode: i64,
     ) -> EventOutcome {
         // The card names the queue neighbor after the active slot; at the
-        // end of the queue there is no card (queue-shuffle-play-order task
-        // 4.2, now neighbor-only).
+        // end of the queue there is no card.
         if let Some(slot_id) = next_up_slot(&self.owner.core.queue)
             && let Some(slot) = self.owner.core.queue.slot(slot_id)
             && let Some(emby) = slot.item.as_emby()

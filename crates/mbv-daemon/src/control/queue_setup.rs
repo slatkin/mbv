@@ -421,9 +421,8 @@ pub(super) fn handle_queue_replace(
         // The replacement installs a new lineage before the observation
         // clear, mirroring the local path below and
         // `play_resolved_items`'s Cast branch.
-        // The clear above reset the observation; publish it so the shared
-        // snapshot and the broadcast below agree (the local path publishes
-        // after its cold start).
+        // Publish the cleared observation so the shared snapshot and the
+        // broadcast below agree (the local path publishes after its cold start).
         ctx.owner.core.note_observed_active_slot(None);
         ctx.shared_queue.publish_observed(&ctx.owner.core);
         broadcast_queue_state(
@@ -505,9 +504,8 @@ fn replace_on_emby_session(ctx: &mut CtrlContext<'_>, except_op_client: Option<C
     );
     // The replacement installs a new lineage before the observation clear,
     // mirroring the local path and `play_resolved_items`'s remote branches.
-    // The clear above reset the observation; publish it so the shared
-    // snapshot and the broadcast below agree (the local path publishes after
-    // its cold start).
+    // Publish the cleared observation so the shared snapshot and the
+    // broadcast below agree (the local path publishes after its cold start).
     ctx.owner.core.note_observed_active_slot(None);
     ctx.shared_queue.publish_observed(&ctx.owner.core);
     broadcast_queue_state(

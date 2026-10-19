@@ -120,7 +120,7 @@ pub enum ContextAction {
     /// [`ContextAction::HomePlaySelection`]).
     HomeEnqueueSelection(Vec<QueueItem>),
     /// Reorder the Bound queue once at random with the playing slot first
-    /// (queue-content-shuffle design D6). This action carries no mode.
+    /// (queue-content-shuffle design D6).
     ShuffleQueue,
     /// Select the queue visual slot's system-audio visualizer (the visual
     /// slot's chrome menu). The menu resolves the current selection when it

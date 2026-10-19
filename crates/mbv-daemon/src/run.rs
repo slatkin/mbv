@@ -72,8 +72,7 @@ pub(super) fn apply_track_completed_observation(
 
 /// The completion recording every natural end shares (cast-owner-output row
 /// 6.3, design D7's Finished row): progress into the slot's canonical state,
-/// the consume rules, the Shuffle re-pick forward, and the shared snapshot
-/// publish. Local playback reaches it through
+/// the consume rules, and the shared snapshot publish. Local playback reaches it through
 /// [`apply_track_completed_observation`]'s run-identity guard; a Cast natural
 /// end records through it directly, because a receiver's end report carries no
 /// local run identity to guard.

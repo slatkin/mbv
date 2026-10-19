@@ -130,18 +130,12 @@ impl PlaybackRun {
         let jump = self.forced_jump.take();
         let transition = jump.and_then(|jump| jump.transition);
         let slot_id = jump.map(|jump| jump.slot_id);
-        let next_idx = match jump {
-            // A forced jump names its own target; the unforced advance is
-            // always the queue neighbor.
-            Some(jump) => self
-                .queue
-                .slot_index(jump.slot_id)
-                .unwrap_or(self.current_idx + 1),
-            // The unforced advance is the queue neighbor; the
-            // `next_idx >= queue_len()` check in the caller runs
-            // `stop_at_queue_end` (design D2).
-            None => self.current_idx + 1,
-        };
+        // A forced jump names its own target; the unforced advance is the
+        // queue neighbor. The `next_idx >= queue_len()` check in the caller
+        // runs `stop_at_queue_end` (design D2).
+        let next_idx = jump
+            .and_then(|jump| self.queue.slot_index(jump.slot_id))
+            .unwrap_or(self.current_idx + 1);
         tracing::info!(name: "player.transition.end_file_settled", target: "transition", slot = ?slot_id, next_index = next_idx, current_index = self.current_idx, queue_length = self.queue_len(), has_transition = transition.is_some(), "settled forced jump on end-file");
         if next_idx < self.queue_len() {
             self.forced_jump = jump.filter(|jump| jump.resume_ticks.is_some()).map(|jump| {

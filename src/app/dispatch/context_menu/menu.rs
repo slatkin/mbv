@@ -113,15 +113,14 @@ impl App {
         // The Queue list Shuffle entry (queue-content-shuffle design D6):
         // every Queue row's menu offers it, appended last after the Emby
         // entries, and a Feed or Audiobookshelf Queue row gets a menu with
-        // only the entry. The entry reorders the existing queue once and
-        // carries no mode. It hides entirely when the owner lacks the
-        // `queue-shuffle` ctrl capability.
+        // only the entry. The entry reorders the existing queue once. It hides
+        // entirely when the owner lacks the `queue-shuffle` ctrl capability.
         if matches!(
             self.effective_panel_focus(),
             mbv_ui_model::settings::PanelFocus::Queue
         ) && self.player.supports_queue_shuffle()
         {
-            Self::push_queue_shuffle_entry(&mut entries);
+            Self::push_context_action(&mut entries, "Shuffle", ContextAction::ShuffleQueue);
         }
 
         if entries.iter().all(|entry| entry.action.is_none()) {
@@ -261,13 +260,6 @@ impl App {
             ContextAction::EnqueueFolder(Box::new(item.clone())),
         );
         Self::push_play_state_context_action(entries, item);
-    }
-
-    /// The queue-row shuffle entry (queue-content-shuffle design D6). It
-    /// pushes only when the owner advertises the `queue-shuffle`
-    /// capability; the dispatch arm only sends the command.
-    fn push_queue_shuffle_entry(entries: &mut Vec<ContextMenuEntry>) {
-        Self::push_context_action(entries, "Shuffle", ContextAction::ShuffleQueue);
     }
 
     fn push_play_state_context_action(entries: &mut Vec<ContextMenuEntry>, item: &EmbyItem) {

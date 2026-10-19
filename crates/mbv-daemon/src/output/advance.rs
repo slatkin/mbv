@@ -96,8 +96,7 @@ pub(crate) fn apply_device_advance(daemon: &mut DaemonLoop, advance: DeviceAdvan
         correct_stale_device_advance(daemon, advance, ended);
         return;
     }
-    // 1. The observed active slot: the queued slot the device started, with the
-    // Shuffle re-pick and the forward play order that follow it.
+    // 1. The observed active slot: the queued slot the device started.
     observe_slot(daemon, advance.queued);
     // 2. A natural end records the old slot's completion and its consume rules
     // (design D6's end row); a device next before the end margin records none.
@@ -159,8 +158,7 @@ fn correct_stale_device_advance(
         return;
     };
     // The corrected slot is where the device plays from now: the observation
-    // comes before the window it is the base of, so a Shuffle re-pick is the
-    // window the load sends.
+    // comes before the window it is the base of.
     observe_slot(daemon, slot);
     let (after, after_stepped) = window(daemon, slot);
     let runtime_ticks = slot_runtime_ticks(&daemon.owner.core.queue, slot);
@@ -455,9 +453,8 @@ fn observe_slot(daemon: &mut DaemonLoop, slot: QueueSlotId) {
 
 /// Re-bases the shared step funnel on the slot the failed step targeted
 /// (design D6's step-over): that slot becomes the desired active slot, so the
-/// funnel steps from after it and the Shuffle pick re-picks past it. A failed
-/// slot an edit removed ends the advance: the edited queue has no order past
-/// it.
+/// funnel steps from after it. A failed slot an edit removed ends the advance:
+/// the edited queue has no order past it.
 fn rebase_on_failed_step(daemon: &mut DaemonLoop) {
     let Some(failed) = daemon
         .owner

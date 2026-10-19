@@ -8,9 +8,8 @@ use mbv_queue::{PlaybackQueue, QueueSlotId};
 
 use crate::core::DaemonOwnerContext;
 
-/// The slot the Next-Up card must name (queue-shuffle-play-order task 4.2):
-/// the queue neighbor after the active slot. `None` when the queue ends at
-/// the active slot.
+/// The slot the Next-Up card must name: the queue neighbor after the active
+/// slot. `None` when the queue ends at the active slot.
 pub(crate) fn next_up_slot(queue: &PlaybackQueue) -> Option<QueueSlotId> {
     let active_idx = queue.active_index().unwrap_or(0);
     queue.slots().get(active_idx + 1).map(|slot| slot.slot_id)

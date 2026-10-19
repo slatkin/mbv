@@ -13,7 +13,7 @@ use std::time::Instant;
 use mbv_ctrl::CtrlEvent;
 use mbv_ids::{EmbySessionId, ItemId};
 use mbv_player::PlayerOwnerState;
-use mbv_queue::{QueueItem, QueueSlotId};
+use mbv_queue::{QueueItem, QueueSlot, QueueSlotId};
 
 use super::worker::{EmbySessionJob, SessionApi};
 use super::{EmbySessionLoadedItem, EmbySessionOutput, EmbySessionQueuedItem};
@@ -168,12 +168,9 @@ pub(crate) fn next_admissible_slot(
     playable_media_types: &[String],
 ) -> (Option<(QueueSlotId, String)>, Vec<SessionAdmission>) {
     let mut stepped = Vec::new();
-    for slot_id in step_candidates(core, loaded) {
-        let Some(slot) = core.queue.slot(slot_id) else {
-            break;
-        };
+    for slot in slots_after(core, loaded) {
         match admit(&slot.item, playable_media_types) {
-            Ok(item) => return (Some((slot_id, item.id.clone())), stepped),
+            Ok(item) => return (Some((slot.slot_id, item.id.clone())), stepped),
             Err(rejected) => stepped.push(rejected),
         }
     }
@@ -182,15 +179,11 @@ pub(crate) fn next_admissible_slot(
 
 /// The slots one Next step walks from `loaded` (design D14): every slot after
 /// `loaded`, so a rejected one can be stepped past within the queue length.
-fn step_candidates(core: &PlayerOwnerState, loaded: QueueSlotId) -> Vec<QueueSlotId> {
-    core.queue
-        .slot_index(loaded)
-        .map_or_else(Vec::new, |index| {
-            core.queue.slots()[index + 1..]
-                .iter()
-                .map(|slot| slot.slot_id)
-                .collect()
-        })
+fn slots_after(core: &PlayerOwnerState, loaded: QueueSlotId) -> &[QueueSlot] {
+    match core.queue.slot_index(loaded) {
+        Some(index) => &core.queue.slots()[index + 1..],
+        None => &[],
+    }
 }
 
 /// Every admissible slot the queue visits after `from` (design D15), for
@@ -206,13 +199,12 @@ pub(crate) fn admissible_after(
     from: QueueSlotId,
     playable_media_types: &[String],
 ) -> Vec<(QueueSlotId, String)> {
-    step_candidates(core, from)
-        .into_iter()
-        .filter_map(|slot_id| {
-            let slot = core.queue.slot(slot_id)?;
+    slots_after(core, from)
+        .iter()
+        .filter_map(|slot| {
             admit(&slot.item, playable_media_types)
                 .ok()
-                .map(|item| (slot_id, item.id.clone()))
+                .map(|item| (slot.slot_id, item.id.clone()))
         })
         .collect()
 }

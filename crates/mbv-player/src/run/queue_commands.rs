@@ -75,7 +75,7 @@ impl PlaybackRun {
         None
     }
 
-    pub(crate) fn cmd_queue_move(&mut self, slot_id: QueueSlotId, to: usize, mpv: &Mpv) {
+    pub(super) fn cmd_queue_move(&mut self, slot_id: QueueSlotId, to: usize, mpv: &Mpv) {
         let Some(from) = self.queue.slot_index(slot_id) else {
             return;
         };
@@ -84,20 +84,11 @@ impl PlaybackRun {
         }
         if !self.active_file {
             let (mpv_from, mpv_to) = playlist_move_args(from, to);
-            let _ = mpv.command(
+            let _ = mpv.command_async(
                 "playlist-move",
                 &[&mpv_from.to_string(), &mpv_to.to_string()],
             );
         }
-        self.apply_queue_move(slot_id, from, to);
-    }
-
-    /// The bookkeeping one queue move applies to the run's queue mirror and
-    /// its tracked mpv index. Split from [`Self::cmd_queue_move`] so the
-    /// Shuffle reorder (queue-content-shuffle task 3.3) can reuse the seams
-    /// inside its one handler; the mpv playlist command itself is pinned by
-    /// the `playlist_move_args` test.
-    pub(crate) fn apply_queue_move(&mut self, slot_id: QueueSlotId, from: usize, to: usize) {
         let _ = self.queue.move_slot(slot_id, to);
         // `current_idx` is this run's mpv-local coordinate; adjust it
         // for the move directly (design D2) rather than recomputing
@@ -110,45 +101,21 @@ impl PlaybackRun {
     /// one command handler (queue-content-shuffle task 3.3). The run drains
     /// its command channel per tick, so a move list leaves a window where an
     /// mpv `EndFile` is processed against a partially applied order; one
-    /// command closes it. The playlist surgery reuses the move seams: the
-    /// incremental plan from `reorder_move_plan` drives `playlist_move_args`
-    /// and `apply_queue_move`, and the active slot moves first, so
-    /// `current_idx` ends at 0. An order that does not name exactly this
-    /// run's slots (a stale reorder) is discarded untouched.
+    /// command closes it. The playlist surgery reuses the move seam: the
+    /// incremental plan from `reorder_move_plan` drives `cmd_queue_move`, and
+    /// the active slot moves first, so `current_idx` ends at 0. An order that
+    /// does not name exactly this run's slots (a stale reorder) is discarded
+    /// untouched.
     pub(crate) fn cmd_queue_reorder(&mut self, order: &[QueueSlotId], mpv: &Mpv) {
-        let before: Vec<QueueSlotId> = (0..self.queue_len())
-            .filter_map(|idx| self.slot_id_at(idx))
-            .collect();
-        if !is_slot_permutation(&before, order) {
+        let before: Vec<QueueSlotId> = self.queue.slots().iter().map(|slot| slot.slot_id).collect();
+        if !mbv_queue::is_slot_permutation(before.iter().copied(), order) {
             tracing::warn!(name: "player.queue_reorder.stale", target: "player", held = before.len(), requested = order.len(), "queue reorder discarded: the order does not name this run's slots");
             return;
         }
         for (slot_id, to) in mbv_queue::reorder_move_plan(&before, order) {
-            let Some(from) = self.queue.slot_index(slot_id) else {
-                continue;
-            };
-            if !self.active_file {
-                let (mpv_from, mpv_to) = playlist_move_args(from, to);
-                let _ = mpv.command(
-                    "playlist-move",
-                    &[&mpv_from.to_string(), &mpv_to.to_string()],
-                );
-            }
-            self.apply_queue_move(slot_id, from, to);
+            self.cmd_queue_move(slot_id, to, mpv);
         }
     }
-}
-
-/// True when `order` names exactly the slots in `current`, each once.
-fn is_slot_permutation(current: &[QueueSlotId], order: &[QueueSlotId]) -> bool {
-    if current.len() != order.len() {
-        return false;
-    }
-    let mut current = current.to_vec();
-    let mut order = order.to_vec();
-    current.sort_unstable();
-    order.sort_unstable();
-    current == order
 }
 
 /// mpv's `playlist-move` arguments for moving the entry at `from` to `to`.
@@ -158,7 +125,7 @@ fn is_slot_permutation(current: &[QueueSlotId], order: &[QueueSlotId]) -> bool {
 /// `to - 1`, not `to` (mpv manual's own "paradox" note, confirmed against
 /// mpv 0.41). Passing `to + 1` (one past the end when `to == n - 1`, which
 /// mpv also accepts as "move to end") makes mpv's result match the run's
-/// from/to bookkeeping in [`PlaybackRun::apply_queue_move`].
+/// from/to bookkeeping in [`PlaybackRun::cmd_queue_move`].
 pub(crate) fn playlist_move_args(from: usize, to: usize) -> (usize, usize) {
     (from, if from < to { to + 1 } else { to })
 }
