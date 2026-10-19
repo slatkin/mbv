@@ -109,6 +109,17 @@ pub enum BrowseEvent {
         parent_id: String,
         items: Vec<EmbyItem>,
     },
+    /// Completion of one lazy per-selection fetch (design D2 of change
+    /// `feed-view-lazy-folder-groups`): the ranged video listing for the All
+    /// root or one folder pill, fetched at selection/show time. The dispatch
+    /// arm stale-guards the result against the library's current selection
+    /// and root parent before it stores it in the session cache.
+    FeedHomeVideoSelectionLoaded {
+        lib_idx: usize,
+        parent_id: String,
+        selection: mbv_ui_model::feed::FeedHomeVideoSelection,
+        items: Vec<EmbyItem>,
+    },
     /// `switch_tab`: true for user-initiated navigation (switch to the lib tab),
     /// false for startup restore (just populate `nav_stack`, stay on current tab).
     NavigateTo {

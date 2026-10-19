@@ -57,7 +57,7 @@ fn seed_home_video_root_loaded(app: &mut App) -> EmbyItem {
         lib_idx: 0,
         parent_id: "lib-youtube".into(),
         level: Box::new(BrowseLevel {
-            rows: ServerRows::new(2),
+            rows: ServerRows::loaded(2, 2),
             parent_id: "lib-youtube".into(),
             title: "YouTube".into(),
             items: vec![empty, active.clone()],
@@ -78,6 +78,168 @@ fn seed_home_video_root_loaded(app: &mut App) -> EmbyItem {
     active
 }
 
+fn seed_folder_counts(app: &mut App, folder_id: &str, count: usize) {
+    if let Some(state) = app.libs[0].feed_home_video.as_mut() {
+        state.folder_counts.insert(folder_id.to_string(), count);
+    }
+}
+
+fn seed_selection_cache(app: &mut App, selection: FeedHomeVideoSelection, items: Vec<EmbyItem>) {
+    if let Some(state) = app.libs[0].feed_home_video.as_mut() {
+        state.items.insert(selection, items);
+    }
+}
+
+/// Contract (tasks.md 3.2): the FIRST selection of a pill triggers its lazy
+/// fetch — the fetch-decision mark (`loading`) is the observable — and the
+/// result event fills the session cache and clears the mark.
+#[rstest]
+fn first_folder_selection_triggers_its_fetch_and_the_result_fills_the_cache(
+    make_home_video_app: App,
+) {
+    let mut app = make_home_video_app;
+    // The fetch decision needs a Service client; the stub client's fetch
+    // fails against the default config and the assertion reads only the
+    // synchronous decision mark.
+    install_test_emby(&mut app, crate::config::Config::default());
+    let active = seed_home_video_root_loaded(&mut app);
+    seed_folder_counts(&mut app, &active.id, 2);
+
+    app.select_feed_folder_group(0, 1);
+
+    let state = app.libs[0].feed_home_video.as_ref().unwrap();
+    assert_eq!(
+        state.selection,
+        FeedHomeVideoSelection::Folder(active.id.clone())
+    );
+    assert!(state.loading, "first selection spawns its fetch");
+
+    let mut video = make_item("Episode 1", "Movie");
+    video.path = "/videos/active/ep1.mp4".into();
+    app.handle_lib_event(LibEvent::Browse(
+        BrowseEvent::FeedHomeVideoSelectionLoaded {
+            lib_idx: 0,
+            parent_id: active.id.clone(),
+            selection: FeedHomeVideoSelection::Folder(active.id.clone()),
+            items: vec![video],
+        },
+    ));
+
+    let state = app.libs[0].feed_home_video.as_ref().unwrap();
+    assert!(!state.loading, "the fetch returned");
+    assert_eq!(app.feed_home_video_selected_items(0).len(), 1);
+    assert_eq!(
+        app.feed_home_video_selected_items(0)[0].path,
+        "/videos/active/ep1.mp4"
+    );
+}
+
+/// Contract (tasks.md 3.2): re-selecting a loaded selection reuses the
+/// session cache — the items survive and no fetch decision (`loading`) is
+/// set for either pill.
+#[rstest]
+fn reselecting_loaded_selections_reuses_the_cache_without_a_fetch(make_home_video_app: App) {
+    let mut app = make_home_video_app;
+    let active = seed_home_video_root_loaded(&mut app);
+    seed_folder_counts(&mut app, &active.id, 2);
+    let mut video = make_item("Episode 1", "Movie");
+    video.path = "/videos/active/ep1.mp4".into();
+    seed_selection_cache(&mut app, FeedHomeVideoSelection::All, vec![video.clone()]);
+    seed_selection_cache(
+        &mut app,
+        FeedHomeVideoSelection::Folder(active.id.clone()),
+        vec![video],
+    );
+
+    app.select_feed_folder_group(0, 1);
+    assert!(!app.libs[0].feed_home_video.as_ref().unwrap().loading);
+    app.select_feed_folder_group(0, 0);
+
+    let state = app.libs[0].feed_home_video.as_ref().unwrap();
+    assert!(!state.loading, "a cached selection sets no fetch");
+    assert_eq!(
+        state.items.len(),
+        2,
+        "the session cache survives pill ping-pong"
+    );
+    assert_eq!(app.feed_home_video_selected_items(0).len(), 1);
+}
+
+/// Contract (tasks.md 3.2, spec "Refresh keeps the lazy shape"): the root
+/// listing refresh drops the whole session cache and leaves the CURRENT
+/// selection awaiting its refetch (the shown pass triggers it); the never-
+/// loaded folder pill stays unloaded — only the current selection's result
+/// refills the map.
+#[rstest]
+fn refresh_drops_caches_refetches_only_the_current_selection(make_home_video_app: App) {
+    let mut app = make_home_video_app;
+    let active = seed_home_video_root_loaded(&mut app);
+    seed_folder_counts(&mut app, &active.id, 2);
+    let video = make_item("Episode 1", "Movie");
+    seed_selection_cache(&mut app, FeedHomeVideoSelection::All, vec![video]);
+
+    app.handle_lib_event(LibEvent::Browse(BrowseEvent::Refreshed {
+        lib_idx: 0,
+        parent_id: "lib-youtube".into(),
+        item_types: None,
+        unplayed_only: false,
+        items: vec![active],
+        total_count: 1,
+    }));
+
+    let state = app.libs[0].feed_home_video.as_ref().unwrap();
+    assert!(state.items.is_empty(), "refresh drops the session cache");
+    assert_eq!(state.selection, FeedHomeVideoSelection::All);
+    assert!(
+        app.feed_home_video_selection_awaits_fetch(0),
+        "the current selection refetches after refresh"
+    );
+
+    app.handle_lib_event(LibEvent::Browse(
+        BrowseEvent::FeedHomeVideoSelectionLoaded {
+            lib_idx: 0,
+            parent_id: "lib-youtube".into(),
+            selection: FeedHomeVideoSelection::All,
+            items: vec![make_item("Episode 2", "Movie")],
+        },
+    ));
+
+    let state = app.libs[0].feed_home_video.as_ref().unwrap();
+    assert_eq!(state.items.len(), 1, "unloaded pills stay unloaded");
+    assert!(state.items.contains_key(&FeedHomeVideoSelection::All));
+}
+
+/// Contract (tasks.md 3.2): a result whose selection no longer matches the
+/// state's current one is stale-dropped — it stores nothing and leaves the
+/// current fetch's `loading` mark alone.
+#[rstest]
+fn stale_selection_result_is_dropped(make_home_video_app: App) {
+    let mut app = make_home_video_app;
+    install_test_emby(&mut app, crate::config::Config::default());
+    let active = seed_home_video_root_loaded(&mut app);
+    seed_folder_counts(&mut app, &active.id, 2);
+    app.select_feed_folder_group(0, 1);
+    assert!(app.libs[0].feed_home_video.as_ref().unwrap().loading);
+
+    app.handle_lib_event(LibEvent::Browse(
+        BrowseEvent::FeedHomeVideoSelectionLoaded {
+            lib_idx: 0,
+            parent_id: "lib-youtube".into(),
+            selection: FeedHomeVideoSelection::All,
+            items: vec![make_item("Stale", "Movie")],
+        },
+    ));
+
+    let state = app.libs[0].feed_home_video.as_ref().unwrap();
+    assert!(state.items.is_empty(), "the stale result stored nothing");
+    assert!(
+        state.loading,
+        "the current selection's fetch stays outstanding"
+    );
+}
+
+/// The group level stays a single root level and resolves the selection's
+/// items once its cache holds them (kept from the pre-lazy shape).
 #[rstest]
 fn ensure_feed_home_video_group_level_does_not_push_and_resolves_selected_items(
     make_home_video_app: App,

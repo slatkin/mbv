@@ -42,6 +42,14 @@ impl App {
                 parent_id,
                 items,
             } => self.handle_all_items_prefetched(lib_idx, &parent_id, items),
+            BrowseEvent::FeedHomeVideoSelectionLoaded {
+                lib_idx,
+                parent_id,
+                selection,
+                items,
+            } => {
+                self.handle_feed_home_video_selection_loaded(lib_idx, &parent_id, selection, items);
+            }
             BrowseEvent::NavigateTo {
                 lib_idx,
                 landing,
@@ -149,6 +157,7 @@ impl App {
         self.maybe_capture_library_total_and_apply_default_pill(lib_idx);
         self.maybe_auto_push_tv_season_level(lib_idx);
         self.maybe_auto_push_music_group_level(lib_idx);
+        self.maybe_complete_feed_home_video_listing(lib_idx);
         self.maybe_fetch_next_page(
             lib_idx,
             self.libs[lib_idx]
@@ -258,6 +267,7 @@ impl App {
         });
         self.normalize_current_browse_level_items(lib_idx);
         self.start_or_supersede_music_grouping(lib_idx);
+        self.maybe_complete_feed_home_video_listing(lib_idx);
         self.maybe_fetch_next_page(
             lib_idx,
             self.libs[lib_idx]
@@ -302,6 +312,18 @@ impl App {
         }
         self.normalize_current_browse_level_items(lib_idx);
         self.start_or_supersede_music_grouping(lib_idx);
+        // A feed-view root listing refresh re-reads the folder listing (design
+        // D2): the session cache drops and the current selection refetches
+        // through the shown projection's lazy-fetch trigger; unloaded pills
+        // stay unloaded. Legacy unplayed-video refresh completions (swallowed
+        // above, revisit in task 5.1) are not listing refreshes.
+        if self.is_feed_home_video_library(lib_idx)
+            && self.libs.get(lib_idx).is_some_and(|lib| {
+                lib.nav_stack.len() == 1 && lib.nav_stack[0].parent_id == parent_id
+            })
+        {
+            self.complete_feed_home_video_refresh(lib_idx);
+        }
         self.spawn_all_items_prefetch(lib_idx);
         // A group switch (music) or pill switch / stop-refresh (TV series
         // root) refreshes the level in place -- no `Loaded` event, no

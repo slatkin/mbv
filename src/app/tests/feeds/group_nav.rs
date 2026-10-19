@@ -377,3 +377,82 @@ fn ensure_feed_home_video_group_level_clamps_stale_cursor_to_available_folders()
         Some(1)
     );
 }
+
+/// Contract (tasks.md 3.2, rule 5): when the folder listing completes, the
+/// persisted pill index (`selected_group`) resolves into the concrete
+/// selection against the listing's counted folders (design D3).
+#[test]
+fn listing_completion_resolves_the_pending_pill_index_into_the_selection() {
+    let mut app = make_app_stub();
+    app.tab = TabSelection::EmbyLibrary(0);
+    app.config.lock().unwrap().feed_view_libraries = vec!["youtube".into()];
+
+    let mut library = make_item("YouTube", "CollectionFolder");
+    library.id = "lib-youtube".into();
+    library.collection_type = "homevideos".into();
+    library.is_folder = true;
+
+    let mut folder = make_item("Channel A", "Folder");
+    folder.id = "folder-a".into();
+    folder.is_folder = true;
+
+    app.libs.push(LibraryTab {
+        nav_stack: vec![BrowseLevel {
+            rows: ServerRows::new(1),
+            parent_id: "lib-youtube".into(),
+            title: "YouTube".into(),
+            items: vec![],
+
+            resting: BrowseResting::new(0, 0),
+            item_types: None,
+            unplayed_only: false,
+            sort_by: "SortName".into(),
+            sort_order: "Ascending".into(),
+            loading: true,
+            all_items: None,
+            letter_filter: None,
+            tv_content_mode: None,
+            music_grouping: None,
+        }],
+        feed_home_video: Some(FeedHomeVideoState {
+            selected_group: 1,
+            folder_counts: HashMap::from([("folder-a".to_string(), 2)]),
+            ..FeedHomeVideoState::default()
+        }),
+        ..LibraryTab::new(library)
+    });
+
+    app.handle_lib_event(LibEvent::Browse(BrowseEvent::Loaded {
+        lib_idx: 0,
+        parent_id: "lib-youtube".into(),
+        level: Box::new(BrowseLevel {
+            rows: ServerRows::loaded(1, 1),
+            parent_id: "lib-youtube".into(),
+            title: "YouTube".into(),
+            items: vec![folder.clone()],
+
+            resting: BrowseResting::new(0, 0),
+            item_types: None,
+            unplayed_only: false,
+            sort_by: "SortName".into(),
+            sort_order: "Ascending".into(),
+            loading: false,
+            all_items: None,
+            letter_filter: None,
+            tv_content_mode: None,
+            music_grouping: None,
+        }),
+    }));
+
+    assert_eq!(
+        app.libs[0]
+            .feed_home_video
+            .as_ref()
+            .map(|state| state.selection.clone()),
+        Some(FeedHomeVideoSelection::Folder("folder-a".into()))
+    );
+    assert_eq!(
+        app.feed_home_video_selected_parent_id(0).as_deref(),
+        Some("folder-a")
+    );
+}

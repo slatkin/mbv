@@ -126,6 +126,17 @@ impl Model {
         // is painted.
         self.app.ensure_feed_home_video_group_level(index);
         let feed_group_view = self.app.is_feed_home_video_group_view(index);
+        // Lazy per-selection fetch (design D2 of change
+        // `feed-view-lazy-folder-groups`): a shown selection whose items are
+        // not cached fetches here. The Latest (New) pill is exempt — the group
+        // lists must not load merely because New is active (spec
+        // feed-home-video-group-view, "The New pill SHALL NOT depend on any
+        // group list being loaded"). Read fresh: the owner push below can
+        // flip Latest mode, and the later Latest-marker/request decisions
+        // must see the post-push answer.
+        if feed_group_view && !self.active_emby_library_owner_is_latest() {
+            self.app.maybe_fetch_feed_home_video_selection(index);
+        }
         let show_letter_pills = self.app.should_show_letter_pills(index);
         let selector_mode = if feed_group_view {
             mbv_components::emby_library_content::EmbySelectorMode::FeedGroups

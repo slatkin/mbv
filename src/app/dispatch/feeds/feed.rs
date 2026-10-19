@@ -1,5 +1,6 @@
 use crate::app::dispatch::notify::ToastSeverity;
-use crate::app::{App, BrowseLevel, FeedHomeVideoSelection, FeedHomeVideoState};
+use crate::app::state::events::{BrowseEvent, LibEvent};
+use crate::app::{App, BrowseLevel, FeedHomeVideoSelection, FeedHomeVideoState, PAGE_SIZE};
 use mbv_emby_model::EmbyItem;
 use mbv_feed::fetch_and_parse_rss;
 use mbv_ui_model::browse::{BrowseResting, ServerRows};
@@ -273,13 +274,266 @@ impl App {
             return;
         };
         if let Some(state) = self.libs[lib_idx].feed_home_video.as_mut() {
+            let changed = state.selection != selection;
             state.selected_group = group_idx;
+            state.selection = selection.clone();
+            if changed {
+                state.video_cursor = 0;
+                state.video_scroll = 0;
+                // A cached selection has no fetch to wait for; an outstanding
+                // fetch belonged to the previous selection and is
+                // stale-dropped on arrival.
+                if state.items.contains_key(&selection) {
+                    state.loading = false;
+                }
+            }
+        }
+        self.clamp_feed_home_video_state(lib_idx);
+        // Lazy fetch (design D2): a newly selected, uncached selection fetches
+        // at selection time; a cached one reuses the session cache and sets no
+        // fetch. The spawn bypasses `loading` because an outstanding fetch for
+        // the previous selection is stale-dropped, not a fetch for this one.
+        self.fetch_feed_home_video_selection_after_change(lib_idx);
+        self.log_feed_home_video_state(lib_idx, "select_group");
+    }
+
+    /// The shown selection's items are not cached and no fetch for it is
+    /// outstanding: its lazy fetch (design D2) still has to run. The shown
+    /// and Latest-mode gates live at the shell call sites (`App` cannot name
+    /// component-local Latest state); tests use this predicate to observe the
+    /// refetch decision a refresh leaves behind.
+    pub(in crate::app) fn feed_home_video_selection_awaits_fetch(&self, lib_idx: usize) -> bool {
+        if !self.is_feed_home_video_library(lib_idx) {
+            return false;
+        }
+        self.libs
+            .get(lib_idx)
+            .and_then(|lib| lib.feed_home_video.as_ref())
+            .is_some_and(|state| !state.loading && !state.items.contains_key(&state.selection))
+    }
+
+    /// Shown-time trigger for the lazy per-selection fetch (design D2): fires
+    /// only when the selection is uncached and nothing is fetching it. While
+    /// a fetch is outstanding (`loading`) or the selection is cached, this is
+    /// a no-op.
+    pub(in crate::app) fn maybe_fetch_feed_home_video_selection(&mut self, lib_idx: usize) {
+        if self.feed_home_video_selection_awaits_fetch(lib_idx) {
+            self.fetch_feed_home_video_selection_now(lib_idx);
+        }
+    }
+
+    /// Selection-change trigger for the lazy per-selection fetch (design D2):
+    /// spawns whenever the new selection is uncached, even while a fetch for
+    /// the previous selection is still outstanding — that result is
+    /// stale-dropped on arrival, so `loading` here describes this selection.
+    fn fetch_feed_home_video_selection_after_change(&mut self, lib_idx: usize) {
+        if !self.is_feed_home_video_library(lib_idx) {
+            return;
+        }
+        let uncached = self
+            .libs
+            .get(lib_idx)
+            .and_then(|lib| lib.feed_home_video.as_ref())
+            .is_some_and(|state| !state.items.contains_key(&state.selection));
+        if uncached {
+            self.fetch_feed_home_video_selection_now(lib_idx);
+        }
+    }
+
+    /// Marks the current selection's fetch outstanding and spawns it. Callers
+    /// own the cached and shown gates.
+    fn fetch_feed_home_video_selection_now(&mut self, lib_idx: usize) {
+        if !self.is_feed_home_video_library(lib_idx) {
+            return;
+        }
+        let Some(client) = self.emby_snapshot() else {
+            // No Service client yet: leave the selection uncached and
+            // unloaded; a later selection or shown pass retries.
+            return;
+        };
+        let Some(lib) = self.libs.get_mut(lib_idx) else {
+            return;
+        };
+        let Some(state) = lib.feed_home_video.as_mut() else {
+            return;
+        };
+        if state.loading || state.items.contains_key(&state.selection) {
+            return;
+        }
+        let Some(root) = lib.nav_stack.first() else {
+            return;
+        };
+        let selection = state.selection.clone();
+        let parent_id = match &selection {
+            FeedHomeVideoSelection::All => root.parent_id.clone(),
+            FeedHomeVideoSelection::Folder(id) => id.clone(),
+        };
+        state.loading = true;
+        self.log_feed_home_video_state(lib_idx, "selection_fetch_spawned");
+        let tx = self.channels.lib_tx.clone();
+        std::thread::spawn(move || {
+            let (mut items, total_count) = match client.get_items_sorted(
+                &parent_id,
+                Some("Video"),
+                false,
+                0,
+                PAGE_SIZE,
+                "DateCreated",
+                "Ascending",
+            ) {
+                Ok(result) => result,
+                Err(e) => {
+                    let _ = tx.send(LibEvent::Error(e.to_string()));
+                    return;
+                }
+            };
+            // Initial page then total refill (design D2): the same shape the
+            // deleted aggregate used, minus the unplayed filter and grouping.
+            if total_count > items.len() {
+                match client.get_items_sorted(
+                    &parent_id,
+                    Some("Video"),
+                    false,
+                    0,
+                    total_count,
+                    "DateCreated",
+                    "Ascending",
+                ) {
+                    Ok((refetched, _)) => items = refetched,
+                    Err(e) => {
+                        let _ = tx.send(LibEvent::Error(e.to_string()));
+                        return;
+                    }
+                }
+            }
+            let _ = tx.send(LibEvent::Browse(
+                BrowseEvent::FeedHomeVideoSelectionLoaded {
+                    lib_idx,
+                    parent_id,
+                    selection,
+                    items,
+                },
+            ));
+        });
+    }
+
+    /// The `FeedHomeVideoSelectionLoaded` arm. Stale guard: a result serves
+    /// the library only while its root parent still matches (an All fetch's
+    /// source listing) and its selection is still the state's current one; a
+    /// selection left before its fetch returned is dropped, and the cache
+    /// fills only through a live selection.
+    pub(in crate::app) fn handle_feed_home_video_selection_loaded(
+        &mut self,
+        lib_idx: usize,
+        parent_id: &str,
+        selection: FeedHomeVideoSelection,
+        items: Vec<EmbyItem>,
+    ) {
+        let stale = self.libs.get(lib_idx).is_none_or(|lib| {
+            lib.feed_home_video.as_ref().is_none_or(|state| {
+                state.selection != selection
+                    || matches!(selection, FeedHomeVideoSelection::All)
+                        && lib
+                            .nav_stack
+                            .first()
+                            .is_none_or(|root| root.parent_id != parent_id)
+            })
+        });
+        if stale {
+            self.log_feed_home_video_state(lib_idx, "selection_loaded_dropped_stale");
+            return;
+        }
+        if let Some(state) = self
+            .libs
+            .get_mut(lib_idx)
+            .and_then(|lib| lib.feed_home_video.as_mut())
+        {
+            state.items.insert(selection, items);
+            state.loading = false;
+        }
+        self.clamp_feed_home_video_state(lib_idx);
+        self.log_feed_home_video_state(lib_idx, "selection_loaded");
+    }
+
+    /// Rule 5: when the folder listing completes (open, restore), resolve the
+    /// persisted pill index into the concrete selection (design D3). A folder
+    /// index past the counted folders — the count fan-out is still empty, or
+    /// the folder vanished — leaves the selection as it is. Resolution that
+    /// keeps the selection leaves the cursor alone; the fetch itself stays
+    /// shown-gated at the shell call sites.
+    pub(in crate::app) fn maybe_complete_feed_home_video_listing(&mut self, lib_idx: usize) {
+        if !self.feed_home_video_root_listing_completed(lib_idx) {
+            return;
+        }
+        // The listing-pending phase is over: the open/restore seed's
+        // `loading` hand-off ends here, and the fetch phase owns the flag
+        // from the next shown pass on.
+        if let Some(state) = self
+            .libs
+            .get_mut(lib_idx)
+            .and_then(|lib| lib.feed_home_video.as_mut())
+        {
+            state.loading = false;
+        }
+        self.resolve_feed_home_video_pending_selection(lib_idx);
+        self.log_feed_home_video_state(lib_idx, "listing_completed");
+    }
+
+    /// The refresh-completion hook (design D2): the refreshed folder listing
+    /// invalidates the whole session cache — the current selection refetches
+    /// through the shown projection's lazy-fetch trigger, and unloaded pills
+    /// stay unloaded.
+    pub(in crate::app) fn complete_feed_home_video_refresh(&mut self, lib_idx: usize) {
+        if !self.is_feed_home_video_library(lib_idx) {
+            return;
+        }
+        if let Some(state) = self
+            .libs
+            .get_mut(lib_idx)
+            .and_then(|lib| lib.feed_home_video.as_mut())
+        {
+            state.items.clear();
+            state.loading = false;
+        }
+        self.resolve_feed_home_video_pending_selection(lib_idx);
+        self.log_feed_home_video_state(lib_idx, "refresh_completed");
+    }
+
+    /// The root folder listing has fully paginated: every counted folder is
+    /// known, so a pending pill index can resolve against it.
+    fn feed_home_video_root_listing_completed(&self, lib_idx: usize) -> bool {
+        self.is_feed_home_video_library(lib_idx)
+            && self.libs.get(lib_idx).is_some_and(|lib| {
+                lib.nav_stack.len() == 1
+                    && lib.nav_stack[0].item_types.is_none()
+                    && !lib.nav_stack[0].loading
+                    && lib.nav_stack[0].is_fully_loaded()
+            })
+    }
+
+    fn resolve_feed_home_video_pending_selection(&mut self, lib_idx: usize) {
+        let counted = self.feed_home_video_counted_folders(lib_idx);
+        let Some(state) = self
+            .libs
+            .get_mut(lib_idx)
+            .and_then(|lib| lib.feed_home_video.as_mut())
+        else {
+            return;
+        };
+        let resolved = if state.selected_group == 0 {
+            Some(FeedHomeVideoSelection::All)
+        } else {
+            counted
+                .get(state.selected_group - 1)
+                .map(|folder| FeedHomeVideoSelection::Folder(folder.id.clone()))
+        };
+        if let Some(selection) = resolved
+            && state.selection != selection
+        {
             state.selection = selection;
             state.video_cursor = 0;
             state.video_scroll = 0;
         }
-        self.clamp_feed_home_video_state(lib_idx);
-        self.log_feed_home_video_state(lib_idx, "select_group");
     }
 
     /// Spawn a background thread to fetch and parse the idle RSS feed.
