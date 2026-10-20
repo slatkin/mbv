@@ -4,6 +4,7 @@
 .zcode
 .zvec-grep
 .obsidian/
+.agents
 /target
 *.jpg
 *.png
