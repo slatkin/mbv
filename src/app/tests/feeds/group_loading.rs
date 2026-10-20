@@ -500,70 +500,30 @@ fn partial_root_refresh_keeps_counts_and_the_later_page_pill(make_home_video_app
     );
 }
 
-/// Regression (review P2, 9e454b62d..8e5ce710a): a partial refresh whose
-/// folder set is unchanged still owes its forced count re-query — the
-/// deferred force marker survives the partial window and the final page
-/// append consumes it by committing the forced fan-out, even though every
-/// folder already holds a count entry (the non-forced dedupe would have
-/// skipped the spawn and left the marker set).
+/// Contract (design D2 refresh; replaces the deleted `pending_count_refresh`
+/// marker, review P2 9e454b62d..8e5ce710a): a fully paginated refresh
+/// invalidates the per-folder counts, so the next listing completion's
+/// non-forced fan-out fails its dedupe and re-queries every folder — a
+/// refresh must not leave the pre-refresh counts serving the pill row.
 #[rstest]
-fn partial_refresh_defers_a_forced_count_fanout_to_the_final_page_append(make_home_video_app: App) {
+fn a_full_refresh_invalidates_the_folder_counts_so_the_fan_out_requeries(make_home_video_app: App) {
     let mut app = make_home_video_app;
-    // The fan-out's spawn seam needs a Service client; the stub client's
-    // queries fail against the default config and the assertions read only
-    // the synchronous decision marks.
-    install_test_emby(&mut app, crate::config::Config::default());
-    for id in ["folder-a", "folder-b", "folder-c"] {
-        seed_folder_counts(&mut app, id, 1);
-    }
-    app.handle_lib_event(LibEvent::Browse(BrowseEvent::Loaded {
-        lib_idx: 0,
-        parent_id: "lib-youtube".into(),
-        level: Box::new(youtube_root_level(
-            ServerRows::loaded(3, 3),
-            vec![
-                make_root_folder("folder-a", "Channel A"),
-                make_root_folder("folder-b", "Channel B"),
-                make_root_folder("folder-c", "Channel C"),
-            ],
-            false,
-        )),
-    }));
+    let active = seed_home_video_root_loaded(&mut app);
+    seed_folder_counts(&mut app, &active.id, 2);
 
     app.handle_lib_event(LibEvent::Browse(BrowseEvent::Refreshed {
         lib_idx: 0,
         parent_id: "lib-youtube".into(),
         item_types: None,
         unplayed_only: false,
-        items: vec![make_root_folder("folder-a", "Channel A")],
-        total_count: 3,
+        items: vec![active],
+        total_count: 1,
     }));
 
     let state = app.libs[0].feed_home_video.as_ref().unwrap();
     assert!(
-        state.pending_count_refresh,
-        "the partial refresh defers its forced re-query"
-    );
-    assert_eq!(
-        state.folder_counts.len(),
-        3,
-        "all folders still hold count entries"
-    );
-
-    app.handle_lib_event(LibEvent::Browse(BrowseEvent::PageAppended {
-        lib_idx: 0,
-        parent_id: "lib-youtube".into(),
-        items: vec![
-            make_root_folder("folder-b", "Channel B"),
-            make_root_folder("folder-c", "Channel C"),
-        ],
-        total_count: 3,
-    }));
-
-    let state = app.libs[0].feed_home_video.as_ref().unwrap();
-    assert!(
-        !state.pending_count_refresh,
-        "the final page append committed the forced fan-out"
+        state.folder_counts.is_empty(),
+        "the refresh cleared the counts so the fan-out re-queries"
     );
 }
 

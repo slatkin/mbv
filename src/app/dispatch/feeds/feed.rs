@@ -420,26 +420,19 @@ impl App {
         });
     }
 
-    /// The count fan-out (design D1 (b), task 3.3): one background thread
-    /// queries the per-folder videos-only count for every folder directly
-    /// under the root listing, sequentially, and sends ONE result event
-    /// carrying the successfully obtained pairs. A failed query omits its
-    /// folder — it gets no pill until a later listing completion or refresh
-    /// retries. The listing's `child_count` is not consulted (the root
-    /// listing requests no count fields) and nothing here lists any videos.
-    /// Without `force`, a listing whose folders all hold count entries
-    /// already spawns nothing; a refresh forces a re-query of every folder
-    /// because the refreshed counts replace the map — immediately when the
-    /// refreshed listing is fully loaded, otherwise deferred through the
-    /// state's `pending_count_refresh` marker to the listing's final page
-    /// append. The marker clears exactly here, when the forced fan-out is
-    /// actually requested; without a Service client it survives and the next
-    /// listing completion retries.
-    pub(in crate::app) fn spawn_feed_home_video_folder_counts(
-        &mut self,
-        lib_idx: usize,
-        force: bool,
-    ) {
+    /// The count fan-out (design D1 (b), task 3.3): background threads query
+    /// the per-folder videos-only count for every folder directly under the
+    /// root listing, one query per folder, and each thread sends one result
+    /// event per folder as its queries return so pills fill in incrementally.
+    /// A failed query omits its folder — it gets no pill until a later
+    /// listing completion or refresh retries. The listing's `child_count` is
+    /// not consulted (the root listing requests no count fields) and nothing
+    /// here lists any videos. The fan-out runs only while some folder lacks a
+    /// count entry: a listing whose folders all hold entries spawns nothing,
+    /// and a refresh re-queries every folder by clearing the map (design
+    /// D2). Without a Service client it spawns nothing; the next listing
+    /// completion or refresh retries.
+    pub(in crate::app) fn spawn_feed_home_video_folder_counts(&mut self, lib_idx: usize) {
         if !self.is_feed_home_video_library(lib_idx) {
             return;
         }
@@ -464,26 +457,13 @@ impl App {
             .map(|item| item.id.clone())
             .collect();
         if folder_ids.is_empty()
-            || (!force
-                && folder_ids
-                    .iter()
-                    .all(|id| state.folder_counts.contains_key(id)))
+            || folder_ids
+                .iter()
+                .all(|id| state.folder_counts.contains_key(id))
         {
             return;
         }
         let parent_id = root.parent_id.clone();
-        // The deferred refresh force is consumed exactly at the commit point:
-        // a forced request that reached here passed the non-forced dedupe, so
-        // the marker's clearing proves the fan-out was requested (review P2,
-        // 9e454b62d..8e5ce710a).
-        if force
-            && let Some(state) = self
-                .libs
-                .get_mut(lib_idx)
-                .and_then(|lib| lib.feed_home_video.as_mut())
-        {
-            state.pending_count_refresh = false;
-        }
         let tx = self.channels.lib_tx.clone();
         tracing::debug!(name: "feed.home_video.counts_spawned", target: "feedhv", library_index = lib_idx, folders = folder_ids.len(), "folder video-count fan-out spawned");
         std::thread::spawn(move || {
@@ -601,17 +581,8 @@ impl App {
         {
             state.loading = false;
         }
-        // A partial refresh deferred its forced count re-query to this
-        // completion (review P2, 9e454b62d..8e5ce710a): carry the marker's
-        // force into the fan-out; the fan-out consumes the marker when the
-        // forced request commits.
-        let force_counts = self
-            .libs
-            .get(lib_idx)
-            .and_then(|lib| lib.feed_home_video.as_ref())
-            .is_some_and(|state| state.pending_count_refresh);
         self.resolve_feed_home_video_pending_selection(lib_idx);
-        self.spawn_feed_home_video_folder_counts(lib_idx, force_counts);
+        self.spawn_feed_home_video_folder_counts(lib_idx);
         self.log_feed_home_video_state(lib_idx, "listing_completed");
     }
 
@@ -622,13 +593,12 @@ impl App {
     /// wait for the refreshed root listing to fully paginate (review P2,
     /// b603f329b..9e454b62d): a refresh that lands only part of the folders
     /// (the library total grew since the last full pagination) must not
-    /// replace `folder_counts` from its page-1 folders, nor clamp or
-    /// re-resolve the pill index against the shrunken pill row while
-    /// `selection` keeps a later-page folder. A full refresh forces the count
-    /// re-query now; a partial one arms `pending_count_refresh` so the
-    /// listing's final page append runs exactly one forced fan-out — even
-    /// when the folder set is unchanged and the non-forced dedupe would skip
-    /// it (review P2, 9e454b62d..8e5ce710a).
+    /// shrink the pill row from its page-1 folders, nor re-resolve the pill
+    /// selection against the shrunken row while `selection` keeps a
+    /// later-page folder. A fully paginated refresh therefore clears the
+    /// count map here — the next listing completion's non-forced fan-out
+    /// fails its dedupe and re-queries every folder; a partial refresh keeps
+    /// the counts until its final page append completes the listing.
     pub(in crate::app) fn complete_feed_home_video_refresh(&mut self, lib_idx: usize) {
         if !self.is_feed_home_video_library(lib_idx) {
             return;
@@ -641,11 +611,12 @@ impl App {
         {
             state.items.clear();
             state.loading = false;
-            state.pending_count_refresh = !fully_loaded;
+            if fully_loaded {
+                state.folder_counts.clear();
+            }
         }
         if fully_loaded {
-            self.resolve_feed_home_video_pending_selection(lib_idx);
-            self.spawn_feed_home_video_folder_counts(lib_idx, true);
+            self.spawn_feed_home_video_folder_counts(lib_idx);
         }
         self.log_feed_home_video_state(lib_idx, "refresh_completed");
     }

@@ -26,7 +26,8 @@ pub struct FeedHomeVideoState {
     /// Whether the current selection's fetch is still outstanding.
     pub loading: bool,
     /// Per-root-folder video counts. The count fan-out fills this; pill
-    /// membership reads it alongside the root listing. Empty until then.
+    /// membership reads it alongside the root listing. A full refresh clears
+    /// it so the next fan-out re-queries every folder. Empty until then.
     pub folder_counts: HashMap<String, usize>,
     /// A pill index restored from `LibraryPosition::feed_selected_group` that
     /// still awaits resolution into `selection` against the counted folders
@@ -35,14 +36,6 @@ pub struct FeedHomeVideoState {
     /// resolves or the user picks a pill. It never drives the painted
     /// highlight, which derives from `selection`.
     pub restored_group: Option<usize>,
-    /// Whether a refresh deferred its forced count re-query to the root
-    /// listing's next completion: a partial refresh must not replace the
-    /// counts from its page-1 folders, but it still owes the session a forced
-    /// re-query of every folder once the listing fully repaginates. The
-    /// listing-completion path passes it to the fan-out, which consumes it
-    /// exactly when the forced fan-out is requested. Session-local; never
-    /// persisted.
-    pub pending_count_refresh: bool,
     pub video_cursor: usize,
     pub video_scroll: usize,
 }
