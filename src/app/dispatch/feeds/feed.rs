@@ -29,8 +29,9 @@ fn selection_for_group(counted: &[EmbyItem], group_idx: usize) -> Option<FeedHom
 const FOLDER_COUNT_THREADS: usize = 8;
 
 /// One folder's count query inside a fan-out thread: sends the folder's own
-/// result event, or logs the failure and omits the folder (it gets no pill
-/// until a later listing completion or refresh retries).
+/// result event — every queried folder reports exactly once, `None` when the
+/// query fails, so the fan-out's quiescence accounting balances — carrying
+/// the count the pill row reads on success.
 fn query_folder_count(
     client: &EmbyClient,
     tx: &mpsc::Sender<LibEvent>,
@@ -38,21 +39,21 @@ fn query_folder_count(
     parent_id: &str,
     folder_id: &str,
 ) {
-    match client.get_folder_video_count(folder_id) {
-        Ok(count) => {
-            let _ = tx.send(LibEvent::Browse(
-                BrowseEvent::FeedHomeVideoFolderCountLoaded {
-                    lib_idx,
-                    parent_id: parent_id.to_string(),
-                    folder_id: folder_id.to_string(),
-                    count,
-                },
-            ));
-        }
+    let count = match client.get_folder_video_count(folder_id) {
+        Ok(count) => Some(count),
         Err(error) => {
             tracing::warn!(name: "feed.home_video.folder_count_failed", target: "feedhv", folder = %folder_id, error = %error, "folder video-count query failed");
+            None
         }
-    }
+    };
+    let _ = tx.send(LibEvent::Browse(
+        BrowseEvent::FeedHomeVideoFolderCountLoaded {
+            lib_idx,
+            parent_id: parent_id.to_string(),
+            folder_id: folder_id.to_string(),
+            count,
+        },
+    ));
 }
 
 impl App {
@@ -494,6 +495,15 @@ impl App {
         }
         let parent_id = root.parent_id.clone();
         let tx = self.channels.lib_tx.clone();
+        // Quiescence accounting: one owed report per queried folder, so the
+        // per-folder arm knows when the counted row is final.
+        if let Some(state) = self
+            .libs
+            .get_mut(lib_idx)
+            .and_then(|lib| lib.feed_home_video.as_mut())
+        {
+            state.outstanding_counts += folder_ids.len();
+        }
         let thread_count = folder_ids.len().clamp(1, FOLDER_COUNT_THREADS);
         let slice_len = folder_ids.len().div_ceil(thread_count);
         tracing::debug!(name: "feed.home_video.counts_spawned", target: "feedhv", library_index = lib_idx, folders = folder_ids.len(), threads = thread_count, "folder video-count fan-out spawned");
@@ -510,20 +520,34 @@ impl App {
     }
 
     /// The `FeedHomeVideoFolderCountLoaded` arm (task 3.3). Stale guard: a
-    /// result serves the library only while its root parent still matches the
-    /// current root listing's parent — a library switch or a replaced root
-    /// drops it. The count records into the pill-membership map (the fan-out
-    /// fills it one folder at a time), then the pending restored pill index
-    /// resolves against the pill row and the cursor clamps to it. The
-    /// selection's own fetch stays with the shown-pass trigger (design D2);
-    /// nothing here lists any videos.
+    /// result records into the pill-membership map only while its root parent
+    /// still matches the current root listing's parent — a library switch or
+    /// a replaced root drops it (its accounting report still settles the
+    /// fan-out). Every queried folder reports exactly once, success or
+    /// failure, so when the last owed report lands the fan-out has quiesced:
+    /// the counted row is final and a pending restored pill index resolves
+    /// against it — and is consumed even when it names no pill, so a partial
+    /// arrival can never misbind it and a vanished folder's index is spent.
+    /// The selection's own fetch stays with the shown-pass trigger (design
+    /// D2); nothing here lists any videos.
     pub(in crate::app) fn handle_feed_home_video_folder_count_loaded(
         &mut self,
         lib_idx: usize,
         parent_id: &str,
         folder_id: &str,
-        count: usize,
+        count: Option<usize>,
     ) {
+        let became_quiesced = self
+            .libs
+            .get_mut(lib_idx)
+            .and_then(|lib| lib.feed_home_video.as_mut())
+            .is_some_and(|state| {
+                if state.outstanding_counts == 0 {
+                    return false;
+                }
+                state.outstanding_counts -= 1;
+                state.outstanding_counts == 0
+            });
         let stale = self.libs.get(lib_idx).is_none_or(|lib| {
             lib.feed_home_video.is_none()
                 || lib
@@ -531,20 +555,24 @@ impl App {
                     .first()
                     .is_none_or(|root| root.parent_id != parent_id)
         });
-        if stale {
-            self.log_feed_home_video_state(lib_idx, "folder_counts_dropped_stale");
-            return;
-        }
-        if let Some(state) = self
-            .libs
-            .get_mut(lib_idx)
-            .and_then(|lib| lib.feed_home_video.as_mut())
+        if !stale
+            && let Some(count) = count
+            && let Some(state) = self
+                .libs
+                .get_mut(lib_idx)
+                .and_then(|lib| lib.feed_home_video.as_mut())
         {
             state.folder_counts.insert(folder_id.to_string(), count);
         }
-        self.resolve_feed_home_video_pending_selection(lib_idx);
+        if became_quiesced && self.feed_home_video_root_listing_completed(lib_idx) {
+            self.resolve_feed_home_video_pending_selection(lib_idx);
+        }
         self.clamp_feed_home_video_state(lib_idx);
-        self.log_feed_home_video_state(lib_idx, "folder_counts_loaded");
+        if stale {
+            self.log_feed_home_video_state(lib_idx, "folder_counts_dropped_stale");
+        } else {
+            self.log_feed_home_video_state(lib_idx, "folder_counts_loaded");
+        }
     }
 
     /// The `FeedHomeVideoSelectionLoaded` arm. Stale guard: a result serves
@@ -585,12 +613,12 @@ impl App {
         self.log_feed_home_video_state(lib_idx, "selection_loaded");
     }
 
-    /// Rule 5: when the folder listing completes (open, restore), resolve the
-    /// persisted pill index into the concrete selection (design D3). A folder
-    /// index past the counted folders — the count fan-out is still empty, or
-    /// the folder vanished — leaves the selection as it is. Resolution that
-    /// keeps the selection leaves the cursor alone; the fetch itself stays
-    /// shown-gated at the shell call sites.
+    /// Rule 5: when the folder listing completes (open, restore), the
+    /// open/restore seed's `loading` hand-off ends and the count fan-out
+    /// runs. A pending restored pill index resolves only against a final
+    /// counted row: either the counts already cover every root folder (no
+    /// fan-out is owed), or the fan-out this completion spawns resolves it
+    /// when its last report lands — a partial arrival must never misbind it.
     pub(in crate::app) fn maybe_complete_feed_home_video_listing(&mut self, lib_idx: usize) {
         if !self.feed_home_video_root_listing_completed(lib_idx) {
             return;
@@ -605,7 +633,9 @@ impl App {
         {
             state.loading = false;
         }
-        self.resolve_feed_home_video_pending_selection(lib_idx);
+        if self.feed_home_video_folder_counts_cover_root(lib_idx) {
+            self.resolve_feed_home_video_pending_selection(lib_idx);
+        }
         self.spawn_feed_home_video_folder_counts(lib_idx);
         self.log_feed_home_video_state(lib_idx, "listing_completed");
     }
@@ -657,6 +687,25 @@ impl App {
             })
     }
 
+    /// Whether every folder directly under the root listing holds a count
+    /// entry: the counted row is final and a restored pill index can resolve
+    /// against it.
+    fn feed_home_video_folder_counts_cover_root(&self, lib_idx: usize) -> bool {
+        let Some(lib) = self.libs.get(lib_idx) else {
+            return false;
+        };
+        let Some(state) = lib.feed_home_video.as_ref() else {
+            return false;
+        };
+        let Some(root) = lib.nav_stack.first() else {
+            return false;
+        };
+        root.items
+            .iter()
+            .filter(|item| item.is_folder)
+            .all(|folder| state.folder_counts.contains_key(&folder.id))
+    }
+
     fn resolve_feed_home_video_pending_selection(&mut self, lib_idx: usize) {
         let counted = self.feed_home_video_counted_folders(lib_idx);
         let Some(state) = self
@@ -669,16 +718,19 @@ impl App {
         let Some(group_idx) = state.restored_group else {
             return;
         };
-        // An index past the counted folders — the count fan-out is still
-        // empty, or the folder vanished — stays pending for the next resolve
-        // (a later counts arrival or listing completion).
-        if let Some(selection) = selection_for_group(&counted, group_idx) {
-            if state.selection != selection {
-                state.selection = selection;
-                state.video_cursor = 0;
-                state.video_scroll = 0;
-            }
-            state.restored_group = None;
+        // The callers resolve only once the counted row is final (the
+        // fan-out has quiesced over a completed listing, or the counts
+        // already cover every root folder), so the index consumes here
+        // whether or not it names a pill: a vanished folder's index is
+        // spent, the selection stays as it is, and the derived highlight
+        // clamps into the row.
+        state.restored_group = None;
+        if let Some(selection) = selection_for_group(&counted, group_idx)
+            && state.selection != selection
+        {
+            state.selection = selection;
+            state.video_cursor = 0;
+            state.video_scroll = 0;
         }
     }
 

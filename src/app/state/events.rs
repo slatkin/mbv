@@ -123,14 +123,16 @@ pub enum BrowseEvent {
     /// Completion of one per-folder count query (design D1 (b) of change
     /// `feed-view-lazy-folder-groups`): the videos-only count for one folder
     /// directly under the root listing, sent by the folder's own fan-out
-    /// thread so pills fill in incrementally. The dispatch arm stale-guards
-    /// the result against the library's current root parent before it records
-    /// the count in the pill-membership map.
+    /// thread so pills fill in incrementally. Every queried folder reports
+    /// exactly once — `count` is `None` when the query failed — so the
+    /// dispatch arm can tell when the fan-out has quiesced. The arm
+    /// stale-guards the result against the library's current root parent
+    /// before it records the count in the pill-membership map.
     FeedHomeVideoFolderCountLoaded {
         lib_idx: usize,
         parent_id: String,
         folder_id: String,
-        count: usize,
+        count: Option<usize>,
     },
     /// `switch_tab`: true for user-initiated navigation (switch to the lib tab),
     /// false for startup restore (just populate `nav_stack`, stay on current tab).

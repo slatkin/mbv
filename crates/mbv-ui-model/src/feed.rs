@@ -29,6 +29,12 @@ pub struct FeedHomeVideoState {
     /// membership reads it alongside the root listing. A full refresh clears
     /// it so the next fan-out re-queries every folder. Empty until then.
     pub folder_counts: HashMap<String, usize>,
+    /// How many fan-out count queries are still owed a result event. The
+    /// spawn records one per folder it queries; every per-folder event —
+    /// success or failure — settles one, so zero means the fan-out has
+    /// quiesced and the counted row is final. Session memory; never
+    /// persisted.
+    pub outstanding_counts: usize,
     /// A pill index restored from `LibraryPosition::feed_selected_group` that
     /// still awaits resolution into `selection` against the counted folders
     /// (the pending-selection resolve path). Restore-only session memory:

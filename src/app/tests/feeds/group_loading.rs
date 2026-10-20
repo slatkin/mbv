@@ -248,7 +248,7 @@ fn send_folder_count(app: &mut App, parent_id: &str, folder_id: &str, count: usi
             lib_idx: 0,
             parent_id: parent_id.to_string(),
             folder_id: folder_id.to_string(),
-            count,
+            count: Some(count),
         },
     ));
 }
@@ -362,15 +362,18 @@ fn listing_and_counts_derive_the_pill_row_without_any_video_fetch(make_home_vide
     assert!(!state.loading, "no video fetch is outstanding");
 }
 
-/// Contract (tasks.md 3.3, B's hand-off note): the count-completion arm
-/// resolves a pending restored pill index into the concrete folder
-/// selection — the index could not resolve while the counts were empty.
+/// Contract (tasks.md 3.3, B's hand-off note): once the count fan-out has
+/// quiesced — every folder's report landed, success or failure — the count
+/// arm resolves a pending restored pill index into the concrete folder
+/// selection and consumes the index.
 #[rstest]
 fn folder_counts_event_resolves_the_pending_pill_index(make_home_video_app: App) {
     let mut app = make_home_video_app;
     let active = seed_home_video_root_loaded(&mut app);
     if let Some(state) = app.libs[0].feed_home_video.as_mut() {
         state.restored_group = Some(1);
+        // The spawn's quiescence accounting: one owed report.
+        state.outstanding_counts = 1;
     }
 
     send_folder_count(&mut app, "lib-youtube", "folder-active", 2);
@@ -379,6 +382,62 @@ fn folder_counts_event_resolves_the_pending_pill_index(make_home_video_app: App)
     assert_eq!(
         state.selection,
         FeedHomeVideoSelection::Folder(active.id.clone())
+    );
+}
+
+/// Regression (review P1 on 96abfa239..ab4b558bb): the parallel fan-out's
+/// per-folder events arrive in any order, and a restored pill index must not
+/// bind against a partially arrived count row — folder B's early report must
+/// not make restored index 1 (the listing-first folder's pill) select B. The
+/// index resolves only when the fan-out has quiesced, and is consumed then
+/// even if it names no pill.
+#[rstest]
+fn out_of_order_count_arrivals_do_not_misbind_a_restored_pill_index(make_home_video_app: App) {
+    let mut app = make_home_video_app;
+    // Listing order: A first, B second — the restored index 1 names A's pill.
+    app.handle_lib_event(LibEvent::Browse(BrowseEvent::Loaded {
+        lib_idx: 0,
+        parent_id: "lib-youtube".into(),
+        level: Box::new(youtube_root_level(
+            ServerRows::loaded(2, 2),
+            vec![
+                make_root_folder("folder-a", "Channel A"),
+                make_root_folder("folder-b", "Channel B"),
+            ],
+            false,
+        )),
+    }));
+    let state = app.libs[0].feed_home_video.as_mut().unwrap();
+    state.restored_group = Some(1);
+    // The spawn's quiescence accounting: two owed reports.
+    state.outstanding_counts = 2;
+
+    // B's count lands first: the row is not final yet.
+    send_folder_count(&mut app, "lib-youtube", "folder-b", 1);
+
+    let state = app.libs[0].feed_home_video.as_ref().unwrap();
+    assert_eq!(
+        state.selection,
+        FeedHomeVideoSelection::All,
+        "a partial count row must not bind the restored index"
+    );
+    assert_eq!(
+        state.restored_group,
+        Some(1),
+        "the index stays pending until the fan-out quiesces"
+    );
+
+    // A's report settles the fan-out; the final row is [A, B].
+    send_folder_count(&mut app, "lib-youtube", "folder-a", 1);
+
+    let state = app.libs[0].feed_home_video.as_ref().unwrap();
+    assert_eq!(
+        state.selection,
+        FeedHomeVideoSelection::Folder("folder-a".into())
+    );
+    assert_eq!(
+        state.restored_group, None,
+        "the index is consumed once it resolves"
     );
 }
 
