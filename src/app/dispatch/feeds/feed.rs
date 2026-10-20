@@ -485,24 +485,40 @@ impl App {
         self.log_feed_home_video_state(lib_idx, "listing_completed");
     }
 
-    /// The refresh-completion hook (design D2): the refreshed folder listing
-    /// invalidates the whole session cache — the current selection refetches
-    /// through the shown projection's lazy-fetch trigger, and unloaded pills
-    /// stay unloaded. The counts refresh with the listing (design D2): a
-    /// fully paginated refresh clears the count map, so the fan-out below
-    /// re-queries every folder; a partial one (the library total grew since
-    /// the last full pagination, so `spawn_refresh` fetched only the first
-    /// page) keeps the map and commits the fan-out for the folders it can
-    /// see — per-folder inserts update those entries without shrinking the
-    /// row (review P2, b603f329b..9e454b62d: page-1 folders must not decide
-    /// the whole row), and the re-appended later pages' counts re-query at
-    /// the listing-completion transition, whose fan-out covers every folder
-    /// even when the map already looks fully covered. The pill-index
-    /// resolution stays gated on the completed listing, so neither fan-out
-    /// can misbind it.
-    pub(in crate::app) fn complete_feed_home_video_refresh(&mut self, lib_idx: usize) {
-        if !self.is_feed_home_video_library(lib_idx) {
-            return;
+    /// The refresh-completion hook for a refreshed hidden root listing
+    /// (design D2): returns whether the refreshed level was the feed-view
+    /// library's single root listing with the given parent — the caller's
+    /// pagination re-arm consumes that disposition. Inside, the refreshed
+    /// folder listing invalidates the whole session cache — the current
+    /// selection refetches through the shown projection's lazy-fetch trigger,
+    /// and unloaded pills stay unloaded. The counts refresh with the listing
+    /// (design D2): a fully paginated refresh clears the count map, so the
+    /// fan-out below re-queries every folder; a partial one (the library
+    /// total grew since the last full pagination, so `spawn_refresh` fetched
+    /// only the first page) keeps the map and commits the fan-out for the
+    /// folders it can see — per-folder inserts update those entries without
+    /// shrinking the row (review P2, b603f329b..9e454b62d: page-1 folders
+    /// must not decide the whole row), and the re-appended later pages'
+    /// counts re-query at the listing-completion transition, whose fan-out
+    /// covers every folder even when the map already looks fully covered.
+    /// The pill-index resolution stays gated on the completed listing, so
+    /// neither fan-out can misbind it.
+    pub(in crate::app) fn complete_feed_home_video_refresh(
+        &mut self,
+        lib_idx: usize,
+        parent_id: &str,
+    ) -> bool {
+        // One guard site for the refreshed hidden root listing: the library
+        // must be a feed-view library and the refreshed level must still be
+        // its single root level with the same parent — a deeper level's
+        // refresh or a foreign parent is not the hidden listing. The guard
+        // lives here alone, so a caller-side predicate cannot drift from it.
+        let is_feed_root_refresh = self.is_feed_home_video_library(lib_idx)
+            && self.libs.get(lib_idx).is_some_and(|lib| {
+                lib.nav_stack.len() == 1 && lib.nav_stack[0].parent_id == parent_id
+            });
+        if !is_feed_root_refresh {
+            return false;
         }
         let fully_loaded = self.feed_home_video_root_listing_completed(lib_idx);
         if let Some(state) = self
@@ -522,6 +538,7 @@ impl App {
         // partial listing could not see.
         self.spawn_feed_home_video_folder_counts(lib_idx);
         self.log_feed_home_video_state(lib_idx, "refresh_completed");
+        true
     }
 
     /// The root folder listing has fully paginated: every counted folder is

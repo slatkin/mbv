@@ -164,7 +164,7 @@ impl App {
         self.maybe_capture_library_total_and_apply_default_pill(lib_idx);
         self.maybe_auto_push_tv_season_level(lib_idx);
         self.maybe_auto_push_music_group_level(lib_idx);
-        self.maybe_complete_feed_home_video_listing(lib_idx);
+        self.complete_hidden_root_listing(lib_idx);
         self.maybe_fetch_next_page(
             lib_idx,
             self.libs[lib_idx]
@@ -274,7 +274,7 @@ impl App {
         });
         self.normalize_current_browse_level_items(lib_idx);
         self.start_or_supersede_music_grouping(lib_idx);
-        self.maybe_complete_feed_home_video_listing(lib_idx);
+        self.complete_hidden_root_listing(lib_idx);
         self.maybe_fetch_next_page(
             lib_idx,
             self.libs[lib_idx]
@@ -282,6 +282,19 @@ impl App {
                 .last()
                 .map_or(0, |l| l.resting().cursor()),
         );
+    }
+
+    /// The hidden-root-listing completion hook: some collection kinds hide a
+    /// root listing inside the generic browse flow and owe work when it
+    /// completes. One call per generic handler (`Loaded`, `PageAppended`);
+    /// the hook dispatches per kind internally. The feed home-video group
+    /// view is the current kind: its root is a folder listing whose
+    /// completion drives the count fan-out and the restored pill index
+    /// (design D2/D3). A refreshed hidden root has its own hook
+    /// (`complete_feed_home_video_refresh`), which owns the refreshed-root
+    /// guard and returns the disposition the pagination re-arm needs.
+    pub(in crate::app) fn complete_hidden_root_listing(&mut self, lib_idx: usize) {
+        self.maybe_complete_feed_home_video_listing(lib_idx);
     }
 
     pub(super) fn handle_lib_refreshed(
@@ -315,16 +328,14 @@ impl App {
         self.normalize_current_browse_level_items(lib_idx);
         self.start_or_supersede_music_grouping(lib_idx);
         // A feed-view root listing refresh re-reads the folder listing (design
-        // D2): the session cache drops and the current selection refetches
-        // through the shown projection's lazy-fetch trigger; unloaded pills
-        // stay unloaded.
-        let is_feed_root_refresh = self.is_feed_home_video_library(lib_idx)
-            && self.libs.get(lib_idx).is_some_and(|lib| {
-                lib.nav_stack.len() == 1 && lib.nav_stack[0].parent_id == parent_id
-            });
-        if is_feed_root_refresh {
-            self.complete_feed_home_video_refresh(lib_idx);
-        }
+        // D2): the session cache drops, the counts re-query, and the current
+        // selection refetches through the shown projection's lazy-fetch
+        // trigger; unloaded pills stay unloaded. The hook owns the guard —
+        // the feed-view library check plus the single-root parent match — and
+        // returns whether the refreshed root was the hidden listing, so the
+        // pagination re-arm below sees one disposition instead of a
+        // per-kind predicate that must agree with the hook's own guard.
+        let is_feed_root_refresh = self.complete_feed_home_video_refresh(lib_idx, parent_id);
         self.spawn_all_items_prefetch(lib_idx);
         // A group switch (music) or pill switch / stop-refresh (TV series
         // root) refreshes the level in place -- no `Loaded` event, no
