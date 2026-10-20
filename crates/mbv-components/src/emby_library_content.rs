@@ -245,6 +245,14 @@ impl EmbyLibraryContent {
         self.on_latest()
     }
 
+    /// The browse rows the last content push installed, for shell-side work
+    /// keyed to the owner's now-authoritative cursor (the nearby-poster
+    /// prefetch) without a second clone of the pushed list.
+    #[must_use]
+    pub fn browse_items(&self) -> &[EmbyItem] {
+        &self.browse_items
+    }
+
     pub fn set_latest_marker(&mut self, marker: bool) {
         self.latest_marker = marker;
     }

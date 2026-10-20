@@ -164,12 +164,12 @@ impl App {
         &self,
         idx: usize,
     ) -> (Option<String>, bool, String, String) {
-        let is_feed_view = self
-            .config
-            .lock()
-            .unwrap()
-            .feed_view_libraries
-            .contains(&self.libs[idx].library.name.to_lowercase());
+        // A feed-view library's root is its folder listing: the aggregate-era
+        // `Video`/unplayed-only/DateCreated defaults retired with the
+        // aggregate (design D5). The group view seeds its root through
+        // `ensure_feed_home_video_root_loaded`; keeping the old defaults here
+        // would make a post-reset refresh fetch videos onto the root and
+        // destroy the pill source (review P2 on task 5.1, 46b0ac739).
         match self.libs[idx].library.collection_type.as_str() {
             "movies" => (
                 Some("Movie".to_string()),
@@ -181,12 +181,6 @@ impl App {
                 Some("Series".to_string()),
                 false,
                 "SortName".to_string(),
-                "Ascending".to_string(),
-            ),
-            _ if is_feed_view => (
-                Some("Video".to_string()),
-                true,
-                "DateCreated".to_string(),
                 "Ascending".to_string(),
             ),
             _ => (None, false, "SortName".to_string(), "Ascending".to_string()),

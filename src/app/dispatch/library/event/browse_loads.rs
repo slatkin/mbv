@@ -20,18 +20,9 @@ impl App {
             BrowseEvent::Refreshed {
                 lib_idx,
                 parent_id,
-                item_types,
-                unplayed_only,
                 items,
                 total_count,
-            } => self.handle_lib_refreshed(
-                lib_idx,
-                &parent_id,
-                item_types.as_deref(),
-                unplayed_only,
-                items,
-                total_count,
-            ),
+            } => self.handle_lib_refreshed(lib_idx, &parent_id, items, total_count),
             BrowseEvent::SearchItemsLoaded {
                 lib_idx,
                 parent_id,
@@ -42,12 +33,21 @@ impl App {
                 parent_id,
                 items,
             } => self.handle_all_items_prefetched(lib_idx, &parent_id, items),
-            BrowseEvent::FeedHomeVideoAggregated {
+            BrowseEvent::FeedHomeVideoSelectionLoaded {
                 lib_idx,
                 parent_id,
-                all_items,
-                groups,
-            } => self.handle_feed_home_video_aggregated(lib_idx, &parent_id, all_items, groups),
+                selection,
+                items,
+            } => {
+                self.handle_feed_home_video_selection_loaded(lib_idx, &parent_id, selection, items);
+            }
+            BrowseEvent::FeedHomeVideoFolderCountLoaded {
+                lib_idx,
+                parent_id,
+                folder_id,
+                count,
+            } => self
+                .handle_feed_home_video_folder_count_loaded(lib_idx, &parent_id, &folder_id, count),
             BrowseEvent::NavigateTo {
                 lib_idx,
                 landing,
@@ -155,7 +155,7 @@ impl App {
         self.maybe_capture_library_total_and_apply_default_pill(lib_idx);
         self.maybe_auto_push_tv_season_level(lib_idx);
         self.maybe_auto_push_music_group_level(lib_idx);
-        self.maybe_aggregate_feed_after_loaded(lib_idx);
+        self.complete_hidden_root_listing(lib_idx);
         self.maybe_fetch_next_page(
             lib_idx,
             self.libs[lib_idx]
@@ -265,7 +265,7 @@ impl App {
         });
         self.normalize_current_browse_level_items(lib_idx);
         self.start_or_supersede_music_grouping(lib_idx);
-        self.maybe_aggregate_feed_after_page_append(lib_idx, parent_id);
+        self.complete_hidden_root_listing(lib_idx);
         self.maybe_fetch_next_page(
             lib_idx,
             self.libs[lib_idx]
@@ -275,48 +275,70 @@ impl App {
         );
     }
 
+    /// The hidden-root-listing completion hook: some collection kinds hide a
+    /// root listing inside the generic browse flow and owe work when it
+    /// completes. One call per generic handler (`Loaded`, `PageAppended`);
+    /// the hook dispatches per kind internally. The feed home-video group
+    /// view is the current kind: its root is a folder listing whose
+    /// completion drives the count fan-out and the restored pill index
+    /// (design D2/D3). A refreshed hidden root has its own hook
+    /// (`complete_feed_home_video_refresh`), which owns the refreshed-root
+    /// guard and returns the disposition the pagination re-arm needs.
+    pub(in crate::app) fn complete_hidden_root_listing(&mut self, lib_idx: usize) {
+        self.maybe_complete_feed_home_video_listing(lib_idx);
+    }
+
     pub(super) fn handle_lib_refreshed(
         &mut self,
         lib_idx: usize,
         parent_id: &str,
-        item_types: Option<&str>,
-        unplayed_only: bool,
         items: Vec<EmbyItem>,
         total_count: usize,
     ) {
-        let is_feed_video_refresh = self.is_feed_home_video_library(lib_idx)
-            && item_types == Some("Video")
-            && unplayed_only;
-        if !is_feed_video_refresh {
-            let mut items = Some(items);
-            let updated = self.update_current_browse_level(lib_idx, parent_id, false, |last| {
-                last.items = items.take().unwrap();
-                last.rows = ServerRows::loaded(last.items.len(), total_count);
-                last.loading = false;
-            });
-            if updated {
-                let grouped_music = self.is_grouped_music_library(lib_idx);
-                if let Some(level) = self
-                    .libs
-                    .get_mut(lib_idx)
-                    .and_then(|lib| lib.nav_stack.last_mut())
-                {
-                    crate::app::dispatch::library::browse::retain_grouped_music_level_items(
-                        level,
-                        grouped_music,
-                    );
-                }
+        let mut items = Some(items);
+        let updated = self.update_current_browse_level(lib_idx, parent_id, false, |last| {
+            last.items = items.take().unwrap();
+            last.rows = ServerRows::loaded(last.items.len(), total_count);
+            last.loading = false;
+        });
+        if updated {
+            let grouped_music = self.is_grouped_music_library(lib_idx);
+            if let Some(level) = self
+                .libs
+                .get_mut(lib_idx)
+                .and_then(|lib| lib.nav_stack.last_mut())
+            {
+                crate::app::dispatch::library::browse::retain_grouped_music_level_items(
+                    level,
+                    grouped_music,
+                );
             }
         }
         self.normalize_current_browse_level_items(lib_idx);
         self.start_or_supersede_music_grouping(lib_idx);
-        self.maybe_refresh_feed_groups_after_refresh(lib_idx);
+        // A feed-view root listing refresh re-reads the folder listing (design
+        // D2): the session cache drops, the counts re-query, and the current
+        // selection refetches through the shown projection's lazy-fetch
+        // trigger; unloaded pills stay unloaded. The hook owns the guard —
+        // the feed-view library check plus the single-root parent match — and
+        // returns whether the refreshed root was the hidden listing, so the
+        // pagination re-arm below sees one disposition instead of a
+        // per-kind predicate that must agree with the hook's own guard.
+        let is_feed_root_refresh = self.complete_feed_home_video_refresh(lib_idx, parent_id);
         self.spawn_all_items_prefetch(lib_idx);
         // A group switch (music) or pill switch / stop-refresh (TV series
         // root) refreshes the level in place -- no `Loaded` event, no
         // App-side cursor movement -- so re-arm completion pagination here;
-        // see `is_music_group_view` and `is_tv_series_root_view`.
-        if self.is_music_group_view(lib_idx) || self.is_tv_series_root_view(lib_idx) {
+        // see `is_music_group_view` and `is_tv_series_root_view`. A feed-view
+        // root listing refresh that landed only part of the folders (the
+        // library total grew since the last full pagination) resumes its
+        // unconditional pagination the same way: the refresh-completion work
+        // waits for the full listing, and the final page append completes it
+        // (review P2, b603f329b..9e454b62d).
+        if self.is_music_group_view(lib_idx)
+            || self.is_tv_series_root_view(lib_idx)
+            || is_feed_root_refresh
+        {
             self.maybe_fetch_next_page(lib_idx, 0);
         }
     }
@@ -472,11 +494,11 @@ impl App {
         // saves that already have `library_total` set (see the function's
         // own early-return checks).
         self.maybe_capture_library_total_and_apply_default_pill(lib_idx);
-        self.maybe_refresh_feed_groups_after_refresh(lib_idx);
+        let feed_counted_ids = self.feed_home_video_counted_folder_ids(lib_idx);
         let restored = self
             .libs
             .get(lib_idx)
-            .map(mbv_ui_model::library_tab::LibraryTab::library_position_snapshot);
+            .map(|lib| lib.library_position_snapshot(&feed_counted_ids));
         if restored.as_ref() != self.saved_library_position(lib_idx).as_ref()
             && let Some(restored) = restored
         {

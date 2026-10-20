@@ -192,8 +192,6 @@ impl App {
             visualizer: None,
             visualizer_window: mbv_visualizer::StereoSampleWindow::default(),
             visualizer_glyph: init.visualizer_glyph,
-            last_played_item_id: None,
-            last_played_completed: false,
             queue_card_projection: mbv_ui_model::playback::QueueCardProjection::default(),
             title_log_gate: crate::app::state::projection::card::TitleLogGate::default(),
             dim_backdrop_active: false,

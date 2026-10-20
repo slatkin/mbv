@@ -241,6 +241,31 @@ fn artist_audio_tracks_request_uses_artist_ids_query() {
     assert_eq!(tracks[1].name, "Song Two");
 }
 
+/// feed-view-lazy-folder-groups task 2.1, design D1 (b): the per-folder
+/// pill-membership count is one count-only query against the user-scoped
+/// route, and the count comes from `TotalRecordCount`, not the returned rows.
+#[test]
+fn folder_video_count_requests_videos_only_and_reads_total_record_count() {
+    let (mut client, http) = mock_client(TEST_URL);
+    client.user_id = "user".into();
+    http.respond(200, r#"{"Items":[],"TotalRecordCount":12}"#);
+
+    let count = client.get_folder_video_count("folder-3").unwrap();
+
+    let request = &http.requests()[0];
+    assert!(request.starts_with("GET /Users/user/Items?"));
+    assert!(request.contains("ParentId=folder-3"));
+    assert!(request.contains("Recursive=true"));
+    assert!(request.contains("IncludeItemTypes=Video"));
+    assert!(request.contains("Limit=1"));
+    // The shared sorted-items route carries the browse sort and no explicit
+    // EnableTotalRecordCount — Emby returns TotalRecordCount for this
+    // endpoint by default, which every mbv browse fetch already relies on.
+    assert!(request.contains("SortBy=DateCreated"));
+    assert!(request.contains("SortOrder=Ascending"));
+    assert_eq!(count, 12);
+}
+
 #[test]
 fn artist_audio_tracks_error_propagates() {
     // Unsupported or rejected artist-ID queries surface as Err so the

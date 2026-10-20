@@ -3,7 +3,6 @@ use mbv_core::service_runtime::SetupGeneration;
 use mbv_emby_model::EmbyItem;
 use mbv_queue::QueueItem;
 use mbv_ui_model::browse::{AlbumPathPart, AlbumSearchEntry, BrowseLevel};
-use mbv_ui_model::feed::FeedHomeVideoGroup;
 
 /// Per-kind landing payload for cross-surface item navigation (design D2 of
 /// change `per-destination-item-navigation`): the Movie/generic arm keeps the
@@ -95,8 +94,6 @@ pub enum BrowseEvent {
     Refreshed {
         lib_idx: usize,
         parent_id: String,
-        item_types: Option<String>,
-        unplayed_only: bool,
         items: Vec<EmbyItem>,
         total_count: usize,
     },
@@ -110,11 +107,30 @@ pub enum BrowseEvent {
         parent_id: String,
         items: Vec<EmbyItem>,
     },
-    FeedHomeVideoAggregated {
+    /// Completion of one lazy per-selection fetch (design D2 of change
+    /// `feed-view-lazy-folder-groups`): the ranged video listing for the All
+    /// root or one folder pill, fetched at selection/show time. The dispatch
+    /// arm stale-guards the result against the library's current selection
+    /// and root parent before it stores it in the session cache.
+    FeedHomeVideoSelectionLoaded {
         lib_idx: usize,
         parent_id: String,
-        all_items: Vec<EmbyItem>,
-        groups: Vec<FeedHomeVideoGroup>,
+        selection: mbv_ui_model::feed::FeedHomeVideoSelection,
+        items: Vec<EmbyItem>,
+    },
+    /// Completion of one per-folder count query (design D1 (b) of change
+    /// `feed-view-lazy-folder-groups`): the videos-only count for one folder
+    /// directly under the root listing, sent by the folder's own fan-out
+    /// thread so pills fill in incrementally. Every queried folder reports
+    /// exactly once — `count` is `None` when the query failed — so the
+    /// dispatch arm can tell when the fan-out has quiesced. The arm
+    /// stale-guards the result against the library's current root parent
+    /// before it records the count in the pill-membership map.
+    FeedHomeVideoFolderCountLoaded {
+        lib_idx: usize,
+        parent_id: String,
+        folder_id: String,
+        count: Option<usize>,
     },
     /// `switch_tab`: true for user-initiated navigation (switch to the lib tab),
     /// false for startup restore (just populate `nav_stack`, stay on current tab).

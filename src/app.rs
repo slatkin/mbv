@@ -51,7 +51,7 @@ use mbv_ui_model::context_menu::MultiSelectKind;
 use mbv_ui_model::context_menu::{ContextAction, ContextMenuAnchor, ContextMenuEntry};
 use mbv_ui_model::daemon_lost::DaemonLostModal;
 use mbv_ui_model::feed::{
-    FeedHomeVideoGroup, FeedHomeVideoState, IdleFeed, SavePlaylistDialog, SavePlaylistStage,
+    FeedHomeVideoSelection, FeedHomeVideoState, IdleFeed, SavePlaylistDialog, SavePlaylistStage,
 };
 use mbv_ui_model::library_tab::LibraryTab;
 pub(in crate::app) use mbv_ui_model::overlay::SidebarId;

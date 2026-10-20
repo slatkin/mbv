@@ -81,8 +81,6 @@ impl App {
 
         self.local_view = bootstrap.local_view;
         self.reset_local_daemon_queue_view();
-        self.last_played_item_id = bootstrap.last_played_item_id;
-        self.last_played_completed = bootstrap.last_played_completed;
         self.player_endpoint = Some(DaemonEndpoint::Local);
         self.advance_queue_epoch();
         self.sync_subtitle_prefs_to_player();

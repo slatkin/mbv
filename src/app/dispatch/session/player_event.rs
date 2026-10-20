@@ -261,15 +261,10 @@ impl App {
         let deleted_selection = self.pending_delete_selection.take();
         let is_delete =
             deleted_slot.is_some() || deleted_selection.as_ref().is_some_and(|s| !s.is_empty());
-        let preserve_local_state = !self.has_direct_remote_queue();
         match slot_id {
             Some(slot_id) => {
                 if !is_delete {
                     self.apply_stopped_slot_progress(slot_id, position_ticks, played);
-                }
-                if preserve_local_state && let Some(slot) = self.playback_queue().slot(slot_id) {
-                    self.last_played_item_id = Some(slot.item.id().to_string());
-                    self.last_played_completed = played;
                 }
             }
             None => {
@@ -454,11 +449,6 @@ impl App {
         };
         if !self.queue_cursor_held_by_user() {
             self.playback_queue_mut().set_cursor(adjusted);
-        }
-        if !self.has_direct_remote_queue()
-            && let Some(item) = self.playback_queue().emby_item_at(adjusted)
-        {
-            self.last_played_item_id = Some(item.id.clone());
         }
     }
 

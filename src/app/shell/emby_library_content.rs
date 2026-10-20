@@ -18,9 +18,12 @@ use super::Model;
 use super::TabSelection;
 use mbv_components::emby_library_content::EmbyLibraryIdentity;
 use mbv_components::emby_library_content::{BrowserOwnerPush, EmbyLibraryContent};
+use mbv_components::library_panel::LibraryPanel;
 use mbv_emby_model::EmbyItem;
 use mbv_queue::ServiceKind;
 use mbv_ui_model::library::{LibraryKey, LibraryKind};
+use mbv_ui_msg::{ComponentId, Msg, UserEvent};
+use tuirealm::application::Application;
 
 impl Model {
     /// The active tab's migrated-owner identity, when the active Emby
@@ -78,7 +81,7 @@ impl Model {
             feed_group: lib
                 .feed_home_video
                 .as_ref()
-                .map(mbv_ui_model::feed::FeedHomeVideoState::selected_group_index),
+                .map(|_| self.app.feed_home_video_selected_group_index(index)),
         }
     }
 
@@ -126,6 +129,18 @@ impl Model {
         // is painted.
         self.app.ensure_feed_home_video_group_level(index);
         let feed_group_view = self.app.is_feed_home_video_group_view(index);
+        // Lazy per-selection fetch (design D2 of change
+        // `feed-view-lazy-folder-groups`): a shown selection whose items are
+        // not cached fetches here. The Latest (New) pill is exempt — the group
+        // lists must not load merely because New is active (spec
+        // feed-home-video-group-view, "The New pill SHALL NOT depend on any
+        // group list being loaded"). Read fresh: the owner push below can
+        // flip Latest mode, and the later Latest-marker/request decisions
+        // must see the post-push answer.
+        if feed_group_view && !self.active_emby_library_owner_is_latest() {
+            self.app
+                .ensure_feed_home_video_selection_loaded(index, false);
+        }
         let show_letter_pills = self.app.should_show_letter_pills(index);
         let selector_mode = if feed_group_view {
             mbv_components::emby_library_content::EmbySelectorMode::FeedGroups
@@ -162,18 +177,16 @@ impl Model {
         // Keep the painted names and launch identities aligned from one
         // structural source; the snapshot resolves a selected group to its
         // folder content ID, never to the display name.
-        let (feed_groups, feed_group_ids): (Vec<String>, Vec<String>) = self.app.libs[index]
-            .feed_home_video
-            .as_ref()
-            .map(|s| {
-                s.groups
-                    .iter()
-                    .map(|g| (g.folder.name.clone(), g.folder.id.clone()))
-                    .unzip()
-            })
-            .unwrap_or_default();
+        // Pill membership follows the root listing and the per-folder video
+        // counts (design D3): a folder with no counted videos offers no pill,
+        // so the fan-out's empty count map leaves only New and All until it
+        // fills (task 3.3 owns the count fan-out).
+        let (feed_groups, feed_group_ids): (Vec<String>, Vec<String>) = self
+            .app
+            .counted_folder_iter(index)
+            .map(|folder| (folder.name.clone(), folder.id.clone()))
+            .unzip();
         let feed_group_cursor = self.app.feed_home_video_selected_group_index(index);
-        let poster_window = items.clone();
         let library_id = self.app.libs[index].library.id.clone();
         let latest_items = self
             .tv_latest_snapshots
@@ -217,7 +230,7 @@ impl Model {
             owner.cursor()
         });
         if let Some(cursor) = landed_cursor {
-            self.app.fetch_nearby_movie_posters(&poster_window, cursor);
+            self.fetch_owner_nearby_posters(key, cursor);
         }
         // Latest is the default pill, so a default landing — first open or
         // launch restore — fetches the lazy Latest list here (spec
@@ -239,19 +252,42 @@ impl Model {
         }
     }
 
+    /// Read-only borrow of the owner installed for `key` inside the mounted
+    /// `LibraryPanel` (the immutable twin of `update_emby_library_owner`):
+    /// the one lookup/downcast chain every `EmbyLibraryContent` reader
+    /// reuses instead of repeating it. An associated function over the
+    /// application rather than a `&self` method so a caller holding the
+    /// returned borrow can still reach `&mut self.app` — `application` and
+    /// `app` are disjoint `Model` fields, which a `&self` receiver would
+    /// fuse into one borrow.
+    fn emby_library_owner<'a>(
+        application: &'a Application<ComponentId, Msg, UserEvent>,
+        key: &LibraryKey,
+    ) -> Option<&'a EmbyLibraryContent> {
+        application
+            .get_component(&ComponentId::Library)
+            .and_then(|component| component.as_any().downcast_ref::<LibraryPanel>())
+            .and_then(|panel| panel.owner(key))
+            .and_then(|owner| owner.as_any().downcast_ref::<EmbyLibraryContent>())
+    }
+
+    /// The nearby-poster prefetch at the owner's now-authoritative cursor:
+    /// the owner holds the pushed list verbatim (`set_content` stores
+    /// `push.items`), so the window reads it instead of a second clone of
+    /// the shell-side snapshot (#287).
+    fn fetch_owner_nearby_posters(&mut self, key: &LibraryKey, cursor: usize) {
+        let owner_items =
+            Self::emby_library_owner(&self.application, key).map(EmbyLibraryContent::browse_items);
+        if let Some(items) = owner_items {
+            self.app.fetch_nearby_movie_posters(items, cursor);
+        }
+    }
+
     pub(in crate::app) fn active_emby_library_owner_is_latest(&self) -> bool {
         let Some((_, key, _)) = self.active_emby_library_owner() else {
             return false;
         };
-        self.application
-            .get_component(&mbv_ui_msg::ComponentId::Library)
-            .and_then(|component| {
-                component
-                    .as_any()
-                    .downcast_ref::<mbv_components::library_panel::LibraryPanel>()
-            })
-            .and_then(|panel| panel.owner(&key))
-            .and_then(|owner| owner.as_any().downcast_ref::<EmbyLibraryContent>())
+        Self::emby_library_owner(&self.application, &key)
             .is_some_and(EmbyLibraryContent::latest_mode)
     }
 }

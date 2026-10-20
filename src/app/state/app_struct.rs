@@ -303,8 +303,6 @@ pub struct App {
     /// `RecursiveAlbumActivated` drain. Keyed by the target library so a
     /// foreign library's activation never adopts it.
     pub(in crate::app) pending_track_selection: Option<(usize, String)>,
-    pub(in crate::app) last_played_item_id: Option<String>,
-    pub(in crate::app) last_played_completed: bool,
     /// The queue visual slot's image projection: the queue
     /// projection issues every fetch for the now-playing item and projects
     /// the slot's image state; the painter reads this and paints. Refreshed

@@ -270,9 +270,6 @@ impl App {
         app.launched_as_remote = true;
         debug_assert!(app.player_endpoint.is_some(), "player-endpoint invariant");
         if endpoint.is_local() {
-            let bootstrap = local_daemon_bootstrap.unwrap();
-            app.last_played_item_id = bootstrap.last_played_item_id;
-            app.last_played_completed = bootstrap.last_played_completed;
             app.try_auto_reconnect();
         }
         initialize_service_startup(

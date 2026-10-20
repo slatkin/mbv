@@ -122,7 +122,6 @@ impl App {
             )
         };
         tracing::info!(name: "player.quit.started", target: "player", requested = quit_requested, was_playing, current_index = current_idx, position_ticks, last_valid_position_ticks = last_valid_pos, timeout_seconds = quit_timeout.as_secs(), "player quit started");
-        self.flush_playing_position_on_teardown(was_playing, current_idx);
         // Coordinated shutdown always uses the home link, even when it is
         // suspended behind a routed remote player. Flush settings first: the
         // daemon reads the current lifetime policy when it handles the request.
@@ -185,24 +184,6 @@ impl App {
                 tracing::warn!(name: "auto_reconnect.target_persist.failed", target: "auto_reconnect", error = %e, "auto-reconnect state persistence failed");
             }
         }
-    }
-
-    /// Update the playing item's position before saving: the
-    /// `PlayerEvent::Stopped` that carries this update is never processed after
-    /// the event loop breaks, and `last_valid_pos` (never zeroed during track
-    /// transitions) is preferred over `position_ticks` (transiently 0 when
-    /// `QueueSession` advances to the next track).
-    fn flush_playing_position_on_teardown(&mut self, was_playing: bool, current_idx: usize) {
-        if !was_playing || self.has_direct_remote_queue() {
-            return;
-        }
-        let Some(slot) = self.local_view.slots().get(current_idx) else {
-            return;
-        };
-        let Some(item) = slot.item.as_emby() else {
-            return;
-        };
-        self.last_played_item_id = Some(item.id.clone());
     }
 
     /// Invoke coordinated shutdown over the home link (current or suspended).

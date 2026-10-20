@@ -24,7 +24,8 @@ impl App {
             return;
         };
         let library_id = lib.library.id.clone();
-        let position = lib.library_position_snapshot();
+        let counted_ids = self.feed_home_video_counted_folder_ids(lib_idx);
+        let position = lib.library_position_snapshot(&counted_ids);
         self.library_position_state
             .libraries
             .insert(library_id, position);
@@ -81,11 +82,12 @@ impl App {
         if lib_idx >= self.libs.len() {
             return;
         }
+        let feed_counted_ids = self.feed_home_video_counted_folder_ids(lib_idx);
         let current = self
             .libs
             .get(lib_idx)
             .filter(|lib| !lib.nav_stack.is_empty())
-            .map(mbv_ui_model::library_tab::LibraryTab::library_position_snapshot);
+            .map(|lib| lib.library_position_snapshot(&feed_counted_ids));
         // Grouped Music owns its tree selection/expansion locally in its
         // retained content owner (destination components stay mounted and
         // keep local state across tab changes). The legacy nav_stack
@@ -158,16 +160,14 @@ impl App {
     fn activate_unchanged_library_position(&mut self, lib_idx: usize, current_is_none: bool) {
         if current_is_none {
             self.ensure_lib_loaded_for(lib_idx);
-        } else if self.is_feed_home_video_library(lib_idx) {
-            if let Some(lib) = self.libs.get_mut(lib_idx)
-                && lib.feed_home_video.is_none()
-            {
-                lib.feed_home_video = Some(FeedHomeVideoState {
-                    loading: true,
-                    ..FeedHomeVideoState::default()
-                });
-            }
-            self.maybe_refresh_feed_groups_after_refresh(lib_idx);
+        } else if self.is_feed_home_video_library(lib_idx)
+            && let Some(lib) = self.libs.get_mut(lib_idx)
+            && lib.feed_home_video.is_none()
+        {
+            lib.feed_home_video = Some(FeedHomeVideoState {
+                loading: true,
+                ..FeedHomeVideoState::default()
+            });
         }
     }
 

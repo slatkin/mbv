@@ -4,18 +4,13 @@ use crate::app::state::events::{
     SeriesEvent,
 };
 use crate::app::{
-    AlbumIndex, AlbumIndexState, AlbumSearchEntry, App, FeedHomeVideoState,
-    dispatch::notify::ToastSeverity,
+    AlbumIndex, AlbumIndexState, AlbumSearchEntry, App, dispatch::notify::ToastSeverity,
 };
 use mbv_emby_model::EmbyItem;
 use mbv_ui_model::ui_util::sort_audio_tracks;
 
 mod audiobookshelf;
 mod browse_loads;
-
-fn feed_home_video_selection(state: &FeedHomeVideoState) -> (usize, usize, usize) {
-    (state.selected_group, state.video_cursor, state.video_scroll)
-}
 
 /// Each variant keeps its own documented no-op arm so a future
 /// `ModelContentEvent` variant that must reach the shell drain cannot
@@ -167,36 +162,6 @@ impl App {
         // The whole-library corpus is exactly what a pending Series
         // landing was waiting for (U2 correction).
         self.retry_pending_series_landing(lib_idx, parent_id);
-    }
-
-    fn handle_feed_home_video_aggregated(
-        &mut self,
-        lib_idx: usize,
-        parent_id: &str,
-        all_items: Vec<mbv_emby_model::EmbyItem>,
-        groups: Vec<mbv_ui_model::feed::FeedHomeVideoGroup>,
-    ) {
-        if let Some(lib) = self.libs.get_mut(lib_idx)
-            && lib
-                .nav_stack
-                .first()
-                .is_some_and(|root| root.parent_id == parent_id)
-        {
-            let (selected_group, video_cursor, video_scroll) = lib
-                .feed_home_video
-                .as_ref()
-                .map_or((0, 0, 0), feed_home_video_selection);
-            lib.feed_home_video = Some(FeedHomeVideoState {
-                all_items,
-                groups,
-                loading: false,
-                selected_group,
-                video_cursor,
-                video_scroll,
-            });
-        }
-        self.clamp_feed_home_video_state(lib_idx);
-        self.log_feed_home_video_state(lib_idx, "aggregated");
     }
 
     fn cache_nonempty_album_artist(&mut self, album_id: &str, artist: &str) {
