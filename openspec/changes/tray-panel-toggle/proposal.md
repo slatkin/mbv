@@ -38,5 +38,5 @@ None.
 - `crates/mbv-daemon/src/core.rs`, `event_loop.rs`, `run.rs`: the `toggle_panel` runtime hook and
   the transport arm that runs it.
 - `src/local_daemon.rs`, `src/pin.rs`: the runtime hook that sends the pinwin request.
-- `crates/mbvd/src/main.rs`: the refusing hook; mbvd has no Tray and no pinned panel.
+- `crates/mbvd/src/main.rs`: the hook that does nothing; mbvd has no Tray and no pinned panel.
 - `CONTEXT.md`: the Tray entry names the icon click.

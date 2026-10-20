@@ -13,7 +13,8 @@ Constraints that shape the approach:
 - The Tray starts no process for a request (spec owner-actions "The Tray and the CLI run the same
   Owner action"). The Owner process runs it.
 - The daemon library never names pinwin: the runtime supplies the hooks that touch the desktop
-  (`swap_command`, `notify`). `mbvd` supplies refusing ones.
+  (`swap_command`, `notify`, `toggle_panel`). `mbvd` refuses the swap and does nothing for the
+  rest.
 - The Owner process is what started the pinned panel (through `mbv --pin`), so its environment
   names the same Wayland display and the same pinwin socket the panel uses. The pinned Client
   scrubs `PINWIN_PANEL` and `PINWIN_SOCKET` from its environment, so the Owner process cannot
@@ -63,9 +64,9 @@ process, where it works today.
 ### D3: The Owner runs the request through a runtime hook
 
 The daemon library gains a `toggle_panel` hook beside `swap_command` and `notify`. The Local
-runtime sends the request; `mbvd` supplies a refusing one, because it has no desktop session and
-no Tray. The hook starts the request and returns: the Owner process must not wait for a child
-process on its event loop.
+runtime sends the request; `mbvd` supplies one that does nothing, because it has no desktop
+session and no Tray. The hook starts the request and returns: the Owner process must not wait for
+a child process on its event loop.
 
 *Alternative:* the daemon library spawns `pinwin` itself. Rejected: the daemon crate would name
 an external program and the panel name, which the TUI binary owns.
