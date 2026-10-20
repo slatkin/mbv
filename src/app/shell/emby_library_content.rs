@@ -135,7 +135,8 @@ impl Model {
         // flip Latest mode, and the later Latest-marker/request decisions
         // must see the post-push answer.
         if feed_group_view && !self.active_emby_library_owner_is_latest() {
-            self.app.maybe_fetch_feed_home_video_selection(index);
+            self.app
+                .ensure_feed_home_video_selection_loaded(index, false);
         }
         let show_letter_pills = self.app.should_show_letter_pills(index);
         let selector_mode = if feed_group_view {

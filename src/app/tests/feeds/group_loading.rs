@@ -162,8 +162,9 @@ fn refresh_drops_caches_refetches_only_the_current_selection(make_home_video_app
     let state = app.libs[0].feed_home_video.as_ref().unwrap();
     assert!(state.items.is_empty(), "refresh drops the session cache");
     assert_eq!(state.selection, FeedHomeVideoSelection::All);
+    let awaits_fetch = !state.loading && !state.items.contains_key(&state.selection);
     assert!(
-        app.feed_home_video_selection_awaits_fetch(0),
+        awaits_fetch,
         "the current selection refetches after refresh"
     );
 
@@ -368,7 +369,7 @@ fn selecting_an_uncached_pill_while_a_fetch_is_in_flight_hands_loading_over(
     seed_folder_counts(&mut app, &active.id, 2);
 
     // The All selection's fetch is in flight (`loading` set by its spawn).
-    app.maybe_fetch_feed_home_video_selection(0);
+    app.ensure_feed_home_video_selection_loaded(0, false);
     assert!(app.libs[0].feed_home_video.as_ref().unwrap().loading);
 
     // The Service drops before the folder pill is selected, so the new
@@ -388,7 +389,7 @@ fn selecting_an_uncached_pill_while_a_fetch_is_in_flight_hands_loading_over(
         "the stale mark belongs to the old selection"
     );
     assert!(
-        app.feed_home_video_selection_awaits_fetch(0),
+        !state.loading && !state.items.contains_key(&state.selection),
         "the shown pass can spawn the new selection's fetch"
     );
 
@@ -406,7 +407,7 @@ fn selecting_an_uncached_pill_while_a_fetch_is_in_flight_hands_loading_over(
     let state = app.libs[0].feed_home_video.as_ref().unwrap();
     assert!(state.items.is_empty(), "the stale result stored nothing");
     assert!(
-        app.feed_home_video_selection_awaits_fetch(0),
+        !state.loading && !state.items.contains_key(&state.selection),
         "the shown selection still awaits its fetch"
     );
 }

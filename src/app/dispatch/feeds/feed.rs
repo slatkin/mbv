@@ -288,72 +288,66 @@ impl App {
         // fetch — if any — alone; the shown pass covers the transient
         // uncached case.
         if changed {
-            self.fetch_feed_home_video_selection_after_change(lib_idx);
+            self.ensure_feed_home_video_selection_loaded(lib_idx, true);
         }
         self.log_feed_home_video_state(lib_idx, "select_group");
     }
 
-    /// The shown selection's items are not cached and no fetch for it is
-    /// outstanding: its lazy fetch (design D2) still has to run. The shown
-    /// and Latest-mode gates live at the shell call sites (`App` cannot name
-    /// component-local Latest state); tests use this predicate to observe the
-    /// refetch decision a refresh leaves behind.
-    pub(in crate::app) fn feed_home_video_selection_awaits_fetch(&self, lib_idx: usize) -> bool {
-        if !self.is_feed_home_video_library(lib_idx) {
-            return false;
-        }
-        self.libs
-            .get(lib_idx)
-            .and_then(|lib| lib.feed_home_video.as_ref())
-            .is_some_and(|state| !state.loading && !state.items.contains_key(&state.selection))
-    }
-
-    /// Shown-time trigger for the lazy per-selection fetch (design D2): fires
-    /// only when the selection is uncached and nothing is fetching it. While
+    /// The lazy per-selection fetch trigger (design D2), both entry paths in
+    /// one. The shown/push pass passes `prior_fetch_stale` false and fires
+    /// only when the selection is uncached and nothing is fetching it: while
     /// a fetch is outstanding (`loading`) or the selection is cached, this is
-    /// a no-op.
-    pub(in crate::app) fn maybe_fetch_feed_home_video_selection(&mut self, lib_idx: usize) {
-        if self.feed_home_video_selection_awaits_fetch(lib_idx) {
-            self.fetch_feed_home_video_selection_now(lib_idx);
-        }
-    }
-
-    /// Selection-change trigger for the lazy per-selection fetch (design D2):
-    /// spawns whenever the new selection is uncached, even while a fetch for
-    /// the previous selection is still outstanding — that result is
-    /// stale-dropped on arrival. The outstanding `loading` describes the
-    /// previous selection, so an uncached change clears it before the spawn
-    /// (review P1, b603f329b..9e454b62d): leaving it set would wedge the view
-    /// with a spinner and no fetch for the shown selection.
-    fn fetch_feed_home_video_selection_after_change(&mut self, lib_idx: usize) {
+    /// a no-op. The select path passes true after a changed selection and
+    /// owns the hand-off — the outstanding `loading` described the previous
+    /// selection, whose result is stale-dropped on arrival, so it clears
+    /// before the spawn (review P1, b603f329b..9e454b62d): leaving it set
+    /// would wedge the view with a spinner and no fetch for the shown
+    /// selection, and switching to a cached selection must drop it too. A
+    /// cached selection never spawns; without a Service client the selection
+    /// stays uncached and unloaded, and a later selection or shown pass
+    /// retries.
+    pub(in crate::app) fn ensure_feed_home_video_selection_loaded(
+        &mut self,
+        lib_idx: usize,
+        prior_fetch_stale: bool,
+    ) {
         if !self.is_feed_home_video_library(lib_idx) {
             return;
         }
-        let uncached = self
-            .libs
-            .get_mut(lib_idx)
-            .and_then(|lib| lib.feed_home_video.as_mut())
-            .is_some_and(|state| {
-                let uncached = !state.items.contains_key(&state.selection);
-                if uncached {
-                    state.loading = false;
-                }
-                uncached
-            });
-        if uncached {
-            self.fetch_feed_home_video_selection_now(lib_idx);
-        }
-    }
-
-    /// Marks the current selection's fetch outstanding and spawns it. Callers
-    /// own the cached and shown gates.
-    fn fetch_feed_home_video_selection_now(&mut self, lib_idx: usize) {
-        if !self.is_feed_home_video_library(lib_idx) {
+        let cached_or_loading = {
+            let Some(state) = self
+                .libs
+                .get_mut(lib_idx)
+                .and_then(|lib| lib.feed_home_video.as_mut())
+            else {
+                return;
+            };
+            if prior_fetch_stale {
+                state.loading = false;
+            }
+            let cached_or_loading = state.items.contains_key(&state.selection) || state.loading;
+            // Mark the fetch outstanding only once the gates pass; the
+            // client and parent guards below must leave an unfetchable
+            // selection unloaded so a later pass can retry.
+            if !cached_or_loading {
+                state.loading = true;
+            }
+            cached_or_loading
+        };
+        if cached_or_loading {
             return;
         }
         let Some(client) = self.emby_snapshot() else {
             // No Service client yet: leave the selection uncached and
             // unloaded; a later selection or shown pass retries.
+            let Some(state) = self
+                .libs
+                .get_mut(lib_idx)
+                .and_then(|lib| lib.feed_home_video.as_mut())
+            else {
+                return;
+            };
+            state.loading = false;
             return;
         };
         let Some(parent_id) = self.feed_home_video_selected_parent_id(lib_idx) else {
@@ -366,11 +360,7 @@ impl App {
         else {
             return;
         };
-        if state.loading || state.items.contains_key(&state.selection) {
-            return;
-        }
         let selection = state.selection.clone();
-        state.loading = true;
         self.log_feed_home_video_state(lib_idx, "selection_fetch_spawned");
         let tx = self.channels.lib_tx.clone();
         std::thread::spawn(move || {
