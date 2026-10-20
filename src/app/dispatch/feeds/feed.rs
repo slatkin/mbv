@@ -424,16 +424,15 @@ impl App {
         selection: FeedHomeVideoSelection,
         items: Vec<EmbyItem>,
     ) {
-        let stale = self.libs.get(lib_idx).is_none_or(|lib| {
-            lib.feed_home_video.as_ref().is_none_or(|state| {
+        let stale = self
+            .libs
+            .get(lib_idx)
+            .and_then(|lib| lib.feed_home_video.as_ref())
+            .is_none_or(|state| {
                 state.selection != selection
                     || matches!(selection, FeedHomeVideoSelection::All)
-                        && lib
-                            .nav_stack
-                            .first()
-                            .is_none_or(|root| root.parent_id != parent_id)
-            })
-        });
+                        && !self.feed_home_video_root_matches(lib_idx, parent_id)
+            });
         if stale {
             self.log_feed_home_video_state(lib_idx, "selection_loaded_dropped_stale");
             return;
@@ -551,6 +550,17 @@ impl App {
                     && !lib.nav_stack[0].loading
                     && lib.nav_stack[0].is_fully_loaded()
             })
+    }
+
+    /// Whether `parent_id` still names the current root listing's parent: the
+    /// shared stale-guard base for the fan-out's result arms. A library
+    /// switch or a replaced root drops a result; each arm adds only its own
+    /// extra condition on top.
+    fn feed_home_video_root_matches(&self, lib_idx: usize, parent_id: &str) -> bool {
+        self.libs
+            .get(lib_idx)
+            .and_then(|lib| lib.nav_stack.first())
+            .is_some_and(|root| root.parent_id == parent_id)
     }
 
     fn resolve_feed_home_video_pending_selection(&mut self, lib_idx: usize) {

@@ -138,13 +138,12 @@ impl App {
                 state.outstanding_counts -= 1;
                 state.outstanding_counts == 0
             });
-        let stale = self.libs.get(lib_idx).is_none_or(|lib| {
-            lib.feed_home_video.is_none()
-                || lib
-                    .nav_stack
-                    .first()
-                    .is_none_or(|root| root.parent_id != parent_id)
-        });
+        let stale = !self.feed_home_video_root_matches(lib_idx, parent_id)
+            || self
+                .libs
+                .get(lib_idx)
+                .and_then(|lib| lib.feed_home_video.as_ref())
+                .is_none();
         if !stale
             && let Some(count) = count
             && let Some(state) = self
