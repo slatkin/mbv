@@ -623,7 +623,7 @@ pub(crate) fn toggle_running() {
     }
 }
 
-/// Ask pinwin to toggle the `mbv` panel: hide it if shown, show it if
+/// Ask pinwin to toggle the pinned panel: hide it if shown, show it if
 /// hidden. This is the request the `--toggle` flag sends, run from the
 /// Owner process on the Tray's behalf (tray-panel-toggle design D4).
 ///
@@ -638,9 +638,9 @@ pub(crate) fn toggle_panel() {
             if let Err(error) = run_request(&argv) {
                 let reason = error.to_string();
                 tracing::warn!(
-                    name = "panel_toggle.failed",
-                    target = "panel_toggle",
-                    error = %reason,
+                    name: "panel_toggle.failed",
+                    target: "panel_toggle",
+                    { error = %reason },
                     "pinned panel toggle failed"
                 );
                 notify(&format!("cannot toggle the pinned panel: {reason}"));
@@ -648,9 +648,9 @@ pub(crate) fn toggle_panel() {
         });
     if let Err(error) = worker {
         tracing::warn!(
-            name = "panel_toggle.worker_failed",
-            target = "panel_toggle",
-            error = %error,
+            name: "panel_toggle.worker_failed",
+            target: "panel_toggle",
+            { error = %error },
             "pinned panel toggle worker could not start"
         );
     }

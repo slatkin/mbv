@@ -523,7 +523,7 @@ pub(crate) type SwapCommandHook =
 /// Desktop-notification hook for swap failures (design D5).
 pub(crate) type NotifyHook = Box<dyn Fn(&str) + Send>;
 /// Starts the pinned-panel toggle (tray-panel-toggle design D3): hide the
-/// panel when it is shown, show it when it is hidden. The hook starts the
+/// pinned panel when it is shown, show it when it is hidden. The hook starts the
 /// request and returns, so the Owner's event loop never waits for it; the
 /// runtime reports a failure.
 pub(crate) type TogglePanelHook = Box<dyn Fn() + Send>;

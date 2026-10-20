@@ -138,8 +138,8 @@ impl ksni::Tray for MbvTray {
 
     /// A left click on the icon asks the Owner process to toggle the pinned
     /// panel: hide it when it is shown, show it when it is hidden
-    /// (tray-panel-toggle design D1). The Owner decides whether a panel
-    /// exists, so the click sends the request and nothing more.
+    /// (tray-panel-toggle design D1). The Owner decides whether a pinned
+    /// panel exists, so the click sends the request and nothing more.
     fn activate(&mut self, _x: i32, _y: i32) {
         if let Err(e) = self.transport_tx.send(TransportCommand::TogglePanel) {
             tracing::debug!(
@@ -448,7 +448,7 @@ mod tests {
 
     /// Contract: spec local-daemon-tray "The Tray icon toggles the pinned
     /// panel" — a left click on the icon sends the panel-toggle request to
-    /// the Owner process, which decides whether a panel exists.
+    /// the Owner process, which decides whether a pinned panel exists.
     #[test]
     fn clicking_the_icon_sends_the_panel_toggle_request() {
         let (mut tray, rx) = spy_tray(status(true, false, "A Song"), AttachedClients::Pinned);

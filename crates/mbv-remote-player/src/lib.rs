@@ -292,7 +292,7 @@ impl RemotePlayer {
             // The pinned panel belongs to the local Owner process, which
             // runs the request itself; a remote transport carries none.
             mbv_ctrl::TransportCommand::TogglePanel => {
-                tracing::debug!(name: "remote.transport_toggle_panel.ignored", target: "remote", "ignoring panel-toggle transport command");
+                tracing::debug!(name: "remote.transport_toggle_panel.ignored", target: "remote", "ignoring pinned-panel toggle transport command");
             }
         }
     }

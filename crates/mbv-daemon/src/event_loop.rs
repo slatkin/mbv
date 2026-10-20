@@ -276,7 +276,7 @@ impl DaemonLoop {
 
     /// Runs the pinned-panel toggle when a pinned Client is attached
     /// (tray-panel-toggle design D1). With no pinned Client there is no
-    /// panel, so the request does nothing and the Owner logs it.
+    /// pinned panel, so the request does nothing and the Owner logs it.
     fn toggle_pinned_panel(&mut self) {
         let pinned = self
             .ctrl_clients
@@ -285,7 +285,7 @@ impl DaemonLoop {
             .newest_swap_client(crate::ctrl::SwapSurface::Pinned)
             .is_some();
         if !pinned {
-            tracing::debug!(name: "daemon.panel_toggle.no_pinned_client", target: "panel_toggle", "no pinned client is attached; the panel request does nothing");
+            tracing::debug!(name: "daemon.panel_toggle.no_pinned_client", target: "panel_toggle", "no pinned client is attached; the pinned panel request does nothing");
             return;
         }
         (self.toggle_panel)();
