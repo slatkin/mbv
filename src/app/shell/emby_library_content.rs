@@ -184,7 +184,6 @@ impl Model {
             .map(|folder| (folder.name.clone(), folder.id.clone()))
             .unzip();
         let feed_group_cursor = self.app.feed_home_video_selected_group_index(index);
-        let poster_window = items.clone();
         let library_id = self.app.libs[index].library.id.clone();
         let latest_items = self
             .tv_latest_snapshots
@@ -228,7 +227,7 @@ impl Model {
             owner.cursor()
         });
         if let Some(cursor) = landed_cursor {
-            self.app.fetch_nearby_movie_posters(&poster_window, cursor);
+            self.fetch_owner_nearby_posters(key, cursor);
         }
         // Latest is the default pill, so a default landing — first open or
         // launch restore — fetches the lazy Latest list here (spec
@@ -247,6 +246,27 @@ impl Model {
     pub(in crate::app) fn push_active_emby_library_owner_content(&mut self) {
         if let Some((index, key, kind)) = self.active_emby_library_owner() {
             self.push_emby_library_owner_content(index, &key, kind);
+        }
+    }
+
+    /// The nearby-poster prefetch at the owner's now-authoritative cursor:
+    /// the owner holds the pushed list verbatim (`set_content` stores
+    /// `push.items`), so the window reads it instead of a second clone of
+    /// the shell-side snapshot (#287).
+    fn fetch_owner_nearby_posters(&mut self, key: &LibraryKey, cursor: usize) {
+        let owner_items = self
+            .application
+            .get_component(&mbv_ui_msg::ComponentId::Library)
+            .and_then(|component| {
+                component
+                    .as_any()
+                    .downcast_ref::<mbv_components::library_panel::LibraryPanel>()
+            })
+            .and_then(|panel| panel.owner(key))
+            .and_then(|owner| owner.as_any().downcast_ref::<EmbyLibraryContent>())
+            .map(EmbyLibraryContent::browse_items);
+        if let Some(items) = owner_items {
+            self.app.fetch_nearby_movie_posters(items, cursor);
         }
     }
 
