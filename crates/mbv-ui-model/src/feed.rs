@@ -12,10 +12,13 @@ pub enum FeedHomeVideoSelection {
     All,
     Folder(String),
 }
-
 #[derive(Clone, Debug, Default)]
 pub struct FeedHomeVideoState {
-    /// The selection whose items the view paints; the key into `items`.
+    /// The selection whose items the view paints; the key into `items` and
+    /// the single source of truth for the highlighted pill. The pill index
+    /// derives on demand from the selection's folder position in the counted
+    /// folders (0 = All); it is materialized only at the `LibraryPosition`
+    /// save/restore boundary.
     pub selection: FeedHomeVideoSelection,
     /// Loaded items per selection: the session cache so pill ping-pong does
     /// not refetch (design D2). The lazy fetch fills one entry per selection.
@@ -25,10 +28,13 @@ pub struct FeedHomeVideoState {
     /// Per-root-folder video counts. The count fan-out fills this; pill
     /// membership reads it alongside the root listing. Empty until then.
     pub folder_counts: HashMap<String, usize>,
-    /// Pill-facing selected-group index: 0 means All, 1-based otherwise.
-    /// Persisted through `LibraryPosition::feed_selected_group` and resolved
-    /// into `selection` against the root listing once the listing has loaded.
-    pub selected_group: usize,
+    /// A pill index restored from `LibraryPosition::feed_selected_group` that
+    /// still awaits resolution into `selection` against the counted folders
+    /// (the pending-selection resolve path). Restore-only session memory:
+    /// `LibraryTab::apply_library_position` sets it, and it clears once it
+    /// resolves or the user picks a pill. It never drives the painted
+    /// highlight, which derives from `selection`.
+    pub restored_group: Option<usize>,
     /// Whether a refresh deferred its forced count re-query to the root
     /// listing's next completion: a partial refresh must not replace the
     /// counts from its page-1 folders, but it still owes the session a forced
@@ -46,6 +52,26 @@ impl FeedHomeVideoState {
     #[must_use]
     pub fn selected_len(&self) -> usize {
         self.items.get(&self.selection).map_or(0, Vec::len)
+    }
+
+    /// The pill index to persist at the `LibraryPosition` save boundary: a
+    /// still-unresolved restored index saves unchanged (the counted folders
+    /// that would resolve it are not loaded yet), otherwise the selection
+    /// decides — 0 for All, the folder's counted position plus one otherwise.
+    /// A selection whose folder holds no pill (its count vanished) saves as
+    /// All: the index it was picked from no longer names a pill.
+    #[must_use]
+    pub(crate) fn saved_group_index(&self, counted_ids: &[String]) -> usize {
+        if let Some(group) = self.restored_group {
+            return group;
+        }
+        match &self.selection {
+            FeedHomeVideoSelection::All => 0,
+            FeedHomeVideoSelection::Folder(id) => counted_ids
+                .iter()
+                .position(|counted| counted == id)
+                .map_or(0, |pos| pos + 1),
+        }
     }
 }
 

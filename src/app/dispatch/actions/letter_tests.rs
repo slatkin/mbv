@@ -492,7 +492,7 @@ fn a_genuine_restore_with_a_failed_fetch_does_not_stack_a_second_eager_fetch() {
     push_top_level_tv(&mut app.libs[0], 2);
     // The saved position selected Upcoming; the current level no longer
     // carries it, so activation takes the genuine-restore path.
-    let mut saved = app.libs[0].library_position_snapshot();
+    let mut saved = app.libs[0].library_position_snapshot(&[]);
     saved.levels[0].tv_content_mode = Some(mbv_queue::TvContentMode::Upcoming);
     app.library_position_state
         .libraries
@@ -543,7 +543,7 @@ fn a_failed_genuine_restore_retries_on_the_next_tab_load() {
     let http = install_mock_emby(&mut app);
     app.libs.push(lib_tab("tvshows"));
     push_top_level_tv(&mut app.libs[0], 0);
-    let mut saved = app.libs[0].library_position_snapshot();
+    let mut saved = app.libs[0].library_position_snapshot(&[]);
     saved.levels[0].tv_content_mode = Some(mbv_queue::TvContentMode::Upcoming);
     app.library_position_state
         .libraries

@@ -494,10 +494,11 @@ impl App {
         // saves that already have `library_total` set (see the function's
         // own early-return checks).
         self.maybe_capture_library_total_and_apply_default_pill(lib_idx);
+        let feed_counted_ids = self.feed_home_video_counted_folder_ids(lib_idx);
         let restored = self
             .libs
             .get(lib_idx)
-            .map(mbv_ui_model::library_tab::LibraryTab::library_position_snapshot);
+            .map(|lib| lib.library_position_snapshot(&feed_counted_ids));
         if restored.as_ref() != self.saved_library_position(lib_idx).as_ref()
             && let Some(restored) = restored
         {

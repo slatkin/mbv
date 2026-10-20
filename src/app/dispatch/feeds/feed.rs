@@ -39,6 +39,14 @@ impl App {
         self.counted_folder_iter(lib_idx).cloned().collect()
     }
 
+    /// The counted folders' ids in pill order: the save boundary's input for
+    /// deriving the persisted pill index from the selection.
+    pub(in crate::app) fn feed_home_video_counted_folder_ids(&self, lib_idx: usize) -> Vec<String> {
+        self.counted_folder_iter(lib_idx)
+            .map(|folder| folder.id.clone())
+            .collect()
+    }
+
     pub(in crate::app) fn counted_folder_iter(
         &self,
         lib_idx: usize,
@@ -62,15 +70,27 @@ impl App {
         self.counted_folder_iter(lib_idx).count()
     }
 
+    /// The selected pill's index, derived on demand from the authoritative
+    /// selection (0 = All, the folder's counted position plus one otherwise).
+    /// A selection whose folder holds no counted pill — its count vanished,
+    /// or the counts are not loaded — clamps to the pill row's end, so the
+    /// highlight never points past the last painted pill.
     pub(in crate::app) fn feed_home_video_selected_group_index(&self, lib_idx: usize) -> usize {
-        self.libs
-            .get(lib_idx)
-            .and_then(|lib| lib.feed_home_video.as_ref())
-            .map_or(0, |state| {
-                state
-                    .selected_group
-                    .min(self.feed_home_video_visible_group_count(lib_idx))
-            })
+        let Some(lib) = self.libs.get(lib_idx) else {
+            return 0;
+        };
+        let Some(state) = lib.feed_home_video.as_ref() else {
+            return 0;
+        };
+        match &state.selection {
+            FeedHomeVideoSelection::All => 0,
+            FeedHomeVideoSelection::Folder(id) => {
+                let count = self.feed_home_video_visible_group_count(lib_idx);
+                self.counted_folder_iter(lib_idx)
+                    .position(|folder| folder.id == *id)
+                    .map_or(count, |pos| pos + 1)
+            }
+        }
     }
 
     pub(in crate::app) fn feed_home_video_selected_items(&self, lib_idx: usize) -> Vec<EmbyItem> {
@@ -109,7 +129,6 @@ impl App {
     }
 
     pub(in crate::app) fn clamp_feed_home_video_state(&mut self, lib_idx: usize) {
-        let selected_group = self.feed_home_video_selected_group_index(lib_idx);
         let Some(state) = self
             .libs
             .get_mut(lib_idx)
@@ -117,7 +136,6 @@ impl App {
         else {
             return;
         };
-        state.selected_group = selected_group;
         let items_len = state.selected_len();
         if items_len == 0 {
             state.video_cursor = 0;
@@ -248,7 +266,9 @@ impl App {
         let mut changed = false;
         if let Some(state) = self.libs[lib_idx].feed_home_video.as_mut() {
             changed = state.selection != selection;
-            state.selected_group = group_idx;
+            // The user's pick supersedes any still-unresolved restored pill
+            // index.
+            state.restored_group = None;
             state.selection = selection.clone();
             if changed {
                 state.video_cursor = 0;
@@ -651,12 +671,19 @@ impl App {
         else {
             return;
         };
-        if let Some(selection) = selection_for_group(&counted, state.selected_group)
-            && state.selection != selection
-        {
-            state.selection = selection;
-            state.video_cursor = 0;
-            state.video_scroll = 0;
+        let Some(group_idx) = state.restored_group else {
+            return;
+        };
+        // An index past the counted folders — the count fan-out is still
+        // empty, or the folder vanished — stays pending for the next resolve
+        // (a later counts arrival or listing completion).
+        if let Some(selection) = selection_for_group(&counted, group_idx) {
+            if state.selection != selection {
+                state.selection = selection;
+                state.video_cursor = 0;
+                state.video_scroll = 0;
+            }
+            state.restored_group = None;
         }
     }
 

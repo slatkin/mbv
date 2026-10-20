@@ -65,7 +65,7 @@ fn library_position_snapshot_captures_path_focus_and_feed_group() {
             music_grouping: None,
         }],
         feed_home_video: Some(FeedHomeVideoState {
-            selected_group: 2,
+            selection: FeedHomeVideoSelection::Folder("folder-b".into()),
             video_cursor: 4,
             video_scroll: 3,
             ..Default::default()
@@ -74,7 +74,10 @@ fn library_position_snapshot_captures_path_focus_and_feed_group() {
     };
     lib.library.id = "lib-movies".into();
 
-    let position = lib.library_position_snapshot();
+    // The selection's folder sits at counted position 1, so the persisted
+    // pill index is 2 (0 = All, folders 1-based).
+    let counted = vec!["folder-a".to_string(), "folder-b".to_string()];
+    let position = lib.library_position_snapshot(&counted);
 
     assert_eq!(position.levels.len(), 1);
     assert_eq!(position.levels[0].parent_id, "lib-movies");

@@ -204,7 +204,9 @@ impl App {
         // A feed-view library's root scope is its first group.
         if let Some(state) = lib.feed_home_video.as_mut() {
             state.selection = FeedHomeVideoSelection::All;
-            state.selected_group = 0;
+            // A reset also discards any still-unresolved restored pill index:
+            // the reset's own All pick is the position the user returns to.
+            state.restored_group = None;
             state.video_cursor = 0;
             state.video_scroll = 0;
             // A reset discards the refresh that armed it; a stuck deferred

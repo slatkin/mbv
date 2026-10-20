@@ -321,14 +321,14 @@ fn listing_and_counts_derive_the_pill_row_without_any_video_fetch(make_home_vide
 }
 
 /// Contract (tasks.md 3.3, B's hand-off note): the count-completion arm
-/// resolves a pending persisted pill index into the concrete folder
+/// resolves a pending restored pill index into the concrete folder
 /// selection — the index could not resolve while the counts were empty.
 #[rstest]
 fn folder_counts_event_resolves_the_pending_pill_index(make_home_video_app: App) {
     let mut app = make_home_video_app;
     let active = seed_home_video_root_loaded(&mut app);
     if let Some(state) = app.libs[0].feed_home_video.as_mut() {
-        state.selected_group = 1;
+        state.restored_group = Some(1);
     }
 
     send_folder_counts(&mut app, "lib-youtube", &[("folder-active", 2)]);
@@ -446,7 +446,6 @@ fn partial_root_refresh_keeps_counts_and_the_later_page_pill(make_home_video_app
     }
     if let Some(state) = app.libs[0].feed_home_video.as_mut() {
         state.selection = FeedHomeVideoSelection::Folder("folder-c".into());
-        state.selected_group = 3;
     }
 
     app.handle_lib_event(LibEvent::Browse(BrowseEvent::Refreshed {
@@ -464,10 +463,10 @@ fn partial_root_refresh_keeps_counts_and_the_later_page_pill(make_home_video_app
         3,
         "the partial refresh did not replace the counts"
     );
-    assert_eq!(state.selected_group, 3, "the pill index did not shrink");
     assert_eq!(
         state.selection,
-        FeedHomeVideoSelection::Folder("folder-c".into())
+        FeedHomeVideoSelection::Folder("folder-c".into()),
+        "the selection outlives the partial listing"
     );
 
     app.handle_lib_event(LibEvent::Browse(BrowseEvent::PageAppended {
@@ -490,7 +489,11 @@ fn partial_root_refresh_keeps_counts_and_the_later_page_pill(make_home_video_app
     );
     let state = app.libs[0].feed_home_video.as_ref().unwrap();
     assert_eq!(state.folder_counts.len(), 3);
-    assert_eq!(state.selected_group, 3);
+    assert_eq!(
+        app.feed_home_video_selected_group_index(0),
+        3,
+        "the repaginated row highlights the selected folder again"
+    );
     assert_eq!(
         state.selection,
         FeedHomeVideoSelection::Folder("folder-c".into())

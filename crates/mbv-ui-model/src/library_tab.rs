@@ -30,10 +30,18 @@ impl LibraryTab {
         }
     }
 
-    pub fn library_position_snapshot(&self) -> mbv_queue::LibraryPosition {
+    /// The launch/position snapshot of the library's current state. The feed
+    /// view's pill index persists only here: `counted_ids` are the counted
+    /// folders' ids in pill order, and the state derives the index from its
+    /// authoritative selection (see `FeedHomeVideoState::saved_group_index`).
+    pub fn library_position_snapshot(&self, counted_ids: &[String]) -> mbv_queue::LibraryPosition {
         let (feed_selected_group, feed_video_cursor, feed_video_scroll) =
             self.feed_home_video.as_ref().map_or((0, 0, 0), |state| {
-                (state.selected_group, state.video_cursor, state.video_scroll)
+                (
+                    state.saved_group_index(counted_ids),
+                    state.video_cursor,
+                    state.video_scroll,
+                )
             });
         let mut levels: Vec<mbv_queue::LibraryPositionLevel> = self
             .nav_stack
@@ -67,7 +75,10 @@ impl LibraryTab {
             .and_then(|level| level.tv_content_mode.clone());
         self.nav_stack = nav_stack;
         if let Some(state) = self.feed_home_video.as_mut() {
-            state.selected_group = position.feed_selected_group;
+            // The persisted pill index resolves into `selection` through the
+            // pending-selection resolve path once the counted folders are
+            // known; it is never painted directly.
+            state.restored_group = Some(position.feed_selected_group);
             state.video_cursor = position.feed_video_cursor;
             state.video_scroll = position.feed_video_scroll;
         }

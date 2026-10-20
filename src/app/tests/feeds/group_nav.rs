@@ -88,11 +88,9 @@ fn select_feed_folder_group_all_uses_the_all_selection_cache() {
     app.select_feed_folder_group(0, 0);
     assert_eq!(app.libs[0].nav_stack.len(), 1);
     assert_eq!(
-        app.libs[0]
-            .feed_home_video
-            .as_ref()
-            .map(|state| state.selected_group),
-        Some(0)
+        app.feed_home_video_selected_group_index(0),
+        0,
+        "the All pill's index derives from the All selection"
     );
     assert_eq!(
         app.libs[0]
@@ -145,11 +143,9 @@ fn select_feed_folder_group_resolves_the_folder_id_from_the_listing() {
         Some(FeedHomeVideoSelection::Folder("folder-a".into()))
     );
     assert_eq!(
-        app.libs[0]
-            .feed_home_video
-            .as_ref()
-            .map(|state| state.selected_group),
-        Some(1)
+        app.feed_home_video_selected_group_index(0),
+        1,
+        "the folder pill's index derives from the selection's counted position"
     );
     assert_eq!(
         app.feed_home_video_selected_parent_id(0).as_deref(),
@@ -233,9 +229,11 @@ fn feed_home_video_counted_folders_derive_pills_from_positive_counts() {
 }
 
 #[test]
-fn ensure_feed_home_video_group_level_clamps_stale_cursor_to_available_folders() {
-    // A stale selected group from a listing change with more counted folders
-    // must clamp to the folder pills that exist now.
+fn feed_home_video_selected_group_index_clamps_a_pillless_selection_to_the_last_pill() {
+    // The selection is the pill highlight's single source of truth: a
+    // selection whose folder holds no counted pill (its count vanished) does
+    // not crash the row or point past it — the highlight clamps to the last
+    // painted pill.
     let mut app = make_app_stub();
     app.tab = TabSelection::EmbyLibrary(0);
     app.config.lock().unwrap().feed_view_libraries = vec!["youtube".into()];
@@ -251,20 +249,15 @@ fn ensure_feed_home_video_group_level_clamps_stale_cursor_to_available_folders()
     let video = make_item("A1", "Movie");
 
     app.libs.push(LibraryTab {
-        nav_stack: vec![youtube_root_level(
-            ServerRows::new(1),
-            vec![folder.clone()],
-            false,
-        )],
+        nav_stack: vec![youtube_root_level(ServerRows::new(1), vec![folder], false)],
         feed_home_video: Some(FeedHomeVideoState {
-            selection: FeedHomeVideoSelection::Folder(folder.id.clone()),
+            selection: FeedHomeVideoSelection::Folder("folder-gone".into()),
             items: HashMap::from([(
-                FeedHomeVideoSelection::Folder(folder.id.clone()),
+                FeedHomeVideoSelection::Folder("folder-gone".into()),
                 vec![video],
             )]),
-            folder_counts: HashMap::from([(folder.id, 1)]),
+            folder_counts: HashMap::from([("folder-a".to_string(), 1)]),
             loading: false,
-            selected_group: 5,
             ..FeedHomeVideoState::default()
         }),
         ..LibraryTab::new(library)
@@ -274,11 +267,9 @@ fn ensure_feed_home_video_group_level_clamps_stale_cursor_to_available_folders()
 
     assert_eq!(app.libs[0].nav_stack.len(), 1);
     assert_eq!(
-        app.libs[0]
-            .feed_home_video
-            .as_ref()
-            .map(|state| state.selected_group),
-        Some(1)
+        app.feed_home_video_selected_group_index(0),
+        1,
+        "the pillless selection clamps to the last painted pill"
     );
 }
 
@@ -303,7 +294,7 @@ fn listing_completion_resolves_the_pending_pill_index_into_the_selection() {
     app.libs.push(LibraryTab {
         nav_stack: vec![youtube_root_level(ServerRows::new(1), vec![], true)],
         feed_home_video: Some(FeedHomeVideoState {
-            selected_group: 1,
+            restored_group: Some(1),
             folder_counts: HashMap::from([("folder-a".to_string(), 2)]),
             ..FeedHomeVideoState::default()
         }),

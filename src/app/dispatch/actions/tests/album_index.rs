@@ -149,7 +149,7 @@ fn recursive_activation_keeps_panel_focus_and_installs_path() {
         tv_content_mode: None,
         music_grouping: None,
     });
-    let default_position = app.libs[0].library_position_snapshot();
+    let default_position = app.libs[0].library_position_snapshot(&[]);
     app.library_position_state
         .libraries
         .insert("music-lib".into(), default_position.clone());
