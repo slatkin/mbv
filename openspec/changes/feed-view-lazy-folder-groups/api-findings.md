@@ -16,7 +16,7 @@ Inferred: `RecursiveItemCount` can be positive while the folder holds no Video i
 
 ## 4. A filtered count-only query returns a reliable total
 
-`GET /Users/{id}/Items?ParentId=X&Recursive=true&IncludeItemTypes=Video&Limit=1` returns the filtered total in `TotalRecordCount` ([thread 115217](https://emby.media/community/topic/115217-api-to-extract-library-count)); [thread 19690](https://emby.media/community/topic/19690-incorrect-total-record-count-listing/) shows the total is independent of page size. The API reference does not document `EnableTotalRecordCount` or its default ([reference](https://dev.emby.media/reference/RestAPI/ItemsService/getUsersByUseridItems.html)), so send `EnableTotalRecordCount=true` explicitly. `Video` as an `IncludeItemTypes` value: check it against the item types the user's libraries actually use (`MediaTypes=Video` is an alternative filter) — implementation caveat for task 2.1.
+`GET /Users/{id}/Items?ParentId=X&Recursive=true&IncludeItemTypes=Video&Limit=1` returns the filtered total in `TotalRecordCount` ([thread 115217](https://emby.media/community/topic/115217-api-to-extract-library-count)); [thread 19690](https://emby.media/community/topic/19690-incorrect-total-record-count-listing/) shows the total is independent of page size. The API reference does not document `EnableTotalRecordCount` or its default ([reference](https://dev.emby.media/reference/RestAPI/ItemsService/getUsersByUseridItems.html)), so the shipped query relies on the default total that every mbv browse fetch already reads, and sends no explicit `EnableTotalRecordCount`. `Video` as an `IncludeItemTypes` value: check it against the item types the user's libraries actually use (`MediaTypes=Video` is an alternative filter) — implementation caveat for task 2.1.
 
 ## 5. Caveats of the count-only query
 
@@ -28,4 +28,4 @@ One request per root folder (run them in parallel, or skip folders where `ChildC
 
 ## D1 choice
 
-**(b) one count-only query per root folder** — `GET /Users/{UserId}/Items?ParentId=<folder>&Recursive=true&IncludeItemTypes=Video&Limit=1&EnableTotalRecordCount=true`, read `TotalRecordCount > 0` (user-scoped route; no `IsPlayed` filter, so watched videos count). Reason: no source defines what `RecursiveItemCount` counts; it likely counts sub-folders and all item types, so it cannot prove a folder holds a video.
+**(b) one count-only query per root folder** — `GET /Users/{UserId}/Items?ParentId=<folder>&Recursive=true&IncludeItemTypes=Video&Limit=1` (through the shared sorted-items route; no explicit `EnableTotalRecordCount`), read `TotalRecordCount > 0` (user-scoped route; no `IsPlayed` filter, so watched videos count). Reason: no source defines what `RecursiveItemCount` counts; it likely counts sub-folders and all item types, so it cannot prove a folder holds a video.
