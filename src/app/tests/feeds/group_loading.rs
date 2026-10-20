@@ -676,6 +676,66 @@ fn a_partial_refresh_commits_a_count_fanout_without_shrinking_the_counts(make_ho
     );
 }
 
+/// Regression (round-2 review on 96abfa239..30a12b0e8): a partial refresh
+/// whose folder set is UNCHANGED leaves the beyond-page-1 counts stale unless
+/// the listing completion that ends the pagination re-queries them — the map
+/// already covers every folder, so a coverage-only spawn condition
+/// short-circuits and a folder beyond page 1 that crossed 0<->positive
+/// videos keeps its stale pill for the session (design D2). The
+/// listing-completion transition therefore spawns the full fan-out even when
+/// the counts already cover the root; the stale entries keep serving the row
+/// until the re-query's reports land.
+#[rstest]
+fn the_listing_completion_after_a_partial_refresh_requeries_every_folder(make_home_video_app: App) {
+    let mut app = make_home_video_app;
+    // The stub client's count queries fail into the unprocessed event
+    // channel, so the synchronous accounting mark stays observable.
+    install_test_emby(&mut app, crate::config::Config::default());
+    app.libs[0].nav_stack[0] = youtube_root_level(
+        ServerRows::loaded(3, 3),
+        vec![
+            make_root_folder("folder-a", "Channel A"),
+            make_root_folder("folder-b", "Channel B"),
+            make_root_folder("folder-c", "Channel C"),
+        ],
+        false,
+    );
+    seed_folder_counts(&mut app, "folder-a", 1);
+    seed_folder_counts(&mut app, "folder-b", 1);
+    seed_folder_counts(&mut app, "folder-c", 1);
+
+    app.handle_lib_event(LibEvent::Browse(BrowseEvent::Refreshed {
+        lib_idx: 0,
+        parent_id: "lib-youtube".into(),
+        item_types: None,
+        unplayed_only: false,
+        items: vec![make_root_folder("folder-a", "Channel A")],
+        total_count: 3,
+    }));
+
+    app.handle_lib_event(LibEvent::Browse(BrowseEvent::PageAppended {
+        lib_idx: 0,
+        parent_id: "lib-youtube".into(),
+        items: vec![
+            make_root_folder("folder-b", "Channel B"),
+            make_root_folder("folder-c", "Channel C"),
+        ],
+        total_count: 3,
+    }));
+
+    let state = app.libs[0].feed_home_video.as_ref().unwrap();
+    assert_eq!(
+        state.outstanding_counts, 4,
+        "the completion re-queried every folder despite full coverage \
+         (1 refresh fan-out + 3 completion fan-out)"
+    );
+    assert_eq!(
+        state.folder_counts.len(),
+        3,
+        "the stale entries still serve the row until the re-query lands"
+    );
+}
+
 /// Contract (review P2 on task 5.1, commit 46b0ac739): the UI-state reset
 /// restores a feed-view library's root to a plain folder listing — no
 /// `item_types`, no unplayed-only flag — so a later refresh builds its fetch
