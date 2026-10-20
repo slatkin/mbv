@@ -240,17 +240,15 @@ fn ensure_feed_home_video_group_level_does_not_push_and_resolves_selected_items(
     );
 }
 
-/// Sends the count fan-out's result event for the library root listing
-/// (task 3.3): the successfully obtained `(folder id, count)` pairs.
-fn send_folder_counts(app: &mut App, parent_id: &str, counts: &[(&str, usize)]) {
+/// Sends one per-folder count event for the library root listing (task 3.3):
+/// one fan-out thread's report for one folder.
+fn send_folder_count(app: &mut App, parent_id: &str, folder_id: &str, count: usize) {
     app.handle_lib_event(LibEvent::Browse(
-        BrowseEvent::FeedHomeVideoFolderCountsLoaded {
+        BrowseEvent::FeedHomeVideoFolderCountLoaded {
             lib_idx: 0,
             parent_id: parent_id.to_string(),
-            counts: counts
-                .iter()
-                .map(|(folder, count)| ((*folder).to_string(), *count))
-                .collect(),
+            folder_id: folder_id.to_string(),
+            count,
         },
     ));
 }
@@ -270,11 +268,57 @@ fn folder_counts_event_gives_a_watched_only_folder_its_pill(make_home_video_app:
         vec![watched],
     );
 
-    send_folder_counts(&mut app, "lib-youtube", &[("folder-active", 2)]);
+    send_folder_count(&mut app, "lib-youtube", "folder-active", 2);
 
     let counted = app.feed_home_video_counted_folders(0);
     assert_eq!(counted.len(), 1);
     assert_eq!(counted[0].id, active.id);
+}
+
+/// Contract (task fan-out reshape): each fan-out thread reports its own
+/// per-folder event, so the pill row fills incrementally — one folder's
+/// count alone admits that folder's pill, and a later event adds its own
+/// without disturbing the first.
+#[rstest]
+fn separate_count_events_accumulate_into_the_pill_row(make_home_video_app: App) {
+    let mut app = make_home_video_app;
+    app.handle_lib_event(LibEvent::Browse(BrowseEvent::Loaded {
+        lib_idx: 0,
+        parent_id: "lib-youtube".into(),
+        level: Box::new(youtube_root_level(
+            ServerRows::loaded(3, 3),
+            vec![
+                make_root_folder("folder-a", "Channel A"),
+                make_root_folder("folder-b", "Channel B"),
+                make_root_folder("folder-c", "Channel C"),
+            ],
+            false,
+        )),
+    }));
+
+    send_folder_count(&mut app, "lib-youtube", "folder-a", 1);
+
+    let counted = app.feed_home_video_counted_folders(0);
+    assert_eq!(
+        counted
+            .iter()
+            .map(|folder| folder.id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["folder-a"],
+        "the first folder's event alone fills its pill"
+    );
+
+    send_folder_count(&mut app, "lib-youtube", "folder-c", 1);
+
+    let counted = app.feed_home_video_counted_folders(0);
+    assert_eq!(
+        counted
+            .iter()
+            .map(|folder| folder.id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["folder-a", "folder-c"],
+        "the second event adds its folder without dropping the first"
+    );
 }
 
 /// Contract (tasks.md 3.3, spec "Empty folder gets no pill"): a folder whose
@@ -284,11 +328,8 @@ fn folder_counts_event_denies_a_pill_to_an_empty_folder(make_home_video_app: App
     let mut app = make_home_video_app;
     let active = seed_home_video_root_loaded(&mut app);
 
-    send_folder_counts(
-        &mut app,
-        "lib-youtube",
-        &[("folder-empty", 0), ("folder-active", 2)],
-    );
+    send_folder_count(&mut app, "lib-youtube", "folder-empty", 0);
+    send_folder_count(&mut app, "lib-youtube", "folder-active", 2);
 
     let counted = app.feed_home_video_counted_folders(0);
     assert_eq!(
@@ -309,7 +350,7 @@ fn listing_and_counts_derive_the_pill_row_without_any_video_fetch(make_home_vide
     let mut app = make_home_video_app;
     seed_home_video_root_loaded(&mut app);
 
-    send_folder_counts(&mut app, "lib-youtube", &[("folder-active", 2)]);
+    send_folder_count(&mut app, "lib-youtube", "folder-active", 2);
 
     let state = app.libs[0].feed_home_video.as_ref().unwrap();
     assert_eq!(
@@ -332,7 +373,7 @@ fn folder_counts_event_resolves_the_pending_pill_index(make_home_video_app: App)
         state.restored_group = Some(1);
     }
 
-    send_folder_counts(&mut app, "lib-youtube", &[("folder-active", 2)]);
+    send_folder_count(&mut app, "lib-youtube", "folder-active", 2);
 
     let state = app.libs[0].feed_home_video.as_ref().unwrap();
     assert_eq!(
@@ -348,7 +389,7 @@ fn folder_counts_event_for_a_foreign_root_is_dropped(make_home_video_app: App) {
     let mut app = make_home_video_app;
     seed_home_video_root_loaded(&mut app);
 
-    send_folder_counts(&mut app, "lib-other", &[("folder-active", 2)]);
+    send_folder_count(&mut app, "lib-other", "folder-active", 2);
 
     let state = app.libs[0].feed_home_video.as_ref().unwrap();
     assert!(state.folder_counts.is_empty());

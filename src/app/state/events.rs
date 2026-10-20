@@ -120,16 +120,17 @@ pub enum BrowseEvent {
         selection: mbv_ui_model::feed::FeedHomeVideoSelection,
         items: Vec<EmbyItem>,
     },
-    /// Completion of the per-folder count fan-out (design D1 (b) of change
-    /// `feed-view-lazy-folder-groups`): the successfully obtained
-    /// `(folder id, videos-only count)` pairs for the folders directly under
-    /// the root listing, one count-only query each. The dispatch arm
-    /// stale-guards the result against the library's current root parent
-    /// before it replaces the pill-membership count map.
-    FeedHomeVideoFolderCountsLoaded {
+    /// Completion of one per-folder count query (design D1 (b) of change
+    /// `feed-view-lazy-folder-groups`): the videos-only count for one folder
+    /// directly under the root listing, sent by the folder's own fan-out
+    /// thread so pills fill in incrementally. The dispatch arm stale-guards
+    /// the result against the library's current root parent before it records
+    /// the count in the pill-membership map.
+    FeedHomeVideoFolderCountLoaded {
         lib_idx: usize,
         parent_id: String,
-        counts: Vec<(String, usize)>,
+        folder_id: String,
+        count: usize,
     },
     /// `switch_tab`: true for user-initiated navigation (switch to the lib tab),
     /// false for startup restore (just populate `nav_stack`, stay on current tab).
