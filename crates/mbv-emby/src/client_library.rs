@@ -373,29 +373,31 @@ impl EmbyClient {
 
     /// Counts the videos under a folder with one count-only query.
     ///
+    /// The shared `get_items_sorted` route serves the count:
     /// `GET /Users/{UserId}/Items?ParentId=<folder>&Recursive=true
-    /// &IncludeItemTypes=Video&Limit=1&EnableTotalRecordCount=true`, read
-    /// `TotalRecordCount`. Feed-home-video pill membership uses this instead
-    /// of `RecursiveItemCount`, because no source defines what that count
+    /// &IncludeItemTypes=Video&Limit=1`, read `TotalRecordCount`. The
+    /// request carries the shared browse `Fields` list and
+    /// `SortBy=DateCreated&SortOrder=Ascending`, and sends no explicit
+    /// `EnableTotalRecordCount` — Emby returns `TotalRecordCount` for this
+    /// endpoint by default, which every mbv browse fetch already relies on.
+    /// Feed-home-video pill membership uses this instead of
+    /// `RecursiveItemCount`, because no source defines what that count
     /// spans and it cannot prove a folder holds a video (design D1 (b)). No
     /// `IsPlayed` filter runs, so watched videos count. A missing
     /// `TotalRecordCount` reads as zero.
     pub fn get_folder_video_count(&self, folder_id: &str) -> Result<usize, crate::EmbyError> {
-        let resp: Value = self
-            .get(&format!(
-                "/Users/{}/Items",
-                mbv_net::encode_path_segment(&self.user_id)
-            ))
-            .query("ParentId", folder_id)
-            .query("Recursive", "true")
-            .query("IncludeItemTypes", "Video")
-            .query("Limit", "1")
-            .query("EnableTotalRecordCount", "true")
-            .call()?
-            .body_mut()
-            .read_json()?;
-        let count = resp["TotalRecordCount"].as_u64().unwrap_or(0);
-        Ok(usize::try_from(count).unwrap_or(usize::MAX))
+        // `Limit=1` keeps the response to one row; `TotalRecordCount`
+        // carries the total the caller reads.
+        self.get_items_sorted(
+            folder_id,
+            Some("Video"),
+            false,
+            0,
+            1,
+            "DateCreated",
+            "Ascending",
+        )
+        .map(|(_, total)| total)
     }
 
     /// Fetches one artist's Audio tracks via Emby's

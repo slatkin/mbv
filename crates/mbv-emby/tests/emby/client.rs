@@ -258,7 +258,11 @@ fn folder_video_count_requests_videos_only_and_reads_total_record_count() {
     assert!(request.contains("Recursive=true"));
     assert!(request.contains("IncludeItemTypes=Video"));
     assert!(request.contains("Limit=1"));
-    assert!(request.contains("EnableTotalRecordCount=true"));
+    // The shared sorted-items route carries the browse sort and no explicit
+    // EnableTotalRecordCount — Emby returns TotalRecordCount for this
+    // endpoint by default, which every mbv browse fetch already relies on.
+    assert!(request.contains("SortBy=DateCreated"));
+    assert!(request.contains("SortOrder=Ascending"));
     assert_eq!(count, 12);
 }
 
