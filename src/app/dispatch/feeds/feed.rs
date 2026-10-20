@@ -451,17 +451,17 @@ impl App {
 
     /// The count fan-out (design D1 (b), task 3.3): background threads query
     /// the per-folder videos-only count for every folder directly under the
-    /// root listing, one query per folder, and each thread sends one result
-    /// event per folder as its queries return so pills fill in incrementally.
-    /// At most `FOLDER_COUNT_THREADS` threads run, each over a contiguous
-    /// slice of the folder list. A failed query omits its folder — it gets no
-    /// pill until a later listing completion or refresh retries. The
-    /// listing's `child_count` is not consulted (the root listing requests no
-    /// count fields) and nothing here lists any videos. The fan-out runs only
-    /// while some folder lacks a count entry: a listing whose folders all
-    /// hold entries spawns nothing, and a refresh re-queries every folder by
-    /// clearing the map (design D2). Without a Service client it spawns
-    /// nothing; the next listing completion or refresh retries.
+    /// current root listing, one query per folder, and each thread sends one
+    /// result event per folder as its queries return so pills fill in
+    /// incrementally. At most `FOLDER_COUNT_THREADS` threads run, each over a
+    /// contiguous slice of the folder list. A failed query reports `None` —
+    /// its folder gets no pill until a later listing completion or refresh
+    /// re-queries it. The listing's `child_count` is not consulted (the root
+    /// listing requests no count fields) and nothing here lists any videos.
+    /// Callers decide when to fan out: a listing completion spawns only while
+    /// some folder lacks a count entry; a refresh spawns unconditionally
+    /// (design D2). Without a Service client it spawns nothing; the next
+    /// listing completion or refresh retries.
     pub(in crate::app) fn spawn_feed_home_video_folder_counts(&mut self, lib_idx: usize) {
         if !self.is_feed_home_video_library(lib_idx) {
             return;
@@ -474,9 +474,6 @@ impl App {
         let Some(lib) = self.libs.get(lib_idx) else {
             return;
         };
-        let Some(state) = lib.feed_home_video.as_ref() else {
-            return;
-        };
         let Some(root) = lib.nav_stack.first() else {
             return;
         };
@@ -486,11 +483,7 @@ impl App {
             .filter(|item| item.is_folder)
             .map(|item| item.id.clone())
             .collect();
-        if folder_ids.is_empty()
-            || folder_ids
-                .iter()
-                .all(|id| state.folder_counts.contains_key(id))
-        {
+        if folder_ids.is_empty() {
             return;
         }
         let parent_id = root.parent_id.clone();
@@ -635,24 +628,29 @@ impl App {
         }
         if self.feed_home_video_folder_counts_cover_root(lib_idx) {
             self.resolve_feed_home_video_pending_selection(lib_idx);
+        } else {
+            // Some folder lacks a count entry: the fan-out re-queries, and
+            // its quiescence resolves a pending restored pill index against
+            // the final row.
+            self.spawn_feed_home_video_folder_counts(lib_idx);
         }
-        self.spawn_feed_home_video_folder_counts(lib_idx);
         self.log_feed_home_video_state(lib_idx, "listing_completed");
     }
 
     /// The refresh-completion hook (design D2): the refreshed folder listing
     /// invalidates the whole session cache — the current selection refetches
     /// through the shown projection's lazy-fetch trigger, and unloaded pills
-    /// stay unloaded. The count replacement and the pill-index re-resolution
-    /// wait for the refreshed root listing to fully paginate (review P2,
-    /// b603f329b..9e454b62d): a refresh that lands only part of the folders
-    /// (the library total grew since the last full pagination) must not
-    /// shrink the pill row from its page-1 folders, nor re-resolve the pill
-    /// selection against the shrunken row while `selection` keeps a
-    /// later-page folder. A fully paginated refresh therefore clears the
-    /// count map here — the next listing completion's non-forced fan-out
-    /// fails its dedupe and re-queries every folder; a partial refresh keeps
-    /// the counts until its final page append completes the listing.
+    /// stay unloaded. The counts refresh with the listing (design D2): a
+    /// fully paginated refresh clears the count map, so the fan-out below
+    /// re-queries every folder; a partial one (the library total grew since
+    /// the last full pagination, so `spawn_refresh` fetched only the first
+    /// page) keeps the map and still commits the fan-out — per-folder inserts
+    /// update the page-1 folders' entries without shrinking the row (review
+    /// P2, b603f329b..9e454b62d: page-1 folders must not decide the whole
+    /// row), and the pill-index resolution stays gated on the completed
+    /// listing. A folder that gained or lost its only videos therefore gains
+    /// or loses its pill after the refresh instead of keeping a stale count
+    /// for the session (review P2 on 96abfa239..ab4b558bb).
     pub(in crate::app) fn complete_feed_home_video_refresh(&mut self, lib_idx: usize) {
         if !self.is_feed_home_video_library(lib_idx) {
             return;
@@ -669,9 +667,11 @@ impl App {
                 state.folder_counts.clear();
             }
         }
-        if fully_loaded {
-            self.spawn_feed_home_video_folder_counts(lib_idx);
-        }
+        // Both refresh shapes re-query the counts: the cleared map re-queries
+        // everything after a full pagination; the partial one re-queries its
+        // folders here, and its final page append re-queries whatever the
+        // partial listing could not see.
+        self.spawn_feed_home_video_folder_counts(lib_idx);
         self.log_feed_home_video_state(lib_idx, "refresh_completed");
     }
 

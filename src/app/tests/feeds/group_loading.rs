@@ -628,6 +628,54 @@ fn a_full_refresh_invalidates_the_folder_counts_so_the_fan_out_requeries(make_ho
     );
 }
 
+/// Regression (review P2 on 96abfa239..ab4b558bb): `spawn_refresh` fetches
+/// only `loaded_count.max(PAGE_SIZE)` rows, so a refresh of a root listing
+/// that has not fully paginated lands partial — and that refresh must still
+/// re-query the counts (design D2), or a folder crossing 0<->positive
+/// videos never gains or loses its pill for the rest of the session. The
+/// partial refresh commits the fan-out synchronously (the quiescence
+/// accounting mark) while leaving the existing counts in place: page-1
+/// folders must not shrink the row (review P2, b603f329b..9e454b62d).
+#[rstest]
+fn a_partial_refresh_commits_a_count_fanout_without_shrinking_the_counts(make_home_video_app: App) {
+    let mut app = make_home_video_app;
+    // The stub client's count queries fail into the unprocessed event
+    // channel, so the synchronous accounting mark stays observable.
+    install_test_emby(&mut app, crate::config::Config::default());
+    app.libs[0].nav_stack[0] = youtube_root_level(
+        ServerRows::loaded(3, 3),
+        vec![
+            make_root_folder("folder-a", "Channel A"),
+            make_root_folder("folder-b", "Channel B"),
+            make_root_folder("folder-c", "Channel C"),
+        ],
+        false,
+    );
+    seed_folder_counts(&mut app, "folder-a", 1);
+    seed_folder_counts(&mut app, "folder-b", 1);
+    seed_folder_counts(&mut app, "folder-c", 1);
+
+    app.handle_lib_event(LibEvent::Browse(BrowseEvent::Refreshed {
+        lib_idx: 0,
+        parent_id: "lib-youtube".into(),
+        item_types: None,
+        unplayed_only: false,
+        items: vec![make_root_folder("folder-a", "Channel A")],
+        total_count: 3,
+    }));
+
+    let state = app.libs[0].feed_home_video.as_ref().unwrap();
+    assert_eq!(
+        state.folder_counts.len(),
+        3,
+        "page-1 folders did not shrink the count map"
+    );
+    assert_eq!(
+        state.outstanding_counts, 1,
+        "the partial refresh committed a fan-out for the listing's folders"
+    );
+}
+
 /// Contract (review P2 on task 5.1, commit 46b0ac739): the UI-state reset
 /// restores a feed-view library's root to a plain folder listing — no
 /// `item_types`, no unplayed-only flag — so a later refresh builds its fetch
