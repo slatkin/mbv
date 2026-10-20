@@ -6,19 +6,29 @@ use mbv_feed::fetch_and_parse_rss;
 use mbv_ui_model::browse::{BrowseResting, ServerRows};
 use std::time::Instant;
 
+/// The selection a pill index names: 0 is All, `n` is the nth counted
+/// folder. An index past the counted folders names nothing.
+fn selection_for_group(counted: &[EmbyItem], group_idx: usize) -> Option<FeedHomeVideoSelection> {
+    match group_idx.checked_sub(1) {
+        None => Some(FeedHomeVideoSelection::All),
+        Some(folder_idx) => counted
+            .get(folder_idx)
+            .map(|folder| FeedHomeVideoSelection::Folder(folder.id.clone())),
+    }
+}
+
 impl App {
     pub(in crate::app) fn log_feed_home_video_state(&self, lib_idx: usize, context: &str) {
+        if !tracing::enabled!(target: "feedhv", tracing::Level::DEBUG) {
+            return;
+        }
         let Some(lib) = self.libs.get(lib_idx) else {
             tracing::debug!(name: "feed.home_video.state_missing", target: "feedhv", context, library_index = lib_idx, "feed home-video state missing");
             return;
         };
         let root = lib.nav_stack.first();
         let feed = lib.feed_home_video.as_ref();
-        let selected_group = feed.map_or(0, |state| {
-            state
-                .selected_group
-                .min(self.feed_home_video_visible_group_count(lib_idx))
-        });
+        let selected_group = self.feed_home_video_selected_group_index(lib_idx);
         tracing::debug!(name: "feed.home_video.state_observed", target: "feedhv", context, library_index = lib_idx, library = %lib.library.name, navigation_length = lib.nav_stack.len(), root_parent = root.map_or("", |level| level.parent_id.as_str()), root_item_count = root.map_or(0, |level| level.items.len()), root_loading = root.is_some_and(|level| level.loading), feed_present = feed.is_some(), feed_loading = feed.is_some_and(|state| state.loading), selected_group, item_count = feed.map_or(0, FeedHomeVideoState::selected_len), video_cursor = feed.map_or(0, |state| state.video_cursor), video_scroll = feed.map_or(0, |state| state.video_scroll), group_view = self.is_feed_home_video_group_view(lib_idx), "feed home-video state observed");
     }
 
@@ -26,18 +36,18 @@ impl App {
     /// folders the pill row offers, in listing order (design D3). The count
     /// fan-out fills `folder_counts`; until it does, no folder pill shows.
     pub(in crate::app) fn feed_home_video_counted_folders(&self, lib_idx: usize) -> Vec<EmbyItem> {
-        let Some(lib) = self.libs.get(lib_idx) else {
-            return Vec::new();
-        };
-        let Some(state) = lib.feed_home_video.as_ref() else {
-            return Vec::new();
-        };
-        let Some(root) = lib.nav_stack.first() else {
-            return Vec::new();
-        };
-        root.items
-            .iter()
-            .filter(|folder| {
+        self.counted_folder_iter(lib_idx).cloned().collect()
+    }
+
+    pub(in crate::app) fn counted_folder_iter(
+        &self,
+        lib_idx: usize,
+    ) -> impl Iterator<Item = &EmbyItem> {
+        let lib = self.libs.get(lib_idx);
+        let state = lib.and_then(|lib| lib.feed_home_video.as_ref());
+        let root = lib.and_then(|lib| lib.nav_stack.first());
+        state.zip(root).into_iter().flat_map(|(state, root)| {
+            root.items.iter().filter(move |folder| {
                 state
                     .folder_counts
                     .get(&folder.id)
@@ -45,12 +55,11 @@ impl App {
                     .unwrap_or_default()
                     > 0
             })
-            .cloned()
-            .collect()
+        })
     }
 
     fn feed_home_video_visible_group_count(&self, lib_idx: usize) -> usize {
-        self.feed_home_video_counted_folders(lib_idx).len()
+        self.counted_folder_iter(lib_idx).count()
     }
 
     pub(in crate::app) fn feed_home_video_selected_group_index(&self, lib_idx: usize) -> usize {
@@ -100,7 +109,7 @@ impl App {
     }
 
     pub(in crate::app) fn clamp_feed_home_video_state(&mut self, lib_idx: usize) {
-        let folder_count = self.feed_home_video_visible_group_count(lib_idx);
+        let selected_group = self.feed_home_video_selected_group_index(lib_idx);
         let Some(state) = self
             .libs
             .get_mut(lib_idx)
@@ -108,7 +117,7 @@ impl App {
         else {
             return;
         };
-        state.selected_group = state.selected_group.min(folder_count);
+        state.selected_group = selected_group;
         let items_len = state.selected_len();
         if items_len == 0 {
             state.video_cursor = 0;
@@ -150,14 +159,7 @@ impl App {
             return false;
         }
         // Feed home-video libraries use the group view when configured.
-        if lib.library.collection_type != "homevideos" {
-            return false;
-        }
-        self.config
-            .lock()
-            .unwrap()
-            .feed_view_libraries
-            .contains(&lib.library.name.to_lowercase())
+        self.is_feed_home_video_library(lib_idx)
             && lib
                 .nav_stack
                 .first()
@@ -235,23 +237,12 @@ impl App {
         if self.libs[lib_idx].nav_stack.is_empty() {
             return;
         }
-        let n = self.feed_home_video_visible_group_count(lib_idx);
-        if group_idx > n {
-            return;
-        }
         // Resolve the pill's folder id from the root listing (design D3): the
         // listing, not a state-held group list, is the pill row's source. A
         // folder with no counted videos has no pill, so its index resolves to
         // nothing and the selection stays as it is.
         let counted = self.feed_home_video_counted_folders(lib_idx);
-        let selection = if group_idx == 0 {
-            Some(FeedHomeVideoSelection::All)
-        } else {
-            counted
-                .get(group_idx - 1)
-                .map(|folder| FeedHomeVideoSelection::Folder(folder.id.clone()))
-        };
-        let Some(selection) = selection else {
+        let Some(selection) = selection_for_group(&counted, group_idx) else {
             return;
         };
         let mut changed = false;
@@ -345,23 +336,20 @@ impl App {
             // unloaded; a later selection or shown pass retries.
             return;
         };
-        let Some(lib) = self.libs.get_mut(lib_idx) else {
+        let Some(parent_id) = self.feed_home_video_selected_parent_id(lib_idx) else {
             return;
         };
-        let Some(state) = lib.feed_home_video.as_mut() else {
+        let Some(state) = self
+            .libs
+            .get_mut(lib_idx)
+            .and_then(|lib| lib.feed_home_video.as_mut())
+        else {
             return;
         };
         if state.loading || state.items.contains_key(&state.selection) {
             return;
         }
-        let Some(root) = lib.nav_stack.first() else {
-            return;
-        };
         let selection = state.selection.clone();
-        let parent_id = match &selection {
-            FeedHomeVideoSelection::All => root.parent_id.clone(),
-            FeedHomeVideoSelection::Folder(id) => id.clone(),
-        };
         state.loading = true;
         self.log_feed_home_video_state(lib_idx, "selection_fetch_spawned");
         let tx = self.channels.lib_tx.clone();
@@ -382,19 +370,19 @@ impl App {
                 }
             };
             // Initial page then total refill (design D2): the first page
-            // arrives fast, then a refill replaces it with the parent's full
-            // item set when the total exceeds the page.
+            // arrives fast, then the remainder is appended so the parent's
+            // full item set is held when the total exceeds the page.
             if total_count > items.len() {
                 match client.get_items_sorted(
                     &parent_id,
                     Some("Video"),
                     false,
-                    0,
-                    total_count,
+                    items.len(),
+                    total_count - items.len(),
                     "DateCreated",
                     "Ascending",
                 ) {
-                    Ok((refetched, _)) => items = refetched,
+                    Ok((rest, _)) => items.extend(rest),
                     Err(e) => {
                         let _ = tx.send(LibEvent::Error(e.to_string()));
                         return;
@@ -663,14 +651,7 @@ impl App {
         else {
             return;
         };
-        let resolved = if state.selected_group == 0 {
-            Some(FeedHomeVideoSelection::All)
-        } else {
-            counted
-                .get(state.selected_group - 1)
-                .map(|folder| FeedHomeVideoSelection::Folder(folder.id.clone()))
-        };
-        if let Some(selection) = resolved
+        if let Some(selection) = selection_for_group(&counted, state.selected_group)
             && state.selection != selection
         {
             state.selection = selection;

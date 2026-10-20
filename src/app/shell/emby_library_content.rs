@@ -177,9 +177,9 @@ impl Model {
         // counts (design D3): a folder with no counted videos offers no pill,
         // so the fan-out's empty count map leaves only New and All until it
         // fills (task 3.3 owns the count fan-out).
-        let counted = self.app.feed_home_video_counted_folders(index);
-        let (feed_groups, feed_group_ids): (Vec<String>, Vec<String>) = counted
-            .iter()
+        let (feed_groups, feed_group_ids): (Vec<String>, Vec<String>) = self
+            .app
+            .counted_folder_iter(index)
             .map(|folder| (folder.name.clone(), folder.id.clone()))
             .unzip();
         let feed_group_cursor = self.app.feed_home_video_selected_group_index(index);

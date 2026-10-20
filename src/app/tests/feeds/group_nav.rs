@@ -1,5 +1,5 @@
+use super::youtube_root_level;
 use crate::app::tests::*;
-use mbv_ui_model::browse::BrowseResting;
 use mbv_ui_model::browse::ServerRows;
 use std::collections::HashMap;
 
@@ -15,23 +15,7 @@ fn feed_home_video_group_view_requires_homevideos_and_feed_config() {
     folder.is_folder = true;
 
     app.libs.push(LibraryTab {
-        nav_stack: vec![BrowseLevel {
-            rows: ServerRows::new(1),
-            parent_id: "lib-youtube".into(),
-            title: "YouTube".into(),
-            items: vec![folder],
-
-            resting: BrowseResting::new(0, 0),
-            item_types: None,
-            unplayed_only: false,
-            sort_by: "SortName".into(),
-            sort_order: "Ascending".into(),
-            loading: false,
-            all_items: None,
-            letter_filter: None,
-            tv_content_mode: None,
-            music_grouping: None,
-        }],
+        nav_stack: vec![youtube_root_level(ServerRows::new(1), vec![folder], false)],
         feed_home_video: Some(FeedHomeVideoState {
             loading: true,
             ..FeedHomeVideoState::default()
@@ -57,23 +41,7 @@ fn feed_home_video_group_view_survives_an_empty_state() {
     library.is_folder = true;
 
     app.libs.push(LibraryTab {
-        nav_stack: vec![BrowseLevel {
-            rows: ServerRows::new(0),
-            parent_id: "lib-youtube".into(),
-            title: "YouTube".into(),
-            items: vec![],
-
-            resting: BrowseResting::new(0, 0),
-            item_types: None,
-            unplayed_only: false,
-            sort_by: "SortName".into(),
-            sort_order: "Ascending".into(),
-            loading: false,
-            all_items: None,
-            letter_filter: None,
-            tv_content_mode: None,
-            music_grouping: None,
-        }],
+        nav_stack: vec![youtube_root_level(ServerRows::new(0), vec![], false)],
         // Nothing loaded yet: not loading, no counted folders, no items.
         feed_home_video: Some(FeedHomeVideoState::default()),
         ..LibraryTab::new(library)
@@ -98,23 +66,11 @@ fn select_feed_folder_group_all_uses_the_all_selection_cache() {
     video.id = "video-a1".into();
 
     app.libs.push(LibraryTab {
-        nav_stack: vec![BrowseLevel {
-            rows: ServerRows::new(1),
-            parent_id: "lib-youtube".into(),
-            title: "YouTube".into(),
-            items: vec![folder.clone()],
-
-            resting: BrowseResting::new(0, 0),
-            item_types: None,
-            unplayed_only: false,
-            sort_by: "SortName".into(),
-            sort_order: "Ascending".into(),
-            loading: false,
-            all_items: None,
-            letter_filter: None,
-            tv_content_mode: None,
-            music_grouping: None,
-        }],
+        nav_stack: vec![youtube_root_level(
+            ServerRows::new(1),
+            vec![folder.clone()],
+            false,
+        )],
         feed_home_video: Some(FeedHomeVideoState {
             items: HashMap::from([
                 (FeedHomeVideoSelection::All, vec![video.clone()]),
@@ -167,23 +123,11 @@ fn select_feed_folder_group_resolves_the_folder_id_from_the_listing() {
     folder.is_folder = true;
 
     app.libs.push(LibraryTab {
-        nav_stack: vec![BrowseLevel {
-            rows: ServerRows::new(1),
-            parent_id: "lib-youtube".into(),
-            title: "YouTube".into(),
-            items: vec![folder.clone()],
-
-            resting: BrowseResting::new(0, 0),
-            item_types: None,
-            unplayed_only: false,
-            sort_by: "SortName".into(),
-            sort_order: "Ascending".into(),
-            loading: false,
-            all_items: None,
-            letter_filter: None,
-            tv_content_mode: None,
-            music_grouping: None,
-        }],
+        nav_stack: vec![youtube_root_level(
+            ServerRows::new(1),
+            vec![folder.clone()],
+            false,
+        )],
         feed_home_video: Some(FeedHomeVideoState {
             folder_counts: HashMap::from([(folder.id.clone(), 2)]),
             ..FeedHomeVideoState::default()
@@ -222,23 +166,7 @@ fn feed_home_video_selected_parent_id_follows_the_selection() {
     library.is_folder = true;
 
     app.libs.push(LibraryTab {
-        nav_stack: vec![BrowseLevel {
-            rows: ServerRows::new(0),
-            parent_id: "lib-youtube".into(),
-            title: "YouTube".into(),
-            items: vec![],
-
-            resting: BrowseResting::new(0, 0),
-            item_types: None,
-            unplayed_only: false,
-            sort_by: "SortName".into(),
-            sort_order: "Ascending".into(),
-            loading: false,
-            all_items: None,
-            letter_filter: None,
-            tv_content_mode: None,
-            music_grouping: None,
-        }],
+        nav_stack: vec![youtube_root_level(ServerRows::new(0), vec![], false)],
         feed_home_video: Some(FeedHomeVideoState {
             selection: FeedHomeVideoSelection::Folder("folder-a".into()),
             ..FeedHomeVideoState::default()
@@ -282,23 +210,11 @@ fn feed_home_video_counted_folders_derive_pills_from_positive_counts() {
     active.is_folder = true;
 
     app.libs.push(LibraryTab {
-        nav_stack: vec![BrowseLevel {
-            rows: ServerRows::new(2),
-            parent_id: "lib-youtube".into(),
-            title: "YouTube".into(),
-            items: vec![empty, active.clone()],
-
-            resting: BrowseResting::new(0, 0),
-            item_types: None,
-            unplayed_only: false,
-            sort_by: "SortName".into(),
-            sort_order: "Ascending".into(),
-            loading: false,
-            all_items: None,
-            letter_filter: None,
-            tv_content_mode: None,
-            music_grouping: None,
-        }],
+        nav_stack: vec![youtube_root_level(
+            ServerRows::new(2),
+            vec![empty, active.clone()],
+            false,
+        )],
         feed_home_video: Some(FeedHomeVideoState {
             folder_counts: HashMap::from([(active.id.clone(), 3)]),
             ..FeedHomeVideoState::default()
@@ -335,23 +251,11 @@ fn ensure_feed_home_video_group_level_clamps_stale_cursor_to_available_folders()
     let video = make_item("A1", "Movie");
 
     app.libs.push(LibraryTab {
-        nav_stack: vec![BrowseLevel {
-            rows: ServerRows::new(1),
-            parent_id: "lib-youtube".into(),
-            title: "YouTube".into(),
-            items: vec![folder.clone()],
-
-            resting: BrowseResting::new(0, 0),
-            item_types: None,
-            unplayed_only: false,
-            sort_by: "SortName".into(),
-            sort_order: "Ascending".into(),
-            loading: false,
-            all_items: None,
-            letter_filter: None,
-            tv_content_mode: None,
-            music_grouping: None,
-        }],
+        nav_stack: vec![youtube_root_level(
+            ServerRows::new(1),
+            vec![folder.clone()],
+            false,
+        )],
         feed_home_video: Some(FeedHomeVideoState {
             selection: FeedHomeVideoSelection::Folder(folder.id.clone()),
             items: HashMap::from([(
@@ -397,23 +301,7 @@ fn listing_completion_resolves_the_pending_pill_index_into_the_selection() {
     folder.is_folder = true;
 
     app.libs.push(LibraryTab {
-        nav_stack: vec![BrowseLevel {
-            rows: ServerRows::new(1),
-            parent_id: "lib-youtube".into(),
-            title: "YouTube".into(),
-            items: vec![],
-
-            resting: BrowseResting::new(0, 0),
-            item_types: None,
-            unplayed_only: false,
-            sort_by: "SortName".into(),
-            sort_order: "Ascending".into(),
-            loading: true,
-            all_items: None,
-            letter_filter: None,
-            tv_content_mode: None,
-            music_grouping: None,
-        }],
+        nav_stack: vec![youtube_root_level(ServerRows::new(1), vec![], true)],
         feed_home_video: Some(FeedHomeVideoState {
             selected_group: 1,
             folder_counts: HashMap::from([("folder-a".to_string(), 2)]),
@@ -425,23 +313,11 @@ fn listing_completion_resolves_the_pending_pill_index_into_the_selection() {
     app.handle_lib_event(LibEvent::Browse(BrowseEvent::Loaded {
         lib_idx: 0,
         parent_id: "lib-youtube".into(),
-        level: Box::new(BrowseLevel {
-            rows: ServerRows::loaded(1, 1),
-            parent_id: "lib-youtube".into(),
-            title: "YouTube".into(),
-            items: vec![folder.clone()],
-
-            resting: BrowseResting::new(0, 0),
-            item_types: None,
-            unplayed_only: false,
-            sort_by: "SortName".into(),
-            sort_order: "Ascending".into(),
-            loading: false,
-            all_items: None,
-            letter_filter: None,
-            tv_content_mode: None,
-            music_grouping: None,
-        }),
+        level: Box::new(youtube_root_level(
+            ServerRows::loaded(1, 1),
+            vec![folder.clone()],
+            false,
+        )),
     }));
 
     assert_eq!(

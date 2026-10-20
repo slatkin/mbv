@@ -4,11 +4,12 @@
 //! played — from its context menu or by its playback completing — leaves the
 //! group view's loaded selection rows in place.
 
+use super::youtube_root_level;
 use crate::app::state::service_runtime::EmbyRuntime;
 use crate::app::tests::*;
 use mbv_emby::EmbyClient;
 use mbv_net::mock_http::MockHttp;
-use mbv_ui_model::browse::{BrowseResting, ServerRows};
+use mbv_ui_model::browse::ServerRows;
 use std::collections::HashMap;
 use std::sync::Mutex;
 
@@ -29,22 +30,7 @@ fn app_with_feed_view_library(http: &MockHttp) -> crate::app::App {
     video.id = "video-a1".into();
 
     app.libs.push(LibraryTab {
-        nav_stack: vec![BrowseLevel {
-            rows: ServerRows::new(0),
-            parent_id: "lib-youtube".into(),
-            title: "YouTube".into(),
-            items: vec![],
-            resting: BrowseResting::new(0, 0),
-            item_types: None,
-            unplayed_only: false,
-            sort_by: "SortName".into(),
-            sort_order: "Ascending".into(),
-            loading: false,
-            all_items: None,
-            letter_filter: None,
-            tv_content_mode: None,
-            music_grouping: None,
-        }],
+        nav_stack: vec![youtube_root_level(ServerRows::new(0), vec![], false)],
         feed_home_video: Some(FeedHomeVideoState {
             items: HashMap::from([(FeedHomeVideoSelection::All, vec![video])]),
             ..FeedHomeVideoState::default()

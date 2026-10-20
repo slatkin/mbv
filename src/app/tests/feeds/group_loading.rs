@@ -1,5 +1,5 @@
+use super::youtube_root_level;
 use crate::app::tests::*;
-use mbv_ui_model::browse::BrowseResting;
 use mbv_ui_model::browse::ServerRows;
 use rstest::{fixture, rstest};
 
@@ -15,23 +15,7 @@ fn make_home_video_app() -> App {
     library.is_folder = true;
 
     app.libs.push(LibraryTab {
-        nav_stack: vec![BrowseLevel {
-            rows: ServerRows::complete(0),
-            parent_id: "lib-youtube".into(),
-            title: "YouTube".into(),
-            items: vec![],
-
-            resting: BrowseResting::new(0, 0),
-            item_types: None,
-            unplayed_only: false,
-            sort_by: "SortName".into(),
-            sort_order: "Ascending".into(),
-            loading: true,
-            all_items: None,
-            letter_filter: None,
-            tv_content_mode: None,
-            music_grouping: None,
-        }],
+        nav_stack: vec![youtube_root_level(ServerRows::complete(0), vec![], true)],
         feed_home_video: Some(FeedHomeVideoState {
             loading: true,
             ..FeedHomeVideoState::default()
@@ -56,23 +40,11 @@ fn seed_home_video_root_loaded(app: &mut App) -> EmbyItem {
     app.handle_lib_event(LibEvent::Browse(BrowseEvent::Loaded {
         lib_idx: 0,
         parent_id: "lib-youtube".into(),
-        level: Box::new(BrowseLevel {
-            rows: ServerRows::loaded(2, 2),
-            parent_id: "lib-youtube".into(),
-            title: "YouTube".into(),
-            items: vec![empty, active.clone()],
-
-            resting: BrowseResting::new(0, 0),
-            item_types: None,
-            unplayed_only: false,
-            sort_by: "SortName".into(),
-            sort_order: "Ascending".into(),
-            loading: false,
-            all_items: None,
-            letter_filter: None,
-            tv_content_mode: None,
-            music_grouping: None,
-        }),
+        level: Box::new(youtube_root_level(
+            ServerRows::loaded(2, 2),
+            vec![empty, active.clone()],
+            false,
+        )),
     }));
 
     active
@@ -459,26 +431,15 @@ fn partial_root_refresh_keeps_counts_and_the_later_page_pill(make_home_video_app
     app.handle_lib_event(LibEvent::Browse(BrowseEvent::Loaded {
         lib_idx: 0,
         parent_id: "lib-youtube".into(),
-        level: Box::new(BrowseLevel {
-            rows: ServerRows::loaded(3, 3),
-            parent_id: "lib-youtube".into(),
-            title: "YouTube".into(),
-            items: vec![
+        level: Box::new(youtube_root_level(
+            ServerRows::loaded(3, 3),
+            vec![
                 make_root_folder("folder-a", "Channel A"),
                 make_root_folder("folder-b", "Channel B"),
                 make_root_folder("folder-c", "Channel C"),
             ],
-            resting: BrowseResting::new(0, 0),
-            item_types: None,
-            unplayed_only: false,
-            sort_by: "SortName".into(),
-            sort_order: "Ascending".into(),
-            loading: false,
-            all_items: None,
-            letter_filter: None,
-            tv_content_mode: None,
-            music_grouping: None,
-        }),
+            false,
+        )),
     }));
     for id in ["folder-a", "folder-b", "folder-c"] {
         seed_folder_counts(&mut app, id, 1);
@@ -555,26 +516,15 @@ fn partial_refresh_defers_a_forced_count_fanout_to_the_final_page_append(make_ho
     app.handle_lib_event(LibEvent::Browse(BrowseEvent::Loaded {
         lib_idx: 0,
         parent_id: "lib-youtube".into(),
-        level: Box::new(BrowseLevel {
-            rows: ServerRows::loaded(3, 3),
-            parent_id: "lib-youtube".into(),
-            title: "YouTube".into(),
-            items: vec![
+        level: Box::new(youtube_root_level(
+            ServerRows::loaded(3, 3),
+            vec![
                 make_root_folder("folder-a", "Channel A"),
                 make_root_folder("folder-b", "Channel B"),
                 make_root_folder("folder-c", "Channel C"),
             ],
-            resting: BrowseResting::new(0, 0),
-            item_types: None,
-            unplayed_only: false,
-            sort_by: "SortName".into(),
-            sort_order: "Ascending".into(),
-            loading: false,
-            all_items: None,
-            letter_filter: None,
-            tv_content_mode: None,
-            music_grouping: None,
-        }),
+            false,
+        )),
     }));
 
     app.handle_lib_event(LibEvent::Browse(BrowseEvent::Refreshed {
