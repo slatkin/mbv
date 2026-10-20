@@ -623,6 +623,39 @@ pub(crate) fn toggle_running() {
     }
 }
 
+/// Ask pinwin to toggle the `mbv` panel: hide it if shown, show it if
+/// hidden. This is the request the `--toggle` flag sends, run from the
+/// Owner process on the Tray's behalf (tray-panel-toggle design D4).
+///
+/// The request runs on a worker thread, so the caller's thread never waits
+/// for pinwin, and a failure is reported as a desktop notification: the
+/// caller is a background process with no terminal to print on.
+pub(crate) fn toggle_panel() {
+    let argv = toggle_argv(PANEL_NAME);
+    let worker = std::thread::Builder::new()
+        .name("pinwin-toggle".to_string())
+        .spawn(move || {
+            if let Err(error) = run_request(&argv) {
+                let reason = error.to_string();
+                tracing::warn!(
+                    name = "panel_toggle.failed",
+                    target = "panel_toggle",
+                    error = %reason,
+                    "pinned panel toggle failed"
+                );
+                notify(&format!("cannot toggle the pinned panel: {reason}"));
+            }
+        });
+    if let Err(error) = worker {
+        tracing::warn!(
+            name = "panel_toggle.worker_failed",
+            target = "panel_toggle",
+            error = %error,
+            "pinned panel toggle worker could not start"
+        );
+    }
+}
+
 /// Report a failed `--toggle` and exit 1: stderr when stdin is a
 /// terminal, otherwise a desktop notification, because a compositor key has
 /// no terminal.

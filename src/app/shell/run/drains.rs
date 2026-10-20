@@ -431,8 +431,11 @@ impl Model {
                     self.app.player.stop();
                 }
                 // Owner actions are resolved inside the Owner process
-                // (tray-pin-swap task 3.5); the shell never receives one.
-                mbv_ctrl::TransportCommand::OwnerAction(_) => {}
+                // (tray-pin-swap task 3.5), and the pinned panel belongs to
+                // that process too, which runs the toggle request itself.
+                // The shell never receives either one.
+                mbv_ctrl::TransportCommand::OwnerAction(_)
+                | mbv_ctrl::TransportCommand::TogglePanel => {}
             }
         }
         had_events

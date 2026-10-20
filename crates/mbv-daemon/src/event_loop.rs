@@ -83,6 +83,8 @@ pub(crate) struct DaemonLoop {
     pub(super) tray: TrayState,
     /// Pin-swap state machine (tray-pin-swap design D3).
     pub(super) pin_swap: PinSwapState,
+    /// Starts the pinned-panel toggle (tray-panel-toggle design D3).
+    pub(super) toggle_panel: super::TogglePanelHook,
     /// The runtime's Cast connector, when it supplies one (cast-owner-output
     /// design D2). `None` keeps the Owner on local playback only.
     pub(super) cast_connector: Option<crate::CastConnector>,
@@ -253,6 +255,11 @@ impl DaemonLoop {
             mbv_ctrl::TransportCommand::OwnerAction(action) => {
                 let _ = owner_action::run(self, action);
             }
+            // The pinned-panel toggle runs only while a pinned Client is
+            // attached (tray-panel-toggle design D1).
+            mbv_ctrl::TransportCommand::TogglePanel => {
+                self.toggle_pinned_panel();
+            }
             mbv_ctrl::TransportCommand::Step(direction) => {
                 // The owner's one step rule (design D7): the same funnel the
                 // natural advance uses. The transport path drops the outcome.
@@ -265,6 +272,23 @@ impl DaemonLoop {
 
     pub(super) fn handle_ws_step(&mut self, direction: mbv_ctrl::Direction) {
         self.handle_transport(mbv_ctrl::TransportCommand::Step(direction));
+    }
+
+    /// Runs the pinned-panel toggle when a pinned Client is attached
+    /// (tray-panel-toggle design D1). With no pinned Client there is no
+    /// panel, so the request does nothing and the Owner logs it.
+    fn toggle_pinned_panel(&mut self) {
+        let pinned = self
+            .ctrl_clients
+            .lock()
+            .unwrap()
+            .newest_swap_client(crate::ctrl::SwapSurface::Pinned)
+            .is_some();
+        if !pinned {
+            tracing::debug!(name: "daemon.panel_toggle.no_pinned_client", target: "panel_toggle", "no pinned client is attached; the panel request does nothing");
+            return;
+        }
+        (self.toggle_panel)();
     }
 
     /// Broadcasts the canonical owner queue to every ctrl peer.

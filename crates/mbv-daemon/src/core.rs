@@ -522,6 +522,11 @@ pub(crate) type SwapCommandHook =
     Box<dyn Fn(SwapDirection) -> Result<std::process::Command, String> + Send>;
 /// Desktop-notification hook for swap failures (design D5).
 pub(crate) type NotifyHook = Box<dyn Fn(&str) + Send>;
+/// Starts the pinned-panel toggle (tray-panel-toggle design D3): hide the
+/// panel when it is shown, show it when it is hidden. The hook starts the
+/// request and returns, so the Owner's event loop never waits for it; the
+/// runtime reports a failure.
+pub(crate) type TogglePanelHook = Box<dyn Fn() + Send>;
 
 #[derive(Clone, Debug)]
 pub struct DaemonPlayerHandle {
@@ -541,6 +546,10 @@ pub struct DaemonRuntimeHooks {
     pub on_tray_ready: OnTrayReady,
     pub swap_command: SwapCommandHook,
     pub notify: NotifyHook,
+    /// Starts the pinned-panel toggle (tray-panel-toggle design D3). The
+    /// Local daemon supplies one; `mbvd` passes one that does nothing,
+    /// because it has no desktop session, no Tray, and no pinned panel.
+    pub toggle_panel: TogglePanelHook,
     /// Cast connector for the runtime (cast-owner-output design D2): the
     /// Local daemon supplies one, `mbvd` passes `None`. `None` keeps the
     /// Owner on local playback only and hides the `playback-output`
@@ -561,6 +570,7 @@ impl std::fmt::Debug for DaemonRuntimeHooks {
             .field("on_tray_ready", &"<callback>")
             .field("swap_command", &"<callback>")
             .field("notify", &"<callback>")
+            .field("toggle_panel", &"<callback>")
             .field("cast_connector", &self.cast_connector.is_some())
             .field("emby_session_output", &self.emby_session_output)
             .finish()

@@ -6,6 +6,7 @@
 use super::*;
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Instant;
 use tracing_subscriber::prelude::*;
 
@@ -39,6 +40,8 @@ pub(super) struct TestLoop {
     pub(super) persisted: Persisted,
     pub(super) settings: Arc<Mutex<OwnerSettings>>,
     pub(super) merged_rx: mpsc::Receiver<DaemonEvent>,
+    /// Counts the pinned-panel toggle requests the loop ran.
+    pub(super) panel_toggles: Arc<AtomicUsize>,
 }
 
 pub(super) fn test_loop_with_role(role: crate::DaemonRole) -> TestLoop {
@@ -107,6 +110,8 @@ pub(super) fn test_loop_with_queue(
     let (merged_tx, merged_rx) = mpsc::channel::<DaemonEvent>();
     let settings = Arc::new(Mutex::new(OwnerSettings::default()));
     let current_settings = Arc::clone(&settings);
+    let panel_toggles = Arc::new(AtomicUsize::new(0));
+    let toggles = Arc::clone(&panel_toggles);
     let pin_swap = PinSwapState::new(
         Box::new(|_direction| Err("no swap command in tests".to_string())),
         Box::new(|_message| ()),
@@ -140,6 +145,9 @@ pub(super) fn test_loop_with_queue(
         queue_persist_tx: None,
         tray: null_tray(),
         pin_swap,
+        toggle_panel: Box::new(move || {
+            toggles.fetch_add(1, Ordering::SeqCst);
+        }),
         cast_connector: None,
         emby_session_output: false,
         emby_session_worker: None,
@@ -149,6 +157,7 @@ pub(super) fn test_loop_with_queue(
         persisted,
         settings,
         merged_rx,
+        panel_toggles,
     }
 }
 
@@ -232,6 +241,41 @@ fn transport_stop_stops_the_player_and_clears_slot_jumps() {
 
     assert!(t.event_loop.owner.core.transitions.in_flight().is_none());
     assert!(t.event_loop.owner.queued_transition_origin.is_none());
+}
+
+/// Contract: spec local-daemon-tray "The Tray icon toggles the pinned
+/// panel" — the Owner runs the panel request only while a pinned Client is
+/// attached (tray-panel-toggle design D1). With no pinned Client there is
+/// no panel, so the request does nothing.
+#[test]
+fn transport_toggle_panel_runs_the_request_only_with_a_pinned_client() {
+    let mut t = test_loop_with_queue(crate::DaemonRole::Local, Vec::new(), 0);
+
+    t.event_loop.handle_event(DaemonEvent::Transport(
+        mbv_ctrl::TransportCommand::TogglePanel,
+    ));
+    assert_eq!(
+        t.panel_toggles.load(Ordering::SeqCst),
+        0,
+        "no pinned client is attached, so the request must not run"
+    );
+
+    let (client_tx, _client_rx) = mpsc::channel();
+    t.event_loop.ctrl_clients.lock().unwrap().connect_with_role(
+        client_tx,
+        CtrlTransport::Local,
+        mbv_ctrl::CtrlAudiobookshelfCapabilities::default(),
+        false,
+        false,
+        false,
+        Some(crate::ctrl::SwapSurface::Pinned),
+        crate::ctrl::CtrlConnectionRole::Client,
+    );
+
+    t.event_loop.handle_event(DaemonEvent::Transport(
+        mbv_ctrl::TransportCommand::TogglePanel,
+    ));
+    assert_eq!(t.panel_toggles.load(Ordering::SeqCst), 1);
 }
 
 #[test]

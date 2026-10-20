@@ -136,6 +136,21 @@ impl ksni::Tray for MbvTray {
         "mbv".into()
     }
 
+    /// A left click on the icon asks the Owner process to toggle the pinned
+    /// panel: hide it when it is shown, show it when it is hidden
+    /// (tray-panel-toggle design D1). The Owner decides whether a panel
+    /// exists, so the click sends the request and nothing more.
+    fn activate(&mut self, _x: i32, _y: i32) {
+        if let Err(e) = self.transport_tx.send(TransportCommand::TogglePanel) {
+            tracing::debug!(
+                name: "tray.panel_toggle.dropped",
+                target: "tray",
+                error = %e,
+                "pinned panel toggle request dropped"
+            );
+        }
+    }
+
     fn menu(&self) -> Vec<ksni::MenuItem<Self>> {
         use ksni::menu::{MenuItem, StandardItem};
         let status = self.status.lock().unwrap().clone();
@@ -429,6 +444,18 @@ mod tests {
             rx.try_recv(),
             Ok(TransportCommand::Step(Direction::Next))
         ));
+    }
+
+    /// Contract: spec local-daemon-tray "The Tray icon toggles the pinned
+    /// panel" — a left click on the icon sends the panel-toggle request to
+    /// the Owner process, which decides whether a panel exists.
+    #[test]
+    fn clicking_the_icon_sends_the_panel_toggle_request() {
+        let (mut tray, rx) = spy_tray(status(true, false, "A Song"), AttachedClients::Pinned);
+
+        tray.activate(0, 0);
+
+        assert!(matches!(rx.try_recv(), Ok(TransportCommand::TogglePanel)));
     }
 
     /// Tray-open-terminal pin-swap spec "No Client attached" / "A terminal

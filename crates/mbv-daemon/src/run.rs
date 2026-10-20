@@ -175,6 +175,8 @@ struct DaemonStarted {
     /// (design D2). `None` for the Local role, which owns no `mbv.pid`.
     pid_lock: Option<PidFileLock>,
     pin_swap: PinSwapState,
+    /// Starts the pinned-panel toggle (tray-panel-toggle design D3).
+    toggle_panel: crate::TogglePanelHook,
     /// Shared between the Pin-swap machine and the ctrl admission path
     /// (tray-pin-swap design D4).
     pending_swap: Arc<crate::PendingSwapToken>,
@@ -358,6 +360,7 @@ fn start_daemon(
         attached_clients,
         cast_connector: hooks.cast_connector,
         emby_session_output: hooks.emby_session_output,
+        toggle_panel: hooks.toggle_panel,
     })
 }
 
@@ -631,6 +634,7 @@ pub fn run_with_options(
         attached_clients,
         cast_connector,
         emby_session_output,
+        toggle_panel,
     } = started;
     let (owner, shared_queue) = initialize_queue(role, &player);
     let caps = crate::DaemonHelloCaps {
@@ -707,6 +711,7 @@ pub fn run_with_options(
         cast_connector,
         emby_session_output,
         emby_session_worker: None,
+        toggle_panel,
     };
     run_daemon_loop(&mut daemon_loop, &merged_rx)
 }

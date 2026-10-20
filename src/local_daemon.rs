@@ -314,6 +314,10 @@ pub fn run_local_daemon_main() -> ! {
                 Ok(detached_swap_command(&command_argv))
             }),
             notify: Box::new(crate::pin::notify),
+            // The Tray's icon click asks the Owner process to toggle the
+            // pinned panel; the request runs on a worker thread, so the
+            // Owner's event loop never waits for pinwin.
+            toggle_panel: Box::new(crate::pin::toggle_panel),
             // The Local daemon owns the Cast connector: its Owner can make a
             // receiver its playback output.
             cast_connector: Some(mbv_daemon::local_cast_connector()),

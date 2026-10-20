@@ -634,6 +634,10 @@ fn run() -> Result<(), DaemonError> {
                 Err("mbvd has no desktop session and cannot swap panels".to_string())
             }),
             notify: Box::new(|_| {}),
+            // mbvd is a headless server daemon with no desktop session: it
+            // has no Tray, so nothing asks for a pinned-panel toggle, and it
+            // has no panel to toggle.
+            toggle_panel: Box::new(|| {}),
             // mbvd is a headless server daemon (cast-owner-output design D2):
             // local playback is its only output, so no Cast connector is
             // supplied and the Hello hides `playback-output`.

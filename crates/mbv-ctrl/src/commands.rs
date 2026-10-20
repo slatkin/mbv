@@ -288,6 +288,11 @@ pub enum TransportCommand {
     /// resolves it in-process; the result is not reported back.
     #[serde(rename = "OwnerAction")]
     OwnerAction(OwnerAction),
+    /// Toggle the pinned panel: hide it when it is shown, show it when it
+    /// is hidden. The Owner process runs the request (the Tray's icon
+    /// click); the result is not reported back.
+    #[serde(rename = "TogglePanel")]
+    TogglePanel,
 }
 
 impl From<&PlaybackIntentAction> for Option<Direction> {

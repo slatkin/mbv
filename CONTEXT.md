@@ -128,7 +128,7 @@ Any mbv process on the user machine. It is a Client or the Owner process. Contro
 _Avoid_: client side (of mbvd), frontend, desktop daemon
 
 Tray:
-The desktop status icon shown by a Local process. It gives playback controls and a stop action while no Client is on screen. It carries one Pin or Unpin item that requests a Pin swap. It also carries an Open item. Open shows only while no local Client is attached. It sits directly above the Pin item. It is never the property of mbvd. mbvd is headless. For the local Owner process, it appears while Stay-alive is enabled or the `Show systray icon` preference is on. It follows those settings live.
+The desktop status icon shown by a Local process. It gives playback controls and a stop action while no Client is on screen. It carries one Pin or Unpin item that requests a Pin swap. It also carries an Open item. Open shows only while no local Client is attached. It sits directly above the Pin item. A left click on the icon asks the Owner process to toggle the pinned panel, while a pinned Client is attached. It is never the property of mbvd. mbvd is headless. For the local Owner process, it appears while Stay-alive is enabled or the `Show systray icon` preference is on. It follows those settings live.
 _Avoid_: systray, status icon, indicator, mbvd tray
 
 Pin swap:
@@ -379,7 +379,7 @@ The app-wide layout state. It is one of Mini, Narrow, or Wide. The three values 
 _Avoid_: layout mode, view mode, panel state, responsive mode, breakpoint mode
 
 Pinned panel:
-The Wayland layer-shell surface that pinwin shows beside tiled windows. pinwin hosts the Pin terminal in it, and that terminal runs the mbv TUI. It is a desktop window made only by a pinned launch. It is not one of the in-TUI Panel regions, that is Tab, Library, Queue, and the rest. A plain terminal launch draws the same TUI with no pinned panel. At most one panel named `mbv` runs per Wayland display. It can be hidden and shown with `mbv --toggle` while mbv keeps running, and a second `--pin` shows it.
+The Wayland layer-shell surface that pinwin shows beside tiled windows. pinwin hosts the Pin terminal in it, and that terminal runs the mbv TUI. It is a desktop window made only by a pinned launch. It is not one of the in-TUI Panel regions, that is Tab, Library, Queue, and the rest. A plain terminal launch draws the same TUI with no pinned panel. At most one panel named `mbv` runs per Wayland display. It can be hidden and shown with `mbv --toggle` or with a left click on the Tray while mbv keeps running, and a second `--pin` shows it.
 _Avoid_: panel (bare — reserved for the in-TUI regions), layer-shell panel, dock, sidebar, tray
 
 Pinned panel width:
