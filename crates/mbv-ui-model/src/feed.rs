@@ -25,6 +25,16 @@ pub struct FeedHomeVideoState {
     pub items: HashMap<FeedHomeVideoSelection, Vec<EmbyItem>>,
     /// Whether the current selection's fetch is still outstanding.
     pub loading: bool,
+    /// The selection whose lazy fetch is in flight, `None` when no fetch is
+    /// outstanding. Distinguishes a fetch-phase `loading` (an outstanding
+    /// spawn, which listing completion must not clear — spec
+    /// `feed-home-video-group-view`, "An unloaded selection SHALL show its
+    /// loading state until its fetch returns") from the seed/listing-pending
+    /// `loading` the listing completion hands off. Set at the fetch spawn,
+    /// cleared when that selection's result event lands — applied or
+    /// stale-dropped. A fetch that fails reports through `LibEvent::Error`
+    /// and leaves the mark until the next result for the same selection.
+    pub fetching: Option<FeedHomeVideoSelection>,
     /// Per-root-folder video counts. The count fan-out fills this; pill
     /// membership reads it alongside the root listing. A full refresh clears
     /// it so the next fan-out re-queries every folder. Empty until then.

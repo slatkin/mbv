@@ -236,8 +236,6 @@ impl App {
                     let _ = tx.send(LibEvent::Browse(BrowseEvent::Refreshed {
                         lib_idx,
                         parent_id,
-                        item_types,
-                        unplayed_only,
                         items,
                         total_count,
                     }));

@@ -20,18 +20,9 @@ impl App {
             BrowseEvent::Refreshed {
                 lib_idx,
                 parent_id,
-                item_types,
-                unplayed_only,
                 items,
                 total_count,
-            } => self.handle_lib_refreshed(
-                lib_idx,
-                &parent_id,
-                item_types.as_deref(),
-                unplayed_only,
-                items,
-                total_count,
-            ),
+            } => self.handle_lib_refreshed(lib_idx, &parent_id, items, total_count),
             BrowseEvent::SearchItemsLoaded {
                 lib_idx,
                 parent_id,
@@ -301,8 +292,6 @@ impl App {
         &mut self,
         lib_idx: usize,
         parent_id: &str,
-        _item_types: Option<&str>,
-        _unplayed_only: bool,
         items: Vec<EmbyItem>,
         total_count: usize,
     ) {

@@ -17,10 +17,23 @@ use std::sync::mpsc;
 /// one-shot fan-out.
 const FOLDER_COUNT_THREADS: usize = 8;
 
+/// How many attempts one folder's count query gets before the fan-out
+/// reports `None` for it: the initial query plus two retries for transient
+/// HTTP failures, so a single failed request does not leave the folder
+/// without its pill for the whole session (spec `feed-home-video-group-view`,
+/// "The pill row SHALL include one pill for every folder directly under the
+/// library root that contains at least one video"). The retries run
+/// back-to-back with no delay: they exist to absorb one-off request
+/// failures, not sustained outages — a folder whose every attempt fails
+/// still reports exactly one `None` result, keeping the fan-out's
+/// accounting balanced, and the next listing completion or refresh
+/// re-queries it.
+const FOLDER_COUNT_ATTEMPTS: usize = 3;
+
 /// One folder's count query inside a fan-out thread: sends the folder's own
-/// result event — every queried folder reports exactly once, `None` when the
-/// query fails, so the fan-out's quiescence accounting balances — carrying
-/// the count the pill row reads on success.
+/// result event — every queried folder reports exactly once, `None` when
+/// every attempt fails, so the fan-out's quiescence accounting balances —
+/// carrying the count the pill row reads on success.
 fn query_folder_count(
     client: &EmbyClient,
     tx: &mpsc::Sender<LibEvent>,
@@ -28,13 +41,23 @@ fn query_folder_count(
     parent_id: &str,
     folder_id: &str,
 ) {
-    let count = match client.get_folder_video_count(folder_id) {
-        Ok(count) => Some(count),
-        Err(error) => {
-            tracing::warn!(name: "feed.home_video.folder_count_failed", target: "feedhv", folder = %folder_id, error = %error, "folder video-count query failed");
-            None
+    let mut count = None;
+    let mut failure = None;
+    for _ in 0..FOLDER_COUNT_ATTEMPTS {
+        match client.get_folder_video_count(folder_id) {
+            Ok(queried) => {
+                count = Some(queried);
+                failure = None;
+                break;
+            }
+            Err(error) => failure = Some(error),
         }
-    };
+    }
+    if count.is_none()
+        && let Some(error) = failure
+    {
+        tracing::warn!(name: "feed.home_video.folder_count_failed", target: "feedhv", folder = %folder_id, attempts = FOLDER_COUNT_ATTEMPTS, error = %error, "folder video-count query failed");
+    }
     let _ = tx.send(LibEvent::Browse(
         BrowseEvent::FeedHomeVideoFolderCountLoaded {
             lib_idx,
@@ -51,9 +74,10 @@ impl App {
     /// current root listing, one query per folder, and each thread sends one
     /// result event per folder as its queries return so pills fill in
     /// incrementally. At most `FOLDER_COUNT_THREADS` threads run, each over a
-    /// contiguous slice of the folder list. A failed query reports `None` —
-    /// its folder gets no pill until a later listing completion or refresh
-    /// re-queries it. The listing's `child_count` is not consulted (the root
+    /// contiguous slice of the folder list. A query whose every attempt
+    /// fails reports `None` — its folder gets no pill until a later listing
+    /// completion or refresh re-queries it. The listing's `child_count` is
+    /// not consulted (the root
     /// listing requests no count fields) and nothing here lists any videos.
     /// Callers decide when to fan out: a listing completion spawns once its
     /// listing becomes fully loaded; a refresh spawns unconditionally (design

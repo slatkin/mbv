@@ -94,8 +94,6 @@ pub enum BrowseEvent {
     Refreshed {
         lib_idx: usize,
         parent_id: String,
-        item_types: Option<String>,
-        unplayed_only: bool,
         items: Vec<EmbyItem>,
         total_count: usize,
     },

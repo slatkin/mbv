@@ -18,9 +18,12 @@ use super::Model;
 use super::TabSelection;
 use mbv_components::emby_library_content::EmbyLibraryIdentity;
 use mbv_components::emby_library_content::{BrowserOwnerPush, EmbyLibraryContent};
+use mbv_components::library_panel::LibraryPanel;
 use mbv_emby_model::EmbyItem;
 use mbv_queue::ServiceKind;
 use mbv_ui_model::library::{LibraryKey, LibraryKind};
+use mbv_ui_msg::{ComponentId, Msg, UserEvent};
+use tuirealm::application::Application;
 
 impl Model {
     /// The active tab's migrated-owner identity, when the active Emby
@@ -249,22 +252,32 @@ impl Model {
         }
     }
 
+    /// Read-only borrow of the owner installed for `key` inside the mounted
+    /// `LibraryPanel` (the immutable twin of `update_emby_library_owner`):
+    /// the one lookup/downcast chain every `EmbyLibraryContent` reader
+    /// reuses instead of repeating it. An associated function over the
+    /// application rather than a `&self` method so a caller holding the
+    /// returned borrow can still reach `&mut self.app` — `application` and
+    /// `app` are disjoint `Model` fields, which a `&self` receiver would
+    /// fuse into one borrow.
+    fn emby_library_owner<'a>(
+        application: &'a Application<ComponentId, Msg, UserEvent>,
+        key: &LibraryKey,
+    ) -> Option<&'a EmbyLibraryContent> {
+        application
+            .get_component(&ComponentId::Library)
+            .and_then(|component| component.as_any().downcast_ref::<LibraryPanel>())
+            .and_then(|panel| panel.owner(key))
+            .and_then(|owner| owner.as_any().downcast_ref::<EmbyLibraryContent>())
+    }
+
     /// The nearby-poster prefetch at the owner's now-authoritative cursor:
     /// the owner holds the pushed list verbatim (`set_content` stores
     /// `push.items`), so the window reads it instead of a second clone of
     /// the shell-side snapshot (#287).
     fn fetch_owner_nearby_posters(&mut self, key: &LibraryKey, cursor: usize) {
-        let owner_items = self
-            .application
-            .get_component(&mbv_ui_msg::ComponentId::Library)
-            .and_then(|component| {
-                component
-                    .as_any()
-                    .downcast_ref::<mbv_components::library_panel::LibraryPanel>()
-            })
-            .and_then(|panel| panel.owner(key))
-            .and_then(|owner| owner.as_any().downcast_ref::<EmbyLibraryContent>())
-            .map(EmbyLibraryContent::browse_items);
+        let owner_items =
+            Self::emby_library_owner(&self.application, key).map(EmbyLibraryContent::browse_items);
         if let Some(items) = owner_items {
             self.app.fetch_nearby_movie_posters(items, cursor);
         }
@@ -274,15 +287,7 @@ impl Model {
         let Some((_, key, _)) = self.active_emby_library_owner() else {
             return false;
         };
-        self.application
-            .get_component(&mbv_ui_msg::ComponentId::Library)
-            .and_then(|component| {
-                component
-                    .as_any()
-                    .downcast_ref::<mbv_components::library_panel::LibraryPanel>()
-            })
-            .and_then(|panel| panel.owner(&key))
-            .and_then(|owner| owner.as_any().downcast_ref::<EmbyLibraryContent>())
+        Self::emby_library_owner(&self.application, &key)
             .is_some_and(EmbyLibraryContent::latest_mode)
     }
 }

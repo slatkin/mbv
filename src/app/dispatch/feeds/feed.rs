@@ -363,6 +363,10 @@ impl App {
             return;
         };
         let selection = state.selection.clone();
+        // Mark the fetch outstanding against its selection: the listing
+        // completion's `loading` hand-off and the result arm both read this
+        // to tell a live fetch apart from the listing-pending seed.
+        state.fetching = Some(selection.clone());
         self.log_feed_home_video_state(lib_idx, "selection_fetch_spawned");
         let tx = self.channels.lib_tx.clone();
         std::thread::spawn(move || {
@@ -433,17 +437,24 @@ impl App {
                     || matches!(selection, FeedHomeVideoSelection::All)
                         && !self.feed_home_video_root_matches(lib_idx, parent_id)
             });
-        if stale {
-            self.log_feed_home_video_state(lib_idx, "selection_loaded_dropped_stale");
-            return;
-        }
         if let Some(state) = self
             .libs
             .get_mut(lib_idx)
             .and_then(|lib| lib.feed_home_video.as_mut())
         {
-            state.items.insert(selection, items);
-            state.loading = false;
+            // The fetch has returned, whatever the disposition: retire its
+            // outstanding-fetch mark when this result is the one it named.
+            if state.fetching.as_ref() == Some(&selection) {
+                state.fetching = None;
+            }
+            if !stale {
+                state.items.insert(selection, items);
+                state.loading = false;
+            }
+        }
+        if stale {
+            self.log_feed_home_video_state(lib_idx, "selection_loaded_dropped_stale");
+            return;
         }
         self.clamp_feed_home_video_state(lib_idx);
         self.log_feed_home_video_state(lib_idx, "selection_loaded");
@@ -469,11 +480,17 @@ impl App {
         }
         // The listing-pending phase is over: the open/restore seed's
         // `loading` hand-off ends here, and the fetch phase owns the flag
-        // from the next shown pass on.
+        // from the next shown pass on. A selection fetch already in flight
+        // keeps the flag — its own result clears it on arrival (spec
+        // `feed-home-video-group-view`, "An unloaded selection SHALL show
+        // its loading state until its fetch returns"); clearing it here
+        // would drop the spinner while the fetch is still running and let
+        // the shown pass double-spawn the same selection.
         if let Some(state) = self
             .libs
             .get_mut(lib_idx)
             .and_then(|lib| lib.feed_home_video.as_mut())
+            && state.fetching.is_none()
         {
             state.loading = false;
         }
@@ -526,7 +543,14 @@ impl App {
             .and_then(|lib| lib.feed_home_video.as_mut())
         {
             state.items.clear();
-            state.loading = false;
+            // An outstanding fetch for the still-current selection survives
+            // the refresh — the guard above pinned the root parent, so its
+            // result stays valid — and keeps the loading flag until it lands
+            // (spec `feed-home-video-group-view`, "An unloaded selection
+            // SHALL show its loading state until its fetch returns"); any
+            // other `loading` here is the refresh seed and ends now, leaving
+            // the shown pass to respawn the unloaded selection.
+            state.loading = state.fetching.as_ref() == Some(&state.selection);
             if fully_loaded {
                 state.folder_counts.clear();
             }

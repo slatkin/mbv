@@ -153,8 +153,6 @@ fn refresh_drops_caches_refetches_only_the_current_selection(make_home_video_app
     app.handle_lib_event(LibEvent::Browse(BrowseEvent::Refreshed {
         lib_idx: 0,
         parent_id: "lib-youtube".into(),
-        item_types: None,
-        unplayed_only: false,
         items: vec![active],
         total_count: 1,
     }));
@@ -520,12 +518,13 @@ fn make_root_folder(id: &str, name: &str) -> EmbyItem {
 }
 
 /// Regression (review P2, b603f329b..9e454b62d): a refresh that lands only
-/// the first page of a multi-page root listing must not replace
-/// `folder_counts` from its page-1 folders, nor clamp or re-resolve the pill
-/// index against the partial listing while `selection` keeps a later-page
-/// folder. The final page append completes the refresh: the pill row
-/// re-derives from the full listing and the selection stays the folder the
-/// user picked.
+/// the first page of a multi-page root listing must not clamp or re-resolve
+/// the pill index against the partial listing while `selection` keeps a
+/// later-page folder. The final page append completes the refresh: the pill
+/// row re-derives from the full listing and the selection stays the folder
+/// the user picked. (Count preservation across the partial refresh has its
+/// own owner in
+/// `a_partial_refresh_commits_a_count_fanout_without_shrinking_the_counts`.)
 #[rstest]
 fn partial_root_refresh_keeps_counts_and_the_later_page_pill(make_home_video_app: App) {
     let mut app = make_home_video_app;
@@ -552,18 +551,11 @@ fn partial_root_refresh_keeps_counts_and_the_later_page_pill(make_home_video_app
     app.handle_lib_event(LibEvent::Browse(BrowseEvent::Refreshed {
         lib_idx: 0,
         parent_id: "lib-youtube".into(),
-        item_types: None,
-        unplayed_only: false,
         items: vec![make_root_folder("folder-a", "Channel A")],
         total_count: 3,
     }));
 
     let state = app.libs[0].feed_home_video.as_ref().unwrap();
-    assert_eq!(
-        state.folder_counts.len(),
-        3,
-        "the partial refresh did not replace the counts"
-    );
     assert_eq!(
         state.selection,
         FeedHomeVideoSelection::Folder("folder-c".into()),
@@ -589,7 +581,6 @@ fn partial_root_refresh_keeps_counts_and_the_later_page_pill(make_home_video_app
         "the repaginated listing restores the pill row"
     );
     let state = app.libs[0].feed_home_video.as_ref().unwrap();
-    assert_eq!(state.folder_counts.len(), 3);
     assert_eq!(
         app.feed_home_video_selected_group_index(0),
         3,
@@ -615,8 +606,6 @@ fn a_full_refresh_invalidates_the_folder_counts_so_the_fan_out_requeries(make_ho
     app.handle_lib_event(LibEvent::Browse(BrowseEvent::Refreshed {
         lib_idx: 0,
         parent_id: "lib-youtube".into(),
-        item_types: None,
-        unplayed_only: false,
         items: vec![active],
         total_count: 1,
     }));
@@ -658,8 +647,6 @@ fn a_partial_refresh_commits_a_count_fanout_without_shrinking_the_counts(make_ho
     app.handle_lib_event(LibEvent::Browse(BrowseEvent::Refreshed {
         lib_idx: 0,
         parent_id: "lib-youtube".into(),
-        item_types: None,
-        unplayed_only: false,
         items: vec![make_root_folder("folder-a", "Channel A")],
         total_count: 3,
     }));
@@ -682,9 +669,10 @@ fn a_partial_refresh_commits_a_count_fanout_without_shrinking_the_counts(make_ho
 /// already covers every folder, so a coverage-only spawn condition
 /// short-circuits and a folder beyond page 1 that crossed 0<->positive
 /// videos keeps its stale pill for the session (design D2). The
-/// listing-completion transition therefore spawns the full fan-out even when
-/// the counts already cover the root; the stale entries keep serving the row
-/// until the re-query's reports land.
+/// listing-completion transition therefore spawns the full fan-out even
+/// when the counts already cover the root. (Count preservation across the
+/// partial refresh has its own owner in
+/// `a_partial_refresh_commits_a_count_fanout_without_shrinking_the_counts`.)
 #[rstest]
 fn the_listing_completion_after_a_partial_refresh_requeries_every_folder(make_home_video_app: App) {
     let mut app = make_home_video_app;
@@ -707,8 +695,6 @@ fn the_listing_completion_after_a_partial_refresh_requeries_every_folder(make_ho
     app.handle_lib_event(LibEvent::Browse(BrowseEvent::Refreshed {
         lib_idx: 0,
         parent_id: "lib-youtube".into(),
-        item_types: None,
-        unplayed_only: false,
         items: vec![make_root_folder("folder-a", "Channel A")],
         total_count: 3,
     }));
@@ -729,11 +715,50 @@ fn the_listing_completion_after_a_partial_refresh_requeries_every_folder(make_ho
         "the completion re-queried every folder despite full coverage \
          (1 refresh fan-out + 3 completion fan-out)"
     );
-    assert_eq!(
-        state.folder_counts.len(),
-        3,
-        "the stale entries still serve the row until the re-query lands"
+}
+
+/// Regression (round-3 review on b603f329b..HEAD): the listing completion
+/// that ends a partial refresh's pagination must not clear the selection's
+/// `loading` flag while that selection's fetch is still in flight — the
+/// shown pass spawns the fetch between the refresh and the final page
+/// append, and the flag belongs to that fetch until its result lands (spec
+/// `feed-home-video-group-view`, "An unloaded selection SHALL show its
+/// loading state until its fetch returns"). Clearing it early hid the
+/// spinner mid-fetch and let the shown pass double-spawn the fetch.
+#[rstest]
+fn listing_completion_keeps_loading_while_the_selection_fetch_is_in_flight(
+    make_home_video_app: App,
+) {
+    let mut app = make_home_video_app;
+    app.libs[0].nav_stack[0] = youtube_root_level(
+        ServerRows::loaded(3, 3),
+        vec![make_root_folder("folder-a", "Channel A")],
+        false,
     );
+    if let Some(state) = app.libs[0].feed_home_video.as_mut() {
+        state.loading = true;
+        state.fetching = Some(FeedHomeVideoSelection::All);
+    }
+
+    app.maybe_complete_feed_home_video_listing(0);
+
+    let state = app.libs[0].feed_home_video.as_ref().unwrap();
+    assert!(
+        state.loading,
+        "the in-flight selection fetch owns the loading flag"
+    );
+
+    app.handle_lib_event(LibEvent::Browse(
+        BrowseEvent::FeedHomeVideoSelectionLoaded {
+            lib_idx: 0,
+            parent_id: "lib-youtube".into(),
+            selection: FeedHomeVideoSelection::All,
+            items: vec![make_item("Episode 1", "Movie")],
+        },
+    ));
+
+    let state = app.libs[0].feed_home_video.as_ref().unwrap();
+    assert!(!state.loading, "the fetch's own result clears the flag");
 }
 
 /// Contract (review P2 on task 5.1, commit 46b0ac739): the UI-state reset

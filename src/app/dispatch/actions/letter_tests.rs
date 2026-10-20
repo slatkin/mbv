@@ -398,8 +398,6 @@ fn tv_series_root_refresh_re_arms_completion_pagination() {
     app.handle_lib_event(LibEvent::Browse(BrowseEvent::Refreshed {
         lib_idx: 0,
         parent_id: "lib-1".into(),
-        item_types: Some("Series".into()),
-        unplayed_only: false,
         items: make_items(3),
         total_count: 5,
     }));
