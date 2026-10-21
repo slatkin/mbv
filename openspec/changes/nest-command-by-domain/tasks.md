@@ -2,14 +2,14 @@
 
 ## 1. Types first
 
-- [ ] 1.1 In `src/app/dispatch/action.rs`, rename the four sub-enums to `VisualIntent`,
+- [x] 1.1 In `src/app/dispatch/action.rs`, rename the four sub-enums to `VisualIntent`,
       `PlaybackIntent`, `NavigationIntent`, `PanelIntent`; add `ShellCommand` and `AppCommand`;
       make `Command` the two-variant wrapper; add the `From` impls. Verify:
       `cargo check -p mbv` fails only at caller sites.
-- [ ] 1.2 Rewrite `App::dispatch` to take `&AppCommand` with six direct arms; delete both
+- [x] 1.2 Rewrite `App::dispatch` to take `&AppCommand` with six direct arms; delete both
       `unreachable!` arms and the translation. Verify: `dispatch` has no `_` arm and
       `ast-grep scan .` is clean.
-- [ ] 1.3 Rewrite `Model::dispatch_router_command` in `src/app/shell/arbitration.rs` as an
+- [x] 1.3 Rewrite `Model::dispatch_router_command` in `src/app/shell/arbitration.rs` as an
       exhaustive match over `Command` with no `_` arm. Verify: `cargo check -p mbv`.
 
 ## 2. Callers
