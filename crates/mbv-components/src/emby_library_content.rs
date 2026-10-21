@@ -28,6 +28,8 @@ use mbv_render::components::media_list::{
 };
 use mbv_render::components::tv_wide::HeroImageState;
 use mbv_render::{LetterFilter, effective_sort_str};
+use mbv_ui_model::feed_age::feed_age_group;
+use mbv_ui_model::home_latest::emby_date_added_secs;
 use mbv_ui_model::library::LibraryKind;
 use mbv_ui_msg::{Msg, ShellRequest};
 
@@ -67,6 +69,31 @@ fn latest_row_projection(item: &EmbyItem) -> (String, Option<String>, Option<Med
         .filter(|date| !date.is_empty())
         .map(MediaListTrailing::Gutter);
     (primary, secondary, trailing)
+}
+
+/// The feed home-video All rows: the fetch's newest-first date-added order,
+/// grouped under the Feeds tab's age-group headings keyed on each video's
+/// date added (spec `feed-home-video-group-view`). At most one heading per
+/// age group plus one spacer between groups (5 groups today, so 9 extra rows
+/// max); adding a group without raising this bound only costs a
+/// reallocation, never correctness.
+fn feed_all_rows(items: &[EmbyItem], now_secs: u64) -> Vec<MediaListRow<String>> {
+    let mut rows = Vec::with_capacity(items.len() + 9);
+    let mut last_group = None;
+    for item in items {
+        let group = feed_age_group(emby_date_added_secs(item), now_secs);
+        if last_group != Some(group) {
+            if last_group.is_some() {
+                rows.push(MediaListRow::Spacer);
+            }
+            rows.push(MediaListRow::Heading {
+                text: group.label().to_owned(),
+            });
+            last_group = Some(group);
+        }
+        rows.push(row_for(item, false));
+    }
+    rows
 }
 
 fn row_for(item: &EmbyItem, latest: bool) -> MediaListRow<String> {
@@ -118,6 +145,10 @@ pub struct BrowserOwnerPush {
     /// group pill to its content ID, never to the display name above.
     pub feed_group_ids: Vec<String>,
     pub feed_group_cursor: usize,
+    /// The projection instant, in epoch seconds: the All list's age-group
+    /// headings key on it. The shell fills it so the projection stays
+    /// testable without a real clock.
+    pub now_secs: u64,
 }
 
 /// The embedded content owner for Movies, `HomeVideos` and Generic Emby
@@ -139,6 +170,10 @@ pub struct EmbyLibraryContent {
     feed_groups: Vec<String>,
     feed_group_ids: Vec<String>,
     feed_group_cursor: usize,
+    /// The projection instant from the last content push, in epoch seconds:
+    /// the All list's age-group headings key on it. The shell fills the push
+    /// so the projection stays testable without a real clock.
+    now_secs: u64,
     /// The one shared canonical owner of the active level's rows; the panel
     /// drives its Wide/Inline presentation from its own breakpoint (design
     /// D3/D4) — this owner never chooses a presentation itself.
@@ -179,6 +214,7 @@ impl EmbyLibraryContent {
             feed_groups: Vec::new(),
             feed_group_ids: Vec::new(),
             feed_group_cursor: 0,
+            now_secs: 0,
             carrier: MediaListCarrier::new(),
             last_identity: None,
             last_projected_rows: None,
@@ -228,6 +264,7 @@ impl EmbyLibraryContent {
         self.feed_groups = push.feed_groups;
         self.feed_group_ids = push.feed_group_ids;
         self.feed_group_cursor = push.feed_group_cursor;
+        self.now_secs = push.now_secs;
         let restore_browse_position = if self.on_latest() {
             None
         } else {
@@ -330,29 +367,46 @@ impl EmbyLibraryContent {
         self.carrier.scroll()
     }
 
+    /// Whether the projected rows are the feed home-video group view's All
+    /// list (spec `feed-home-video-group-view`): the `FeedGroups` selector is
+    /// active, the owner sits off its Latest pill, and the selected group
+    /// pill is All (cursor 0). Folder pills project through the ordinary
+    /// branches, so their flat order survives.
+    fn feed_all_list_active(&self) -> bool {
+        self.selector_mode == EmbySelectorMode::FeedGroups
+            && !self.on_latest()
+            && self.feed_group_cursor == 0
+    }
+
     fn true_total(&self) -> usize {
         self.library_total.unwrap_or(self.total_count)
     }
 
-    /// Project the mirrored items into provider-neutral rows: letter-grouped
-    /// `Heading`/`Spacer`/`Item` rows for a large library (or an active
-    /// letter pill), natural-sorted plain rows otherwise (mirrors
-    /// the former `BrowserComponent`'s row projection).
+    /// Project the mirrored items into provider-neutral rows: the feed
+    /// home-video All list groups under the Feeds tab's age-group headings
+    /// keyed on date added (spec `feed-home-video-group-view`); other lists
+    /// project letter-grouped `Heading`/`Spacer`/`Item` rows for a large
+    /// library (or an active letter pill), natural-sorted plain rows
+    /// otherwise (mirrors the former `BrowserComponent`'s row projection).
     fn feed_owner(&mut self) {
-        let grouped =
-            !self.on_latest() && (self.true_total() >= 50 || self.letter_filter.is_some());
-        let rows: Vec<MediaListRow<String>> = if grouped {
-            let pairs: Vec<(String, MediaListRow<String>)> = self
-                .items()
-                .iter()
-                .map(|item| (effective_sort_str(item).to_string(), row_for(item, false)))
-                .collect();
-            letter_grouped_rows(pairs, self.true_total(), self.letter_filter.is_some())
+        let rows: Vec<MediaListRow<String>> = if self.feed_all_list_active() {
+            feed_all_rows(self.items(), self.now_secs)
         } else {
-            self.items()
-                .iter()
-                .map(|item| row_for(item, self.on_latest()))
-                .collect()
+            let grouped =
+                !self.on_latest() && (self.true_total() >= 50 || self.letter_filter.is_some());
+            if grouped {
+                let pairs: Vec<(String, MediaListRow<String>)> = self
+                    .items()
+                    .iter()
+                    .map(|item| (effective_sort_str(item).to_string(), row_for(item, false)))
+                    .collect();
+                letter_grouped_rows(pairs, self.true_total(), self.letter_filter.is_some())
+            } else {
+                self.items()
+                    .iter()
+                    .map(|item| row_for(item, self.on_latest()))
+                    .collect()
+            }
         };
         // Ordinary refresh (design D3): an unchanged projection preserves
         // the shared owner's painted frame instead of re-issuing it.

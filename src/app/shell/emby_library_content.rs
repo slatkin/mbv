@@ -219,6 +219,7 @@ impl Model {
             feed_groups,
             feed_group_ids,
             feed_group_cursor,
+            now_secs: mbv_render::current_time_secs(),
         };
         let identity = self.emby_library_owner_identity(index);
         let landed_cursor = self.update_emby_library_owner(key, kind, |owner| {

@@ -42,6 +42,7 @@ fn movies_panel(latest: bool) -> (LibraryPanel, Position) {
         feed_groups: Vec::new(),
         feed_group_ids: Vec::new(),
         feed_group_cursor: 0,
+        now_secs: 0,
     });
     owner.set_latest_mode(latest);
     let mut panel = LibraryPanel::new();

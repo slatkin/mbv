@@ -14,6 +14,14 @@ pub struct HomeRecentRow {
     pub feed_name: Option<String>,
 }
 
+/// The Emby item's date added, normalized to epoch seconds (`None` when the
+/// payload carries no parseable date). The homevideos All list's age groups
+/// key on this (spec `feed-home-video-group-view`).
+#[must_use]
+pub fn emby_date_added_secs(item: &mbv_emby_model::EmbyItem) -> Option<u64> {
+    mbv_feed::parse_pub_date_secs(&item.date_added)
+}
+
 /// The launch-relative interval used by destination Latest markers.
 /// `previous` is intentionally immutable and separate from exit-only UI state.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

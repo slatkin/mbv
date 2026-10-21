@@ -368,14 +368,19 @@ fn feed_home_video_group_browser_wheel_scrolls_viewport_and_reports_reach() {
         .expect("the wheel emits the typed reach report");
     // The End-resolved viewport showed the last row; scrolling up one uniform
     // step paints one step less far down, and the reach is that last painted
-    // selectable row.
+    // selectable row. The All list projects one age-group heading above the
+    // items (every fixture video carries no date, so all rows share the
+    // Unknown-date group), and the reach counts painted rows: the item-index
+    // expectation drops one below the row-space arithmetic.
+    let structural_rows = 1;
     let list_height = usize::from(list_area.height.max(1));
     let expected_reach = scroll_before
         .min(total_rows - 1)
         .saturating_sub(WHEEL_STEP)
         .saturating_add(list_height)
         .saturating_sub(1)
-        .min(total_rows - 1);
+        .min(total_rows - 1)
+        .saturating_sub(structural_rows);
     let Msg::Shell(shell_boxed) = &wheel else {
         panic!("the wheel emits a shell request, not {wheel:?}");
     };

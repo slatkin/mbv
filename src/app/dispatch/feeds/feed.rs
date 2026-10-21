@@ -363,6 +363,12 @@ impl App {
             return;
         };
         let selection = state.selection.clone();
+        // The All list reads newest-first (spec `feed-home-video-group-view`);
+        // folder pill lists keep the flat oldest-first order.
+        let sort_order = match &selection {
+            FeedHomeVideoSelection::All => "Descending",
+            FeedHomeVideoSelection::Folder(_) => "Ascending",
+        };
         // Mark the fetch outstanding against its selection: the listing
         // completion's `loading` hand-off and the result arm both read this
         // to tell a live fetch apart from the listing-pending seed.
@@ -377,7 +383,7 @@ impl App {
                 0,
                 PAGE_SIZE,
                 "DateCreated",
-                "Ascending",
+                sort_order,
             ) {
                 Ok(result) => result,
                 Err(e) => {
@@ -396,7 +402,7 @@ impl App {
                     items.len(),
                     total_count - items.len(),
                     "DateCreated",
-                    "Ascending",
+                    sort_order,
                 ) {
                     Ok((rest, _)) => items.extend(rest),
                     Err(e) => {

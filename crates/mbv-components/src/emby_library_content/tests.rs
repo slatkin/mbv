@@ -12,6 +12,7 @@ use mbv_config::{
     TUI_LAUNCH_STATE_VERSION, TabIdentity, TuiLaunchState,
 };
 use mbv_emby_model::test_support::make_item;
+use mbv_render::components::media_list::MediaListRow;
 use mbv_ui_model::library::LibraryKind;
 use mbv_ui_model::sort_filter::{LetterFilter, LetterFilterKind};
 use mbv_ui_msg::{Msg, ShellRequest};
@@ -23,6 +24,16 @@ fn key(code: Key) -> KeyEvent {
         code,
         modifiers: KeyModifiers::NONE,
     }
+}
+
+/// An ISO-8601 date-added stamp for a fixture epoch second, the shape the
+/// Emby payloads carry and `parse_pub_date_secs` accepts.
+fn iso_secs(secs: u64) -> String {
+    use time::format_description::well_known::Iso8601;
+    time::OffsetDateTime::from_unix_timestamp(i64::try_from(secs).unwrap_or(i64::MAX))
+        .expect("in-range fixture timestamp")
+        .format(&Iso8601::DEFAULT)
+        .expect("ISO-8601 formatting always succeeds")
 }
 
 fn push_with_letters() -> BrowserOwnerPush {
@@ -42,6 +53,7 @@ fn push_with_letters() -> BrowserOwnerPush {
         feed_groups: Vec::new(),
         feed_group_ids: Vec::new(),
         feed_group_cursor: 0,
+        now_secs: 0,
     }
 }
 
@@ -161,6 +173,7 @@ fn feed_group_video_row_menu_key_emits_the_painted_item() {
         feed_groups: vec!["Group A".into()],
         feed_group_ids: vec!["group-a".into()],
         feed_group_cursor: 0,
+        now_secs: 0,
     });
     owner.set_latest_mode(false);
 
@@ -202,6 +215,7 @@ fn wheel_reach_resolves_the_last_painted_selectable_row_as_an_item_index() {
         feed_groups: Vec::new(),
         feed_group_ids: Vec::new(),
         feed_group_cursor: 0,
+        now_secs: 0,
     });
 
     // Complete one painted frame with a three-row viewport so the wheel
@@ -249,6 +263,7 @@ fn wheel_over_an_empty_library_reports_no_reach_and_never_panics() {
         feed_groups: Vec::new(),
         feed_group_ids: Vec::new(),
         feed_group_cursor: 0,
+        now_secs: 0,
     });
 
     let list = Rect::new(0, 0, 40, 3);
@@ -264,4 +279,115 @@ fn wheel_over_an_empty_library_reports_no_reach_and_never_panics() {
     }));
 
     assert_eq!(message, None);
+}
+
+/// Feed home-video All-list projection (spec `feed-home-video-group-view`,
+/// "The All pill lists every video regardless of watched state"): the rows
+/// keep the fetch's newest-first date-added order and group under the
+/// Feeds tab's age-group headings keyed on date added — never the letter
+/// grouping a large library would otherwise force, which would re-sort the
+/// rows alphabetically (2026-10-21 user report: the All pill lost its date
+/// order to A/B/C headings).
+#[test]
+fn feed_all_rows_group_by_date_added_and_keep_the_fetch_order() {
+    const NOW: u64 = 1_800_000_000;
+    const DAY: u64 = 24 * 60 * 60;
+    let dated = |name: &str, days_old: u64, i: usize| {
+        let mut item = make_item(name, "Movie");
+        item.id = format!("item-{i}");
+        item.date_added = iso_secs(NOW - days_old * DAY);
+        item
+    };
+    // Fetch order: newest first. Names deliberately run backwards
+    // alphabetically so any letter re-sort would flip the rows.
+    let items = vec![
+        dated("Zebra", 0, 0),
+        dated("Yak", 5, 1),
+        dated("Alpha", 20, 2),
+        dated("Bravo", 40, 3),
+    ];
+    let mut owner = EmbyLibraryContent::new(LibraryKind::HomeVideos);
+    owner.set_content(BrowserOwnerPush {
+        items,
+        latest_items: Vec::new(),
+        total_count: 60,
+        library_total: None,
+        letter_filter: None,
+        loading: false,
+        selector_mode: EmbySelectorMode::FeedGroups,
+        feed_groups: Vec::new(),
+        feed_group_ids: Vec::new(),
+        feed_group_cursor: 0,
+        now_secs: NOW,
+    });
+    // Picking the All pill leaves the Latest pill (the shell's pill-pick path
+    // sets this before the content push lands).
+    owner.set_latest_mode(false);
+
+    let headings: Vec<&str> = owner
+        .carrier
+        .rows()
+        .iter()
+        .filter_map(|row| match row {
+            MediaListRow::Heading { text } => Some(text.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        headings,
+        vec![
+            "New",
+            "Recent",
+            "Older than two weeks",
+            "Older than a month"
+        ]
+    );
+    let targets: Vec<&str> = owner
+        .carrier
+        .rows()
+        .iter()
+        .filter_map(|row| match row {
+            MediaListRow::Item { target, .. } => Some(target.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(targets, vec!["item-0", "item-1", "item-2", "item-3"]);
+}
+
+/// The same grouping contract stays off the folder pill lists (spec
+/// `feed-home-video-group-view`): a folder's rows stay flat in their
+/// oldest-first fetch order with no age-group headings.
+#[test]
+fn feed_folder_rows_stay_flat_without_age_groupings() {
+    const NOW: u64 = 1_800_000_000;
+    const DAY: u64 = 24 * 60 * 60;
+    let dated = |name: &str, days_old: u64, i: usize| {
+        let mut item = make_item(name, "Movie");
+        item.id = format!("item-{i}");
+        item.date_added = iso_secs(NOW - days_old * DAY);
+        item
+    };
+    let items = vec![dated("Old", 40, 0), dated("New", 0, 1)];
+    let mut owner = EmbyLibraryContent::new(LibraryKind::HomeVideos);
+    owner.set_content(BrowserOwnerPush {
+        items,
+        latest_items: Vec::new(),
+        total_count: 2,
+        library_total: None,
+        letter_filter: None,
+        loading: false,
+        selector_mode: EmbySelectorMode::FeedGroups,
+        feed_groups: vec!["Group A".into()],
+        feed_group_ids: vec!["group-a".into()],
+        feed_group_cursor: 1,
+        now_secs: NOW,
+    });
+    owner.set_latest_mode(false);
+
+    let rows = owner.carrier.rows();
+    assert_eq!(rows.len(), 2, "no heading or spacer rows join the items");
+    assert!(
+        rows.iter()
+            .all(|row| matches!(row, MediaListRow::Item { .. }))
+    );
 }

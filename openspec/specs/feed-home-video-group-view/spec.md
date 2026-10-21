@@ -6,7 +6,7 @@ Defines what the Emby homevideos feed view's All and folder pills contain, how p
 ## Requirements
 
 ### Requirement: The All pill lists every video regardless of watched state
-The group view's All selection SHALL list every video under the library root, watched or unwatched, without filtering on played state. The list SHALL order rows oldest-first by date added, regardless of played state.
+The group view's All selection SHALL list every video under the library root, watched or unwatched, without filtering on played state. The list SHALL order rows newest-first by date added, regardless of played state, and SHALL group consecutive rows under the Feeds tab's age-group headings keyed on each video's date added, including `Unknown date` for videos without one. The All list SHALL NOT use letter grouping.
 
 #### Scenario: Watched video appears in All
 - **WHEN** a video under the library root has been marked played
@@ -14,14 +14,26 @@ The group view's All selection SHALL list every video under the library root, wa
 
 #### Scenario: Ordering ignores played state
 - **WHEN** the All list loads from a library with both watched and unwatched videos
-- **THEN** rows order oldest-first by date added, and played state does not reorder or drop any row
+- **THEN** rows order newest-first by date added, and played state does not reorder or drop any row
+
+#### Scenario: Age groups match Feeds criteria
+- **WHEN** All rows are grouped
+- **THEN** the headings and their day boundaries SHALL be identical to the Feeds tab's groups, keyed on each video's date added, including `Unknown date` for videos without one
+
+#### Scenario: The All list never letter-groups
+- **WHEN** the All list holds enough videos for a large library's letter grouping
+- **THEN** its rows stay in date-added order under age-group headings, and no letter heading or alphabetical reordering appears
 
 #### Scenario: Loose root videos appear in All
 - **WHEN** a video sits directly under the library root rather than inside any folder
 - **THEN** it appears in the All list
 
 ### Requirement: Every folder holding videos gets a pill
-The pill row SHALL include one pill for every folder directly under the library root that contains at least one video, regardless of watched state. A folder containing no videos SHALL NOT get a pill.
+The pill row SHALL include one pill for every folder directly under the library root that contains at least one video, regardless of watched state. A folder containing no videos SHALL NOT get a pill. A folder pill's list SHALL stay flat in oldest-first date-added order, with no age-group headings.
+
+#### Scenario: Folder pill lists keep their order
+- **WHEN** a folder pill's list loads
+- **THEN** its rows stay flat in oldest-first date-added order with no age-group headings
 
 #### Scenario: Watched-only folder keeps its pill
 - **WHEN** every video inside a folder is marked played
