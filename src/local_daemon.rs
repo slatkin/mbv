@@ -2,7 +2,7 @@
 //!
 //! Ported from `relay::spawn_detached` / `run_relay_main`, minus everything
 //! pty-related: no pty, no winsize, no byte-pipe multiplexing, no eviction.
-//! The daemon here is just `crates/mbv-daemon/src/run.rs::run_with_options`
+//! The daemon here is just `crates/mbv-daemon/src/run.rs::run_local_with_options`
 //! running headless in a detached process; clients reach it exactly the way
 //! any other `DaemonEndpoint::Local` client does.
 //!
@@ -277,7 +277,7 @@ pub fn run_local_daemon_main() -> ! {
 
     // `Ok` is unreachable: the daemon loop never returns — shutdown always
     // ends in `process::exit`. Only a startup failure reaches this point.
-    let Err(error) = mbv_daemon::run_with_options(
+    let Err(error) = mbv_daemon::run_local_with_options(
         mbv_daemon::DaemonStartupContext::new(config, mbv_daemon::DaemonRole::Local),
         false,
         mbv_daemon::DaemonRuntimeHooks {
@@ -318,11 +318,15 @@ pub fn run_local_daemon_main() -> ! {
             // pinned panel; the request runs on a worker thread, so the
             // Owner's event loop never waits for pinwin.
             toggle_panel: Box::new(crate::pin::toggle_panel),
-            // The Local daemon owns the Cast connector: its Owner can make a
-            // receiver its playback output.
-            cast_connector: Some(mbv_daemon::local_cast_connector()),
-            // The Local daemon hosts an Emby Session output: it is the
-            // desktop-adjacent owner whose Client selects the Session.
+        },
+        // The Local daemon owns the Cast connector: its Owner can make a
+        // receiver its playback output. The Local daemon hosts an Emby
+        // Session output: it is the desktop-adjacent owner whose Client
+        // selects the Session. Only the Local entry point takes these
+        // hooks; the packaged `mbvd` has no parameter that could carry
+        // them (mbvd-local-playback-only design D1, D2).
+        mbv_daemon::LocalOutputHooks {
+            cast_connector: mbv_daemon::local_cast_connector(),
             emby_session_output: true,
         },
     );

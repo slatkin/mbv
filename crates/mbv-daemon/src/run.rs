@@ -1,10 +1,10 @@
 use super::core::{DaemonEvent, QueuePersistenceRequest, bind_ctrl_listener, broadcast};
 use super::{
     AudiobookshelfOwnerContext, CtrlTransport, DaemonLoop, DaemonPlayerHandle, DaemonPlayerOwner,
-    DaemonRole, DaemonRuntimeHooks, DaemonStartupContext, EmbyOwnerContext, LoopFlow,
-    SharedQueueState, TrayState, broadcast_queue_state, install_daemon_audiobookshelf_context,
-    pid_file, project_queue_state, setup_shutdown_signal, spawn_ctrl_client,
-    start_queue_enrichment,
+    DaemonRole, DaemonRuntimeHooks, DaemonStartupContext, EmbyOwnerContext, LocalOutputHooks,
+    LoopFlow, SharedQueueState, TrayState, broadcast_queue_state,
+    install_daemon_audiobookshelf_context, pid_file, project_queue_state, setup_shutdown_signal,
+    spawn_ctrl_client, start_queue_enrichment,
 };
 use crate::PinSwapState;
 use crate::owner_lock::{OwnerLockError, PidFileLock, lock_pid_file};
@@ -158,6 +158,16 @@ pub(super) fn apply_queue_enriched(
     }
 }
 
+/// The remote-output hooks only the Local entry point can express
+/// (mbvd-local-playback-only design D1). The packaged entry derives the
+/// empty carrier; the Local entry derives it from its `LocalOutputHooks`.
+/// Private so no caller outside `mbv-daemon` can construct a remote variant
+/// — the boundary lives at the public entry points, not here.
+struct OwnerOutputs {
+    cast_connector: Option<crate::CastConnector>,
+    emby_session_output: bool,
+}
+
 struct DaemonStarted {
     config: mbv_config::Config,
     role: DaemonRole,
@@ -183,7 +193,9 @@ struct DaemonStarted {
     /// Shared with the ctrl registry, which keeps it current (design D1).
     attached_clients: Arc<AttachedClientsCell>,
     /// The runtime's Cast connector, when the runtime supplies one
-    /// (cast-owner-output design D2). Lives on the event loop.
+    /// (cast-owner-output design D2). Lives on the event loop. Filled only
+    /// from the Local entry's `LocalOutputHooks` (mbvd-local-playback-only
+    /// design D3).
     cast_connector: Option<crate::CastConnector>,
     /// Whether the runtime hosts an Emby Session output (emby-session-owner-output
     /// design D2), advertised as the `emby-session-output` capability.
@@ -234,6 +246,7 @@ fn prewarm_player(player: &Player, config: &mbv_config::Config) {
 fn start_daemon(
     startup: DaemonStartupContext,
     hooks: DaemonRuntimeHooks,
+    outputs: OwnerOutputs,
 ) -> Result<DaemonStarted, OwnerLockError> {
     let role = startup.role;
     let config = startup.config;
@@ -358,8 +371,8 @@ fn start_daemon(
         pin_swap,
         pending_swap,
         attached_clients,
-        cast_connector: hooks.cast_connector,
-        emby_session_output: hooks.emby_session_output,
+        cast_connector: outputs.cast_connector,
+        emby_session_output: outputs.emby_session_output,
         toggle_panel: hooks.toggle_panel,
     })
 }
@@ -612,7 +625,45 @@ pub fn run_with_options(
     audio_only: bool,
     hooks: DaemonRuntimeHooks,
 ) -> Result<Infallible, OwnerLockError> {
-    let started = start_daemon(startup, hooks)?;
+    run_with_owner_outputs(
+        startup,
+        audio_only,
+        hooks,
+        OwnerOutputs {
+            cast_connector: None,
+            emby_session_output: false,
+        },
+    )
+}
+
+/// The Local run entry point (mbvd-local-playback-only design D1, D2): the
+/// only entry that can carry a Cast connector or an Emby Session output,
+/// through `LocalOutputHooks`. The TUI's Local process calls it; the
+/// packaged `mbvd` cannot, because its entry point takes no such argument.
+pub fn run_local_with_options(
+    startup: DaemonStartupContext,
+    audio_only: bool,
+    hooks: DaemonRuntimeHooks,
+    local_outputs: LocalOutputHooks,
+) -> Result<Infallible, OwnerLockError> {
+    run_with_owner_outputs(
+        startup,
+        audio_only,
+        hooks,
+        OwnerOutputs {
+            cast_connector: Some(local_outputs.cast_connector),
+            emby_session_output: local_outputs.emby_session_output,
+        },
+    )
+}
+
+fn run_with_owner_outputs(
+    startup: DaemonStartupContext,
+    audio_only: bool,
+    hooks: DaemonRuntimeHooks,
+    outputs: OwnerOutputs,
+) -> Result<Infallible, OwnerLockError> {
+    let started = start_daemon(startup, hooks, outputs)?;
     let DaemonStarted {
         config,
         role,

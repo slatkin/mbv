@@ -619,6 +619,12 @@ fn run() -> Result<(), DaemonError> {
     // ends in `process::exit`. Only a startup failure reaches this point; the
     // lock-held refusal is an already-running failure (harden-owner-process-
     // boundaries 1.3).
+    //
+    // This is the packaged entry point (mbvd-local-playback-only design D1):
+    // its parameters cannot name a Cast connector or an Emby Session output,
+    // so local playback is mbvd's only output by construction — no runtime
+    // setup in any build can express a remote output. The Local entry
+    // (`run_local_with_options`) is the only one that takes those hooks.
     let Err(error) = mbv_daemon::run_with_options(
         mbv_daemon::DaemonStartupContext::new(config, mbv_daemon::DaemonRole::Packaged),
         audio_only,
@@ -638,14 +644,6 @@ fn run() -> Result<(), DaemonError> {
             // has no Tray, so nothing asks for a pinned-panel toggle, and
             // it has no pinned panel to toggle.
             toggle_panel: Box::new(|| {}),
-            // mbvd is a headless server daemon (cast-owner-output design D2):
-            // local playback is its only output, so no Cast connector is
-            // supplied and the Hello hides `playback-output`.
-            cast_connector: None,
-            // mbvd is a headless server daemon (emby-session-owner-output
-            // design D2): it never hosts an Emby Session output, a state that
-            // belongs with a user's desktop Client.
-            emby_session_output: false,
         },
     );
     Err(DaemonError::failure(format!("mbvd: {error}")))
