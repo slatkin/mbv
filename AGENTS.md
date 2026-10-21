@@ -91,6 +91,7 @@ Before any TUI change, read `docs/architecture/tui-frontend.md`. It covers the t
 * Keep tests simple. Use one behavior per test. Use no loops or branching in the body. Put setup in helpers. The Clippy complexity threshold (25) applies to the whole crate, so review holds tests to the stricter bar.
 * Fixture-varying test families use named `#[case]` tables (through the `rstest` dev-dependency). `#[case]` is never a way to generate many thin tests. Convert opportunistically and file by file.
 * lint: `cargo clippy --workspace --all-targets -- -D warnings`
+* A pre-existing gate failure is still a failing gate. Before you push, every red gate is yours to fix or to put in front of the user for a decision, whoever introduced it and however unrelated the line looks. "Not from this work" never green-lights a push; it names the next fix, not a deferral. This is not a blame game — it is how the standards stay real.
 * Use no lint suppression without per-instance user approval. Use no `allow` or `expect` attribute in any form. Do not loosen `[lints]`. Never edit `clippy.toml` (thresholds included) unless the user explicitly asks. Fix the cause instead (params struct, delete dead code and its tests, drop the unused import).
 * Run `cargo fmt` for each Rust change (stock edition-2024, max-width-100). Accept all reflow and never revert it. `cargo fmt --all -- --check` is a read-only check.
 * Write custom domain error types (for example, `AudiobookshelfError`). Do not introduce `anyhow`, `thiserror`, or `eyre`.
