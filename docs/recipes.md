@@ -25,9 +25,11 @@ or for a new field on an existing message.
 2. **Vocabulary.** Add the variant in `crates/mbv-ctrl/src/commands.rs`,
    `events.rs`, or `player.rs`. Pin the wire tag with `#[serde(rename = "...")]`.
    For a new `CtrlCmd`, add an arm to the exhaustive matches in
-   `CtrlCmd::requires_owner` and `CtrlCmd::mutates_owner_queue`. A `CtrlCmd`
-   is a *Transport command* (`CONTEXT.md`), not a *UI command*. It never
-   becomes a UI command in the terminal application.
+   `CtrlCmd::requires_owner` and `CtrlCmd::mutates_owner_queue`. `CtrlCmd` is
+   the ctrl wire vocabulary; it never becomes a *UI command* in the terminal
+   application. The *Transport command* (`CONTEXT.md`) is a different type,
+   `TransportCommand`: the owner-resolved transport action (`Step`, `Player`,
+   `Stop`).
    *Proof:* `cargo check -p mbv-ctrl`.
 3. **Capability.** Add a `CTRL_CAP_*` constant with a doc comment in
    `protocol.rs`. Re-export it from `lib.rs`. Advertise it in `CtrlHello`
