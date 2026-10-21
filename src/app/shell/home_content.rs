@@ -16,7 +16,6 @@ use mbv_ui_model::browse::ServerRows;
 use mbv_ui_model::library::LibraryKey;
 #[cfg(test)]
 use mbv_ui_msg::ComponentId;
-use std::time::Instant;
 
 impl Model {
     pub(in crate::app) fn assign_home_content(&mut self, content: HomeContent) {
@@ -200,8 +199,7 @@ impl Model {
                 // bootstrap seam.
                 self.app
                     .spawn_home_recently_added(mbv_queue::ServiceKind::Emby);
-                let has_live_flash = self.app.status_expires.is_some_and(|t| t > Instant::now());
-                if !has_live_flash {
+                if !self.app.status_toast_live() {
                     self.app.status.clear();
                 }
                 self.assign_home_content(content);

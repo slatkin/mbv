@@ -538,6 +538,15 @@ pub struct App {
 }
 
 impl App {
+    /// Whether a flash toast is still live: its expiry instant is strictly
+    /// in the future. One predicate for every liveness reader (the status-row
+    /// projection, the expiry cleanup, and the startup guards) so the rule
+    /// lives once.
+    pub(in crate::app) fn status_toast_live(&self) -> bool {
+        self.status_expires
+            .is_some_and(|expires| expires > Instant::now())
+    }
+
     /// Whether the Player owner's active playback output is a Cast receiver,
     /// per the last `CtrlEvent::PlaybackOutput`. A `Disconnected` Cast still
     /// counts: the spec's cast-session

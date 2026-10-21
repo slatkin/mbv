@@ -78,16 +78,13 @@ impl App {
     /// Clear an expired toast so the status row stops projecting it
     /// (spec `toast-notification-semantics`: a toast expires on its
     /// severity-derived duration). The old draw path ran this check before
-    /// every render; the sync pass calls it now. Returns `true` when an
-    /// expired toast was cleared.
-    pub(in crate::app) fn expire_status_toast(&mut self) -> bool {
-        if self.status_expires.is_some_and(|t| t <= Instant::now()) {
+    /// every render; the sync pass calls it now. A toast with no expiry is
+    /// never cleared here: only an expired live toast is.
+    pub(in crate::app) fn expire_status_toast(&mut self) {
+        if self.status_expires.is_some() && !self.status_toast_live() {
             self.status.clear();
             self.status_expires = None;
             self.status_severity = ToastSeverity::default();
-            true
-        } else {
-            false
         }
     }
 

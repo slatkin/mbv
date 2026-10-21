@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 
 use super::{
     IdleFeed, Model, Msg, PanelFocus, PollStrategy, QUIT_REQUESTED, init_terminal,
-    install_signal_handlers, restore_terminal, service_startup, start_quit_watchdog,
+    install_signal_handlers, restore_terminal, start_quit_watchdog,
 };
 // The run-loop tests reach `App` through this module's scope.
 #[cfg(test)]
@@ -297,16 +297,6 @@ impl Model {
         // Image pickers are initialised in `main` before `Model::new` starts
         // the TuiRealm listener — see `App::init_image_pickers` (#654).
 
-        // Don't clobber a still-live flash message (e.g. try_auto_reconnect's
-        // outcome, set during App::new) -- only show "Loading..." if there's
-        // no pending flash, mirroring the render loop's own expiry check.
-        let has_live_flash = self.app.status_expires.is_some_and(|t| t > Instant::now());
-        if !has_live_flash {
-            self.app.status = self.app.emby_client().map_or_else(
-                || service_startup::startup_status(self.app.emby_runtime.state).into(),
-                |_| "Loading...".into(),
-            );
-        }
         self.home_content.loading = true;
         terminal.draw(|f| self.draw_frame(f, false, false))?;
 

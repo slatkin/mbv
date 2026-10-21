@@ -16,7 +16,6 @@ use mbv_render::components::widgets::service_state_color;
 use mbv_render::indicators;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Span;
-use std::time::Instant;
 
 impl App {
     /// Build the live toast's spans for the status row, or `None` when no
@@ -26,9 +25,11 @@ impl App {
     /// Success/Warning/Error toasts render in-app only when system
     /// notifications are disabled or the desktop notification failed
     /// (`notif_failed`), because a delivered desktop notification hides the
-    /// in-app row. Severity colors ride on the status-bar surface.
+    /// in-app row. Severity colors ride on the status-bar surface: the span
+    /// carries only the severity foreground, the row background comes from
+    /// the painter's `bar_style`.
     pub(in crate::app) fn toast_status_spans(&self) -> Option<Vec<Span<'static>>> {
-        if self.status.is_empty() || self.status_expires.is_none_or(|t| t <= Instant::now()) {
+        if self.status.is_empty() || !self.status_toast_live() {
             return None;
         }
         let delivered_offscreen = self.system_notifications
@@ -44,10 +45,9 @@ impl App {
             ToastSeverity::Error => mbv_theme::Role::StatusError,
         }
         .color();
-        let bg = mbv_theme::surface_colors(mbv_theme::Surface::StatusBar, false).fill;
         Some(vec![Span::styled(
             self.status.clone(),
-            Style::default().fg(fg).bg(bg),
+            Style::default().fg(fg),
         )])
     }
 
@@ -487,6 +487,7 @@ fn queue_source_status_label(
 #[cfg(test)]
 mod tests {
     use crate::app::RemoteSlotState;
+    use crate::app::dispatch::notify::ToastSeverity;
     use crate::app::tests::make_app_stub;
 
     /// Same consistency contract as the queue header: the status-bar remote
@@ -562,60 +563,66 @@ mod tests {
     }
 
     /// A live toast projects its message with the severity color on the
-    /// status-bar surface (spec `toast-notification-semantics`); with
-    /// system notifications disabled the in-app row renders for non-neutral
-    /// severities too. (Bug regression: the in-app toast render path was
-    /// dropped during the `TuiRealm` migration, commit `e9f3ab957`.)
-    #[test]
-    fn a_live_toast_projects_severity_styled_spans() {
+    /// status-bar surface; a delivered desktop notification hides the in-app
+    /// row for non-neutral severities ("when the desktop notification
+    /// succeeds, the in-app toast row is hidden"); an expired toast stops
+    /// projecting (a toast expires on its severity-derived duration and
+    /// claims no key). One outcome per case, stub setup in the body (spec
+    /// `toast-notification-semantics`). (Bug regression context: the in-app
+    /// toast render path was dropped during the `TuiRealm` migration, commit
+    /// `e9f3ab957`.)
+    #[rstest::rstest]
+    #[case::live_toast_projects(ToastSeverity::Neutral, false, false, ToastExpiry::Live(2), true)]
+    #[case::delivered_desktop_notification_hides_the_row(
+        ToastSeverity::Error,
+        true,
+        false,
+        ToastExpiry::Live(5),
+        false
+    )]
+    #[case::expired_toast_stops_projecting(
+        ToastSeverity::Neutral,
+        false,
+        false,
+        ToastExpiry::Expired,
+        false
+    )]
+    fn toast_projection_matches_the_spec(
+        #[case] severity: ToastSeverity,
+        #[case] system_notifications: bool,
+        #[case] notif_failed: bool,
+        #[case] expiry: ToastExpiry,
+        #[case] projected: bool,
+    ) {
         let mut app = make_app_stub();
+        app.system_notifications = system_notifications;
+        app.notif_failed = notif_failed;
         app.status = "Scanning 'Movies'...".into();
-        app.status_severity = crate::app::dispatch::notify::ToastSeverity::Neutral;
-        app.status_expires = Some(std::time::Instant::now() + std::time::Duration::from_secs(2));
+        app.status_severity = severity;
+        app.status_expires = Some(toast_expiry(expiry));
 
-        let spans = app.toast_status_spans().expect("live toast projects");
-
-        assert!(
-            spans.iter().any(|span| span.content.contains("Scanning")),
-            "the toast message projects: {:?}",
-            spans.iter().map(|s| s.content.as_ref()).collect::<Vec<_>>()
+        assert_eq!(
+            app.toast_status_spans()
+                .is_some_and(|spans| spans.iter().any(|span| span.content.contains("Scanning"))),
+            projected,
         );
     }
 
-    /// A delivered desktop notification hides the in-app toast row: with
-    /// system notifications enabled and no reported `notify-send` failure,
-    /// a non-neutral toast does not render in-app (spec: "when the desktop
-    /// notification succeeds, the in-app toast row is hidden").
-    #[test]
-    fn a_delivered_desktop_notification_hides_the_in_app_toast() {
-        let mut app = make_app_stub();
-        app.system_notifications = true;
-        app.notif_failed = false;
-        app.status = "Save failed".into();
-        app.status_severity = crate::app::dispatch::notify::ToastSeverity::Error;
-        app.status_expires = Some(std::time::Instant::now() + std::time::Duration::from_secs(5));
-
-        assert!(
-            app.toast_status_spans().is_none(),
-            "a delivered desktop notification hides the in-app toast row"
-        );
+    /// Case fixture: the toast under test's expiry instant, future or past.
+    #[derive(Clone, Copy)]
+    enum ToastExpiry {
+        Live(u64),
+        Expired,
     }
 
-    /// An expired toast stops projecting (spec: a toast expires on its
-    /// severity-derived duration and claims no key).
-    #[test]
-    fn an_expired_toast_stops_projecting() {
-        let mut app = make_app_stub();
-        app.status = "Scanning 'Movies'...".into();
-        app.status_expires = Some(
-            std::time::Instant::now()
+    fn toast_expiry(expiry: ToastExpiry) -> std::time::Instant {
+        match expiry {
+            ToastExpiry::Live(secs) => {
+                std::time::Instant::now() + std::time::Duration::from_secs(secs)
+            }
+            ToastExpiry::Expired => std::time::Instant::now()
                 .checked_sub(std::time::Duration::from_secs(1))
                 .unwrap(),
-        );
-
-        assert!(
-            app.toast_status_spans().is_none(),
-            "an expired toast stops projecting on the status row"
-        );
+        }
     }
 }

@@ -34,7 +34,7 @@ pub struct HomeLatestLaunchWindow {
 #[must_use]
 pub fn provider_timestamp_secs(item: &QueueItem) -> Option<u64> {
     match item {
-        QueueItem::Emby(item) => mbv_feed::parse_pub_date_secs(&item.date_added),
+        QueueItem::Emby(item) => emby_date_added_secs(item),
         QueueItem::Feed(entry) => entry.pub_date_secs,
         QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Episode(episode)) => {
             episode.pub_date_secs

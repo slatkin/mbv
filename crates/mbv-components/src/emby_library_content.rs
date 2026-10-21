@@ -28,7 +28,7 @@ use mbv_render::components::media_list::{
 };
 use mbv_render::components::tv_wide::HeroImageState;
 use mbv_render::{LetterFilter, effective_sort_str};
-use mbv_ui_model::feed_age::feed_age_group;
+use mbv_ui_model::feed_age::{AgeGroupedRow, age_grouped_rows};
 use mbv_ui_model::home_latest::emby_date_added_secs;
 use mbv_ui_model::library::LibraryKind;
 use mbv_ui_msg::{Msg, ShellRequest};
@@ -73,27 +73,16 @@ fn latest_row_projection(item: &EmbyItem) -> (String, Option<String>, Option<Med
 
 /// The feed home-video All rows: the fetch's newest-first date-added order,
 /// grouped under the Feeds tab's age-group headings keyed on each video's
-/// date added (spec `feed-home-video-group-view`). At most one heading per
-/// age group plus one spacer between groups (5 groups today, so 9 extra rows
-/// max); adding a group without raising this bound only costs a
-/// reallocation, never correctness.
+/// date added (spec `feed-home-video-group-view`). Shared projection:
+/// `age_grouped_rows`.
 fn feed_all_rows(items: &[EmbyItem], now_secs: u64) -> Vec<MediaListRow<String>> {
-    let mut rows = Vec::with_capacity(items.len() + 9);
-    let mut last_group = None;
-    for item in items {
-        let group = feed_age_group(emby_date_added_secs(item), now_secs);
-        if last_group != Some(group) {
-            if last_group.is_some() {
-                rows.push(MediaListRow::Spacer);
-            }
-            rows.push(MediaListRow::Heading {
-                text: group.label().to_owned(),
-            });
-            last_group = Some(group);
-        }
-        rows.push(row_for(item, false));
-    }
-    rows
+    age_grouped_rows(items, now_secs, emby_date_added_secs, |row| match row {
+        AgeGroupedRow::Spacer => MediaListRow::Spacer,
+        AgeGroupedRow::Heading(group) => MediaListRow::Heading {
+            text: group.label().to_owned(),
+        },
+        AgeGroupedRow::Item(_, item) => row_for(item, false),
+    })
 }
 
 fn row_for(item: &EmbyItem, latest: bool) -> MediaListRow<String> {
