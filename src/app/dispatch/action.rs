@@ -202,6 +202,9 @@ pub(in crate::app) fn idle_feed_command_for_key(
         {
             Some(VisualIntent::OpenIdleFeedLink.into())
         }
+        // A key-chord matcher, not a request dispatch: the wildcard is every
+        // key that is not the bound chord.
+        // ast-grep-ignore: mbv-dispatch-no-wildcard-arm
         _ => None,
     }
 }

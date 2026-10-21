@@ -12,6 +12,10 @@
 # Blind spots (documented, deliberate): the suffix list can name a
 # component-local lookalike (no *Config/*Client types exist there today);
 # mbv-ctrl protocol objects beyond CtrlCmd/CtrlEvent are not listed.
+#
+# The rule carries its own `files` scope for the crate and `ignores`
+# globs for the crate's test paths, so one plain repo scan covers the
+# tree without an explicit path argument per rule.
 id: mbv-components-no-shell-types
 language: Rust
 severity: warning
@@ -55,3 +59,11 @@ tags:
   - rust
   - mbv
   - interactive-architecture
+files:
+  - "crates/mbv-components/**"
+ignores:
+  - "**/*_tests/**"
+  - "**/tests/**"
+  - "**/tests.rs"
+  - "**/*_tests.rs"
+  - "**/test_*.rs"

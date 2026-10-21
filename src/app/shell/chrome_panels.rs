@@ -131,10 +131,21 @@ impl Model {
         let id = panel.id();
         match placement {
             Some(_) => {
-                if !self.application.mounted(&id) {
-                    self.application
-                        .mount(id.clone(), panel.new_component(), vec![])
-                        .unwrap_or_else(|e| panic!("mount {id:?}: {e:?}"));
+                if !self.application.mounted(&id)
+                    && let Err(e) =
+                        self.application
+                            .mount(id.clone(), panel.new_component(), vec![])
+                {
+                    // A mount failure leaves the panel absent, not fatal: the
+                    // shell keeps running and the panel is retried on the
+                    // next sync.
+                    tracing::error!(
+                        name = "chrome_panel.mount_failed",
+                        target = "chrome_panel",
+                        panel = ?id,
+                        error = %e,
+                        "chrome panel mount failed"
+                    );
                 }
             }
             None => {

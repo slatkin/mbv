@@ -91,7 +91,14 @@ fn handle_ws_play(event: WsEvent, context: WsPlayContext<'_>) {
         start_index,
     } = event
     else {
-        unreachable!("handle_ws_play only accepts Play events");
+        // Documented no-op: only Play events reach this handler, so another
+        // event is a routing bug. Ignore it instead of killing the daemon.
+        tracing::warn!(
+            name = "daemon.websocket_play.unexpected_event",
+            target = "daemon",
+            "websocket play handler received a non-Play event"
+        );
+        return;
     };
     let WsPlayContext {
         client,

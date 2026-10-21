@@ -271,17 +271,16 @@ pub(super) const PLAYBACK_OUTPUT_SEED_READ_TIMEOUT: Duration = Duration::from_mi
 /// the partial `String` is discarded on the error.) The read timeout is
 /// always cleared again before the reader thread takes the stream over,
 /// so no lingering timeout can ever end the event loop early.
-pub(super) fn read_playback_output_seed(reader: &mut BufReader<SocketStream>) -> SeedLineRead {
-    if reader
-        .get_mut()
-        .set_read_timeout(Some(PLAYBACK_OUTPUT_SEED_READ_TIMEOUT))
-        .is_err()
-    {
+pub(super) fn read_playback_output_seed(
+    reader: &mut BufReader<SocketStream>,
+    timeout: Duration,
+) -> SeedLineRead {
+    if reader.get_mut().set_read_timeout(Some(timeout)).is_err() {
         // Can't bound the wait on this stream: don't risk hanging the
         // connect. The seed stays the reader thread's problem.
         return SeedLineRead::default();
     }
-    let seed = wait_for_seed_line(reader);
+    let seed = wait_for_seed_line(reader, timeout);
     // Always clear the timeout before the reader thread takes over: a
     // lingering one would end the event loop on its first quiet moment.
     let _ = reader.get_mut().set_read_timeout(None);
@@ -298,11 +297,11 @@ pub(super) struct SeedLineRead {
     pub(super) consumed: Vec<u8>,
 }
 
-/// Waits, up to [`PLAYBACK_OUTPUT_SEED_READ_TIMEOUT`], for a
+/// Waits, up to `timeout`, for a
 /// `'\n'`-terminated line, consuming as it goes and stopping exactly at
 /// the newline. See [`read_playback_output_seed`] for the contract.
-fn wait_for_seed_line(reader: &mut BufReader<SocketStream>) -> SeedLineRead {
-    let deadline = Instant::now() + PLAYBACK_OUTPUT_SEED_READ_TIMEOUT;
+fn wait_for_seed_line(reader: &mut BufReader<SocketStream>, timeout: Duration) -> SeedLineRead {
+    let deadline = Instant::now() + timeout;
     // Bytes consumed so far. On the happy path they all belong to the
     // returned line; on a give-up they are replayed to the reader thread.
     let mut taken: Vec<u8> = Vec::new();

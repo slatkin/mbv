@@ -113,7 +113,14 @@ fn fetch_restored_level_rows(
         Some(mbv_queue::TvContentMode::Range(index)) => {
             mbv_ui_model::sort_filter::LetterFilter::for_index_for_kind(index, filter_kind)
         }
-        _ => saved_level.letter_filter_index.and_then(|index| {
+        // Latest and Upcoming returned above, so the saved level's own
+        // letter filter is the only one left to restore here.
+        Some(
+            mbv_queue::TvContentMode::Latest
+            | mbv_queue::TvContentMode::Upcoming
+            | mbv_queue::TvContentMode::All,
+        )
+        | None => saved_level.letter_filter_index.and_then(|index| {
             mbv_ui_model::sort_filter::LetterFilter::for_index_for_kind(index, filter_kind)
         }),
     };
@@ -183,6 +190,9 @@ impl App {
                 "SortName".to_string(),
                 "Ascending".to_string(),
             ),
+            // The Emby collection type is a server-side string, so the key
+            // space is open and an unknown type takes the neutral default.
+            // ast-grep-ignore: mbv-dispatch-no-wildcard-arm
             _ => (None, false, "SortName".to_string(), "Ascending".to_string()),
         }
     }

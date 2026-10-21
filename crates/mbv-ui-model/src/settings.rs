@@ -273,7 +273,10 @@ fn label_for(key: SettingKey, labels: &[(SettingKey, &'static str)]) -> &'static
     labels
         .iter()
         .find_map(|(candidate, label)| (*candidate == key).then_some(*label))
-        .unwrap_or_else(|| unreachable!("setting label group must contain its key"))
+        // A key missing from its group table is a table gap, not a reason to
+        // kill the process that is drawing the settings screen: the row shows
+        // a neutral label instead.
+        .unwrap_or("Unknown setting")
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

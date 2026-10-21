@@ -291,6 +291,9 @@ impl App {
             1 => Some(mbv_queue::TvContentMode::Upcoming),
             index if large => Some(mbv_queue::TvContentMode::Range(index - 2)),
             2 => Some(mbv_queue::TvContentMode::All),
+            // A pill index is a position, not a variant: an index past the
+            // last pill names no mode.
+            // ast-grep-ignore: mbv-dispatch-no-wildcard-arm
             _ => None,
         }
     }

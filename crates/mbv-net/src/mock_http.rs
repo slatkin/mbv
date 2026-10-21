@@ -7,7 +7,7 @@
 
 use std::collections::VecDeque;
 use std::io;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
 use std::time::Duration;
 
 use ureq::config::Config;
@@ -33,6 +33,9 @@ enum Scripted {
 struct Shared {
     script: Mutex<VecDeque<Scripted>>,
     requests: Mutex<Vec<String>>,
+    /// Signalled whenever a request is recorded, so a test can wait for the
+    /// request instead of polling for it.
+    requests_changed: Condvar,
 }
 
 /// Handle to the scripted responses and recorded requests of one mock agent.
@@ -54,6 +57,7 @@ impl MockHttp {
             shared: Arc::new(Shared {
                 script: Mutex::new(VecDeque::new()),
                 requests: Mutex::new(Vec::new()),
+                requests_changed: Condvar::new(),
             }),
         }
     }
@@ -108,6 +112,28 @@ impl MockHttp {
     #[must_use]
     pub fn request_count(&self) -> usize {
         self.shared.requests.lock().unwrap().len()
+    }
+
+    /// Blocks until at least `count` requests have been transmitted, or
+    /// until `timeout` passes. Returns whether the count was reached.
+    ///
+    /// This waits for the outcome instead of polling for it: a test that
+    /// needs a request to have been sent waits here rather than sleeping
+    /// between checks.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `requests` mutex is poisoned: a previous holder panicked
+    /// while holding the lock.
+    #[must_use]
+    pub fn wait_for_requests(&self, count: usize, timeout: Duration) -> bool {
+        let requests = self.shared.requests.lock().unwrap();
+        let (_requests, result) = self
+            .shared
+            .requests_changed
+            .wait_timeout_while(requests, timeout, |requests| requests.len() < count)
+            .unwrap();
+        !result.timed_out()
     }
 
     fn push(&self, scripted: Scripted) {
@@ -213,6 +239,8 @@ impl Transport for MockTransport {
                 .lock()
                 .unwrap()
                 .push(self.received.clone());
+            // A waiting test must learn that the request is now recorded.
+            self.shared.requests_changed.notify_all();
         }
         Ok(())
     }

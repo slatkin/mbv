@@ -1,0 +1,13 @@
+---
+# Root ast-grep project config: both mbv rule trees and their fixtures.
+# rules/ast-grep-rules-ci/ holds the CI tripwires (each rule scopes its own
+# paths via its files/ignores globs); rules/ast-grep-rules/ holds the
+# repo-wide rules. The live tree keeps its own .sgconfig.yml for standalone
+# scans of just that tree; pi-lens loads its rule files directly and does
+# not read this file.
+ruleDirs:
+  - ./rules/ast-grep-rules-ci/rules
+  - ./rules/ast-grep-rules/rules
+testConfigs:
+  - testDir: ./rules/ast-grep-rules-ci/rule-tests
+  - testDir: ./rules/ast-grep-rules/rule-tests

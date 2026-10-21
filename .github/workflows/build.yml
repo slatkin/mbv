@@ -62,7 +62,7 @@ jobs:
           # changes only when that pin is bumped deliberately. clang stays a
           # system package (native build-script tooling, not a cache-keyed
           # compiler).
-          pacman_retry pacman -S --noconfirm --needed rustup clang nasm mpv pipewire openssl dpkg github-cli git openssh zig wayland libxkbcommon fontconfig
+          pacman_retry pacman -S --noconfirm --needed rustup clang nasm mpv pipewire openssl dpkg github-cli git openssh zig wayland libxkbcommon fontconfig ast-grep
 
       - uses: actions/checkout@v7
 
@@ -119,6 +119,23 @@ jobs:
 
       - name: Lint
         run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Ast-grep tripwires
+        # The repo-specific ast-grep rules (issue #956) run here. One plain
+        # `ast-grep scan .` covers the whole tree: sgconfig.yml at the repo
+        # root merges both rule trees (rules/ast-grep-rules-ci/ and
+        # rules/ast-grep-rules/), and every CI-tree rule scopes its own
+        # paths through its `files`/`ignores` globs, so the invocation needs
+        # no per-rule path arguments and no test-path --globs. The repo-wide
+        # rules (mbv-no-sleep-in-tests, mbv-no-error-helper-crates) must see
+        # test files, which is exactly why nothing excludes tests here.
+        # All rules ship as `warning`, so findings print and the step stays
+        # green; a rule promoted to `error` fails the step. The fixture run
+        # keeps the rules honest: a rule whose two-sided fixtures stop
+        # passing fails here even when its scan is quiet.
+        run: |
+          ast-grep test --skip-snapshot-tests
+          ast-grep scan .
 
       - name: Audit dependencies
         run: cargo audit

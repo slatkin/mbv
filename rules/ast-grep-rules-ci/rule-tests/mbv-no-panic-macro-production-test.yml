@@ -1,0 +1,54 @@
+---
+id: mbv-no-panic-macro-production
+valid:
+  # No panic-family macro at all.
+  - "fn f() -> u32 { 1 }"
+  # The sanctioned invariant arm: `unreachable!()` in a match arm asserts a
+  # variant that cannot reach the match.
+  - |-
+    fn f(x: u32) -> u32 {
+        match x {
+            1 => 1,
+            _ => unreachable!("only 1 is reachable here"),
+        }
+    }
+  # Test items are out of scope: a panic in a test is the assertion.
+  - |-
+    #[cfg(test)]
+    mod tests {
+        #[test]
+        fn t() {
+            panic!("boom");
+        }
+    }
+  - |-
+    #[test]
+    fn t() {
+        todo!();
+    }
+invalid:
+  # A panic in production code kills the process.
+  - "fn f() { panic!(\"boom\"); }"
+  # An unfinished implementation is the same failure.
+  - "fn f() { todo!(); }"
+  - "fn f() { unimplemented!(); }"
+  # The binding guard: the same macro outside a match arm must fire, so the
+  # exclusion checks the arm and not the macro's spelling.
+  - "fn f() { unreachable!(\"bare\"); }"
+  # The binding guard: the exclusion is bound to `unreachable!`, so a
+  # `panic!` in the same match arm still fires.
+  - |-
+    fn f(x: u32) -> u32 {
+        match x {
+            1 => 1,
+            _ => panic!("boom"),
+        }
+    }
+  # The binding guard: a helper inside a `mod tests` that carries no
+  # `#[cfg(test)]` attribute is production code and must fire.
+  - |-
+    mod tests {
+        fn helper() {
+            panic!("boom");
+        }
+    }

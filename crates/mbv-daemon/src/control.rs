@@ -390,8 +390,28 @@ fn answer_queue_op(ctx: &CtrlContext<'_>, op: QueueOpId) {
         supports_abs_queue,
         supports_abs_book_queue,
     );
+    // The projection always builds a queue state. A different event is a
+    // projection bug: report the op as rejected instead of killing the
+    // daemon. The edit above has already applied by the time this reply
+    // is built, so the reason text reports the defect; it is not a
+    // refusal of the op, and a client that resends on it would
+    // double-apply.
     let CtrlEvent::UnifiedQueueState(state) = event else {
-        unreachable!("queue projection always returns UnifiedQueueState")
+        tracing::error!(
+            name = "daemon.queue_op.projection_mismatch",
+            target = "daemon",
+            "queue projection returned a non-queue event"
+        );
+        send_to(
+            ctx.reply_tx,
+            &CtrlEvent::QueueOpResult {
+                op,
+                outcome: QueueOpOutcome::Rejected(
+                    "queue projection returned no queue state".to_string(),
+                ),
+            },
+        );
+        return;
     };
     send_to(
         ctx.reply_tx,

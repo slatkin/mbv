@@ -313,7 +313,8 @@ impl App {
                 0 => "No subscriptions".into(),
                 n => format!("{n} subscription{}", if n == 1 { "" } else { "s" }),
             },
-            _ => String::new(),
+            // Emby and Audiobookshelf carry no subscription count of their own.
+            ServiceEntry::Emby | ServiceEntry::Audiobookshelf => String::new(),
         }
     }
 }
