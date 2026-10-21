@@ -1,5 +1,6 @@
 use super::*;
 use crate::app::LibraryTab;
+use crate::app::dispatch::action::{PlaybackIntent, ShellCommand};
 use crate::app::tests::{install_test_emby, make_app_stub, make_remote_app_stub_with_cmd_rx};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use mbv_emby_model::EmbyItem;
@@ -16,18 +17,18 @@ fn ui_root_router_command_opens_help() {
     let messages = vec![Msg::TerminalEvent(TerminalObserverEvent::Key(key.into()))];
     assert_eq!(
         model.router_outcome(&messages),
-        RouterOutcome::Command(Command::OpenHelp)
+        RouterOutcome::Command(ShellCommand::OpenHelp.into())
     );
     assert_eq!(
         arbitrate_key(
             messages,
             Some(&ComponentId::UiRoot),
-            &RouterOutcome::Command(Command::OpenHelp)
+            &RouterOutcome::Command(ShellCommand::OpenHelp.into())
         )
         .0,
         [] as [mbv_ui_msg::Msg; 0]
     );
-    assert!(!model.dispatch_router_command(&Command::OpenHelp));
+    assert!(!model.dispatch_router_command(&ShellCommand::OpenHelp.into()));
     assert!(
         model
             .application
@@ -51,16 +52,18 @@ fn consumed_space_cancels_the_playback_candidate_and_leaves_no_state() {
 
     assert_eq!(
         model.router_outcome(&messages),
-        RouterOutcome::Deferred(Command::TogglePlayPause)
+        RouterOutcome::Deferred(PlaybackIntent::TogglePlayPause.into())
     );
-    assert!(
-        !model.apply_deferred_candidate(&RouterOutcome::Deferred(Command::TogglePlayPause), true)
-    );
+    assert!(!model.apply_deferred_candidate(
+        &RouterOutcome::Deferred(PlaybackIntent::TogglePlayPause.into()),
+        true
+    ));
     // A later unhandled press still behaves as a first press: no consumed
     // state is inherited.
-    assert!(
-        model.apply_deferred_candidate(&RouterOutcome::Deferred(Command::TogglePlayPause), false)
-    );
+    assert!(model.apply_deferred_candidate(
+        &RouterOutcome::Deferred(PlaybackIntent::TogglePlayPause.into()),
+        false
+    ));
 }
 
 /// The double-Esc stop (see `Model::router_outcome`): the first Esc falls
@@ -84,7 +87,7 @@ fn first_escape_falls_through_and_second_dispatches_the_stop() {
     // Second press inside the window: the stop dispatches immediately.
     assert_eq!(
         model.router_outcome(&messages),
-        RouterOutcome::Command(Command::Stop)
+        RouterOutcome::Command(PlaybackIntent::Stop.into())
     );
 
     // A non-Esc press between the two disarms: Space stays play/pause.
@@ -116,12 +119,12 @@ fn second_escape_stops_when_the_leaf_consumes_both_presses() {
     // command still dispatches (and arbitration discards the request).
     assert_eq!(
         model.router_outcome(&leaf),
-        RouterOutcome::Command(Command::Stop)
+        RouterOutcome::Command(PlaybackIntent::Stop.into())
     );
     let (folded, _) = arbitrate_key(
         leaf,
         Some(&ComponentId::Library),
-        &RouterOutcome::Command(Command::Stop),
+        &RouterOutcome::Command(PlaybackIntent::Stop.into()),
     );
     assert!(
         folded.is_empty(),

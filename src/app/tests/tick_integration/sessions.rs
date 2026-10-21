@@ -5,7 +5,7 @@ use tuirealm::event::{
     Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
 };
 
-use crate::app::dispatch::action::Command;
+use crate::app::dispatch::action::NavigationIntent;
 use crate::app::state::panel_targets::PanelTarget;
 use crate::app::tests::make_app_stub;
 use crate::app::tests::tick_integration::harness::{StepOutcome, TickHarness};
@@ -99,11 +99,11 @@ fn open_sessions(harness: &mut TickHarness) {
     let outcome = harness.step();
     assert_eq!(
         outcome.router,
-        crate::app::input::router::RouterOutcome::Command(Command::OpenSessions)
+        crate::app::input::router::RouterOutcome::Command(NavigationIntent::OpenSessions.into())
     );
     harness
         .model_mut()
-        .dispatch_router_command(&Command::OpenSessions);
+        .dispatch_router_command(&NavigationIntent::OpenSessions.into());
     apply_messages(harness, outcome);
     harness.model_mut().sync_mounted_surfaces();
     assert_eq!(

@@ -1,4 +1,5 @@
 use super::*;
+use crate::app::dispatch::action::{AppCommand, PanelIntent};
 use crate::app::state::panel_focus::{PanelPresentation, panel_appearance_focus_decision};
 use crate::app::tests::tick_integration::harness::TickHarness;
 use mbv_ui_msg::{Msg, TerminalObserverEvent};
@@ -313,7 +314,7 @@ fn cycle_from_hidden_empty_queue_advances_stored_mode_to_queue_only() {
     app.terminal_width = 100;
     app.panel_mode = PanelMode::Both;
 
-    app.dispatch(&crate::app::dispatch::action::Command::CyclePanelMode);
+    app.dispatch(&AppCommand::Panel(PanelIntent::CyclePanelMode));
 
     assert_eq!(app.panel_mode, PanelMode::QueueOnly);
 }

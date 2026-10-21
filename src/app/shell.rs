@@ -9,8 +9,6 @@ use super::{
 use super::{
     QUIT_REQUESTED, init_terminal, install_signal_handlers, restore_terminal, start_quit_watchdog,
 };
-#[cfg(test)]
-pub(in crate::app) use crate::app::dispatch::action::Command;
 use crate::app::dispatch::session::service_startup;
 pub(in crate::app) use crate::app::input::router::RouterOutcome;
 #[cfg(test)]

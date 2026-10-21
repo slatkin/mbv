@@ -1,7 +1,7 @@
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
 use crate::app::PanelFocus;
-use crate::app::dispatch::action::Command;
+use crate::app::dispatch::action::NavigationIntent;
 use crate::app::input::router::RouterOutcome;
 use crate::app::tests::make_app_stub;
 use crate::app::tests::tick_integration::harness::TickHarness;
@@ -25,13 +25,13 @@ fn settings_mouse_support_row_toggle_flips_config_and_arms_capture() {
 
     harness.inject(key(Key::Function(2)));
     let outcome = harness.step();
-    assert!(matches!(
+    assert_eq!(
         outcome.router,
-        RouterOutcome::Command(Command::ToggleSettings)
-    ));
+        RouterOutcome::Command(NavigationIntent::ToggleSettings.into())
+    );
     harness
         .model_mut()
-        .dispatch_router_command(&Command::ToggleSettings);
+        .dispatch_router_command(&NavigationIntent::ToggleSettings.into());
     {
         let (mut music_resize, mut tv_resize) = (false, false);
         for message in outcome.messages {
@@ -99,13 +99,13 @@ fn settings_reset_ui_state_row_runs_the_coordinator_and_dismisses_settings() {
 
     harness.inject(key(Key::Function(2)));
     let outcome = harness.step();
-    assert!(matches!(
+    assert_eq!(
         outcome.router,
-        RouterOutcome::Command(Command::ToggleSettings)
-    ));
+        RouterOutcome::Command(NavigationIntent::ToggleSettings.into())
+    );
     harness
         .model_mut()
-        .dispatch_router_command(&Command::ToggleSettings);
+        .dispatch_router_command(&NavigationIntent::ToggleSettings.into());
     feed(&mut harness, outcome.messages);
     harness.model_mut().sync_mounted_surfaces();
     let settings_id = ComponentId::Overlay(OverlayId::Settings);

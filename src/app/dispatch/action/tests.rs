@@ -19,13 +19,13 @@ fn key_ctrl(code: KeyCode) -> KeyChord {
 fn focus_panel_keeps_the_card_checkpoint() {
     let mut app = make_app_stub();
     app.images.record_card_size(17, 34);
-    app.dispatch(&Command::FocusPanel(
+    app.dispatch(&AppCommand::Panel(PanelIntent::FocusPanel(
         mbv_ui_model::settings::PanelFocus::Library,
-    ));
+    )));
     assert_eq!(app.images.last_card_size(), (17, 34));
-    app.dispatch(&Command::FocusPanel(
+    app.dispatch(&AppCommand::Panel(PanelIntent::FocusPanel(
         mbv_ui_model::settings::PanelFocus::Queue,
-    ));
+    )));
     assert_eq!(app.images.last_card_size(), (17, 34));
 }
 
@@ -40,7 +40,7 @@ fn o_opens_an_idle_feed_link_only_when_available() {
         };
     assert_eq!(
         idle_feed_command_for_key(o, &context(false, false, true)),
-        Some(Command::OpenIdleFeedLink)
+        Some(VisualIntent::OpenIdleFeedLink.into())
     );
     assert_eq!(
         idle_feed_command_for_key(o, &context(true, false, true)),
@@ -99,7 +99,7 @@ fn dispatch_toggle_mute_flips_state_and_persists() {
 
     let mut app = make_app_stub();
     assert!(!app.mute_on);
-    app.dispatch(&Command::ToggleMute);
+    app.dispatch(&AppCommand::Playback(PlaybackIntent::ToggleMute));
     assert!(app.mute_on);
 
     let prefs_path = crate::config::prefs_path();
@@ -107,7 +107,7 @@ fn dispatch_toggle_mute_flips_state_and_persists() {
     let v: serde_json::Value = serde_json::from_str(&saved).unwrap();
     assert_eq!(v["mute_on"], serde_json::json!(true));
 
-    app.dispatch(&Command::ToggleMute);
+    app.dispatch(&AppCommand::Playback(PlaybackIntent::ToggleMute));
     assert!(!app.mute_on);
 }
 

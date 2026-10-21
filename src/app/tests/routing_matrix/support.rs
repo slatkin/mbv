@@ -152,7 +152,7 @@ fn immediate_router_outcomes_have_distinct_fold_behavior() {
         leaf.clone(),
         key(KeyCode::Char('q')),
         focused.as_ref(),
-        &RouterOutcome::Command(crate::app::dispatch::action::Command::Quit),
+        &RouterOutcome::Command(crate::app::dispatch::action::AppCommand::Quit.into()),
     );
     assert!(
         command.is_empty(),

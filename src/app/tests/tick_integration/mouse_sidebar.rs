@@ -2,7 +2,7 @@ use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
 
-use crate::app::dispatch::action::Command;
+use crate::app::dispatch::action::NavigationIntent;
 use crate::app::tests::make_app_stub;
 use crate::app::tests::tick_integration::harness::{StepOutcome, TickHarness};
 use mbv_components::library_panel::LibraryPanel;
@@ -46,17 +46,17 @@ fn playlists_sidebar_claims_immediate_wheel_and_keeps_normal_keys() {
     let mut harness = TickHarness::new(app);
     harness.inject(key(Key::Function(4)));
     let outcome = harness.step();
-    assert!(matches!(
+    assert_eq!(
         outcome.router,
-        crate::app::input::router::RouterOutcome::Command(Command::OpenPlaylists)
-    ));
+        crate::app::input::router::RouterOutcome::Command(NavigationIntent::OpenPlaylists.into())
+    );
     assert!(
         outcome.messages.is_empty(),
         "the router consumes F4's leaf message"
     );
     harness
         .model_mut()
-        .dispatch_router_command(&Command::OpenPlaylists);
+        .dispatch_router_command(&NavigationIntent::OpenPlaylists.into());
     apply_outcome(&mut harness, outcome);
     harness.model_mut().sync_mounted_surfaces();
     let playlists_id = ComponentId::Overlay(OverlayId::Playlists);

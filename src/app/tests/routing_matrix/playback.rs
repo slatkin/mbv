@@ -1,7 +1,7 @@
 //! Routing matrix: playback precedence and policy rows.
 
 use super::support::*;
-use crate::app::dispatch::action::Command;
+use crate::app::dispatch::action::{PlaybackIntent, VisualIntent};
 use crate::app::input::router::{
     RouterOutcome, RouterSnapshot, resolve_router_outcome_with_focused,
 };
@@ -31,7 +31,7 @@ fn playback_gating_space_toggles_without_a_visual_selection() {
             None,
             &default_keybinds()
         ),
-        RouterOutcome::Command(Command::TogglePlayPause)
+        RouterOutcome::Command(PlaybackIntent::TogglePlayPause.into())
     );
 }
 #[test]
@@ -47,7 +47,7 @@ fn playback_gating_space_defers_to_a_visual_selection() {
             None,
             &default_keybinds()
         ),
-        RouterOutcome::Deferred(Command::TogglePlayPause)
+        RouterOutcome::Deferred(PlaybackIntent::TogglePlayPause.into())
     );
 }
 #[test]
@@ -60,7 +60,7 @@ fn playback_gating_esc_claims_deferred_stop() {
             None,
             &default_keybinds()
         ),
-        RouterOutcome::Deferred(Command::Stop)
+        RouterOutcome::Deferred(PlaybackIntent::Stop.into())
     );
 }
 #[test]
@@ -73,7 +73,7 @@ fn playback_policy_preserves_per_key_eligibility() {
             None,
             &default_keybinds()
         ),
-        RouterOutcome::Command(Command::SeekRelative(-5.0))
+        RouterOutcome::Command(PlaybackIntent::SeekRelative(-5.0).into())
     );
     assert_eq!(
         resolve_router_outcome_with_focused(
@@ -82,7 +82,7 @@ fn playback_policy_preserves_per_key_eligibility() {
             None,
             &default_keybinds()
         ),
-        RouterOutcome::Command(Command::CycleAudio)
+        RouterOutcome::Command(PlaybackIntent::CycleAudio.into())
     );
     assert_eq!(
         resolve_router_outcome_with_focused(
@@ -100,7 +100,7 @@ fn playback_policy_preserves_per_key_eligibility() {
             None,
             &default_keybinds()
         ),
-        RouterOutcome::Command(Command::ToggleMute)
+        RouterOutcome::Command(PlaybackIntent::ToggleMute.into())
     );
 }
 #[test]
@@ -112,7 +112,7 @@ fn visualizer_resolves_to_router_command() {
             None,
             &default_keybinds()
         ),
-        RouterOutcome::Command(Command::ToggleVisualizer)
+        RouterOutcome::Command(VisualIntent::ToggleVisualizer.into())
     );
 }
 #[test]
@@ -171,7 +171,7 @@ fn idle_feed_path_uses_connected_session_not_broad_playback_route() {
             None,
             &default_keybinds()
         ),
-        RouterOutcome::Command(Command::OpenIdleFeedLink)
+        RouterOutcome::Command(VisualIntent::OpenIdleFeedLink.into())
     );
 
     let queue_only_idle = RouterSnapshot {
@@ -229,6 +229,6 @@ fn idle_feed_path_uses_connected_session_not_broad_playback_route() {
             None,
             &default_keybinds()
         ),
-        RouterOutcome::Command(Command::OpenIdleFeedLink)
+        RouterOutcome::Command(VisualIntent::OpenIdleFeedLink.into())
     );
 }

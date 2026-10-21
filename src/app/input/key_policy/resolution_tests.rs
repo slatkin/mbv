@@ -40,7 +40,7 @@ fn panel_mode_cycle_falls_through_during_text_entry() {
             None,
             &keybinds()
         ),
-        crate::app::input::router::RouterOutcome::Command(Command::CyclePanelMode)
+        crate::app::input::router::RouterOutcome::Command(PanelIntent::CyclePanelMode.into())
     );
 }
 
@@ -54,7 +54,9 @@ fn hide_visual_slot_routes_to_command_without_overlay() {
             None,
             &keybinds()
         ),
-        crate::app::input::router::RouterOutcome::Command(Command::ToggleVisualSlotHidden)
+        crate::app::input::router::RouterOutcome::Command(
+            VisualIntent::ToggleVisualSlotHidden.into()
+        )
     );
 }
 
@@ -139,7 +141,7 @@ fn rebound_transport_action_fires_on_configured_chord_only() {
     );
     assert_eq!(
         command_for_policy(KeyPolicyBinding::VolumeUp, new_chord),
-        Some(Command::AdjustVolume(VOLUME_STEP))
+        Some(PlaybackIntent::AdjustVolume(VOLUME_STEP).into())
     );
     for inert in ['+', '='] {
         assert_eq!(
@@ -166,7 +168,7 @@ fn rebound_transport_action_fires_on_configured_chord_only() {
     );
     assert_eq!(
         command_for_policy(KeyPolicyBinding::TogglePlayPause, new_chord),
-        Some(Command::TogglePlayPause)
+        Some(PlaybackIntent::TogglePlayPause.into())
     );
     assert_eq!(
         resolve_policy(new_chord, &snapshot(), &keybinds).map(|entry| entry.name),

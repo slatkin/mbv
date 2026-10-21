@@ -7,6 +7,7 @@
 
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
+use crate::app::dispatch::action::{NavigationIntent, PlaybackIntent, ShellCommand};
 use crate::app::input::router::RouterOutcome;
 use crate::app::tests::tick_integration::harness::TickHarness;
 use crate::app::tests::{
@@ -53,12 +54,12 @@ fn configured_rebind_fires_through_tick() {
     let outcome = harness.step();
     assert_eq!(
         outcome.router,
-        RouterOutcome::Command(crate::app::dispatch::action::Command::OpenHelp),
+        RouterOutcome::Command(ShellCommand::OpenHelp.into()),
         "the configured chord fires the rebound action through tick()"
     );
     harness
         .model_mut()
-        .dispatch_router_command(&crate::app::dispatch::action::Command::OpenHelp);
+        .dispatch_router_command(&ShellCommand::OpenHelp.into());
     assert!(
         harness
             .model()
@@ -101,7 +102,7 @@ fn shift_tab_backtab_shift_encoding_fires_previous_library_tab_through_tick() {
     let outcome = harness.step();
     assert_eq!(
         outcome.router,
-        RouterOutcome::Command(crate::app::dispatch::action::Command::PreviousLibraryTab),
+        RouterOutcome::Command(NavigationIntent::PreviousLibraryTab.into()),
         "Shift+Tab must fire previous_library_tab through tick()"
     );
 }
@@ -133,7 +134,7 @@ fn rebound_transport_action_fires_through_tick_and_default_is_inert() {
     let outcome = harness.step();
     assert_eq!(
         outcome.router,
-        RouterOutcome::Command(crate::app::dispatch::action::Command::AdjustVolume(5)),
+        RouterOutcome::Command(PlaybackIntent::AdjustVolume(5).into()),
         "the configured chord fires the rebound transport action through tick()"
     );
 
@@ -165,7 +166,7 @@ fn shift_n_default_fires_next_track_through_tick() {
     let outcome = harness.step();
     assert_eq!(
         outcome.router,
-        RouterOutcome::Command(crate::app::dispatch::action::Command::NextTrack),
+        RouterOutcome::Command(PlaybackIntent::NextTrack.into()),
         "Shift+N must fire next_track through tick()"
     );
 }
@@ -212,7 +213,7 @@ fn f5_with_queue_focus_refreshes_the_selected_library_through_tick() {
     let outcome = harness.step();
     assert_eq!(
         outcome.router,
-        RouterOutcome::Command(crate::app::dispatch::action::Command::RefreshCurrentView),
+        RouterOutcome::Command(ShellCommand::RefreshCurrentView.into()),
         "F5 resolves the global refresh command under Queue focus"
     );
     // Drop anything the tick's own sync emitted; the assertion below is about
@@ -220,7 +221,7 @@ fn f5_with_queue_focus_refreshes_the_selected_library_through_tick() {
     while cmd_rx.try_recv().is_ok() {}
     harness
         .model_mut()
-        .dispatch_router_command(&crate::app::dispatch::action::Command::RefreshCurrentView);
+        .dispatch_router_command(&ShellCommand::RefreshCurrentView.into());
 
     assert!(
         harness.model().app.libs[0].nav_stack[0].loading,

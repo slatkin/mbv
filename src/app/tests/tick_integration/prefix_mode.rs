@@ -9,7 +9,7 @@
 
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
 
-use crate::app::dispatch::action::Command;
+use crate::app::dispatch::action::{NavigationIntent, PanelIntent};
 use crate::app::input::router::RouterOutcome;
 use crate::app::tests::make_app_stub;
 use crate::app::tests::tick_integration::harness::TickHarness;
@@ -205,7 +205,7 @@ fn mouse_event_disarms_without_altering_handling() {
     harness.inject(key(Key::Char('x')));
     assert_eq!(
         harness.step().router,
-        RouterOutcome::Command(Command::CyclePanelMode),
+        RouterOutcome::Command(PanelIntent::CyclePanelMode.into()),
         "after the mouse disarm the keyboard routes as usual"
     );
 }
@@ -266,7 +266,7 @@ fn armed_chords_reach_no_component_and_a_mapped_chord_dispatches() {
     let outcome = harness.step();
     assert_eq!(
         outcome.router,
-        RouterOutcome::PrefixDispatch(Command::CyclePanelMode)
+        RouterOutcome::PrefixDispatch(PanelIntent::CyclePanelMode.into())
     );
     assert!(
         !harness.model().app.prefix_armed,
@@ -274,7 +274,7 @@ fn armed_chords_reach_no_component_and_a_mapped_chord_dispatches() {
     );
     harness
         .model_mut()
-        .dispatch_router_command(&Command::CyclePanelMode);
+        .dispatch_router_command(&PanelIntent::CyclePanelMode.into());
     assert_ne!(
         harness.model().app.panel_mode,
         mbv_ui_model::settings::PanelMode::default(),
@@ -312,7 +312,7 @@ fn double_prefix_re_arms_through_tick() {
     harness.inject(key(Key::Char('n')));
     assert_eq!(
         harness.step().router,
-        RouterOutcome::PrefixDispatch(Command::NextLibraryTab)
+        RouterOutcome::PrefixDispatch(NavigationIntent::NextLibraryTab.into())
     );
 }
 
@@ -343,7 +343,7 @@ fn unmapped_chord_swallows_disarms_and_the_next_chord_routes_normally() {
     harness.inject(key(Key::Char('x')));
     assert_eq!(
         harness.step().router,
-        RouterOutcome::Command(Command::CyclePanelMode),
+        RouterOutcome::Command(PanelIntent::CyclePanelMode.into()),
         "after the disarm the chord routes normally"
     );
 }

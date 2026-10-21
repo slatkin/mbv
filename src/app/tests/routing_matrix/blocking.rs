@@ -1,7 +1,7 @@
 //! Routing matrix: blocking precedence and policy rows.
 
 use super::support::*;
-use crate::app::dispatch::action::Command;
+use crate::app::dispatch::action::PlaybackIntent;
 use crate::app::input::router::{
     RouterOutcome, RouterSnapshot, resolve_router_outcome_with_focused,
 };
@@ -108,7 +108,7 @@ fn router_command_discards_focused_leaf_message() {
         leaf,
         key(KeyCode::Char('q')),
         Some(&ComponentId::Library),
-        &RouterOutcome::Command(Command::Stop),
+        &RouterOutcome::Command(PlaybackIntent::Stop.into()),
     );
     assert!(
         out.is_empty(),

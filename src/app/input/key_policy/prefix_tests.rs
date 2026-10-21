@@ -106,7 +106,7 @@ mod prefix_mode {
                 &armed_snapshot(),
                 &keybinds
             ),
-            RouterOutcome::PrefixDispatch(Command::NextLibraryTab)
+            RouterOutcome::PrefixDispatch(NavigationIntent::NextLibraryTab.into())
         );
     }
 
@@ -125,7 +125,7 @@ mod prefix_mode {
                 &link,
                 &keybinds
             ),
-            RouterOutcome::PrefixDispatch(Command::OpenIdleFeedLink)
+            RouterOutcome::PrefixDispatch(VisualIntent::OpenIdleFeedLink.into())
         );
         // The gate's non-chord conditions still close it.
         assert_eq!(

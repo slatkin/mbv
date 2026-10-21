@@ -9,7 +9,7 @@ use tuirealm::event::{
     Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
 };
 
-use crate::app::dispatch::action::Command;
+use crate::app::dispatch::action::{NavigationIntent, PanelIntent, PlaybackIntent};
 use crate::app::input::router::RouterOutcome;
 use crate::app::shell::fold_keyboard_messages;
 use crate::app::tests::QueueViewTestExt;
@@ -116,7 +116,7 @@ fn live_tick_space_toggles_immediately_on_the_press() {
     let first = harness.step();
     assert_eq!(
         first.router,
-        RouterOutcome::Command(crate::app::dispatch::action::Command::TogglePlayPause)
+        RouterOutcome::Command(PlaybackIntent::TogglePlayPause.into())
     );
     assert!(!first.deferred_fired);
 }
@@ -138,7 +138,7 @@ fn live_tick_escape_stops_on_the_second_press() {
     let second = harness.step();
     assert_eq!(
         second.router,
-        RouterOutcome::Command(crate::app::dispatch::action::Command::Stop)
+        RouterOutcome::Command(PlaybackIntent::Stop.into())
     );
     assert!(!second.deferred_fired);
 }
@@ -377,7 +377,7 @@ fn tick_ctrl_arrows_switch_main_panels() {
     let outcome = harness.step();
     assert_eq!(
         outcome.router,
-        RouterOutcome::Command(Command::FocusPanel(PanelFocus::Library))
+        RouterOutcome::Command(PanelIntent::FocusPanel(PanelFocus::Library).into())
     );
     if let RouterOutcome::Command(command) = outcome.router {
         harness.model_mut().dispatch_router_command(&command);
@@ -403,7 +403,7 @@ fn tick_ctrl_arrows_switch_main_panels() {
     let outcome = both.step();
     assert_eq!(
         outcome.router,
-        RouterOutcome::Command(Command::FocusPanel(PanelFocus::Queue))
+        RouterOutcome::Command(PanelIntent::FocusPanel(PanelFocus::Queue).into())
     );
     if let RouterOutcome::Command(command) = outcome.router {
         both.model_mut().dispatch_router_command(&command);
@@ -427,7 +427,7 @@ fn tick_ctrl_arrows_switch_main_panels() {
     let outcome = plain.step();
     assert_ne!(
         outcome.router,
-        RouterOutcome::Command(Command::FocusPanel(PanelFocus::Queue)),
+        RouterOutcome::Command(PanelIntent::FocusPanel(PanelFocus::Queue).into()),
         "plain Left is the tree's chord, not a panel switch"
     );
     assert_eq!(
@@ -685,13 +685,13 @@ fn f4_playlists_sidebar_toggles_open_and_closed() {
     let step_with_key = |harness: &mut TickHarness, code: Key| {
         harness.inject(key(code));
         let outcome = harness.step();
-        assert!(matches!(
+        assert_eq!(
             outcome.router,
-            RouterOutcome::Command(Command::OpenPlaylists)
-        ));
+            RouterOutcome::Command(NavigationIntent::OpenPlaylists.into())
+        );
         harness
             .model_mut()
-            .dispatch_router_command(&Command::OpenPlaylists);
+            .dispatch_router_command(&NavigationIntent::OpenPlaylists.into());
         let (mut music_resize, mut tv_resize) = (false, false);
         for message in outcome.messages {
             harness
