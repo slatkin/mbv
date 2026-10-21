@@ -319,12 +319,8 @@ pub fn run_local_daemon_main() -> ! {
             // Owner's event loop never waits for pinwin.
             toggle_panel: Box::new(crate::pin::toggle_panel),
         },
-        // The Local daemon owns the Cast connector: its Owner can make a
-        // receiver its playback output. The Local daemon hosts an Emby
-        // Session output: it is the desktop-adjacent owner whose Client
-        // selects the Session. Only the Local entry point takes these
-        // hooks; the packaged `mbvd` has no parameter that could carry
-        // them (mbvd-local-playback-only design D1, D2).
+        // The Local daemon owns the Cast connector and hosts an Emby
+        // Session output; see `LocalOutputHooks` for the entry-point rule.
         mbv_daemon::LocalOutputHooks {
             cast_connector: mbv_daemon::local_cast_connector(),
             emby_session_output: true,

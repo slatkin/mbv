@@ -8,6 +8,45 @@ fn packaged_startup_context_is_service_independent() {
     assert!(startup.audiobookshelf.is_none());
 }
 
+/// Contract: the Local run entry point refuses a startup whose role is not
+/// `DaemonRole::Local`, so a packaged startup can never reach it together
+/// with the `LocalOutputHooks` that express a remote output (spec "Packaged
+/// runtime setup has no remote-output choice").
+#[test]
+fn run_local_with_options_refuses_a_packaged_startup() {
+    let startup = DaemonStartupContext {
+        role: DaemonRole::Packaged,
+        config: Config::default(),
+        emby: None,
+        audiobookshelf: None,
+    };
+    let error = run_local_with_options(
+        startup,
+        false,
+        DaemonRuntimeHooks {
+            on_player_ready: Box::new(|_| {}),
+            on_tray_ready: Box::new(|_| None),
+            swap_command: Box::new(|_| Err(String::new())),
+            notify: Box::new(|_| {}),
+            toggle_panel: Box::new(|| {}),
+        },
+        LocalOutputHooks {
+            cast_connector: local_cast_connector(),
+            emby_session_output: false,
+        },
+    )
+    .expect_err("a packaged startup is refused on the Local entry");
+
+    assert!(
+        matches!(error, LocalStartupError::NotLocal(DaemonRole::Packaged)),
+        "the refusal names the packaged role: {error}"
+    );
+    assert!(
+        error.to_string().contains("Local"),
+        "the refusal states the role rule: {error}"
+    );
+}
+
 #[test]
 fn audiobookshelf_reconciliation_installs_context_and_enables_admission() {
     let _guard = mbv_config::TestStateDirGuard::new();

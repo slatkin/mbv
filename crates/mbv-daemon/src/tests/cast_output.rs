@@ -121,29 +121,31 @@ pub(super) fn select_output(
     ));
 }
 
+/// The output capabilities the spawned Client negotiates at its Hello.
+#[derive(Clone, Copy, Default)]
+struct ClientOutputCaps {
+    /// The Client negotiates `playback-output`.
+    playback_output: bool,
+    /// The Client negotiates `emby-session-output`.
+    emby_session_output: bool,
+}
+
 /// Spawns a ctrl session over a socket pair whose daemon Hello advertises
-/// the capabilities in `caps` and whose Client Hello negotiates
-/// `client_playback_output` (and `client_emby_session_output` when set).
-/// Returns the client-side reader; the daemon Hello is its first line.
+/// the capabilities in `caps` and whose Client Hello negotiates the
+/// capabilities in `client_caps`. Returns the client-side reader; the daemon
+/// Hello is its first line.
 fn spawn_cast_peer(
     caps: crate::DaemonHelloCaps,
-    client_playback_output: bool,
-    client_emby_session_output: bool,
+    client_caps: ClientOutputCaps,
 ) -> BufReader<UnixStream> {
-    spawn_output_peer(
-        caps,
-        client_playback_output,
-        client_emby_session_output,
-        OutputState::Local,
-    )
+    spawn_output_peer(caps, client_caps, OutputState::Local)
 }
 
 /// [`spawn_cast_peer`] with the owner's seeded output state chosen by the
 /// test, so the cold-seed rule can be observed against an Emby Session.
 fn spawn_output_peer(
     caps: crate::DaemonHelloCaps,
-    client_playback_output: bool,
-    client_emby_session_output: bool,
+    client_caps: ClientOutputCaps,
     owner_output: OutputState,
 ) -> BufReader<UnixStream> {
     let (client, peer) = UnixStream::pair().unwrap();
@@ -169,12 +171,12 @@ fn spawn_output_peer(
     );
     let reader = BufReader::new(client.try_clone().unwrap());
     let mut client_hello = CtrlHello::current();
-    if client_playback_output {
+    if client_caps.playback_output {
         client_hello
             .capabilities
             .push(mbv_ctrl::CTRL_CAP_PLAYBACK_OUTPUT.to_string());
     }
-    if client_emby_session_output {
+    if client_caps.emby_session_output {
         client_hello
             .capabilities
             .push(mbv_ctrl::CTRL_CAP_EMBY_SESSION_OUTPUT.to_string());
@@ -211,7 +213,7 @@ fn daemon_caps(playback_output: bool, emby_session_output: bool) -> crate::Daemo
 /// `playback-output` when the runtime supplies a Cast connector.
 #[test]
 fn the_daemon_hello_advertises_playback_output_with_a_connector() {
-    let mut reader = spawn_cast_peer(daemon_caps(true, false), false, false);
+    let mut reader = spawn_cast_peer(daemon_caps(true, false), ClientOutputCaps::default());
     let CtrlEvent::Hello(hello) = read_event(&mut reader) else {
         panic!("expected daemon hello");
     };
@@ -222,7 +224,7 @@ fn the_daemon_hello_advertises_playback_output_with_a_connector() {
 /// `playback-output` when the runtime supplies no Cast connector (mbvd).
 #[test]
 fn the_daemon_hello_hides_playback_output_without_a_connector() {
-    let mut reader = spawn_cast_peer(daemon_caps(false, false), false, false);
+    let mut reader = spawn_cast_peer(daemon_caps(false, false), ClientOutputCaps::default());
     let CtrlEvent::Hello(hello) = read_event(&mut reader) else {
         panic!("expected daemon hello");
     };
@@ -234,7 +236,7 @@ fn the_daemon_hello_hides_playback_output_without_a_connector() {
 /// (the Local daemon).
 #[test]
 fn the_daemon_hello_advertises_emby_session_output_with_the_hook_on() {
-    let mut reader = spawn_cast_peer(daemon_caps(true, true), false, false);
+    let mut reader = spawn_cast_peer(daemon_caps(true, true), ClientOutputCaps::default());
     let CtrlEvent::Hello(hello) = read_event(&mut reader) else {
         panic!("expected daemon hello");
     };
@@ -245,7 +247,7 @@ fn the_daemon_hello_advertises_emby_session_output_with_the_hook_on() {
 /// hides `emby-session-output` when the runtime hook leaves it off (mbvd).
 #[test]
 fn the_daemon_hello_hides_emby_session_output_with_the_hook_off() {
-    let mut reader = spawn_cast_peer(daemon_caps(true, false), false, false);
+    let mut reader = spawn_cast_peer(daemon_caps(true, false), ClientOutputCaps::default());
     let CtrlEvent::Hello(hello) = read_event(&mut reader) else {
         panic!("expected daemon hello");
     };
@@ -257,7 +259,13 @@ fn the_daemon_hello_hides_emby_session_output_with_the_hook_off() {
 /// connects to an owner that is casting"); the seed here is the Local start.
 #[test]
 fn a_capable_client_receives_the_playback_output_on_connect() {
-    let mut reader = spawn_cast_peer(daemon_caps(false, false), true, false);
+    let mut reader = spawn_cast_peer(
+        daemon_caps(false, false),
+        ClientOutputCaps {
+            playback_output: true,
+            ..ClientOutputCaps::default()
+        },
+    );
     let CtrlEvent::Hello(_) = read_event(&mut reader) else {
         panic!("expected daemon hello");
     };
@@ -280,7 +288,14 @@ fn a_capable_client_receives_the_playback_output_on_connect() {
 /// both capabilities receives the Session state.
 #[test]
 fn an_emby_session_output_is_seeded_only_to_capable_peers() {
-    let mut plain = spawn_output_peer(daemon_caps(true, true), true, false, emby_session_state());
+    let mut plain = spawn_output_peer(
+        daemon_caps(true, true),
+        ClientOutputCaps {
+            playback_output: true,
+            ..ClientOutputCaps::default()
+        },
+        emby_session_state(),
+    );
     assert!(matches!(read_event(&mut plain), CtrlEvent::Hello(_)));
     assert!(matches!(
         read_event(&mut plain),
@@ -294,7 +309,14 @@ fn an_emby_session_output_is_seeded_only_to_capable_peers() {
         "a peer without the capability sees Local instead of the Session output"
     );
 
-    let mut capable = spawn_output_peer(daemon_caps(true, true), true, true, emby_session_state());
+    let mut capable = spawn_output_peer(
+        daemon_caps(true, true),
+        ClientOutputCaps {
+            playback_output: true,
+            emby_session_output: true,
+        },
+        emby_session_state(),
+    );
     assert!(matches!(read_event(&mut capable), CtrlEvent::Hello(_)));
     assert!(matches!(
         read_event(&mut capable),
@@ -338,8 +360,8 @@ fn an_emby_session_output_change_reaches_only_capable_peers() {
     );
 }
 
-/// Contract: cast-owner-output row 3.2, mbvd-local-playback-only row 2.1 — a packaged owner has no connector: a Cast
-/// selection is rejected with a reason and the output stays Local.
+/// Contract: cast-owner-output row 3.2 — a packaged owner has no connector,
+/// so a Cast selection is rejected with a reason and the output stays Local.
 #[test]
 fn a_cast_selection_without_a_connector_is_rejected() {
     let mut t = test_loop_with_role(DaemonRole::Packaged);

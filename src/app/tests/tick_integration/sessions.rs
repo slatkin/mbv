@@ -73,13 +73,22 @@ fn capability_owner_app(
 }
 
 /// An app whose owner advertises neither output capability — the Client
-/// compatibility a connection to packaged `mbvd` negotiates
-/// (mbvd-local-playback-only row 2.2).
+/// compatibility a connection to packaged `mbvd` negotiates (spec scenario
+/// "Client connected to mbvd").
 fn capabilityless_owner_app() -> (
     crate::app::App,
     std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>,
 ) {
     capability_owner_app(false, false)
+}
+
+/// An app whose owner advertises both output capabilities — the Local
+/// owner's compatibility (emby-session-owner-output design D3/D12).
+fn both_output_capabilities_owner_app() -> (
+    crate::app::App,
+    std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>,
+) {
+    capability_owner_app(true, true)
 }
 
 /// Injected direct-connect failure for row 7.1: the Session advertises a
@@ -367,7 +376,7 @@ fn tick_sessions_unchanged_sync_keeps_painted_pointer_target_without_redraw() {
 
 #[test]
 fn tick_sessions_reordered_snapshot_activates_selected_identity() {
-    let (mut app, cmd_rx) = capability_owner_app(true, true);
+    let (mut app, cmd_rx) = both_output_capabilities_owner_app();
     app.panel_targets = sessions(&["first", "selected"]);
     let mut harness = TickHarness::new(app);
     open_sessions(&mut harness);
@@ -490,7 +499,7 @@ fn tick_sessions_cast_row_activation_sends_the_owner_output_selection() {
 /// active slot.
 #[test]
 fn tick_sessions_emby_row_without_direct_endpoint_selects_the_owner_output() {
-    let (mut app, cmd_rx) = capability_owner_app(true, true);
+    let (mut app, cmd_rx) = both_output_capabilities_owner_app();
     app.terminal_width = 100;
     app.terminal_height = 14;
     app.player_endpoint = Some(mbv_remote_player::DaemonEndpoint::Local);
@@ -535,7 +544,7 @@ fn tick_sessions_emby_row_with_failed_direct_connect_reports_and_selects_the_own
 
     let _guard = DIRECT_CONNECT_TEST_LOCK.lock().unwrap();
     *DIRECT_CONNECT_OVERRIDE.lock().unwrap() = Some(failed_direct_connect);
-    let (mut app, cmd_rx) = capability_owner_app(true, true);
+    let (mut app, cmd_rx) = both_output_capabilities_owner_app();
     app.terminal_width = 100;
     app.terminal_height = 14;
     app.player_endpoint = Some(mbv_remote_player::DaemonEndpoint::Local);
@@ -577,10 +586,10 @@ fn tick_sessions_emby_row_with_failed_direct_connect_reports_and_selects_the_own
     );
 }
 
-/// Contract: mbvd-local-playback-only row 2.2, spec scenario "Client connected
-/// to mbvd" — with an owner compatibility that advertises neither output
-/// capability, the target rebuild offers the Emby rows but no Cast row; the
-/// row-level Cast gate reads the negotiated compatibility, not a bare flag.
+/// Contract: spec scenario "Client connected to mbvd" — with an owner
+/// compatibility that advertises neither output capability, the target
+/// rebuild offers the Emby rows but no Cast row; the row-level Cast gate
+/// reads the negotiated compatibility, not a bare flag.
 #[test]
 fn a_capabilityless_owner_rebuild_offers_no_cast_row() {
     let (mut app, _cmd_rx) = capabilityless_owner_app();
@@ -603,10 +612,10 @@ fn a_capabilityless_owner_rebuild_offers_no_cast_row() {
     );
 }
 
-/// Contract: mbvd-local-playback-only row 2.2, spec scenario "Client connected
-/// to mbvd" — with an owner compatibility that advertises neither output
-/// capability, an Emby row without a direct endpoint is not offered as an
-/// output selection: the activation warns and sends the owner nothing.
+/// Contract: spec scenario "Client connected to mbvd" — with an owner
+/// compatibility that advertises neither output capability, an Emby row
+/// without a direct endpoint is not offered as an output selection: the
+/// activation warns and sends the owner nothing.
 #[test]
 fn tick_sessions_emby_row_on_a_capabilityless_owner_selects_no_output() {
     let (mut app, cmd_rx) = capabilityless_owner_app();

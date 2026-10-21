@@ -552,10 +552,11 @@ pub struct DaemonRuntimeHooks {
     pub toggle_panel: TogglePanelHook,
 }
 
-/// The remote-output hooks only the Local process can supply
-/// (mbvd-local-playback-only design D1, D2). They ride on the Local run
-/// entry point, not on [`DaemonRuntimeHooks`], so the packaged entry's
-/// signature cannot name a Cast connector or an Emby Session output.
+/// The remote-output hooks only the Local process can supply. They ride on
+/// the Local run entry point, not on [`DaemonRuntimeHooks`], so the packaged
+/// entry's signature cannot name a Cast connector or an Emby Session output:
+/// a packaged owner has no way to express a remote output, and local
+/// playback stays its only output by construction.
 pub struct LocalOutputHooks {
     /// Cast connector for the runtime (cast-owner-output design D2): the
     /// Local daemon is the only Cast-output host and always supplies one.

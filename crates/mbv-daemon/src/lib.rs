@@ -21,7 +21,7 @@ mod owner_settings;
 #[doc(inline)]
 pub use context::{AudiobookshelfOwnerContext, DaemonRole, DaemonStartupContext, EmbyOwnerContext};
 #[doc(inline)]
-pub use error::DaemonLibError;
+pub use error::{DaemonLibError, LocalStartupError};
 #[cfg(test)]
 pub(crate) use owner_settings::OwnerSettings;
 pub(crate) use owner_settings::OwnerSettingsReader;

@@ -620,11 +620,9 @@ fn run() -> Result<(), DaemonError> {
     // lock-held refusal is an already-running failure (harden-owner-process-
     // boundaries 1.3).
     //
-    // This is the packaged entry point (mbvd-local-playback-only design D1):
-    // its parameters cannot name a Cast connector or an Emby Session output,
-    // so local playback is mbvd's only output by construction — no runtime
-    // setup in any build can express a remote output. The Local entry
-    // (`run_local_with_options`) is the only one that takes those hooks.
+    // The packaged entry: its parameters cannot name a remote output (the
+    // rule lives on `mbv_daemon::LocalOutputHooks`), so local playback is
+    // mbvd's only output.
     let Err(error) = mbv_daemon::run_with_options(
         mbv_daemon::DaemonStartupContext::new(config, mbv_daemon::DaemonRole::Packaged),
         audio_only,
