@@ -276,17 +276,12 @@ fn feed_home_video_group_app() -> App {
     app
 }
 
-/// Wheel-scrolls-viewport task 4.1 (D4 wheel contract rewrite of the
-/// superseded "wheel keeps control cursor authoritative" ask): the End key
-/// still persists the resting cursor through the embedded owner's typed
-/// cursor echo, and a wheel notch over the painted list then scrolls the
-/// viewport freely (selection and shell resting state unchanged) while the
-/// reach report carries the last painted selectable row's item index.
-#[test]
-fn feed_home_video_group_browser_wheel_scrolls_viewport_and_reports_reach() {
-    // The uniform wheel step is three rows (mouse-input "Wheel scrolling
-    // moves the viewport by a uniform step").
-    const WHEEL_STEP: usize = 3;
+/// The wide feed-home-video wheel fixture: the 140×40 `LibraryOnly` layout
+/// with 30 extra All rows for wheel room, mounted on the Latest-off pill,
+/// plus the painted list rect for event coordinates and the projected row
+/// count. The wide fixed-row control gives a durable one-row-per-item
+/// geometry.
+fn wide_feed_video_group_model() -> (Model, Terminal<TestBackend>, ratatui::layout::Rect, usize) {
     let mut app = feed_home_video_group_app();
     app.terminal_width = 140;
     app.terminal_height = 40;
@@ -302,7 +297,6 @@ fn feed_home_video_group_browser_wheel_scrolls_viewport_and_reports_reach() {
     let mut model = Model::new(app);
     model.sync_mounted_surfaces();
     leave_latest(&mut model);
-    // The wide fixed-row control gives a durable one-row-per-item geometry.
     let mut term = Terminal::new(TestBackend::new(140, 40)).unwrap();
     draw(&mut model, &mut term);
     let list_area = model
@@ -321,12 +315,13 @@ fn feed_home_video_group_browser_wheel_scrolls_viewport_and_reports_reach() {
         list_area.width > 0 && list_area.height > 0,
         "the panel's list slot must have painted"
     );
-    let mut music_resize = false;
-    let mut tv_resize = false;
+    (model, term, list_area, total_rows)
+}
 
-    // Seed the control selection at the last row through the panel's
-    // keyboard delivery (task 6.1: the panel forwards the chord to the
-    // embedded owner, which echoes its resolved index).
+/// Seeds the control selection at the last row through the panel's keyboard
+/// delivery (task 6.1: the panel forwards the chord to the embedded owner,
+/// which echoes its resolved index) and returns the free viewport offset.
+fn end_select_last_row(model: &mut Model) -> usize {
     let end = model
         .application
         .get_component_mut(&ComponentId::Library)
@@ -336,19 +331,38 @@ fn feed_home_video_group_browser_wheel_scrolls_viewport_and_reports_reach() {
             modifiers: KeyModifiers::NONE,
         }))
         .expect("End emits the typed cursor echo");
-    model.handle_terminal_message(end, &mut music_resize, &mut tv_resize);
-    draw(&mut model, &mut term);
+    model.handle_terminal_message(end, &mut false, &mut false);
+    let total_rows = model.app.libs[0]
+        .feed_home_video
+        .as_ref()
+        .unwrap()
+        .selected_len();
     assert_eq!(
-        owner_cursor(&mut model),
+        owner_cursor(model),
         total_rows - 1,
         "End selects the last row"
     );
     assert_eq!(
-        feed_video_cursor(&mut model),
+        feed_video_cursor(model),
         total_rows - 1,
         "the shell resting cursor follows the control selection"
     );
-    let scroll_before = owner_scroll(&mut model);
+    owner_scroll(model)
+}
+
+/// Wheel-scrolls-viewport task 4.1 (D4 wheel contract rewrite of the
+/// superseded "wheel keeps control cursor authoritative" ask): the End key
+/// still persists the resting cursor through the embedded owner's typed
+/// cursor echo, and a wheel notch over the painted list then scrolls the
+/// viewport freely (selection and shell resting state unchanged) while the
+/// reach report carries the last painted selectable row's item index.
+#[test]
+fn feed_home_video_group_browser_wheel_scrolls_viewport_and_reports_reach() {
+    // The uniform wheel step is three rows (mouse-input "Wheel scrolling
+    // moves the viewport by a uniform step").
+    const WHEEL_STEP: usize = 3;
+    let (mut model, mut term, list_area, total_rows) = wide_feed_video_group_model();
+    let scroll_before = end_select_last_row(&mut model);
 
     // One wheel notch over the painted list (the viewport-wheel contract):
     // the control scrolls its own viewport by the uniform step without
@@ -388,7 +402,7 @@ fn feed_home_video_group_browser_wheel_scrolls_viewport_and_reports_reach() {
         panic!("the wheel sends the reach report, not {shell_boxed:?}");
     };
     assert_eq!(*index, expected_reach, "the reach is the last painted row");
-    model.handle_terminal_message(wheel, &mut music_resize, &mut tv_resize);
+    model.handle_terminal_message(wheel, &mut false, &mut false);
     // The free scroll invalidates the retained frame; production draws
     // between events, so refresh the painted claim here too (design.md D6).
     draw(&mut model, &mut term);
