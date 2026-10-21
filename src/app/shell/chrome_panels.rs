@@ -202,6 +202,9 @@ impl Model {
     /// Local/Remote queue-scope pills are queue concern: the shell projects
     /// them into the `QueueComponent` footer in `sync_queue`, never here.
     pub(in crate::app) fn sync_status_bar_panel(&mut self) {
+        // An expired toast stops projecting: clear the state first so this
+        // pass and the frame below both see the toast-free row.
+        self.app.expire_status_toast();
         let placement = self.sync_chrome_root().status_bar;
         self.mount_to_placement(ChromePanel::StatusBar, placement);
         let id = ChromePanel::StatusBar.id();
@@ -251,6 +254,7 @@ impl Model {
                 .visual_selection
                 .map(|(_, count)| VisualModeIndicator { count }),
             prefix_armed: self.app.prefix_armed_status_spans(),
+            toast: self.app.toast_status_spans(),
         };
         if let Some(comp) = self.application.get_component_mut(&id)
             && let Some(panel) = comp.as_any_mut().downcast_mut::<StatusBarPanel>()

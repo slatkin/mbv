@@ -9,7 +9,7 @@
 
 use mbv_theme as palette;
 use ratatui::Frame;
-use ratatui::layout::Rect;
+use ratatui::layout::{Alignment, Rect};
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Clear, Paragraph};
@@ -51,6 +51,11 @@ pub struct StatusBarModel {
     pub visual_mode: Option<VisualModeIndicator>,
     /// Prefix-armed pill spans (absent when not armed).
     pub prefix_armed: Option<Vec<Span<'static>>>,
+    /// Severity-styled toast spans, projected by the shell while a toast is
+    /// live (`None` otherwise, spec `toast-notification-semantics`). A live
+    /// toast takes over the entire status row, so the pills drop for the
+    /// toast's severity-derived duration and their regions stay `None`.
+    pub toast: Option<Vec<Span<'static>>>,
 }
 /// The status row's pointer regions, retained by the mounted
 /// `StatusBarPanel` after painting.
@@ -349,6 +354,20 @@ pub fn render_status_bar(f: &mut Frame, area: Rect, model: &StatusBarModel) -> S
     // owned it.
     f.render_widget(Clear, area);
     f.render_widget(Block::default().style(bar_style), area);
+
+    // A live toast takes over the entire row (the restored in-app toast
+    // surface, previously the render-path overlay). The pills are not
+    // painted while the toast is live and their regions stay `None`, so
+    // pointer events are never resolved against hidden pills.
+    if let Some(toast) = model.toast.as_ref().filter(|spans| !spans.is_empty()) {
+        f.render_widget(
+            Paragraph::new(Line::from(toast.clone()))
+                .alignment(Alignment::Center)
+                .style(bar_style),
+            area,
+        );
+        return StatusBarRegions::default();
+    }
 
     let segments = status_bar_left_segments(model, area.width);
     let (regions, left_content_width) = render_status_bar_left(f, area, bar_style, segments);

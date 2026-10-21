@@ -155,7 +155,44 @@ mod tests {
             right: pill("R", Color::White),
             visual_mode: None,
             prefix_armed: None,
+            toast: None,
         }
+    }
+
+    /// A live toast takes over the entire row: the toast text paints and
+    /// the pills (and their regions) drop for the toast's duration, so
+    /// pointer events are never resolved against hidden pills (spec
+    /// `toast-notification-semantics`; restored in-app toast surface).
+    #[test]
+    fn a_live_toast_takes_over_the_status_row() {
+        let mut model = model(pill(" 60", palette::Role::Accent.color()), None);
+        model.toast = Some(vec![Span::styled(
+            "Scanning 'Movies'...",
+            Style::default().fg(Color::White),
+        )]);
+        let mut panel = StatusBarPanel::new();
+        panel.set_model(model);
+        let mut terminal = Terminal::new(TestBackend::new(60, 1)).unwrap();
+        terminal
+            .draw(|f| panel.view(f, Rect::new(0, 0, 60, 1)))
+            .unwrap();
+        let buffer = terminal.backend().buffer().clone();
+
+        let row: String = (0..60)
+            .filter_map(|x| buffer[(x, 0)].symbol().chars().next())
+            .collect();
+        assert!(
+            row.contains("Scanning 'Movies'..."),
+            "the live toast paints on the status row: {row:?}"
+        );
+        assert!(
+            !row.contains("60"),
+            "the pills drop while the toast is live: {row:?}"
+        );
+        assert!(
+            panel.regions().volume.is_none() && panel.regions().mute.is_none(),
+            "no pill regions are retained while the toast is live"
+        );
     }
 
     fn drawn_panel(

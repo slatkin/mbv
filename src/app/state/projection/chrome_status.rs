@@ -9,14 +9,48 @@
 //! The Local/Remote queue-scope pills are queue concern and paint in the
 //! `QueueColumn` footer (`render_queue_status`), never here.
 
+use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::{App, PanelFocus, RemoteSlotState};
 use mbv_render::components::chrome::daemon_endpoint_label;
 use mbv_render::components::widgets::service_state_color;
 use mbv_render::indicators;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Span;
+use std::time::Instant;
 
 impl App {
+    /// Build the live toast's spans for the status row, or `None` when no
+    /// toast should render in-app (spec `toast-notification-semantics`).
+    /// Restores the in-app toast surface dropped during the `TuiRealm`
+    /// migration (commit `e9f3ab957`): Neutral toasts always render in-app;
+    /// Success/Warning/Error toasts render in-app only when system
+    /// notifications are disabled or the desktop notification failed
+    /// (`notif_failed`), because a delivered desktop notification hides the
+    /// in-app row. Severity colors ride on the status-bar surface.
+    pub(in crate::app) fn toast_status_spans(&self) -> Option<Vec<Span<'static>>> {
+        if self.status.is_empty() || self.status_expires.is_none_or(|t| t <= Instant::now()) {
+            return None;
+        }
+        let delivered_offscreen = self.system_notifications
+            && self.status_severity != ToastSeverity::Neutral
+            && !self.notif_failed;
+        if delivered_offscreen {
+            return None;
+        }
+        let fg = match self.status_severity {
+            ToastSeverity::Neutral => mbv_theme::Role::TextPrimary,
+            ToastSeverity::Success => mbv_theme::Role::StatusAvailable,
+            ToastSeverity::Warning => mbv_theme::Role::TextFocusAccent,
+            ToastSeverity::Error => mbv_theme::Role::StatusError,
+        }
+        .color();
+        let bg = mbv_theme::surface_colors(mbv_theme::Surface::StatusBar, false).fill;
+        Some(vec![Span::styled(
+            self.status.clone(),
+            Style::default().fg(fg).bg(bg),
+        )])
+    }
+
     /// Build the playback status indicator items (res/codec, audio lang, CC), space-separated.
     /// Returns None if the local player is not active.
     /// Callers wrap these in [ ... ] with whatever surrounding style they need.
@@ -524,6 +558,64 @@ mod tests {
                 .any(|span| span.content.contains("Living Room")),
             "the pill stops naming a disconnected receiver: {:?}",
             spans.iter().map(|s| s.content.as_ref()).collect::<Vec<_>>()
+        );
+    }
+
+    /// A live toast projects its message with the severity color on the
+    /// status-bar surface (spec `toast-notification-semantics`); with
+    /// system notifications disabled the in-app row renders for non-neutral
+    /// severities too. (Bug regression: the in-app toast render path was
+    /// dropped during the `TuiRealm` migration, commit `e9f3ab957`.)
+    #[test]
+    fn a_live_toast_projects_severity_styled_spans() {
+        let mut app = make_app_stub();
+        app.status = "Scanning 'Movies'...".into();
+        app.status_severity = crate::app::dispatch::notify::ToastSeverity::Neutral;
+        app.status_expires = Some(std::time::Instant::now() + std::time::Duration::from_secs(2));
+
+        let spans = app.toast_status_spans().expect("live toast projects");
+
+        assert!(
+            spans.iter().any(|span| span.content.contains("Scanning")),
+            "the toast message projects: {:?}",
+            spans.iter().map(|s| s.content.as_ref()).collect::<Vec<_>>()
+        );
+    }
+
+    /// A delivered desktop notification hides the in-app toast row: with
+    /// system notifications enabled and no reported `notify-send` failure,
+    /// a non-neutral toast does not render in-app (spec: "when the desktop
+    /// notification succeeds, the in-app toast row is hidden").
+    #[test]
+    fn a_delivered_desktop_notification_hides_the_in_app_toast() {
+        let mut app = make_app_stub();
+        app.system_notifications = true;
+        app.notif_failed = false;
+        app.status = "Save failed".into();
+        app.status_severity = crate::app::dispatch::notify::ToastSeverity::Error;
+        app.status_expires = Some(std::time::Instant::now() + std::time::Duration::from_secs(5));
+
+        assert!(
+            app.toast_status_spans().is_none(),
+            "a delivered desktop notification hides the in-app toast row"
+        );
+    }
+
+    /// An expired toast stops projecting (spec: a toast expires on its
+    /// severity-derived duration and claims no key).
+    #[test]
+    fn an_expired_toast_stops_projecting() {
+        let mut app = make_app_stub();
+        app.status = "Scanning 'Movies'...".into();
+        app.status_expires = Some(
+            std::time::Instant::now()
+                .checked_sub(std::time::Duration::from_secs(1))
+                .unwrap(),
+        );
+
+        assert!(
+            app.toast_status_spans().is_none(),
+            "an expired toast stops projecting on the status row"
         );
     }
 }

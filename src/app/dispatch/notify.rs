@@ -75,6 +75,22 @@ impl App {
         self.flash(format!("Error: {e}"), ToastSeverity::Error);
     }
 
+    /// Clear an expired toast so the status row stops projecting it
+    /// (spec `toast-notification-semantics`: a toast expires on its
+    /// severity-derived duration). The old draw path ran this check before
+    /// every render; the sync pass calls it now. Returns `true` when an
+    /// expired toast was cleared.
+    pub(in crate::app) fn expire_status_toast(&mut self) -> bool {
+        if self.status_expires.is_some_and(|t| t <= Instant::now()) {
+            self.status.clear();
+            self.status_expires = None;
+            self.status_severity = ToastSeverity::default();
+            true
+        } else {
+            false
+        }
+    }
+
     /// Enforces #223's queue-route invariant: an item whose resolved
     /// route differs from the queue's current route (`active_route`) is
     /// rejected with a toast instead of being appended or silently
