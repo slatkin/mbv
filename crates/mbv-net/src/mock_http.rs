@@ -8,7 +8,7 @@
 use std::collections::VecDeque;
 use std::io;
 use std::sync::{Arc, Condvar, Mutex};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use ureq::config::Config;
 use ureq::unversioned::resolver::DefaultResolver;
@@ -127,24 +127,13 @@ impl MockHttp {
     /// while holding the lock.
     #[must_use]
     pub fn wait_for_requests(&self, count: usize, timeout: Duration) -> bool {
-        let deadline = Instant::now() + timeout;
-        let mut requests = self.shared.requests.lock().unwrap();
-        while requests.len() < count {
-            let remaining = deadline.saturating_duration_since(Instant::now());
-            if remaining.is_zero() {
-                return false;
-            }
-            let (guard, timed_out) = self
-                .shared
-                .requests_changed
-                .wait_timeout(requests, remaining)
-                .unwrap();
-            requests = guard;
-            if timed_out.timed_out() && requests.len() < count {
-                return false;
-            }
-        }
-        true
+        let requests = self.shared.requests.lock().unwrap();
+        let (_requests, result) = self
+            .shared
+            .requests_changed
+            .wait_timeout_while(requests, timeout, |requests| requests.len() < count)
+            .unwrap();
+        !result.timed_out()
     }
 
     fn push(&self, scripted: Scripted) {
