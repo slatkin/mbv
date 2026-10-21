@@ -2,8 +2,8 @@
 
 ## 1. Owner-output seam in `mbv-daemon` (design D1, D2)
 
-- [ ] 1.1 In `crates/mbv-daemon/src/run.rs`, remove `cast_connector` and `emby_session_output` from `DaemonRuntimeHooks`; add `LocalOutputHooks { cast_connector: CastConnector, emby_session_output: bool }`; add the private `OwnerOutputs` carrier and split the public run entry points so the packaged entry has no parameter that can carry a remote output, with one internal run body behind both (design D1, D2). Verify: `cargo check -p mbv-daemon -p mbvd -p mbv` passes, and the packaged entry point's signature mentions neither `CastConnector` nor an Emby-output flag.
-- [ ] 1.2 Update the two process boundaries: `src/local_daemon.rs` supplies `LocalOutputHooks` through the Local entry point exactly as it supplied the old fields; `crates/mbvd/src/main.rs` calls the packaged entry with no remote-output argument and its comment now states the boundary instead of the convention. Verify: `cargo check -p mbvd` and `cargo check -p mbv`; the existing daemon and `mbvd` tests still pass (`cargo nextest run -p mbv-daemon -p mbvd`).
+- [x] 1.1 In `crates/mbv-daemon/src/run.rs`, remove `cast_connector` and `emby_session_output` from `DaemonRuntimeHooks`; add `LocalOutputHooks { cast_connector: CastConnector, emby_session_output: bool }`; add the private `OwnerOutputs` carrier and split the public run entry points so the packaged entry has no parameter that can carry a remote output, with one internal run body behind both (design D1, D2). Verify: `cargo check -p mbv-daemon -p mbvd -p mbv` passes, and the packaged entry point's signature mentions neither `CastConnector` nor an Emby-output flag.
+- [x] 1.2 Update the two process boundaries: `src/local_daemon.rs` supplies `LocalOutputHooks` through the Local entry point exactly as it supplied the old fields; `crates/mbvd/src/main.rs` calls the packaged entry with no remote-output argument and its comment now states the boundary instead of the convention. Verify: `cargo check -p mbvd` and `cargo check -p mbv`; the existing daemon and `mbvd` tests still pass (`cargo nextest run -p mbv-daemon -p mbvd`).
 
 ## 2. Pin the derived behavior (design D3, D4)
 
