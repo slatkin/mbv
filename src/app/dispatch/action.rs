@@ -457,7 +457,7 @@ impl App {
             mbv_ui_model::settings::PanelMode::Both => {}
         }
     }
-    /// Own the `Command::QueuePlayCursor` state transitions (extracted from
+    /// Own the `AppCommand::QueuePlayCursor` state transitions (extracted from
     /// `dispatch`; every early exit there returned `false`, i.e. fell through
     /// to dispatch's own `false` tail).
     pub(in crate::app) fn dispatch_queue_play_cursor(&mut self, t: usize) {

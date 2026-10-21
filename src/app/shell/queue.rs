@@ -310,7 +310,7 @@ impl Model {
             QueueRequest::Play { scope, slot_id } => {
                 if let Some(index) = self.select_queue_slot(scope, slot_id) {
                     self.app
-                        .dispatch(&crate::app::dispatch::action::Command::QueuePlayCursor(
+                        .dispatch(&crate::app::dispatch::action::AppCommand::QueuePlayCursor(
                             index,
                         ));
                 }
@@ -461,7 +461,7 @@ impl Model {
     /// scope/focus/hold-window side effects, returning the resolved index.
     /// The index is the operand for the shell-owned effect the caller is
     /// about to run (D2: `remove_from_queue(index)`, `move_queue_item_up/
-    /// down(index)`, `Command::QueuePlayCursor(index)`). The component's
+    /// down(index)`, `AppCommand::QueuePlayCursor(index)`). The component's
     /// own cursor is authoritative for selection; App's `queue_cursor` is
     /// not written here (task 3.1: the mirror is gone).
     fn select_queue_slot(

@@ -251,7 +251,7 @@ impl App {
                 None
             }
             Some(ContextAction::PlayQueue(index)) => {
-                self.dispatch(&crate::app::dispatch::action::Command::QueuePlayCursor(
+                self.dispatch(&crate::app::dispatch::action::AppCommand::QueuePlayCursor(
                     index,
                 ));
                 None
@@ -449,7 +449,7 @@ impl App {
             // focus should not occur, but keep the legacy read for
             // defensive parity with the pre-D2 behavior.
             let index = self.displayed_queue().cursor();
-            self.dispatch(&crate::app::dispatch::action::Command::QueuePlayCursor(
+            self.dispatch(&crate::app::dispatch::action::AppCommand::QueuePlayCursor(
                 index,
             ));
         } else if let Some(lib_idx) = lib_idx {

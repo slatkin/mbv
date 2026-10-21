@@ -98,27 +98,40 @@ impl Model {
     }
 
     pub(in crate::app) fn handle_playback_request(&mut self, request: &PlaybackRequest) {
-        use crate::app::dispatch::action::Command;
+        use crate::app::dispatch::action::AppCommand;
+        use crate::app::dispatch::action::PlaybackIntent;
         match request {
-            PlaybackRequest::TogglePlayPause => self.dispatch_playback(&Command::TogglePlayPause),
-            PlaybackRequest::Stop => self.dispatch_playback(&Command::Stop),
-            PlaybackRequest::Previous => self.dispatch_playback(&Command::PreviousTrack),
-            PlaybackRequest::Next => self.dispatch_playback(&Command::NextTrack),
+            PlaybackRequest::TogglePlayPause => {
+                self.dispatch_playback(&AppCommand::Playback(PlaybackIntent::TogglePlayPause));
+            }
+            PlaybackRequest::Stop => {
+                self.dispatch_playback(&AppCommand::Playback(PlaybackIntent::Stop));
+            }
+            PlaybackRequest::Previous => {
+                self.dispatch_playback(&AppCommand::Playback(PlaybackIntent::PreviousTrack));
+            }
+            PlaybackRequest::Next => {
+                self.dispatch_playback(&AppCommand::Playback(PlaybackIntent::NextTrack));
+            }
             PlaybackRequest::SeekTo(fraction) => self.app.seek_to_fraction(*fraction),
-            PlaybackRequest::ToggleMute => self.dispatch_playback(&Command::ToggleMute),
+            PlaybackRequest::ToggleMute => {
+                self.dispatch_playback(&AppCommand::Playback(PlaybackIntent::ToggleMute));
+            }
             PlaybackRequest::VolumeDelta(delta) => {
-                self.dispatch_playback(&Command::AdjustVolume(*delta));
+                self.dispatch_playback(&AppCommand::Playback(PlaybackIntent::AdjustVolume(*delta)));
             }
             PlaybackRequest::CycleAudio => {
-                self.dispatch_playback(&Command::CycleAudio);
+                self.dispatch_playback(&AppCommand::Playback(PlaybackIntent::CycleAudio));
             }
             PlaybackRequest::CycleSubtitle => {
-                self.dispatch_playback(&Command::CycleOrToggleSubtitle);
+                self.dispatch_playback(&AppCommand::Playback(
+                    PlaybackIntent::CycleOrToggleSubtitle,
+                ));
             }
         }
     }
 
-    fn dispatch_playback(&mut self, command: &crate::app::dispatch::action::Command) {
+    fn dispatch_playback(&mut self, command: &crate::app::dispatch::action::AppCommand) {
         let _ = self.app.dispatch(command);
     }
 }

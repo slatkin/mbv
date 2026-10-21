@@ -66,7 +66,7 @@ impl StatusBarPanel {
         let at = Position::new(event.column, event.row);
         match event.kind {
             // Legacy wheel mapping: scroll down lowers the volume by the
-            // shared `VOLUME_STEP`, the same `Command::AdjustVolume` step
+            // shared `VOLUME_STEP`, the same `PlaybackIntent::AdjustVolume` step
             // the `-`/`+` keys dispatch.
             MouseEventKind::ScrollDown if self.regions.volume.is_some_and(|r| r.contains(at)) => {
                 Some(Msg::Playback(PlaybackRequest::VolumeDelta(-VOLUME_STEP)))
@@ -77,7 +77,7 @@ impl StatusBarPanel {
             MouseEventKind::Down(MouseButton::Left)
                 if self.regions.mute.is_some_and(|r| r.contains(at)) =>
             {
-                // Same `Command::ToggleMute` the `m` key dispatches.
+                // Same `PlaybackIntent::ToggleMute` the `m` key dispatches.
                 Some(Msg::Playback(PlaybackRequest::ToggleMute))
             }
             // The visual-mode indicator clears the multi-selection; the

@@ -5,7 +5,10 @@
 //! precedence belongs to the router, not to distributed component mirrors.
 
 use super::resolver::KeyChord;
-use crate::app::dispatch::action::{Command, IdleFeedLinkContext, idle_feed_command_for_key};
+use crate::app::dispatch::action::{
+    AppCommand, Command, IdleFeedLinkContext, NavigationIntent, PanelIntent, PlaybackIntent,
+    ShellCommand, VisualIntent, idle_feed_command_for_key,
+};
 use crossterm::event::{KeyCode, KeyModifiers};
 use mbv_keybinds::{Keybinds, action_by_id};
 use mbv_ui_model::playback::VOLUME_STEP;
@@ -577,20 +580,20 @@ pub(in crate::app) fn command_for_policy(
 
 fn command_for_simple_binding(binding: KeyPolicyBinding) -> Option<Command> {
     match binding {
-        KeyPolicyBinding::SettingsOpen => Some(Command::ToggleSettings),
-        KeyPolicyBinding::SessionsOpen => Some(Command::OpenSessions),
-        KeyPolicyBinding::PlaylistsOpen => Some(Command::OpenPlaylists),
-        KeyPolicyBinding::SearchOpen => Some(Command::OpenSearch),
-        KeyPolicyBinding::HelpOpen => Some(Command::OpenHelp),
-        KeyPolicyBinding::Quit => Some(Command::Quit),
-        KeyPolicyBinding::PanelRight => Some(Command::FocusPanel(PanelFocus::Library)),
-        KeyPolicyBinding::PanelLeft => Some(Command::FocusPanel(PanelFocus::Queue)),
-        KeyPolicyBinding::PanelModeCycle => Some(Command::CyclePanelMode),
-        KeyPolicyBinding::CtrlL => Some(Command::ForceClear),
-        KeyPolicyBinding::ClearQueue => Some(Command::RequestClearQueue),
-        KeyPolicyBinding::F5 => Some(Command::RefreshCurrentView),
-        KeyPolicyBinding::Visualizer => Some(Command::ToggleVisualizer),
-        KeyPolicyBinding::HideVisualSlot => Some(Command::ToggleVisualSlotHidden),
+        KeyPolicyBinding::SettingsOpen => Some(NavigationIntent::ToggleSettings.into()),
+        KeyPolicyBinding::SessionsOpen => Some(NavigationIntent::OpenSessions.into()),
+        KeyPolicyBinding::PlaylistsOpen => Some(NavigationIntent::OpenPlaylists.into()),
+        KeyPolicyBinding::SearchOpen => Some(NavigationIntent::OpenSearch.into()),
+        KeyPolicyBinding::HelpOpen => Some(ShellCommand::OpenHelp.into()),
+        KeyPolicyBinding::Quit => Some(AppCommand::Quit.into()),
+        KeyPolicyBinding::PanelRight => Some(PanelIntent::FocusPanel(PanelFocus::Library).into()),
+        KeyPolicyBinding::PanelLeft => Some(PanelIntent::FocusPanel(PanelFocus::Queue).into()),
+        KeyPolicyBinding::PanelModeCycle => Some(PanelIntent::CyclePanelMode.into()),
+        KeyPolicyBinding::CtrlL => Some(NavigationIntent::ForceClear.into()),
+        KeyPolicyBinding::ClearQueue => Some(NavigationIntent::RequestClearQueue.into()),
+        KeyPolicyBinding::F5 => Some(ShellCommand::RefreshCurrentView.into()),
+        KeyPolicyBinding::Visualizer => Some(VisualIntent::ToggleVisualizer.into()),
+        KeyPolicyBinding::HideVisualSlot => Some(VisualIntent::ToggleVisualSlotHidden.into()),
         _ => None,
     }
 }
@@ -598,14 +601,14 @@ fn command_for_simple_binding(binding: KeyPolicyBinding) -> Option<Command> {
 fn command_for_navigation_binding(binding: KeyPolicyBinding, key: KeyChord) -> Option<Command> {
     match binding {
         KeyPolicyBinding::NextLibraryTab | KeyPolicyBinding::AltNextLibraryTab => {
-            Some(Command::NextLibraryTab)
+            Some(NavigationIntent::NextLibraryTab.into())
         }
         KeyPolicyBinding::PreviousLibraryTab | KeyPolicyBinding::AltPreviousLibraryTab => {
-            Some(Command::PreviousLibraryTab)
+            Some(NavigationIntent::PreviousLibraryTab.into())
         }
         KeyPolicyBinding::LibraryTabJump => match key.code {
             KeyCode::Char(c @ '1'..='9') => {
-                Some(Command::SetLibraryTab((c as usize) - '1' as usize))
+                Some(NavigationIntent::SetLibraryTab((c as usize) - '1' as usize).into())
             }
             _ => None,
         },
@@ -617,18 +620,18 @@ fn command_for_transport_binding(binding: KeyPolicyBinding) -> Option<Command> {
     // The split transport set: each action binds the fixed payload its key's
     // call site carried before the bucket split.
     match binding {
-        KeyPolicyBinding::TogglePlayPause => Some(Command::TogglePlayPause),
-        KeyPolicyBinding::Stop => Some(Command::Stop),
-        KeyPolicyBinding::SeekBack => Some(Command::SeekRelative(-5.0)),
-        KeyPolicyBinding::SeekForward => Some(Command::SeekRelative(5.0)),
-        KeyPolicyBinding::NextTrack => Some(Command::NextTrack),
-        KeyPolicyBinding::PreviousTrack => Some(Command::PreviousTrack),
-        KeyPolicyBinding::VolumeDown => Some(Command::AdjustVolume(-VOLUME_STEP)),
-        KeyPolicyBinding::VolumeUp => Some(Command::AdjustVolume(VOLUME_STEP)),
-        KeyPolicyBinding::ToggleMute => Some(Command::ToggleMute),
-        KeyPolicyBinding::CycleAudio => Some(Command::CycleAudio),
-        KeyPolicyBinding::CycleSubtitle => Some(Command::CycleOrToggleSubtitle),
-        KeyPolicyBinding::OpenIdleFeedLink => Some(Command::OpenIdleFeedLink),
+        KeyPolicyBinding::TogglePlayPause => Some(PlaybackIntent::TogglePlayPause.into()),
+        KeyPolicyBinding::Stop => Some(PlaybackIntent::Stop.into()),
+        KeyPolicyBinding::SeekBack => Some(PlaybackIntent::SeekRelative(-5.0).into()),
+        KeyPolicyBinding::SeekForward => Some(PlaybackIntent::SeekRelative(5.0).into()),
+        KeyPolicyBinding::NextTrack => Some(PlaybackIntent::NextTrack.into()),
+        KeyPolicyBinding::PreviousTrack => Some(PlaybackIntent::PreviousTrack.into()),
+        KeyPolicyBinding::VolumeDown => Some(PlaybackIntent::AdjustVolume(-VOLUME_STEP).into()),
+        KeyPolicyBinding::VolumeUp => Some(PlaybackIntent::AdjustVolume(VOLUME_STEP).into()),
+        KeyPolicyBinding::ToggleMute => Some(PlaybackIntent::ToggleMute.into()),
+        KeyPolicyBinding::CycleAudio => Some(PlaybackIntent::CycleAudio.into()),
+        KeyPolicyBinding::CycleSubtitle => Some(PlaybackIntent::CycleOrToggleSubtitle.into()),
+        KeyPolicyBinding::OpenIdleFeedLink => Some(VisualIntent::OpenIdleFeedLink.into()),
         _ => None,
     }
 }

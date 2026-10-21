@@ -11,7 +11,7 @@ use mbv_keybinds::Keybinds;
 
 use super::key_policy::{KeyPolicyBinding, command_for_policy, resolve_policy};
 use super::resolver::KeyChord;
-use crate::app::dispatch::action::Command;
+use crate::app::dispatch::action::{AppCommand, Command, PlaybackIntent};
 use mbv_ui_msg::ComponentId;
 
 pub(in crate::app) use super::key_policy::RouterSnapshot;
@@ -102,10 +102,14 @@ pub(in crate::app) fn resolve_router_outcome_with_focused(
                 // Visual selection owns it. Esc stays a deferred candidate for
                 // the shell's leaf arbitration; a non-Esc stop chord fires
                 // immediately.
-                Some(cmd @ Command::TogglePlayPause) if snapshot.visual_selection_active => {
+                Some(cmd @ Command::App(AppCommand::Playback(PlaybackIntent::TogglePlayPause)))
+                    if snapshot.visual_selection_active =>
+                {
                     RouterOutcome::Deferred(cmd)
                 }
-                Some(cmd @ Command::Stop) if chord.code == KeyCode::Esc => {
+                Some(cmd @ Command::App(AppCommand::Playback(PlaybackIntent::Stop)))
+                    if chord.code == KeyCode::Esc =>
+                {
                     RouterOutcome::Deferred(cmd)
                 }
                 Some(cmd) => RouterOutcome::Command(cmd),

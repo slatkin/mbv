@@ -1,7 +1,7 @@
 //! Shell-invoked mouse effect handlers for migrated interactive surfaces.
 
 use crate::app::App;
-use crate::app::dispatch::action::Command;
+use crate::app::dispatch::action::AppCommand;
 use mbv_ctrl::player::PlayerCommand;
 use mbv_emby_model::EmbyItem;
 use mbv_ui_msg::TvHit;
@@ -105,7 +105,7 @@ impl App {
         // of being recovered from `queue_cursor`, so a follow update cannot
         // play a different row.
         if let Some(index) = self.handle_mouse_single_click_queue(slot_id) {
-            self.dispatch(&Command::QueuePlayCursor(index));
+            self.dispatch(&AppCommand::QueuePlayCursor(index));
         }
     }
 

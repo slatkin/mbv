@@ -1,5 +1,7 @@
 use super::{DOUBLE_ESC_STOP_WINDOW, Model};
+use crate::app::dispatch::action::AppCommand;
 use crate::app::dispatch::action::Command;
+use crate::app::dispatch::action::PlaybackIntent;
 use crate::app::dispatch::action::ShellCommand;
 use crate::app::input::router::{
     RouterOutcome, RouterSnapshot, resolve_router_outcome_with_focused,
@@ -315,12 +317,19 @@ impl Model {
         let leaf_stops = messages
             .iter()
             .any(|msg| matches!(msg, Msg::Playback(PlaybackRequest::Stop)));
-        let outcome = match outcome {
-            RouterOutcome::Deferred(Command::Stop) if !double_esc => RouterOutcome::FallThrough,
-            RouterOutcome::Deferred(Command::Stop) if leaf_stops => RouterOutcome::Swallow,
-            RouterOutcome::Deferred(Command::Stop) => RouterOutcome::Command(Command::Stop),
-            other => other,
-        };
+        let outcome =
+            match outcome {
+                RouterOutcome::Deferred(Command::App(AppCommand::Playback(
+                    PlaybackIntent::Stop,
+                ))) if !double_esc => RouterOutcome::FallThrough,
+                RouterOutcome::Deferred(Command::App(AppCommand::Playback(
+                    PlaybackIntent::Stop,
+                ))) if leaf_stops => RouterOutcome::Swallow,
+                RouterOutcome::Deferred(Command::App(AppCommand::Playback(
+                    PlaybackIntent::Stop,
+                ))) => RouterOutcome::Command(PlaybackIntent::Stop.into()),
+                other => other,
+            };
         // Arm/disarm transitions come from the router's outcome (design D6,
         // task 6.1): the arming layer arms, an armed dispatch (mapped or
         // swallowed) disarms. The prefix chord re-arms through `PrefixArm`.
