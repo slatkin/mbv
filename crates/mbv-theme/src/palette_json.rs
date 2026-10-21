@@ -40,7 +40,11 @@ fn hex(color: Color) -> String {
 fn rgb(color: Color) -> [u8; 3] {
     match color {
         Color::Rgb(r, g, b) => [r, g, b],
-        other => panic!("theme colour is not an Rgb colour: {other:?}"),
+        // The theme's palette is closed to Rgb colours: every slot resolves
+        // through `Theme::DEFAULT`, so no other colour can reach the
+        // generator. An impossible value is an invariant violation, not a
+        // user-facing error.
+        other => unreachable!("theme colour is not an Rgb colour: {other:?}"),
     }
 }
 
