@@ -253,17 +253,17 @@ impl App {
     /// #78 follow-up).
     pub(in crate::app) fn dispatch(&mut self, command: &AppCommand) -> bool {
         match command {
-            AppCommand::Visual(intent) => self.dispatch_visual_command(intent),
-            AppCommand::Playback(intent) => self.dispatch_playback_command(intent),
-            AppCommand::Navigation(intent) => self.dispatch_navigation_command(intent),
-            AppCommand::Panel(intent) => self.dispatch_panel_command(intent),
+            AppCommand::Visual(intent) => self.dispatch_visual_command(*intent),
+            AppCommand::Playback(intent) => self.dispatch_playback_command(*intent),
+            AppCommand::Navigation(intent) => self.dispatch_navigation_command(*intent),
+            AppCommand::Panel(intent) => self.dispatch_panel_command(*intent),
             AppCommand::QueuePlayCursor(index) => self.dispatch_queue_play_cursor(*index),
             AppCommand::Quit => return self.try_quit(),
         }
         false
     }
 
-    fn dispatch_visual_command(&mut self, intent: &VisualIntent) {
+    fn dispatch_visual_command(&mut self, intent: VisualIntent) {
         match intent {
             VisualIntent::OpenIdleFeedLink => self.open_idle_feed_link(),
             VisualIntent::ToggleVisualizer => self.toggle_visualizer(),
@@ -273,7 +273,7 @@ impl App {
         }
     }
 
-    fn dispatch_playback_command(&mut self, intent: &PlaybackIntent) {
+    fn dispatch_playback_command(&mut self, intent: PlaybackIntent) {
         // Issue #940: name every dispatched transport command, so a dead
         // input window shows whether the dispatch happened at all.
         tracing::debug!(
@@ -288,7 +288,7 @@ impl App {
             }
             PlaybackIntent::Stop => crate::app::LocalPlaybackTarget::stop(self),
             PlaybackIntent::SeekRelative(delta) => {
-                crate::app::LocalPlaybackTarget::seek_relative(self, *delta);
+                crate::app::LocalPlaybackTarget::seek_relative(self, delta);
             }
             PlaybackIntent::NextTrack => crate::app::LocalPlaybackTarget::jump_track(self, 1),
             PlaybackIntent::PreviousTrack => crate::app::LocalPlaybackTarget::jump_track(self, -1),
@@ -296,22 +296,22 @@ impl App {
                 self.cycle_sub();
             }
             PlaybackIntent::AdjustVolume(delta) => {
-                self.adjust_volume(*delta);
+                self.adjust_volume(delta);
             }
             PlaybackIntent::ToggleMute => {
-                crate::app::LocalPlaybackTarget::toggle_command_mute(self)
+                crate::app::LocalPlaybackTarget::toggle_command_mute(self);
             }
             PlaybackIntent::CycleAudio => self.cycle_audio(),
         }
     }
 
-    fn dispatch_navigation_command(&mut self, intent: &NavigationIntent) {
+    fn dispatch_navigation_command(&mut self, intent: NavigationIntent) {
         match intent {
             NavigationIntent::NextLibraryTab => self.library_tab_next(),
             NavigationIntent::PreviousLibraryTab => self.library_tab_prev(),
             NavigationIntent::SetLibraryTab(index) => {
-                if *index < self.tab_count() {
-                    self.set_library_tab(*index);
+                if index < self.tab_count() {
+                    self.set_library_tab(index);
                 }
             }
             NavigationIntent::ForceClear => self.force_clear = true,
@@ -329,10 +329,10 @@ impl App {
         }
     }
 
-    fn dispatch_panel_command(&mut self, intent: &PanelIntent) {
+    fn dispatch_panel_command(&mut self, intent: PanelIntent) {
         match intent {
             PanelIntent::FocusPanel(focus) => {
-                self.set_panel_focus(*focus);
+                self.set_panel_focus(focus);
                 // No card-checkpoint reset: `last_card_*` is the measured
                 // image geometry and focus does not change the artwork
                 // (hide-queue-visuals-when-idle design). Clearing it here
