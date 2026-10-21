@@ -13,13 +13,13 @@ the CI tree is wired into the build.
   macros outside test items, with the match-arm `unreachable!()` invariant form excluded
   structurally) and `mbv-dispatch-no-wildcard-arm` (`_` wildcard arms in `src/app/dispatch/`
   matches, test items excluded).
-- The panic census triaged: the 35 deliberate invariant arms are covered by the structural
+- The panic census triaged: the 29 deliberate invariant arms are covered by the structural
   exclusion, and the 6 real production sites degrade gracefully instead of crashing (help
   label fallback, theme invariant arm, logged panel-mount failure, rejected queue op, logged
   no-op, neutral settings label).
 - The wildcard census triaged: the four `Command` sub-dispatchers in `src/app/dispatch/action.rs`
-  take typed sub-enums so their matches are exhaustive, seven `Option`/enum matches name their
-  variants, and the ten open-key-space or index sites carry a per-instance
+  take typed intent enums so their matches are exhaustive, seven `Option`/enum matches name their
+  variants, and the seven open-key-space or index sites carry a per-instance
   `// ast-grep-ignore:` comment with its reason.
 - The three sleep residuals triaged: the remote-player seed read takes its deadline as a
   parameter and the test orders its peer thread on a channel; the Audiobookshelf playback test

@@ -12,7 +12,7 @@ dry-run census for the three Tier-2 rules lived outside the repo.
 
 ### 1. The panic rule excludes the invariant-arm idiom structurally
 
-Of the 41 census hits, 35 are the deliberate `unreachable!()`-in-a-match-arm form the watch
+Of the 35 census hits, 29 are the deliberate `unreachable!()`-in-a-match-arm form the watch
 item from #950 described. Excluding that form in the rule (one structural clause) removes the
 batch-ignore question entirely; the 6 remaining sites were real and are fixed in code:
 
@@ -32,7 +32,7 @@ No per-instance ignore comments exist for this rule. (User decision 1.)
 
 ### 2. The wildcard rule gets explicit arms, with per-instance ignores for open key spaces
 
-The four `Command` sub-dispatchers in `src/app/dispatch/action.rs` take typed sub-enums, so
+The four `Command` sub-dispatchers in `src/app/dispatch/action.rs` take typed intent enums, so
 each of their matches is exhaustive. The nested shape of that enum comes from the
 `nest-command-by-domain` change (`openspec/changes/nest-command-by-domain/`): it renames the
 four sub-enums to `*Intent` (`VisualIntent`, `PlaybackIntent`, `NavigationIntent`,
@@ -43,8 +43,8 @@ to police. This change follows it instead of re-deriving the typed sub-enums, an
 rule then guards the translation-free shape. Seven `Option`/enum matches name their variants,
 including the three `match key` sites over the 40-variant
 `SettingKey` enum in `src/app/dispatch/settings.rs`, which are now exhaustive variant lists
-(user decision 4). The remaining ten sites match open key spaces or index mappings where a
-wildcard is the correct arm; seven of them carry a per-instance directive with its reason, and
+(user decision 4). The remaining seven sites match an open key space or an index mapping where
+a wildcard is the correct arm; each carries a per-instance directive with its reason, and
 the directive must be the comment line immediately above the arm. (User decision 2.)
 
 ### 3. One plain scan, with the path scoping inside the rule files
