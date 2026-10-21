@@ -170,7 +170,9 @@ mbv SHALL accept `--toggle`, which asks pinwin on the current Wayland display to
 named `mbv` if shown, or to show it if hidden, and exits with status 0. It SHALL NOT start mbv, a
 TUI or a panel. When no such panel runs or the request fails, it SHALL report pinwin's reason
 (stderr on a terminal, otherwise a desktop notification) and exit with status 1. Hiding and
-showing SHALL NOT resize the TUI or change its width state.
+showing SHALL NOT resize the TUI or change its width state. The Tray icon SHALL ask for the same
+toggle while a pinned Client is attached; the Owner process sends the request then, and a failed
+request is reported as a desktop notification.
 
 #### Scenario: Hide from a compositor key
 - **WHEN** the user presses a compositor key bound to `mbv --toggle` while the pinned panel is shown
@@ -187,6 +189,11 @@ showing SHALL NOT resize the TUI or change its width state.
 #### Scenario: Nothing pinned from a key
 - **WHEN** a compositor key runs `mbv --toggle` with no `mbv` panel running
 - **THEN** a desktop notification gives pinwin's reason, and no mbv starts
+
+#### Scenario: Toggle from the Tray
+- **WHEN** a pinned Client is attached and the user left-clicks the Tray icon
+- **THEN** the Owner process sends the same request, and the panel hides or shows as it did for
+  `mbv --toggle`
 
 ### Requirement: Panel width decides pushing or covering
 `mbv --pin` SHALL build the collapsed panel layout in pushing mode and the expanded panel layout
