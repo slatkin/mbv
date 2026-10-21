@@ -510,6 +510,10 @@ Global chord:
 A key combination with meaning that does not depend on the focused surface. The Keyboard Router therefore claims it and no Interactive Component interprets it. A selection-dependent chord (`.` for the context menu) is not global, even though every destination binds it.
 _Avoid_: global key, hotkey, shortcut (bare — a shortcut can be leaf-local)
 
+UI command:
+The nested command the TUI resolves a key chord into. A UI command has two levels. The outer level says who owns it: `Shell(ShellCommand)` for the shell `Model` and `App(AppCommand)` for the `App`. The inner level groups the `App` commands by domain, and each domain carries one typed intent enum. They are `VisualIntent`, `PlaybackIntent`, `NavigationIntent`, and `PanelIntent`. The Keyboard Router produces one, and `App::dispatch` has one arm per domain. It stays inside the terminal application and never crosses the ctrl protocol. It differs from *Transport command*, which is the Player-owner protocol concept.
+_Avoid_: transport command, playback command, navigation command, command (bare)
+
 `component` state:
 The middle interactive-surface ledger state. An Interactive Component paints the surface in it. The shell still mirrors `App` state or legacy input still forwards, or both. `App` teardown stays pending as group 5.
 _Avoid_: migrated (until the mirror and legacy handler are removed)

@@ -25,7 +25,9 @@ or for a new field on an existing message.
 2. **Vocabulary.** Add the variant in `crates/mbv-ctrl/src/commands.rs`,
    `events.rs`, or `player.rs`. Pin the wire tag with `#[serde(rename = "...")]`.
    For a new `CtrlCmd`, add an arm to the exhaustive matches in
-   `CtrlCmd::requires_owner` and `CtrlCmd::mutates_owner_queue`.
+   `CtrlCmd::requires_owner` and `CtrlCmd::mutates_owner_queue`. A `CtrlCmd`
+   is a *Transport command* (`CONTEXT.md`), not a *UI command*. It never
+   becomes a UI command in the terminal application.
    *Proof:* `cargo check -p mbv-ctrl`.
 3. **Capability.** Add a `CTRL_CAP_*` constant with a doc comment in
    `protocol.rs`. Re-export it from `lib.rs`. Advertise it in `CtrlHello`
@@ -73,9 +75,12 @@ Use this recipe for a new configurable keyboard action. Read
    registry `id`, and an arm in `command_for_policy`. Routing stays in
    `src/app/input/`. Never route keys anywhere else.
    *Proof:* `cargo check -p mbv`.
-3. **Dispatch.** Add the `Command` variant and its arm in
-   `src/app/dispatch/action.rs`. If a component also requests the action,
-   add the typed request in `crates/mbv-ui-msg/` and map it to the `Command`
+3. **Dispatch.** The UI command is nested. Add the variant to the intent enum
+   of its domain in `src/app/dispatch/action.rs` (`VisualIntent`,
+   `PlaybackIntent`, `NavigationIntent`, or `PanelIntent`) and give it an arm
+   in the matching sub-dispatcher. A shell-owned action goes to
+   `ShellCommand` instead. If a component also requests the action,
+   add the typed request in `crates/mbv-ui-msg/` and map it to the UI command
    in the shell (for example `src/app/shell/playback.rs`).
    *Proof:* `cargo clippy --workspace --all-targets -- -D warnings`.
 4. **Help label.** A Playback-section action needs a label in
