@@ -11,6 +11,7 @@ mbv is a Rust terminal media client for Emby, Audiobookshelf, and Feeds. It embe
 * Write durable plans in OpenSpec markdown, not in chat. Commit plans, specs, and docs with code. Sync applied deltas into `openspec/specs/` and archive the change only when the user approves the PR for merge, as the last commit before the merge. Never sync or archive when you open a PR: the change stays open while review and live tests can still change it.
 * Probe the real service before you plan API work. If the design of a feature depends on what a remote API returns, probe that endpoint first. Emby, Audiobookshelf, feeds, and any remote endpoint are examples.
 * Change source-of-truth types before callers. Ask only about material design and product choices.
+* Never check out another branch in the main workspace (`~/Dev/mbv`), EVER. It stays on `main`. Do branch work in a worktree (`git-worktrees` skill, `wt <change-name>`).
 * Commit your changes or undo them. Never leave a dirty worktree.
 * Keep no file over 800 lines at push time. Split along responsibility seams. Run `make check-code-file-lines` just before you push. Never use it as a per-task, CI, or acceptance gate.
 * Coding standards live in `docs/standards/README.md` (Microsoft Pragmatic Rust Guidelines, pinned locally, one file per rule). Scan its checklist. Then run `qmd query` for the full text of a rule. Never read every rule.
