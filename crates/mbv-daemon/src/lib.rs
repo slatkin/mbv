@@ -21,7 +21,7 @@ mod owner_settings;
 #[doc(inline)]
 pub use context::{AudiobookshelfOwnerContext, DaemonRole, DaemonStartupContext, EmbyOwnerContext};
 #[doc(inline)]
-pub use error::DaemonLibError;
+pub use error::{DaemonLibError, LocalStartupError};
 #[cfg(test)]
 pub(crate) use owner_settings::OwnerSettings;
 pub(crate) use owner_settings::OwnerSettingsReader;
@@ -35,7 +35,7 @@ pub(crate) use core::{
     submit_queue_slots_cold_start,
 };
 #[doc(inline)]
-pub use core::{DaemonPlayerHandle, DaemonRuntimeHooks, SwapDirection};
+pub use core::{DaemonPlayerHandle, DaemonRuntimeHooks, LocalOutputHooks, SwapDirection};
 mod cast;
 #[doc(inline)]
 pub use cast::{
@@ -64,13 +64,13 @@ pub(crate) use run_shutdown::setup_shutdown_signal;
 mod run;
 #[cfg(test)]
 pub(crate) use run::playback_run_identity_is_current;
-#[doc(inline)]
-pub use run::run_with_options;
 pub(crate) use run::{
     ConsumePolicy, apply_queue_enriched, apply_stopped_observation,
     apply_track_completed_observation, broadcast_player_event_if_not_replaced,
     record_completed_slot,
 };
+#[doc(inline)]
+pub use run::{run_local_with_options, run_with_options};
 mod event_loop;
 pub(crate) use event_loop::{DaemonLoop, LoopFlow, PendingSwapToken, PinSwapState, TrayState};
 mod audiobookshelf;

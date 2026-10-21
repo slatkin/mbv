@@ -76,7 +76,7 @@ pub(super) fn pump_session_event(t: &mut TestLoop) {
 /// keeps local playback.
 #[test]
 fn a_session_selection_with_the_hook_off_is_rejected_and_keeps_local() {
-    let mut t = test_loop_with_role(DaemonRole::Local);
+    let mut t = test_loop_with_role(DaemonRole::Packaged);
     t.event_loop.emby_runtime = Some(crate::EmbyOwnerContext::from_client(
         t.event_loop.client.lock().unwrap().clone(),
         1,

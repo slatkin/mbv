@@ -550,16 +550,34 @@ pub struct DaemonRuntimeHooks {
     /// Local daemon supplies one; `mbvd` passes one that does nothing,
     /// because it has no desktop session, no Tray, and no pinned panel.
     pub toggle_panel: TogglePanelHook,
+}
+
+/// The remote-output hooks only the Local process can supply. They ride on
+/// the Local run entry point, not on [`DaemonRuntimeHooks`], so the packaged
+/// entry's signature cannot name a Cast connector or an Emby Session output:
+/// a packaged owner has no way to express a remote output, and local
+/// playback stays its only output by construction.
+pub struct LocalOutputHooks {
     /// Cast connector for the runtime (cast-owner-output design D2): the
-    /// Local daemon supplies one, `mbvd` passes `None`. `None` keeps the
-    /// Owner on local playback only and hides the `playback-output`
-    /// capability from the Hello.
-    pub cast_connector: Option<crate::cast::CastConnector>,
+    /// Local daemon is the only Cast-output host and always supplies one.
+    /// A receiver that cannot be reached is learned at selection time.
+    pub cast_connector: crate::cast::CastConnector,
     /// Whether this runtime can host an Emby Session output
-    /// (emby-session-owner-output design D2): the Local daemon sets it,
-    /// `mbvd` does not. It gates the `emby-session-output` capability in the
-    /// Hello and the Emby Session arms of the output selection.
+    /// (emby-session-owner-output design D2): the Local daemon sets it.
+    /// It gates the `emby-session-output` capability in the Hello and the
+    /// Emby Session arms of the output selection.
     pub emby_session_output: bool,
+}
+
+impl std::fmt::Debug for LocalOutputHooks {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // The connector is a boxed callback with no Debug form; presence is
+        // always `Some` on the Local entry (design D2).
+        f.debug_struct("LocalOutputHooks")
+            .field("cast_connector", &"<callback>")
+            .field("emby_session_output", &self.emby_session_output)
+            .finish()
+    }
 }
 
 impl std::fmt::Debug for DaemonRuntimeHooks {
@@ -571,8 +589,6 @@ impl std::fmt::Debug for DaemonRuntimeHooks {
             .field("swap_command", &"<callback>")
             .field("notify", &"<callback>")
             .field("toggle_panel", &"<callback>")
-            .field("cast_connector", &self.cast_connector.is_some())
-            .field("emby_session_output", &self.emby_session_output)
             .finish()
     }
 }

@@ -1,11 +1,12 @@
 use super::core::{DaemonEvent, QueuePersistenceRequest, bind_ctrl_listener, broadcast};
 use super::{
     AudiobookshelfOwnerContext, CtrlTransport, DaemonLoop, DaemonPlayerHandle, DaemonPlayerOwner,
-    DaemonRole, DaemonRuntimeHooks, DaemonStartupContext, EmbyOwnerContext, LoopFlow,
-    SharedQueueState, TrayState, broadcast_queue_state, install_daemon_audiobookshelf_context,
-    pid_file, project_queue_state, setup_shutdown_signal, spawn_ctrl_client,
-    start_queue_enrichment,
+    DaemonRole, DaemonRuntimeHooks, DaemonStartupContext, EmbyOwnerContext, LocalOutputHooks,
+    LoopFlow, SharedQueueState, TrayState, broadcast_queue_state,
+    install_daemon_audiobookshelf_context, pid_file, project_queue_state, setup_shutdown_signal,
+    spawn_ctrl_client, start_queue_enrichment,
 };
+use crate::LocalStartupError;
 use crate::PinSwapState;
 use crate::owner_lock::{OwnerLockError, PidFileLock, lock_pid_file};
 use crate::{ClientRegistry, CtrlClients};
@@ -183,7 +184,8 @@ struct DaemonStarted {
     /// Shared with the ctrl registry, which keeps it current (design D1).
     attached_clients: Arc<AttachedClientsCell>,
     /// The runtime's Cast connector, when the runtime supplies one
-    /// (cast-owner-output design D2). Lives on the event loop.
+    /// (cast-owner-output design D2). Lives on the event loop. Filled only
+    /// from the Local entry's `LocalOutputHooks`.
     cast_connector: Option<crate::CastConnector>,
     /// Whether the runtime hosts an Emby Session output (emby-session-owner-output
     /// design D2), advertised as the `emby-session-output` capability.
@@ -234,23 +236,25 @@ fn prewarm_player(player: &Player, config: &mbv_config::Config) {
 fn start_daemon(
     startup: DaemonStartupContext,
     hooks: DaemonRuntimeHooks,
+    local_outputs: Option<LocalOutputHooks>,
 ) -> Result<DaemonStarted, OwnerLockError> {
     let role = startup.role;
     let config = startup.config;
     let owner_settings = crate::owner_settings::reader(role, &config);
     let emby_runtime = startup.emby;
     let audiobookshelf_runtime = startup.audiobookshelf;
+    let (cast_connector, emby_session_output) = local_outputs.map_or((None, false), |o| {
+        (Some(o.cast_connector), o.emby_session_output)
+    });
     // Only the packaged Owner records its PID in `mbv.pid`; the Local
     // role's PID record is its single-instance lock file (design D2).
     // The flock is taken first and the guard held for the whole run, so
     // whoever locks the file first is the daemon and the recorded PID is
     // always the live lock holder. A held lock refuses the start with an
     // error naming the record (harden-owner-process-boundaries 1.3).
-    let pid_lock = if role == DaemonRole::Packaged {
-        let path = pid_file();
-        Some(lock_pid_file(&path)?)
-    } else {
-        None
+    let pid_lock = match role {
+        DaemonRole::Packaged => Some(lock_pid_file(&pid_file())?),
+        DaemonRole::Local => None,
     };
 
     let (shutdown_signal_tx, shutdown_signal_rx) = setup_shutdown_signal();
@@ -258,14 +262,10 @@ fn start_daemon(
         || Arc::new(Mutex::new(EmbyClient::new(config.clone()))),
         |runtime| Arc::clone(&runtime.client),
     );
-    let control_credential = if role == DaemonRole::Packaged {
-        None
-    } else {
-        Some(
-            mbv_config::load_or_create_control_credential()
-                .expect("mbv daemon: failed to load Control credential"),
-        )
-    };
+    let control_credential = (role == DaemonRole::Local)
+        .then(mbv_config::load_or_create_control_credential)
+        .transpose()
+        .expect("mbv daemon: failed to load Control credential");
 
     let (player_tx, player_rx) = mpsc::channel();
     let (ws_tx_chan, ws_rx) = mpsc::channel();
@@ -358,8 +358,8 @@ fn start_daemon(
         pin_swap,
         pending_swap,
         attached_clients,
-        cast_connector: hooks.cast_connector,
-        emby_session_output: hooks.emby_session_output,
+        cast_connector,
+        emby_session_output,
         toggle_panel: hooks.toggle_panel,
     })
 }
@@ -612,7 +612,35 @@ pub fn run_with_options(
     audio_only: bool,
     hooks: DaemonRuntimeHooks,
 ) -> Result<Infallible, OwnerLockError> {
-    let started = start_daemon(startup, hooks)?;
+    run_with_owner_outputs(startup, audio_only, hooks, None)
+}
+
+/// The Local run entry point: the only entry that can carry a Cast
+/// connector or an Emby Session output, through `LocalOutputHooks`. The
+/// TUI's Local process calls it; the packaged `mbvd` cannot, because its
+/// entry point takes no such argument. A startup whose role is not
+/// [`DaemonRole::Local`] is refused, so the packaged role can never reach
+/// the remote-output hooks.
+pub fn run_local_with_options(
+    startup: DaemonStartupContext,
+    audio_only: bool,
+    hooks: DaemonRuntimeHooks,
+    local_outputs: LocalOutputHooks,
+) -> Result<Infallible, LocalStartupError> {
+    if startup.role != DaemonRole::Local {
+        return Err(LocalStartupError::NotLocal(startup.role));
+    }
+    run_with_owner_outputs(startup, audio_only, hooks, Some(local_outputs))
+        .map_err(LocalStartupError::OwnerLock)
+}
+
+fn run_with_owner_outputs(
+    startup: DaemonStartupContext,
+    audio_only: bool,
+    hooks: DaemonRuntimeHooks,
+    local_outputs: Option<LocalOutputHooks>,
+) -> Result<Infallible, OwnerLockError> {
+    let started = start_daemon(startup, hooks, local_outputs)?;
     let DaemonStarted {
         config,
         role,

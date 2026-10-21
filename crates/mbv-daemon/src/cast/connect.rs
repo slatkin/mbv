@@ -43,10 +43,10 @@ pub struct CastConnectRequest {
     pub reply: mpsc::Sender<CastConnectOutcome>,
 }
 
-/// Spawns one Cast worker connection for the Owner (design D2). The Local
-/// daemon supplies a connector through `DaemonRuntimeHooks`; `mbvd` passes
-/// `None`. The connector hands the (blocking) connect to its own thread and
-/// reports the outcome on the request's reply path.
+/// Spawns one Cast worker connection for the Owner (design D2). The
+/// connector comes from the Local entry's `LocalOutputHooks` alone. It hands
+/// the (blocking) connect to its own thread and reports the outcome on the
+/// request's reply path.
 pub type CastConnector = Box<dyn Fn(CastConnectRequest) + Send>;
 
 /// The Local daemon's Cast connector (design D2): connect in first-select
