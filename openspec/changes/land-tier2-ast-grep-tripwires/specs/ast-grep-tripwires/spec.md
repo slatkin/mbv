@@ -12,9 +12,11 @@ runs them.
 
 ### Requirement: The rule set is fixture-covered
 
-Every rule under `rules/` SHALL carry two-sided fixtures in its tree's rule-test directory:
-cases where the rule fires and cases where an exclusion or suppression keeps it quiet. The
-fixture check (`ast-grep test --skip-snapshot-tests` at the repo root) SHALL pass.
+Every rule under `rules/` SHALL carry two-sided fixtures in its rule-test directory:
+cases where the rule fires and cases where a structural exclusion keeps it quiet. The
+fixture check (`ast-grep test --skip-snapshot-tests` at the repo root) SHALL pass. A
+per-instance `// ast-grep-ignore:` directive is NOT a fixture case: `ast-grep test` does
+not honour the directive, so the directive form is covered by the live tree scan.
 
 #### Scenario: Fixture run passes
 
@@ -26,6 +28,13 @@ fixture check (`ast-grep test --skip-snapshot-tests` at the repo root) SHALL pas
 
 - **WHEN** a rule edit changes what the rule matches without a matching fixture change
 - **THEN** the fixture run fails
+
+#### Scenario: A directive is not a fixture case
+
+- **WHEN** a `valid` fixture case carries a `// ast-grep-ignore:` directive
+- **THEN** the fixture run still reports the finding, so the directive form is covered by
+  the live tree scan: the eight shipped directives -- seven under `src/app/dispatch/` and
+  one in `crates/mbv-net/src/bounded.rs` -- keep `ast-grep scan .` quiet
 
 ### Requirement: Panic-family macros stay out of production code
 
@@ -63,6 +72,11 @@ above the directive.
 
 - **WHEN** a wildcard arm carries its per-instance directive with a reason
 - **THEN** the scan reports nothing at that arm
+
+  The directive form is covered by the live tree scan, not by a fixture: `ast-grep test`
+  does not honour the directive, so a `valid` fixture case carrying it still reports the
+  finding. The shipped directives -- seven under `src/app/dispatch/` and one in
+  `crates/mbv-net/src/bounded.rs`, eight in the tree -- keep `ast-grep scan .` quiet.
 
 ### Requirement: Tests contain no real sleeps
 

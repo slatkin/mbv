@@ -10,16 +10,20 @@
 # to pass as `--globs`). ast-grep checks `ignores` before `files`.
 #
 # Census (ast-grep 0.44.1 dry-run over mbv @ 2026-10-21, at main
-# e6d65e330): 21 production wildcard arms under `src/app/dispatch/`. 14
-# became explicit arms: the four `Command` sub-dispatchers take typed
-# intent enums (`VisualIntent`, `PlaybackIntent`, `NavigationIntent`,
-# `PanelIntent`, from the `nest-command-by-domain` change), so each of
-# their matches is exhaustive, and the seven `Option`/enum matches (ten
-# arms) name their variants. The remaining 7 are open key spaces or index
-# mappings where a wildcard is the correct arm: a key chord, an Emby
-# collection type, two Emby item types, a notification action, an image
-# protocol name, and a pill index. Each of those carries a per-instance
-# `// ast-grep-ignore:` comment with its reason.
+# e6d65e330): 17 production wildcard arms under `src/app/dispatch/`. Ten
+# of them became explicit arms: the seven `Option`/enum matches (ten
+# arms) name their variants. The four `Command` sub-dispatchers are
+# already explicit at e6d65e330 -- they match typed intent enums
+# (`VisualIntent`, `PlaybackIntent`, `NavigationIntent`, `PanelIntent`,
+# from the `nest-command-by-domain` change), so each of their matches is
+# exhaustive and none of them is a wildcard arm. They were 4 of the 21
+# arms at the pre-rebase census commit ffaf8897e, where the
+# sub-dispatchers still matched the flat `Command` enum. The remaining 7
+# are open key spaces or index mappings where a wildcard is the correct
+# arm: a key chord, an Emby collection type, two Emby item types, a
+# notification action, an image protocol name, and a pill index. Each of
+# those carries a per-instance `// ast-grep-ignore:` comment with its
+# reason.
 #
 # Blind spot (documented, deliberate): the rule matches the `_` wildcard
 # pattern only. A named catch-all binding (`other => ...`) is the same

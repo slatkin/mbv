@@ -6,14 +6,19 @@
 # Census (ast-grep 0.44.1 dry-run over mbv @ 2026-10-18): 5 hits inside
 # test items. Three are the hang-simulator idiom — a spawned or abandoned
 # closure whose whole body is one sleep, a prop the test never waits on —
-# suppressed structurally below, not by prose. Residual 3 hits: 2 real
-# policy violations awaiting triage (mbv-remote-player connect/tests.rs,
+# suppressed structurally below, not by prose. The residual 3 hits were 2
+# real policy violations (mbv-remote-player connect/tests.rs,
 # mbv-audiobookshelf playback.rs) and 1 documented variant — a
 # run_with_hard_bound simulator closure carrying a result value after the
-# sleep; that one gets a per-instance ast-grep-ignore with a reason during
-# triage rather than a broader exclusion. Production sleeps (retry
-# backoff, poll loops) are out of scope; the test-item binding makes that
-# precise, and the fixtures guard every binding in both directions.
+# sleep. Both violations are now fixed: the connect test orders the peer
+# thread on an mpsc channel, and the audiobookshelf playback test waits
+# for the outcome instead of polling. The variant is not covered by the
+# structural exclusion (its closure keeps a result value after the sleep);
+# it carries a per-instance ast-grep-ignore with its reason rather than a
+# broader exclusion, so the rule reports nothing in the tree today.
+# Production sleeps (retry backoff, poll loops) are out of scope; the
+# test-item binding makes that precise, and the fixtures guard every
+# binding in both directions.
 id: mbv-no-sleep-in-tests
 language: Rust
 severity: warning

@@ -12,8 +12,13 @@
 - [x] 1.3 Land `rules/ast-grep-rules-ci/rules/mbv/mbv-dispatch-no-wildcard-arm.yml`: the `_`
       wildcard arm under `src/app/dispatch/`, the test-item exclusion, and its census and
       blind-spot comments. Verify: `ast-grep test --skip-snapshot-tests`.
-- [x] 1.4 Land its fixtures `rule-tests/mbv-dispatch-no-wildcard-arm-test.yml`, including the
-      directive form. Verify: the fixture run fails if either side is removed.
+- [x] 1.4 Land its fixtures `rule-tests/mbv-dispatch-no-wildcard-arm-test.yml`: the firing
+      case, plus the two exclusion cases (a match that is not a dispatch, and a test
+      item). The `// ast-grep-ignore:` directive form is not a fixture case: `ast-grep
+      test` does not honour the directive, so a `valid` case carrying one still reports
+      the finding. The directive form is covered by the live tree scan instead -- the
+      seven shipped directives under `src/app/dispatch/` keep `ast-grep scan .` quiet.
+      Verify: the fixture run fails if either side is removed.
 
 ## 2. The panic census triage
 
