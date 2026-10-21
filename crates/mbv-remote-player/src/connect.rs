@@ -7,6 +7,7 @@ use std::io::{BufRead, BufReader, Cursor, Read, Write};
 use std::os::unix::net::UnixStream;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
+use std::time::Duration;
 
 #[cfg(any(test, feature = "test"))]
 use mbv_ctrl::CtrlHello;
@@ -29,8 +30,8 @@ pub use endpoint::{DaemonEndpoint, resolve_library_route};
 pub use owner_actions::{run_local_owner_action, signal_local_daemon_service_setup};
 
 use handshake::{
-    DAEMON_HANDSHAKE_HARD_BOUND, HandshakeRole, PeerBuild, SeedLineRead,
-    perform_handshake_with_role, read_playback_output_seed,
+    DAEMON_HANDSHAKE_HARD_BOUND, HandshakeRole, PLAYBACK_OUTPUT_SEED_READ_TIMEOUT, PeerBuild,
+    SeedLineRead, perform_handshake_with_role, read_playback_output_seed,
 };
 
 fn apply_ctrl_event(
@@ -302,6 +303,7 @@ fn run_bounded_handshake(
     peer_build: PeerBuild,
     pinned: bool,
     swap_token: Option<String>,
+    seed_read_timeout: Duration,
 ) -> Result<HandshakeOutcome, crate::RemotePlayerError> {
     mbv_net::bounded::run_with_hard_bound_or_error(
         move || {
@@ -322,7 +324,7 @@ fn run_bounded_handshake(
             // just returns None and degrades to the reader-thread path —
             // the connect never fails or hangs on the seed.
             let seed = if ctrl_compatibility.supports_playback_output {
-                read_playback_output_seed(&mut reader)
+                read_playback_output_seed(&mut reader, seed_read_timeout)
             } else {
                 SeedLineRead::default()
             };
@@ -348,6 +350,24 @@ fn connect_stream(
     peer_build: PeerBuild,
     pinned: bool,
     swap_token: Option<String>,
+) -> Result<(RemotePlayer, mpsc::Receiver<PlayerEvent>), crate::RemotePlayerError> {
+    connect_stream_with_seed_timeout(
+        stream,
+        peer_build,
+        pinned,
+        swap_token,
+        PLAYBACK_OUTPUT_SEED_READ_TIMEOUT,
+    )
+}
+
+/// [`connect_stream`] with the seed-read deadline as a parameter, so a test
+/// can bound the wait it needs instead of waiting the production deadline.
+fn connect_stream_with_seed_timeout(
+    stream: SocketStream,
+    peer_build: PeerBuild,
+    pinned: bool,
+    swap_token: Option<String>,
+    seed_read_timeout: Duration,
 ) -> Result<(RemotePlayer, mpsc::Receiver<PlayerEvent>), crate::RemotePlayerError> {
     // Kept aside for `disconnect()` (#233) -- taken before `stream` is
     // moved into the writer thread below.
@@ -391,7 +411,13 @@ fn connect_stream(
         state_event,
         ctrl_compatibility,
         seed,
-    } = run_bounded_handshake(stream.try_clone()?, peer_build, pinned, swap_token)?;
+    } = run_bounded_handshake(
+        stream.try_clone()?,
+        peer_build,
+        pinned,
+        swap_token,
+        seed_read_timeout,
+    )?;
     let SeedLineRead {
         event: playback_output_seed,
         consumed: replayed_bytes,

@@ -235,15 +235,12 @@ fn late_success_after_create_bound_is_closed_on_loopback() {
     let error = session_error(&client, "secret", Duration::from_millis(5));
     assert_eq!(error.class, AudiobookshelfFailureClass::Unavailable);
     // The cleanup close is sent by the abandoned worker once it observes the
-    // bound was missed; poll for it rather than assuming it is already there.
-    let deadline = Instant::now() + Duration::from_secs(1);
-    let close = loop {
-        if http.request_count() >= 2 {
-            break http.requests().remove(1);
-        }
-        assert!(Instant::now() < deadline, "cleanup close was never sent");
-        std::thread::sleep(Duration::from_millis(5));
-    };
+    // bound was missed; wait for that request instead of polling for it.
+    assert!(
+        http.wait_for_requests(2, Duration::from_secs(1)),
+        "cleanup close was never sent"
+    );
+    let close = http.requests()[1].clone();
     assert!(close.starts_with("POST /api/session/%3CSESSION_ID%3E/close HTTP/1.1"));
 }
 

@@ -124,6 +124,10 @@ mod tests {
         // the 5s hang proves the same property.
         let result = run_with_hard_bound(
             || {
+                // The hang simulator: the sleep is the thing under test, and
+                // the closure keeps a result value after it, so the rule's
+                // sole-sleep-closure exclusion does not cover it.
+                // ast-grep-ignore: mbv-no-sleep-in-tests
                 std::thread::sleep(Duration::from_secs(5));
                 Ok::<_, String>(())
             },

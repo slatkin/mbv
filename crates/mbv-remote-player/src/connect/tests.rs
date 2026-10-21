@@ -654,6 +654,10 @@ fn a_late_partial_seed_line_is_never_consumed() {
     let (seed_prefix, seed_suffix) = (seed_line[..split].to_owned(), seed_line[split..].to_owned());
 
     let (client, daemon) = UnixStream::pair().unwrap();
+    // The peer holds the second half of the seed line until the connect has
+    // given up. The handoff is an event, not a pause: the test signals the
+    // peer once the connect has returned.
+    let (seed_tail_tx, seed_tail_rx) = std::sync::mpsc::channel::<()>();
     let peer = std::thread::spawn(move || {
         let mut writer = daemon.try_clone().unwrap();
         let mut reader = BufReader::new(daemon);
@@ -680,13 +684,15 @@ fn a_late_partial_seed_line_is_never_consumed() {
             queued_latest_transition: None,
         });
         writeln!(writer, "{}", serde_json::to_string(&state).unwrap()).unwrap();
-        // Half the seed now, the other half after a pause twice the
-        // handshake's seed deadline: the wait must give up on the partial
-        // line without consuming it, and the reader thread must later see
-        // the two halves as one line.
+        // Half the seed now, the other half only after the handshake's seed
+        // wait has given up: the wait must give up on the partial line
+        // without consuming it, and the reader thread must later see the
+        // two halves as one line.
         writer.write_all(seed_prefix.as_bytes()).unwrap();
         writer.flush().unwrap();
-        std::thread::sleep(Duration::from_secs(1));
+        // The test releases the rest of the line once the connect has
+        // returned, which is after the seed wait gave up.
+        let _ = seed_tail_rx.recv();
         writer.write_all(seed_suffix.as_bytes()).unwrap();
         writer.flush().unwrap();
         // Hold until the client end closes: nothing is sent, so `lines`
@@ -696,8 +702,22 @@ fn a_late_partial_seed_line_is_never_consumed() {
         }
     });
 
-    let (player, event_rx) =
-        connect_stream(SocketStream::Unix(client), PeerBuild::Any, false, None).unwrap();
+    // The seed deadline is the production one in every other connect; this
+    // test bounds it so the give-up it exercises happens without a pause.
+    // The prefix is already in the socket buffer when the wait starts: the
+    // peer writes it right after the hello exchange, and the wait outlives
+    // that write by orders of magnitude.
+    let (player, event_rx) = connect_stream_with_seed_timeout(
+        SocketStream::Unix(client),
+        PeerBuild::Any,
+        false,
+        None,
+        Duration::from_millis(200),
+    )
+    .unwrap();
+    // The connect gave up on the partial line: the rest of the line may
+    // now arrive, and the reader thread must still read it whole.
+    seed_tail_tx.send(()).unwrap();
 
     let event = event_rx
         .recv_timeout(Duration::from_secs(5))
