@@ -7,6 +7,12 @@
 //! module keeps the `Command` variants, the idle-feed link's availability
 //! condition, and `dispatch`'s state transitions.
 //!
+//! `Command` is a two-level enum: the outer level says who owns the command
+//! (the shell `Model` or the `App`), and the inner level groups the `App`
+//! commands by domain. Each domain owns one typed intent enum, so
+//! `App::dispatch` has one arm per domain and each sub-dispatcher matches
+//! its own intent exhaustively.
+//!
 //! The help overlay was converted to a `TuiRealm` Interactive Component
 //! (`crates/mbv-components/src/help.rs`) and no longer routes through this `Command`
 //! enum. Other modal handlers still speak directly to `App` and are expected to
@@ -21,11 +27,72 @@ use mbv_ctrl::Direction;
 use mbv_ctrl::player::PlayerCommand;
 use mbv_queue::QueueSlotId;
 
+/// A UI command: the seam between key-event translation (`input.rs`) and
+/// effects (`actions.rs`, `player.rs`).
+///
+/// The outer level says who owns the command: the shell `Model` handles
+/// `Shell`, the `App` handles `App`. The inner level groups the `App`
+/// commands by domain, so each sub-dispatcher matches one typed intent
+/// instead of re-grouping a flat variant list.
 #[derive(Debug, Clone, PartialEq)]
 pub(in crate::app) enum Command {
+    /// Commands only the shell `Model` handles.
+    Shell(ShellCommand),
+    /// Commands the `App` dispatches to its own state transitions.
+    App(AppCommand),
+}
+
+/// The commands the shell `Model` handles before the `App` sees them. The
+/// `App` cannot receive one, so it needs no arm for it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(in crate::app) enum ShellCommand {
+    /// Model-owned because mounting Help belongs to the `TuiRealm` shell.
+    OpenHelp,
+    /// The podcast Latest pill is component-local state, so the refresh
+    /// carries the owner's pill answer for the lazy destination shelf fetch
+    /// (spec `destination-latest-modes`, "Destination Latest lists load
+    /// lazily").
+    RefreshCurrentView,
+}
+
+/// The commands the `App` dispatches to its own state transitions. The
+/// domain grouping is the type: each arm of `App::dispatch` names one
+/// domain, and each sub-dispatcher matches one typed intent.
+#[derive(Debug, Clone, PartialEq)]
+pub(in crate::app) enum AppCommand {
+    Visual(VisualIntent),
+    Playback(PlaybackIntent),
+    Navigation(NavigationIntent),
+    Panel(PanelIntent),
+    /// Activate the item at the given queue index: `Enter` on the queue
+    /// tab, or a double-click on a queue row (`handle_mouse`'s
+    /// `is_double`/queue branch — the two were already made to match in
+    /// a70ad7a, before either went through `Command`; this variant is the
+    /// single implementation both now share). It seeks to the top if it's
+    /// the already-playing audio item, jumps to it if it's elsewhere in the
+    /// active playback queue, or replaces the local playback queue and plays
+    /// from this index if the visible queue isn't the one currently playing.
+    /// The target index is carried explicitly: the shell resolves the slot the
+    /// user selected and passes it
+    /// rather than this command re-reading `queue.cursor()` as an
+    /// ambient argument channel.
+    QueuePlayCursor(usize),
+    /// Quit the client through the normal dirty-queue/prefs shutdown path.
+    Quit,
+}
+
+/// The visual (non-playback) intents: the idle-feed link and the visualizer
+/// slot.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(in crate::app) enum VisualIntent {
     OpenIdleFeedLink,
     ToggleVisualizer,
     ToggleVisualSlotHidden,
+}
+
+/// The playback intents.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(in crate::app) enum PlaybackIntent {
     TogglePlayPause,
     Stop,
     /// Relative seek in seconds; negative rewinds, positive fast-forwards.
@@ -42,44 +109,67 @@ pub(in crate::app) enum Command {
     ToggleMute,
     /// The `#` key: cycles the audio track.
     CycleAudio,
+}
 
-    // ── queue activation (issue #134) ───────────────────────────────────
-    /// Activate the item at the given queue index: `Enter` on the queue
-    /// tab, or a double-click on a queue row (`handle_mouse`'s
-    /// `is_double`/queue branch — the two were already made to match in
-    /// a70ad7a, before either went through `Command`; this variant is the
-    /// single implementation both now share). It seeks to the top if it's
-    /// the already-playing audio item, jumps to it if it's elsewhere in the
-    /// active playback queue, or replaces the local playback queue and plays
-    /// from this index if the visible queue isn't the one currently playing.
-    /// The target index is carried explicitly: the shell resolves the slot the
-    /// user selected and passes it
-    /// rather than this command re-reading `queue.cursor()` as an
-    /// ambient argument channel.
-    QueuePlayCursor(usize),
-
-    /// `x`: cycle the Power View layout through both, queue-only, and
-    /// library-only (see `PanelMode`); below the mini-view threshold it
-    /// toggles queue-only and library-only.
-    CyclePanelMode,
-
-    // ── destination-independent routing ─────────────────────────────────
-    /// Quit the client through the normal dirty-queue/prefs shutdown path.
-    Quit,
+/// The destination-independent routing intents.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(in crate::app) enum NavigationIntent {
     NextLibraryTab,
     PreviousLibraryTab,
     SetLibraryTab(usize),
     ForceClear,
     /// Raise the "Clear queue?" confirmation prompt (the global `c` binding).
     RequestClearQueue,
-    RefreshCurrentView,
     ToggleSettings,
     OpenSessions,
     OpenPlaylists,
     OpenSearch,
-    /// Model-owned because mounting Help belongs to the `TuiRealm` shell.
-    OpenHelp,
+}
+
+/// The panel intents.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(in crate::app) enum PanelIntent {
+    /// `x`: cycle the Power View layout through both, queue-only, and
+    /// library-only (see `PanelMode`); below the mini-view threshold it
+    /// toggles queue-only and library-only.
+    CyclePanelMode,
     FocusPanel(mbv_ui_model::settings::PanelFocus),
+}
+
+impl From<ShellCommand> for Command {
+    fn from(command: ShellCommand) -> Self {
+        Command::Shell(command)
+    }
+}
+
+impl From<AppCommand> for Command {
+    fn from(command: AppCommand) -> Self {
+        Command::App(command)
+    }
+}
+
+impl From<VisualIntent> for Command {
+    fn from(intent: VisualIntent) -> Self {
+        Command::App(AppCommand::Visual(intent))
+    }
+}
+
+impl From<PlaybackIntent> for Command {
+    fn from(intent: PlaybackIntent) -> Self {
+        Command::App(AppCommand::Playback(intent))
+    }
+}
+
+impl From<NavigationIntent> for Command {
+    fn from(intent: NavigationIntent) -> Self {
+        Command::App(AppCommand::Navigation(intent))
+    }
+}
+
+impl From<PanelIntent> for Command {
+    fn from(intent: PanelIntent) -> Self {
+        Command::App(AppCommand::Panel(intent))
+    }
 }
 
 /// Resolve the idle-feed link shortcut. The link's eligibility is its own
@@ -110,7 +200,7 @@ pub(in crate::app) fn idle_feed_command_for_key(
                 && !context.playback_panel_present_idle
                 && context.link_available =>
         {
-            Some(Command::OpenIdleFeedLink)
+            Some(VisualIntent::OpenIdleFeedLink.into())
         }
         _ => None,
     }
@@ -153,127 +243,96 @@ impl App {
         self.request_remote_slot_jump(slot_id)
     }
 
-    /// Own the state transitions for a `Command`. Returns whether the app
-    /// should quit (`true` only for `Command::Quit`'s non-prompting path;
+    /// Own the state transitions for an `AppCommand`. Returns whether the app
+    /// should quit (`true` only for `AppCommand::Quit`'s non-prompting path;
     /// `false` for every other variant).
     ///
     /// For most playback variants this means picking a remote-session
     /// command vs. a local `Player` command, matching the divergent behavior
     /// `handle_playback_key` had inline (including its known bugs — see issue
     /// #78 follow-up).
-    pub(in crate::app) fn dispatch(&mut self, command: &Command) -> bool {
-        match *command {
-            Command::OpenIdleFeedLink
-            | Command::ToggleVisualizer
-            | Command::ToggleVisualSlotHidden => self.dispatch_visual_command(command),
-            Command::TogglePlayPause
-            | Command::Stop
-            | Command::SeekRelative(_)
-            | Command::NextTrack
-            | Command::PreviousTrack
-            | Command::CycleOrToggleSubtitle
-            | Command::AdjustVolume(_)
-            | Command::ToggleMute
-            | Command::CycleAudio => self.dispatch_playback_command(command),
-            Command::QueuePlayCursor(t) => self.dispatch_queue_play_cursor(t),
-            Command::Quit => return self.try_quit(),
-            Command::NextLibraryTab
-            | Command::PreviousLibraryTab
-            | Command::SetLibraryTab(_)
-            | Command::ForceClear
-            | Command::RequestClearQueue
-            | Command::ToggleSettings
-            | Command::OpenSessions
-            | Command::OpenPlaylists
-            | Command::OpenSearch
-            | Command::OpenHelp => self.dispatch_navigation_command(command),
-            // Model handles this shell-only command before delegating the
-            // remaining commands to App::dispatch: the podcast Latest pill
-            // is component-local state, so the refresh carries the owner's
-            // pill answer for the lazy destination shelf fetch (spec
-            // `destination-latest-modes`, "Destination Latest lists load lazily").
-            Command::RefreshCurrentView => {
-                unreachable!("RefreshCurrentView is dispatched by Model")
-            }
-            Command::FocusPanel(_) | Command::CyclePanelMode => {
-                self.dispatch_panel_command(command);
-            }
+    pub(in crate::app) fn dispatch(&mut self, command: &AppCommand) -> bool {
+        match command {
+            AppCommand::Visual(intent) => self.dispatch_visual_command(intent),
+            AppCommand::Playback(intent) => self.dispatch_playback_command(intent),
+            AppCommand::Navigation(intent) => self.dispatch_navigation_command(intent),
+            AppCommand::Panel(intent) => self.dispatch_panel_command(intent),
+            AppCommand::QueuePlayCursor(index) => self.dispatch_queue_play_cursor(*index),
+            AppCommand::Quit => return self.try_quit(),
         }
         false
     }
 
-    fn dispatch_visual_command(&mut self, command: &Command) {
-        match *command {
-            Command::OpenIdleFeedLink => self.open_idle_feed_link(),
-            Command::ToggleVisualizer => self.toggle_visualizer(),
-            Command::ToggleVisualSlotHidden => {
+    fn dispatch_visual_command(&mut self, intent: &VisualIntent) {
+        match intent {
+            VisualIntent::OpenIdleFeedLink => self.open_idle_feed_link(),
+            VisualIntent::ToggleVisualizer => self.toggle_visualizer(),
+            VisualIntent::ToggleVisualSlotHidden => {
                 self.set_visual_slot_hidden(!self.visual_slot_hidden);
             }
-            _ => unreachable!("dispatch_visual_command only accepts visual commands"),
         }
     }
 
-    fn dispatch_playback_command(&mut self, command: &Command) {
+    fn dispatch_playback_command(&mut self, intent: &PlaybackIntent) {
         // Issue #940: name every dispatched transport command, so a dead
         // input window shows whether the dispatch happened at all.
         tracing::debug!(
             name: "transport.dispatch",
             target: "transport",
-            { command = ?command },
+            { command = ?intent },
             "transport command dispatched"
         );
-        match *command {
-            Command::TogglePlayPause => crate::app::LocalPlaybackTarget::toggle_play_pause(self),
-            Command::Stop => crate::app::LocalPlaybackTarget::stop(self),
-            Command::SeekRelative(delta) => {
-                crate::app::LocalPlaybackTarget::seek_relative(self, delta);
+        match intent {
+            PlaybackIntent::TogglePlayPause => {
+                crate::app::LocalPlaybackTarget::toggle_play_pause(self);
             }
-            Command::NextTrack => crate::app::LocalPlaybackTarget::jump_track(self, 1),
-            Command::PreviousTrack => crate::app::LocalPlaybackTarget::jump_track(self, -1),
-            Command::CycleOrToggleSubtitle => {
+            PlaybackIntent::Stop => crate::app::LocalPlaybackTarget::stop(self),
+            PlaybackIntent::SeekRelative(delta) => {
+                crate::app::LocalPlaybackTarget::seek_relative(self, *delta);
+            }
+            PlaybackIntent::NextTrack => crate::app::LocalPlaybackTarget::jump_track(self, 1),
+            PlaybackIntent::PreviousTrack => crate::app::LocalPlaybackTarget::jump_track(self, -1),
+            PlaybackIntent::CycleOrToggleSubtitle => {
                 self.cycle_sub();
             }
-            Command::AdjustVolume(delta) => {
-                self.adjust_volume(delta);
+            PlaybackIntent::AdjustVolume(delta) => {
+                self.adjust_volume(*delta);
             }
-            Command::ToggleMute => crate::app::LocalPlaybackTarget::toggle_command_mute(self),
-            Command::CycleAudio => self.cycle_audio(),
-            _ => unreachable!("dispatch_playback_command only accepts playback commands"),
+            PlaybackIntent::ToggleMute => {
+                crate::app::LocalPlaybackTarget::toggle_command_mute(self)
+            }
+            PlaybackIntent::CycleAudio => self.cycle_audio(),
         }
     }
 
-    fn dispatch_navigation_command(&mut self, command: &Command) {
-        match *command {
-            Command::NextLibraryTab => self.library_tab_next(),
-            Command::PreviousLibraryTab => self.library_tab_prev(),
-            Command::SetLibraryTab(index) => {
-                if index < self.tab_count() {
-                    self.set_library_tab(index);
+    fn dispatch_navigation_command(&mut self, intent: &NavigationIntent) {
+        match intent {
+            NavigationIntent::NextLibraryTab => self.library_tab_next(),
+            NavigationIntent::PreviousLibraryTab => self.library_tab_prev(),
+            NavigationIntent::SetLibraryTab(index) => {
+                if *index < self.tab_count() {
+                    self.set_library_tab(*index);
                 }
             }
-            Command::ForceClear => self.force_clear = true,
-            Command::RequestClearQueue => self.request_clear_queue(),
-            Command::ToggleSettings => {
+            NavigationIntent::ForceClear => self.force_clear = true,
+            NavigationIntent::RequestClearQueue => self.request_clear_queue(),
+            NavigationIntent::ToggleSettings => {
                 self.request_sidebar_toggle(mbv_ui_model::overlay::SidebarId::Settings);
             }
-            Command::OpenSessions => {
+            NavigationIntent::OpenSessions => {
                 self.request_sidebar_toggle(mbv_ui_model::overlay::SidebarId::Sessions);
             }
-            Command::OpenPlaylists => {
+            NavigationIntent::OpenPlaylists => {
                 self.request_sidebar_toggle(mbv_ui_model::overlay::SidebarId::Playlists);
             }
-            Command::OpenSearch => self.open_search_sidebar(),
-            // Model handles this shell-only command before delegating the
-            // remaining commands to App::dispatch.
-            Command::OpenHelp => unreachable!("OpenHelp is dispatched by Model"),
-            _ => unreachable!("dispatch_navigation_command only accepts navigation commands"),
+            NavigationIntent::OpenSearch => self.open_search_sidebar(),
         }
     }
 
-    fn dispatch_panel_command(&mut self, command: &Command) {
-        match *command {
-            Command::FocusPanel(focus) => {
-                self.set_panel_focus(focus);
+    fn dispatch_panel_command(&mut self, intent: &PanelIntent) {
+        match intent {
+            PanelIntent::FocusPanel(focus) => {
+                self.set_panel_focus(*focus);
                 // No card-checkpoint reset: `last_card_*` is the measured
                 // image geometry and focus does not change the artwork
                 // (hide-queue-visuals-when-idle design). Clearing it here
@@ -281,8 +340,7 @@ impl App {
                 // for a frame -- the now-playing panel visibly grew then
                 // shrank between image and seekbar.
             }
-            Command::CyclePanelMode => self.cycle_panel_mode(),
-            _ => unreachable!("dispatch_panel_command only accepts panel commands"),
+            PanelIntent::CyclePanelMode => self.cycle_panel_mode(),
         }
     }
 

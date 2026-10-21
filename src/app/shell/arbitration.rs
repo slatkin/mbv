@@ -1,5 +1,6 @@
 use super::{DOUBLE_ESC_STOP_WINDOW, Model};
 use crate::app::dispatch::action::Command;
+use crate::app::dispatch::action::ShellCommand;
 use crate::app::input::router::{
     RouterOutcome, RouterSnapshot, resolve_router_outcome_with_focused,
 };
@@ -404,20 +405,22 @@ impl Model {
 
     pub(in crate::app) fn dispatch_router_command(&mut self, command: &Command) -> bool {
         match command {
-            Command::OpenHelp => {
-                self.mount_help();
-                false
-            }
-            // The podcast Latest pill is component-local state; the refresh
-            // carries the owner's pill answer so the destination shelf is
-            // fetched only while Latest is selected (spec
-            // `destination-latest-modes`, "Destination Latest lists load lazily").
-            Command::RefreshCurrentView => {
-                let podcast_latest_selected = self.abs_podcast_latest_selected();
-                self.app.refresh_current_view(podcast_latest_selected);
-                false
-            }
-            _ => self.app.dispatch(command),
+            Command::Shell(shell) => match shell {
+                ShellCommand::OpenHelp => {
+                    self.mount_help();
+                    false
+                }
+                // The podcast Latest pill is component-local state; the refresh
+                // carries the owner's pill answer so the destination shelf is
+                // fetched only while Latest is selected (spec
+                // `destination-latest-modes`, "Destination Latest lists load lazily").
+                ShellCommand::RefreshCurrentView => {
+                    let podcast_latest_selected = self.abs_podcast_latest_selected();
+                    self.app.refresh_current_view(podcast_latest_selected);
+                    false
+                }
+            },
+            Command::App(app_command) => self.app.dispatch(app_command),
         }
     }
 }
