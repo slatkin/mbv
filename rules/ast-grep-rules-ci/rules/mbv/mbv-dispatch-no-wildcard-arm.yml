@@ -9,15 +9,16 @@
 # `ignores` drops its test paths (the same four patterns the CI scan used
 # to pass as `--globs`). ast-grep checks `ignores` before `files`.
 #
-# Census (ast-grep 0.44.1 dry-run over mbv @ 2026-10-21): 21 production
-# wildcard arms under `src/app/dispatch/`. 11 became explicit arms: the four
-# `Command` sub-dispatchers now take typed sub-enums (`VisualCommand`,
-# `PlaybackCommand`, `NavigationCommand`, `PanelCommand`), so each of their
-# matches is exhaustive, and the seven `Option`/enum matches name their
-# variants. The remaining 10 are open key spaces or index mappings where a
-# wildcard is the correct arm: a config key, an Emby item type, a
-# collection type, a notification action, an image protocol name, a key
-# chord, and a pill index. Each of those carries a per-instance
+# Census (ast-grep 0.44.1 dry-run over mbv @ 2026-10-21, at main
+# e6d65e330): 21 production wildcard arms under `src/app/dispatch/`. 14
+# became explicit arms: the four `Command` sub-dispatchers take typed
+# intent enums (`VisualIntent`, `PlaybackIntent`, `NavigationIntent`,
+# `PanelIntent`, from the `nest-command-by-domain` change), so each of
+# their matches is exhaustive, and the seven `Option`/enum matches (ten
+# arms) name their variants. The remaining 7 are open key spaces or index
+# mappings where a wildcard is the correct arm: a key chord, an Emby
+# collection type, two Emby item types, a notification action, an image
+# protocol name, and a pill index. Each of those carries a per-instance
 # `// ast-grep-ignore:` comment with its reason.
 #
 # Blind spot (documented, deliberate): the rule matches the `_` wildcard

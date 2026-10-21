@@ -3,11 +3,12 @@
 # session. No lint enforces that today: clippy has no panic-in-production
 # lint and the rule is prose-only.
 #
-# Census (ast-grep 0.44.1 dry-run over mbv @ 2026-10-21): 41 hits in
-# production files (test paths excluded by the scan globs). 35 of them are
-# the deliberate invariant arm -- `unreachable!()` inside a match arm, which
-# asserts a variant that cannot reach the match -- and are excluded
-# structurally below. The 6 remaining sites were real: 3 `panic!()` and 3
+# Census (ast-grep 0.44.1 dry-run over mbv @ 2026-10-21, at main
+# e6d65e330): 35 hits in production files (test paths excluded by the
+# scan globs). 29 of them are the deliberate invariant arm --
+# `unreachable!()` inside a match arm, which asserts a variant that
+# cannot reach the match -- and are excluded structurally below. The 6
+# remaining sites were real: 3 `panic!()` and 3
 # `unreachable!()` outside any match arm. All 6 now degrade gracefully
 # (a placeholder help label, a theme invariant arm, a logged mount failure,
 # a rejected queue op, a logged no-op, a neutral settings label).
