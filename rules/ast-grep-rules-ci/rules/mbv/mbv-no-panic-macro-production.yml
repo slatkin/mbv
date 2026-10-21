@@ -1,0 +1,91 @@
+---
+# A panic in the TUI or in the daemon kills the process and loses the
+# session. No lint enforces that today: clippy has no panic-in-production
+# lint and the rule is prose-only.
+#
+# Census (ast-grep 0.44.1 dry-run over mbv @ 2026-10-21): 41 hits in
+# production files (test paths excluded by the scan globs). 35 of them are
+# the deliberate invariant arm -- `unreachable!()` inside a match arm, which
+# asserts a variant that cannot reach the match -- and are excluded
+# structurally below. The 6 remaining sites were real: 3 `panic!()` and 3
+# `unreachable!()` outside any match arm. All 6 now degrade gracefully
+# (a placeholder help label, a theme invariant arm, a logged mount failure,
+# a rejected queue op, a logged no-op, a neutral settings label).
+#
+# The rule scopes itself to production code in its own file: the `files`
+# globs name the Rust trees and the `ignores` globs drop the test paths
+# (`**/tests/**`, `**/tests.rs`, `**/*_tests.rs`, `**/test_*.rs`), so one
+# plain repo scan carries the rule. ast-grep checks `ignores` before
+# `files`. The rule also excludes test items structurally. A test-only
+# module file that is not under a test path is the one blind spot the
+# path globs cannot see; the theme's palette generator is such a file,
+# and its impossible-colour arm uses the invariant-arm form.
+#
+# Blind spot (documented, deliberate): `unreachable!()` in a match arm is
+# allowed wherever it appears, including a non-final arm. A reachable
+# `unreachable!()` inside an arm over an open key space is not caught.
+id: mbv-no-panic-macro-production
+language: Rust
+severity: warning
+message: "Panic-family macro in production code"
+note: |
+  A panic in the TUI or the daemon kills the process and loses the session.
+  Replace it with a documented no-op, an error, or an explicit fallback.
+
+  The one sanctioned form is `unreachable!()` inside a match arm: it
+  asserts a variant that cannot reach the match, and the compiler checks
+  the surrounding match.
+
+  BAD:  fn t() { panic!("boom"); }
+  GOOD: fn t() { tracing::error!(name = "x.failed", "x failed"); }
+rule:
+  all:
+    - any:
+        - pattern: panic!($$$A)
+        - pattern: unreachable!($$$A)
+        - pattern: todo!($$$A)
+        - pattern: unimplemented!($$$A)
+    - not:
+        inside:
+          matches: test-item
+          stopBy: end
+    # The invariant-arm form: `unreachable!()` as the body of a match arm.
+    # The exclusion is bound to `unreachable!`, so a `panic!` in the same
+    # arm still fires.
+    - not:
+        all:
+          - pattern: unreachable!($$$A)
+          - inside:
+              kind: match_arm
+              stopBy:
+                kind: match_arm
+utils:
+  test-attr:
+    kind: attribute_item
+    regex: '^#\[(cfg\(test\)|(\w+::)*test(_case)?\b|rstest\b)'
+  test-item:
+    any:
+      - kind: function_item
+      - kind: mod_item
+      - kind: impl_item
+    follows:
+      matches: test-attr
+      stopBy:
+        not:
+          any:
+            - kind: attribute_item
+            - kind: line_comment
+            - kind: block_comment
+has_fix: false
+tags:
+  - rust
+  - mbv
+  - reliability
+files:
+  - "src/**"
+  - "crates/**"
+ignores:
+  - "**/tests/**"
+  - "**/tests.rs"
+  - "**/*_tests.rs"
+  - "**/test_*.rs"

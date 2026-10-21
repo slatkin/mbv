@@ -1,0 +1,78 @@
+---
+# AGENTS.md (Interactive architecture): "Give every boundary-crossing request
+# variant an exhaustive dispatch arm or a documented no-op. Never hide a
+# variant with a wildcard." The shell dispatch is where a request variant
+# disappears today, so the tripwire lives here.
+#
+# The rule scopes itself by its own `files` and `ignores` globs, so one
+# plain repo scan covers the tree: `files` names the dispatch tree and
+# `ignores` drops its test paths (the same four patterns the CI scan used
+# to pass as `--globs`). ast-grep checks `ignores` before `files`.
+#
+# Census (ast-grep 0.44.1 dry-run over mbv @ 2026-10-21): 21 production
+# wildcard arms under `src/app/dispatch/`. 11 became explicit arms: the four
+# `Command` sub-dispatchers now take typed sub-enums (`VisualCommand`,
+# `PlaybackCommand`, `NavigationCommand`, `PanelCommand`), so each of their
+# matches is exhaustive, and the seven `Option`/enum matches name their
+# variants. The remaining 10 are open key spaces or index mappings where a
+# wildcard is the correct arm: a config key, an Emby item type, a
+# collection type, a notification action, an image protocol name, a key
+# chord, and a pill index. Each of those carries a per-instance
+# `// ast-grep-ignore:` comment with its reason.
+#
+# Blind spot (documented, deliberate): the rule matches the `_` wildcard
+# pattern only. A named catch-all binding (`other => ...`) is the same
+# catch-all arm and is not matched.
+id: mbv-dispatch-no-wildcard-arm
+language: Rust
+severity: warning
+message: "Wildcard arm in a dispatch match"
+note: |
+  Every boundary-crossing request variant gets an exhaustive arm or a
+  documented no-op. A wildcard arm swallows a variant the author did not
+  read, so a new variant of the matched type changes behavior silently.
+
+  Name the variant, or -- for an open key space such as a config key --
+  document why the wildcard is the arm.
+
+  BAD:  match request { Request::Play(..) => play(), _ => {} }
+  GOOD: match request { Request::Play(..) => play(), Request::Stop => stop() }
+rule:
+  all:
+    - kind: match_arm
+    - has:
+        field: pattern
+        regex: '^_\s*$'
+    - not:
+        inside:
+          matches: test-item
+          stopBy: end
+utils:
+  test-attr:
+    kind: attribute_item
+    regex: '^#\[(cfg\(test\)|(\w+::)*test(_case)?\b|rstest\b)'
+  test-item:
+    any:
+      - kind: function_item
+      - kind: mod_item
+      - kind: impl_item
+    follows:
+      matches: test-attr
+      stopBy:
+        not:
+          any:
+            - kind: attribute_item
+            - kind: line_comment
+            - kind: block_comment
+has_fix: false
+tags:
+  - rust
+  - mbv
+  - interactive-architecture
+files:
+  - "src/app/dispatch/**"
+ignores:
+  - "**/tests/**"
+  - "**/tests.rs"
+  - "**/*_tests.rs"
+  - "**/test_*.rs"

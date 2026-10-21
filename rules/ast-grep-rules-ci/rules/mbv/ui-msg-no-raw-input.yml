@@ -11,6 +11,10 @@
 #
 # Blind spot: only the five crossterm/tuirealm event types below; a new
 # raw-input type needs a regex addition.
+#
+# The rule carries its own `files` scope for the crate and `ignores`
+# globs for the crate's test paths, so one plain repo scan covers the
+# tree without an explicit path argument per rule.
 id: mbv-ui-msg-no-raw-input
 language: Rust
 severity: warning
@@ -50,3 +54,10 @@ tags:
   - rust
   - mbv
   - interactive-architecture
+files:
+  - "crates/mbv-ui-msg/**"
+ignores:
+  - "**/tests/**"
+  - "**/tests.rs"
+  - "**/*_tests.rs"
+  - "**/test_*.rs"

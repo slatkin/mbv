@@ -1,0 +1,27 @@
+---
+id: mbv-dispatch-no-wildcard-arm
+valid:
+  # Every variant named.
+  - "fn f(x: Option<u32>) -> u32 { match x { Some(v) => v, None => 0 } }"
+  # A match that is not a request dispatch at all.
+  - "fn f(x: u32) -> u32 { match x { 1 => 1, 2 => 2 } }"
+  # Test items are out of scope.
+  - |-
+    #[cfg(test)]
+    mod tests {
+        #[test]
+        fn t() {
+            let v = match 1 { _ => 0 };
+        }
+    }
+invalid:
+  # A wildcard arm in a dispatch match hides a variant.
+  - "fn f(x: Option<u32>) -> u32 { match x { Some(v) => v, _ => 0 } }"
+  # The binding guard: a helper inside a `mod tests` that carries no
+  # `#[cfg(test)]` attribute is production code and must fire.
+  - |-
+    mod tests {
+        fn helper() {
+            let v = match 1 { _ => 0 };
+        }
+    }
