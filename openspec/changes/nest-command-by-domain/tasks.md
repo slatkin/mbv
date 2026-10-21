@@ -14,11 +14,11 @@
 
 ## 2. Callers
 
-- [ ] 2.1 Update construction sites in `src/app/input/key_policy.rs` (`command_for_policy`),
+- [x] 2.1 Update construction sites in `src/app/input/key_policy.rs` (`command_for_policy`),
       `router.rs`, `src/app/shell/playback.rs`, `queue.rs`, `mouse_gestures.rs`,
       `context_menu/actions.rs`, and `crates/mbv-components/src/status_bar_panel.rs`. Verify:
       `cargo check --workspace`.
-- [ ] 2.2 Update the existing tests that build or match `Command` (routing matrix, tick
+- [x] 2.2 Update the existing tests that build or match `Command` (routing matrix, tick
       integration, `shell/tests.rs`, `dispatch/action/tests.rs`, `key_policy` tests). Add no
       new tests: the routing-matrix and `dispatch_router_command` tests already own the
       contract "each key resolves to the same effect" (`docs/invariants/14-test-ownership.md`).
