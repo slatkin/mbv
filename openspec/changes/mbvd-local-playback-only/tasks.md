@@ -7,8 +7,8 @@
 
 ## 2. Pin the derived behavior (design D3, D4)
 
-- [ ] 2.1 In `crates/mbv-daemon/src/tests/`, pin the packaged-role contracts: a packaged hello carries neither `playback-output` nor `emby-session-output`, and a `SelectPlaybackOutput` Cast or Emby-Session request to a packaged-role loop is rejected with `CommandRejected` and a stated reason while the output stays Local (spec scenarios "Packaged hello carries no remote-output capability" and "Request reaches mbvd"). Extend the existing cast-output/session test families; one test per contract, no new family. Verify: `cargo nextest run -p mbv-daemon`.
-- [ ] 2.2 In `src/app/tests/`, pin the Client contract: with an owner compatibility whose `supports_playback_output` and `supports_emby_session_output` are both false, the output-selection targets offer no Cast row and no Emby-remote row (spec scenario "Client connected to mbvd"). Extend the existing `panel_targets` / session-connect tests; if the gating already has a covering test for a capability-less owner, extend that one instead of adding a twin. Verify: `cargo nextest run -p mbv`.
+- [x] 2.1 In `crates/mbv-daemon/src/tests/`, pin the packaged-role contracts: a packaged hello carries neither `playback-output` nor `emby-session-output`, and a `SelectPlaybackOutput` Cast or Emby-Session request to a packaged-role loop is rejected with `CommandRejected` and a stated reason while the output stays Local (spec scenarios "Packaged hello carries no remote-output capability" and "Request reaches mbvd"). Extend the existing cast-output/session test families; one test per contract, no new family. Verify: `cargo nextest run -p mbv-daemon`.
+- [x] 2.2 In `src/app/tests/`, pin the Client contract: with an owner compatibility whose `supports_playback_output` and `supports_emby_session_output` are both false, the output-selection targets offer no Cast row and no Emby-remote row (spec scenario "Client connected to mbvd"). Extend the existing `panel_targets` / session-connect tests; if the gating already has a covering test for a capability-less owner, extend that one instead of adding a twin. Verify: `cargo nextest run -p mbv`.
 
 ## 3. Integration
 
