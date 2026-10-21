@@ -97,6 +97,34 @@ fn a_session_selection_with_the_hook_off_is_rejected_and_keeps_local() {
     );
 }
 
+/// Contract: mbvd-local-playback-only row 2.1 — an Emby Session selection
+/// that still reaches a packaged owner is rejected with a stated reason and
+/// local playback stays the output (spec "Request reaches mbvd"). The
+/// packaged entry cannot express the output hook (design D1); the hook-off
+/// guard keeps its shape as the stated-reason surface (design D3).
+#[test]
+fn a_session_selection_on_a_packaged_owner_is_rejected_and_local_stays_the_output() {
+    let mut t = test_loop_with_role(DaemonRole::Packaged);
+    let (client_id, reply_tx, rx) =
+        connect_output_client_with_caps(&t.event_loop.ctrl_clients, true, true);
+
+    select_output(&mut t, client_id, &reply_tx, session_selection());
+
+    assert!(
+        matches!(
+            recv_event(&rx),
+            CtrlEvent::CommandRejected(reason)
+                if reason.contains("does not host an Emby Session playback output")
+        ),
+        "the rejection states its reason"
+    );
+    assert!(matches!(t.event_loop.owner.output, PlaybackOutput::Local));
+    assert_eq!(
+        *t.event_loop.shared_queue.playback_output.lock().unwrap(),
+        OutputState::Local
+    );
+}
+
 /// Contract: row 3.2 / design D4 — a device that the unfiltered Session list
 /// does not contain keeps the current output and reports the reason to the
 /// selecting Client.

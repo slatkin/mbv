@@ -126,11 +126,13 @@ pub(super) fn select_output(
 /// `client_playback_output` (and `client_emby_session_output` when set).
 /// Returns the client-side reader; the daemon Hello is its first line.
 fn spawn_cast_peer(
+    role: DaemonRole,
     caps: crate::DaemonHelloCaps,
     client_playback_output: bool,
     client_emby_session_output: bool,
 ) -> BufReader<UnixStream> {
     spawn_output_peer(
+        role,
         caps,
         client_playback_output,
         client_emby_session_output,
@@ -141,6 +143,7 @@ fn spawn_cast_peer(
 /// [`spawn_cast_peer`] with the owner's seeded output state chosen by the
 /// test, so the cold-seed rule can be observed against an Emby Session.
 fn spawn_output_peer(
+    role: DaemonRole,
     caps: crate::DaemonHelloCaps,
     client_playback_output: bool,
     client_emby_session_output: bool,
@@ -164,7 +167,7 @@ fn spawn_output_peer(
         player.status,
         queue_state,
         caps,
-        DaemonRole::Local,
+        role,
         crate::owner_settings::fixed_reader(false),
     );
     let reader = BufReader::new(client.try_clone().unwrap());
@@ -211,7 +214,7 @@ fn daemon_caps(playback_output: bool, emby_session_output: bool) -> crate::Daemo
 /// `playback-output` when the runtime supplies a Cast connector.
 #[test]
 fn the_daemon_hello_advertises_playback_output_with_a_connector() {
-    let mut reader = spawn_cast_peer(daemon_caps(true, false), false, false);
+    let mut reader = spawn_cast_peer(DaemonRole::Local, daemon_caps(true, false), false, false);
     let CtrlEvent::Hello(hello) = read_event(&mut reader) else {
         panic!("expected daemon hello");
     };
@@ -222,7 +225,7 @@ fn the_daemon_hello_advertises_playback_output_with_a_connector() {
 /// `playback-output` when the runtime supplies no Cast connector (mbvd).
 #[test]
 fn the_daemon_hello_hides_playback_output_without_a_connector() {
-    let mut reader = spawn_cast_peer(daemon_caps(false, false), false, false);
+    let mut reader = spawn_cast_peer(DaemonRole::Local, daemon_caps(false, false), false, false);
     let CtrlEvent::Hello(hello) = read_event(&mut reader) else {
         panic!("expected daemon hello");
     };
@@ -234,7 +237,7 @@ fn the_daemon_hello_hides_playback_output_without_a_connector() {
 /// (the Local daemon).
 #[test]
 fn the_daemon_hello_advertises_emby_session_output_with_the_hook_on() {
-    let mut reader = spawn_cast_peer(daemon_caps(true, true), false, false);
+    let mut reader = spawn_cast_peer(DaemonRole::Local, daemon_caps(true, true), false, false);
     let CtrlEvent::Hello(hello) = read_event(&mut reader) else {
         panic!("expected daemon hello");
     };
@@ -245,10 +248,30 @@ fn the_daemon_hello_advertises_emby_session_output_with_the_hook_on() {
 /// hides `emby-session-output` when the runtime hook leaves it off (mbvd).
 #[test]
 fn the_daemon_hello_hides_emby_session_output_with_the_hook_off() {
-    let mut reader = spawn_cast_peer(daemon_caps(true, false), false, false);
+    let mut reader = spawn_cast_peer(DaemonRole::Local, daemon_caps(true, false), false, false);
     let CtrlEvent::Hello(hello) = read_event(&mut reader) else {
         panic!("expected daemon hello");
     };
+    assert!(!hello.supports_emby_session_output());
+}
+
+/// Contract: mbvd-local-playback-only row 2.1 — the packaged entry's
+/// `OwnerOutputs` is empty by construction (design D1), so a packaged
+/// owner's Hello advertises neither `playback-output` nor
+/// `emby-session-output` (spec "Packaged hello carries no remote-output
+/// capability").
+#[test]
+fn a_packaged_owner_hello_advertises_neither_remote_output_capability() {
+    let mut reader = spawn_cast_peer(
+        DaemonRole::Packaged,
+        daemon_caps(false, false),
+        false,
+        false,
+    );
+    let CtrlEvent::Hello(hello) = read_event(&mut reader) else {
+        panic!("expected daemon hello");
+    };
+    assert!(!hello.supports_playback_output());
     assert!(!hello.supports_emby_session_output());
 }
 
@@ -257,7 +280,7 @@ fn the_daemon_hello_hides_emby_session_output_with_the_hook_off() {
 /// connects to an owner that is casting"); the seed here is the Local start.
 #[test]
 fn a_capable_client_receives_the_playback_output_on_connect() {
-    let mut reader = spawn_cast_peer(daemon_caps(false, false), true, false);
+    let mut reader = spawn_cast_peer(DaemonRole::Local, daemon_caps(false, false), true, false);
     let CtrlEvent::Hello(_) = read_event(&mut reader) else {
         panic!("expected daemon hello");
     };
@@ -280,7 +303,13 @@ fn a_capable_client_receives_the_playback_output_on_connect() {
 /// both capabilities receives the Session state.
 #[test]
 fn an_emby_session_output_is_seeded_only_to_capable_peers() {
-    let mut plain = spawn_output_peer(daemon_caps(true, true), true, false, emby_session_state());
+    let mut plain = spawn_output_peer(
+        DaemonRole::Local,
+        daemon_caps(true, true),
+        true,
+        false,
+        emby_session_state(),
+    );
     assert!(matches!(read_event(&mut plain), CtrlEvent::Hello(_)));
     assert!(matches!(
         read_event(&mut plain),
@@ -294,7 +323,13 @@ fn an_emby_session_output_is_seeded_only_to_capable_peers() {
         "a peer without the capability sees Local instead of the Session output"
     );
 
-    let mut capable = spawn_output_peer(daemon_caps(true, true), true, true, emby_session_state());
+    let mut capable = spawn_output_peer(
+        DaemonRole::Local,
+        daemon_caps(true, true),
+        true,
+        true,
+        emby_session_state(),
+    );
     assert!(matches!(read_event(&mut capable), CtrlEvent::Hello(_)));
     assert!(matches!(
         read_event(&mut capable),
@@ -350,6 +385,32 @@ fn a_cast_selection_without_a_connector_is_rejected() {
     assert!(
         matches!(recv_event(&rx), CtrlEvent::CommandRejected(_)),
         "a Cast selection without a connector is rejected"
+    );
+    assert!(matches!(t.event_loop.owner.output, PlaybackOutput::Local));
+    assert_eq!(
+        *t.event_loop.shared_queue.playback_output.lock().unwrap(),
+        OutputState::Local
+    );
+}
+
+/// Contract: mbvd-local-playback-only row 2.1 — a Cast selection that still
+/// reaches a packaged owner is rejected with a stated reason and local
+/// playback stays the output (spec "Request reaches mbvd"). The packaged
+/// entry supplies no connector (design D1); the no-connector guard keeps its
+/// shape as the stated-reason surface (design D3).
+#[test]
+fn a_cast_selection_on_a_packaged_owner_is_rejected_and_local_stays_the_output() {
+    let mut t = test_loop_with_role(DaemonRole::Packaged);
+    let (client_id, reply_tx, rx) = connect_output_client(&t.event_loop.ctrl_clients, true);
+
+    select_output(&mut t, client_id, &reply_tx, cast_selection());
+
+    assert!(
+        matches!(
+            recv_event(&rx),
+            CtrlEvent::CommandRejected(reason) if reason.contains("no Cast playback output")
+        ),
+        "the rejection states its reason"
     );
     assert!(matches!(t.event_loop.owner.output, PlaybackOutput::Local));
     assert_eq!(
