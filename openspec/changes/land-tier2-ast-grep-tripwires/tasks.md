@@ -42,7 +42,7 @@
       `PlaybackIntent`, `NavigationIntent`, `PanelIntent`), nests `Command` as
       `Shell(ShellCommand)` / `App(AppCommand)`, and gives `App::dispatch` one arm per domain,
       which removes the flat-variant translation this tripwire gates on. Rebase this branch onto
-      that change; the two invariant arms keep their `unreachable!()`. Verify:
+      that change; the rebase removes both `unreachable!()` invariant arms. Verify:
       `cargo check -p mbv && cargo nextest run -p mbv dispatch`.
 - [x] 3.2 Name the variants in the seven `Option`/enum matches:
       `library/browse/loading.rs` (`TvContentMode`), `library/browse/navigation.rs`

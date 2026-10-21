@@ -41,11 +41,11 @@ gives `App::dispatch` one arm per domain. That change resolves the `App::dispatc
 this tripwire gates on, because it removes the flat-variant translation the rule would have had
 to police. This change follows it instead of re-deriving the typed sub-enums, and the wildcard
 rule then guards the translation-free shape. Seven `Option`/enum matches name their variants,
-including the three `match key` sites over the 41-variant
+including the three `match key` sites over the 40-variant
 `SettingKey` enum in `src/app/dispatch/settings.rs`, which are now exhaustive variant lists
 (user decision 4). The remaining ten sites match open key spaces or index mappings where a
-wildcard is the correct arm; each carries a per-instance directive with its reason, and the
-directive must be the comment line immediately above the arm. (User decision 2.)
+wildcard is the correct arm; seven of them carry a per-instance directive with its reason, and
+the directive must be the comment line immediately above the arm. (User decision 2.)
 
 ### 3. One plain scan, with the path scoping inside the rule files
 
