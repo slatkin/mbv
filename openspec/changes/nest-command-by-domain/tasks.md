@@ -26,12 +26,12 @@
 
 ## 3. Docs and gates
 
-- [ ] 3.1 Add the *UI command* term to `CONTEXT.md` and update the `Command` variant site in
+- [x] 3.1 Add the *UI command* term to `CONTEXT.md` and update the `Command` variant site in
       `docs/recipes.md`. Verify: `qmd query "UI command"` returns the term.
-- [ ] 3.2 Update `openspec/changes/land-tier2-ast-grep-tripwires/` `design.md` decision 2 and
+- [x] 3.2 Update `openspec/changes/land-tier2-ast-grep-tripwires/` `design.md` decision 2 and
       `tasks.md` row 3.1 to point to this change. Verify: `openspec validate
       land-tier2-ast-grep-tripwires --strict` passes.
-- [ ] 3.3 Run the gates: `cargo fmt --all`, `cargo clippy --workspace --all-targets -- -D
+- [x] 3.3 Run the gates: `cargo fmt --all`, `cargo clippy --workspace --all-targets -- -D
       warnings`, `cargo nextest run --workspace`, `ast-grep scan .`, and the rca complexity
       check on all changed `.rs` files. Verify: every gate is green and no function is over
       cyclomatic 25.
