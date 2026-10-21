@@ -9,6 +9,73 @@ use mbv_ui_model::settings::SettingsDestination;
 use mbv_ui_model::ui_util::{cycle_lang, next_subtitle_mode};
 use std::time::{Duration, Instant};
 
+/// How a Settings row responds when the user activates it. Each row is
+/// classified exactly once, and the dispatch sites route on the kind, so
+/// a new row states its behavior once instead of once per dispatch site.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum SettingRowKind {
+    /// Opens a destination: a sub-panel, a multiselect overlay, the
+    /// library-routes editor or the feeds manager.
+    Destination,
+    /// Activates through its own handler: a confirm step, a cycle, or a
+    /// toggle with a refusal rule or a live side effect.
+    OwnActivation,
+    /// Flips one stored config flag in place.
+    ConfigToggle,
+    /// Takes no activation in this dispatch: the panel geometry rows step
+    /// through `apply_panel_setting`, and `ResetUiState` runs through its
+    /// own confirm path in the shell.
+    Passive,
+}
+
+/// Classify one Settings row. The match is exhaustive over `SettingKey`,
+/// so a new row cannot be added without stating its kind once.
+fn setting_row_kind(key: SettingKey) -> SettingRowKind {
+    use SettingKey as K;
+    match key {
+        K::Services
+        | K::Keys
+        | K::Panel
+        | K::HiddenLibraries
+        | K::MyLanguages
+        | K::FeedViewLibraries
+        | K::LibraryRoutes
+        | K::ManageFeeds => SettingRowKind::Destination,
+        K::LogOut
+        | K::ImageProtocol
+        | K::ShowSysTrayIcon
+        | K::SystemNotifications
+        | K::MouseSupport
+        | K::SubtitleMode
+        | K::SubtitleLanguage
+        | K::AudioLanguage => SettingRowKind::OwnActivation,
+        K::StayAlive
+        | K::AutoReconnect
+        | K::SavePlaylistOnQuit
+        | K::AlwaysPlayNext
+        | K::ConsumeVideos
+        | K::ConsumeAudio
+        | K::SavePlaylistOnConsume
+        | K::SavePlaylistOnConsumeAudio
+        | K::AlwaysSkipIntro
+        | K::ShowAudioWindow
+        | K::UseMpvConfig
+        | K::NoScripts
+        | K::Autoload => SettingRowKind::ConfigToggle,
+        K::PanelSide
+        | K::PanelWidth
+        | K::PanelWidthExpanded
+        | K::PanelGutterTop
+        | K::PanelGutterBottom
+        | K::PanelGutterLeft
+        | K::PanelGutterRight
+        | K::PanelAccent
+        | K::PanelAccentColor
+        | K::PanelAccentWidth
+        | K::ResetUiState => SettingRowKind::Passive,
+    }
+}
+
 impl App {
     pub(crate) fn close_settings(&mut self) {
         self.flush_settings_save();
@@ -148,167 +215,118 @@ impl App {
     }
 
     fn open_settings_destination(&mut self, key: SettingKey) -> bool {
-        match key {
-            SettingKey::Services => {
-                self.open_services_settings();
-            }
-            SettingKey::Keys => {
-                self.open_keys_settings();
-            }
-            SettingKey::Panel => {
-                self.open_panel_settings();
-            }
-            SettingKey::HiddenLibraries => {
-                self.pending_overlay = Some(OverlayRequest::OpenMultiselect(
-                    MultiSelectKind::HiddenLibraries,
-                ));
-            }
-            SettingKey::MyLanguages => {
-                self.pending_overlay = Some(OverlayRequest::OpenMultiselect(
-                    MultiSelectKind::MyLanguages,
-                ));
-            }
-            SettingKey::FeedViewLibraries => {
-                self.pending_overlay = Some(OverlayRequest::OpenMultiselect(
-                    MultiSelectKind::FeedViewLibraries,
-                ));
-            }
-            SettingKey::LibraryRoutes => {
-                self.pending_overlay = Some(OverlayRequest::OpenLibraryRoutes);
-            }
-            SettingKey::ManageFeeds => {
-                self.pending_overlay = Some(OverlayRequest::OpenFeedsManage);
-            }
-            // Every other key opens no destination. The list is exhaustive on
-            // purpose: a new Settings row must say here whether it opens a
-            // destination, instead of falling into a catch-all arm. The panel
-            // geometry and the accent rows are steppers, the config flags
-            // toggle in place, the steps and the system rows have their own
-            // activation, and the action rows confirm or reset.
-            SettingKey::PanelSide
-            | SettingKey::PanelWidth
-            | SettingKey::PanelWidthExpanded
-            | SettingKey::PanelGutterTop
-            | SettingKey::PanelGutterBottom
-            | SettingKey::PanelGutterLeft
-            | SettingKey::PanelGutterRight
-            | SettingKey::PanelAccent
-            | SettingKey::PanelAccentColor
-            | SettingKey::PanelAccentWidth
-            | SettingKey::StayAlive
-            | SettingKey::AutoReconnect
-            | SettingKey::SavePlaylistOnQuit
-            | SettingKey::AlwaysPlayNext
-            | SettingKey::ConsumeVideos
-            | SettingKey::ConsumeAudio
-            | SettingKey::SavePlaylistOnConsume
-            | SettingKey::SavePlaylistOnConsumeAudio
-            | SettingKey::AlwaysSkipIntro
-            | SettingKey::ShowAudioWindow
-            | SettingKey::UseMpvConfig
-            | SettingKey::NoScripts
-            | SettingKey::Autoload
-            | SettingKey::ShowSysTrayIcon
-            | SettingKey::ImageProtocol
-            | SettingKey::SubtitleMode
-            | SettingKey::SubtitleLanguage
-            | SettingKey::AudioLanguage
-            | SettingKey::SystemNotifications
-            | SettingKey::MouseSupport
-            | SettingKey::ResetUiState
-            | SettingKey::LogOut => return false,
+        if setting_row_kind(key) != SettingRowKind::Destination {
+            return false;
+        }
+        // The kind gate admits Destination rows only, so each branch below
+        // is that row's own destination opener.
+        if key == SettingKey::Services {
+            self.open_services_settings();
+        }
+        if key == SettingKey::Keys {
+            self.open_keys_settings();
+        }
+        if key == SettingKey::Panel {
+            self.open_panel_settings();
+        }
+        if key == SettingKey::HiddenLibraries {
+            self.pending_overlay = Some(OverlayRequest::OpenMultiselect(
+                MultiSelectKind::HiddenLibraries,
+            ));
+        }
+        if key == SettingKey::MyLanguages {
+            self.pending_overlay = Some(OverlayRequest::OpenMultiselect(
+                MultiSelectKind::MyLanguages,
+            ));
+        }
+        if key == SettingKey::FeedViewLibraries {
+            self.pending_overlay = Some(OverlayRequest::OpenMultiselect(
+                MultiSelectKind::FeedViewLibraries,
+            ));
+        }
+        if key == SettingKey::LibraryRoutes {
+            self.pending_overlay = Some(OverlayRequest::OpenLibraryRoutes);
+        }
+        if key == SettingKey::ManageFeeds {
+            self.pending_overlay = Some(OverlayRequest::OpenFeedsManage);
         }
         true
     }
 
     fn apply_settings_activation(&mut self, key: SettingKey) {
-        match key {
-            SettingKey::LogOut => self.confirm_logout = true,
-            SettingKey::ImageProtocol => self.cycle_image_protocol(),
-            SettingKey::SystemNotifications => {
-                let new_val = {
-                    let mut c = self.config.lock().unwrap();
-                    c.system_notifications = !c.system_notifications;
-                    c.system_notifications
-                };
-                self.system_notifications = new_val;
-            }
-            SettingKey::MouseSupport => {
-                let new_val = {
-                    let mut c = self.config.lock().unwrap();
-                    c.mouse_support = !c.mouse_support;
-                    c.mouse_support
-                };
-                // Effect handoff: the run loop applies the live flip on the
-                // session stdout; persistence rides the debounced
-                // `settings_save_at` below.
-                self.mouse_capture_pending = Some(new_val);
-            }
-            SettingKey::SubtitleMode => self.apply_subtitle_mode(),
-            SettingKey::SubtitleLanguage => self.cycle_subtitle_language(),
-            SettingKey::AudioLanguage => self.cycle_audio_language(),
-            // The Tray row shows `tray_enabled()` — the single source of the
-            // tray-enable rule — not the stored preference, so its toggle is
-            // refused when flipping the preference cannot change that value:
-            // while stay-alive forces the Tray on. `toggle_config_setting` holds
-            // the config lock, so the refusal is decided here where flashing
-            // is possible; a refused toggle is reverted so the stored
-            // preference stays untouched.
-            SettingKey::ShowSysTrayIcon => {
-                let refused = {
-                    let mut c = self.config.lock().unwrap();
-                    let enabled = c.tray_enabled();
-                    c.show_systray_icon = !c.show_systray_icon;
-                    let refused = c.tray_enabled() == enabled;
-                    if refused {
-                        c.show_systray_icon = !c.show_systray_icon;
-                    }
-                    refused
-                };
+        match setting_row_kind(key) {
+            // open_settings_destination already routed the row, and the
+            // panel geometry rows step through `apply_panel_setting`
+            // (`ResetUiState` runs through its own confirm path in the
+            // shell), so neither reaches a config toggle.
+            SettingRowKind::Destination | SettingRowKind::Passive => {}
+            SettingRowKind::OwnActivation => self.apply_own_activation(key),
+            SettingRowKind::ConfigToggle => self.toggle_config_setting(key),
+        }
+    }
+
+    /// The `OwnActivation` handlers, one per row. The caller's kind match
+    /// admits `OwnActivation` rows only, so each branch below is that row's
+    /// own activation.
+    fn apply_own_activation(&mut self, key: SettingKey) {
+        if key == SettingKey::LogOut {
+            self.confirm_logout = true;
+        }
+        if key == SettingKey::ImageProtocol {
+            self.cycle_image_protocol();
+        }
+        if key == SettingKey::SystemNotifications {
+            let new_val = {
+                let mut c = self.config.lock().unwrap();
+                c.system_notifications = !c.system_notifications;
+                c.system_notifications
+            };
+            self.system_notifications = new_val;
+        }
+        if key == SettingKey::MouseSupport {
+            let new_val = {
+                let mut c = self.config.lock().unwrap();
+                c.mouse_support = !c.mouse_support;
+                c.mouse_support
+            };
+            // Effect handoff: the run loop applies the live flip on the
+            // session stdout; persistence rides the debounced
+            // `settings_save_at` below.
+            self.mouse_capture_pending = Some(new_val);
+        }
+        if key == SettingKey::SubtitleMode {
+            self.apply_subtitle_mode();
+        }
+        if key == SettingKey::SubtitleLanguage {
+            self.cycle_subtitle_language();
+        }
+        if key == SettingKey::AudioLanguage {
+            self.cycle_audio_language();
+        }
+        // The Tray row shows `tray_enabled()` — the single source of the
+        // tray-enable rule — not the stored preference, so its toggle is
+        // refused when flipping the preference cannot change that value:
+        // while stay-alive forces the Tray on. `toggle_config_setting` holds
+        // the config lock, so the refusal is decided here where flashing
+        // is possible; a refused toggle is reverted so the stored
+        // preference stays untouched.
+        if key == SettingKey::ShowSysTrayIcon {
+            let refused = {
+                let mut c = self.config.lock().unwrap();
+                let enabled = c.tray_enabled();
+                c.show_systray_icon = !c.show_systray_icon;
+                let refused = c.tray_enabled() == enabled;
                 if refused {
-                    self.flash(
-                        "Tray stays on while Stay alive is on".into(),
-                        ToastSeverity::Neutral,
-                    );
+                    c.show_systray_icon = !c.show_systray_icon;
                 }
+                refused
+            };
+            if refused {
+                self.flash(
+                    "Tray stays on while Stay alive is on".into(),
+                    ToastSeverity::Neutral,
+                );
             }
-            // Every other key toggles its config flag in place, steppers and
-            // flags alike. The list is exhaustive on purpose: a new Settings
-            // row must say here whether it activates on its own, instead of
-            // falling into a catch-all arm. The destination rows open a
-            // destination instead.
-            SettingKey::Services
-            | SettingKey::Keys
-            | SettingKey::Panel
-            | SettingKey::HiddenLibraries
-            | SettingKey::MyLanguages
-            | SettingKey::FeedViewLibraries
-            | SettingKey::LibraryRoutes
-            | SettingKey::ManageFeeds
-            | SettingKey::PanelSide
-            | SettingKey::PanelWidth
-            | SettingKey::PanelWidthExpanded
-            | SettingKey::PanelGutterTop
-            | SettingKey::PanelGutterBottom
-            | SettingKey::PanelGutterLeft
-            | SettingKey::PanelGutterRight
-            | SettingKey::PanelAccent
-            | SettingKey::PanelAccentColor
-            | SettingKey::PanelAccentWidth
-            | SettingKey::StayAlive
-            | SettingKey::AutoReconnect
-            | SettingKey::SavePlaylistOnQuit
-            | SettingKey::AlwaysPlayNext
-            | SettingKey::ConsumeVideos
-            | SettingKey::ConsumeAudio
-            | SettingKey::SavePlaylistOnConsume
-            | SettingKey::SavePlaylistOnConsumeAudio
-            | SettingKey::AlwaysSkipIntro
-            | SettingKey::ShowAudioWindow
-            | SettingKey::UseMpvConfig
-            | SettingKey::NoScripts
-            | SettingKey::Autoload
-            | SettingKey::ResetUiState => self.toggle_config_setting(key),
         }
     }
 
@@ -363,58 +381,52 @@ impl App {
         self.push_subtitle_prefs();
     }
 
+    /// Flip the stored config flag of a `ConfigToggle` row. Rows of any
+    /// other kind keep no flag here, so the kind gate returns before the
+    /// config lock is taken.
     fn toggle_config_setting(&mut self, key: SettingKey) {
+        if setting_row_kind(key) != SettingRowKind::ConfigToggle {
+            return;
+        }
         let mut c = self.config.lock().unwrap();
-        match key {
-            SettingKey::StayAlive => c.stay_alive = !c.stay_alive,
-            SettingKey::AutoReconnect => c.auto_reconnect = !c.auto_reconnect,
-            SettingKey::SavePlaylistOnQuit => c.save_playlist_on_quit = !c.save_playlist_on_quit,
-            SettingKey::AlwaysPlayNext => c.always_play_next = !c.always_play_next,
-            SettingKey::ConsumeVideos => c.consume_videos = !c.consume_videos,
-            SettingKey::ConsumeAudio => c.consume_audio = !c.consume_audio,
-            SettingKey::SavePlaylistOnConsume => {
-                c.save_playlist_on_consume = !c.save_playlist_on_consume;
-            }
-            SettingKey::SavePlaylistOnConsumeAudio => {
-                c.save_playlist_on_consume_audio = !c.save_playlist_on_consume_audio;
-            }
-            SettingKey::AlwaysSkipIntro => c.always_skip_intro = !c.always_skip_intro,
-            SettingKey::ShowAudioWindow => c.show_audio_window = !c.show_audio_window,
-            SettingKey::UseMpvConfig => c.use_mpv_config = !c.use_mpv_config,
-            SettingKey::NoScripts => c.no_scripts = !c.no_scripts,
-            SettingKey::Autoload => c.autoload = !c.autoload,
-            // Every other key toggles no config flag: a stepper, a
-            // collection row, a destination row, or an action row. The list
-            // is exhaustive on purpose: a new Settings row must say here
-            // whether it toggles a flag, instead of falling into a
-            // catch-all arm.
-            SettingKey::Services
-            | SettingKey::Keys
-            | SettingKey::Panel
-            | SettingKey::PanelSide
-            | SettingKey::PanelWidth
-            | SettingKey::PanelWidthExpanded
-            | SettingKey::PanelGutterTop
-            | SettingKey::PanelGutterBottom
-            | SettingKey::PanelGutterLeft
-            | SettingKey::PanelGutterRight
-            | SettingKey::PanelAccent
-            | SettingKey::PanelAccentColor
-            | SettingKey::PanelAccentWidth
-            | SettingKey::ImageProtocol
-            | SettingKey::HiddenLibraries
-            | SettingKey::ShowSysTrayIcon
-            | SettingKey::SystemNotifications
-            | SettingKey::MouseSupport
-            | SettingKey::MyLanguages
-            | SettingKey::SubtitleMode
-            | SettingKey::FeedViewLibraries
-            | SettingKey::LibraryRoutes
-            | SettingKey::SubtitleLanguage
-            | SettingKey::AudioLanguage
-            | SettingKey::ManageFeeds
-            | SettingKey::ResetUiState
-            | SettingKey::LogOut => {}
+        if key == SettingKey::StayAlive {
+            c.stay_alive = !c.stay_alive;
+        }
+        if key == SettingKey::AutoReconnect {
+            c.auto_reconnect = !c.auto_reconnect;
+        }
+        if key == SettingKey::SavePlaylistOnQuit {
+            c.save_playlist_on_quit = !c.save_playlist_on_quit;
+        }
+        if key == SettingKey::AlwaysPlayNext {
+            c.always_play_next = !c.always_play_next;
+        }
+        if key == SettingKey::ConsumeVideos {
+            c.consume_videos = !c.consume_videos;
+        }
+        if key == SettingKey::ConsumeAudio {
+            c.consume_audio = !c.consume_audio;
+        }
+        if key == SettingKey::SavePlaylistOnConsume {
+            c.save_playlist_on_consume = !c.save_playlist_on_consume;
+        }
+        if key == SettingKey::SavePlaylistOnConsumeAudio {
+            c.save_playlist_on_consume_audio = !c.save_playlist_on_consume_audio;
+        }
+        if key == SettingKey::AlwaysSkipIntro {
+            c.always_skip_intro = !c.always_skip_intro;
+        }
+        if key == SettingKey::ShowAudioWindow {
+            c.show_audio_window = !c.show_audio_window;
+        }
+        if key == SettingKey::UseMpvConfig {
+            c.use_mpv_config = !c.use_mpv_config;
+        }
+        if key == SettingKey::NoScripts {
+            c.no_scripts = !c.no_scripts;
+        }
+        if key == SettingKey::Autoload {
+            c.autoload = !c.autoload;
         }
     }
 }

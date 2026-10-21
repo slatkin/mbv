@@ -40,9 +40,10 @@ not honour the directive, so the directive form is covered by the live tree scan
 
 The `mbv-no-panic-macro-production` rule SHALL flag `panic!`, `unreachable!`, `todo!` and
 `unimplemented!` outside test items in the `src/` and `crates/` trees. The one sanctioned form
-SHALL be `unreachable!()` as the body of a match arm: it asserts a variant that cannot reach
-the match, and the compiler checks the surrounding match. A `panic!` in the same arm SHALL
-still be flagged.
+SHALL be `unreachable!()` as the body of a match arm. The compiler checks that the surrounding
+match is exhaustive, never that the sanctioned arm itself cannot run, and the rule does not
+distinguish a closed enum from an open key space, so the form is reserved for arms over closed,
+exhaustive enums. A `panic!` in the same arm SHALL still be flagged.
 
 #### Scenario: Production panic is flagged
 
@@ -58,10 +59,10 @@ still be flagged.
 
 The `mbv-dispatch-no-wildcard-arm` rule SHALL flag a `_` wildcard arm in a match under
 `src/app/dispatch/`. A wildcard arm is correct only where the matched key space is open (a
-config key, a server-side item type, a notification action, a key chord, a pill index) or the
-arm is an index mapping; every such site SHALL carry a per-instance
-`// ast-grep-ignore:` comment naming the rule with its reason on the comment line directly
-above the directive.
+config key, a server-side item type or collection type, a notification action, a key chord, an
+image-protocol name, a pill index) or the arm is an index mapping; every such site SHALL carry
+a per-instance `// ast-grep-ignore:` comment naming the rule with its reason on the comment
+line directly above the directive.
 
 #### Scenario: New wildcard arm is flagged
 

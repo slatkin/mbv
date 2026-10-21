@@ -7,6 +7,7 @@ use ratatui::Frame;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
+use std::borrow::Cow;
 
 /// The named help sections. `Audiobookshelf` is its own destination section so
 /// its key set can never be presented as Emby or Feeds behavior (design §5).
@@ -107,22 +108,23 @@ impl HelpSection {
 ///
 /// A declared action with no hand-written label falls back to the humanized
 /// action id: a missing label is a table gap, not a reason to kill the
-/// process that is drawing the help screen.
-fn playback_label(action_id: &str) -> String {
+/// process that is drawing the help screen. The `Cow` keeps the static
+/// labels borrowed: a help draw allocates only for the fallback rows.
+fn playback_label(action_id: &str) -> Cow<'static, str> {
     match action_id {
-        "toggle_play_pause" => "Pause/Resume".to_string(),
-        "stop" => "Stop".to_string(),
-        "seek_back" => "Seek back 5 seconds".to_string(),
-        "seek_forward" => "Seek forward 5 seconds".to_string(),
-        "next_track" => "Next track".to_string(),
-        "previous_track" => "Previous track".to_string(),
-        "volume_down" => "Volume down".to_string(),
-        "volume_up" => "Volume up".to_string(),
-        "toggle_mute" => "Mute".to_string(),
-        "cycle_audio" => "Cycle audio track".to_string(),
-        "cycle_subtitle" => "Cycle subtitles".to_string(),
-        "open_idle_feed_link" => "Open idle feed link".to_string(),
-        other => humanize_action_id(other),
+        "toggle_play_pause" => "Pause/Resume".into(),
+        "stop" => "Stop".into(),
+        "seek_back" => "Seek back 5 seconds".into(),
+        "seek_forward" => "Seek forward 5 seconds".into(),
+        "next_track" => "Next track".into(),
+        "previous_track" => "Previous track".into(),
+        "volume_down" => "Volume down".into(),
+        "volume_up" => "Volume up".into(),
+        "toggle_mute" => "Mute".into(),
+        "cycle_audio" => "Cycle audio track".into(),
+        "cycle_subtitle" => "Cycle subtitles".into(),
+        "open_idle_feed_link" => "Open idle feed link".into(),
+        other => Cow::Owned(humanize_action_id(other)),
     }
 }
 
@@ -138,6 +140,13 @@ fn humanize_action_id(id: &str) -> String {
 }
 
 fn help_line(key_w: usize, key: &str, desc: &str) -> Line<'static> {
+    help_line_label(key_w, key, desc.to_owned().into())
+}
+
+/// The line builder over an already-owned-or-borrowed description, so the
+/// playback rows can hand over `playback_label`'s `Cow` without copying a
+/// borrowed label into a `String` first.
+fn help_line_label(key_w: usize, key: &str, desc: Cow<'static, str>) -> Line<'static> {
     Line::from(vec![
         Span::raw(""),
         Span::styled(
@@ -147,7 +156,7 @@ fn help_line(key_w: usize, key: &str, desc: &str) -> Line<'static> {
                 .add_modifier(Modifier::BOLD),
         ),
         Span::styled(
-            desc.to_owned(),
+            desc,
             Style::default().fg(palette::Role::TextSecondary.color()),
         ),
     ])
@@ -282,7 +291,7 @@ fn build_playback_section(key_w: usize, keybinds: &Keybinds) -> Vec<Line<'static
             .map(ToString::to_string)
             .collect::<Vec<_>>()
             .join(" / ");
-        sec_playback.push(help_line(key_w, &keys, &playback_label(action.id)));
+        sec_playback.push(help_line_label(key_w, &keys, playback_label(action.id)));
     }
     sec_playback.push(help_blank());
     sec_playback

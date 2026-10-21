@@ -57,6 +57,7 @@ tags:
 files:
   - "crates/mbv-ui-msg/**"
 ignores:
+  - "**/*_tests/**"
   - "**/tests/**"
   - "**/tests.rs"
   - "**/*_tests.rs"

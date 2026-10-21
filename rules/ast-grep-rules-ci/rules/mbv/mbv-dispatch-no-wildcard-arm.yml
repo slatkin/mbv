@@ -6,24 +6,21 @@
 #
 # The rule scopes itself by its own `files` and `ignores` globs, so one
 # plain repo scan covers the tree: `files` names the dispatch tree and
-# `ignores` drops its test paths (the same four patterns the CI scan used
-# to pass as `--globs`). ast-grep checks `ignores` before `files`.
+# `ignores` drops its test paths (`**/*_tests/**`, `**/tests/**`,
+# `**/tests.rs`, `**/*_tests.rs`, `**/test_*.rs`). ast-grep checks
+# `ignores` before `files`.
 #
 # Census (ast-grep 0.44.1 dry-run over mbv @ 2026-10-21, at main
 # e6d65e330): 17 production wildcard arms under `src/app/dispatch/`. Ten
-# of them became explicit arms: the seven `Option`/enum matches (ten
-# arms) name their variants. The four `Command` sub-dispatchers are
-# already explicit at e6d65e330 -- they match typed intent enums
-# (`VisualIntent`, `PlaybackIntent`, `NavigationIntent`, `PanelIntent`,
-# from the `nest-command-by-domain` change), so each of their matches is
-# exhaustive and none of them is a wildcard arm. They were 4 of the 21
-# arms at the pre-rebase census commit ffaf8897e, where the
-# sub-dispatchers still matched the flat `Command` enum. The remaining 7
-# are open key spaces or index mappings where a wildcard is the correct
-# arm: a key chord, an Emby collection type, two Emby item types, a
-# notification action, an image protocol name, and a pill index. Each of
-# those carries a per-instance `// ast-grep-ignore:` comment with its
-# reason.
+# of them are gone: seven `Option`/enum matches now name their variants,
+# and the three `match key` sites among them over the 40-variant
+# `SettingKey` enum in `src/app/dispatch/settings.rs` classify each row
+# once through `setting_row_kind` (beside the dispatch sites) and dispatch
+# on the kind. The remaining seven are open key spaces or index mappings where
+# a wildcard is the correct arm: a key chord, an Emby collection type,
+# two Emby item types, a notification action, an image protocol name,
+# and a pill index. Each carries a per-instance ignore directive comment
+# with its reason, in the comment form the suppression policy requires.
 #
 # Blind spot (documented, deliberate): the rule matches the `_` wildcard
 # pattern only. A named catch-all binding (`other => ...`) is the same
@@ -77,6 +74,7 @@ tags:
 files:
   - "src/app/dispatch/**"
 ignores:
+  - "**/*_tests/**"
   - "**/tests/**"
   - "**/tests.rs"
   - "**/*_tests.rs"

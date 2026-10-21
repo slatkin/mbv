@@ -62,6 +62,7 @@ tags:
 files:
   - "crates/mbv-components/**"
 ignores:
+  - "**/*_tests/**"
   - "**/tests/**"
   - "**/tests.rs"
   - "**/*_tests.rs"

@@ -392,7 +392,10 @@ fn answer_queue_op(ctx: &CtrlContext<'_>, op: QueueOpId) {
     );
     // The projection always builds a queue state. A different event is a
     // projection bug: report the op as rejected instead of killing the
-    // daemon, and let the client retry.
+    // daemon. The edit above has already applied by the time this reply
+    // is built, so the reason text reports the defect; it is not a
+    // refusal of the op, and a client that resends on it would
+    // double-apply.
     let CtrlEvent::UnifiedQueueState(state) = event else {
         tracing::error!(
             name = "daemon.queue_op.projection_mismatch",

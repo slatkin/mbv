@@ -40,10 +40,14 @@ four sub-enums to `*Intent` (`VisualIntent`, `PlaybackIntent`, `NavigationIntent
 gives `App::dispatch` one arm per domain. That change resolves the `App::dispatch` complexity
 this tripwire gates on, because it removes the flat-variant translation the rule would have had
 to police. This change follows it instead of re-deriving the typed sub-enums, and the wildcard
-rule then guards the translation-free shape. Seven `Option`/enum matches name their variants,
-including the three `match key` sites over the 40-variant
-`SettingKey` enum in `src/app/dispatch/settings.rs`, which are now exhaustive variant lists
-(user decision 4). The remaining seven sites match an open key space or an index mapping where
+rule then guards the translation-free shape. Seven `Option`/enum matches name their variants.
+The three `match key` sites over the 40-variant `SettingKey` enum in
+`src/app/dispatch/settings.rs` classify each row once through a `SettingRowKind` function
+beside the dispatch sites (`Destination`, `OwnActivation`, `ConfigToggle`, `Passive`) and
+route on the kind, so a new row states its behavior once instead of once per dispatch site
+(review fix of the original exhaustive variant lists, which repeated the classification in
+three hand-written lists).
+The remaining seven sites match an open key space or an index mapping where
 a wildcard is the correct arm; each carries a per-instance directive with its reason, and
 the directive must be the comment line immediately above the arm. (User decision 2.)
 
@@ -62,9 +66,13 @@ wildcard rules must not fire on test paths. Building it exposed two facts:
   blocks that look like defects.
 
 So the landed wiring is one invocation: the root `sgconfig.yml` merges both rule trees and
-both fixture directories, and the four CI-tree rules carry the same four `ignores:` globs
-(`**/tests/**`, `**/tests.rs`, `**/*_tests.rs`, `**/test_*.rs`) — the same patterns
-`.pi-lens.json` lists for the LSP. The repo-wide rules stay unscoped, which is what keeps the
+both fixture directories, and the four CI-tree rules carry the same five `ignores:` globs
+(`**/*_tests/**`, `**/tests/**`, `**/tests.rs`, `**/*_tests.rs`, `**/test_*.rs`) — the same
+patterns
+`.pi-lens.json` lists for the LSP, plus `**/*_tests/**` for the repo's `*_tests/` module
+directories, whose files the structural test-item exclusion cannot see through their
+`#[cfg(test)]` parent (a review correction confirmed on `src/app/dispatch/actions/route_tests/`).
+The repo-wide rules stay unscoped, which is what keeps the
 sleep rule's teeth on test files. `ast-grep scan .` over the tree is clean, and a probe run
 confirmed the teeth in both directions (a production `panic!` and a fresh dispatch `_` arm
 fire; a shell `_` arm and all test paths stay quiet).

@@ -15,10 +15,10 @@
 #
 # The rule scopes itself to production code in its own file: the `files`
 # globs name the Rust trees and the `ignores` globs drop the test paths
-# (`**/tests/**`, `**/tests.rs`, `**/*_tests.rs`, `**/test_*.rs`), so one
-# plain repo scan carries the rule. ast-grep checks `ignores` before
-# `files`. The rule also excludes test items structurally. A test-only
-# module file that is not under a test path is the one blind spot the
+# (`**/*_tests/**`, `**/tests/**`, `**/tests.rs`, `**/*_tests.rs`,
+# `**/test_*.rs`), so one plain repo scan carries the rule. ast-grep checks
+# `ignores` before `files`. The rule also excludes test items structurally; a
+# test-only module file that is not under a test path is the one blind spot the
 # path globs cannot see; the theme's palette generator is such a file,
 # and its impossible-colour arm uses the invariant-arm form.
 #
@@ -33,9 +33,13 @@ note: |
   A panic in the TUI or the daemon kills the process and loses the session.
   Replace it with a documented no-op, an error, or an explicit fallback.
 
-  The one sanctioned form is `unreachable!()` inside a match arm: it
-  asserts a variant that cannot reach the match, and the compiler checks
-  the surrounding match.
+  The one sanctioned form is `unreachable!()` as the body of a match
+  arm. The exclusion is structural, not a proof: the compiler checks
+  that the surrounding match is exhaustive, never that the arm itself
+  cannot run, and the rule does not distinguish a closed enum from an
+  open key space. Reserve the form for arms over closed, exhaustive
+  enums; on an open key space (a config key, a protocol name) use an
+  explicit arm or a per-instance directive instead.
 
   BAD:  fn t() { panic!("boom"); }
   GOOD: fn t() { tracing::error!(name = "x.failed", "x failed"); }
@@ -86,6 +90,7 @@ files:
   - "src/**"
   - "crates/**"
 ignores:
+  - "**/*_tests/**"
   - "**/tests/**"
   - "**/tests.rs"
   - "**/*_tests.rs"
