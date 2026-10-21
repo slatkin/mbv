@@ -12,7 +12,7 @@ impl App {
             (Some(setup), None) => {
                 let _ = mbv_config::save_emby_setup(setup);
             }
-            _ => {}
+            (None, _) => {}
         }
     }
 

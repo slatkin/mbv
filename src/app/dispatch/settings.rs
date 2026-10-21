@@ -179,7 +179,44 @@ impl App {
             SettingKey::ManageFeeds => {
                 self.pending_overlay = Some(OverlayRequest::OpenFeedsManage);
             }
-            _ => return false,
+            // Every other key opens no destination. The list is exhaustive on
+            // purpose: a new Settings row must say here whether it opens a
+            // destination, instead of falling into a catch-all arm. The panel
+            // geometry and the accent rows are steppers, the config flags
+            // toggle in place, the steps and the system rows have their own
+            // activation, and the action rows confirm or reset.
+            SettingKey::PanelSide
+            | SettingKey::PanelWidth
+            | SettingKey::PanelWidthExpanded
+            | SettingKey::PanelGutterTop
+            | SettingKey::PanelGutterBottom
+            | SettingKey::PanelGutterLeft
+            | SettingKey::PanelGutterRight
+            | SettingKey::PanelAccent
+            | SettingKey::PanelAccentColor
+            | SettingKey::PanelAccentWidth
+            | SettingKey::StayAlive
+            | SettingKey::AutoReconnect
+            | SettingKey::SavePlaylistOnQuit
+            | SettingKey::AlwaysPlayNext
+            | SettingKey::ConsumeVideos
+            | SettingKey::ConsumeAudio
+            | SettingKey::SavePlaylistOnConsume
+            | SettingKey::SavePlaylistOnConsumeAudio
+            | SettingKey::AlwaysSkipIntro
+            | SettingKey::ShowAudioWindow
+            | SettingKey::UseMpvConfig
+            | SettingKey::NoScripts
+            | SettingKey::Autoload
+            | SettingKey::ShowSysTrayIcon
+            | SettingKey::ImageProtocol
+            | SettingKey::SubtitleMode
+            | SettingKey::SubtitleLanguage
+            | SettingKey::AudioLanguage
+            | SettingKey::SystemNotifications
+            | SettingKey::MouseSupport
+            | SettingKey::ResetUiState
+            | SettingKey::LogOut => return false,
         }
         true
     }
@@ -235,7 +272,43 @@ impl App {
                     );
                 }
             }
-            _ => self.toggle_config_setting(key),
+            // Every other key toggles its config flag in place, steppers and
+            // flags alike. The list is exhaustive on purpose: a new Settings
+            // row must say here whether it activates on its own, instead of
+            // falling into a catch-all arm. The destination rows open a
+            // destination instead.
+            SettingKey::Services
+            | SettingKey::Keys
+            | SettingKey::Panel
+            | SettingKey::HiddenLibraries
+            | SettingKey::MyLanguages
+            | SettingKey::FeedViewLibraries
+            | SettingKey::LibraryRoutes
+            | SettingKey::ManageFeeds
+            | SettingKey::PanelSide
+            | SettingKey::PanelWidth
+            | SettingKey::PanelWidthExpanded
+            | SettingKey::PanelGutterTop
+            | SettingKey::PanelGutterBottom
+            | SettingKey::PanelGutterLeft
+            | SettingKey::PanelGutterRight
+            | SettingKey::PanelAccent
+            | SettingKey::PanelAccentColor
+            | SettingKey::PanelAccentWidth
+            | SettingKey::StayAlive
+            | SettingKey::AutoReconnect
+            | SettingKey::SavePlaylistOnQuit
+            | SettingKey::AlwaysPlayNext
+            | SettingKey::ConsumeVideos
+            | SettingKey::ConsumeAudio
+            | SettingKey::SavePlaylistOnConsume
+            | SettingKey::SavePlaylistOnConsumeAudio
+            | SettingKey::AlwaysSkipIntro
+            | SettingKey::ShowAudioWindow
+            | SettingKey::UseMpvConfig
+            | SettingKey::NoScripts
+            | SettingKey::Autoload
+            | SettingKey::ResetUiState => self.toggle_config_setting(key),
         }
     }
 
@@ -246,6 +319,9 @@ impl App {
             Some("sixel") => Some("kitty".into()),
             Some("kitty") => Some("iterm2".into()),
             Some("iterm2") => Some("auto".into()),
+            // The protocol name is a string, so the key space is open: an
+            // unknown protocol has no next protocol.
+            // ast-grep-ignore: mbv-dispatch-no-wildcard-arm
             _ => None,
         };
         let enabled = protocol.is_some();
@@ -307,7 +383,38 @@ impl App {
             SettingKey::UseMpvConfig => c.use_mpv_config = !c.use_mpv_config,
             SettingKey::NoScripts => c.no_scripts = !c.no_scripts,
             SettingKey::Autoload => c.autoload = !c.autoload,
-            _ => {}
+            // Every other key toggles no config flag: a stepper, a
+            // collection row, a destination row, or an action row. The list
+            // is exhaustive on purpose: a new Settings row must say here
+            // whether it toggles a flag, instead of falling into a
+            // catch-all arm.
+            SettingKey::Services
+            | SettingKey::Keys
+            | SettingKey::Panel
+            | SettingKey::PanelSide
+            | SettingKey::PanelWidth
+            | SettingKey::PanelWidthExpanded
+            | SettingKey::PanelGutterTop
+            | SettingKey::PanelGutterBottom
+            | SettingKey::PanelGutterLeft
+            | SettingKey::PanelGutterRight
+            | SettingKey::PanelAccent
+            | SettingKey::PanelAccentColor
+            | SettingKey::PanelAccentWidth
+            | SettingKey::ImageProtocol
+            | SettingKey::HiddenLibraries
+            | SettingKey::ShowSysTrayIcon
+            | SettingKey::SystemNotifications
+            | SettingKey::MouseSupport
+            | SettingKey::MyLanguages
+            | SettingKey::SubtitleMode
+            | SettingKey::FeedViewLibraries
+            | SettingKey::LibraryRoutes
+            | SettingKey::SubtitleLanguage
+            | SettingKey::AudioLanguage
+            | SettingKey::ManageFeeds
+            | SettingKey::ResetUiState
+            | SettingKey::LogOut => {}
         }
     }
 }

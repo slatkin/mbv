@@ -414,6 +414,9 @@ impl App {
                 "__notif_failed__" => {
                     self.notif_failed = true;
                 }
+                // The notification action is a string, so the key space is
+                // open: a dismissed, ignored, or cancelled action lands here.
+                // ast-grep-ignore: mbv-dispatch-no-wildcard-arm
                 _ => {} // dismissed, "ignore", "cancel", or empty
             }
         }

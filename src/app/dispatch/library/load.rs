@@ -145,7 +145,10 @@ impl App {
                     Some(mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseKind::Book) => {
                         self.audiobookshelf_book_refresh();
                     }
-                    _ => self.audiobookshelf_refresh(podcast_latest_selected),
+                    Some(
+                        mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseKind::Podcast,
+                    )
+                    | None => self.audiobookshelf_refresh(podcast_latest_selected),
                 }
             }
             TabSelection::Feeds => self.refresh_feeds(),
@@ -375,7 +378,7 @@ impl App {
                 };
                 (client.get_continue_watching(10).unwrap_or_default(), views)
             }
-            _ => (Vec::new(), Vec::new()),
+            None => (Vec::new(), Vec::new()),
         };
 
         // Library tabs are Emby-modeled state; only rebuild them from the

@@ -58,6 +58,10 @@ pub(in crate::app) fn resolve_reveal_target(
         )),
         "Series" => Ok(RevealTarget::Series(item.id.clone())),
         // Movie/generic: the ancestor-chain rebuild is already correct.
+        //
+        // The Emby item type is a server-side string, so the key space is
+        // open and an unknown type takes the ancestor chain.
+        // ast-grep-ignore: mbv-dispatch-no-wildcard-arm
         _ => Ok(RevealTarget::Chain),
     }
 }
@@ -318,6 +322,9 @@ impl App {
             "Series" | "Episode" | "Season" => "tvshows",
             "Movie" => "movies",
             "Audio" | "MusicAlbum" | "MusicArtist" => "music",
+            // The Emby item type is a server-side string, so the key space
+            // is open and an unknown type names no library.
+            // ast-grep-ignore: mbv-dispatch-no-wildcard-arm
             _ => "",
         };
         let cached_album_index = libs
@@ -326,7 +333,7 @@ impl App {
             .and_then(|(_, library_id, _)| self.album_indexes.get(library_id))
             .and_then(|state| match state {
                 AlbumIndexState::Ready(index) => Some(std::sync::Arc::clone(index)),
-                _ => None,
+                AlbumIndexState::Unavailable | AlbumIndexState::Loading { .. } => None,
             });
         std::thread::spawn(move || {
             // Match library by collection_type since CollectionFolder IDs never appear in ancestors

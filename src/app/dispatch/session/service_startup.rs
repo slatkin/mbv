@@ -359,7 +359,12 @@ pub(in crate::app) fn classify_audiobookshelf_failure(
         mbv_audiobookshelf::AudiobookshelfFailureClass::AuthenticationRejected => {
             ServiceState::NeedsAuthentication
         }
-        _ => ServiceState::Unavailable,
+        mbv_audiobookshelf::AudiobookshelfFailureClass::Connectivity
+        | mbv_audiobookshelf::AudiobookshelfFailureClass::Server
+        | mbv_audiobookshelf::AudiobookshelfFailureClass::Protocol
+        | mbv_audiobookshelf::AudiobookshelfFailureClass::MalformedResponse
+        | mbv_audiobookshelf::AudiobookshelfFailureClass::Unavailable
+        | mbv_audiobookshelf::AudiobookshelfFailureClass::Persistence => ServiceState::Unavailable,
     }
 }
 
