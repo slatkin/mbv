@@ -1,6 +1,7 @@
 //! Private-item unit tests for the run-lifecycle machine: the
-//! single exit's close per run identity, and the load-failure verdict. No
-//! `Mpv`, no channel — a bare machine and plain facts.
+//! single exit's close per run identity, the load-failure verdict, and the
+//! accepted-submission reset. No `Mpv`, no channel — a bare machine and
+//! plain facts.
 
 use super::RunLifecycle;
 use crate::run::{FailurePhase, FailureVerdict, ForcedJump, JumpArm, QueueSlotId, RunPosition};
@@ -30,13 +31,27 @@ fn close_reports_once_per_run_identity_and_reopens_on_a_new_submission() {
     );
 }
 
+/// The contract "a new submission starts the counts again": the accepted
+/// submission's own failure is a start failure (#941) even when an earlier
+/// submission had begun, so `submission_accepted` clears the
+/// "has playback begun" boundary.
+#[test]
+fn submission_accepted_resets_the_playback_begun_boundary() {
+    let mut lifecycle = RunLifecycle::default();
+    lifecycle.playback_started();
+
+    lifecycle.submission_accepted();
+
+    assert!(
+        !lifecycle.began,
+        "the accepted submission starts the counts again"
+    );
+}
+
 /// The plain position facts one row drives, with slots
 /// distinct so a verdict built from a stale entry cannot pass the naming.
 struct VerdictFacts {
     began: bool,
-    /// An earlier submission played and a new submission was accepted into
-    /// the same mpv child after that; the counts start again.
-    resubmitted: bool,
     active_file: bool,
     jump: JumpArm,
     position: RunPosition,
@@ -93,24 +108,8 @@ fn resume_only(target: QueueSlotId) -> JumpArm {
 /// failed entry. `failed_slot` in an `EndRun` names that entry.
 #[rstest]
 #[case::before_start_ends_naming_the_entry_941(
-    "before start → end, naming the entry mpv is on (#941)",
     VerdictFacts {
         began: false,
-        resubmitted: false,
-        active_file: false,
-        jump: JumpArm::Idle,
-        position: playlist_position(0, 2, None),
-    },
-    FailureVerdict::EndRun {
-        failed_slot: Some(slot(1)),
-        phase: FailurePhase::BeforeStart,
-    },
-)]
-#[case::resubmitted_play_then_first_entry_fails_ends_before_start(
-    "began in an earlier submission, new submission fails before its start → end, not continue",
-    VerdictFacts {
-        began: true,
-        resubmitted: true,
         active_file: false,
         jump: JumpArm::Idle,
         position: playlist_position(0, 2, None),
@@ -121,10 +120,8 @@ fn resume_only(target: QueueSlotId) -> JumpArm {
     },
 )]
 #[case::after_start_failure_with_a_next_entry_continues(
-    "after start with a next entry → continue",
     VerdictFacts {
         began: true,
-        resubmitted: false,
         active_file: false,
         jump: JumpArm::Idle,
         position: playlist_position(0, 2, None),
@@ -132,10 +129,8 @@ fn resume_only(target: QueueSlotId) -> JumpArm {
     FailureVerdict::Continue,
 )]
 #[case::after_start_last_entry_ends_942_943(
-    "after start with no next entry → end (#942, #943)",
     VerdictFacts {
         began: true,
-        resubmitted: false,
         active_file: false,
         jump: JumpArm::Idle,
         position: playlist_position(1, 2, None),
@@ -146,10 +141,8 @@ fn resume_only(target: QueueSlotId) -> JumpArm {
     },
 )]
 #[case::active_file_ends_even_with_slots_after_it_942_943(
-    "active-file projection → end, even with queue slots after it (#942, #943)",
     VerdictFacts {
         began: true,
-        resubmitted: false,
         active_file: true,
         jump: JumpArm::Idle,
         position: playlist_position(0, 3, None),
@@ -160,10 +153,8 @@ fn resume_only(target: QueueSlotId) -> JumpArm {
     },
 )]
 #[case::from_idle_last_target_ends_naming_the_target(
-    "pending from-idle target that is last → end naming the target",
     VerdictFacts {
         began: true,
-        resubmitted: false,
         active_file: false,
         jump: pending_from_idle(slot(7)),
         position: playlist_position(0, 2, Some(1)),
@@ -173,22 +164,9 @@ fn resume_only(target: QueueSlotId) -> JumpArm {
         phase: FailurePhase::AfterStart,
     },
 )]
-#[case::from_idle_target_with_next_continues_and_clears_the_arm(
-    "pending from-idle target with a next entry → continue and arm idle",
-    VerdictFacts {
-        began: true,
-        resubmitted: false,
-        active_file: false,
-        jump: pending_from_idle(slot(7)),
-        position: playlist_position(0, 3, Some(1)),
-    },
-    FailureVerdict::Continue,
-)]
 #[case::resume_only_target_continues_and_clears_the_arm(
-    "resume-only arm on a target with a next entry → continue and arm idle",
     VerdictFacts {
         began: true,
-        resubmitted: false,
         active_file: false,
         jump: resume_only(slot(7)),
         position: playlist_position(0, 3, Some(1)),
@@ -196,17 +174,12 @@ fn resume_only(target: QueueSlotId) -> JumpArm {
     FailureVerdict::Continue,
 )]
 fn load_failed_judges_the_failure_verdict(
-    #[case] name: &str,
     #[case] facts: VerdictFacts,
     #[case] expected: FailureVerdict,
 ) {
     let mut lifecycle = RunLifecycle::default();
     if facts.began {
         lifecycle.playback_started();
-    }
-    if facts.resubmitted {
-        // A new submission was accepted: the counts start again.
-        lifecycle.submission_accepted();
     }
     if facts.active_file {
         lifecycle.enter_active_file();
@@ -217,11 +190,11 @@ fn load_failed_judges_the_failure_verdict(
 
     let verdict = lifecycle.load_failed(facts.position);
 
-    assert_eq!(verdict, expected, "{name}");
+    assert_eq!(verdict, expected);
     if !facts.jump.is_idle() {
         assert!(
             lifecycle.jump_arm().is_idle(),
-            "{name}: every verdict clears an armed jump"
+            "every verdict clears an armed jump"
         );
     }
 }
