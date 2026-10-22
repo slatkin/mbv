@@ -26,7 +26,7 @@ All work is in `crates/mbv-player`. For each task, run `cargo fmt`, then `cargo 
 
 ## 5. Docs and gates
 
-- [ ] 5.1 Rewrite `docs/invariants/24-run-ends-when-nothing-can-play.md` to the new mechanism: the lifecycle verdict, `end_run`, and the per-identity close. Close the "Where it currently fails" entry, and record the D3 two-jump window as the remaining known limit. Verify: every function and file that the invariant names exists (`rg`).
+- [x] 5.1 Rewrite `docs/invariants/24-run-ends-when-nothing-can-play.md` to the new mechanism: the lifecycle verdict, `end_run`, and the per-identity close. Close the "Where it currently fails" entry, and record the D3 two-jump window as the remaining known limit. Verify: every function and file that the invariant names exists (`rg`).
 - [ ] 5.2 Run the full gates: `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo nextest run --workspace`. Then run `make check-code-file-lines` just before the push. Verify: all are green.
 
 ## Workflow follow-up
