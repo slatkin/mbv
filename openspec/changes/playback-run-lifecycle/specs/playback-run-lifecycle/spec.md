@@ -105,5 +105,5 @@ For each run submission, the Player owner SHALL report exactly one stop when tha
 
 #### Scenario: A replacement after an ended run
 
-- **WHEN** a run ended with a stop, and a replacement or a `LoadNew` command submits into the same mpv child and then ends
-- **THEN** that submission SHALL report its own stop even though it reuses the run identity
+- **WHEN** a run ended with a stop, and a replacement submits into the same mpv child and then ends
+- **THEN** that replacement SHALL report its own stop under the run identity its submission carries

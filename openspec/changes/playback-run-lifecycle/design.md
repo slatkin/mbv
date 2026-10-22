@@ -88,7 +88,7 @@ The three active-file failure arms (defect 3) call `end_run` with the error and 
 
 ### D5. `submission_accepted` resets `began`
 
-`PlayerCommand::SubmitQueue` with items, and the active-file replacement path, call `submission_accepted()` at the point where `run_identity` is refreshed. That resets `began`, `jump`, and `ended` (defect 6). `LoadNew` does not get a new identity today. It calls `submission_accepted()` too, so a new file that fails before its first restart is a start failure. Its single-entry queue already ends the run, so only the error text changes.
+`PlayerCommand::SubmitQueue` with items refreshes `run_identity` and calls `submission_accepted()`. The active-file replacement path is reached through that same command, so it inherits the refreshed identity and calls `submission_accepted()` again. That resets `began`, `jump`, and `ended` (defect 6). `LoadNew` does not get a new identity today: it keeps the current one and calls `submission_accepted()` too, so a new file that fails before its first restart is a start failure. Its single-entry queue already ends the run, so only the error text changes.
 
 ### D6. Tests
 

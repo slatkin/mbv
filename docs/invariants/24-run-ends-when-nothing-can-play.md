@@ -18,9 +18,8 @@ load-failure path `stop_for_unrecoverable_error`
 4. Each run submission reports exactly one `Stopped`, whichever end path fires.
    A second end path for the same submission reports nothing. A later submission
    can end again: a submission that refreshes the run identity carries a new
-   one, and a submission that keeps the identity — the active-file replacement
-   and a `LoadNew` command — reopens the guard, so its stop carries the
-   identity the run already had.
+   one, and a submission that keeps the identity — a `LoadNew` command —
+   reopens the guard, so its stop carries the identity the run already had.
 
 ## Why it matters
 
@@ -101,7 +100,7 @@ failed active-file replacement let a later quit send a second one.
   second one logs `player.run.end_suppressed` and sends nothing. The guard is
   keyed by the run identity, and `submission_accepted()` reopens it, so a later
   submission can close again — including one that keeps the identity, such as
-  the active-file replacement or a `LoadNew` command. The ten in-run
+  a `LoadNew` command. The ten in-run
   end paths build their own outcome and call it: `finalize_quit`
   (`run/run_loop.rs`), `stop_for_missing_completed`, `stop_at_queue_end`, and
   `stop_for_failed_advance` (`run/events/queue_advance.rs`),
