@@ -22,16 +22,15 @@ pub(crate) fn is_superseded_jump_end_file(
     jump_arm: JumpArm,
     track_finished: bool,
 ) -> bool {
-    let unsettled_marker = match jump_arm {
-        // A pending arm still holding its transition marker IS the settle the
-        // caller waits for; debris arrives after that marker was consumed by
-        // the real target's end-file.
-        JumpArm::Pending(jump) => jump.transition.is_none(),
-        JumpArm::Idle | JumpArm::ResumeOnly { .. } => true,
-    };
-    unsettled_marker
+    matches!(reason, EndFileReason::Stop | EndFileReason::Redirect)
         && !track_finished
-        && matches!(reason, EndFileReason::Stop | EndFileReason::Redirect)
+        && match jump_arm {
+            // A pending arm still holding its transition marker IS the settle the
+            // caller waits for; debris arrives after that marker was consumed by
+            // the real target's end-file.
+            JumpArm::Pending(jump) => jump.transition.is_none(),
+            JumpArm::Idle | JumpArm::ResumeOnly { .. } => true,
+        }
 }
 
 pub(crate) fn provider_lifecycle_close_pos(

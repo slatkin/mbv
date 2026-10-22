@@ -401,7 +401,6 @@ impl PlaybackRun {
             status.title = active_item.title().to_string();
             status.art_item_id = active_item.id().to_string();
         }
-        status.active = false;
         drop(status);
 
         self.end_run(StopOutcome {
