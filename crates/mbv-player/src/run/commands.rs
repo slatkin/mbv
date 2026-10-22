@@ -28,7 +28,7 @@ impl PlaybackRun {
                 self.cmd_jump_to(slot_id, request_id, generation, resume_ticks, mpv, progress);
             }
             PlayerCommand::QueueAppend { items } => {
-                self.cmd_append_queue(items, mpv);
+                self.cmd_append_queue(items, mpv, progress);
             }
             PlayerCommand::QueueRemove(slot_id) => {
                 self.cmd_queue_remove(slot_id, mpv);
