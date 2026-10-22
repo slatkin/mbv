@@ -8,7 +8,7 @@ impl PlaybackRun {
         }
         if self.pending_initial_playlist_layout
             || !self.load_is_ready()
-            || self.forced_jump.is_some()
+            || !self.run_lifecycle.jump_arm().is_idle()
         {
             tracing::debug!(name: "player.playlist_position.ignored", target: "player", position = pos, "ignoring transient playlist position during queue transition");
             return;

@@ -2,7 +2,7 @@ use super::{
     ExecSlot, Mpv, PlaybackRun, PlayerEvent, ProgressGuard, QueueItem, QueueSlotId, mpv_load_opts,
     mpv_url_for_queue_item, reject_stale_jump, resolve_jump_target, spawn_progress_reporter,
 };
-use crate::run::{ForcedJump, StopReport};
+use crate::run::{ForcedJump, JumpArm, StopReport};
 use crate::{EMBY_RESUME_RETRY_DELAYS, refresh_emby_resume};
 
 impl PlaybackRun {
@@ -58,7 +58,7 @@ impl PlaybackRun {
     }
 
     pub(crate) fn set_pending_playlist_jump(&mut self, jump: ForcedJump) {
-        self.forced_jump = (!self.run_lifecycle.is_active_file()).then_some(jump);
+        self.run_lifecycle.arm_jump(jump);
     }
 
     fn cmd_jump_to_active_file(
@@ -114,15 +114,18 @@ impl PlaybackRun {
         if from_idle {
             self.tracks_initialized = false;
         }
-        let transition = self.forced_jump.and_then(|jump| jump.transition);
-        self.forced_jump = Some(super::super::ForcedJump {
+        let transition = match self.run_lifecycle.jump_arm() {
+            JumpArm::Pending(jump) => jump.transition,
+            JumpArm::Idle | JumpArm::ResumeOnly { .. } => None,
+        };
+        self.run_lifecycle.arm_jump(ForcedJump {
             slot_id,
             transition,
             resume_ticks,
             from_idle,
         });
         if let Err(e) = mpv.set_property("playlist-pos", i64::try_from(idx).unwrap_or(i64::MAX)) {
-            self.forced_jump = None;
+            self.run_lifecycle.disarm_jump();
             tracing::warn!(name: "player.jump.failed", target: "player", index = idx, error = %e, "jump failed");
             return;
         }

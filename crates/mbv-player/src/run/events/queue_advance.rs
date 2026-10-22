@@ -1,9 +1,10 @@
 use mbv_audiobookshelf::{AudiobookshelfError, AudiobookshelfFailureClass};
 
 use super::super::{
-    AdvanceDecisionInput, CompletedMedia, EndFileReason, FinishReason, Mpv, PlaybackOrigin,
-    PlaybackRun, PlayerEvent, ProgressGuard, QueueItem, QueueSlotId, StopReport, advance_decision,
-    is_near_end, mpv_position_ticks, retry_mark_played, send_ep_info, spawn_progress_reporter,
+    AdvanceDecisionInput, CompletedMedia, EndFileReason, FinishReason, JumpArm, Mpv,
+    PlaybackOrigin, PlaybackRun, PlayerEvent, ProgressGuard, QueueItem, QueueSlotId, StopReport,
+    advance_decision, is_near_end, mpv_position_ticks, retry_mark_played, send_ep_info,
+    spawn_progress_reporter,
 };
 use super::event_classifiers::{is_superseded_jump_end_file, provider_lifecycle_close_pos};
 use mbv_ids::ItemId;
@@ -99,12 +100,14 @@ impl PlaybackRun {
                 },
                 last_valid_pos: self.last_valid_pos,
             });
-        if is_superseded_jump_end_file(
-            reason,
-            self.forced_jump
-                .filter(|_| !self.run_lifecycle.is_active_file()),
-            track_finished,
-        ) {
+        // The superseded-jump guard classifies only playlist end-files: the
+        // active-file projection never holds an armed jump (design D1).
+        let jump_in_flight = if self.run_lifecycle.is_active_file() {
+            JumpArm::Idle
+        } else {
+            self.run_lifecycle.jump_arm()
+        };
+        if is_superseded_jump_end_file(reason, jump_in_flight, track_finished) {
             return self.handle_superseded_jump(reason, completed_slot_id, mpv);
         }
         // Played stays video-only; consume is type-agnostic and gated per type
@@ -128,26 +131,18 @@ impl PlaybackRun {
     }
 
     fn settle_forced_jump(&mut self) -> (usize, Option<crate::transition::Transition>) {
-        let jump = self.forced_jump.take();
-        let transition = jump.and_then(|jump| jump.transition);
-        let slot_id = jump.map(|jump| jump.slot_id);
-        // A forced jump names its own target; the unforced advance is the
-        // queue neighbor. The `next_idx >= queue_len()` check in the caller
-        // runs `stop_at_queue_end` (design D2).
-        let next_idx = jump
-            .and_then(|jump| self.queue.slot_index(jump.slot_id))
-            .unwrap_or(self.current_idx + 1);
-        tracing::info!(name: "player.transition.end_file_settled", target: "transition", slot = ?slot_id, next_index = next_idx, current_index = self.current_idx, queue_length = self.queue_len(), has_transition = transition.is_some(), "settled forced jump on end-file");
-        if next_idx < self.queue_len() {
-            self.forced_jump = jump.filter(|jump| jump.resume_ticks.is_some()).map(|jump| {
-                crate::run::ForcedJump {
-                    transition: None,
-                    from_idle: false,
-                    ..jump
-                }
-            });
-        }
-        (next_idx, transition)
+        // Resolve the armed slot against the queue before the settle: the
+        // lifecycle machine takes plain values and holds no queue
+        // (identity -> ordinal, design D2).
+        let armed_slot = self.run_lifecycle.jump_target_slot();
+        let target_index = armed_slot.and_then(|slot_id| self.queue.slot_index(slot_id));
+        let (next_idx, settling_transition) = self.run_lifecycle.jump_settled_on_end_file(
+            target_index,
+            self.current_idx,
+            self.queue_len(),
+        );
+        tracing::info!(name: "player.transition.end_file_settled", target: "transition", slot = ?armed_slot, next_index = next_idx, current_index = self.current_idx, queue_length = self.queue_len(), has_transition = settling_transition.is_some(), "settled forced jump on end-file");
+        (next_idx, settling_transition)
     }
 
     /// Advance to the already-bounds-checked next track: select it, emit the

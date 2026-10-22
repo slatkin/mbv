@@ -31,6 +31,10 @@ pub(crate) struct RunInit {
     pub(crate) prepared_source: Option<PreparedSource>,
 }
 
+/// An in-flight forced `JumpTo` (design D1): the target slot, the request
+/// identity announced when it settles, and the resume ticks to seek to on the
+/// target's restart. It is the `Pending` payload of `JumpArm` (the lifecycle
+/// module names the waiting states).
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub(crate) struct ForcedJump {
     pub(crate) slot_id: QueueSlotId,
@@ -60,14 +64,14 @@ pub(crate) struct PlaybackRun {
     pub(crate) queue: ExecutionSequence,
     pub(crate) audiobookshelf_context: Option<AudiobookshelfPlayerContext>,
     pub(crate) active_lifecycle: ActiveItemLifecycle,
-    /// Run-lifecycle facts (design D1): the "has playback begun" boundary and
-    /// which projection feeds mpv. See the `lifecycle` module.
+    /// Run-lifecycle facts (design D1): the "has playback begun" boundary,
+    /// which projection feeds mpv, and the forced-jump arm. See the
+    /// `lifecycle` module.
     pub(crate) run_lifecycle: RunLifecycle,
     pub(crate) prepared_source: Option<PreparedSource>,
     pub(crate) ext_sub_urls: Vec<String>,
     // loop state
     pub(crate) current_idx: usize,
-    pub(crate) forced_jump: Option<ForcedJump>,
     /// Slot identity captured at the moment a stop/quit is first observed, so a
     /// `QueueMove`/`QueueRemove` applied before the deferred `Stopped` emit
     /// (shutdown / quit-timeout paths) cannot change which occurrence the event

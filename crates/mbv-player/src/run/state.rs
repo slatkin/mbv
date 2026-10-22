@@ -90,7 +90,7 @@ impl PlaybackRun {
         });
         self.accept_replacement();
         self.tracks_initialized = false;
-        self.forced_jump = None;
+        self.run_lifecycle.disarm_jump();
         self.reset_next_up_state();
         self.stopped_event_sent = false;
         self.mark_played_id = None;

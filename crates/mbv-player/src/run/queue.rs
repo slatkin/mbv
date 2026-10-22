@@ -280,7 +280,7 @@ impl PlaybackRun {
         // for; mpv adopted a *different* entry here (that's what this path is
         // for), so the armed value belongs to nothing about to restart and
         // must not be misapplied to this one.
-        self.forced_jump = None;
+        self.run_lifecycle.entry_adopted();
         self.queue_next_up.reset();
         true
     }
@@ -565,7 +565,6 @@ impl PlaybackRun {
             active_lifecycle,
             ext_sub_urls,
             current_idx: start_idx,
-            forced_jump: None,
             stop_slot: None,
             stop_runtime: None,
             quit_at: None,

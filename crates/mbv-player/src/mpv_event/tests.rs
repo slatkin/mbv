@@ -3,7 +3,7 @@
 
 use super::ipc::DecodeError;
 use super::{EndFileReason, MpvEvent, MpvFailure};
-use crate::run::{is_clocked_audio_error, is_superseded_jump_end_file};
+use crate::run::{JumpArm, is_clocked_audio_error, is_superseded_jump_end_file};
 
 /// Decodes every line of a fixture. A line that does not decode fails the test.
 fn decode_fixture(fixture: &str) -> Vec<MpvEvent> {
@@ -32,7 +32,7 @@ fn s2_stop_end_file_is_superseded_jump_debris() {
     let events = decode_fixture(include_str!("fixtures/S2.jsonl"));
     assert!(events.iter().any(|event| matches!(
         event,
-        MpvEvent::EndFile(reason) if is_superseded_jump_end_file(*reason, None, false)
+        MpvEvent::EndFile(reason) if is_superseded_jump_end_file(*reason, JumpArm::Idle, false)
     )));
 }
 

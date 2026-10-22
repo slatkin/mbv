@@ -1,6 +1,6 @@
 use super::super::{
-    Duration, ForcedJump, Instant, Mpv, Ordering, PlaybackOrigin, PlaybackRun, PlayerEvent,
-    QueueItem, QueueSlotId, StopReport, auto_select_tracks, mpv_position_ticks, send_ep_info,
+    Duration, Instant, Mpv, Ordering, PlaybackOrigin, PlaybackRun, PlayerEvent, QueueItem,
+    QueueSlotId, StopReport, auto_select_tracks, mpv_position_ticks, send_ep_info,
 };
 
 impl PlaybackRun {
@@ -8,19 +8,11 @@ impl PlaybackRun {
         &mut self,
         position_ticks: i64,
     ) -> Option<(QueueSlotId, Option<crate::transition::Transition>)> {
-        let jump = self.forced_jump.filter(|jump| jump.from_idle)?;
-        self.forced_jump = jump.resume_ticks.map(|resume_ticks| ForcedJump {
-            transition: None,
-            from_idle: false,
-            resume_ticks: Some(resume_ticks),
-            ..jump
-        });
-        let slot_id = jump.slot_id;
+        let (slot_id, transition) = self.run_lifecycle.jump_settled_on_restart()?;
         let Some(index) = self.queue.slot_index(slot_id) else {
-            self.forced_jump = None;
+            self.run_lifecycle.disarm_jump();
             return None;
         };
-        let transition = jump.transition;
         if !self.set_active_index(index) {
             return None;
         }
@@ -72,13 +64,9 @@ impl PlaybackRun {
     /// queue's current position) repairs that with an explicit seek now that
     /// the entry is actually loaded and seekable.
     fn apply_forced_resume(&mut self, mpv: &Mpv) {
-        let Some(jump) = self.forced_jump else {
+        let Some(ticks) = self.run_lifecycle.take_resume_ticks() else {
             return;
         };
-        let Some(ticks) = jump.resume_ticks else {
-            return;
-        };
-        self.forced_jump = None;
         let seconds = mbv_emby_model::ticks_to_seconds(ticks);
         if let Err(e) = mpv.command("seek", &[&seconds.to_string(), "absolute"]) {
             tracing::warn!(name: "player.resume_seek.failed", target: "player", position_seconds = seconds, error = %e, "resume seek failed");

@@ -1,5 +1,5 @@
 use super::*;
-use crate::run::{ForcedJump, StopAction};
+use crate::run::{ForcedJump, JumpArm, StopAction};
 
 const RUNTIME: i64 = 600 * TICKS_PER_SECOND; // 10-minute episode
 
@@ -65,7 +65,7 @@ fn playlist_pos_does_not_clobber_in_flight_jump_to() {
     // Rapid Enter on two rows: the in-flight jump also carries its request
     // identity; an intermediate playlist-pos event must not clobber either.
     let transition = crate::transition::Transition::new(42, 1, target);
-    session.forced_jump = Some(ForcedJump {
+    session.run_lifecycle.arm_jump(ForcedJump {
         slot_id: target,
         transition: Some(transition),
         resume_ticks: None,
@@ -76,12 +76,12 @@ fn playlist_pos_does_not_clobber_in_flight_jump_to() {
 
     assert_eq!(session.current_idx, 0);
     assert_eq!(status.lock().unwrap().current_idx, 0);
-    assert_eq!(session.forced_jump.map(|jump| jump.slot_id), Some(target));
+    let JumpArm::Pending(in_flight) = session.run_lifecycle.jump_arm() else {
+        panic!("the in-flight jump must still be pending");
+    };
+    assert_eq!(in_flight.slot_id, target);
     assert_eq!(
-        session
-            .forced_jump
-            .and_then(|jump| jump.transition)
-            .map(|t| (t.request_id, t.target)),
+        in_flight.transition.map(|t| (t.request_id, t.target)),
         Some((42, target)),
         "the in-flight jump's request identity survives an intermediate playlist-pos event"
     );
@@ -93,7 +93,7 @@ fn idle_jump_settles_from_playback_restart_and_emits_the_transition_observation(
     session.pending_initial_playlist_layout = false;
     let slot_id = session.slot_id_at(1).unwrap();
     let transition = crate::transition::Transition::new(42, 7, slot_id);
-    session.forced_jump = Some(ForcedJump {
+    session.run_lifecycle.arm_jump(ForcedJump {
         slot_id,
         transition: Some(transition),
         resume_ticks: None,
@@ -113,7 +113,7 @@ fn idle_jump_settles_from_playback_restart_and_emits_the_transition_observation(
 
     assert_eq!(session.current_idx, 1);
     assert!(status.lock().unwrap().active);
-    assert_eq!(session.forced_jump, None);
+    assert!(session.run_lifecycle.jump_arm().is_idle());
     assert!(matches!(
         events.try_recv(),
         Ok(PlayerEvent::TrackChanged {
@@ -128,7 +128,7 @@ fn idle_jump_to_removed_slot_clears_the_pending_transition() {
     let (mut session, _status, _events) = make_queue_session_for_pos_tests_with_events(0);
     let missing = QueueSlotId::from_raw(u64::MAX);
     let transition = crate::transition::Transition::new(42, 7, missing);
-    session.forced_jump = Some(ForcedJump {
+    session.run_lifecycle.arm_jump(ForcedJump {
         slot_id: missing,
         transition: Some(transition),
         resume_ticks: None,
@@ -137,7 +137,7 @@ fn idle_jump_to_removed_slot_clears_the_pending_transition() {
 
     assert_eq!(session.settle_idle_jump_on_restart(0), None);
 
-    assert_eq!(session.forced_jump, None);
+    assert!(session.run_lifecycle.jump_arm().is_idle());
 }
 
 #[test]
@@ -289,46 +289,48 @@ fn end_file_quit_uses_shutdown_aware_stop_report_context() {
 #[test]
 fn superseded_jump_end_file_is_dropped_without_a_pending_transition() {
     let slot_id = QueueSlotId::from_raw(2);
-    let rearmed_jump = ForcedJump {
+    // A settled jump keeps only its resume ticks; an in-flight one still
+    // carries the transition marker waiting for its own end-file.
+    let settled_resume = JumpArm::ResumeOnly {
         slot_id,
-        transition: None,
+        resume_ticks: 42,
+    };
+    let in_flight = JumpArm::Pending(ForcedJump {
+        slot_id,
+        transition: Some(crate::transition::Transition::new(42, 1, slot_id)),
         resume_ticks: Some(42),
         from_idle: false,
-    };
-    let in_flight_jump = ForcedJump {
-        transition: Some(crate::transition::Transition::new(42, 1, slot_id)),
-        ..rearmed_jump
-    };
+    });
 
     assert!(is_superseded_jump_end_file(
         EndFileReason::Stop,
-        None,
+        JumpArm::Idle,
         false
     ));
     assert!(is_superseded_jump_end_file(
         EndFileReason::Redirect,
-        None,
+        JumpArm::Idle,
         false
     ));
     assert!(is_superseded_jump_end_file(
         EndFileReason::Stop,
-        Some(rearmed_jump),
+        settled_resume,
         false
     ));
     assert!(!is_superseded_jump_end_file(
         EndFileReason::Stop,
-        Some(in_flight_jump),
+        in_flight,
         false
     ));
     // A finished track (EOF/near-end/next-up) always advances.
     assert!(!is_superseded_jump_end_file(
         EndFileReason::Stop,
-        None,
+        JumpArm::Idle,
         true
     ));
     assert!(!is_superseded_jump_end_file(
         EndFileReason::Eof,
-        None,
+        JumpArm::Idle,
         false
     ));
 }
