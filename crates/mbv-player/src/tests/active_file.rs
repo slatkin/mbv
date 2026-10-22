@@ -1,5 +1,6 @@
 use super::*;
 use crate::run::ForcedJump;
+use std::sync::Mutex;
 
 /// The active-file projection holds no armed jump: a jump armed earlier in
 /// the playlist projection must not survive the switch into the projection.
@@ -30,27 +31,27 @@ fn entering_the_active_file_projection_clears_an_armed_playlist_jump() {
     );
 }
 
-/// Spec requirement "An active-file selection that fails ends the run",
-/// scenario "An active-file jump fails": a selection failure during a jump
-/// into the active-file projection ends the run with one `Stopped` that
-/// carries the error and names the slot the run tried to select.
-#[test]
-fn failed_active_file_jump_reports_one_stopped_naming_the_target_slot() {
+/// Shared fixture for the failed active-file jump tests: rebuilds the
+/// session's queue over the session's own slot identities with `items`
+/// (start = slot 0), lifts the active-file projection, scripts the two
+/// outgoing stop-report responses, and pairs a test mpv. The far socket end
+/// travels with the tuple so the mpv connection stays open for the caller.
+fn failed_active_file_jump_fixture(
+    items: Vec<QueueItem>,
+) -> (
+    PlaybackRun,
+    Arc<Mutex<PlayerStatus>>,
+    mpsc::Receiver<PlayerEvent>,
+    Mpv,
+    std::os::unix::net::UnixStream,
+) {
     let (mut session, status, events, http) = make_queue_session_for_pos_tests_with_mock(0);
-    let (holder, target, last) = (
-        session.slot_id_at(0).unwrap(),
-        session.slot_id_at(1).unwrap(),
-        session.slot_id_at(2).unwrap(),
-    );
-    // Lift the active-file projection onto Audiobookshelf slots with no
-    // active setup context, so selecting a slot beside the holder fails
-    // preparation and never touches mpv.
+    let slot_ids: Vec<QueueSlotId> = (0..items.len())
+        .map(|idx| session.slot_id_at(idx).unwrap())
+        .collect();
+    let holder = slot_ids[0];
     session.queue = mbv_queue::ExecutionSequence::from_slot_items(
-        vec![
-            (holder, abs_item()),
-            (target, abs_item()),
-            (last, abs_book_item()),
-        ],
+        slot_ids.into_iter().zip(items).collect(),
         Some(holder),
     );
     session.current_idx = 0;
@@ -58,9 +59,21 @@ fn failed_active_file_jump_reports_one_stopped_naming_the_target_slot() {
     // The outgoing item's stop report is the only HTTP call the failure makes.
     http.respond(200, "");
     http.respond(200, "");
-    let (ours, _peer) = std::os::unix::net::UnixStream::pair().expect("socket pair");
+    let (ours, peer) = std::os::unix::net::UnixStream::pair().expect("socket pair");
     let mpv =
         Mpv::for_test(crate::mpv_session::ipc::IpcSession::from_stream(ours).expect("session"));
+    (session, status, events, mpv, peer)
+}
+
+/// Spec requirement "An active-file selection that fails ends the run",
+/// scenario "An active-file jump fails": a selection failure during a jump
+/// into the active-file projection ends the run with one `Stopped` that
+/// carries the error and names the slot the run tried to select.
+#[test]
+fn failed_active_file_jump_reports_one_stopped_naming_the_target_slot() {
+    let (mut session, status, events, mpv, _peer) =
+        failed_active_file_jump_fixture(vec![abs_item(), abs_item(), abs_book_item()]);
+    let target = session.slot_id_at(1).unwrap();
     let mut progress = noop_progress();
 
     session.handle_command(
@@ -103,21 +116,10 @@ fn failed_active_file_jump_reports_one_stopped_naming_the_target_slot() {
 /// (`on_end_file_standalone` returns false, ending `run()`).
 #[test]
 fn a_failed_active_file_jump_drains_its_teardown_end_file_and_parks_the_run() {
-    let (mut session, status, events, http) = make_queue_session_for_pos_tests_with_mock(0);
+    let (mut session, status, events, mpv, _peer) =
+        failed_active_file_jump_fixture(vec![abs_item(), abs_item()]);
     let holder = session.slot_id_at(0).unwrap();
     let target = session.slot_id_at(1).unwrap();
-    session.queue = mbv_queue::ExecutionSequence::from_slot_items(
-        vec![(holder, abs_item()), (target, abs_item())],
-        Some(holder),
-    );
-    session.current_idx = 0;
-    session.run_lifecycle.enter_active_file();
-    // The outgoing item's stop report is the only HTTP call the failure makes.
-    http.respond(200, "");
-    http.respond(200, "");
-    let (ours, _peer) = std::os::unix::net::UnixStream::pair().expect("socket pair");
-    let mpv =
-        Mpv::for_test(crate::mpv_session::ipc::IpcSession::from_stream(ours).expect("session"));
     let mut progress = noop_progress();
 
     session.handle_command(
