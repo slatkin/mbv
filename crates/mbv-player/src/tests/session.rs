@@ -231,6 +231,61 @@ fn deferred_stop_keeps_the_slot_observed_at_end_file_not_the_one_now_at_that_ind
     assert_eq!(slot_id, Some(observed));
 }
 
+/// Regression test for playback-run-lifecycle defect 2 (design D4, spec
+/// scenario "Quit after a failed replacement"): a failed active-file
+/// replacement reports its one `Stopped` with the error and parks the run;
+/// the user's quit must then not report the same run identity a second time.
+#[test]
+fn quit_after_a_failed_active_file_replacement_sends_no_second_stopped() {
+    let (mut session, _status, events, http) = make_queue_session_for_pos_tests_with_mock(0);
+    // The submitted Audiobookshelf episodes fail preparation with no active
+    // context (Unavailable); the outgoing item's stopped report needs the
+    // mock response.
+    http.respond(200, "");
+    http.respond(200, "");
+    let (ours, _peer) = std::os::unix::net::UnixStream::pair().expect("socket pair");
+    let mpv =
+        Mpv::for_test(crate::mpv_session::ipc::IpcSession::from_stream(ours).expect("session"));
+    let mut progress = noop_progress();
+
+    session.handle_command(
+        PlayerCommand::SubmitQueue {
+            items: owner_paired(vec![abs_item(), abs_item()]),
+            start_idx: 0,
+        },
+        &mpv,
+        &mut progress,
+    );
+
+    let PlayerEvent::Stopped { error, .. } = events
+        .try_recv()
+        .expect("the failed replacement reports one Stopped")
+    else {
+        panic!("expected the failed replacement's Stopped");
+    };
+    assert!(
+        error.is_some(),
+        "a failed replacement's stop must carry the error"
+    );
+
+    // A stop request pins the quit (handle_stop_request's marker) before the
+    // mpv Shutdown the user's quit produces; on_shutdown drives the deferred
+    // emit on the same run identity.
+    session.quit_at = Some(Instant::now());
+    session.stop_slot = session.active_slot_id();
+    session.stop_runtime = Some(0);
+    session.on_shutdown(&mut progress);
+
+    let repeat = events
+        .try_iter()
+        .filter(|event| matches!(event, PlayerEvent::Stopped { .. }))
+        .count();
+    assert_eq!(
+        repeat, 0,
+        "the quit must not report the ended run identity a second time"
+    );
+}
+
 #[test]
 fn load_new_serde_roundtrip() {
     let cmd = PlayerCommand::LoadNew {
