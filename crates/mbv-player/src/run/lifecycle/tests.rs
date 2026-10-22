@@ -42,13 +42,15 @@ struct VerdictFacts {
     position: RunPosition,
 }
 
-/// `spec deltas play the rows`: the entry mpv is on is named `slot` here.
+/// A fixture slot; distinct raw values separate the entry played before a
+/// jump from the jump target.
 fn slot(raw: u64) -> QueueSlotId {
     QueueSlotId::from_raw(raw)
 }
 
-/// The failed entry is not named `played_before` in these rows: a jump
-/// target sits beside the stale entry mpv still reports.
+/// The plain position facts of one row. `current_slot` names the entry mpv
+/// reports (the stale one for the jump rows); `target_idx` names the armed
+/// target's ordinal when it resolves.
 fn playlist_position(
     current_idx: usize,
     queue_len: usize,
