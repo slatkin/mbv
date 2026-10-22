@@ -16,9 +16,9 @@ All work is in `crates/mbv-player`. For each task, run `cargo fmt`, then `cargo 
 
 ## 3. The load-failure verdict
 
-- [ ] 3.1 Add `RunLifecycle::load_failed(RunPosition) -> FailureVerdict` with the D2 rule order, and make `stop_for_unrecoverable_error` act on the verdict. A stop names `failed_slot`. Verify: the existing tests for #941, #942, and #943 pass.
-- [ ] 3.2 In `run/lifecycle/tests.rs`, add the named `#[case]` table for the contract "the load-failure verdict" (spec requirements 1-3). Keep only cases with different outcomes: before start → end; after start with a next entry → continue; after start with no next entry → end; active-file → end; pending from-idle target that is last → end naming the target (defect 4); pending from-idle target with a next entry → continue and arm idle; resume-only arm on a target with a next entry → continue and arm idle (defect 5). Delete the `tests/submit.rs` tests that set `playback_began` or `active_file` directly where the table now covers them. Verify: the table passes, and each regression case cites its issue or defect in its case name.
-- [ ] 3.3 Make `submission_accepted()` reset `began` (design D5). Add one `#[case]` row to the 3.2 table: began in an earlier submission, then a new submission fails before start → end. Verify: the table passes.
+- [x] 3.1 Add `RunLifecycle::load_failed(RunPosition) -> FailureVerdict` with the D2 rule order, and make `stop_for_unrecoverable_error` act on the verdict. A stop names `failed_slot`. Verify: the existing tests for #941, #942, and #943 pass.
+- [x] 3.2 In `run/lifecycle/tests.rs`, add the named `#[case]` table for the contract "the load-failure verdict" (spec requirements 1-3). Keep only cases with different outcomes: before start → end; after start with a next entry → continue; after start with no next entry → end; active-file → end; pending from-idle target that is last → end naming the target (defect 4); pending from-idle target with a next entry → continue and arm idle; resume-only arm on a target with a next entry → continue and arm idle (defect 5). Delete the `tests/submit.rs` tests that set `playback_began` or `active_file` directly where the table now covers them. Verify: the table passes, and each regression case cites its issue or defect in its case name.
+- [x] 3.3 Make `submission_accepted()` reset `began` (design D5). Add one `#[case]` row to the 3.2 table: began in an earlier submission, then a new submission fails before start → end. Verify: the table passes.
 
 ## 4. Active-file failure arms
 
