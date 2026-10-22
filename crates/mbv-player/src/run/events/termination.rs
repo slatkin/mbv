@@ -1,6 +1,7 @@
 use super::super::{
-    EndFileReason, MpvFailure, PlaybackOrigin, PlaybackRun, PlayerEvent, ProgressGuard, QueueItem,
-    QueueSlotId, StopOutcome, StopReport, is_near_end, retry_mark_played,
+    EndFileReason, FailurePhase, FailureVerdict, MpvFailure, PlaybackOrigin, PlaybackRun,
+    PlayerEvent, ProgressGuard, QueueItem, QueueSlotId, RunPosition, StopOutcome, StopReport,
+    is_near_end, retry_mark_played,
 };
 use super::event_classifiers::{is_clocked_audio_error, provider_lifecycle_close_pos};
 use std::sync::{Arc, atomic::Ordering};
@@ -27,8 +28,10 @@ impl PlaybackRun {
         }
 
         let device = self.config.audio_device.clone().unwrap_or_default();
+        let failed_slot = self.active_slot_id();
         self.stop_run_with_error(
             progress,
+            failed_slot,
             0,
             format!("audio output failed to start (device: {device})"),
         )
@@ -46,8 +49,10 @@ impl PlaybackRun {
             return false;
         }
         tracing::error!(name: "player.mpv.process_exited", target: "player", "mpv process exited without a quit request");
+        let failed_slot = self.active_slot_id();
         self.stop_run_with_error(
             progress,
+            failed_slot,
             self.last_valid_pos,
             "mpv process exited unexpectedly".to_owned(),
         );
@@ -55,13 +60,13 @@ impl PlaybackRun {
     }
 
     /// A generic error — a missing file, an HTTP 404 from the stream
-    /// endpoint, a decode error — ends the run with the error whenever mpv has
-    /// no next entry to skip to: before any playback began (#941), or past
-    /// that boundary when the failed entry is the run's last one (#942, #943).
-    /// With an entry after the failed one, mpv skips to it on its own and the
-    /// playlist-position drift machinery follows (probe S5), so the
-    /// warn-and-continue path stays there. `current_idx` is the failed entry:
-    /// the advance to it settled before mpv tried to load it.
+    /// endpoint, a decode error — is judged by the lifecycle machine (design
+    /// D2): before any playback began it ends the run (#941), after it only
+    /// when mpv has no entry after the failed one to skip to (#942, #943).
+    /// With one, mpv skips on its own and the playlist-position drift
+    /// machinery follows (probe S5), so the warn-and-continue path stays
+    /// there. The judged slot names the failed entry: the armed jump target
+    /// while a jump was in flight (design D3), otherwise the entry mpv is on.
     fn stop_for_unrecoverable_error(
         &mut self,
         failure: &MpvFailure,
@@ -70,37 +75,51 @@ impl PlaybackRun {
         if !matches!(failure, MpvFailure::Other(_)) {
             return false;
         }
-        // mpv skips a failed entry on its own only while it holds the run's
-        // playlist, and an active-file projection clears it to the single
-        // entry playing — so nothing follows a failure there, whatever the
-        // run's own queue holds.
-        let mpv_has_next_entry =
-            !self.run_lifecycle.is_active_file() && self.current_idx + 1 < self.queue_len();
-        if self.run_lifecycle.began() && mpv_has_next_entry {
+        let FailureVerdict::EndRun { failed_slot, phase } =
+            self.run_lifecycle.load_failed(self.run_position())
+        else {
+            tracing::warn!(name: "player.event.failed", target: "player", error = %failure, "mpv event failed");
             return false;
-        }
-        let error = if self.run_lifecycle.began() {
-            tracing::error!(name: "player.event.playback_failed", target: "player", error = %failure, "playback error with no next entry; ending the run");
-            format!("failed to play media: {failure}")
-        } else {
-            tracing::error!(name: "player.event.start_failed", target: "player", error = %failure, "file failed to start before playback began");
-            format!("failed to start media: {failure}")
         };
-        self.stop_run_with_error(progress, self.last_valid_pos, error);
-        true
+        let error = match phase {
+            FailurePhase::BeforeStart => {
+                tracing::error!(name: "player.event.start_failed", target: "player", error = %failure, "file failed to start before playback began");
+                format!("failed to start media: {failure}")
+            }
+            FailurePhase::AfterStart => {
+                tracing::error!(name: "player.event.playback_failed", target: "player", error = %failure, "playback error with no next entry; ending the run");
+                format!("failed to play media: {failure}")
+            }
+        };
+        self.stop_run_with_error(progress, failed_slot, self.last_valid_pos, error)
     }
 
-    /// The teardown shared by an audio-output failure, an unexpected mpv
-    /// exit, and a start failure: close the prepared source, join progress,
-    /// and report one `Stopped` with `error` and `position_ticks` through
-    /// the single exit (design D4). The close per run identity — not the
-    /// Service report state — decides that the event goes out exactly once:
-    /// an adoption's stopped report no longer mutes a later error stop
-    /// (defect 1), and an earlier end for the same identity still allows no
-    /// second one.
+    /// The plain position facts a load failure is judged from (design D1/D2):
+    /// the machine holds no queue, so the run resolves the armed jump
+    /// target's ordinal before the call, and names the entry mpv is on.
+    fn run_position(&self) -> RunPosition {
+        RunPosition {
+            current_idx: self.current_idx,
+            queue_len: self.queue_len(),
+            current_slot: self.slot_id_at(self.current_idx),
+            jump_target_idx: self
+                .run_lifecycle
+                .jump_target_slot()
+                .and_then(|slot_id| self.queue.slot_index(slot_id)),
+        }
+    }
+
+    /// The teardown shared by an audio-output failure and an unexpected mpv
+    /// exit: close the prepared source, join progress, and report one
+    /// `Stopped` with `error` and `position_ticks` through the single exit
+    /// (design D4). The close per run identity — not the Service report
+    /// state — decides that the event goes out exactly once: an adoption's
+    /// stopped report no longer mutes a later error stop (defect 1), and an
+    /// earlier end for the same identity still allows no second one.
     fn stop_run_with_error(
         &mut self,
         progress: &mut ProgressGuard,
+        failed_slot: Option<QueueSlotId>,
         position_ticks: i64,
         error: String,
     ) -> bool {
@@ -108,7 +127,7 @@ impl PlaybackRun {
         progress.stop_and_join(Self::progress_join_budget());
         self.close_prepared_source_at(self.last_valid_pos);
         self.end_run(StopOutcome {
-            slot_id: self.active_slot_id(),
+            slot_id: failed_slot,
             position_ticks,
             played: false,
             consume: false,

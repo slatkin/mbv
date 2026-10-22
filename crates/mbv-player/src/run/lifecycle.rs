@@ -64,6 +64,56 @@ impl JumpArm {
     }
 }
 
+/// Which side of the "has playback begun" boundary a load failure arrived on
+/// (design D2). It picks the error text `termination.rs` reports.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub(crate) enum FailurePhase {
+    /// Before any `PlaybackRestart` in this submission: a start failure that
+    /// the run reports as "failed to start media".
+    BeforeStart,
+    /// After the first restart with nothing to skip to: an end of playback
+    /// the run reports as "failed to play media".
+    AfterStart,
+}
+
+/// The verdict on a generic load failure (design D2): a failure is an end of
+/// the run only when nothing can play after it — no entry follows it, or the
+/// active-file projection holds it alone.
+#[derive(Debug, Eq, PartialEq)]
+pub(crate) enum FailureVerdict {
+    /// mpv holds an entry after the failed one and skips to it on its own;
+    /// the playlist-position drift machinery follows the move now that no
+    /// armed jump mutes it.
+    Continue,
+    /// Nothing can play after the failed entry: the run ends, and the stop
+    /// names the slot the failed entry belonged to, in the failed phase.
+    EndRun {
+        failed_slot: Option<QueueSlotId>,
+        phase: FailurePhase,
+    },
+}
+
+/// The plain queue-position facts a load failure is judged from (design
+/// D1/D2), so the machine borrows no queue. The run resolves the armed
+/// target's ordinal before the call — identity -> ordinal is the run's
+/// resolution (design D2) — and `jump_target_idx` is `None` when no jump is
+/// armed or the armed slot is no longer queued, exactly the input
+/// `jump_settled_on_end_file` takes.
+#[derive(Copy, Clone, Debug)]
+pub(crate) struct RunPosition {
+    /// The ordinal of the entry mpv is on.
+    pub(crate) current_idx: usize,
+    /// How many entries the run's queue holds.
+    pub(crate) queue_len: usize,
+    /// The slot of the entry at `current_idx`: the failed entry to name when
+    /// no jump is armed.
+    pub(crate) current_slot: Option<QueueSlotId>,
+    /// The armed jump target resolved to the queue's ordinal; `None` when
+    /// unresolvable (the machine falls back to the entry after the current
+    /// one, like `jump_settled_on_end_file`).
+    pub(crate) jump_target_idx: Option<usize>,
+}
+
 /// The lifecycle facts of one run: the "has playback begun" boundary, the
 /// projection that decides whether anything follows a failed entry, and the
 /// run identity that already ended. `PlaybackRun` holds this in place of the
@@ -125,17 +175,52 @@ impl RunLifecycle {
         matches!(self.projection, Projection::ActiveFile)
     }
 
-    /// Whether playback began in this run (the #941 boundary).
-    #[must_use]
-    pub(crate) fn began(&self) -> bool {
-        self.began
-    }
-
     /// A new submission was accepted into the same mpv child (design D5):
     /// nothing rules the incoming submission's run identity out of ending,
     /// even if the previous submission already did.
     pub(crate) fn submission_accepted(&mut self) {
         self.ended = None;
+    }
+
+    /// Judged answer (design D2) to a load failure, in rule order:
+    ///
+    /// 1. Find the failed entry. While a jump is armed — `Pending` or
+    ///    `ResumeOnly` — the failed entry is the armed target: the outgoing
+    ///    entry's end-file settles or is swallowed before the target's error
+    ///    arrives (design D3). Otherwise it is the entry mpv is on, named by
+    ///    `RunPosition`.
+    /// 2. Clear the arm in every verdict: a failed target leaves no jump in
+    ///    flight (defects 4 and 5), so drift adopts mpv's next move and no
+    ///    later entry inherits the failed target's resume seek.
+    /// 3. Before the first restart in this submission, the run cannot start:
+    ///    end (#941).
+    /// 4. The active-file projection holds the failed entry alone in mpv, and
+    ///    a queue failure with no entry following it has nothing to skip to:
+    ///    end after start (#942, #943).
+    /// 5. Otherwise, with playback begun and an entry after the failed one,
+    ///    mpv skips ahead on its own: continue.
+    pub(crate) fn load_failed(&mut self, position: RunPosition) -> FailureVerdict {
+        // Rules 1 and 2 together: take the arm out, leaving `Idle` behind
+        // whatever the verdict says.
+        let arm = std::mem::replace(&mut self.jump, JumpArm::Idle);
+        let (failed_idx, failed_slot) = match arm {
+            JumpArm::Idle => (position.current_idx, position.current_slot),
+            JumpArm::Pending(jump) => (resolved_target_idx(&position), Some(jump.slot_id)),
+            JumpArm::ResumeOnly { slot_id, .. } => (resolved_target_idx(&position), Some(slot_id)),
+        };
+        if !self.began {
+            return FailureVerdict::EndRun {
+                failed_slot,
+                phase: FailurePhase::BeforeStart,
+            };
+        }
+        if self.is_active_file() || failed_idx + 1 >= position.queue_len {
+            return FailureVerdict::EndRun {
+                failed_slot,
+                phase: FailurePhase::AfterStart,
+            };
+        }
+        FailureVerdict::Continue
     }
 
     /// Answers the run's single exit (design D4): `true` when this identity
@@ -274,6 +359,14 @@ impl RunLifecycle {
         self.jump = JumpArm::Idle;
         Some(resume_ticks)
     }
+}
+
+/// The armed target's ordinal, or the neighbor fallback for a target the
+/// queue no longer holds — the same fallback `jump_settled_on_end_file`
+/// applies, so a judged failure and a settled jump agree on where a vanished
+/// target lands.
+fn resolved_target_idx(position: &RunPosition) -> usize {
+    position.jump_target_idx.unwrap_or(position.current_idx + 1)
 }
 
 #[cfg(test)]
