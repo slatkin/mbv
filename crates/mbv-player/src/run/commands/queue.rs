@@ -3,7 +3,7 @@ use super::{
     mpv_load_opts, mpv_url_for_queue_item, reject_stale_jump, resolve_jump_target,
     spawn_progress_reporter,
 };
-use crate::run::{ForcedJump, JumpArm, StopReport};
+use crate::run::{ForcedJump, JumpArm, StopAction, StopReport};
 use crate::{EMBY_RESUME_RETRY_DELAYS, refresh_emby_resume};
 
 impl PlaybackRun {
@@ -239,6 +239,11 @@ impl PlaybackRun {
         self.close_prepared_source_at(old_pos);
         let _ = mpv.command("stop", &[]);
         let _ = mpv.command("playlist-clear", &[]);
+        // The stop above produces an EndFile of its own: arm the same
+        // replacement drain a failed replacement arms, so `on_end_file`
+        // swallows it (`swallow_pending_load`) instead of letting the real
+        // end-file handlers advance the parked run or end it again.
+        self.begin_item_lifecycle(StopAction::ReportedNow(self.stop_report()));
         self.ext_sub_urls.clear();
         self.reporter.clear_session();
         self.end_run(StopOutcome {
