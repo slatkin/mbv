@@ -22,7 +22,7 @@ All work is in `crates/mbv-player`. For each task, run `cargo fmt`, then `cargo 
 
 ## 4. Active-file failure arms
 
-- [ ] 4.1 In `cmd_jump_to_active_file` (selection error) and in `promote_to_active_file` (install error), call `end_run` with an error that names the slot the run tried to select (defect 3, spec requirement 4). Verify: one run-level test in `src/tests/active_file.rs` drives a failed active-file jump and asserts one `Stopped` with `error: Some(_)` and the target slot.
+- [x] 4.1 In `cmd_jump_to_active_file` (selection error) and in `promote_to_active_file` (install error), call `end_run` with an error that names the slot the run tried to select (defect 3, spec requirement 4). Verify: one run-level test in `src/tests/active_file.rs` drives a failed active-file jump and asserts one `Stopped` with `error: Some(_)` and the target slot.
 
 ## 5. Docs and gates
 
