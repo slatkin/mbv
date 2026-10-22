@@ -1,6 +1,7 @@
 use super::super::{
-    EndFileReason, MpvFailure, PlaybackOrigin, PlaybackRun, PlayerEvent, ProgressGuard, QueueItem,
-    QueueSlotId, StopReport, is_near_end, retry_mark_played,
+    EndFileReason, FailurePhase, FailureVerdict, MpvFailure, PlaybackOrigin, PlaybackRun,
+    PlayerEvent, ProgressGuard, QueueItem, QueueSlotId, RunPosition, StopOutcome, StopReport,
+    is_near_end, retry_mark_played,
 };
 use super::event_classifiers::{is_clocked_audio_error, provider_lifecycle_close_pos};
 use std::sync::{Arc, atomic::Ordering};
@@ -27,8 +28,10 @@ impl PlaybackRun {
         }
 
         let device = self.config.audio_device.clone().unwrap_or_default();
+        let failed_slot = self.active_slot_id();
         self.stop_run_with_error(
             progress,
+            failed_slot,
             0,
             format!("audio output failed to start (device: {device})"),
         )
@@ -46,8 +49,10 @@ impl PlaybackRun {
             return false;
         }
         tracing::error!(name: "player.mpv.process_exited", target: "player", "mpv process exited without a quit request");
+        let failed_slot = self.active_slot_id();
         self.stop_run_with_error(
             progress,
+            failed_slot,
             self.last_valid_pos,
             "mpv process exited unexpectedly".to_owned(),
         );
@@ -55,13 +60,13 @@ impl PlaybackRun {
     }
 
     /// A generic error — a missing file, an HTTP 404 from the stream
-    /// endpoint, a decode error — ends the run with the error whenever mpv has
-    /// no next entry to skip to: before any playback began (#941), or past
-    /// that boundary when the failed entry is the run's last one (#942, #943).
-    /// With an entry after the failed one, mpv skips to it on its own and the
-    /// playlist-position drift machinery follows (probe S5), so the
-    /// warn-and-continue path stays there. `current_idx` is the failed entry:
-    /// the advance to it settled before mpv tried to load it.
+    /// endpoint, a decode error — is judged by the lifecycle machine:
+    /// before any playback began it ends the run (#941), after it only
+    /// when mpv has no entry after the failed one to skip to (#942, #943).
+    /// With one, mpv skips on its own and the playlist-position drift
+    /// machinery follows (probe S5), so the warn-and-continue path stays
+    /// there. The judged slot names the failed entry: the armed jump target
+    /// while a jump was in flight, otherwise the entry mpv is on.
     fn stop_for_unrecoverable_error(
         &mut self,
         failure: &MpvFailure,
@@ -70,52 +75,66 @@ impl PlaybackRun {
         if !matches!(failure, MpvFailure::Other(_)) {
             return false;
         }
-        // mpv skips a failed entry on its own only while it holds the run's
-        // playlist, and an `active_file` projection clears it to the single
-        // entry playing — so nothing follows a failure there, whatever the
-        // run's own queue holds.
-        let mpv_has_next_entry = !self.active_file && self.current_idx + 1 < self.queue_len();
-        if self.playback_began && mpv_has_next_entry {
+        let FailureVerdict::EndRun { failed_slot, phase } =
+            self.run_lifecycle.load_failed(self.run_position())
+        else {
+            // mpv holds an entry after the failed one. Fall through silently:
+            // `on_mpv_error` fires the run's one `player.event.failed` warn
+            // for a failure it does not stop on.
             return false;
-        }
-        let error = if self.playback_began {
-            tracing::error!(name: "player.event.playback_failed", target: "player", error = %failure, "playback error with no next entry; ending the run");
-            format!("failed to play media: {failure}")
-        } else {
-            tracing::error!(name: "player.event.start_failed", target: "player", error = %failure, "file failed to start before playback began");
-            format!("failed to start media: {failure}")
         };
-        self.stop_run_with_error(progress, self.last_valid_pos, error);
-        true
+        let error = match phase {
+            FailurePhase::BeforeStart => {
+                tracing::error!(name: "player.event.start_failed", target: "player", error = %failure, "file failed to start before playback began");
+                format!("failed to start media: {failure}")
+            }
+            FailurePhase::AfterStart => {
+                tracing::error!(name: "player.event.playback_failed", target: "player", error = %failure, "playback error with no next entry; ending the run");
+                format!("failed to play media: {failure}")
+            }
+        };
+        self.stop_run_with_error(progress, failed_slot, self.last_valid_pos, error)
+    }
+
+    /// The plain position facts a load failure is judged from:
+    /// the machine holds no queue, so the run resolves the armed jump
+    /// target's ordinal before the call, and names the entry mpv is on.
+    fn run_position(&self) -> RunPosition {
+        RunPosition {
+            current_idx: self.current_idx,
+            queue_len: self.queue_len(),
+            current_slot: self.slot_id_at(self.current_idx),
+            jump_target_idx: self
+                .run_lifecycle
+                .jump_target_slot()
+                .and_then(|slot_id| self.queue.slot_index(slot_id)),
+        }
     }
 
     /// The teardown shared by an audio-output failure and an unexpected mpv
-    /// exit: close the prepared source, join progress, deactivate the status
-    /// snapshot, and report one `Stopped` with `error` and `position_ticks`.
-    /// A stop that is already reported (for example a standalone end-file
-    /// stop) is not reported a second time.
+    /// exit: close the prepared source, join progress, and report one
+    /// `Stopped` with `error` and `position_ticks` through the single exit.
+    /// The close per run identity — not the Service report state — decides
+    /// that the event goes out exactly once: an adoption's stopped report
+    /// no longer mutes a later error stop, and an earlier end for the same
+    /// identity still allows no second one.
     fn stop_run_with_error(
         &mut self,
         progress: &mut ProgressGuard,
+        failed_slot: Option<QueueSlotId>,
         position_ticks: i64,
         error: String,
     ) -> bool {
         self.close_prepared_source();
         progress.stop_and_join(Self::progress_join_budget());
         self.close_prepared_source_at(self.last_valid_pos);
-        let stopped_slot = self.active_slot_id();
-        self.status.lock().unwrap().active = false;
-        if !self.stopped_event_sent && !self.stop_report_sent() {
-            let _ = self.event_tx.send(PlayerEvent::Stopped {
-                slot_id: stopped_slot,
-                run_identity: self.run_identity,
-                position_ticks,
-                played: false,
-                consume: false,
-                error: Some(error),
-            });
-            self.stopped_event_sent = true;
-        }
+        self.end_run(StopOutcome {
+            slot_id: failed_slot,
+            position_ticks,
+            played: false,
+            consume: false,
+            error: Some(error),
+        });
         true
     }
 
@@ -173,20 +192,15 @@ impl PlaybackRun {
             provider_lifecycle_close_pos(item, natural_end, runtime, self.last_valid_pos)
         });
         self.close_prepared_source_at(lifecycle_pos);
-        self.status.lock().unwrap().active = false;
 
         self.retry_natural_mark_played(natural_end, completed_is_audio);
-        if !self.stopped_event_sent {
-            let _ = self.event_tx.send(PlayerEvent::Stopped {
-                slot_id: completed_slot_id,
-                run_identity: self.run_identity,
-                position_ticks: 0,
-                played: natural_end && !completed_is_audio && self.reporter.has_session(),
-                consume: false,
-                error: None,
-            });
-            self.stopped_event_sent = true;
-        }
+        self.end_run(StopOutcome {
+            slot_id: completed_slot_id,
+            position_ticks: 0,
+            played: natural_end && !completed_is_audio && self.reporter.has_session(),
+            consume: false,
+            error: None,
+        });
         false
     }
 
@@ -229,17 +243,13 @@ impl PlaybackRun {
             let id = self.reporter.ids.lock().unwrap().0.clone();
             retry_mark_played(Arc::clone(client), id);
         }
-        self.status.lock().unwrap().active = false;
-        if !self.stopped_event_sent {
-            let _ = self.event_tx.send(PlayerEvent::Stopped {
-                slot_id: stopped_slot,
-                run_identity: self.run_identity,
-                position_ticks: self.last_valid_pos,
-                played: near_end,
-                consume: false,
-                error: None,
-            });
-        }
+        self.end_run(StopOutcome {
+            slot_id: stopped_slot,
+            position_ticks: self.last_valid_pos,
+            played: near_end,
+            consume: false,
+            error: None,
+        });
         // mpv exited on its own (not via our stop command, e.g. the user
         // closed the mpv window directly) — despite the event name,
         // App::handle_player_event's PlayerEvent::MpvQuit arm does not
@@ -250,14 +260,12 @@ impl PlaybackRun {
     }
 
     fn shutdown_queue(&mut self, stopped_slot: Option<QueueSlotId>) {
-        self.status.lock().unwrap().active = false;
         // played and consume are deliberately the same value here: stopped_near_end
         // is already video-only (see is_near_end's !is_audio gate), so a quit/cancel
         // near the end of an audio item never sets either — consistent with on_end_file's
         // normal advance path, where only natural/next-up (not near-end) triggers audio consume.
-        let _ = self.event_tx.send(PlayerEvent::Stopped {
+        self.end_run(StopOutcome {
             slot_id: stopped_slot,
-            run_identity: self.run_identity,
             position_ticks: self.last_valid_pos,
             played: self.stopped_near_end,
             consume: self.stopped_near_end,

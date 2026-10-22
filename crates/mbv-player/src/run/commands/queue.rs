@@ -1,8 +1,9 @@
 use super::{
-    ExecSlot, Mpv, PlaybackRun, PlayerEvent, ProgressGuard, QueueItem, QueueSlotId, mpv_load_opts,
-    mpv_url_for_queue_item, reject_stale_jump, resolve_jump_target, spawn_progress_reporter,
+    ExecSlot, Mpv, PlaybackRun, PlayerEvent, ProgressGuard, QueueItem, QueueSlotId, StopOutcome,
+    mpv_load_opts, mpv_url_for_queue_item, reject_stale_jump, resolve_jump_target,
+    spawn_progress_reporter,
 };
-use crate::run::{ForcedJump, StopReport};
+use crate::run::{ForcedJump, JumpArm, StopReport};
 use crate::{EMBY_RESUME_RETRY_DELAYS, refresh_emby_resume};
 
 impl PlaybackRun {
@@ -50,7 +51,7 @@ impl PlaybackRun {
             resume_ticks,
             from_idle: false,
         });
-        if self.active_file {
+        if self.run_lifecycle.is_active_file() {
             self.cmd_jump_to_active_file(slot_id, resume_ticks, Some(transition), mpv, progress);
         } else {
             self.cmd_jump_to_playlist(slot_id, idx, resume_ticks, mpv);
@@ -58,7 +59,7 @@ impl PlaybackRun {
     }
 
     pub(crate) fn set_pending_playlist_jump(&mut self, jump: ForcedJump) {
-        self.forced_jump = (!self.active_file).then_some(jump);
+        self.run_lifecycle.arm_jump(jump);
     }
 
     fn cmd_jump_to_active_file(
@@ -80,6 +81,13 @@ impl PlaybackRun {
             }
             Err(error) => {
                 tracing::warn!(name: "player.active_file.selection_failed", target: "player", error = %error, "active-file selection failed");
+                self.stop_for_active_file_failure(
+                    Some(slot_id),
+                    0,
+                    format!("failed to select slot {slot_id:?}: {error}"),
+                    mpv,
+                    progress,
+                );
             }
         }
     }
@@ -114,15 +122,18 @@ impl PlaybackRun {
         if from_idle {
             self.tracks_initialized = false;
         }
-        let transition = self.forced_jump.and_then(|jump| jump.transition);
-        self.forced_jump = Some(super::super::ForcedJump {
+        let transition = match self.run_lifecycle.jump_arm() {
+            JumpArm::Pending(jump) => jump.transition,
+            JumpArm::Idle | JumpArm::ResumeOnly { .. } => None,
+        };
+        self.run_lifecycle.arm_jump(ForcedJump {
             slot_id,
             transition,
             resume_ticks,
             from_idle,
         });
         if let Err(e) = mpv.set_property("playlist-pos", i64::try_from(idx).unwrap_or(i64::MAX)) {
-            self.forced_jump = None;
+            self.run_lifecycle.disarm_jump();
             tracing::warn!(name: "player.jump.failed", target: "player", index = idx, error = %e, "jump failed");
             return;
         }
@@ -150,17 +161,22 @@ impl PlaybackRun {
         self.status.lock().unwrap().queue_len = self.queue_len();
     }
 
-    pub(super) fn cmd_append_queue(&mut self, new_items: Vec<ExecSlot>, mpv: &Mpv) {
+    pub(super) fn cmd_append_queue(
+        &mut self,
+        new_items: Vec<ExecSlot>,
+        mpv: &Mpv,
+        progress: &mut ProgressGuard,
+    ) {
         if new_items.is_empty() {
             return;
         }
 
-        if self.active_file {
+        if self.run_lifecycle.is_active_file() {
             self.append_items_to_queue(new_items);
             return;
         }
         if new_items.iter().any(|slot| slot.item.is_audiobookshelf()) {
-            self.promote_to_active_file(new_items, mpv);
+            self.promote_to_active_file(new_items, mpv, progress);
             return;
         }
         self.append_items_via_mpv(new_items, mpv);
@@ -168,7 +184,12 @@ impl PlaybackRun {
 
     /// Audiobookshelf append with no active file: install the current item's
     /// projection as the active file first, then append.
-    fn promote_to_active_file(&mut self, new_items: Vec<ExecSlot>, mpv: &Mpv) {
+    fn promote_to_active_file(
+        &mut self,
+        new_items: Vec<ExecSlot>,
+        mpv: &Mpv,
+        progress: &mut ProgressGuard,
+    ) {
         let Some(active_item) = self.active_item().cloned() else {
             return;
         };
@@ -181,10 +202,41 @@ impl PlaybackRun {
         };
         if let Err(error) = self.install_active_projection(mpv, prepared, &active_item) {
             tracing::warn!(name: "player.active_file.transition_failed", target: "player", error = %error, "active-file transition failed");
+            self.stop_for_active_file_failure(
+                self.active_slot_id(),
+                self.last_valid_pos,
+                format!("failed to load media: {error}"),
+                mpv,
+                progress,
+            );
             return;
         }
         self.append_items_to_queue(new_items);
-        self.active_file = true;
+        self.run_lifecycle.enter_active_file();
+    }
+
+    /// Ends the run after a failed active-file select or install: one
+    /// `Stopped` with the error, naming the slot the run tried to select.
+    /// The run parks like a failed replacement (`park_for_failed_load`) —
+    /// the outgoing item's stop report goes out and a later submission can
+    /// still reuse the mpv child (a second end path for the closed identity
+    /// reports nothing).
+    fn stop_for_active_file_failure(
+        &mut self,
+        failed_slot: Option<QueueSlotId>,
+        position_ticks: i64,
+        error: String,
+        mpv: &Mpv,
+        progress: &mut ProgressGuard,
+    ) {
+        self.park_for_failed_load(mpv, progress);
+        self.end_run(StopOutcome {
+            slot_id: failed_slot,
+            position_ticks,
+            played: false,
+            consume: false,
+            error: Some(error),
+        });
     }
 
     /// Appends a non-audiobookshelf set straight to mpv's playlist, using

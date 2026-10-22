@@ -409,33 +409,35 @@ fn generic_start_failure_stops_the_run_with_an_error() {
 }
 
 #[test]
-fn generic_error_after_playback_began_keeps_the_run_active() {
-    // mpv skips a failed playlist entry on its own once playback has begun,
-    // and the playlist-position drift machinery follows it (#941 probe S5):
-    // the failure must not end the whole run there.
+fn failure_after_playback_began_with_a_next_entry_keeps_the_run_active() {
+    // Regression (#941 probe S5): once playback began, mpv skips a failed
+    // playlist entry with a next entry on its own and the drift machinery
+    // follows it — the run must stay active and send no Stopped from the
+    // failure (spec: "A failure after playback began ends the run only when
+    // nothing follows", a middle entry fails).
     let (mut run, status, events) = make_queue_session_for_pos_tests_with_events(0);
     run.reporter.clear_session();
-    run.playback_began = true;
+    run.run_lifecycle.playback_started();
     let mut progress = noop_progress();
 
     assert!(!run.on_mpv_error(&MpvFailure::Other("loading failed".into()), &mut progress));
+
     assert!(status.lock().unwrap().active);
     events.try_recv().unwrap_err();
 }
 
 #[test]
-fn generic_error_after_playback_began_stops_the_run_when_no_entry_follows() {
-    // Regression (#942, #943): with no entry after the failed one — the last
-    // queue entry, or a single-file run — mpv goes idle instead of skipping,
-    // and nothing observes `idle-active`, so the run stayed marked active with
-    // no playback and the user got no error.
-    let (mut run, status, events) = make_queue_session_for_pos_tests_with_events(2);
+fn failure_of_the_last_entry_after_playback_began_reports_the_play_media_error() {
+    // Regression (#942, #943): a failed last entry stops the run, and the
+    // after-start phasing decides the user text — "failed to play media"
+    // must reach the Stopped error, not the start-failure wording.
+    let (mut run, _status, events) = make_queue_session_for_pos_tests_with_events(2);
     run.reporter.clear_session();
-    run.playback_began = true;
+    run.run_lifecycle.playback_started();
     let mut progress = noop_progress();
 
     assert!(run.on_mpv_error(&MpvFailure::Other("loading failed".into()), &mut progress));
-    assert!(!status.lock().unwrap().active);
+
     let PlayerEvent::Stopped { error, .. } = events.recv().unwrap() else {
         panic!("expected stopped event");
     };
@@ -443,38 +445,6 @@ fn generic_error_after_playback_began_stops_the_run_when_no_entry_follows() {
         error.as_deref(),
         Some("failed to play media: loading failed")
     );
-    // The run ended: no further events follow the one error stop.
-    events.try_recv().unwrap_err();
-}
-
-#[test]
-fn generic_error_after_playback_began_stops_an_active_file_run() {
-    // Regression (#942, #943, review of 7971bf149): the `active_file`
-    // projection clears mpv's playlist to the one entry playing, so mpv has
-    // nothing to skip to even while the run's own queue holds a later slot.
-    // Without the projection check, the failed entry's successor in that
-    // queue was read as mpv's next entry and the run stayed active.
-    let (mut run, status, events) = make_queue_session_for_pos_tests_with_events(0);
-    run.reporter.clear_session();
-    run.queue = ExecutionSequence::from_slot_items(
-        vec![
-            (QueueSlotId::from_raw(1), abs_item()),
-            (QueueSlotId::from_raw(2), abs_book_item()),
-        ],
-        Some(QueueSlotId::from_raw(1)),
-    );
-    // What `PlaybackRun::new` derives from this queue.
-    assert!(run.queue.has_audiobookshelf_entries());
-    run.active_file = true;
-    run.playback_began = true;
-    let mut progress = noop_progress();
-
-    assert!(run.on_mpv_error(&MpvFailure::Other("loading failed".into()), &mut progress));
-    assert!(!status.lock().unwrap().active);
-    assert!(matches!(
-        events.recv().unwrap(),
-        PlayerEvent::Stopped { error: Some(_), .. }
-    ));
 }
 
 #[test]

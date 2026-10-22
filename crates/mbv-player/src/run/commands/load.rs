@@ -1,6 +1,6 @@
 use super::{
     EmbyItem, ExecSlot, ExecutionSequence, Mpv, PlaybackOrigin, PlaybackRun, PlayerEvent,
-    ProgressGuard, QueueItem, QueueSlotId, StopReport, mpv_load_opts, mpv_title_opt,
+    ProgressGuard, QueueItem, QueueSlotId, StopOutcome, StopReport, mpv_load_opts, mpv_title_opt,
     mpv_url_for_queue_item, queue_load_indices, queue_load_location, reassert_queue_layout,
     send_ep_info, spawn_progress_reporter, start_queue_playback,
 };
@@ -17,6 +17,10 @@ impl PlaybackRun {
         progress: &mut ProgressGuard,
     ) {
         self.cancel_pending_quit();
+        // A new file is a new submission into the reused child; it receives no
+        // new run identity, so its end must be able to report again even when
+        // the previous run identity already ended.
+        self.run_lifecycle.submission_accepted();
         self.origin = PlaybackOrigin::Standalone;
         self.close_prepared_source();
         // Loading a new item should always start playing it, even if mpv
@@ -98,7 +102,9 @@ impl PlaybackRun {
         mpv: &Mpv,
         progress: &mut ProgressGuard,
     ) {
-        if self.active_file || items.iter().any(|slot| slot.item.is_audiobookshelf()) {
+        if self.run_lifecycle.is_active_file()
+            || items.iter().any(|slot| slot.item.is_audiobookshelf())
+        {
             self.replace_with_queue_items(items, start_idx, mpv, progress);
             return;
         }
@@ -264,6 +270,10 @@ impl PlaybackRun {
             self.sync_status_position();
             return;
         }
+        // The replacement (its success and its failure arms alike) is a new
+        // submission into the reused child: its identity may end
+        // again even if the previous submission already did.
+        self.run_lifecycle.submission_accepted();
         let start_idx = start_idx.min(items.len() - 1);
         let active_item = items[start_idx].item.clone();
         let prepared = match self.prepare_item(&active_item) {
@@ -293,7 +303,7 @@ impl PlaybackRun {
             active_slot_id,
         );
         self.current_idx = start_idx;
-        self.active_file = true;
+        self.run_lifecycle.enter_active_file();
         // New active slot: rebuild the correlation span before the projection
         // install, so its failure lines carry the incoming slot (design D5).
         self.rebuild_playback_span();
@@ -344,15 +354,7 @@ impl PlaybackRun {
         progress: &mut ProgressGuard,
         error: String,
     ) {
-        let old_pos = self.last_valid_pos;
-        progress.stop_and_join(Self::progress_join_budget());
-        if self.is_unreported() {
-            let _ = self.reporter.report_stopped(old_pos);
-            self.mark_reported(StopReport::Sent);
-        }
-        self.close_prepared_source_at(old_pos);
-        let _ = mpv.command("stop", &[]);
-        let _ = mpv.command("playlist-clear", &[]);
+        self.park_for_failed_load(mpv, progress);
 
         if !items.is_empty() {
             let active_slot_id = items.get(start_idx).map(|slot| slot.slot_id);
@@ -365,17 +367,14 @@ impl PlaybackRun {
             );
         }
         self.current_idx = start_idx;
-        self.active_file = true;
+        self.run_lifecycle.enter_active_file();
         self.origin = if self.queue_len() == 1 {
             PlaybackOrigin::Standalone
         } else {
             PlaybackOrigin::Queue
         };
         self.load_active_item_state();
-        self.begin_item_lifecycle(StopAction::ReportedNow(self.stop_report()));
         self.pending_initial_playlist_layout = false;
-        self.ext_sub_urls.clear();
-        self.reporter.clear_session();
 
         let position_ticks = active_item.playback_position_ticks();
         let mut status = self.status.lock().unwrap();
@@ -391,12 +390,10 @@ impl PlaybackRun {
             status.title = active_item.title().to_string();
             status.art_item_id = active_item.id().to_string();
         }
-        status.active = false;
         drop(status);
 
-        let _ = self.event_tx.send(PlayerEvent::Stopped {
+        self.end_run(StopOutcome {
             slot_id: self.active_slot_id(),
-            run_identity: self.run_identity,
             position_ticks,
             played: false,
             consume: false,

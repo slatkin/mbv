@@ -2,8 +2,9 @@ use mbv_audiobookshelf::{AudiobookshelfError, AudiobookshelfFailureClass};
 
 use super::super::{
     AdvanceDecisionInput, CompletedMedia, EndFileReason, FinishReason, Mpv, PlaybackOrigin,
-    PlaybackRun, PlayerEvent, ProgressGuard, QueueItem, QueueSlotId, StopReport, advance_decision,
-    is_near_end, mpv_position_ticks, retry_mark_played, send_ep_info, spawn_progress_reporter,
+    PlaybackRun, PlayerEvent, ProgressGuard, QueueItem, QueueSlotId, StopOutcome, StopReport,
+    advance_decision, is_near_end, mpv_position_ticks, retry_mark_played, send_ep_info,
+    spawn_progress_reporter,
 };
 use super::event_classifiers::{is_superseded_jump_end_file, provider_lifecycle_close_pos};
 use mbv_ids::ItemId;
@@ -99,11 +100,8 @@ impl PlaybackRun {
                 },
                 last_valid_pos: self.last_valid_pos,
             });
-        if is_superseded_jump_end_file(
-            reason,
-            self.forced_jump.filter(|_| !self.active_file),
-            track_finished,
-        ) {
+        let jump_in_flight = self.run_lifecycle.jump_arm();
+        if is_superseded_jump_end_file(reason, jump_in_flight, track_finished) {
             return self.handle_superseded_jump(reason, completed_slot_id, mpv);
         }
         // Played stays video-only; consume is type-agnostic and gated per type
@@ -127,26 +125,17 @@ impl PlaybackRun {
     }
 
     fn settle_forced_jump(&mut self) -> (usize, Option<crate::transition::Transition>) {
-        let jump = self.forced_jump.take();
-        let transition = jump.and_then(|jump| jump.transition);
-        let slot_id = jump.map(|jump| jump.slot_id);
-        // A forced jump names its own target; the unforced advance is the
-        // queue neighbor. The `next_idx >= queue_len()` check in the caller
-        // runs `stop_at_queue_end` (design D2).
-        let next_idx = jump
-            .and_then(|jump| self.queue.slot_index(jump.slot_id))
-            .unwrap_or(self.current_idx + 1);
-        tracing::info!(name: "player.transition.end_file_settled", target: "transition", slot = ?slot_id, next_index = next_idx, current_index = self.current_idx, queue_length = self.queue_len(), has_transition = transition.is_some(), "settled forced jump on end-file");
-        if next_idx < self.queue_len() {
-            self.forced_jump = jump.filter(|jump| jump.resume_ticks.is_some()).map(|jump| {
-                crate::run::ForcedJump {
-                    transition: None,
-                    from_idle: false,
-                    ..jump
-                }
-            });
-        }
-        (next_idx, transition)
+        // Resolve the armed slot against the queue before the settle: the
+        // lifecycle machine takes plain values and holds no queue.
+        let armed_slot = self.run_lifecycle.jump_target_slot();
+        let target_index = armed_slot.and_then(|slot_id| self.queue.slot_index(slot_id));
+        let (next_idx, settling_transition) = self.run_lifecycle.jump_settled_on_end_file(
+            target_index,
+            self.current_idx,
+            self.queue_len(),
+        );
+        tracing::info!(name: "player.transition.end_file_settled", target: "transition", slot = ?armed_slot, next_index = next_idx, current_index = self.current_idx, queue_length = self.queue_len(), has_transition = settling_transition.is_some(), "settled forced jump on end-file");
+        (next_idx, settling_transition)
     }
 
     /// Advance to the already-bounds-checked next track: select it, emit the
@@ -165,7 +154,7 @@ impl PlaybackRun {
         // next_idx < queue_len() was already checked above, so set_active_index
         // (which only fails when the index is out of bounds) cannot fail here.
         let next_slot_id = self.slot_id_at(next_idx);
-        let advanced = if self.active_file {
+        let advanced = if self.run_lifecycle.is_active_file() {
             self.close_prepared_source_at(provider_lifecycle_close_pos(
                 end.completed_item,
                 end.natural,
@@ -195,7 +184,7 @@ impl PlaybackRun {
             .cloned()
             .expect("active item must exist after successful set_active_index");
         self.load_active_item_state();
-        if self.active_file && !advanced {
+        if self.run_lifecycle.is_active_file() && !advanced {
             return self.stop_for_failed_advance(end.completed_slot_id, progress);
         }
         self.tracks_initialized = false;
@@ -289,12 +278,10 @@ impl PlaybackRun {
     ) -> bool {
         tracing::warn!(name: "player.queue.completed_slot_missing", target: "player", index = ?completed_idx, queue_length = self.queue_len(), "completed item is out of bounds; stopping");
         progress.stop_and_join(Self::progress_join_budget());
-        self.status.lock().unwrap().active = false;
         let _ = self.reporter.report_stopped(self.last_valid_pos);
         self.mark_reported(StopReport::Sent);
-        let _ = self.event_tx.send(PlayerEvent::Stopped {
+        self.end_run(StopOutcome {
             slot_id: completed_slot_id,
-            run_identity: self.run_identity,
             position_ticks: self.last_valid_pos,
             played: false,
             consume: false,
@@ -342,7 +329,6 @@ impl PlaybackRun {
     /// the run (signals `run()` to return).
     fn stop_at_queue_end(&mut self, stop: &QueueEndStop<'_>, progress: &mut ProgressGuard) -> bool {
         progress.stop_and_join(Self::progress_join_budget());
-        self.status.lock().unwrap().active = false;
         let _ = self.reporter.report_stopped(stop.completed_pos);
         self.mark_reported(StopReport::Sent);
         self.close_prepared_source_at(provider_lifecycle_close_pos(
@@ -352,9 +338,8 @@ impl PlaybackRun {
             self.last_valid_pos,
         ));
         self.mark_played_or_retry(stop.played_out, stop.completed_item);
-        let _ = self.event_tx.send(PlayerEvent::Stopped {
+        self.end_run(StopOutcome {
             slot_id: stop.completed_slot_id,
-            run_identity: self.run_identity,
             position_ticks: stop.completed_pos,
             played: stop.played_out,
             consume: stop.consume_track,
@@ -370,10 +355,8 @@ impl PlaybackRun {
     ) -> bool {
         let error = AudiobookshelfError::from_class(AudiobookshelfFailureClass::Unavailable);
         progress.stop_and_join(Self::progress_join_budget());
-        self.status.lock().unwrap().active = false;
-        let _ = self.event_tx.send(PlayerEvent::Stopped {
+        self.end_run(StopOutcome {
             slot_id: completed_slot_id,
-            run_identity: self.run_identity,
             position_ticks: 0,
             played: false,
             consume: false,
@@ -456,7 +439,7 @@ mod tests {
             Some(b),
         );
         run.current_idx = 1;
-        run.active_file = true;
+        run.run_lifecycle.enter_active_file();
         run.set_pending_playlist_jump(ForcedJump {
             slot_id: b,
             transition: Some(crate::transition::Transition::new(42, 1, b)),

@@ -4,8 +4,8 @@ use super::active_item_state;
 use super::{
     ActiveItemLifecycle, EndFileReason, ExecSlot, ExecutionSequence, IntroState,
     ItemLifecycleState, Mpv, NextUp, PlaybackRun, PlayerEvent, PreparedSource, ProgressGuard,
-    QueueItem, QueueSlotId, ReportJob, RunInit, StartupPause, StopReport, StopReportContext,
-    end_file_stop_report_context,
+    QueueItem, QueueSlotId, ReportJob, RunInit, RunLifecycle, StartupPause, StopReport,
+    StopReportContext, end_file_stop_report_context,
 };
 use crate::{divergent_entry, prepare_source};
 use mbv_ids::ItemId;
@@ -207,14 +207,14 @@ impl PlaybackRun {
 
     /// mpv's current entry, when it is not the one the run believes in — the
     /// only evidence that mpv navigated itself, since nothing asked it to.
-    /// `None` for an `active_file` run: that projection keeps one entry in
+    /// `None` for an active-file projection run: it keeps one entry in
     /// mpv's playlist, so `playlist-pos` never names the run's ordinal.
     /// mpv's raw `playlist-pos`, alongside the entry it names when that is
     /// not the run's active one — see `divergent_entry`. Returning the raw
     /// position too lets a caller log it without a second IPC round-trip.
     pub(crate) fn mpv_divergent_entry(&self, mpv: &Mpv) -> (i64, Option<usize>) {
         let pos = mpv.get_property::<i64>("playlist-pos").unwrap_or(-1);
-        if self.active_file {
+        if self.run_lifecycle.is_active_file() {
             return (pos, None);
         }
         (
@@ -280,7 +280,7 @@ impl PlaybackRun {
         // for; mpv adopted a *different* entry here (that's what this path is
         // for), so the armed value belongs to nothing about to restart and
         // must not be misapplied to this one.
-        self.forced_jump = None;
+        self.run_lifecycle.disarm_jump();
         self.queue_next_up.reset();
         true
     }
@@ -537,7 +537,9 @@ impl PlaybackRun {
 
         tracing::info!(name: "player.playback.initialized", target: "player", origin = ?origin, index = start_idx, position_seconds = initial_pos / mbv_emby_model::TICKS_PER_SECOND, "playback initialized");
         let run_identity = status.lock().unwrap().sequence_generation;
-        let active_file = queue.has_audiobookshelf_entries();
+        // In the struct literal `queue` moves first; derive the projection
+        // fact before that.
+        let run_lifecycle = RunLifecycle::for_queue(&queue);
         let mut prepared_source = prepared_source;
         let active_lifecycle = ActiveItemLifecycle::for_item(
             &initial_item,
@@ -558,12 +560,11 @@ impl PlaybackRun {
             token,
             queue,
             audiobookshelf_context,
-            active_file,
+            run_lifecycle,
             prepared_source,
             active_lifecycle,
             ext_sub_urls,
             current_idx: start_idx,
-            forced_jump: None,
             stop_slot: None,
             stop_runtime: None,
             quit_at: None,
@@ -572,8 +573,6 @@ impl PlaybackRun {
             tracks_initialized: false,
             item_lifecycle: ItemLifecycleState::new(),
             pending_initial_playlist_layout: start_idx > 0,
-            stopped_event_sent: false,
-            playback_began: false,
             mark_played_id: None,
             last_mouse_osd: None,
             series_id,

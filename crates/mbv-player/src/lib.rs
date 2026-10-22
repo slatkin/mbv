@@ -258,7 +258,7 @@ fn queue_layout_verdict(
 /// mpv's playlist ordinal, when it names an entry that is not the run's
 /// active one. `None` when mpv has no entry (`-1`), the ordinal is out of
 /// range, or it is where the run already believes playback is. The caller
-/// gates the `active_file` projection, whose one-entry playlist never carries
+/// gates the active-file projection, whose one-entry playlist never carries
 /// the run's ordinal.
 fn divergent_entry(pos: i64, current_idx: usize, queue_len: usize) -> Option<usize> {
     if pos < 0 {

@@ -9,7 +9,7 @@ impl PlaybackRun {
             return;
         };
         let active_slot_id = self.active_slot_id();
-        if self.active_file {
+        if self.run_lifecycle.is_active_file() {
             self.remove_active_file_slot(slot_id, idx, active_slot_id, mpv);
             return;
         }
@@ -21,8 +21,12 @@ impl PlaybackRun {
             self.queue.remove_slot(slot_id);
         }
         self.sync_status_position();
-        if self.forced_jump.is_some_and(|jump| jump.slot_id == slot_id) {
-            self.forced_jump = None;
+        if self
+            .run_lifecycle
+            .jump_target_slot()
+            .is_some_and(|jumped| jumped == slot_id)
+        {
+            self.run_lifecycle.disarm_jump();
         }
         if active_slot_id != Some(slot_id) {
             return;
@@ -82,7 +86,7 @@ impl PlaybackRun {
         if from >= self.queue_len() || to >= self.queue_len() || from == to {
             return;
         }
-        if !self.active_file {
+        if !self.run_lifecycle.is_active_file() {
             let (mpv_from, mpv_to) = playlist_move_args(from, to);
             let _ = mpv.command_async(
                 "playlist-move",

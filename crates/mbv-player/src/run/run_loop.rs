@@ -2,7 +2,7 @@ use super::super::{
     Duration, Instant, Mpv, MpvEvent, Ordering, PlayerCommand, PlayerEvent, PreparedSource,
     PropertyValue, mpsc, mpv_position_ticks, quit_timeout_stop_flags, refresh_tracks, thread,
 };
-use super::{PlaybackRun, ProgressGuard};
+use super::{PlaybackRun, ProgressGuard, StopOutcome};
 use mbv_core::applog as app_logging;
 use mbv_queue::QueueItem;
 use std::os::unix::io::RawFd;
@@ -195,7 +195,9 @@ impl PlaybackRun {
         self.pin_stop_runtime();
     }
 
-    /// Emit the final `Stopped` after the quit timeout elapsed.
+    /// Emit the final `Stopped` after the quit timeout elapsed, through the
+    /// single exit: a run identity that already ended (a parked failed
+    /// replacement) is closed again by the lifecycle and reports nothing.
     fn finalize_quit(&mut self, progress: &mut ProgressGuard) {
         if !self.stop_report_sent() {
             self.report_stop_now_or_background(progress);
@@ -212,10 +214,8 @@ impl PlaybackRun {
             runtime,
             self.stopped_near_end,
         );
-        self.status.lock().unwrap().active = false;
-        let _ = self.event_tx.send(PlayerEvent::Stopped {
+        self.end_run(StopOutcome {
             slot_id: self.stop_slot.or_else(|| self.active_slot_id()),
-            run_identity: self.run_identity,
             position_ticks: self.last_valid_pos,
             played,
             consume,

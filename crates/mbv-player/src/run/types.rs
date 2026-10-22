@@ -1,7 +1,7 @@
 use super::{
     ActiveItemLifecycle, Arc, AudiobookshelfPlayerContext, Duration, ExecutionSequence, Instant,
     IntroState, ItemId, ItemLifecycleState, MpvRunConfig, Mutex, NextUp, PlayerEvent, PlayerStatus,
-    PreparedSource, QueueSlotId, SessionReporter, StartupPause, SubtitlePrefs, mpsc,
+    PreparedSource, QueueSlotId, RunLifecycle, SessionReporter, StartupPause, SubtitlePrefs, mpsc,
 };
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -31,12 +31,27 @@ pub(crate) struct RunInit {
     pub(crate) prepared_source: Option<PreparedSource>,
 }
 
+/// An in-flight forced `JumpTo`: the target slot, the request
+/// identity announced when it settles, and the resume ticks to seek to on the
+/// target's restart. It is the `Pending` payload of `JumpArm` (the lifecycle
+/// module names the waiting states).
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub(crate) struct ForcedJump {
     pub(crate) slot_id: QueueSlotId,
     pub(crate) transition: Option<crate::transition::Transition>,
     pub(crate) resume_ticks: Option<i64>,
     pub(crate) from_idle: bool,
+}
+
+/// What a run end has to report: the outcome math for one slot,
+/// built by a call site and handed to the single exit `end_run`.
+#[derive(Debug)]
+pub(crate) struct StopOutcome {
+    pub(crate) slot_id: Option<QueueSlotId>,
+    pub(crate) position_ticks: i64,
+    pub(crate) played: bool,
+    pub(crate) consume: bool,
+    pub(crate) error: Option<String>,
 }
 
 #[expect(
@@ -60,12 +75,14 @@ pub(crate) struct PlaybackRun {
     pub(crate) queue: ExecutionSequence,
     pub(crate) audiobookshelf_context: Option<AudiobookshelfPlayerContext>,
     pub(crate) active_lifecycle: ActiveItemLifecycle,
-    pub(crate) active_file: bool,
+    /// Run-lifecycle facts: the "has playback begun" boundary,
+    /// which projection feeds mpv, and the forced-jump arm. See the
+    /// `lifecycle` module.
+    pub(crate) run_lifecycle: RunLifecycle,
     pub(crate) prepared_source: Option<PreparedSource>,
     pub(crate) ext_sub_urls: Vec<String>,
     // loop state
     pub(crate) current_idx: usize,
-    pub(crate) forced_jump: Option<ForcedJump>,
     /// Slot identity captured at the moment a stop/quit is first observed, so a
     /// `QueueMove`/`QueueRemove` applied before the deferred `Stopped` emit
     /// (shutdown / quit-timeout paths) cannot change which occurrence the event
@@ -80,14 +97,6 @@ pub(crate) struct PlaybackRun {
     pub(crate) tracks_initialized: bool,
     pub(crate) item_lifecycle: ItemLifecycleState,
     pub(crate) pending_initial_playlist_layout: bool,
-    pub(crate) stopped_event_sent: bool,
-    /// Whether any `PlaybackRestart` has arrived in this run — the "has
-    /// playback begun" boundary. A generic mpv failure before it is a start
-    /// failure and stops the run with an error (#941); after it, mpv owns
-    /// skipping a failed entry and the playlist-position drift machinery
-    /// follows it — unless no entry follows the failed one, where the run
-    /// still ends with the error (#942, #943).
-    pub(crate) playback_began: bool,
     pub(crate) mark_played_id: Option<ItemId>,
     pub(crate) osd_title: String,
     pub(crate) last_mouse_osd: Option<Instant>,

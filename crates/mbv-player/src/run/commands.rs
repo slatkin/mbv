@@ -1,6 +1,6 @@
 use super::{
-    Mpv, PlaybackOrigin, PlaybackRun, ProgressGuard, StopReport, auto_select_tracks, mpv_load_opts,
-    mpv_title_opt, mpv_url_for_queue_item, queue_load_indices, queue_load_location,
+    Mpv, PlaybackOrigin, PlaybackRun, ProgressGuard, StopOutcome, StopReport, auto_select_tracks,
+    mpv_load_opts, mpv_title_opt, mpv_url_for_queue_item, queue_load_indices, queue_load_location,
     reassert_queue_layout, refresh_tracks, reject_stale_jump, resolve_jump_target, seek_decision,
     send_ep_info, spawn_progress_reporter, start_queue_playback, volume_decision,
 };
@@ -28,7 +28,7 @@ impl PlaybackRun {
                 self.cmd_jump_to(slot_id, request_id, generation, resume_ticks, mpv, progress);
             }
             PlayerCommand::QueueAppend { items } => {
-                self.cmd_append_queue(items, mpv);
+                self.cmd_append_queue(items, mpv, progress);
             }
             PlayerCommand::QueueRemove(slot_id) => {
                 self.cmd_queue_remove(slot_id, mpv);
@@ -86,6 +86,9 @@ impl PlaybackRun {
             PlayerCommand::SubmitQueue { items, start_idx } => {
                 if !items.is_empty() {
                     self.run_identity = self.status.lock().unwrap().sequence_generation;
+                    // The accepted submission carries the fresh identity:
+                    // nothing rules its end out of reporting again.
+                    self.run_lifecycle.submission_accepted();
                 }
                 self.cmd_submit_queue(items, start_idx, mpv, progress);
                 cancel_stop = true;

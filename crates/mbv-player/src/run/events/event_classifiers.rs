@@ -1,4 +1,4 @@
-use super::super::{EndFileReason, ForcedJump, MpvFailure, QueueItem};
+use super::super::{EndFileReason, JumpArm, MpvFailure, QueueItem};
 
 pub(crate) fn is_clocked_audio_error(failure: &MpvFailure, audio_device_configured: bool) -> bool {
     audio_device_configured && matches!(failure, MpvFailure::AudioOutputInit)
@@ -19,12 +19,18 @@ pub(crate) fn is_clocked_audio_error(failure: &MpvFailure, audio_device_configur
 /// instead.
 pub(crate) fn is_superseded_jump_end_file(
     reason: EndFileReason,
-    forced_jump: Option<ForcedJump>,
+    jump_arm: JumpArm,
     track_finished: bool,
 ) -> bool {
-    forced_jump.is_none_or(|jump| jump.transition.is_none())
+    matches!(reason, EndFileReason::Stop | EndFileReason::Redirect)
         && !track_finished
-        && matches!(reason, EndFileReason::Stop | EndFileReason::Redirect)
+        && match jump_arm {
+            // A pending arm still holding its transition marker IS the settle the
+            // caller waits for; debris arrives after that marker was consumed by
+            // the real target's end-file.
+            JumpArm::Pending(jump) => jump.transition.is_none(),
+            JumpArm::Idle | JumpArm::ResumeOnly { .. } => true,
+        }
 }
 
 pub(crate) fn provider_lifecycle_close_pos(
