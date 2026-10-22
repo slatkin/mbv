@@ -1,9 +1,9 @@
 use mbv_audiobookshelf::{AudiobookshelfError, AudiobookshelfFailureClass};
 
 use super::super::{
-    AdvanceDecisionInput, CompletedMedia, EndFileReason, FinishReason, JumpArm, Mpv,
-    PlaybackOrigin, PlaybackRun, PlayerEvent, ProgressGuard, QueueItem, QueueSlotId, StopOutcome,
-    StopReport, advance_decision, is_near_end, mpv_position_ticks, retry_mark_played, send_ep_info,
+    AdvanceDecisionInput, CompletedMedia, EndFileReason, FinishReason, Mpv, PlaybackOrigin,
+    PlaybackRun, PlayerEvent, ProgressGuard, QueueItem, QueueSlotId, StopOutcome, StopReport,
+    advance_decision, is_near_end, mpv_position_ticks, retry_mark_played, send_ep_info,
     spawn_progress_reporter,
 };
 use super::event_classifiers::{is_superseded_jump_end_file, provider_lifecycle_close_pos};
@@ -100,13 +100,7 @@ impl PlaybackRun {
                 },
                 last_valid_pos: self.last_valid_pos,
             });
-        // The superseded-jump guard classifies only playlist end-files: the
-        // active-file projection never holds an armed jump (design D1).
-        let jump_in_flight = if self.run_lifecycle.is_active_file() {
-            JumpArm::Idle
-        } else {
-            self.run_lifecycle.jump_arm()
-        };
+        let jump_in_flight = self.run_lifecycle.jump_arm();
         if is_superseded_jump_end_file(reason, jump_in_flight, track_finished) {
             return self.handle_superseded_jump(reason, completed_slot_id, mpv);
         }

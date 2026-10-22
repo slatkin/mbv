@@ -163,10 +163,16 @@ impl RunLifecycle {
         }
     }
 
-    /// Switches the run to the active-file projection. Idempotent; the
-    /// projection never returns to `Playlist`.
+    /// Switches the run to the active-file projection and leaves no jump
+    /// armed: the projection never moves mpv with a `playlist-pos` write, so
+    /// an arm armed in the playlist projection belongs to nothing here, and a
+    /// later `PlaybackRestart` on the projection's own entry must not settle
+    /// it. Idempotent; the projection never returns to `Playlist`, and the
+    /// cleared arm cannot re-appear because `arm_jump` discards arms in this
+    /// projection.
     pub(crate) fn enter_active_file(&mut self) {
         self.projection = Projection::ActiveFile;
+        self.jump = JumpArm::Idle;
     }
 
     /// Whether the run is in the active-file projection.

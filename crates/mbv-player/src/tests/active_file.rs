@@ -1,4 +1,34 @@
 use super::*;
+use crate::run::ForcedJump;
+
+/// The active-file projection holds no armed jump: a jump armed earlier in
+/// the playlist projection must not survive the switch into the projection.
+/// It keeps one entry in mpv's playlist and never moves mpv with a
+/// `playlist-pos` write, so an armed jump from the playlist projection names
+/// a slot nothing there is moving to — a promoted entry's later
+/// `PlaybackRestart` would otherwise settle the stale arm (the from-idle
+/// shape below) and report the old jump target as the active slot while mpv
+/// plays the projection's own entry.
+#[test]
+fn entering_the_active_file_projection_clears_an_armed_playlist_jump() {
+    let (mut session, _status) = make_queue_session_for_pos_tests(0);
+    let target = session.slot_id_at(1).unwrap();
+    // The arm shape a playlist jump arms when the run is idle: its target is
+    // settled by a `PlaybackRestart`, not by an outgoing end-file.
+    session.set_pending_playlist_jump(ForcedJump {
+        slot_id: target,
+        transition: Some(crate::transition::Transition::new(42, 1, target)),
+        resume_ticks: None,
+        from_idle: true,
+    });
+
+    session.run_lifecycle.enter_active_file();
+
+    assert!(
+        session.run_lifecycle.jump_arm().is_idle(),
+        "the active-file projection holds no armed jump"
+    );
+}
 
 /// playback-run-lifecycle row 4.1 / defect 3 (spec requirement 4, scenario
 /// "An active-file jump fails"): a selection failure during a jump into the
