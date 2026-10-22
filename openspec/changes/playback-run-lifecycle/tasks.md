@@ -4,8 +4,8 @@ All work is in `crates/mbv-player`. For each task, run `cargo fmt`, then `cargo 
 
 ## 1. The lifecycle module, with no behavior change
 
-- [ ] 1.1 Add `run/lifecycle.rs` with `RunLifecycle`, `Projection`, `JumpArm` (`Idle`, `Pending(ForcedJump)`, `ResumeOnly { slot_id, resume_ticks }`), and the `began` and `ended` state (design D1). Add only the constructors and the read accessors. Verify: `cargo check -p mbv-player`.
-- [ ] 1.2 Replace `PlaybackRun::playback_began` and `active_file` with the lifecycle (`playback_started()`, `enter_active_file()`, `is_active_file()`, `began()`) at every site that design "Context" lists. Change the direct field writes in `src/tests/submit.rs` and `src/tests/active_file.rs` to the facts. Verify: the existing tests pass unchanged in what they assert.
+- [x] 1.1 Add `run/lifecycle.rs` with `RunLifecycle`, `Projection`, `JumpArm` (`Idle`, `Pending(ForcedJump)`, `ResumeOnly { slot_id, resume_ticks }`), and the `began` and `ended` state (design D1). Add only the constructors and the read accessors. Verify: `cargo check -p mbv-player`. (JumpArm lands in 1.3, `ended` in 2.1: dead_code gate.)
+- [x] 1.2 Replace `PlaybackRun::playback_began` and `active_file` with the lifecycle (`playback_started()`, `enter_active_file()`, `is_active_file()`, `began()`) at every site that design "Context" lists. Change the direct field writes in `src/tests/submit.rs` and `src/tests/active_file.rs` to the facts. Verify: the existing tests pass unchanged in what they assert.
 - [ ] 1.3 Replace `PlaybackRun::forced_jump` with `JumpArm`. Port `set_pending_playlist_jump`, `cmd_jump_to_playlist`, `settle_forced_jump`, `settle_idle_jump_on_restart`, `apply_forced_resume`, `adopt_mpv_entry`, the `queue_commands.rs:25` clear, `begin_item_lifecycle`, `is_superseded_jump_end_file`, and the drift mute. Each one does the same transition as today. Change the `forced_jump` writes in `src/tests/session.rs` to `arm_jump`. Verify: the existing tests pass, and `rg -n forced_jump crates/mbv-player/src` shows no field access.
 
 ## 2. The single exit
