@@ -3,7 +3,7 @@ use super::{
     mpv_load_opts, mpv_url_for_queue_item, reject_stale_jump, resolve_jump_target,
     spawn_progress_reporter,
 };
-use crate::run::{ForcedJump, JumpArm, StopAction, StopReport};
+use crate::run::{ForcedJump, JumpArm, StopReport};
 use crate::{EMBY_RESUME_RETRY_DELAYS, refresh_emby_resume};
 
 impl PlaybackRun {
@@ -217,11 +217,10 @@ impl PlaybackRun {
 
     /// Ends the run after a failed active-file select or install: one
     /// `Stopped` with the error, naming the slot the run tried to select.
-    /// run tried to select. The run parks like a failed replacement
-    /// (`accept_stopped_replacement`) — the outgoing item's stop report goes
-    /// out, the child drains to idle, and a later submission can still reuse
-    /// the mpv child (a second end path for the closed identity reports
-    /// nothing).
+    /// The run parks like a failed replacement (`park_for_failed_load`) —
+    /// the outgoing item's stop report goes out and a later submission can
+    /// still reuse the mpv child (a second end path for the closed identity
+    /// reports nothing).
     fn stop_for_active_file_failure(
         &mut self,
         failed_slot: Option<QueueSlotId>,
@@ -230,22 +229,7 @@ impl PlaybackRun {
         mpv: &Mpv,
         progress: &mut ProgressGuard,
     ) {
-        let old_pos = self.last_valid_pos;
-        progress.stop_and_join(Self::progress_join_budget());
-        if self.is_unreported() {
-            let _ = self.reporter.report_stopped(old_pos);
-            self.mark_reported(StopReport::Sent);
-        }
-        self.close_prepared_source_at(old_pos);
-        let _ = mpv.command("stop", &[]);
-        let _ = mpv.command("playlist-clear", &[]);
-        // The stop above produces an EndFile of its own: arm the same
-        // replacement drain a failed replacement arms, so `on_end_file`
-        // swallows it (`swallow_pending_load`) instead of letting the real
-        // end-file handlers advance the parked run or end it again.
-        self.begin_item_lifecycle(StopAction::ReportedNow(self.stop_report()));
-        self.ext_sub_urls.clear();
-        self.reporter.clear_session();
+        self.park_for_failed_load(mpv, progress);
         self.end_run(StopOutcome {
             slot_id: failed_slot,
             position_ticks,

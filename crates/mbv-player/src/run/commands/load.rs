@@ -354,15 +354,7 @@ impl PlaybackRun {
         progress: &mut ProgressGuard,
         error: String,
     ) {
-        let old_pos = self.last_valid_pos;
-        progress.stop_and_join(Self::progress_join_budget());
-        if self.is_unreported() {
-            let _ = self.reporter.report_stopped(old_pos);
-            self.mark_reported(StopReport::Sent);
-        }
-        self.close_prepared_source_at(old_pos);
-        let _ = mpv.command("stop", &[]);
-        let _ = mpv.command("playlist-clear", &[]);
+        self.park_for_failed_load(mpv, progress);
 
         if !items.is_empty() {
             let active_slot_id = items.get(start_idx).map(|slot| slot.slot_id);
@@ -382,10 +374,7 @@ impl PlaybackRun {
             PlaybackOrigin::Queue
         };
         self.load_active_item_state();
-        self.begin_item_lifecycle(StopAction::ReportedNow(self.stop_report()));
         self.pending_initial_playlist_layout = false;
-        self.ext_sub_urls.clear();
-        self.reporter.clear_session();
 
         let position_ticks = active_item.playback_position_ticks();
         let mut status = self.status.lock().unwrap();
