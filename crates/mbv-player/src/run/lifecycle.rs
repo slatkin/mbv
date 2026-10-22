@@ -176,9 +176,13 @@ impl RunLifecycle {
     }
 
     /// A new submission was accepted into the same mpv child (design D5):
-    /// nothing rules the incoming submission's run identity out of ending,
-    /// even if the previous submission already did.
+    /// it starts the counts again — no `PlaybackRestart` has arrived for it
+    /// (defect 6: an earlier submission's boundary must not hold the new
+    /// one's start-failure open), nothing of it is armed, and nothing rules
+    /// its run identity out of ending.
     pub(crate) fn submission_accepted(&mut self) {
+        self.began = false;
+        self.jump = JumpArm::Idle;
         self.ended = None;
     }
 

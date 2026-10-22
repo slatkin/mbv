@@ -34,6 +34,9 @@ fn close_reports_once_per_run_identity_and_reopens_on_a_new_submission() {
 /// distinct so a verdict built from a stale entry cannot pass the naming.
 struct VerdictFacts {
     began: bool,
+    /// An earlier submission played and a new submission was accepted into
+    /// the same mpv child after that (design D5); the counts start again.
+    resubmitted: bool,
     active_file: bool,
     jump: JumpArm,
     position: RunPosition,
@@ -89,6 +92,21 @@ fn resume_only(target: QueueSlotId) -> JumpArm {
     "before start → end, naming the entry mpv is on (#941)",
     VerdictFacts {
         began: false,
+        resubmitted: false,
+        active_file: false,
+        jump: JumpArm::Idle,
+        position: playlist_position(0, 2, None),
+    },
+    FailureVerdict::EndRun {
+        failed_slot: Some(slot(1)),
+        phase: FailurePhase::BeforeStart,
+    },
+)]
+#[case::resubmitted_play_then_first_entry_fails_ends_defect_6(
+    "began in an earlier submission, new submission fails before its start → end, not continue (design D5, defect 6)",
+    VerdictFacts {
+        began: true,
+        resubmitted: true,
         active_file: false,
         jump: JumpArm::Idle,
         position: playlist_position(0, 2, None),
@@ -102,6 +120,7 @@ fn resume_only(target: QueueSlotId) -> JumpArm {
     "after start with a next entry → continue",
     VerdictFacts {
         began: true,
+        resubmitted: false,
         active_file: false,
         jump: JumpArm::Idle,
         position: playlist_position(0, 2, None),
@@ -112,6 +131,7 @@ fn resume_only(target: QueueSlotId) -> JumpArm {
     "after start with no next entry → end (#942, #943)",
     VerdictFacts {
         began: true,
+        resubmitted: false,
         active_file: false,
         jump: JumpArm::Idle,
         position: playlist_position(1, 2, None),
@@ -125,6 +145,7 @@ fn resume_only(target: QueueSlotId) -> JumpArm {
     "active-file projection → end, even with queue slots after it (#942, #943, review of 7971bf149)",
     VerdictFacts {
         began: true,
+        resubmitted: false,
         active_file: true,
         jump: JumpArm::Idle,
         position: playlist_position(0, 3, None),
@@ -138,6 +159,7 @@ fn resume_only(target: QueueSlotId) -> JumpArm {
     "pending from-idle target that is last → end naming the target (defect 4)",
     VerdictFacts {
         began: true,
+        resubmitted: false,
         active_file: false,
         jump: pending_from_idle(slot(7)),
         position: playlist_position(0, 2, Some(1)),
@@ -151,6 +173,7 @@ fn resume_only(target: QueueSlotId) -> JumpArm {
     "pending from-idle target with a next entry → continue and arm idle (defect 4)",
     VerdictFacts {
         began: true,
+        resubmitted: false,
         active_file: false,
         jump: pending_from_idle(slot(7)),
         position: playlist_position(0, 3, Some(1)),
@@ -161,6 +184,7 @@ fn resume_only(target: QueueSlotId) -> JumpArm {
     "resume-only arm on a target with a next entry → continue and arm idle (defect 5)",
     VerdictFacts {
         began: true,
+        resubmitted: false,
         active_file: false,
         jump: resume_only(slot(7)),
         position: playlist_position(0, 3, Some(1)),
@@ -175,6 +199,10 @@ fn load_failed_judges_the_failure_verdict(
     let mut lifecycle = RunLifecycle::default();
     if facts.began {
         lifecycle.playback_started();
+    }
+    if facts.resubmitted {
+        // A new submission was accepted (design D5): the counts start again.
+        lifecycle.submission_accepted();
     }
     if facts.active_file {
         lifecycle.enter_active_file();
