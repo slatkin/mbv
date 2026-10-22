@@ -78,7 +78,9 @@ impl PlaybackRun {
         let FailureVerdict::EndRun { failed_slot, phase } =
             self.run_lifecycle.load_failed(self.run_position())
         else {
-            tracing::warn!(name: "player.event.failed", target: "player", error = %failure, "mpv event failed");
+            // mpv holds an entry after the failed one. Fall through silently:
+            // `on_mpv_error` fires the run's one `player.event.failed` warn
+            // for a failure it does not stop on.
             return false;
         };
         let error = match phase {
