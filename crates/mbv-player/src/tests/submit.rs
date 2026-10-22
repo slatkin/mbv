@@ -415,7 +415,7 @@ fn generic_error_after_playback_began_keeps_the_run_active() {
     // the failure must not end the whole run there.
     let (mut run, status, events) = make_queue_session_for_pos_tests_with_events(0);
     run.reporter.clear_session();
-    run.playback_began = true;
+    run.run_lifecycle.playback_started();
     let mut progress = noop_progress();
 
     assert!(!run.on_mpv_error(&MpvFailure::Other("loading failed".into()), &mut progress));
@@ -431,7 +431,7 @@ fn generic_error_after_playback_began_stops_the_run_when_no_entry_follows() {
     // no playback and the user got no error.
     let (mut run, status, events) = make_queue_session_for_pos_tests_with_events(2);
     run.reporter.clear_session();
-    run.playback_began = true;
+    run.run_lifecycle.playback_started();
     let mut progress = noop_progress();
 
     assert!(run.on_mpv_error(&MpvFailure::Other("loading failed".into()), &mut progress));
@@ -465,8 +465,8 @@ fn generic_error_after_playback_began_stops_an_active_file_run() {
     );
     // What `PlaybackRun::new` derives from this queue.
     assert!(run.queue.has_audiobookshelf_entries());
-    run.active_file = true;
-    run.playback_began = true;
+    run.run_lifecycle.enter_active_file();
+    run.run_lifecycle.playback_started();
     let mut progress = noop_progress();
 
     assert!(run.on_mpv_error(&MpvFailure::Other("loading failed".into()), &mut progress));

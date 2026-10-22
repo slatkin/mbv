@@ -3,7 +3,7 @@ use mbv_ctrl::player::PlayerEvent;
 
 impl PlaybackRun {
     pub(crate) fn on_playlist_pos_changed(&mut self, pos: i64, mpv_pos_ticks: i64) {
-        if self.active_file {
+        if self.run_lifecycle.is_active_file() {
             return;
         }
         if self.pending_initial_playlist_layout
@@ -33,7 +33,7 @@ impl PlaybackRun {
     }
 
     pub(crate) fn on_playlist_count_changed(&mut self, count: usize) {
-        if self.active_file {
+        if self.run_lifecycle.is_active_file() {
             return;
         }
         if count == self.queue_len() {

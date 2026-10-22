@@ -14,6 +14,8 @@ use std::time::{Duration, Instant};
 
 mod state;
 pub(crate) use state::*;
+mod lifecycle;
+pub(crate) use lifecycle::*;
 mod decisions;
 pub(crate) use decisions::*;
 mod types;

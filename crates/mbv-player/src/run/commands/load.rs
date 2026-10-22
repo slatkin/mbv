@@ -98,7 +98,9 @@ impl PlaybackRun {
         mpv: &Mpv,
         progress: &mut ProgressGuard,
     ) {
-        if self.active_file || items.iter().any(|slot| slot.item.is_audiobookshelf()) {
+        if self.run_lifecycle.is_active_file()
+            || items.iter().any(|slot| slot.item.is_audiobookshelf())
+        {
             self.replace_with_queue_items(items, start_idx, mpv, progress);
             return;
         }
@@ -293,7 +295,7 @@ impl PlaybackRun {
             active_slot_id,
         );
         self.current_idx = start_idx;
-        self.active_file = true;
+        self.run_lifecycle.enter_active_file();
         // New active slot: rebuild the correlation span before the projection
         // install, so its failure lines carry the incoming slot (design D5).
         self.rebuild_playback_span();
@@ -365,7 +367,7 @@ impl PlaybackRun {
             );
         }
         self.current_idx = start_idx;
-        self.active_file = true;
+        self.run_lifecycle.enter_active_file();
         self.origin = if self.queue_len() == 1 {
             PlaybackOrigin::Standalone
         } else {

@@ -71,14 +71,15 @@ impl PlaybackRun {
             return false;
         }
         // mpv skips a failed entry on its own only while it holds the run's
-        // playlist, and an `active_file` projection clears it to the single
+        // playlist, and an active-file projection clears it to the single
         // entry playing — so nothing follows a failure there, whatever the
         // run's own queue holds.
-        let mpv_has_next_entry = !self.active_file && self.current_idx + 1 < self.queue_len();
-        if self.playback_began && mpv_has_next_entry {
+        let mpv_has_next_entry =
+            !self.run_lifecycle.is_active_file() && self.current_idx + 1 < self.queue_len();
+        if self.run_lifecycle.began() && mpv_has_next_entry {
             return false;
         }
-        let error = if self.playback_began {
+        let error = if self.run_lifecycle.began() {
             tracing::error!(name: "player.event.playback_failed", target: "player", error = %failure, "playback error with no next entry; ending the run");
             format!("failed to play media: {failure}")
         } else {

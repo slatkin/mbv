@@ -50,7 +50,7 @@ impl PlaybackRun {
             resume_ticks,
             from_idle: false,
         });
-        if self.active_file {
+        if self.run_lifecycle.is_active_file() {
             self.cmd_jump_to_active_file(slot_id, resume_ticks, Some(transition), mpv, progress);
         } else {
             self.cmd_jump_to_playlist(slot_id, idx, resume_ticks, mpv);
@@ -58,7 +58,7 @@ impl PlaybackRun {
     }
 
     pub(crate) fn set_pending_playlist_jump(&mut self, jump: ForcedJump) {
-        self.forced_jump = (!self.active_file).then_some(jump);
+        self.forced_jump = (!self.run_lifecycle.is_active_file()).then_some(jump);
     }
 
     fn cmd_jump_to_active_file(
@@ -155,7 +155,7 @@ impl PlaybackRun {
             return;
         }
 
-        if self.active_file {
+        if self.run_lifecycle.is_active_file() {
             self.append_items_to_queue(new_items);
             return;
         }
@@ -184,7 +184,7 @@ impl PlaybackRun {
             return;
         }
         self.append_items_to_queue(new_items);
-        self.active_file = true;
+        self.run_lifecycle.enter_active_file();
     }
 
     /// Appends a non-audiobookshelf set straight to mpv's playlist, using

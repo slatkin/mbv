@@ -101,7 +101,8 @@ impl PlaybackRun {
             });
         if is_superseded_jump_end_file(
             reason,
-            self.forced_jump.filter(|_| !self.active_file),
+            self.forced_jump
+                .filter(|_| !self.run_lifecycle.is_active_file()),
             track_finished,
         ) {
             return self.handle_superseded_jump(reason, completed_slot_id, mpv);
@@ -165,7 +166,7 @@ impl PlaybackRun {
         // next_idx < queue_len() was already checked above, so set_active_index
         // (which only fails when the index is out of bounds) cannot fail here.
         let next_slot_id = self.slot_id_at(next_idx);
-        let advanced = if self.active_file {
+        let advanced = if self.run_lifecycle.is_active_file() {
             self.close_prepared_source_at(provider_lifecycle_close_pos(
                 end.completed_item,
                 end.natural,
@@ -195,7 +196,7 @@ impl PlaybackRun {
             .cloned()
             .expect("active item must exist after successful set_active_index");
         self.load_active_item_state();
-        if self.active_file && !advanced {
+        if self.run_lifecycle.is_active_file() && !advanced {
             return self.stop_for_failed_advance(end.completed_slot_id, progress);
         }
         self.tracks_initialized = false;
@@ -456,7 +457,7 @@ mod tests {
             Some(b),
         );
         run.current_idx = 1;
-        run.active_file = true;
+        run.run_lifecycle.enter_active_file();
         run.set_pending_playlist_jump(ForcedJump {
             slot_id: b,
             transition: Some(crate::transition::Transition::new(42, 1, b)),

@@ -124,8 +124,8 @@ impl PlaybackRun {
     }
 
     pub(crate) fn on_playback_restart(&mut self, mpv: &Mpv) {
-        // The "has playback begun" boundary (#941); see `playback_began`.
-        self.playback_began = true;
+        // The "has playback begun" boundary (#941); see `RunLifecycle`.
+        self.run_lifecycle.playback_started();
         // The submit-time start report fires here, on the first actual
         // playback: a run that never plays reports no session start, so no
         // start+stop pair churns the server-side session (its stop report
