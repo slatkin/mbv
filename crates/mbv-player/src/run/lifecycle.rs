@@ -59,7 +59,7 @@ impl JumpArm {
     /// to a transition mpv is still applying, so it mutes the
     /// playlist-position drift adoption.
     #[must_use]
-    pub(crate) fn is_idle(self) -> bool {
+    pub(crate) fn is_idle(&self) -> bool {
         matches!(self, JumpArm::Idle)
     }
 }
@@ -260,13 +260,6 @@ impl RunLifecycle {
         self.jump = JumpArm::Idle;
     }
 
-    /// Records that the run adopted the entry mpv moved to on its own: any
-    /// armed resume value belonged to the jumped entry, which is gone, so the
-    /// arm goes `Idle`.
-    pub(crate) fn entry_adopted(&mut self) {
-        self.jump = JumpArm::Idle;
-    }
-
     /// The current arm, for reads that decide against it whole: the drift
     /// mute (`is_idle`), the superseded-jump guard, and the pending
     /// transition marker a playlist jump re-arms with.
@@ -303,7 +296,7 @@ impl RunLifecycle {
         current_idx: usize,
         queue_len: usize,
     ) -> (usize, Option<Transition>) {
-        let next_idx = target_index.unwrap_or(current_idx + 1);
+        let next_idx = neighbor_fallback(target_index, current_idx);
         let (transition, resume) = match std::mem::replace(&mut self.jump, JumpArm::Idle) {
             JumpArm::Idle => (None, None),
             JumpArm::Pending(jump) => (
@@ -370,7 +363,11 @@ impl RunLifecycle {
 /// applies, so a judged failure and a settled jump agree on where a vanished
 /// target lands.
 fn resolved_target_idx(position: &RunPosition) -> usize {
-    position.jump_target_idx.unwrap_or(position.current_idx + 1)
+    neighbor_fallback(position.jump_target_idx, position.current_idx)
+}
+
+fn neighbor_fallback(target_idx: Option<usize>, current_idx: usize) -> usize {
+    target_idx.unwrap_or(current_idx + 1)
 }
 
 #[cfg(test)]
