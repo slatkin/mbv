@@ -192,7 +192,6 @@ impl PlaybackRun {
             provider_lifecycle_close_pos(item, natural_end, runtime, self.last_valid_pos)
         });
         self.close_prepared_source_at(lifecycle_pos);
-        self.status.lock().unwrap().active = false;
 
         self.retry_natural_mark_played(natural_end, completed_is_audio);
         self.end_run(StopOutcome {
