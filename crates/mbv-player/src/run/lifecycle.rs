@@ -18,9 +18,14 @@
 //! which of the two a single `Option<ForcedJump>` held from its `transition`
 //! and `from_idle` fields; the named states give each event exactly one
 //! transition (design D1).
+//!
+//! The run's single exit (design D4) is the machine's close: `close(identity)`
+//! answers once per run identity whether the caller may send the run's one
+//! `Stopped`, and an accepted later submission reopens the guard.
 
 use super::{ExecutionSequence, ForcedJump, QueueSlotId};
 use crate::transition::Transition;
+use mbv_ctrl::PlaybackGeneration;
 
 #[derive(Copy, Clone, Debug, Default)]
 enum Projection {
@@ -59,10 +64,11 @@ impl JumpArm {
     }
 }
 
-/// The lifecycle facts of one submission: the "has playback begun" boundary
-/// and the projection that decides whether anything follows a failed entry.
-/// `PlaybackRun` holds this in place of the `playback_began` and
-/// `active_file` flags it produced (design D1).
+/// The lifecycle facts of one run: the "has playback begun" boundary, the
+/// projection that decides whether anything follows a failed entry, and the
+/// run identity that already ended. `PlaybackRun` holds this in place of the
+/// `playback_began`, `active_file`, and `stopped_event_sent` flags it
+/// produced (design D1).
 #[derive(Debug, Default)]
 pub(crate) struct RunLifecycle {
     /// Whether any `PlaybackRestart` has arrived in this run — the "has
@@ -76,6 +82,10 @@ pub(crate) struct RunLifecycle {
     /// The forced-jump arm (design D1): what a `JumpTo` is waiting on, with
     /// the named states of `JumpArm`.
     jump: JumpArm,
+    /// The run identity that already reported its `Stopped` (design D4): the
+    /// one-shot guard behind `close`. A later accepted submission clears it
+    /// (design D5), so that submission's run can end again.
+    ended: Option<PlaybackGeneration>,
 }
 
 impl RunLifecycle {
@@ -99,6 +109,7 @@ impl RunLifecycle {
                 Projection::Playlist
             },
             jump: JumpArm::Idle,
+            ended: None,
         }
     }
 
@@ -118,6 +129,25 @@ impl RunLifecycle {
     #[must_use]
     pub(crate) fn began(&self) -> bool {
         self.began
+    }
+
+    /// A new submission was accepted into the same mpv child (design D5):
+    /// nothing rules the incoming submission's run identity out of ending,
+    /// even if the previous submission already did.
+    pub(crate) fn submission_accepted(&mut self) {
+        self.ended = None;
+    }
+
+    /// Answers the run's single exit (design D4): `true` when this identity
+    /// has not reported its `Stopped` yet — the caller may deactivate and
+    /// send — and `false` for a second end path over the same identity. The
+    /// first close records `identity` as ended.
+    pub(crate) fn close(&mut self, identity: PlaybackGeneration) -> bool {
+        if self.ended == Some(identity) {
+            return false;
+        }
+        self.ended = Some(identity);
+        true
     }
 
     /// Arms a pending `JumpTo` (design D1): the run is `Pending`, waiting for
@@ -232,9 +262,9 @@ impl RunLifecycle {
 
     /// Takes the arm's resume ticks for an entry that just loaded so the run
     /// can seek to it, resolving the arm to `Idle` — the resume it was
-    /// waiting for is now served. `None` when no arm carries ticks; only such
-    /// an arm is disarmed, since a pending transition arm still waiting for
-    /// its end-file or restart stays in flight.
+    /// waiting for is now served. `None` when no arm carries ticks: only an
+    /// arm carrying ticks is resolved, while a `Pending` arm without ticks
+    /// stays in flight, still waiting for its end-file or restart.
     pub(crate) fn take_resume_ticks(&mut self) -> Option<i64> {
         let resume_ticks = match self.jump {
             JumpArm::Pending(jump) => jump.resume_ticks,
@@ -245,3 +275,6 @@ impl RunLifecycle {
         Some(resume_ticks)
     }
 }
+
+#[cfg(test)]
+mod tests;

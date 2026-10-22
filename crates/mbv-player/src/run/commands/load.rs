@@ -1,6 +1,6 @@
 use super::{
     EmbyItem, ExecSlot, ExecutionSequence, Mpv, PlaybackOrigin, PlaybackRun, PlayerEvent,
-    ProgressGuard, QueueItem, QueueSlotId, StopReport, mpv_load_opts, mpv_title_opt,
+    ProgressGuard, QueueItem, QueueSlotId, StopOutcome, StopReport, mpv_load_opts, mpv_title_opt,
     mpv_url_for_queue_item, queue_load_indices, queue_load_location, reassert_queue_layout,
     send_ep_info, spawn_progress_reporter, start_queue_playback,
 };
@@ -17,6 +17,10 @@ impl PlaybackRun {
         progress: &mut ProgressGuard,
     ) {
         self.cancel_pending_quit();
+        // A new file is a new submission into the reused child; it receives no
+        // new run identity, so its end must be able to report again even when
+        // the previous run identity already ended (design D5).
+        self.run_lifecycle.submission_accepted();
         self.origin = PlaybackOrigin::Standalone;
         self.close_prepared_source();
         // Loading a new item should always start playing it, even if mpv
@@ -266,6 +270,10 @@ impl PlaybackRun {
             self.sync_status_position();
             return;
         }
+        // The replacement (its success and its failure arms alike) is a new
+        // submission into the reused child (design D5): its identity may end
+        // again even if the previous submission already did.
+        self.run_lifecycle.submission_accepted();
         let start_idx = start_idx.min(items.len() - 1);
         let active_item = items[start_idx].item.clone();
         let prepared = match self.prepare_item(&active_item) {
@@ -396,9 +404,8 @@ impl PlaybackRun {
         status.active = false;
         drop(status);
 
-        let _ = self.event_tx.send(PlayerEvent::Stopped {
+        self.end_run(StopOutcome {
             slot_id: self.active_slot_id(),
-            run_identity: self.run_identity,
             position_ticks,
             played: false,
             consume: false,

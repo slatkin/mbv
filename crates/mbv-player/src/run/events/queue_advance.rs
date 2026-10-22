@@ -2,8 +2,8 @@ use mbv_audiobookshelf::{AudiobookshelfError, AudiobookshelfFailureClass};
 
 use super::super::{
     AdvanceDecisionInput, CompletedMedia, EndFileReason, FinishReason, JumpArm, Mpv,
-    PlaybackOrigin, PlaybackRun, PlayerEvent, ProgressGuard, QueueItem, QueueSlotId, StopReport,
-    advance_decision, is_near_end, mpv_position_ticks, retry_mark_played, send_ep_info,
+    PlaybackOrigin, PlaybackRun, PlayerEvent, ProgressGuard, QueueItem, QueueSlotId, StopOutcome,
+    StopReport, advance_decision, is_near_end, mpv_position_ticks, retry_mark_played, send_ep_info,
     spawn_progress_reporter,
 };
 use super::event_classifiers::{is_superseded_jump_end_file, provider_lifecycle_close_pos};
@@ -285,12 +285,10 @@ impl PlaybackRun {
     ) -> bool {
         tracing::warn!(name: "player.queue.completed_slot_missing", target: "player", index = ?completed_idx, queue_length = self.queue_len(), "completed item is out of bounds; stopping");
         progress.stop_and_join(Self::progress_join_budget());
-        self.status.lock().unwrap().active = false;
         let _ = self.reporter.report_stopped(self.last_valid_pos);
         self.mark_reported(StopReport::Sent);
-        let _ = self.event_tx.send(PlayerEvent::Stopped {
+        self.end_run(StopOutcome {
             slot_id: completed_slot_id,
-            run_identity: self.run_identity,
             position_ticks: self.last_valid_pos,
             played: false,
             consume: false,
@@ -338,7 +336,6 @@ impl PlaybackRun {
     /// the run (signals `run()` to return).
     fn stop_at_queue_end(&mut self, stop: &QueueEndStop<'_>, progress: &mut ProgressGuard) -> bool {
         progress.stop_and_join(Self::progress_join_budget());
-        self.status.lock().unwrap().active = false;
         let _ = self.reporter.report_stopped(stop.completed_pos);
         self.mark_reported(StopReport::Sent);
         self.close_prepared_source_at(provider_lifecycle_close_pos(
@@ -348,9 +345,8 @@ impl PlaybackRun {
             self.last_valid_pos,
         ));
         self.mark_played_or_retry(stop.played_out, stop.completed_item);
-        let _ = self.event_tx.send(PlayerEvent::Stopped {
+        self.end_run(StopOutcome {
             slot_id: stop.completed_slot_id,
-            run_identity: self.run_identity,
             position_ticks: stop.completed_pos,
             played: stop.played_out,
             consume: stop.consume_track,
@@ -366,10 +362,8 @@ impl PlaybackRun {
     ) -> bool {
         let error = AudiobookshelfError::from_class(AudiobookshelfFailureClass::Unavailable);
         progress.stop_and_join(Self::progress_join_budget());
-        self.status.lock().unwrap().active = false;
-        let _ = self.event_tx.send(PlayerEvent::Stopped {
+        self.end_run(StopOutcome {
             slot_id: completed_slot_id,
-            run_identity: self.run_identity,
             position_ticks: 0,
             played: false,
             consume: false,

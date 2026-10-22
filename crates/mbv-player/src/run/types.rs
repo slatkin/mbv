@@ -43,6 +43,17 @@ pub(crate) struct ForcedJump {
     pub(crate) from_idle: bool,
 }
 
+/// What a run end has to report (design D4): the outcome math for one slot,
+/// built by a call site and handed to the single exit `end_run`.
+#[derive(Debug)]
+pub(crate) struct StopOutcome {
+    pub(crate) slot_id: Option<QueueSlotId>,
+    pub(crate) position_ticks: i64,
+    pub(crate) played: bool,
+    pub(crate) consume: bool,
+    pub(crate) error: Option<String>,
+}
+
 #[expect(
     clippy::struct_excessive_bools,
     reason = "runtime flags represent independent playback state, not alternatives (design analysis, issue #804)"
@@ -86,7 +97,6 @@ pub(crate) struct PlaybackRun {
     pub(crate) tracks_initialized: bool,
     pub(crate) item_lifecycle: ItemLifecycleState,
     pub(crate) pending_initial_playlist_layout: bool,
-    pub(crate) stopped_event_sent: bool,
     pub(crate) mark_played_id: Option<ItemId>,
     pub(crate) osd_title: String,
     pub(crate) last_mouse_osd: Option<Instant>,

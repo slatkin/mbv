@@ -1,6 +1,6 @@
 use super::super::{
     EndFileReason, MpvFailure, PlaybackOrigin, PlaybackRun, PlayerEvent, ProgressGuard, QueueItem,
-    QueueSlotId, StopReport, is_near_end, retry_mark_played,
+    QueueSlotId, StopOutcome, StopReport, is_near_end, retry_mark_played,
 };
 use super::event_classifiers::{is_clocked_audio_error, provider_lifecycle_close_pos};
 use std::sync::{Arc, atomic::Ordering};
@@ -90,11 +90,14 @@ impl PlaybackRun {
         true
     }
 
-    /// The teardown shared by an audio-output failure and an unexpected mpv
-    /// exit: close the prepared source, join progress, deactivate the status
-    /// snapshot, and report one `Stopped` with `error` and `position_ticks`.
-    /// A stop that is already reported (for example a standalone end-file
-    /// stop) is not reported a second time.
+    /// The teardown shared by an audio-output failure, an unexpected mpv
+    /// exit, and a start failure: close the prepared source, join progress,
+    /// and report one `Stopped` with `error` and `position_ticks` through
+    /// the single exit (design D4). The close per run identity — not the
+    /// Service report state — decides that the event goes out exactly once:
+    /// an adoption's stopped report no longer mutes a later error stop
+    /// (defect 1), and an earlier end for the same identity still allows no
+    /// second one.
     fn stop_run_with_error(
         &mut self,
         progress: &mut ProgressGuard,
@@ -104,19 +107,13 @@ impl PlaybackRun {
         self.close_prepared_source();
         progress.stop_and_join(Self::progress_join_budget());
         self.close_prepared_source_at(self.last_valid_pos);
-        let stopped_slot = self.active_slot_id();
-        self.status.lock().unwrap().active = false;
-        if !self.stopped_event_sent && !self.stop_report_sent() {
-            let _ = self.event_tx.send(PlayerEvent::Stopped {
-                slot_id: stopped_slot,
-                run_identity: self.run_identity,
-                position_ticks,
-                played: false,
-                consume: false,
-                error: Some(error),
-            });
-            self.stopped_event_sent = true;
-        }
+        self.end_run(StopOutcome {
+            slot_id: self.active_slot_id(),
+            position_ticks,
+            played: false,
+            consume: false,
+            error: Some(error),
+        });
         true
     }
 
@@ -177,17 +174,13 @@ impl PlaybackRun {
         self.status.lock().unwrap().active = false;
 
         self.retry_natural_mark_played(natural_end, completed_is_audio);
-        if !self.stopped_event_sent {
-            let _ = self.event_tx.send(PlayerEvent::Stopped {
-                slot_id: completed_slot_id,
-                run_identity: self.run_identity,
-                position_ticks: 0,
-                played: natural_end && !completed_is_audio && self.reporter.has_session(),
-                consume: false,
-                error: None,
-            });
-            self.stopped_event_sent = true;
-        }
+        self.end_run(StopOutcome {
+            slot_id: completed_slot_id,
+            position_ticks: 0,
+            played: natural_end && !completed_is_audio && self.reporter.has_session(),
+            consume: false,
+            error: None,
+        });
         false
     }
 
@@ -230,17 +223,13 @@ impl PlaybackRun {
             let id = self.reporter.ids.lock().unwrap().0.clone();
             retry_mark_played(Arc::clone(client), id);
         }
-        self.status.lock().unwrap().active = false;
-        if !self.stopped_event_sent {
-            let _ = self.event_tx.send(PlayerEvent::Stopped {
-                slot_id: stopped_slot,
-                run_identity: self.run_identity,
-                position_ticks: self.last_valid_pos,
-                played: near_end,
-                consume: false,
-                error: None,
-            });
-        }
+        self.end_run(StopOutcome {
+            slot_id: stopped_slot,
+            position_ticks: self.last_valid_pos,
+            played: near_end,
+            consume: false,
+            error: None,
+        });
         // mpv exited on its own (not via our stop command, e.g. the user
         // closed the mpv window directly) — despite the event name,
         // App::handle_player_event's PlayerEvent::MpvQuit arm does not
@@ -251,14 +240,12 @@ impl PlaybackRun {
     }
 
     fn shutdown_queue(&mut self, stopped_slot: Option<QueueSlotId>) {
-        self.status.lock().unwrap().active = false;
         // played and consume are deliberately the same value here: stopped_near_end
         // is already video-only (see is_near_end's !is_audio gate), so a quit/cancel
         // near the end of an audio item never sets either — consistent with on_end_file's
         // normal advance path, where only natural/next-up (not near-end) triggers audio consume.
-        let _ = self.event_tx.send(PlayerEvent::Stopped {
+        self.end_run(StopOutcome {
             slot_id: stopped_slot,
-            run_identity: self.run_identity,
             position_ticks: self.last_valid_pos,
             played: self.stopped_near_end,
             consume: self.stopped_near_end,
