@@ -15,9 +15,12 @@ load-failure path `stop_for_unrecoverable_error`
    drift machinery follows the move.
 3. A failed jump is judged from the jump target, never from the entry played
    before it, and it leaves no jump in flight.
-4. Each run identity reports exactly one `Stopped`, whichever end path fires.
-   A second end path for the same identity reports nothing. A later accepted
-   submission carries a new identity and can end again.
+4. Each run submission reports exactly one `Stopped`, whichever end path fires.
+   A second end path for the same submission reports nothing. A later submission
+   can end again: a submission that refreshes the run identity carries a new
+   one, and a submission that keeps the identity — the active-file replacement
+   and a `LoadNew` command — reopens the guard, so its stop carries the
+   identity the run already had.
 
 ## Why it matters
 
@@ -36,10 +39,9 @@ but it never removes two stops for one current identity: a duplicated `Stopped`
 re-applies its stop observation to the same slot (`apply_stopped_observation` →
 `apply_completion_progress`) and relays the event to Clients again.
 Exactly-once is therefore a Player-side duty, not a filter the Owner can apply.
-Before the `playback-run-lifecycle` change, the send was guarded by
-`stopped_event_sent` plus the Service report state, so a fatal error after an
-adoption sent no `Stopped` at all, while a failed active-file replacement let a
-later quit send a second one.
+The send used to be guarded by `stopped_event_sent` plus the Service report
+state, so a fatal error after an adoption sent no `Stopped` at all, while a
+failed active-file replacement let a later quit send a second one.
 
 ## How the code maintains it today
 
@@ -51,7 +53,9 @@ later quit send a second one.
   resume_ticks }`), and the identity that already ended (`ended`). It is a pure
   state machine: no `Mpv`, no channel, no lock, and it borrows no queue — the
   run hands it plain values in `RunPosition`. `PlaybackRun` holds it as
-  `run_lifecycle`.
+  `run_lifecycle`. Entering the active-file projection clears the jump arm:
+  that projection never moves mpv with a `playlist-pos` write, so a jump armed
+  in the playlist projection cannot settle there.
 - The verdict. `stop_for_unrecoverable_error` (`run/events/termination.rs`)
   turns a generic `MpvFailure::Other` into one question,
   `RunLifecycle::load_failed(RunPosition)`, and acts on the answer:
@@ -61,7 +65,7 @@ later quit send a second one.
   (`BeforeStart` or `AfterStart`). `run_position()` resolves the armed target's
   ordinal (`queue.slot_index`) and the slot of the entry mpv is on before the
   call, because identity → ordinal is the run's resolution, not the machine's.
-  The rule order is design D2: take the failed entry from the arm while one is
+  The rule order is: take the failed entry from the arm while one is
   set, clear the arm in every verdict, end before the first restart (#941), end
   in the active-file projection or when nothing follows (#942, #943), otherwise
   continue.
@@ -72,11 +76,11 @@ later quit send a second one.
   the end-of-file paths (`on_end_file`, `on_end_file_queue`,
   `stop_at_queue_end`, `on_end_file_standalone`) never see an error, and every
   error exit lives in `on_mpv_error`. The run loop turns the event into one
-  lifecycle fact; the machine never sees an `MpvEvent`. Design D2 keeps the
-  output-specific cases out of the machine: `on_mpv_error` still classifies
+  lifecycle fact; the machine never sees an `MpvEvent`. The
+  output-specific cases stay out of the machine: `on_mpv_error` still classifies
   `MpvFailure::ProcessExited` and `MpvFailure::AudioOutputInit` itself, and only
   `MpvFailure::Other` reaches `load_failed`.
-- A jump-target failure reads the target (design D3). While `jump_arm()` is
+- A jump-target failure reads the target. While `jump_arm()` is
   `Pending` or `ResumeOnly`, the failed entry is the armed target
   (`jump_target_slot`), and rule 2 of the verdict disarms it. Drift therefore
   stops being muted — `on_playlist_pos_changed` (`run/events/playlist_drift.rs`)
@@ -91,11 +95,13 @@ later quit send a second one.
   new submission is accepted into the live child: `PlayerCommand::SubmitQueue`
   (`run/commands.rs`), where `run_identity` refreshes, plus
   `replace_with_queue_items` and `cmd_load_new` (`run/commands/load.rs`).
-  Design D5.
 - The single exit. `PlaybackRun::end_run(StopOutcome)` (`run/state.rs`) calls
   `RunLifecycle::close(self.run_identity)`; only the first close for that
   identity sets `status.active = false` and sends `PlayerEvent::Stopped`, and a
-  second one logs `player.run.end_suppressed` and sends nothing. The ten in-run
+  second one logs `player.run.end_suppressed` and sends nothing. The guard is
+  keyed by the run identity, and `submission_accepted()` reopens it, so a later
+  submission can close again — including one that keeps the identity, such as
+  the active-file replacement or a `LoadNew` command. The ten in-run
   end paths build their own outcome and call it: `finalize_quit`
   (`run/run_loop.rs`), `stop_for_missing_completed`, `stop_at_queue_end`, and
   `stop_for_failed_advance` (`run/events/queue_advance.rs`),
@@ -120,13 +126,15 @@ later quit send a second one.
   `run/lifecycle/tests.rs` owns the machine:
   `close_reports_once_per_run_identity_and_reopens_on_a_new_submission` for the
   exit, and the named `#[case]` table `load_failed_judges_the_failure_verdict`
-  for the verdict, whose regression cases cite #941, #942, #943 and design
-  defects 4, 5, and 6. `crates/mbv-player/src/tests/session.rs` owns the wiring
+  for the verdict, whose regression cases cite #941, #942, #943 and the
+  jump-target scenarios of the spec. `crates/mbv-player/src/tests/session.rs` owns the wiring
   at run level: `quit_after_a_failed_active_file_replacement_sends_no_second_stopped`
   and `process_exit_after_a_reported_stop_sends_no_second_stopped`.
   `crates/mbv-player/src/tests/active_file.rs` owns the active-file arms:
-  `failed_active_file_jump_reports_one_stopped_naming_the_target_slot` and
-  `a_failed_active_file_jump_drains_its_teardown_end_file_and_parks_the_run`.
+  `failed_active_file_jump_reports_one_stopped_naming_the_target_slot`,
+  `a_failed_active_file_jump_drains_its_teardown_end_file_and_parks_the_run`,
+  and
+  `entering_the_active_file_projection_clears_an_armed_playlist_jump`.
 
 ## Where it currently fails
 
@@ -135,14 +143,14 @@ leaves a jump armed, because the verdict both reads the arm for the failed
 entry and disarms it in every answer. Two known limits remain, neither
 observed:
 
-1. The design D3 two-jump window. Two quick jumps, A then B, leave B armed,
+1. The two-jump window. Two quick jumps, A then B, leave B armed,
    because the arm holds one jump and `arm_jump` overwrites it. If A's load
    fails before mpv applies B's `playlist-pos` write, the verdict blames the
    armed target: the stop names B's slot, and when B is the last entry the run
    ends although B never failed to load. The window is narrow — mpv normally
    stops A with `reason=stop` first, and `is_superseded_jump_end_file` handles
    that end-file — and the stop names a queued slot the user can replay. The
-   upgrade path is the alternative design D3 rejected: decode
+   upgrade path is the rejected alternative: decode
    `playlist_entry_id` on `start-file` and `end-file` and keep an
    entry-id-to-slot map. Take it up if a failure is ever seen with no jump
    armed.
@@ -157,5 +165,4 @@ observed:
    so `settle_idle_jump_on_restart` — the restart site that sets
    `status.active = true` — settles nothing, and no other active-file jump site
    reactivates the status. The fix would be to treat a `JumpTo` into a parked
-   run as a new submission. That is a product call, and it is not part of this
-   change.
+   run as a new submission. That is a product call, outside this invariant.

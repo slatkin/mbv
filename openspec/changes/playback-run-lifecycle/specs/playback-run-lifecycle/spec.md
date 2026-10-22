@@ -43,7 +43,7 @@ When an entry fails to load after playback began, the run SHALL continue to the 
 
 ### Requirement: A failed jump target is judged from the target
 
-When the target of a jump fails to load, the Player owner SHALL decide from the target slot, not from the slot played before the jump. The decision SHALL follow the rules above, and a stop SHALL name the target slot. The failed target SHALL leave no jump in flight. Later moves of mpv to another entry SHALL then be followed, and no later entry SHALL get the resume position of the failed target.
+When the target of a jump fails to load, the Player owner SHALL decide from the target slot, not from the slot played before the jump. The decision SHALL follow the rules above, and a stop SHALL name the target slot. The failed target SHALL leave no jump in flight. Later moves of mpv to another entry SHALL then be followed, and no later entry SHALL get the resume position of the failed target. The active-file projection SHALL hold no jump in flight.
 
 #### Scenario: The jump target is the last entry and fails
 
@@ -65,6 +65,11 @@ When the target of a jump fails to load, the Player owner SHALL decide from the 
 - **WHEN** the run is idle, the user jumps to an entry, and that entry fails to load before playback restarts
 - **THEN** the decision SHALL use the slot after the target, not the slot after the entry played before
 
+#### Scenario: A jump armed before the active-file projection
+
+- **WHEN** a jump is armed in the playlist projection and the run then enters the active-file projection
+- **THEN** the active-file projection SHALL hold no jump in flight
+
 ### Requirement: An active-file selection that fails ends the run
 
 When the Player owner cannot select or install the active entry of an active-file projection, after a jump, a replacement, or a promotion to the projection, the run SHALL report one stop with an error that names the slot it tried to select. The run SHALL NOT stay marked active with nothing loaded.
@@ -79,9 +84,9 @@ When the Player owner cannot select or install the active entry of an active-fil
 - **WHEN** a lifecycle-backed item enters a playlist run and the install of the active-file projection fails
 - **THEN** the run SHALL report one stop with an error
 
-### Requirement: Each run identity ends with exactly one stop
+### Requirement: Each run submission ends with exactly one stop
 
-For each run identity, the Player owner SHALL report exactly one stop when that run ends, whatever the end path: end of queue, error, quit, mpv shutdown, or a missing completed slot. A second end path for the same run identity SHALL report nothing. A later submission gets a new run identity and SHALL be able to end again.
+For each run submission, the Player owner SHALL report exactly one stop when that submission's run ends, whatever the end path: end of queue, error, quit, mpv shutdown, or a missing completed slot. A second end path for the same submission SHALL report nothing. A later submission SHALL be able to end again.
 
 #### Scenario: Quit after a failed replacement
 
@@ -95,5 +100,10 @@ For each run identity, the Player owner SHALL report exactly one stop when that 
 
 #### Scenario: A new submission after an ended run
 
-- **WHEN** a run identity ended with a stop, and a new submission starts in the same mpv child and then ends
-- **THEN** the new run identity SHALL report its own stop
+- **WHEN** a run ended with a stop, and a new submission starts in the same mpv child and then ends
+- **THEN** that submission SHALL report its own stop, under a new run identity when it refreshes the identity and under the reused identity when it does not
+
+#### Scenario: A replacement after an ended run
+
+- **WHEN** a run ended with a stop, and a replacement or a `LoadNew` command submits into the same mpv child and then ends
+- **THEN** that submission SHALL report its own stop even though it reuses the run identity

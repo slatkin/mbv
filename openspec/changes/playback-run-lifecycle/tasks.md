@@ -29,6 +29,12 @@ All work is in `crates/mbv-player`. For each task, run `cargo fmt`, then `cargo 
 - [x] 5.1 Rewrite `docs/invariants/24-run-ends-when-nothing-can-play.md` to the new mechanism: the lifecycle verdict, `end_run`, and the per-identity close. Close the "Where it currently fails" entry, and record the D3 two-jump window as the remaining known limit. Verify: every function and file that the invariant names exists (`rg`).
 - [x] 5.2 Run the full gates: `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo nextest run --workspace`. Then run `make check-code-file-lines` just before the push. Verify: all are green.
 
+## 6. Review fixes
+
+- [x] 6.1 The active-file projection holds no armed jump: `enter_active_file` clears the arm, so a jump armed in the playlist projection cannot settle in the active-file projection, and the caller-side substitution in `run/events/queue_advance.rs` is gone. One run-level regression test in `src/tests/active_file.rs` names the contract.
+- [x] 6.2 The module documentation and the changed comments state the end state; they no longer cite this change's design decisions, defects, or task rows (M-NO-META-DESIGN-DOCUMENTATION).
+- [x] 6.3 One implementation for the jump-clearing transition, one shared neighbour fallback for a vanished jump target, and one shared fixture for the failed active-file jump tests.
+
 ## Workflow follow-up
 
 - Live test (user only): play a queue whose last entry is a broken URL, and jump to it. Expect one stop with an error, and a now-playing panel that is not frozen.
