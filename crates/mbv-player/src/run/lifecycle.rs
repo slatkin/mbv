@@ -255,9 +255,11 @@ impl RunLifecycle {
 
     /// Disarms the jump arm: nothing is in flight. Every site that aborts an
     /// in-flight jump without it reaching a settle lands here — a failed
-    /// `playlist-pos` write, a `QueueRemove` taking the jump's target, and
-    /// the item-lifecycle handoff (`begin_item_lifecycle`) where a new item
-    /// starting means no jump is waiting for it.
+    /// `playlist-pos` write, a `QueueRemove` taking the jump's target, the
+    /// item-lifecycle handoff (`begin_item_lifecycle`) where a new item
+    /// starting means no jump is waiting for it, and mpv adopting the entry
+    /// it navigated to on its own (`report_stopped_and_adopt_mpv_entry`) —
+    /// there the armed value belonged to the entry mpv left, which is gone.
     pub(crate) fn disarm_jump(&mut self) {
         self.jump = JumpArm::Idle;
     }
