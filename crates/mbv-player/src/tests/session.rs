@@ -206,7 +206,7 @@ fn append_items_to_queue_extends_queue_without_moving_current_idx() {
 
 #[test]
 fn deferred_stop_keeps_the_slot_observed_at_end_file_not_the_one_now_at_that_index() {
-    // Task 2.3 / design D2: the Queue+Quit end-file defers its Stopped emit
+    // The Queue+Quit end-file defers its Stopped emit
     // until the mpv Shutdown event. A QueueMove drained in between must not
     // change which occurrence the event names. `stop_slot` is the identity
     // captured when the stop was first observed; here it points at ep2 while
@@ -231,10 +231,10 @@ fn deferred_stop_keeps_the_slot_observed_at_end_file_not_the_one_now_at_that_ind
     assert_eq!(slot_id, Some(observed));
 }
 
-/// Regression test for playback-run-lifecycle defect 2 (design D4, spec
-/// scenario "Quit after a failed replacement"): a failed active-file
-/// replacement reports its one `Stopped` with the error and parks the run;
-/// the user's quit must then not report the same run identity a second time.
+/// Regression for the spec scenario "Quit after a failed replacement": a
+/// failed active-file replacement reports its one `Stopped` with the error
+/// and parks the run; the user's quit must then not report the same run
+/// identity a second time.
 #[test]
 fn quit_after_a_failed_active_file_replacement_sends_no_second_stopped() {
     let (mut session, _status, events, http) = make_queue_session_for_pos_tests_with_mock(0);

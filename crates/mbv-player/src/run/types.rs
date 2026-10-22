@@ -31,7 +31,7 @@ pub(crate) struct RunInit {
     pub(crate) prepared_source: Option<PreparedSource>,
 }
 
-/// An in-flight forced `JumpTo` (design D1): the target slot, the request
+/// An in-flight forced `JumpTo`: the target slot, the request
 /// identity announced when it settles, and the resume ticks to seek to on the
 /// target's restart. It is the `Pending` payload of `JumpArm` (the lifecycle
 /// module names the waiting states).
@@ -43,7 +43,7 @@ pub(crate) struct ForcedJump {
     pub(crate) from_idle: bool,
 }
 
-/// What a run end has to report (design D4): the outcome math for one slot,
+/// What a run end has to report: the outcome math for one slot,
 /// built by a call site and handed to the single exit `end_run`.
 #[derive(Debug)]
 pub(crate) struct StopOutcome {
@@ -75,7 +75,7 @@ pub(crate) struct PlaybackRun {
     pub(crate) queue: ExecutionSequence,
     pub(crate) audiobookshelf_context: Option<AudiobookshelfPlayerContext>,
     pub(crate) active_lifecycle: ActiveItemLifecycle,
-    /// Run-lifecycle facts (design D1): the "has playback begun" boundary,
+    /// Run-lifecycle facts: the "has playback begun" boundary,
     /// which projection feeds mpv, and the forced-jump arm. See the
     /// `lifecycle` module.
     pub(crate) run_lifecycle: RunLifecycle,

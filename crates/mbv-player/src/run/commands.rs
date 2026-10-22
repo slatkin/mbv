@@ -86,8 +86,8 @@ impl PlaybackRun {
             PlayerCommand::SubmitQueue { items, start_idx } => {
                 if !items.is_empty() {
                     self.run_identity = self.status.lock().unwrap().sequence_generation;
-                    // The accepted submission carries the fresh identity (design
-                    // D5): nothing rules its end out of reporting again.
+                    // The accepted submission carries the fresh identity:
+                    // nothing rules its end out of reporting again.
                     self.run_lifecycle.submission_accepted();
                 }
                 self.cmd_submit_queue(items, start_idx, mpv, progress);

@@ -30,11 +30,10 @@ fn entering_the_active_file_projection_clears_an_armed_playlist_jump() {
     );
 }
 
-/// playback-run-lifecycle row 4.1 / defect 3 (spec requirement 4, scenario
-/// "An active-file jump fails"): a selection failure during a jump into the
-/// active-file projection must end the run with one `Stopped` that carries
-/// the error and names the slot the run tried to select; before the fix the
-/// error arm sent nothing.
+/// Spec requirement "An active-file selection that fails ends the run",
+/// scenario "An active-file jump fails": a selection failure during a jump
+/// into the active-file projection ends the run with one `Stopped` that
+/// carries the error and names the slot the run tried to select.
 #[test]
 fn failed_active_file_jump_reports_one_stopped_naming_the_target_slot() {
     let (mut session, status, events, http) = make_queue_session_for_pos_tests_with_mock(0);
@@ -97,11 +96,11 @@ fn failed_active_file_jump_reports_one_stopped_naming_the_target_slot() {
     );
 }
 
-/// playback-run-lifecycle row 4.1, review P1: the failure teardown's own `mpv
-/// stop` produces an `EndFile`, and the run must drain it like a failed
-/// replacement does (`begin_item_lifecycle` arms the replacement drain) — a
-/// real end-file here would advance the parked run or, on a standalone run,
-/// tear it down (`on_end_file_standalone` returns false, ending `run()`).
+/// The failure teardown's own `mpv stop` produces an `EndFile`, and the run
+/// must drain it like a failed replacement does (`begin_item_lifecycle`
+/// arms the replacement drain) — a real end-file here would advance the
+/// parked run or, on a standalone run, tear it down
+/// (`on_end_file_standalone` returns false, ending `run()`).
 #[test]
 fn a_failed_active_file_jump_drains_its_teardown_end_file_and_parks_the_run() {
     let (mut session, status, events, http) = make_queue_session_for_pos_tests_with_mock(0);

@@ -19,7 +19,7 @@ impl PlaybackRun {
         self.cancel_pending_quit();
         // A new file is a new submission into the reused child; it receives no
         // new run identity, so its end must be able to report again even when
-        // the previous run identity already ended (design D5).
+        // the previous run identity already ended.
         self.run_lifecycle.submission_accepted();
         self.origin = PlaybackOrigin::Standalone;
         self.close_prepared_source();
@@ -271,7 +271,7 @@ impl PlaybackRun {
             return;
         }
         // The replacement (its success and its failure arms alike) is a new
-        // submission into the reused child (design D5): its identity may end
+        // submission into the reused child: its identity may end
         // again even if the previous submission already did.
         self.run_lifecycle.submission_accepted();
         let start_idx = start_idx.min(items.len() - 1);

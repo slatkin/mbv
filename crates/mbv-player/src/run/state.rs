@@ -83,14 +83,13 @@ impl ItemLifecycleState {
 }
 
 impl PlaybackRun {
-    /// The run's single exit (design D4): every in-run end builds its
+    /// The run's single exit: every in-run end builds its
     /// `StopOutcome` and calls this. The call closes the run identity over
     /// the lifecycle; only the first close deactivates the status snapshot
     /// and sends `PlayerEvent::Stopped`. A second end path for the same
     /// identity — a quit after a parked failed replacement, a shutdown after
     /// a reported stop — is the close saying `false`, and sends nothing: the
-    /// close, not a flag, is the guard (defects 1 and 2 are fixed here, not
-    /// at the call sites).
+    /// close, not a flag, is the guard.
     pub(crate) fn end_run(&mut self, outcome: StopOutcome) {
         if !self.run_lifecycle.close(self.run_identity) {
             tracing::debug!(name: "player.run.end_suppressed", target: "player", "second end path for the ended run identity; no second Stopped");

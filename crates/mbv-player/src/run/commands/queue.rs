@@ -215,8 +215,8 @@ impl PlaybackRun {
         self.run_lifecycle.enter_active_file();
     }
 
-    /// Ends the run after a failed active-file select or install (defect 3,
-    /// spec requirement 4): one `Stopped` with the error, naming the slot the
+    /// Ends the run after a failed active-file select or install: one
+    /// `Stopped` with the error, naming the slot the run tried to select.
     /// run tried to select. The run parks like a failed replacement
     /// (`accept_stopped_replacement`) — the outgoing item's stop report goes
     /// out, the child drains to idle, and a later submission can still reuse

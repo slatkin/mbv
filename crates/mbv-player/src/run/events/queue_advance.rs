@@ -126,8 +126,7 @@ impl PlaybackRun {
 
     fn settle_forced_jump(&mut self) -> (usize, Option<crate::transition::Transition>) {
         // Resolve the armed slot against the queue before the settle: the
-        // lifecycle machine takes plain values and holds no queue
-        // (identity -> ordinal, design D2).
+        // lifecycle machine takes plain values and holds no queue.
         let armed_slot = self.run_lifecycle.jump_target_slot();
         let target_index = armed_slot.and_then(|slot_id| self.queue.slot_index(slot_id));
         let (next_idx, settling_transition) = self.run_lifecycle.jump_settled_on_end_file(

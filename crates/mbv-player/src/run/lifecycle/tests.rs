@@ -1,4 +1,4 @@
-//! Private-item unit tests for the run-lifecycle machine (design D6): the
+//! Private-item unit tests for the run-lifecycle machine: the
 //! single exit's close per run identity, and the load-failure verdict. No
 //! `Mpv`, no channel — a bare machine and plain facts.
 
@@ -30,12 +30,12 @@ fn close_reports_once_per_run_identity_and_reopens_on_a_new_submission() {
     );
 }
 
-/// The plain position facts one row drives (design D1/D2), with slots
+/// The plain position facts one row drives, with slots
 /// distinct so a verdict built from a stale entry cannot pass the naming.
 struct VerdictFacts {
     began: bool,
     /// An earlier submission played and a new submission was accepted into
-    /// the same mpv child after that (design D5); the counts start again.
+    /// the same mpv child after that; the counts start again.
     resubmitted: bool,
     active_file: bool,
     jump: JumpArm,
@@ -64,7 +64,7 @@ fn playlist_position(
     }
 }
 
-/// A pending arm that jumped from idle (the defect-4 shape): no outgoing
+/// A pending arm that jumped from idle: no outgoing
 /// end-file settles it, so the entry mpv reports stays stale.
 fn pending_from_idle(target: QueueSlotId) -> JumpArm {
     JumpArm::Pending(ForcedJump {
@@ -75,7 +75,7 @@ fn pending_from_idle(target: QueueSlotId) -> JumpArm {
     })
 }
 
-/// A settled resume-only arm (the defect-5 shape): the jumped target's end
+/// A settled resume-only arm: the jumped target's end
 /// settled already and its seek still waits to land.
 fn resume_only(target: QueueSlotId) -> JumpArm {
     JumpArm::ResumeOnly {
@@ -84,9 +84,11 @@ fn resume_only(target: QueueSlotId) -> JumpArm {
     }
 }
 
-/// The contract "the load-failure verdict" — the D2 rule order in one table:
-/// the failed entry comes from the armed jump when one is in flight
-/// (design D3) and from the entry mpv is on otherwise; the arm clears on
+/// The contract "the load-failure verdict" in one table:
+/// the failed entry comes from the armed jump when one is in flight —
+/// from mpv's event order, an end-file error that arrives while a jump is
+/// armed belongs to the jump target — and from the entry mpv is on
+/// otherwise; the arm clears on
 /// every verdict; and the run ends only when nothing can play after the
 /// failed entry. `failed_slot` in an `EndRun` names that entry.
 #[rstest]
@@ -104,8 +106,8 @@ fn resume_only(target: QueueSlotId) -> JumpArm {
         phase: FailurePhase::BeforeStart,
     },
 )]
-#[case::resubmitted_play_then_first_entry_fails_ends_defect_6(
-    "began in an earlier submission, new submission fails before its start → end, not continue (design D5, defect 6)",
+#[case::resubmitted_play_then_first_entry_fails_ends_before_start(
+    "began in an earlier submission, new submission fails before its start → end, not continue",
     VerdictFacts {
         began: true,
         resubmitted: true,
@@ -144,7 +146,7 @@ fn resume_only(target: QueueSlotId) -> JumpArm {
     },
 )]
 #[case::active_file_ends_even_with_slots_after_it_942_943(
-    "active-file projection → end, even with queue slots after it (#942, #943, review of 7971bf149)",
+    "active-file projection → end, even with queue slots after it (#942, #943)",
     VerdictFacts {
         began: true,
         resubmitted: false,
@@ -157,8 +159,8 @@ fn resume_only(target: QueueSlotId) -> JumpArm {
         phase: FailurePhase::AfterStart,
     },
 )]
-#[case::from_idle_last_target_ends_naming_the_target_defect_4(
-    "pending from-idle target that is last → end naming the target (defect 4)",
+#[case::from_idle_last_target_ends_naming_the_target(
+    "pending from-idle target that is last → end naming the target",
     VerdictFacts {
         began: true,
         resubmitted: false,
@@ -171,8 +173,8 @@ fn resume_only(target: QueueSlotId) -> JumpArm {
         phase: FailurePhase::AfterStart,
     },
 )]
-#[case::from_idle_target_with_next_continues_and_clears_defect_4(
-    "pending from-idle target with a next entry → continue and arm idle (defect 4)",
+#[case::from_idle_target_with_next_continues_and_clears_the_arm(
+    "pending from-idle target with a next entry → continue and arm idle",
     VerdictFacts {
         began: true,
         resubmitted: false,
@@ -182,8 +184,8 @@ fn resume_only(target: QueueSlotId) -> JumpArm {
     },
     FailureVerdict::Continue,
 )]
-#[case::resume_only_target_continues_and_clears_defect_5(
-    "resume-only arm on a target with a next entry → continue and arm idle (defect 5)",
+#[case::resume_only_target_continues_and_clears_the_arm(
+    "resume-only arm on a target with a next entry → continue and arm idle",
     VerdictFacts {
         began: true,
         resubmitted: false,
@@ -203,7 +205,7 @@ fn load_failed_judges_the_failure_verdict(
         lifecycle.playback_started();
     }
     if facts.resubmitted {
-        // A new submission was accepted (design D5): the counts start again.
+        // A new submission was accepted: the counts start again.
         lifecycle.submission_accepted();
     }
     if facts.active_file {

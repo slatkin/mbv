@@ -60,13 +60,13 @@ impl PlaybackRun {
     }
 
     /// A generic error — a missing file, an HTTP 404 from the stream
-    /// endpoint, a decode error — is judged by the lifecycle machine (design
-    /// D2): before any playback began it ends the run (#941), after it only
+    /// endpoint, a decode error — is judged by the lifecycle machine:
+    /// before any playback began it ends the run (#941), after it only
     /// when mpv has no entry after the failed one to skip to (#942, #943).
     /// With one, mpv skips on its own and the playlist-position drift
     /// machinery follows (probe S5), so the warn-and-continue path stays
     /// there. The judged slot names the failed entry: the armed jump target
-    /// while a jump was in flight (design D3), otherwise the entry mpv is on.
+    /// while a jump was in flight, otherwise the entry mpv is on.
     fn stop_for_unrecoverable_error(
         &mut self,
         failure: &MpvFailure,
@@ -96,7 +96,7 @@ impl PlaybackRun {
         self.stop_run_with_error(progress, failed_slot, self.last_valid_pos, error)
     }
 
-    /// The plain position facts a load failure is judged from (design D1/D2):
+    /// The plain position facts a load failure is judged from:
     /// the machine holds no queue, so the run resolves the armed jump
     /// target's ordinal before the call, and names the entry mpv is on.
     fn run_position(&self) -> RunPosition {
@@ -113,11 +113,11 @@ impl PlaybackRun {
 
     /// The teardown shared by an audio-output failure and an unexpected mpv
     /// exit: close the prepared source, join progress, and report one
-    /// `Stopped` with `error` and `position_ticks` through the single exit
-    /// (design D4). The close per run identity — not the Service report
-    /// state — decides that the event goes out exactly once: an adoption's
-    /// stopped report no longer mutes a later error stop (defect 1), and an
-    /// earlier end for the same identity still allows no second one.
+    /// `Stopped` with `error` and `position_ticks` through the single exit.
+    /// The close per run identity — not the Service report state — decides
+    /// that the event goes out exactly once: an adoption's stopped report
+    /// no longer mutes a later error stop, and an earlier end for the same
+    /// identity still allows no second one.
     fn stop_run_with_error(
         &mut self,
         progress: &mut ProgressGuard,

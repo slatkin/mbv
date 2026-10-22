@@ -1,27 +1,25 @@
-//! Run-lifecycle facts for one playback run, held in place of loose flags on
-//! `PlaybackRun` (design D1 of the `playback-run-lifecycle` change).
+//! Run-lifecycle facts for one playback run: the state of what plays.
 //!
-//! The module owns the "has playback begun" boundary: a generic mpv failure
-//! before the first `PlaybackRestart` is a start failure and stops the run
-//! with an error (#941); after it, mpv owns skipping a failed entry and the
-//! playlist-position drift machinery follows it — unless no entry follows
-//! the failed one, where the run still ends with the error (#942, #943).
-//! It also owns which projection feeds mpv: the active-file projection keeps
-//! exactly one entry in mpv's playlist and never returns to the playlist
-//! projection. The facts take plain values (`PlaybackRestart` observed, a
-//! queue of entries), never a raw `MpvEvent`.
+//! The machine owns three facts for one run. The "has playback begun"
+//! boundary: a generic mpv failure before the first `PlaybackRestart` is a
+//! start failure and stops the run with an error (#941); after it, mpv owns
+//! skipping a failed entry and the playlist-position drift machinery
+//! follows it — unless no entry follows the failed one, where the run still
+//! ends with the error (#942, #943). Which projection feeds mpv: the
+//! active-file projection keeps exactly one entry in mpv's playlist, never
+//! returns to the playlist projection, and holds no armed jump because it
+//! never moves mpv with a `playlist-pos` write. Which forced jump is in
+//! flight: a `JumpArm` with named states — `Pending` waits for its outgoing
+//! end-file (or, when jumped from idle, for its target's
+//! `PlaybackRestart`), `ResumeOnly` has settled and waits for the target
+//! entry so its resume seek can land, and `Idle` holds no jump — so every
+//! event has exactly one transition. The facts take plain values
+//! (`PlaybackRestart` observed, resolved queue positions), never a raw
+//! `MpvEvent`.
 //!
-//! A forced jump is a `JumpArm` with named states: a `Pending` arm waits for
-//! its outgoing end-file — or, when jumped from idle, for its target's
-//! `PlaybackRestart` — while a `ResumeOnly` arm has settled and waits for
-//! the target entry so its resume seek can land. The old readers inferred
-//! which of the two a single `Option<ForcedJump>` held from its `transition`
-//! and `from_idle` fields; the named states give each event exactly one
-//! transition (design D1).
-//!
-//! The run's single exit (design D4) is the machine's close: `close(identity)`
-//! answers once per run identity whether the caller may send the run's one
-//! `Stopped`, and an accepted later submission reopens the guard.
+//! The run's single exit is `close(identity)`: it answers once per run
+//! identity whether the caller may send the run's one `Stopped`, and an
+//! accepted later submission reopens the guard.
 
 use super::{ExecutionSequence, ForcedJump, QueueSlotId};
 use crate::transition::Transition;
@@ -38,7 +36,7 @@ enum Projection {
     ActiveFile,
 }
 
-/// What a forced `JumpTo` is waiting on (design D1). `Pending` waits for its
+/// What a forced `JumpTo` is waiting on. `Pending` waits for its
 /// outgoing end-file — or, when jumped from idle, for its target
 /// `PlaybackRestart`. `ResumeOnly` has settled already (transition marker
 /// consumed) and waits for the target entry's restart so its resume seek can
@@ -64,8 +62,8 @@ impl JumpArm {
     }
 }
 
-/// Which side of the "has playback begun" boundary a load failure arrived on
-/// (design D2). It picks the error text `termination.rs` reports.
+/// Which side of the "has playback begun" boundary a load failure arrived
+/// on. It picks the error text `termination.rs` reports.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub(crate) enum FailurePhase {
     /// Before any `PlaybackRestart` in this submission: a start failure that
@@ -76,7 +74,7 @@ pub(crate) enum FailurePhase {
     AfterStart,
 }
 
-/// The verdict on a generic load failure (design D2): a failure is an end of
+/// The verdict on a generic load failure: a failure is an end of
 /// the run only when nothing can play after it — no entry follows it, or the
 /// active-file projection holds it alone.
 #[derive(Debug, Eq, PartialEq)]
@@ -93,10 +91,10 @@ pub(crate) enum FailureVerdict {
     },
 }
 
-/// The plain queue-position facts a load failure is judged from (design
-/// D1/D2), so the machine borrows no queue. The run resolves the armed
-/// target's ordinal before the call — identity -> ordinal is the run's
-/// resolution (design D2) — and `jump_target_idx` is `None` when no jump is
+/// The plain queue-position facts a load failure is judged from, so the
+/// machine borrows no queue. The run resolves the armed target's ordinal
+/// before the call — identity -> ordinal is the run's resolution — and
+/// `jump_target_idx` is `None` when no jump is
 /// armed or the armed slot is no longer queued, exactly the input
 /// `jump_settled_on_end_file` takes.
 #[derive(Copy, Clone, Debug)]
@@ -116,9 +114,7 @@ pub(crate) struct RunPosition {
 
 /// The lifecycle facts of one run: the "has playback begun" boundary, the
 /// projection that decides whether anything follows a failed entry, and the
-/// run identity that already ended. `PlaybackRun` holds this in place of the
-/// `playback_began`, `active_file`, and `stopped_event_sent` flags it
-/// produced (design D1).
+/// run identity that already ended.
 #[derive(Debug, Default)]
 pub(crate) struct RunLifecycle {
     /// Whether any `PlaybackRestart` has arrived in this run — the "has
@@ -129,12 +125,12 @@ pub(crate) struct RunLifecycle {
     /// still ends with the error (#942, #943).
     began: bool,
     projection: Projection,
-    /// The forced-jump arm (design D1): what a `JumpTo` is waiting on, with
+    /// The forced-jump arm: what a `JumpTo` is waiting on, with
     /// the named states of `JumpArm`.
     jump: JumpArm,
-    /// The run identity that already reported its `Stopped` (design D4): the
-    /// one-shot guard behind `close`. A later accepted submission clears it
-    /// (design D5), so that submission's run can end again.
+    /// The run identity that already reported its `Stopped`: the
+    /// one-shot guard behind `close`. A later accepted submission clears it,
+    /// so that submission's run can end again.
     ended: Option<PlaybackGeneration>,
 }
 
@@ -181,9 +177,9 @@ impl RunLifecycle {
         matches!(self.projection, Projection::ActiveFile)
     }
 
-    /// A new submission was accepted into the same mpv child (design D5):
+    /// A new submission was accepted into the same mpv child:
     /// it starts the counts again — no `PlaybackRestart` has arrived for it
-    /// (defect 6: an earlier submission's boundary must not hold the new
+    /// (an earlier submission's boundary must not hold the new
     /// one's start-failure open), nothing of it is armed, and nothing rules
     /// its run identity out of ending.
     pub(crate) fn submission_accepted(&mut self) {
@@ -192,15 +188,15 @@ impl RunLifecycle {
         self.ended = None;
     }
 
-    /// Judged answer (design D2) to a load failure, in rule order:
+    /// Judged answer to a load failure, in rule order:
     ///
     /// 1. Find the failed entry. While a jump is armed — `Pending` or
     ///    `ResumeOnly` — the failed entry is the armed target: the outgoing
     ///    entry's end-file settles or is swallowed before the target's error
-    ///    arrives (design D3). Otherwise it is the entry mpv is on, named by
+    ///    arrives. Otherwise it is the entry mpv is on, named by
     ///    `RunPosition`.
     /// 2. Clear the arm in every verdict: a failed target leaves no jump in
-    ///    flight (defects 4 and 5), so drift adopts mpv's next move and no
+    ///    flight, so drift adopts mpv's next move and no
     ///    later entry inherits the failed target's resume seek.
     /// 3. Before the first restart in this submission, the run cannot start:
     ///    end (#941).
@@ -233,7 +229,7 @@ impl RunLifecycle {
         FailureVerdict::Continue
     }
 
-    /// Answers the run's single exit (design D4): `true` when this identity
+    /// Answers the run's single exit: `true` when this identity
     /// has not reported its `Stopped` yet — the caller may deactivate and
     /// send — and `false` for a second end path over the same identity. The
     /// first close records `identity` as ended.
@@ -245,7 +241,7 @@ impl RunLifecycle {
         true
     }
 
-    /// Arms a pending `JumpTo` (design D1): the run is `Pending`, waiting for
+    /// Arms a pending `JumpTo`: the run is `Pending`, waiting for
     /// the target's outgoing end-file — or, when jumped from idle, for its
     /// target's `PlaybackRestart`. The active-file projection never moves mpv
     /// with a `playlist-pos` write, so there an arm always discards: `Idle`.
@@ -276,7 +272,7 @@ impl RunLifecycle {
 
     /// The queue slot the arm is waiting on: a pending target while
     /// `Pending`, the resume-only target while `ResumeOnly`. The run resolves
-    /// it against its queue (identity -> ordinal, design D2) before handing
+    /// it against its queue (identity -> ordinal) before handing
     /// a settle to the machine, which takes plain values only.
     #[must_use]
     pub(crate) fn jump_target_slot(&self) -> Option<QueueSlotId> {
@@ -287,7 +283,7 @@ impl RunLifecycle {
         }
     }
 
-    /// Settles the arm on an end-file (design D1), returning `(next_idx,
+    /// Settles the arm on an end-file, returning `(next_idx,
     /// transition)`: the ordinal of the settled target, and the in-flight
     /// transition to announce, if any. `target_index` is the armed slot
     /// resolved against the run's queue; a removed slot falls back to the
@@ -325,8 +321,8 @@ impl RunLifecycle {
         (next_idx, transition)
     }
 
-    /// Settles the arm when a `PlaybackRestart` starts its target (design
-    /// D1): only a `Pending` jump that armed from idle settles here — an idle
+    /// Settles the arm when a `PlaybackRestart` starts its target:
+    /// only a `Pending` jump that armed from idle settles here — an idle
     /// jump has no outgoing end-file to wait on — and the arm is untouched
     /// otherwise. The transition is returned for the announce; a
     /// resume-bearing arm re-arms as `ResumeOnly` (waiting for the target's
