@@ -391,7 +391,7 @@ A stroke around the Pinned panel window while it holds keyboard focus. It draws 
 _Avoid_: focus ring, strip, highlight
 
 Panel covering:
-The fixed covering rule of the Pinned panel. The collapsed panel always pushes: the compositor reserves a strip beside it. The expanded panel always covers: it draws over the tiled windows and holds the reserved strip, so expanding and collapsing move no tiled window. There is no setting for either.
+The covering rule of the Pinned panel. The collapsed panel pushes when `[panel]` `reserve` is on, the default: the compositor reserves a strip beside it and tiled windows move aside. It covers when `reserve` is off: it draws over the tiled windows and no strip is reserved. The expanded panel always covers: it draws over the tiled windows and holds the strip already reserved, so expanding and collapsing move no tiled window. A `reserve` change while the panel is expanded applies on the next collapse. A strip the panel already holds is released only on the next `mbv --pin` launch. The F2 `Reserve space` row or `config.toml` edits `reserve`.
 _Avoid_: cover mode, overlay, always on top
 
 Pinned launch:
