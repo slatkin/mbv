@@ -202,14 +202,21 @@ pub(crate) fn swap_token() -> Option<String> {
 /// The reserve mode a panel change asks for: the collapsed panel
 /// pushes the tiled windows aside, the expanded one covers them.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum PanelReserve {
+pub(crate) enum PanelReserveMode {
     /// Reserve a strip beside the panel and move the tiled windows.
     Push,
     /// Draw over the tiled windows, holding the strip of the last push.
     Cover,
 }
 
-impl PanelReserve {
+impl PanelReserveMode {
+    /// The mode the `[panel] reserve` flag picks: `Push` while it is on,
+    /// `Cover` while it is off.
+    #[must_use]
+    pub(crate) fn for_flag(reserve: bool) -> Self {
+        if reserve { Self::Push } else { Self::Cover }
+    }
+
     /// The `--reserve` value.
     #[must_use]
     fn as_str(self) -> &'static str {
@@ -259,6 +266,10 @@ pub(crate) enum PinnedSettingRequest {
     Side(mbv_config::PanelSide),
     /// A gutter row: one `set-gutters` that carries only the edited gutter.
     Gutter(PanelGutter, i32),
+    /// The `Reserve space` row: one `set-reserve` with the candidate reserve
+    /// mode, so an off collapse stops pushing and an on collapse reserves the
+    /// strip at the panel's current size.
+    Reserve(PanelReserveMode),
 }
 
 impl PinnedSettingRequest {
@@ -268,7 +279,7 @@ impl PinnedSettingRequest {
     pub(crate) fn edited_width(self) -> Option<PinnedWidth> {
         match self {
             Self::Width(width) => Some(width),
-            Self::Side(_) | Self::Gutter(..) => None,
+            Self::Side(_) | Self::Gutter(..) | Self::Reserve(_) => None,
         }
     }
 }
@@ -277,6 +288,14 @@ impl PinnedSettingRequest {
 #[must_use]
 fn size_arg(width: u16) -> String {
     format!("{width}px")
+}
+
+/// The reserve mode the collapsed panel asks for: the `[panel] reserve`
+/// flag's mode ([`PanelReserveMode::for_flag`]). The expanded panel's mode
+/// is always `Cover`; no config key picks it.
+#[must_use]
+fn collapsed_reserve(config: &PanelConfig) -> PanelReserveMode {
+    PanelReserveMode::for_flag(config.reserve)
 }
 
 /// The `--focus-ring` value of a `run`: `off`, or the configured
@@ -331,7 +350,7 @@ fn run_argv(
         "--size".to_string(),
         size_arg(config.width),
         "--reserve".to_string(),
-        PanelReserve::Push.as_str().to_string(),
+        collapsed_reserve(config).as_str().to_string(),
         "--gutter-top".to_string(),
         config.gutter_top.to_string(),
         "--gutter-bottom".to_string(),
@@ -359,7 +378,7 @@ fn run_argv(
 /// and one F2 width step each send one change with the width and the reserve
 /// mode, so no tiled window moves.
 #[must_use]
-fn set_size_argv(panel: &str, width: u16, reserve: PanelReserve) -> Vec<String> {
+fn set_size_argv(panel: &str, width: u16, reserve: PanelReserveMode) -> Vec<String> {
     vec![
         "set-size".to_string(),
         panel.to_string(),
@@ -376,8 +395,8 @@ fn set_size_argv(panel: &str, width: u16, reserve: PanelReserve) -> Vec<String> 
 #[must_use]
 fn pinned_width_argv(panel: &str, config: &PanelConfig, width: PinnedWidth) -> Vec<String> {
     let (pixels, reserve) = match width {
-        PinnedWidth::Collapsed => (config.width, PanelReserve::Push),
-        PinnedWidth::Expanded => (config.width_expanded, PanelReserve::Cover),
+        PinnedWidth::Collapsed => (config.width, collapsed_reserve(config)),
+        PinnedWidth::Expanded => (config.width_expanded, PanelReserveMode::Cover),
     };
     set_size_argv(panel, pixels, reserve)
 }
@@ -411,6 +430,7 @@ pub(crate) fn spawn_pinned_request(
         PinnedSettingRequest::Width(width) => pinned_width_argv(panel, config, width),
         PinnedSettingRequest::Side(side) => set_edge_argv(panel, side),
         PinnedSettingRequest::Gutter(gutter, value) => set_gutters_argv(panel, gutter, value),
+        PinnedSettingRequest::Reserve(reserve) => set_reserve_argv(panel, reserve),
     };
     std::thread::Builder::new()
         .name("pinwin-request".to_string())
@@ -457,6 +477,19 @@ fn set_gutters_argv(panel: &str, gutter: PanelGutter, value: i32) -> Vec<String>
         panel.to_string(),
         gutter.flag().to_string(),
         value.to_string(),
+    ]
+}
+
+/// `set-reserve <panel> push|cover`: the `Reserve space` row sends the mode
+/// resolved from the saved `reserve` flag, so the panel's reserve mode
+/// changes at its current size; a cover holds any strip a push already
+/// reserved and reserves nothing new.
+#[must_use]
+fn set_reserve_argv(panel: &str, reserve: PanelReserveMode) -> Vec<String> {
+    vec![
+        "set-reserve".to_string(),
+        panel.to_string(),
+        reserve.as_str().to_string(),
     ]
 }
 

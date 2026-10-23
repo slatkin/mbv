@@ -1,9 +1,10 @@
 //! Unit tests for the pinwin boundary.
 
 use super::{
-    PanelExitAction, PanelGutter, PanelIdentity, PinSpawnError, StartFailureAction,
-    claim_panel_identity, exit_action, failure_action, is_pinned, pinned_width_argv,
-    request_result, run_argv, set_edge_argv, set_gutters_argv, terminal_prefix, toggle_argv,
+    PanelExitAction, PanelGutter, PanelIdentity, PanelReserveMode, PinSpawnError,
+    StartFailureAction, claim_panel_identity, exit_action, failure_action, is_pinned,
+    pinned_width_argv, request_result, run_argv, set_edge_argv, set_gutters_argv, set_reserve_argv,
+    terminal_prefix, toggle_argv,
 };
 use mbv_config::{PanelConfig, PanelSide};
 use mbv_ui_model::settings::PinnedWidth;
@@ -116,6 +117,20 @@ fn panel_environment_without_the_flag_is_scrubbed_and_unpinned() {
         "--in-panel", "--log-level", "mbv=debug",
     ]
 )]
+#[case::reserve_off_starts_covering(
+    PanelConfig {
+        width: 400,
+        reserve: false,
+        ..PanelConfig::default()
+    },
+    None,
+    vec![
+        "run", "--name", "mbv", "--show-existing", "--edge", "left", "--size", "400px",
+        "--reserve", "cover", "--gutter-top", "0", "--gutter-bottom", "0", "--gutter-left", "0",
+        "--gutter-right", "0", "--focus-ring", "#dabc7f:1", "--", "ghostty", "-e",
+        "/usr/bin/mbv", "--in-panel",
+    ]
+)]
 fn run_argv_carries_the_layout_the_terminal_and_the_log_level(
     #[case] config: PanelConfig,
     #[case] log_level: Option<&str>,
@@ -187,6 +202,26 @@ fn pinned_width_argv_sends_the_views_width_and_reserve_mode(
     assert_eq!(pinned_width_argv("mbv", &config, width), strings(&expected));
 }
 
+/// With `reserve` off no `set-size` request pushes: the collapse covers
+/// instead of reserving a strip, and the expanded width covers as always,
+/// so no request re-reserves the strip a launch or earlier collapse held
+/// (change `panel-reserve-space`, design D2).
+#[rstest::rstest]
+#[case::collapsed(PinnedWidth::Collapsed, vec!["set-size", "mbv", "320px", "--reserve", "cover"])]
+#[case::expanded(PinnedWidth::Expanded, vec!["set-size", "mbv", "1100px", "--reserve", "cover"])]
+fn pinned_width_argv_with_reserve_off_never_pushes(
+    #[case] width: PinnedWidth,
+    #[case] expected: Vec<&str>,
+) {
+    let config = PanelConfig {
+        width: 320,
+        width_expanded: 1100,
+        reserve: false,
+        ..PanelConfig::default()
+    };
+    assert_eq!(pinned_width_argv("mbv", &config, width), strings(&expected));
+}
+
 /// A side change names the panel and the new edge.
 #[rstest::rstest]
 #[case::left("mbv", PanelSide::Left, vec!["set-edge", "mbv", "left"])]
@@ -210,6 +245,14 @@ fn set_gutters_argv_sends_the_edited_gutter(
     #[case] expected: Vec<&str>,
 ) {
     assert_eq!(set_gutters_argv(panel, gutter, value), strings(&expected));
+}
+
+/// The `Reserve space` row names the panel and the candidate mode.
+#[rstest::rstest]
+#[case::reserve_on(PanelReserveMode::Push, vec!["set-reserve", "mbv", "push"])]
+#[case::reserve_off(PanelReserveMode::Cover, vec!["set-reserve", "mbv", "cover"])]
+fn set_reserve_argv_sends_the_mode(#[case] reserve: PanelReserveMode, #[case] expected: Vec<&str>) {
+    assert_eq!(set_reserve_argv("mbv", reserve), strings(&expected));
 }
 
 /// `--toggle` names the panel it toggles.

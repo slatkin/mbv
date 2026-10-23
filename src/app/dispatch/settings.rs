@@ -1,6 +1,6 @@
 use super::super::super::App;
 use super::notify::ToastSeverity;
-use crate::pin::PinnedSettingRequest;
+use crate::pin::{PanelReserveMode, PinnedSettingRequest};
 use mbv_ui_model::context_menu::MultiSelectKind;
 use mbv_ui_model::overlay::OverlayRequest;
 use mbv_ui_model::settings::PinnedWidth;
@@ -65,6 +65,7 @@ fn setting_row_kind(key: SettingKey) -> SettingRowKind {
         K::PanelSide
         | K::PanelWidth
         | K::PanelWidthExpanded
+        | K::PanelReserve
         | K::PanelGutterTop
         | K::PanelGutterBottom
         | K::PanelGutterLeft
@@ -127,7 +128,10 @@ impl App {
     /// The accent rows are not part of the layout and the accent is fixed at
     /// panel start, so they send no
     /// panel request; while pinned a `Neutral` toast announces that the change
-    /// applies on the next `mbv --pin` launch.
+    /// applies on the next `mbv --pin` launch. The `Reserve space` row sends
+    /// one `set-reserve` from the collapsed width and, from the expanded width,
+    /// no request at all — there a push would reserve the full expanded strip
+    /// (change `panel-reserve-space`, design D4).
     pub(crate) fn apply_panel_setting(&mut self, key: SettingKey, delta: i32) {
         self.apply_panel_setting_pinned(key, delta, crate::pin::is_pinned());
     }
@@ -155,9 +159,10 @@ impl App {
         let Some(candidate) = candidate else {
             return;
         };
-        let request = pinned_setting_request(key, &candidate);
+        let request = pinned_setting_request(key, &candidate, self.pinned_width);
         // Outside a panel, and for a row that takes no request (an accent
-        // row), the candidate saves as it is.
+        // row, or the `Reserve space` row while expanded), the candidate
+        // saves as it is.
         if let (Some(request), true) = (request, pinned) {
             let edited_width = request.edited_width();
             let pending = crate::app::state::pinned_request::PinnedRequestPending::Setting {
@@ -192,6 +197,7 @@ impl App {
             self.flash(reason, ToastSeverity::Warning);
             return;
         }
+        let saved_reserve = candidate.reserve;
         self.config.lock().unwrap().panel = candidate;
         if pinned && let Some(edited) = edited_width {
             self.note_pinned_width_applied(edited);
@@ -202,6 +208,25 @@ impl App {
                 "Accent changes apply on the next mbv --pin launch".into(),
                 ToastSeverity::Neutral,
             );
+        }
+        // A saved `Reserve space` change tells the user when it visibly
+        // lands: a disable releases the held strip only on the next launch,
+        // and an enable while expanded reserves the strip on the next
+        // collapse (change `panel-reserve-space`, design D3/D4); while
+        // collapsed nothing announces an enable, because the strip visibly
+        // appears.
+        if pinned && key == SettingKey::PanelReserve {
+            if !saved_reserve {
+                self.flash(
+                    "The held strip is released on the next mbv --pin launch".into(),
+                    ToastSeverity::Neutral,
+                );
+            } else if self.pinned_width == PinnedWidth::Expanded {
+                self.flash(
+                    "The strip is reserved on the next collapse".into(),
+                    ToastSeverity::Neutral,
+                );
+            }
         }
     }
 
@@ -432,11 +457,15 @@ impl App {
 }
 
 /// The request a Panel row sends while pinned, or `None` for a row
-/// that takes none: an accent row is fixed at panel start and any
-/// other Settings row is not a Panel layout value.
+/// that takes none: an accent row is fixed at panel start, the
+/// `Reserve space` row sends nothing from the expanded width (a push there
+/// would reserve the full expanded strip; change `panel-reserve-space`,
+/// design D4), and any other Settings row is not a Panel layout value.
+/// `active_width` is the width the running panel shows.
 fn pinned_setting_request(
     key: SettingKey,
     candidate: &mbv_config::PanelConfig,
+    active_width: PinnedWidth,
 ) -> Option<PinnedSettingRequest> {
     match key {
         SettingKey::PanelWidth | SettingKey::PanelWidthExpanded => {
@@ -459,6 +488,12 @@ fn pinned_setting_request(
             crate::pin::PanelGutter::Right,
             candidate.gutter_right,
         )),
+        SettingKey::PanelReserve => match active_width {
+            PinnedWidth::Collapsed => Some(PinnedSettingRequest::Reserve(
+                PanelReserveMode::for_flag(candidate.reserve),
+            )),
+            PinnedWidth::Expanded => None,
+        },
         SettingKey::PanelAccent | SettingKey::PanelAccentColor | SettingKey::PanelAccentWidth => {
             None
         }

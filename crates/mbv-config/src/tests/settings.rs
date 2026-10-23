@@ -243,6 +243,7 @@ gutter_top = 12
 gutter_bottom = 3000000000
 gutter_left = -5
 gutter_right = "wide"
+reserve = "yes"
 accent = "yes"
 accent_color = "orange"
 accent_width = 0
@@ -255,6 +256,7 @@ accent_width = 0
         cfg.panel.width_expanded,
         crate::DEFAULT_PANEL_WIDTH_EXPANDED
     );
+    assert!(cfg.panel.reserve);
     assert_eq!(cfg.panel.gutter_top, 12);
     assert_eq!(cfg.panel.gutter_bottom, 0);
     assert_eq!(cfg.panel.gutter_left, -5);
@@ -279,6 +281,7 @@ accent_width = 0
         side: PanelSide::Right,
         width: 1400,
         width_expanded: 1700,
+        reserve: false,
         gutter_top: 1,
         gutter_bottom: -2,
         gutter_left: 3,

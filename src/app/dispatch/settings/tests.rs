@@ -31,7 +31,8 @@ fn candidate() -> PanelConfig {
 
 /// A width row asks for the width it edited, a `Side` row moves the
 /// panel, a gutter row changes only that gutter, and an accent row takes no
-/// panel request.
+/// panel request. These rows' requests never depend on the active width, so
+/// the mapping is read at the collapsed width.
 #[rstest]
 #[case::width_row(
     SettingKey::PanelWidth,
@@ -66,7 +67,10 @@ fn pinned_setting_request_names_the_rows_panel_change(
     #[case] key: SettingKey,
     #[case] expected: Option<PinnedSettingRequest>,
 ) {
-    assert_eq!(pinned_setting_request(key, &candidate()), expected);
+    assert_eq!(
+        pinned_setting_request(key, &candidate(), PinnedWidth::Collapsed),
+        expected
+    );
 }
 
 /// An accepted request saves the candidate, arms the settings save,
@@ -203,4 +207,100 @@ fn unpinned_row_saves_without_recording_a_pinned_width() {
     assert_eq!(app.pinned_width, PinnedWidth::Collapsed);
     assert!(app.status.is_empty(), "no toast outside the panel");
     assert!(app.settings_save_at.is_some(), "the save is armed");
+}
+
+/// While collapsed, an accepted enable sends one `set-reserve push`, saves
+/// the value, and announces nothing: the strip visibly appears
+/// (change `panel-reserve-space`, design D3; spec "Enable reserve while
+/// pinned").
+#[test]
+fn the_reserve_row_enable_while_collapsed_saves_without_an_announcement() {
+    let _guard = PINNED_REQUEST_TEST_LOCK.lock().unwrap();
+    *PINNED_REQUEST_OVERRIDE.lock().unwrap() = Some(Ok(()));
+    PINNED_REQUESTS.lock().unwrap().clear();
+    let mut app = make_app_stub();
+    app.config.lock().unwrap().panel.reserve = false;
+
+    app.apply_panel_setting_pinned(SettingKey::PanelReserve, 0, true);
+    app.drain_pinned_requests();
+
+    assert_eq!(
+        *PINNED_REQUESTS.lock().unwrap(),
+        vec![PinnedSettingRequest::Reserve(PanelReserveMode::Push)],
+        "the collapsed enable asks to push"
+    );
+    assert!(app.config.lock().unwrap().panel.reserve, "the saved enable");
+    assert!(app.settings_save_at.is_some(), "the save is armed");
+    assert!(app.status.is_empty(), "enabling needs no toast");
+    *PINNED_REQUEST_OVERRIDE.lock().unwrap() = None;
+}
+
+/// A saved disable while pinned keeps the held strip here and releases it
+/// only on the next `mbv --pin` launch, so the neutral toast names that
+/// (spec "Disable reserve while pinned").
+#[test]
+fn the_reserve_row_disable_while_pinned_saves_and_announces_the_release() {
+    let _guard = PINNED_REQUEST_TEST_LOCK.lock().unwrap();
+    *PINNED_REQUEST_OVERRIDE.lock().unwrap() = Some(Ok(()));
+    PINNED_REQUESTS.lock().unwrap().clear();
+    let mut app = make_app_stub();
+
+    app.apply_panel_setting_pinned(SettingKey::PanelReserve, 0, true);
+    app.drain_pinned_requests();
+
+    assert_eq!(
+        *PINNED_REQUESTS.lock().unwrap(),
+        vec![PinnedSettingRequest::Reserve(PanelReserveMode::Cover)],
+        "the collapsed disable asks to cover"
+    );
+    assert!(
+        !app.config.lock().unwrap().panel.reserve,
+        "the saved disable"
+    );
+    assert_eq!(
+        app.status,
+        "The held strip is released on the next mbv --pin launch"
+    );
+    assert_eq!(app.status_severity, ToastSeverity::Neutral);
+    *PINNED_REQUEST_OVERRIDE.lock().unwrap() = None;
+}
+
+/// While expanded, the `Reserve space` row takes the accent rows'
+/// no-request path: the flipped value saves and no `pinwin` request goes
+/// out, because a push there would reserve the full expanded strip
+/// (change `panel-reserve-space`, design D4; spec "Enable reserve while
+/// expanded").
+#[test]
+fn the_reserve_row_while_expanded_saves_without_a_request() {
+    let _guard = PINNED_REQUEST_TEST_LOCK.lock().unwrap();
+    *PINNED_REQUEST_OVERRIDE.lock().unwrap() = Some(Ok(()));
+    PINNED_REQUESTS.lock().unwrap().clear();
+    let mut app = make_app_stub();
+    app.note_pinned_width_applied(PinnedWidth::Expanded);
+
+    app.apply_panel_setting_pinned(SettingKey::PanelReserve, 0, true);
+
+    assert!(
+        PINNED_REQUESTS.lock().unwrap().is_empty(),
+        "no request leaves the expanded width"
+    );
+    assert!(!app.config.lock().unwrap().panel.reserve, "the saved value");
+    assert!(app.settings_save_at.is_some(), "the save is armed");
+    *PINNED_REQUEST_OVERRIDE.lock().unwrap() = None;
+}
+
+/// A saved enable while expanded sends no request and announces that the
+/// strip is reserved on the next collapse
+/// (change `panel-reserve-space`, design D4; spec "Enable reserve while
+/// expanded").
+#[test]
+fn a_saved_enable_while_expanded_announces_the_next_collapse() {
+    let mut app = make_app_stub();
+    app.note_pinned_width_applied(PinnedWidth::Expanded);
+
+    app.apply_panel_setting_outcome(true, SettingKey::PanelReserve, None, candidate(), Ok(()));
+
+    assert!(app.config.lock().unwrap().panel.reserve, "the saved enable");
+    assert_eq!(app.status, "The strip is reserved on the next collapse");
+    assert_eq!(app.status_severity, ToastSeverity::Neutral);
 }

@@ -122,7 +122,7 @@ impl Model {
         }
     }
 
-    /// The Panel destination's ten value rows, in paint and cursor order,
+    /// The Panel destination's eleven value rows, in paint and cursor order,
     /// including the accent rows.
     fn panel_settings_rows(cfg: &Config, ui: &UiConfig) -> Vec<SettingsRow> {
         settings::PANEL_SETTING_KEYS
