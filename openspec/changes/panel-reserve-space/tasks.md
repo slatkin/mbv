@@ -16,7 +16,7 @@
 
 ## 4. Docs
 
-- [ ] 4.1 Rewrite the `Panel covering` entry in `CONTEXT.md` (its "The collapsed panel always pushes … There is no setting for either." sentence would contradict the new option): collapsed pushes and reserves the strip when `reserve` is on and covers when it is off, expanded always covers, a change while expanded applies on the next collapse, and a held strip releases only on the next `mbv --pin` launch; verify `openspec validate panel-reserve-space --strict` passes.
+- [x] 4.1 Rewrite the `Panel covering` entry in `CONTEXT.md` (its "The collapsed panel always pushes … There is no setting for either." sentence would contradict the new option): collapsed pushes and reserves the strip when `reserve` is on and covers when it is off, expanded always covers, a change while expanded applies on the next collapse, and a held strip releases only on the next `mbv --pin` launch; verify `openspec validate panel-reserve-space --strict` passes.
 
 ## Workflow follow-up
 
