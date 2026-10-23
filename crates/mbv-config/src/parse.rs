@@ -374,6 +374,7 @@ fn parse_panel_section(panel: Option<&toml::Value>) -> PanelConfig {
         side: panel_side(panel, defaults.side),
         width: panel_width(panel, "width", defaults.width),
         width_expanded: panel_width(panel, "width_expanded", defaults.width_expanded),
+        reserve: panel_bool(panel, "reserve", defaults.reserve),
         gutter_top: panel_gutter(panel, "gutter_top", defaults.gutter_top),
         gutter_bottom: panel_gutter(panel, "gutter_bottom", defaults.gutter_bottom),
         gutter_left: panel_gutter(panel, "gutter_left", defaults.gutter_left),

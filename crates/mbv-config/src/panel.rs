@@ -77,11 +77,11 @@ impl std::fmt::Display for PanelAccentColor {
 }
 
 /// The `[panel]` section: docking side, collapsed and expanded widths in
-/// logical pixels, four gutters in logical pixels (negative values are
-/// allowed), the focus accent stroke (flag, colour, width in pixels), and the
-/// two terminal argv prefixes. Every value is already validated; an
-/// out-of-range or malformed TOML value was replaced with its default while
-/// parsing.
+/// logical pixels, whether the collapsed panel reserves its strip, four
+/// gutters in logical pixels (negative values are allowed), the focus accent
+/// stroke (flag, colour, width in pixels), and the two terminal argv
+/// prefixes. Every value is already validated; an out-of-range or malformed
+/// TOML value was replaced with its default while parsing.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PanelConfig {
     /// The edge the panel docks to.
@@ -90,6 +90,10 @@ pub struct PanelConfig {
     pub width: u16,
     /// Panel width in logical pixels when expanded.
     pub width_expanded: u16,
+    /// Whether the collapsed panel reserves a strip beside it (pushes the
+    /// tiled windows); `false` makes it cover them instead. The expanded
+    /// width always covers. The `Reserve space` F2 row edits this.
+    pub reserve: bool,
     /// Inset from the output's top edge.
     pub gutter_top: i32,
     /// Inset from the output's bottom edge.
@@ -126,6 +130,7 @@ impl Default for PanelConfig {
             side: PanelSide::Left,
             width: DEFAULT_PANEL_WIDTH,
             width_expanded: DEFAULT_PANEL_WIDTH_EXPANDED,
+            reserve: true,
             gutter_top: 0,
             gutter_bottom: 0,
             gutter_left: 0,
