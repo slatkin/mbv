@@ -1,10 +1,10 @@
 //! Unit tests for the pinwin boundary.
 
 use super::{
-    PanelExitAction, PanelGutter, PanelIdentity, PinSpawnError, StartFailureAction,
-    claim_panel_identity, exit_action, failure_action, is_pinned, pinned_width_argv,
-    request_result, run_argv, set_edge_argv, set_gutters_argv, set_reserve_argv, terminal_prefix,
-    toggle_argv,
+    PanelExitAction, PanelGutter, PanelIdentity, PanelReserveMode, PinSpawnError,
+    StartFailureAction, claim_panel_identity, exit_action, failure_action, is_pinned,
+    pinned_width_argv, request_result, run_argv, set_edge_argv, set_gutters_argv, set_reserve_argv,
+    terminal_prefix, toggle_argv,
 };
 use mbv_config::{PanelConfig, PanelSide};
 use mbv_ui_model::settings::PinnedWidth;
@@ -249,9 +249,9 @@ fn set_gutters_argv_sends_the_edited_gutter(
 
 /// The `Reserve space` row names the panel and the candidate mode.
 #[rstest::rstest]
-#[case::reserve_on(true, vec!["set-reserve", "mbv", "push"])]
-#[case::reserve_off(false, vec!["set-reserve", "mbv", "cover"])]
-fn set_reserve_argv_sends_the_mode(#[case] reserve: bool, #[case] expected: Vec<&str>) {
+#[case::reserve_on(PanelReserveMode::Push, vec!["set-reserve", "mbv", "push"])]
+#[case::reserve_off(PanelReserveMode::Cover, vec!["set-reserve", "mbv", "cover"])]
+fn set_reserve_argv_sends_the_mode(#[case] reserve: PanelReserveMode, #[case] expected: Vec<&str>) {
     assert_eq!(set_reserve_argv("mbv", reserve), strings(&expected));
 }
 

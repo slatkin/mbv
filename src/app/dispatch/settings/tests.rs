@@ -73,39 +73,6 @@ fn pinned_setting_request_names_the_rows_panel_change(
     );
 }
 
-/// The `Reserve space` row asks for the candidate reserve mode only from the
-/// collapsed width; from the expanded width it takes the accent rows'
-/// no-request path, there a push would reserve the full expanded strip
-/// (design D4). Both directions carry their saved value.
-#[rstest]
-#[case::enable_while_collapsed(
-    PinnedWidth::Collapsed,
-    true,
-    Some(PinnedSettingRequest::Reserve(true))
-)]
-#[case::disable_while_collapsed(
-    PinnedWidth::Collapsed,
-    false,
-    Some(PinnedSettingRequest::Reserve(false))
-)]
-#[case::enable_while_expanded(PinnedWidth::Expanded, true, None)]
-#[case::disable_while_expanded(PinnedWidth::Expanded, false, None)]
-fn the_reserve_row_requests_only_from_the_collapsed_width(
-    #[case] active_width: PinnedWidth,
-    #[case] saved: bool,
-    #[case] expected: Option<PinnedSettingRequest>,
-) {
-    let candidate = PanelConfig {
-        reserve: saved,
-        ..candidate()
-    };
-
-    assert_eq!(
-        pinned_setting_request(SettingKey::PanelReserve, &candidate, active_width),
-        expected
-    );
-}
-
 /// An accepted request saves the candidate, arms the settings save,
 /// and records the width the row switched the panel to.
 #[test]
@@ -243,8 +210,9 @@ fn unpinned_row_saves_without_recording_a_pinned_width() {
 }
 
 /// While collapsed, an accepted enable sends one `set-reserve push`, saves
-/// the value, and announces nothing: the strip visibly appears (design D3;
-/// spec "Enable reserve while pinned").
+/// the value, and announces nothing: the strip visibly appears
+/// (change `panel-reserve-space`, design D3; spec "Enable reserve while
+/// pinned").
 #[test]
 fn the_reserve_row_enable_while_collapsed_saves_without_an_announcement() {
     let _guard = PINNED_REQUEST_TEST_LOCK.lock().unwrap();
@@ -258,7 +226,7 @@ fn the_reserve_row_enable_while_collapsed_saves_without_an_announcement() {
 
     assert_eq!(
         *PINNED_REQUESTS.lock().unwrap(),
-        vec![PinnedSettingRequest::Reserve(true)],
+        vec![PinnedSettingRequest::Reserve(PanelReserveMode::Push)],
         "the collapsed enable asks to push"
     );
     assert!(app.config.lock().unwrap().panel.reserve, "the saved enable");
@@ -282,7 +250,7 @@ fn the_reserve_row_disable_while_pinned_saves_and_announces_the_release() {
 
     assert_eq!(
         *PINNED_REQUESTS.lock().unwrap(),
-        vec![PinnedSettingRequest::Reserve(false)],
+        vec![PinnedSettingRequest::Reserve(PanelReserveMode::Cover)],
         "the collapsed disable asks to cover"
     );
     assert!(
@@ -300,7 +268,8 @@ fn the_reserve_row_disable_while_pinned_saves_and_announces_the_release() {
 /// While expanded, the `Reserve space` row takes the accent rows'
 /// no-request path: the flipped value saves and no `pinwin` request goes
 /// out, because a push there would reserve the full expanded strip
-/// (design D4; spec "Enable reserve while expanded").
+/// (change `panel-reserve-space`, design D4; spec "Enable reserve while
+/// expanded").
 #[test]
 fn the_reserve_row_while_expanded_saves_without_a_request() {
     let _guard = PINNED_REQUEST_TEST_LOCK.lock().unwrap();
@@ -321,8 +290,9 @@ fn the_reserve_row_while_expanded_saves_without_a_request() {
 }
 
 /// A saved enable while expanded sends no request and announces that the
-/// strip is reserved on the next collapse (design D4; spec "Enable reserve
-/// while expanded").
+/// strip is reserved on the next collapse
+/// (change `panel-reserve-space`, design D4; spec "Enable reserve while
+/// expanded").
 #[test]
 fn a_saved_enable_while_expanded_announces_the_next_collapse() {
     let mut app = make_app_stub();

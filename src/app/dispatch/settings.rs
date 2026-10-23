@@ -1,6 +1,6 @@
 use super::super::super::App;
 use super::notify::ToastSeverity;
-use crate::pin::PinnedSettingRequest;
+use crate::pin::{PanelReserveMode, PinnedSettingRequest};
 use mbv_ui_model::context_menu::MultiSelectKind;
 use mbv_ui_model::overlay::OverlayRequest;
 use mbv_ui_model::settings::PinnedWidth;
@@ -131,7 +131,7 @@ impl App {
     /// applies on the next `mbv --pin` launch. The `Reserve space` row sends
     /// one `set-reserve` from the collapsed width and, from the expanded width,
     /// no request at all — there a push would reserve the full expanded strip
-    /// (design D4).
+    /// (change `panel-reserve-space`, design D4).
     pub(crate) fn apply_panel_setting(&mut self, key: SettingKey, delta: i32) {
         self.apply_panel_setting_pinned(key, delta, crate::pin::is_pinned());
     }
@@ -212,8 +212,9 @@ impl App {
         // A saved `Reserve space` change tells the user when it visibly
         // lands: a disable releases the held strip only on the next launch,
         // and an enable while expanded reserves the strip on the next
-        // collapse (design D3/D4); while collapsed nothing announces an
-        // enable, because the strip visibly appears.
+        // collapse (change `panel-reserve-space`, design D3/D4); while
+        // collapsed nothing announces an enable, because the strip visibly
+        // appears.
         if pinned && key == SettingKey::PanelReserve {
             if !saved_reserve {
                 self.flash(
@@ -458,9 +459,9 @@ impl App {
 /// The request a Panel row sends while pinned, or `None` for a row
 /// that takes none: an accent row is fixed at panel start, the
 /// `Reserve space` row sends nothing from the expanded width (a push there
-/// would reserve the full expanded strip, design D4), and any
-/// other Settings row is not a Panel layout value. `active_width` is the
-/// width the running panel shows.
+/// would reserve the full expanded strip; change `panel-reserve-space`,
+/// design D4), and any other Settings row is not a Panel layout value.
+/// `active_width` is the width the running panel shows.
 fn pinned_setting_request(
     key: SettingKey,
     candidate: &mbv_config::PanelConfig,
@@ -488,7 +489,9 @@ fn pinned_setting_request(
             candidate.gutter_right,
         )),
         SettingKey::PanelReserve => match active_width {
-            PinnedWidth::Collapsed => Some(PinnedSettingRequest::Reserve(candidate.reserve)),
+            PinnedWidth::Collapsed => Some(PinnedSettingRequest::Reserve(
+                PanelReserveMode::for_flag(candidate.reserve),
+            )),
             PinnedWidth::Expanded => None,
         },
         SettingKey::PanelAccent | SettingKey::PanelAccentColor | SettingKey::PanelAccentWidth => {
