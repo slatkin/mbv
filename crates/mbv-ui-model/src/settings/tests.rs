@@ -2,6 +2,35 @@ use super::*;
 use mbv_config::PanelConfig;
 use rstest::rstest;
 
+/// The `Reserve space` row presents the saved `[panel] reserve` flag: the
+/// boolean row's label and the on/off value text of `cfg.panel.reserve`.
+#[test]
+fn the_reserve_space_row_labels_and_reads_the_saved_reserve() {
+    let cfg = mbv_config::Config {
+        panel: PanelConfig {
+            reserve: false,
+            ..PanelConfig::default()
+        },
+        ..mbv_config::Config::default()
+    };
+
+    assert_eq!(setting_label(SettingKey::PanelReserve), "Reserve space");
+    assert_eq!(
+        setting_value(SettingKey::PanelReserve, &cfg, &UiConfig::default()),
+        bool_val(false)
+    );
+}
+
+/// The `Reserve space` row flips the saved reserve flag in the candidate
+/// config, so the next pinned collapse asks for the flipped mode.
+#[test]
+fn the_reserve_space_row_toggles_the_saved_reserve() {
+    let stepped = changed_panel_config(SettingKey::PanelReserve, PanelConfig::default(), 0, None)
+        .expect("a Reserve space toggle changes the panel config");
+
+    assert!(!stepped.reserve);
+}
+
 /// The Tray row (labelled `Show systray icon`) shows whether the Tray is
 /// enabled, not the stored preference: with stay-alive on the row reads on
 /// even when the preference is off (contract `local-daemon-tray` "Row while

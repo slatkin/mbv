@@ -32,6 +32,7 @@ pub enum SettingKey {
     PanelSide,
     PanelWidth,
     PanelWidthExpanded,
+    PanelReserve,
     PanelGutterTop,
     PanelGutterBottom,
     PanelGutterLeft,
@@ -221,6 +222,7 @@ fn setting_boolean_label(key: SettingKey) -> &'static str {
             (SettingKey::SystemNotifications, "System notifications"),
             (SettingKey::MouseSupport, "Mouse support"),
             (SettingKey::PanelAccent, "Accent"),
+            (SettingKey::PanelReserve, "Reserve space"),
         ],
     )
 }
@@ -311,7 +313,8 @@ pub fn setting_kind(key: SettingKey) -> SettingValueKind {
         | K::ShowSysTrayIcon
         | K::SystemNotifications
         | K::MouseSupport
-        | K::PanelAccent => V::Boolean,
+        | K::PanelAccent
+        | K::PanelReserve => V::Boolean,
         K::ImageProtocol
         | K::SubtitleMode
         | K::SubtitleLanguage
@@ -396,6 +399,7 @@ fn setting_boolean_value(key: SettingKey, cfg: &Config) -> Option<String> {
         SettingKey::SystemNotifications => cfg.system_notifications,
         SettingKey::MouseSupport => cfg.mouse_support,
         SettingKey::PanelAccent => cfg.panel.accent,
+        SettingKey::PanelReserve => cfg.panel.reserve,
         _ => return None,
     };
     Some(bool_val(value))
@@ -504,12 +508,13 @@ pub fn bool_val(v: bool) -> String {
     if v { "on".into() } else { "off".into() }
 }
 
-/// The Panel destination's rows, in paint and cursor order: `Side` first,
-/// then the six stepper rows, then the three accent rows.
-pub const PANEL_SETTING_KEYS: [SettingKey; 10] = [
+/// The Panel destination's eleven value rows, in paint and cursor order,
+/// including the accent rows.
+pub const PANEL_SETTING_KEYS: [SettingKey; 11] = [
     SettingKey::PanelSide,
     SettingKey::PanelWidth,
     SettingKey::PanelWidthExpanded,
+    SettingKey::PanelReserve,
     SettingKey::PanelGutterTop,
     SettingKey::PanelGutterBottom,
     SettingKey::PanelGutterLeft,
@@ -701,6 +706,7 @@ pub fn changed_panel_config(
             next.gutter_right = next.gutter_right.saturating_add(delta);
         }
         SettingKey::PanelAccent => next.accent = !next.accent,
+        SettingKey::PanelReserve => next.reserve = !next.reserve,
         SettingKey::PanelAccentColor => {
             next.accent_color = next_accent_color(next.accent_color, accent_custom);
         }
