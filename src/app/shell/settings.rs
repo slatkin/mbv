@@ -507,7 +507,7 @@ mod tests {
             .find(|row| row.label == "stop")
             .expect("declared action is listed");
         assert_eq!(
-            stop.value, "Esc",
+            stop.value, "Shift+S",
             "an unconfigured action shows its default"
         );
     }

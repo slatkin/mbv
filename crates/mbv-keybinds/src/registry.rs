@@ -119,8 +119,9 @@ pub struct KeybindAction {
     /// Router-scope override allowed. Every declared action is rebindable:
     /// the registry is exactly the rebindable set.
     pub rebindable: bool,
-    /// May be assigned in the prefix namespace. Actions whose default chord
-    /// is `Esc` are not: Escape while armed always disarms, never dispatches.
+    /// May be assigned in the prefix namespace. `stop` is not: an `Esc` stop
+    /// chord and the armed disarm chord would collide, because Escape while
+    /// armed always disarms, never dispatches.
     pub prefix_addressable: bool,
 }
 
@@ -305,12 +306,13 @@ pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
     KeybindAction {
         id: "stop",
         section: KeySection::Playback,
-        default_chords: &["Esc"],
+        default_chords: &["Shift+S"],
         gate: KeyGate::Playback,
         policy: "playback",
         rebindable: true,
-        // Escape while armed must disarm, never dispatch (spec: prefix
-        // namespace capture), so `stop` cannot take a prefix assignment.
+        // An `Esc` stop chord and the armed disarm chord would collide: Escape
+        // while armed must disarm, never dispatch (spec: prefix namespace
+        // capture), so `stop` cannot take a prefix assignment.
         prefix_addressable: false,
     },
     KeybindAction {

@@ -159,16 +159,13 @@ fn no_two_actions_share_a_default_chord() {
 #[test]
 fn non_prefix_addressable_actions_are_the_documented_exceptions() {
     for action in KEYBIND_ACTIONS {
-        let escape_default = action
-            .parsed_default_chords()
-            .iter()
-            .any(|chord| chord.key == Key::Esc && chord.mods.is_empty());
-        // `library_tab_jump` is positional: its payload is the pressed
-        // digit, which an action-level prefix mapping cannot carry.
-        let positional_payload = action.id == "library_tab_jump";
+        // `stop` is an exception because an `Esc` stop chord would collide
+        // with the armed disarm chord (design D6). `library_tab_jump` is
+        // positional: its payload is the pressed digit, which an action-level
+        // prefix mapping cannot carry.
+        let documented_exception = matches!(action.id, "stop" | "library_tab_jump");
         assert_eq!(
-            action.prefix_addressable,
-            !(escape_default || positional_payload),
+            action.prefix_addressable, !documented_exception,
             "action `{}` prefix-addressability must follow its declared exception",
             action.id
         );
@@ -286,7 +283,7 @@ const EXPECTED_DEFAULTS: &[(&str, &[&str])] = &[
     ("visualizer", &["v"]),
     ("hide_visual_slot", &["h"]),
     ("toggle_play_pause", &["Space"]),
-    ("stop", &["Esc"]),
+    ("stop", &["Shift+S"]),
     ("seek_back", &["<"]),
     ("seek_forward", &[">"]),
     ("next_track", &["Shift+N"]),
@@ -673,7 +670,7 @@ fn override_count_counts_distinct_overridden_action_ids() {
             router: vec![
                 ("toggle_play_pause", Chord::parse("k").unwrap()),
                 ("toggle_play_pause", Chord::parse("p").unwrap()),
-                ("stop", Chord::parse("Esc").unwrap()),
+                ("stop", Chord::parse("Shift+S").unwrap()),
             ],
             prefix: Vec::new(),
         },
