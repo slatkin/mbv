@@ -83,6 +83,10 @@ pub(super) enum ReportJob {
         budget: Duration,
         stopped: Option<StoppedReportData>,
     },
+    /// Ordering marker for [`SessionReporter::settle`] (design D4, #963): the
+    /// worker acks it only after every job queued ahead of it ran, so the ack
+    /// orders a run's reports with the next run's cold-start fetch.
+    Barrier(mpsc::Sender<()>),
 }
 
 fn execute_stopped_report(data: StoppedReportData) {
@@ -249,6 +253,11 @@ fn run_report_worker(rx: mpsc::Receiver<ReportJob>) {
                 if let Some(data) = stopped {
                     execute_stopped_report(data);
                 }
+            }
+            // FIFO: this arm runs only after every job sent before it, so the
+            // ack means those jobs finished (design D4, #963).
+            ReportJob::Barrier(ack) => {
+                let _ = ack.send(());
             }
         }
     }
@@ -677,4 +686,25 @@ impl SessionReporter {
         // only needs to lead the run's next `PlaybackRestart` check.
         self.start_reported.store(true, Ordering::Relaxed);
     }
+
+    /// Waits until every report queued so far on this reporter's worker has
+    /// run, or `bound` passes (design D4, #963). The worker is FIFO, so the
+    /// barrier ack means the run's exit stop report already reached Emby: the
+    /// next run's cold-start resume fetch then reads the reported position.
+    ///
+    /// A timeout is not a failure. It logs `player.resume.settle_timed_out`
+    /// and returns, so the fetch runs anyway and never adds a user wait.
+    pub(super) fn settle(&self, bound: Duration) {
+        let (ack_tx, ack_rx) = mpsc::channel::<()>();
+        if self.job_tx.send(ReportJob::Barrier(ack_tx)).is_err() {
+            // No worker left to drain: nothing is queued, so nothing waits.
+            return;
+        }
+        if ack_rx.recv_timeout(bound).is_err() {
+            tracing::warn!(name: "player.resume.settle_timed_out", target: "player", bound_ms = bound.as_millis(), "report worker did not drain within the settle bound");
+        }
+    }
 }
+
+#[cfg(test)]
+mod tests;

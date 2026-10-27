@@ -17,6 +17,12 @@ use std::sync::{Arc, atomic::AtomicBool};
 /// when neither the wakeup pipe nor the socket is readable.
 const WAKEUP_POLL_MS: i32 = 50;
 
+/// Bound on the run-exit drain of the report worker (design D4, #963). The
+/// run waits this long for the reports it queued (the exit stop report rides
+/// the FIFO worker) before its thread ends, so the next cold start's resume
+/// fetch is ordered after them. On timeout the fetch runs anyway.
+const REPORT_SETTLE_BOUND: Duration = Duration::from_secs(2);
+
 /// Waits until the wakeup pipe or the mpv socket is readable, or `timeout_ms`
 /// passes. `poll` ignores a negative fd, so a missing wakeup pipe leaves the
 /// socket as the only source and the ceiling still bounds the timers.
@@ -116,6 +122,12 @@ impl PlaybackRun {
         // child down at the end of the run, before the panic teardown below
         // (design D5).
         drop(mpv);
+        // Design D4: drain the reports this run queued — the exit stop report
+        // rides the FIFO worker — before the thread ends, so `Player::join`
+        // covers them and the next cold start's resume fetch reads the
+        // reported position. `run_exited` is already stored above, so no
+        // submission reuses this dying run while it waits.
+        self.reporter.settle(REPORT_SETTLE_BOUND);
         if let Err(panic) = result {
             let msg = panic
                 .downcast_ref::<&str>()
