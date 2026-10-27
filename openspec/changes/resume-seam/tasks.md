@@ -27,7 +27,7 @@ Use `cargo nextest run -p mbv-player` for tests. Follow `docs/standards/README.m
 ## 4. Docs and gates
 
 - [x] 4.1 Update `docs/invariants/06-queue-progress-application-sites.md`: the seek source is chosen by `resume_source`; the per-kind list moves to the seam; state the run-exit drain as the ordering rule and name its test (task 3.1). Verify by reading the file against the code (`rg resume_source`).
-- [ ] 4.2 Run the gates: `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo nextest run -p mbv-player -p mbv-daemon`, and `make check-code-file-lines` just before the push. Fix every red gate or put it in front of the user. No lint suppression.
+- [x] 4.2 Run the gates: `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo nextest run -p mbv-player -p mbv-daemon`, and `make check-code-file-lines` just before the push. Fix every red gate or put it in front of the user. No lint suppression.
 - [ ] 4.3 Open the PR with the change left open. Ask the user for a live test of the stop-then-replay case, and for approval to sync and archive.
 
 ## Workflow follow-up
