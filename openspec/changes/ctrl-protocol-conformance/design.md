@@ -140,19 +140,21 @@ for the canonical value.
 ### D6: Owner-side decode check in `crates/mbv-daemon`
 
 One test iterates `fixtures/commands/*.json` and decodes each through
-`serde_json::from_str::<CtrlCmd>` — the entry `core_ctrl_spawn.rs` uses —
-asserting every file decodes and the corpus is non-empty. `mbvd` runs
-`mbv-daemon`, so the packaged-owner direction is exercised without launching
-a daemon.
+`mbv_daemon::decode_ctrl_cmd` — the decode entry `core_ctrl_spawn.rs`'s
+Hello classification and command loop call per inbound line — asserting
+every file decodes and the corpus is non-empty. `mbvd` runs `mbv-daemon`, so
+the packaged-owner direction is exercised without launching a daemon.
 
 ### D7: Recipe and comment updates, not duplicated pins
 
 `docs/recipes.md` step 8 names the bless command and the fixture site;
 `protocol.rs`'s bump-rules comment points at `protocol/ctrl/v10/`. The
-existing `wire.rs` pin tests stay: they pin at unit level, cost nothing, and
-a wire change forcing updates in two places is the intended friction. Pure
-tag-pin assertions that a fixture now duplicates may be trimmed
-opportunistically during implementation, but removing them is not a goal.
+corpus is the sole owner of the wire-shape contracts — tag pins, encode
+bytes, and decode round-trips — so `wire.rs`/`queue.rs` tests a fixture row
+subsumes were deleted. What remains there are the contracts no fixture can
+own: additive-decode tolerances (missing `op`, legacy `play_order`, absent
+transition fields), the fail-closed `try_from_player_command` refusal, and
+the `mutates_owner_queue` persistence predicate.
 
 ## Risks / Trade-offs
 
