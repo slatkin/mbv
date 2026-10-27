@@ -410,7 +410,23 @@ struct PlayerThreadStart {
     run_exited: Arc<AtomicBool>,
 }
 
+/// Sets the run's exit flag when the player thread exits, however it exits:
+/// the normal loop return, a pre-loop startup failure, or a panic unwinding
+/// out of the thread body (design D7, review correction). Without it, a run
+/// that dies before or beside `PlaybackRun::run` leaves the flag unset and a
+/// replacement submitted into that teardown tail is channel-accepted but
+/// never read. `PlaybackRun::run` sets the flag earlier — before `drop(mpv)`
+/// — so the guard is only the backstop for the exits `run` never reaches.
+struct RunExitGuard(Arc<AtomicBool>);
+
+impl Drop for RunExitGuard {
+    fn drop(&mut self) {
+        self.0.store(true, Ordering::Relaxed);
+    }
+}
+
 fn run_player_thread(mut start: PlayerThreadStart) {
+    let _run_exit = RunExitGuard(Arc::clone(&start.run_exited));
     let (mpv, startup_pause_for_pipe) = match start.pre_warmed.take() {
         Some(warmed) => warmed,
         None => match init_mpv(&start.spawner, &start.config) {
