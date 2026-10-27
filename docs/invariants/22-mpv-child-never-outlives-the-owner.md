@@ -2,8 +2,9 @@
 
 ## The invariant
 
-1. One `mpv` child process serves exactly one Playback run. A later run never
-   reuses a live child.
+1. One `mpv` child process serves exactly one Playback run at a time. A later
+   submission of the same run may reuse the live child; a later run never
+   does. Two live runs never share one child.
 2. The child never outlives the Owner process. When the run ends, or when the
    Owner process dies, the child exits.
 
@@ -30,6 +31,15 @@ stop goes through the code below.
   on-demand start in `run_player_thread` both use it. This thread outlives
   every run, so `PR_SET_PDEATHSIG` cannot fire early on a short-lived caller
   thread.
+- A submission either goes into the live run or starts a new one, and the
+  choice never doubles up the child. `Controller::submit_queue_slots`
+  (`submit.rs`) reuses the live run through `submit_into_live_run` when a run
+  exists, the headless class matches, no stop was requested (`stop_tx` is
+  `Some`), and `run_exited` is unset; the run then takes the submission
+  (`PlayerCommand::SubmitQueue`, `run/commands.rs`). The reported playback
+  state does not decide this, so an idle or parked run keeps its child. Every
+  failed check falls back to the cold start, which calls `stop()` and `join()`
+  before it spawns, so the old child is gone before the new one starts.
 - `prepare_ipc_socket` (`runtime.rs`) removes a stale socket before each
   spawn. `submit.rs` takes the pre-warmed session once
   (`pre_warmed_mpv.take()`), so no child serves two runs.
@@ -45,3 +55,9 @@ No known violation. Known limits:
 - The one-pre-warmed-instance rule is a convention in `submit.rs`, not a type.
   A later call site that clones a session or keeps the pre-warm would break
   it.
+- The reuse decision is a check-then-send, not a handshake. `run_exited` (set
+  in `PlaybackRun::run` before `drop(mpv)`) narrows the teardown window to one
+  loop pass, but a submission accepted in the pass where the loop exits is
+  lost (invariant 24 names that residual window). It never leaves a second
+  child: the next submission reads `run_exited` set, cold-starts, and joins
+  the exited run first.
