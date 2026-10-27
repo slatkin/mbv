@@ -234,53 +234,6 @@ fn unified_queue_replace_cmd_round_trips() {
 }
 
 #[test]
-fn idle_queue_load_and_result_round_trip_with_request_identity() {
-    let command = CtrlCmd::UnifiedQueueLoadIdle {
-        request_id: 77,
-        slots: vec![UnifiedQueueSlot {
-            slot_id: 12,
-            item: QueueItem::Feed(stub_feed_entry()),
-        }],
-        cursor: 0,
-        source: QueueSource::Album,
-    };
-    let decoded: CtrlCmd = serde_json::from_str(&serde_json::to_string(&command).unwrap()).unwrap();
-    assert!(matches!(
-        decoded,
-        CtrlCmd::UnifiedQueueLoadIdle {
-            request_id: 77,
-            cursor: 0,
-            source: QueueSource::Album,
-            ..
-        }
-    ));
-
-    let event = CtrlEvent::UnifiedQueueLoadResult {
-        request_id: 77,
-        result: QueueLoadResult::Rejected {
-            reason: "unsupported".to_string(),
-        },
-    };
-    let decoded: CtrlEvent = serde_json::from_str(&serde_json::to_string(&event).unwrap()).unwrap();
-    assert!(
-        matches!(decoded, CtrlEvent::UnifiedQueueLoadResult { request_id: 77, result: QueueLoadResult::Rejected { reason } } if reason == "unsupported")
-    );
-    let accepted = CtrlEvent::UnifiedQueueLoadResult {
-        request_id: 78,
-        result: QueueLoadResult::Accepted,
-    };
-    let decoded: CtrlEvent =
-        serde_json::from_str(&serde_json::to_string(&accepted).unwrap()).unwrap();
-    assert!(matches!(
-        decoded,
-        CtrlEvent::UnifiedQueueLoadResult {
-            request_id: 78,
-            result: QueueLoadResult::Accepted
-        }
-    ));
-}
-
-#[test]
 fn source_only_update_round_trips_queue_lineage() {
     let command = CtrlCmd::UnifiedQueueSourceUpdate {
         source: QueueSource::Album,

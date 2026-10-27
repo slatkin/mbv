@@ -124,16 +124,14 @@ Every event emitted by mbv code SHALL carry an event name in dot notation
 same name in every process.
 
 #### Scenario: Grouping by event
-- **WHEN** a user filters a log for `event=queue.load.rejected`
-- **THEN** every queue-load rejection is found, and no other event
+- **WHEN** a user filters a log for `event=player.load.failed`
+- **THEN** every load failure is found, and no other event
 
 ### Requirement: Correlation fields
 Log lines SHALL carry correlation fields for the operation they belong to, using the same
 key names in `mbv`, the local daemon and `mbvd`:
 - ctrl playback intents: `request` (playback request id) and `generation`. On the Player
   owner, also `client` (the owner's id for the connection that sent it).
-- ctrl queue loads: `queue_request` (queue load request id). On the Player owner, also
-  `client`.
 - playback sessions: `slot` (queue slot id), `item` (content id, when there is one) and,
   for Emby, `play_session`
 - Emby playback reporting: `item` and `play_session` of the session being reported

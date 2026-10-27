@@ -393,7 +393,6 @@ use rand::SeedableRng;
 /// loop owns exactly one of these.
 pub(super) struct DaemonPlayerOwner {
     pub(super) core: PlayerOwnerState,
-    pub(super) pending_idle_load: Option<PendingIdleQueueLoad>,
     /// Guarded direct-playback lifecycle coordinator. Retained functionally
     /// as-is (task 3.2 folds its single `current` into the core `transitions`);
     /// kept here so the event loop owns one struct. Meaningless in Bare mode,
@@ -428,7 +427,6 @@ impl Default for DaemonPlayerOwner {
     fn default() -> Self {
         Self {
             core: PlayerOwnerState::default(),
-            pending_idle_load: None,
             intents: PlaybackIntentState::default(),
             queued_transition_origin: None,
             output: crate::output::PlaybackOutput::default(),
@@ -438,17 +436,6 @@ impl Default for DaemonPlayerOwner {
             rng: rand::rngs::SmallRng::from_rng(&mut rand::rng()),
         }
     }
-}
-
-pub(crate) struct PendingIdleQueueLoad {
-    pub(super) client_id: CtrlClientId,
-    pub(super) request_id: mbv_ctrl::QueueLoadRequestId,
-    pub(super) slots: Vec<(QueueSlotId, QueueItem)>,
-    pub(super) cursor: usize,
-    pub(super) source: mbv_queue::QueueSource,
-    pub(super) reply_tx: CtrlSender,
-    pub(super) stopped_run: mbv_ctrl::PlaybackGeneration,
-    pub(super) started_at: Instant,
 }
 
 /// The daemon's owner-side playback authority: everything the paths that

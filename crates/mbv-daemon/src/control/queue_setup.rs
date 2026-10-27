@@ -212,7 +212,7 @@ pub(super) fn handle_queue_source_update(
         .ctrl_clients
         .lock()
         .unwrap()
-        .supports_owner_queue_load(ctx.client_id);
+        .supports_owner_queue_source_update(ctx.client_id);
     if !supports_operation {
         reject_command(
             &ctx.rejection_context(lineage),

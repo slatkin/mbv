@@ -57,8 +57,8 @@ the wedged transition (queue-owner-process #857).
 No known violation. Two known residuals (observed in review, not regressions):
 
 - On a plain autostart play, the owner's Queue source stays at its previous
-  value until the next idle load or clear — a property of the adoption model,
-  since submission does not carry a source update.
+  value until the next queue replacement or clear — a property of the
+  adoption model, since submission does not carry a source update.
 - Property 3 is not enforced by types: `Player::send_command`'s boolean is the
   only signal that no live run took the jump, so a future call site that
   dispatches a jump directly, bypassing `send_jump_or_cold_start`, would

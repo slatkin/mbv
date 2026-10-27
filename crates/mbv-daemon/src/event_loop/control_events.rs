@@ -79,7 +79,7 @@ impl DaemonLoop {
                 op: std::cell::Cell::new(None),
             },
         );
-        if persist_after_command && self.owner.pending_idle_load.is_none() {
+        if persist_after_command {
             return EventOutcome::DIRTY;
         }
         EventOutcome::CONTINUE

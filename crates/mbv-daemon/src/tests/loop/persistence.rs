@@ -119,102 +119,6 @@ fn stopped_stale_run_persists_nothing() {
 }
 
 #[test]
-fn stopped_matching_pending_idle_load_commits_and_persists_once() {
-    let mut t = test_loop_with_queue(
-        crate::DaemonRole::Local,
-        vec![emby_qi("old", "Video", "Movie")],
-        0,
-    );
-    let old_slot = t.event_loop.owner.core.queue.slots()[0].slot_id;
-    let run = current_run(&t.event_loop);
-    let (reply_tx, reply_rx) = mpsc::channel();
-    t.event_loop.owner.pending_idle_load = Some(PendingIdleQueueLoad {
-        client_id: 0,
-        request_id: 7,
-        slots: vec![(old_slot, emby_qi("new", "Video", "Movie"))],
-        cursor: 0,
-        source: QueueSource::Album,
-        reply_tx,
-        stopped_run: run,
-        started_at: Instant::now(),
-    });
-
-    let flow = t
-        .event_loop
-        .handle_event(DaemonEvent::Player(PlayerEvent::Stopped {
-            slot_id: Some(old_slot),
-            run_identity: run,
-            position_ticks: 900,
-            played: false,
-            consume: false,
-            error: None,
-        }));
-
-    assert_eq!(flow, LoopFlow::Continue);
-    assert!(t.event_loop.owner.pending_idle_load.is_none());
-    assert_eq!(t.event_loop.owner.core.queue.slots()[0].item.id(), "new");
-    assert_eq!(t.event_loop.owner.core.source, QueueSource::Album);
-    assert_eq!(t.persisted.borrow().len(), 1);
-    assert!(matches!(
-        recv_event(&reply_rx),
-        CtrlEvent::UnifiedQueueLoadResult {
-            request_id: 7,
-            result: mbv_ctrl::QueueLoadResult::Accepted,
-        }
-    ));
-}
-
-#[test]
-fn stopped_different_run_cancels_pending_idle_load_and_persists_nothing() {
-    let mut t = test_loop_with_queue(
-        crate::DaemonRole::Local,
-        vec![emby_qi("old", "Video", "Movie")],
-        0,
-    );
-    t.event_loop
-        .player
-        .status
-        .lock()
-        .unwrap()
-        .sequence_generation = 5;
-    let old_slot = t.event_loop.owner.core.queue.slots()[0].slot_id;
-    let (reply_tx, reply_rx) = mpsc::channel();
-    t.event_loop.owner.pending_idle_load = Some(PendingIdleQueueLoad {
-        client_id: 0,
-        request_id: 8,
-        slots: vec![(old_slot, emby_qi("new", "Video", "Movie"))],
-        cursor: 0,
-        source: QueueSource::Album,
-        reply_tx,
-        stopped_run: 5,
-        started_at: Instant::now(),
-    });
-
-    let flow = t
-        .event_loop
-        .handle_event(DaemonEvent::Player(PlayerEvent::Stopped {
-            slot_id: Some(old_slot),
-            run_identity: 4,
-            position_ticks: 900,
-            played: false,
-            consume: false,
-            error: None,
-        }));
-
-    assert_eq!(flow, LoopFlow::Continue);
-    assert!(t.event_loop.owner.pending_idle_load.is_none());
-    assert_eq!(t.event_loop.owner.core.queue.slots()[0].item.id(), "old");
-    assert!(t.persisted.borrow().is_empty());
-    assert!(matches!(
-        recv_event(&reply_rx),
-        CtrlEvent::UnifiedQueueLoadResult {
-            request_id: 8,
-            result: mbv_ctrl::QueueLoadResult::Rejected { .. },
-        }
-    ));
-}
-
-#[test]
 fn ws_matching_generation_persists_once() {
     let mut t = test_loop_with_queue(
         crate::DaemonRole::Local,
@@ -275,7 +179,7 @@ fn role_gate_non_local_dirty_event_persists_nothing() {
 }
 
 #[test]
-fn idle_queue_load_install_persists_once_through_injected_store() {
+fn queue_replace_command_persists_once_through_injected_store() {
     let mut t = test_loop_with_queue(
         crate::DaemonRole::Local,
         vec![emby_qi("old", "Video", "Movie")],
@@ -286,17 +190,18 @@ fn idle_queue_load_install_persists_once_through_injected_store() {
     let _guard = mbv_config::TestStateDirGuard::new();
     t.event_loop.client.lock().unwrap().token = "test-token".to_string();
     let (client_id, _rx) = connect_client(&mut t.event_loop.ctrl_clients.lock().unwrap());
-    let (reply_tx, reply_rx) = mpsc::channel();
+    let (reply_tx, _reply_rx) = mpsc::channel();
 
     let flow = t.event_loop.handle_event(DaemonEvent::Ctrl(
-        CtrlCmd::UnifiedQueueLoadIdle {
-            request_id: 5,
+        CtrlCmd::UnifiedQueueReplace {
+            items: vec![],
             slots: vec![mbv_ctrl::UnifiedQueueSlot {
                 slot_id: 1,
                 item: emby_qi("new", "Video", "Movie"),
             }],
-            cursor: 0,
+            start_idx: Some(0),
             source: QueueSource::Album,
+            op: None,
         },
         client_id,
         reply_tx,
@@ -305,19 +210,12 @@ fn idle_queue_load_install_persists_once_through_injected_store() {
     assert_eq!(flow, LoopFlow::Continue);
     assert_eq!(t.event_loop.owner.core.queue.slots()[0].item.id(), "new");
     assert_eq!(t.event_loop.owner.core.source, QueueSource::Album);
-    // The install path has no inline production write: the loop-pass store is
-    // the single writer, so a committed load records exactly one snapshot.
+    // A queue-mutating command records exactly one snapshot through the
+    // loop-pass store.
     assert_eq!(t.persisted.borrow().len(), 1);
     assert_eq!(t.persisted.borrow()[0].item_ids, vec!["new".to_string()]);
     assert!(
         !mbv_config::stay_alive_queue_state_path().exists(),
-        "install path must not write the production store directly"
+        "no command path writes the production store directly"
     );
-    assert!(matches!(
-        recv_event(&reply_rx),
-        CtrlEvent::UnifiedQueueLoadResult {
-            request_id: 5,
-            result: mbv_ctrl::QueueLoadResult::Accepted,
-        }
-    ));
 }

@@ -22,7 +22,7 @@ When an Emby Session presents an item that the owner did not load (neither the l
 
 ### Requirement: The device's own continuation at the queue's end becomes the next queue slot
 
-When the tracked item on an Emby Session ends within 10 seconds of its runtime, the device holds no queued next item, and the device starts an item the owner did not load, the owner SHALL append that item at the end of its queue, make it the active slot, and track it as the tracked item. A device move to a stale queued item SHALL NOT be adopted.
+When the tracked item on an Emby Session ends within 10 seconds of its runtime and the device holds no queued next item, the owner SHALL adopt the next item the device starts and the owner did not load: it SHALL append that item at the end of its queue, make it the active slot, and track it. The owner SHALL adopt an item only when the Session first presents it within 30 seconds of that end, and SHALL record the ended slot's completion once.
 
 #### Scenario: The device autoplays its next episode at the queue's end
 
@@ -30,6 +30,22 @@ When the tracked item on an Emby Session ends within 10 seconds of its runtime, 
 - **THEN** the owner appends that episode as a new slot at the end of the queue
 - **AND** the new slot becomes the active slot
 - **AND** the ended slot records completion under the same rule as a device move to the queued next item
+
+#### Scenario: The device autoplays after an idle gap
+
+- **WHEN** the queue's last slot plays to its end, the Session is idle for one observation, and within 30 seconds the device starts an item of its own
+- **THEN** the owner appends that item as the active slot as in the direct case
+- **AND** the ended slot has recorded completion once
+
+#### Scenario: A late foreign item is not adopted
+
+- **WHEN** the Session first presents an item the owner did not load more than 30 seconds after the tracked item's end
+- **THEN** the owner presents that item and appends nothing to the queue
+
+#### Scenario: The item lookup fails
+
+- **WHEN** the device starts an item that meets the adoption rule and the owner's lookup of that item fails
+- **THEN** the owner presents that item, appends nothing to the queue, and logs the failure
 
 #### Scenario: Adoption repeats
 
@@ -51,4 +67,3 @@ When the tracked item on an Emby Session ends within 10 seconds of its runtime, 
 
 - **WHEN** the user presses next while the device plays an adopted item that is the queue's last slot
 - **THEN** the owner loads nothing and the device receives no next command
-

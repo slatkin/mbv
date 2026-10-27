@@ -386,7 +386,7 @@ fn an_expired_jump_promotes_the_queued_jump_with_its_origin_so_the_failure_is_re
         .checked_sub(std::time::Duration::from_secs(10))
         .expect("the monotonic clock reaches back ten seconds");
     t.event_loop.owner.core.transitions.expire(backdated);
-    t.event_loop.on_recv_timeout(std::time::Instant::now());
+    t.event_loop.on_recv_timeout();
     assert!(
         t.event_loop.owner.core.transitions.in_flight().is_some(),
         "the queued jump is promoted into flight"
@@ -529,7 +529,7 @@ fn a_resolve_that_lands_after_its_transition_expired_loads_nothing() {
         .checked_sub(std::time::Duration::from_secs(10))
         .expect("the monotonic clock reaches back ten seconds");
     t.event_loop.owner.core.transitions.expire(backdated);
-    t.event_loop.on_recv_timeout(std::time::Instant::now());
+    t.event_loop.on_recv_timeout();
     assert!(t.event_loop.owner.core.transitions.in_flight().is_none());
 
     pump(&mut t);

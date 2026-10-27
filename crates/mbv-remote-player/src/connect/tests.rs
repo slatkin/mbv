@@ -7,6 +7,7 @@ use mbv_emby_model::EmbyImageTags;
 use mbv_emby_model::EmbyItem;
 use mbv_queue::QueueSource;
 use mbv_queue::{FeedEntry, QueueItem};
+use rstest::rstest;
 
 fn make_media_item(id: &str) -> EmbyItem {
     EmbyItem {
@@ -327,20 +328,45 @@ fn connect_endpoint_maps_owner_admission_refusals() {
     assert_eq!(shutting_down.to_string(), "the owner is shutting down");
 }
 
-#[test]
-// Issue #559: the build gate fires on the Owner's hello, before the Client
-// sends its own hello/control credential (design D1).
-fn local_handshake_rejects_different_owner_build_before_client_hello() {
+// Issue #559 (design D1) and emby-session-output-followups task 4.2 (issue
+// #949 item 3): the build gate fires on the Owner's hello, before the Client
+// sends its own hello or control credential — on a different version, on a
+// same-version build-id mismatch, and on the empty build id a stale Owner
+// sends (invariant 15). Each case pins the refusal and the prompt text the
+// scenario produces.
+#[rstest]
+#[case::a_different_owner_version(
+    "different-owner-build",
+    "owner-build-1",
+    "version different-owner-build"
+)]
+#[case::a_different_build_id(
+    env!("CARGO_PKG_VERSION"),
+    "a-different-build-id",
+    "build a-different-build-id"
+)]
+#[case::a_stale_owner_without_a_build_id(
+    env!("CARGO_PKG_VERSION"),
+    "",
+    "unknown build"
+)]
+fn local_handshake_rejects_a_mismatched_owner_build_before_client_hello(
+    #[case] owner_version: &str,
+    #[case] owner_build_id: &str,
+    #[case] message_fragment: &str,
+) {
     use std::io::{BufRead, Write};
 
     let (client, daemon) = UnixStream::pair().unwrap();
     let (received_tx, received_rx) = mpsc::channel();
-    let owner_version = "different-owner-build";
+    let owner_version = owner_version.to_string();
+    let owner_build_id = owner_build_id.to_string();
     let peer = std::thread::spawn(move || {
         let mut writer = daemon.try_clone().unwrap();
         let mut reader = BufReader::new(daemon);
         let mut hello = CtrlHello::current();
-        hello.app_version = owner_version.to_string();
+        hello.app_version = owner_version;
+        hello.build_id = owner_build_id;
         writeln!(
             writer,
             "{}",
@@ -362,7 +388,11 @@ fn local_handshake_rejects_different_owner_build_before_client_hello() {
     )
     .unwrap_err();
 
-    assert_eq!(error.mismatched_owner_version(), Some(owner_version));
+    assert!(error.is_owner_build_mismatch());
+    assert!(
+        error.to_string().contains(message_fragment),
+        "the mismatch message names the Owner's identity: {error}"
+    );
     peer.join().unwrap();
     assert_eq!(received_rx.recv().unwrap(), "");
 }

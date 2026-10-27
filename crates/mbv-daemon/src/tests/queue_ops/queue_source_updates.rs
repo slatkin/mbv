@@ -163,8 +163,8 @@ impl SourceUpdateFixture {
         }
     }
 
-    /// Dispatch one command as a registered local client.
-    fn dispatch(&mut self, client_id: u64, cmd: CtrlCmd) {
+    /// Dispatch one command under `role`, the owner-role gate's subject.
+    fn dispatch_with_role(&mut self, client_id: u64, cmd: CtrlCmd, role: crate::DaemonRole) {
         handle_ctrl_for_role(
             cmd,
             CtrlContext {
@@ -179,11 +179,47 @@ impl SourceUpdateFixture {
                 audiobookshelf: None,
                 merged_tx: &self.merged_tx,
                 owner_settings: crate::owner_settings::fixed_reader(true),
-                role: crate::DaemonRole::Local,
+                role,
                 op: std::cell::Cell::new(None),
             },
         );
     }
+
+    /// Dispatch one command as a registered local client.
+    fn dispatch(&mut self, client_id: u64, cmd: CtrlCmd) {
+        self.dispatch_with_role(client_id, cmd, crate::DaemonRole::Local);
+    }
+}
+
+/// Contract: followups task 2.3 — a source update still requires the
+/// Stay-alive owner (regression, PR 966 review): the retired idle-load test
+/// family was the last to pin this gate, so a Packaged owner rejects the
+/// command with the gate's reason and applies nothing.
+#[test]
+fn packaged_role_rejects_a_source_update_without_applying_it() {
+    let mut fx = SourceUpdateFixture::new();
+
+    fx.dispatch_with_role(
+        fx.client_id,
+        CtrlCmd::UnifiedQueueSourceUpdate {
+            source: QueueSource::Album,
+            lineage: mbv_queue::QueueLineage(1),
+            op: None,
+        },
+        crate::DaemonRole::Packaged,
+    );
+
+    assert!(
+        matches!(recv_event(&fx.reply_rx), CtrlEvent::CommandRejected(reason)
+        if reason.contains("only by the Stay-alive owner")),
+        "the Packaged owner rejects the source update"
+    );
+    assert_eq!(fx.owner.core.source, QueueSource::Unknown);
+    assert_eq!(fx.owner.core.queue.slots().len(), 1);
+    assert!(matches!(
+        fx.commands.try_recv(),
+        Err(mpsc::TryRecvError::Empty)
+    ));
 }
 
 #[test]
@@ -192,27 +228,24 @@ fn matching_source_update_publishes_without_replacing_queue_or_playback() {
 
     fx.dispatch(
         fx.client_id,
-        CtrlCmd::UnifiedQueueLoadIdle {
-            request_id: 71,
+        CtrlCmd::UnifiedQueueReplace {
+            items: vec![],
             slots: vec![mbv_ctrl::UnifiedQueueSlot {
                 slot_id: 81,
                 item: emby_qi("loaded", "Video", "Movie"),
             }],
-            cursor: 0,
+            start_idx: Some(0),
             source: QueueSource::Album,
+            op: None,
         },
     );
     assert!(matches!(
         recv_event(&fx.client_rx),
         CtrlEvent::UnifiedQueueState(_)
     ));
-    assert!(matches!(
-        recv_event(&fx.reply_rx),
-        CtrlEvent::UnifiedQueueLoadResult {
-            request_id: 71,
-            result: mbv_ctrl::QueueLoadResult::Accepted,
-        }
-    ));
+    // The replacement's cold start plays; the spy records its commands. Drain
+    // them so the assertion below stays about the source update alone.
+    while fx.commands.try_recv().is_ok() {}
     let lineage = *fx.shared_queue.lineage.lock().unwrap();
     let slots_before: Vec<_> = fx
         .owner
@@ -278,8 +311,8 @@ fn matching_source_update_publishes_without_replacing_queue_or_playback() {
         ),
         status_before,
     );
-    // The idle load's order reset stays owner-local now (queue-content-shuffle
-    // task 5.2): the source update itself sends no command.
+    // The source update itself sends no command (queue-content-shuffle task
+    // 5.2: the queue's order reset stays owner-local).
     assert!(matches!(
         fx.commands.try_recv(),
         Err(mpsc::TryRecvError::Empty)
@@ -292,30 +325,25 @@ fn delayed_source_update_is_rejected_after_another_client_replaces_queue() {
     let (client_b, rx_b) = connect_client(&mut fx.registry.lock().unwrap());
     let client_a = fx.client_id;
 
-    for (request_id, client_id, item_id, playlist_name) in [
+    for (slot_id, client_id, item_id, playlist_name) in [
         (72, client_a, "first", "First"),
         (73, client_b, "second", "Second"),
     ] {
         fx.dispatch(
             client_id,
-            CtrlCmd::UnifiedQueueLoadIdle {
-                request_id,
+            CtrlCmd::UnifiedQueueReplace {
+                items: vec![],
                 slots: vec![mbv_ctrl::UnifiedQueueSlot {
-                    slot_id: request_id,
+                    slot_id,
                     item: emby_qi(item_id, "Video", "Movie"),
                 }],
-                cursor: 0,
+                start_idx: Some(0),
                 source: QueueSource::Playlist {
-                    id: Some(request_id.to_string()),
+                    id: Some(slot_id.to_string()),
                     name: playlist_name.to_string(),
                 },
+                op: None,
             },
-        );
-        assert!(
-            matches!(recv_event(&fx.reply_rx), CtrlEvent::UnifiedQueueLoadResult {
-            request_id: got,
-            result: mbv_ctrl::QueueLoadResult::Accepted,
-        } if got == request_id)
         );
     }
     let stale_lineage = mbv_queue::QueueLineage(1);
@@ -328,6 +356,9 @@ fn delayed_source_update_is_rejected_after_another_client_replaces_queue() {
         let _ = recv_event(rx);
         let _ = recv_event(rx);
     }
+    // Drain the replacements' cold-start commands so the assertion below
+    // stays about the source update alone.
+    while fx.commands.try_recv().is_ok() {}
     let slots_before: Vec<_> = fx
         .owner
         .core
@@ -373,8 +404,8 @@ fn delayed_source_update_is_rejected_after_another_client_replaces_queue() {
             .collect::<Vec<_>>(),
         slots_before,
     );
-    // Each committed idle load's order reset stays owner-local now
-    // (queue-content-shuffle task 5.2); the source update itself sends none.
+    // The source update itself sends no command (queue-content-shuffle task
+    // 5.2: the queue's order reset stays owner-local).
     assert!(matches!(
         fx.commands.try_recv(),
         Err(mpsc::TryRecvError::Empty)

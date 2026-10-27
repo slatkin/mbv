@@ -8,6 +8,7 @@
 use std::sync::mpsc;
 
 use mbv_emby::{EmbyClient, SessionInfo};
+use mbv_emby_model::EmbyItem;
 
 /// The `/Sessions` operations the worker needs, decoupled from the concrete
 /// `EmbyClient` so tests can substitute a recording fake (design D4). No
@@ -32,6 +33,10 @@ pub(crate) trait SessionApi {
     fn set_mute(&self, session_id: &str, muted: bool) -> Result<(), String>;
     fn set_audio_index(&self, session_id: &str, index: i64) -> Result<(), String>;
     fn set_subtitle_index(&self, session_id: &str, index: i64) -> Result<(), String>;
+    /// Looks one Emby item up by id (emby-session-output-followups design
+    /// D4): the queue-end continuation's lookup runs on the output's worker
+    /// like every other call.
+    fn get_item(&self, item_id: &str) -> Result<EmbyItem, String>;
 }
 
 impl SessionApi for EmbyClient {
@@ -78,6 +83,15 @@ impl SessionApi for EmbyClient {
     fn set_subtitle_index(&self, session_id: &str, index: i64) -> Result<(), String> {
         self.session_set_subtitle_index(session_id, index)
             .map_err(|error| error.to_string())
+    }
+
+    fn get_item(&self, item_id: &str) -> Result<EmbyItem, String> {
+        let mut items = self
+            .get_items_by_ids(&[item_id.to_owned()])
+            .map_err(|error| error.to_string())?;
+        items
+            .pop()
+            .ok_or_else(|| format!("the server returned no item for {item_id}"))
     }
 }
 

@@ -17,11 +17,13 @@ use mbv_net::stream::SocketStream;
 // tighter than `EmbyClient::AUTHENTICATE_HARD_BOUND`.
 pub(super) const DAEMON_HANDSHAKE_HARD_BOUND: Duration = Duration::from_secs(5);
 
-/// Whether the handshake must reject an Owner built from a different version.
+/// Whether the handshake must reject an Owner built differently.
 ///
 /// The local Owner process is the same binary as this Client, so a differing
-/// `app_version` means a stale process; explicit `unix://`/`tcp://` endpoints
-/// and the packaged `mbvd` are independent builds and never compare.
+/// `app_version` or `build_id` means a stale process. Every handshake to
+/// `control_socket_path()` compares — the Client attach and both restricted
+/// roles — while explicit `unix://`/`tcp://` endpoints and the packaged
+/// `mbvd` are independent builds and never compare.
 #[derive(Clone, Copy)]
 pub(super) enum PeerBuild {
     Any,
@@ -73,7 +75,10 @@ where
         stream,
         load_control_token,
         HandshakeRole::ServiceSetupAdmin,
-        PeerBuild::Any,
+        // Local-socket only, so the same build gate the Client attach runs
+        // applies: no Control credential reaches a stale Owner (invariant
+        // 15).
+        PeerBuild::MustMatch,
         false,
         None,
     )
@@ -127,14 +132,20 @@ pub(super) fn read_server_hello(
         ));
     };
     // A local Owner is the same binary as this Client, so a differing
-    // `app_version` means the user is attached to a stale process. Refuse
-    // here, before `validate_peer` and therefore before `send_client_hello`,
-    // so no control credential leaves this terminal. Both sides read the
-    // workspace version (`version.workspace = true`), so this compares like
-    // with like.
-    if matches!(peer_build, PeerBuild::MustMatch) && info.app_version != env!("CARGO_PKG_VERSION") {
+    // `app_version` or `build_id` means the user is attached to a stale
+    // process (emby-session-output-followups design D3, issue #949 item 3).
+    // An Owner that predates the build-id field sends an empty `build_id`,
+    // which never equals this binary's non-empty identity and is refused
+    // the same way. Refuse here, before `validate_peer` and therefore
+    // before `send_client_hello`, so no control credential leaves this
+    // terminal (invariant 15). Both sides read the workspace version
+    // (`version.workspace = true`), so this compares like with like.
+    if matches!(peer_build, PeerBuild::MustMatch)
+        && (info.app_version != env!("CARGO_PKG_VERSION") || info.build_id != mbv_ctrl::BUILD_ID)
+    {
         return Err(crate::RemotePlayerError::owner_build_mismatch(
             info.app_version,
+            info.build_id,
         ));
     }
     info.validate_peer()?;
@@ -142,7 +153,7 @@ pub(super) fn read_server_hello(
     compatibility.supports_lifecycle_shutdown = info.supports_lifecycle_shutdown();
     compatibility.supports_audio_only = info.supports_audio_only();
     compatibility.supports_control_auth = info.supports_control_auth();
-    compatibility.supports_owner_queue_load = info.supports_owner_queue_load();
+    compatibility.supports_owner_queue_source_update = info.supports_owner_queue_source_update();
     compatibility.supports_answered_queue_ops = info.supports_answered_queue_ops();
     compatibility.supports_owner_action = info.supports_owner_action();
     compatibility.supports_queue_shuffle = info.supports_queue_shuffle();

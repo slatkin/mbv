@@ -22,7 +22,7 @@ pub use commands::{
 pub use events::{
     AudiobookshelfBookProgressEvent, AudiobookshelfProgressEvent, CtrlEvent, DisconnectReason,
     PipePlaybackPhase, PipePlaybackStatus, PlaybackIntentEvent, PlaybackIntentOutcome,
-    PlaybackIntentRejection, QueueLoadResult, QueueOpOutcome, ServiceSetupRejection,
+    PlaybackIntentRejection, QueueOpOutcome, ServiceSetupRejection,
 };
 #[doc(inline)]
 pub use output::{OutputConnection, OutputSelection, OutputState, SessionNowPlaying};
@@ -33,12 +33,12 @@ pub use protocol::{
     CTRL_CAP_ABS_BOOK_PROGRESS, CTRL_CAP_ABS_BOOK_QUEUE, CTRL_CAP_ABS_PROGRESS, CTRL_CAP_ABS_QUEUE,
     CTRL_CAP_ANSWERED_QUEUE_OPS, CTRL_CAP_AUDIO_ONLY, CTRL_CAP_CONTROL_AUTH,
     CTRL_CAP_EMBY_SESSION_OUTPUT, CTRL_CAP_LIFECYCLE_SHUTDOWN, CTRL_CAP_OWNER_ACTION,
-    CTRL_CAP_OWNER_QUEUE_LOAD, CTRL_CAP_PIN_SWAP, CTRL_CAP_PINNED_SURFACE,
+    CTRL_CAP_OWNER_QUEUE_SOURCE_UPDATE, CTRL_CAP_PIN_SWAP, CTRL_CAP_PINNED_SURFACE,
     CTRL_CAP_PLAYBACK_OUTPUT, CTRL_CAP_QUEUE_SHUFFLE, CTRL_CAP_QUEUE_STATE,
     CTRL_CAP_SERVICE_SETUP_ADMIN, CTRL_CAP_START_INDEX, CTRL_CAP_STATUS_ONLY,
     CTRL_CAP_UNIFIED_QUEUE, CTRL_PROTOCOL_VERSION, PlaybackGeneration, PlaybackRequestId,
-    ProgressUpdate, QueueLoadRequestId, QueueOpId, SWAP_TOKEN_ENV, TransitionSummary,
-    UnifiedQueueSlot, UnifiedQueueStateData, slot_id_to_u64,
+    ProgressUpdate, QueueOpId, SWAP_TOKEN_ENV, TransitionSummary, UnifiedQueueSlot,
+    UnifiedQueueStateData, slot_id_to_u64,
 };
 
 mod error;
@@ -47,5 +47,10 @@ mod hello;
 pub use error::CtrlError;
 #[doc(inline)]
 pub use hello::{CtrlAudiobookshelfCapabilities, CtrlCompatibility, CtrlHello};
+
+/// Build identity of this binary, embedded by the build script: the git
+/// short SHA plus `-dirty` when the tree was dirty at build time, or
+/// `unknown` when git was unavailable (design D3).
+pub const BUILD_ID: &str = env!("BUILD_ID");
 
 pub mod player;

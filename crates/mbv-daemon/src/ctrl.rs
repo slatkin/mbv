@@ -83,7 +83,7 @@ struct CtrlClient {
     transport: CtrlTransport,
     /// Capabilities advertised by this peer at Hello.
     audiobookshelf: CtrlAudiobookshelfCapabilities,
-    supports_owner_queue_load: bool,
+    supports_owner_queue_source_update: bool,
     /// Whether the peer negotiated `playback-output` at Hello
     /// (cast-owner-output design D3); gates `CtrlEvent::PlaybackOutput`.
     supports_playback_output: bool,
@@ -178,7 +178,7 @@ impl CtrlClients {
         tx: CtrlSender,
         transport: CtrlTransport,
         audiobookshelf: CtrlAudiobookshelfCapabilities,
-        supports_owner_queue_load: bool,
+        supports_owner_queue_source_update: bool,
         supports_playback_output: bool,
         supports_emby_session_output: bool,
         swap_surface: Option<SwapSurface>,
@@ -198,7 +198,7 @@ impl CtrlClients {
             tx,
             transport,
             audiobookshelf,
-            supports_owner_queue_load,
+            supports_owner_queue_source_update,
             supports_playback_output,
             supports_emby_session_output,
             role,
@@ -285,11 +285,11 @@ impl CtrlClients {
     /// Whether the client `id` advertised `abs-book-queue` support at Hello.
     /// Used to gate Audiobookshelf book `QueueItem` transport in both
     /// directions.
-    pub(crate) fn supports_owner_queue_load(&self, id: CtrlClientId) -> bool {
+    pub(crate) fn supports_owner_queue_source_update(&self, id: CtrlClientId) -> bool {
         self.connection
             .iter()
             .find(|c| c.id == id)
-            .is_some_and(|c| c.supports_owner_queue_load)
+            .is_some_and(|c| c.supports_owner_queue_source_update)
     }
 
     pub(crate) fn supports_abs_book_queue(&self, id: CtrlClientId) -> bool {

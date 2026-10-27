@@ -10,9 +10,10 @@ use mbv_queue::{QueueLineage, QueueSource};
 
 /// A Local-daemon stub whose home link is suspended under a routed peer:
 /// the home link carries lineage 7, the routed peer stays at the default
-/// lineage 0. Both advertise the owner-queue-load capability so a save's
-/// source update would succeed on either link — only the targeting under
-/// test decides which one receives it.
+/// lineage 0. Both advertise the capability that gates source updates (the
+/// `owner-queue-load` hello string) so a save's source update would succeed
+/// on either link — only the targeting under test decides which one
+/// receives it.
 fn app_with_suspended_home() -> (
     App,
     std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>,
@@ -20,13 +21,19 @@ fn app_with_suspended_home() -> (
 ) {
     let mut app = make_local_daemon_app_stub(make_items(1));
     let (home, home_rx, home_cmd_rx) =
-        mbv_remote_player::RemotePlayer::stub_owner_queue_load_with_command_rx(make_items(1), 0);
+        mbv_remote_player::RemotePlayer::stub_owner_queue_source_update_with_command_rx(
+            make_items(1),
+            0,
+        );
     home.update_unified_queue_state_for_test(|state| state.lineage = QueueLineage(7));
     app.player = mbv_player::PlayerProxy::from_remote(home, false);
     app.player_rx = home_rx;
 
     let (route, route_rx, route_cmd_rx) =
-        mbv_remote_player::RemotePlayer::stub_owner_queue_load_with_command_rx(make_items(1), 0);
+        mbv_remote_player::RemotePlayer::stub_owner_queue_source_update_with_command_rx(
+            make_items(1),
+            0,
+        );
     app.switch_to_library_route(
         "music",
         route,

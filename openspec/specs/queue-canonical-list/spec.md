@@ -222,8 +222,8 @@ MAY share its revision.
 
 #### Scenario: Consecutive idle loads repaint the Queue
 
-- **WHEN** nothing is playing and a second playlist is loaded into the queue immediately after a first one
-- **THEN** the Queue rows show the second playlist's items, even when both loads produce the same slot identities and the same active slot
+- **WHEN** the queue is replaced twice in succession and both replacements produce the same slot identities and the same active slot
+- **THEN** the Queue rows show the second replacement's items
 
 #### Scenario: Re-adopting an owner snapshot repaints the Queue
 

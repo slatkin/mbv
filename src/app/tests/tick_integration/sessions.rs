@@ -102,7 +102,7 @@ fn failed_direct_connect(
     ),
     mbv_remote_player::RemotePlayerError,
 > {
-    Err(mbv_remote_player::RemotePlayerError::owner_build_mismatch_for_test("test"))
+    Err(mbv_remote_player::RemotePlayerError::owner_build_mismatch_for_test("test", "test-build"))
 }
 
 fn apply_messages(harness: &mut TickHarness, outcome: StepOutcome) {

@@ -28,11 +28,11 @@ use std::time::Duration;
 // Daemon module items used across test files (from the old shared `use super::*;` scope)
 use crate::{
     AudiobookshelfOwnerContext, AuthorityHolder, CtrlClients, CtrlContext, CtrlTransport,
-    DaemonEvent, DaemonLoop, DaemonPlayerOwner, LoopFlow, PendingIdleQueueLoad,
-    PlaybackIntentState, SharedQueueState, apply_audiobookshelf_book_progress,
-    apply_audiobookshelf_progress, apply_audiobookshelf_progress_refresh, apply_queue_enriched,
-    apply_stopped_observation, apply_track_completed_observation, audio_only_rejection, broadcast,
-    handle_ctrl_for_role, handle_ws, take_authority_for_emby_remote,
+    DaemonEvent, DaemonLoop, DaemonPlayerOwner, LoopFlow, PlaybackIntentState, SharedQueueState,
+    apply_audiobookshelf_book_progress, apply_audiobookshelf_progress,
+    apply_audiobookshelf_progress_refresh, apply_queue_enriched, apply_stopped_observation,
+    apply_track_completed_observation, audio_only_rejection, broadcast, handle_ctrl_for_role,
+    handle_ws, take_authority_for_emby_remote,
 };
 
 mod basic;

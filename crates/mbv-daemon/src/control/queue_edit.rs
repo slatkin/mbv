@@ -170,14 +170,15 @@ pub(crate) fn handle_queue_shuffle(ctx: &mut CtrlContext<'_>) {
         rng,
         ..
     } = &mut *ctx.owner;
-    // The canonical active slot doubles as the resolved-play anchor while
-    // nothing plays (an idle queue load and an owner restore both set it), so
-    // the shuffle pins it first only when the output presents that queue
-    // slot. `active` alone is not enough: a remote output that plays foreign
-    // content — media the Owner did not load — presents `active` while the
-    // loaded queue slot is not what plays, and pinning the stale anchor first
-    // would freeze it at the head of a shuffle that owns every slot (spec
-    // scenario "Shuffle with nothing playing"; PR #957 review).
+    // The canonical active slot doubles as the last resolved-play anchor
+    // while nothing plays (owner restore of a persisted queue and a stopped
+    // playback both leave it set), so the shuffle pins it first only when
+    // the output presents that queue slot. `active` alone is not enough: a
+    // remote output that plays foreign content — media the Owner did not
+    // load — presents `active` while the loaded queue slot is not what
+    // plays, and pinning the stale anchor first would freeze it at the head
+    // of a shuffle that owns every slot (spec scenario "Shuffle with nothing
+    // playing"; PR #957 review).
     let pin_active_first =
         ctx.player.status.lock().unwrap().active && output.presents_active_queue_slot(queue);
     let order = queue.shuffled_slot_order(rng, pin_active_first);

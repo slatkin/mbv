@@ -90,8 +90,6 @@ mod queue_mutations;
 mod queue_shuffle;
 // Queue state persists and is taken over across owner restarts.
 mod queue_persistence;
-// Idle queue loads validate peers and commit only after playback stops.
-mod queue_idle_load;
 // Queue replacements and source updates publish lineage-consistent snapshots.
 mod queue_source_updates;
 // Refresh and progress operations answer while preserving active-slot authority.

@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 use mbv_ctrl::OutputConnection;
 use mbv_emby::SessionInfo;
 
-use super::end::DeviceAdvance;
+use super::end::{ContinuationStart, DeviceAdvance};
 use super::worker::{EmbySessionJob, SessionApi};
 use super::{EmbySessionEvent, EmbySessionOutput};
 use crate::DaemonEvent;
@@ -138,8 +138,15 @@ pub(super) fn handle_sessions(
         // it (design D6, task 5.2): near the runtime the owner records its
         // completion and steps the queue, and earlier it presents nothing and
         // advances nothing.
-        if observation.ended_naturally {
-            super::end::advance_from_natural_end(daemon);
+        if let Some(ended_at) = observation.ended_naturally {
+            super::end::advance_from_natural_end(daemon, ended_at);
+        }
+        // The foreign item the device started at the queue's end is looked up
+        // on the output's worker (emby-session-output-followups design D4): the
+        // result adopts it while the Session still presents it, and the direct
+        // detection's completion record goes out beside the submission.
+        if let Some(continuation) = observation.continuation {
+            super::adopt::continuation_started(daemon, &continuation);
         }
     }
     // An observation that does not show the loaded item is also when the 30 s
@@ -178,23 +185,27 @@ fn apply_pending_pause(daemon: &mut DaemonLoop) {
 }
 
 /// What one `/Sessions` observation changed (design D5, D6): the loaded slot
-/// the observation presents, whether it ended the loaded item naturally, and
-/// the device advance it shows (design D14). Whether the ctrl peers' state
-/// changed is decided by comparing the projected state with the one the Owner
-/// last broadcast (`handle_sessions`).
-#[derive(Clone, Copy)]
+/// the observation presents, the estimated end of the loaded item when this
+/// observation ended it naturally, the device advance it shows (design D14),
+/// and the queue-end continuation it starts (emby-session-output-followups
+/// design D4). Whether the ctrl peers' state changed is decided by comparing
+/// the projected state with the one the Owner last broadcast
+/// (`handle_sessions`).
+#[derive(Clone)]
 struct Observation {
     presented: Option<QueueSlotId>,
-    ended_naturally: bool,
+    ended_naturally: Option<Instant>,
     device_advance: Option<DeviceAdvance>,
+    continuation: Option<ContinuationStart>,
 }
 
 impl Observation {
     /// The observation nothing changed: a missing device, or a failed poll.
     const UNCHANGED: Self = Self {
         presented: None,
-        ended_naturally: false,
+        ended_naturally: None,
         device_advance: None,
+        continuation: None,
     };
 }
 
@@ -226,6 +237,10 @@ fn observe(
     output.session_id = Some(session.id.clone());
     let device_advance = super::end::device_advance(output, &session, now);
     let ended_naturally = super::end::ended_naturally(output, &session, now);
+    // The queue-end continuation is judged on the observation this one
+    // replaces too (emby-session-output-followups design D4): the direct path
+    // reads the tracked item's sighting and its end margin from it.
+    let continuation = super::end::queue_end_continuation(output, &session, now);
     let presented = presented_loaded_slot(output, &session);
     output.last_observation = Some(session);
     output.observed_at = Some(now);
@@ -234,6 +249,7 @@ fn observe(
         presented,
         ended_naturally,
         device_advance,
+        continuation,
     }
 }
 

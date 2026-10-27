@@ -2,12 +2,14 @@ use super::{
     CTRL_CAP_ABS_BOOK_PROGRESS, CTRL_CAP_ABS_BOOK_QUEUE, CTRL_CAP_ABS_PROGRESS, CTRL_CAP_ABS_QUEUE,
     CTRL_CAP_ANSWERED_QUEUE_OPS, CTRL_CAP_AUDIO_ONLY, CTRL_CAP_CONTROL_AUTH,
     CTRL_CAP_EMBY_SESSION_OUTPUT, CTRL_CAP_LIFECYCLE_SHUTDOWN, CTRL_CAP_OWNER_ACTION,
-    CTRL_CAP_OWNER_QUEUE_LOAD, CTRL_CAP_PIN_SWAP, CTRL_CAP_PINNED_SURFACE,
+    CTRL_CAP_OWNER_QUEUE_SOURCE_UPDATE, CTRL_CAP_PIN_SWAP, CTRL_CAP_PINNED_SURFACE,
     CTRL_CAP_PLAYBACK_OUTPUT, CTRL_CAP_QUEUE_SHUFFLE, CTRL_CAP_QUEUE_STATE,
     CTRL_CAP_SERVICE_SETUP_ADMIN, CTRL_CAP_START_INDEX, CTRL_CAP_STATUS_ONLY,
     CTRL_PROTOCOL_VERSION,
 };
 use serde::{Deserialize, Serialize};
+
+use crate::BUILD_ID;
 
 use super::CtrlError;
 
@@ -15,6 +17,12 @@ use super::CtrlError;
 pub struct CtrlHello {
     pub protocol_version: u32,
     pub app_version: String,
+    /// Build identity of the sending binary (design D3): the git short SHA
+    /// plus `-dirty` when the tree was dirty at build time. `#[serde(default)]`
+    /// keeps the field additive: a peer that predates it decodes an empty
+    /// value and is ignored by `PeerBuild::Any` handshakes.
+    #[serde(default)]
+    pub build_id: String,
     pub capabilities: Vec<String>,
     /// Control credential used only when the peer advertises `control-auth`.
     #[serde(default)]
@@ -31,6 +39,7 @@ impl CtrlHello {
         Self {
             protocol_version: CTRL_PROTOCOL_VERSION,
             app_version: env!("CARGO_PKG_VERSION").to_string(),
+            build_id: BUILD_ID.to_string(),
             capabilities: vec![
                 CTRL_CAP_QUEUE_STATE.to_string(),
                 CTRL_CAP_START_INDEX.to_string(),
@@ -42,7 +51,7 @@ impl CtrlHello {
                 CTRL_CAP_ABS_PROGRESS.to_string(),
                 CTRL_CAP_ABS_BOOK_QUEUE.to_string(),
                 CTRL_CAP_ABS_BOOK_PROGRESS.to_string(),
-                CTRL_CAP_OWNER_QUEUE_LOAD.to_string(),
+                CTRL_CAP_OWNER_QUEUE_SOURCE_UPDATE.to_string(),
                 CTRL_CAP_ANSWERED_QUEUE_OPS.to_string(),
                 CTRL_CAP_QUEUE_SHUFFLE.to_string(),
             ],
@@ -163,10 +172,10 @@ impl CtrlHello {
     }
 
     #[must_use]
-    pub fn supports_owner_queue_load(&self) -> bool {
+    pub fn supports_owner_queue_source_update(&self) -> bool {
         self.capabilities
             .iter()
-            .any(|cap| cap == CTRL_CAP_OWNER_QUEUE_LOAD)
+            .any(|cap| cap == CTRL_CAP_OWNER_QUEUE_SOURCE_UPDATE)
     }
 
     #[must_use]
@@ -263,7 +272,7 @@ pub struct CtrlAudiobookshelfCapabilities {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[expect(
     clippy::struct_excessive_bools,
-    reason = "each supports_* bit is an independently negotiated optional protocol feature; no honest enum or bundle exists across queue/lifecycle/audio/auth/owner-load (design analysis, issue #804)"
+    reason = "each supports_* bit is an independently negotiated optional protocol feature; no honest enum or bundle exists across queue/lifecycle/audio/auth/owner-source-update (design analysis, issue #804)"
 )]
 pub struct CtrlCompatibility {
     pub peer_protocol_version: u32,
@@ -273,7 +282,7 @@ pub struct CtrlCompatibility {
     pub supports_audio_only: bool,
     pub supports_control_auth: bool,
     pub audiobookshelf: CtrlAudiobookshelfCapabilities,
-    pub supports_owner_queue_load: bool,
+    pub supports_owner_queue_source_update: bool,
     pub supports_answered_queue_ops: bool,
     /// The peer runs Owner actions (`CtrlCmd::RunOwnerAction`); set from the
     /// peer Hello's `owner-action` capability by the Client's handshake.
@@ -308,7 +317,7 @@ impl CtrlCompatibility {
                     book_queue: true,
                     book_progress: true,
                 },
-                supports_owner_queue_load: false,
+                supports_owner_queue_source_update: false,
                 supports_answered_queue_ops: false,
                 supports_owner_action: false,
                 supports_queue_shuffle: false,

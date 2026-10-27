@@ -29,10 +29,9 @@ mod core;
 #[cfg(test)]
 pub(crate) use core::PlaybackIntentState;
 pub(crate) use core::{
-    DaemonEvent, DaemonOwnerContext, DaemonPlayerOwner, PendingIdleQueueLoad,
-    QueuePersistenceRequest, SharedQueueState, TogglePanelHook, audio_only_rejection, broadcast,
-    dispatch_slot_jump, expire_and_redispatch, reset_slot_jumps, settle_and_redispatch,
-    submit_queue_slots_cold_start,
+    DaemonEvent, DaemonOwnerContext, DaemonPlayerOwner, QueuePersistenceRequest, SharedQueueState,
+    TogglePanelHook, audio_only_rejection, broadcast, dispatch_slot_jump, expire_and_redispatch,
+    reset_slot_jumps, settle_and_redispatch, submit_queue_slots_cold_start,
 };
 #[doc(inline)]
 pub use core::{DaemonPlayerHandle, DaemonRuntimeHooks, LocalOutputHooks, SwapDirection};
@@ -62,12 +61,9 @@ pub(crate) use step::next_up_slot;
 mod run_shutdown;
 pub(crate) use run_shutdown::setup_shutdown_signal;
 mod run;
-#[cfg(test)]
-pub(crate) use run::playback_run_identity_is_current;
 pub(crate) use run::{
     ConsumePolicy, apply_queue_enriched, apply_stopped_observation,
-    apply_track_completed_observation, broadcast_player_event_if_not_replaced,
-    record_completed_slot,
+    apply_track_completed_observation, record_completed_slot,
 };
 #[doc(inline)]
 pub use run::{run_local_with_options, run_with_options};
@@ -80,9 +76,8 @@ pub(crate) use audiobookshelf::{
 };
 mod control;
 pub(crate) use control::{
-    CtrlContext, cancel_pending_idle_queue_load, cancel_pending_idle_queue_load_if_run_changed,
-    complete_pending_idle_queue_load, expire_pending_idle_queue_load, handle_ctrl_for_role,
-    owner_admin_transport_allowed, play_resolved_items, start_queue_enrichment,
+    CtrlContext, handle_ctrl_for_role, owner_admin_transport_allowed, play_resolved_items,
+    start_queue_enrichment,
 };
 mod control_queue;
 pub(crate) use control_queue::{

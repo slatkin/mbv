@@ -22,13 +22,20 @@ use mbv_ctrl::CtrlEvent;
 use mbv_emby::SessionInfo;
 use mbv_queue::QueueSlotId;
 
-use super::{EmbySessionOutput, presents_item};
+use super::{ContinuationWatch, EmbySessionOutput, presents_item};
 use crate::DaemonLoop;
 use crate::cast::PlaybackOutput;
 
 /// How long a load may go without an observation presenting it before the
 /// Owner reports that it never started (design D6, task 4.3).
 pub(crate) const EMBY_SESSION_LOAD_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// How long after the tracked item's estimated end a foreign item the Session
+/// presents can still be the device's own queue-end autoplay, adopted as the
+/// queue's next slot (emby-session-output-followups design D4): the bound that
+/// keeps another app's playback minutes later present-only. Separate from
+/// [`EMBY_SESSION_LOAD_TIMEOUT`], which times the load-failure rule.
+pub(crate) const EMBY_SESSION_ADOPTION_WINDOW: Duration = Duration::from_secs(30);
 
 /// How close to the runtime the estimated position must be for an idle
 /// Session to count as the loaded item's natural end (design D6, spec "The
@@ -44,20 +51,22 @@ pub(crate) const EMBY_SESSION_END_MARGIN_TICKS: i64 = 10 * mbv_emby_model::TICKS
 /// advances nothing. `end_handled` records either outcome, so the second poll
 /// of the same idle advances at most once.
 ///
-/// Returns whether this observation ended the loaded item naturally. An idle
-/// Session before the loaded item was ever presented is not an end (the 30 s
-/// failure rule owns that case). The replaced observation must present the
-/// loaded item: a Session that presented an item the Owner did not load ends
-/// nothing (design D6's last row), and the idle that follows such an item is
-/// the other app's stop, not this item's end — its runtime and position belong
-/// to that item.
+/// Returns the instant the loaded item's estimated end falls on when this
+/// observation ended it naturally, so the caller can open the queue-end window
+/// from that end (emby-session-output-followups design D4). An idle Session
+/// before the loaded item was ever presented is not an end (the 30 s failure
+/// rule owns that case). The replaced observation must present the loaded
+/// item: a Session that presented an item the Owner did not load ends nothing
+/// (design D6's last row), and the idle that follows such an item is the other
+/// app's stop, not this item's end — its runtime and position belong to that
+/// item.
 pub(crate) fn ended_naturally(
     output: &mut EmbySessionOutput,
     session: &SessionInfo,
     now: Instant,
-) -> bool {
+) -> Option<Instant> {
     if session.now_playing_item_id.is_some() {
-        return false;
+        return None;
     }
     let unhandled_sighting = output.loaded.as_ref().is_some_and(|loaded| {
         loaded.seen_playing
@@ -65,16 +74,39 @@ pub(crate) fn ended_naturally(
             && presents_item(output.last_observation.as_ref(), &loaded.item_id)
     });
     if !unhandled_sighting {
-        return false;
+        return None;
     }
-    let runtime = output.presented_runtime_ticks();
-    let estimate = output.estimate_ticks(now);
     if let Some(loaded) = output.loaded.as_mut() {
         loaded.end_handled = true;
     }
     // A loaded slot whose queue item and Session both report no runtime has no
     // end to infer (design D6, risks): the idle counts as a stop on the device.
-    runtime > 0 && estimate.saturating_add(EMBY_SESSION_END_MARGIN_TICKS) >= runtime
+    if end_within_margin(output, now) {
+        estimated_end(output)
+    } else {
+        None
+    }
+}
+
+/// The runtime the observation this one replaces still had left, clamped at
+/// zero: the one `last_observation` the position estimate reads, shared by
+/// [`estimated_end`] and [`ended_recently`].
+fn remaining_ticks(output: &EmbySessionOutput) -> Option<i64> {
+    let observed = output.last_observation.as_ref()?;
+    Some((output.presented_runtime_ticks() - observed.position_ticks).max(0))
+}
+
+/// The instant the loaded item's estimated end falls on (emby-session-output-
+/// followups design D4): the time of the observation this one replaces, plus
+/// the runtime that observation had left. The idle observation that reveals
+/// the end can arrive long after a device absence, so the adoption window
+/// opens from here and not from the detecting poll.
+fn estimated_end(output: &EmbySessionOutput) -> Option<Instant> {
+    let observed_at = output.observed_at?;
+    let remaining = remaining_ticks(output)?;
+    observed_at.checked_add(Duration::from_secs_f64(mbv_emby_model::ticks_to_seconds(
+        remaining,
+    )))
 }
 
 /// The device advance one observation shows (design D6's end table, D14; tasks
@@ -118,10 +150,7 @@ pub(crate) fn device_advance(
     {
         return None;
     }
-    let runtime = output.presented_runtime_ticks();
-    let estimate = output.estimate_ticks(now);
-    let completes =
-        runtime > 0 && estimate.saturating_add(EMBY_SESSION_END_MARGIN_TICKS) >= runtime;
+    let completes = end_within_margin(output, now);
     if loaded.item_id == queued.item_id
         && !(completes && session.position_ticks < EMBY_SESSION_END_MARGIN_TICKS)
     {
@@ -139,8 +168,137 @@ pub(crate) fn device_advance(
 /// and steps the queue through `OutputAdvance`, which reports and steps past a
 /// slot this output cannot play. It is the same advance a Cast natural end
 /// starts, so the two outputs never drift apart.
-pub(crate) fn advance_from_natural_end(daemon: &mut DaemonLoop) {
+///
+/// A natural end that leaves the output idle at the queue's edge — no step
+/// target, no queued next item — opens the adoption window (emby-session-
+/// output-followups design D4): the first foreign item the Session presents
+/// within [`EMBY_SESSION_ADOPTION_WINDOW`] of `ended_at`, the estimated end,
+/// is the device's own continuation at the queue's end, adopted as the queue's
+/// next slot. The window runs from the end, not from the poll that detects it,
+/// so a device that reappears long after its end adopts nothing.
+pub(crate) fn advance_from_natural_end(daemon: &mut DaemonLoop, ended_at: Instant) {
     crate::output::advance::begin_advance(daemon);
+    let PlaybackOutput::EmbySession(output) = &mut daemon.owner.output else {
+        return;
+    };
+    let at_edge = output.advance.is_none()
+        && output.queued_next.is_none()
+        && output
+            .loaded
+            .as_ref()
+            .is_some_and(|loaded| loaded.end_handled);
+    if at_edge {
+        output.continuation = Some(ContinuationWatch::Window {
+            until: ended_at + EMBY_SESSION_ADOPTION_WINDOW,
+        });
+    }
+}
+
+/// Whether the tracked item's estimated position is within
+/// [`EMBY_SESSION_END_MARGIN_TICKS`] of its runtime (design D14's completion
+/// rule), read from the observation this one replaces: only then did the item
+/// reach its end.
+fn end_within_margin(output: &EmbySessionOutput, now: Instant) -> bool {
+    let runtime = output.presented_runtime_ticks();
+    runtime > 0
+        && output
+            .estimate_ticks(now)
+            .saturating_add(EMBY_SESSION_END_MARGIN_TICKS)
+            >= runtime
+}
+
+/// Whether the tracked item's estimated end is recent (emby-session-output-
+/// followups design D4): the observation gap beyond the item's remaining
+/// runtime, measured from the observation the estimate reads, is within
+/// [`EMBY_SESSION_ADOPTION_WINDOW`]. An estimate that extrapolated a long
+/// absence — the device was absent from `/Sessions` or the polls failed —
+/// meets the end margin trivially, because the position estimate is capped at
+/// the runtime, so this bound is what keeps a foreign item presented minutes
+/// later present-only.
+fn ended_recently(output: &EmbySessionOutput, now: Instant) -> bool {
+    let Some(observed_at) = output.observed_at else {
+        return false;
+    };
+    let Some(remaining) = remaining_ticks(output) else {
+        return false;
+    };
+    let Some(elapsed) = now.checked_duration_since(observed_at) else {
+        return false;
+    };
+    let elapsed_ticks = mbv_emby_model::seconds_to_ticks(elapsed.as_secs_f64());
+    elapsed_ticks.saturating_sub(remaining)
+        <= mbv_emby_model::seconds_to_ticks(EMBY_SESSION_ADOPTION_WINDOW.as_secs_f64())
+}
+
+/// The queue-end continuation one observation shows (emby-session-output-
+/// followups design D4): the Session presents an item the Owner did not load
+/// while the tracked item's end was handled at the queue's edge — directly,
+/// when the replaced observation presented the tracked item within 10 seconds
+/// of its runtime, or within [`EMBY_SESSION_ADOPTION_WINDOW`] after a natural end
+/// handled at the queue's edge. A mid-item interruption fails the end rule and
+/// stays present-only, and a stale queued item keeps its correction path
+/// because the transition starts from a registered queued item.
+///
+/// Returns the item to look up, and records the in-flight lookup on the
+/// output: the result adopts it only while the Session still presents it.
+pub(crate) fn queue_end_continuation(
+    output: &mut EmbySessionOutput,
+    session: &SessionInfo,
+    now: Instant,
+) -> Option<ContinuationStart> {
+    let item_id = session.now_playing_item_id.clone()?;
+    if output.known_item(&item_id) || output.queued_next.is_some() {
+        return None;
+    }
+    // An expired window adopts nothing; the next end at the queue's edge
+    // opens a fresh one.
+    if let Some(ContinuationWatch::Window { until }) = output.continuation
+        && now > until
+    {
+        output.continuation = None;
+    }
+    let loaded = output.loaded.as_ref()?;
+    if !loaded.seen_playing {
+        return None;
+    }
+    // The direct path: the replaced observation presented the tracked item,
+    // whose end was not handled yet, so the foreign item is the device's own
+    // next item. The idle-gap path: the window a natural end at the queue's
+    // edge opened is still open, and the tracked item's end was handled there.
+    let direct = !loaded.end_handled
+        && presents_item(output.last_observation.as_ref(), &loaded.item_id)
+        && end_within_margin(output, now)
+        && ended_recently(output, now);
+    let after_gap =
+        matches!(output.continuation, Some(ContinuationWatch::Window { .. })) && loaded.end_handled;
+    if !direct && !after_gap {
+        return None;
+    }
+    if direct {
+        // This detection is what handles the tracked item's end: the idle
+        // that never comes must not end it again.
+        if let Some(loaded) = output.loaded.as_mut() {
+            loaded.end_handled = true;
+        }
+    }
+    let start = ContinuationStart {
+        item_id: item_id.clone(),
+        records_completion: direct,
+    };
+    output.continuation = Some(ContinuationWatch::Lookup { item_id });
+    Some(start)
+}
+
+/// The queue-end continuation one observation starts (emby-session-output-
+/// followups design D4): the item the device started at the queue's end.
+#[derive(Debug, Clone)]
+pub(crate) struct ContinuationStart {
+    /// The item the device started, the lookup's subject.
+    pub(crate) item_id: String,
+    /// Whether this detection is what handles the tracked item's end, so the
+    /// caller records its completion (the direct path); a natural end's own
+    /// record is reused on the idle-gap path.
+    pub(crate) records_completion: bool,
 }
 
 /// Settles the in-flight transition that the observation presenting the

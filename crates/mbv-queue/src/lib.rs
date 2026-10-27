@@ -461,9 +461,10 @@ impl PlaybackQueue {
     /// When a slot is playing, that slot comes first and the rest follow at
     /// random (spec scenario "Shuffle with a playing item"). When nothing
     /// plays, every slot is reordered at random: the queue's active marker
-    /// then carries only the resolved-play anchor (idle load and owner
-    /// restore), which keeps its slot identity but is not pinned (spec
-    /// scenario "Shuffle with nothing playing").
+    /// then carries only the last resolved-play anchor (owner restore of a
+    /// persisted queue and a stopped playback leave it), which keeps its
+    /// slot identity but is not pinned (spec scenario "Shuffle with nothing
+    /// playing").
     ///
     /// The queue itself is not changed. The caller supplies `rng` so tests can
     /// seed it and so the owner owns the randomness source.

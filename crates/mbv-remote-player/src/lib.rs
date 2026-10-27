@@ -428,8 +428,8 @@ impl RemotePlayer {
     }
 
     #[must_use]
-    pub fn supports_owner_queue_load(&self) -> bool {
-        self.ctrl_compatibility.supports_owner_queue_load
+    pub fn supports_owner_queue_source_update(&self) -> bool {
+        self.ctrl_compatibility.supports_owner_queue_source_update
     }
 
     #[must_use]
@@ -450,37 +450,6 @@ impl RemotePlayer {
     #[must_use]
     pub fn supports_emby_session_output(&self) -> bool {
         self.ctrl_compatibility.supports_emby_session_output
-    }
-
-    pub fn load_queue_idle(
-        &self,
-        request_id: mbv_ctrl::QueueLoadRequestId,
-        slots: Vec<mbv_ctrl::UnifiedQueueSlot>,
-        cursor: usize,
-        source: mbv_queue::QueueSource,
-    ) -> Result<(), RemotePlayerError> {
-        if !self.supports_owner_queue_load() {
-            return Err(RemotePlayerError::queue_operation(
-                "daemon does not support owner-authoritative idle queue loads",
-            ));
-        }
-        if !self.send_ctrl_cmd(CtrlCmd::UnifiedQueueLoadIdle {
-            request_id,
-            slots,
-            cursor,
-            source,
-        }) {
-            return Err(RemotePlayerError::queue_operation(
-                "could not send idle queue load to Player owner",
-            ));
-        }
-        tracing::info!(
-            name: "queue.load.sent",
-            target: "ctrl",
-            queue_request = request_id,
-            "idle queue load sent"
-        );
-        Ok(())
     }
 
     /// Send an owner queue operation, using answered correlation when negotiated.
@@ -517,7 +486,7 @@ impl RemotePlayer {
                 None => CtrlCmd::UnifiedQueueClear,
             },
             QueueOp::SourceUpdate { source, lineage } => {
-                if !self.supports_owner_queue_load() {
+                if !self.supports_owner_queue_source_update() {
                     return Err(RemotePlayerError::queue_operation(
                         "daemon does not support owner queue source updates",
                     ));
@@ -753,15 +722,17 @@ impl RemotePlayer {
         )
     }
 
-    /// Test-support stub that advertises owner-authoritative idle queue loads.
+    /// Test-support stub whose advertised ctrl capability accepts the
+    /// owner's queue source updates (`QueueOp::SourceUpdate` sends its
+    /// `UnifiedQueueSourceUpdate` instead of failing the operation).
     #[cfg(any(test, feature = "test"))]
     #[must_use]
-    pub fn stub_owner_queue_load_with_command_rx(
+    pub fn stub_owner_queue_source_update_with_command_rx(
         items: Vec<EmbyItem>,
         current_idx: usize,
     ) -> (Self, mpsc::Receiver<PlayerEvent>, mpsc::Receiver<CtrlCmd>) {
         let (mut remote, event_rx, cmd_rx) = Self::stub_with_command_rx(items, current_idx);
-        remote.ctrl_compatibility.supports_owner_queue_load = true;
+        remote.ctrl_compatibility.supports_owner_queue_source_update = true;
         (remote, event_rx, cmd_rx)
     }
 
@@ -790,7 +761,7 @@ impl RemotePlayer {
     ) -> (Self, mpsc::Receiver<PlayerEvent>, mpsc::Receiver<CtrlCmd>) {
         let (mut remote, event_rx, cmd_rx) = Self::stub_with_command_rx(items, current_idx);
         remote.ctrl_compatibility.supports_answered_queue_ops = true;
-        remote.ctrl_compatibility.supports_owner_queue_load = true;
+        remote.ctrl_compatibility.supports_owner_queue_source_update = true;
         (remote, event_rx, cmd_rx)
     }
 }

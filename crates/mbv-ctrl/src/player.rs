@@ -335,11 +335,6 @@ pub enum PlayerEvent {
         op: crate::QueueOpId,
         outcome: crate::QueueOpOutcome,
     },
-    /// Correlated result of an owner-authoritative idle queue load.
-    UnifiedQueueLoadResult {
-        request_id: crate::QueueLoadRequestId,
-        result: crate::QueueLoadResult,
-    },
     /// Chapter API: playback entered the intro window.
     IntroStarted {
         intro_end_ticks: i64,

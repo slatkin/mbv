@@ -683,7 +683,7 @@ fn an_unsettled_loads_natural_end_advances_past_it_not_back_onto_it() {
         .checked_sub(std::time::Duration::from_secs(10))
         .expect("the monotonic clock reaches back ten seconds");
     t.event_loop.owner.core.transitions.expire(backdated);
-    t.event_loop.on_recv_timeout(std::time::Instant::now());
+    t.event_loop.on_recv_timeout();
     assert!(
         t.event_loop.owner.core.transitions.in_flight().is_none(),
         "a's load transition expired without a settling status"

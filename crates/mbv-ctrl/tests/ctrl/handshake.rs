@@ -1,5 +1,22 @@
 use super::*;
 
+// emby-session-output-followups task 4.1: `build_id` is additive (design
+// D2 keeps CTRL_PROTOCOL_VERSION at 10), so it must round-trip and a peer
+// that predates the field must decode an empty value.
+#[test]
+fn hello_build_id_round_trips_and_a_missing_field_decodes_empty() {
+    let hello = CtrlHello::current();
+
+    let wire = serde_json::to_string(&hello).unwrap();
+    let decoded: CtrlHello = serde_json::from_str(&wire).unwrap();
+    assert_eq!(decoded.build_id, BUILD_ID);
+
+    let stale: CtrlHello =
+        serde_json::from_str(r#"{"protocol_version":10,"app_version":"0.0.0","capabilities":[]}"#)
+            .unwrap();
+    assert_eq!(stale.build_id, "");
+}
+
 #[test]
 fn current_hello_validates() {
     CtrlHello::current().validate_peer().unwrap();
@@ -160,7 +177,7 @@ fn hello_current_advertises_abs_capabilities() {
         hello.supports_abs_progress(),
         "hello must advertise abs-progress"
     );
-    assert!(hello.supports_owner_queue_load());
+    assert!(hello.supports_owner_queue_source_update());
     assert!(hello.capabilities.iter().any(|c| c == CTRL_CAP_ABS_QUEUE));
     assert!(
         hello

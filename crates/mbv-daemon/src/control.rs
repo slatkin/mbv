@@ -1,13 +1,12 @@
 use super::core::DaemonEvent;
 use super::{
     AuthorityHolder, ClientRegistry, CtrlClientId, CtrlSender, CtrlTransport, DaemonOwnerContext,
-    DaemonPlayerOwner, PendingIdleQueueLoad, SharedQueueState, audio_only_rejection,
-    dispatch_slot_jump, reset_slot_jumps, send_to, submit_queue_slots_cold_start,
+    DaemonPlayerOwner, SharedQueueState, audio_only_rejection, dispatch_slot_jump,
+    reset_slot_jumps, send_to, submit_queue_slots_cold_start,
 };
 use mbv_ctrl::player::PlayerCommand;
 use mbv_ctrl::{
-    CtrlCmd, CtrlEvent, PlaybackGeneration, PlaybackRequestId, QueueLoadRequestId, QueueOpId,
-    QueueOpOutcome,
+    CtrlCmd, CtrlEvent, PlaybackGeneration, PlaybackRequestId, QueueOpId, QueueOpOutcome,
 };
 use mbv_emby::EmbyClient;
 use mbv_emby_model::EmbyItem;
@@ -24,19 +23,16 @@ use super::control_queue::{
 
 mod playback;
 mod queue_edit;
-mod queue_load;
 mod queue_setup;
 
-pub(crate) fn queue_load_span(
-    client_id: CtrlClientId,
-    request_id: QueueLoadRequestId,
-) -> tracing::Span {
-    tracing::info_span!(
-        target: "ctrl",
-        "queue.load",
-        client = %client_id,
-        queue_request = request_id,
-    )
+/// Whether the Emby service is configured: the client holds a token. The one
+/// predicate every queue-entry admission site reads (emby-session-owner-output
+/// design D7): the ctrl dispatcher derives it per command, and the queue-end
+/// adoption reads it at its lookup result. Derived per use instead of stored:
+/// only the event-loop thread mutates the client token, so the value is
+/// stable for the duration of one dispatched command.
+pub(crate) fn has_emby(client: &Arc<Mutex<EmbyClient>>) -> bool {
+    !client.lock().unwrap().token.is_empty()
 }
 
 pub(crate) fn intent_span(
@@ -54,10 +50,6 @@ pub(crate) fn intent_span(
 }
 
 pub(crate) use playback::play_resolved_items;
-pub(crate) use queue_load::{
-    cancel_pending_idle_queue_load, cancel_pending_idle_queue_load_if_run_changed,
-    complete_pending_idle_queue_load, expire_pending_idle_queue_load,
-};
 pub(crate) use queue_setup::start_queue_enrichment;
 
 /// Mints the next queue lineage into `SharedQueueState.lineage`, the single
@@ -93,11 +85,9 @@ pub(super) struct CtrlContext<'a> {
 }
 
 impl CtrlContext<'_> {
-    /// Whether the Emby service is configured. Derived per use instead of
-    /// stored: only the event-loop thread mutates the client token, so the
-    /// value is stable for the duration of one dispatched command.
+    /// Whether the Emby service is configured.
     pub(crate) fn has_emby(&self) -> bool {
-        !self.client.lock().unwrap().token.is_empty()
+        crate::control::has_emby(self.client)
     }
 
     /// Rejection context valid before any handler has taken mutable borrows
@@ -187,19 +177,12 @@ fn reject_command(ctx: &RejectContext<'_>, reason: &str) {
 /// Sends the rejection reply for a command whose owner-role gate
 /// (`CtrlCmd::requires_owner`) failed. Reply shape/event and reason text are
 /// kept per-command, matching what each arm sent before the gate moved here.
-/// Matches `OwnerGateRejection` exhaustively: its 3 variants are exactly the
+/// Matches `OwnerGateRejection` exhaustively: its 2 variants are exactly the
 /// gated commands, so there is no wildcard/unreachable arm to fall into.
 fn send_role_gate_rejection(rejection: &mbv_ctrl::OwnerGateRejection, ctx: &RejectContext<'_>) {
     match rejection {
         mbv_ctrl::OwnerGateRejection::AdoptQueue => {
             reject_command(ctx, "Stay-alive owner queues cannot be adopted by Clients");
-        }
-        mbv_ctrl::OwnerGateRejection::QueueLoadIdle { request_id } => {
-            queue_load::reject_queue_load(
-                ctx.reply_tx,
-                *request_id,
-                "idle queue loads are supported only by the Stay-alive owner".to_string(),
-            );
         }
         mbv_ctrl::OwnerGateRejection::QueueSourceUpdate => reject_command(
             ctx,
@@ -309,28 +292,12 @@ fn handle_stop(ctx: &mut CtrlContext<'_>) {
 
 pub(super) fn handle_ctrl_for_role(cmd: CtrlCmd, mut ctx: CtrlContext<'_>) {
     ctx.op.set(queue_op_id(&cmd));
-    cancel_pending_idle_queue_load_if_run_changed(ctx.owner, ctx.player);
     // `SharedQueueState.lineage` is the single source of truth (other
     // threads read it for cold ctrl-client snapshots); this is a
     // function-local snapshot so hot-path comparisons below don't
     // re-lock per read; `mint_queue_lineage` below writes the new value
     // straight to `shared_queue.lineage` for the next command's read.
     let queue_lineage = *ctx.shared_queue.lineage.lock().unwrap();
-    if ctx.owner.pending_idle_load.is_some() && !matches!(&cmd, CtrlCmd::RequestShutdown) {
-        if let CtrlCmd::UnifiedQueueLoadIdle { request_id, .. } = &cmd {
-            queue_load::reject_queue_load(
-                ctx.reply_tx,
-                *request_id,
-                "another idle queue load is pending".to_string(),
-            );
-        } else {
-            reject_command(
-                &ctx.rejection_context(queue_lineage),
-                "owner is finalizing an idle queue load",
-            );
-        }
-        return;
-    }
     match cmd.requires_owner() {
         mbv_ctrl::OwnerGate::OwnerOnly(rejection) if ctx.role != crate::DaemonRole::Local => {
             send_role_gate_rejection(&rejection, &ctx.rejection_context(queue_lineage));
@@ -472,12 +439,6 @@ fn dispatch_ctrl_command(
         CtrlCmd::SelectPlaybackOutput(_) => {
             tracing::debug!(name: "daemon.ctrl_select_output.ignored", target: "daemon", "ignoring SelectPlaybackOutput outside the event-loop selection path");
         }
-        CtrlCmd::UnifiedQueueLoadIdle {
-            request_id,
-            slots,
-            cursor,
-            source: new_source,
-        } => queue_load::handle_queue_load_idle(ctx, request_id, slots, cursor, new_source),
         CtrlCmd::UnifiedQueueSourceUpdate {
             source: new_source,
             lineage: cmd_lineage,

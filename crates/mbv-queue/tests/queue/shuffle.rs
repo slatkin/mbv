@@ -111,10 +111,10 @@ fn shuffled_slot_order_without_an_active_slot_shuffles_all_slots() {
 }
 
 /// The contract: an idle queue keeps its active marker as the resolved-play
-/// anchor (idle load and owner restore set it), and Shuffle must not pin that
-/// anchor first — every slot reorders, and the anchor keeps its slot identity
-/// (spec scenario "Shuffle with nothing playing"; live-test finding,
-/// queue-content-shuffle task 6.4).
+/// anchor (owner restore of a persisted queue and a stopped playback leave
+/// it), and Shuffle must not pin that anchor first — every slot reorders,
+/// and the anchor keeps its slot identity (spec scenario "Shuffle with
+/// nothing playing"; live-test finding, queue-content-shuffle task 6.4).
 #[test]
 fn shuffled_slot_order_does_not_pin_an_idle_play_anchor() {
     let mut queue = queue_from_items(vec![item("a"), item("b"), item("c"), item("d")], Some(0));

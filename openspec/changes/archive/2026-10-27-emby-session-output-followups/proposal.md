@@ -38,6 +38,10 @@ scope; it can be reopened if it comes back.
   begins an item the owner did not load after the queue's last playable
   slot, the owner appends that item to the queue as a new slot, makes it the
   active slot, and keeps tracking — repeating for each later autoplay.
+  The item's details come from an Emby lookup (a new `SessionApi` call). A
+  continuation that arrives after one idle observation is adopted too; an
+  item the Session first presents more than 30 s after the tracked item's end
+  stays present-only.
   Mid-queue foreign content keeps the present-only rule and the D14
   stale-item correction is unchanged.
 - Strengthen the local Owner build gate: `CtrlHello` gains an additive
@@ -82,9 +86,14 @@ scope; it can be reopened if it comes back.
   and the `queue_idle_load` test family plus touched persistence/source
   tests.
 - `src/`: `app/dispatch/session/player_event.rs` dead result handling;
-  `owner_restart.rs` prompt text if it names versions only.
+  `owner_restart.rs` keeps its `follow_up` call correct (the prompt text
+  lives in `crates/mbv-remote-player/src/error.rs`, whose `OwnerBuildMismatch`
+  gains the build identity).
 - Build plumbing: a build-identity source (e.g. `build.rs` emitting a git
   SHA env) feeding `CtrlHello` in `mbv-ctrl`.
+- Docs: `docs/invariants/13` and `15`, `docs/architecture/owner-client-operation-split.md`,
+  and the `QueueEpoch` entry in `CONTEXT.md`.
+- Daemon (adoption): `emby_session/worker.rs` (`SessionApi::get_item`), `fake.rs`.
 - Specs: deltas in the five capabilities above; `ctrl-protocol` needs none —
   no requirement names the removed command and the hello change is additive.
 - Issue #949 items 1–3; item 4 (Brave stall) is explicitly deferred.

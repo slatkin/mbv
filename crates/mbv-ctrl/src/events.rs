@@ -2,10 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::output::OutputState;
 use crate::player::{PlayerEvent, PlayerStatus};
-use crate::{
-    CtrlHello, PlaybackGeneration, PlaybackRequestId, QueueLoadRequestId, QueueOpId,
-    UnifiedQueueStateData,
-};
+use crate::{CtrlHello, PlaybackGeneration, PlaybackRequestId, QueueOpId, UnifiedQueueStateData};
 use mbv_queue::ServiceKind;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -66,12 +63,6 @@ pub enum CtrlEvent {
     /// Full item-generic queue state.  Sent on initial connection and
     /// after every queue mutation.
     UnifiedQueueState(UnifiedQueueStateData),
-    /// Result of an idle whole-queue load, correlated with its request.
-    #[serde(rename = "UnifiedQueueLoadResult")]
-    UnifiedQueueLoadResult {
-        request_id: QueueLoadRequestId,
-        result: QueueLoadResult,
-    },
     /// Result of one correlated owner queue operation.
     QueueOpResult {
         op: QueueOpId,
@@ -125,12 +116,6 @@ pub struct AudiobookshelfBookProgressEvent {
     /// Setup generation the acknowledged progress was produced under;
     /// receivers discard progress from a stale generation.
     pub setup_generation: u64,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub enum QueueLoadResult {
-    Accepted,
-    Rejected { reason: String },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

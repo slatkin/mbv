@@ -89,11 +89,6 @@ fn apply_ctrl_event(
         CtrlEvent::Disconnected { reason } => {
             apply_disconnected_event(reason, event_tx, notify);
         }
-        CtrlEvent::UnifiedQueueLoadResult { request_id, result } => send_if_notifying(
-            notify,
-            event_tx,
-            PlayerEvent::UnifiedQueueLoadResult { request_id, result },
-        ),
         CtrlEvent::UnifiedQueueState(unified) => {
             // Retain the canonical snapshot for TUI and reconnect paths.
             apply_unified_queue_state(unified, status, unified_queue, event_tx, notify);
