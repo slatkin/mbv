@@ -85,7 +85,7 @@ pub(crate) fn handle_lookup(
     item_id: &str,
     result: Result<Box<EmbyItem>, String>,
 ) -> bool {
-    let (pending, still_presented) = {
+    let (pending, tracks_ended, still_presented) = {
         let PlaybackOutput::EmbySession(output) = &mut daemon.owner.output else {
             return false;
         };
@@ -93,8 +93,12 @@ pub(crate) fn handle_lookup(
             &output.continuation,
             Some(ContinuationWatch::Lookup { item_id: pending }) if pending == item_id
         );
+        // The adoption re-establishes the tracked item, so the output must
+        // still track the ended one: a user stop cleared it, and a stopped
+        // output advances nothing (emby-session-owner-output design D9).
+        let tracks_ended = output.loaded.is_some();
         let still_presented = pending && presents_item(output.last_observation.as_ref(), item_id);
-        (pending, still_presented)
+        (pending, tracks_ended, still_presented)
     };
     let item = match result {
         Ok(item) => item,
@@ -118,6 +122,18 @@ pub(crate) fn handle_lookup(
             target: "daemon",
             item = %item_id,
             "the lookup's result names no pending queue-end continuation; nothing was adopted"
+        );
+        return false;
+    }
+    if !tracks_ended {
+        if let PlaybackOutput::EmbySession(output) = &mut daemon.owner.output {
+            output.continuation = None;
+        }
+        tracing::info!(
+            name: "daemon.emby_session_adopt.not_tracking",
+            target: "daemon",
+            item = %item_id,
+            "the output no longer tracks the ended item the lookup continued; nothing was adopted"
         );
         return false;
     }
@@ -160,10 +176,12 @@ pub(crate) fn handle_lookup(
         end_handled: false,
         failure_reported: false,
     });
-    // The device holds only the adopted item (design D4): the window and
-    // the ended item's advance and owed pause go with the adoption.
+    // The window and the ended item's advance and owed pause go with the
+    // adoption. The queued next item is kept whatever the flight left: the
+    // trigger cleared it, so a record here is one a queue edit re-established
+    // with a `play_last` while the lookup ran — the device holds it, and
+    // dropping the record would adopt it a second time at its end.
     output.continuation = None;
-    output.queued_next = None;
     output.advance = None;
     output.pending_pause = false;
     daemon.shared_queue.publish_observed(&daemon.owner.core);

@@ -176,6 +176,30 @@ fn end_within_margin(output: &EmbySessionOutput, now: Instant) -> bool {
             >= runtime
 }
 
+/// Whether the tracked item's estimated end is recent (emby-session-output-
+/// followups design D4): the observation gap beyond the item's remaining
+/// runtime, measured from the observation the estimate reads, is within
+/// [`EMBY_SESSION_LOAD_TIMEOUT`]. An estimate that extrapolated a long
+/// absence — the device was absent from `/Sessions` or the polls failed —
+/// meets the end margin trivially, because the position estimate is capped at
+/// the runtime, so this bound is what keeps a foreign item presented minutes
+/// later present-only.
+fn ended_recently(output: &EmbySessionOutput, now: Instant) -> bool {
+    let Some(observed) = output.last_observation.as_ref() else {
+        return false;
+    };
+    let Some(observed_at) = output.observed_at else {
+        return false;
+    };
+    let Some(elapsed) = now.checked_duration_since(observed_at) else {
+        return false;
+    };
+    let elapsed_ticks = mbv_emby_model::seconds_to_ticks(elapsed.as_secs_f64());
+    let remaining_ticks = (output.presented_runtime_ticks() - observed.position_ticks).max(0);
+    elapsed_ticks.saturating_sub(remaining_ticks)
+        <= mbv_emby_model::seconds_to_ticks(EMBY_SESSION_LOAD_TIMEOUT.as_secs_f64())
+}
+
 /// The queue-end continuation one observation shows (emby-session-output-
 /// followups design D4): the Session presents an item the Owner did not load
 /// while the tracked item's end was handled at the queue's edge — directly,
@@ -213,7 +237,8 @@ pub(crate) fn queue_end_continuation(
     // edge opened is still open, and the tracked item's end was handled there.
     let direct = !loaded.end_handled
         && presents_item(output.last_observation.as_ref(), &loaded.item_id)
-        && end_within_margin(output, now);
+        && end_within_margin(output, now)
+        && ended_recently(output, now);
     let after_gap =
         matches!(output.continuation, Some(ContinuationWatch::Window { .. })) && loaded.end_handled;
     if !direct && !after_gap {

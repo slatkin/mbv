@@ -7,6 +7,7 @@
 use super::*;
 
 use super::super::emby_session_output::pump_session_event;
+use super::super::emby_session_support::{play_last, play_last_calls};
 use crate::emby_session::ContinuationWatch;
 
 /// The canned item the fake's `get_item` returns for the device's own
@@ -522,5 +523,225 @@ fn next_on_the_adopted_queue_end_slot_loads_nothing_and_sends_no_device_command(
         t.event_loop.owner.core.queue.active_slot_id(),
         Some(adopted),
         "the adopted slot stays active"
+    );
+}
+
+/// Contract: row 3.4 / followups design D4 and spec scenario "A late foreign
+/// item is not adopted", direct path — the freshness bound the direct arm
+/// shares with the idle-gap window: the tracked item's estimated end is
+/// measured from its last sighting, so an estimate that extrapolated a long
+/// absence (the device was missing from `/Sessions`) meets the end margin
+/// trivially and must not adopt. The foreign item the device presents after
+/// a longer-than-30-second absence stays present-only, submits no lookup,
+/// and leaves the queue and the ended slot's completion alone. The case
+/// stands alone because its prologue has no idle observation: the direct
+/// path is the one the no-adoption table's shared prologue cannot reach.
+#[test]
+fn a_foreign_item_presented_after_a_long_absence_is_not_adopted() {
+    let fake = FakeSessionApi::with_sessions(vec![idle_session()]);
+    let script = fake.clone();
+    let (mut t, calls, _rx) = session_output_with_queue(fake, vec![timed("a", RUNTIME_TICKS)]);
+    script.set_item(canned_autoplay_item());
+    let (client_id, _reply_tx, _client_rx) =
+        connect_output_client_with_caps(&t.event_loop.ctrl_clients, true, true);
+    let slots = slot_ids(&t);
+    play_slot(&mut t, client_id, slots[0]);
+    let t0 = Instant::now();
+
+    // The sighting of the tracked item, within 10 seconds of its runtime.
+    script.set_sessions(vec![session_presenting_at(
+        "a",
+        RUNTIME_TICKS - 3 * SECOND_TICKS,
+        RUNTIME_TICKS,
+    )]);
+    poll_once(&mut t, t0);
+    // The device then goes missing and the polls fail, so the sighting stays
+    // the observation the estimate reads. The observation path reads the real
+    // clock, so the test ages the sighting past the 30-second bound instead
+    // of waiting — the same injection the no-adoption table's late case makes
+    // to its window.
+    let PlaybackOutput::EmbySession(output) = &mut t.event_loop.owner.output else {
+        panic!("the Session is the output");
+    };
+    output.observed_at = Some(
+        Instant::now()
+            .checked_sub(Duration::from_secs(40))
+            .expect("40 seconds before now is representable"),
+    );
+    // The device reappears playing its own item.
+    script.set_sessions(vec![session_presenting_at("f", 0, RUNTIME_TICKS)]);
+    poll_once(&mut t, t0 + EMBY_SESSION_POLL_INTERVAL);
+
+    assert!(
+        get_item_calls(&calls).is_empty(),
+        "the late foreign item submits no lookup"
+    );
+    assert_eq!(
+        t.event_loop.owner.core.queue.slots().len(),
+        1,
+        "the queue gains no slot"
+    );
+    assert_eq!(
+        t.event_loop.owner.core.queue.active_slot_id(),
+        Some(slots[0]),
+        "the active slot is unchanged"
+    );
+    assert!(
+        !slot_played(&t, slots[0]),
+        "the ended slot records no completion for content the owner did not adopt"
+    );
+    assert_eq!(
+        t.event_loop.player.status.lock().unwrap().title,
+        "f",
+        "the foreign item stays presented"
+    );
+}
+
+/// Contract: followups design D4, review correction — the adoption
+/// re-establishes the tracked item, so a lookup result that lands after the
+/// output was stopped adopts nothing: the stop cleared the loaded item and a
+/// stopped output advances nothing. The pending continuation is spent and
+/// the queue and its persistence are untouched.
+#[test]
+fn a_lookup_result_after_the_output_was_stopped_adopts_nothing() {
+    let fake = FakeSessionApi::with_sessions(vec![idle_session()]);
+    let script = fake.clone();
+    let (mut t, calls, _rx) = session_output_with_queue(fake, vec![timed("a", RUNTIME_TICKS)]);
+    script.set_item(canned_autoplay_item());
+    let (client_id, _reply_tx, _client_rx) =
+        connect_output_client_with_caps(&t.event_loop.ctrl_clients, true, true);
+    let slots = slot_ids(&t);
+    play_slot(&mut t, client_id, slots[0]);
+    let t0 = Instant::now();
+
+    // The sighting of the tracked item, then the device's own autoplay: the
+    // lookup is in flight.
+    script.set_sessions(vec![session_presenting_at(
+        "a",
+        RUNTIME_TICKS - 3 * SECOND_TICKS,
+        RUNTIME_TICKS,
+    )]);
+    poll_once(&mut t, t0);
+    script.set_sessions(vec![session_presenting_at("f", 0, RUNTIME_TICKS)]);
+    poll_once(&mut t, t0 + EMBY_SESSION_POLL_INTERVAL);
+    // The user stops the output while the lookup runs: the loaded item is
+    // gone, and the device keeps the foreign content it started.
+    t.event_loop.handle_event(DaemonEvent::Ctrl(
+        CtrlCmd::Stop,
+        client_id,
+        mpsc::channel().0,
+    ));
+    wait_for_session_jobs(&t.event_loop.owner.output);
+    let persisted_before = t.persisted.borrow().len();
+    pump_session_event(&mut t);
+
+    assert_eq!(
+        t.event_loop.owner.core.queue.slots().len(),
+        1,
+        "the stopped output adopts nothing"
+    );
+    assert_eq!(
+        t.event_loop.owner.core.queue.active_slot_id(),
+        Some(slots[0]),
+        "the active slot is unchanged"
+    );
+    let crate::cast::PlaybackOutput::EmbySession(output) = &t.event_loop.owner.output else {
+        panic!("the Session is the output");
+    };
+    assert!(
+        output.loaded.is_none(),
+        "the stopped output stays without a tracked item"
+    );
+    assert!(
+        output.continuation.is_none(),
+        "the lookup result spends the pending continuation"
+    );
+    assert_eq!(
+        t.persisted.borrow().len(),
+        persisted_before,
+        "the rejected lookup persists nothing"
+    );
+    assert_eq!(
+        play_calls(&calls),
+        vec![play(&["a"])],
+        "the rejected lookup sends no device command"
+    );
+}
+
+/// Contract: followups design D4, review correction — a queue edit that
+/// lands while the lookup runs re-establishes the queued next item with one
+/// `play_last`, and the device holds it: the adoption keeps that record
+/// instead of dropping it, so the device's move to it at the adopted item's
+/// end is a known item, not a second adoption of the same content.
+#[test]
+fn an_append_during_the_lookup_flight_keeps_the_queued_next_item() {
+    let fake = FakeSessionApi::with_sessions(vec![idle_session()]);
+    let script = fake.clone();
+    let (mut t, calls, _rx) = session_output_with_queue(fake, vec![timed("a", RUNTIME_TICKS)]);
+    script.set_item(canned_autoplay_item());
+    let (client_id, _reply_tx, _client_rx) =
+        connect_output_client_with_caps(&t.event_loop.ctrl_clients, true, true);
+    let slots = slot_ids(&t);
+    play_slot(&mut t, client_id, slots[0]);
+    let t0 = Instant::now();
+
+    // The sighting of the tracked item, then the device's own autoplay: the
+    // lookup is in flight.
+    script.set_sessions(vec![session_presenting_at(
+        "a",
+        RUNTIME_TICKS - 3 * SECOND_TICKS,
+        RUNTIME_TICKS,
+    )]);
+    poll_once(&mut t, t0);
+    script.set_sessions(vec![session_presenting_at("f", 0, RUNTIME_TICKS)]);
+    poll_once(&mut t, t0 + EMBY_SESSION_POLL_INTERVAL);
+    // The queue edit lands while the lookup runs; the tick that reconciles
+    // the device's window with the queue queues the appended slot with one
+    // `play_last`.
+    t.event_loop.client.lock().unwrap().token = "test-token".to_string();
+    t.event_loop.handle_event(DaemonEvent::Ctrl(
+        CtrlCmd::UnifiedQueueAppend {
+            items: vec![timed("b", RUNTIME_TICKS)],
+            before: None,
+            op: None,
+        },
+        client_id,
+        mpsc::channel().0,
+    ));
+    t.event_loop.tick(t0 + 2 * EMBY_SESSION_POLL_INTERVAL);
+    wait_for_session_jobs(&t.event_loop.owner.output);
+    pump_session_event(&mut t);
+
+    assert_eq!(
+        play_last_calls(&calls),
+        vec![play_last(&["b"])],
+        "the appended slot was queued on the device during the flight"
+    );
+    assert_eq!(
+        t.event_loop.owner.core.queue.slots().len(),
+        3,
+        "the adoption appends the autoplay item once: a, the append, the adoption"
+    );
+    let adopted = t.event_loop.owner.core.queue.slots()[2].slot_id;
+    assert_eq!(
+        t.event_loop.owner.core.queue.slots()[2].item.id(),
+        "f",
+        "the adopted slot is the item the device started"
+    );
+    assert_eq!(
+        t.event_loop.owner.core.queue.active_slot_id(),
+        Some(adopted),
+        "the adopted slot becomes the active slot"
+    );
+    let crate::cast::PlaybackOutput::EmbySession(output) = &t.event_loop.owner.output else {
+        panic!("the Session is the output");
+    };
+    assert_eq!(
+        output
+            .queued_next
+            .as_ref()
+            .map(|queued| (queued.slot, queued.item_id.as_str())),
+        Some((slot_ids(&t)[1], "b")),
+        "the adoption keeps the queued next item the device was given during the flight"
     );
 }
