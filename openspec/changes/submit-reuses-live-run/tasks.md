@@ -17,7 +17,7 @@
 
 ## 4. Docs
 
-- [ ] 4.1 Update `docs/invariants/22-mpv-child-never-outlives-the-owner.md` (item 1: a live child may take a later submission of the same run; it never serves two live runs at once and never outlives the Owner) and `docs/invariants/24-run-ends-when-nothing-can-play.md` (the parked run now has a consumer; name the loop-exit residual window). Verify: read both files against D7.
+- [x] 4.1 Update `docs/invariants/22-mpv-child-never-outlives-the-owner.md` (item 1: a live child may take a later submission of the same run; it never serves two live runs at once and never outlives the Owner) and `docs/invariants/24-run-ends-when-nothing-can-play.md` (the parked run now has a consumer; name the loop-exit residual window). Verify: read both files against D7.
 
 ## 5. Gates
 
