@@ -239,7 +239,9 @@ impl Player {
     ///
     /// Checks 3–5 hold the `stop_tx` lock with the `cmd_tx` lock taken inside
     /// it (`stop()` takes `stop_tx`, the send takes `cmd_tx`), so a `stop()`
-    /// cannot slip between the check and the send. The status is seeded only
+    /// cannot slip between the check and the send. The send helper's wake
+    /// takes `wakeup_fd` inside that nesting too, the same order `stop()`
+    /// already uses. The status is seeded only
     /// after the send is accepted (design D2), so a submission that then
     /// cold-starts never publishes a seeded status. On any failed check,
     /// returns the cold-start reason with the submission restored for the
@@ -273,26 +275,22 @@ impl Player {
             items: std::mem::take(&mut items),
             start_idx,
         };
-        let cmd_tx = self.cmd_tx.lock().unwrap();
         // The run-existence check above established `cmd_tx` is `Some`, and
         // with the `stop_tx` lock held no cold start can replace it (it is
         // never cleared, only installed or replaced).
-        let Some(tx) = cmd_tx.as_ref() else {
-            unreachable!("the run-existence check above established cmd_tx is Some");
-        };
-        let sent = match tx.send(cmd) {
+        assert!(
+            self.cmd_tx.lock().unwrap().is_some(),
+            "the run-existence check above established cmd_tx is Some"
+        );
+        let sent = match self.send_command_parts(cmd) {
             Ok(()) => true,
             Err(error) => {
                 (items, start_idx) = submit_queue_parts(error.0);
                 false
             }
         };
-        drop(cmd_tx);
         drop(stop_tx);
         if sent {
-            if let Some(w) = self.wakeup_fd.lock().unwrap().as_ref() {
-                w.notify();
-            }
             tracing::info!(name: "player.submit.reused_run", target: "player", run_identity, "queue replacement submitted into the live run");
             self.status
                 .lock()

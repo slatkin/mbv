@@ -30,61 +30,11 @@ fn jump_to_after_replacement_resolves_new_occurrence() {
 
 // Task 2.3: shared-boundary routing and failure surfacing.
 // Verifies that bare-local and stay-alive-local playback routes through
-// `submit_queue_slots`, that the fast path sends a SubmitQueue command, that
-// the cold path sets status.active before spawning, and that selecting
-// an existing Feed slot in a mixed queue preserves queue contents.
-
-#[test]
-fn submit_queue_fast_path_sends_command_for_feed_entry() {
-    // When the player is already active with matching headless state,
-    // submit_queue_slots must route through the SubmitQueue command (live-run
-    // reuse) rather than spawning a new thread. This proves bare-local and
-    // stay-alive-local playback share the same boundary. The stub arms
-    // `stop_tx` the way every real cold start does, so the D1 decision sees a
-    // live run.
-    let (event_tx, _event_rx) = mpsc::channel();
-    let player = Player::new(
-        String::new(),
-        String::new(),
-        false,
-        false,
-        false,
-        false,
-        SubtitlePrefs::default(),
-        event_tx,
-        None,
-    )
-    .with_mpv_inhibited();
-    player.status.lock().unwrap().active = true;
-    player.current_is_headless.store(false, Ordering::Relaxed);
-    let (armed_tx, _armed_rx) = mpsc::channel();
-    *player.stop_tx.lock().unwrap() = Some(armed_tx);
-    let cmd_rx = player.spy_on_commands();
-
-    let entry = make_feed_entry("feed-1", "Podcast Episode 1");
-    player.submit_queue_slots(
-        vec![ExecSlot {
-            slot_id: QueueSlotId::from_raw(1),
-            item: QueueItem::Feed(entry),
-        }],
-        0,
-        None,
-        false,
-        100,
-    );
-
-    let cmd = cmd_rx
-        .try_recv()
-        .expect("expected a command from submit_queue_slots");
-    match cmd {
-        PlayerCommand::SubmitQueue { items, start_idx } => {
-            assert_eq!(items.len(), 1);
-            assert_eq!(start_idx, 0);
-            assert!(matches!(&items[0].item, QueueItem::Feed(e) if e.guid == "feed-1"));
-        }
-        _ => panic!("expected SubmitQueue command"),
-    }
-}
+// `submit_queue_slots` — the replacement-decision table below covers the
+// reuse path's SubmitQueue send and every cold-start reason — that the fast
+// path seeds the status for the start item, that the cold path sets
+// status.active before spawning, and that selecting an existing Feed slot
+// in a mixed queue preserves queue contents.
 
 #[test]
 fn submit_queue_slots_preserves_caller_slot_ids() {
@@ -141,7 +91,9 @@ fn submit_queue_fast_path_seeds_status_for_the_start_item() {
     // Once the live run accepted the replacement, the status must reflect
     // the new queue items (design D2 seeds after the send is accepted), so
     // any reader that sees the seeded status also sees consistent queue_len
-    // and title.
+    // and title. The stub arms `stop_tx` the way every real cold start does,
+    // so the submission takes the reuse path and the seed asserted here is
+    // the reuse path's own.
     let (event_tx, _event_rx) = mpsc::channel();
     let player = Player::new(
         String::new(),
@@ -153,10 +105,13 @@ fn submit_queue_fast_path_seeds_status_for_the_start_item() {
         SubtitlePrefs::default(),
         event_tx,
         None,
-    );
+    )
+    .with_mpv_inhibited();
     player.status.lock().unwrap().active = true;
     player.current_is_headless.store(false, Ordering::Relaxed);
-    let _cmd_rx = player.spy_on_commands();
+    let (armed_tx, _armed_rx) = mpsc::channel();
+    *player.stop_tx.lock().unwrap() = Some(armed_tx);
+    let cmd_rx = player.spy_on_commands();
 
     let entry = make_feed_entry("feed-test", "Test Episode");
     player.submit_queue_slots(
@@ -169,6 +124,13 @@ fn submit_queue_fast_path_seeds_status_for_the_start_item() {
         false,
         100,
     );
+
+    assert!(matches!(
+        cmd_rx
+            .try_recv()
+            .expect("expected a command from submit_queue_slots"),
+        PlayerCommand::SubmitQueue { .. }
+    ));
 
     let st = player.status.lock().unwrap();
     assert_eq!(st.queue_len, 1);
@@ -557,6 +519,57 @@ enum Expect {
     Cold(&'static str),
 }
 
+/// The replacement-decision setup for one `#[case]`: the player with its
+/// reported state, an armed `stop_rx` when the case arms `stop_tx`, an exit
+/// flag when the case's run has exited, and the case's command channel.
+fn player_for_replacement_decision(
+    case: &ReplaceDecision,
+) -> (
+    Player,
+    Option<mpsc::Receiver<()>>,
+    Option<mpsc::Receiver<PlayerCommand>>,
+) {
+    let (event_tx, _event_rx) = mpsc::channel();
+    let player = Player::new(
+        String::new(),
+        String::new(),
+        false,
+        false,
+        false,
+        false,
+        SubtitlePrefs::default(),
+        event_tx,
+        None,
+    )
+    .with_mpv_inhibited();
+    player.status.lock().unwrap().active = matches!(case.reported, Reported::Playing);
+    player
+        .current_is_headless
+        .store(case.current_headless, Ordering::Relaxed);
+    let mut stop_rx = None;
+    if let StopState::Armed = case.stop {
+        let (armed_tx, rx) = mpsc::channel();
+        *player.stop_tx.lock().unwrap() = Some(armed_tx);
+        stop_rx = Some(rx);
+    }
+    if let RunState::Exited = case.run {
+        player
+            .run_exited
+            .lock()
+            .unwrap()
+            .store(true, Ordering::Relaxed);
+    }
+    let cmd_rx = match case.commands {
+        Commands::Spy => Some(player.spy_on_commands()),
+        Commands::Dropped => {
+            drop(player.spy_on_commands());
+            None
+        }
+        Commands::None => None,
+    };
+    (player, stop_rx, cmd_rx)
+}
+
 // Task 2.1: the Controller-level replacement decision follows the D1 order —
 // run exists, headless class, `stop_tx` armed, `run_exited` unset, send — and
 // every cold start carries its D5 reason. No case exercises the loop-exit
@@ -620,44 +633,7 @@ enum Expect {
     expect: Expect::Cold("no_run"),
 })]
 fn queue_replacement_decision_follows_the_d1_order(#[case] case: ReplaceDecision) {
-    let (event_tx, _event_rx) = mpsc::channel();
-    let player = Player::new(
-        String::new(),
-        String::new(),
-        false,
-        false,
-        false,
-        false,
-        SubtitlePrefs::default(),
-        event_tx,
-        None,
-    )
-    .with_mpv_inhibited();
-    player.status.lock().unwrap().active = matches!(case.reported, Reported::Playing);
-    player
-        .current_is_headless
-        .store(case.current_headless, Ordering::Relaxed);
-    let mut stop_rx = None;
-    if let StopState::Armed = case.stop {
-        let (armed_tx, rx) = mpsc::channel();
-        *player.stop_tx.lock().unwrap() = Some(armed_tx);
-        stop_rx = Some(rx);
-    }
-    if let RunState::Exited = case.run {
-        player
-            .run_exited
-            .lock()
-            .unwrap()
-            .store(true, Ordering::Relaxed);
-    }
-    let cmd_rx = match case.commands {
-        Commands::Spy => Some(player.spy_on_commands()),
-        Commands::Dropped => {
-            drop(player.spy_on_commands());
-            None
-        }
-        Commands::None => None,
-    };
+    let (player, stop_rx, cmd_rx) = player_for_replacement_decision(&case);
 
     let lines = mbv_core::applog::test_support::capture_log_lines(|| {
         let accepted = player.submit_queue_slots(
@@ -703,6 +679,11 @@ fn queue_replacement_decision_follows_the_d1_order(#[case] case: ReplaceDecision
                     assert_eq!(start_idx, 0);
                     assert_eq!(items.len(), 1);
                     assert!(matches!(items[0].item, QueueItem::Feed(_)));
+                    // The submitted payload reaches the run verbatim (the
+                    // guid the submission built is the guid the run got).
+                    assert!(
+                        matches!(&items[0].item, QueueItem::Feed(e) if e.guid == "replacement")
+                    );
                 }
                 _ => panic!("expected SubmitQueue"),
             }

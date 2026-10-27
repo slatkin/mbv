@@ -366,6 +366,32 @@ impl Player {
         status.sequence_generation
     }
 
+    /// Send `cmd` to the live run's command channel and, once it is accepted,
+    /// wake the run's command loop. Returns the send result: `Err` wraps the
+    /// command when no run exists (`cmd_tx` is `None`) or the run's channel
+    /// is closed, so the caller can recover its payload.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `cmd_tx` mutex is poisoned, or, once a command has been
+    /// sent, if the `wakeup_fd` mutex is poisoned. Both mean a previous owner
+    /// panicked while holding the lock.
+    pub(super) fn send_command_parts(
+        &self,
+        cmd: PlayerCommand,
+    ) -> Result<(), mpsc::SendError<PlayerCommand>> {
+        let result = match self.cmd_tx.lock().unwrap().as_ref() {
+            Some(tx) => tx.send(cmd),
+            None => Err(mpsc::SendError(cmd)),
+        };
+        if result.is_ok()
+            && let Some(w) = self.wakeup_fd.lock().unwrap().as_ref()
+        {
+            w.notify();
+        }
+        result
+    }
+
     /// Returns `true` if the command was sent, `false` if the player thread is gone.
     ///
     /// # Panics
@@ -374,15 +400,7 @@ impl Player {
     /// sent, if the `wakeup_fd` mutex is poisoned. Both mean a previous owner
     /// panicked while holding the lock.
     pub fn send_command(&self, cmd: PlayerCommand) -> bool {
-        let sent = if let Some(tx) = self.cmd_tx.lock().unwrap().as_ref() {
-            tx.send(cmd).is_ok()
-        } else {
-            false
-        };
-        if sent && let Some(w) = self.wakeup_fd.lock().unwrap().as_ref() {
-            w.notify();
-        }
-        sent
+        self.send_command_parts(cmd).is_ok()
     }
 
     /// Replace the command sender with a test observer and return its receiver.
