@@ -378,14 +378,13 @@ impl App {
     /// answered `Replace` op on capable owners and the same replace in its
     /// legacy wire form (no op id, no answer to wait for) on legacy owners —
     /// and enqueue appends without starting playback. While a cast target is
-    /// attached, the selection is dispatched to the receiver instead of the
-    /// local player (cast-session-control): the owner's `Replace` op always
-    /// starts playback, so capable owners get the owner queue loaded without
-    /// starting it through the idle-load route first, and the dispatch waits
-    /// for the owner's accepted load answer; legacy owners are dispatched
-    /// with no owner call at all. The Client holds no editable
-    /// queue (row 5.3, design D6), so the view changes only through the
-    /// owner's answer.
+    /// attached, the Owner dispatches the replace to the receiver instead of
+    /// the local player (cast-session-control): the `Replace` op installs the
+    /// queue and loads only its start slot on the receiver, and on capable
+    /// owners the dispatch waits for the accepted answer; legacy owners follow
+    /// the same replace, with no answer to wait for. The Client holds no
+    /// editable queue (row 5.3, design D6), so the view changes only through
+    /// the owner's answer.
     /// Callers resolve their own provider-specific selection/admission ahead
     /// of the call. Returns whether the submit succeeded.
     pub(in crate::app) fn submit_queue_item(
