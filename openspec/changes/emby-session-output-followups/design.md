@@ -106,7 +106,7 @@ load. Two observation paths reach it. (a) Direct: one observation presents the t
 item and the next presents the foreign item. (b) After an idle gap: the idle observation
 already ended the tracked item (`ended_naturally` records completion and leaves the output
 idle at the queue edge), and the first foreign item the Session presents within
-`EMBY_SESSION_LOAD_TIMEOUT` (30 s) after that end is adopted. The 30 s bound keeps another
+`EMBY_SESSION_ADOPTION_WINDOW` (30 s) after that end is adopted. The 30 s bound keeps another
 app's playback minutes later present-only. Path (b) records no second completion: the
 natural end already did, and the ended slot records completion once on either path. Emby's
 behavior between two items is not documented and a 1 s poll can see either path, so both

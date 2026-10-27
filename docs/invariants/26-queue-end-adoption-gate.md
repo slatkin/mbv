@@ -4,7 +4,7 @@
 
 ## The invariant
 
-1. The Owner appends a foreign item to the queue only when the device started it within `EMBY_SESSION_LOAD_TIMEOUT` (30 s) of the tracked item's estimated end. A foreign item presented later stays present-only.
+1. The Owner appends a foreign item to the queue only when the device started it within `EMBY_SESSION_ADOPTION_WINDOW` (30 s) of the tracked item's estimated end. A foreign item presented later stays present-only.
 2. The window runs from the estimated end (the observed time plus the runtime that observation had left), not from the poll that detects the natural end. An idle observation can arrive minutes after the end, after the device left `/Sessions`.
 3. A lookup result adopts only while four things hold: the lookup is still pending, the output still tracks the ended item, the Session still presents the looked-up item, and the owner and Session admit the item (`daemon_admits` plus the `playable_media_types` rule every queue-entry path runs). A pending lookup whose result adopts nothing clears the continuation through `clear_continuation`; a result that names no pending lookup clears nothing — the in-flight lookup may belong to a different item.
 4. An adoption keeps a queued next record that a queue edit re-established during the lookup flight. Dropping it adopts the same device item a second time at its end.
