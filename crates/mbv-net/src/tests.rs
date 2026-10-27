@@ -2,24 +2,8 @@
 //! `agent_config` logs `http.request.done`/`http.request.failed` inside an
 //! `http.request` span carrying `service`, the method and the path.
 
-use std::sync::{Arc, Mutex};
-
-use tracing_subscriber::prelude::*;
-
 use crate::HttpService;
 use crate::mock_http::MockHttp;
-
-fn captured(f: impl FnOnce()) -> Vec<String> {
-    let lines = Arc::new(Mutex::new(Vec::new()));
-    let sink = Arc::clone(&lines);
-    let subscriber = tracing_subscriber::Registry::default().with(
-        mbv_core::applog::test_support::capture_layer(move |line| {
-            sink.lock().expect("capture lock").push(line.to_owned());
-        }),
-    );
-    tracing::subscriber::with_default(subscriber, f);
-    lines.lock().expect("capture lock").clone()
-}
 
 #[test]
 fn failed_request_logs_service_and_status() {
@@ -27,7 +11,7 @@ fn failed_request_logs_service_and_status() {
     mock.respond(500, "{}");
 
     let agent = mock.agent_for(HttpService::Emby);
-    let lines = captured(|| {
+    let lines = mbv_core::applog::test_support::capture_log_lines(|| {
         let error = agent
             .get("http://127.0.0.1:1/Items?api_key=secret")
             .call()

@@ -505,22 +505,6 @@ fn context_loss_rejects_audiobookshelf_without_mutating_bound_submission() {
 
 // ── queue replacement decision (submit-reuses-live-run) ──────────────────────
 
-/// Runs `run` under the shared logfmt capture layer and returns the rendered
-/// lines (structured-logging design D5).
-fn capture_log_lines(run: impl FnOnce()) -> Vec<String> {
-    use tracing_subscriber::prelude::*;
-
-    let lines = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
-    let sink = std::sync::Arc::clone(&lines);
-    let subscriber = tracing_subscriber::registry().with(
-        mbv_core::applog::test_support::capture_layer(move |line| {
-            sink.lock().unwrap().push(line.to_owned());
-        }),
-    );
-    tracing::subscriber::with_default(subscriber, run);
-    lines.lock().unwrap().clone()
-}
-
 /// The playback state the status reports before the submission.
 enum Reported {
     Playing,
@@ -675,7 +659,7 @@ fn queue_replacement_decision_follows_the_d1_order(#[case] case: ReplaceDecision
         Commands::None => None,
     };
 
-    let lines = capture_log_lines(|| {
+    let lines = mbv_core::applog::test_support::capture_log_lines(|| {
         let accepted = player.submit_queue_slots(
             vec![ExecSlot {
                 slot_id: QueueSlotId::from_raw(1),

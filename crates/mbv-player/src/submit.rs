@@ -103,6 +103,11 @@ impl Player {
     /// identities because every later command and observation addresses slots,
     /// not playlist positions.
     ///
+    /// `cmd_tx` is installed at the first cold start and never cleared
+    /// afterwards: it survives `stop()`, and a cold start replaces it in
+    /// place. The reuse path's run-existence check therefore fixes `cmd_tx`
+    /// as `Some` for its send.
+    ///
     /// # Panics
     ///
     /// Panics if any of the player's shared mutexes is poisoned, i.e. a previous
@@ -269,21 +274,18 @@ impl Player {
             start_idx,
         };
         let cmd_tx = self.cmd_tx.lock().unwrap();
-        let sent = if let Some(tx) = cmd_tx.as_ref() {
-            match tx.send(cmd) {
-                Ok(()) => true,
-                Err(error) => {
-                    (items, start_idx) = submit_queue_parts(error.0);
-                    false
-                }
+        // The run-existence check above established `cmd_tx` is `Some`, and
+        // with the `stop_tx` lock held no cold start can replace it (it is
+        // never cleared, only installed or replaced).
+        let Some(tx) = cmd_tx.as_ref() else {
+            unreachable!("the run-existence check above established cmd_tx is Some");
+        };
+        let sent = match tx.send(cmd) {
+            Ok(()) => true,
+            Err(error) => {
+                (items, start_idx) = submit_queue_parts(error.0);
+                false
             }
-        } else {
-            // Unreachable: the run-existence check above established `cmd_tx`
-            // is `Some`, and with the `stop_tx` lock held no cold start can
-            // replace it. Recover the unsent command so the cold start below
-            // still submits it.
-            (items, start_idx) = submit_queue_parts(cmd);
-            false
         };
         drop(cmd_tx);
         drop(stop_tx);
