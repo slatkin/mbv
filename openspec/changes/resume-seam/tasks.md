@@ -20,9 +20,9 @@ Use `cargo nextest run -p mbv-player` for tests. Follow `docs/standards/README.m
 
 ## 3. Drain the run's reports before its thread ends
 
-- [ ] 3.1 Add `ReportJob::Barrier(mpsc::Sender<()>)` and the worker arm in `report_worker.rs`. Add `SessionReporter::settle(bound)`: send the barrier, wait with `recv_timeout`, and log `player.resume.settle_timed_out` on timeout. Verify with two worker-level tests (no real sleeps, a gate held by the test): a held job ahead of the barrier keeps the ack back until the gate opens; a zero bound returns without the ack. Contract: the FIFO worker acks the barrier only after earlier jobs ran (#963).
-- [ ] 3.2 Call `self.reporter.settle(REPORT_SETTLE_BOUND)` (2 seconds, named constant) in `run()` after the loop returns and the mpv child is dropped, before the panic teardown. Verify with `cargo check -p mbv-player` and by reading that `run_exited` is already stored before the call, so no submission reuses the dying run.
-- [ ] 3.3 Check every caller of `Player::join` and `join_or_timeout` for the added wait (`rg "\.join\(\)|join_or_timeout" crates/mbv-player crates/mbv-daemon src`). Confirm the daemon callers pass a deadline. Verify by listing the callers and their bounds in the PR description. Fix any caller that waits without a bound, or put it in front of the user.
+- [x] 3.1 Add `ReportJob::Barrier(mpsc::Sender<()>)` and the worker arm in `report_worker.rs`. Add `SessionReporter::settle(bound)`: send the barrier, wait with `recv_timeout`, and log `player.resume.settle_timed_out` on timeout. Verify with two worker-level tests (no real sleeps, a gate held by the test): a held job ahead of the barrier keeps the ack back until the gate opens; a zero bound returns without the ack. Contract: the FIFO worker acks the barrier only after earlier jobs ran (#963).
+- [x] 3.2 Call `self.reporter.settle(REPORT_SETTLE_BOUND)` (2 seconds, named constant) in `run()` after the loop returns and the mpv child is dropped, before the panic teardown. Verify with `cargo check -p mbv-player` and by reading that `run_exited` is already stored before the call, so no submission reuses the dying run.
+- [x] 3.3 Check every caller of `Player::join` and `join_or_timeout` for the added wait (`rg "\.join\(\)|join_or_timeout" crates/mbv-player crates/mbv-daemon src`). Confirm the daemon callers pass a deadline. Verify by listing the callers and their bounds in the PR description. Fix any caller that waits without a bound, or put it in front of the user.
 
 ## 4. Docs and gates
 
