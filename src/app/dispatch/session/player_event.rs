@@ -90,10 +90,6 @@ impl App {
                     PlayerEventFlow::Proceed
                 }
             }
-            PlayerEvent::UnifiedQueueLoadResult { result, .. } => {
-                self.handle_unified_queue_load_result(result);
-                PlayerEventFlow::Proceed
-            }
             PlayerEvent::IntroStarted { intro_end_ticks } => {
                 self.handle_intro_started(intro_end_ticks);
                 PlayerEventFlow::Proceed
@@ -192,23 +188,6 @@ impl App {
         // If a seek was pending for a Feed slot, persist the resulting position now.
         if let Some(slot_id) = self.feed_seek_pending_slot.take() {
             self.persist_feed_slot_position(slot_id);
-        }
-    }
-
-    pub(in crate::app) fn handle_unified_queue_load_result(
-        &mut self,
-        result: mbv_ctrl::QueueLoadResult,
-    ) {
-        match result {
-            mbv_ctrl::QueueLoadResult::Accepted => {
-                self.flash("Queue load accepted".into(), ToastSeverity::Neutral);
-            }
-            mbv_ctrl::QueueLoadResult::Rejected { reason } => {
-                self.flash(
-                    format!("Queue load rejected: {reason}"),
-                    ToastSeverity::Error,
-                );
-            }
         }
     }
 

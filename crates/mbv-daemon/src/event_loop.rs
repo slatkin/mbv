@@ -1,8 +1,7 @@
 use super::{
     AudiobookshelfOwnerContext, ClientRegistry, DaemonEvent, DaemonPlayerOwner, DaemonRole,
-    EmbyOwnerContext, SharedQueueState, broadcast_queue_state,
-    cancel_pending_idle_queue_load_if_run_changed, expire_and_redispatch,
-    expire_pending_idle_queue_load, persist_stay_alive_owner_queue, reset_slot_jumps,
+    EmbyOwnerContext, SharedQueueState, broadcast_queue_state, expire_and_redispatch,
+    persist_stay_alive_owner_queue, reset_slot_jumps,
 };
 use mbv_ctrl::CtrlEvent;
 use mbv_emby::EmbyClient;
@@ -125,9 +124,7 @@ impl DaemonLoop {
     }
 
     /// Idle work performed when no event arrived within the poll timeout.
-    pub(super) fn on_recv_timeout(&mut self, now: Instant) {
-        cancel_pending_idle_queue_load_if_run_changed(&mut self.owner, &self.player);
-        expire_pending_idle_queue_load(&mut self.owner, now);
+    pub(super) fn on_recv_timeout(&mut self, _now: Instant) {
         if let Some((connection_id, event)) = self.owner.intents.settle_buffering_if_due() {
             tracing::info!(name: "daemon.pipe_latency.settled", target: "pipe_latency", request = %event.request_id, generation = event.generation, outcome = "settled", "pipe playback settled");
             let clients = self.ctrl_clients.lock().unwrap();

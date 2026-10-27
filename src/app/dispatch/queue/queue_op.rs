@@ -32,7 +32,7 @@ impl App {
     /// answered op (row 5.3, design D6): the owner replaces its canonical
     /// queue, begins playback at `start_idx`, and answers with the snapshot
     /// the Client adopts — the Client holds no editable queue of its own.
-    /// Slot identities are minted client-side (1..=n), like the idle load.
+    /// Slot identities are minted client-side (1..=n).
     pub(in crate::app) fn replace_queue_on_owner(
         &mut self,
         scope: QueueScope,

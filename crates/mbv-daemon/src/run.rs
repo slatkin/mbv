@@ -10,7 +10,6 @@ use crate::LocalStartupError;
 use crate::PinSwapState;
 use crate::owner_lock::{OwnerLockError, PidFileLock, lock_pid_file};
 use crate::{ClientRegistry, CtrlClients};
-use mbv_ctrl::player::PlayerEvent;
 use mbv_ctrl::{AttachedClientsCell, CtrlEvent, PlaybackGeneration};
 use mbv_emby::{EmbyClient, mbv_direct_tcp_port_command};
 use mbv_emby_model::EmbyItem;
@@ -22,16 +21,6 @@ use std::net::TcpListener;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-
-pub(crate) fn broadcast_player_event_if_not_replaced(
-    ctrl_clients: &ClientRegistry,
-    event: PlayerEvent,
-    replacement_committed: bool,
-) {
-    if !replacement_committed {
-        broadcast(ctrl_clients, &CtrlEvent::Player(event));
-    }
-}
 
 pub(crate) fn playback_run_identity_is_current(
     run_identity: PlaybackGeneration,
