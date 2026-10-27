@@ -86,8 +86,9 @@ fn clear_continuation(daemon: &mut DaemonLoop) {
 
 /// Handles the lookup's result (design D4): the item is appended at the
 /// queue's tail and made the active slot and the tracked item only while the
-/// Session still presents it. A failed lookup, or a device that moved on,
-/// leaves the item presented and not adopted, and the failure is logged.
+/// Session still presents it and the owner and Session admit it. A failed
+/// lookup, a device that moved on, or an item admission refuses leaves the
+/// item presented and not adopted, and the failure is logged.
 /// Returns whether the canonical owner queue changed.
 pub(crate) fn handle_lookup(
     daemon: &mut DaemonLoop,
@@ -157,11 +158,51 @@ pub(crate) fn handle_lookup(
         );
         return false;
     }
-    // The adopted item is the queue's next slot: the append and the active
-    // marker go through the owner's queue mutation path.
-    let slot = daemon.owner.core.queue.append(QueueItem::Emby(item));
-    // The device plays the adopted item now, so it is the observed active
-    // slot: a following Next steps from it and Clients highlight its row.
+    // Owner admission is the capability boundary every queue-entry path runs,
+    // the adoption included: the owner must admit the item (media kind and
+    // Service availability, `daemon_admits`), and the Session's own
+    // playable-media list judges whether the device can play it — the same
+    // rule the queue's load path applies (emby-session-owner-output design
+    // D7). An item that fails either check stays presented.
+    let candidate = QueueItem::Emby(item);
+    let rejection = {
+        let PlaybackOutput::EmbySession(output) = &daemon.owner.output else {
+            return false;
+        };
+        if crate::control_queue::daemon_admits(
+            &candidate,
+            daemon.audio_only,
+            !daemon.client.lock().unwrap().token.is_empty(),
+            daemon.audiobookshelf_runtime.is_some(),
+        ) {
+            super::load::admit(&candidate, &output.playable_media_types)
+                .err()
+                .map(|admission| admission.reason)
+        } else {
+            Some("the owner does not admit the item".to_string())
+        }
+    };
+    if let Some(reason) = rejection {
+        clear_continuation(daemon);
+        tracing::info!(
+            name: "daemon.emby_session_adopt.not_admitted",
+            target: "daemon",
+            item = %item_id,
+            reason = %reason,
+            "the queue-end item is not admitted; it stays presented and not adopted"
+        );
+        return false;
+    }
+    commit_adoption(daemon, item_id, candidate)
+}
+
+/// Commits the queue-end adoption (design D4): the item is appended at the
+/// queue's tail through the owner's queue mutation path and becomes the
+/// observed active slot — the device plays it now, so a following Next steps
+/// from it and Clients highlight its row — and the tracked item. The ended
+/// item's advance and owed pause go with the adoption.
+fn commit_adoption(daemon: &mut DaemonLoop, item_id: &str, item: QueueItem) -> bool {
+    let slot = daemon.owner.core.queue.append(item);
     daemon.owner.core.note_observed_active_slot(Some(slot));
     let runtime_ticks = daemon
         .owner

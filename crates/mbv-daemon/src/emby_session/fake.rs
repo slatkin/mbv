@@ -113,13 +113,17 @@ impl FakeSessionApi {
         }
     }
 
+    /// The canned item for `item_id`: the lookup answers the id the device
+    /// presents, so a scripted item under another id is a lookup failure,
+    /// not a quiet wrong answer.
     fn recorded_item(&self, item_id: &str) -> Result<EmbyItem, String> {
         match (
             self.failure.lock().unwrap().as_deref(),
             self.item.lock().unwrap().as_ref(),
         ) {
             (Some(error), _) => Err(error.to_string()),
-            (None, Some(item)) => Ok(item.clone()),
+            (None, Some(item)) if item.id == item_id => Ok(item.clone()),
+            (None, Some(item)) => Err(format!("the canned item {} is not {item_id}", item.id)),
             (None, None) => Err(format!("the fake has no canned item for {item_id}")),
         }
     }

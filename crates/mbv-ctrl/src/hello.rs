@@ -272,7 +272,7 @@ pub struct CtrlAudiobookshelfCapabilities {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[expect(
     clippy::struct_excessive_bools,
-    reason = "each supports_* bit is an independently negotiated optional protocol feature; no honest enum or bundle exists across queue/lifecycle/audio/auth/owner-load (design analysis, issue #804)"
+    reason = "each supports_* bit is an independently negotiated optional protocol feature; no honest enum or bundle exists across queue/lifecycle/audio/auth/owner-source-update (design analysis, issue #804)"
 )]
 pub struct CtrlCompatibility {
     pub peer_protocol_version: u32,

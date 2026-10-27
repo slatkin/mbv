@@ -163,8 +163,8 @@ impl SourceUpdateFixture {
         }
     }
 
-    /// Dispatch one command as a registered local client.
-    fn dispatch(&mut self, client_id: u64, cmd: CtrlCmd) {
+    /// Dispatch one command under `role`, the owner-role gate's subject.
+    fn dispatch_with_role(&mut self, client_id: u64, cmd: CtrlCmd, role: crate::DaemonRole) {
         handle_ctrl_for_role(
             cmd,
             CtrlContext {
@@ -179,11 +179,47 @@ impl SourceUpdateFixture {
                 audiobookshelf: None,
                 merged_tx: &self.merged_tx,
                 owner_settings: crate::owner_settings::fixed_reader(true),
-                role: crate::DaemonRole::Local,
+                role,
                 op: std::cell::Cell::new(None),
             },
         );
     }
+
+    /// Dispatch one command as a registered local client.
+    fn dispatch(&mut self, client_id: u64, cmd: CtrlCmd) {
+        self.dispatch_with_role(client_id, cmd, crate::DaemonRole::Local);
+    }
+}
+
+/// Contract: followups task 2.3 — a source update still requires the
+/// Stay-alive owner (regression, PR 966 review): the retired idle-load test
+/// family was the last to pin this gate, so a Packaged owner rejects the
+/// command with the gate's reason and applies nothing.
+#[test]
+fn packaged_role_rejects_a_source_update_without_applying_it() {
+    let mut fx = SourceUpdateFixture::new();
+
+    fx.dispatch_with_role(
+        fx.client_id,
+        CtrlCmd::UnifiedQueueSourceUpdate {
+            source: QueueSource::Album,
+            lineage: mbv_queue::QueueLineage(1),
+            op: None,
+        },
+        crate::DaemonRole::Packaged,
+    );
+
+    assert!(
+        matches!(recv_event(&fx.reply_rx), CtrlEvent::CommandRejected(reason)
+        if reason.contains("only by the Stay-alive owner")),
+        "the Packaged owner rejects the source update"
+    );
+    assert_eq!(fx.owner.core.source, QueueSource::Unknown);
+    assert_eq!(fx.owner.core.queue.slots().len(), 1);
+    assert!(matches!(
+        fx.commands.try_recv(),
+        Err(mpsc::TryRecvError::Empty)
+    ));
 }
 
 #[test]

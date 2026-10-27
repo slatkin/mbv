@@ -148,7 +148,7 @@ Hand-over at exit needs no change: adopted items are queue slots and ride the ex
 `docs/invariants/15` states that the gate compares version and build identity (and fixes
 its stale path reference — the check lives in `connect/handshake.rs`), including the
 `unknown` fallback and the same-commit limitation. `docs/invariants/13`'s "until the next
-idle load or clear" becomes "until the next queue replacement or clear". `docs/architecture/owner-client-operation-split.md` (Client column) and the `QueueEpoch` entry in `CONTEXT.md` stop naming `UnifiedQueueLoadIdle` and idle loads.
+idle load or clear" becomes "until the next queue replacement or clear". `docs/architecture/owner-client-operation-split.md` (Client column) and the `QueueEpoch` entry in `CONTEXT.md` stop naming `UnifiedQueueLoadIdle` and idle loads. ADR 0029's sentence naming the retired idle-load operation is reworded: the cold-start and idle-jump path stays the Stay-alive-specific one.
 
 ## Risks / Trade-offs
 

@@ -69,18 +69,24 @@ pub(crate) fn ended_naturally(
     if !unhandled_sighting {
         return None;
     }
-    let runtime = output.presented_runtime_ticks();
-    let estimate = output.estimate_ticks(now);
     if let Some(loaded) = output.loaded.as_mut() {
         loaded.end_handled = true;
     }
     // A loaded slot whose queue item and Session both report no runtime has no
     // end to infer (design D6, risks): the idle counts as a stop on the device.
-    if runtime > 0 && estimate.saturating_add(EMBY_SESSION_END_MARGIN_TICKS) >= runtime {
+    if end_within_margin(output, now) {
         estimated_end(output)
     } else {
         None
     }
+}
+
+/// The runtime the observation this one replaces still had left, clamped at
+/// zero: the one `last_observation` the position estimate reads, shared by
+/// [`estimated_end`] and [`ended_recently`].
+fn remaining_ticks(output: &EmbySessionOutput) -> Option<i64> {
+    let observed = output.last_observation.as_ref()?;
+    Some((output.presented_runtime_ticks() - observed.position_ticks).max(0))
 }
 
 /// The instant the loaded item's estimated end falls on (emby-session-output-
@@ -89,9 +95,8 @@ pub(crate) fn ended_naturally(
 /// the end can arrive long after a device absence, so the adoption window
 /// opens from here and not from the detecting poll.
 fn estimated_end(output: &EmbySessionOutput) -> Option<Instant> {
-    let observed = output.last_observation.as_ref()?;
     let observed_at = output.observed_at?;
-    let remaining = (output.presented_runtime_ticks() - observed.position_ticks).max(0);
+    let remaining = remaining_ticks(output)?;
     observed_at.checked_add(Duration::from_secs_f64(mbv_emby_model::ticks_to_seconds(
         remaining,
     )))
@@ -138,10 +143,7 @@ pub(crate) fn device_advance(
     {
         return None;
     }
-    let runtime = output.presented_runtime_ticks();
-    let estimate = output.estimate_ticks(now);
-    let completes =
-        runtime > 0 && estimate.saturating_add(EMBY_SESSION_END_MARGIN_TICKS) >= runtime;
+    let completes = end_within_margin(output, now);
     if loaded.item_id == queued.item_id
         && !(completes && session.position_ticks < EMBY_SESSION_END_MARGIN_TICKS)
     {
@@ -207,18 +209,17 @@ fn end_within_margin(output: &EmbySessionOutput, now: Instant) -> bool {
 /// the runtime, so this bound is what keeps a foreign item presented minutes
 /// later present-only.
 fn ended_recently(output: &EmbySessionOutput, now: Instant) -> bool {
-    let Some(observed) = output.last_observation.as_ref() else {
+    let Some(observed_at) = output.observed_at else {
         return false;
     };
-    let Some(observed_at) = output.observed_at else {
+    let Some(remaining) = remaining_ticks(output) else {
         return false;
     };
     let Some(elapsed) = now.checked_duration_since(observed_at) else {
         return false;
     };
     let elapsed_ticks = mbv_emby_model::seconds_to_ticks(elapsed.as_secs_f64());
-    let remaining_ticks = (output.presented_runtime_ticks() - observed.position_ticks).max(0);
-    elapsed_ticks.saturating_sub(remaining_ticks)
+    elapsed_ticks.saturating_sub(remaining)
         <= mbv_emby_model::seconds_to_ticks(EMBY_SESSION_LOAD_TIMEOUT.as_secs_f64())
 }
 

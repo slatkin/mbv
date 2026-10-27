@@ -50,6 +50,10 @@ fn loop_with_session(fake: FakeSessionApi) -> TestLoop {
 /// this to keep a scripted queue while the Session is the output.
 pub(super) fn host_session_output(t: &mut TestLoop, fake: FakeSessionApi) {
     t.event_loop.emby_session_output = true;
+    // A host that can serve a Session output has its Emby Service configured:
+    // the client's token is what `daemon_admits` reads for Emby items, the
+    // adoption's queue-entry gate included.
+    t.event_loop.client.lock().unwrap().token = "test-token".to_string();
     t.event_loop.emby_runtime = Some(crate::EmbyOwnerContext::from_client(
         t.event_loop.client.lock().unwrap().clone(),
         1,

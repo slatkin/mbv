@@ -6,7 +6,7 @@
 
 1. The Owner appends a foreign item to the queue only when the device started it within `EMBY_SESSION_LOAD_TIMEOUT` (30 s) of the tracked item's estimated end. A foreign item presented later stays present-only.
 2. The window runs from the estimated end (the observed time plus the runtime that observation had left), not from the poll that detects the natural end. An idle observation can arrive minutes after the end, after the device left `/Sessions`.
-3. A lookup result adopts only while three things hold: the lookup is still pending, the output still tracks the ended item, and the Session still presents the looked-up item. Every other exit of the lookup clears the pending continuation through `clear_continuation`.
+3. A lookup result adopts only while four things hold: the lookup is still pending, the output still tracks the ended item, the Session still presents the looked-up item, and the owner and Session admit the item (`daemon_admits` plus the `playable_media_types` rule every queue-entry path runs). A pending lookup whose result adopts nothing clears the continuation through `clear_continuation`; a result that names no pending lookup clears nothing — the in-flight lookup may belong to a different item.
 4. An adoption keeps a queued next record that a queue edit re-established during the lookup flight. Dropping it adopts the same device item a second time at its end.
 
 ## Why it matters
@@ -17,8 +17,8 @@ Adoption changes the queue on the user's behalf. A window that runs from the det
 
 - `ended_naturally` returns the estimated end. `advance_from_natural_end` opens `ContinuationWatch::Window` at that end plus 30 s, only at the queue's edge.
 - `queue_end_continuation` has two paths. The direct path needs an unhandled sighting, an estimate within the end margin, and `ended_recently`. The after-gap path needs an open window and a handled end. An expired window is cleared on the next observation.
-- `handle_lookup` checks pending, tracks-ended, and still-presented before it appends. The three non-adopting exits call `clear_continuation`.
-- Guard tests in `crates/mbv-daemon/src/tests/emby_session_end/continuation.rs`: `the_queue_end_autoplay_is_adopted`, `a_foreign_item_presented_after_a_long_absence_is_not_adopted`, `a_natural_end_revealed_after_a_long_absence_opens_no_window`, `a_lookup_result_after_the_output_was_stopped_adopts_nothing`, and `an_append_during_the_lookup_flight_keeps_the_queued_next_item`.
+- `handle_lookup` checks pending, tracks-ended, still-presented, and owner/Session admission before it appends. A pending lookup's non-adopting exits call `clear_continuation`.
+- Guard tests in `crates/mbv-daemon/src/tests/emby_session_end/continuation.rs`: `the_queue_end_autoplay_is_adopted`, `a_foreign_item_presented_after_a_long_absence_is_not_adopted`, `a_natural_end_revealed_after_a_long_absence_opens_no_window`, `a_lookup_result_after_the_output_was_stopped_adopts_nothing`, `an_item_the_owner_does_not_admit_is_not_adopted`, and `an_append_during_the_lookup_flight_keeps_the_queued_next_item`.
 
 ## Where it currently fails / how it could regress
 
