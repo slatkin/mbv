@@ -18,7 +18,7 @@
 ## 3. Owner decode and docs
 
 - [x] 3.1 Add a `crates/mbv-daemon` test that decodes every `fixtures/commands/*.json` through `serde_json::from_str::<CtrlCmd>` (the same call `core_ctrl_spawn.rs` uses) and asserts the corpus is non-empty (design D6). Verify: `cargo nextest run -p mbv-daemon` passes.
-- [ ] 3.2 Update `docs/recipes.md` "Add a ctrl protocol variant" step 8 to name the bless command and the fixture directory, and point the `protocol.rs` bump-rules comment at `protocol/ctrl/v10/` (design D7). Verify: both files name `protocol/ctrl/` and `MBV_PROTOCOL_BLESS`.
+- [x] 3.2 Update `docs/recipes.md` "Add a ctrl protocol variant" step 8 to name the bless command and the fixture directory, and point the `protocol.rs` bump-rules comment at `protocol/ctrl/v10/` (design D7). Verify: both files name `protocol/ctrl/` and `MBV_PROTOCOL_BLESS`.
 
 ## 4. Final verification
 
