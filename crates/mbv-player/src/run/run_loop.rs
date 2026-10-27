@@ -6,6 +6,7 @@ use super::{PlaybackRun, ProgressGuard, StopOutcome};
 use mbv_core::applog as app_logging;
 use mbv_queue::QueueItem;
 use std::os::unix::io::RawFd;
+use std::sync::{Arc, atomic::AtomicBool};
 
 /// Worst-case mpv event latency for the run's own timers.
 ///
@@ -64,6 +65,7 @@ impl PlaybackRun {
         cmd_rx: &mpsc::Receiver<PlayerCommand>,
         mut progress: ProgressGuard,
         wakeup_read_fd: RawFd,
+        run_exited: &Arc<AtomicBool>,
     ) {
         let event_tx_panic = self.event_tx.clone();
 
@@ -99,6 +101,10 @@ impl PlaybackRun {
                 }
             }
         })); // end catch_unwind
+        // Design D7: the loop has returned — mark this run exited before the
+        // mpv child teardown, so the Controller's reuse decision never
+        // submits a replacement into a dying run.
+        run_exited.store(true, Ordering::Relaxed);
         if wakeup_read_fd >= 0 {
             // SAFETY: this run exclusively owns the read descriptor and closes
             // it once, after its polling loop has stopped.

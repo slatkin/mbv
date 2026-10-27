@@ -580,12 +580,14 @@ impl std::fmt::Debug for DaemonRuntimeHooks {
     }
 }
 
-/// Submit a whole canonical queue to the Player, cold-starting a playback run
-/// when none is alive (`submit_queue_slots` spawns one). The one shared form of
-/// the submission `handle_queue_replace`, owner reconciliation, and the
-/// cold-start slot jump all use. `100` is the initial volume a freshly spawned
-/// run starts at; playback paths apply mute parity separately via `SetMute`.
-pub(crate) fn submit_queue_slots_cold_start(
+/// Submit a whole canonical queue to the Player for the queue-replace paths.
+/// Whether the Controller reuses the live run or cold-starts a new one is its
+/// decision (`submit_queue_slots` spawns one when no reusable run exists). The
+/// one shared form of the submission `handle_queue_replace`, owner
+/// reconciliation, and the cold-start slot jump all use. `100` is the initial
+/// volume a freshly spawned run starts at; playback paths apply mute parity
+/// separately via `SetMute`.
+pub(crate) fn submit_queue_slots_for_replace(
     player: &Player,
     slots: Vec<ExecSlot>,
     start_idx: usize,

@@ -31,7 +31,7 @@ pub(crate) use core::PlaybackIntentState;
 pub(crate) use core::{
     DaemonEvent, DaemonOwnerContext, DaemonPlayerOwner, QueuePersistenceRequest, SharedQueueState,
     TogglePanelHook, audio_only_rejection, broadcast, dispatch_slot_jump, expire_and_redispatch,
-    reset_slot_jumps, settle_and_redispatch, submit_queue_slots_cold_start,
+    reset_slot_jumps, settle_and_redispatch, submit_queue_slots_for_replace,
 };
 #[doc(inline)]
 pub use core::{DaemonPlayerHandle, DaemonRuntimeHooks, LocalOutputHooks, SwapDirection};

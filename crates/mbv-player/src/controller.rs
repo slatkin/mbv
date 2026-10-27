@@ -20,7 +20,7 @@ use crate::mpv_session::spawn::Spawner;
 pub(super) struct WakeupWriter(pub(super) RawFd);
 
 impl WakeupWriter {
-    fn notify(&self) {
+    pub(super) fn notify(&self) {
         let byte = [0u8; 1];
         // SAFETY: the owned pipe write descriptor is valid until Drop, and `byte`
         // points to one readable byte for the requested write length.
@@ -108,6 +108,10 @@ pub struct Player {
     pub subtitle_prefs: Arc<Mutex<SubtitlePrefs>>,
     pub(super) origin: Mutex<PlaybackOrigin>,
     pub(super) current_is_headless: Arc<AtomicBool>,
+    /// The live run's exit flag (design D7): the run thread sets it when its
+    /// loop returns, before the mpv teardown, and each cold start installs a
+    /// fresh flag — so a dying run's exit can never mark the new run.
+    pub(super) run_exited: Mutex<Arc<AtomicBool>>,
     pub event_tx: mpsc::Sender<PlayerEvent>,
     pub(super) stop_tx: Arc<Mutex<Option<mpsc::Sender<()>>>>,
     pub(super) shutdown_report_timeout: Arc<Mutex<Option<Duration>>>,
@@ -181,6 +185,7 @@ impl Player {
             subtitle_prefs: Arc::new(Mutex::new(subtitle_prefs)),
             origin: Mutex::new(PlaybackOrigin::Standalone),
             current_is_headless: Arc::new(AtomicBool::new(false)),
+            run_exited: Mutex::new(Arc::new(AtomicBool::new(false))),
             event_tx,
             stop_tx: Arc::new(Mutex::new(None)),
             shutdown_report_timeout: Arc::new(Mutex::new(None)),
@@ -361,6 +366,32 @@ impl Player {
         status.sequence_generation
     }
 
+    /// Send `cmd` to the live run's command channel and, once it is accepted,
+    /// wake the run's command loop. Returns the send result: `Err` wraps the
+    /// command when no run exists (`cmd_tx` is `None`) or the run's channel
+    /// is closed, so the caller can recover its payload.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `cmd_tx` mutex is poisoned, or, once a command has been
+    /// sent, if the `wakeup_fd` mutex is poisoned. Both mean a previous owner
+    /// panicked while holding the lock.
+    pub(super) fn send_command_parts(
+        &self,
+        cmd: PlayerCommand,
+    ) -> Result<(), mpsc::SendError<PlayerCommand>> {
+        let result = match self.cmd_tx.lock().unwrap().as_ref() {
+            Some(tx) => tx.send(cmd),
+            None => Err(mpsc::SendError(cmd)),
+        };
+        if result.is_ok()
+            && let Some(w) = self.wakeup_fd.lock().unwrap().as_ref()
+        {
+            w.notify();
+        }
+        result
+    }
+
     /// Returns `true` if the command was sent, `false` if the player thread is gone.
     ///
     /// # Panics
@@ -369,15 +400,7 @@ impl Player {
     /// sent, if the `wakeup_fd` mutex is poisoned. Both mean a previous owner
     /// panicked while holding the lock.
     pub fn send_command(&self, cmd: PlayerCommand) -> bool {
-        let sent = if let Some(tx) = self.cmd_tx.lock().unwrap().as_ref() {
-            tx.send(cmd).is_ok()
-        } else {
-            false
-        };
-        if sent && let Some(w) = self.wakeup_fd.lock().unwrap().as_ref() {
-            w.notify();
-        }
-        sent
+        self.send_command_parts(cmd).is_ok()
     }
 
     /// Replace the command sender with a test observer and return its receiver.

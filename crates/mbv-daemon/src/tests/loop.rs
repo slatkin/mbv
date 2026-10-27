@@ -8,7 +8,6 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Instant;
-use tracing_subscriber::prelude::*;
 
 pub(super) type Persisted = Rc<RefCell<Vec<RecordedSnapshot>>>;
 
@@ -168,19 +167,6 @@ pub(super) fn test_loop_with_queue(
 
 fn current_run(event_loop: &DaemonLoop) -> mbv_ctrl::PlaybackGeneration {
     event_loop.player.status.lock().unwrap().sequence_generation
-}
-
-/// Runs `run` under the shared logfmt capture layer (structured-logging
-/// design D5) and returns the rendered lines.
-fn capture_log_lines(run: impl FnOnce()) -> Vec<String> {
-    let lines = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
-    let sink = std::sync::Arc::clone(&lines);
-    let subscriber =
-        tracing_subscriber::registry().with(mbv_core::applog::test_support::capture_layer(
-            move |line| sink.lock().unwrap().push(line.to_owned()),
-        ));
-    tracing::subscriber::with_default(subscriber, run);
-    lines.lock().unwrap().clone()
 }
 
 #[test]
@@ -536,7 +522,7 @@ fn playback_resolved_failure_line_carries_intent_client_and_request() {
         false,
     );
 
-    let lines = capture_log_lines(|| {
+    let lines = mbv_core::applog::test_support::capture_log_lines(|| {
         t.event_loop.handle_event(DaemonEvent::PlaybackResolved {
             start_idx: 0,
             start_ticks: 0,

@@ -3,7 +3,7 @@ use super::{
     PlaybackQueue, PlayerCommand, PlayerOwnerState, QueueItem, QueueSlotId, RejectContext,
     abs_queue_transport_rejection, admit_queue_items, admit_queue_slots, audio_only_rejection,
     broadcast_queue_state, daemon_admits, mint_queue_lineage, reject_command, reset_slot_jumps,
-    submit_queue_slots_cold_start,
+    submit_queue_slots_for_replace,
 };
 use crate::AudiobookshelfOwnerContext;
 use crate::ctrl::CtrlClientId;
@@ -443,7 +443,7 @@ pub(super) fn handle_queue_replace(
         replace_on_emby_session(ctx, except_op_client);
         return;
     }
-    submit_queue_slots_cold_start(
+    submit_queue_slots_for_replace(
         ctx.player,
         ctx.owner.core.queue.slot_pairs(),
         next_cursor,

@@ -20,6 +20,12 @@ load-failure path `stop_for_unrecoverable_error`
    can end again: a submission that refreshes the run identity carries a new
    one, and a submission that keeps the identity — a `LoadNew` command —
    reopens the guard, so its stop carries the identity the run already had.
+5. A parked run is an ended run, not a stuck one. It keeps its mpv child alive
+   for a later submission, and that submission now arrives: the Controller's
+   reuse path does not read the reported playback state, so a queue
+   replacement goes into the parked run instead of ending it again and
+   starting a new one (`submit.rs`, invariant 22). The replacement's own end
+   reports through the reopened guard of item 4.
 
 ## Why it matters
 
@@ -118,7 +124,11 @@ failed active-file replacement let a later quit send a second one.
   `begin_item_lifecycle` arms the replacement drain, so the teardown `stop`
   command's own `end-file` is swallowed by `swallow_pending_load` instead of
   advancing or ending the parked run again. The mpv child stays alive for a
-  later submission, as in `accept_stopped_replacement`.
+  later submission, as in `accept_stopped_replacement`, and the reuse path
+  (`Controller::submit_queue_slots`, `submit.rs`) is that submission's
+  consumer: it decides from the run's existence, class, stop state, and
+  `run_exited`, never from `status.active`, so a parked run takes the
+  replacement instead of the cold path.
 - Sends outside a live run stay outside the machine: `submit.rs` (before the
   run exists) and the panic teardown (`run/run_loop.rs`) keep their own sends.
 - Tests own the contracts, one per layer.
@@ -139,8 +149,8 @@ failed active-file replacement let a later quit send a second one.
 
 The old residual is closed: a jump whose target failed to load no longer
 leaves a jump armed, because the verdict both reads the arm for the failed
-entry and disarms it in every answer. Two known limits remain, neither
-observed:
+entry and disarms it in every answer. Three known limits remain: the first two
+are unobserved, the third is an accepted window.
 
 1. The two-jump window. Two quick jumps, A then B, leave B armed,
    because the arm holds one jump and `arm_jump` overwrites it. If A's load
@@ -165,3 +175,12 @@ observed:
    `status.active = true` — settles nothing, and no other active-file jump site
    reactivates the status. The fix would be to treat a `JumpTo` into a parked
    run as a new submission. That is a product call, outside this invariant.
+3. The loop-exit window. A submission can be accepted by the run's command
+   channel in the same loop pass in which the loop returns: the loop drained
+   its commands, then exited, without reading the new one. That replacement
+   never plays, though the Owner has installed its queue, and the user repeats
+   the action. The window is one loop pass — at most the 50 ms poll ceiling —
+   and `run_exited` (set in `PlaybackRun::run` before `drop(mpv)`) keeps the
+   wider mpv teardown window out of it, so this is the only way an accepted
+   replacement is lost. Closing it would need the run to hand unread commands
+   back at exit.

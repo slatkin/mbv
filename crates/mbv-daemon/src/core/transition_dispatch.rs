@@ -11,7 +11,7 @@ use mbv_queue::QueueSlotId;
 use crate::control_queue::broadcast_queue_state;
 use crate::ctrl::CtrlClientId;
 
-use super::{DaemonOwnerContext, JumpOrigin, submit_queue_slots_cold_start};
+use super::{DaemonOwnerContext, JumpOrigin, submit_queue_slots_for_replace};
 
 /// Deliver one accepted transition's `JumpTo` to the Player. When no Playback
 /// run is alive the bare command would be dropped silently, so fall back to
@@ -98,7 +98,7 @@ fn cold_start_at_slot(ctx: &mut DaemonOwnerContext<'_>, target: QueueSlotId) -> 
         return false;
     };
     tracing::info!(name: "daemon.transition_dispatch.cold_start", target: "transition", slot = ?target, start_idx, "no live playback run; cold-starting the queue at the target slot");
-    if !submit_queue_slots_cold_start(
+    if !submit_queue_slots_for_replace(
         ctx.player,
         ctx.owner.core.queue.slot_pairs(),
         start_idx,

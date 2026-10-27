@@ -7,12 +7,43 @@ use super::{
     refresh_emby_resume, send_ep_info, spawn_progress_reporter, start_queue_playback,
 };
 use mbv_ids::{EmbySessionId, ItemId, MediaSourceId};
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
 use std::time::Duration;
 
 use crate::mpv_session::spawn::Spawner;
+
+/// Why `submit_queue_slots` fell through to a cold start (design D1, D5).
+#[derive(Clone, Copy)]
+enum ColdStartReason {
+    NoRun,
+    HeadlessMismatch,
+    StopRequested,
+    RunExited,
+    SendFailed,
+}
+
+impl ColdStartReason {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::NoRun => "no_run",
+            Self::HeadlessMismatch => "headless_mismatch",
+            Self::StopRequested => "stop_requested",
+            Self::RunExited => "run_exited",
+            Self::SendFailed => "send_failed",
+        }
+    }
+}
+
+/// The `SubmitQueue` payload of a command a failed send returned. The reuse
+/// path only ever sends `SubmitQueue`, so no other variant can come back.
+fn submit_queue_parts(cmd: PlayerCommand) -> (Vec<ExecSlot>, usize) {
+    match cmd {
+        PlayerCommand::SubmitQueue { items, start_idx } => (items, start_idx),
+        _ => unreachable!("the reuse path only sends SubmitQueue"),
+    }
+}
 
 impl Player {
     /// Play a freshly fetched Emby sequence with no pre-existing canonical
@@ -72,15 +103,21 @@ impl Player {
     /// identities because every later command and observation addresses slots,
     /// not playlist positions.
     ///
+    /// `cmd_tx` is installed at the first cold start and never cleared
+    /// afterwards: it survives `stop()`, and a cold start replaces it in
+    /// place. The reuse path's run-existence check therefore fixes `cmd_tx`
+    /// as `Some` for its send.
+    ///
     /// # Panics
     ///
     /// Panics if any of the player's shared mutexes is poisoned, i.e. a previous
     /// owner panicked while holding it: the owner state read or seeded here
     /// (`status`, `origin`, `ws_tx`, `credentials`, `audiobookshelf_context`,
     /// `stop_tx`, `shutdown_report_timeout`, `cmd_tx`, `wakeup_fd`,
-    /// `pre_warmed_mpv`, `thread_handle`). An empty submission returns before
-    /// locking; a submission rejected for Audiobookshelf admission still locks
-    /// `audiobookshelf_context` to answer the admission question.
+    /// `run_exited`, `pre_warmed_mpv`, `thread_handle`). An empty submission
+    /// returns before locking; a submission rejected for Audiobookshelf
+    /// admission still locks `audiobookshelf_context` to answer the admission
+    /// question.
     pub fn submit_queue_slots(
         &self,
         items: Vec<ExecSlot>,
@@ -100,18 +137,12 @@ impl Player {
         // generation is serialized in PlayerStatus so clients can fence
         // slot-addressed commands against a locally replaced queue.
         let run_identity = self.advance_sequence_generation();
-
-        // Fast path: reuse existing mpv window when headless state matches.
-        if self.status.lock().unwrap().active
-            && (self.current_is_headless.load(Ordering::Relaxed) == headless)
-        {
-            let start_item = &items[start_idx].item;
-            {
-                let mut st = self.status.lock().unwrap();
-                st.seed_from_item(start_item, start_idx, items.len());
+        let (reason, items, start_idx) =
+            match self.submit_into_live_run(headless, items, start_idx, run_identity) {
+                Ok(()) => return true,
+                Err(failed) => failed,
             };
-            return self.send_command(PlayerCommand::SubmitQueue { items, start_idx });
-        }
+        tracing::info!(name: "player.submit.cold_started", target: "player", reason = reason.as_str(), "queue replacement starting a new playback run");
 
         // Cold start: stop, join, spawn fresh player thread.
         self.stop();
@@ -166,6 +197,11 @@ impl Player {
         *self.wakeup_fd.lock().unwrap() = wakeup_pipe.map(|(_, w)| w);
         let pre_warmed = self.pre_warmed_mpv.lock().unwrap().take();
         let spawner = Arc::clone(&self.spawner);
+        // A fresh exit flag for this run (design D7): the dying run's thread
+        // can still set the previous flag after this point, and it must never
+        // mark the new run.
+        let run_exited = Arc::new(AtomicBool::new(false));
+        *self.run_exited.lock().unwrap() = Arc::clone(&run_exited);
 
         let handle = thread::spawn(move || {
             run_player_thread(PlayerThreadStart {
@@ -189,10 +225,80 @@ impl Player {
                 stop_rx,
                 cmd_rx,
                 wakeup_read_fd,
+                run_exited,
             });
         });
         *self.thread_handle.lock().unwrap() = Some(handle);
         true
+    }
+
+    /// The reuse path (design D1): submit into the live run when the run
+    /// exists, the headless class matches, no stop was requested for it, its
+    /// loop has not exited, and the send is accepted. The reported playback
+    /// state does not decide this: an idle or parked run is still live.
+    ///
+    /// Checks 3–5 hold the `stop_tx` lock with the `cmd_tx` lock taken inside
+    /// it (`stop()` takes `stop_tx`, the send takes `cmd_tx`), so a `stop()`
+    /// cannot slip between the check and the send. The send helper's wake
+    /// takes `wakeup_fd` inside that nesting too, the same order `stop()`
+    /// already uses. The status is seeded only
+    /// after the send is accepted (design D2), so a submission that then
+    /// cold-starts never publishes a seeded status. On any failed check,
+    /// returns the cold-start reason with the submission restored for the
+    /// cold start.
+    fn submit_into_live_run(
+        &self,
+        headless: bool,
+        mut items: Vec<ExecSlot>,
+        mut start_idx: usize,
+        run_identity: mbv_ctrl::PlaybackGeneration,
+    ) -> Result<(), (ColdStartReason, Vec<ExecSlot>, usize)> {
+        if self.cmd_tx.lock().unwrap().is_none() {
+            return Err((ColdStartReason::NoRun, items, start_idx));
+        }
+        if self.current_is_headless.load(Ordering::Relaxed) != headless {
+            return Err((ColdStartReason::HeadlessMismatch, items, start_idx));
+        }
+        let stop_tx = self.stop_tx.lock().unwrap();
+        if stop_tx.is_none() {
+            return Err((ColdStartReason::StopRequested, items, start_idx));
+        }
+        if self.run_exited.lock().unwrap().load(Ordering::Relaxed) {
+            return Err((ColdStartReason::RunExited, items, start_idx));
+        }
+        // The start item is cloned before the send because the send consumes
+        // the submission; the seed itself happens after the send is accepted
+        // (design D2).
+        let start_item = items[start_idx].item.clone();
+        let items_len = items.len();
+        let cmd = PlayerCommand::SubmitQueue {
+            items: std::mem::take(&mut items),
+            start_idx,
+        };
+        // The run-existence check above established `cmd_tx` is `Some`, and
+        // with the `stop_tx` lock held no cold start can replace it (it is
+        // never cleared, only installed or replaced).
+        assert!(
+            self.cmd_tx.lock().unwrap().is_some(),
+            "the run-existence check above established cmd_tx is Some"
+        );
+        let sent = match self.send_command_parts(cmd) {
+            Ok(()) => true,
+            Err(error) => {
+                (items, start_idx) = submit_queue_parts(error.0);
+                false
+            }
+        };
+        drop(stop_tx);
+        if sent {
+            tracing::info!(name: "player.submit.reused_run", target: "player", run_identity, "queue replacement submitted into the live run");
+            self.status
+                .lock()
+                .unwrap()
+                .seed_from_item(&start_item, start_idx, items_len);
+            return Ok(());
+        }
+        Err((ColdStartReason::SendFailed, items, start_idx))
     }
 
     fn cold_start_config(&self, client: Option<&EmbyClient>, headless: bool) -> MpvRunConfig {
@@ -298,9 +404,29 @@ struct PlayerThreadStart {
     stop_rx: mpsc::Receiver<()>,
     cmd_rx: mpsc::Receiver<PlayerCommand>,
     wakeup_read_fd: std::os::unix::io::RawFd,
+    /// This run's exit flag (design D7): the run sets it when its loop
+    /// returns, before the mpv teardown, so the Controller's reuse decision
+    /// never submits into a dying run.
+    run_exited: Arc<AtomicBool>,
+}
+
+/// Sets the run's exit flag when the player thread exits, however it exits:
+/// the normal loop return, a pre-loop startup failure, or a panic unwinding
+/// out of the thread body (design D7, review correction). Without it, a run
+/// that dies before or beside `PlaybackRun::run` leaves the flag unset and a
+/// replacement submitted into that teardown tail is channel-accepted but
+/// never read. `PlaybackRun::run` sets the flag earlier — before `drop(mpv)`
+/// — so the guard is only the backstop for the exits `run` never reaches.
+struct RunExitGuard(Arc<AtomicBool>);
+
+impl Drop for RunExitGuard {
+    fn drop(&mut self) {
+        self.0.store(true, Ordering::Relaxed);
+    }
 }
 
 fn run_player_thread(mut start: PlayerThreadStart) {
+    let _run_exit = RunExitGuard(Arc::clone(&start.run_exited));
     let (mpv, startup_pause_for_pipe) = match start.pre_warmed.take() {
         Some(warmed) => warmed,
         None => match init_mpv(&start.spawner, &start.config) {
@@ -359,6 +485,7 @@ fn run_player_thread(mut start: PlayerThreadStart) {
         stop_rx,
         cmd_rx,
         wakeup_read_fd,
+        run_exited,
         ..
     } = start;
     let (reporter, progress) =
@@ -381,7 +508,14 @@ fn run_player_thread(mut start: PlayerThreadStart) {
             prepared_source: Some(active_prepared_source),
         },
     );
-    session.run(mpv, &stop_rx, &cmd_rx, progress, wakeup_read_fd);
+    session.run(
+        mpv,
+        &stop_rx,
+        &cmd_rx,
+        progress,
+        wakeup_read_fd,
+        &run_exited,
+    );
 }
 
 fn load_queue_sources(
