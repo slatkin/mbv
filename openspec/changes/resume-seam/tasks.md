@@ -6,8 +6,8 @@ Use `cargo nextest run -p mbv-player` for tests. Follow `docs/standards/README.m
 
 ## 1. Settle the facts the plan rests on
 
-- [ ] 1.1 Pin the Audiobookshelf jump facts with a `RunLifecycle`-level test (no mpv handle): `arm_jump` on an active-file lifecycle leaves the arm `Idle`, so `take_resume_ticks` returns `None`. Contract: an Audiobookshelf jump arms no resume seek, so `jump_ticks` returning `None` for `Session` changes nothing. Verify with `cargo nextest run -p mbv-player` on the named test. If a test for this already exists, add nothing.
-- [ ] 1.2 Re-check the stop-path facts against the code before building on them: `rg "report_stopped_background|transition_to_deferred" crates/mbv-player/src` shows callers only under `cmd_load_new`; `PlayerCommand::LoadNew` has no constructor outside tests. Record the result in the PR description. No code change.
+- [x] 1.1 Pin the Audiobookshelf jump facts with a `RunLifecycle`-level test (no mpv handle): `arm_jump` on an active-file lifecycle leaves the arm `Idle`, so `take_resume_ticks` returns `None`. Contract: an Audiobookshelf jump arms no resume seek, so `jump_ticks` returning `None` for `Session` changes nothing. Verify with `cargo nextest run -p mbv-player` on the named test. If a test for this already exists, add nothing.
+- [x] 1.2 Re-check the stop-path facts against the code before building on them: `rg "report_stopped_background|transition_to_deferred" crates/mbv-player/src` shows callers only under `cmd_load_new`; `PlayerCommand::LoadNew` has no constructor outside tests. Record the result in the PR description. No code change.
 
 ## 2. Resume seam (no behavior change)
 
