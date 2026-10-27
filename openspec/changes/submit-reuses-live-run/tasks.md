@@ -21,7 +21,7 @@
 
 ## 5. Gates
 
-- [ ] 5.1 Run `cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo nextest run -p mbv-player -p mbv-daemon`, and `make check-code-file-lines` just before push; fix or surface any red gate.
+- [x] 5.1 Run `cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo nextest run -p mbv-player -p mbv-daemon`, and `make check-code-file-lines` just before push; fix or surface any red gate.
 
 ## Workflow follow-up
 
