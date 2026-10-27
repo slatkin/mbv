@@ -1,11 +1,12 @@
 use super::{
-    AudiobookshelfPlayerContext, EMBY_RESUME_RETRY_DELAYS, EmbyClient, EmbyItem, ExecSlot, Mpv,
-    MpvRunConfig, PlaybackOrigin, PlaybackRun, Player, PlayerCommand, PlayerEvent, PlayerStatus,
-    PreparedSource, ProgressGuard, QueueItem, QueueSlotId, RunInit, SessionReporter, SubtitlePrefs,
-    active_file_load_location, init_mpv, init_volume, make_wakeup_pipe, observe_properties,
-    prepare_source, queue_load_indices, queue_load_location, reassert_queue_layout,
-    refresh_emby_resume, send_ep_info, spawn_progress_reporter, start_queue_playback,
+    AudiobookshelfPlayerContext, EmbyClient, EmbyItem, ExecSlot, Mpv, MpvRunConfig, PlaybackOrigin,
+    PlaybackRun, Player, PlayerCommand, PlayerEvent, PlayerStatus, PreparedSource, ProgressGuard,
+    QueueItem, QueueSlotId, RunInit, SessionReporter, SubtitlePrefs, active_file_load_location,
+    init_mpv, init_volume, make_wakeup_pipe, observe_properties, prepare_source,
+    queue_load_indices, queue_load_location, reassert_queue_layout, send_ep_info,
+    spawn_progress_reporter, start_queue_playback,
 };
+use crate::resume::{EMBY_RESUME_RETRY_DELAYS, refresh_emby_resume};
 use mbv_ids::{EmbySessionId, ItemId, MediaSourceId};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, mpsc};

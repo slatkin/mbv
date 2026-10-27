@@ -1,4 +1,5 @@
 use super::*;
+use mbv_queue::PlaybackQueue;
 
 #[test]
 fn jump_to_absent_slot_is_discarded_and_rejected() {

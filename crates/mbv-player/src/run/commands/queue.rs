@@ -3,8 +3,8 @@ use super::{
     mpv_load_opts, mpv_url_for_queue_item, reject_stale_jump, resolve_jump_target,
     spawn_progress_reporter,
 };
+use crate::resume::{EMBY_RESUME_RETRY_DELAYS, refresh_emby_resume};
 use crate::run::{ForcedJump, JumpArm, StopReport};
-use crate::{EMBY_RESUME_RETRY_DELAYS, refresh_emby_resume};
 
 impl PlaybackRun {
     /// Explicit jump to an owner-assigned slot. Resolves the slot to this

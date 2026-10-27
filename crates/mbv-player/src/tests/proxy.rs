@@ -1,7 +1,7 @@
 use super::*;
 
 use mbv_ctrl::{CtrlCmd, CtrlCompatibility};
-use mbv_queue::AudiobookshelfQueueItem;
+use mbv_queue::{AudiobookshelfItem, AudiobookshelfQueueItem};
 use mbv_remote_player::RemotePlayer;
 
 fn proxy_audiobookshelf_item() -> QueueItem {
