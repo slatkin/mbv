@@ -78,14 +78,17 @@ shape, SHALL fail the conformance check.
 
 ### Requirement: Conformance runs in both directions
 
-For every fixture, CI SHALL verify that encoding the canonical message yields
-the fixture content and that decoding the fixture yields the canonical
-message. The owner decode path used by packaged `mbvd` SHALL be exercised
-against the command corpus.
+Every fixture SHALL decode to the canonical message. A fixture pinning an
+emitted shape SHALL also be produced by encoding the canonical message. A
+decode-only fixture pinning a tolerated legacy shape SHALL decode to the
+canonical value that re-encodes to the canonical emitted shape, with no
+fixture-byte encode check and no schema validation. The owner decode path
+used by packaged `mbvd` SHALL be exercised against the command corpus.
 
 #### Scenario: Encode drift is caught
 
-- **WHEN** a wire change alters what the encoder emits for a fixture's shape
+- **WHEN** a wire change alters what the encoder emits for a fixture that
+  pins an emitted shape
 - **THEN** the conformance check SHALL fail until the fixture is regenerated
 
 #### Scenario: Decode drift is caught
@@ -93,6 +96,14 @@ against the command corpus.
 - **WHEN** a wire change makes a fixture no longer decode, or silently drops
   fixture fields on decode
 - **THEN** the conformance check SHALL fail until the fixture is regenerated
+
+#### Scenario: Legacy decode-only fixtures carry no encode pin
+
+- **WHEN** a fixture pins a tolerated legacy shape the wire no longer emits
+- **THEN** it SHALL decode to the canonical value and re-encode to the
+  canonical emitted shape
+- **THEN** it SHALL NOT be checked byte-for-byte against the canonical
+  encoding and SHALL NOT be schema-validated
 
 #### Scenario: Packaged-owner decode of the command corpus
 

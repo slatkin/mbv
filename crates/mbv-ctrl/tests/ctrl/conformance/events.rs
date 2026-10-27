@@ -9,6 +9,8 @@ mod player;
 
 use mbv_queue::ServiceKind;
 
+use strum::IntoEnumIterator;
+
 pub(crate) use super::builders::{
     ABS_BOOK_ITEM_ID, ABS_EPISODE_ID, ABS_LIBRARY_ITEM_ID, CAST_NAME, CAST_RECEIVER_ID,
     EMBY_DEVICE_ID, EMBY_DEVICE_NAME, EMBY_ITEM_ID, EMBY_ITEM_NAME, EMBY_SERIES_ID, GENERATION,
@@ -36,9 +38,13 @@ const INTRO_END_TICKS: i64 = 240_000_000;
 /// The buffering remainder the pipe-status fixture pins.
 const ESTIMATED_REMAINING_MS: u64 = 1_500;
 
-/// One event shape in the corpus. The exhaustive shape-name match keeps
-/// every shape named, and `rows` gives each one a builder and a fixture.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// One event shape in the corpus. Coverage is compile-forced, like
+/// `commands::CommandShape`: every shape enum derives `EnumIter`, `all()`
+/// iterates the top-level shapes and expands each payload-carrying variant
+/// over its nested enum, and the expansion match names every variant — a
+/// new shape fails this build until its arm, builder, fixture row, and
+/// fixture exist.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, strum::EnumIter)]
 enum EventShape {
     Hello,
     Player(PlayerShape),
@@ -63,31 +69,48 @@ enum EventShape {
 }
 
 impl EventShape {
-    /// Every event shape: each flat variant plus one per nested-enum
-    /// variant. Hand-kept, like `commands::CommandShape::all`.
+    /// Every event shape: iterate the top-level variants, expanding each
+    /// payload-carrying variant over its nested enum's iteration. The flat
+    /// or-pattern is exhaustive, so a new shape fails this build until it
+    /// lands in an arm — it can never be missing from the table silently.
     fn all() -> Vec<Self> {
-        let mut shapes = vec![
-            EventShape::Hello,
-            EventShape::StatusOnly,
-            EventShape::CommandRejected,
-            EventShape::PipePlaybackStatus,
-            EventShape::ShutdownAccepted,
-            EventShape::ShutdownRejected,
-            EventShape::ServiceSetupApplied,
-            EventShape::SwapPrepare,
-            EventShape::SwapQuit,
-            EventShape::OwnerActionAccepted,
-            EventShape::OwnerActionRefused,
-            EventShape::UnifiedQueueState,
-            EventShape::AudiobookshelfProgress,
-            EventShape::AudiobookshelfBookProgress,
-        ];
-        shapes.extend(PlayerShape::ALL.map(EventShape::Player));
-        shapes.extend(DisconnectKind::ALL.map(EventShape::Disconnected));
-        shapes.extend(IntentOutcome::ALL.map(EventShape::PlaybackIntent));
-        shapes.extend(SetupRejection::ALL.map(EventShape::ServiceSetupRejected));
-        shapes.extend(QueueOutcome::ALL.map(EventShape::QueueOpResult));
-        shapes.extend(commands::OutputChoice::ALL.map(EventShape::PlaybackOutput));
+        let mut shapes = Vec::new();
+        for shape in Self::iter() {
+            match shape {
+                EventShape::Player(_) => {
+                    shapes.extend(PlayerShape::iter().map(EventShape::Player));
+                }
+                EventShape::Disconnected(_) => {
+                    shapes.extend(DisconnectKind::iter().map(EventShape::Disconnected));
+                }
+                EventShape::PlaybackIntent(_) => {
+                    shapes.extend(IntentOutcome::iter().map(EventShape::PlaybackIntent));
+                }
+                EventShape::ServiceSetupRejected(_) => {
+                    shapes.extend(SetupRejection::iter().map(EventShape::ServiceSetupRejected));
+                }
+                EventShape::QueueOpResult(_) => {
+                    shapes.extend(QueueOutcome::iter().map(EventShape::QueueOpResult));
+                }
+                EventShape::PlaybackOutput(_) => {
+                    shapes.extend(commands::OutputChoice::iter().map(EventShape::PlaybackOutput));
+                }
+                EventShape::Hello
+                | EventShape::StatusOnly
+                | EventShape::CommandRejected
+                | EventShape::PipePlaybackStatus
+                | EventShape::ShutdownAccepted
+                | EventShape::ShutdownRejected
+                | EventShape::ServiceSetupApplied
+                | EventShape::SwapPrepare
+                | EventShape::SwapQuit
+                | EventShape::OwnerActionAccepted
+                | EventShape::OwnerActionRefused
+                | EventShape::UnifiedQueueState
+                | EventShape::AudiobookshelfProgress
+                | EventShape::AudiobookshelfBookProgress => shapes.push(shape),
+            }
+        }
         shapes
     }
 
@@ -210,9 +233,11 @@ fn shape_of(event: &CtrlEvent) -> EventShape {
 // ── Nested wire enums ────────────────────────────────────────────────────
 
 /// One `DisconnectReason`. Every reason gets a `Disconnected.<reason>`
-/// fixture row.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// fixture row. `Default` exists only so `EventShape::iter()` can
+/// construct the payload variant; the expansion discards it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, strum::EnumIter)]
 enum DisconnectKind {
+    #[default]
     TakenOverByEmbyRemote,
     DaemonShutdown,
     ExclusiveOwner,
@@ -220,13 +245,6 @@ enum DisconnectKind {
 }
 
 impl DisconnectKind {
-    const ALL: [DisconnectKind; 4] = [
-        DisconnectKind::TakenOverByEmbyRemote,
-        DisconnectKind::DaemonShutdown,
-        DisconnectKind::ExclusiveOwner,
-        DisconnectKind::OwnerShuttingDown,
-    ];
-
     /// Exhaustive: a new `DisconnectReason` variant fails this build until
     /// its arm and fixture row exist.
     fn name(self) -> &'static str {
@@ -261,41 +279,41 @@ fn disconnect_kind_of(reason: DisconnectReason) -> DisconnectKind {
     }
 }
 
-/// One `PlaybackIntentOutcome`. Every flat outcome gets a
+/// One `PlaybackIntentOutcome` case. Every flat outcome gets a
 /// `PlaybackIntent.<outcome>` fixture row, and every `PlaybackIntentRejection`
-/// gets a `PlaybackIntent.Rejected.<reason>` row.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// gets a `PlaybackIntent.Rejected.<reason>` row — flattened to unit
+/// variants so iteration covers each (a nested `Rejected(IntentRejection)`
+/// payload could only iterate the rejection enum through a `Default` it
+/// would need for `EventShape::iter()` anyway).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, strum::EnumIter)]
 enum IntentOutcome {
+    #[default]
     Accepted,
     Applied,
     Coalesced,
     Superseded,
-    Rejected(IntentRejection),
+    RejectedEmptyTarget,
+    RejectedInvalidTarget,
+    RejectedResolutionFailed,
+    RejectedAudioOnly,
+    RejectedUnavailable,
 }
 
 impl IntentOutcome {
-    const ALL: [IntentOutcome; 9] = [
-        IntentOutcome::Accepted,
-        IntentOutcome::Applied,
-        IntentOutcome::Coalesced,
-        IntentOutcome::Superseded,
-        IntentOutcome::Rejected(IntentRejection::EmptyTarget),
-        IntentOutcome::Rejected(IntentRejection::InvalidTarget),
-        IntentOutcome::Rejected(IntentRejection::ResolutionFailed),
-        IntentOutcome::Rejected(IntentRejection::AudioOnly),
-        IntentOutcome::Rejected(IntentRejection::Unavailable),
-    ];
-
     /// The fixture-stem suffix for this outcome. Exhaustive: a new
     /// `PlaybackIntentOutcome` or `PlaybackIntentRejection` variant fails
     /// this build until its arm and fixture row exist.
-    fn name(self) -> String {
+    fn name(self) -> &'static str {
         match self {
-            IntentOutcome::Accepted => "Accepted".into(),
-            IntentOutcome::Applied => "Applied".into(),
-            IntentOutcome::Coalesced => "Coalesced".into(),
-            IntentOutcome::Superseded => "Superseded".into(),
-            IntentOutcome::Rejected(reason) => format!("Rejected.{}", reason.name()),
+            IntentOutcome::Accepted => "Accepted",
+            IntentOutcome::Applied => "Applied",
+            IntentOutcome::Coalesced => "Coalesced",
+            IntentOutcome::Superseded => "Superseded",
+            IntentOutcome::RejectedEmptyTarget => "Rejected.EmptyTarget",
+            IntentOutcome::RejectedInvalidTarget => "Rejected.InvalidTarget",
+            IntentOutcome::RejectedResolutionFailed => "Rejected.ResolutionFailed",
+            IntentOutcome::RejectedAudioOnly => "Rejected.AudioOnly",
+            IntentOutcome::RejectedUnavailable => "Rejected.Unavailable",
         }
     }
 
@@ -308,76 +326,49 @@ impl IntentOutcome {
                 canonical_request_id: CANONICAL_REQUEST_ID,
             },
             IntentOutcome::Superseded => PlaybackIntentOutcome::Superseded,
-            IntentOutcome::Rejected(reason) => PlaybackIntentOutcome::Rejected {
-                reason: reason.build(),
+            IntentOutcome::RejectedEmptyTarget => PlaybackIntentOutcome::Rejected {
+                reason: PlaybackIntentRejection::EmptyTarget,
+            },
+            IntentOutcome::RejectedInvalidTarget => PlaybackIntentOutcome::Rejected {
+                reason: PlaybackIntentRejection::InvalidTarget,
+            },
+            IntentOutcome::RejectedResolutionFailed => PlaybackIntentOutcome::Rejected {
+                reason: PlaybackIntentRejection::ResolutionFailed,
+            },
+            IntentOutcome::RejectedAudioOnly => PlaybackIntentOutcome::Rejected {
+                reason: PlaybackIntentRejection::AudioOnly,
+            },
+            IntentOutcome::RejectedUnavailable => PlaybackIntentOutcome::Rejected {
+                reason: PlaybackIntentRejection::Unavailable,
             },
         }
     }
 }
 
 /// Exhaustive outcome match over `PlaybackIntentOutcome` with NO wildcard
-/// arm.
+/// arm — its `Rejected` arm matches `PlaybackIntentRejection` exhaustively,
+/// so a new rejection variant fails this build too.
 fn intent_outcome_of(outcome: &PlaybackIntentOutcome) -> IntentOutcome {
     match outcome {
         PlaybackIntentOutcome::Accepted => IntentOutcome::Accepted,
         PlaybackIntentOutcome::Applied => IntentOutcome::Applied,
         PlaybackIntentOutcome::Coalesced { .. } => IntentOutcome::Coalesced,
         PlaybackIntentOutcome::Superseded => IntentOutcome::Superseded,
-        PlaybackIntentOutcome::Rejected { reason } => {
-            IntentOutcome::Rejected(intent_rejection_of(reason))
-        }
-    }
-}
-
-/// One `PlaybackIntentRejection`. Exhaustive: a new variant fails this build
-/// until its arm and fixture row exist.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum IntentRejection {
-    EmptyTarget,
-    InvalidTarget,
-    ResolutionFailed,
-    AudioOnly,
-    Unavailable,
-}
-
-impl IntentRejection {
-    fn name(self) -> &'static str {
-        match self {
-            IntentRejection::EmptyTarget => "EmptyTarget",
-            IntentRejection::InvalidTarget => "InvalidTarget",
-            IntentRejection::ResolutionFailed => "ResolutionFailed",
-            IntentRejection::AudioOnly => "AudioOnly",
-            IntentRejection::Unavailable => "Unavailable",
-        }
-    }
-
-    fn build(self) -> PlaybackIntentRejection {
-        match self {
-            IntentRejection::EmptyTarget => PlaybackIntentRejection::EmptyTarget,
-            IntentRejection::InvalidTarget => PlaybackIntentRejection::InvalidTarget,
-            IntentRejection::ResolutionFailed => PlaybackIntentRejection::ResolutionFailed,
-            IntentRejection::AudioOnly => PlaybackIntentRejection::AudioOnly,
-            IntentRejection::Unavailable => PlaybackIntentRejection::Unavailable,
-        }
-    }
-}
-
-/// Exhaustive rejection match over `PlaybackIntentRejection` with NO
-/// wildcard arm.
-fn intent_rejection_of(reason: &PlaybackIntentRejection) -> IntentRejection {
-    match reason {
-        PlaybackIntentRejection::EmptyTarget => IntentRejection::EmptyTarget,
-        PlaybackIntentRejection::InvalidTarget => IntentRejection::InvalidTarget,
-        PlaybackIntentRejection::ResolutionFailed => IntentRejection::ResolutionFailed,
-        PlaybackIntentRejection::AudioOnly => IntentRejection::AudioOnly,
-        PlaybackIntentRejection::Unavailable => IntentRejection::Unavailable,
+        PlaybackIntentOutcome::Rejected { reason } => match reason {
+            PlaybackIntentRejection::EmptyTarget => IntentOutcome::RejectedEmptyTarget,
+            PlaybackIntentRejection::InvalidTarget => IntentOutcome::RejectedInvalidTarget,
+            PlaybackIntentRejection::ResolutionFailed => IntentOutcome::RejectedResolutionFailed,
+            PlaybackIntentRejection::AudioOnly => IntentOutcome::RejectedAudioOnly,
+            PlaybackIntentRejection::Unavailable => IntentOutcome::RejectedUnavailable,
+        },
     }
 }
 
 /// One `ServiceSetupRejection`. Every rejection gets a
 /// `ServiceSetupRejected.<reason>` fixture row.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, strum::EnumIter)]
 enum SetupRejection {
+    #[default]
     UnsupportedService,
     RevisionMismatch,
     StorageUnavailable,
@@ -385,13 +376,6 @@ enum SetupRejection {
 }
 
 impl SetupRejection {
-    const ALL: [SetupRejection; 4] = [
-        SetupRejection::UnsupportedService,
-        SetupRejection::RevisionMismatch,
-        SetupRejection::StorageUnavailable,
-        SetupRejection::TransitionRejected,
-    ];
-
     /// Exhaustive: a new `ServiceSetupRejection` variant fails this build
     /// until its arm and fixture row exist.
     fn name(self) -> &'static str {
@@ -426,15 +410,14 @@ fn setup_rejection_of(reason: ServiceSetupRejection) -> SetupRejection {
 
 /// One `QueueOpOutcome`. Both outcomes get a `QueueOpResult.<outcome>`
 /// fixture row.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, strum::EnumIter)]
 enum QueueOutcome {
+    #[default]
     Applied,
     Rejected,
 }
 
 impl QueueOutcome {
-    const ALL: [QueueOutcome; 2] = [QueueOutcome::Applied, QueueOutcome::Rejected];
-
     /// Exhaustive: a new `QueueOpOutcome` variant fails this build until its
     /// arm and fixture row exist.
     fn name(self) -> &'static str {

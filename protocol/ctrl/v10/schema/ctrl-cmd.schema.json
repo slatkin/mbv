@@ -766,14 +766,11 @@
     "QueueItem": {
       "oneOf": [
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/EmbyItem"
-            }
-          ],
+          "$ref": "#/$defs/EmbyItem",
           "properties": {
             "kind": {
-              "const": "Emby"
+              "const": "Emby",
+              "type": "string"
             }
           },
           "required": [
@@ -782,14 +779,11 @@
           "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/FeedEntry"
-            }
-          ],
+          "$ref": "#/$defs/FeedEntry",
           "properties": {
             "kind": {
-              "const": "Feed"
+              "const": "Feed",
+              "type": "string"
             }
           },
           "required": [
@@ -798,14 +792,11 @@
           "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/AudiobookshelfQueueItem"
-            }
-          ],
+          "$ref": "#/$defs/AudiobookshelfQueueItem",
           "properties": {
             "kind": {
-              "const": "Audiobookshelf"
+              "const": "Audiobookshelf",
+              "type": "string"
             }
           },
           "required": [
@@ -814,14 +805,11 @@
           "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/AudiobookshelfBookQueueItem"
-            }
-          ],
+          "$ref": "#/$defs/AudiobookshelfBookQueueItem",
           "properties": {
             "kind": {
-              "const": "AudiobookshelfBook"
+              "const": "AudiobookshelfBook",
+              "type": "string"
             }
           },
           "required": [

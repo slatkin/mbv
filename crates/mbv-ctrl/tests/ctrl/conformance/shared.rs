@@ -11,6 +11,7 @@
 
 use mbv_ctrl::player::PlayerEvent;
 use mbv_queue::{QueueItem, QueueItemKind, QueueSlotId};
+use strum::IntoEnumIterator;
 
 use super::builders::{
     GENERATION, POSITION_TICKS, abs_book_queue_item, abs_episode_queue_item, emby_queue_item,
@@ -18,33 +19,48 @@ use super::builders::{
 };
 use super::*;
 
-/// Every `QueueItem` kind, one fixture row each. Exhaustive over the
-/// production enum: a new kind fails this build until its arm exists here.
-const QUEUE_KINDS: [QueueItemKind; 4] = [
-    QueueItemKind::Emby,
-    QueueItemKind::Feed,
-    QueueItemKind::Audiobookshelf,
-    QueueItemKind::AudiobookshelfBook,
-];
-
-/// Exhaustive kind-name match: the fixture stem suffix is the Rust variant
-/// name (design D4).
-fn kind_name(kind: &QueueItemKind) -> &'static str {
-    match kind {
-        QueueItemKind::Emby => "Emby",
-        QueueItemKind::Feed => "Feed",
-        QueueItemKind::Audiobookshelf => "Audiobookshelf",
-        QueueItemKind::AudiobookshelfBook => "AudiobookshelfBook",
-    }
+/// One `QueueItem` kind, mirrored test-side because the production
+/// `QueueItemKind` cannot take the `EnumIter` derive: `of` is an exhaustive
+/// match over the production enum, so a new kind fails this build until its
+/// arm — and its fixture row — exists. Iteration builds the rows.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, strum::EnumIter)]
+enum ItemKind {
+    Emby,
+    Feed,
+    Audiobookshelf,
+    AudiobookshelfBook,
 }
 
-/// The canonical `QueueItem` for one kind. Exhaustive, no wildcard arm.
-fn queue_item(kind: &QueueItemKind) -> QueueItem {
-    match kind {
-        QueueItemKind::Emby => emby_queue_item(),
-        QueueItemKind::Feed => feed_queue_item(),
-        QueueItemKind::Audiobookshelf => abs_episode_queue_item(),
-        QueueItemKind::AudiobookshelfBook => abs_book_queue_item(),
+impl ItemKind {
+    /// Exhaustive match over `QueueItemKind` with NO wildcard arm: a new
+    /// production kind fails this build until its arm exists here.
+    fn of(kind: &QueueItemKind) -> Self {
+        match kind {
+            QueueItemKind::Emby => ItemKind::Emby,
+            QueueItemKind::Feed => ItemKind::Feed,
+            QueueItemKind::Audiobookshelf => ItemKind::Audiobookshelf,
+            QueueItemKind::AudiobookshelfBook => ItemKind::AudiobookshelfBook,
+        }
+    }
+
+    /// The fixture stem suffix: the Rust variant name (design D4).
+    fn name(self) -> &'static str {
+        match self {
+            ItemKind::Emby => "Emby",
+            ItemKind::Feed => "Feed",
+            ItemKind::Audiobookshelf => "Audiobookshelf",
+            ItemKind::AudiobookshelfBook => "AudiobookshelfBook",
+        }
+    }
+
+    /// The canonical `QueueItem` for one kind. Exhaustive, no wildcard arm.
+    fn build(self) -> QueueItem {
+        match self {
+            ItemKind::Emby => emby_queue_item(),
+            ItemKind::Feed => feed_queue_item(),
+            ItemKind::Audiobookshelf => abs_episode_queue_item(),
+            ItemKind::AudiobookshelfBook => abs_book_queue_item(),
+        }
     }
 }
 
@@ -71,16 +87,16 @@ fn stopped_event() -> PlayerEvent {
 /// by bless: their files are hand-maintained records of the legacy wire
 /// bytes, and reconciliation fails if one goes missing.
 pub(crate) fn rows(rows: &mut Vec<FixtureRow>) {
-    for kind in &QUEUE_KINDS {
-        let value = queue_item(kind);
+    for kind in ItemKind::iter() {
+        let value = kind.build();
         assert_eq!(
-            value.kind(),
-            *kind,
+            ItemKind::of(&value.kind()),
+            kind,
             "QueueItem.{}: the kind mapping disagrees with the fixture row",
-            kind_name(kind)
+            kind.name()
         );
         rows.push(FixtureRow {
-            path: format!("shared/QueueItem.{}.json", kind_name(kind)),
+            path: format!("shared/QueueItem.{}.json", kind.name()),
             direction: Direction::RoundTrip,
             schema: Some(SchemaAnchor::DefsEntry {
                 root: schema::Root::Cmd,

@@ -15,6 +15,14 @@ const CTRL_HELLO_DEADLINE: Duration = Duration::from_secs(10);
 /// Interval the accepted stream allows between individual command writes.
 const CTRL_WRITE_TIMEOUT: Duration = Duration::from_secs(30);
 
+/// Decode one inbound ctrl line as a `CtrlCmd` — the single decode entry the
+/// Hello classification and the per-line command loop share. The
+/// ctrl-protocol-conformance corpus check in `tests/` pins this exact
+/// function (design D6).
+pub fn decode_ctrl_cmd(line: &str) -> Result<CtrlCmd, serde_json::Error> {
+    serde_json::from_str::<CtrlCmd>(line)
+}
+
 /// What one decoded Hello classifies into for admission and registration
 /// (tray-pin-swap design D7).
 struct HelloClassification {
@@ -43,7 +51,7 @@ fn ctrl_client_capabilities(
     line: &str,
     control_credential: Option<&str>,
 ) -> Option<HelloClassification> {
-    match serde_json::from_str::<CtrlCmd>(line) {
+    match decode_ctrl_cmd(line) {
         Ok(CtrlCmd::Hello(info)) => {
             if !hello_credentials_valid(&info, control_credential) {
                 return None;
@@ -389,7 +397,7 @@ impl CtrlClientSession {
             if line.is_empty() {
                 continue;
             }
-            match serde_json::from_str::<CtrlCmd>(&line) {
+            match decode_ctrl_cmd(&line) {
                 Ok(cmd) => match restricted_command_rejection(hello.role, &cmd) {
                     Some(reason) => {
                         crate::send_to(&reply_tx, &CtrlEvent::CommandRejected(reason));

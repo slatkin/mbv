@@ -55,6 +55,8 @@ pub use owner_lock::{
     try_lock, write_pid,
 };
 mod core_ctrl_spawn;
+#[doc(inline)]
+pub use core_ctrl_spawn::decode_ctrl_cmd;
 pub(crate) use core_ctrl_spawn::{DaemonHelloCaps, spawn_ctrl_client};
 mod step;
 pub(crate) use step::next_up_slot;

@@ -122,25 +122,3 @@ pub(crate) fn serialize(document: &serde_json::Value) -> String {
     text.push('\n');
     text
 }
-
-/// The committed document must declare the protocol version the code pins.
-pub(crate) fn assert_version_bound(document: &serde_json::Value, root: Root) {
-    let id = document
-        .get("$id")
-        .and_then(serde_json::Value::as_str)
-        .unwrap_or_else(|| panic!("{} carries no $id", root.file_name()));
-    assert!(
-        id.contains(&format!("v{CTRL_PROTOCOL_VERSION}/")),
-        "{}: $id `{id}` does not name ctrl protocol version {CTRL_PROTOCOL_VERSION}",
-        root.file_name()
-    );
-    let title = document
-        .get("title")
-        .and_then(serde_json::Value::as_str)
-        .unwrap_or_else(|| panic!("{} carries no title", root.file_name()));
-    assert!(
-        title.contains(&format!("version {CTRL_PROTOCOL_VERSION}")),
-        "{}: title `{title}` does not name ctrl protocol version {CTRL_PROTOCOL_VERSION}",
-        root.file_name()
-    );
-}

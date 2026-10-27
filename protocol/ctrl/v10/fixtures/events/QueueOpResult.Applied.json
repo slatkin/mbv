@@ -75,6 +75,38 @@
               "title": "Conformance Feed Entry"
             },
             "slot_id": 2
+          },
+          {
+            "item": {
+              "author": "Conformance Author",
+              "cover_path": "covers/conformance-episode.jpg",
+              "description": "Conformance episode description",
+              "duration_ticks": 1800000000,
+              "episodeId": "abs-episode-1",
+              "is_finished": false,
+              "kind": "Audiobookshelf",
+              "libraryItemId": "abs-library-item-1",
+              "played": false,
+              "position_ticks": 30000000,
+              "pub_date_secs": 1700000000,
+              "show_title": "Conformance Show",
+              "title": "Conformance Audiobookshelf Episode"
+            },
+            "slot_id": 3
+          },
+          {
+            "item": {
+              "author": "Conformance Author",
+              "cover_path": null,
+              "duration_ticks": 3600000000,
+              "is_finished": false,
+              "kind": "AudiobookshelfBook",
+              "libraryItemId": "abs-book-1",
+              "played": false,
+              "position_ticks": 30000000,
+              "title": "Conformance Audiobookshelf Book"
+            },
+            "slot_id": 4
           }
         ],
         "source": {
@@ -102,7 +134,7 @@
           "muted": false,
           "paused": false,
           "position_ticks": 30000000,
-          "queue_len": 2,
+          "queue_len": 4,
           "runtime_ticks": 1800000000,
           "sequence_generation": 3,
           "sub_id": 0,

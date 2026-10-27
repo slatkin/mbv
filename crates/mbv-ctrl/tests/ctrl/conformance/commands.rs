@@ -5,6 +5,7 @@
 //! `ServiceKind` (design D4).
 
 use mbv_queue::{QueueLineage, ServiceKind};
+use strum::IntoEnumIterator;
 
 use super::builders::{
     CAST_HOST, CAST_NAME, CAST_PORT, CAST_RECEIVER_ID, EMBY_DEVICE_ID, EMBY_DEVICE_NAME,
@@ -13,18 +14,26 @@ use super::builders::{
 };
 use super::*;
 
-/// One command shape in the corpus. The exhaustive shape-name match keeps
-/// every shape named, and `rows` gives each one a builder and a fixture.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// One command shape in the corpus. Coverage is compile-forced: every shape
+/// enum derives `EnumIter`, `all()` iterates the top-level shapes and
+/// expands each payload-carrying variant over its nested enum, and the
+/// expansion match names every variant — a new shape fails this build until
+/// its arm, builder, fixture row, and fixture exist. `ServiceKind` and
+/// `OwnerAction` are production enums the iterator cannot construct, so
+/// their shapes are flattened to one variant per case: a new production
+/// variant still fails the exhaustive `shape_of` match.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, strum::EnumIter)]
 enum CommandShape {
     Hello,
     PlayerCmd(WireTag),
     Stop,
     PlaybackIntent(IntentAction),
     RequestShutdown,
-    ApplyServiceSetup(ServiceKind),
+    ApplyServiceSetupEmby,
+    ApplyServiceSetupAudiobookshelf,
     SwapPrepared,
-    RunOwnerAction(OwnerAction),
+    RunOwnerActionSwapPanel,
+    RunOwnerActionOpenTerminal,
     UnifiedQueueReplace,
     UnifiedQueueSourceUpdate,
     UnifiedQueueAppend,
@@ -42,37 +51,46 @@ enum CommandShape {
 }
 
 impl CommandShape {
-    /// Every command shape: each flat variant plus one per nested-enum
-    /// variant. Hand-kept, like `HelloShape::ALL`.
+    /// Every command shape: iterate the top-level variants, expanding each
+    /// payload-carrying variant over its nested enum's iteration. The flat
+    /// or-pattern is exhaustive, so a new shape fails this build until it
+    /// lands in an arm — it can never be missing from the table silently.
     fn all() -> Vec<Self> {
-        let mut shapes = vec![
-            CommandShape::Hello,
-            CommandShape::Stop,
-            CommandShape::RequestShutdown,
-            CommandShape::SwapPrepared,
-            CommandShape::UnifiedQueueReplace,
-            CommandShape::UnifiedQueueSourceUpdate,
-            CommandShape::UnifiedQueueAppend,
-            CommandShape::UnifiedQueueRemoveSlot,
-            CommandShape::UnifiedQueueRemoveSlots,
-            CommandShape::UnifiedQueueMoveSlot,
-            CommandShape::UnifiedQueueShuffle,
-            CommandShape::UnifiedQueuePlaySlot,
-            CommandShape::UnifiedQueueClear,
-            CommandShape::UnifiedQueueClearOp,
-            CommandShape::UnifiedQueueRefresh,
-            CommandShape::UnifiedQueueApplyProgress,
-            CommandShape::UnifiedAdoptQueue,
-        ];
-        shapes.extend(WireTag::ALL.map(CommandShape::PlayerCmd));
-        shapes.extend(IntentAction::ALL.map(CommandShape::PlaybackIntent));
-        shapes.extend(SERVICE_KINDS.map(CommandShape::ApplyServiceSetup));
-        shapes.extend(
-            OwnerAction::ALL
-                .iter()
-                .map(|action| CommandShape::RunOwnerAction(*action)),
-        );
-        shapes.extend(OutputChoice::ALL.map(CommandShape::SelectPlaybackOutput));
+        let mut shapes = Vec::new();
+        for shape in Self::iter() {
+            match shape {
+                CommandShape::PlayerCmd(_) => {
+                    shapes.extend(WireTag::iter().map(CommandShape::PlayerCmd));
+                }
+                CommandShape::PlaybackIntent(_) => {
+                    shapes.extend(IntentAction::iter().map(CommandShape::PlaybackIntent));
+                }
+                CommandShape::SelectPlaybackOutput(_) => {
+                    shapes.extend(OutputChoice::iter().map(CommandShape::SelectPlaybackOutput));
+                }
+                CommandShape::Hello
+                | CommandShape::Stop
+                | CommandShape::RequestShutdown
+                | CommandShape::ApplyServiceSetupEmby
+                | CommandShape::ApplyServiceSetupAudiobookshelf
+                | CommandShape::SwapPrepared
+                | CommandShape::RunOwnerActionSwapPanel
+                | CommandShape::RunOwnerActionOpenTerminal
+                | CommandShape::UnifiedQueueReplace
+                | CommandShape::UnifiedQueueSourceUpdate
+                | CommandShape::UnifiedQueueAppend
+                | CommandShape::UnifiedQueueRemoveSlot
+                | CommandShape::UnifiedQueueRemoveSlots
+                | CommandShape::UnifiedQueueMoveSlot
+                | CommandShape::UnifiedQueueShuffle
+                | CommandShape::UnifiedQueuePlaySlot
+                | CommandShape::UnifiedQueueClear
+                | CommandShape::UnifiedQueueClearOp
+                | CommandShape::UnifiedQueueRefresh
+                | CommandShape::UnifiedQueueApplyProgress
+                | CommandShape::UnifiedAdoptQueue => shapes.push(shape),
+            }
+        }
         shapes
     }
 
@@ -87,13 +105,13 @@ impl CommandShape {
                 format!("PlaybackIntent.{}", action.name())
             }
             CommandShape::RequestShutdown => "RequestShutdown".into(),
-            CommandShape::ApplyServiceSetup(kind) => {
-                format!("ApplyServiceSetup.{}", service_kind_name(kind))
+            CommandShape::ApplyServiceSetupEmby => "ApplyServiceSetup.Emby".into(),
+            CommandShape::ApplyServiceSetupAudiobookshelf => {
+                "ApplyServiceSetup.Audiobookshelf".into()
             }
             CommandShape::SwapPrepared => "SwapPrepared".into(),
-            CommandShape::RunOwnerAction(action) => {
-                format!("RunOwnerAction.{}", owner_action_name(action))
-            }
+            CommandShape::RunOwnerActionSwapPanel => "RunOwnerAction.SwapPanel".into(),
+            CommandShape::RunOwnerActionOpenTerminal => "RunOwnerAction.OpenTerminal".into(),
             CommandShape::UnifiedQueueReplace => "UnifiedQueueReplace".into(),
             CommandShape::UnifiedQueueSourceUpdate => "UnifiedQueueSourceUpdate".into(),
             CommandShape::UnifiedQueueAppend => "UnifiedQueueAppend".into(),
@@ -125,12 +143,21 @@ impl CommandShape {
                 action: action.build(),
             }),
             CommandShape::RequestShutdown => CtrlCmd::RequestShutdown,
-            CommandShape::ApplyServiceSetup(kind) => CtrlCmd::ApplyServiceSetup {
-                kind,
+            CommandShape::ApplyServiceSetupEmby => CtrlCmd::ApplyServiceSetup {
+                kind: ServiceKind::Emby,
+                revision: REVISION,
+            },
+            CommandShape::ApplyServiceSetupAudiobookshelf => CtrlCmd::ApplyServiceSetup {
+                kind: ServiceKind::Audiobookshelf,
                 revision: REVISION,
             },
             CommandShape::SwapPrepared => CtrlCmd::SwapPrepared,
-            CommandShape::RunOwnerAction(action) => CtrlCmd::RunOwnerAction(action),
+            CommandShape::RunOwnerActionSwapPanel => {
+                CtrlCmd::RunOwnerAction(OwnerAction::SwapPanel)
+            }
+            CommandShape::RunOwnerActionOpenTerminal => {
+                CtrlCmd::RunOwnerAction(OwnerAction::OpenTerminal)
+            }
             CommandShape::UnifiedQueueReplace => {
                 let slots = vec![
                     UnifiedQueueSlot {
@@ -214,9 +241,15 @@ fn shape_of(cmd: &CtrlCmd) -> CommandShape {
             CommandShape::PlaybackIntent(intent_action_of(&intent.action))
         }
         CtrlCmd::RequestShutdown => CommandShape::RequestShutdown,
-        CtrlCmd::ApplyServiceSetup { kind, .. } => CommandShape::ApplyServiceSetup(*kind),
+        CtrlCmd::ApplyServiceSetup { kind, .. } => match kind {
+            ServiceKind::Emby => CommandShape::ApplyServiceSetupEmby,
+            ServiceKind::Audiobookshelf => CommandShape::ApplyServiceSetupAudiobookshelf,
+        },
         CtrlCmd::SwapPrepared => CommandShape::SwapPrepared,
-        CtrlCmd::RunOwnerAction(action) => CommandShape::RunOwnerAction(*action),
+        CtrlCmd::RunOwnerAction(action) => match action {
+            OwnerAction::SwapPanel => CommandShape::RunOwnerActionSwapPanel,
+            OwnerAction::OpenTerminal => CommandShape::RunOwnerActionOpenTerminal,
+        },
         CtrlCmd::UnifiedQueueReplace { .. } => CommandShape::UnifiedQueueReplace,
         CtrlCmd::UnifiedQueueSourceUpdate { .. } => CommandShape::UnifiedQueueSourceUpdate,
         CtrlCmd::UnifiedQueueAppend { .. } => CommandShape::UnifiedQueueAppend,
@@ -239,8 +272,11 @@ fn shape_of(cmd: &CtrlCmd) -> CommandShape {
 // ── Nested wire enums ────────────────────────────────────────────────────
 
 /// One `WireCommand` tag. Every tag gets a `PlayerCmd.<tag>` fixture row.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// `Default` exists only so `CommandShape::iter()` can construct the
+/// payload variant; the expansion discards it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, strum::EnumIter)]
 enum WireTag {
+    #[default]
     TogglePause,
     JumpTo,
     SetVolume,
@@ -256,21 +292,6 @@ enum WireTag {
 }
 
 impl WireTag {
-    const ALL: [WireTag; 12] = [
-        WireTag::TogglePause,
-        WireTag::JumpTo,
-        WireTag::SetVolume,
-        WireTag::Seek,
-        WireTag::SeekAbsolute,
-        WireTag::SetAudio,
-        WireTag::SetSub,
-        WireTag::SetSubtitlePrefs,
-        WireTag::SetMute,
-        WireTag::NextUpShow,
-        WireTag::NextUpDismiss,
-        WireTag::SkipIntroDismiss,
-    ];
-
     /// Exhaustive: a new `WireCommand` variant fails this build until its
     /// arm and fixture row exist.
     fn name(self) -> &'static str {
@@ -339,8 +360,9 @@ fn wire_tag_of(cmd: &WireCommand) -> WireTag {
 
 /// One `PlaybackIntentAction`. Every action gets a `PlaybackIntent.<action>`
 /// fixture row.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, strum::EnumIter)]
 enum IntentAction {
+    #[default]
     Play,
     Stop,
     SetPaused,
@@ -349,14 +371,6 @@ enum IntentAction {
 }
 
 impl IntentAction {
-    const ALL: [IntentAction; 5] = [
-        IntentAction::Play,
-        IntentAction::Stop,
-        IntentAction::SetPaused,
-        IntentAction::Next,
-        IntentAction::Previous,
-    ];
-
     /// Exhaustive: a new `PlaybackIntentAction` variant fails this build
     /// until its arm and fixture row exist.
     fn name(self) -> &'static str {
@@ -401,20 +415,15 @@ fn intent_action_of(action: &PlaybackIntentAction) -> IntentAction {
 /// `SelectPlaybackOutput.<selection>` fixture row. The `events/` corpus
 /// reuses this enum for `OutputState` naming — the two wire enums have the
 /// same three variants.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, strum::EnumIter)]
 pub(crate) enum OutputChoice {
+    #[default]
     Local,
     Cast,
     EmbySession,
 }
 
 impl OutputChoice {
-    pub(crate) const ALL: [OutputChoice; 3] = [
-        OutputChoice::Local,
-        OutputChoice::Cast,
-        OutputChoice::EmbySession,
-    ];
-
     /// Exhaustive: a new `OutputSelection` variant fails this build until
     /// its arm and fixture row exist.
     pub(crate) fn name(self) -> &'static str {
@@ -449,26 +458,6 @@ pub(crate) fn output_of(selection: &OutputSelection) -> OutputChoice {
         OutputSelection::Local => OutputChoice::Local,
         OutputSelection::Cast { .. } => OutputChoice::Cast,
         OutputSelection::EmbySession { .. } => OutputChoice::EmbySession,
-    }
-}
-
-/// Exhaustive name match over `OwnerAction` with NO wildcard arm: a new
-/// action fails this build until its arm and fixture row exist.
-fn owner_action_name(action: OwnerAction) -> &'static str {
-    match action {
-        OwnerAction::SwapPanel => "SwapPanel",
-        OwnerAction::OpenTerminal => "OpenTerminal",
-    }
-}
-
-/// Both `ServiceKind`s, each with an `ApplyServiceSetup.<kind>` fixture row.
-const SERVICE_KINDS: [ServiceKind; 2] = [ServiceKind::Emby, ServiceKind::Audiobookshelf];
-
-/// Exhaustive name match over `ServiceKind` with NO wildcard arm.
-fn service_kind_name(kind: ServiceKind) -> &'static str {
-    match kind {
-        ServiceKind::Emby => "Emby",
-        ServiceKind::Audiobookshelf => "Audiobookshelf",
     }
 }
 

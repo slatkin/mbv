@@ -164,7 +164,9 @@ pub enum MpvUrlSource<'a> {
 
 // Serialize through the original flat internally-tagged representation. This
 // preserves both the legacy discriminator and the inner fields' wire order.
-#[derive(serde::Serialize)]
+// The `JsonSchema` derive mirrors the same serde shape: `QueueItem`'s manual
+// impl delegates to it (ctrl-protocol-conformance design D3).
+#[derive(serde::Serialize, schemars::JsonSchema)]
 #[serde(tag = "kind")]
 enum QueueItemSerialize<'a> {
     #[serde(rename = "Emby")]
@@ -183,39 +185,13 @@ impl schemars::JsonSchema for QueueItem {
     }
 
     /// The emitted wire shape only: internally tagged by `kind`, with the
-    /// payload flattened into the same object — a schema mirror of
-    /// `QueueItemSerialize` (ctrl-protocol-conformance design D3). The
-    /// permissive decode path (a legacy bare `EmbyItem` with no `kind`)
-    /// stays a decode tolerance, never a schema variant.
+    /// payload flattened into the same object — delegated to the derived
+    /// schema of `QueueItemSerialize` so the kind table is declared once
+    /// (ctrl-protocol-conformance design D3). The permissive decode path (a
+    /// legacy bare `EmbyItem` with no `kind`) stays a decode tolerance,
+    /// never a schema variant.
     fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
-        let variants = [
-            ("Emby", generator.subschema_for::<EmbyItem>()),
-            ("Feed", generator.subschema_for::<FeedEntry>()),
-            (
-                "Audiobookshelf",
-                generator.subschema_for::<AudiobookshelfQueueItem>(),
-            ),
-            (
-                "AudiobookshelfBook",
-                generator.subschema_for::<AudiobookshelfBookQueueItem>(),
-            ),
-        ];
-        let one_of: Vec<schemars::Schema> = variants
-            .into_iter()
-            .map(|(kind, payload)| {
-                // `allOf` carries the payload reference: a `$ref` sibling of
-                // `properties` would be overridden under strict 2020-12.
-                schemars::Schema::try_from(serde_json::json!({
-                    "type": "object",
-                    "required": ["kind"],
-                    "properties": { "kind": { "const": kind } },
-                    "allOf": [payload],
-                }))
-                .expect("static literal schema object is a valid schema")
-            })
-            .collect();
-        schemars::Schema::try_from(serde_json::json!({ "oneOf": one_of }))
-            .expect("static literal schema object is a valid schema")
+        <QueueItemSerialize<'static> as schemars::JsonSchema>::json_schema(generator)
     }
 }
 

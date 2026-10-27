@@ -259,12 +259,12 @@ fn collect_fixture_files(dir: &Path, prefix: &mut Vec<String>, out: &mut BTreeSe
 }
 
 /// Regenerating every wire-root schema must reproduce the committed documents
-/// byte-for-byte, and each document must carry the `CTRL_PROTOCOL_VERSION` it
-/// pins — a version bump without regeneration fails here.
+/// byte-for-byte — each generated document embeds the `CTRL_PROTOCOL_VERSION`
+/// it pins in `$id` and title, so a version bump without regeneration fails
+/// here.
 #[test]
 fn committed_schemas_are_fresh_and_carry_the_protocol_version() {
     for (root, document) in schema::documents() {
-        schema::assert_version_bound(&document, root);
         let generated = schema::serialize(&document);
         let path = protocol_dir().join(root.file_name());
         if bless() {

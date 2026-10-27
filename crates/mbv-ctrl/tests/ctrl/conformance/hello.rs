@@ -3,6 +3,8 @@
 //! daemon reply, service-setup administration, Pin swap, owner actions, and
 //! the audio-only daemon (design D4).
 
+use strum::IntoEnumIterator;
+
 use super::*;
 
 /// Fixed identity literals for every fixture (design note N2): the corpus
@@ -13,10 +15,10 @@ const BUILD_ID: &str = "4f2a1c9";
 const CONTROL_TOKEN: &str = "conformance-control-token";
 const SWAP_TOKEN: &str = "conformance-swap-token";
 
-/// One negotiated `CtrlHello` shape in the corpus. The exhaustive
-/// shape-name match keeps every shape named, and the row dispatch below
-/// gives every shape a builder and a fixture.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// One negotiated `CtrlHello` shape in the corpus. `EnumIter` makes the
+/// coverage list compile-forced: a new shape fails this build until its
+/// `name` arm, builder, fixture row, and fixture exist.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, strum::EnumIter)]
 enum HelloShape {
     /// The minimal client hello: only the capabilities every peer must
     /// advertise.
@@ -40,18 +42,6 @@ enum HelloShape {
 }
 
 impl HelloShape {
-    /// Every negotiated hello shape; `rows` gives each one a fixture.
-    const ALL: [HelloShape; 8] = [
-        HelloShape::Base,
-        HelloShape::ControlCredential,
-        HelloShape::CredentialFreePackaged,
-        HelloShape::ServiceSetupAdmin,
-        HelloShape::PinSwap,
-        HelloShape::PinnedSurface,
-        HelloShape::OwnerAction,
-        HelloShape::AudioOnlyDaemon,
-    ];
-
     /// Exhaustive shape-name match: a new hello shape fails this build until
     /// its arm, builder, and fixture row exist.
     fn name(self) -> &'static str {
@@ -168,7 +158,7 @@ pub(crate) fn base() -> CtrlHello {
 
 /// The `hello/` rows of the fixture table.
 pub(crate) fn rows(rows: &mut Vec<FixtureRow>) {
-    for shape in HelloShape::ALL {
+    for shape in HelloShape::iter() {
         let value = build(shape);
         let name = shape.name();
         rows.push(FixtureRow {

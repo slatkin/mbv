@@ -141,7 +141,7 @@ pub(crate) fn player_status() -> PlayerStatus {
         volume: 55,
         volume_max: 130,
         current_idx: 1,
-        queue_len: 2,
+        queue_len: 4,
         sequence_generation: GENERATION,
         active: true,
         title: EMBY_ITEM_NAME.to_owned(),
@@ -163,9 +163,11 @@ pub(crate) fn player_status() -> PlayerStatus {
     }
 }
 
-/// The canonical `UnifiedQueueStateData`: two slots (Emby episode, feed
-/// entry), the first active, under a playlist source, with no transition in
-/// flight or queued.
+/// The canonical `UnifiedQueueStateData`: four slots, one per
+/// `QueueItem` kind (Emby episode, feed entry, Audiobookshelf episode,
+/// Audiobookshelf book), so the snapshot shape covers every kind inside a
+/// queue slot — the first active, under a playlist source, with no
+/// transition in flight or queued.
 pub(crate) fn unified_queue_state() -> UnifiedQueueStateData {
     UnifiedQueueStateData {
         status: player_status(),
@@ -177,6 +179,14 @@ pub(crate) fn unified_queue_state() -> UnifiedQueueStateData {
             UnifiedQueueSlot {
                 slot_id: 2,
                 item: feed_queue_item(),
+            },
+            UnifiedQueueSlot {
+                slot_id: 3,
+                item: abs_episode_queue_item(),
+            },
+            UnifiedQueueSlot {
+                slot_id: 4,
+                item: abs_book_queue_item(),
             },
         ],
         active_slot: Some(1),

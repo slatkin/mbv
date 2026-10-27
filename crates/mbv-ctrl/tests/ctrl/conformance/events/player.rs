@@ -11,9 +11,11 @@ use mbv_queue::QueueSlotId;
 use super::*;
 
 /// One `PlayerEvent` variant. Every variant gets a `Player.<variant>`
-/// fixture row.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// fixture row. `Default` exists only so `EventShape::iter()` can
+/// construct the payload variant; the expansion discards it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, strum::EnumIter)]
 pub(crate) enum PlayerShape {
+    #[default]
     Stopped,
     TrackChanged,
     PausedChanged,
@@ -43,36 +45,6 @@ pub(crate) enum PlayerShape {
 }
 
 impl PlayerShape {
-    /// Every `PlayerEvent` variant, in declaration order.
-    pub(crate) const ALL: [PlayerShape; 26] = [
-        PlayerShape::Stopped,
-        PlayerShape::TrackChanged,
-        PlayerShape::PausedChanged,
-        PlayerShape::OutputStarted,
-        PlayerShape::TrackCompleted,
-        PlayerShape::NextUpThreshold,
-        PlayerShape::NextUpPlay,
-        PlayerShape::QueueNextUp,
-        PlayerShape::UnifiedQueueUpdated,
-        PlayerShape::QueueOpResult,
-        PlayerShape::IntroStarted,
-        PlayerShape::IntroEnded,
-        PlayerShape::SkipIntroPlay,
-        PlayerShape::MpvQuit,
-        PlayerShape::CommandRejected,
-        PlayerShape::PlaybackIntent,
-        PlayerShape::PipePlaybackStatus,
-        PlayerShape::RemoteDisconnected,
-        PlayerShape::EmbyAuthorityTaken,
-        PlayerShape::DaemonShutdownAnnounced,
-        PlayerShape::QueueDesynced,
-        PlayerShape::SwapPrepare,
-        PlayerShape::SwapQuit,
-        PlayerShape::AudiobookshelfProgress,
-        PlayerShape::AudiobookshelfBookProgress,
-        PlayerShape::PlaybackOutput,
-    ];
-
     /// The fixture-stem name: the Rust variant name. Exhaustive: a new
     /// `PlayerEvent` variant fails this build until its arm and fixture row
     /// exist. (`QueueNextUp`'s wire tag stays `PlaylistNextUp`; fixtures name

@@ -175,7 +175,7 @@ impl AudiobookshelfBookQueueItem {
 // queue presentation and identity behavior.
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, schemars::JsonSchema)]
+#[derive(Debug, Clone)]
 pub enum AudiobookshelfItem {
     Episode(AudiobookshelfQueueItem),
     Book(AudiobookshelfBookQueueItem),
