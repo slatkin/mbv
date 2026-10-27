@@ -121,7 +121,9 @@ for the canonical value.
   file, re-encode, compare again. This checks both directions without needing
   `PartialEq` on `CtrlCmd`/`CtrlEvent`.
 - **Decode-only rows** (legacy bare `EmbyItem`, bare-scalar `run_identity`):
-  decoding must succeed; no re-encode equality.
+  decoding must yield exactly the canonical value the same shape encodes to
+  (the legacy bytes themselves are not re-emitted or rewritten, but a
+  silently dropped or altered field fails).
 - **Coverage, compile-forced:** the test owns an exhaustive `match` per wire
   enum mapping every variant to its shape name — a new variant breaks the
   build until the arm (and the fixture) exists. A runtime reconciliation
