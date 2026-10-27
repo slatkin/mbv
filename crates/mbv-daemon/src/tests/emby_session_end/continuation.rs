@@ -45,7 +45,7 @@ fn slot_played(t: &TestLoop, slot: mbv_queue::QueueSlotId) -> bool {
 
 /// The adopted slot's state on the output: the loaded item and the cleared
 /// continuation.
-fn adopted_output(t: &TestLoop, slot: mbv_queue::QueueSlotId) {
+fn adopted_output(t: &TestLoop, slot: mbv_queue::QueueSlotId, item_id: &str) {
     let crate::cast::PlaybackOutput::EmbySession(output) = &t.event_loop.owner.output else {
         panic!("the Session is the output");
     };
@@ -54,13 +54,60 @@ fn adopted_output(t: &TestLoop, slot: mbv_queue::QueueSlotId) {
             .loaded
             .as_ref()
             .map(|loaded| (loaded.slot, loaded.item_id.as_str())),
-        Some((slot, "f")),
+        Some((slot, item_id)),
         "the adopted item is the tracked item"
     );
     assert!(
         output.continuation.is_none(),
         "the adoption spends the pending continuation"
     );
+}
+
+/// The adoption contract every path shares (design D4): `lookups` ran in
+/// order, no device command went out beyond the initial load — the item
+/// already plays — the item's slot was appended at the queue's tail and made
+/// the active and the tracked slot, and `ended` recorded its completion.
+/// Returns the adopted slot.
+fn assert_adopted(
+    t: &TestLoop,
+    calls: &Arc<Mutex<Vec<SessionCall>>>,
+    lookups: &[String],
+    tail: usize,
+    item_id: &str,
+    ended: mbv_queue::QueueSlotId,
+) -> mbv_queue::QueueSlotId {
+    assert_eq!(
+        get_item_calls(calls),
+        lookups,
+        "each autoplay submits one item lookup"
+    );
+    assert_eq!(
+        play_calls(calls),
+        vec![play(&["a"])],
+        "the adoption sends no device command: the item already plays"
+    );
+    assert_eq!(
+        t.event_loop.owner.core.queue.slots().len(),
+        tail + 1,
+        "the adopted item is appended at the queue's tail"
+    );
+    let adopted = t.event_loop.owner.core.queue.slots()[tail].slot_id;
+    assert_eq!(
+        t.event_loop.owner.core.queue.slots()[tail].item.id(),
+        item_id,
+        "the appended slot is the item the device started"
+    );
+    assert_eq!(
+        t.event_loop.owner.core.queue.active_slot_id(),
+        Some(adopted),
+        "the adopted slot becomes the active slot"
+    );
+    assert!(
+        slot_played(t, ended),
+        "the ended slot records its completion"
+    );
+    adopted_output(t, adopted, item_id);
+    adopted
 }
 
 /// Contract: row 3.2 / followups design D4, direct path, and spec scenario
@@ -95,37 +142,7 @@ fn the_queue_end_autoplay_is_adopted() {
     let persisted_before = t.persisted.borrow().len();
     pump_session_event(&mut t);
 
-    assert_eq!(
-        get_item_calls(&calls),
-        vec!["f".to_string()],
-        "the adoption submits one item lookup"
-    );
-    assert_eq!(
-        play_calls(&calls),
-        vec![play(&["a"])],
-        "the adoption sends no device command: the item already plays"
-    );
-    assert_eq!(
-        t.event_loop.owner.core.queue.slots().len(),
-        2,
-        "the adopted item is appended at the queue's tail"
-    );
-    let adopted = t.event_loop.owner.core.queue.slots()[1].slot_id;
-    assert_eq!(
-        t.event_loop.owner.core.queue.slots()[1].item.id(),
-        "f",
-        "the appended slot is the item the device started"
-    );
-    assert_eq!(
-        t.event_loop.owner.core.queue.active_slot_id(),
-        Some(adopted),
-        "the adopted slot becomes the active slot"
-    );
-    assert!(
-        slot_played(&t, slots[0]),
-        "the ended slot records its completion"
-    );
-    adopted_output(&t, adopted);
+    assert_adopted(&t, &calls, &["f".to_string()], 1, "f", slots[0]);
     assert_eq!(
         t.persisted.borrow().len(),
         persisted_before + 1,
@@ -188,32 +205,7 @@ fn the_autoplay_after_an_idle_gap_is_adopted_with_one_completion() {
     wait_for_session_jobs(&t.event_loop.owner.output);
     pump_session_event(&mut t);
 
-    assert_eq!(
-        get_item_calls(&calls),
-        vec!["f".to_string()],
-        "the adoption submits one item lookup"
-    );
-    assert_eq!(
-        play_calls(&calls),
-        vec![play(&["a"])],
-        "the adoption sends no device command"
-    );
-    assert_eq!(
-        t.event_loop.owner.core.queue.slots().len(),
-        2,
-        "the adopted item is appended at the queue's tail"
-    );
-    let adopted = t.event_loop.owner.core.queue.slots()[1].slot_id;
-    assert_eq!(
-        t.event_loop.owner.core.queue.active_slot_id(),
-        Some(adopted),
-        "the adopted slot becomes the active slot"
-    );
-    assert!(
-        slot_played(&t, slots[0]),
-        "the ended slot's completion is still the one the natural end recorded"
-    );
-    adopted_output(&t, adopted);
+    assert_adopted(&t, &calls, &["f".to_string()], 1, "f", slots[0]);
     assert_eq!(
         t.event_loop.owner.core.queue.revision().raw() - revision_after_end.raw(),
         2,
@@ -260,9 +252,8 @@ fn transport_calls(calls: &Arc<Mutex<Vec<SessionCall>>>) -> Vec<SessionCall> {
 /// item is tracked like a loaded item" — the adopted slot's item is the
 /// tracked item the Session's tables read: its presented position is the
 /// Session's own report, its end is inferred from the same margin, so the
-/// device's next autoplay is adopted again ("Adoption repeats"), the ended
-/// adopted slot records its completion, and the idle that follows loads
-/// nothing and leaves the output idle.
+/// device's next autoplay is adopted again ("Adoption repeats") and the
+/// ended adopted slot records its completion.
 #[test]
 fn an_adopted_item_is_tracked_like_a_loaded_item_and_adoption_repeats() {
     let fake = FakeSessionApi::with_sessions(vec![idle_session()]);
@@ -272,8 +263,9 @@ fn an_adopted_item_is_tracked_like_a_loaded_item_and_adoption_repeats() {
     let (client_id, _reply_tx, _client_rx) =
         connect_output_client_with_caps(&t.event_loop.ctrl_clients, true, true);
     let t0 = Instant::now();
+    let slots = slot_ids(&t);
     adopt_the_direct_autoplay(&mut t, &script, client_id, t0);
-    let first_adopted = slot_ids(&t)[1];
+    let first_adopted = assert_adopted(&t, &calls, &["f".to_string()], 1, "f", slots[0]);
 
     // The adopted item plays like a loaded item: the Session's own position
     // is the presented one, and its sighting near the runtime arms the end
@@ -300,55 +292,52 @@ fn an_adopted_item_is_tracked_like_a_loaded_item_and_adoption_repeats() {
     wait_for_session_jobs(&t.event_loop.owner.output);
     pump_session_event(&mut t);
 
-    assert_eq!(
-        get_item_calls(&calls),
-        vec!["f".to_string(), "g".to_string()],
-        "the second autoplay is looked up like the first"
+    assert_adopted(
+        &t,
+        &calls,
+        &["f".to_string(), "g".to_string()],
+        2,
+        "g",
+        first_adopted,
     );
-    assert_eq!(
-        play_calls(&calls),
-        vec![play(&["a"])],
-        "neither adoption sends a device command"
-    );
-    assert_eq!(
-        t.event_loop.owner.core.queue.slots().len(),
-        3,
-        "the second autoplay is appended at the queue's tail"
-    );
-    let second_adopted = slot_ids(&t)[2];
     assert_eq!(
         t.event_loop.owner.core.queue.slots()[1].item.id(),
         "f",
         "the first adopted slot keeps the item the device started"
     );
-    assert_eq!(
-        t.event_loop.owner.core.queue.slots()[2].item.id(),
-        "g",
-        "the second adopted slot is the item the device started"
-    );
-    assert_eq!(
-        t.event_loop.owner.core.queue.active_slot_id(),
-        Some(second_adopted),
-        "the repeated adoption becomes the active slot"
-    );
-    assert!(
-        slot_played(&t, first_adopted),
-        "the adopted item's completion is recorded when it ends"
-    );
+}
 
-    // The adopted item plays on: its sighting near the runtime is what the
-    // idle observation reads the end from.
+/// Contract: row 3.3 / followups design D4 and spec scenario "The adopted
+/// item is tracked like a loaded item" — an adopted item's natural end is
+/// inferred from the same sighting margin a loaded item's is: the device
+/// going idle records the completion, loads nothing, and leaves the output
+/// idle.
+#[test]
+fn an_adopted_items_natural_end_records_its_completion_and_loads_nothing() {
+    let fake = FakeSessionApi::with_sessions(vec![idle_session()]);
+    let script = fake.clone();
+    let (mut t, calls, _rx) = session_output_with_queue(fake, vec![timed("a", RUNTIME_TICKS)]);
+    script.set_item(canned_autoplay_item());
+    let (client_id, _reply_tx, _client_rx) =
+        connect_output_client_with_caps(&t.event_loop.ctrl_clients, true, true);
+    let t0 = Instant::now();
+    let slots = slot_ids(&t);
+    adopt_the_direct_autoplay(&mut t, &script, client_id, t0);
+    let adopted = assert_adopted(&t, &calls, &["f".to_string()], 1, "f", slots[0]);
+
+    // The adopted item's sighting near the runtime is what the idle
+    // observation reads the end from.
     script.set_sessions(vec![session_presenting_at(
-        "g",
+        "f",
         RUNTIME_TICKS - 3 * SECOND_TICKS,
         RUNTIME_TICKS,
     )]);
-    poll_once(&mut t, t0 + 4 * EMBY_SESSION_POLL_INTERVAL);
+    poll_once(&mut t, t0 + 2 * EMBY_SESSION_POLL_INTERVAL);
 
-    // The device goes idle at the second adopted item's end: the completion
-    // is recorded, nothing loads, and the output stays idle.
+    // The device goes idle at the adopted item's end: the completion is
+    // recorded, nothing loads, and the output stays idle.
     script.set_sessions(vec![idle_session()]);
-    poll_once(&mut t, t0 + 5 * EMBY_SESSION_POLL_INTERVAL);
+    poll_once(&mut t, t0 + 3 * EMBY_SESSION_POLL_INTERVAL);
 
     assert_eq!(
         play_calls(&calls),
@@ -357,12 +346,12 @@ fn an_adopted_item_is_tracked_like_a_loaded_item_and_adoption_repeats() {
     );
     assert_eq!(
         t.event_loop.owner.core.queue.slots().len(),
-        3,
+        2,
         "the idle observation appends nothing"
     );
     assert!(
-        slot_played(&t, second_adopted),
-        "the second adopted item's completion is recorded like a loaded slot's"
+        slot_played(&t, adopted),
+        "the adopted item's completion is recorded like a loaded slot's"
     );
     assert!(
         !t.event_loop.player.status.lock().unwrap().active,

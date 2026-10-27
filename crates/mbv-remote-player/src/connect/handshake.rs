@@ -17,11 +17,13 @@ use mbv_net::stream::SocketStream;
 // tighter than `EmbyClient::AUTHENTICATE_HARD_BOUND`.
 pub(super) const DAEMON_HANDSHAKE_HARD_BOUND: Duration = Duration::from_secs(5);
 
-/// Whether the handshake must reject an Owner built from a different version.
+/// Whether the handshake must reject an Owner built differently.
 ///
 /// The local Owner process is the same binary as this Client, so a differing
-/// `app_version` means a stale process; explicit `unix://`/`tcp://` endpoints
-/// and the packaged `mbvd` are independent builds and never compare.
+/// `app_version` or `build_id` means a stale process. Every handshake to
+/// `control_socket_path()` compares — the Client attach and both restricted
+/// roles — while explicit `unix://`/`tcp://` endpoints and the packaged
+/// `mbvd` are independent builds and never compare.
 #[derive(Clone, Copy)]
 pub(super) enum PeerBuild {
     Any,
@@ -73,7 +75,10 @@ where
         stream,
         load_control_token,
         HandshakeRole::ServiceSetupAdmin,
-        PeerBuild::Any,
+        // Local-socket only, so the same build gate the Client attach runs
+        // applies: no Control credential reaches a stale Owner (invariant
+        // 15).
+        PeerBuild::MustMatch,
         false,
         None,
     )

@@ -40,6 +40,14 @@ fn rerun_if_changed(path: &str) {
     }
 }
 
+/// Watches the git path `args` reports (a `git rev-parse` path query): emits
+/// nothing when git fails or the path does not exist.
+fn watch_git_path(args: &[&str]) {
+    if let Some(path) = git(args) {
+        rerun_if_changed(&path);
+    }
+}
+
 fn main() {
     // Everything below keys off git; without it the identity is a constant
     // `unknown` and no rerun path is emitted.
@@ -58,20 +66,20 @@ fn main() {
     };
     println!("cargo:rustc-env=BUILD_ID={build_id}");
 
-    rerun_if_changed(&git(&["rev-parse", "--git-path", "HEAD"]).unwrap_or_default());
+    watch_git_path(&["rev-parse", "--git-path", "HEAD"]);
     // The branch ref file: `--git-path` returns the per-worktree path, but
     // a shared branch lives in the common dir, so both candidates are
     // emitted when they exist. A detached HEAD has no symbolic ref at all.
     if let Some(branch) = git(&["symbolic-ref", "--short", "HEAD"]) {
-        rerun_if_changed(&git(&["rev-parse", "--git-path", &branch]).unwrap_or_default());
+        watch_git_path(&["rev-parse", "--git-path", &branch]);
         if let Some(common_dir) = git(&["rev-parse", "--path-format=absolute", "--git-common-dir"])
         {
             rerun_if_changed(&format!("{common_dir}/refs/heads/{branch}"));
         }
     }
-    rerun_if_changed(&git(&["rev-parse", "--git-path", "packed-refs"]).unwrap_or_default());
+    watch_git_path(&["rev-parse", "--git-path", "packed-refs"]);
     // The per-worktree HEAD reflog: every commit appends to it, so it stays
     // the commit signal even when the branch ref has been packed into
     // `packed-refs` (which a commit never rewrites).
-    rerun_if_changed(&git(&["rev-parse", "--git-path", "logs/HEAD"]).unwrap_or_default());
+    watch_git_path(&["rev-parse", "--git-path", "logs/HEAD"]);
 }

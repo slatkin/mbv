@@ -51,7 +51,7 @@ pub(super) fn follow_up(error: &RemotePlayerError, restart_requested: bool) -> F
     if error.is_owner_shutting_down() {
         return FollowUp::WaitForOwnerExit;
     }
-    if error.mismatched_owner_version().is_some() {
+    if error.is_owner_build_mismatch() {
         return if restart_requested {
             FollowUp::WaitForOwnerExit
         } else {

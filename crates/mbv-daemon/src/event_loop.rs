@@ -124,7 +124,7 @@ impl DaemonLoop {
     }
 
     /// Idle work performed when no event arrived within the poll timeout.
-    pub(super) fn on_recv_timeout(&mut self, _now: Instant) {
+    pub(super) fn on_recv_timeout(&mut self) {
         if let Some((connection_id, event)) = self.owner.intents.settle_buffering_if_due() {
             tracing::info!(name: "daemon.pipe_latency.settled", target: "pipe_latency", request = %event.request_id, generation = event.generation, outcome = "settled", "pipe playback settled");
             let clients = self.ctrl_clients.lock().unwrap();

@@ -21,7 +21,8 @@ use super::handshake::{
 /// owner-local Service storage. A single non-blocking connect attempt is made;
 /// when no Local daemon is reachable the call returns `Ok(())` so a bare-mode
 /// commit proceeds without a daemon. When a daemon is reachable, the
-/// control-auth handshake runs, `ApplyServiceSetup` is sent, and the
+/// control-auth handshake runs — the build gate refuses a stale Owner before
+/// the Control credential leaves — `ApplyServiceSetup` is sent, and the
 /// applied/rejected acknowledgement is awaited. Any failure after the connect
 /// reports a restart requirement; the caller's durable commit is untouched.
 pub fn signal_local_daemon_service_setup(
@@ -130,10 +131,12 @@ fn restart_required_too_old(action: OwnerAction) -> crate::RemotePlayerError {
     ))
 }
 
-/// The Owner-action handshake: reads the server Hello, refuses an Owner
-/// without the `owner-action` capability before anything is sent, sends the
-/// Client Hello with the [`HandshakeRole::OwnerAction`] role, and consumes
-/// the initial state event the Owner sends on admission.
+/// The Owner-action handshake: reads the server Hello, refuses an Owner of
+/// a different build (invariant 15: the connection is local-socket only, so
+/// the same gate the Client attach runs applies) or one without the
+/// `owner-action` capability, before anything is sent, then sends the Client
+/// Hello with the [`HandshakeRole::OwnerAction`] role and consumes the
+/// initial state event the Owner sends on admission.
 pub(super) fn run_owner_action_handshake<F>(
     reader: &mut BufReader<SocketStream>,
     action: OwnerAction,
@@ -142,7 +145,7 @@ pub(super) fn run_owner_action_handshake<F>(
 where
     F: FnOnce() -> Result<String, crate::RemotePlayerError>,
 {
-    let compatibility = read_server_hello(reader, PeerBuild::Any)?;
+    let compatibility = read_server_hello(reader, PeerBuild::MustMatch)?;
     if !compatibility.supports_owner_action {
         return Err(restart_required_too_old(action));
     }

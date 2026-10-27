@@ -129,13 +129,12 @@ impl RemotePlayerError {
         matches!(&self.kind, RemotePlayerErrorKind::OwnerShuttingDown)
     }
 
-    /// The local Owner's `app_version`, when it differs from this build's.
+    /// The error is a local Owner build mismatch: the Owner's version or
+    /// build identity differs from this binary's, so nothing identifying was
+    /// sent (invariant 15).
     #[must_use]
-    pub fn mismatched_owner_version(&self) -> Option<&str> {
-        match &self.kind {
-            RemotePlayerErrorKind::OwnerBuildMismatch(data) => Some(&data.app_version),
-            _ => None,
-        }
+    pub fn is_owner_build_mismatch(&self) -> bool {
+        matches!(&self.kind, RemotePlayerErrorKind::OwnerBuildMismatch(_))
     }
 
     #[must_use]

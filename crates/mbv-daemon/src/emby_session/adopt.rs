@@ -94,7 +94,7 @@ pub(crate) fn handle_lookup(
     item_id: &str,
     result: Result<Box<EmbyItem>, String>,
 ) -> bool {
-    let (pending, tracks_ended, still_presented) = {
+    let (pending, still_tracking, still_presented) = {
         let PlaybackOutput::EmbySession(output) = &mut daemon.owner.output else {
             return false;
         };
@@ -103,11 +103,14 @@ pub(crate) fn handle_lookup(
             Some(ContinuationWatch::Lookup { item_id: pending }) if pending == item_id
         );
         // The adoption re-establishes the tracked item, so the output must
-        // still track the ended one: a user stop cleared it, and a stopped
-        // output advances nothing (emby-session-owner-output design D9).
-        let tracks_ended = output.loaded.is_some();
+        // still track one: a user stop cleared it, and a stopped output
+        // advances nothing (emby-session-owner-output design D9). The
+        // pending continuation names the looked-up item, not the ended one,
+        // so `loaded.is_some()` is the available check; `still_presented`
+        // covers a device that moved on to other content.
+        let still_tracking = output.loaded.is_some();
         let still_presented = pending && presents_item(output.last_observation.as_ref(), item_id);
-        (pending, tracks_ended, still_presented)
+        (pending, still_tracking, still_presented)
     };
     let item = match result {
         Ok(item) => item,
@@ -134,7 +137,7 @@ pub(crate) fn handle_lookup(
         );
         return false;
     }
-    if !tracks_ended {
+    if !still_tracking {
         clear_continuation(daemon);
         tracing::info!(
             name: "daemon.emby_session_adopt.not_tracking",

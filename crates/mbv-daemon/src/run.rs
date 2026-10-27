@@ -748,7 +748,7 @@ fn run_daemon_loop(daemon_loop: &mut DaemonLoop, merged_rx: &mpsc::Receiver<Daem
                 }
             }
             Err(mpsc::RecvTimeoutError::Timeout) => {
-                daemon_loop.on_recv_timeout(Instant::now());
+                daemon_loop.on_recv_timeout();
             }
             Err(mpsc::RecvTimeoutError::Disconnected) => {
                 unreachable!("daemon event channel closed")
