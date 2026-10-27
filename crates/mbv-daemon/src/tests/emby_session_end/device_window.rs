@@ -493,6 +493,11 @@ fn a_shuffle_that_changes_the_queued_next_slot_marks_it_stale_and_interrupts_not
         Some(slots[2]),
         "the corrected slot becomes the active slot"
     );
+    assert_eq!(
+        t.event_loop.owner.core.queue.slots().len(),
+        3,
+        "the correction adopts nothing: the queue gains no slot"
+    );
     let PlaybackOutput::EmbySession(output) = &t.event_loop.owner.output else {
         panic!("the Session is the output");
     };

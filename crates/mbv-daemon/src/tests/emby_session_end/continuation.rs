@@ -1,4 +1,4 @@
-// emby-session-output-followups rows 3.1 and 3.2: the queue-end continuation
+// emby-session-output-followups rows 3.1 to 3.4: the queue-end continuation
 // (design D4). When the tracked item ends at the queue's edge and the device
 // starts an item of its own, the Owner looks that item up once and adopts it
 // as the queue's next slot: appended at the tail, active, and tracked. The
@@ -7,6 +7,7 @@
 use super::*;
 
 use super::super::emby_session_output::pump_session_event;
+use crate::emby_session::ContinuationWatch;
 
 /// The canned item the fake's `get_item` returns for the device's own
 /// autoplay, with the runtime the tracked item's slot carries.
@@ -216,5 +217,310 @@ fn the_autoplay_after_an_idle_gap_is_adopted_with_one_completion() {
         t.event_loop.owner.core.queue.revision().raw() - revision_after_end.raw(),
         2,
         "the adoption's own queue mutations are the append and the active marker: no second completion record"
+    );
+}
+
+/// Drives the direct adoption the follow-up tests build on: the queue's one
+/// slot is playing, and the device starts the canned autoplay item straight
+/// after its sighting. The caller scripted the canned item and reads the
+/// adopted slot from the queue afterwards.
+fn adopt_the_direct_autoplay(
+    t: &mut TestLoop,
+    script: &FakeSessionApi,
+    client_id: u64,
+    t0: Instant,
+) {
+    let slots = slot_ids(t);
+    play_slot(t, client_id, slots[0]);
+    script.set_sessions(vec![session_presenting_at(
+        "a",
+        RUNTIME_TICKS - 3 * SECOND_TICKS,
+        RUNTIME_TICKS,
+    )]);
+    poll_once(t, t0);
+    script.set_sessions(vec![session_presenting_at("f", 0, RUNTIME_TICKS)]);
+    poll_once(t, t0 + EMBY_SESSION_POLL_INTERVAL);
+    wait_for_session_jobs(&t.event_loop.owner.output);
+    pump_session_event(t);
+}
+
+/// The transport commands the Session received, in order.
+fn transport_calls(calls: &Arc<Mutex<Vec<SessionCall>>>) -> Vec<SessionCall> {
+    calls
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|call| matches!(call, SessionCall::Transport { .. }))
+        .cloned()
+        .collect()
+}
+
+/// Contract: row 3.3 / followups design D4 and spec scenario "The adopted
+/// item is tracked like a loaded item" — the adopted slot's item is the
+/// tracked item the Session's tables read: its presented position is the
+/// Session's own report, its end is inferred from the same margin, so the
+/// device's next autoplay is adopted again ("Adoption repeats"), the ended
+/// adopted slot records its completion, and the idle that follows loads
+/// nothing and leaves the output idle.
+#[test]
+fn an_adopted_item_is_tracked_like_a_loaded_item_and_adoption_repeats() {
+    let fake = FakeSessionApi::with_sessions(vec![idle_session()]);
+    let script = fake.clone();
+    let (mut t, calls, _rx) = session_output_with_queue(fake, vec![timed("a", RUNTIME_TICKS)]);
+    script.set_item(canned_autoplay_item());
+    let (client_id, _reply_tx, _client_rx) =
+        connect_output_client_with_caps(&t.event_loop.ctrl_clients, true, true);
+    let t0 = Instant::now();
+    adopt_the_direct_autoplay(&mut t, &script, client_id, t0);
+    let first_adopted = slot_ids(&t)[1];
+
+    // The adopted item plays like a loaded item: the Session's own position
+    // is the presented one, and its sighting near the runtime arms the end
+    // rule for the device's next autoplay.
+    let mut tracked = item("g", "Video", "Movie");
+    tracked.runtime_ticks = RUNTIME_TICKS;
+    script.set_item(tracked);
+    script.set_sessions(vec![session_presenting_at(
+        "f",
+        RUNTIME_TICKS - 3 * SECOND_TICKS,
+        RUNTIME_TICKS,
+    )]);
+    poll_once(&mut t, t0 + 2 * EMBY_SESSION_POLL_INTERVAL);
+    assert_eq!(
+        t.event_loop.player.status.lock().unwrap().position_ticks,
+        RUNTIME_TICKS - 3 * SECOND_TICKS,
+        "the adopted item's presented position is the Session's own report"
+    );
+
+    // The device starts its own next item at the adopted item's end: the
+    // adoption repeats.
+    script.set_sessions(vec![session_presenting_at("g", 0, RUNTIME_TICKS)]);
+    poll_once(&mut t, t0 + 3 * EMBY_SESSION_POLL_INTERVAL);
+    wait_for_session_jobs(&t.event_loop.owner.output);
+    pump_session_event(&mut t);
+
+    assert_eq!(
+        get_item_calls(&calls),
+        vec!["f".to_string(), "g".to_string()],
+        "the second autoplay is looked up like the first"
+    );
+    assert_eq!(
+        play_calls(&calls),
+        vec![play(&["a"])],
+        "neither adoption sends a device command"
+    );
+    assert_eq!(
+        t.event_loop.owner.core.queue.slots().len(),
+        3,
+        "the second autoplay is appended at the queue's tail"
+    );
+    let second_adopted = slot_ids(&t)[2];
+    assert_eq!(
+        t.event_loop.owner.core.queue.slots()[1].item.id(),
+        "f",
+        "the first adopted slot keeps the item the device started"
+    );
+    assert_eq!(
+        t.event_loop.owner.core.queue.slots()[2].item.id(),
+        "g",
+        "the second adopted slot is the item the device started"
+    );
+    assert_eq!(
+        t.event_loop.owner.core.queue.active_slot_id(),
+        Some(second_adopted),
+        "the repeated adoption becomes the active slot"
+    );
+    assert!(
+        slot_played(&t, first_adopted),
+        "the adopted item's completion is recorded when it ends"
+    );
+
+    // The adopted item plays on: its sighting near the runtime is what the
+    // idle observation reads the end from.
+    script.set_sessions(vec![session_presenting_at(
+        "g",
+        RUNTIME_TICKS - 3 * SECOND_TICKS,
+        RUNTIME_TICKS,
+    )]);
+    poll_once(&mut t, t0 + 4 * EMBY_SESSION_POLL_INTERVAL);
+
+    // The device goes idle at the second adopted item's end: the completion
+    // is recorded, nothing loads, and the output stays idle.
+    script.set_sessions(vec![idle_session()]);
+    poll_once(&mut t, t0 + 5 * EMBY_SESSION_POLL_INTERVAL);
+
+    assert_eq!(
+        play_calls(&calls),
+        vec![play(&["a"])],
+        "the idle observation loads nothing"
+    );
+    assert_eq!(
+        t.event_loop.owner.core.queue.slots().len(),
+        3,
+        "the idle observation appends nothing"
+    );
+    assert!(
+        slot_played(&t, second_adopted),
+        "the second adopted item's completion is recorded like a loaded slot's"
+    );
+    assert!(
+        !t.event_loop.player.status.lock().unwrap().active,
+        "the output stays idle"
+    );
+}
+
+/// The foreign item the device starts after the tracked item's end at the
+/// queue's edge, in the two ways the adoption fails (row 3.4). Both leave
+/// the item presented and the queue unchanged; they differ in the lookup
+/// the owner is left with.
+#[derive(Clone, Copy)]
+enum NoAdoption {
+    /// The Session first presents the item after the 30-second window
+    /// closed.
+    Late,
+    /// The lookup runs and fails; the fake answers it with its failure.
+    LookupFails,
+}
+
+impl NoAdoption {
+    /// Prepares the adoption state the foreign item arrives into: the late
+    /// case's window is expired in the injected sense — the observation path
+    /// reads the real clock, so the test moves the window's close to the
+    /// test's start instead of waiting 30 seconds — and the failed lookup
+    /// keeps the window the natural end opened.
+    fn prepare(self, t: &mut TestLoop, t0: Instant) {
+        if let Self::Late = self {
+            let PlaybackOutput::EmbySession(output) = &mut t.event_loop.owner.output else {
+                panic!("the Session is the output");
+            };
+            output.continuation = Some(ContinuationWatch::Window { until: t0 });
+        }
+    }
+
+    /// The item lookups the case leaves behind.
+    fn lookups(self) -> Vec<String> {
+        match self {
+            Self::Late => Vec::new(),
+            Self::LookupFails => vec!["f".to_string()],
+        }
+    }
+
+    /// Lets the lookup's outcome reach the owner: the failed lookup's event
+    /// arrives on the merged channel; the late item submitted no lookup, so
+    /// nothing arrives.
+    fn settle(self, t: &mut TestLoop) {
+        if let Self::LookupFails = self {
+            wait_for_session_jobs(&t.event_loop.owner.output);
+            pump_session_event(t);
+        }
+    }
+}
+
+/// Contract: row 3.4 / followups design D4 and spec scenarios "A late
+/// foreign item is not adopted" and "The item lookup fails" — a foreign item
+/// the device starts after the tracked item's end at the queue's edge is
+/// adopted only while the window is open and the lookup answers: the late
+/// item submits no lookup, the failed one submits exactly one, and both
+/// leave the item presented and the queue unchanged.
+#[rstest]
+#[case::a_foreign_item_after_the_window_closed(NoAdoption::Late)]
+#[case::a_failed_lookup(NoAdoption::LookupFails)]
+fn the_cases_that_adopt_nothing_leave_the_item_presented_and_the_queue_unchanged(
+    #[case] case: NoAdoption,
+) {
+    let fake = FakeSessionApi::with_sessions(vec![idle_session()]);
+    let script = fake.clone();
+    let (mut t, calls, _rx) = session_output_with_queue(fake, vec![timed("a", RUNTIME_TICKS)]);
+    let (client_id, _reply_tx, _client_rx) =
+        connect_output_client_with_caps(&t.event_loop.ctrl_clients, true, true);
+    let slots = slot_ids(&t);
+    play_slot(&mut t, client_id, slots[0]);
+    let t0 = Instant::now();
+
+    // The sighting of the tracked item, then the idle observation one second
+    // later: the natural end at the queue's edge opens the 30-second window.
+    script.set_sessions(vec![session_presenting_at(
+        "a",
+        RUNTIME_TICKS - 3 * SECOND_TICKS,
+        RUNTIME_TICKS,
+    )]);
+    poll_once(&mut t, t0);
+    script.set_sessions(vec![idle_session()]);
+    let t_end = t0 + EMBY_SESSION_POLL_INTERVAL;
+    poll_once(&mut t, t_end);
+
+    // The foreign item the case scripts, first presented one poll after the
+    // end.
+    case.prepare(&mut t, t0);
+    script.set_sessions(vec![session_presenting_at("f", 0, RUNTIME_TICKS)]);
+    poll_once(&mut t, t_end + EMBY_SESSION_POLL_INTERVAL);
+    case.settle(&mut t);
+
+    assert_eq!(
+        get_item_calls(&calls),
+        case.lookups(),
+        "the case leaves exactly the lookups it scripts"
+    );
+    assert_eq!(
+        t.event_loop.owner.core.queue.slots().len(),
+        1,
+        "the queue gains no slot"
+    );
+    assert_eq!(
+        t.event_loop.owner.core.queue.active_slot_id(),
+        Some(slots[0]),
+        "the active slot is unchanged"
+    );
+    assert_eq!(
+        t.event_loop.player.status.lock().unwrap().title,
+        "f",
+        "the foreign item stays presented"
+    );
+}
+
+/// Contract: row 3.4 / followups design D4 and spec scenario "Next on an
+/// adopted item follows the queue" — next on the adopted slot at the queue's
+/// end resolves over the queue like any active slot's step, and the queue
+/// ends there: nothing loads and the device receives no command.
+#[test]
+fn next_on_the_adopted_queue_end_slot_loads_nothing_and_sends_no_device_command() {
+    let fake = FakeSessionApi::with_sessions(vec![idle_session()]);
+    let script = fake.clone();
+    let (mut t, calls, _rx) = session_output_with_queue(fake, vec![timed("a", RUNTIME_TICKS)]);
+    script.set_item(canned_autoplay_item());
+    let (client_id, _reply_tx, _client_rx) =
+        connect_output_client_with_caps(&t.event_loop.ctrl_clients, true, true);
+    adopt_the_direct_autoplay(&mut t, &script, client_id, Instant::now());
+    let adopted = slot_ids(&t)[1];
+
+    t.event_loop.handle_event(DaemonEvent::Ctrl(
+        CtrlCmd::PlaybackIntent(PlaybackIntent {
+            request_id: 1,
+            generation: 1,
+            action: PlaybackIntentAction::Next,
+        }),
+        client_id,
+        mpsc::channel().0,
+    ));
+    wait_for_session_jobs(&t.event_loop.owner.output);
+
+    assert_eq!(
+        play_calls(&calls),
+        vec![play(&["a"])],
+        "next at the queue's end loads nothing"
+    );
+    assert!(
+        transport_calls(&calls).is_empty(),
+        "next sends no device command"
+    );
+    assert_eq!(
+        t.event_loop.owner.core.queue.slots().len(),
+        2,
+        "the queue is unchanged"
+    );
+    assert_eq!(
+        t.event_loop.owner.core.queue.active_slot_id(),
+        Some(adopted),
+        "the adopted slot stays active"
     );
 }
