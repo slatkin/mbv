@@ -72,7 +72,19 @@ the user: it kills every running daemon and client for a command no shipped send
 and ignore it (additive — no bump). `crates/mbv-ctrl/build.rs` runs
 `git rev-parse --short=12 HEAD`, appends `-dirty` when `git status --porcelain` is
 non-empty, and falls back to `unknown` when git is unavailable (tarball builds);
-the build script emits `cargo:rerun-if-changed` for the paths `git rev-parse --git-path HEAD`, the symbolic ref's `--git-path`, the branch ref file under `<git-common-dir>/refs/heads/<branch>`, and `packed-refs` report, so the embedded value stays fresh across commits. The common-dir branch ref is named because in a linked worktree the per-worktree path for a shared branch does not exist. It never names a literal `.git/HEAD`: in a worktree `.git` is a file, and Cargo reruns a build script on every build when a named path is missing, which would recompile `mbv-ctrl` and every dependent each time. When git is unavailable it emits no git path. The `-dirty` marker is computed only when the script reruns (a HEAD or ref change), so edits made on the same commit keep the old marker.
+the build script emits `cargo:rerun-if-changed` for the paths
+`git rev-parse --git-path HEAD`, the symbolic ref's `--git-path`, the branch ref file
+under `<git-common-dir>/refs/heads/<branch>`, the `packed-refs` report, and the
+per-worktree HEAD reflog (`--git-path logs/HEAD`), so the embedded value stays fresh
+across commits. Each path is emitted only when it exists. The common-dir branch ref is named because in
+a linked worktree the per-worktree path for a shared branch does not exist. The reflog
+is the commit signal when the branch ref is packed: `git pack-refs` folds the loose ref
+into `packed-refs`, which a later commit never rewrites, while every commit appends to
+the reflog. It never names a literal `.git/HEAD`: in a worktree `.git` is a file, and
+Cargo reruns a build script on every build when a named path is missing, which would
+recompile `mbv-ctrl` and every dependent each time. When git is unavailable it emits no
+git path. The `-dirty` marker is computed only when the script reruns (a HEAD, ref, or
+reflog change), so edits made on the same commit keep the old marker.
 
 `read_server_hello` refuses under `PeerBuild::MustMatch` when the `app_version` differs
 or the `build_id` differs, and treats an empty owner `build_id` as a mismatch — that is

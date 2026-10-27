@@ -35,6 +35,16 @@ order in the handshake path.
   time, or `unknown` when git is unavailable (tarball builds). A local
   Owner built from a tarball reports `unknown` on both sides and still
   attaches; two different tarball builds are indistinguishable.
+- That value is re-embedded when the build script reruns, and the script
+  watches git paths only, each emitted only when it exists: `HEAD`, the
+  branch ref (the per-worktree path and the common-dir
+  `refs/heads/<branch>`), `packed-refs`, and the per-worktree HEAD reflog
+  (`logs/HEAD`). A literal `.git/HEAD` is never named, because in a
+  worktree `.git` is a file and Cargo reruns the script on every build
+  when a named path is missing. The reflog is what keeps the identity
+  fresh when the branch ref is packed: `git pack-refs` folds the loose ref
+  into `packed-refs`, which a commit never rewrites, while every commit
+  appends to the reflog.
 - An empty Owner `build_id` never equals this binary's non-empty identity,
   so a pre-change Owner is refused as a build mismatch rather than accepted
   on the version alone.
@@ -51,7 +61,8 @@ The identity is commit-level, not binary-level: two builds of the same
 commit carry the same `build_id`, so a rebuild at the same commit is not
 detected. `-dirty` narrows the gap only when the build script reruns — the
 marker is computed at build-script time, so a tree edited after that run
-keeps the earlier marker until a HEAD or ref change reruns the script.
+keeps the earlier marker until a HEAD, ref, or reflog change reruns the
+script.
 
 No known violation of the ordering. It is conventional, not enforced: any
 future handshake restructuring must keep the build check ahead of the first
