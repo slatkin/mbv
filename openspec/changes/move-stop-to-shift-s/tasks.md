@@ -18,7 +18,7 @@
 
 ## 5. Docs
 
-- [ ] 5.1 Edit the ADR 0023 Amendment (`docs/adr/0023-one-central-keyboard-router.md`) and the `CONTEXT.md` *Arbitration fold* entry per design D7. Verify: the edited text no longer mentions the 300 ms double-tap or candidate clocks, and `CONTEXT.md` adds no new term.
+- [x] 5.1 Edit the ADR 0023 Amendment (`docs/adr/0023-one-central-keyboard-router.md`) and the `CONTEXT.md` *Arbitration fold* entry per design D7. Verify: the edited text no longer mentions the 300 ms double-tap or candidate clocks, and `CONTEXT.md` adds no new term.
 
 ## 6. Gates
 
