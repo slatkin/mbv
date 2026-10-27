@@ -1,7 +1,8 @@
 use super::{
     AudiobookshelfBookPlaybackLifecycle, AudiobookshelfPlaybackLifecycle, PreparedLifecycle,
-    mpv_title_opt, mpv_url_for_queue_item, resume_start_pos,
+    mpv_title_opt, mpv_url_for_queue_item,
 };
+use crate::resume::{ResumeSource, resume_source, resume_start_pos};
 use mbv_audiobookshelf::{
     AudiobookshelfAudioSource, AudiobookshelfClient, AudiobookshelfError,
     AudiobookshelfFailureClass, AudiobookshelfSourceMethod,
@@ -134,8 +135,13 @@ impl PreparedSource {
     }
 
     pub(crate) fn override_jump_resume(&mut self, item: &QueueItem, resume_ticks: Option<i64>) {
-        if !item.is_audiobookshelf() {
-            self.start_seconds = resume_ticks.map_or(0.0, mbv_emby_model::ticks_to_seconds);
+        match resume_source(item) {
+            // The session position is already baked into the prepared source.
+            ResumeSource::Session => {}
+            // Every other source applies the owner's ticks, or the beginning.
+            ResumeSource::Server | ResumeSource::Local | ResumeSource::Beginning => {
+                self.start_seconds = resume_ticks.map_or(0.0, mbv_emby_model::ticks_to_seconds);
+            }
         }
     }
 

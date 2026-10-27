@@ -48,6 +48,30 @@ fn submission_accepted_resets_the_playback_begun_boundary() {
     );
 }
 
+/// The contract "an Audiobookshelf jump arms no resume seek": every
+/// Audiobookshelf queue is active-file, and that projection never moves mpv
+/// with a `playlist-pos` write, so `arm_jump` there discards the arm whatever
+/// the jump carries. `take_resume_ticks` then yields `None`, so a resume
+/// position baked into the prepared source is never applied again as a seek.
+#[test]
+fn arm_jump_in_the_active_file_projection_arms_no_resume_seek() {
+    let mut lifecycle = RunLifecycle::default();
+    lifecycle.enter_active_file();
+
+    lifecycle.arm_jump(ForcedJump {
+        slot_id: slot(7),
+        transition: None,
+        resume_ticks: Some(42),
+        from_idle: true,
+    });
+
+    assert!(
+        lifecycle.jump_arm().is_idle(),
+        "the active-file projection arms no jump"
+    );
+    assert_eq!(lifecycle.take_resume_ticks(), None);
+}
+
 /// The plain position facts one row drives, with slots
 /// distinct so a verdict built from a stale entry cannot pass the naming.
 struct VerdictFacts {

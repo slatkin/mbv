@@ -1,4 +1,5 @@
 use super::*;
+use crate::resume::resume_start_pos;
 
 #[test]
 fn abs_natural_eof_uses_runtime_without_changing_generic_audio_reporting() {

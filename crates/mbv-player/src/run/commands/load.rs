@@ -4,8 +4,8 @@ use super::{
     mpv_url_for_queue_item, queue_load_indices, queue_load_location, reassert_queue_layout,
     send_ep_info, spawn_progress_reporter, start_queue_playback,
 };
+use crate::resume::{EMBY_RESUME_RETRY_DELAYS, ResumeSeam};
 use crate::run::StopAction;
-use crate::{EMBY_RESUME_RETRY_DELAYS, refresh_emby_resume};
 
 impl PlaybackRun {
     pub(super) fn cmd_load_new(
@@ -114,11 +114,11 @@ impl PlaybackRun {
         // load-time value; the upgrade path is fetch-and-seek on entry
         // activation.
         let slot_ids: Vec<QueueSlotId> = items.iter().map(|slot| slot.slot_id).collect();
-        let items = refresh_emby_resume(
-            items.into_iter().map(|slot| slot.item).collect(),
-            |ids| self.reporter.client.get_items_by_ids(ids),
+        let items = ResumeSeam::new(
+            &mut |ids| self.reporter.client.get_items_by_ids(ids),
             &EMBY_RESUME_RETRY_DELAYS,
-        );
+        )
+        .refresh(items.into_iter().map(|slot| slot.item).collect());
         let Some(sources) = items
             .iter()
             .map(QueueItem::mpv_url_source)

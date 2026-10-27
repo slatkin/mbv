@@ -3,8 +3,8 @@ use super::{
     mpv_load_opts, mpv_url_for_queue_item, reject_stale_jump, resolve_jump_target,
     spawn_progress_reporter,
 };
+use crate::resume::{EMBY_RESUME_RETRY_DELAYS, ResumeSeam};
 use crate::run::{ForcedJump, JumpArm, StopReport};
-use crate::{EMBY_RESUME_RETRY_DELAYS, refresh_emby_resume};
 
 impl PlaybackRun {
     /// Explicit jump to an owner-assigned slot. Resolves the slot to this
@@ -31,19 +31,17 @@ impl PlaybackRun {
             return;
         };
         let transition = crate::transition::Transition::new(request_id, generation, slot_id);
-        // Design D1/1.3: an Emby video's resume position comes from Emby at
-        // jump time, not from the owner's load-time value. Feed and
-        // Audiobookshelf slots keep the owner's ticks.
+        // Design D1/1.3: the seam decides which authority the jump's resume
+        // position comes from — an Emby video reads Emby at jump time, a Feed
+        // slot keeps the owner's ticks, and an Audiobookshelf slot starts from
+        // the position already baked into its prepared source.
         let resume_ticks = match self.queue.slot(slot_id).map(|slot| &slot.item) {
-            Some(QueueItem::Emby(emby)) if !emby.is_audio() => {
-                let refreshed = refresh_emby_resume(
-                    vec![QueueItem::Emby(emby.clone())],
-                    |ids| self.reporter.client.get_items_by_ids(ids),
-                    &EMBY_RESUME_RETRY_DELAYS,
-                );
-                crate::resume_ticks_for_item(&refreshed[0])
-            }
-            _ => resume_ticks,
+            Some(item) => ResumeSeam::new(
+                &mut |ids| self.reporter.client.get_items_by_ids(ids),
+                &EMBY_RESUME_RETRY_DELAYS,
+            )
+            .jump_ticks(item, resume_ticks),
+            None => resume_ticks,
         };
         self.set_pending_playlist_jump(ForcedJump {
             slot_id,
@@ -247,11 +245,11 @@ impl PlaybackRun {
         // baked. ponytail: a natural mpv advance still uses this load-time
         // value; the upgrade path is fetch-and-seek on entry activation.
         let slot_ids: Vec<QueueSlotId> = new_items.iter().map(|slot| slot.slot_id).collect();
-        let items = refresh_emby_resume(
-            new_items.into_iter().map(|slot| slot.item).collect(),
-            |ids| self.reporter.client.get_items_by_ids(ids),
+        let items = ResumeSeam::new(
+            &mut |ids| self.reporter.client.get_items_by_ids(ids),
             &EMBY_RESUME_RETRY_DELAYS,
-        );
+        )
+        .refresh(new_items.into_iter().map(|slot| slot.item).collect());
         let Some(sources) = items
             .iter()
             .map(QueueItem::mpv_url_source)
