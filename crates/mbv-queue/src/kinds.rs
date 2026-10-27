@@ -3,7 +3,9 @@
 /// subscription; per-entry kind can be refined from the enclosure MIME
 /// at parse time (#471). Not currently used for routing — only for
 /// display and future refinement (#472).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, schemars::JsonSchema,
+)]
 #[serde(rename_all = "lowercase")]
 pub enum FeedKind {
     Audio,
@@ -42,7 +44,17 @@ impl FeedKind {
 
 /// Singleton Service kind identifier. Each variant represents exactly one
 /// configured instance of that Service within mbv.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    serde::Serialize,
+    serde::Deserialize,
+    schemars::JsonSchema,
+)]
 pub enum ServiceKind {
     Emby,
     /// Reserved; not yet implemented. Added now to establish the pattern

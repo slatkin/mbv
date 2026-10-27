@@ -18,7 +18,12 @@ mbv-queue = { path = "../mbv-queue" }
 mbv-emby-model = { path = "../mbv-emby-model" }
 mbv-ids = { path = "../mbv-ids" }
 serde = { workspace = true, features = ["derive"] }
+schemars.workspace = true
 
 [dev-dependencies]
+# Fixture-vs-schema validation for the ctrl protocol conformance gate.
+# Default features are off: they pull HTTP/file reference resolvers (reqwest,
+# TLS) this gate never needs — every fixture schema resolves locally.
+jsonschema = { version = "0.60", default-features = false }
 rstest.workspace = true
 serde_json.workspace = true

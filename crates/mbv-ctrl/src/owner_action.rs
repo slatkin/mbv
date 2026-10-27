@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 /// An action the Owner process runs on request from the Tray or its one CLI
 /// flag. Each variant has exactly one `mbv` CLI flag; `cli_flag`, `help`,
 /// `from_cli_flag`, and `ALL` are the only places a flag string lives.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub enum OwnerAction {
     /// Move the session between the pinned panel and a terminal by replacing
     /// one Client with another; the Owner keeps playing.

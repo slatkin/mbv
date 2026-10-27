@@ -21,7 +21,7 @@ pub enum SubtitleChoice {
     Track(i64),
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 #[expect(
     clippy::struct_excessive_bools,
     reason = "status booleans are independent observed player properties (design analysis, issue #804)"
@@ -259,7 +259,7 @@ mod run_identity_wire {
 
 pub const CONNECTION_LOST_MESSAGE: &str = "Lost connection to the daemon's device";
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 pub enum PlayerEvent {
     Stopped {
         /// Owner-assigned identity of the occurrence that stopped, or `None`
@@ -273,6 +273,10 @@ pub enum PlayerEvent {
         /// Identity of the Playback run that observed this stop: the owner
         /// submission generation at event construction time.
         #[serde(default, with = "run_identity_wire")]
+        // `run_identity_wire` emits the protocol-10 `[request_id,
+        // generation]` pair (design D3); the Rust field type is a bare `u64`
+        // generation, so the derive alone would describe the scalar.
+        #[schemars(with = "(u64, u64)")]
         run_identity: crate::PlaybackGeneration,
         position_ticks: i64,
         played: bool,
@@ -301,6 +305,8 @@ pub enum PlayerEvent {
         /// Identity of the Playback run that observed this completion: the
         /// owner submission generation at event construction time.
         #[serde(default, with = "run_identity_wire")]
+        // Same emitted pair shape as `Stopped` (design D3).
+        #[schemars(with = "(u64, u64)")]
         run_identity: crate::PlaybackGeneration,
         position_ticks: i64,
         played: bool,

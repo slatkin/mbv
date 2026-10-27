@@ -46,7 +46,7 @@ impl EpisodeResume {
 // server URL, playback sessionId, resolved source URL, and headers.
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 pub struct AudiobookshelfQueueItem {
     #[serde(rename = "libraryItemId")]
     pub library_item_id: String,
@@ -127,7 +127,7 @@ impl AudiobookshelfQueueItem {
 // sessionId, resolved source URLs, and headers.
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 pub struct AudiobookshelfBookQueueItem {
     #[serde(rename = "libraryItemId")]
     pub library_item_id: String,
@@ -175,7 +175,7 @@ impl AudiobookshelfBookQueueItem {
 // queue presentation and identity behavior.
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, schemars::JsonSchema)]
 pub enum AudiobookshelfItem {
     Episode(AudiobookshelfQueueItem),
     Book(AudiobookshelfBookQueueItem),

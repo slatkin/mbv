@@ -109,11 +109,11 @@ pub type PlaybackRequestId = u64;
 pub type PlaybackGeneration = u64;
 
 /// Identity correlating one Client queue operation with its owner's answer.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct QueueOpId(pub u64);
 
 /// Provider-qualified queue content progress relayed to the Player owner.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ProgressUpdate {
     pub content_id: QueueItemContentId,
     pub position_ticks: i64,
@@ -124,7 +124,7 @@ pub struct ProgressUpdate {
 
 /// One slot in the unified queue representation.  The `slot_id` is the
 /// stable runtime identity of the occurrence (not the item's content ID).
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct UnifiedQueueSlot {
     pub slot_id: u64,
     pub item: QueueItem,
@@ -133,7 +133,7 @@ pub struct UnifiedQueueSlot {
 /// Summary of a pending playback transition carried in the owner snapshot.
 /// Kept independent of internal queue types — the target slot is a raw u64,
 /// matching `UnifiedQueueSlot::slot_id`.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct TransitionSummary {
     pub request_id: PlaybackRequestId,
     pub generation: PlaybackGeneration,
@@ -141,7 +141,7 @@ pub struct TransitionSummary {
 }
 
 /// Full queue state exchanged between unified-queue-capable peers.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct UnifiedQueueStateData {
     pub status: PlayerStatus,
     pub slots: Vec<UnifiedQueueSlot>,

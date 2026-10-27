@@ -10,7 +10,9 @@ pub use super::audiobookshelf::{
 // string matching like `format!("abs:{}:{}", lib, ep)`.
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize, schemars::JsonSchema,
+)]
 #[serde(tag = "provider", content = "value")]
 pub enum QueueItemContentId {
     Emby(String),
@@ -98,7 +100,7 @@ pub(super) fn duration_ticks_as_i64(ticks: u64) -> i64 {
 // serde-defaulted so old queue payloads and ctrl snapshots remain loadable.
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 pub struct FeedEntry {
     pub guid: String,
     pub title: String,
@@ -173,6 +175,48 @@ enum QueueItemSerialize<'a> {
     Audiobookshelf(&'a AudiobookshelfQueueItem),
     #[serde(rename = "AudiobookshelfBook")]
     AudiobookshelfBook(&'a AudiobookshelfBookQueueItem),
+}
+
+impl schemars::JsonSchema for QueueItem {
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        "QueueItem".into()
+    }
+
+    /// The emitted wire shape only: internally tagged by `kind`, with the
+    /// payload flattened into the same object — a schema mirror of
+    /// `QueueItemSerialize` (ctrl-protocol-conformance design D3). The
+    /// permissive decode path (a legacy bare `EmbyItem` with no `kind`)
+    /// stays a decode tolerance, never a schema variant.
+    fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        let variants = [
+            ("Emby", generator.subschema_for::<EmbyItem>()),
+            ("Feed", generator.subschema_for::<FeedEntry>()),
+            (
+                "Audiobookshelf",
+                generator.subschema_for::<AudiobookshelfQueueItem>(),
+            ),
+            (
+                "AudiobookshelfBook",
+                generator.subschema_for::<AudiobookshelfBookQueueItem>(),
+            ),
+        ];
+        let one_of: Vec<schemars::Schema> = variants
+            .into_iter()
+            .map(|(kind, payload)| {
+                // `allOf` carries the payload reference: a `$ref` sibling of
+                // `properties` would be overridden under strict 2020-12.
+                schemars::Schema::try_from(serde_json::json!({
+                    "type": "object",
+                    "required": ["kind"],
+                    "properties": { "kind": { "const": kind } },
+                    "allOf": [payload],
+                }))
+                .expect("static literal schema object is a valid schema")
+            })
+            .collect();
+        schemars::Schema::try_from(serde_json::json!({ "oneOf": one_of }))
+            .expect("static literal schema object is a valid schema")
+    }
 }
 
 impl serde::Serialize for QueueItem {
