@@ -16,7 +16,7 @@ Use `cargo nextest run -p mbv-player` for tests. Follow `docs/standards/README.m
 - [x] 2.3 Add `ResumeSeam` with `refresh` (today's `refresh_emby_resume` body, keyed on `ResumeSource::Server`). Move the four callers to it: `load_queue_sources` in `submit.rs`, `cmd_submit_queue` in `run/commands/load.rs`, `append_items_via_mpv` and `cmd_jump_to` in `run/commands/queue.rs`. Verify with `cargo nextest run -p mbv-player` green and `rg refresh_emby_resume crates/` showing only `resume.rs` and its tests.
 - [x] 2.4 Add `ResumeSeam::jump_ticks(item, owner_ticks)`. Replace the hand-written branch in `cmd_jump_to`. Make `PreparedSource::override_jump_resume` match on `resume_source` instead of `is_audiobookshelf`. `override_jump_resume` keeps its apply-or-zero semantics with `Session` as the pass-through arm; `jump_ticks` is for `cmd_jump_to` only, and `select_active_slot` still never fetches. Verify with `cargo nextest run -p mbv-player` green and no kind branch left in `cmd_jump_to` or `prepare_active_slot_with_resume` (read both). `cmd_append_queue`'s `is_audiobookshelf` promotion check is not a resume decision and stays.
 - [x] 2.5 Re-point `tests/resume_refresh.rs` at the seam and add one table-free test per source. Contract: the source choice per kind at the seam, with the fetch mocked. Cases: Emby video fetches and the server value wins; Emby audio never fetches and starts at 0; Feed keeps its local position under the 1% rule and never fetches; Audiobookshelf never fetches and `jump_ticks` yields `None`. Verify with `cargo nextest run -p mbv-player resume`. Keep the retry and missing-id tests, no real sleeps (`NO_DELAYS`).
-- [ ] 2.6 Add the *Resume source* term to `CONTEXT.md` (with *Avoid*: progress source, position source). Verify with `qmd query "Resume source"` returning the entry.
+- [x] 2.6 Add the *Resume source* term to `CONTEXT.md` (with *Avoid*: progress source, position source). Verify with `qmd query "Resume source"` returning the entry.
 
 ## 3. Drain the run's reports before its thread ends
 
@@ -26,7 +26,7 @@ Use `cargo nextest run -p mbv-player` for tests. Follow `docs/standards/README.m
 
 ## 4. Docs and gates
 
-- [ ] 4.1 Update `docs/invariants/06-queue-progress-application-sites.md`: the seek source is chosen by `resume_source`; the per-kind list moves to the seam; state the run-exit drain as the ordering rule and name its test (task 3.1). Verify by reading the file against the code (`rg resume_source`).
+- [x] 4.1 Update `docs/invariants/06-queue-progress-application-sites.md`: the seek source is chosen by `resume_source`; the per-kind list moves to the seam; state the run-exit drain as the ordering rule and name its test (task 3.1). Verify by reading the file against the code (`rg resume_source`).
 - [ ] 4.2 Run the gates: `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo nextest run -p mbv-player -p mbv-daemon`, and `make check-code-file-lines` just before the push. Fix every red gate or put it in front of the user. No lint suppression.
 - [ ] 4.3 Open the PR with the change left open. Ask the user for a live test of the stop-then-replay case, and for approval to sync and archive.
 
