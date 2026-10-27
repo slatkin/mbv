@@ -123,38 +123,13 @@ fn the_queue_end_autoplay_is_adopted() {
     let fake = FakeSessionApi::with_sessions(vec![idle_session()]);
     let script = fake.clone();
     let (mut t, calls, _rx) = session_output_with_queue(fake, vec![timed("a", RUNTIME_TICKS)]);
-    script.set_item(canned_autoplay_item());
-    let (client_id, _reply_tx, _client_rx) =
-        connect_output_client_with_caps(&t.event_loop.ctrl_clients, true, true);
-    let slots = slot_ids(&t);
-    play_slot(&mut t, client_id, slots[0]);
-    let t0 = Instant::now();
+    let (_client_id, ended) = adopt_the_direct_autoplay(&mut t, &script, Instant::now());
 
-    // The sighting of the tracked item, within 10 seconds of its runtime.
-    script.set_sessions(vec![session_presenting_at(
-        "a",
-        RUNTIME_TICKS - 3 * SECOND_TICKS,
-        RUNTIME_TICKS,
-    )]);
-    poll_once(&mut t, t0);
-    // The device starts its own next item straight away: no idle in between.
-    script.set_sessions(vec![session_presenting_at("f", 0, RUNTIME_TICKS)]);
-    poll_once(&mut t, t0 + EMBY_SESSION_POLL_INTERVAL);
-    wait_for_session_jobs(&t.event_loop.owner.output);
     let persisted_before = t.persisted.borrow().len();
     pump_session_event(&mut t);
 
-    assert_adopted(&t, &calls, &["f".to_string()], 1, "f", slots[0]);
-    assert_eq!(
-        t.persisted.borrow().len(),
-        persisted_before + 1,
-        "the adoption is the one queue change the Session event persists"
-    );
-    assert_eq!(
-        t.persisted.borrow()[persisted_before].item_ids(),
-        ["a".to_string(), "f".to_string()],
-        "the persisted queue holds the adopted slot"
-    );
+    assert_adopted(&t, &calls, &["f".to_string()], 1, "f", ended);
+    assert_persisted_adoption(&t, persisted_before, &["a".to_string(), "f".to_string()]);
 }
 
 /// Contract: row 3.2 / followups design D4, idle-gap path, and spec scenario
@@ -167,11 +142,7 @@ fn the_autoplay_after_an_idle_gap_is_adopted_with_one_completion() {
     let fake = FakeSessionApi::with_sessions(vec![idle_session()]);
     let script = fake.clone();
     let (mut t, calls, _rx) = session_output_with_queue(fake, vec![timed("a", RUNTIME_TICKS)]);
-    script.set_item(canned_autoplay_item());
-    let (client_id, _reply_tx, _client_rx) =
-        connect_output_client_with_caps(&t.event_loop.ctrl_clients, true, true);
-    let slots = slot_ids(&t);
-    play_slot(&mut t, client_id, slots[0]);
+    let (_client_id, ended) = playing_queue_with_canned_autoplay(&mut t, &script);
     let t0 = Instant::now();
 
     // The sighting of the tracked item, then the idle observation one second
@@ -185,7 +156,7 @@ fn the_autoplay_after_an_idle_gap_is_adopted_with_one_completion() {
     script.set_sessions(vec![idle_session()]);
     poll_once(&mut t, t0 + EMBY_SESSION_POLL_INTERVAL);
     assert!(
-        slot_played(&t, slots[0]),
+        slot_played(&t, ended),
         "the natural end recorded the completion"
     );
 
@@ -193,34 +164,40 @@ fn the_autoplay_after_an_idle_gap_is_adopted_with_one_completion() {
     script.set_sessions(vec![session_presenting_at("f", 0, RUNTIME_TICKS)]);
     poll_once(&mut t, t0 + 2 * EMBY_SESSION_POLL_INTERVAL);
     wait_for_session_jobs(&t.event_loop.owner.output);
+
     let persisted_before = t.persisted.borrow().len();
     pump_session_event(&mut t);
 
-    assert_adopted(&t, &calls, &["f".to_string()], 1, "f", slots[0]);
-    assert_eq!(
-        t.persisted.borrow().len(),
-        persisted_before + 1,
-        "the adoption is the one queue change the Session event persists"
-    );
-    assert_eq!(
-        t.persisted.borrow()[persisted_before].item_ids(),
-        ["a".to_string(), "f".to_string()],
-        "the persisted queue holds the adopted slot"
-    );
+    assert_adopted(&t, &calls, &["f".to_string()], 1, "f", ended);
+    assert_persisted_adoption(&t, persisted_before, &["a".to_string(), "f".to_string()]);
+}
+
+/// The prologue the queue-end adoption tests share: the canned autoplay item
+/// is scripted, a client is connected, and the queue's one slot is playing.
+/// Returns the client id and the tracked slot the device ends.
+fn playing_queue_with_canned_autoplay(
+    t: &mut TestLoop,
+    script: &FakeSessionApi,
+) -> (u64, mbv_queue::QueueSlotId) {
+    script.set_item(canned_autoplay_item());
+    let (client_id, _reply_tx, _client_rx) =
+        connect_output_client_with_caps(&t.event_loop.ctrl_clients, true, true);
+    let slots = slot_ids(t);
+    play_slot(t, client_id, slots[0]);
+    (client_id, slots[0])
 }
 
 /// Drives the direct adoption the follow-up tests build on: the queue's one
-/// slot is playing, and the device starts the canned autoplay item straight
-/// after its sighting. The caller scripted the canned item and reads the
-/// adopted slot from the queue afterwards.
+/// slot is playing (the shared prologue), and the device starts the canned
+/// autoplay item straight after its sighting — no idle in between. The
+/// lookup's job has run when this returns; the caller pumps the result event
+/// itself, so a test can snapshot persistence first.
 fn adopt_the_direct_autoplay(
     t: &mut TestLoop,
     script: &FakeSessionApi,
-    client_id: u64,
     t0: Instant,
-) {
-    let slots = slot_ids(t);
-    play_slot(t, client_id, slots[0]);
+) -> (u64, mbv_queue::QueueSlotId) {
+    let (client_id, ended) = playing_queue_with_canned_autoplay(t, script);
     script.set_sessions(vec![session_presenting_at(
         "a",
         RUNTIME_TICKS - 3 * SECOND_TICKS,
@@ -230,7 +207,23 @@ fn adopt_the_direct_autoplay(
     script.set_sessions(vec![session_presenting_at("f", 0, RUNTIME_TICKS)]);
     poll_once(t, t0 + EMBY_SESSION_POLL_INTERVAL);
     wait_for_session_jobs(&t.event_loop.owner.output);
-    pump_session_event(t);
+    (client_id, ended)
+}
+
+/// The adoption's persistence contract (design D4): the Session event that
+/// lands the lookup result is the one queue change it persists, and the
+/// persisted queue holds the adopted tail slot.
+fn assert_persisted_adoption(t: &TestLoop, persisted_before: usize, item_ids: &[String]) {
+    assert_eq!(
+        t.persisted.borrow().len(),
+        persisted_before + 1,
+        "the adoption is the one queue change the Session event persists"
+    );
+    assert_eq!(
+        t.persisted.borrow()[persisted_before].item_ids(),
+        item_ids,
+        "the persisted queue holds the adopted slot"
+    );
 }
 
 /// The transport commands the Session received, in order.
@@ -256,12 +249,10 @@ fn an_adopted_item_is_tracked_like_a_loaded_item_and_adoption_repeats() {
     let script = fake.clone();
     let (mut t, calls, _rx) = session_output_with_queue(fake, vec![timed("a", RUNTIME_TICKS)]);
     script.set_item(canned_autoplay_item());
-    let (client_id, _reply_tx, _client_rx) =
-        connect_output_client_with_caps(&t.event_loop.ctrl_clients, true, true);
     let t0 = Instant::now();
-    let slots = slot_ids(&t);
-    adopt_the_direct_autoplay(&mut t, &script, client_id, t0);
-    let first_adopted = assert_adopted(&t, &calls, &["f".to_string()], 1, "f", slots[0]);
+    let (_client_id, ended) = adopt_the_direct_autoplay(&mut t, &script, t0);
+    pump_session_event(&mut t);
+    let first_adopted = assert_adopted(&t, &calls, &["f".to_string()], 1, "f", ended);
 
     // The adopted item plays like a loaded item: the Session's own position
     // is the presented one, and its sighting near the runtime arms the end
@@ -314,12 +305,10 @@ fn an_adopted_items_natural_end_records_its_completion_and_loads_nothing() {
     let script = fake.clone();
     let (mut t, calls, _rx) = session_output_with_queue(fake, vec![timed("a", RUNTIME_TICKS)]);
     script.set_item(canned_autoplay_item());
-    let (client_id, _reply_tx, _client_rx) =
-        connect_output_client_with_caps(&t.event_loop.ctrl_clients, true, true);
     let t0 = Instant::now();
-    let slots = slot_ids(&t);
-    adopt_the_direct_autoplay(&mut t, &script, client_id, t0);
-    let adopted = assert_adopted(&t, &calls, &["f".to_string()], 1, "f", slots[0]);
+    let (_client_id, ended) = adopt_the_direct_autoplay(&mut t, &script, t0);
+    pump_session_event(&mut t);
+    let adopted = assert_adopted(&t, &calls, &["f".to_string()], 1, "f", ended);
 
     // The adopted item's sighting near the runtime is what the idle
     // observation reads the end from.
@@ -365,9 +354,8 @@ fn next_on_the_adopted_queue_end_slot_loads_nothing_and_sends_no_device_command(
     let script = fake.clone();
     let (mut t, calls, _rx) = session_output_with_queue(fake, vec![timed("a", RUNTIME_TICKS)]);
     script.set_item(canned_autoplay_item());
-    let (client_id, _reply_tx, _client_rx) =
-        connect_output_client_with_caps(&t.event_loop.ctrl_clients, true, true);
-    adopt_the_direct_autoplay(&mut t, &script, client_id, Instant::now());
+    let (client_id, _ended) = adopt_the_direct_autoplay(&mut t, &script, Instant::now());
+    pump_session_event(&mut t);
     let adopted = slot_ids(&t)[1];
 
     t.event_loop.handle_event(DaemonEvent::Ctrl(

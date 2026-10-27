@@ -110,7 +110,7 @@ pub(crate) fn handle_lookup(
         // so `loaded.is_some()` is the available check; `still_presented`
         // covers a device that moved on to other content.
         let still_tracking = output.loaded.is_some();
-        let still_presented = pending && presents_item(output.last_observation.as_ref(), item_id);
+        let still_presented = presents_item(output.last_observation.as_ref(), item_id);
         (pending, still_tracking, still_presented)
     };
     let item = match result {
@@ -172,7 +172,7 @@ pub(crate) fn handle_lookup(
         if crate::control_queue::daemon_admits(
             &candidate,
             daemon.audio_only,
-            !daemon.client.lock().unwrap().token.is_empty(),
+            crate::control::has_emby(&daemon.client),
             daemon.audiobookshelf_runtime.is_some(),
         ) {
             super::load::admit(&candidate, &output.playable_media_types)
@@ -202,18 +202,14 @@ pub(crate) fn handle_lookup(
 /// from it and Clients highlight its row — and the tracked item. The ended
 /// item's advance and owed pause go with the adoption.
 fn commit_adoption(daemon: &mut DaemonLoop, item_id: &str, item: QueueItem) -> bool {
-    let slot = daemon.owner.core.queue.append(item);
-    daemon.owner.core.note_observed_active_slot(Some(slot));
-    let runtime_ticks = daemon
-        .owner
-        .core
-        .queue
-        .slot(slot)
-        .and_then(|slot| slot.item.as_emby())
-        .map_or(0, |item| item.runtime_ticks);
+    // The output is matched before anything mutates: a non-Session output
+    // appends no slot and records no observation.
     let PlaybackOutput::EmbySession(output) = &mut daemon.owner.output else {
         return false;
     };
+    let runtime_ticks = item.as_emby().map_or(0, |item| item.runtime_ticks);
+    let slot = daemon.owner.core.queue.append(item);
+    daemon.owner.core.note_observed_active_slot(Some(slot));
     output.loaded = Some(EmbySessionLoadedItem {
         slot,
         item_id: item_id.to_owned(),

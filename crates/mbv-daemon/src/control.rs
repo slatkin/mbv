@@ -25,6 +25,16 @@ mod playback;
 mod queue_edit;
 mod queue_setup;
 
+/// Whether the Emby service is configured: the client holds a token. The one
+/// predicate every queue-entry admission site reads (emby-session-owner-output
+/// design D7): the ctrl dispatcher derives it per command, and the queue-end
+/// adoption reads it at its lookup result. Derived per use instead of stored:
+/// only the event-loop thread mutates the client token, so the value is
+/// stable for the duration of one dispatched command.
+pub(crate) fn has_emby(client: &Arc<Mutex<EmbyClient>>) -> bool {
+    !client.lock().unwrap().token.is_empty()
+}
+
 pub(crate) fn intent_span(
     client_id: CtrlClientId,
     request_id: PlaybackRequestId,
@@ -75,11 +85,9 @@ pub(super) struct CtrlContext<'a> {
 }
 
 impl CtrlContext<'_> {
-    /// Whether the Emby service is configured. Derived per use instead of
-    /// stored: only the event-loop thread mutates the client token, so the
-    /// value is stable for the duration of one dispatched command.
+    /// Whether the Emby service is configured.
     pub(crate) fn has_emby(&self) -> bool {
-        !self.client.lock().unwrap().token.is_empty()
+        crate::control::has_emby(self.client)
     }
 
     /// Rejection context valid before any handler has taken mutable borrows

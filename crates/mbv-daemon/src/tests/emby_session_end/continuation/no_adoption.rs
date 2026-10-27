@@ -8,6 +8,22 @@ use super::*;
 
 use crate::emby_session::ContinuationWatch;
 
+/// Moves the output's last observation stamp back by `age`: the observation
+/// path stamps `observed_at` with the real clock (poll.rs `observe`), so a
+/// test that needs a sighting older than its poll script drives the stamp
+/// through this one helper instead of waiting the age out. The fake times
+/// the polls read stay the scenario's one clock.
+fn age_last_observation(t: &mut TestLoop, age: Duration) {
+    let PlaybackOutput::EmbySession(output) = &mut t.event_loop.owner.output else {
+        panic!("the Session is the output");
+    };
+    output.observed_at = Some(
+        Instant::now()
+            .checked_sub(age)
+            .expect("the aged observation stamp is representable"),
+    );
+}
+
 /// The foreign item the device starts after the tracked item's end at the
 /// queue's edge, in the two ways the adoption fails (row 3.4). Both leave
 /// the item presented and the queue unchanged; they differ in the lookup
@@ -147,18 +163,9 @@ fn a_foreign_item_presented_after_a_long_absence_is_not_adopted() {
     )]);
     poll_once(&mut t, t0);
     // The device then goes missing and the polls fail, so the sighting stays
-    // the observation the estimate reads. The observation path reads the real
-    // clock, so the test ages the sighting past the 30-second bound instead
-    // of waiting — the same injection the no-adoption table's late case makes
-    // to its window.
-    let PlaybackOutput::EmbySession(output) = &mut t.event_loop.owner.output else {
-        panic!("the Session is the output");
-    };
-    output.observed_at = Some(
-        Instant::now()
-            .checked_sub(Duration::from_secs(40))
-            .expect("40 seconds before now is representable"),
-    );
+    // the observation the estimate reads. The stamp moves back past the
+    // 30-second freshness bound instead of waiting out the absence.
+    age_last_observation(&mut t, Duration::from_secs(40));
     // The device reappears playing its own item.
     script.set_sessions(vec![session_presenting_at("f", 0, RUNTIME_TICKS)]);
     poll_once(&mut t, t0 + EMBY_SESSION_POLL_INTERVAL);
@@ -212,18 +219,10 @@ fn a_natural_end_revealed_after_a_long_absence_opens_no_window() {
         RUNTIME_TICKS,
     )]);
     poll_once(&mut t, t0);
-    // No polls land for five minutes. The observation path reads the real
-    // clock, so the test ages the sighting instead of waiting: the device then
-    // reports idle, which reveals the natural end three seconds after the
-    // sighting.
-    let PlaybackOutput::EmbySession(output) = &mut t.event_loop.owner.output else {
-        panic!("the Session is the output");
-    };
-    output.observed_at = Some(
-        Instant::now()
-            .checked_sub(Duration::from_secs(300))
-            .expect("300 seconds before now is representable"),
-    );
+    // No polls land for five minutes. The stamp moves back so the idle
+    // observation reveals the natural end three seconds after the sighting,
+    // minutes in the past.
+    age_last_observation(&mut t, Duration::from_secs(300));
     script.set_sessions(vec![idle_session()]);
     poll_once(&mut t, t0 + Duration::from_secs(300));
     script.set_sessions(vec![session_presenting_at("f", 0, RUNTIME_TICKS)]);

@@ -722,7 +722,9 @@ impl RemotePlayer {
         )
     }
 
-    /// Test-support stub that advertises owner-authoritative idle queue loads.
+    /// Test-support stub whose advertised ctrl capability accepts the
+    /// owner's queue source updates (`QueueOp::SourceUpdate` sends its
+    /// `UnifiedQueueSourceUpdate` instead of failing the operation).
     #[cfg(any(test, feature = "test"))]
     #[must_use]
     pub fn stub_owner_queue_source_update_with_command_rx(
