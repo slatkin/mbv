@@ -13,7 +13,7 @@
 
 ## 3. Daemon helper rename
 
-- [ ] 3.1 Rename `submit_queue_slots_cold_start` to `submit_queue_slots_for_replace` (D6): the definition in `crates/mbv-daemon/src/core.rs`, the `lib.rs` re-export, `control.rs`, `reconciliation.rs`, `output/handoff.rs`, `core/transition_dispatch.rs`, and the doc comments in `core.rs` and `control_queue.rs` that call it a cold start. No behaviour change. Verify: `cargo check -p mbv-daemon` and `cargo nextest run -p mbv-daemon`.
+- [x] 3.1 Rename `submit_queue_slots_cold_start` to `submit_queue_slots_for_replace` (D6): the definition in `crates/mbv-daemon/src/core.rs`, the `lib.rs` re-export, `control.rs`, `reconciliation.rs`, `output/handoff.rs`, `core/transition_dispatch.rs`, and the doc comments in `core.rs` and `control_queue.rs` that call it a cold start. No behaviour change. Verify: `cargo check -p mbv-daemon` and `cargo nextest run -p mbv-daemon`.
 
 ## 4. Docs
 
