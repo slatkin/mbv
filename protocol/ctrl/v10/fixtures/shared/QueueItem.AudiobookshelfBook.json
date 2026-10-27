@@ -1,0 +1,11 @@
+{
+  "author": "Conformance Author",
+  "cover_path": null,
+  "duration_ticks": 3600000000,
+  "is_finished": false,
+  "kind": "AudiobookshelfBook",
+  "libraryItemId": "abs-book-1",
+  "played": false,
+  "position_ticks": 30000000,
+  "title": "Conformance Audiobookshelf Book"
+}

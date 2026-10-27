@@ -91,6 +91,29 @@ pub(crate) fn document(root: Root) -> serde_json::Value {
     root_document(root)
 }
 
+/// A named `$defs` entry of one root schema, as a standalone document with
+/// the root's full `$defs` attached so inner `$ref`s still resolve. Shared
+/// nested-only shapes (`QueueItem`, `PlayerStatus`, `UnifiedQueueStateData`)
+/// have no root of their own; their fixtures validate against the entry of
+/// the root that carries the type (design D4).
+pub(crate) fn document_entry(root: Root, name: &str) -> serde_json::Value {
+    let document = root_document(root);
+    let defs = document
+        .get("$defs")
+        .and_then(serde_json::Value::as_object)
+        .unwrap_or_else(|| panic!("{} carries no $defs", root.file_name()))
+        .clone();
+    let mut entry = defs
+        .get(name)
+        .cloned()
+        .unwrap_or_else(|| panic!("{} carries no $defs entry `{name}`", root.file_name()));
+    let entry_object = entry
+        .as_object_mut()
+        .expect("a $defs entry is a schema object");
+    entry_object.insert(String::from("$defs"), serde_json::Value::Object(defs));
+    entry
+}
+
 /// Deterministic on-disk form: pretty-printed JSON with a trailing newline.
 /// `serde_json` sorts object keys (no `preserve_order` in this workspace), so
 /// the bytes are stable across runs.

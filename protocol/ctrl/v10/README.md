@@ -65,7 +65,9 @@ is a deliberate act, not a way to silence the gate.
   fixture must satisfy its root schema.
 - **Decode-only fixtures** (`shared/`): tolerated legacy shapes the wire no
   longer emits — today the legacy bare `EmbyItem` queue item and the
-  bare-scalar `run_identity`. Decoding must succeed; no re-encode equality,
-  and no schema validation, because the schema describes emitted shapes
+  bare-scalar `run_identity`. Decoding must yield exactly the canonical
+  value the same shape encodes to (so a silently dropped or altered field
+  fails), but the legacy bytes themselves are never rewritten by bless, and
+  they get no schema validation, because the schema describes emitted shapes
   only. Shared fixtures validate against a named `$defs` entry of the root
   schema that carries the type.

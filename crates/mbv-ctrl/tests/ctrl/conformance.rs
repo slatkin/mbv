@@ -8,9 +8,11 @@
 //!
 //! The corpus is one fixture per wire shape, seeded per corpus by the units
 //! of the change: `hello/` (handshake shapes), `commands/` (one `CtrlCmd`
-//! per variant, `PlayerCmd` per `WireCommand` tag), and `events/` (one
-//! `CtrlEvent` per variant, `PlayerEvent` per `Player.<variant>` row) now;
-//! `shared/` in a later unit. A fixture directory that holds a file the
+//! per variant, `PlayerCmd` per `WireCommand` tag), `events/` (one
+//! `CtrlEvent` per variant, `PlayerEvent` per `Player.<variant>` row), and
+//! `shared/` (one `QueueItem` per kind, `PlayerStatus`, and
+//! `UnifiedQueueStateData` with its transition fields, plus the tolerated
+//! legacy decode shapes). A fixture directory that holds a file the
 //! table does not name — or the reverse — fails reconciliation.
 
 mod builders;
@@ -18,6 +20,7 @@ mod commands;
 mod events;
 mod hello;
 mod schema;
+mod shared;
 
 use std::collections::BTreeSet;
 use std::fs;
@@ -51,8 +54,32 @@ enum Direction {
     /// the fixture, and decoding the fixture must re-encode to it.
     RoundTrip,
     /// A tolerated legacy shape the wire never emits any more: decoding the
-    /// fixture must succeed, but nothing pins what a re-encode emits.
+    /// fixture must yield exactly the canonical value the same shape encodes
+    /// to (the legacy bytes themselves differ from that encoding — that is
+    /// what makes them legacy).
     DecodeOnly,
+}
+
+/// The schema document a fixture validates against. A wire root is its own
+/// document; a shared nested-only shape has no root of its own and
+/// validates against a named `$defs` entry of the root schema that carries
+/// the type (design D4).
+enum SchemaAnchor {
+    Root(schema::Root),
+    DefsEntry {
+        root: schema::Root,
+        name: &'static str,
+    },
+}
+
+impl SchemaAnchor {
+    /// The schema document this anchor resolves to.
+    fn document(self) -> serde_json::Value {
+        match self {
+            SchemaAnchor::Root(root) => schema::document(root),
+            SchemaAnchor::DefsEntry { root, name } => schema::document_entry(root, name),
+        }
+    }
 }
 
 /// One row of the fixture table: a fixture path, its direction, the root
@@ -61,7 +88,7 @@ enum Direction {
 struct FixtureRow {
     path: String,
     direction: Direction,
-    schema: Option<schema::Root>,
+    schema: Option<SchemaAnchor>,
     value: Box<dyn FixtureValue>,
 }
 
@@ -105,6 +132,7 @@ fn rows() -> Vec<FixtureRow> {
     hello::rows(&mut rows);
     commands::rows(&mut rows);
     events::rows(&mut rows);
+    shared::rows(&mut rows);
     rows
 }
 
@@ -156,7 +184,14 @@ fn check_row(row: &FixtureRow) -> Result<(), String> {
         }
         Direction::DecodeOnly => {
             let file = read_fixture_json(&path)?;
-            row.value.reencode_from_file(&file)?;
+            let reencoded = row.value.reencode_from_file(&file)?;
+            if reencoded != row.value.encode() {
+                return Err(format!(
+                    "{}: decoding the legacy shape does not yield the canonical value \
+                     — a field is dropped or altered on decode",
+                    row.path
+                ));
+            }
         }
     }
     Ok(())
@@ -262,14 +297,15 @@ fn write_schema_if_changed(path: &Path, generated: &str) {
     }
 }
 
-/// Every round-trip fixture must satisfy the root schema its row anchors to,
-/// so a `#[schemars(with = ...)]` override that no longer matches what serde
-/// emits cannot pass silently. Decode-only rows skip validation: the schema
-/// describes emitted shapes only.
+/// Every round-trip fixture must satisfy the schema its row anchors to — a
+/// wire root document, or the named `$defs` entry a shared shape validates
+/// against — so a `#[schemars(with = ...)]` override that no longer matches
+/// what serde emits cannot pass silently. Decode-only rows skip validation:
+/// the schema describes emitted shapes only.
 #[test]
 fn every_round_trip_fixture_validates_against_its_root_schema() {
     for row in rows() {
-        let Some(root) = row.schema else {
+        let Some(anchor) = row.schema else {
             assert_eq!(
                 row.direction,
                 Direction::DecodeOnly,
@@ -278,7 +314,7 @@ fn every_round_trip_fixture_validates_against_its_root_schema() {
             );
             continue;
         };
-        let document = schema::document(root);
+        let document = anchor.document();
         let instance = if bless() {
             // The fixture file may not exist yet in a seeding bless run; the
             // canonical value is exactly what the round-trip pass writes.

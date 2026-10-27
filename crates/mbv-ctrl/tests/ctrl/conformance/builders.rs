@@ -5,7 +5,10 @@
 //! these, so a payload literal changes in exactly one place.
 
 use mbv_emby_model::{EmbyImageTags, EmbyItem};
-use mbv_queue::{FeedEntry, FeedKind, QueueItem, QueueItemContentId, QueueLineage, QueueSource};
+use mbv_queue::{
+    AudiobookshelfBookQueueItem, AudiobookshelfItem, AudiobookshelfQueueItem, FeedEntry, FeedKind,
+    QueueItem, QueueItemContentId, QueueLineage, QueueSource,
+};
 
 use super::*;
 
@@ -33,6 +36,12 @@ pub(crate) const ABS_EPISODE_ID: &str = "abs-episode-1";
 pub(crate) const ABS_BOOK_ITEM_ID: &str = "abs-book-1";
 /// Playback position the progress-shaped fixtures carry (30 s in ticks).
 pub(crate) const POSITION_TICKS: i64 = 30_000_000;
+/// The queued transition's request id, distinct from `REQUEST_ID` so the
+/// two `TransitionSummary` rows of the transitions fixture stay separable.
+pub(crate) const QUEUED_REQUEST_ID: u64 = 8;
+/// The queued transition's generation, distinct from `GENERATION` for the
+/// same reason.
+pub(crate) const QUEUED_GENERATION: u64 = 4;
 
 // ── Queue payload builders ───────────────────────────────────────────────
 
@@ -177,4 +186,55 @@ pub(crate) fn unified_queue_state() -> UnifiedQueueStateData {
         in_flight_transition: None,
         queued_latest_transition: None,
     }
+}
+
+/// The canonical `UnifiedQueueStateData` with both transition fields set: a
+/// `JumpTo` dispatched to the Playback run and awaiting observation, and a
+/// newer one queued behind it. Distinct request ids and generations so the
+/// two summaries stay separable in the fixture.
+pub(crate) fn unified_queue_state_with_transitions() -> UnifiedQueueStateData {
+    let mut state = unified_queue_state();
+    state.in_flight_transition = Some(TransitionSummary {
+        request_id: REQUEST_ID,
+        generation: GENERATION,
+        target_slot: 2,
+    });
+    state.queued_latest_transition = Some(TransitionSummary {
+        request_id: QUEUED_REQUEST_ID,
+        generation: QUEUED_GENERATION,
+        target_slot: 2,
+    });
+    state
+}
+
+/// The Audiobookshelf episode queue item the shared fixtures carry.
+pub(crate) fn abs_episode_queue_item() -> QueueItem {
+    QueueItem::Audiobookshelf(AudiobookshelfItem::Episode(AudiobookshelfQueueItem {
+        library_item_id: ABS_LIBRARY_ITEM_ID.to_owned(),
+        episode_id: ABS_EPISODE_ID.to_owned(),
+        title: "Conformance Audiobookshelf Episode".to_owned(),
+        show_title: Some("Conformance Show".to_owned()),
+        author: Some("Conformance Author".to_owned()),
+        description: Some("Conformance episode description".to_owned()),
+        duration_ticks: Some(1_800_000_000),
+        position_ticks: POSITION_TICKS,
+        played: false,
+        pub_date_secs: Some(1_700_000_000),
+        is_finished: false,
+        cover_path: Some("covers/conformance-episode.jpg".to_owned()),
+    }))
+}
+
+/// The Audiobookshelf book queue item the shared fixtures carry.
+pub(crate) fn abs_book_queue_item() -> QueueItem {
+    QueueItem::Audiobookshelf(AudiobookshelfItem::Book(AudiobookshelfBookQueueItem {
+        library_item_id: ABS_BOOK_ITEM_ID.to_owned(),
+        title: "Conformance Audiobookshelf Book".to_owned(),
+        author: Some("Conformance Author".to_owned()),
+        duration_ticks: Some(3_600_000_000),
+        position_ticks: POSITION_TICKS,
+        played: false,
+        is_finished: false,
+        cover_path: None,
+    }))
 }

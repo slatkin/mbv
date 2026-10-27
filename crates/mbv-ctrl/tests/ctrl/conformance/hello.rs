@@ -174,7 +174,7 @@ pub(crate) fn rows(rows: &mut Vec<FixtureRow>) {
         rows.push(FixtureRow {
             path: format!("hello/{name}.json"),
             direction: Direction::RoundTrip,
-            schema: Some(schema::Root::Hello),
+            schema: Some(SchemaAnchor::Root(schema::Root::Hello)),
             value: fixture_value(value),
         });
     }

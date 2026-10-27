@@ -1,0 +1,14 @@
+{
+  "duration_ticks": 1800000000,
+  "enclosure_url": "https://feeds.example/conformance/episode-1.mp3",
+  "feed_id": "https://feeds.example/conformance.xml",
+  "feed_kind": "audio",
+  "guid": "conformance-feed-guid",
+  "kind": "Feed",
+  "link": null,
+  "mime_type": "audio/mpeg",
+  "played": false,
+  "position_ticks": 0,
+  "pub_date_secs": 1700000000,
+  "title": "Conformance Feed Entry"
+}
