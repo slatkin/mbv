@@ -22,8 +22,8 @@
 
 ## 6. Gates
 
-- [ ] 6.1 Run `cargo fmt`, then `cargo clippy --workspace --all-targets -- -D warnings`. Verify: both pass with no new `allow` attribute.
-- [ ] 6.2 Run `make check-code-file-lines` before the push. Verify: no touched file is over 800 lines.
+- [x] 6.1 Run `cargo fmt`, then `cargo clippy --workspace --all-targets -- -D warnings`. Verify: both pass with no new `allow` attribute.
+- [x] 6.2 Run `make check-code-file-lines` before the push. Verify: no touched file is over 800 lines.
 
 ## Workflow follow-up
 
