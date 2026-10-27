@@ -127,14 +127,20 @@ pub(super) fn read_server_hello(
         ));
     };
     // A local Owner is the same binary as this Client, so a differing
-    // `app_version` means the user is attached to a stale process. Refuse
-    // here, before `validate_peer` and therefore before `send_client_hello`,
-    // so no control credential leaves this terminal. Both sides read the
-    // workspace version (`version.workspace = true`), so this compares like
-    // with like.
-    if matches!(peer_build, PeerBuild::MustMatch) && info.app_version != env!("CARGO_PKG_VERSION") {
+    // `app_version` or `build_id` means the user is attached to a stale
+    // process (emby-session-output-followups design D3, issue #949 item 3).
+    // An Owner that predates the build-id field sends an empty `build_id`,
+    // which never equals this binary's non-empty identity and is refused
+    // the same way. Refuse here, before `validate_peer` and therefore
+    // before `send_client_hello`, so no control credential leaves this
+    // terminal (invariant 15). Both sides read the workspace version
+    // (`version.workspace = true`), so this compares like with like.
+    if matches!(peer_build, PeerBuild::MustMatch)
+        && (info.app_version != env!("CARGO_PKG_VERSION") || info.build_id != mbv_ctrl::BUILD_ID)
+    {
         return Err(crate::RemotePlayerError::owner_build_mismatch(
             info.app_version,
+            info.build_id,
         ));
     }
     info.validate_peer()?;

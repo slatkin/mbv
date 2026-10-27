@@ -2169,6 +2169,7 @@ dependencies = [
  "mbv-emby-model",
  "mbv-net",
  "mbv-queue",
+ "rstest",
  "serde_json",
  "tracing",
 ]

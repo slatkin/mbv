@@ -6,7 +6,7 @@ use super::{Choice, FollowUp, ask, follow_up};
 use crate::remote_player::RemotePlayerError;
 
 fn mismatch_error(owner_app_version: &str) -> RemotePlayerError {
-    RemotePlayerError::owner_build_mismatch_for_test(owner_app_version)
+    RemotePlayerError::owner_build_mismatch_for_test(owner_app_version, "owner-build-1")
 }
 
 // Issue #559 (tasks row 3.1 contract: only an explicit r restarts). The

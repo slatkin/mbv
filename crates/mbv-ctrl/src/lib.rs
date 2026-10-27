@@ -48,4 +48,9 @@ pub use error::CtrlError;
 #[doc(inline)]
 pub use hello::{CtrlAudiobookshelfCapabilities, CtrlCompatibility, CtrlHello};
 
+/// Build identity of this binary, embedded by the build script: the git
+/// short SHA plus `-dirty` when the tree was dirty at build time, or
+/// `unknown` when git was unavailable (design D3).
+pub const BUILD_ID: &str = env!("BUILD_ID");
+
 pub mod player;

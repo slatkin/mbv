@@ -9,12 +9,20 @@ use super::{
 };
 use serde::{Deserialize, Serialize};
 
+use crate::BUILD_ID;
+
 use super::CtrlError;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CtrlHello {
     pub protocol_version: u32,
     pub app_version: String,
+    /// Build identity of the sending binary (design D3): the git short SHA
+    /// plus `-dirty` when the tree was dirty at build time. `#[serde(default)]`
+    /// keeps the field additive: a peer that predates it decodes an empty
+    /// value and is ignored by `PeerBuild::Any` handshakes.
+    #[serde(default)]
+    pub build_id: String,
     pub capabilities: Vec<String>,
     /// Control credential used only when the peer advertises `control-auth`.
     #[serde(default)]
@@ -31,6 +39,7 @@ impl CtrlHello {
         Self {
             protocol_version: CTRL_PROTOCOL_VERSION,
             app_version: env!("CARGO_PKG_VERSION").to_string(),
+            build_id: BUILD_ID.to_string(),
             capabilities: vec![
                 CTRL_CAP_QUEUE_STATE.to_string(),
                 CTRL_CAP_START_INDEX.to_string(),

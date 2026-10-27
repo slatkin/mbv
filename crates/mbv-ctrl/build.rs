@@ -1,0 +1,65 @@
+//! Build script: embeds the build identity as `BUILD_ID` (design D3,
+//! emby-session-output-followups task 4.1). The identity is the git short
+//! SHA plus `-dirty` when the tree is dirty, or `unknown` when git is
+//! unavailable (tarball builds).
+//!
+//! Rerun tracking names only git paths that exist: `git rev-parse
+//! --git-path HEAD`, the symbolic ref's `--git-path`, and the
+//! `packed-refs` report. A literal `.git/HEAD` is never named — in a
+//! worktree `.git` is a file, and Cargo reruns a build script on every
+//! build when a named path is missing, which would recompile this crate
+//! and every dependent each time. When git is unavailable no git path is
+//! emitted at all, so the default whole-project tracking applies.
+
+use std::process::Command;
+
+/// Runs `git` with `args` and returns its trimmed stdout, or `None` when
+/// git is unavailable or the command fails.
+fn git(args: &[&str]) -> Option<String> {
+    let output = Command::new("git").args(args).output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let stdout = String::from_utf8(output.stdout).ok()?;
+    Some(stdout.trim().to_string())
+}
+
+/// Emits `cargo:rerun-if-changed` for `path` only when it exists: a missing
+/// path makes Cargo rerun the script on every build.
+fn rerun_if_changed(path: &str) {
+    if std::fs::metadata(path).is_ok() {
+        println!("cargo:rerun-if-changed={path}");
+    }
+}
+
+fn main() {
+    // Everything below keys off git; without it the identity is a constant
+    // `unknown` and no rerun path is emitted.
+    let Some(head_sha) = git(&["rev-parse", "--short=12", "HEAD"]) else {
+        println!("cargo:rustc-env=BUILD_ID=unknown");
+        return;
+    };
+
+    // `--porcelain` output is empty exactly when the worktree is clean;
+    // ignored files (build artifacts) never appear.
+    let dirty = git(&["status", "--porcelain"]).is_some_and(|status| !status.is_empty());
+    let build_id = if dirty {
+        format!("{head_sha}-dirty")
+    } else {
+        head_sha
+    };
+    println!("cargo:rustc-env=BUILD_ID={build_id}");
+
+    rerun_if_changed(&git(&["rev-parse", "--git-path", "HEAD"]).unwrap_or_default());
+    // The branch ref file: `--git-path` returns the per-worktree path, but
+    // a shared branch lives in the common dir, so both candidates are
+    // emitted when they exist. A detached HEAD has no symbolic ref at all.
+    if let Some(branch) = git(&["symbolic-ref", "--short", "HEAD"]) {
+        rerun_if_changed(&git(&["rev-parse", "--git-path", &branch]).unwrap_or_default());
+        if let Some(common_dir) = git(&["rev-parse", "--path-format=absolute", "--git-common-dir"])
+        {
+            rerun_if_changed(&format!("{common_dir}/refs/heads/{branch}"));
+        }
+    }
+    rerun_if_changed(&git(&["rev-parse", "--git-path", "packed-refs"]).unwrap_or_default());
+}
