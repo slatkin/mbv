@@ -7,7 +7,7 @@ use mbv_emby_model::EmbyItem;
 use mbv_emby_model::test_support::make_item;
 use mbv_net::mock_http::MockHttp;
 use mbv_ui_model::media_list::SelectionOrigin;
-use mbv_ui_msg::{MusicTreeAction, PlaybackRequest, ShellRequest};
+use mbv_ui_msg::{MusicTreeAction, ShellRequest};
 use std::sync::{Arc, Mutex};
 
 #[test]
@@ -64,100 +64,6 @@ fn consumed_space_cancels_the_playback_candidate_and_leaves_no_state() {
         &RouterOutcome::Deferred(PlaybackIntent::TogglePlayPause.into()),
         false
     ));
-}
-
-/// The double-Esc stop (see `Model::router_outcome`): the first Esc falls
-/// through to its claimants and dispatches nothing; a second Esc inside
-/// [`DOUBLE_ESC_STOP_WINDOW`] dispatches the stop from any focus — the leaf's
-/// own Esc action (back, close, selection clearing) already ran on the first
-/// press. A press on any other key disarms, so Esc-then-Space stays a
-/// play/pause toggle.
-#[test]
-fn first_escape_falls_through_and_second_dispatches_the_stop() {
-    let mut model = Model::new(make_app_stub());
-    model
-        .app
-        .player
-        .update_status(|status| status.active = true);
-    let key = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
-    let messages = vec![Msg::TerminalEvent(TerminalObserverEvent::Key(key.into()))];
-
-    // First press: falls through, nothing dispatches.
-    assert_eq!(model.router_outcome(&messages), RouterOutcome::FallThrough);
-    // Second press inside the window: the stop dispatches immediately.
-    assert_eq!(
-        model.router_outcome(&messages),
-        RouterOutcome::Command(PlaybackIntent::Stop.into())
-    );
-
-    // A non-Esc press between the two disarms: Space stays play/pause.
-    let space = vec![Msg::TerminalEvent(TerminalObserverEvent::Key(
-        KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE).into(),
-    ))];
-    model.router_outcome(&space);
-    assert_eq!(model.router_outcome(&messages), RouterOutcome::FallThrough);
-}
-
-/// The stop is global: the second Esc inside the window dispatches even when
-/// the focused leaf consumed both presses (a library list's back navigation) —
-/// the stop previously fired only where the leaf ignored Esc.
-#[test]
-fn second_escape_stops_when_the_leaf_consumes_both_presses() {
-    let mut model = Model::new(make_app_stub());
-    model
-        .app
-        .player
-        .update_status(|status| status.active = true);
-    let key = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
-    let leaf = vec![
-        Msg::Shell(Box::new(ShellRequest::EmbyLibraryBack)),
-        Msg::TerminalEvent(TerminalObserverEvent::Key(key.into())),
-    ];
-
-    assert_eq!(model.router_outcome(&leaf), RouterOutcome::FallThrough);
-    // The second press carries the leaf's own back request again; the stop
-    // command still dispatches (and arbitration discards the request).
-    assert_eq!(
-        model.router_outcome(&leaf),
-        RouterOutcome::Command(PlaybackIntent::Stop.into())
-    );
-    let (folded, _) = arbitrate_key(
-        leaf,
-        Some(&ComponentId::Library),
-        &RouterOutcome::Command(PlaybackIntent::Stop.into()),
-    );
-    assert!(
-        folded.is_empty(),
-        "the second Esc's back request is discarded"
-    );
-}
-
-/// A playback panel whose own Esc is Stop (`library_playback_panel`)
-/// dispatched through the leaf on the first press; the second Esc inside the
-/// window is inert instead of dispatching a duplicate Stop behind it
-/// (review round 1, P2: duplicate toast and redundant stop command).
-#[test]
-fn second_escape_behind_a_leaf_stop_is_swallowed() {
-    let mut model = Model::new(make_app_stub());
-    model
-        .app
-        .player
-        .update_status(|status| status.active = true);
-    let key = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
-    let leaf_stop = vec![
-        Msg::Playback(PlaybackRequest::Stop),
-        Msg::TerminalEvent(TerminalObserverEvent::Key(key.into())),
-    ];
-
-    // First press: falls through, the leaf's own Stop dispatches.
-    assert_eq!(model.router_outcome(&leaf_stop), RouterOutcome::FallThrough);
-    // Second press inside the window: the leaf is stopping already, so the
-    // press is swallowed — no duplicate Stop dispatch.
-    assert_eq!(
-        model.router_outcome(&leaf_stop),
-        RouterOutcome::Swallow,
-        "the leaf's own stop stands; no duplicate dispatch"
-    );
 }
 
 #[test]

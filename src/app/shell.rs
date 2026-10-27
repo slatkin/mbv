@@ -75,10 +75,6 @@ const TERMINAL_LISTENER_INTERVAL: Duration = Duration::from_millis(8);
 /// one-event-per-iteration loop.
 const TERMINAL_LISTENER_MAX_POLL: usize = 60;
 
-/// A second Esc inside this window stops playback; a single Esc stays free
-/// for whatever claims it (sidebar, search, overlay dismissal).
-const DOUBLE_ESC_STOP_WINDOW: Duration = Duration::from_millis(600);
-
 /// One-shot inline-track-focus transition the shell hands the Music workspace
 /// at the next content push. `Enter` is bound to the album it was raised for,
 /// so a re-anchor that outruns that album's track fetch can retry on the
@@ -216,10 +212,6 @@ pub struct Model {
             mbv_ui_model::context_menu::ContextMenuTargets,
         >,
     >,
-    /// The last Esc press, for the double-Esc playback stop. Shell-owned
-    /// timing state: a single Esc falls through to its claimants, and only
-    /// a second Esc within [`DOUBLE_ESC_STOP_WINDOW`] dispatches the stop.
-    pub(in crate::app) last_esc: Option<std::time::Instant>,
     /// Compiled keybind configuration, parsed once from the config file at
     /// startup (change `add-configurable-keybinds`, design D3): the optional
     /// prefix chord plus per-section router overrides and prefix-namespace
@@ -339,7 +331,6 @@ impl Model {
             visual_selection: None,
             context_menu_origin: None,
             context_action_snapshot: None,
-            last_esc: None,
             keybinds,
             prefix_armed_focus: None,
             swapped_out_exit: false,
