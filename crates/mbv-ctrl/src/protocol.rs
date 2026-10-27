@@ -17,6 +17,11 @@ use mbv_queue::{QueueItem, QueueItemContentId, QueueLineage, QueueSlotId, QueueS
 ///   - changing the meaning, units, or nullability of an existing field
 ///   - changing handshake order or framing
 ///
+/// The committed record of the wire is `protocol/ctrl/v10/`: one golden
+/// fixture per variant and case, plus the generated schemas. An additive
+/// change updates that directory in place; a bump opens the next version
+/// directory (see `protocol/ctrl/v10/README.md`).
+///
 /// Version 9 intentionally bumps for the removed legacy `auth_token` hello
 /// field and the resulting credential-free packaged-daemon handshake. The
 /// source previously declared v7 while the archived v8 contract described v8;
