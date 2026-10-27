@@ -39,7 +39,7 @@ fn mpv_title_opt(title: &str) -> String {
 
 fn mpv_load_opts(item: &QueueItem) -> String {
     let title = mpv_title_opt(&item.display_name());
-    let start = resume_start_pos(item);
+    let start = resume::resume_start_pos(item);
     if start > 0.0 {
         format!("{title},start={start}")
     } else {
@@ -226,7 +226,6 @@ mod tracks;
 use tracks::lang_code_to_name;
 use tracks::{auto_select_tracks, refresh_tracks};
 mod resume;
-pub(crate) use resume::resume_start_pos;
 #[doc(inline)]
 pub use resume::{resume_ticks_for_item, resume_ticks_for_slot};
 mod sources;

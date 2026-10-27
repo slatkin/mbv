@@ -6,7 +6,7 @@ use super::{
     queue_load_indices, queue_load_location, reassert_queue_layout, send_ep_info,
     spawn_progress_reporter, start_queue_playback,
 };
-use crate::resume::{EMBY_RESUME_RETRY_DELAYS, refresh_emby_resume};
+use crate::resume::{EMBY_RESUME_RETRY_DELAYS, ResumeSeam};
 use mbv_ids::{EmbySessionId, ItemId, MediaSourceId};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
@@ -528,13 +528,14 @@ fn load_queue_sources(
     // before any `start=` option is baked into the loads below. This runs
     // before `make_reporter`, so it uses the same Emby client the reporter
     // will hold (`start.client`).
-    let items: Vec<QueueItem> = match start.client.as_deref() {
-        Some(client) => refresh_emby_resume(
-            start.items.iter().map(|slot| slot.item.clone()).collect(),
-            |ids| client.get_items_by_ids(ids),
+    let items: Vec<QueueItem> = start.items.iter().map(|slot| slot.item.clone()).collect();
+    let items = match start.client.as_deref() {
+        Some(client) => ResumeSeam::new(
+            &mut |ids| client.get_items_by_ids(ids),
             &EMBY_RESUME_RETRY_DELAYS,
-        ),
-        None => start.items.iter().map(|slot| slot.item.clone()).collect(),
+        )
+        .refresh(items),
+        None => items,
     };
     let load_indices: Vec<_> = if active_file_projection {
         vec![start.start_idx]

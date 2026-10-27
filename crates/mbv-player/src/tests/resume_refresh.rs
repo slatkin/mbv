@@ -1,5 +1,5 @@
 use super::*;
-use crate::resume::refresh_emby_resume;
+use crate::resume::ResumeSeam;
 use mbv_emby::EmbyError;
 use std::cell::{Cell, RefCell};
 
@@ -33,7 +33,8 @@ fn fetched_position_replaces_the_items_position() {
     let items = vec![emby_video("ep1", TICKS_PER_SECOND, false)];
     let server = server_item("ep1", 120 * TICKS_PER_SECOND);
 
-    let refreshed = refresh_emby_resume(items, |_| Ok(vec![server.clone()]), &NO_DELAYS);
+    let mut fetch = |_ids: &[String]| Ok(vec![server.clone()]);
+    let refreshed = ResumeSeam::new(&mut fetch, &NO_DELAYS).refresh(items);
 
     assert_eq!(position(&refreshed[0]), (120 * TICKS_PER_SECOND, true));
 }
@@ -43,18 +44,16 @@ fn one_failure_then_success_uses_the_fetched_position_after_two_attempts() {
     let calls = Cell::new(0_u32);
     let server = server_item("ep1", 90 * TICKS_PER_SECOND);
 
-    let refreshed = refresh_emby_resume(
-        vec![emby_video("ep1", TICKS_PER_SECOND, false)],
-        |_| {
-            calls.set(calls.get() + 1);
-            if calls.get() == 1 {
-                Err(EmbyError::resolve("fetch failed"))
-            } else {
-                Ok(vec![server.clone()])
-            }
-        },
-        &NO_DELAYS,
-    );
+    let items = vec![emby_video("ep1", TICKS_PER_SECOND, false)];
+    let mut fetch = |_ids: &[String]| {
+        calls.set(calls.get() + 1);
+        if calls.get() == 1 {
+            Err(EmbyError::resolve("fetch failed"))
+        } else {
+            Ok(vec![server.clone()])
+        }
+    };
+    let refreshed = ResumeSeam::new(&mut fetch, &NO_DELAYS).refresh(items);
 
     assert_eq!(
         calls.get(),
@@ -68,14 +67,12 @@ fn one_failure_then_success_uses_the_fetched_position_after_two_attempts() {
 fn three_failures_start_from_the_beginning_after_three_attempts() {
     let calls = Cell::new(0_u32);
 
-    let refreshed = refresh_emby_resume(
-        vec![emby_video("ep1", 30 * TICKS_PER_SECOND, true)],
-        |_| {
-            calls.set(calls.get() + 1);
-            Err(EmbyError::resolve("fetch failed"))
-        },
-        &NO_DELAYS,
-    );
+    let items = vec![emby_video("ep1", 30 * TICKS_PER_SECOND, true)];
+    let mut fetch = |_ids: &[String]| {
+        calls.set(calls.get() + 1);
+        Err(EmbyError::resolve("fetch failed"))
+    };
+    let refreshed = ResumeSeam::new(&mut fetch, &NO_DELAYS).refresh(items);
 
     assert_eq!(calls.get(), 3, "attempts stop after the third failure");
     assert_eq!(position(&refreshed[0]), (0, false));
@@ -87,18 +84,18 @@ fn an_omitted_id_is_retried_alone() {
     let server_a = server_item("ep-a", 10 * TICKS_PER_SECOND);
     let server_b = server_item("ep-b", 20 * TICKS_PER_SECOND);
 
-    let refreshed = refresh_emby_resume(
-        vec![emby_video("ep-a", 0, false), emby_video("ep-b", 0, false)],
-        |ids| {
-            batches.borrow_mut().push(ids.to_vec());
-            if batches.borrow().len() == 1 {
-                Ok(vec![server_a.clone()])
-            } else {
-                Ok(vec![server_b.clone()])
-            }
-        },
-        &NO_DELAYS,
-    );
+    let mut fetch = |ids: &[String]| {
+        batches.borrow_mut().push(ids.to_vec());
+        if batches.borrow().len() == 1 {
+            Ok(vec![server_a.clone()])
+        } else {
+            Ok(vec![server_b.clone()])
+        }
+    };
+    let refreshed = ResumeSeam::new(&mut fetch, &NO_DELAYS).refresh(vec![
+        emby_video("ep-a", 0, false),
+        emby_video("ep-b", 0, false),
+    ]);
 
     assert_eq!(batches.borrow()[0], vec!["ep-a", "ep-b"]);
     assert_eq!(
