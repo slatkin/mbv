@@ -507,7 +507,7 @@ The one keyboard routing authority, in the `UiRoot` Interactive Component (ADR 0
 _Avoid_: input handler, dispatcher, context stack, key policy (the policy is data the router evaluates, not a second router)
 
 Arbitration fold:
-The one central pure combination (`arbitrate_key`, ADR 0023 amendment). It combines the Keyboard Router outcome and the leaf disposition of the focused component for the same tick. It produces a final disposition and the requests to dispatch. It owns no policy and resolves no chord. It is not a second Keyboard Router. It is the only place where a local claim suppresses a context-sensitive candidate. It is the only place where deferred-candidate clocks advance or reset.
+The one central pure combination (`arbitrate_key`, ADR 0023 amendment). It combines the Keyboard Router outcome and the leaf disposition of the focused component for the same tick. It produces a final disposition and the requests to dispatch. It owns no policy and resolves no chord. It is not a second Keyboard Router. It is the only place where a local claim suppresses a context-sensitive candidate.
 _Avoid_: second router, dispatcher, message filter
 
 Global chord:
