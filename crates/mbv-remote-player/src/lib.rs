@@ -452,37 +452,6 @@ impl RemotePlayer {
         self.ctrl_compatibility.supports_emby_session_output
     }
 
-    pub fn load_queue_idle(
-        &self,
-        request_id: mbv_ctrl::QueueLoadRequestId,
-        slots: Vec<mbv_ctrl::UnifiedQueueSlot>,
-        cursor: usize,
-        source: mbv_queue::QueueSource,
-    ) -> Result<(), RemotePlayerError> {
-        if !self.supports_owner_queue_load() {
-            return Err(RemotePlayerError::queue_operation(
-                "daemon does not support owner-authoritative idle queue loads",
-            ));
-        }
-        if !self.send_ctrl_cmd(CtrlCmd::UnifiedQueueLoadIdle {
-            request_id,
-            slots,
-            cursor,
-            source,
-        }) {
-            return Err(RemotePlayerError::queue_operation(
-                "could not send idle queue load to Player owner",
-            ));
-        }
-        tracing::info!(
-            name: "queue.load.sent",
-            target: "ctrl",
-            queue_request = request_id,
-            "idle queue load sent"
-        );
-        Ok(())
-    }
-
     /// Send an owner queue operation, using answered correlation when negotiated.
     pub fn send_queue_op(
         &self,

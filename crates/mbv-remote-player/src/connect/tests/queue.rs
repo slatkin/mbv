@@ -1,48 +1,6 @@
 use super::*;
 
 #[test]
-fn unsupported_idle_queue_load_is_rejected_without_staging_local_queue() {
-    let (remote, _events, commands) =
-        RemotePlayer::stub_with_command_rx(vec![make_media_item("confirmed")], 0);
-    let result = remote.load_queue_idle(9, vec![], 0, QueueSource::Album);
-    assert!(result.is_err());
-    assert!(matches!(
-        commands.try_recv(),
-        Err(mpsc::TryRecvError::Empty)
-    ));
-    assert_eq!(remote.status.lock().unwrap().queue_len, 1);
-    let queue = remote
-        .unified_queue_state()
-        .expect("confirmed queue projection");
-    assert!(matches!(
-        &queue.slots[0].item,
-        QueueItem::Emby(item) if item.id == "confirmed"
-    ));
-}
-
-#[test]
-fn supported_idle_queue_load_sends_correlated_request_without_staging_queue() {
-    let (mut remote, _events, commands) =
-        RemotePlayer::stub_with_command_rx(vec![make_media_item("confirmed")], 0);
-    remote.ctrl_compatibility.supports_owner_queue_load = true;
-    remote
-        .load_queue_idle(31, vec![], 0, QueueSource::Album)
-        .unwrap();
-    assert!(matches!(
-        commands.try_recv(),
-        Ok(CtrlCmd::UnifiedQueueLoadIdle { request_id: 31, .. })
-    ));
-    assert_eq!(remote.status.lock().unwrap().queue_len, 1);
-    let queue = remote
-        .unified_queue_state()
-        .expect("confirmed queue projection");
-    assert!(matches!(
-        &queue.slots[0].item,
-        QueueItem::Emby(item) if item.id == "confirmed"
-    ));
-}
-
-#[test]
 fn answered_queue_op_is_correlated_and_sent_on_the_wire() {
     let (mut remote, _events, commands) = RemotePlayer::stub_with_command_rx(Vec::new(), 0);
     remote.ctrl_compatibility.supports_answered_queue_ops = true;
