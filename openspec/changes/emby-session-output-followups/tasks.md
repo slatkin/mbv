@@ -27,7 +27,7 @@
 
 ## 5. Integration gates
 
-- [ ] 5.1 After the groups: `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo nextest run --workspace`, `openspec validate --strict emby-session-output-followups`, and `make check-code-file-lines` just before push. Verify: all green.
+- [x] 5.1 After the groups: `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo nextest run --workspace`, `openspec validate --strict emby-session-output-followups`, and `make check-code-file-lines` just before push. Verify: all green.
 
 ## Workflow follow-up
 
