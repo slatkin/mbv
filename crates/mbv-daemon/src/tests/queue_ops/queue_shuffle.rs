@@ -270,6 +270,7 @@ fn foreign_content_session_output(
         queued_next: None,
         pending_pause: false,
         advance: None,
+        continuation: None,
     }))
 }
 

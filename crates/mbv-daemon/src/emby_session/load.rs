@@ -349,6 +349,10 @@ pub(crate) fn submit_play(
         end_handled: false,
         failure_reported: false,
     });
+    // A load replaces the tracked item, so a queue-end continuation the ended
+    // item left open goes with it (emby-session-output-followups design D4):
+    // the user took the device over.
+    output.continuation = None;
     true
 }
 

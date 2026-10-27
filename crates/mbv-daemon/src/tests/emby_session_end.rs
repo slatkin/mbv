@@ -21,6 +21,7 @@ use crate::emby_session::fake::{FakeSessionApi, SessionCall, session};
 use crate::emby_session::poll::EMBY_SESSION_POLL_INTERVAL;
 use mbv_emby::SessionInfo;
 
+mod continuation;
 mod device_window;
 
 /// One second of media in ticks.

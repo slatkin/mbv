@@ -10,11 +10,13 @@ use std::time::Instant;
 
 use mbv_ctrl::{OutputConnection, SessionNowPlaying};
 use mbv_emby::SessionInfo;
+use mbv_emby_model::EmbyItem;
 use mbv_queue::QueueSlotId;
 
 use crate::event_loop::DaemonLoop;
 use crate::output::advance::OutputAdvance;
 
+pub(crate) mod adopt;
 pub(crate) mod command;
 pub(crate) mod connect;
 pub(crate) mod end;
@@ -60,6 +62,16 @@ pub(crate) enum EmbySessionEvent {
     /// reports the loaded item once and expires the transition the load
     /// registered, so the load gate cannot stay wedged behind it.
     PlayFailed { slot: QueueSlotId, error: String },
+    /// One queue-end continuation lookup (emby-session-output-followups
+    /// design D4): the item the device started of its own at the queue's end,
+    /// fetched on the output's worker. The Owner adopts it only while the
+    /// Session still presents it.
+    ItemLookup {
+        item_id: String,
+        /// Boxed because an `EmbyItem` is large and this enum crosses the
+        /// owner's event channel on every worker outcome.
+        result: Result<Box<EmbyItem>, String>,
+    },
 }
 
 /// Builds the one worker an output owns (design D4). The Local daemon builds
@@ -67,17 +79,26 @@ pub(crate) enum EmbySessionEvent {
 /// whose `SessionApi` is a recording fake, so no test reaches the network.
 pub(crate) type EmbySessionWorkerFactory = Box<dyn Fn() -> mpsc::Sender<EmbySessionJob>>;
 
-/// Applies one worker outcome to the owner's output (design D4).
-pub(crate) fn handle_event(daemon: &mut DaemonLoop, event: EmbySessionEvent) {
+/// Applies one worker outcome to the owner's output (design D4). Returns
+/// whether the outcome changed the canonical owner queue, so the event loop
+/// persists it (emby-session-output-followups design D4): the adoption's
+/// appended slot would otherwise not persist until a later command.
+pub(crate) fn handle_event(daemon: &mut DaemonLoop, event: EmbySessionEvent) -> bool {
     match event {
         EmbySessionEvent::Selected { device_id, result } => {
             connect::handle_selected(daemon, &device_id, result);
+            false
         }
         EmbySessionEvent::Sessions { poll_id, result } => {
             poll::handle_sessions(daemon, poll_id, result);
+            false
         }
         EmbySessionEvent::PlayFailed { slot, error } => {
             end::handle_play_failed(daemon, slot, &error);
+            false
+        }
+        EmbySessionEvent::ItemLookup { item_id, result } => {
+            adopt::handle_lookup(daemon, &item_id, result)
         }
     }
 }
@@ -138,6 +159,10 @@ pub(crate) struct EmbySessionOutput {
     /// output, so a stop, an output change, or a replacing load ends it with
     /// the output.
     pub(crate) advance: Option<OutputAdvance>,
+    /// The queue-end continuation the Owner watches for (emby-session-
+    /// output-followups design D4): the window a natural end at the queue's
+    /// edge opens, then the lookup the device's own autoplay started.
+    pub(crate) continuation: Option<ContinuationWatch>,
 }
 
 impl EmbySessionOutput {
@@ -207,7 +232,7 @@ impl EmbySessionOutput {
     /// Whether the Owner put `item_id` on the device (design D3, D14): the
     /// loaded item or the queued next one. Every other item is content the
     /// Owner did not load.
-    fn known_item(&self, item_id: &str) -> bool {
+    pub(crate) fn known_item(&self, item_id: &str) -> bool {
         self.loaded
             .as_ref()
             .is_some_and(|loaded| loaded.item_id == item_id)
@@ -235,6 +260,20 @@ impl EmbySessionOutput {
 /// Owner did not load all present nothing.
 pub(crate) fn presents_item(observed: Option<&SessionInfo>, item_id: &str) -> bool {
     observed.and_then(|observed| observed.now_playing_item_id.as_deref()) == Some(item_id)
+}
+
+/// The queue-end continuation the Owner watches for (emby-session-output-
+/// followups design D4): after the tracked item's end at the queue's edge the
+/// window waits for the device's own autoplay, and the lookup waits for the
+/// fetched item while the Session still presents it.
+#[derive(Debug)]
+pub(crate) enum ContinuationWatch {
+    /// The tracked item ended with no queued next item; a foreign item first
+    /// presented before `until` is adopted as the queue's next slot.
+    Window { until: Instant },
+    /// The lookup for the item the device started is in flight; the result
+    /// adopts the item only while the Session still presents it.
+    Lookup { item_id: String },
 }
 
 /// The item the Owner queued on an Emby Session after the loaded one (design

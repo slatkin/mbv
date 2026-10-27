@@ -6,6 +6,7 @@
 use std::sync::{Arc, Mutex};
 
 use mbv_emby::SessionInfo;
+use mbv_emby_model::EmbyItem;
 
 use super::worker::SessionApi;
 
@@ -47,6 +48,9 @@ pub(crate) enum SessionCall {
         session_id: String,
         index: i64,
     },
+    GetItem {
+        item_id: String,
+    },
 }
 
 /// The recording `SessionApi` double (design D4). Handles are `Arc`s so a test
@@ -57,6 +61,7 @@ pub(crate) enum SessionCall {
 pub(crate) struct FakeSessionApi {
     calls: Arc<Mutex<Vec<SessionCall>>>,
     sessions: Arc<Mutex<Vec<SessionInfo>>>,
+    item: Arc<Mutex<Option<EmbyItem>>>,
     failure: Arc<Mutex<Option<String>>>,
 }
 
@@ -80,6 +85,14 @@ impl FakeSessionApi {
         *self.sessions.lock().unwrap() = sessions;
     }
 
+    /// Sets the canned item `get_item` returns (emby-session-output-followups
+    /// design D4): the queue-end continuation's lookup answer. A test scripts
+    /// the item whose id the device presents, so the adopted slot keeps the
+    /// identity the Session reports.
+    pub(crate) fn set_item(&self, item: EmbyItem) {
+        *self.item.lock().unwrap() = Some(item);
+    }
+
     /// Makes every call fail with `error`.
     pub(crate) fn fail_with(&self, error: &str) {
         *self.failure.lock().unwrap() = Some(error.to_string());
@@ -97,6 +110,17 @@ impl FakeSessionApi {
         match self.failure.lock().unwrap().as_deref() {
             Some(error) => Err(error.to_string()),
             None => Ok(self.sessions.lock().unwrap().clone()),
+        }
+    }
+
+    fn recorded_item(&self, item_id: &str) -> Result<EmbyItem, String> {
+        match (
+            self.failure.lock().unwrap().as_deref(),
+            self.item.lock().unwrap().as_ref(),
+        ) {
+            (Some(error), _) => Err(error.to_string()),
+            (None, Some(item)) => Ok(item.clone()),
+            (None, None) => Err(format!("the fake has no canned item for {item_id}")),
         }
     }
 }
@@ -162,6 +186,13 @@ impl SessionApi for FakeSessionApi {
             session_id: session_id.to_string(),
             index,
         })
+    }
+
+    fn get_item(&self, item_id: &str) -> Result<EmbyItem, String> {
+        self.calls.lock().unwrap().push(SessionCall::GetItem {
+            item_id: item_id.to_string(),
+        });
+        self.recorded_item(item_id)
     }
 }
 

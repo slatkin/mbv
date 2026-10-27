@@ -211,8 +211,14 @@ impl DaemonLoop {
                 EventOutcome::CONTINUE
             }
             DaemonEvent::EmbySession(event) => {
-                crate::emby_session::handle_event(self, event);
-                EventOutcome::CONTINUE
+                // The queue-end continuation's adoption appends a slot, so the
+                // outcome marks the owner queue dirty and persists it
+                // (emby-session-output-followups design D4).
+                if crate::emby_session::handle_event(self, event) {
+                    EventOutcome::DIRTY
+                } else {
+                    EventOutcome::CONTINUE
+                }
             }
             DaemonEvent::Shutdown => self.handle_shutdown(),
         };

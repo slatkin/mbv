@@ -21,6 +21,11 @@ pub(super) struct RecordedSnapshot {
 }
 
 impl RecordedSnapshot {
+    /// The persisted queue's item ids, for assertions outside this module.
+    pub(super) fn item_ids(&self) -> &[String] {
+        &self.item_ids
+    }
+
     fn of(state: &StayAliveQueueState) -> Self {
         Self {
             item_ids: state

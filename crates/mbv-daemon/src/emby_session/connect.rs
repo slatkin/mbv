@@ -275,6 +275,10 @@ fn install_output(
         // for the first observation that shows the loaded item.
         pending_pause: handoff.is_some_and(|handoff| handoff.paused),
         advance: None,
+        // A fresh selection watches for nothing: the queue-end continuation's
+        // window opens with a natural end at the queue's edge (followups
+        // design D4).
+        continuation: None,
     };
     tracing::info!(
         name: "daemon.emby_session_output.selected",

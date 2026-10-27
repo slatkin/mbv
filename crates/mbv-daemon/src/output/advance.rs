@@ -212,6 +212,7 @@ fn stop_stale_advance(daemon: &mut DaemonLoop, ended: QueueSlotId) {
     output.queued_next = None;
     output.advance = None;
     output.pending_pause = false;
+    output.continuation = None;
     output.last_observation = None;
     output.observed_at = None;
     tracing::info!(name: "daemon.emby_session_advance.stopped", target: "daemon", slot = ?ended, "the device moved to a stale queued item and the queue has no next admissible slot; the device was told to stop");
@@ -250,6 +251,10 @@ fn reset_loaded_item(daemon: &mut DaemonLoop, now: Instant) {
         end_handled: false,
         failure_reported: false,
     });
+    // The moved-to item replaces the tracked one, so a queue-end continuation
+    // the ended item left open goes with it (emby-session-output-followups
+    // design D4).
+    output.continuation = None;
     output.advance = None;
     output.pending_pause = false;
 }
@@ -304,7 +309,11 @@ fn window(
 /// `played` stays video-only, and a finished track is consumable. `consume`
 /// follows the resolved step target — at the queue edge the local outcome is
 /// the `Stopped` observation, which consumes nothing.
-fn record_natural_end(daemon: &mut DaemonLoop, ended: QueueSlotId, consume: bool) {
+///
+/// The queue-end continuation's direct detection records through it too
+/// (emby-session-output-followups design D4): the ended slot's completion is
+/// the device move's rule, recorded when the end rule was met.
+pub(crate) fn record_natural_end(daemon: &mut DaemonLoop, ended: QueueSlotId, consume: bool) {
     let played = daemon
         .owner
         .core
