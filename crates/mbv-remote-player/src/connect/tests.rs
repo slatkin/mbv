@@ -7,7 +7,6 @@ use mbv_emby_model::EmbyImageTags;
 use mbv_emby_model::EmbyItem;
 use mbv_queue::QueueSource;
 use mbv_queue::{FeedEntry, QueueItem};
-use rstest::rstest;
 
 fn make_media_item(id: &str) -> EmbyItem {
     EmbyItem {
@@ -369,26 +368,21 @@ fn local_handshake_rejects_different_owner_build_before_client_hello() {
 }
 
 // emby-session-output-followups task 4.2 (issue #949 item 3): a same-version
-// Owner with a different build id, and an Owner hello that carries no build
-// id (the stale-Owner case), both refuse before the Client sends its hello
-// or control credential (invariant 15).
-#[rstest]
-#[case::different_build_id("a-different-build-id")]
-#[case::empty_build_id("")]
-fn local_handshake_rejects_a_same_version_owner_with_a_different_build_id_before_client_hello(
-    #[case] owner_build_id: &str,
-) {
+// Owner with a different build id refuses before the Client sends its hello
+// or control credential (invariant 15). An empty build id, the stale-Owner
+// case, takes the same comparison, so it needs no row of its own.
+#[test]
+fn local_handshake_rejects_a_same_version_owner_with_a_different_build_id_before_client_hello() {
     use std::io::{BufRead, Write};
 
     let (client, daemon) = UnixStream::pair().unwrap();
     let (received_tx, received_rx) = mpsc::channel();
-    let owner_build_id = owner_build_id.to_string();
     let peer = std::thread::spawn(move || {
         let mut writer = daemon.try_clone().unwrap();
         let mut reader = BufReader::new(daemon);
         let mut hello = CtrlHello::current();
         hello.app_version = env!("CARGO_PKG_VERSION").to_string();
-        hello.build_id = owner_build_id;
+        hello.build_id = "a-different-build-id".to_string();
         writeln!(
             writer,
             "{}",

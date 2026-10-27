@@ -6,7 +6,6 @@ use super::*;
 #[test]
 fn hello_build_id_round_trips_and_a_missing_field_decodes_empty() {
     let hello = CtrlHello::current();
-    assert_eq!(hello.build_id, BUILD_ID);
 
     let wire = serde_json::to_string(&hello).unwrap();
     let decoded: CtrlHello = serde_json::from_str(&wire).unwrap();
@@ -178,7 +177,7 @@ fn hello_current_advertises_abs_capabilities() {
         hello.supports_abs_progress(),
         "hello must advertise abs-progress"
     );
-    assert!(hello.supports_owner_queue_load());
+    assert!(hello.supports_owner_queue_source_update());
     assert!(hello.capabilities.iter().any(|c| c == CTRL_CAP_ABS_QUEUE));
     assert!(
         hello

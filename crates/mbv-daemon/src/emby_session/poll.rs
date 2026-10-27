@@ -138,8 +138,8 @@ pub(super) fn handle_sessions(
         // it (design D6, task 5.2): near the runtime the owner records its
         // completion and steps the queue, and earlier it presents nothing and
         // advances nothing.
-        if observation.ended_naturally {
-            super::end::advance_from_natural_end(daemon, now);
+        if let Some(ended_at) = observation.ended_naturally {
+            super::end::advance_from_natural_end(daemon, ended_at);
         }
         // The foreign item the device started at the queue's end is looked up
         // on the output's worker (emby-session-output-followups design D4): the
@@ -185,15 +185,16 @@ fn apply_pending_pause(daemon: &mut DaemonLoop) {
 }
 
 /// What one `/Sessions` observation changed (design D5, D6): the loaded slot
-/// the observation presents, whether it ended the loaded item naturally, the
-/// device advance it shows (design D14), and the queue-end continuation it
-/// starts (emby-session-output-followups design D4). Whether the ctrl peers'
-/// state changed is decided by comparing the projected state with the one the
-/// Owner last broadcast (`handle_sessions`).
+/// the observation presents, the estimated end of the loaded item when this
+/// observation ended it naturally, the device advance it shows (design D14),
+/// and the queue-end continuation it starts (emby-session-output-followups
+/// design D4). Whether the ctrl peers' state changed is decided by comparing
+/// the projected state with the one the Owner last broadcast
+/// (`handle_sessions`).
 #[derive(Clone)]
 struct Observation {
     presented: Option<QueueSlotId>,
-    ended_naturally: bool,
+    ended_naturally: Option<Instant>,
     device_advance: Option<DeviceAdvance>,
     continuation: Option<ContinuationStart>,
 }
@@ -202,7 +203,7 @@ impl Observation {
     /// The observation nothing changed: a missing device, or a failed poll.
     const UNCHANGED: Self = Self {
         presented: None,
-        ended_naturally: false,
+        ended_naturally: None,
         device_advance: None,
         continuation: None,
     };

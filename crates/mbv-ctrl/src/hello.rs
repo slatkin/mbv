@@ -2,7 +2,7 @@ use super::{
     CTRL_CAP_ABS_BOOK_PROGRESS, CTRL_CAP_ABS_BOOK_QUEUE, CTRL_CAP_ABS_PROGRESS, CTRL_CAP_ABS_QUEUE,
     CTRL_CAP_ANSWERED_QUEUE_OPS, CTRL_CAP_AUDIO_ONLY, CTRL_CAP_CONTROL_AUTH,
     CTRL_CAP_EMBY_SESSION_OUTPUT, CTRL_CAP_LIFECYCLE_SHUTDOWN, CTRL_CAP_OWNER_ACTION,
-    CTRL_CAP_OWNER_QUEUE_LOAD, CTRL_CAP_PIN_SWAP, CTRL_CAP_PINNED_SURFACE,
+    CTRL_CAP_OWNER_QUEUE_SOURCE_UPDATE, CTRL_CAP_PIN_SWAP, CTRL_CAP_PINNED_SURFACE,
     CTRL_CAP_PLAYBACK_OUTPUT, CTRL_CAP_QUEUE_SHUFFLE, CTRL_CAP_QUEUE_STATE,
     CTRL_CAP_SERVICE_SETUP_ADMIN, CTRL_CAP_START_INDEX, CTRL_CAP_STATUS_ONLY,
     CTRL_PROTOCOL_VERSION,
@@ -51,7 +51,7 @@ impl CtrlHello {
                 CTRL_CAP_ABS_PROGRESS.to_string(),
                 CTRL_CAP_ABS_BOOK_QUEUE.to_string(),
                 CTRL_CAP_ABS_BOOK_PROGRESS.to_string(),
-                CTRL_CAP_OWNER_QUEUE_LOAD.to_string(),
+                CTRL_CAP_OWNER_QUEUE_SOURCE_UPDATE.to_string(),
                 CTRL_CAP_ANSWERED_QUEUE_OPS.to_string(),
                 CTRL_CAP_QUEUE_SHUFFLE.to_string(),
             ],
@@ -172,10 +172,10 @@ impl CtrlHello {
     }
 
     #[must_use]
-    pub fn supports_owner_queue_load(&self) -> bool {
+    pub fn supports_owner_queue_source_update(&self) -> bool {
         self.capabilities
             .iter()
-            .any(|cap| cap == CTRL_CAP_OWNER_QUEUE_LOAD)
+            .any(|cap| cap == CTRL_CAP_OWNER_QUEUE_SOURCE_UPDATE)
     }
 
     #[must_use]
@@ -282,7 +282,7 @@ pub struct CtrlCompatibility {
     pub supports_audio_only: bool,
     pub supports_control_auth: bool,
     pub audiobookshelf: CtrlAudiobookshelfCapabilities,
-    pub supports_owner_queue_load: bool,
+    pub supports_owner_queue_source_update: bool,
     pub supports_answered_queue_ops: bool,
     /// The peer runs Owner actions (`CtrlCmd::RunOwnerAction`); set from the
     /// peer Hello's `owner-action` capability by the Client's handshake.
@@ -317,7 +317,7 @@ impl CtrlCompatibility {
                     book_queue: true,
                     book_progress: true,
                 },
-                supports_owner_queue_load: false,
+                supports_owner_queue_source_update: false,
                 supports_answered_queue_ops: false,
                 supports_owner_action: false,
                 supports_queue_shuffle: false,

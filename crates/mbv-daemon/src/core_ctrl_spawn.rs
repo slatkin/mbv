@@ -19,7 +19,7 @@ const CTRL_WRITE_TIMEOUT: Duration = Duration::from_secs(30);
 /// (tray-pin-swap design D7).
 struct HelloClassification {
     audiobookshelf: CtrlAudiobookshelfCapabilities,
-    supports_owner_queue_load: bool,
+    supports_owner_queue_source_update: bool,
     supports_playback_output: bool,
     supports_emby_session_output: bool,
     role: CtrlConnectionRole,
@@ -56,7 +56,7 @@ fn ctrl_client_capabilities(
                     book_queue: info.supports_abs_book_queue(),
                     book_progress: info.supports_abs_book_progress(),
                 },
-                supports_owner_queue_load: info.supports_owner_queue_load(),
+                supports_owner_queue_source_update: info.supports_owner_queue_source_update(),
                 supports_playback_output: info.supports_playback_output(),
                 supports_emby_session_output: info.supports_emby_session_output(),
                 role,
@@ -375,7 +375,7 @@ impl CtrlClientSession {
             ev_tx,
             transport,
             hello.audiobookshelf,
-            hello.supports_owner_queue_load,
+            hello.supports_owner_queue_source_update,
             hello.supports_playback_output,
             hello.supports_emby_session_output,
             hello.swap_surface,

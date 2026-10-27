@@ -597,6 +597,53 @@ fn a_foreign_item_presented_after_a_long_absence_is_not_adopted() {
     );
 }
 
+/// Contract: spec "A late foreign item is not adopted" (owner-playback-output)
+/// and followups design D4 — the queue-end window opens from the estimated
+/// end, not from the poll that detects it. The device is idle five minutes
+/// after its tracked item ended, so the detecting idle observation must not
+/// open a window that runs from its own time: the foreign item presented 20
+/// seconds later is more than 30 seconds past the end and submits no lookup.
+#[test]
+fn a_natural_end_revealed_after_a_long_absence_opens_no_window() {
+    let fake = FakeSessionApi::with_sessions(vec![idle_session()]);
+    let script = fake.clone();
+    let (mut t, calls, _rx) = session_output_with_queue(fake, vec![timed("a", RUNTIME_TICKS)]);
+    script.set_item(canned_autoplay_item());
+    let (client_id, _reply_tx, _client_rx) =
+        connect_output_client_with_caps(&t.event_loop.ctrl_clients, true, true);
+    let slots = slot_ids(&t);
+    play_slot(&mut t, client_id, slots[0]);
+    let t0 = Instant::now();
+
+    script.set_sessions(vec![session_presenting_at(
+        "a",
+        RUNTIME_TICKS - 3 * SECOND_TICKS,
+        RUNTIME_TICKS,
+    )]);
+    poll_once(&mut t, t0);
+    // No polls land for five minutes. The observation path reads the real
+    // clock, so the test ages the sighting instead of waiting: the device then
+    // reports idle, which reveals the natural end three seconds after the
+    // sighting.
+    let PlaybackOutput::EmbySession(output) = &mut t.event_loop.owner.output else {
+        panic!("the Session is the output");
+    };
+    output.observed_at = Some(
+        Instant::now()
+            .checked_sub(Duration::from_secs(300))
+            .expect("300 seconds before now is representable"),
+    );
+    script.set_sessions(vec![idle_session()]);
+    poll_once(&mut t, t0 + Duration::from_secs(300));
+    script.set_sessions(vec![session_presenting_at("f", 0, RUNTIME_TICKS)]);
+    poll_once(&mut t, t0 + Duration::from_secs(320));
+
+    assert!(
+        get_item_calls(&calls).is_empty(),
+        "a foreign item presented after the reappearance is past the 30-second window from the end"
+    );
+}
+
 /// Contract: followups design D4, review correction — the adoption
 /// re-establishes the tracked item, so a lookup result that lands after the
 /// output was stopped adopts nothing: the stop cleared the loaded item and a

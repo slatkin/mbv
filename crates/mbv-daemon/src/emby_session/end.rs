@@ -44,20 +44,22 @@ pub(crate) const EMBY_SESSION_END_MARGIN_TICKS: i64 = 10 * mbv_emby_model::TICKS
 /// advances nothing. `end_handled` records either outcome, so the second poll
 /// of the same idle advances at most once.
 ///
-/// Returns whether this observation ended the loaded item naturally. An idle
-/// Session before the loaded item was ever presented is not an end (the 30 s
-/// failure rule owns that case). The replaced observation must present the
-/// loaded item: a Session that presented an item the Owner did not load ends
-/// nothing (design D6's last row), and the idle that follows such an item is
-/// the other app's stop, not this item's end — its runtime and position belong
-/// to that item.
+/// Returns the instant the loaded item's estimated end falls on when this
+/// observation ended it naturally, so the caller can open the queue-end window
+/// from that end (emby-session-output-followups design D4). An idle Session
+/// before the loaded item was ever presented is not an end (the 30 s failure
+/// rule owns that case). The replaced observation must present the loaded
+/// item: a Session that presented an item the Owner did not load ends nothing
+/// (design D6's last row), and the idle that follows such an item is the other
+/// app's stop, not this item's end — its runtime and position belong to that
+/// item.
 pub(crate) fn ended_naturally(
     output: &mut EmbySessionOutput,
     session: &SessionInfo,
     now: Instant,
-) -> bool {
+) -> Option<Instant> {
     if session.now_playing_item_id.is_some() {
-        return false;
+        return None;
     }
     let unhandled_sighting = output.loaded.as_ref().is_some_and(|loaded| {
         loaded.seen_playing
@@ -65,7 +67,7 @@ pub(crate) fn ended_naturally(
             && presents_item(output.last_observation.as_ref(), &loaded.item_id)
     });
     if !unhandled_sighting {
-        return false;
+        return None;
     }
     let runtime = output.presented_runtime_ticks();
     let estimate = output.estimate_ticks(now);
@@ -74,7 +76,25 @@ pub(crate) fn ended_naturally(
     }
     // A loaded slot whose queue item and Session both report no runtime has no
     // end to infer (design D6, risks): the idle counts as a stop on the device.
-    runtime > 0 && estimate.saturating_add(EMBY_SESSION_END_MARGIN_TICKS) >= runtime
+    if runtime > 0 && estimate.saturating_add(EMBY_SESSION_END_MARGIN_TICKS) >= runtime {
+        estimated_end(output)
+    } else {
+        None
+    }
+}
+
+/// The instant the loaded item's estimated end falls on (emby-session-output-
+/// followups design D4): the time of the observation this one replaces, plus
+/// the runtime that observation had left. The idle observation that reveals
+/// the end can arrive long after a device absence, so the adoption window
+/// opens from here and not from the detecting poll.
+fn estimated_end(output: &EmbySessionOutput) -> Option<Instant> {
+    let observed = output.last_observation.as_ref()?;
+    let observed_at = output.observed_at?;
+    let remaining = (output.presented_runtime_ticks() - observed.position_ticks).max(0);
+    observed_at.checked_add(Duration::from_secs_f64(mbv_emby_model::ticks_to_seconds(
+        remaining,
+    )))
 }
 
 /// The device advance one observation shows (design D6's end table, D14; tasks
@@ -143,9 +163,11 @@ pub(crate) fn device_advance(
 /// A natural end that leaves the output idle at the queue's edge — no step
 /// target, no queued next item — opens the adoption window (emby-session-
 /// output-followups design D4): the first foreign item the Session presents
-/// within [`EMBY_SESSION_LOAD_TIMEOUT`] of the end is the device's own
-/// continuation at the queue's end, adopted as the queue's next slot.
-pub(crate) fn advance_from_natural_end(daemon: &mut DaemonLoop, now: Instant) {
+/// within [`EMBY_SESSION_LOAD_TIMEOUT`] of `ended_at`, the estimated end, is
+/// the device's own continuation at the queue's end, adopted as the queue's
+/// next slot. The window runs from the end, not from the poll that detects it,
+/// so a device that reappears long after its end adopts nothing.
+pub(crate) fn advance_from_natural_end(daemon: &mut DaemonLoop, ended_at: Instant) {
     crate::output::advance::begin_advance(daemon);
     let PlaybackOutput::EmbySession(output) = &mut daemon.owner.output else {
         return;
@@ -158,7 +180,7 @@ pub(crate) fn advance_from_natural_end(daemon: &mut DaemonLoop, now: Instant) {
             .is_some_and(|loaded| loaded.end_handled);
     if at_edge {
         output.continuation = Some(ContinuationWatch::Window {
-            until: now + EMBY_SESSION_LOAD_TIMEOUT,
+            until: ended_at + EMBY_SESSION_LOAD_TIMEOUT,
         });
     }
 }

@@ -75,6 +75,15 @@ fn submit_lookup(
     }
 }
 
+/// Drops the output's pending queue-end continuation (emby-session-output-
+/// followups design D4): the three exits of a lookup that adopts nothing end
+/// the same way, so they share this one teardown.
+fn clear_continuation(daemon: &mut DaemonLoop) {
+    if let PlaybackOutput::EmbySession(output) = &mut daemon.owner.output {
+        output.continuation = None;
+    }
+}
+
 /// Handles the lookup's result (design D4): the item is appended at the
 /// queue's tail and made the active slot and the tracked item only while the
 /// Session still presents it. A failed lookup, or a device that moved on,
@@ -103,8 +112,8 @@ pub(crate) fn handle_lookup(
     let item = match result {
         Ok(item) => item,
         Err(error) => {
-            if pending && let PlaybackOutput::EmbySession(output) = &mut daemon.owner.output {
-                output.continuation = None;
+            if pending {
+                clear_continuation(daemon);
             }
             tracing::warn!(
                 name: "daemon.emby_session_adopt.lookup_failed",
@@ -126,9 +135,7 @@ pub(crate) fn handle_lookup(
         return false;
     }
     if !tracks_ended {
-        if let PlaybackOutput::EmbySession(output) = &mut daemon.owner.output {
-            output.continuation = None;
-        }
+        clear_continuation(daemon);
         tracing::info!(
             name: "daemon.emby_session_adopt.not_tracking",
             target: "daemon",
@@ -138,9 +145,7 @@ pub(crate) fn handle_lookup(
         return false;
     }
     if !still_presented {
-        if let PlaybackOutput::EmbySession(output) = &mut daemon.owner.output {
-            output.continuation = None;
-        }
+        clear_continuation(daemon);
         tracing::info!(
             name: "daemon.emby_session_adopt.moved_on",
             target: "daemon",

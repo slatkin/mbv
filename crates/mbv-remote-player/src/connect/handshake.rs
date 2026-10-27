@@ -148,7 +148,7 @@ pub(super) fn read_server_hello(
     compatibility.supports_lifecycle_shutdown = info.supports_lifecycle_shutdown();
     compatibility.supports_audio_only = info.supports_audio_only();
     compatibility.supports_control_auth = info.supports_control_auth();
-    compatibility.supports_owner_queue_load = info.supports_owner_queue_load();
+    compatibility.supports_owner_queue_source_update = info.supports_owner_queue_source_update();
     compatibility.supports_answered_queue_ops = info.supports_answered_queue_ops();
     compatibility.supports_owner_action = info.supports_owner_action();
     compatibility.supports_queue_shuffle = info.supports_queue_shuffle();
