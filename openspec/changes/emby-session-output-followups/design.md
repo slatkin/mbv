@@ -72,8 +72,7 @@ the user: it kills every running daemon and client for a command no shipped send
 and ignore it (additive — no bump). `crates/mbv-ctrl/build.rs` runs
 `git rev-parse --short=12 HEAD`, appends `-dirty` when `git status --porcelain` is
 non-empty, and falls back to `unknown` when git is unavailable (tarball builds);
-`cargo:rerun-if-changed` on the workspace `.git/HEAD` and the resolved ref keeps the
-embedded value fresh across commits.
+the build script emits `cargo:rerun-if-changed` for the paths `git rev-parse --git-path HEAD`, the symbolic ref's `--git-path`, and `packed-refs` report, so the embedded value stays fresh across commits. It never names a literal `.git/HEAD`: in a worktree `.git` is a file, and Cargo reruns a build script on every build when a named path is missing, which would recompile `mbv-ctrl` and every dependent each time. When git is unavailable it emits no git path. The `-dirty` marker is computed only when the script reruns (a HEAD or ref change), so edits made on the same commit keep the old marker.
 
 `read_server_hello` refuses under `PeerBuild::MustMatch` when the `app_version` differs
 or the `build_id` differs, and treats an empty owner `build_id` as a mismatch — that is
@@ -91,7 +90,15 @@ Client cannot recompute the Owner's binary identity at handshake time.
 The trigger (owner-playback-output ADDED requirement) is the tracked item ending within
 10 seconds of its runtime — the same end rule as the D14 device-move completion — while
 the device holds no queued next item and the Session starts an item the owner did not
-load. A mid-item interruption (another app) fails the end rule and stays present-only; a
+load. Two observation paths reach it. (a) Direct: one observation presents the tracked
+item and the next presents the foreign item. (b) After an idle gap: the idle observation
+already ended the tracked item (`ended_naturally` records completion and leaves the output
+idle at the queue edge), and the first foreign item the Session presents within
+`EMBY_SESSION_LOAD_TIMEOUT` (30 s) after that end is adopted. The 30 s bound keeps another
+app's playback minutes later present-only. Path (b) records no second completion: the
+natural end already did, and the ended slot records completion once on either path. Emby's
+behavior between two items is not documented and a 1 s poll can see either path, so both
+are covered. A mid-item interruption (another app) fails the end rule and stays present-only; a
 stale queued item keeps its correction path because the transition starts from a
 registered queued item. The adopted item is appended at the queue tail (past any
 unplayable tail slots), becomes the active slot, and is the tracked item from then on:
@@ -99,6 +106,17 @@ Session progress, completion recording, and end inference treat it exactly like 
 item, and the ended slot records completion under the device-move rule. After an adoption
 the device holds only the adopted item, so a later user append takes the existing "queue
 grows after the last slot" path (`play_last`).
+
+The adopted slot's item comes from an Emby lookup: `SessionApi` gains `get_item(item_id)`
+(the `EmbyClient` impl uses `get_items_by_ids`; the fake returns a canned item). The
+observation alone cannot build the slot, because `QueueItem::Emby` holds a full `EmbyItem`
+(episode and season index, path, played state) that `SessionInfo` does not carry. On a
+foreign start that meets the trigger the owner submits one lookup on the Session worker.
+When the result returns, the owner appends the slot only while the Session still presents
+that item; a failed lookup, or a device that moved on, leaves the item presented and not
+adopted, and the failure is logged. Adoption marks the owner queue dirty: the
+`DaemonEvent::EmbySession` arm returns a clean `EventOutcome`, so without it the slot would
+not persist until a later command.
 
 Next and previous on an adopted item resolve over the queue like any active slot
 ("Next and previous load the target slot directly"): next at the queue edge does nothing
@@ -118,7 +136,7 @@ Hand-over at exit needs no change: adopted items are queue slots and ride the ex
 `docs/invariants/15` states that the gate compares version and build identity (and fixes
 its stale path reference — the check lives in `connect/handshake.rs`), including the
 `unknown` fallback and the same-commit limitation. `docs/invariants/13`'s "until the next
-idle load or clear" becomes "until the next queue replacement or clear".
+idle load or clear" becomes "until the next queue replacement or clear". `docs/architecture/owner-client-operation-split.md` (Client column) and the `QueueEpoch` entry in `CONTEXT.md` stop naming `UnifiedQueueLoadIdle` and idle loads.
 
 ## Risks / Trade-offs
 
@@ -128,6 +146,9 @@ idle load or clear" becomes "until the next queue replacement or clear".
 - [Another app starts an item exactly as the tracked item reaches its end] →
   indistinguishable from autoplay; the end rule adopts it. Accepted: the window is one
   poll tick at an item boundary.
+- [The item lookup is slow, fails, or the device moves on first] → the item stays presented
+  and not adopted (D4). The next autoplay at that item's end is judged by the same rule, but
+  with no tracked slot it is not adopted: accepted, the failure is logged.
 - [A non-git build compiles `build_id` as `unknown`] → two `unknown` builds degrade to
   today's version-only comparison. Documented in invariant 15.
 - [The same commit is rebuilt with no tree change] → identical identity, so a restarted
