@@ -43,24 +43,10 @@ fn submit_queue_slots_preserves_caller_slot_ids() {
     // run's TrackChanged/JumpTo observations are resolved against the app's
     // queue by identity — a minted id pointing at the wrong item desyncs the
     // queue panel from what mpv is playing.
-    let (event_tx, _event_rx) = mpsc::channel();
-    let player = Player::new(
-        String::new(),
-        String::new(),
-        false,
-        false,
-        false,
-        false,
-        SubtitlePrefs::default(),
-        event_tx,
-        None,
-    )
-    .with_mpv_inhibited();
-    player.status.lock().unwrap().active = true;
+    // The shared stub recipe below arms `stop_tx`, so the submission takes
+    // the reuse path.
+    let (player, _stop_rx, cmd_rx) = submit_stub_player(StopState::Armed, Commands::Spy);
     player.current_is_headless.store(false, Ordering::Relaxed);
-    let (armed_tx, _armed_rx) = mpsc::channel();
-    *player.stop_tx.lock().unwrap() = Some(armed_tx);
-    let cmd_rx = player.spy_on_commands();
 
     let ids = [QueueSlotId::from_raw(7), QueueSlotId::from_raw(3)];
     let items: Vec<_> = ids
@@ -73,7 +59,11 @@ fn submit_queue_slots_preserves_caller_slot_ids() {
         .collect();
     player.submit_queue_slots(items, 1, None, false, 100);
 
-    match cmd_rx.try_recv().expect("expected a command") {
+    match cmd_rx
+        .expect("the stub installed the command spy")
+        .try_recv()
+        .expect("expected a command")
+    {
         PlayerCommand::SubmitQueue { items, start_idx } => {
             assert_eq!(start_idx, 1);
             assert_eq!(
@@ -91,27 +81,11 @@ fn submit_queue_fast_path_seeds_status_for_the_start_item() {
     // Once the live run accepted the replacement, the status must reflect
     // the new queue items (design D2 seeds after the send is accepted), so
     // any reader that sees the seeded status also sees consistent queue_len
-    // and title. The stub arms `stop_tx` the way every real cold start does,
-    // so the submission takes the reuse path and the seed asserted here is
-    // the reuse path's own.
-    let (event_tx, _event_rx) = mpsc::channel();
-    let player = Player::new(
-        String::new(),
-        String::new(),
-        false,
-        false,
-        false,
-        false,
-        SubtitlePrefs::default(),
-        event_tx,
-        None,
-    )
-    .with_mpv_inhibited();
-    player.status.lock().unwrap().active = true;
+    // and title. The shared stub recipe below arms `stop_tx`, so the
+    // submission takes the reuse path and the seed asserted here is the
+    // reuse path's own.
+    let (player, _stop_rx, cmd_rx) = submit_stub_player(StopState::Armed, Commands::Spy);
     player.current_is_headless.store(false, Ordering::Relaxed);
-    let (armed_tx, _armed_rx) = mpsc::channel();
-    *player.stop_tx.lock().unwrap() = Some(armed_tx);
-    let cmd_rx = player.spy_on_commands();
 
     let entry = make_feed_entry("feed-test", "Test Episode");
     player.submit_queue_slots(
@@ -127,6 +101,7 @@ fn submit_queue_fast_path_seeds_status_for_the_start_item() {
 
     assert!(matches!(
         cmd_rx
+            .expect("the stub installed the command spy")
             .try_recv()
             .expect("expected a command from submit_queue_slots"),
         PlayerCommand::SubmitQueue { .. }
@@ -265,24 +240,8 @@ fn audiobookshelf_context() -> AudiobookshelfPlayerContext {
 
 #[test]
 fn complete_bare_player_admits_audiobookshelf_without_ctrl_transport() {
-    let (event_tx, _event_rx) = mpsc::channel();
-    let player = Player::new(
-        String::new(),
-        String::new(),
-        false,
-        false,
-        false,
-        false,
-        SubtitlePrefs::default(),
-        event_tx,
-        None,
-    )
-    .with_mpv_inhibited();
+    let (player, _stop_rx, commands) = submit_stub_player(StopState::Armed, Commands::Spy);
     player.update_audiobookshelf_context(Some(audiobookshelf_context()));
-    player.status.lock().unwrap().active = true;
-    let (armed_tx, _armed_rx) = mpsc::channel();
-    *player.stop_tx.lock().unwrap() = Some(armed_tx);
-    let commands = player.spy_on_commands();
 
     assert!(player.can_admit_audiobookshelf());
     assert!(player.submit_queue_slots(
@@ -296,7 +255,10 @@ fn complete_bare_player_admits_audiobookshelf_without_ctrl_transport() {
         100,
     ));
     assert!(matches!(
-        commands.try_recv().unwrap(),
+        commands
+            .expect("the stub installed the command spy")
+            .try_recv()
+            .unwrap(),
         PlayerCommand::SubmitQueue { items, start_idx }
             if start_idx == 0 && items.len() == 1 && items[0].item.is_audiobookshelf()
     ));
@@ -468,18 +430,21 @@ fn context_loss_rejects_audiobookshelf_without_mutating_bound_submission() {
 // ── queue replacement decision (submit-reuses-live-run) ──────────────────────
 
 /// The playback state the status reports before the submission.
+#[derive(Clone, Copy)]
 enum Reported {
     Playing,
     Idle,
 }
 
 /// Whether `stop_tx` is armed for the running run.
+#[derive(Clone, Copy)]
 enum StopState {
     Armed,
     Taken,
 }
 
 /// Whether the running run's loop has exited (design D7).
+#[derive(Clone, Copy)]
 enum RunState {
     Live,
     Exited,
@@ -503,6 +468,8 @@ struct ReplaceDecision {
     expect: Expect,
 }
 
+/// The command channel the stub installed.
+#[derive(Clone, Copy)]
 enum Commands {
     /// A live spy receiver.
     Spy,
@@ -519,11 +486,14 @@ enum Expect {
     Cold(&'static str),
 }
 
-/// The replacement-decision setup for one `#[case]`: the player with its
-/// reported state, an armed `stop_rx` when the case arms `stop_tx`, an exit
-/// flag when the case's run has exited, and the case's command channel.
-fn player_for_replacement_decision(
-    case: &ReplaceDecision,
+/// The stub recipe every submission test in this file arms: an
+/// mpv-inhibited player (a test never starts the real mpv child, issue
+/// #757), `stop_tx` armed unless the case simulates a taken stop, and the
+/// command channel the submission's send meets — a live spy receiver the
+/// test reads, a dropped one whose send must fail, or none at all.
+fn submit_stub_player(
+    stop: StopState,
+    commands: Commands,
 ) -> (
     Player,
     Option<mpsc::Receiver<()>>,
@@ -542,24 +512,13 @@ fn player_for_replacement_decision(
         None,
     )
     .with_mpv_inhibited();
-    player.status.lock().unwrap().active = matches!(case.reported, Reported::Playing);
-    player
-        .current_is_headless
-        .store(case.current_headless, Ordering::Relaxed);
     let mut stop_rx = None;
-    if let StopState::Armed = case.stop {
+    if let StopState::Armed = stop {
         let (armed_tx, rx) = mpsc::channel();
         *player.stop_tx.lock().unwrap() = Some(armed_tx);
         stop_rx = Some(rx);
     }
-    if let RunState::Exited = case.run {
-        player
-            .run_exited
-            .lock()
-            .unwrap()
-            .store(true, Ordering::Relaxed);
-    }
-    let cmd_rx = match case.commands {
+    let cmd_rx = match commands {
         Commands::Spy => Some(player.spy_on_commands()),
         Commands::Dropped => {
             drop(player.spy_on_commands());
@@ -570,21 +529,41 @@ fn player_for_replacement_decision(
     (player, stop_rx, cmd_rx)
 }
 
+/// The replacement-decision setup for one `#[case]`: the shared stub recipe
+/// with the case's reported state, headless class, and exit flag on top.
+fn player_for_replacement_decision(
+    case: &ReplaceDecision,
+) -> (
+    Player,
+    Option<mpsc::Receiver<()>>,
+    Option<mpsc::Receiver<PlayerCommand>>,
+) {
+    let (player, stop_rx, cmd_rx) = submit_stub_player(case.stop, case.commands);
+    player.status.lock().unwrap().active = matches!(case.reported, Reported::Playing);
+    player
+        .current_is_headless
+        .store(case.current_headless, Ordering::Relaxed);
+    if let RunState::Exited = case.run {
+        player
+            .run_exited
+            .lock()
+            .unwrap()
+            .store(true, Ordering::Relaxed);
+    }
+    (player, stop_rx, cmd_rx)
+}
+
 // Task 2.1: the Controller-level replacement decision follows the D1 order —
 // run exists, headless class, `stop_tx` armed, `run_exited` unset, send — and
 // every cold start carries its D5 reason. No case exercises the loop-exit
 // window itself: it needs a live mpv child, which hermetic tests must not
-// start (issue #757); `run_exited` is set directly instead.
+// start (issue #757); `run_exited` is set directly instead. There is no
+// parked-run case: a parked run (ended, mpv child alive) presents exactly
+// the idle row's Player-level state — armed `stop_tx`, unset `run_exited`,
+// inactive status — because the decision consults no reported state, so the
+// idle row already pins the parked run's reuse.
 #[rstest::rstest]
 #[case::idle_run_reuses(ReplaceDecision {
-    reported: Reported::Idle,
-    current_headless: false,
-    stop: StopState::Armed,
-    run: RunState::Live,
-    commands: Commands::Spy,
-    expect: Expect::Reuse,
-})]
-#[case::parked_run_reuses(ReplaceDecision {
     reported: Reported::Idle,
     current_headless: false,
     stop: StopState::Armed,
