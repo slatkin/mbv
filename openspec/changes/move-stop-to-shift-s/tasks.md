@@ -1,11 +1,11 @@
 ## 1. Default chord
 
-- [ ] 1.1 In `crates/mbv-keybinds/src/registry.rs`, change the `stop` default chord from `Esc` to `Shift+S`, and reword the `prefix_addressable` comment per design D6. In `crates/mbv-keybinds/src/tests.rs`, change the default-chord table row for `stop` and swap the `("stop", "Esc")` entry in the `override_count` test for `Shift+S`, so it stays a redundant default-equal override. Verify: `cargo nextest run -p mbv-keybinds` passes.
-- [ ] 1.2 In `src/app/shell/settings.rs`, change the expected default text for the `stop` row from `Esc` to `Shift+S`. Verify: that test passes under `cargo nextest run -p mbv`.
+- [x] 1.1 In `crates/mbv-keybinds/src/registry.rs`, change the `stop` default chord from `Esc` to `Shift+S`, and reword the `prefix_addressable` comment per design D6. In `crates/mbv-keybinds/src/tests.rs`, change the default-chord table row for `stop` and swap the `("stop", "Esc")` entry in the `override_count` test for `Shift+S`, so it stays a redundant default-equal override. Verify: `cargo nextest run -p mbv-keybinds` passes.
+- [x] 1.2 In `src/app/shell/settings.rs`, change the expected default text for the `stop` row from `Esc` to `Shift+S`. Verify: that test passes under `cargo nextest run -p mbv`.
 
 ## 2. Playback panel
 
-- [ ] 2.1 In `crates/mbv-components/src/library_playback_panel.rs`, remove the `Key::Esc` arm in `key()` and the `Key::Esc` term in the `Consumed(None)` list of `key_result` (design D5). Change the existing `Esc` assertion in its test to expect an unhandled key. Verify: `cargo nextest run -p mbv-components` passes.
+- [x] 2.1 In `crates/mbv-components/src/library_playback_panel.rs`, remove the `Key::Esc` arm in `key()` and the `Key::Esc` term in the `Consumed(None)` list of `key_result` (design D5). Change the existing `Esc` assertion in its test to expect an unhandled key. Verify: `cargo nextest run -p mbv-components` passes.
 
 ## 3. Remove the double-Esc window
 
