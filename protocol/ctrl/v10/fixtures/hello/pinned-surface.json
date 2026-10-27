@@ -1,0 +1,15 @@
+{
+  "app_version": "1.2.3",
+  "build_id": "4f2a1c9",
+  "capabilities": [
+    "queue-state",
+    "play-items-start-idx",
+    "status-only",
+    "control-auth",
+    "pin-swap",
+    "pinned-surface"
+  ],
+  "control_token": "conformance-control-token",
+  "protocol_version": 10,
+  "swap_token": "conformance-swap-token"
+}

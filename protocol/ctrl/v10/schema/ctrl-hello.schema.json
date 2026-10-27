@@ -1,0 +1,48 @@
+{
+  "$id": "https://mbv.dev/schemas/ctrl/v10/ctrl-hello.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "app_version": {
+      "type": "string"
+    },
+    "build_id": {
+      "default": "",
+      "description": "Build identity of the sending binary (design D3): the git short SHA\nplus `-dirty` when the tree was dirty at build time. `#[serde(default)]`\nkeeps the field additive: a peer that predates it decodes an empty\nvalue and is ignored by `PeerBuild::Any` handshakes.",
+      "type": "string"
+    },
+    "capabilities": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "control_token": {
+      "default": null,
+      "description": "Control credential used only when the peer advertises `control-auth`.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "protocol_version": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "swap_token": {
+      "default": null,
+      "description": "One-shot swap token carried only by a Client the Owner itself started\nfor a Pin swap. `None` for every Client the user started.",
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "protocol_version",
+    "app_version",
+    "capabilities"
+  ],
+  "title": "mbv ctrl hello (protocol version 10)",
+  "type": "object"
+}

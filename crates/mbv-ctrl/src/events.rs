@@ -5,7 +5,7 @@ use crate::player::{PlayerEvent, PlayerStatus};
 use crate::{CtrlHello, PlaybackGeneration, PlaybackRequestId, QueueOpId, UnifiedQueueStateData};
 use mbv_queue::ServiceKind;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, schemars::JsonSchema)]
 pub enum CtrlEvent {
     Hello(CtrlHello),
     Player(PlayerEvent),
@@ -90,7 +90,7 @@ pub enum CtrlEvent {
 /// acknowledged position/completion, and setup generation only. Excludes
 /// API key, Authorization header, resolved source URL, and playback
 /// `sessionId` — those never cross the ctrl wire.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct AudiobookshelfProgressEvent {
     pub library_item_id: String,
     pub episode_id: String,
@@ -106,7 +106,7 @@ pub struct AudiobookshelfProgressEvent {
 /// Book-shaped counterpart to `AudiobookshelfProgressEvent`: identity,
 /// acknowledged position/completion, and setup generation only, keyed by
 /// `library_item_id` with no `episode_id`.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct AudiobookshelfBookProgressEvent {
     pub library_item_id: String,
     /// Acknowledged playback position in ticks.
@@ -118,13 +118,13 @@ pub struct AudiobookshelfBookProgressEvent {
     pub setup_generation: u64,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, schemars::JsonSchema)]
 pub enum QueueOpOutcome {
     Applied(Box<UnifiedQueueStateData>),
     Rejected(String),
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub enum ServiceSetupRejection {
     UnsupportedService,
     RevisionMismatch,
@@ -132,7 +132,7 @@ pub enum ServiceSetupRejection {
     TransitionRejected,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct PipePlaybackStatus {
     pub request_id: PlaybackRequestId,
     pub generation: PlaybackGeneration,
@@ -142,7 +142,7 @@ pub struct PipePlaybackStatus {
     pub estimated_remaining_ms: Option<u64>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub enum PipePlaybackPhase {
     Resolving,
     PlayerOpening,
@@ -151,14 +151,14 @@ pub enum PipePlaybackPhase {
     OutputBuffering,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct PlaybackIntentEvent {
     pub request_id: PlaybackRequestId,
     pub generation: PlaybackGeneration,
     pub outcome: PlaybackIntentOutcome,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub enum PlaybackIntentOutcome {
     Accepted,
     Applied,
@@ -171,7 +171,7 @@ pub enum PlaybackIntentOutcome {
     },
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub enum PlaybackIntentRejection {
     EmptyTarget,
     InvalidTarget,
@@ -180,7 +180,7 @@ pub enum PlaybackIntentRejection {
     Unavailable,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub enum DisconnectReason {
     #[serde(rename = "TakenOverByEmbyRemote")]
     TakenOverByEmbyRemote,

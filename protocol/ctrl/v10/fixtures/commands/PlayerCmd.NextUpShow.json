@@ -1,0 +1,10 @@
+{
+  "PlayerCmd": {
+    "NextUpShow": {
+      "artist": "Conformance Artist",
+      "ep_title": "Conformance Episode",
+      "item_id": "emby-conformance-item",
+      "show_title": "Conformance Show"
+    }
+  }
+}

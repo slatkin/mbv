@@ -1,0 +1,46 @@
+{
+  "StatusOnly": {
+    "active": true,
+    "album": "Conformance Album",
+    "art_album_id": "emby-album-1",
+    "art_item_id": "emby-conformance-item",
+    "artist": "Conformance Artist",
+    "audio_codec": "",
+    "audio_id": 1,
+    "audio_lang": "en",
+    "audio_tracks": [
+      [
+        1,
+        "English"
+      ]
+    ],
+    "current_idx": 1,
+    "last_valid_pos": 30000000,
+    "muted": false,
+    "paused": false,
+    "position_ticks": 30000000,
+    "queue_len": 4,
+    "runtime_ticks": 1800000000,
+    "sequence_generation": 3,
+    "sub_id": 0,
+    "sub_lang": "",
+    "sub_track_stream_indexes": [
+      [
+        2,
+        5
+      ]
+    ],
+    "sub_tracks": [
+      [
+        2,
+        "Forced",
+        true
+      ]
+    ],
+    "title": "Conformance Episode",
+    "video_height": 1080,
+    "video_is_image": false,
+    "volume": 55,
+    "volume_max": 130
+  }
+}

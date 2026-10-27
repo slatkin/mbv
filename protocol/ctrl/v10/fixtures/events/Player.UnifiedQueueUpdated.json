@@ -1,0 +1,161 @@
+{
+  "Player": {
+    "UnifiedQueueUpdated": {
+      "active_slot": 1,
+      "in_flight_transition": null,
+      "lineage": 2,
+      "queued_latest_transition": null,
+      "revision": 12,
+      "slots": [
+        {
+          "item": {
+            "album": "",
+            "album_id": "",
+            "artist": "",
+            "artist_items": [],
+            "audio_info": "",
+            "child_count": null,
+            "collection_type": "",
+            "container": "",
+            "date_added": "2026-01-01T00:00:00Z",
+            "end_year": 0,
+            "external_urls": [],
+            "genres": [],
+            "id": "emby-conformance-item",
+            "image_tags": {
+              "backdrops": [],
+              "logo": "",
+              "primary": "",
+              "series_backdrops": [],
+              "series_thumb": "",
+              "thumb": ""
+            },
+            "index_number": 1,
+            "is_folder": false,
+            "item_type": "Episode",
+            "kind": "Emby",
+            "media_type": "Video",
+            "name": "Conformance Episode",
+            "overview": "",
+            "parent_index_number": 1,
+            "path": "",
+            "people": [],
+            "playback_position_ticks": 0,
+            "played": false,
+            "playlist_item_id": "",
+            "premiere_date": "",
+            "production_year": 2026,
+            "runtime_ticks": 1800000000,
+            "series_id": "emby-series-1",
+            "series_name": "Conformance Series",
+            "sort_name": "conformance episode",
+            "studios": [],
+            "total_count": 0,
+            "track_artist": "",
+            "unplayed_item_count": 0,
+            "video_info": ""
+          },
+          "slot_id": 1
+        },
+        {
+          "item": {
+            "duration_ticks": 1800000000,
+            "enclosure_url": "https://feeds.example/conformance/episode-1.mp3",
+            "feed_id": "https://feeds.example/conformance.xml",
+            "feed_kind": "audio",
+            "guid": "conformance-feed-guid",
+            "kind": "Feed",
+            "link": null,
+            "mime_type": "audio/mpeg",
+            "played": false,
+            "position_ticks": 0,
+            "pub_date_secs": 1700000000,
+            "title": "Conformance Feed Entry"
+          },
+          "slot_id": 2
+        },
+        {
+          "item": {
+            "author": "Conformance Author",
+            "cover_path": "covers/conformance-episode.jpg",
+            "description": "Conformance episode description",
+            "duration_ticks": 1800000000,
+            "episodeId": "abs-episode-1",
+            "is_finished": false,
+            "kind": "Audiobookshelf",
+            "libraryItemId": "abs-library-item-1",
+            "played": false,
+            "position_ticks": 30000000,
+            "pub_date_secs": 1700000000,
+            "show_title": "Conformance Show",
+            "title": "Conformance Audiobookshelf Episode"
+          },
+          "slot_id": 3
+        },
+        {
+          "item": {
+            "author": "Conformance Author",
+            "cover_path": null,
+            "duration_ticks": 3600000000,
+            "is_finished": false,
+            "kind": "AudiobookshelfBook",
+            "libraryItemId": "abs-book-1",
+            "played": false,
+            "position_ticks": 30000000,
+            "title": "Conformance Audiobookshelf Book"
+          },
+          "slot_id": 4
+        }
+      ],
+      "source": {
+        "id": "conformance-playlist",
+        "name": "Conformance Playlist",
+        "type": "playlist"
+      },
+      "status": {
+        "active": true,
+        "album": "Conformance Album",
+        "art_album_id": "emby-album-1",
+        "art_item_id": "emby-conformance-item",
+        "artist": "Conformance Artist",
+        "audio_codec": "",
+        "audio_id": 1,
+        "audio_lang": "en",
+        "audio_tracks": [
+          [
+            1,
+            "English"
+          ]
+        ],
+        "current_idx": 1,
+        "last_valid_pos": 30000000,
+        "muted": false,
+        "paused": false,
+        "position_ticks": 30000000,
+        "queue_len": 4,
+        "runtime_ticks": 1800000000,
+        "sequence_generation": 3,
+        "sub_id": 0,
+        "sub_lang": "",
+        "sub_track_stream_indexes": [
+          [
+            2,
+            5
+          ]
+        ],
+        "sub_tracks": [
+          [
+            2,
+            "Forced",
+            true
+          ]
+        ],
+        "title": "Conformance Episode",
+        "video_height": 1080,
+        "video_is_image": false,
+        "volume": 55,
+        "volume_max": 130
+      }
+    }
+  }
+}

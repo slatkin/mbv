@@ -1,0 +1,20 @@
+{
+  "PlaybackIntent": {
+    "action": {
+      "Play": {
+        "item_ids": [
+          "emby-conformance-item"
+        ],
+        "source": {
+          "id": "conformance-playlist",
+          "name": "Conformance Playlist",
+          "type": "playlist"
+        },
+        "start_idx": 0,
+        "start_ticks": 0
+      }
+    },
+    "generation": 3,
+    "request_id": 7
+  }
+}

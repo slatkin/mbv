@@ -58,8 +58,13 @@ or for a new field on an existing message.
    `crates/mbvd/src/main.rs` (Service-setup reconcile and Hello). It must
    still match the new shape.
    *Proof:* `cargo nextest run -p mbvd`.
-8. **Fixtures.** When the conformance fixtures of #951 exist, add or update
-   the fixture for the new shape. A bump opens a new versioned directory.
+8. **Fixtures.** Add or update the fixture for the new shape in
+   `protocol/ctrl/` (the current version directory, `protocol/ctrl/v10/`), and
+   regenerate the schemas there. Never hand-edit the generated files.
+   *Proof:* bless with `MBV_PROTOCOL_BLESS=1 cargo nextest run -p mbv-ctrl
+   conformance`, review the diff, then check with
+   `cargo nextest run -p mbv-ctrl conformance`. A bump opens a new versioned
+   directory (`protocol/ctrl/v10/README.md`).
 
 ## Add a keybind action
 

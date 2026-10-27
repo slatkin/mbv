@@ -1,0 +1,8 @@
+{
+  "SelectPlaybackOutput": {
+    "EmbySession": {
+      "device_id": "emby-device-1",
+      "name": "Conformance Session"
+    }
+  }
+}

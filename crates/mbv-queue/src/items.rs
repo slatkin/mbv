@@ -10,7 +10,9 @@ pub use super::audiobookshelf::{
 // string matching like `format!("abs:{}:{}", lib, ep)`.
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize, schemars::JsonSchema,
+)]
 #[serde(tag = "provider", content = "value")]
 pub enum QueueItemContentId {
     Emby(String),
@@ -98,7 +100,7 @@ pub(super) fn duration_ticks_as_i64(ticks: u64) -> i64 {
 // serde-defaulted so old queue payloads and ctrl snapshots remain loadable.
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 pub struct FeedEntry {
     pub guid: String,
     pub title: String,
@@ -162,7 +164,9 @@ pub enum MpvUrlSource<'a> {
 
 // Serialize through the original flat internally-tagged representation. This
 // preserves both the legacy discriminator and the inner fields' wire order.
-#[derive(serde::Serialize)]
+// The `JsonSchema` derive mirrors the same serde shape: `QueueItem`'s manual
+// impl delegates to it (ctrl-protocol-conformance design D3).
+#[derive(serde::Serialize, schemars::JsonSchema)]
 #[serde(tag = "kind")]
 enum QueueItemSerialize<'a> {
     #[serde(rename = "Emby")]
@@ -173,6 +177,22 @@ enum QueueItemSerialize<'a> {
     Audiobookshelf(&'a AudiobookshelfQueueItem),
     #[serde(rename = "AudiobookshelfBook")]
     AudiobookshelfBook(&'a AudiobookshelfBookQueueItem),
+}
+
+impl schemars::JsonSchema for QueueItem {
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        "QueueItem".into()
+    }
+
+    /// The emitted wire shape only: internally tagged by `kind`, with the
+    /// payload flattened into the same object — delegated to the derived
+    /// schema of `QueueItemSerialize` so the kind table is declared once
+    /// (ctrl-protocol-conformance design D3). The permissive decode path (a
+    /// legacy bare `EmbyItem` with no `kind`) stays a decode tolerance,
+    /// never a schema variant.
+    fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        <QueueItemSerialize<'static> as schemars::JsonSchema>::json_schema(generator)
+    }
 }
 
 impl serde::Serialize for QueueItem {

@@ -479,5 +479,6 @@ mod queue {
 
     mod feed;
     mod operations;
+    mod schema;
     mod title_parts;
 }

@@ -44,7 +44,17 @@ pub use progress::{ProgressObservation, SlotProgress};
 // `PlayerEvent` / `PlayerCommand` across the ctrl seam; a newtype over `u64`
 // serializes as its inner value.
 #[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    PartialOrd,
+    Ord,
+    serde::Serialize,
+    serde::Deserialize,
+    schemars::JsonSchema,
 )]
 pub struct QueueSlotId(u64);
 

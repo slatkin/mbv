@@ -13,7 +13,7 @@ use crate::BUILD_ID;
 
 use super::CtrlError;
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct CtrlHello {
     pub protocol_version: u32,
     pub app_version: String,

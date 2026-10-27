@@ -1,0 +1,11 @@
+{
+  "PlaybackIntent": {
+    "action": {
+      "SetPaused": {
+        "paused": true
+      }
+    },
+    "generation": 3,
+    "request_id": 7
+  }
+}

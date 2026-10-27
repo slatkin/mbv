@@ -73,14 +73,14 @@ pub fn should_resume(position_ticks: i64, runtime_ticks: i64) -> bool {
 // — the Application requires `Msg: PartialEq`) can carry the component-resolved
 // item as the explicit owned target of a typed effect. Additive derive only;
 // no semantics change.
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 pub struct EmbyPerson {
     pub name: String,
     pub role: String,
     pub kind: String,
 }
 
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 pub struct EmbyLink {
     pub name: String,
     pub url: String,
@@ -90,13 +90,13 @@ pub struct EmbyLink {
 /// album-artist display name and the stable artist item ID it maps to.
 /// This pair is mbv's only source of stable artist identity; IDs from an
 /// `/Artists` listing never enter this field.
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 pub struct EmbyArtistRef {
     pub name: String,
     pub id: String,
 }
 
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 pub struct EmbyItem {
     pub id: String,
     pub name: String,
@@ -167,7 +167,9 @@ pub struct EmbyItem {
 /// any image is fetched, so the chosen shape never changes when the image
 /// arrives. These are Emby's default item-DTO members (not `Fields`-gated
 /// properties), so parsing them needs no extra `Fields` request.
-#[derive(Debug, Clone, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Default, PartialEq, serde::Serialize, serde::Deserialize, schemars::JsonSchema,
+)]
 pub struct EmbyImageTags {
     /// `ImageTags.Thumb`: a 16:9 landscape thumbnail is declared available.
     #[serde(default)]

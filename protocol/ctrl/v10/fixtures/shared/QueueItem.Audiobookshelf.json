@@ -1,0 +1,15 @@
+{
+  "author": "Conformance Author",
+  "cover_path": "covers/conformance-episode.jpg",
+  "description": "Conformance episode description",
+  "duration_ticks": 1800000000,
+  "episodeId": "abs-episode-1",
+  "is_finished": false,
+  "kind": "Audiobookshelf",
+  "libraryItemId": "abs-library-item-1",
+  "played": false,
+  "position_ticks": 30000000,
+  "pub_date_secs": 1700000000,
+  "show_title": "Conformance Show",
+  "title": "Conformance Audiobookshelf Episode"
+}

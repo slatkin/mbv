@@ -11,7 +11,7 @@ use mbv_queue::{QueueLineage, QueueSource, ServiceKind};
 
 // ── CtrlCmd ──────────────────────────────────────────────────────────────
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, schemars::JsonSchema)]
 pub enum CtrlCmd {
     Hello(CtrlHello),
     PlayerCmd(WireCommand),
@@ -246,7 +246,7 @@ impl CtrlCmd {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct PlaybackIntent {
     pub request_id: PlaybackRequestId,
     pub generation: PlaybackGeneration,
@@ -288,7 +288,7 @@ impl From<&PlaybackIntentAction> for Option<Direction> {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 pub enum PlaybackIntentAction {
     Play {
         item_ids: Vec<String>,
@@ -312,7 +312,7 @@ pub enum PlaybackIntentAction {
 /// to/from `PlayerCommand` are exhaustive matches with no wildcard arm, so
 /// adding a new `PlayerCommand` variant is a compile error until this type
 /// (and its conversions) are updated too.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, schemars::JsonSchema)]
 pub enum WireCommand {
     #[serde(rename = "TogglePause")]
     TogglePause,

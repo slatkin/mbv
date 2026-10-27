@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 /// Client supplies the Cast address from its own discovery, and only the
 /// Emby device identity of an Emby Session; the Owner is the only authority
 /// over the resulting output state.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub enum OutputSelection {
     Local,
     Cast {
@@ -24,7 +24,7 @@ pub enum OutputSelection {
 }
 
 /// Connection state of the Owner's remote playback output.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub enum OutputConnection {
     Connecting,
     Connected,
@@ -34,7 +34,7 @@ pub enum OutputConnection {
 /// Content that an Emby Session plays but the Owner did not load
 /// (emby-session-owner-output design D3): the device's own item. The Owner
 /// sends it only when that item changes, not on every `StatusOnly` broadcast.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct SessionNowPlaying {
     pub item_id: String,
     pub item_type: String,
@@ -50,7 +50,7 @@ pub struct SessionNowPlaying {
 /// on cold seed and on every change (design D3). Slot, position, and pause
 /// state keep travelling on `UnifiedQueueState` and `StatusOnly`, which have
 /// no output-specific shape.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub enum OutputState {
     Local,
     Cast {

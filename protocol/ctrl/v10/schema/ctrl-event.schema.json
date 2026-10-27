@@ -1,0 +1,2204 @@
+{
+  "$defs": {
+    "AudiobookshelfBookProgressEvent": {
+      "description": "Book-shaped counterpart to `AudiobookshelfProgressEvent`: identity,\nacknowledged position/completion, and setup generation only, keyed by\n`library_item_id` with no `episode_id`.",
+      "properties": {
+        "is_finished": {
+          "description": "Mirrors Audiobookshelf `is_finished` completion state.",
+          "type": "boolean"
+        },
+        "library_item_id": {
+          "type": "string"
+        },
+        "position_ticks": {
+          "description": "Acknowledged playback position in ticks.",
+          "format": "int64",
+          "type": "integer"
+        },
+        "setup_generation": {
+          "description": "Setup generation the acknowledged progress was produced under;\nreceivers discard progress from a stale generation.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "library_item_id",
+        "position_ticks",
+        "is_finished",
+        "setup_generation"
+      ],
+      "type": "object"
+    },
+    "AudiobookshelfBookQueueItem": {
+      "properties": {
+        "author": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "cover_path": {
+          "default": null,
+          "description": "Service-scoped artwork identity (cover path, not server URL).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "duration_ticks": {
+          "default": null,
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "is_finished": {
+          "default": false,
+          "description": "Mirrors Audiobookshelf `is_finished` (distinct from played state).",
+          "type": "boolean"
+        },
+        "libraryItemId": {
+          "type": "string"
+        },
+        "played": {
+          "default": false,
+          "type": "boolean"
+        },
+        "position_ticks": {
+          "default": 0,
+          "description": "Playback position in ticks. Zero means start from the beginning.",
+          "format": "int64",
+          "type": "integer"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "libraryItemId",
+        "title"
+      ],
+      "type": "object"
+    },
+    "AudiobookshelfProgressEvent": {
+      "description": "Redacted, provider-qualified Audiobookshelf progress: identity,\nacknowledged position/completion, and setup generation only. Excludes\nAPI key, Authorization header, resolved source URL, and playback\n`sessionId` — those never cross the ctrl wire.",
+      "properties": {
+        "episode_id": {
+          "type": "string"
+        },
+        "is_finished": {
+          "description": "Mirrors Audiobookshelf `is_finished` completion state.",
+          "type": "boolean"
+        },
+        "library_item_id": {
+          "type": "string"
+        },
+        "position_ticks": {
+          "description": "Acknowledged playback position in ticks.",
+          "format": "int64",
+          "type": "integer"
+        },
+        "setup_generation": {
+          "description": "Setup generation the acknowledged progress was produced under;\nreceivers discard progress from a stale generation.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "library_item_id",
+        "episode_id",
+        "position_ticks",
+        "is_finished",
+        "setup_generation"
+      ],
+      "type": "object"
+    },
+    "AudiobookshelfQueueItem": {
+      "properties": {
+        "author": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "cover_path": {
+          "default": null,
+          "description": "Service-scoped artwork identity (cover path, not server URL).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "description": {
+          "default": null,
+          "description": "Episode synopsis/description, when the catalog carries one. Used by\nHome's hero detail for Audiobookshelf rows.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "duration_ticks": {
+          "default": null,
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "episodeId": {
+          "type": "string"
+        },
+        "is_finished": {
+          "default": false,
+          "description": "Mirrors Audiobookshelf `is_finished` (distinct from played state\npersisted here). Defaulted for backward compat.",
+          "type": "boolean"
+        },
+        "libraryItemId": {
+          "type": "string"
+        },
+        "played": {
+          "default": false,
+          "type": "boolean"
+        },
+        "position_ticks": {
+          "default": 0,
+          "description": "Playback position in ticks. Zero means start from the beginning.",
+          "format": "int64",
+          "type": "integer"
+        },
+        "pub_date_secs": {
+          "default": null,
+          "description": "Publish time in Unix seconds, when available from the catalog.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "show_title": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "libraryItemId",
+        "episodeId",
+        "title"
+      ],
+      "type": "object"
+    },
+    "CtrlHello": {
+      "properties": {
+        "app_version": {
+          "type": "string"
+        },
+        "build_id": {
+          "default": "",
+          "description": "Build identity of the sending binary (design D3): the git short SHA\nplus `-dirty` when the tree was dirty at build time. `#[serde(default)]`\nkeeps the field additive: a peer that predates it decodes an empty\nvalue and is ignored by `PeerBuild::Any` handshakes.",
+          "type": "string"
+        },
+        "capabilities": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "control_token": {
+          "default": null,
+          "description": "Control credential used only when the peer advertises `control-auth`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "protocol_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "swap_token": {
+          "default": null,
+          "description": "One-shot swap token carried only by a Client the Owner itself started\nfor a Pin swap. `None` for every Client the user started.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "protocol_version",
+        "app_version",
+        "capabilities"
+      ],
+      "type": "object"
+    },
+    "DisconnectReason": {
+      "oneOf": [
+        {
+          "enum": [
+            "TakenOverByEmbyRemote",
+            "OwnerShuttingDown"
+          ],
+          "type": "string"
+        },
+        {
+          "const": "DaemonShutdown",
+          "description": "The daemon is shutting down deliberately (`mbv -q`, tray Quit).\nUnlike `TakenOverByEmbyRemote`, this reason means the connection is\nabout to close, and it is not an Emby-authority notification.",
+          "type": "string"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "ExclusiveOwner": {
+              "properties": {
+                "pid": {
+                  "format": "uint32",
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "pid"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "ExclusiveOwner"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "EmbyArtistRef": {
+      "description": "One `ArtistItems` name/ID pair from a music album/item payload: an\nalbum-artist display name and the stable artist item ID it maps to.\nThis pair is mbv's only source of stable artist identity; IDs from an\n`/Artists` listing never enter this field.",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "id"
+      ],
+      "type": "object"
+    },
+    "EmbyImageTags": {
+      "description": "Declared image availability for one item (task 5.3, design D5): the\nprovider metadata the artwork policy reads to decide availability before\nany image is fetched, so the chosen shape never changes when the image\narrives. These are Emby's default item-DTO members (not `Fields`-gated\nproperties), so parsing them needs no extra `Fields` request.",
+      "properties": {
+        "backdrops": {
+          "default": [],
+          "description": "`BackdropImageTags`: landscape backdrop tags.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "logo": {
+          "default": "",
+          "description": "`ImageTags.Logo`: an optional semantic logo decoration is declared available.",
+          "type": "string"
+        },
+        "primary": {
+          "default": "",
+          "description": "`ImageTags.Primary`: a primary (poster/square) image is declared\navailable.",
+          "type": "string"
+        },
+        "series_backdrops": {
+          "default": [],
+          "description": "On episodes: the series' backdrop tags (`ParentBackdropImageTags`).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "series_thumb": {
+          "default": "",
+          "description": "On episodes: the series' thumb tag (`ParentThumbImageTag`, falling\nback to `SeriesThumbImageTag`).",
+          "type": "string"
+        },
+        "thumb": {
+          "default": "",
+          "description": "`ImageTags.Thumb`: a 16:9 landscape thumbnail is declared available.",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "EmbyItem": {
+      "properties": {
+        "album": {
+          "type": "string"
+        },
+        "album_id": {
+          "type": "string"
+        },
+        "artist": {
+          "type": "string"
+        },
+        "artist_items": {
+          "default": [],
+          "description": "`ArtistItems` name/ID pairs as returned on the payload, retained\nverbatim. `Default` so legacy serialized queue items (which predate\nthe field) deserialize unchanged; serialized queue compatibility is\nunchanged.",
+          "items": {
+            "$ref": "#/$defs/EmbyArtistRef"
+          },
+          "type": "array"
+        },
+        "audio_info": {
+          "type": "string"
+        },
+        "child_count": {
+          "default": null,
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "collection_type": {
+          "type": "string"
+        },
+        "container": {
+          "type": "string"
+        },
+        "date_added": {
+          "description": "Full ISO 8601 (not truncated to a date), so destination Latest markers\ncan compare it against the launch window at second precision.",
+          "type": "string"
+        },
+        "end_year": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "external_urls": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/EmbyLink"
+          },
+          "type": "array"
+        },
+        "genres": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "id": {
+          "type": "string"
+        },
+        "image_tags": {
+          "$ref": "#/$defs/EmbyImageTags",
+          "default": {
+            "backdrops": [],
+            "logo": "",
+            "primary": "",
+            "series_backdrops": [],
+            "series_thumb": "",
+            "thumb": ""
+          },
+          "description": "Declared image availability (task 5.3): the Emby default-DTO image\ntags the hero artwork policy reads to choose an artwork shape before\nany image is fetched. `Default` so older payloads deserialize\nunchanged."
+        },
+        "index_number": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "is_folder": {
+          "type": "boolean"
+        },
+        "item_type": {
+          "type": "string"
+        },
+        "media_type": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "overview": {
+          "type": "string"
+        },
+        "parent_index_number": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "path": {
+          "type": "string"
+        },
+        "people": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/EmbyPerson"
+          },
+          "type": "array"
+        },
+        "playback_position_ticks": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "played": {
+          "type": "boolean"
+        },
+        "playlist_item_id": {
+          "type": "string"
+        },
+        "premiere_date": {
+          "type": "string"
+        },
+        "production_year": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "runtime_ticks": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "series_id": {
+          "type": "string"
+        },
+        "series_name": {
+          "type": "string"
+        },
+        "sort_name": {
+          "type": "string"
+        },
+        "studios": {
+          "default": [],
+          "description": "`Studios[].Name`: the production studios — a series' network (NBC,\nBBC, Netflix).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "total_count": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "track_artist": {
+          "default": "",
+          "description": "The track-level artist from the payload's `Artists` list (first\nentry), kept distinct from `artist` (the album artist) so per-track\nsurfaces can prefer the individual artist. `Default` so legacy\nserialized queue items (which predate the field) deserialize\nunchanged; serialized queue compatibility is unchanged.",
+          "type": "string"
+        },
+        "unplayed_item_count": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "video_info": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "item_type",
+        "is_folder",
+        "media_type",
+        "collection_type",
+        "runtime_ticks",
+        "played",
+        "playback_position_ticks",
+        "series_id",
+        "series_name",
+        "album_id",
+        "album",
+        "index_number",
+        "parent_index_number",
+        "unplayed_item_count",
+        "path",
+        "artist",
+        "sort_name",
+        "production_year",
+        "end_year",
+        "overview",
+        "premiere_date",
+        "date_added",
+        "total_count",
+        "container",
+        "video_info",
+        "audio_info",
+        "playlist_item_id"
+      ],
+      "type": "object"
+    },
+    "EmbyLink": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "url"
+      ],
+      "type": "object"
+    },
+    "EmbyPerson": {
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "role",
+        "kind"
+      ],
+      "type": "object"
+    },
+    "FeedEntry": {
+      "properties": {
+        "duration_ticks": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "enclosure_url": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "feed_id": {
+          "default": null,
+          "description": "Stable feed identity for the keyed feed-entry state store (#492).\nSet to the normalized subscription URL at fetch time. `None` means\nthe entry cannot address the store (legacy or identity-less) and\nplayback falls through to stateless behavior.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "feed_kind": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FeedKind"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Subscription's `FeedKind` carried into the queued snapshot. Canonical\nmedia kind when enclosure MIME is absent or unrecognized; enclosure MIME\nrefines it when recognized. `None` means unknown — legacy\npersisted/wire data that predates this field."
+        },
+        "guid": {
+          "type": "string"
+        },
+        "link": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "mime_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "played": {
+          "default": false,
+          "description": "Whether the entry has been played to completion (known-runtime EOF\nor stop ≥ 95%). Played entries with position zero replay from start.",
+          "type": "boolean"
+        },
+        "position_ticks": {
+          "default": 0,
+          "description": "Playback position in ticks. Zero means start from the beginning\n(or the entry was marked played with position reset).",
+          "format": "int64",
+          "type": "integer"
+        },
+        "pub_date_secs": {
+          "default": null,
+          "description": "Publish time in unix seconds UTC (RSS `pubDate` / Atom\n`published`/`updated`), for the \"All\" group's newest-first sort.\nMissing dates sort last. `#[serde(default)]` keeps old\n`queue_state.json` files (pre-#471) loading.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "guid",
+        "title"
+      ],
+      "type": "object"
+    },
+    "FeedKind": {
+      "description": "Media kind of a feed subscription, declared by the user in\n`[[feeds]]` config entries. The stored kind is the default for the\nsubscription; per-entry kind can be refined from the enclosure MIME\nat parse time (#471). Not currently used for routing — only for\ndisplay and future refinement (#472).",
+      "enum": [
+        "audio",
+        "video"
+      ],
+      "type": "string"
+    },
+    "ItemId": {
+      "description": "Emby item identifier (movies, episodes, albums, tracks).",
+      "type": "string"
+    },
+    "OutputConnection": {
+      "description": "Connection state of the Owner's remote playback output.",
+      "enum": [
+        "Connecting",
+        "Connected",
+        "Disconnected"
+      ],
+      "type": "string"
+    },
+    "OutputState": {
+      "description": "The Owner's active playback output, carried by `CtrlEvent::PlaybackOutput`\non cold seed and on every change (design D3). Slot, position, and pause\nstate keep travelling on `UnifiedQueueState` and `StatusOnly`, which have\nno output-specific shape.",
+      "oneOf": [
+        {
+          "enum": [
+            "Local"
+          ],
+          "type": "string"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "Cast": {
+              "properties": {
+                "connection": {
+                  "$ref": "#/$defs/OutputConnection"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "receiver_id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "receiver_id",
+                "name",
+                "connection"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "Cast"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "`audio_only` is the Session's own view of what it can play, and\n`now_playing` is content that the Owner did not load.",
+          "properties": {
+            "EmbySession": {
+              "properties": {
+                "audio_only": {
+                  "type": "boolean"
+                },
+                "connection": {
+                  "$ref": "#/$defs/OutputConnection"
+                },
+                "device_id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "now_playing": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/SessionNowPlaying"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "device_id",
+                "name",
+                "connection",
+                "audio_only"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "EmbySession"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "PipePlaybackPhase": {
+      "oneOf": [
+        {
+          "enum": [
+            "Resolving",
+            "PlayerOpening",
+            "OutputBuffering"
+          ],
+          "type": "string"
+        },
+        {
+          "const": "OutputStarted",
+          "description": "mbv observed mpv's `PlaybackRestart` event for this generation.",
+          "type": "string"
+        }
+      ]
+    },
+    "PipePlaybackStatus": {
+      "properties": {
+        "estimated_remaining_ms": {
+          "description": "Approximate time until the configured local estimate expires. Only\npresent for `OutputBuffering`; it is not an observed downstream value.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "generation": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "phase": {
+          "$ref": "#/$defs/PipePlaybackPhase"
+        },
+        "request_id": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "request_id",
+        "generation",
+        "phase"
+      ],
+      "type": "object"
+    },
+    "PlaybackIntentEvent": {
+      "properties": {
+        "generation": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "outcome": {
+          "$ref": "#/$defs/PlaybackIntentOutcome"
+        },
+        "request_id": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "request_id",
+        "generation",
+        "outcome"
+      ],
+      "type": "object"
+    },
+    "PlaybackIntentOutcome": {
+      "oneOf": [
+        {
+          "enum": [
+            "Accepted",
+            "Applied",
+            "Superseded"
+          ],
+          "type": "string"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "Coalesced": {
+              "properties": {
+                "canonical_request_id": {
+                  "format": "uint64",
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "canonical_request_id"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "Coalesced"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "Rejected": {
+              "properties": {
+                "reason": {
+                  "$ref": "#/$defs/PlaybackIntentRejection"
+                }
+              },
+              "required": [
+                "reason"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "Rejected"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "PlaybackIntentRejection": {
+      "enum": [
+        "EmptyTarget",
+        "InvalidTarget",
+        "ResolutionFailed",
+        "AudioOnly",
+        "Unavailable"
+      ],
+      "type": "string"
+    },
+    "PlayerEvent": {
+      "oneOf": [
+        {
+          "enum": [
+            "NextUpPlay"
+          ],
+          "type": "string"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "Stopped": {
+              "properties": {
+                "consume": {
+                  "type": "boolean"
+                },
+                "error": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "played": {
+                  "type": "boolean"
+                },
+                "position_ticks": {
+                  "format": "int64",
+                  "type": "integer"
+                },
+                "run_identity": {
+                  "default": [
+                    0,
+                    0
+                  ],
+                  "description": "Identity of the Playback run that observed this stop: the owner\nsubmission generation at event construction time.",
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "prefixItems": [
+                    {
+                      "format": "uint64",
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    {
+                      "format": "uint64",
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  ],
+                  "type": "array"
+                },
+                "slot_id": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/QueueSlotId"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null,
+                  "description": "Owner-assigned identity of the occurrence that stopped, or `None`\nfor teardown/error synthetics raised with no live queue slot\n(spawn failure, panic, daemon disconnect). Resolved from the\nPlayback run's mpv-local position before the event leaves the run\n(design D2). `#[serde(default)]` so a pre-change peer's\nindex-shaped `Stopped` still decodes (to `None`)."
+                }
+              },
+              "required": [
+                "position_ticks",
+                "played",
+                "consume"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "Stopped"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "mpv advanced to (or was jumped to) an occurrence. Names the\nowner-assigned slot identity, never an ordinal.",
+          "properties": {
+            "TrackChanged": {
+              "properties": {
+                "slot_id": {
+                  "$ref": "#/$defs/QueueSlotId"
+                },
+                "transition": {
+                  "default": null,
+                  "description": "Present only when this observation settles a dispatched `JumpTo`\ntransition (design D4): `(request_id, generation)` of that\nrequest. `None` for natural advancement. Bare-mode dispatch\npopulates this in Section 3; today it is always `None`.",
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "prefixItems": [
+                    {
+                      "format": "uint64",
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    {
+                      "format": "uint64",
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  ],
+                  "type": [
+                    "array",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "slot_id"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "TrackChanged"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Emitted after the player confirms its paused property transition.",
+          "properties": {
+            "PausedChanged": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "PausedChanged"
+          ],
+          "type": "object"
+        },
+        {
+          "const": "OutputStarted",
+          "description": "mpv's `PlaybackRestart` event. This confirms mbv's player output\nboundary, not sound at a downstream pipe consumer.",
+          "type": "string"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "TrackCompleted": {
+              "properties": {
+                "consume": {
+                  "type": "boolean"
+                },
+                "played": {
+                  "type": "boolean"
+                },
+                "position_ticks": {
+                  "format": "int64",
+                  "type": "integer"
+                },
+                "run_identity": {
+                  "default": [
+                    0,
+                    0
+                  ],
+                  "description": "Identity of the Playback run that observed this completion: the\nowner submission generation at event construction time.",
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "prefixItems": [
+                    {
+                      "format": "uint64",
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    {
+                      "format": "uint64",
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  ],
+                  "type": "array"
+                },
+                "slot_id": {
+                  "$ref": "#/$defs/QueueSlotId",
+                  "description": "Owner-assigned identity of the completed occurrence (design D7)."
+                }
+              },
+              "required": [
+                "slot_id",
+                "position_ticks",
+                "played",
+                "consume"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "TrackCompleted"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "NextUpThreshold": {
+              "properties": {
+                "episode": {
+                  "format": "int64",
+                  "type": "integer"
+                },
+                "season": {
+                  "format": "int64",
+                  "type": "integer"
+                },
+                "series_id": {
+                  "$ref": "#/$defs/ItemId"
+                }
+              },
+              "required": [
+                "series_id",
+                "season",
+                "episode"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "NextUpThreshold"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Rust identifier renamed from `PlaylistNextUp` (see #104); the wire tag\nis pinned via `serde(rename)` so daemon/TUI processes at different\nversions during an upgrade still speak the same JSON tag. `PlayerEvent`\nhas no `WireCommand`-style adapter (unlike `PlayerCommand`, see #81),\nso this pin lives directly on the variant.\nLook-ahead hint for the *next* occurrence, not an address of an\nexisting one: `next_idx` stays ordinal (it is only ever read to peek\nthe upcoming item for the Next-Up card, never to mutate or activate a\nslot), per the presentation-coordinate carve-out in the stable-slot\nspec rule.",
+          "properties": {
+            "PlaylistNextUp": {
+              "properties": {
+                "next_idx": {
+                  "format": "uint",
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "next_idx"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "PlaylistNextUp"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Emitted by `RemotePlayer` when a `UnifiedQueueState` arrives so App can\nsync the full canonical queue (tagged `QueueItems`, slot identity, active\nslot, revision) without decomposing into legacy Emby-only shapes.",
+          "properties": {
+            "UnifiedQueueUpdated": {
+              "$ref": "#/$defs/UnifiedQueueStateData"
+            }
+          },
+          "required": [
+            "UnifiedQueueUpdated"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Result of an owner-authoritative queue operation.",
+          "properties": {
+            "QueueOpResult": {
+              "properties": {
+                "op": {
+                  "$ref": "#/$defs/QueueOpId"
+                },
+                "outcome": {
+                  "$ref": "#/$defs/QueueOpOutcome"
+                }
+              },
+              "required": [
+                "op",
+                "outcome"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "QueueOpResult"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Chapter API: playback entered the intro window.",
+          "properties": {
+            "IntroStarted": {
+              "properties": {
+                "intro_end_ticks": {
+                  "format": "int64",
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "intro_end_ticks"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "IntroStarted"
+          ],
+          "type": "object"
+        },
+        {
+          "const": "IntroEnded",
+          "description": "Chapter API: playback passed `IntroEnd` (or track changed).",
+          "type": "string"
+        },
+        {
+          "const": "SkipIntroPlay",
+          "description": "Chapter API: user clicked the \"Skip Intro\" button in MPV.",
+          "type": "string"
+        },
+        {
+          "const": "MpvQuit",
+          "description": "mpv exited on its own (user pressed q inside mpv, or mpv crashed).",
+          "type": "string"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Emitted when a Player owner cannot act on a command, including local\nslot-addressed commands and daemon ctrl-socket commands. The reason\nstring is owner-computed and shown to the user as-is.",
+          "properties": {
+            "CommandRejected": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "CommandRejected"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Correlated lifecycle update for a guarded direct-daemon playback\nintent. The confirmed `PlayerStatus` remains authoritative separately.",
+          "properties": {
+            "PlaybackIntent": {
+              "$ref": "#/$defs/PlaybackIntentEvent"
+            }
+          },
+          "required": [
+            "PlaybackIntent"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Direct-daemon pipe startup status; absent for local, Emby-attached,\nand non-pipe playback routes.",
+          "properties": {
+            "PipePlaybackStatus": {
+              "$ref": "#/$defs/PipePlaybackStatus"
+            }
+          },
+          "required": [
+            "PipePlaybackStatus"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Emitted by `RemotePlayer` when the daemon intentionally disconnects this\nctrl client (actual connection close, not an authority-change notification).",
+          "properties": {
+            "RemoteDisconnected": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "RemoteDisconnected"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Emitted by `RemotePlayer` when the daemon sends a `Disconnected` notification\nfor Emby remote authority takeover. Unlike `RemoteDisconnected`, this is\nan authority-change notification — the connection stays open.",
+          "properties": {
+            "EmbyAuthorityTaken": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "EmbyAuthorityTaken"
+          ],
+          "type": "object"
+        },
+        {
+          "const": "DaemonShutdownAnnounced",
+          "description": "Emitted by `RemotePlayer` when its connection closes after the daemon\nannounced a deliberate shutdown (`DisconnectReason::DaemonShutdown`).\nUnlike `RemoteDisconnected`, this is not a crash: the client SHALL\nprint one line, restore the terminal, and exit rather than offer\nrecovery.",
+          "type": "string"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Emitted when an external tool modifies mpv's playlist outside of mbv's\ncontrol (e.g. by writing to the mpv IPC socket), causing mbv's queue\nmirror to become stale. The detail describes what was detected. The UI\nshows this as a warning toast.",
+          "properties": {
+            "QueueDesynced": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "QueueDesynced"
+          ],
+          "type": "object"
+        },
+        {
+          "const": "SwapPrepare",
+          "description": "The Owner asks this Client to prepare for a Pin swap: save the launch\nsnapshot now and answer `CtrlCmd::SwapPrepared` (tray-pin-swap design\nD2). Sent only to a Client that advertised `pin-swap`.",
+          "type": "string"
+        },
+        {
+          "const": "SwapQuit",
+          "description": "The Owner tells this Client to exit now as swapped out: skip the\nlaunch-state save and the coordinated shutdown request (tray-pin-swap\ndesign D2/D6). Sent only to a Client that advertised `pin-swap`.",
+          "type": "string"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Emitted by `RemotePlayer` when the daemon sends redacted Audiobookshelf\nprogress. Dormant: delivered for a future browse-reconciliation\nconsumer, but nothing applies it to queue or browse state yet.",
+          "properties": {
+            "AudiobookshelfProgress": {
+              "$ref": "#/$defs/AudiobookshelfProgressEvent"
+            }
+          },
+          "required": [
+            "AudiobookshelfProgress"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Book-shaped counterpart to `AudiobookshelfProgress`; keyed by\n`library_item_id` only.",
+          "properties": {
+            "AudiobookshelfBookProgress": {
+              "$ref": "#/$defs/AudiobookshelfBookProgressEvent"
+            }
+          },
+          "required": [
+            "AudiobookshelfBookProgress"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "The Owner's active playback output, forwarded from\n`CtrlEvent::PlaybackOutput` (cast-owner-output design D3/D13). Sent on\ncold seed and on every output change, only to peers that negotiated\n`playback-output`; the TUI reads it for the connection mark, the output\nindicator, and the idle keep-panel rule.",
+          "properties": {
+            "PlaybackOutput": {
+              "$ref": "#/$defs/OutputState"
+            }
+          },
+          "required": [
+            "PlaybackOutput"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "PlayerStatus": {
+      "properties": {
+        "active": {
+          "type": "boolean"
+        },
+        "album": {
+          "default": "",
+          "type": "string"
+        },
+        "art_album_id": {
+          "default": "",
+          "description": "Album id for the current track, when it's a grouped audio track\n(mirrors the `Audio` + non-empty `album_id` grouping the\nqueue card already uses in `crates/mbv-render/src/components/card.rs`, so the\nsame disk-cache entry a browsed album card populated can be reused\nhere). Empty when not applicable.",
+          "type": "string"
+        },
+        "art_item_id": {
+          "default": "",
+          "description": "Id of the current track's Emby item, used by the root `mbv` crate to\nresolve `mpris:artUrl` against the on-disk image cache. Deliberately\nNOT a ready-made URL: `mbv-core` has no access to the disk cache\n(that lives in the root crate's `config` module) and, per #158's\nrecorded triage decision, must never build a token-bearing Emby URL\nas a fallback. See `mbv-desktop::mpris::resolve_art_url`.",
+          "type": "string"
+        },
+        "artist": {
+          "default": "",
+          "type": "string"
+        },
+        "audio_codec": {
+          "default": "",
+          "type": "string"
+        },
+        "audio_id": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "audio_lang": {
+          "type": "string"
+        },
+        "audio_tracks": {
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "current_idx": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "last_valid_pos": {
+          "default": 0,
+          "format": "int64",
+          "type": "integer"
+        },
+        "muted": {
+          "type": "boolean"
+        },
+        "paused": {
+          "type": "boolean"
+        },
+        "position_ticks": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "queue_len": {
+          "default": 0,
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "runtime_ticks": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "sequence_generation": {
+          "default": 0,
+          "description": "Monotonic identity for the owner's current queue submission.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sub_id": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "sub_lang": {
+          "type": "string"
+        },
+        "sub_track_stream_indexes": {
+          "default": [],
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              }
+            ],
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "sub_tracks": {
+          "items": {
+            "maxItems": 3,
+            "minItems": 3,
+            "prefixItems": [
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "boolean"
+              }
+            ],
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "title": {
+          "type": "string"
+        },
+        "video_height": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "video_is_image": {
+          "default": false,
+          "type": "boolean"
+        },
+        "volume": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "volume_max": {
+          "format": "int64",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "position_ticks",
+        "runtime_ticks",
+        "paused",
+        "volume",
+        "volume_max",
+        "current_idx",
+        "active",
+        "title",
+        "audio_tracks",
+        "sub_tracks",
+        "audio_id",
+        "audio_lang",
+        "sub_id",
+        "sub_lang",
+        "muted",
+        "video_height"
+      ],
+      "type": "object"
+    },
+    "QueueItem": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/EmbyItem",
+          "properties": {
+            "kind": {
+              "const": "Emby",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "$ref": "#/$defs/FeedEntry",
+          "properties": {
+            "kind": {
+              "const": "Feed",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "$ref": "#/$defs/AudiobookshelfQueueItem",
+          "properties": {
+            "kind": {
+              "const": "Audiobookshelf",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "$ref": "#/$defs/AudiobookshelfBookQueueItem",
+          "properties": {
+            "kind": {
+              "const": "AudiobookshelfBook",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "QueueLineage": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "QueueOpId": {
+      "description": "Identity correlating one Client queue operation with its owner's answer.",
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "QueueOpOutcome": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "Applied": {
+              "$ref": "#/$defs/UnifiedQueueStateData"
+            }
+          },
+          "required": [
+            "Applied"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "Rejected": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "Rejected"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "QueueSlotId": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "QueueSource": {
+      "oneOf": [
+        {
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": "string"
+            },
+            "type": {
+              "const": "playlist",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "name"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "album",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "series",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "shuffle",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "remote",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "collection_type": {
+              "type": "string"
+            },
+            "type": {
+              "const": "collection",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "collection_type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "unknown",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ServiceKind": {
+      "description": "Singleton Service kind identifier. Each variant represents exactly one\nconfigured instance of that Service within mbv.",
+      "oneOf": [
+        {
+          "enum": [
+            "Emby"
+          ],
+          "type": "string"
+        },
+        {
+          "const": "Audiobookshelf",
+          "description": "Reserved; not yet implemented. Added now to establish the pattern\nand the per-Service secret path. No Audiobookshelf auth, browsing,\nplayback, or credential logic is introduced here.",
+          "type": "string"
+        }
+      ]
+    },
+    "ServiceSetupRejection": {
+      "enum": [
+        "UnsupportedService",
+        "RevisionMismatch",
+        "StorageUnavailable",
+        "TransitionRejected"
+      ],
+      "type": "string"
+    },
+    "SessionNowPlaying": {
+      "description": "Content that an Emby Session plays but the Owner did not load\n(emby-session-owner-output design D3): the device's own item. The Owner\nsends it only when that item changes, not on every `StatusOnly` broadcast.",
+      "properties": {
+        "item_id": {
+          "type": "string"
+        },
+        "item_type": {
+          "type": "string"
+        },
+        "logo_tag": {
+          "description": "The item's own logo image tag. An episode's logo lives on its series\nand is keyed by the series id alone, so it needs no tag.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "series_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "series_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "item_id",
+        "item_type",
+        "name"
+      ],
+      "type": "object"
+    },
+    "TransitionSummary": {
+      "description": "Summary of a pending playback transition carried in the owner snapshot.\nKept independent of internal queue types — the target slot is a raw u64,\nmatching `UnifiedQueueSlot::slot_id`.",
+      "properties": {
+        "generation": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "request_id": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "target_slot": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "request_id",
+        "generation",
+        "target_slot"
+      ],
+      "type": "object"
+    },
+    "UnifiedQueueSlot": {
+      "description": "One slot in the unified queue representation.  The `slot_id` is the\nstable runtime identity of the occurrence (not the item's content ID).",
+      "properties": {
+        "item": {
+          "$ref": "#/$defs/QueueItem"
+        },
+        "slot_id": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "slot_id",
+        "item"
+      ],
+      "type": "object"
+    },
+    "UnifiedQueueStateData": {
+      "description": "Full queue state exchanged between unified-queue-capable peers.",
+      "properties": {
+        "active_slot": {
+          "description": "`None` when nothing is playing.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "in_flight_transition": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TransitionSummary"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Transition dispatched to the Playback run and awaiting observation.\n`None` when no transition is in flight."
+        },
+        "lineage": {
+          "$ref": "#/$defs/QueueLineage",
+          "default": 0,
+          "description": "Owner-minted identity for the current whole-queue replacement lineage."
+        },
+        "queued_latest_transition": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TransitionSummary"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Newest queued transition held back behind the in-flight one. `None`\nwhen nothing is queued."
+        },
+        "revision": {
+          "description": "Owner-local diagnostic value; clients never compare this across processes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "slots": {
+          "items": {
+            "$ref": "#/$defs/UnifiedQueueSlot"
+          },
+          "type": "array"
+        },
+        "source": {
+          "$ref": "#/$defs/QueueSource",
+          "default": {
+            "type": "unknown"
+          }
+        },
+        "status": {
+          "$ref": "#/$defs/PlayerStatus"
+        }
+      },
+      "required": [
+        "status",
+        "slots",
+        "revision"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://mbv.dev/schemas/ctrl/v10/ctrl-event.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "oneOf": [
+    {
+      "additionalProperties": false,
+      "properties": {
+        "Hello": {
+          "$ref": "#/$defs/CtrlHello"
+        }
+      },
+      "required": [
+        "Hello"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "Player": {
+          "$ref": "#/$defs/PlayerEvent"
+        }
+      },
+      "required": [
+        "Player"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "StatusOnly": {
+          "$ref": "#/$defs/PlayerStatus"
+        }
+      },
+      "required": [
+        "StatusOnly"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "Disconnected": {
+          "properties": {
+            "reason": {
+              "$ref": "#/$defs/DisconnectReason"
+            }
+          },
+          "required": [
+            "reason"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "Disconnected"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "description": "A command the daemon received over the ctrl socket was not acted on;\nthe payload is a human-readable, server-computed reason. Generic by\ndesign so future rejection reasons (not just audio-only mode) can\nreuse it — see #90.",
+      "properties": {
+        "CommandRejected": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "CommandRejected"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "PlaybackIntent": {
+          "$ref": "#/$defs/PlaybackIntentEvent"
+        }
+      },
+      "required": [
+        "PlaybackIntent"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "description": "Observed pipe-startup progress for a direct daemon client. The daemon\nowns this status; it never represents downstream audibility.",
+      "properties": {
+        "PipePlaybackStatus": {
+          "$ref": "#/$defs/PipePlaybackStatus"
+        }
+      },
+      "required": [
+        "PipePlaybackStatus"
+      ],
+      "type": "object"
+    },
+    {
+      "const": "ShutdownAccepted",
+      "description": "The daemon accepted a coordinated shutdown request after durably\npersisting its authoritative queue.",
+      "type": "string"
+    },
+    {
+      "additionalProperties": false,
+      "description": "The daemon rejected a coordinated shutdown request. The reason\nindicates why (e.g. TCP transport, persistence failure).",
+      "properties": {
+        "ShutdownRejected": {
+          "properties": {
+            "reason": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "reason"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "ShutdownRejected"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "ServiceSetupApplied": {
+          "properties": {
+            "kind": {
+              "$ref": "#/$defs/ServiceKind"
+            },
+            "revision": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "revision"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "ServiceSetupApplied"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "ServiceSetupRejected": {
+          "properties": {
+            "kind": {
+              "$ref": "#/$defs/ServiceKind"
+            },
+            "reason": {
+              "$ref": "#/$defs/ServiceSetupRejection"
+            },
+            "revision": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "revision",
+            "reason"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "ServiceSetupRejected"
+      ],
+      "type": "object"
+    },
+    {
+      "const": "SwapPrepare",
+      "description": "Owner to the Pin-swap target: save launch state now, then acknowledge\nwith `CtrlCmd::SwapPrepared`.",
+      "type": "string"
+    },
+    {
+      "const": "SwapQuit",
+      "description": "Owner to the replaced Pin-swap target: exit now as swapped out.",
+      "type": "string"
+    },
+    {
+      "const": "OwnerActionAccepted",
+      "description": "The Owner accepted an Owner action (`CtrlCmd::RunOwnerAction`).",
+      "type": "string"
+    },
+    {
+      "additionalProperties": false,
+      "description": "The Owner refused an Owner action; the payload is a human-readable,\nOwner-computed reason.",
+      "properties": {
+        "OwnerActionRefused": {
+          "properties": {
+            "reason": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "reason"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "OwnerActionRefused"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "description": "Full item-generic queue state.  Sent on initial connection and\nafter every queue mutation.",
+      "properties": {
+        "UnifiedQueueState": {
+          "$ref": "#/$defs/UnifiedQueueStateData"
+        }
+      },
+      "required": [
+        "UnifiedQueueState"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "description": "Result of one correlated owner queue operation.",
+      "properties": {
+        "QueueOpResult": {
+          "properties": {
+            "op": {
+              "$ref": "#/$defs/QueueOpId"
+            },
+            "outcome": {
+              "$ref": "#/$defs/QueueOpOutcome"
+            }
+          },
+          "required": [
+            "op",
+            "outcome"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "QueueOpResult"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "description": "Redacted, provider-qualified Audiobookshelf progress. Sent only to\npeers advertising `abs-progress`. See `AudiobookshelfProgressEvent`\nfor the field-level redaction contract this event upholds.",
+      "properties": {
+        "AudiobookshelfProgress": {
+          "$ref": "#/$defs/AudiobookshelfProgressEvent"
+        }
+      },
+      "required": [
+        "AudiobookshelfProgress"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "description": "Redacted, provider-qualified Audiobookshelf book progress. Sent only to\npeers advertising `abs-book-progress`. Keyed by `library_item_id` only,\nso it can never be matched against an episode-shaped event.",
+      "properties": {
+        "AudiobookshelfBookProgress": {
+          "$ref": "#/$defs/AudiobookshelfBookProgressEvent"
+        }
+      },
+      "required": [
+        "AudiobookshelfBookProgress"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "description": "The Owner's active playback output, sent on cold seed and on every\nchange to peers advertising `playback-output` (cast-owner-output\ndesign D3). Slot, position, and pause state stay on\n`UnifiedQueueState` and `StatusOnly`.",
+      "properties": {
+        "PlaybackOutput": {
+          "$ref": "#/$defs/OutputState"
+        }
+      },
+      "required": [
+        "PlaybackOutput"
+      ],
+      "type": "object"
+    }
+  ],
+  "title": "mbv ctrl event (protocol version 10)"
+}

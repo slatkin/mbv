@@ -62,7 +62,9 @@ fn stub_feed_entry() -> mbv_queue::FeedEntry {
 }
 
 // Contract: answered-queue-op support is additive — legacy peers' queue
-// commands must keep deserializing, and the current hello advertises it.
+// commands must keep deserializing, and the current hello advertises it. The
+// corpus pins each command's canonical shape; this pins the missing-field
+// decode tolerance no fixture row owns.
 #[test]
 fn unified_ctrl_behavior_is_capability_gated_and_additive() {
     assert!(CtrlHello::current().supports_answered_queue_ops());
@@ -81,47 +83,17 @@ fn unified_ctrl_behavior_is_capability_gated_and_additive() {
     }
 }
 
+// A pre-transition peer's snapshot omits the transition fields (and
+// `lineage`) entirely; they decode to their defaults — a decode tolerance no
+// fixture row owns.
 #[test]
-fn unified_queue_slot_round_trips_through_json() {
-    let slot = UnifiedQueueSlot {
-        slot_id: 42,
-        item: QueueItem::Emby(Box::new(stub_media_item())),
-    };
-    let json = serde_json::to_string(&slot).unwrap();
-    let decoded: UnifiedQueueSlot = serde_json::from_str(&json).unwrap();
-    assert_eq!(decoded.slot_id, 42);
-    assert_eq!(decoded.item.id(), "item1");
-}
-
-#[test]
-fn unified_queue_slot_feed_round_trips() {
-    let slot = UnifiedQueueSlot {
-        slot_id: 7,
-        item: QueueItem::Feed(stub_feed_entry()),
-    };
-    let json = serde_json::to_string(&slot).unwrap();
-    let decoded: UnifiedQueueSlot = serde_json::from_str(&json).unwrap();
-    assert_eq!(decoded.slot_id, 7);
-    match &decoded.item {
-        QueueItem::Feed(e) => assert_eq!(e.guid, "feed-guid-1"),
-        _ => panic!("expected Feed"),
-    }
-}
-
-#[test]
-fn unified_queue_state_data_round_trips() {
-    let state = UnifiedQueueStateData {
+fn unified_queue_state_data_decodes_without_transition_fields() {
+    let mut legacy = serde_json::to_value(UnifiedQueueStateData {
         status: PlayerStatus::default(),
-        slots: vec![
-            UnifiedQueueSlot {
-                slot_id: 1,
-                item: QueueItem::Emby(Box::new(stub_media_item())),
-            },
-            UnifiedQueueSlot {
-                slot_id: 2,
-                item: QueueItem::Feed(stub_feed_entry()),
-            },
-        ],
+        slots: vec![UnifiedQueueSlot {
+            slot_id: 1,
+            item: QueueItem::Emby(Box::new(stub_media_item())),
+        }],
         active_slot: Some(1),
         revision: 5,
         source: QueueSource::Unknown,
@@ -131,38 +103,24 @@ fn unified_queue_state_data_round_trips() {
             generation: 3,
             target_slot: 2,
         }),
-        queued_latest_transition: Some(mbv_ctrl::TransitionSummary {
-            request_id: 8,
-            generation: 3,
-            target_slot: 1,
-        }),
-    };
-    let json = serde_json::to_string(&state).unwrap();
-    let decoded: UnifiedQueueStateData = serde_json::from_str(&json).unwrap();
-    assert_eq!(decoded.slots.len(), 2);
-    assert_eq!(decoded.active_slot, Some(1));
-    assert_eq!(decoded.revision, 5);
-    assert_eq!(decoded.lineage, QueueLineage(42));
-    assert_eq!(decoded.in_flight_transition, state.in_flight_transition);
-    assert_eq!(
-        decoded.queued_latest_transition,
-        state.queued_latest_transition
-    );
-
-    // Older payloads omit the transition fields entirely.
-    let mut legacy: serde_json::Value = serde_json::from_str(&json).unwrap();
+        queued_latest_transition: None,
+    })
+    .unwrap();
     let obj = legacy.as_object_mut().unwrap();
     obj.remove("in_flight_transition");
     obj.remove("queued_latest_transition");
     obj.remove("lineage");
-    let decoded_legacy: UnifiedQueueStateData = serde_json::from_value(legacy).unwrap();
-    assert_eq!(decoded_legacy.in_flight_transition, None);
-    assert_eq!(decoded_legacy.queued_latest_transition, None);
-    assert_eq!(decoded_legacy.lineage, QueueLineage::default());
+    let decoded: UnifiedQueueStateData = serde_json::from_value(legacy).unwrap();
+    assert_eq!(decoded.in_flight_transition, None);
+    assert_eq!(decoded.queued_latest_transition, None);
+    assert_eq!(decoded.lineage, QueueLineage::default());
 }
 
+// A pre-slot-identity peer omitted the additive `slots` and `source` fields;
+// the command remains readable and both default — a decode tolerance no
+// fixture row owns.
 #[test]
-fn unified_queue_replace_cmd_round_trips() {
+fn unified_queue_replace_decodes_without_slot_identity() {
     let items = vec![
         QueueItem::Emby(Box::new(stub_media_item())),
         QueueItem::Feed(stub_feed_entry()),
@@ -182,30 +140,8 @@ fn unified_queue_replace_cmd_round_trips() {
         source: QueueSource::Album,
         op: None,
     };
-    let json = serde_json::to_string(&cmd).unwrap();
-    let decoded: CtrlCmd = serde_json::from_str(&json).unwrap();
-    match decoded {
-        CtrlCmd::UnifiedQueueReplace {
-            items,
-            slots,
-            start_idx,
-            source,
-            op,
-        } => {
-            assert_eq!(op, None);
-            assert_eq!(items.len(), 2);
-            assert_eq!(source, QueueSource::Album);
-            assert_eq!(
-                slots.iter().map(|slot| slot.slot_id).collect::<Vec<_>>(),
-                vec![7, 8]
-            );
-            assert_eq!(start_idx, Some(0));
-        }
-        _ => panic!("expected UnifiedQueueReplace"),
-    }
-
-    // A pre-slot-identity peer omitted the additive field and remains readable.
-    let mut legacy: serde_json::Value = serde_json::from_str(&json).unwrap();
+    let mut legacy: serde_json::Value =
+        serde_json::from_str(&serde_json::to_string(&cmd).unwrap()).unwrap();
     legacy
         .get_mut("UnifiedQueueReplace")
         .and_then(serde_json::Value::as_object_mut)
@@ -231,173 +167,4 @@ fn unified_queue_replace_cmd_round_trips() {
     assert_eq!(start_idx, Some(0));
     assert_eq!(source, QueueSource::Unknown);
     assert_eq!(op, None);
-}
-
-#[test]
-fn source_only_update_round_trips_queue_lineage() {
-    let command = CtrlCmd::UnifiedQueueSourceUpdate {
-        source: QueueSource::Album,
-        lineage: QueueLineage(42),
-        op: None,
-    };
-    let decoded: CtrlCmd = serde_json::from_str(&serde_json::to_string(&command).unwrap()).unwrap();
-    assert!(matches!(
-        decoded,
-        CtrlCmd::UnifiedQueueSourceUpdate {
-            source: QueueSource::Album,
-            lineage: QueueLineage(42),
-            op: None
-        }
-    ));
-}
-
-#[test]
-fn unified_queue_append_cmd_round_trips() {
-    let cmd = CtrlCmd::UnifiedQueueAppend {
-        items: vec![QueueItem::Feed(stub_feed_entry())],
-        before: None,
-        op: None,
-    };
-    let json = serde_json::to_string(&cmd).unwrap();
-    let decoded: CtrlCmd = serde_json::from_str(&json).unwrap();
-    match decoded {
-        CtrlCmd::UnifiedQueueAppend { items, before, op } => {
-            assert_eq!(items.len(), 1);
-            assert_eq!(before, None);
-            assert_eq!(op, None);
-        }
-        _ => panic!("expected UnifiedQueueAppend"),
-    }
-}
-
-#[test]
-fn unified_queue_remove_slot_cmd_round_trips() {
-    let cmd = CtrlCmd::UnifiedQueueRemoveSlot {
-        slot_id: 99,
-        op: None,
-    };
-    let json = serde_json::to_string(&cmd).unwrap();
-    let decoded: CtrlCmd = serde_json::from_str(&json).unwrap();
-    match decoded {
-        CtrlCmd::UnifiedQueueRemoveSlot { slot_id, op } => {
-            assert_eq!(slot_id, 99);
-            assert_eq!(op, None);
-        }
-        _ => panic!("expected UnifiedQueueRemoveSlot"),
-    }
-}
-
-#[test]
-fn unified_queue_remove_slots_cmd_round_trips() {
-    let cmd = CtrlCmd::UnifiedQueueRemoveSlots {
-        slot_ids: vec![4, 9],
-        op: None,
-    };
-    let json = serde_json::to_string(&cmd).unwrap();
-    let decoded: CtrlCmd = serde_json::from_str(&json).unwrap();
-    match decoded {
-        CtrlCmd::UnifiedQueueRemoveSlots { slot_ids, op } => {
-            assert_eq!(slot_ids, vec![4, 9]);
-            assert_eq!(op, None);
-        }
-        _ => panic!("expected UnifiedQueueRemoveSlots"),
-    }
-}
-
-#[test]
-fn unified_queue_move_slot_cmd_round_trips() {
-    let cmd = CtrlCmd::UnifiedQueueMoveSlot {
-        slot_id: 3,
-        to_index: 0,
-        op: None,
-    };
-    let json = serde_json::to_string(&cmd).unwrap();
-    let decoded: CtrlCmd = serde_json::from_str(&json).unwrap();
-    match decoded {
-        CtrlCmd::UnifiedQueueMoveSlot {
-            slot_id,
-            to_index,
-            op,
-        } => {
-            assert_eq!(slot_id, 3);
-            assert_eq!(to_index, 0);
-            assert_eq!(op, None);
-        }
-        _ => panic!("expected UnifiedQueueMoveSlot"),
-    }
-}
-
-#[test]
-fn unified_queue_play_slot_cmd_round_trips() {
-    let cmd = CtrlCmd::UnifiedQueuePlaySlot {
-        slot_id: 5,
-        op: None,
-    };
-    let json = serde_json::to_string(&cmd).unwrap();
-    let decoded: CtrlCmd = serde_json::from_str(&json).unwrap();
-    match decoded {
-        CtrlCmd::UnifiedQueuePlaySlot { slot_id, op } => {
-            assert_eq!(slot_id, 5);
-            assert_eq!(op, None);
-        }
-        _ => panic!("expected UnifiedQueuePlaySlot"),
-    }
-}
-
-#[test]
-fn unified_queue_clear_cmd_round_trips() {
-    let cmd = CtrlCmd::UnifiedQueueClear;
-    let json = serde_json::to_string(&cmd).unwrap();
-    let decoded: CtrlCmd = serde_json::from_str(&json).unwrap();
-    assert!(matches!(decoded, CtrlCmd::UnifiedQueueClear));
-}
-
-#[test]
-fn unified_adopt_queue_cmd_round_trips() {
-    let items = vec![
-        QueueItem::Emby(Box::new(stub_media_item())),
-        QueueItem::Feed(stub_feed_entry()),
-    ];
-    let cmd = CtrlCmd::UnifiedAdoptQueue {
-        items,
-        cursor: 1,
-        source: QueueSource::Album,
-    };
-    let json = serde_json::to_string(&cmd).unwrap();
-    let decoded: CtrlCmd = serde_json::from_str(&json).unwrap();
-    match decoded {
-        CtrlCmd::UnifiedAdoptQueue {
-            items,
-            cursor,
-            source,
-        } => {
-            assert_eq!(items.len(), 2);
-            assert_eq!(cursor, 1);
-            assert!(matches!(source, QueueSource::Album));
-        }
-        _ => panic!("expected UnifiedAdoptQueue"),
-    }
-}
-
-#[test]
-fn unified_queue_state_event_round_trips() {
-    let event = CtrlEvent::UnifiedQueueState(UnifiedQueueStateData {
-        status: PlayerStatus::default(),
-        slots: vec![],
-        active_slot: None,
-        revision: 0,
-        source: QueueSource::Unknown,
-        lineage: QueueLineage::default(),
-        in_flight_transition: None,
-        queued_latest_transition: None,
-    });
-    let json = serde_json::to_string(&event).unwrap();
-    let decoded: CtrlEvent = serde_json::from_str(&json).unwrap();
-    match decoded {
-        CtrlEvent::UnifiedQueueState(state) => {
-            assert!(state.slots.is_empty());
-            assert_eq!(state.active_slot, None);
-        }
-        _ => panic!("expected UnifiedQueueState"),
-    }
 }

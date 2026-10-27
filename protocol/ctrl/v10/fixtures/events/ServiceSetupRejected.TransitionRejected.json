@@ -1,0 +1,7 @@
+{
+  "ServiceSetupRejected": {
+    "kind": "Audiobookshelf",
+    "reason": "TransitionRejected",
+    "revision": 4
+  }
+}

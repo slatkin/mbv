@@ -1,0 +1,9 @@
+{
+  "AudiobookshelfProgress": {
+    "episode_id": "abs-episode-1",
+    "is_finished": false,
+    "library_item_id": "abs-library-item-1",
+    "position_ticks": 30000000,
+    "setup_generation": 3
+  }
+}
