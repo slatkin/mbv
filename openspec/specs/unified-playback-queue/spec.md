@@ -41,7 +41,7 @@ When a queue replacement would discard unsaved changes to the queue's saved play
 
 ### Requirement: Each queue has one canonical ordered representation
 
-Every Composed or Bound queue SHALL be represented by one ordered collection of queue slots containing `QueueItem` values. A Player owner SHALL hold the only authoritative collection for its Bound queue. A Client MAY hold a replaceable snapshot of a Bound queue, and a Playback run MAY hold an mpv execution projection, but neither SHALL independently decide canonical order, active slot, revision, or queue mutation outcome. A component SHALL NOT maintain parallel item-kind collections whose synchronization is required to determine queue contents, order, length, or current slot. An mpv projection MAY contain the full playable sequence or only the active materialized file as required by source lifecycle, but that projection SHALL NOT become queue authority. A Cast receiver output SHALL hold only the active slot's item. An Emby Session output SHALL hold only the active slot's item and the next playable slot's item, and a list that the owner hands over at exit. Neither SHALL become queue authority. A populate-only queue replacement MAY update a Client's Composed queue without submitting it to an owner only when that Client does not present the queue as the Stay-alive process's queue. A Client presenting the Stay-alive queue SHALL submit a populate-only replacement to that owner at load time and SHALL display only owner-accepted contents, including the queue source. Until explicit play submits a Composed replacement to another playback target, the Client SHALL NOT present an unconfirmed slot from that replacement as the playing slot.
+Every Composed or Bound queue SHALL be represented by one ordered collection of queue slots containing `QueueItem` values. A Player owner SHALL hold the only authoritative collection for its Bound queue. A Client MAY hold a replaceable snapshot of a Bound queue, and a Playback run MAY hold an mpv execution projection, but neither SHALL independently decide canonical order, active slot, revision, or queue mutation outcome. A component SHALL NOT maintain parallel item-kind collections whose synchronization is required to determine queue contents, order, length, or current slot. An mpv projection MAY contain the full playable sequence or only the active materialized file as required by source lifecycle, but that projection SHALL NOT become queue authority. A Cast receiver output SHALL hold only the active slot's item. An Emby Session output SHALL hold only the active slot's item and the next playable slot's item, and a list that the owner hands over at exit. Neither SHALL become queue authority. A populate-only queue replacement MAY update a Client's Composed queue without submitting it to an owner only when that Client does not present the queue as the Stay-alive process's queue. A Client presenting the Stay-alive queue SHALL display only owner-accepted contents, including the queue source; no owner operation installs a queue without starting playback, so staged content reaches that owner only when explicit play submits a replacement. Until explicit play submits a Composed replacement to another playback target, the Client SHALL NOT present an unconfirmed slot from that replacement as the playing slot.
 
 #### Scenario: Mixed queue order
 
@@ -86,9 +86,9 @@ Every Composed or Bound queue SHALL be represented by one ordered collection of 
 
 #### Scenario: Populate-only load on Stay-alive
 
-- **WHEN** a Client installs a replacement queue without starting playback on the owner while presenting the Stay-alive process's queue
-- **THEN** the Client SHALL send the replacement to that owner at load time
-- **AND** its displayed queue and source SHALL follow the owner's accepted snapshot, not a private staged queue
+- **WHEN** a Client holds replacement content without starting playback while presenting the Stay-alive process's queue
+- **THEN** the Client SHALL submit nothing to that owner before explicit play
+- **AND** its displayed queue and source SHALL follow the owner's accepted contents, not the staged content
 
 ### Requirement: Queue occurrences have stable slot identity
 
@@ -548,38 +548,6 @@ When a Player owner (Local daemon or packaged `mbvd`) builds its queue from pers
 - **WHEN** the refresh returns a position for an inactive slot that is lower than the position the slot currently shows
 - **THEN** the slot SHALL take the fetched position; a lower server position is not a regression, because the server's position is the only progress source for Emby and Audiobookshelf items
 
-### Requirement: Stay-alive replacement stops playback before publishing the new queue
-
-When a Client loads a playlist into the Stay-alive process's queue without requesting playback, that owner SHALL stop and finalize the prior playing item, replace its entire Bound queue and Queue source with the admitted playlist and source, clear the observed active slot and pending playback transitions, and publish a stopped snapshot with no playing row. The replacement SHALL preserve a valid selected queue cursor for subsequent explicit Play but SHALL NOT start playback. The owner SHALL NOT publish a state in which an item is playing outside its Bound queue. A load rejected before acceptance SHALL NOT replace or stop the existing queue. If delivery is uncertain because the connection fails in flight, the Client SHALL reconcile from the owner rather than assume either outcome.
-
-#### Scenario: Load while old item plays
-
-- **WHEN** the owner is playing an old queue and a Client loads a different playlist without autostart
-- **THEN** the owner SHALL stop the old item and replace its queue and source with the loaded playlist
-- **AND** every Client SHALL observe the new queue as stopped with no playing slot
-- **AND** the old item SHALL NOT resume or appear as playing in the new queue
-
-#### Scenario: Play after a successful idle load
-
-- **WHEN** a Client explicitly plays a slot from the newly loaded queue
-- **THEN** the owner SHALL start that owner-assigned slot without resubmitting a private copy of the queue
-
-#### Scenario: A late observation from the old Playback run arrives
-
-- **WHEN** a prior run reports progress, completion, or a track change after the replacement is accepted
-- **THEN** the report SHALL NOT mark a new-queue slot as playing, completed, or consumed
-
-#### Scenario: Empty playlist load
-
-- **WHEN** a Client loads an empty playlist into the Stay-alive queue
-- **THEN** the owner SHALL stop playback, leave its queue empty, and publish no active slot
-
-#### Scenario: Rejected replacement
-
-- **WHEN** a requested idle replacement is rejected before acceptance
-- **THEN** the existing owner queue and playback SHALL remain authoritative
-- **AND** the Client SHALL display an error rather than claiming the playlist was loaded
-
 ### Requirement: The Stay-alive process holds the queue source
 
 The Stay-alive process SHALL hold the queue source as part of its queue state. Every whole-queue replacement it accepts, every clear, and every source-only update SHALL set its source; a clear SHALL reset it to Unknown. A source-only update SHALL apply only to the queue lineage the owner held when the update was requested; a delayed update from an earlier queue SHALL NOT rename a later queue. A Client attached to that owner SHALL display the owner's source and SHALL NOT maintain an independent authoritative source for it. Saving the queue as a new playlist (Save As) and overwriting an existing playlist with the queue SHALL both reach the owner as source-only updates carrying the lineage observed when the save was requested; the Client SHALL report the queue clean only once an owner snapshot shows the new source. A Client that has not yet received an owner snapshot SHALL refuse to save the queue to a playlist, and SHALL create or change no server playlist.
@@ -785,7 +753,7 @@ A Client's displayed queue for each queue scope SHALL change only by adopting a 
 
 ### Requirement: Queue edits are answered before the next input
 
-Every queue edit a Client sends, other than a populate-only load (a replacement installed without starting playback), SHALL carry an identity, and the Player owner SHALL answer the sending Client with that identity and either the resulting snapshot or a rejection; other attached Clients SHALL receive the resulting snapshot as usual. The Client SHALL adopt the answer before handling its next input, so an accepted edit is visible in the next frame after the owner applies it. The Client SHALL wait for the answer for a bounded time only; when the bound passes, it SHALL report that the owner did not respond, keep showing the owner's last accepted state, and continue to adopt later snapshots, including a late answer to that edit. A populate-only load SHALL keep its own load result: the Client SHALL NOT wait for it before handling input, and SHALL NOT show the load as applied until that result or an owner snapshot contains it. A remote Player owner that does not advertise answered queue edits SHALL still receive the edit, and the Client SHALL NOT wait for an answer from it.
+Every queue edit a Client sends SHALL carry an identity, and the Player owner SHALL answer the sending Client with that identity and either the resulting snapshot or a rejection; other attached Clients SHALL receive the resulting snapshot as usual. The Client SHALL adopt the answer before handling its next input, so an accepted edit is visible in the next frame after the owner applies it. The Client SHALL wait for the answer for a bounded time only; when the bound passes, it SHALL report that the owner did not respond, keep showing the owner's last accepted state, and continue to adopt later snapshots, including a late answer to that edit. A remote Player owner that does not advertise answered queue edits SHALL still receive the edit, and the Client SHALL NOT wait for an answer from it.
 
 #### Scenario: Rapid repeated removals
 
@@ -811,9 +779,9 @@ Every queue edit a Client sends, other than a populate-only load (a replacement 
 
 #### Scenario: Idle load while an item plays
 
-- **WHEN** a populate-only load is sent while the owner is still stopping the playing item
+- **WHEN** the Client holds replacement content while the owner is still stopping the playing item
 - **THEN** the Client SHALL keep handling input
-- **AND** SHALL show the loaded queue once the owner's load result or snapshot contains it
+- **AND** SHALL show nothing as loaded until an owner snapshot or an explicit play's answer carries it
 
 #### Scenario: Older remote owner
 
