@@ -1,0 +1,12 @@
+{
+  "app_version": "1.2.3",
+  "build_id": "4f2a1c9",
+  "capabilities": [
+    "queue-state",
+    "play-items-start-idx",
+    "status-only"
+  ],
+  "control_token": null,
+  "protocol_version": 10,
+  "swap_token": null
+}
