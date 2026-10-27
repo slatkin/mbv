@@ -5,14 +5,19 @@
 //!
 //! Rerun tracking names only git paths that exist: `git rev-parse
 //! --git-path HEAD`, the symbolic ref's `--git-path`, the branch ref file
-//! under `<git-common-dir>/refs/heads/<branch>`, and the `packed-refs`
-//! report. The common-dir path is emitted as well as the per-worktree one
-//! because a shared branch's worktree path does not exist. A literal
-//! `.git/HEAD` is never named — in a worktree `.git` is a file, and Cargo
-//! reruns a build script on every build when a named path is missing, which
-//! would recompile this crate and every dependent each time. When git is
-//! unavailable no git path is emitted at all, so the default whole-project
-//! tracking applies.
+//! under `<git-common-dir>/refs/heads/<branch>`, the `packed-refs`
+//! report, and the per-worktree HEAD reflog (`--git-path logs/HEAD`).
+//! The common-dir path is emitted as well as the per-worktree one
+//! because a shared branch's worktree path does not exist. The reflog is
+//! the fallback that keeps the identity fresh across commits when the
+//! branch ref was packed at build time: `git pack-refs` folds the loose
+//! ref into `packed-refs`, which a later commit never rewrites, so the
+//! reflog (appended by every commit) is the only watched path that
+//! changes. A literal `.git/HEAD` is never named — in a worktree `.git`
+//! is a file, and Cargo reruns a build script on every build when a named
+//! path is missing, which would recompile this crate and every dependent
+//! each time. When git is unavailable no git path is emitted at all, so
+//! the default whole-project tracking applies.
 
 use std::process::Command;
 
@@ -65,4 +70,8 @@ fn main() {
         }
     }
     rerun_if_changed(&git(&["rev-parse", "--git-path", "packed-refs"]).unwrap_or_default());
+    // The per-worktree HEAD reflog: every commit appends to it, so it stays
+    // the commit signal even when the branch ref has been packed into
+    // `packed-refs` (which a commit never rewrites).
+    rerun_if_changed(&git(&["rev-parse", "--git-path", "logs/HEAD"]).unwrap_or_default());
 }
