@@ -22,7 +22,7 @@ pub use commands::{
 pub use events::{
     AudiobookshelfBookProgressEvent, AudiobookshelfProgressEvent, CtrlEvent, DisconnectReason,
     PipePlaybackPhase, PipePlaybackStatus, PlaybackIntentEvent, PlaybackIntentOutcome,
-    PlaybackIntentRejection, QueueLoadResult, QueueOpOutcome, ServiceSetupRejection,
+    PlaybackIntentRejection, QueueOpOutcome, ServiceSetupRejection,
 };
 #[doc(inline)]
 pub use output::{OutputConnection, OutputSelection, OutputState, SessionNowPlaying};
@@ -37,8 +37,8 @@ pub use protocol::{
     CTRL_CAP_PLAYBACK_OUTPUT, CTRL_CAP_QUEUE_SHUFFLE, CTRL_CAP_QUEUE_STATE,
     CTRL_CAP_SERVICE_SETUP_ADMIN, CTRL_CAP_START_INDEX, CTRL_CAP_STATUS_ONLY,
     CTRL_CAP_UNIFIED_QUEUE, CTRL_PROTOCOL_VERSION, PlaybackGeneration, PlaybackRequestId,
-    ProgressUpdate, QueueLoadRequestId, QueueOpId, SWAP_TOKEN_ENV, TransitionSummary,
-    UnifiedQueueSlot, UnifiedQueueStateData, slot_id_to_u64,
+    ProgressUpdate, QueueOpId, SWAP_TOKEN_ENV, TransitionSummary, UnifiedQueueSlot,
+    UnifiedQueueStateData, slot_id_to_u64,
 };
 
 mod error;

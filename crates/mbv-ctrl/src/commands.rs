@@ -4,8 +4,7 @@ use crate::output::OutputSelection;
 use crate::owner_action::OwnerAction;
 use crate::player::PlayerCommand;
 use crate::{
-    CtrlHello, PlaybackGeneration, PlaybackRequestId, ProgressUpdate, QueueLoadRequestId,
-    QueueOpId, UnifiedQueueSlot,
+    CtrlHello, PlaybackGeneration, PlaybackRequestId, ProgressUpdate, QueueOpId, UnifiedQueueSlot,
 };
 use mbv_queue::QueueItem;
 use mbv_queue::{QueueLineage, QueueSource, ServiceKind};
@@ -58,15 +57,6 @@ pub enum CtrlCmd {
         source: QueueSource,
         #[serde(default)]
         op: Option<QueueOpId>,
-    },
-    /// Replace the owner's queue without starting playback. Requires the
-    /// `owner-queue-load` capability and is correlated by request identity.
-    #[serde(rename = "UnifiedQueueLoadIdle")]
-    UnifiedQueueLoadIdle {
-        request_id: QueueLoadRequestId,
-        slots: Vec<UnifiedQueueSlot>,
-        cursor: usize,
-        source: QueueSource,
     },
     /// Update only the source of the owner queue if its lineage still matches.
     #[serde(rename = "UnifiedQueueSourceUpdate")]
@@ -155,7 +145,6 @@ pub enum CtrlCmd {
 #[derive(Debug)]
 pub enum OwnerGateRejection {
     AdoptQueue,
-    QueueLoadIdle { request_id: QueueLoadRequestId },
     QueueSourceUpdate,
 }
 
@@ -178,11 +167,6 @@ impl CtrlCmd {
     #[must_use]
     pub fn requires_owner(&self) -> OwnerGate {
         match self {
-            CtrlCmd::UnifiedQueueLoadIdle { request_id, .. } => {
-                OwnerGate::OwnerOnly(OwnerGateRejection::QueueLoadIdle {
-                    request_id: *request_id,
-                })
-            }
             CtrlCmd::UnifiedQueueSourceUpdate { .. } => {
                 OwnerGate::OwnerOnly(OwnerGateRejection::QueueSourceUpdate)
             }
@@ -218,8 +202,7 @@ impl CtrlCmd {
     #[must_use]
     pub fn mutates_owner_queue(&self) -> bool {
         match self {
-            CtrlCmd::UnifiedQueueLoadIdle { .. }
-            | CtrlCmd::UnifiedQueueSourceUpdate { .. }
+            CtrlCmd::UnifiedQueueSourceUpdate { .. }
             | CtrlCmd::UnifiedQueueReplace { .. }
             | CtrlCmd::UnifiedQueueAppend { .. }
             | CtrlCmd::UnifiedQueueRemoveSlot { .. }

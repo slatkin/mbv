@@ -67,7 +67,7 @@ pub const CTRL_CAP_ABS_BOOK_PROGRESS: &str = "abs-book-progress";
 /// Peer owner is configured audio-only and cannot play video. Additive — no
 /// protocol-version bump.
 pub const CTRL_CAP_AUDIO_ONLY: &str = "audio-only";
-/// Peer supports owner-authoritative idle queue loads and source updates.
+/// Peer supports owner-authoritative queue source updates.
 /// Additive — no protocol-version bump.
 pub const CTRL_CAP_OWNER_QUEUE_LOAD: &str = "owner-queue-load";
 /// Client connection is restricted to owner Service-setup administration.
@@ -105,7 +105,6 @@ pub const CTRL_CAP_QUEUE_SHUFFLE: &str = "queue-shuffle";
 pub const CTRL_CAP_ANSWERED_QUEUE_OPS: &str = "answered-queue-ops";
 
 pub type PlaybackRequestId = u64;
-pub type QueueLoadRequestId = u64;
 pub type PlaybackGeneration = u64;
 
 /// Identity correlating one Client queue operation with its owner's answer.
