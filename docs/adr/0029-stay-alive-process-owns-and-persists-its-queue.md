@@ -41,9 +41,8 @@ Bare mode owns its queue and persists it as before).
 
 ## Shared PlaybackRun boundary
 
-The idle-load operation and its queue-ownership semantics are specific to the
-Stay-alive process, but implementing the owner's cold-start and idle-jump path
-also changed shared playback mechanics:
+The owner's cold-start and idle-jump path is specific to the Stay-alive
+process, but implementing it also changed shared playback mechanics:
 
 - The shared PlaybackRun settles an idle `JumpTo` on `PlaybackRestart`, using
   forced-jump state to retain the owner-assigned slot and transition until

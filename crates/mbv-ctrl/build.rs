@@ -4,12 +4,15 @@
 //! unavailable (tarball builds).
 //!
 //! Rerun tracking names only git paths that exist: `git rev-parse
-//! --git-path HEAD`, the symbolic ref's `--git-path`, and the
-//! `packed-refs` report. A literal `.git/HEAD` is never named — in a
-//! worktree `.git` is a file, and Cargo reruns a build script on every
-//! build when a named path is missing, which would recompile this crate
-//! and every dependent each time. When git is unavailable no git path is
-//! emitted at all, so the default whole-project tracking applies.
+//! --git-path HEAD`, the symbolic ref's `--git-path`, the branch ref file
+//! under `<git-common-dir>/refs/heads/<branch>`, and the `packed-refs`
+//! report. The common-dir path is emitted as well as the per-worktree one
+//! because a shared branch's worktree path does not exist. A literal
+//! `.git/HEAD` is never named — in a worktree `.git` is a file, and Cargo
+//! reruns a build script on every build when a named path is missing, which
+//! would recompile this crate and every dependent each time. When git is
+//! unavailable no git path is emitted at all, so the default whole-project
+//! tracking applies.
 
 use std::process::Command;
 

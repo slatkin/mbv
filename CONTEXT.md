@@ -208,7 +208,7 @@ An owner-minted identity with an accepted queue state. A source-only update (Sav
 _Avoid_: generation stamp, client lineage, fence token
 
 Queue epoch:
-A Client-local counter (`QueueEpoch`). It advances on each Client-side queue replace, clear, or attach. It fences async completions against queue changes this Client made. Playlist saves and idle loads are examples. It is never sent over ctrl. It is captured with the owner lineage as a `QueueOrigin` when a request is made. The fence value shape then follows the owner.
+A Client-local counter (`QueueEpoch`). It advances on each Client-side queue replace, clear, or attach. It fences async completions against queue changes this Client made. Playlist saves and queue edits are examples. It is never sent over ctrl. It is captured with the owner lineage as a `QueueOrigin` when a request is made. The fence value shape then follows the owner.
 _Avoid_: remote queue lineage, client lineage
 
 Unplayable item:
