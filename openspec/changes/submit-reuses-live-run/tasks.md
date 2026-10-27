@@ -2,13 +2,13 @@
 
 ## 1. Reuse decision in the Controller
 
-- [ ] 1.1 Add the `run_exited` flag (D7): a per-run `Arc<AtomicBool>` on `Player`, replaced at each cold start, passed into the run thread, and set in `PlaybackRun::run` when the loop returns, before `drop(mpv)`. Verify: `cargo check -p mbv-player`.
-- [ ] 1.2 In `Controller::submit_queue_slots` (`crates/mbv-player/src/submit.rs`), replace the `status.active` fast-path gate with the D1 order (run exists, class match, `stop_tx` is `Some`, `run_exited` unset, send), with the `stop_tx` lock held across the send. Seed the status after the send is accepted (D2). Fall through to the existing cold start on any failed check. Verify: the existing submit tests still pass, `cargo nextest run -p mbv-player`.
-- [ ] 1.3 Add the D5 structured events at the decision point: one when the live run takes the submission, one when a cold start happens with `reason` from `no_run`, `headless_mismatch`, `stop_requested`, `run_exited`, `send_failed`. Verify: the contract test in 2.1 asserts the reason of each case.
+- [x] 1.1 Add the `run_exited` flag (D7): a per-run `Arc<AtomicBool>` on `Player`, replaced at each cold start, passed into the run thread, and set in `PlaybackRun::run` when the loop returns, before `drop(mpv)`. Verify: `cargo check -p mbv-player`.
+- [x] 1.2 In `Controller::submit_queue_slots` (`crates/mbv-player/src/submit.rs`), replace the `status.active` fast-path gate with the D1 order (run exists, class match, `stop_tx` is `Some`, `run_exited` unset, send), with the `stop_tx` lock held across the send. Seed the status after the send is accepted (D2). Fall through to the existing cold start on any failed check. Verify: the existing submit tests still pass, `cargo nextest run -p mbv-player`.
+- [x] 1.3 Add the D5 structured events at the decision point: one when the live run takes the submission, one when a cold start happens with `reason` from `no_run`, `headless_mismatch`, `stop_requested`, `run_exited`, `send_failed`. Verify: the contract test in 2.1 asserts the reason of each case.
 
 ## 2. Contract test
 
-- [ ] 2.1 One `#[case]` table at the Controller level (`crates/mbv-player/src/tests/submit.rs`, a stubbed player with a spy or dropped command receiver; cite this change in the test name). Each case has a different expected outcome: idle run (`active=false`) reuses; parked run reuses; headless mismatch cold-starts; `stop_tx` taken cold-starts with `stop_requested`; `run_exited` set cold-starts; dropped receiver cold-starts with `send_failed`; no `cmd_tx` cold-starts with `no_run`. Verify: `cargo nextest run -p mbv-player`.
+- [x] 2.1 One `#[case]` table at the Controller level (`crates/mbv-player/src/tests/submit.rs`, a stubbed player with a spy or dropped command receiver; cite this change in the test name). Each case has a different expected outcome: idle run (`active=false`) reuses; parked run reuses; headless mismatch cold-starts; `stop_tx` taken cold-starts with `stop_requested`; `run_exited` set cold-starts; dropped receiver cold-starts with `send_failed`; no `cmd_tx` cold-starts with `no_run`. Verify: `cargo nextest run -p mbv-player`.
 - No test for the loop-exit window (it needs a live mpv; AGENTS.md forbids it) and none for stop ordering inside `run_tick`: the change no longer depends on it.
 
 ## 3. Daemon helper rename
