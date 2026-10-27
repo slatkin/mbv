@@ -221,7 +221,7 @@ fn continue_slot_on_local(
         paused = handoff.paused,
         "the handed-off slot continues on a fresh local run"
     );
-    if !crate::core::submit_queue_slots_cold_start(
+    if !crate::core::submit_queue_slots_for_replace(
         &daemon.player,
         daemon.owner.core.queue.slot_pairs(),
         start_idx,
