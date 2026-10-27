@@ -1,0 +1,11 @@
+{
+  "PlaybackIntent": {
+    "generation": 3,
+    "outcome": {
+      "Rejected": {
+        "reason": "ResolutionFailed"
+      }
+    },
+    "request_id": 7
+  }
+}

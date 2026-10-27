@@ -1,0 +1,10 @@
+{
+  "Player": {
+    "QueueOpResult": {
+      "op": 41,
+      "outcome": {
+        "Rejected": "conformance queue op rejected"
+      }
+    }
+  }
+}

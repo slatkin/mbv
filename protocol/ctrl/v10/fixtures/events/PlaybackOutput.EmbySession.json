@@ -1,0 +1,18 @@
+{
+  "PlaybackOutput": {
+    "EmbySession": {
+      "audio_only": true,
+      "connection": "Connecting",
+      "device_id": "emby-device-1",
+      "name": "Conformance Session",
+      "now_playing": {
+        "item_id": "emby-conformance-item",
+        "item_type": "Episode",
+        "logo_tag": "conformance-logo-tag",
+        "name": "Conformance Episode",
+        "series_id": "emby-series-1",
+        "series_name": "Conformance Series"
+      }
+    }
+  }
+}

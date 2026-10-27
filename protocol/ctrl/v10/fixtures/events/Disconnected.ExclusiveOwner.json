@@ -1,0 +1,9 @@
+{
+  "Disconnected": {
+    "reason": {
+      "ExclusiveOwner": {
+        "pid": 4242
+      }
+    }
+  }
+}

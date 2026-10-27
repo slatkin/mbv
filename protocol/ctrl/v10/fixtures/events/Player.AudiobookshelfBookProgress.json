@@ -1,0 +1,10 @@
+{
+  "Player": {
+    "AudiobookshelfBookProgress": {
+      "is_finished": false,
+      "library_item_id": "abs-book-1",
+      "position_ticks": 30000000,
+      "setup_generation": 3
+    }
+  }
+}

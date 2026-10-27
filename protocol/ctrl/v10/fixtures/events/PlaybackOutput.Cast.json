@@ -1,0 +1,9 @@
+{
+  "PlaybackOutput": {
+    "Cast": {
+      "connection": "Connected",
+      "name": "Conformance Display",
+      "receiver_id": "cast-receiver-1"
+    }
+  }
+}

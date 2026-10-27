@@ -1,0 +1,11 @@
+{
+  "PlaybackIntent": {
+    "generation": 3,
+    "outcome": {
+      "Rejected": {
+        "reason": "AudioOnly"
+      }
+    },
+    "request_id": 7
+  }
+}

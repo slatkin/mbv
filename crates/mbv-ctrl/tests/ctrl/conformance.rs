@@ -7,12 +7,15 @@
 //! `MBV_PROTOCOL_BLESS=1 cargo nextest run -p mbv-ctrl conformance`.
 //!
 //! The corpus is one fixture per wire shape, seeded per corpus by the units
-//! of the change: `hello/` (handshake shapes) and `commands/` (one `CtrlCmd`
-//! per variant, `PlayerCmd` per `WireCommand` tag) now, `events/` and
-//! `shared/` in later units. A fixture directory that holds a file the
+//! of the change: `hello/` (handshake shapes), `commands/` (one `CtrlCmd`
+//! per variant, `PlayerCmd` per `WireCommand` tag), and `events/` (one
+//! `CtrlEvent` per variant, `PlayerEvent` per `Player.<variant>` row) now;
+//! `shared/` in a later unit. A fixture directory that holds a file the
 //! table does not name — or the reverse — fails reconciliation.
 
+mod builders;
 mod commands;
+mod events;
 mod hello;
 mod schema;
 
@@ -101,6 +104,7 @@ fn rows() -> Vec<FixtureRow> {
     let mut rows = Vec::new();
     hello::rows(&mut rows);
     commands::rows(&mut rows);
+    events::rows(&mut rows);
     rows
 }
 

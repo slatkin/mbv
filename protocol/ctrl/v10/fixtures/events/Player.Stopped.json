@@ -1,0 +1,15 @@
+{
+  "Player": {
+    "Stopped": {
+      "consume": false,
+      "error": null,
+      "played": false,
+      "position_ticks": 30000000,
+      "run_identity": [
+        0,
+        3
+      ],
+      "slot_id": 1
+    }
+  }
+}

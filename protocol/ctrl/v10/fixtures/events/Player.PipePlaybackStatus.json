@@ -1,0 +1,10 @@
+{
+  "Player": {
+    "PipePlaybackStatus": {
+      "estimated_remaining_ms": 1500,
+      "generation": 3,
+      "phase": "OutputBuffering",
+      "request_id": 7
+    }
+  }
+}

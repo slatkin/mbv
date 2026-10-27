@@ -4,32 +4,14 @@
 //! `RunOwnerAction` per `OwnerAction`, and `ApplyServiceSetup` per
 //! `ServiceKind` (design D4).
 
-use mbv_emby_model::{EmbyImageTags, EmbyItem};
-use mbv_queue::{
-    FeedEntry, FeedKind, QueueItem, QueueItemContentId, QueueLineage, QueueSource, ServiceKind,
+use mbv_queue::{QueueLineage, ServiceKind};
+
+use super::builders::{
+    CAST_HOST, CAST_NAME, CAST_PORT, CAST_RECEIVER_ID, EMBY_DEVICE_ID, EMBY_DEVICE_NAME,
+    EMBY_ITEM_ID, GENERATION, REQUEST_ID, REVISION, emby_queue_item, feed_queue_item,
+    progress_update, queue_source,
 };
-
 use super::*;
-
-/// Fixed payload literals: the corpus pins wire shapes, not runtime state,
-/// so every builder below uses these constants and never reads the
-/// environment or the clock (design note N2, matching the hello corpus).
-const EMBY_ITEM_ID: &str = "emby-conformance-item";
-const EMBY_ITEM_NAME: &str = "Conformance Episode";
-const FEED_GUID: &str = "conformance-feed-guid";
-const FEED_TITLE: &str = "Conformance Feed Entry";
-const FEED_URL: &str = "https://feeds.example/conformance/episode-1.mp3";
-const FEED_ID: &str = "https://feeds.example/conformance.xml";
-const PLAYLIST_NAME: &str = "Conformance Playlist";
-const REQUEST_ID: u64 = 7;
-const GENERATION: u64 = 3;
-const REVISION: u64 = 4;
-const CAST_RECEIVER_ID: &str = "cast-receiver-1";
-const CAST_NAME: &str = "Conformance Display";
-const CAST_HOST: &str = "192.168.1.50";
-const CAST_PORT: u16 = 8009;
-const EMBY_DEVICE_ID: &str = "emby-device-1";
-const EMBY_DEVICE_NAME: &str = "Conformance Session";
 
 /// One command shape in the corpus. The exhaustive shape-name match keeps
 /// every shape named, and `rows` gives each one a builder and a fixture.
@@ -416,16 +398,18 @@ fn intent_action_of(action: &PlaybackIntentAction) -> IntentAction {
 }
 
 /// One `OutputSelection`. Every selection gets a
-/// `SelectPlaybackOutput.<selection>` fixture row.
+/// `SelectPlaybackOutput.<selection>` fixture row. The `events/` corpus
+/// reuses this enum for `OutputState` naming — the two wire enums have the
+/// same three variants.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum OutputChoice {
+pub(crate) enum OutputChoice {
     Local,
     Cast,
     EmbySession,
 }
 
 impl OutputChoice {
-    const ALL: [OutputChoice; 3] = [
+    pub(crate) const ALL: [OutputChoice; 3] = [
         OutputChoice::Local,
         OutputChoice::Cast,
         OutputChoice::EmbySession,
@@ -433,7 +417,7 @@ impl OutputChoice {
 
     /// Exhaustive: a new `OutputSelection` variant fails this build until
     /// its arm and fixture row exist.
-    fn name(self) -> &'static str {
+    pub(crate) fn name(self) -> &'static str {
         match self {
             OutputChoice::Local => "Local",
             OutputChoice::Cast => "Cast",
@@ -460,7 +444,7 @@ impl OutputChoice {
 }
 
 /// Exhaustive selection match over `OutputSelection` with NO wildcard arm.
-fn output_of(selection: &OutputSelection) -> OutputChoice {
+pub(crate) fn output_of(selection: &OutputSelection) -> OutputChoice {
     match selection {
         OutputSelection::Local => OutputChoice::Local,
         OutputSelection::Cast { .. } => OutputChoice::Cast,
@@ -485,90 +469,6 @@ fn service_kind_name(kind: ServiceKind) -> &'static str {
     match kind {
         ServiceKind::Emby => "Emby",
         ServiceKind::Audiobookshelf => "Audiobookshelf",
-    }
-}
-
-// ── Fixed-literal payload builders ───────────────────────────────────────
-
-/// The playlist `QueueSource` the queue-command fixtures carry.
-fn queue_source() -> QueueSource {
-    QueueSource::Playlist {
-        id: Some("conformance-playlist".to_owned()),
-        name: PLAYLIST_NAME.to_owned(),
-    }
-}
-
-/// The Emby queue item the queue-command fixtures carry.
-fn emby_queue_item() -> QueueItem {
-    QueueItem::Emby(Box::new(EmbyItem {
-        id: EMBY_ITEM_ID.to_owned(),
-        name: EMBY_ITEM_NAME.to_owned(),
-        item_type: "Episode".to_owned(),
-        is_folder: false,
-        child_count: None,
-        studios: Vec::new(),
-        media_type: "Video".to_owned(),
-        collection_type: String::new(),
-        runtime_ticks: 1_800_000_000,
-        played: false,
-        playback_position_ticks: 0,
-        series_id: "emby-series-1".to_owned(),
-        series_name: "Conformance Series".to_owned(),
-        album_id: String::new(),
-        album: String::new(),
-        index_number: 1,
-        parent_index_number: 1,
-        unplayed_item_count: 0,
-        path: String::new(),
-        artist: String::new(),
-        track_artist: String::new(),
-        artist_items: Vec::new(),
-        sort_name: "conformance episode".to_owned(),
-        production_year: 2026,
-        end_year: 0,
-        overview: String::new(),
-        premiere_date: String::new(),
-        date_added: "2026-01-01T00:00:00Z".to_owned(),
-        total_count: 0,
-        container: String::new(),
-        video_info: String::new(),
-        audio_info: String::new(),
-        genres: Vec::new(),
-        people: Vec::new(),
-        external_urls: Vec::new(),
-        playlist_item_id: String::new(),
-        image_tags: EmbyImageTags::default(),
-    }))
-}
-
-/// The feed queue item the queue-command fixtures carry.
-fn feed_queue_item() -> QueueItem {
-    QueueItem::Feed(FeedEntry {
-        guid: FEED_GUID.to_owned(),
-        title: FEED_TITLE.to_owned(),
-        enclosure_url: Some(FEED_URL.to_owned()),
-        link: None,
-        mime_type: Some("audio/mpeg".to_owned()),
-        duration_ticks: Some(1_800_000_000),
-        pub_date_secs: Some(1_700_000_000),
-        feed_kind: Some(FeedKind::Audio),
-        feed_id: Some(FEED_ID.to_owned()),
-        position_ticks: 0,
-        played: false,
-    })
-}
-
-/// The provider-qualified progress update the progress-relay fixture
-/// carries: an Audiobookshelf episode position, redacted of everything but
-/// identity and progress.
-fn progress_update() -> ProgressUpdate {
-    ProgressUpdate {
-        content_id: QueueItemContentId::Audiobookshelf {
-            library_item_id: "abs-library-item-1".to_owned(),
-            episode_id: "abs-episode-1".to_owned(),
-        },
-        position_ticks: 30_000_000,
-        finished: false,
     }
 }
 

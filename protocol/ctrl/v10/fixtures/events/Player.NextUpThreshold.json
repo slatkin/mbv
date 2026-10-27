@@ -1,0 +1,9 @@
+{
+  "Player": {
+    "NextUpThreshold": {
+      "episode": 2,
+      "season": 1,
+      "series_id": "emby-series-1"
+    }
+  }
+}

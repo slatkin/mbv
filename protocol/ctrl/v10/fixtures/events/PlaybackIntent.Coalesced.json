@@ -1,0 +1,11 @@
+{
+  "PlaybackIntent": {
+    "generation": 3,
+    "outcome": {
+      "Coalesced": {
+        "canonical_request_id": 5
+      }
+    },
+    "request_id": 7
+  }
+}
