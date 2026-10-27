@@ -160,6 +160,12 @@ fn build(shape: HelloShape) -> CtrlHello {
     }
 }
 
+/// The base negotiated hello, for corpora whose command wraps a `CtrlHello`
+/// payload (`CtrlCmd::Hello`).
+pub(crate) fn base() -> CtrlHello {
+    build(HelloShape::Base)
+}
+
 /// The `hello/` rows of the fixture table.
 pub(crate) fn rows(rows: &mut Vec<FixtureRow>) {
     for shape in HelloShape::ALL {

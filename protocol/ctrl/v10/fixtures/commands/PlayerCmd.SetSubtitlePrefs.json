@@ -1,0 +1,9 @@
+{
+  "PlayerCmd": {
+    "SetSubtitlePrefs": {
+      "audio_lang": "en",
+      "mode": "on",
+      "subtitle_lang": "en"
+    }
+  }
+}

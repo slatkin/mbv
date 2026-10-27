@@ -1,0 +1,18 @@
+{
+  "UnifiedQueueApplyProgress": {
+    "op": 51,
+    "updates": [
+      {
+        "content_id": {
+          "provider": "Audiobookshelf",
+          "value": {
+            "episode_id": "abs-episode-1",
+            "library_item_id": "abs-library-item-1"
+          }
+        },
+        "finished": false,
+        "position_ticks": 30000000
+      }
+    ]
+  }
+}
