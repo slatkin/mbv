@@ -22,4 +22,4 @@
 
 ## 4. Final verification
 
-- [ ] 4.1 Run the full gates: `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo nextest run -p mbv-ctrl -p mbv-daemon`, and `openspec validate ctrl-protocol-conformance --strict`. Verify: all green.
+- [x] 4.1 Run the full gates: `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo nextest run -p mbv-ctrl -p mbv-daemon`, and `openspec validate ctrl-protocol-conformance --strict`. Verify: all green.
