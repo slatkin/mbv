@@ -8,7 +8,7 @@
 
 ## 2. Contract test
 
-- [x] 2.1 One `#[case]` table at the Controller level (`crates/mbv-player/src/tests/submit.rs`, a stubbed player with a spy or dropped command receiver; cite this change in the test name). Each case has a different expected outcome: idle run (`active=false`) reuses; parked run reuses; headless mismatch cold-starts; `stop_tx` taken cold-starts with `stop_requested`; `run_exited` set cold-starts; dropped receiver cold-starts with `send_failed`; no `cmd_tx` cold-starts with `no_run`. Verify: `cargo nextest run -p mbv-player`.
+- [x] 2.1 One `#[case]` table at the Controller level (`crates/mbv-player/src/tests/submit.rs`, a stubbed player with a spy or dropped command receiver; cite this change in the test name). Each case has a different expected outcome: idle run (`active=false`) reuses (a parked run presents identical Player-level state, so this row pins parked reuse too — see the table's leading comment); headless mismatch cold-starts; `stop_tx` taken cold-starts with `stop_requested`; `run_exited` set cold-starts; dropped receiver cold-starts with `send_failed`; no `cmd_tx` cold-starts with `no_run`. Verify: `cargo nextest run -p mbv-player`.
 - No test for the loop-exit window (it needs a live mpv; AGENTS.md forbids it) and none for stop ordering inside `run_tick`: the change no longer depends on it.
 
 ## 3. Daemon helper rename

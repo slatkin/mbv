@@ -398,7 +398,6 @@ fn context_loss_rejects_audiobookshelf_without_mutating_bound_submission() {
         None,
     );
     player.update_audiobookshelf_context(Some(audiobookshelf_context()));
-    player.status.lock().unwrap().active = true;
     let commands = player.spy_on_commands();
     player.update_audiobookshelf_context(None);
 
