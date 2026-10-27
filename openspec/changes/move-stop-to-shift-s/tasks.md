@@ -9,12 +9,12 @@
 
 ## 3. Remove the double-Esc window
 
-- [ ] 3.1 Delete `last_esc` and `DOUBLE_ESC_STOP_WINDOW` from `src/app/shell.rs`, the reset line in `src/app/shell/ui_state_reset.rs`, and in `Model::router_outcome` (`src/app/shell/arbitration.rs`) the `now` and `double_esc` locals, the `leaf_stops` scan, and the `match` that rewrites `Deferred(Stop)` (design D3). Remove imports this leaves unused. Reword the `apply_deferred_candidate` doc comment per design D4 and keep its `debug_assert!`. Verify: `cargo check -p mbv` passes.
-- [ ] 3.2 Delete the three double-Esc tests in `src/app/shell/tests.rs` and `live_tick_escape_stops_on_the_second_press` in `src/app/tests/tick_integration.rs`, and the doc comments that point at them. Verify: `cargo nextest run -p mbv` passes with no reference to `last_esc` left (`cargo check` is the check, not a grep script).
+- [x] 3.1 Delete `last_esc` and `DOUBLE_ESC_STOP_WINDOW` from `src/app/shell.rs`, the reset line in `src/app/shell/ui_state_reset.rs`, and in `Model::router_outcome` (`src/app/shell/arbitration.rs`) the `now` and `double_esc` locals, the `leaf_stops` scan, and the `match` that rewrites `Deferred(Stop)` (design D3). Remove imports this leaves unused. Reword the `apply_deferred_candidate` doc comment per design D4 and keep its `debug_assert!`. Verify: `cargo check -p mbv` passes.
+- [x] 3.2 Delete the three double-Esc tests in `src/app/shell/tests.rs` and `live_tick_escape_stops_on_the_second_press` in `src/app/tests/tick_integration.rs`, and the doc comments that point at them. Verify: `cargo nextest run -p mbv` passes with no reference to `last_esc` left (`cargo check` is the check, not a grep script).
 
 ## 4. Router tests
 
-- [ ] 4.1 In `src/app/tests/routing_matrix/playback.rs`, change `playback_gating_esc_claims_deferred_stop` to the default-binding outcome (`Esc` is `FallThrough`), and add rows for the default Stop chord: `Command(Stop)` with the gate open, and `FallThrough` while text entry is focused. Add one row with a keybinds fixture that assigns `Esc` to `stop`, expecting `Deferred(Stop)`. Name each contract in the test name. Verify: `cargo nextest run -p mbv` passes, and each row has a different expected outcome.
+- [x] 4.1 In `src/app/tests/routing_matrix/playback.rs`, change `playback_gating_esc_claims_deferred_stop` to the default-binding outcome (`Esc` is `FallThrough`), and add rows for the default Stop chord: `Command(Stop)` with the gate open, and `FallThrough` while text entry is focused. Add one row with a keybinds fixture that assigns `Esc` to `stop`, expecting `Deferred(Stop)`. Name each contract in the test name. Verify: `cargo nextest run -p mbv` passes, and each row has a different expected outcome.
 
 ## 5. Docs
 
