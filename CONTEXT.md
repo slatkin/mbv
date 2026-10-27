@@ -235,6 +235,10 @@ Playback resume:
 The rule that decides whether a prior watched entry resumes or starts over. When position passes 1 percent of runtime, resume starts from that position. When runtime is unknown and position is above zero, resume also starts from that position. Otherwise it starts from zero. It applies to Emby items, Feed entries, and Audiobookshelf episodes with the same threshold. Music is fire-and-forget and never resumes. Tracks, albums, and artists are examples. `EmbyItem::is_music` and `QueueItem::is_music` items skip this rule in full. `MediaSemanticState::from_emby` and `from_queue_item` always derive `Ordinary` for them without regard to stored played or position facts. A finished or partly played track never dims and never shows a resume percentage.
 _Avoid_: continue threshold, resume percent, watched threshold
 
+Resume source:
+The authority that a QueueItem kind reads its start position from, decided in one place by `resume_source` in `crates/mbv-player/src/resume.rs`. The values are Server, Session, Local, and Beginning. An Emby video reads the position Emby reports when the start is decided. Audiobookshelf reads the position of the opened playback session. A Feed entry keeps its locally recorded position. Emby audio always starts from the beginning. Every resume decision matches on the source and never on the item kind, and a new kind must name its source. The Playback resume rule gates the position of each source.
+_Avoid_: progress source, position source
+
 Playhead:
 The one reconciled answer of the shell to where playback is. It names the queue scope that plays. It names the active slot in it. It tells whether that slot is confirmed by the Player owner or is an optimistic prediction not yet acknowledged. A prediction records its reason. A queue edit moved the still-playing item, or a different item was selected to play. Reconciliation happens in one tick-phase step against owner status. It never happens during paint. Playback position itself stays a live read.
 _Avoid_: pending active index, cursor push, now-playing index, active_idx
