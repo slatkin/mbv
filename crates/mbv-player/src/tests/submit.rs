@@ -37,9 +37,11 @@ fn jump_to_after_replacement_resolves_new_occurrence() {
 #[test]
 fn submit_queue_fast_path_sends_command_for_feed_entry() {
     // When the player is already active with matching headless state,
-    // submit_queue_slots must route through the SubmitQueue command (fast path)
-    // rather than spawning a new thread. This proves bare-local and
-    // stay-alive-local playback share the same boundary.
+    // submit_queue_slots must route through the SubmitQueue command (live-run
+    // reuse) rather than spawning a new thread. This proves bare-local and
+    // stay-alive-local playback share the same boundary. The stub arms
+    // `stop_tx` the way every real cold start does, so the D1 decision sees a
+    // live run.
     let (event_tx, _event_rx) = mpsc::channel();
     let player = Player::new(
         String::new(),
@@ -51,9 +53,12 @@ fn submit_queue_fast_path_sends_command_for_feed_entry() {
         SubtitlePrefs::default(),
         event_tx,
         None,
-    );
+    )
+    .with_mpv_inhibited();
     player.status.lock().unwrap().active = true;
     player.current_is_headless.store(false, Ordering::Relaxed);
+    let (armed_tx, _armed_rx) = mpsc::channel();
+    *player.stop_tx.lock().unwrap() = Some(armed_tx);
     let cmd_rx = player.spy_on_commands();
 
     let entry = make_feed_entry("feed-1", "Podcast Episode 1");
@@ -99,9 +104,12 @@ fn submit_queue_slots_preserves_caller_slot_ids() {
         SubtitlePrefs::default(),
         event_tx,
         None,
-    );
+    )
+    .with_mpv_inhibited();
     player.status.lock().unwrap().active = true;
     player.current_is_headless.store(false, Ordering::Relaxed);
+    let (armed_tx, _armed_rx) = mpsc::channel();
+    *player.stop_tx.lock().unwrap() = Some(armed_tx);
     let cmd_rx = player.spy_on_commands();
 
     let ids = [QueueSlotId::from_raw(7), QueueSlotId::from_raw(3)];
@@ -129,10 +137,11 @@ fn submit_queue_slots_preserves_caller_slot_ids() {
 }
 
 #[test]
-fn submit_queue_fast_path_updates_status_before_sending() {
-    // The status must reflect the new queue items before the command is
-    // sent, so any reader that sees status.active = true also sees
-    // consistent queue_len and title.
+fn submit_queue_fast_path_seeds_status_for_the_start_item() {
+    // Once the live run accepted the replacement, the status must reflect
+    // the new queue items (design D2 seeds after the send is accepted), so
+    // any reader that sees the seeded status also sees consistent queue_len
+    // and title.
     let (event_tx, _event_rx) = mpsc::channel();
     let player = Player::new(
         String::new(),
@@ -305,9 +314,12 @@ fn complete_bare_player_admits_audiobookshelf_without_ctrl_transport() {
         SubtitlePrefs::default(),
         event_tx,
         None,
-    );
+    )
+    .with_mpv_inhibited();
     player.update_audiobookshelf_context(Some(audiobookshelf_context()));
     player.status.lock().unwrap().active = true;
+    let (armed_tx, _armed_rx) = mpsc::channel();
+    *player.stop_tx.lock().unwrap() = Some(armed_tx);
     let commands = player.spy_on_commands();
 
     assert!(player.can_admit_audiobookshelf());
@@ -489,4 +501,251 @@ fn context_loss_rejects_audiobookshelf_without_mutating_bound_submission() {
         100,
     ));
     commands.try_recv().unwrap_err();
+}
+
+// ── queue replacement decision (submit-reuses-live-run) ──────────────────────
+
+/// Runs `run` under the shared logfmt capture layer and returns the rendered
+/// lines (structured-logging design D5).
+fn capture_log_lines(run: impl FnOnce()) -> Vec<String> {
+    use tracing_subscriber::prelude::*;
+
+    let lines = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let sink = std::sync::Arc::clone(&lines);
+    let subscriber = tracing_subscriber::registry().with(
+        mbv_core::applog::test_support::capture_layer(move |line| {
+            sink.lock().unwrap().push(line.to_owned());
+        }),
+    );
+    tracing::subscriber::with_default(subscriber, run);
+    lines.lock().unwrap().clone()
+}
+
+/// The playback state the status reports before the submission.
+enum Reported {
+    Playing,
+    Idle,
+}
+
+/// Whether `stop_tx` is armed for the running run.
+enum StopState {
+    Armed,
+    Taken,
+}
+
+/// Whether the running run's loop has exited (design D7).
+enum RunState {
+    Live,
+    Exited,
+}
+
+/// One replacement-decision setup and its expected outcome (design D1).
+struct ReplaceDecision {
+    /// The reported playback state before the submission. The Controller must
+    /// not read it: an idle or parked run reports idle and is still reused.
+    reported: Reported,
+    /// `current_is_headless` before the submission; the submitted class is
+    /// `false`.
+    current_headless: bool,
+    /// Whether `stop_tx` is armed for the running run.
+    stop: StopState,
+    /// Whether the running run's loop has exited (design D7).
+    run: RunState,
+    /// The command channel the stub installed.
+    commands: Commands,
+    /// The expected decision.
+    expect: Expect,
+}
+
+enum Commands {
+    /// A live spy receiver.
+    Spy,
+    /// A spy whose receiver is dropped, so the send must fail.
+    Dropped,
+    /// No `cmd_tx` at all.
+    None,
+}
+
+enum Expect {
+    /// The live run takes the submission.
+    Reuse,
+    /// A cold start, with its D5 reason.
+    Cold(&'static str),
+}
+
+// Task 2.1: the Controller-level replacement decision follows the D1 order —
+// run exists, headless class, `stop_tx` armed, `run_exited` unset, send — and
+// every cold start carries its D5 reason. No case exercises the loop-exit
+// window itself: it needs a live mpv child, which hermetic tests must not
+// start (issue #757); `run_exited` is set directly instead.
+#[rstest::rstest]
+#[case::idle_run_reuses(ReplaceDecision {
+    reported: Reported::Idle,
+    current_headless: false,
+    stop: StopState::Armed,
+    run: RunState::Live,
+    commands: Commands::Spy,
+    expect: Expect::Reuse,
+})]
+#[case::parked_run_reuses(ReplaceDecision {
+    reported: Reported::Idle,
+    current_headless: false,
+    stop: StopState::Armed,
+    run: RunState::Live,
+    commands: Commands::Spy,
+    expect: Expect::Reuse,
+})]
+#[case::headless_mismatch_cold_starts(ReplaceDecision {
+    reported: Reported::Playing,
+    current_headless: true,
+    stop: StopState::Armed,
+    run: RunState::Live,
+    commands: Commands::Spy,
+    expect: Expect::Cold("headless_mismatch"),
+})]
+#[case::stop_requested_cold_starts(ReplaceDecision {
+    reported: Reported::Playing,
+    current_headless: false,
+    stop: StopState::Taken,
+    run: RunState::Live,
+    commands: Commands::Spy,
+    expect: Expect::Cold("stop_requested"),
+})]
+#[case::run_exited_cold_starts(ReplaceDecision {
+    reported: Reported::Playing,
+    current_headless: false,
+    stop: StopState::Armed,
+    run: RunState::Exited,
+    commands: Commands::Spy,
+    expect: Expect::Cold("run_exited"),
+})]
+#[case::send_failed_cold_starts(ReplaceDecision {
+    reported: Reported::Playing,
+    current_headless: false,
+    stop: StopState::Armed,
+    run: RunState::Live,
+    commands: Commands::Dropped,
+    expect: Expect::Cold("send_failed"),
+})]
+#[case::no_run_cold_starts(ReplaceDecision {
+    reported: Reported::Idle,
+    current_headless: false,
+    stop: StopState::Taken,
+    run: RunState::Live,
+    commands: Commands::None,
+    expect: Expect::Cold("no_run"),
+})]
+fn queue_replacement_decision_follows_the_d1_order(#[case] case: ReplaceDecision) {
+    let (event_tx, _event_rx) = mpsc::channel();
+    let player = Player::new(
+        String::new(),
+        String::new(),
+        false,
+        false,
+        false,
+        false,
+        SubtitlePrefs::default(),
+        event_tx,
+        None,
+    )
+    .with_mpv_inhibited();
+    player.status.lock().unwrap().active = matches!(case.reported, Reported::Playing);
+    player
+        .current_is_headless
+        .store(case.current_headless, Ordering::Relaxed);
+    let mut stop_rx = None;
+    if let StopState::Armed = case.stop {
+        let (armed_tx, rx) = mpsc::channel();
+        *player.stop_tx.lock().unwrap() = Some(armed_tx);
+        stop_rx = Some(rx);
+    }
+    if let RunState::Exited = case.run {
+        player
+            .run_exited
+            .lock()
+            .unwrap()
+            .store(true, Ordering::Relaxed);
+    }
+    let cmd_rx = match case.commands {
+        Commands::Spy => Some(player.spy_on_commands()),
+        Commands::Dropped => {
+            drop(player.spy_on_commands());
+            None
+        }
+        Commands::None => None,
+    };
+
+    let lines = capture_log_lines(|| {
+        let accepted = player.submit_queue_slots(
+            vec![ExecSlot {
+                slot_id: QueueSlotId::from_raw(1),
+                item: QueueItem::Feed(make_feed_entry("replacement", "Replacement")),
+            }],
+            0,
+            None,
+            false,
+            100,
+        );
+        assert!(accepted, "every decision path accepts the submission");
+    });
+
+    let decisions: Vec<&String> = lines
+        .iter()
+        .filter(|line| line.contains("event=player.submit."))
+        .collect();
+    assert_eq!(
+        decisions.len(),
+        1,
+        "exactly one decision event per submission: {lines:?}"
+    );
+    match case.expect {
+        Expect::Reuse => {
+            assert!(
+                decisions[0].contains("event=player.submit.reused_run"),
+                "reuse event: {}",
+                decisions[0]
+            );
+            assert!(
+                decisions[0].contains("run_identity="),
+                "reuse event names the run identity: {}",
+                decisions[0]
+            );
+            let cmd = cmd_rx
+                .expect("a reuse decision sends into the live run")
+                .try_recv()
+                .expect("the live run received the replacement");
+            match cmd {
+                PlayerCommand::SubmitQueue { items, start_idx } => {
+                    assert_eq!(start_idx, 0);
+                    assert_eq!(items.len(), 1);
+                    assert!(matches!(items[0].item, QueueItem::Feed(_)));
+                }
+                _ => panic!("expected SubmitQueue"),
+            }
+            if let Some(stop_rx) = stop_rx {
+                assert!(stop_rx.try_recv().is_err(), "a reused run is never stopped");
+            }
+        }
+        Expect::Cold(reason) => {
+            assert!(
+                decisions[0].contains("event=player.submit.cold_started")
+                    && decisions[0].contains(&format!("reason={reason}")),
+                "cold-start event with its reason: {}",
+                decisions[0]
+            );
+            if let Some(cmd_rx) = cmd_rx {
+                assert!(
+                    cmd_rx.try_recv().is_err(),
+                    "a cold start sends no command into the old run"
+                );
+            }
+            if let Some(stop_rx) = stop_rx {
+                assert!(stop_rx.try_recv().is_ok(), "a cold start stops the old run");
+            }
+            assert!(
+                player.status.lock().unwrap().active,
+                "a cold start seeds the new run as active"
+            );
+        }
+    }
 }

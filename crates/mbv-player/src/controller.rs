@@ -20,7 +20,7 @@ use crate::mpv_session::spawn::Spawner;
 pub(super) struct WakeupWriter(pub(super) RawFd);
 
 impl WakeupWriter {
-    fn notify(&self) {
+    pub(super) fn notify(&self) {
         let byte = [0u8; 1];
         // SAFETY: the owned pipe write descriptor is valid until Drop, and `byte`
         // points to one readable byte for the requested write length.
@@ -108,6 +108,10 @@ pub struct Player {
     pub subtitle_prefs: Arc<Mutex<SubtitlePrefs>>,
     pub(super) origin: Mutex<PlaybackOrigin>,
     pub(super) current_is_headless: Arc<AtomicBool>,
+    /// The live run's exit flag (design D7): the run thread sets it when its
+    /// loop returns, before the mpv teardown, and each cold start installs a
+    /// fresh flag — so a dying run's exit can never mark the new run.
+    pub(super) run_exited: Mutex<Arc<AtomicBool>>,
     pub event_tx: mpsc::Sender<PlayerEvent>,
     pub(super) stop_tx: Arc<Mutex<Option<mpsc::Sender<()>>>>,
     pub(super) shutdown_report_timeout: Arc<Mutex<Option<Duration>>>,
@@ -181,6 +185,7 @@ impl Player {
             subtitle_prefs: Arc::new(Mutex::new(subtitle_prefs)),
             origin: Mutex::new(PlaybackOrigin::Standalone),
             current_is_headless: Arc::new(AtomicBool::new(false)),
+            run_exited: Mutex::new(Arc::new(AtomicBool::new(false))),
             event_tx,
             stop_tx: Arc::new(Mutex::new(None)),
             shutdown_report_timeout: Arc::new(Mutex::new(None)),
