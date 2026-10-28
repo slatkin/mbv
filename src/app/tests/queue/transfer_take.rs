@@ -20,10 +20,7 @@ use crate::app::tests::queue::transfer_handoff::{
     PROBE_LINK, applied, confirm_key, hand_off_key as transfer_key, peer_compat, peer_replace,
     peer_session, peer_snapshot, staged_probe_connect, stop_sent_to,
 };
-use crate::app::tests::{
-    make_audio_items, make_local_daemon_app_stub_with_cmd_rx,
-    make_local_daemon_app_stub_with_cmd_rx_and_compat,
-};
+use crate::app::tests::{make_audio_items, make_local_daemon_app_stub_with_cmd_rx_and_compat};
 
 /// The local Owner's negotiated compatibility for the copy: a real Owner
 /// advertises the start-position capability from its Hello (task 2.3); the
@@ -277,7 +274,8 @@ fn a_peer_snapshot_without_an_active_slot_receives_nothing_and_leaves_the_local_
     // no active slot, so the Client reports, sends nothing to either owner,
     // and both queues stay as they are.
     let local_items = make_audio_items(2);
-    let (mut app, local_cmd_rx) = make_local_daemon_app_stub_with_cmd_rx(local_items.clone());
+    let (mut app, local_cmd_rx) =
+        make_local_daemon_app_stub_with_cmd_rx_and_compat(local_items.clone(), owner_compat());
     let (mut peer, _stub_rx, peer_cmd_rx) =
         RemotePlayer::stub_with_command_rx(make_audio_items(3), 0);
     peer.set_ctrl_compatibility_for_test(peer_compat(true, true, false));
@@ -477,6 +475,49 @@ fn a_settled_take_never_stops_a_different_peer_attachment() {
     assert!(
         app.direct_remote_connected && app.has_remote_queue(),
         "the different peer attachment is not the transfer's link to close"
+    );
+}
+
+#[test]
+fn a_local_owner_without_the_start_position_capability_refuses_the_take() {
+    // queue-handoff "Hand off and Take need a peer that accepts a start
+    // position": "Take SHALL need that capability only on the local Owner"
+    // — without it the copy's start position is silently dropped (PR #973
+    // review), so the Take refuses before anything is connected or sent.
+    let (mut app, local_cmd_rx) = make_local_daemon_app_stub_with_cmd_rx_and_compat(
+        make_audio_items(2),
+        peer_compat(true, false, false),
+    );
+    let (mut peer, _stub_rx, peer_cmd_rx) =
+        RemotePlayer::stub_with_command_rx(make_audio_items(3), 1);
+    peer.set_ctrl_compatibility_for_test(peer_compat(true, true, false));
+    let sess = peer_session("peer-owner");
+    let (_dropped_tx, attach_rx) = mpsc::channel();
+    app.switch_to_direct_remote(
+        &sess,
+        peer,
+        attach_rx,
+        &DaemonEndpoint::Tcp("127.0.0.1:47788".parse().unwrap()),
+    );
+    app.panel_targets = vec![PanelTarget::Emby(Box::new(sess))];
+    while local_cmd_rx.try_recv().is_ok() {}
+    while peer_cmd_rx.try_recv().is_ok() {}
+
+    app.begin_queue_transfer(QueueTransferDirection::Take, &transfer_key());
+
+    assert!(
+        local_replace(&local_cmd_rx).is_none() && peer_replace(&peer_cmd_rx).is_none(),
+        "the refused Take sends nothing to either owner"
+    );
+    assert!(
+        app.pending_queue_transfer.is_none() && app.staged_queue_transfer.is_none(),
+        "the refused Take arms and stages nothing"
+    );
+    assert_eq!(app.status_severity, ToastSeverity::Warning);
+    assert!(
+        app.status.contains("does not support Take"),
+        "the refusal names the cause, got {:?}",
+        app.status
     );
 }
 

@@ -87,6 +87,21 @@ impl App {
             );
             return;
         }
+        // The capability gate (queue-handoff spec: "Take SHALL need that
+        // capability only on the local Owner"): an owner without it
+        // silently drops the copy's start position — refuse before
+        // anything is connected or sent (PR #973 review).
+        if !self
+            .local_queue_player()
+            .remote()
+            .supports_queue_replace_start_position()
+        {
+            self.flash(
+                format!("Take: {} does not support Take", mbv_emby::device_name()),
+                ToastSeverity::Warning,
+            );
+            return;
+        }
         let connected = self.queue_transfer_peer_link_is_current(&sess.id);
         let staged_link = if connected {
             None
