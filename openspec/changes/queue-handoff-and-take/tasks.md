@@ -37,7 +37,7 @@
 
 ## 8. Take
 
-- [ ] 8.1 Implement Take (design D1 right column) for both the connected and the unconnected case, reusing `PendingQueueTransfer`. Take while connected closes the F3 connection; Take never touches a library route (ADR 0012). Verify with tests that mock both links: success stops the peer only after local observes the start slot and the Client ends unconnected; a peer whose snapshot has no active slot (stale F3 row) receives nothing and the local queue is unchanged. `cargo nextest run -p mbv`.
+- [x] 8.1 Implement Take (design D1 right column) for both the connected and the unconnected case, reusing `PendingQueueTransfer`. Take while connected closes the F3 connection; Take never touches a library route (ADR 0012). Verify with tests that mock both links: success stops the peer only after local observes the start slot and the Client ends unconnected; a peer whose snapshot has no active slot (stale F3 row) receives nothing and the local queue is unchanged. `cargo nextest run -p mbv`.
 
 ## 9. Integration checks
 
