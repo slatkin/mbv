@@ -41,8 +41,8 @@
 
 ## 9. Integration checks
 
-- [ ] 9.1 Run `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run --workspace`. Verify all pass.
-- [ ] 9.2 Run `make check-code-file-lines` just before push and split any file over 800 lines. Verify it passes.
+- [x] 9.1 Run `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run --workspace`. Verify all pass.
+- [x] 9.2 Run `make check-code-file-lines` just before push and split any file over 800 lines. Verify it passes.
 
 ## Workflow follow-up
 
