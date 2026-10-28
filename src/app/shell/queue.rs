@@ -296,11 +296,6 @@ impl Model {
 
     pub(in crate::app) fn handle_queue_request(&mut self, request: QueueRequest) {
         match request {
-            QueueRequest::Link(link) => {
-                if link == QueueLink::Local || self.app.has_direct_remote_queue() {
-                    self.app.set_queue_link(link);
-                }
-            }
             QueueRequest::Cursor { link, slot_id } => {
                 // Plain navigation: select_queue_slot applies the link/focus/
                 // hold-window side effects; there is no effect to drive with
@@ -413,7 +408,6 @@ impl Model {
                 };
                 if active {
                     self.app.playback_queue_mut().set_cursor(current_idx);
-                    self.app.set_queue_link(QueueLink::Peer);
                     // Jump-to-now-playing is an explicit, authoritative move.
                     self.app.pending_queue_cursor_reanchor = Some(self.app.playing_queue_link());
                 } else {
@@ -473,7 +467,6 @@ impl Model {
             return None;
         }
         let index = self.slot_index(link, slot_id)?;
-        self.app.set_queue_link(link);
         self.app.set_panel_focus(PanelFocus::Queue);
         self.app.mark_queue_cursor_user_active();
         Some(index)

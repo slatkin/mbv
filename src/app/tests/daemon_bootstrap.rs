@@ -4,7 +4,6 @@ use super::*;
 fn remote_app_starts_on_remote_queue_when_remote_queue_has_items() {
     let app = make_remote_app_stub(make_items(2), make_items(1));
 
-    assert_eq!(app.queue_link, QueueLink::Peer);
     assert_eq!(app.viewed_queue_link(), QueueLink::Peer);
 }
 

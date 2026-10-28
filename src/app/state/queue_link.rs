@@ -95,7 +95,7 @@ impl App {
     }
 
     fn queue_link_resolution(&self) -> QueueLinkResolution {
-        QueueLinkResolution::new(self.has_direct_remote_queue(), self.queue_link)
+        QueueLinkResolution::new(self.has_direct_remote_queue())
     }
 
     pub(in crate::app) fn local_queue_metadata_applies(&self, link: QueueLink) -> bool {
@@ -140,7 +140,7 @@ impl App {
     }
 
     pub(in crate::app) fn viewed_queue_link(&self) -> QueueLink {
-        self.queue_link_resolution().visible_scope()
+        self.queue_link_resolution().playback_target()
     }
 
     pub(in crate::app) fn displayed_queue(&self) -> &QueueView {
@@ -202,28 +202,19 @@ impl App {
         (should_consume, is_audio)
     }
 
-    /// Connected to an mbv daemon/client: the peer's queue is the displayed
-    /// queue, empty or not. A Local-endpoint attach has no remote tab, so the
-    /// link resolution lands back on the adopted unified Local view.
-    pub(in crate::app) fn display_peer_queue_on_connect(&mut self) {
-        self.set_queue_link(QueueLink::Peer);
-    }
-
-    pub(in crate::app) fn set_queue_link(&mut self, link: QueueLink) {
-        let resolved = if link == QueueLink::Peer && self.has_direct_remote_queue() {
-            QueueLink::Peer
-        } else {
-            QueueLink::Local
-        };
-        if resolved != self.queue_link {
-            // A real link switch (`[`/`]`, link pill, session
-            // attach/detach) must adopt the new link's own follow
-            // position rather than reconciling by slot identity: the two
-            // queues hand out colliding `QueueSlotId`s (each is a
-            // per-`PlaybackQueue` counter starting at 1), so identity
-            // reconciliation can park the cursor on an unrelated slot.
-            self.pending_queue_cursor_reanchor = Some(resolved);
+    /// D5: the shown queue follows the connection, so the shown link only
+    /// flips when `remote_view` is installed or cleared. When it flips, arm
+    /// the cursor re-anchor: the component must adopt the newly shown
+    /// queue's own follow position rather than reconcile by slot identity
+    /// (the two queues hand out colliding `QueueSlotId`s, each a
+    /// per-`PlaybackQueue` counter starting at 1).
+    pub(in crate::app) fn reanchor_queue_cursor_after_link_change(
+        &mut self,
+        previous_shown: QueueLink,
+    ) {
+        let shown = self.viewed_queue_link();
+        if shown != previous_shown {
+            self.pending_queue_cursor_reanchor = Some(shown);
         }
-        self.queue_link = resolved;
     }
 }

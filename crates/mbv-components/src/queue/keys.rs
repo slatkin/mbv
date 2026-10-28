@@ -2,7 +2,6 @@ use tuirealm::event::{Key, KeyEvent};
 
 use crate::media_list::{MediaListSurfaceInput, RowIntent};
 use mbv_ui_model::context_menu::ContextMenuTargets;
-use mbv_ui_model::playback::QueueLink;
 use mbv_ui_msg::{
     LeafKeyResult, Msg, QueueColumnResize, QueueIntent, QueueMove, QueueRequest, ShellRequest,
 };
@@ -34,7 +33,7 @@ impl QueueComponent {
                     | Key::Right
                     | Key::Enter
                     | Key::Delete
-                    | Key::Char('[' | ']' | '.' | 'i' | 'p' | 's' | 'c' | 'z')
+                    | Key::Char('.' | 'i' | 'p' | 's' | 'c' | 'z')
             ) =>
             {
                 LeafKeyResult::Consumed(None)
@@ -48,9 +47,6 @@ impl QueueComponent {
             return Some(Msg::Shell(Box::new(ShellRequest::SelectionProjection(
                 self.carrier.selection_summary(),
             ))));
-        }
-        if let Some(message) = self.handle_link_key(key) {
-            return Some(message);
         }
         if let Some(message) = Self::handle_resize_key(key) {
             return Some(message);
@@ -86,28 +82,6 @@ impl QueueComponent {
             ),
             _ => None,
         }
-    }
-
-    fn handle_link_key(&mut self, key: &KeyEvent) -> Option<Msg> {
-        let link = match key.code {
-            Key::Char('[' | ']')
-                if !key
-                    .modifiers
-                    .contains(tuirealm::event::KeyModifiers::CONTROL)
-                    && !key.modifiers.contains(tuirealm::event::KeyModifiers::ALT) =>
-            {
-                if key.code == Key::Char('[') {
-                    QueueLink::Local
-                } else {
-                    QueueLink::Peer
-                }
-            }
-            _ => return None,
-        };
-        self.link = link;
-        // Link is preassigned before the shell request, so set_content will not reset scroll.
-        self.carrier.set_scroll(0);
-        Some(Msg::Queue(QueueRequest::Link(self.link)))
     }
 
     fn handle_resize_key(key: &KeyEvent) -> Option<Msg> {

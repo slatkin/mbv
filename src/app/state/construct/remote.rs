@@ -9,7 +9,6 @@ use mbv_ctrl::player::PlayerEvent;
 use mbv_emby::EmbyClient;
 use mbv_player::PlayerProxy;
 use mbv_remote_player::DaemonEndpoint;
-use mbv_ui_model::playback::QueueLink;
 use std::sync::{Arc, Mutex, mpsc};
 
 /// Start MPRIS against the daemon's `RemotePlayer` (#175, previously done in
@@ -48,23 +47,6 @@ impl RemoteSnapshot {
     fn take(remote: &mbv_remote_player::RemotePlayer) -> Self {
         Self {
             unified_state: remote.unified_queue_state(),
-        }
-    }
-
-    /// Whether the daemon side has any queue content to present.
-    fn has_items(&self) -> bool {
-        self.unified_state
-            .as_ref()
-            .is_some_and(|state| !state.slots.is_empty())
-    }
-
-    /// The queue link the session opens in: remote when a network daemon
-    /// already plays something, local otherwise.
-    fn link(&self, is_local: bool) -> QueueLink {
-        if !is_local && self.has_items() {
-            QueueLink::Peer
-        } else {
-            QueueLink::Local
         }
     }
 
@@ -222,7 +204,6 @@ impl App {
         let services = remote_services(&app_config, client_arc.as_ref());
         let config = Arc::new(Mutex::new(app_config));
         let snapshot = RemoteSnapshot::take(&remote);
-        let initial_queue_link = snapshot.link(endpoint.is_local());
         let local_daemon_bootstrap = endpoint.is_local().then(|| snapshot.local_bootstrap());
         #[cfg(not(test))]
         let mpris_handle = Some(start_mpris(&remote));
@@ -247,7 +228,6 @@ impl App {
             audiobookshelf_socket_generation: None,
             local_view,
             remote_view,
-            initial_queue_link,
             system_notifications,
             image_protocol: ui_config.image_protocol.clone(),
             image_protocol_enabled: ui_config.image_protocol.is_some(),

@@ -249,7 +249,6 @@ impl App {
     /// becomes the viewed one, and focus moves to the queue unless the play
     /// started in the library.
     fn adopt_played_queue_view(&mut self) {
-        self.set_queue_link(self.playing_queue_link());
         if !matches!(self.effective_panel_focus(), PanelFocus::Library) {
             self.set_panel_focus(PanelFocus::Queue);
         }
@@ -431,7 +430,6 @@ impl App {
                 .player
                 .send_command(PlayerCommand::SetMute(self.mute_on));
         }
-        self.set_queue_link(link);
         if !matches!(self.effective_panel_focus(), PanelFocus::Library) {
             self.set_panel_focus(PanelFocus::Queue);
         }

@@ -10,30 +10,19 @@ use std::sync::mpsc;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(in crate::app) struct QueueLinkResolution {
     pub has_direct_remote_queue: bool,
-    pub requested_visible_scope: QueueLink,
 }
 
 impl QueueLinkResolution {
     #[must_use]
-    pub fn new(has_direct_remote_queue: bool, requested_visible_scope: QueueLink) -> Self {
+    pub fn new(has_direct_remote_queue: bool) -> Self {
         Self {
             has_direct_remote_queue,
-            requested_visible_scope,
         }
     }
 
     #[must_use]
     pub fn playback_target(self) -> QueueLink {
         if self.has_direct_remote_queue {
-            QueueLink::Peer
-        } else {
-            QueueLink::Local
-        }
-    }
-
-    #[must_use]
-    pub fn visible_scope(self) -> QueueLink {
-        if self.has_direct_remote_queue && self.requested_visible_scope == QueueLink::Peer {
             QueueLink::Peer
         } else {
             QueueLink::Local

@@ -155,7 +155,7 @@ fn confirmed_local_fall_through_stops_and_detaches_remote_owner() {
 
     assert!(!app.queue_deferrals.has_local_play());
     assert!(app.is_local_daemon());
-    assert_eq!(app.queue_link, QueueLink::Local);
+    assert_eq!(app.viewed_queue_link(), QueueLink::Local);
     let commands: Vec<_> = command_rx.try_iter().collect();
     assert!(commands.iter().any(|command| {
         matches!(

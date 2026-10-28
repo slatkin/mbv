@@ -212,11 +212,12 @@ impl App {
         let tab = initial_unified_state
             .as_ref()
             .map_or_else(QueueView::default, QueueView::from_snapshot);
+        let shown_before = self.viewed_queue_link();
         self.remote_view = Some(tab);
         self.direct_remote_connected = true;
         self.advance_queue_epoch();
         self.next_up_item = None;
-        self.display_peer_queue_on_connect();
+        self.reanchor_queue_cursor_after_link_change(shown_before);
         self.sync_subtitle_prefs_to_player();
         self.flash(
             format!("Reconnected to daemon (attempt {})", attempt + 1),

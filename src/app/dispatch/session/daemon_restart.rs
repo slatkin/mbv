@@ -1,13 +1,14 @@
+use crate::app::App;
 use crate::app::state::bootstrap::{bootstrap_legacy_queue, bootstrap_unified_queue};
-use crate::app::{App, QueueLink};
 use mbv_player::PlayerProxy;
 use mbv_remote_player::{DaemonEndpoint, RemotePlayer};
 
 impl App {
     pub(in crate::app) fn reset_local_daemon_queue_view(&mut self) {
+        let shown_before = self.viewed_queue_link();
         self.remote_view = None;
         self.remote_queue_undo_stack.clear();
-        self.set_queue_link(QueueLink::Local);
+        self.reanchor_queue_cursor_after_link_change(shown_before);
     }
 
     /// Ensure-daemon-then-attach, run from inside an already-running app

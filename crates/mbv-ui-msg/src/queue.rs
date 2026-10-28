@@ -15,7 +15,6 @@ pub enum QueueRequest {
         link: mbv_ui_model::playback::QueueLink,
         slot_id: QueueSlotId,
     },
-    Link(mbv_ui_model::playback::QueueLink),
     Play {
         link: mbv_ui_model::playback::QueueLink,
         slot_id: QueueSlotId,

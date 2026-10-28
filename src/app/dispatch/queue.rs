@@ -310,7 +310,6 @@ impl App {
                 }
             }
         }
-        self.set_queue_link(link);
     }
 
     /// Bookkeeping for an edit the owner's queue now holds (or that a legacy

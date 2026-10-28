@@ -1,5 +1,5 @@
 use crate::app::dispatch::notify::ToastSeverity;
-use crate::app::{App, QueueLink, QueueView, SuspendedLocalSession};
+use crate::app::{App, QueueView, SuspendedLocalSession};
 use mbv_ctrl::player::PlayerEvent;
 use mbv_player::PlayerProxy;
 use std::sync::mpsc;
@@ -52,11 +52,13 @@ impl App {
         self.rebind_mpris_to_current_player();
 
         let daemon_view = replacement_view(initial_unified_state.as_ref());
+        let shown_before = self.viewed_queue_link();
         if endpoint.is_local() {
             self.adopt_local_daemon_queue(daemon_view);
         } else {
             self.remote_view = Some(daemon_view);
         }
+        self.reanchor_queue_cursor_after_link_change(shown_before);
         self.advance_queue_epoch();
         true
     }
@@ -84,7 +86,6 @@ impl App {
         // never marked.
         self.direct_remote_session_id = (!endpoint.is_local()).then(|| sess.id.clone());
         self.next_up_item = None;
-        self.display_peer_queue_on_connect();
         self.request_sidebar_dismiss(mbv_ui_model::overlay::SidebarId::Sessions);
         self.flash(
             format!("Connected directly to {}", sess.device_name),
@@ -123,7 +124,6 @@ impl App {
         self.direct_remote_session_id = None;
         self.active_route = Some(library_name.to_string());
         self.next_up_item = None;
-        self.display_peer_queue_on_connect();
         tracing::info!(name: "library_route.playback_route.switched", target: "library_route", previous_route = ?previous_route, next_route = %library_name, "playback route switched");
         self.flash(
             format!("Routed to {library_name} daemon"),
@@ -216,8 +216,9 @@ impl App {
         if let Some(local_view) = reconnected_local_daemon {
             self.local_view = local_view;
         }
+        let shown_before = self.viewed_queue_link();
         self.remote_view = None;
-        self.set_queue_link(QueueLink::Local);
+        self.reanchor_queue_cursor_after_link_change(shown_before);
         self.advance_queue_epoch();
         self.direct_remote_connected = false;
         self.direct_remote_label = None;

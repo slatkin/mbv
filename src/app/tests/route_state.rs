@@ -47,7 +47,6 @@ fn direct_remote_connect_shows_the_peer_queue_even_when_empty() {
 
     app.switch_to_direct_remote(&sess, remote, remote_rx, &stub_endpoint());
 
-    assert_eq!(app.queue_link, QueueLink::Peer);
     assert_eq!(app.viewed_queue_link(), QueueLink::Peer);
     assert_eq!(
         app.remote_view.as_ref().unwrap().emby_items(),
@@ -67,7 +66,6 @@ fn direct_remote_connect_switches_to_peer_link_when_remote_queue_has_items() {
 
     app.switch_to_direct_remote(&sess, remote, remote_rx, &stub_endpoint());
 
-    assert_eq!(app.queue_link, QueueLink::Peer);
     assert_eq!(app.viewed_queue_link(), QueueLink::Peer);
     assert_eq!(
         app.remote_view.as_ref().unwrap().emby_items()[0].id,
@@ -95,7 +93,6 @@ fn library_route_connect_shows_the_peer_queue_even_when_empty() {
 
     app.switch_to_library_route("music", remote, remote_rx, &stub_endpoint());
 
-    assert_eq!(app.queue_link, QueueLink::Peer);
     assert_eq!(app.viewed_queue_link(), QueueLink::Peer);
     assert_eq!(
         app.remote_view.as_ref().unwrap().emby_items(),

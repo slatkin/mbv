@@ -35,7 +35,6 @@ impl App {
             return;
         }
         self.collapse_pinned_view_after_play();
-        self.set_queue_link(link);
         let _ = self
             .player
             .send_command(PlayerCommand::SetMute(self.mute_on));

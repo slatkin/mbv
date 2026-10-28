@@ -505,7 +505,6 @@ pub struct App {
         std::collections::HashSet<(String, String)>,
     pub(in crate::app) images: mbv_images::cache::ImageCache,
     pub(in crate::app) library_position_state: mbv_queue::LibraryPositionState,
-    pub(in crate::app) queue_link: QueueLink,
     pub(in crate::app) idle_feed: Option<IdleFeed>,
     pub(in crate::app) feed_tab: FeedTabState,
     /// Local, machine-scoped feed-entry playback state (resume position and
