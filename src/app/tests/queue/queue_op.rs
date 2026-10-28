@@ -10,7 +10,7 @@ use crate::app::tests::{
     QueueViewTestExt, close_initial_services, emby_unified_state, make_items,
     make_local_daemon_app_stub, make_local_daemon_app_stub_with_cmd_rx, remote_stub_config,
 };
-use crate::app::{App, PanelFocus, QueueScope};
+use crate::app::{App, QueueScope};
 use crate::pin::{PINNED_REQUEST_OVERRIDE, PINNED_REQUEST_TEST_LOCK, PINNED_REQUESTS};
 use mbv_ctrl::player::PlayerEvent;
 use mbv_ctrl::{CtrlCmd, QueueOpId, QueueOpOutcome};
@@ -515,10 +515,10 @@ fn single_item_play_on_a_legacy_owner_replaces_the_queue_with_the_played_item() 
 }
 
 #[test]
-fn an_accepted_play_at_the_expanded_pinned_width_collapses_to_the_queue_view() {
+fn an_accepted_play_at_the_expanded_pinned_width_records_one_collapse_request() {
     // pinned-play-collapses-to-queue row 2.2: a user play's accepted replace
-    // collapses the expanded pinned view, and the drained collapse shows the
-    // queue view with queue focus.
+    // reaches the collapse step once. The drain and focus contract is owned
+    // by pinned_view_toggle.rs.
     let _guard = PINNED_REQUEST_TEST_LOCK.lock().unwrap();
     *PINNED_REQUEST_OVERRIDE.lock().unwrap() = Some(Ok(()));
     PINNED_REQUESTS.lock().unwrap().clear();
@@ -534,18 +534,6 @@ fn an_accepted_play_at_the_expanded_pinned_width_collapses_to_the_queue_view() {
     assert_eq!(
         requests[0],
         crate::pin::PinnedSettingRequest::Width(PinnedWidth::Collapsed)
-    );
-    assert!(app.drain_pinned_requests());
-    assert_eq!(app.pinned_width, PinnedWidth::Collapsed);
-    assert_eq!(
-        app.panel_mode,
-        crate::app::PanelMode::QueueOnly,
-        "the drained collapse shows the queue view"
-    );
-    assert_eq!(
-        app.panel_focus,
-        PanelFocus::Queue,
-        "the drained collapse focuses the queue"
     );
     *PINNED_REQUEST_OVERRIDE.lock().unwrap() = None;
 }
