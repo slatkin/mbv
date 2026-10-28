@@ -34,6 +34,7 @@ impl App {
         if sent == QueueOpEdit::NotApplied {
             return;
         }
+        self.collapse_pinned_view_after_play();
         self.set_queue_scope(scope);
         let _ = self
             .player

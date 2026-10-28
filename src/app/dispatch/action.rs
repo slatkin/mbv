@@ -356,12 +356,20 @@ impl App {
     /// `cycle_panel_mode` guards pinned-ness, so the not-pinned arm here
     /// is unreachable.
     pub(crate) fn pinned_view_toggle(&mut self) {
+        self.request_pinned_view(self.pinned_width.toggled());
+    }
+
+    /// Send one pinned view `set-size` request for `width` and hand the
+    /// pending record its outcome; on a synchronous refusal, apply the
+    /// rejection at once. Shared by `pinned_view_toggle` (the `x` toggle,
+    /// target `pinned_width.toggled()`) and
+    /// [`App::collapse_pinned_view_after_play`] (target `Collapsed`).
+    fn request_pinned_view(&mut self, width: mbv_ui_model::settings::PinnedWidth) {
         // One request in flight: a press while pinwin is still working is
         // ignored, with no queue (design D4/D6).
         if self.pinned_request_pending.is_some() {
             return;
         }
-        let width = self.pinned_width.toggled();
         let config = self.config.lock().unwrap().panel.clone();
         let pending = crate::app::state::pinned_request::PinnedRequestPending::View(width);
         if let Err(reason) = self.begin_pinned_request(
@@ -370,6 +378,22 @@ impl App {
             crate::pin::PinnedSettingRequest::Width(width),
         ) {
             self.apply_pinned_view(width, Err(reason));
+        }
+    }
+
+    /// Collapse the pinned panel to its queue view after a user tail's
+    /// accepted queue replace. Every user tail that starts playback calls
+    /// this after the accepted replace — `play_items_routed`,
+    /// `play_series_continuation`, `play_single_item`, `submit_queue_item`
+    /// (its `start_playback` arm), and `start_pending_queue_playback`; a new
+    /// user play tail must too. The websocket Play handler never does
+    /// (pinned-play-collapses-to-queue design D1). Only the expanded width
+    /// collapses, so the collapsed-width and not-pinned plays do nothing;
+    /// the pending guard lives in [`App::request_pinned_view`], which caps
+    /// a multi-item play at one request (design D4).
+    pub(in crate::app) fn collapse_pinned_view_after_play(&mut self) {
+        if self.pinned_width == mbv_ui_model::settings::PinnedWidth::Expanded {
+            self.request_pinned_view(mbv_ui_model::settings::PinnedWidth::Collapsed);
         }
     }
 

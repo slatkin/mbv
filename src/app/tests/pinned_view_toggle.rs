@@ -110,6 +110,49 @@ fn a_second_x_press_while_a_request_is_pending_sends_nothing() {
     *PINNED_REQUEST_OVERRIDE.lock().unwrap() = None;
 }
 
+/// The collapse step (pinned-play-collapses-to-queue rows 1.1/1.2): from
+/// the expanded width it records one `Width(Collapsed)` request, and the
+/// drained outcome shows the queue view with queue focus, the same as `x`.
+#[test]
+fn the_play_collapse_step_from_the_expanded_width_records_one_collapse_request() {
+    let _guard = PINNED_REQUEST_TEST_LOCK.lock().unwrap();
+    *PINNED_REQUEST_OVERRIDE.lock().unwrap() = Some(Ok(()));
+    PINNED_REQUESTS.lock().unwrap().clear();
+    let mut app = make_app_stub();
+    app.pinned_width = PinnedWidth::Expanded;
+
+    app.collapse_pinned_view_after_play();
+
+    let requests = PINNED_REQUESTS.lock().unwrap().clone();
+    assert_eq!(requests.len(), 1, "one collapse request for the play");
+    assert_eq!(
+        requests[0],
+        crate::pin::PinnedSettingRequest::Width(PinnedWidth::Collapsed)
+    );
+    assert!(app.drain_pinned_requests());
+    assert_eq!(app.pinned_width, PinnedWidth::Collapsed);
+    assert_eq!(app.panel_mode, PanelMode::QueueOnly);
+    assert_eq!(app.panel_focus, PanelFocus::Queue);
+    *PINNED_REQUEST_OVERRIDE.lock().unwrap() = None;
+}
+
+/// The collapse step from the collapsed width sends no request: the play
+/// tail runs there, but the view is already the queue view.
+#[test]
+fn the_play_collapse_step_from_the_collapsed_width_records_no_request() {
+    let _guard = PINNED_REQUEST_TEST_LOCK.lock().unwrap();
+    *PINNED_REQUEST_OVERRIDE.lock().unwrap() = Some(Ok(()));
+    PINNED_REQUESTS.lock().unwrap().clear();
+    let mut app = make_app_stub();
+    app.pinned_width = PinnedWidth::Collapsed;
+
+    app.collapse_pinned_view_after_play();
+
+    assert!(PINNED_REQUESTS.lock().unwrap().is_empty());
+    assert!(app.pinned_request_pending.is_none());
+    *PINNED_REQUEST_OVERRIDE.lock().unwrap() = None;
+}
+
 /// The worker's outcome reaches the same handler as before: the view stays
 /// untouched while the request is pending and the drained outcome applies it.
 #[test]
