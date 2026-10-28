@@ -155,8 +155,9 @@ impl App {
     ///   normal queue-state persistence — the only difference is that the
     ///   daemon owns mpv instead of an in-process `Player`.
     /// - `Tcp`/`Unix`: a separate `remote_view` is kept so the user
-    ///   can browse locally while a daemon elsewhere plays something else,
-    ///   with the Local/Peer link split (`[`/`]`) to switch between them.
+    ///   can browse locally while a daemon elsewhere plays something else.
+    ///   The shown queue follows the connection (ADR 0034): the peer link
+    ///   while it is attached, the Local link otherwise.
     #[cfg(test)]
     pub fn new_remote_with_config(
         client: EmbyClient,
