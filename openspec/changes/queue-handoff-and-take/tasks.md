@@ -2,8 +2,8 @@
 
 ## 1. Domain language and decision record
 
-- [ ] 1.1 Update `CONTEXT.md` per design D9: add *Queue handoff* and *Take*, retire *Queue scope*, update *Direct remote control*, *Playhead*, *Resume source*, and the *hand-off* cross-reference. Verify with `rg -n -i "queue scope|scope pill|take of the control" CONTEXT.md` that only the retired-term entry remains.
-- [ ] 1.2 Add an ADR under `docs/adr/` that records "each Player owner keeps its own queue; Hand off and Take copy it; connect moves control only", notes how it updates ADR 0012, and supersedes the Queue-scope sentences of ADR 0017 (design D9). Verify the ADR links ADR 0012, ADR 0017, and this change.
+- [x] 1.1 Update `CONTEXT.md` per design D9: add *Queue handoff* and *Take*, retire *Queue scope*, update *Direct remote control*, *Playhead*, *Resume source*, and the *hand-off* cross-reference. Verify with `rg -n -i "queue scope|scope pill|take of the control" CONTEXT.md` that only the retired-term entry remains.
+- [x] 1.2 Add an ADR under `docs/adr/` that records "each Player owner keeps its own queue; Hand off and Take copy it; connect moves control only", notes how it updates ADR 0012, and supersedes the Queue-scope sentences of ADR 0017 (design D9). Verify the ADR links ADR 0012, ADR 0017, and this change.
 
 ## 2. ctrl start position (recipe: Add a ctrl protocol variant)
 
