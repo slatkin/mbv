@@ -60,6 +60,45 @@ fn hide_visual_slot_routes_to_command_without_overlay() {
     );
 }
 
+/// The Sessions sidebar's fixed transfer keys (design D6): while the
+/// sidebar is mounted, `h`/`t` resolve to the commandless transfer layer,
+/// so the router folds them to `FallThrough` and the focused leaf keeps
+/// its request instead of the global `hide_visual_slot` command owning
+/// `h`. Outside the sidebar the global binding owns `h` as before.
+#[test]
+fn sessions_transfer_keys_fall_through_to_the_sidebar_leaf() {
+    let mut sessions = snapshot();
+    sessions.overlays.sessions_sidebar = true;
+    for code in [KeyCode::Char('h'), KeyCode::Char('t')] {
+        assert_eq!(
+            resolve_policy(chord(code, KeyModifiers::NONE), &sessions, &keybinds())
+                .unwrap()
+                .name,
+            "sessions_sidebar_transfer"
+        );
+        assert_eq!(
+            crate::app::input::router::resolve_router_outcome_with_focused(
+                crossterm::event::KeyEvent::new(code, crossterm::event::KeyModifiers::NONE),
+                &sessions,
+                None,
+                &keybinds()
+            ),
+            crate::app::input::router::RouterOutcome::FallThrough
+        );
+    }
+    assert_eq!(
+        resolve_policy(
+            chord(KeyCode::Char('h'), KeyModifiers::NONE),
+            &snapshot(),
+            &keybinds()
+        )
+        .unwrap()
+        .name,
+        "hide_visual_slot",
+        "with the sidebar closed the global binding owns `h` again"
+    );
+}
+
 #[test]
 fn playback_gate_uses_per_key_resolution_and_idle_feed_path() {
     let mut active = snapshot();

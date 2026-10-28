@@ -29,7 +29,9 @@ impl super::super::Model {
             request @ (ShellRequest::DismissSessions
             | ShellRequest::RefreshSessions
             | ShellRequest::SelectSession(_)
-            | ShellRequest::DetachSessions) => {
+            | ShellRequest::DetachSessions
+            | ShellRequest::HandOffSession(_)
+            | ShellRequest::TakeSession(_)) => {
                 self.handle_sessions_navigation(request);
                 None
             }
@@ -190,6 +192,11 @@ impl super::super::Model {
                 }
                 self.dismiss_sidebar(super::super::SidebarId::Sessions);
             }
+            // The Client-run Hand off sequence lands here in row 7.x and
+            // the Take sequence in row 8.1 (design D1/D2). Until they
+            // exist, each request is a documented no-op: nothing is sent on
+            // either link and no state changes.
+            ShellRequest::HandOffSession(_) | ShellRequest::TakeSession(_) => {}
             _ => unreachable!("request is a sessions navigation request"),
         }
     }

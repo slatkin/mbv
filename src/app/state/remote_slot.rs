@@ -4,6 +4,19 @@ use mbv_ctrl::{CtrlCmd, OutputSelection};
 use mbv_remote_player::DaemonEndpoint;
 
 impl App {
+    /// Whether the local Owner currently plays (design D6's Hand off gate):
+    /// its status while the home link is suspended behind a peer
+    /// connection, else the current link's status — the same link when no
+    /// connection is attached. `active` alone only marks a loaded item; the
+    /// paused flag decides audible playback, as `now_playing_status` does.
+    pub(in crate::app) fn local_owner_plays(&self) -> bool {
+        let status = match &self.suspended_local {
+            Some(suspended) => suspended.player.status_snapshot(),
+            None => self.player.status_snapshot(),
+        };
+        status.active && !status.paused
+    }
+
     pub(in crate::app) fn is_local_daemon(&self) -> bool {
         matches!(self.player_endpoint, Some(DaemonEndpoint::Local))
     }

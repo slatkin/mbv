@@ -143,13 +143,30 @@ impl Model {
                     .app
                     .panel_targets
                     .iter()
-                    .map(crate::app::state::panel_targets::PanelTarget::row)
+                    .map(|target| {
+                        // The per-row direct-endpoint projection (design D6):
+                        // a peer with a direct Player-owner endpoint other
+                        // than the local Owner; this device's own row and a
+                        // Cast receiver carry `false`.
+                        let has_direct_endpoint = match target {
+                            crate::app::state::panel_targets::PanelTarget::Emby(session) => self
+                                .app
+                                .session_direct_endpoint(session)
+                                .is_some_and(|endpoint| !endpoint.is_local()),
+                            crate::app::state::panel_targets::PanelTarget::Cast(_) => false,
+                        };
+                        target.row(has_direct_endpoint)
+                    })
                     .collect::<Vec<_>>(),
                 self.app.sessions_loading,
                 direct_remote_session_id,
                 emby_output_device_id,
                 cast_attachment_id,
                 self.app.can_disconnect_remote(),
+                mbv_ui_model::panel_targets::SessionTransferGates {
+                    home_is_local_daemon: self.app.home_is_local_daemon,
+                    local_owner_plays: self.app.local_owner_plays(),
+                },
                 panel_area,
             );
         }

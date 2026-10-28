@@ -123,6 +123,13 @@ pub(in crate::app) enum KeyPolicyBinding {
     SettingsOpen,
     SessionsOpen,
     SessionsDismiss,
+    /// The Sessions sidebar's fixed queue-transfer keys `h`/`t` (design
+    /// D6): a layer that keeps the leaf's request while the sidebar is
+    /// mounted, so the global `hide_visual_slot` binding cannot swallow
+    /// `h` before the component sees it. Not a registry action; matches
+    /// unmodified letters only, and maps to no command (the router folds a
+    /// matched commandless layer to `FallThrough`).
+    SessionsSidebarTransfer,
     PlaylistsOpen,
     SearchOpen,
     HelpOpen,
@@ -171,6 +178,9 @@ impl KeyPolicyBinding {
     fn matches(self, chord: KeyChord) -> bool {
         match self {
             Self::SessionsDismiss => chord.code == KeyCode::Esc,
+            Self::SessionsSidebarTransfer => {
+                chord.mods.is_empty() && matches!(chord.code, KeyCode::Char('h' | 't'))
+            }
             Self::AltSwallow => chord.mods.contains(KeyModifiers::ALT),
             Self::QueueColumnWidth => {
                 matches!(chord.code, KeyCode::Left | KeyCode::Right)
@@ -366,6 +376,18 @@ pub(in crate::app) const KEY_POLICY: &[KeyPolicyEntry] = &[
         global: true,
         binding: KeyPolicyBinding::Visualizer,
         gate: KeyPolicyGate::NoBlockingOverlay,
+        blocking: false,
+    },
+    KeyPolicyEntry {
+        // The Sessions sidebar's fixed transfer keys (design D6) must
+        // outrank the global `hide_visual_slot` binding on `h`, so this
+        // layer sits above it; first-match order decides. Like
+        // `sessions_sidebar_escape`, it maps to no command: a match falls
+        // through and the focused sidebar leaf keeps its request.
+        name: "sessions_sidebar_transfer",
+        global: false,
+        binding: KeyPolicyBinding::SessionsSidebarTransfer,
+        gate: KeyPolicyGate::SessionsSidebarOpen,
         blocking: false,
     },
     KeyPolicyEntry {
