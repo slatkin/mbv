@@ -11,7 +11,6 @@
 
 use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::{App, PanelFocus, QueueLink, RemoteSlotState};
-use mbv_render::components::chrome::daemon_endpoint_label;
 use mbv_render::components::widgets::service_state_color;
 use mbv_render::indicators;
 use ratatui::style::{Color, Modifier, Style};
@@ -101,11 +100,29 @@ impl App {
             || matches!(remote_state, RemoteSlotState::DirectRemote)
     }
 
+    /// The connected Player-owner endpoint's host label (PR #973 review):
+    /// names the attachment the Client actually holds — never the
+    /// configured `daemon_client_endpoint`, which can name a different
+    /// host. `Local` carries no peer name; the caller's device-name
+    /// fallback covers it.
+    fn connected_player_endpoint_label(&self) -> Option<String> {
+        self.player_endpoint
+            .as_ref()
+            .and_then(|endpoint| match endpoint {
+                mbv_remote_player::DaemonEndpoint::Tcp(addr) => Some(addr.ip().to_string()),
+                mbv_remote_player::DaemonEndpoint::Unix(path) => path
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .map(str::to_string),
+                mbv_remote_player::DaemonEndpoint::Local => None,
+            })
+    }
+
     /// The remote pill label, gap included. An attached remote output names it
     /// first; otherwise the remote slot names it, and this machine's device
     /// name is the fallback. `or_else` leaves the slot unread while a receiver
     /// is attached.
-    fn remote_label(&self, remote_state: RemoteSlotState, daemon_endpoint: &str) -> String {
+    fn remote_label(&self, remote_state: RemoteSlotState) -> String {
         let gap = if self.use_nerd_fonts { " " } else { "  " };
         let target = self.remote_output_label().or_else(|| match remote_state {
             RemoteSlotState::LocalDaemon => None,
@@ -114,7 +131,7 @@ impl App {
                 .as_ref()
                 .map(|name| format!("route:{name}"))
                 .or_else(|| self.direct_remote_label.clone())
-                .or_else(|| daemon_endpoint_label(daemon_endpoint)),
+                .or_else(|| self.connected_player_endpoint_label()),
         });
         match target {
             Some(target) => format!("{gap}{target}"),
@@ -125,14 +142,13 @@ impl App {
     pub(in crate::app) fn remote_status_spans(
         &self,
         remote_state: RemoteSlotState,
-        daemon_endpoint: &str,
     ) -> Vec<Span<'static>> {
         let remote_on = self.remote_connected(remote_state);
         let glyph_style = Style::default()
             .bg(mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false).fill)
             .fg(ratatui::style::Color::White);
 
-        let label = self.remote_label(remote_state, daemon_endpoint);
+        let label = self.remote_label(remote_state);
         let label_style = Style::default()
             .fg(if remote_on {
                 mbv_theme::Role::Accent.color()
@@ -180,8 +196,7 @@ impl App {
     pub(in crate::app) fn playback_host_label_and_remote(&self) -> (String, bool) {
         let remote_state = self.remote_slot_state();
         let is_remote = self.remote_connected(remote_state);
-        let daemon_endpoint = self.config.lock().unwrap().daemon_client_endpoint.clone();
-        let label = self.remote_label(remote_state, &daemon_endpoint);
+        let label = self.remote_label(remote_state);
         (label.trim_start().to_string(), is_remote)
     }
 
@@ -189,15 +204,14 @@ impl App {
     /// delta): the connected peer by device name while the shown queue is the
     /// peer link, else this machine's device name (the local Owner). The peer
     /// resolution mirrors the remote pill's (`remote_label`): route name,
-    /// session device name, endpoint label.
+    /// session device name, connected endpoint host.
     pub(in crate::app) fn queue_owner_label(&self) -> String {
         if self.playing_queue_link() == QueueLink::Peer {
-            let daemon_endpoint = self.config.lock().unwrap().daemon_client_endpoint.clone();
             self.active_route
                 .as_ref()
                 .map(|name| format!("route:{name}"))
                 .or_else(|| self.direct_remote_label.clone())
-                .or_else(|| daemon_endpoint_label(&daemon_endpoint))
+                .or_else(|| self.connected_player_endpoint_label())
                 .unwrap_or_else(mbv_emby::device_name)
         } else {
             mbv_emby::device_name()
@@ -526,7 +540,37 @@ fn queue_source_status_label(
 mod tests {
     use crate::app::RemoteSlotState;
     use crate::app::dispatch::notify::ToastSeverity;
-    use crate::app::tests::make_app_stub;
+    use crate::app::tests::{
+        make_app_stub, make_audio_items, make_local_daemon_app_stub_with_cmd_rx,
+    };
+
+    /// The queue owner label and the remote pill name the connected peer's
+    /// endpoint when its device name is empty — never the configured
+    /// `daemon_client_endpoint`, which can name a different host (PR #973
+    /// review).
+    #[test]
+    fn an_empty_named_peer_labels_the_connected_endpoint_not_the_configured_one() {
+        let (mut app, _cmd_rx) = make_local_daemon_app_stub_with_cmd_rx(make_audio_items(2));
+        app.config.lock().unwrap().daemon_client_endpoint = "tcp://10.9.9.9:1111".to_string();
+        let mut sess = mbv_emby::test_support::make_session("", "mbv");
+        sess.id = "peer-1".to_string();
+        let (peer, peer_rx, _peer_cmd_rx) =
+            mbv_remote_player::RemotePlayer::stub_with_command_rx(make_audio_items(1), 0);
+        app.switch_to_direct_remote(
+            &sess,
+            peer,
+            peer_rx,
+            &mbv_remote_player::DaemonEndpoint::Tcp("127.0.0.1:47788".parse().unwrap()),
+        );
+
+        assert_eq!(app.queue_owner_label(), "127.0.0.1");
+        assert!(
+            app.remote_status_spans(RemoteSlotState::DirectRemote)
+                .iter()
+                .any(|span| span.content.contains("127.0.0.1")),
+            "the pill names the connected endpoint's host"
+        );
+    }
 
     /// Same consistency contract as the queue header: the status-bar remote
     /// pill names the owner's cast output instead of this machine's device
@@ -542,7 +586,7 @@ mod tests {
             },
         ));
 
-        let spans = app.remote_status_spans(RemoteSlotState::LocalDaemon, "endpoint");
+        let spans = app.remote_status_spans(RemoteSlotState::LocalDaemon);
 
         assert!(
             spans
@@ -589,7 +633,7 @@ mod tests {
             },
         ));
 
-        let spans = app.remote_status_spans(RemoteSlotState::LocalDaemon, "endpoint");
+        let spans = app.remote_status_spans(RemoteSlotState::LocalDaemon);
 
         assert!(
             !spans

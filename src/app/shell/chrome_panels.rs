@@ -222,15 +222,7 @@ impl Model {
         // The base frame has always passed `show_session_pill: false` here.
         let show_session_pill = false;
         let remote_status = if show_session_pill {
-            let endpoint = self
-                .app
-                .config
-                .lock()
-                .unwrap()
-                .daemon_client_endpoint
-                .clone();
-            self.app
-                .remote_status_spans(self.app.remote_slot_state(), &endpoint)
+            self.app.remote_status_spans(self.app.remote_slot_state())
         } else {
             Vec::new()
         };
