@@ -149,10 +149,9 @@ impl Model {
                         // than the local Owner; this device's own row and a
                         // Cast receiver carry `false`.
                         let has_direct_endpoint = match target {
-                            crate::app::state::panel_targets::PanelTarget::Emby(session) => self
-                                .app
-                                .session_direct_endpoint(session)
-                                .is_some_and(|endpoint| !endpoint.is_local()),
+                            crate::app::state::panel_targets::PanelTarget::Emby(session) => {
+                                self.app.session_has_direct_endpoint(session)
+                            }
                             crate::app::state::panel_targets::PanelTarget::Cast(_) => false,
                         };
                         target.row(has_direct_endpoint)

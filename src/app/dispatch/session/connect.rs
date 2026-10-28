@@ -29,6 +29,32 @@ impl App {
             .then_some(mbv_remote_player::DaemonEndpoint::Local)
     }
 
+    /// Whether the session is this device's own Emby Session row: an mbv
+    /// client whose device name is the local Emby client's.
+    fn session_is_own_row(&self, sess: &mbv_emby::SessionInfo) -> bool {
+        if !sess.client.eq_ignore_ascii_case("mbv") {
+            return false;
+        }
+        let Some(client) = self.emby_client() else {
+            return false;
+        };
+        sess.device_name
+            .eq_ignore_ascii_case(&client.lock().unwrap().device_name)
+    }
+
+    /// Whether the session advertises a direct Player-owner endpoint other
+    /// than the local Owner (design D6): the Sessions sidebar's per-row
+    /// transfer projection. This device's own row is never a transfer
+    /// target, whatever it advertises -- `session_direct_endpoint` prefers
+    /// the advertised TCP endpoint over the Local device-name match, so the
+    /// endpoint alone cannot tell the own row from a peer.
+    pub(in crate::app) fn session_has_direct_endpoint(&self, sess: &mbv_emby::SessionInfo) -> bool {
+        !self.session_is_own_row(sess)
+            && self
+                .session_direct_endpoint(sess)
+                .is_some_and(|endpoint| !endpoint.is_local())
+    }
+
     /// Blocking `GET /Sessions` (unfiltered), factored out only so tests
     /// can override it via `SESSIONS_LOAD_OVERRIDE` -- mirrors
     /// `connect_daemon_route_endpoint`'s `#[cfg(test)]` seam. Callers:

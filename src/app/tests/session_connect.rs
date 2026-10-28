@@ -14,6 +14,36 @@ fn session_direct_endpoint_prefers_advertised_tcp_port() {
     );
 }
 
+/// Design D6 (review qht-6r P1): this device's own row never counts as a
+/// direct-endpoint transfer target, even when the local daemon advertises
+/// `mbv-direct-tcp-port` — `session_direct_endpoint` prefers the advertised
+/// TCP endpoint over the Local device-name match, so the projection keys on
+/// the own row itself, not on the endpoint kind.
+#[test]
+fn the_own_row_has_no_direct_endpoint_even_when_the_local_daemon_advertises_a_port() {
+    let mut app = make_app_stub();
+    let mut client = mbv_emby::EmbyClient::new(crate::config::Config::default());
+    client.device_name = "this-host".into();
+    app.emby_runtime.client = Some(std::sync::Arc::new(std::sync::Mutex::new(client)));
+
+    let mut own = make_session("this-host", "mbv");
+    own.host = "127.0.0.1".into();
+    own.supported_commands = vec![mbv_emby::mbv_direct_tcp_port_command(47788)];
+    assert!(
+        !app.session_has_direct_endpoint(&own),
+        "the own row is never a transfer target, whatever it advertises"
+    );
+
+    // The same advertisement on another device's row is a peer.
+    let mut peer = make_session("other-host", "mbv");
+    peer.host = "192.168.1.20".into();
+    peer.supported_commands = vec![mbv_emby::mbv_direct_tcp_port_command(47788)];
+    assert!(
+        app.session_has_direct_endpoint(&peer),
+        "a different device advertising the port is a peer"
+    );
+}
+
 #[test]
 fn playback_output_event_stores_cast_state_including_disconnected() {
     // cast-owner-output design D13 (rows 8.1/8.2 A): the App mirrors the

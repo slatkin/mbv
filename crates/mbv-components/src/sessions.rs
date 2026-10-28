@@ -183,13 +183,14 @@ impl SessionsComponent {
             // The fixed transfer keys (design D6): like `r` and `d`, not
             // registry actions. Each emits only while its D6 conditions
             // hold for the selected row; the request carries the stable
-            // target identity and the shell resolves it.
-            Key::Char('h') if self.hand_off_available() => self
+            // target identity and the shell resolves it. Unmodified keys
+            // only, matching the policy layer's exact-chord scope.
+            Key::Char('h') if key.modifiers.is_empty() && self.hand_off_available() => self
                 .list
                 .selected_target()
                 .cloned()
                 .map(|key| Msg::Shell(Box::new(ShellRequest::HandOffSession(key)))),
-            Key::Char('t') if self.take_available() => self
+            Key::Char('t') if key.modifiers.is_empty() && self.take_available() => self
                 .list
                 .selected_target()
                 .cloned()
@@ -693,6 +694,25 @@ mod tests {
         // This device's own row carries no direct endpoint: no Take.
         let mut component = component_with_rows(std::slice::from_ref(&own_row), true, true);
         assert_eq!(component.handle_key(&key(Key::Char('t'))), None);
+    }
+
+    /// The transfer arms match unmodified keys only, mirroring the policy
+    /// layer's exact-chord scope (review qht-6r P2): a modifier-bearing
+    /// press is not a transfer request.
+    #[test]
+    fn modifier_bearing_transfer_presses_emit_nothing() {
+        let peer = peer_target("peer", Some("Song"), false, true);
+        let mut component = component_with_rows(std::slice::from_ref(&peer), true, true);
+        let ctrl_h = KeyEvent {
+            code: Key::Char('h'),
+            modifiers: KeyModifiers::CONTROL,
+        };
+        assert_eq!(component.handle_key(&ctrl_h), None);
+        let ctrl_t = KeyEvent {
+            code: Key::Char('t'),
+            modifiers: KeyModifiers::CONTROL,
+        };
+        assert_eq!(component.handle_key(&ctrl_t), None);
     }
 
     fn emby_targets(count: usize) -> Vec<SessionTargetRow> {
