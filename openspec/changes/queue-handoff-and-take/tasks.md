@@ -13,8 +13,8 @@
 
 ## 3. Owner start-position override
 
-- [ ] 3.1 Add `ResumeSource::Handoff(seconds)` in `crates/mbv-player/src/resume.rs` as a one-time override for the start slot of a replacement that carries a start position (design D4); the one-percent gate does not apply. Verify with one test in `mbv-player` (contract: Emby audio start slot starts at the carried position; the next slot uses its per-medium source).
-- [ ] 3.2 Pass the field into `handle_queue_replace` (`crates/mbv-daemon/src/control/queue_setup.rs`) and apply the override on its Cast, Emby Session, and local mpv branches (design D4). Verify with one `mbv-daemon` test (contract: a replace with `start_idx` and position starts that slot at the position, with no earlier audible slot) and `cargo nextest run -p mbv-daemon`.
+- [x] 3.1 Add `ResumeSource::Handoff(seconds)` in `crates/mbv-player/src/resume.rs` as a one-time override for the start slot of a replacement that carries a start position (design D4); the one-percent gate does not apply. Verify with one test in `mbv-player` (contract: Emby audio start slot starts at the carried position; the next slot uses its per-medium source).
+- [x] 3.2 Pass the field into `handle_queue_replace` (`crates/mbv-daemon/src/control/queue_setup.rs`) and apply the override on its Cast, Emby Session, and local mpv branches (design D4). Verify with one `mbv-daemon` test (contract: a replace with `start_idx` and position starts that slot at the position, with no earlier audible slot) and `cargo nextest run -p mbv-daemon`.
 
 ## 4. Rename `QueueScope` to `QueueLink` (no behavior change)
 
