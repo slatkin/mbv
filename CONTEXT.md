@@ -631,12 +631,16 @@ A client with its own control-socket connection to the Player owner of another d
 _Avoid_: green pill, remote takeover, queue management (alone)
 
 Queue handoff:
-The Client action that copies the local Owner queue and its position to a directly reachable peer Player owner, starts the copy there, and stops local playback. It needs playback on the local Owner. It asks for confirmation before it replaces a populated peer queue. It never stops the source until the peer plays. It stays connected to the peer when it succeeds. It differs from *hand-off*, which moves the active slot between the *Playback outputs* of one Player owner. The reverse action is *Take*.
-_Avoid_: hand-off, queue transfer, push queue, copy on connect
+The Client action that copies the local Owner queue and its position to a directly reachable peer Player owner, starts the copy there, and stops local playback. It needs playback on the local Owner. It asks for confirmation before it replaces a populated peer queue. It never stops the source until the peer plays. It stays connected to the peer when it succeeds. It differs from *hand-off*, which moves the active slot between the *Playback outputs* of one Player owner. The reverse action is *Take*. Both actions are the user-facing faces of *Queue transfer*.
+_Avoid_: hand-off, push queue, copy on connect
 
 Take:
 The reverse of *Queue handoff*. The Client action that copies the queue and its position of a directly reachable peer Player owner to the local Owner, starts the copy here, and stops the peer. It works from a Sessions-sidebar row with or without a connection. It needs playback on the peer. It asks for confirmation before it replaces a populated local queue. It never stops the peer until the local Owner plays. It disconnects from the peer when it succeeds from a connection.
 _Avoid_: queue handoff (for the reverse), pull queue, control takeover
+
+Queue transfer:
+The code-facing name (`queue_transfer`, `PendingQueueTransfer`) for the pending copy machinery that *Queue handoff* and *Take* share: one Player owner's queue and its position are staged while the confirm prompt is up, sent to the target, and settled in the tick phase that observes the start slot. The user-facing actions for its two directions remain *Queue handoff* and *Take*.
+_Avoid_: queue sync, queue move
 
 Queue scope:
 Retired term. Each Player owner keeps its own queue. The queue panel shows the queue of the connected Player owner, or the local Owner queue when no peer is connected. Connect moves control only; *Queue handoff* and *Take* copy a queue.
