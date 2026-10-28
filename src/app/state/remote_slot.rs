@@ -80,6 +80,13 @@ impl App {
         self.direct_remote_connected
     }
 
+    /// Whether the F3 transfer target's peer link is the current attachment
+    /// (queue-handoff-and-take design D1): the transfer then reads the peer
+    /// queue and capabilities from the current link instead of opening one.
+    pub(in crate::app) fn queue_transfer_peer_link_is_current(&self, sess_id: &str) -> bool {
+        self.direct_remote_connected && self.direct_remote_session_id.as_deref() == Some(sess_id)
+    }
+
     pub(in crate::app) fn disconnect_remote(&mut self) {
         if self.direct_remote_connected {
             // A disconnect cancels the pending transfer without a report

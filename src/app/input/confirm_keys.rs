@@ -50,6 +50,13 @@ impl App {
             ConfirmAction::ReplacePopulatedQueue => {
                 self.confirm_replace_populated_queue(key);
             }
+            // queue-handoff-and-take design D1: the confirmed transfer runs its
+            // staged flow (attach a link opened for it, copy, arm the pending
+            // transfer); every other key cancels and drops an opened link.
+            ConfirmAction::ConfirmQueueTransfer(_target) => match key.code {
+                KeyCode::Enter => self.run_staged_queue_transfer(),
+                _ => self.cancel_staged_queue_transfer(),
+            },
         }
         false
     }

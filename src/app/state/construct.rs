@@ -151,6 +151,7 @@ impl App {
             remote_queue_undo_stack: Vec::new(),
             pending_queue_cursor_reanchor: None,
             pending_queue_transfer: None,
+            staged_queue_transfer: None,
             next_up_item: None,
             // #361: read the new prefs key, falling back to the pre-#361 one
             // for one release. `power_focus`/`power_left_tab`/`power_left_width`

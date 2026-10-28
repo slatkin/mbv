@@ -258,6 +258,13 @@ pub struct App {
     /// settled in the tick phase that adopts owner snapshots.
     pub(in crate::app) pending_queue_transfer:
         Option<crate::app::state::queue_transfer::PendingQueueTransfer>,
+    /// The queue transfer staged for its confirmation prompt
+    /// (queue-handoff-and-take design D1): the resolved target plus, when the
+    /// target link was not the current attachment, the link opened to read
+    /// the target's queue. Confirm attaches that link; cancel drops it.
+    /// `None` when nothing is staged.
+    pub(in crate::app) staged_queue_transfer:
+        Option<crate::app::state::queue_transfer::StagedQueueTransfer>,
     pub(in crate::app) next_up_item: Option<EmbyItem>,
     // Main UI scalars.
     // reuses shared self.libs.
