@@ -5,7 +5,7 @@ use crate::app::dispatch::action::{PlaybackIntent, VisualIntent};
 use crate::app::input::router::{
     RouterOutcome, RouterSnapshot, resolve_router_outcome_with_focused,
 };
-use crossterm::event::KeyCode;
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use mbv_ui_msg::{ComponentId, Msg, ShellRequest};
 
 #[test]
@@ -51,14 +51,51 @@ fn playback_gating_space_defers_to_a_visual_selection() {
     );
 }
 #[test]
-fn playback_gating_esc_claims_deferred_stop() {
-    let snapshot = active_snapshot();
+fn playback_gating_esc_falls_through_with_default_bindings() {
     assert_eq!(
         resolve_router_outcome_with_focused(
             key(KeyCode::Esc),
+            &active_snapshot(),
+            None,
+            &default_keybinds()
+        ),
+        RouterOutcome::FallThrough
+    );
+}
+#[test]
+fn playback_gating_default_stop_chord_commands_a_stop_when_the_gate_is_open() {
+    assert_eq!(
+        resolve_router_outcome_with_focused(
+            KeyEvent::new(KeyCode::Char('S'), KeyModifiers::SHIFT),
+            &active_snapshot(),
+            None,
+            &default_keybinds()
+        ),
+        RouterOutcome::Command(PlaybackIntent::Stop.into())
+    );
+}
+#[test]
+fn playback_gating_default_stop_chord_falls_through_during_text_entry() {
+    let mut snapshot = active_snapshot();
+    snapshot.overlays.text_entry_focused = true;
+    assert_eq!(
+        resolve_router_outcome_with_focused(
+            KeyEvent::new(KeyCode::Char('S'), KeyModifiers::SHIFT),
             &snapshot,
             None,
             &default_keybinds()
+        ),
+        RouterOutcome::FallThrough
+    );
+}
+#[test]
+fn playback_gating_esc_stop_override_claims_a_deferred_stop() {
+    assert_eq!(
+        resolve_router_outcome_with_focused(
+            key(KeyCode::Esc),
+            &active_snapshot(),
+            None,
+            &keybinds_with_override("stop", "Esc")
         ),
         RouterOutcome::Deferred(PlaybackIntent::Stop.into())
     );

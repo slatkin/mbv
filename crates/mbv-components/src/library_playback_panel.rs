@@ -136,7 +136,7 @@ impl LibraryPlaybackPanel {
             Some(message) => LeafKeyResult::Consumed(Some(Box::new(message))),
             None if matches!(
                 key.code,
-                Key::Char(' ' | 'm' | '[' | ']' | '<' | '>') | Key::Esc | Key::Left | Key::Right
+                Key::Char(' ' | 'm' | '[' | ']' | '<' | '>') | Key::Left | Key::Right
             ) =>
             {
                 LeafKeyResult::Consumed(None)
@@ -145,16 +145,15 @@ impl LibraryPlaybackPanel {
         }
     }
 
-    /// One semantic intent per press: `Space` and `Esc` fire their transport
-    /// request immediately when the panel holds focus; the shell's deferred
-    /// candidate only covers presses the leaf did not consume.
+    /// One semantic intent per press: `Space` fires its transport request
+    /// immediately when the panel holds focus; the shell's deferred candidate
+    /// only covers presses the leaf did not consume.
     fn key(key: &KeyEvent) -> Option<Msg> {
         if key.modifiers != KeyModifiers::NONE {
             return None;
         }
         let request = match key.code {
             Key::Char(' ') => PlaybackRequest::TogglePlayPause,
-            Key::Esc => PlaybackRequest::Stop,
             Key::Left => PlaybackRequest::Previous,
             Key::Right => PlaybackRequest::Next,
             Key::Char('m') => PlaybackRequest::ToggleMute,
@@ -526,10 +525,11 @@ mod tests {
         ));
     }
 
-    /// One press fires the transport intent — no repeated-press window
-    /// remains (task 4.2 / semantic-input-arbitration).
+    /// One press fires the transport intent where the panel maps a key.
+    /// `Esc` is not one of them: it carries no shell timing state and falls
+    /// through as an unhandled key (semantic-input-arbitration).
     #[test]
-    fn space_and_escape_fire_their_transport_intent_on_one_press() {
+    fn space_fires_its_transport_intent_on_one_press_and_escape_is_unhandled() {
         let mut panel = LibraryPlaybackPanel::new();
         assert!(matches!(
             panel.on(&key(Key::Char(' '))),
@@ -539,9 +539,6 @@ mod tests {
             panel.on(&key(Key::Char(' '))),
             Some(Msg::Playback(PlaybackRequest::TogglePlayPause))
         ));
-        assert!(matches!(
-            panel.on(&key(Key::Esc)),
-            Some(Msg::Playback(PlaybackRequest::Stop))
-        ));
+        assert!(panel.on(&key(Key::Esc)).is_none(), "`Esc` is unhandled");
     }
 }

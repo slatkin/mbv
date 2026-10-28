@@ -121,28 +121,6 @@ fn live_tick_space_toggles_immediately_on_the_press() {
     assert!(!first.deferred_fired);
 }
 
-/// The double-Esc stop (see `Model::router_outcome`): the first Esc falls
-/// through to its claimants and dispatches nothing; the second press inside
-/// the window dispatches the stop from any focus — the leaf's own Esc action
-/// (back, close, selection clearing) already ran on the first press.
-#[test]
-fn live_tick_escape_stops_on_the_second_press() {
-    let mut harness = active_queue_harness();
-
-    harness.inject(key(Key::Esc));
-    let first = harness.step();
-    assert_eq!(first.router, RouterOutcome::FallThrough);
-    assert!(!first.deferred_fired);
-
-    harness.inject(key(Key::Esc));
-    let second = harness.step();
-    assert_eq!(
-        second.router,
-        RouterOutcome::Command(PlaybackIntent::Stop.into())
-    );
-    assert!(!second.deferred_fired);
-}
-
 #[test]
 fn live_tick_local_mutation_precedes_root_observation() {
     let mut harness = TickHarness::new(make_app_stub());

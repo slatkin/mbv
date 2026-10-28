@@ -1,12 +1,10 @@
-use super::{DOUBLE_ESC_STOP_WINDOW, Model};
-use crate::app::dispatch::action::AppCommand;
+use super::Model;
 use crate::app::dispatch::action::Command;
-use crate::app::dispatch::action::PlaybackIntent;
 use crate::app::dispatch::action::ShellCommand;
 use crate::app::input::router::{
     RouterOutcome, RouterSnapshot, resolve_router_outcome_with_focused,
 };
-use mbv_ui_msg::{ComponentId, Msg, OverlayId, PlaybackRequest, TerminalObserverEvent};
+use mbv_ui_msg::{ComponentId, Msg, OverlayId, TerminalObserverEvent};
 
 /// The ADR 0023 Keyboard Router fold: apply the router's outcome to this
 /// tick's message list and return the messages that survive.
@@ -245,17 +243,6 @@ impl Model {
             return RouterOutcome::FallThrough;
         };
         let key = crate::app::input::resolver::tuirealm_key_to_crossterm(tui_key);
-        // Double-Esc stop: a single Esc must stay free for whatever claims
-        // it (sidebar, search, overlay dismissal), so the stop dispatches
-        // only when this Esc follows another Esc inside the window. The
-        // tracker updates before resolution; the outcome gate below is the
-        // only consumer.
-        let now = std::time::Instant::now();
-        let double_esc = matches!(
-            self.last_esc,
-            Some(last) if now.duration_since(last) <= DOUBLE_ESC_STOP_WINDOW
-        );
-        self.last_esc = (key.code == crossterm::event::KeyCode::Esc).then_some(now);
         // `player.status` is a plain (non-reentrant) mutex and `RouterSnapshot`
         // initializers below call `effective_playback_state()`, which locks it
         // again. A temporary created anywhere inside the struct literal lives
@@ -309,27 +296,6 @@ impl Model {
             self.application.focus(),
             &self.keybinds,
         );
-        // The first Esc resolves to the stop candidate but falls through: the
-        // leaf (and the deferred-candidate arbitration) handle it, and nothing
-        // dispatches. The second Esc inside the window dispatches the stop from
-        // any focus, unless the focused leaf already stops on this tick (its own
-        // Esc action ran on the first press); that press is swallowed.
-        let leaf_stops = messages
-            .iter()
-            .any(|msg| matches!(msg, Msg::Playback(PlaybackRequest::Stop)));
-        let outcome =
-            match outcome {
-                RouterOutcome::Deferred(Command::App(AppCommand::Playback(
-                    PlaybackIntent::Stop,
-                ))) if !double_esc => RouterOutcome::FallThrough,
-                RouterOutcome::Deferred(Command::App(AppCommand::Playback(
-                    PlaybackIntent::Stop,
-                ))) if leaf_stops => RouterOutcome::Swallow,
-                RouterOutcome::Deferred(Command::App(AppCommand::Playback(
-                    PlaybackIntent::Stop,
-                ))) => RouterOutcome::Command(PlaybackIntent::Stop.into()),
-                other => other,
-            };
         // Arm/disarm transitions come from the router's outcome (design D6,
         // task 6.1): the arming layer arms, an armed dispatch (mapped or
         // swallowed) disarms. The prefix chord re-arms through `PrefixArm`.
@@ -388,8 +354,9 @@ impl Model {
     /// an unhandled press dispatches the command on that press; a consumed press
     /// cancels the candidate and records nothing, so a later unhandled press
     /// behaves as a first press. Returns whether the candidate fired. The
-    /// shell's quit signal is unaffected: a deferred candidate is only ever
-    /// `TogglePlayPause` (the Visual-selection Space), which never quits.
+    /// shell's quit signal is unaffected: a deferred candidate is a transport
+    /// command (`TogglePlayPause` for a Visual-selection Space, `Stop` for an
+    /// `Esc` stop chord), and none of them quits.
     pub(in crate::app) fn apply_deferred_candidate(
         &mut self,
         router: &RouterOutcome,
@@ -436,6 +403,7 @@ impl Model {
 #[cfg(test)]
 mod mouse_fold_tests {
     use super::*;
+    use mbv_ui_msg::PlaybackRequest;
 
     #[test]
     fn fold_keeps_one_mouse_claim_and_the_observer_signal() {

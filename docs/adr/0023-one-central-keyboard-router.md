@@ -85,12 +85,12 @@ replaced by the leaf's own local interpretation. A blocking overlay is
 `Swallow`. A global chord is `Command`. Anything the policy declines is
 `FallThrough`, which is how the leaf gets its key.
 
-Fall-through that depends on router state needs no special case. The Space and
-Escape double-tap resolved `FallThrough` on the first press and
-`Command(Stop)` / `Command(TogglePlayPause)` on the second press within 300 ms.
-That pre-arbitration resolution is superseded by this ADR's Amendment: the
-router now returns a deferred candidate and the central fold applies it after
-the leaf disposition, which the original description could not express safely.
+Fall-through that depends on router state needs no special case. A
+context-sensitive candidate once resolved to an immediate `Command` before
+arbitration. That pre-arbitration resolution is superseded by this ADR's
+Amendment: the router now returns a deferred candidate and the central fold
+applies it after the leaf disposition, which the original description could not
+express safely.
 
 `UiRoot` is skipped by `forward_to_subscriptions` while it holds focus, and
 receives the event as the active component instead. Delivery is therefore
@@ -123,8 +123,8 @@ exactly once whether or not a leaf is focused.
   available as a later, separate input-API decision.
 - **A shell pre-router in `Model`**: rejected. Same ordering relation, but sited
   outside the component framework, which is the shape ADR 0022 removes.
-- **Per-leaf mirrors of global behavior** (e.g. each screen implementing the
-  double-tap): rejected. Per-screen resolution of a global binding is the
+- **Per-leaf mirrors of global behavior** (e.g. each screen re-implementing a
+  global chord): rejected. Per-screen resolution of a global binding is the
   decentralization ADR 0002 exists to prevent.
 
 ## Consequences
@@ -173,12 +173,10 @@ key ──┬─▶ focused leaf ─────▶ LeafKeyResult (Unhandled | C
                        arbitrate_key ──▶ final disposition + requests
 ```
 
-**Deferred candidates.** Context-sensitive Space and Escape double-taps no
-longer resolve to an immediate `Command` from precomputed snapshot facts. The
-router returns a `Deferred` candidate; the fold applies it only when the leaf
-did not consume the key, and a consumed press resets its own candidate clock so
-a later unhandled press cannot complete a sequence begun inside a local mode.
-Candidate clocks advance only after arbitration proves non-consumption, and
-the router's policy evaluation no longer mutates them or reads any
-component-local mirror. Immediate `Command` and overlay `Swallow` outcomes are
-unchanged.
+**Deferred candidates.** Context-sensitive chords no longer resolve to an
+immediate `Command` from precomputed snapshot facts. The router returns a
+`Deferred` candidate; the fold applies it only when the leaf did not consume
+the key, and a consumed press cancels it, so a later unhandled press behaves as
+a first press. The candidate carries no timing state and the router's policy
+evaluation reads no component-local mirror. Immediate `Command` and overlay
+`Swallow` outcomes are unchanged.

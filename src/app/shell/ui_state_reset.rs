@@ -63,10 +63,9 @@ impl Model {
         self.app.pending_queue_cursor_reanchor = None;
         self.app.pending_overlay = None;
         self.app.confirm_logout = false;
-        // Prefix/Esc capture and the resolved-focus hand-off it displaced.
+        // Prefix capture and the resolved-focus hand-off it displaced.
         self.app.prefix_armed = false;
         self.prefix_armed_focus = None;
-        self.last_esc = None;
         // Shell-owned transient UI intent (selection summaries, context menu,
         // cross-surface selection hand-offs, inline-search/track focus).
         self.visual_selection = None;
