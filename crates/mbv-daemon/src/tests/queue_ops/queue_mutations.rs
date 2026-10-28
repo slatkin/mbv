@@ -580,7 +580,9 @@ fn unified_queue_remove_last_slot_clears_the_player_queue() {
 
     assert!(owner.core.queue.is_empty());
     match cmd_rx.recv().unwrap() {
-        PlayerCommand::SubmitQueue { items, start_idx } => {
+        PlayerCommand::SubmitQueue {
+            items, start_idx, ..
+        } => {
             assert!(items.is_empty());
             assert_eq!(start_idx, 0);
         }
@@ -623,7 +625,9 @@ fn unified_queue_clear_empties_canonical_queue_and_clears_the_player() {
         mbv_queue::QueueLineage(1)
     );
     match cmd_rx.recv().unwrap() {
-        PlayerCommand::SubmitQueue { items, start_idx } => {
+        PlayerCommand::SubmitQueue {
+            items, start_idx, ..
+        } => {
             assert!(items.is_empty());
             assert_eq!(start_idx, 0);
         }

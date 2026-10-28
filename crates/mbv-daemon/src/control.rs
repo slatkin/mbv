@@ -450,6 +450,7 @@ fn dispatch_ctrl_command(
             slots,
             start_idx,
             source: new_source,
+            start_position_secs,
             ..
         } => queue_setup::handle_queue_replace(
             ctx,
@@ -457,6 +458,7 @@ fn dispatch_ctrl_command(
             items,
             slots,
             start_idx,
+            start_position_secs,
             new_source,
         ),
         CtrlCmd::UnifiedQueueAppend { items, before, .. } => {

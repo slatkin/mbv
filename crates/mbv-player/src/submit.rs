@@ -39,9 +39,13 @@ impl ColdStartReason {
 
 /// The `SubmitQueue` payload of a command a failed send returned. The reuse
 /// path only ever sends `SubmitQueue`, so no other variant can come back.
-fn submit_queue_parts(cmd: PlayerCommand) -> (Vec<ExecSlot>, usize) {
+fn submit_queue_parts(cmd: PlayerCommand) -> (Vec<ExecSlot>, usize, Option<f64>) {
     match cmd {
-        PlayerCommand::SubmitQueue { items, start_idx } => (items, start_idx),
+        PlayerCommand::SubmitQueue {
+            items,
+            start_idx,
+            start_position_secs,
+        } => (items, start_idx, start_position_secs),
         _ => unreachable!("the reuse path only sends SubmitQueue"),
     }
 }
@@ -67,6 +71,7 @@ impl Player {
         self.submit_queue_slots(
             Self::sequential_slot_ids(vec![QueueItem::Emby(Box::new(item.clone()))]),
             0,
+            None,
             Some(client),
             headless,
             initial_volume,
@@ -94,6 +99,7 @@ impl Player {
         self.submit_queue_slots(
             Self::sequential_slot_ids(queue_items),
             start_idx,
+            None,
             Some(client),
             headless,
             initial_volume,
@@ -103,6 +109,12 @@ impl Player {
     /// Submit a canonical Bound queue. The Playback run must preserve these
     /// identities because every later command and observation addresses slots,
     /// not playlist positions.
+    ///
+    /// `start_position_secs` is the one-time start override of a queue
+    /// replacement that carries a start position (queue-handoff-and-take
+    /// design D4): the start slot starts at the carried position, with no
+    /// one-percent gate, and every later start in the queue keeps its
+    /// per-medium source. Every other submission is `None`.
     ///
     /// `cmd_tx` is installed at the first cold start and never cleared
     /// afterwards: it survives `stop()`, and a cold start replaces it in
@@ -123,6 +135,7 @@ impl Player {
         &self,
         items: Vec<ExecSlot>,
         start_idx: usize,
+        start_position_secs: Option<f64>,
         client: Option<Arc<EmbyClient>>,
         headless: bool,
         initial_volume: u8,
@@ -138,11 +151,16 @@ impl Player {
         // generation is serialized in PlayerStatus so clients can fence
         // slot-addressed commands against a locally replaced queue.
         let run_identity = self.advance_sequence_generation();
-        let (reason, items, start_idx) =
-            match self.submit_into_live_run(headless, items, start_idx, run_identity) {
-                Ok(()) => return true,
-                Err(failed) => failed,
-            };
+        let (reason, items, start_idx, start_position_secs) = match self.submit_into_live_run(
+            headless,
+            items,
+            start_idx,
+            start_position_secs,
+            run_identity,
+        ) {
+            Ok(()) => return true,
+            Err(failed) => failed,
+        };
         tracing::info!(name: "player.submit.cold_started", target: "player", reason = reason.as_str(), "queue replacement starting a new playback run");
 
         // Cold start: stop, join, spawn fresh player thread.
@@ -214,6 +232,7 @@ impl Player {
                 initial_volume,
                 items,
                 start_idx,
+                start_position_secs,
                 run_identity,
                 server_url,
                 token,
@@ -252,20 +271,41 @@ impl Player {
         headless: bool,
         mut items: Vec<ExecSlot>,
         mut start_idx: usize,
+        mut start_position_secs: Option<f64>,
         run_identity: mbv_ctrl::PlaybackGeneration,
-    ) -> Result<(), (ColdStartReason, Vec<ExecSlot>, usize)> {
+    ) -> Result<(), (ColdStartReason, Vec<ExecSlot>, usize, Option<f64>)> {
         if self.cmd_tx.lock().unwrap().is_none() {
-            return Err((ColdStartReason::NoRun, items, start_idx));
+            return Err((
+                ColdStartReason::NoRun,
+                items,
+                start_idx,
+                start_position_secs,
+            ));
         }
         if self.current_is_headless.load(Ordering::Relaxed) != headless {
-            return Err((ColdStartReason::HeadlessMismatch, items, start_idx));
+            return Err((
+                ColdStartReason::HeadlessMismatch,
+                items,
+                start_idx,
+                start_position_secs,
+            ));
         }
         let stop_tx = self.stop_tx.lock().unwrap();
         if stop_tx.is_none() {
-            return Err((ColdStartReason::StopRequested, items, start_idx));
+            return Err((
+                ColdStartReason::StopRequested,
+                items,
+                start_idx,
+                start_position_secs,
+            ));
         }
         if self.run_exited.lock().unwrap().load(Ordering::Relaxed) {
-            return Err((ColdStartReason::RunExited, items, start_idx));
+            return Err((
+                ColdStartReason::RunExited,
+                items,
+                start_idx,
+                start_position_secs,
+            ));
         }
         // The start item is cloned before the send because the send consumes
         // the submission; the seed itself happens after the send is accepted
@@ -275,6 +315,7 @@ impl Player {
         let cmd = PlayerCommand::SubmitQueue {
             items: std::mem::take(&mut items),
             start_idx,
+            start_position_secs,
         };
         // The run-existence check above established `cmd_tx` is `Some`, and
         // with the `stop_tx` lock held no cold start can replace it (it is
@@ -286,7 +327,7 @@ impl Player {
         let sent = match self.send_command_parts(cmd) {
             Ok(()) => true,
             Err(error) => {
-                (items, start_idx) = submit_queue_parts(error.0);
+                (items, start_idx, start_position_secs) = submit_queue_parts(error.0);
                 false
             }
         };
@@ -299,7 +340,12 @@ impl Player {
                 .seed_from_item(&start_item, start_idx, items_len);
             return Ok(());
         }
-        Err((ColdStartReason::SendFailed, items, start_idx))
+        Err((
+            ColdStartReason::SendFailed,
+            items,
+            start_idx,
+            start_position_secs,
+        ))
     }
 
     fn cold_start_config(&self, client: Option<&EmbyClient>, headless: bool) -> MpvRunConfig {
@@ -393,6 +439,10 @@ struct PlayerThreadStart {
     initial_volume: u8,
     items: Vec<ExecSlot>,
     start_idx: usize,
+    /// One-time start override for the start slot, in seconds
+    /// (queue-handoff-and-take design D4): `None` for every submission but a
+    /// queue replacement that carries a start position.
+    start_position_secs: Option<f64>,
     run_identity: mbv_ctrl::PlaybackGeneration,
     server_url: String,
     token: String,
@@ -545,7 +595,7 @@ fn load_queue_sources(
     let mut active_prepared_source = None;
     for index in load_indices {
         let item = &items[index];
-        let prepared = match prepare_source(
+        let mut prepared = match prepare_source(
             item,
             &start.server_url,
             &start.token,
@@ -565,6 +615,15 @@ fn load_queue_sources(
                 return None;
             }
         };
+        // A queue replacement that carries a start position starts its start
+        // slot at the carried position (queue-handoff-and-take design D4),
+        // replacing whatever the per-medium source baked in — no one-percent
+        // gate. Every later load keeps its own source.
+        if index == start.start_idx
+            && let Some(secs) = start.start_position_secs
+        {
+            prepared.override_start_seconds(secs);
+        }
         let (mode, position) = if active_file_projection {
             // An active-file load is the whole playlist, so it must start it.
             active_file_load_location()

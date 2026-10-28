@@ -252,6 +252,7 @@ fn quit_after_a_failed_active_file_replacement_sends_no_second_stopped() {
         PlayerCommand::SubmitQueue {
             items: owner_paired(vec![abs_item(), abs_item()]),
             start_idx: 0,
+            start_position_secs: None,
         },
         &mpv,
         &mut progress,

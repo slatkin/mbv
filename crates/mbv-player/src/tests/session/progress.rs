@@ -1,5 +1,5 @@
 use super::*;
-use crate::resume::resume_start_pos;
+use crate::resume::{resume_source, resume_start_pos};
 
 #[test]
 fn abs_natural_eof_uses_runtime_without_changing_generic_audio_reporting() {
@@ -202,7 +202,7 @@ fn queue_loads_selected_item_first_without_starting_playback() {
     item.playback_position_ticks = item.runtime_ticks / 2;
     let queue_item = QueueItem::Emby(Box::new(item));
 
-    assert!(mpv_load_opts(&queue_item).contains(",start="));
+    assert!(mpv_load_opts(&queue_item, resume_source(&queue_item)).contains(",start="));
     assert_eq!(
         queue_load_indices(4, 2).collect::<Vec<_>>(),
         vec![2, 0, 1, 3]

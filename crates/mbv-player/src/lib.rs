@@ -37,9 +37,13 @@ fn mpv_title_opt(title: &str) -> String {
     format!("force-media-title=%{}%{}", title.len(), title)
 }
 
-fn mpv_load_opts(item: &QueueItem) -> String {
+/// The loadfile options for `item` under the start-position decision
+/// `start_source`: a normal start derives its per-medium source; the replace
+/// start slot of a queue replacement that carries a start position hands its
+/// one-time `Handoff` override here (queue-handoff-and-take design D4).
+fn mpv_load_opts(item: &QueueItem, start_source: resume::ResumeSource) -> String {
     let title = mpv_title_opt(&item.display_name());
-    let start = resume::resume_start_pos(item);
+    let start = resume::source_start_seconds(start_source, item);
     if start > 0.0 {
         format!("{title},start={start}")
     } else {

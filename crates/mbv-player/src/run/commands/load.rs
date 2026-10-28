@@ -4,7 +4,7 @@ use super::{
     mpv_url_for_queue_item, queue_load_indices, queue_load_location, reassert_queue_layout,
     send_ep_info, spawn_progress_reporter, start_queue_playback,
 };
-use crate::resume::{EMBY_RESUME_RETRY_DELAYS, ResumeSeam};
+use crate::resume::{EMBY_RESUME_RETRY_DELAYS, ResumeSeam, ResumeSource, resume_source};
 use crate::run::StopAction;
 
 impl PlaybackRun {
@@ -94,18 +94,24 @@ impl PlaybackRun {
     /// through the same lifecycle — source URL and reporting branch on
     /// `QueueItem` variant; everything else is shared.
     ///
+    /// `start_position_secs` is the one-time start override of a queue
+    /// replacement that carries a start position (queue-handoff-and-take
+    /// design D4): the start slot loads at the carried position, ungated;
+    /// every later slot keeps its per-medium source.
+    ///
     /// Single-item sets `PlaybackOrigin::Standalone`; multi-item sets `Queue`.
     pub(super) fn cmd_submit_queue(
         &mut self,
         items: Vec<ExecSlot>,
         start_idx: usize,
+        start_position_secs: Option<f64>,
         mpv: &Mpv,
         progress: &mut ProgressGuard,
     ) {
         if self.run_lifecycle.is_active_file()
             || items.iter().any(|slot| slot.item.is_audiobookshelf())
         {
-            self.replace_with_queue_items(items, start_idx, mpv, progress);
+            self.replace_with_queue_items(items, start_idx, start_position_secs, mpv, progress);
             return;
         }
         // Design D1: every Emby video start position in this queue is
@@ -158,7 +164,15 @@ impl PlaybackRun {
             let item = &items[i];
             let url = mpv_url_for_queue_item(sources[i], &self.server_url, &self.token);
             let (mode, index) = queue_load_location(i, start_idx);
-            let opts = mpv_load_opts(item);
+            // The start slot of a replacement that carries a start position
+            // loads at the carried position (queue-handoff-and-take design
+            // D4), ungated; every other slot keeps its per-medium source.
+            let start_source = if i == start_idx {
+                start_position_secs.map_or_else(|| resume_source(item), ResumeSource::Handoff)
+            } else {
+                resume_source(item)
+            };
+            let opts = mpv_load_opts(item, start_source);
             if let Err(e) = mpv.command("loadfile", &[url.as_str(), mode, &index, &opts]) {
                 tracing::warn!(name: "player.queue_load.failed", target: "player", error = %e, mode, load_options = ?opts, "mpv loadfile failed");
             }
@@ -258,6 +272,7 @@ impl PlaybackRun {
         &mut self,
         items: Vec<ExecSlot>,
         start_idx: usize,
+        start_position_secs: Option<f64>,
         mpv: &Mpv,
         progress: &mut ProgressGuard,
     ) {
@@ -276,7 +291,7 @@ impl PlaybackRun {
         self.run_lifecycle.submission_accepted();
         let start_idx = start_idx.min(items.len() - 1);
         let active_item = items[start_idx].item.clone();
-        let prepared = match self.prepare_item(&active_item) {
+        let mut prepared = match self.prepare_item(&active_item) {
             Ok(prepared) => prepared,
             Err(error) => {
                 tracing::warn!(name: "player.active_file.prepare_failed", target: "player", error = %error, "active-file replacement preparation failed");
@@ -291,6 +306,12 @@ impl PlaybackRun {
                 return;
             }
         };
+        // A queue replacement that carries a start position starts its start
+        // slot at the carried position (queue-handoff-and-take design D4),
+        // replacing what the opened session baked in — no one-percent gate.
+        if let Some(secs) = start_position_secs {
+            prepared.override_start_seconds(secs);
+        }
 
         let had_previous_queue = self.queue_len() > 0;
         progress.stop_and_join(Self::progress_join_budget());

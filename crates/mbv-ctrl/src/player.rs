@@ -475,5 +475,11 @@ pub enum PlayerCommand {
     SubmitQueue {
         items: Vec<ExecSlot>,
         start_idx: usize,
+        /// One-time start override for the start slot, in seconds
+        /// (queue-handoff-and-take design D4): a queue replacement that
+        /// carries a start position starts its start slot there, with no
+        /// one-percent gate. Every other submission is `None` and keeps the
+        /// start slot's per-medium source.
+        start_position_secs: Option<f64>,
     },
 }

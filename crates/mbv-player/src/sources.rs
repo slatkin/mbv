@@ -149,6 +149,13 @@ impl PreparedSource {
         }
     }
 
+    /// The one-time start override of a queue replacement that carries a start
+    /// position (queue-handoff-and-take design D4): the carried position
+    /// replaces what the per-medium source baked in, with no one-percent gate.
+    pub(super) fn override_start_seconds(&mut self, seconds: f64) {
+        self.start_seconds = seconds;
+    }
+
     /// Options for the first source load (title, resume start, per-file
     /// header). For a merged timeline the resume start is omitted here and
     /// applied as an absolute seek after loading, so the position is
