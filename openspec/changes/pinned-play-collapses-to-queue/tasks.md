@@ -12,8 +12,8 @@
 
 ## 3. Websocket Play leaves the UI alone
 
-- [ ] 3.1 Remove `set_panel_focus(PanelFocus::Queue)` from `handle_ws_play` in `src/app/dispatch/session/ws_event.rs`, and drop any import that this makes unused (design D5). Keep its toasts and its replace.
-- [ ] 3.2 Extend the existing `play_replaces_queue_with_remote_source` test (do not add a new test) for the `emby-remote-play` contract: start with library focus and `pinned_width == Expanded`, then assert that the library keeps focus, `pinned_width` stays `Expanded`, and no pinned request is recorded. Verify: `cargo nextest run -p mbv` passes.
+- [x] 3.1 Remove `set_panel_focus(PanelFocus::Queue)` from `handle_ws_play` in `src/app/dispatch/session/ws_event.rs`, and drop any import that this makes unused (design D5). Keep its toasts and its replace.
+- [x] 3.2 Extend the existing `play_replaces_queue_with_remote_source` test (do not add a new test) for the `emby-remote-play` contract: start with library focus and `pinned_width == Expanded`, then assert that the library keeps focus, `pinned_width` stays `Expanded`, and no pinned request is recorded. Verify: `cargo nextest run -p mbv` passes.
 
 ## 4. Domain model
 
