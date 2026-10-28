@@ -17,7 +17,7 @@
 
 ## 4. Domain model
 
-- [ ] 4.1 In `CONTEXT.md` *Pinned panel width*, replace "The running panel switches between the two values with `x` only." with a sentence that names all three triggers: `x`, the F2 Panel width rows, and the collapse after a user play from the expanded width. Keep the rest of the entry. Verify: the entry names the three triggers and no other text in it changes.
+- [x] 4.1 In `CONTEXT.md` *Pinned panel width*, replace "The running panel switches between the two values with `x` only." with a sentence that names all three triggers: `x`, the F2 Panel width rows, and the collapse after a user play from the expanded width. Keep the rest of the entry. Verify: the entry names the three triggers and no other text in it changes.
 
 ## 5. Gates
 
