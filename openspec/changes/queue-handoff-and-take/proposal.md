@@ -9,6 +9,7 @@ The F3 Sessions sidebar has one verb, connect, but it does two different things.
 - Each Player owner keeps its own queue. Two verb pairs act on peers:
   - **Connect / Disconnect** move only control. The Client sees and edits the queue of the connected Player owner. The music stays where it plays. Disconnect leaves the peer playing.
   - **Hand off / Take** copy a queue between Player owners and move the music. Hand off copies the local queue and position to the peer, starts it there, stops local playback, and connects. Take copies the peer queue and position to the local Owner, starts it here, stops the peer, and disconnects when connected. Take also works from an F3 row with no connection.
+- Hand off and Take need playback on the source. There is nothing to move when the source is idle.
 - Hand off and Take ask for confirmation before they replace a populated target queue. They never stop the source until the target plays.
 - A new additive ctrl capability lets a whole-queue replacement carry a start position for its start slot. Hand off and Take use it, so the item continues where it was. A peer without the capability refuses Hand off with a clear message.
 - The queue panel always names the Player owner whose queue it shows, local or peer.

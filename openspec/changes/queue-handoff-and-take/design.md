@@ -31,6 +31,8 @@ See `proposal.md` (Why). Current facts that shape the approach:
 
 The Client already holds the local Owner link and, while connected, the peer link. It reads the source snapshot and position, sends the replacement to the target, waits for the target to report playback, and then sends `Stop` to the source.
 
+Hand off needs the local Owner to play. Take needs the peer to play (D6). When the Client is not connected, Hand off opens the peer link with `connect_direct_endpoint` to read the peer queue for step 1, and attaches it (step 2) only after confirmation. Cancel drops that link, and the Client stays unconnected.
+
 ```
 Hand off                                   Take
 1 confirm if peer queue not empty          1 confirm if local queue not empty
@@ -49,10 +51,10 @@ Alternative: the local Owner holds the peer link, as for Cast and Session output
 The shell holds at most one `PendingQueueTransfer { direction, target, start_slot, op }`. It is set after step 4 is sent. It settles in the same tick-phase step that adopts owner snapshots:
 
 - success: the target's adopted snapshot names `start_slot` as the observed active slot, and the status plays. Then run step 6 and step 7.
-- failure: the target rejects the replacement, the answer has no pending transition for the start slot (admission dropped it), or the target link is lost. Then report the failure and do not stop the source.
+- failure: the target rejects the replacement, the answer has no pending transition for the start slot (admission dropped it), or the target link is lost. Then report the failure and do not stop the source. If the answer shows that admission removed the start slot, the Client also sends `Stop` to the target, because the target started a different item.
 - cancel: a new F3 action, a disconnect, or a new Hand off or Take replaces the pending value. The source keeps playing.
 
-The replacement answer uses the existing answered-edit bound. Playback observation has no own timeout, because the user can cancel and the source still plays. When the source has no active slot, the sequence ends after the answer, with no wait and no stop.
+The replacement answer uses the existing answered-edit bound. Playback observation has no own timeout, because the user can cancel and the source still plays. If the source snapshot has no active slot when step 3 reads it (a stale F3 row), the Client sends nothing, changes nothing, and reports that nothing plays on the source.
 
 Alternative: stop the source first, then start the target. Rejected. A failed target leaves no music.
 
@@ -64,7 +66,7 @@ Before step 4, the Client checks the target's advertised capabilities. If the ta
 
 Add `start_position_secs: Option<f64>` with `#[serde(default)]` to `UnifiedQueueReplace`, and a capability `CTRL_CAP_QUEUE_REPLACE_START_POSITION` (`"queue-replace-start-position"`), following the ctrl variant recipe in `docs/recipes.md`. The field is meaningful only with `start_idx`. The Client sends it only to an owner that advertises the capability.
 
-In the Owner, the field becomes a one-time override for the start slot. `mbv-player` gets a `ResumeSource::Handoff(seconds)` value. It is not derived by `resume_source(item)`. The replace path sets it for the start slot only, and the one-percent gate does not apply. Every later start in that queue uses `resume_source` as before.
+In the Owner, the field becomes a one-time override for the start slot. `mbv-player` gets a `ResumeSource::Handoff(seconds)` value. It is not derived by `resume_source(item)`. The replace path sets it for the start slot only, and the one-percent gate does not apply. Every later start in that queue uses `resume_source` as before. The override applies on all three output branches of `handle_queue_replace` (`crates/mbv-daemon/src/control/queue_setup.rs`): Cast (today `resume_ticks_for_slot`), Emby Session, and local mpv.
 
 Alternative: seek after start. Rejected. The item plays audibly from the wrong position before the seek, which the existing start-slot rule in `unified-playback-queue` forbids.
 
@@ -78,7 +80,7 @@ A library route also fills `remote_view`. After D5 a route shows the route peer'
 
 ### D6. F3 keys
 
-In the Sessions component, add `h` for Hand off and `t` for Take. Both send a new `ShellRequest` with the stable target key, as `SelectSession` does: `HandOffSession(key)` and `TakeSession(key)`. The keys are offered only when the selected target has a direct endpoint, so the component receives a per-target `has_direct_endpoint` projection with the rows. Shell dispatch resolves the key against the current snapshot and does nothing when the target is gone. The footer lists the keys. These are fixed sidebar keys, like `r` and `d`, not registry actions.
+In the Sessions component, add `h` for Hand off and `t` for Take. Both send a new `ShellRequest` with the stable target key, as `SelectSession` does: `HandOffSession(key)` and `TakeSession(key)`. The keys are offered only when the selected target has a direct endpoint, so the component receives a per-target `has_direct_endpoint` projection with the rows. `has_direct_endpoint` is false when `session_direct_endpoint` returns `DaemonEndpoint::Local` (this device's own row). `h` is offered only while the local Owner plays. `t` is offered only while the selected row shows the peer playing (its `now_playing`). Both are offered only when the home of the Client is the local Owner (`home_is_local_daemon`). Shell dispatch resolves the key against the current snapshot and does nothing when the target is gone. The footer lists the keys. These are fixed sidebar keys, like `r` and `d`, not registry actions.
 
 ### D7. Queue owner label
 
@@ -86,11 +88,11 @@ The queue footer already has one informational indicator (commit `b17763718`). I
 
 ### D8. Copy contents
 
-The copy carries the item sequence, `start_idx`, and the Queue source. The target mints new slot identities and a new lineage. Feed positions and Audiobookshelf progress stay in their own stores. A playlist Queue source is copied, so save-on-consume can run on whichever owner plays the queue.
+The copy carries the item sequence, `start_idx`, and the Queue source. The target keeps the submitted slot ids (`prepare_replacement_slots`) and mints a new lineage. D2's `start_slot` is the submitted id. Feed positions and Audiobookshelf progress stay in their own stores. A playlist Queue source is copied, so save-on-consume can run on whichever owner plays the queue.
 
 ### D9. Glossary and ADR
 
-`CONTEXT.md`: add *Queue handoff* (the Client action that copies a queue to a peer, starts it there, and stops local playback) and *Take* (the reverse). Keep *hand-off* for the move of the active slot between Playback outputs, and add *Queue handoff* to its *Avoid* cross-reference. Retire *Queue scope*. Update *Direct remote control* (connect moves control only; the aqua scope pill is gone). A new ADR records "each Player owner keeps its own queue; Hand off and Take copy it" and updates ADR 0012 (F3 now owns Hand off and Take as well as connect).
+`CONTEXT.md`: add *Queue handoff* (the Client action that copies a queue to a peer, starts it there, and stops local playback) and *Take* (the reverse). Keep *hand-off* for the move of the active slot between Playback outputs, and add *Queue handoff* to its *Avoid* cross-reference. Retire *Queue scope*. Update *Direct remote control* (connect moves control only; the aqua scope pill is gone; reword "Take of the control socket" so it does not collide with *Take*). Update *Playhead* so it names the Player owner that plays, not a queue scope. Add *Handoff* to the values of *Resume source*. A new ADR records "each Player owner keeps its own queue; Hand off and Take copy it" and updates ADR 0012 (F3 now owns Hand off and Take as well as connect). It also supersedes the Queue-scope sentences of ADR 0017 ("Queue scope remains independent presentation state" and "Queue visibility is derived from … the requested Queue scope").
 
 ## Risks / Trade-offs
 

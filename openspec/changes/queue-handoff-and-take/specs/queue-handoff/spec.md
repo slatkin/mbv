@@ -8,7 +8,7 @@ Moves the music between the local Owner and a directly reachable peer Player own
 
 ### Requirement: Hand off copies the local queue to the peer and moves playback there
 
-Hand off SHALL replace the peer queue with a copy of the local Owner queue and its Queue source. When the local Owner has an active slot, the peer SHALL start that slot at the local playback position. The local Owner SHALL keep its queue unchanged. The Client SHALL stop local playback only after the peer reports playback of the handed-off slot.
+Hand off SHALL replace the peer queue with a copy of the local Owner queue and its Queue source. The peer SHALL start the local active slot at the local playback position. The local Owner SHALL keep its queue unchanged. The Client SHALL stop local playback only after the peer reports playback of the handed-off slot.
 
 #### Scenario: Hand off while local playback runs
 
@@ -17,12 +17,6 @@ Hand off SHALL replace the peer queue with a copy of the local Owner queue and i
 - **AND** the peer SHALL play the third item from 12:40
 - **AND** local playback SHALL stop after the peer reports that item as playing
 - **AND** the local Owner SHALL still hold its 10 items
-
-#### Scenario: Hand off while nothing plays
-
-- **WHEN** the local Owner holds a queue with no active slot and the user hands off
-- **THEN** the peer queue SHALL be replaced with the copy
-- **AND** no playback SHALL start on the peer
 
 ### Requirement: Hand off connects the Client to the peer
 
@@ -36,7 +30,7 @@ When Hand off succeeds, the Client SHALL be connected to the peer as by Connect:
 
 ### Requirement: Take copies the peer queue to the local Owner and moves playback here
 
-Take SHALL replace the local Owner queue with a copy of the peer queue and its Queue source. When the peer has an active slot, the local Owner SHALL start that slot at the peer playback position. The peer SHALL keep its queue. The Client SHALL stop the peer only after the local Owner reports playback of the taken slot.
+Take SHALL replace the local Owner queue with a copy of the peer queue and its Queue source. The local Owner SHALL start the peer active slot at the peer playback position. The peer SHALL keep its queue. The Client SHALL stop the peer only after the local Owner reports playback of the taken slot.
 
 #### Scenario: Take while the peer plays
 
@@ -46,11 +40,15 @@ Take SHALL replace the local Owner queue with a copy of the peer queue and its Q
 - **AND** the peer SHALL stop after the local Owner reports that item as playing
 - **AND** the peer SHALL still hold its 5 items
 
-#### Scenario: Take while the peer is idle
+### Requirement: Hand off and Take need playback on the source
 
-- **WHEN** the peer holds a queue with no active slot and the user takes from it
-- **THEN** the local Owner queue SHALL be replaced with the copy
-- **AND** no playback SHALL start locally
+Hand off SHALL need an active slot on the local Owner, and Take SHALL need an active slot on the peer. When the source snapshot has no active slot, the Client SHALL send nothing, SHALL change nothing on either Player owner, and SHALL report that nothing plays on the source.
+
+#### Scenario: Stale F3 row shows the peer playing
+
+- **WHEN** the F3 row shows the peer playing, the user takes from it, and the peer snapshot has no active slot
+- **THEN** the Client SHALL report that nothing plays on the peer
+- **AND** neither queue nor playback SHALL change
 
 ### Requirement: Take disconnects and works without a connection
 
