@@ -227,7 +227,7 @@ use tracks::lang_code_to_name;
 use tracks::{auto_select_tracks, refresh_tracks};
 mod resume;
 #[doc(inline)]
-pub use resume::{resume_ticks_for_item, resume_ticks_for_slot};
+pub use resume::{resume_ticks_for_item, resume_ticks_for_replace_start, resume_ticks_for_slot};
 mod sources;
 #[doc(inline)]
 pub use sources::{

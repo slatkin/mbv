@@ -137,7 +137,11 @@ impl PreparedSource {
     pub(crate) fn override_jump_resume(&mut self, item: &QueueItem, resume_ticks: Option<i64>) {
         match resume_source(item) {
             // The session position is already baked into the prepared source.
-            ResumeSource::Session => {}
+            // A jump's target is never a replacement's start slot either: the
+            // `Handoff` override is one-time at the replacement's own start
+            // (queue-handoff-and-take design D4), and `resume_source` derives
+            // no `Handoff`, so the arm only keeps the match total.
+            ResumeSource::Session | ResumeSource::Handoff(_) => {}
             // Every other source applies the owner's ticks, or the beginning.
             ResumeSource::Server | ResumeSource::Local | ResumeSource::Beginning => {
                 self.start_seconds = resume_ticks.map_or(0.0, mbv_emby_model::ticks_to_seconds);
