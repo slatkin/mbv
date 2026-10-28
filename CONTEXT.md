@@ -387,7 +387,7 @@ The Wayland layer-shell surface that pinwin shows beside tiled windows. pinwin h
 _Avoid_: panel (bare — reserved for the in-TUI regions), layer-shell panel, dock, sidebar, tray
 
 Pinned panel width:
-The active saved width of the Pinned panel. Collapsed (`width`) and expanded (`width_expanded`) are the two values, in logical pixels. Every pinned launch starts at the collapsed width. The active width is never stored. The running panel switches between the two values with `x` only. `x` sets the Panel mode with the width it requests. Expanded is Library-only. Collapsed is Queue-only. A resize that mbv did not request changes neither value. The F2 Panel page edits the two saved values.
+The active saved width of the Pinned panel. Collapsed (`width`) and expanded (`width_expanded`) are the two values, in logical pixels. Every pinned launch starts at the collapsed width. The active width is never stored. The running panel switches between the two values on `x`, the F2 Panel width rows, and the collapse after a user play from the expanded width. `x` sets the Panel mode with the width it requests. Expanded is Library-only. Collapsed is Queue-only. A resize that mbv did not request changes neither value. The F2 Panel page edits the two saved values.
 _Avoid_: panel mode, expand mode, panel size
 
 Focus accent:

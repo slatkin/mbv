@@ -11,10 +11,12 @@ use crate::app::tests::{
     make_local_daemon_app_stub, make_local_daemon_app_stub_with_cmd_rx, remote_stub_config,
 };
 use crate::app::{App, QueueScope};
+use crate::pin::{PINNED_REQUEST_OVERRIDE, PINNED_REQUEST_TEST_LOCK, PINNED_REQUESTS};
 use mbv_ctrl::player::PlayerEvent;
 use mbv_ctrl::{CtrlCmd, QueueOpId, QueueOpOutcome};
 use mbv_queue::QueueItem;
 use mbv_remote_player::QueueOp;
+use mbv_ui_model::settings::PinnedWidth;
 use std::sync::mpsc;
 use std::time::Duration;
 
@@ -510,4 +512,70 @@ fn single_item_play_on_a_legacy_owner_replaces_the_queue_with_the_played_item() 
         other => panic!("expected the legacy whole-queue replace form, got {other:?}"),
     }
     assert!(app.status.is_empty(), "the legacy send must not flash");
+}
+
+#[test]
+fn an_accepted_play_at_the_expanded_pinned_width_records_one_collapse_request() {
+    // pinned-play-collapses-to-queue row 2.2: a user play's accepted replace
+    // reaches the collapse step once. The drain and focus contract is owned
+    // by pinned_view_toggle.rs.
+    let _guard = PINNED_REQUEST_TEST_LOCK.lock().unwrap();
+    *PINNED_REQUEST_OVERRIDE.lock().unwrap() = Some(Ok(()));
+    PINNED_REQUESTS.lock().unwrap().clear();
+    let (mut app, _cmd_rx) = answered_local_daemon_app();
+    let tx = inject_player_rx(&mut app);
+    tx.send(applied(1, snapshot(1))).unwrap();
+    app.pinned_width = PinnedWidth::Expanded;
+
+    assert!(app.submit_queue_item(one_queue_item().remove(0), true));
+
+    let requests = PINNED_REQUESTS.lock().unwrap().clone();
+    assert_eq!(requests.len(), 1, "one collapse request for the play");
+    assert_eq!(
+        requests[0],
+        crate::pin::PinnedSettingRequest::Width(PinnedWidth::Collapsed)
+    );
+    *PINNED_REQUEST_OVERRIDE.lock().unwrap() = None;
+}
+
+#[test]
+fn a_not_applied_play_records_no_collapse_request() {
+    // pinned-play-collapses-to-queue row 2.2: a rejected replace never
+    // reaches the collapse step.
+    let _guard = PINNED_REQUEST_TEST_LOCK.lock().unwrap();
+    *PINNED_REQUEST_OVERRIDE.lock().unwrap() = Some(Ok(()));
+    PINNED_REQUESTS.lock().unwrap().clear();
+    let (mut app, _cmd_rx) = answered_local_daemon_app();
+    let tx = inject_player_rx(&mut app);
+    tx.send(PlayerEvent::QueueOpResult {
+        op: QueueOpId(1),
+        outcome: QueueOpOutcome::Rejected("the owner refused the replace".into()),
+    })
+    .unwrap();
+    app.pinned_width = PinnedWidth::Expanded;
+
+    assert!(!app.submit_queue_item(one_queue_item().remove(0), true));
+
+    assert!(PINNED_REQUESTS.lock().unwrap().is_empty());
+    assert_eq!(app.pinned_width, PinnedWidth::Expanded);
+    *PINNED_REQUEST_OVERRIDE.lock().unwrap() = None;
+}
+
+#[test]
+fn an_enqueue_records_no_collapse_request() {
+    // pinned-play-collapses-to-queue row 2.2: enqueue appends without
+    // starting playback and must not touch the pinned view.
+    let _guard = PINNED_REQUEST_TEST_LOCK.lock().unwrap();
+    *PINNED_REQUEST_OVERRIDE.lock().unwrap() = Some(Ok(()));
+    PINNED_REQUESTS.lock().unwrap().clear();
+    let (mut app, _cmd_rx) = answered_local_daemon_app();
+    let tx = inject_player_rx(&mut app);
+    tx.send(applied(1, snapshot(3))).unwrap();
+    app.pinned_width = PinnedWidth::Expanded;
+
+    assert!(app.submit_queue_item(one_queue_item().remove(0), false));
+
+    assert!(PINNED_REQUESTS.lock().unwrap().is_empty());
+    assert_eq!(app.pinned_width, PinnedWidth::Expanded);
+    *PINNED_REQUEST_OVERRIDE.lock().unwrap() = None;
 }

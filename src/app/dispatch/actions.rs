@@ -198,6 +198,7 @@ impl App {
         if sent == QueueOpEdit::NotApplied {
             return;
         }
+        self.collapse_pinned_view_after_play();
         let _ = self
             .player
             .send_command(PlayerCommand::SetMute(self.mute_on));
@@ -283,6 +284,7 @@ impl App {
         if sent == QueueOpEdit::NotApplied {
             return true;
         }
+        self.collapse_pinned_view_after_play();
         let _ = self
             .player
             .send_command(PlayerCommand::SetMute(self.mute_on));
@@ -308,6 +310,7 @@ impl App {
         if sent == QueueOpEdit::NotApplied {
             return;
         }
+        self.collapse_pinned_view_after_play();
         let _ = self
             .player
             .send_command(PlayerCommand::SetMute(self.mute_on));
@@ -422,6 +425,7 @@ impl App {
         if sent == QueueOpEdit::NotApplied {
             return false;
         }
+        self.collapse_pinned_view_after_play();
         if answered {
             let _ = self
                 .player
