@@ -43,7 +43,6 @@
 
 - [ ] 9.1 Run `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run --workspace`. Verify all pass.
 - [ ] 9.2 Run `make check-code-file-lines` just before push and split any file over 800 lines. Verify it passes.
-- [ ] 9.3 Ask the user to live-test Hand off and Take against a real mbv or mbvd peer (mid-song Emby audio, a feed entry, a video to an audio-only mbvd, disconnect leaves the peer playing). Record the result.
 
 ## Workflow follow-up
 
