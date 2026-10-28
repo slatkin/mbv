@@ -18,7 +18,7 @@
 
 ## 4. Rename `QueueScope` to `QueueLink` (no behavior change)
 
-- [ ] 4.1 Rename `QueueScope { Local, Remote }` to `QueueLink { Local, Peer }` across `crates/mbv-ui-model`, `crates/mbv-ui-msg`, `crates/mbv-components`, and `src/app` (design D5). Verify with `cargo check --workspace` and an unchanged `cargo nextest run -p mbv` result.
+- [x] 4.1 Rename `QueueScope { Local, Remote }` to `QueueLink { Local, Peer }` across `crates/mbv-ui-model`, `crates/mbv-ui-msg`, `crates/mbv-components`, and `src/app` (design D5). Verify with `cargo check --workspace` and an unchanged `cargo nextest run -p mbv` result.
 
 ## 5. Shown queue follows the connection
 
