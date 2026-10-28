@@ -7,9 +7,9 @@
 
 ## 2. ctrl start position (recipe: Add a ctrl protocol variant)
 
-- [ ] 2.1 Add `CTRL_CAP_QUEUE_REPLACE_START_POSITION` and the `#[serde(default)] start_position_secs: Option<f64>` field on `UnifiedQueueReplace` in `crates/mbv-ctrl`, with the `CtrlHello` advertisement and a `supports_*` accessor. Verify with a handshake case and a wire round-trip case in `crates/mbv-ctrl/tests/ctrl/` (contract: field is additive, absent field decodes as `None`), and `cargo nextest run -p mbv-ctrl`.
-- [ ] 2.2 Add the fixture under `protocol/ctrl/v10/` and regenerate schemas. Verify with `MBV_PROTOCOL_BLESS=1 cargo nextest run -p mbv-ctrl conformance`, review the diff, then `cargo nextest run -p mbv-ctrl conformance`.
-- [ ] 2.3 Advertise the capability from the Owner (`DaemonHelloCaps` in `crates/mbv-daemon/src/core_ctrl_spawn.rs`) and let `RemotePlayer` send the field only to owners that advertise it. Verify with `cargo nextest run -p mbv-remote-player -p mbvd` and one remote-player test (contract: field is omitted for an owner without the capability).
+- [x] 2.1 Add `CTRL_CAP_QUEUE_REPLACE_START_POSITION` and the `#[serde(default)] start_position_secs: Option<f64>` field on `UnifiedQueueReplace` in `crates/mbv-ctrl`, with the `CtrlHello` advertisement and a `supports_*` accessor. Verify with a handshake case and a wire round-trip case in `crates/mbv-ctrl/tests/ctrl/` (contract: field is additive, absent field decodes as `None`), and `cargo nextest run -p mbv-ctrl`.
+- [x] 2.2 Add the fixture under `protocol/ctrl/v10/` and regenerate schemas. Verify with `MBV_PROTOCOL_BLESS=1 cargo nextest run -p mbv-ctrl conformance`, review the diff, then `cargo nextest run -p mbv-ctrl conformance`.
+- [x] 2.3 Advertise the capability from the Owner (`DaemonHelloCaps` in `crates/mbv-daemon/src/core_ctrl_spawn.rs`) and let `RemotePlayer` send the field only to owners that advertise it. Verify with `cargo nextest run -p mbv-remote-player -p mbvd` and one remote-player test (contract: field is omitted for an owner without the capability).
 
 ## 3. Owner start-position override
 
