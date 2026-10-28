@@ -2,16 +2,18 @@
 //! (queue-handoff-and-take design D2). The Client copies one Player owner's
 //! queue to the other, waits for the target to report playback of the start
 //! slot, and only then stops the source — a failed or lost target never
-//! stops the source.
+//! stops the source. Each direction's flow arms its own file:
+//! `hand_off` (design D1 left column) and `take` (right column).
+
+mod hand_off;
+mod take;
 
 use std::sync::mpsc;
 
 use crate::app::dispatch::notify::ToastSeverity;
-use crate::app::dispatch::queue::QueueOpEdit;
 use crate::app::state::panel_targets::{PanelTarget, resolve_session_target};
 use crate::app::{App, QueueLink};
 use mbv_queue::QueueSlotId;
-use mbv_ui_model::confirm::{ConfirmAction, ConfirmModal};
 use mbv_ui_model::panel_targets::SessionTargetKey;
 
 /// Which Player owner a queue transfer copies from and which it copies to
@@ -69,13 +71,17 @@ impl QueueTransferFollowUp {
 /// owner snapshots. `start_slot` is the submitted slot id the target must
 /// observe as its active, playing slot — the target keeps submitted slot ids
 /// (design D8), so the id survives into its snapshots.
-#[derive(Clone, Debug)]
 pub(in crate::app) struct PendingQueueTransfer {
     pub direction: QueueTransferDirection,
     /// The F3 target the transfer was started for (stable identity, D6).
     pub target: SessionTargetKey,
     pub start_slot: QueueSlotId,
     pub op: QueueTransferFollowUp,
+    /// The peer link opened to read an unconnected Take's source queue
+    /// (design D1 unconnected Take). It never became `self.player`, so the
+    /// settlement's source stop and its close go through it. `None` when the
+    /// source is (or was) the current attachment.
+    pub source_link: Option<StagedQueueTransferLink>,
 }
 
 /// The link a transfer opened ahead of its confirmation (design D1): read
@@ -113,21 +119,19 @@ enum TransferFailure {
     StartSlotDropped,
 }
 
-impl PendingQueueTransfer {
-    fn failure_message(&self, cause: TransferFailure) -> String {
-        match (self.direction, cause) {
-            (QueueTransferDirection::HandOff, TransferFailure::LinkLost) => {
-                "Hand off failed: the peer connection was lost".to_string()
-            }
-            (QueueTransferDirection::Take, TransferFailure::LinkLost) => {
-                "Take failed: the local Owner connection was lost".to_string()
-            }
-            (QueueTransferDirection::HandOff, TransferFailure::StartSlotDropped) => {
-                "Hand off failed: the peer could not start the handed-off item".to_string()
-            }
-            (QueueTransferDirection::Take, TransferFailure::StartSlotDropped) => {
-                "Take failed: the local Owner could not start the taken item".to_string()
-            }
+fn transfer_failure_message(direction: QueueTransferDirection, cause: TransferFailure) -> String {
+    match (direction, cause) {
+        (QueueTransferDirection::HandOff, TransferFailure::LinkLost) => {
+            "Hand off failed: the peer connection was lost".to_string()
+        }
+        (QueueTransferDirection::Take, TransferFailure::LinkLost) => {
+            "Take failed: the local Owner connection was lost".to_string()
+        }
+        (QueueTransferDirection::HandOff, TransferFailure::StartSlotDropped) => {
+            "Hand off failed: the peer could not start the handed-off item".to_string()
+        }
+        (QueueTransferDirection::Take, TransferFailure::StartSlotDropped) => {
+            "Take failed: the local Owner could not start the taken item".to_string()
         }
     }
 }
@@ -156,16 +160,14 @@ impl App {
         );
         match direction {
             QueueTransferDirection::HandOff => self.begin_queue_hand_off(target),
-            // Row 8.1 fills the Take flow (design D1 right column); the
-            // cancel above already replaced any pending transfer.
-            QueueTransferDirection::Take => {}
+            QueueTransferDirection::Take => self.begin_queue_take(target),
         }
     }
 
-    /// Resolves an F3 Hand off target (design D6): a live Emby row that
-    /// advertises a direct Player-owner endpoint other than the local Owner.
-    /// Returns the session row, its endpoint, and its display name.
-    fn resolve_queue_hand_off_target(
+    /// Resolves an F3 Hand off or Take target (design D6): a live Emby row
+    /// that advertises a direct Player-owner endpoint other than the local
+    /// Owner. Returns the session row, its endpoint, and its display name.
+    fn resolve_queue_transfer_target(
         &self,
         target: &SessionTargetKey,
     ) -> Option<(
@@ -198,12 +200,13 @@ impl App {
         Some((sess, endpoint, name))
     }
 
-    /// Opens the peer link the unconnected Hand off reads its queue through
-    /// (design D1): the link is attached only after confirmation and dropped
-    /// when the user cancels. `None` after a failed connect, which is
-    /// reported here.
-    fn open_queue_hand_off_probe_link(
+    /// Opens the peer link an unconnected transfer reads its source queue
+    /// through (design D1): Hand off attaches it after confirmation; Take
+    /// keeps it as the settlement's source stop. `None` after a failed
+    /// connect, which is reported here.
+    fn open_queue_transfer_probe_link(
         &mut self,
+        action: &str,
         endpoint: &mbv_remote_player::DaemonEndpoint,
         name: &str,
         device: &str,
@@ -212,114 +215,22 @@ impl App {
             Ok(connect) => connect,
             Err(error) => {
                 tracing::warn!(
-                    name: "queue_transfer.hand_off.connect_failed",
+                    name: "queue_transfer.probe_connect_failed",
                     target: "queue_transfer",
+                    action = %action,
                     device = %device,
                     endpoint = %endpoint,
                     error = %error,
-                    "the Hand off probe connect failed"
+                    "the transfer probe connect failed"
                 );
                 self.flash(
-                    format!("Hand off: cannot reach {name}"),
+                    format!("{action}: cannot reach {name}"),
                     ToastSeverity::Warning,
                 );
                 return None;
             }
         };
         Some(StagedQueueTransferLink { remote, remote_rx })
-    }
-
-    /// Hand off (design D1 left column): ask before replacing a populated
-    /// peer queue, attach the peer when its link is not the current
-    /// attachment, copy the local queue with its position, and arm the
-    /// pending transfer. The tick-phase settlement then waits for the peer
-    /// to observe the start slot before local playback stops.
-    fn begin_queue_hand_off(&mut self, target: &SessionTargetKey) {
-        let Some((sess, endpoint, name)) = self.resolve_queue_hand_off_target(target) else {
-            return;
-        };
-        let connected = self.queue_transfer_peer_link_is_current(&sess.id);
-        let staged_link = if connected {
-            None
-        } else {
-            let Some(link) =
-                self.open_queue_hand_off_probe_link(&endpoint, &name, &sess.device_name)
-            else {
-                return;
-            };
-            Some(link)
-        };
-        let (supports_start_position, target_audio_only, peer_queue_len) = if connected {
-            let remote = self.player.remote();
-            (
-                remote.supports_queue_replace_start_position(),
-                remote.supports_audio_only(),
-                self.queue_for_link(QueueLink::Peer).total_queue_len(),
-            )
-        } else {
-            let link = staged_link
-                .as_ref()
-                .map(|link| &link.remote)
-                .expect("probe link staged");
-            let snapshot = link.unified_queue_state();
-            (
-                link.supports_queue_replace_start_position(),
-                link.supports_audio_only(),
-                snapshot.map_or(0, |state| state.slots.len()),
-            )
-        };
-        // The capability gate (queue-handoff spec, "Hand off and Take need a
-        // peer that accepts a start position"): refuse before anything is
-        // asked or sent.
-        if !supports_start_position {
-            Self::drop_staged_probe_link(staged_link);
-            self.flash(
-                format!("Hand off: {name} does not support Hand off"),
-                ToastSeverity::Warning,
-            );
-            return;
-        }
-        // Hand off needs playback on the source (queue-handoff spec): a
-        // stale F3 row reports and sends nothing.
-        if !self.queue_hand_off_source_is_playing() {
-            Self::drop_staged_probe_link(staged_link);
-            self.flash(
-                "Hand off: nothing is playing on the local Owner".to_string(),
-                ToastSeverity::Warning,
-            );
-            return;
-        }
-        // Design D3 admission pre-check: an audio-only target cannot hold a
-        // non-audio active item, so the copy is refused before it is sent.
-        if target_audio_only && !self.queue_hand_off_active_item_is_audio() {
-            Self::drop_staged_probe_link(staged_link);
-            self.flash(
-                format!("Hand off: {name} cannot play the active item"),
-                ToastSeverity::Warning,
-            );
-            return;
-        }
-        let staged = StagedQueueTransfer {
-            direction: QueueTransferDirection::HandOff,
-            target: target.clone(),
-            sess,
-            endpoint,
-            link: staged_link,
-        };
-        // The confirm requirement: ask before replacing a populated target
-        // queue, naming the target. An empty target queue runs without a
-        // prompt.
-        self.staged_queue_transfer = Some(staged);
-        if peer_queue_len > 0 {
-            self.ask_confirm(ConfirmModal::two_button(
-                format!("Replace the queue on {name}?"),
-                "Hand off",
-                "Cancel",
-                ConfirmAction::ConfirmQueueTransfer(target.clone()),
-            ));
-            return;
-        }
-        self.run_staged_queue_transfer();
     }
 
     /// The transfer prompt's confirm answer (design D1): run the staged
@@ -331,9 +242,7 @@ impl App {
         };
         match staged.direction {
             QueueTransferDirection::HandOff => self.run_staged_queue_hand_off(staged),
-            // Row 8.1 fills the Take confirm (design D1 right column); no
-            // Take transfer is staged before it is implemented.
-            QueueTransferDirection::Take => {}
+            QueueTransferDirection::Take => self.run_staged_queue_take(staged),
         }
     }
 
@@ -365,155 +274,14 @@ impl App {
         }
     }
 
-    /// Run the staged Hand off past its confirm gate (design D1 steps 2-4):
-    /// attach the peer when a link was opened for the transfer, then copy the
-    /// local queue onto it.
-    fn run_staged_queue_hand_off(&mut self, staged: StagedQueueTransfer) {
-        let StagedQueueTransfer {
-            sess,
-            endpoint,
-            link,
-            ..
-        } = staged;
-        if let Some(link) = link {
-            if link.remote.is_disconnected() {
-                // The link opened for the transfer died while the prompt was
-                // up: report and drop it, so nothing is sent.
-                self.flash(
-                    "Hand off failed: the peer connection was lost".to_string(),
-                    ToastSeverity::Error,
-                );
-                return;
-            }
-            // Design D1 step 2: sever the current connection and attach the
-            // peer, as by Connect — the Hand off ends connected (step 7).
-            // The sever keeps the Owner output alone (design D2): the local
-            // Owner may be the transfer source playing through a Cast or
-            // Emby Session output, and its Stop must wait for the
-            // settlement's observation, not ride the attach.
-            self.sever_connections_without_output_change();
-            self.switch_to_direct_remote(&sess, link.remote, link.remote_rx, &endpoint);
-        }
-        self.send_queue_hand_off_copy(&staged.target);
-    }
-
-    /// Hand off steps 3-4 (design D1): read the local snapshot and the
-    /// status position, then replace the peer queue with the copy — the
-    /// start slot at the local playback position (design D4). The submitted
-    /// slot ids are the local queue's own (design D8), so the settlement's
-    /// `start_slot` survives into the peer's snapshots.
-    fn send_queue_hand_off_copy(&mut self, target: &SessionTargetKey) {
-        let Some((start_slot, start_idx, position_secs)) = self.queue_hand_off_source_start()
-        else {
-            // A stale F3 row (design D2): the Client sends nothing, changes
-            // nothing, and reports that nothing plays on the source.
-            self.flash(
-                "Hand off: nothing is playing on the local Owner".to_string(),
-                ToastSeverity::Warning,
-            );
-            return;
-        };
-        let slots: Vec<mbv_ctrl::UnifiedQueueSlot> = self
-            .local_view
-            .slots()
-            .iter()
-            .map(|slot| mbv_ctrl::UnifiedQueueSlot {
-                slot_id: mbv_ctrl::slot_id_to_u64(slot.slot_id),
-                item: slot.item.clone(),
-            })
-            .collect();
-        let source = self.local_view.source().clone();
-        tracing::info!(
-            name: "queue_transfer.hand_off.sending",
-            target: "queue_transfer",
-            session = ?target,
-            start_slot = ?start_slot,
-            start_idx,
-            position_secs,
-            slots = slots.len(),
-            "sending the handed-off queue copy to the peer"
-        );
-        let sent = self.queue_op(
-            QueueLink::Peer,
-            mbv_remote_player::QueueOp::Replace {
-                items: slots,
-                start_idx: Some(start_idx),
-                source,
-                start_position_secs: Some(position_secs),
-            },
-        );
-        if sent == QueueOpEdit::NotApplied {
-            // The answered-edit bound reported the rejection or the timeout
-            // (design D2 failure): the pending transfer fails and the source
-            // keeps playing.
-            self.fail_pending_queue_transfer(
-                "Hand off failed: the peer did not take the queue copy".to_string(),
-            );
-            return;
-        }
-        // Design D2: the pending transfer arms after the copy is sent; the
-        // tick-phase settlement waits for the peer to observe the start slot
-        // before local playback stops.
-        self.pending_queue_transfer = Some(PendingQueueTransfer {
-            direction: QueueTransferDirection::HandOff,
-            target: target.clone(),
-            start_slot,
-            op: QueueTransferFollowUp::for_direction(QueueTransferDirection::HandOff),
-        });
-    }
-
-    /// The Hand off source's copy inputs (design D1 step 3): the local
-    /// active slot, its queue index, and the local playback position in
-    /// seconds.
-    fn queue_hand_off_source_start(&self) -> Option<(QueueSlotId, usize, f64)> {
-        let status = self.queue_hand_off_source_status()?;
-        if !status.active || status.paused {
-            return None;
-        }
-        let start_slot = self.local_view.active_slot_id()?;
-        let start_idx = self.local_view.slot_index(start_slot)?;
-        Some((
-            start_slot,
-            start_idx,
-            mbv_emby_model::ticks_to_seconds(status.position_ticks),
-        ))
-    }
-
-    /// Whether the Hand off source currently plays (design D6's source gate,
-    /// re-checked at the copy): the local Owner has a link and audible
-    /// playback of an active slot.
-    fn queue_hand_off_source_is_playing(&self) -> bool {
-        self.queue_hand_off_source_start().is_some()
-    }
-
-    /// Whether the local active item is audio (design D3's pre-check input).
-    fn queue_hand_off_active_item_is_audio(&self) -> bool {
-        self.local_view.active_slot_id().is_some_and(|slot_id| {
-            self.local_view
-                .slot(slot_id)
-                .is_some_and(|slot| slot.item.is_audio())
-        })
-    }
-
-    /// The local Owner link's status (the Hand off source): the suspended
-    /// home link while a peer connection holds the player, the current
-    /// player while it is the local daemon. `None` when no local Owner link
-    /// exists — a peer connection without a suspended home link means the
-    /// home link is already gone.
-    fn queue_hand_off_source_status(&self) -> Option<mbv_ctrl::player::PlayerStatus> {
-        match &self.suspended_local {
-            Some(home) => Some(home.player.status_snapshot()),
-            None if self.is_local_daemon() => Some(self.player.status_snapshot()),
-            None => None,
-        }
-    }
-
     /// Cancel the pending transfer without a report (design D2 cancel): a
     /// disconnect leaves both owners as they are, and the source keeps
     /// playing. A newer F3 action or a disconnect also replaces a staged
     /// transfer prompt, dropping any link opened for it.
     pub(in crate::app) fn cancel_pending_queue_transfer(&mut self) {
-        self.pending_queue_transfer = None;
+        if let Some(transfer) = self.pending_queue_transfer.take() {
+            Self::close_transfer_source_link(transfer.source_link);
+        }
         self.drop_staged_queue_transfer();
     }
 
@@ -521,8 +289,20 @@ impl App {
     /// keeps playing and nothing is sent to either owner here. The
     /// replacement's rejection travels through this same report path.
     pub(in crate::app) fn fail_pending_queue_transfer(&mut self, message: String) {
-        self.pending_queue_transfer = None;
+        if let Some(transfer) = self.pending_queue_transfer.take() {
+            Self::close_transfer_source_link(transfer.source_link);
+        }
         self.flash(message, ToastSeverity::Error);
+    }
+
+    /// Close the source link an unconnected Take carried (design D1 step 7):
+    /// an explicit disconnect lets the connection's reader thread exit
+    /// instead of leaking (#233). Free of `self`: the link is closed where
+    /// its owner settles it.
+    fn close_transfer_source_link(link: Option<StagedQueueTransferLink>) {
+        if let Some(link) = link {
+            link.remote.disconnect();
+        }
     }
 
     /// Tick-phase settlement (design D2): the run loop calls this right after
@@ -533,15 +313,23 @@ impl App {
     /// plays. Returns whether the settlement acted (a report or a stop), so
     /// the caller can count the tick as having events.
     pub(in crate::app) fn settle_pending_queue_transfer(&mut self) -> bool {
-        let Some(transfer) = self.pending_queue_transfer.clone() else {
+        let Some(transfer) = self.pending_queue_transfer.take() else {
             return false;
         };
-        if self.transfer_target_link_lost(transfer.direction) {
-            let message = transfer.failure_message(TransferFailure::LinkLost);
+        let PendingQueueTransfer {
+            direction,
+            target,
+            start_slot,
+            op,
+            source_link,
+        } = transfer;
+        if self.transfer_target_link_lost(direction) {
+            Self::close_transfer_source_link(source_link);
+            let message = transfer_failure_message(direction, TransferFailure::LinkLost);
             self.fail_pending_queue_transfer(message);
             return true;
         }
-        self.settle_target_observation(&transfer)
+        self.settle_target_observation(direction, target, start_slot, op, source_link)
     }
 
     /// Whether the transfer's target link is gone before the target reported
@@ -582,14 +370,21 @@ impl App {
     /// slot still queued or still transitioning keeps the value armed; a
     /// start slot the target no longer holds was dropped by admission, so
     /// the target started a different item and is stopped too.
-    fn settle_target_observation(&mut self, transfer: &PendingQueueTransfer) -> bool {
-        let target_playing = self.transfer_target_playing(transfer.direction);
+    fn settle_target_observation(
+        &mut self,
+        direction: QueueTransferDirection,
+        target: SessionTargetKey,
+        start_slot: QueueSlotId,
+        op: QueueTransferFollowUp,
+        source_link: Option<StagedQueueTransferLink>,
+    ) -> bool {
+        let target_playing = self.transfer_target_playing(direction);
         let (target_active, target_pending, start_slot_present) = {
-            let view = self.queue_for_link(transfer.direction.target_link());
+            let view = self.queue_for_link(direction.target_link());
             (
-                view.active_slot_id() == Some(transfer.start_slot),
-                view.pending_playback_slot() == Some(transfer.start_slot),
-                view.slot(transfer.start_slot).is_some(),
+                view.active_slot_id() == Some(start_slot),
+                view.pending_playback_slot() == Some(start_slot),
+                view.slot(start_slot).is_some(),
             )
         };
         if target_active && target_playing {
@@ -597,31 +392,40 @@ impl App {
                 name: "queue_transfer.settled",
                 target: "queue_transfer",
                 {
-                    direction = ?transfer.direction,
-                    session = ?transfer.target,
-                    start_slot = ?transfer.start_slot,
-                    follow_up = ?transfer.op
+                    direction = ?direction,
+                    session = ?target,
+                    start_slot = ?start_slot,
+                    follow_up = ?op
                 },
                 "target reports the start slot playing"
             );
-            self.stop_transfer_source(transfer.direction);
-            Self::run_queue_transfer_follow_up(transfer);
+            self.stop_transfer_source(direction, source_link.as_ref());
+            self.run_queue_transfer_follow_up(op, &target);
+            Self::close_transfer_source_link(source_link);
             self.pending_queue_transfer = None;
             return true;
         }
         if target_pending || start_slot_present {
             // The target is still starting the start slot, or has not yet
             // reported: keep waiting (design D2 — no observation timeout).
+            self.pending_queue_transfer = Some(PendingQueueTransfer {
+                direction,
+                target,
+                start_slot,
+                op,
+                source_link,
+            });
             return false;
         }
         tracing::info!(
             name: "queue_transfer.start_slot_dropped",
             target: "queue_transfer",
-            { direction = ?transfer.direction, session = ?transfer.target, start_slot = ?transfer.start_slot },
+            { direction = ?direction, session = ?target, start_slot = ?start_slot },
             "target no longer holds the start slot"
         );
-        self.stop_transfer_target(transfer.direction);
-        let message = transfer.failure_message(TransferFailure::StartSlotDropped);
+        self.stop_transfer_target(direction);
+        Self::close_transfer_source_link(source_link);
+        let message = transfer_failure_message(direction, TransferFailure::StartSlotDropped);
         self.fail_pending_queue_transfer(message);
         true
     }
@@ -634,7 +438,11 @@ impl App {
     /// mid-transfer while the peer is attached — there is nothing to stop,
     /// and falling through to `self.player` would stop the handed-off
     /// playback on the peer instead.
-    fn stop_transfer_source(&mut self, direction: QueueTransferDirection) {
+    fn stop_transfer_source(
+        &mut self,
+        direction: QueueTransferDirection,
+        source_link: Option<&StagedQueueTransferLink>,
+    ) {
         match direction {
             QueueTransferDirection::HandOff => {
                 let source = match (&self.suspended_local, self.is_local_daemon()) {
@@ -652,8 +460,26 @@ impl App {
                 source.stop();
             }
             QueueTransferDirection::Take => {
-                let (proxy, _rx) = self.queue_link(direction.source_link());
-                proxy.stop();
+                if let Some(link) = source_link {
+                    // The unconnected Take's probe link is the source (design
+                    // D1): it never became `self.player`, so the stop goes
+                    // through it. A dead probe link is nothing to stop — the
+                    // peer's playback is already gone.
+                    if link.remote.is_disconnected() {
+                        tracing::warn!(
+                            name: "queue_transfer.source_link_missing",
+                            target: "queue_transfer",
+                            "the peer probe link is gone; skipping the source stop"
+                        );
+                        return;
+                    }
+                    link.remote.stop();
+                } else {
+                    // The connected Take's source is the current peer
+                    // attachment.
+                    let (proxy, _rx) = self.queue_link(direction.source_link());
+                    proxy.stop();
+                }
             }
         }
     }
@@ -667,19 +493,35 @@ impl App {
     }
 
     /// The settled transfer's step-7 tail (design D1), run by the
-    /// settlement's success block after the source stops. Free of `self` for
-    /// now: the Hand off tail only logs — row 8.1 moves it back onto `App`
-    /// when the Take tail needs the shell state to close the peer link.
-    fn run_queue_transfer_follow_up(transfer: &PendingQueueTransfer) {
-        match transfer.op {
+    /// settlement's success block after the source stops. A Hand off stays
+    /// connected to the peer. A Take closes the F3 connection when the
+    /// transfer ran over one — never touching a library route (ADR 0012);
+    /// an unconnected Take has no F3 connection to close, and its probe
+    /// link is closed by the settlement itself.
+    fn run_queue_transfer_follow_up(
+        &mut self,
+        op: QueueTransferFollowUp,
+        target: &SessionTargetKey,
+    ) {
+        match op {
             QueueTransferFollowUp::StayConnected => tracing::debug!(
                 name: "queue_transfer.hand_off.stayed_connected",
                 target: "queue_transfer",
-                session = ?transfer.target,
+                session = ?target,
                 "Hand off settled: the Client stays attached to the peer"
             ),
-            // Row 8.1 (Take) closes the peer link here.
-            QueueTransferFollowUp::ClosePeerLink => {}
+            QueueTransferFollowUp::ClosePeerLink => {
+                if self.can_disconnect_remote() {
+                    self.disconnect_remote();
+                } else {
+                    tracing::debug!(
+                        name: "queue_transfer.take.no_connection_to_close",
+                        target: "queue_transfer",
+                        session = ?target,
+                        "Take settled: the Client has no F3 connection to close"
+                    );
+                }
+            }
         }
     }
 }

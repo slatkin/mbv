@@ -28,12 +28,13 @@ use mbv_ui_model::panel_targets::SessionTargetKey;
 /// The peer link `staged_probe_connect` hands out, staged by the test that
 /// installed the override (nextest runs one test per process; the lock guard
 /// keeps plain `cargo test` honest too).
-static PROBE_LINK: Mutex<Option<(RemotePlayer, mpsc::Receiver<PlayerEvent>)>> = Mutex::new(None);
+pub(super) static PROBE_LINK: Mutex<Option<(RemotePlayer, mpsc::Receiver<PlayerEvent>)>> =
+    Mutex::new(None);
 
 /// The injected direct connect for the unconnected Hand off tests: hands back
 /// the probe link the test staged, so the test holds the peer's command
 /// receiver while the flow takes the link itself.
-fn staged_probe_connect(
+pub(super) fn staged_probe_connect(
     _endpoint: &DaemonEndpoint,
 ) -> Result<(RemotePlayer, mpsc::Receiver<PlayerEvent>), RemotePlayerError> {
     PROBE_LINK
@@ -45,7 +46,7 @@ fn staged_probe_connect(
 
 /// An F3 peer row that advertises a direct Player-owner endpoint (design D6).
 /// The port is never dialed: the unconnected tests inject the connect.
-fn peer_session(id: &str) -> mbv_emby::SessionInfo {
+pub(super) fn peer_session(id: &str) -> mbv_emby::SessionInfo {
     let mut sess = mbv_emby::test_support::make_session(id, "mbv");
     sess.id = id.to_string();
     sess.device_id = format!("device-{id}");
@@ -54,7 +55,11 @@ fn peer_session(id: &str) -> mbv_emby::SessionInfo {
     sess
 }
 
-fn peer_compat(answered: bool, start_position: bool, audio_only: bool) -> CtrlCompatibility {
+pub(super) fn peer_compat(
+    answered: bool,
+    start_position: bool,
+    audio_only: bool,
+) -> CtrlCompatibility {
     let mut compat = CtrlCompatibility::for_peer(CTRL_PROTOCOL_VERSION)
         .expect("local ctrl protocol version is compatible");
     compat.supports_answered_queue_ops = answered;
@@ -66,7 +71,11 @@ fn peer_compat(answered: bool, start_position: bool, audio_only: bool) -> CtrlCo
 /// The peer's post-replacement answer: the submitted slot ids (1..=n) are
 /// kept (design D8), `active_index` names the observed active slot, and
 /// `playing` decides the snapshot's audible status.
-fn peer_snapshot(items: &[EmbyItem], active_index: usize, playing: bool) -> UnifiedQueueStateData {
+pub(super) fn peer_snapshot(
+    items: &[EmbyItem],
+    active_index: usize,
+    playing: bool,
+) -> UnifiedQueueStateData {
     UnifiedQueueStateData {
         status: PlayerStatus {
             active: playing,
@@ -90,18 +99,18 @@ fn peer_snapshot(items: &[EmbyItem], active_index: usize, playing: bool) -> Unif
     }
 }
 
-fn applied(op: u64, snapshot: UnifiedQueueStateData) -> PlayerEvent {
+pub(super) fn applied(op: u64, snapshot: UnifiedQueueStateData) -> PlayerEvent {
     PlayerEvent::QueueOpResult {
         op: QueueOpId(op),
         outcome: QueueOpOutcome::Applied(Box::new(snapshot)),
     }
 }
 
-fn hand_off_key() -> SessionTargetKey {
+pub(super) fn hand_off_key() -> SessionTargetKey {
     SessionTargetKey::Emby("peer-owner".to_string())
 }
 
-fn confirm_key(code: KeyCode) -> KeyEvent {
+pub(super) fn confirm_key(code: KeyCode) -> KeyEvent {
     KeyEvent::new(code, KeyModifiers::NONE)
 }
 
@@ -147,7 +156,7 @@ fn connected_hand_off_app(
 }
 
 /// The `UnifiedQueueReplace` the peer received, if any.
-fn peer_replace(peer_cmd_rx: &mpsc::Receiver<CtrlCmd>) -> Option<CtrlCmd> {
+pub(super) fn peer_replace(peer_cmd_rx: &mpsc::Receiver<CtrlCmd>) -> Option<CtrlCmd> {
     let mut replace = None;
     while let Ok(cmd) = peer_cmd_rx.try_recv() {
         if matches!(cmd, CtrlCmd::UnifiedQueueReplace { .. }) {
@@ -157,7 +166,7 @@ fn peer_replace(peer_cmd_rx: &mpsc::Receiver<CtrlCmd>) -> Option<CtrlCmd> {
     replace
 }
 
-fn stop_sent_to(local_cmd_rx: &mpsc::Receiver<CtrlCmd>) -> bool {
+pub(super) fn stop_sent_to(local_cmd_rx: &mpsc::Receiver<CtrlCmd>) -> bool {
     let mut stopped = false;
     while let Ok(cmd) = local_cmd_rx.try_recv() {
         stopped |= matches!(

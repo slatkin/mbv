@@ -59,6 +59,7 @@ fn a_target_snapshot_without_the_start_slot_stops_the_target_and_never_the_sourc
         target: mbv_ui_model::panel_targets::SessionTargetKey::Emby("peer-owner".to_string()),
         start_slot: QueueSlotId::from_raw(1),
         op: QueueTransferFollowUp::StayConnected,
+        source_link: None,
     });
 
     let mut harness = TickHarness::new(app);
