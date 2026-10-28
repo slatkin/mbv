@@ -232,7 +232,8 @@ tiled windows and show library-only with library focus; from the expanded width
 (in mini view when the collapsed panel is below 80 columns). Each press SHALL change the width
 and the covering mode in one panel change. If the panel rejects the target width, a warning toast
 SHALL name the reason and neither the width nor the displayed panel mode SHALL change. The
-collapsed or expanded state SHALL change only through `x` and the F2 Panel width rows; a resize
+collapsed or expanded state SHALL change only through `x`, the F2 Panel width rows, and the
+collapse that `A play from the expanded pinned view collapses to the queue view` starts; a resize
 that mbv did not request SHALL NOT change it. Each press SHALL send at most one panel request,
 off the TUI thread. While a request is pending, a further `x` press SHALL be ignored, with no
 queue. The outcome SHALL set the view on success or flash the reason on failure; a refusal SHALL
@@ -279,6 +280,69 @@ requirement SHALL NOT apply.
 - **WHEN** mbv runs in the pinned panel and the user presses `x` any number of times
 - **THEN** the three-state cycle and the mini-view toggle never run; the layout is always one of
   the two pinned views
+
+### Requirement: A play from the expanded pinned view collapses to the queue view
+
+When mbv runs in the pinned panel at its expanded width and a user action starts playback now,
+mbv SHALL collapse the panel to its queue view, as `x` does from the expanded width. The collapse
+SHALL start only after the Owner accepts the queue replacement, and at most one time per action.
+It SHALL apply to every output. Enqueue, a refused or cancelled play, and a play at the collapsed
+width SHALL NOT change the view. A refused collapse SHALL NOT stop playback.
+
+#### Scenario: Play collapses the expanded panel
+
+- **WHEN** mbv runs in the pinned panel at its expanded width and the user plays an item, plays
+  all, or shuffles from the library
+- **THEN** playback starts, the panel collapses to `width`, and the layout shows queue-only with
+  queue focus
+
+#### Scenario: Play to another output collapses the panel
+
+- **WHEN** mbv runs in the pinned panel at its expanded width, a Cast receiver or a directly
+  controlled Emby session is the playback target, and the user plays from the library
+- **THEN** the play goes to that target and the panel collapses to its queue view
+
+#### Scenario: A multi-item play collapses one time
+
+- **WHEN** mbv runs in the pinned panel at its expanded width and the user plays a multi-item
+  selection whose first item starts playback and whose other items append
+- **THEN** mbv sends one collapse request
+
+#### Scenario: Enqueue keeps the expanded view
+
+- **WHEN** mbv runs in the pinned panel at its expanded width and the user enqueues an item
+- **THEN** the item appends to the queue and the panel stays at its expanded width with the
+  library view
+
+#### Scenario: A cancelled replace keeps the expanded view
+
+- **WHEN** mbv runs in the pinned panel at its expanded width, the user plays into a populated
+  queue, and cancels the replace confirmation
+- **THEN** nothing plays and the panel stays at its expanded width with the library view
+
+#### Scenario: A rejected replace keeps the expanded view
+
+- **WHEN** mbv runs in the pinned panel at its expanded width, the user plays from the library,
+  and the Owner does not apply the replacement
+- **THEN** no collapse request is sent and the panel stays at its expanded width
+
+#### Scenario: A refused collapse does not stop playback
+
+- **WHEN** a play from the expanded pinned view starts playback and the panel refuses the
+  collapsed width
+- **THEN** a warning toast names the reason, the panel keeps its expanded width and library view,
+  and playback continues
+
+#### Scenario: A pending pinned request blocks the collapse
+
+- **WHEN** a pinned panel request is pending and a play from the expanded pinned view starts
+  playback
+- **THEN** mbv sends no second request and the view follows the pending request's outcome
+
+#### Scenario: Unpinned play is unchanged
+
+- **WHEN** mbv is not pinned and the user plays from the library
+- **THEN** the panel mode does not change because of the play
 
 ### Requirement: Two-panel layout hides an empty queue column
 
