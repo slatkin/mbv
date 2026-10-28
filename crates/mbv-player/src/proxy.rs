@@ -115,6 +115,13 @@ impl PlayerProxy {
         self.remote.stop();
     }
 
+    /// Send the guarded `Stop` and wait, bounded, for the owner's correlated
+    /// reply (`RemotePlayer::stop_and_await_ack`): the delivery proof a
+    /// caller needs before it tears the connection down.
+    pub fn stop_and_await_ack(&self, bound: std::time::Duration) {
+        self.remote.stop_and_await_ack(bound);
+    }
+
     pub fn disconnect_remote(&self) {
         self.remote.disconnect();
     }

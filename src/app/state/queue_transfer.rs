@@ -11,6 +11,7 @@ mod take;
 use std::sync::mpsc;
 
 use crate::app::dispatch::notify::ToastSeverity;
+use crate::app::dispatch::queue::QUEUE_OP_ANSWER_BOUND;
 use crate::app::state::panel_targets::{PanelTarget, resolve_session_target};
 use crate::app::{App, QueueLink};
 use mbv_queue::QueueSlotId;
@@ -473,12 +474,20 @@ impl App {
                         );
                         return;
                     }
-                    link.remote.stop();
+                    // Review P1 (row 8.1): the settlement closes this probe
+                    // link right after, and a `Stop` still queued on the
+                    // writer thread loses that race — wait for the owner's
+                    // correlated reply, the delivery proof, before any
+                    // socket teardown.
+                    link.remote.stop_and_await_ack(QUEUE_OP_ANSWER_BOUND);
                 } else {
                     // The connected Take's source is the current peer
-                    // attachment.
+                    // attachment, whose socket the follow-up's disconnect
+                    // tears down: the stop must be delivered first (review
+                    // P1). The Hand off arm above never closes its link, so
+                    // it needs no proof.
                     let (proxy, _rx) = self.queue_link(direction.source_link());
-                    proxy.stop();
+                    proxy.stop_and_await_ack(QUEUE_OP_ANSWER_BOUND);
                 }
             }
         }

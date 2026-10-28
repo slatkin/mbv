@@ -8,7 +8,7 @@
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use mbv_ctrl::player::{PlayerCommand, PlayerEvent, PlayerStatus};
 use mbv_ctrl::{CtrlCmd, CtrlCompatibility, PlaybackIntent, QueueOpId, WireCommand};
@@ -380,6 +380,59 @@ impl RemotePlayer {
     pub fn stop(&self) {
         let _ = self
             .send_playback_intent(self.new_playback_intent(mbv_ctrl::PlaybackIntentAction::Stop));
+    }
+
+    /// Send the guarded `Stop` and wait, bounded, for the owner's
+    /// correlated reply (queue-handoff-and-take review P1, row 8.1): a
+    /// caller that tears this connection down right after needs the reply
+    /// as the delivery proof — a `Stop` still queued on the writer thread
+    /// loses the race against the socket shutdown. The wait is best-effort:
+    /// past the bound, or on a connection lost mid-wait, the caller's
+    /// teardown proceeds the same way.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `pending_playback` mutex is poisoned: a previous owner
+    /// panicked while holding it.
+    pub fn stop_and_await_ack(&self, bound: Duration) {
+        let intent = self.new_playback_intent(mbv_ctrl::PlaybackIntentAction::Stop);
+        let request_id = intent.request_id;
+        if self.send_playback_intent(intent) {
+            let _ = self.await_playback_intent(request_id, bound);
+        }
+    }
+
+    /// Bounded wait until the owner answered the playback intent
+    /// `request_id` — the reader thread drops the pending entry when the
+    /// correlated `PlaybackIntent` reply arrives, which proves the writer
+    /// thread delivered the command and the owner read it. The delivery
+    /// proof a caller needs before it tears the connection down: a `Stop`
+    /// enqueued just before `disconnect` is otherwise only a queued write,
+    /// and the shutdown can eat it (queue-handoff-and-take review P1,
+    /// row 8.1). `false` on timeout or a connection already lost.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `pending_playback` mutex is poisoned: a previous owner
+    /// panicked while holding it.
+    #[must_use]
+    pub fn await_playback_intent(&self, request_id: u64, bound: Duration) -> bool {
+        let deadline = Instant::now() + bound;
+        while !self.is_disconnected() {
+            if !self
+                .pending_playback
+                .lock()
+                .unwrap()
+                .contains_key(&request_id)
+            {
+                return true;
+            }
+            if Instant::now() >= deadline {
+                return false;
+            }
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        false
     }
 
     /// Actively tears down the control-socket connection (#233): shuts

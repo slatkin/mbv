@@ -12,6 +12,7 @@ use mbv_remote_player::{DaemonEndpoint, RemotePlayer};
 use mbv_ui_model::confirm::ConfirmAction;
 use mbv_ui_model::overlay::OverlayRequest;
 
+use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::state::panel_targets::PanelTarget;
 use crate::app::state::queue_transfer::QueueTransferDirection;
 use crate::app::tests::queue::transfer_handoff::{
@@ -325,4 +326,91 @@ fn a_peer_snapshot_without_an_active_slot_receives_nothing_and_leaves_the_local_
         vec![1, 2],
         "the local queue is unchanged"
     );
+}
+
+#[test]
+fn a_dead_home_link_refuses_the_connected_take_before_anything_is_sent() {
+    // Review P2 (row 8.1): behind an attachment whose home link died, the
+    // local Owner link is gone — the copy must not reach the peer
+    // attachment instead of the local Owner.
+    let (mut app, local_cmd_rx) =
+        make_local_daemon_app_stub_with_cmd_rx_and_compat(make_audio_items(2), owner_compat());
+    let (mut peer, _stub_rx, peer_cmd_rx) =
+        RemotePlayer::stub_with_command_rx(make_audio_items(3), 1);
+    peer.set_ctrl_compatibility_for_test(peer_compat(true, true, false));
+    let sess = peer_session("peer-owner");
+    let (_dropped_tx, attach_rx) = mpsc::channel();
+    app.switch_to_direct_remote(
+        &sess,
+        peer,
+        attach_rx,
+        &DaemonEndpoint::Tcp("127.0.0.1:47788".parse().unwrap()),
+    );
+    app.panel_targets = vec![PanelTarget::Emby(Box::new(sess))];
+    // The home link died behind the attachment.
+    app.suspended_local = None;
+    while local_cmd_rx.try_recv().is_ok() {}
+    while peer_cmd_rx.try_recv().is_ok() {}
+
+    app.begin_queue_transfer(QueueTransferDirection::Take, &transfer_key());
+
+    assert!(
+        local_replace(&local_cmd_rx).is_none() && peer_replace(&peer_cmd_rx).is_none(),
+        "the copy must not reach the peer attachment"
+    );
+    assert!(
+        app.pending_queue_transfer.is_none() && app.staged_queue_transfer.is_none(),
+        "the refused Take arms nothing"
+    );
+    assert_eq!(app.status_severity, ToastSeverity::Error);
+    assert!(
+        app.status.contains("the local Owner connection was lost"),
+        "the refusal names the lost local Owner link, got {:?}",
+        app.status
+    );
+}
+
+#[test]
+fn a_probe_link_lost_during_the_confirm_names_the_peer() {
+    // Review P2 (row 8.1): the dead link is the peer's probe — the report
+    // must name the peer, not the local Owner the settlement's own link
+    // loss names.
+    let _guard = crate::app::DIRECT_CONNECT_TEST_LOCK.lock().unwrap();
+    let (mut app, local_cmd_rx) =
+        make_local_daemon_app_stub_with_cmd_rx_and_compat(make_audio_items(2), owner_compat());
+    let (mut probe, _stub_rx, probe_cmd_rx) =
+        RemotePlayer::stub_with_command_rx(make_audio_items(3), 1);
+    probe.set_ctrl_compatibility_for_test(peer_compat(true, true, false));
+    probe.set_disconnected_for_test(true);
+    let (_dropped_tx, probe_event_rx) = mpsc::channel();
+    *PROBE_LINK.lock().unwrap() = Some((probe, probe_event_rx));
+    *crate::app::DIRECT_CONNECT_OVERRIDE.lock().unwrap() = Some(staged_probe_connect);
+    app.panel_targets = vec![PanelTarget::Emby(Box::new(peer_session("peer-owner")))];
+
+    app.begin_queue_transfer(QueueTransferDirection::Take, &transfer_key());
+
+    assert!(
+        matches!(app.pending_overlay, Some(OverlayRequest::Confirm(_))),
+        "the staged Take raised the confirm prompt"
+    );
+    app.pending_overlay = None;
+    app.apply_confirm_action(
+        ConfirmAction::ConfirmQueueTransfer(transfer_key()),
+        confirm_key(KeyCode::Enter),
+    );
+
+    assert!(
+        app.status.contains("the peer connection was lost"),
+        "the report names the dead probe link, got {:?}",
+        app.status
+    );
+    assert!(
+        local_replace(&local_cmd_rx).is_none() && peer_replace(&probe_cmd_rx).is_none(),
+        "nothing is sent to either owner"
+    );
+    assert!(
+        app.pending_queue_transfer.is_none() && app.staged_queue_transfer.is_none(),
+        "the dead probe arms nothing"
+    );
+    *crate::app::DIRECT_CONNECT_OVERRIDE.lock().unwrap() = None;
 }

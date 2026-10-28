@@ -8,7 +8,7 @@ use mbv_emby_model::EmbyItem;
 use mbv_queue::QueueItem;
 use mbv_ui_model::ui_util::is_playable;
 
-pub(in crate::app) use self::queue_op::QueueOpEdit;
+pub(in crate::app) use self::queue_op::{QUEUE_OP_ANSWER_BOUND, QueueOpEdit};
 
 mod pending_playback;
 mod playlist;

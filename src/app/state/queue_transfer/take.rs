@@ -9,7 +9,7 @@ use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::dispatch::queue::QueueOpEdit;
 use crate::app::state::queue_transfer::{
     PendingQueueTransfer, QueueTransferDirection, QueueTransferFollowUp, StagedQueueTransfer,
-    StagedQueueTransferLink, TransferFailure, transfer_failure_message,
+    StagedQueueTransferLink,
 };
 use crate::app::{App, QueueLink};
 use mbv_queue::QueueSlotId;
@@ -65,10 +65,28 @@ impl App {
     /// for the local Owner to observe the start slot before the peer stops.
     /// Take never touches a library route (ADR 0012): it severs nothing and
     /// the flow's only connection change is the follow-up's F3 disconnect.
+    /// The local Owner link the Take's copy must reach: the suspended home
+    /// link behind the attachment, or the current player when it is the
+    /// local daemon. None means the home link is already gone — the copy
+    /// would reach the peer attachment instead of the local Owner.
+    fn queue_take_target_link_present(&self) -> bool {
+        self.suspended_local.is_some() || self.is_local_daemon()
+    }
+
     pub(super) fn begin_queue_take(&mut self, target: &SessionTargetKey) {
         let Some((sess, endpoint, peer_name)) = self.resolve_queue_transfer_target(target) else {
             return;
         };
+        // The target gate: the copy must reach a live local Owner link
+        // (review P2, row 8.1). Behind an attachment whose home link died
+        // there is none — refuse before anything is connected or sent.
+        if !self.queue_take_target_link_present() {
+            self.flash(
+                "Take failed: the local Owner connection was lost".to_string(),
+                ToastSeverity::Error,
+            );
+            return;
+        }
         let connected = self.queue_transfer_peer_link_is_current(&sess.id);
         let staged_link = if connected {
             None
@@ -122,12 +140,12 @@ impl App {
         let source_link = match link {
             Some(link) if link.remote.is_disconnected() => {
                 // The link opened for the transfer died while the prompt was
-                // up: report and drop it, so nothing is sent.
+                // up: report and drop it, so nothing is sent. The loss is
+                // the peer's, so the message names the peer (review P2,
+                // row 8.1) — the settlement's link-lost failure names the
+                // local Owner, its own lost link.
                 self.flash(
-                    transfer_failure_message(
-                        QueueTransferDirection::Take,
-                        TransferFailure::LinkLost,
-                    ),
+                    "Take failed: the peer connection was lost".to_string(),
                     ToastSeverity::Error,
                 );
                 Self::drop_staged_probe_link(Some(link));
@@ -148,6 +166,17 @@ impl App {
         target: &SessionTargetKey,
         source_link: Option<StagedQueueTransferLink>,
     ) {
+        // The target gate, re-checked at the copy (review P2, row 8.1): the
+        // home link can die while the confirm prompt is up, and the copy
+        // would then reach the peer attachment instead of the local Owner.
+        if !self.queue_take_target_link_present() {
+            Self::drop_staged_probe_link(source_link);
+            self.flash(
+                "Take failed: the local Owner connection was lost".to_string(),
+                ToastSeverity::Error,
+            );
+            return;
+        }
         let Some(read) = self.queue_take_source_read(source_link.as_ref()) else {
             // A stale F3 row (design D2): the Client sends nothing, changes
             // nothing, and reports that nothing plays on the source.
