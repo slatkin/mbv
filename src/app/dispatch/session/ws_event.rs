@@ -1,4 +1,4 @@
-use crate::app::{App, LibEvent, ModelContentEvent, PanelFocus, dispatch::notify::ToastSeverity};
+use crate::app::{App, LibEvent, ModelContentEvent, dispatch::notify::ToastSeverity};
 use mbv_ctrl::player::PlayerCommand;
 use mbv_ws::WsEvent;
 
@@ -121,7 +121,6 @@ impl App {
             return;
         }
         let start_idx = start_index.min(items.len().saturating_sub(1));
-        self.set_panel_focus(PanelFocus::Queue);
         if items.len() == 1 {
             self.flash(items[0].playback_label(), ToastSeverity::Neutral);
         } else {
@@ -143,7 +142,9 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app::PanelFocus;
     use crate::app::tests::{live_owner_channel, make_app_stub};
+    use mbv_ui_model::settings::PinnedWidth;
     use rstest::rstest;
 
     /// Install a stub Emby runtime whose transport is `http`, so the handler's
@@ -171,7 +172,11 @@ mod tests {
 
     /// `Play` issues a real Emby fetch (`get_items_by_ids`), so its queue
     /// replacement, `Remote` source, and honoured start position are asserted
-    /// end to end against the mock transport.
+    /// end to end against the mock transport. The pinned width and panel focus
+    /// start set so the emby-remote-play contract reads directly: a remote
+    /// Play leaves local UI interaction unchanged — the library keeps focus,
+    /// the expanded pinned view stays expanded, and no pinwin request is
+    /// recorded (pinned-play-collapses-to-queue rows 3.1/3.2).
     #[rstest]
     #[case::multi_item(
         PLAY_TWO_ITEMS,
@@ -187,9 +192,13 @@ mod tests {
         #[case] start_position_ticks: i64,
         #[case] expected_positions: Vec<(&str, i64)>,
     ) {
+        let _guard = crate::pin::PINNED_REQUEST_TEST_LOCK.lock().unwrap();
+        crate::pin::PINNED_REQUESTS.lock().unwrap().clear();
         let http = mbv_net::mock_http::MockHttp::new();
         http.respond(200, response);
         let mut app = app_with_mock_emby(&http);
+        app.pinned_width = PinnedWidth::Expanded;
+        app.panel_focus = PanelFocus::Library;
         let cmd_rx = live_owner_channel(&mut app);
 
         app.handle_ws_event(WsEvent::Play {
@@ -214,6 +223,12 @@ mod tests {
                     .map(|item| (item.id.as_str(), item.playback_position_ticks))
                     .collect::<Vec<_>>() == expected_positions
         ));
+        assert_eq!(app.panel_focus, PanelFocus::Library);
+        assert_eq!(app.pinned_width, PinnedWidth::Expanded);
+        assert!(
+            crate::pin::PINNED_REQUESTS.lock().unwrap().is_empty(),
+            "a remote Play sends no pinwin request"
+        );
     }
 
     #[test]
