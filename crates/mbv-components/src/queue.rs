@@ -64,9 +64,10 @@ pub struct QueueComponent {
     /// `view()` (component-retained geometry, task 3.1): the list body, the
     /// empty-state text, and the context-menu keyboard anchor panel.
     content_area: Rect,
-    /// The projected status pill row (playlist source, autosave prefix, dirty
-    /// suffix), pushed by the queue projection and painted at the panel's
-    /// own status row.
+    /// The projected status pill row (owner indicator, playlist source,
+    /// autosave prefix, dirty suffix), pushed by the queue projection and
+    /// painted at the panel's own status row.
+    status_owner: Vec<Span<'static>>,
     status_playlist: Vec<Span<'static>>,
     status_autosave: Option<Vec<Span<'static>>>,
     status_dirty: Option<Vec<Span<'static>>>,
@@ -108,6 +109,7 @@ impl QueueComponent {
             empty_text: String::new(),
             area: Rect::default(),
             content_area: Rect::default(),
+            status_owner: Vec::new(),
             status_playlist: Vec::new(),
             status_autosave: None,
             status_dirty: None,
@@ -195,14 +197,17 @@ impl QueueComponent {
         self.mini_view = mini_view;
     }
 
-    /// Project the status pill row (playlist source, autosave prefix, dirty
-    /// suffix), painted at the `QueueColumn` footer below the recessed box.
+    /// Project the status pill row: the owner indicator (always shown, design
+    /// D7), the playlist source, the autosave prefix, and the dirty suffix,
+    /// painted at the `QueueColumn` footer below the recessed box.
     pub fn set_status_pills(
         &mut self,
+        owner: Vec<Span<'static>>,
         playlist: Vec<Span<'static>>,
         autosave: Option<Vec<Span<'static>>>,
         dirty: Option<Vec<Span<'static>>>,
     ) {
+        self.status_owner = owner;
         self.status_playlist = playlist;
         self.status_autosave = autosave;
         self.status_dirty = dirty;
@@ -314,6 +319,7 @@ impl Component for QueueComponent {
             let regions = render_queue_status(
                 frame,
                 footer_row,
+                self.status_owner.clone(),
                 self.status_playlist.clone(),
                 self.status_autosave.clone(),
                 self.status_dirty.clone(),

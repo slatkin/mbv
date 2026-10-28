@@ -82,11 +82,16 @@ fn spans_width(spans: &[Span<'_>]) -> u16 {
 ///
 /// Left side: the autosave indicator (when present), one space delimiter,
 /// then the playlist source pill. Right side: the dirty indicator (when
-/// present). Content spans carry no outer pads; this painter owns them.
+/// present), then the owner indicator — the queue panel names the Player
+/// owner whose queue it shows (design D7), so the owner pill sits far
+/// right and wins over the dirty marker on narrow footers. Content spans
+/// carry no outer pads except the owner and dirty pills, which include
+/// their own; this painter owns the rest.
 #[must_use]
 pub fn render_queue_status(
     frame: &mut Frame,
     area: Rect,
+    owner: Vec<Span<'static>>,
     playlist: Vec<Span<'static>>,
     autosave: Option<Vec<Span<'static>>>,
     dirty: Option<Vec<Span<'static>>>,
@@ -114,10 +119,18 @@ pub fn render_queue_status(
     left.push(pad.clone());
     let left_width = spans_width(&left);
     frame.render_widget(Paragraph::new(Line::from(left)), area);
+    // The right segment: the dirty marker (when present) and then the
+    // always-shown owner indicator, right-anchored as one group. The owner
+    // pill is informational (design D7): it takes no hit region. The owner
+    // spans carry their own pads; the painter wraps dirty as before.
+    let mut right: Vec<Span<'static>> = Vec::new();
     if let Some(spans) = dirty {
-        let mut right = vec![pad.clone()];
+        right.push(pad.clone());
         right.extend(spans);
-        right.push(pad);
+        right.push(pad.clone());
+    }
+    right.extend(owner);
+    if !right.is_empty() {
         let width = spans_width(&right);
         let x = area.x.saturating_add(area.width.saturating_sub(width));
         let left_end = area.x.saturating_add(left_width);

@@ -602,6 +602,7 @@ mod mouse;
 mod mouse_sidebar;
 mod playback_title_parts;
 mod prefix_mode;
+mod queue_owner;
 mod queue_playback;
 mod sessions;
 mod settings;

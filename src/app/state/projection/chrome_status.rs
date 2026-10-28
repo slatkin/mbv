@@ -10,7 +10,7 @@
 //! `QueueColumn` footer (`render_queue_status`), never here.
 
 use crate::app::dispatch::notify::ToastSeverity;
-use crate::app::{App, PanelFocus, RemoteSlotState};
+use crate::app::{App, PanelFocus, QueueLink, RemoteSlotState};
 use mbv_render::components::chrome::daemon_endpoint_label;
 use mbv_render::components::widgets::service_state_color;
 use mbv_render::indicators;
@@ -183,6 +183,44 @@ impl App {
         let daemon_endpoint = self.config.lock().unwrap().daemon_client_endpoint.clone();
         let label = self.remote_label(remote_state, &daemon_endpoint);
         (label.trim_start().to_string(), is_remote)
+    }
+
+    /// The shown queue's Player owner's name (design D7, `queue-playback-panel`
+    /// delta): the connected peer by device name while the shown queue is the
+    /// peer link, else this machine's device name (the local Owner). The peer
+    /// resolution mirrors the remote pill's (`remote_label`): route name,
+    /// session device name, endpoint label.
+    pub(in crate::app) fn queue_owner_label(&self) -> String {
+        if self.viewed_queue_link() == QueueLink::Peer {
+            let daemon_endpoint = self.config.lock().unwrap().daemon_client_endpoint.clone();
+            self.active_route
+                .as_ref()
+                .map(|name| format!("route:{name}"))
+                .or_else(|| self.direct_remote_label.clone())
+                .or_else(|| daemon_endpoint_label(&daemon_endpoint))
+                .unwrap_or_else(mbv_emby::device_name)
+        } else {
+            mbv_emby::device_name()
+        }
+    }
+
+    /// The queue footer's owner indicator content, without outer pads (design
+    /// D7): always shown, naming the Player owner whose queue the panel
+    /// shows. The painter adds the pads and gives it no hit region — it is
+    /// informational only.
+    pub(in crate::app) fn queue_owner_status_spans(&self) -> Vec<Span<'static>> {
+        let style = Style::default()
+            .fg(mbv_theme::Role::TextFocusAccent.color())
+            .bg(mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false).fill);
+        let icon = if self.use_nerd_fonts {
+            "\u{f1616}"
+        } else {
+            "\u{1F5A7}"
+        };
+        vec![
+            Span::styled(icon.to_string(), style),
+            Span::styled(format!(" {}", self.queue_owner_label()), style),
+        ]
     }
 
     /// The playlist source pill content (glyph plus name), without outer pads.

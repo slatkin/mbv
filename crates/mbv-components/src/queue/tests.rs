@@ -122,7 +122,12 @@ fn painted_footer_component() -> QueueComponent {
     let mut component = QueueComponent::new();
     component.set_rows(&[], PlaybackState::default());
     component.set_link(QueueLink::Local);
-    component.set_status_pills(vec![Span::raw("X"), Span::raw("name")], None, None);
+    component.set_status_pills(
+        vec![Span::raw("O")],
+        vec![Span::raw("X"), Span::raw("name")],
+        None,
+        None,
+    );
     let mut terminal = Terminal::new(TestBackend::new(60, 24)).unwrap();
     terminal
         .draw(|frame| component.view(frame, Rect::new(0, 0, 60, 24)))

@@ -240,11 +240,14 @@ impl Model {
             }
             queue.set_cursor(&update.cursor);
             queue.set_link(update.link);
-            // The footer pills are all queue concern (playlist source,
-            // autosave prefix, dirty suffix) — never the library column's
-            // status bar. The remote target lives on the queue header row
-            // now; the footer pill is gone.
+            // The footer pills are all queue concern (owner indicator, playlist
+            // source, autosave prefix, dirty suffix) — never the library
+            // column's status bar. The owner pill always names the shown
+            // Player owner (design D7), so it flips in the same sync pass the
+            // shown link flips; the playback target's host lives on the queue
+            // header row.
             queue.set_status_pills(
+                self.app.queue_owner_status_spans(),
                 self.app.playlist_status_spans(),
                 self.app.autosave_status_spans(),
                 self.app.dirty_status_spans(),
