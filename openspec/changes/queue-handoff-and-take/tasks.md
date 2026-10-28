@@ -28,7 +28,7 @@
 
 ## 6. F3 Hand off and Take requests
 
-- [ ] 6.1 Add `ShellRequest::HandOffSession(key)` and `ShellRequest::TakeSession(key)` in `crates/mbv-ui-msg`, the `h`/`t` keys in `crates/mbv-components/src/sessions.rs` gated per design D6 (`has_direct_endpoint`, false for this device's own row; `h` only while the local Owner plays; `t` only while the row shows the peer playing; both only when `home_is_local_daemon`), and the footer hints. Give each request an exhaustive dispatch arm. Verify with one component test (contract: each key emits the request with the stable key only when its D6 conditions hold) and `cargo nextest run -p mbv-components`.
+- [x] 6.1 Add `ShellRequest::HandOffSession(key)` and `ShellRequest::TakeSession(key)` in `crates/mbv-ui-msg`, the `h`/`t` keys in `crates/mbv-components/src/sessions.rs` gated per design D6 (`has_direct_endpoint`, false for this device's own row; `h` only while the local Owner plays; `t` only while the row shows the peer playing; both only when `home_is_local_daemon`), and the footer hints. Give each request an exhaustive dispatch arm. Verify with one component test (contract: each key emits the request with the stable key only when its D6 conditions hold) and `cargo nextest run -p mbv-components`.
 
 ## 7. Hand off
 
