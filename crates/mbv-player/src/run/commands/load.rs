@@ -204,6 +204,7 @@ impl PlaybackRun {
             had_previous_queue,
             active_as_emby.as_ref(),
             active_pos,
+            start_position_secs,
             active_runtime,
             active_title,
             active_guid,
@@ -221,6 +222,7 @@ impl PlaybackRun {
         had_previous_queue: bool,
         active_as_emby: Option<&EmbyItem>,
         active_pos: i64,
+        start_position_secs: Option<f64>,
         active_runtime: i64,
         active_title: String,
         active_guid: String,
@@ -256,7 +258,11 @@ impl PlaybackRun {
         }
         *progress = spawn_progress_reporter(self.reporter.clone());
         let mut status = self.status.lock().unwrap();
-        status.position_ticks = active_pos;
+        // A replacement that carries a start position seeds its carried
+        // position, not the item's stored ticks (queue-handoff-and-take
+        // review P2): the take at 3600s must not briefly report the stored 0.
+        status.position_ticks =
+            start_position_secs.map_or(active_pos, mbv_emby_model::seconds_to_ticks);
         status.runtime_ticks = active_runtime;
         status.current_idx = self.current_idx;
         status.queue_len = self.queue_len();
@@ -357,6 +363,7 @@ impl PlaybackRun {
             had_previous_queue,
             active_item.as_emby(),
             active_item.playback_position_ticks(),
+            start_position_secs,
             active_item.runtime_ticks(),
             active_item.title().to_string(),
             active_item.id().to_string(),

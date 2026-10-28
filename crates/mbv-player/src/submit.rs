@@ -192,6 +192,13 @@ impl Player {
         {
             let mut st = status.lock().unwrap();
             st.seed_from_item(start_item, start_idx, items.len());
+            // A replacement that carries a start position seeds its carried
+            // position (queue-handoff-and-take review P2): the item's stored
+            // ticks would briefly report a stale position until the first
+            // playback observation.
+            if let Some(secs) = start_position_secs {
+                st.position_ticks = mbv_emby_model::seconds_to_ticks(secs);
+            }
             st.active = true;
         };
 
@@ -334,10 +341,13 @@ impl Player {
         drop(stop_tx);
         if sent {
             tracing::info!(name: "player.submit.reused_run", target: "player", run_identity, "queue replacement submitted into the live run");
-            self.status
-                .lock()
-                .unwrap()
-                .seed_from_item(&start_item, start_idx, items_len);
+            let mut st = self.status.lock().unwrap();
+            st.seed_from_item(&start_item, start_idx, items_len);
+            // The carried position seeds the status here too (queue-handoff-and-take
+            // review P2); the run's queue-start seed applies the same value.
+            if let Some(secs) = start_position_secs {
+                st.position_ticks = mbv_emby_model::seconds_to_ticks(secs);
+            }
             return Ok(());
         }
         Err((
