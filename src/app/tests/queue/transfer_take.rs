@@ -7,6 +7,7 @@ use std::sync::mpsc;
 use crossterm::event::KeyCode;
 
 use crate::app::tests::tick_integration::harness::TickHarness;
+use mbv_ctrl::player::PlayerEvent;
 use mbv_ctrl::{CtrlCmd, CtrlCompatibility};
 use mbv_remote_player::{DaemonEndpoint, RemotePlayer};
 use mbv_ui_model::confirm::ConfirmAction;
@@ -390,6 +391,92 @@ fn a_connected_take_whose_peer_link_died_never_stops_the_local_owner() {
     assert!(
         !app.direct_remote_connected && !app.has_remote_queue(),
         "the Take ends unconnected"
+    );
+}
+
+#[test]
+fn a_settled_take_never_stops_a_different_peer_attachment() {
+    // PR #973 review: the connected Take's peer drops after the copy is
+    // armed; the teardown reinstalls the home link, and the user connects
+    // to a different peer before the local Owner reports the start slot.
+    // `self.player` then names the new peer — the settlement's source stop
+    // and step-7 close must skip it: it was never the transfer's link.
+    let (mut app, local_cmd_rx) =
+        make_local_daemon_app_stub_with_cmd_rx_and_compat(make_audio_items(2), owner_compat());
+    let (mut peer, _stub_rx, peer_cmd_rx) =
+        RemotePlayer::stub_with_command_rx(make_audio_items(3), 1);
+    peer.set_ctrl_compatibility_for_test(peer_compat(true, true, false));
+    let sess = peer_session("peer-owner");
+    let (_dropped_tx, attach_rx) = mpsc::channel();
+    app.switch_to_direct_remote(
+        &sess,
+        peer,
+        attach_rx,
+        &DaemonEndpoint::Tcp("127.0.0.1:47788".parse().unwrap()),
+    );
+    app.panel_targets = vec![PanelTarget::Emby(Box::new(sess))];
+    // The local Owner's post-replacement answer, pre-pushed onto its
+    // suspended link: the start slot is queued but not yet observed
+    // active, so the settlement stays armed across the reconnect below.
+    let (home_tx, home_rx) = mpsc::channel();
+    app.suspended_local.as_mut().unwrap().player_rx = home_rx;
+    home_tx
+        .send(applied(1, peer_snapshot(&make_audio_items(3), 99, false)))
+        .unwrap();
+    while local_cmd_rx.try_recv().is_ok() {}
+    while peer_cmd_rx.try_recv().is_ok() {}
+
+    app.begin_queue_transfer(QueueTransferDirection::Take, &transfer_key());
+    app.pending_overlay = None;
+    app.apply_confirm_action(
+        ConfirmAction::ConfirmQueueTransfer(transfer_key()),
+        confirm_key(KeyCode::Enter),
+    );
+    assert!(
+        app.pending_queue_transfer.is_some(),
+        "the confirmed Take armed the pending transfer"
+    );
+
+    // The peer link drops and the teardown reinstalls the home link; the
+    // user then connects to a different peer before the local Owner
+    // reports the start slot playing.
+    app.restore_local_mode("Daemon disconnected — returned to local mode");
+    let other_sess = peer_session("peer-other");
+    let (other_peer, other_peer_rx, other_cmd_rx) =
+        RemotePlayer::stub_with_command_rx(make_audio_items(1), 0);
+    app.switch_to_direct_remote(
+        &other_sess,
+        other_peer,
+        other_peer_rx,
+        &DaemonEndpoint::Tcp("127.0.0.1:47789".parse().unwrap()),
+    );
+
+    // The local Owner then reports the start slot active and playing over
+    // its link — the same channel, still held inside `suspended_local`.
+    home_tx
+        .send(PlayerEvent::UnifiedQueueUpdated(Box::new(peer_snapshot(
+            &make_audio_items(3),
+            1,
+            true,
+        ))))
+        .unwrap();
+
+    let mut harness = TickHarness::new(app);
+    harness.step();
+
+    let app = &harness.model().app;
+    assert!(app.pending_queue_transfer.is_none(), "the transfer settles");
+    assert!(
+        !stop_sent_to(&other_cmd_rx),
+        "the source stop never lands on the different peer"
+    );
+    assert!(
+        !stop_sent_to(&local_cmd_rx),
+        "the local Owner keeps playing the taken queue"
+    );
+    assert!(
+        app.direct_remote_connected && app.has_remote_queue(),
+        "the different peer attachment is not the transfer's link to close"
     );
 }
 

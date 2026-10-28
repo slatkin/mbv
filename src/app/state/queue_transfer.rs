@@ -347,6 +347,19 @@ impl App {
         self.settle_target_observation(direction, target, start_slot, op, source_link)
     }
 
+    /// Whether the current peer attachment still holds the transfer's own
+    /// session — the link identity the transfer ran against (PR #973
+    /// review). `self.player` names the transfer's peer only while the same
+    /// session holds the attachment: a dropped peer's teardown reinstalls
+    /// the local link, and a later connect can hold a different peer —
+    /// neither owns the transfer's source stop or its step-7 close.
+    fn transfer_peer_attachment_is_current(&self, target: &SessionTargetKey) -> bool {
+        match target {
+            SessionTargetKey::Emby(id) => self.queue_transfer_peer_link_is_current(id),
+            SessionTargetKey::Cast(_) => false,
+        }
+    }
+
     /// Whether the transfer's target link is gone before the target reported
     /// playback (design D2 failure). A peer target is lost when its queue
     /// view is gone or its connection reports a drop the drain has not torn
@@ -414,7 +427,7 @@ impl App {
                 },
                 "target reports the start slot playing"
             );
-            self.stop_transfer_source(direction, source_link.as_ref());
+            self.stop_transfer_source(direction, &target, source_link.as_ref());
             self.run_queue_transfer_follow_up(op, &target);
             Self::close_transfer_source_link(source_link);
             self.pending_queue_transfer = None;
@@ -456,6 +469,7 @@ impl App {
     fn stop_transfer_source(
         &mut self,
         direction: QueueTransferDirection,
+        target: &SessionTargetKey,
         source_link: Option<&StagedQueueTransferLink>,
     ) {
         match direction {
@@ -499,18 +513,20 @@ impl App {
                     // attachment, whose socket the follow-up's disconnect
                     // tears down: the stop must be delivered first (review
                     // P1). The Hand off arm above never closes its link, so
-                    // it needs no proof. When the attachment no longer holds
-                    // the source — the peer link dropped mid-transfer and
-                    // the teardown reinstalled the home link, or the link is
-                    // dead and its teardown is still pending — `queue_link`
-                    // falls through to `self.player`, which is then the
-                    // local Owner the Take just started; a gone source is
-                    // nothing to stop (PR #973 review).
-                    if !self.can_disconnect_remote() || self.player.is_remote_disconnected() {
+                    // it needs no proof. `self.player` names the source only
+                    // while the transfer's own session holds the attachment
+                    // — the peer link's teardown reinstalled the home link,
+                    // and a connect since then can hold a different peer;
+                    // `queue_link` resolves either to `self.player` and the
+                    // stop would land on an owner the transfer never ran
+                    // against (PR #973 review).
+                    if !self.transfer_peer_attachment_is_current(target)
+                        || self.player.is_remote_disconnected()
+                    {
                         tracing::warn!(
                             name: "queue_transfer.source_link_missing",
                             target: "queue_transfer",
-                            "the peer attachment is gone; skipping the source stop"
+                            "the transfer's peer attachment is gone; skipping the source stop"
                         );
                         return;
                     }
@@ -548,7 +564,12 @@ impl App {
                 "Hand off settled: the Client stays attached to the peer"
             ),
             QueueTransferFollowUp::ClosePeerLink => {
-                if self.can_disconnect_remote() {
+                // The connection the Take ran over — close only while the
+                // current attachment still owns it: a dropped peer's
+                // teardown already restored local, and a different peer
+                // connected since is not the transfer's link to close
+                // (PR #973 review).
+                if self.transfer_peer_attachment_is_current(target) {
                     self.disconnect_remote();
                 } else {
                     tracing::debug!(
