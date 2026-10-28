@@ -419,3 +419,119 @@ fn a_peer_link_lost_before_observation_leaves_local_playing() {
         "local playback continues after the peer link is lost"
     );
 }
+
+/// Every `CtrlCmd` the local Owner received, drained for inspection.
+fn local_owner_commands(local_cmd_rx: &mpsc::Receiver<CtrlCmd>) -> Vec<CtrlCmd> {
+    let mut commands = Vec::new();
+    while let Ok(command) = local_cmd_rx.try_recv() {
+        commands.push(command);
+    }
+    commands
+}
+
+fn hand_back_sent(commands: &[CtrlCmd]) -> bool {
+    commands
+        .iter()
+        .any(|command| matches!(command, CtrlCmd::Stop | CtrlCmd::SelectPlaybackOutput(_)))
+}
+
+#[test]
+fn an_unconnected_hand_off_never_stops_the_local_owners_remote_output() {
+    // Review P1 (unit G, commit 654eb9f89): the attach's sever must not run
+    // the Owner-output hand-back — the local Owner may be the transfer source
+    // playing through a Cast or Emby Session output, and its Stop must wait
+    // for the settlement's observation, not ride the attach.
+    let _guard = crate::app::DIRECT_CONNECT_TEST_LOCK.lock().unwrap();
+    let items = make_audio_items(3);
+    let (mut app, local_cmd_rx) = hand_off_source_app(items.clone());
+    app.player
+        .remote()
+        .update_playback_output_for_test(mbv_ctrl::OutputState::Cast {
+            receiver_id: "r-1".to_string(),
+            name: "Living Room".to_string(),
+            connection: mbv_ctrl::OutputConnection::Connected,
+        });
+    let (mut probe, _stub_rx, _peer_cmd_rx) = RemotePlayer::stub_with_command_rx(Vec::new(), 0);
+    probe.set_ctrl_compatibility_for_test(peer_compat(true, true, false));
+    let (answer_tx, answer_rx) = mpsc::channel();
+    answer_tx
+        .send(applied(1, peer_snapshot(&items, 0, true)))
+        .unwrap();
+    *PROBE_LINK.lock().unwrap() = Some((probe, answer_rx));
+    *crate::app::DIRECT_CONNECT_OVERRIDE.lock().unwrap() = Some(staged_probe_connect);
+    app.panel_targets = vec![PanelTarget::Emby(Box::new(peer_session("peer-owner")))];
+
+    app.begin_queue_transfer(QueueTransferDirection::HandOff, &hand_off_key());
+
+    let sent_at_attach = local_owner_commands(&local_cmd_rx);
+    assert!(
+        !hand_back_sent(&sent_at_attach),
+        "the attach must not stop the source or hand its output back, got {sent_at_attach:?}"
+    );
+
+    let mut harness = TickHarness::new(app);
+    harness.step();
+
+    let sent_at_settle = local_owner_commands(&local_cmd_rx);
+    assert!(
+        !hand_back_sent(&sent_at_settle),
+        "no Owner-output hand-back rides the transfer, got {sent_at_settle:?}"
+    );
+    assert_eq!(
+        sent_at_settle
+            .iter()
+            .filter(|command| matches!(
+                command,
+                CtrlCmd::PlaybackIntent(intent) if intent.action == mbv_ctrl::PlaybackIntentAction::Stop
+            ))
+            .count(),
+        1,
+        "the only local stop is the settlement's source stop"
+    );
+    *crate::app::DIRECT_CONNECT_OVERRIDE.lock().unwrap() = None;
+}
+
+#[test]
+fn a_dead_home_link_never_stops_the_peer_at_the_success_settlement() {
+    // Review P2 (unit G, commit 654eb9f89): when the suspended home link dies
+    // mid-transfer while the peer is attached, the success settlement has no
+    // source link left — it must skip the source stop instead of falling
+    // through to `self.player`, which is the peer and would kill the
+    // just-handed-off playback.
+    let (mut app, _local_cmd_rx, peer_cmd_rx, peer_tx) =
+        connected_hand_off_app(peer_compat(true, true, false), make_audio_items(2));
+    // The peer's answer already shows the start slot active and playing, so
+    // the very next settlement succeeds.
+    peer_tx
+        .send(applied(1, peer_snapshot(&make_audio_items(2), 0, true)))
+        .unwrap();
+    let (home_tx, home_rx) = mpsc::channel();
+    app.suspended_local.as_mut().unwrap().player_rx = home_rx;
+    home_tx
+        .send(PlayerEvent::RemoteDisconnected("home owner lost".into()))
+        .unwrap();
+
+    app.begin_queue_transfer(QueueTransferDirection::HandOff, &hand_off_key());
+    assert!(app.pending_queue_transfer.is_some(), "the copy armed");
+
+    let mut harness = TickHarness::new(app);
+    harness.step();
+
+    let model = harness.model();
+    let app = &model.app;
+    assert!(app.pending_queue_transfer.is_none(), "the transfer settles");
+    assert!(
+        !stop_sent_to(&peer_cmd_rx),
+        "the settlement must never stop the peer it just handed off to"
+    );
+    assert!(
+        app.has_remote_queue(),
+        "the peer keeps the handed-off queue and playback"
+    );
+    assert!(
+        model.application.mounted(&mbv_ui_msg::ComponentId::Modal(
+            mbv_ui_msg::ModalId::DaemonLost
+        )),
+        "the dead home link raised the daemon-lost modal"
+    );
+}

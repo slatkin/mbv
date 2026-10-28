@@ -387,7 +387,11 @@ impl App {
             }
             // Design D1 step 2: sever the current connection and attach the
             // peer, as by Connect — the Hand off ends connected (step 7).
-            self.sever_active_connection();
+            // The sever keeps the Owner output alone (design D2): the local
+            // Owner may be the transfer source playing through a Cast or
+            // Emby Session output, and its Stop must wait for the
+            // settlement's observation, not ride the attach.
+            self.sever_connections_without_output_change();
             self.switch_to_direct_remote(&sess, link.remote, link.remote_rx, &endpoint);
         }
         self.send_queue_hand_off_copy(&staged.target);
@@ -623,10 +627,35 @@ impl App {
     }
 
     /// Send `Stop` to the transfer's source owner (design D2 success, step 6).
-    /// Best-effort like every other fire-and-forget player send.
+    /// Best-effort like every other fire-and-forget player send. A Hand off
+    /// source is the local Owner link: the suspended home link while a peer
+    /// connection holds the player, the current player while it is the local
+    /// daemon. When no local Owner link exists — the home link died
+    /// mid-transfer while the peer is attached — there is nothing to stop,
+    /// and falling through to `self.player` would stop the handed-off
+    /// playback on the peer instead.
     fn stop_transfer_source(&mut self, direction: QueueTransferDirection) {
-        let (proxy, _rx) = self.queue_link(direction.source_link());
-        proxy.stop();
+        match direction {
+            QueueTransferDirection::HandOff => {
+                let source = match (&self.suspended_local, self.is_local_daemon()) {
+                    (Some(home), _) => &home.player,
+                    (None, true) => &self.player,
+                    (None, false) => {
+                        tracing::warn!(
+                            name: "queue_transfer.source_link_missing",
+                            target: "queue_transfer",
+                            "the local Owner link is gone; skipping the source stop"
+                        );
+                        return;
+                    }
+                };
+                source.stop();
+            }
+            QueueTransferDirection::Take => {
+                let (proxy, _rx) = self.queue_link(direction.source_link());
+                proxy.stop();
+            }
+        }
     }
 
     /// Send `Stop` to the transfer's target owner after admission removed the
