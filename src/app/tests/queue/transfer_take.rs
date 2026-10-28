@@ -329,6 +329,71 @@ fn a_peer_snapshot_without_an_active_slot_receives_nothing_and_leaves_the_local_
 }
 
 #[test]
+fn a_connected_take_whose_peer_link_died_never_stops_the_local_owner() {
+    // PR #973 spec review: the peer link drops after the copy is armed and
+    // the disconnect teardown reinstalls the home link before the settle
+    // ticks. The settlement must not resolve the source link through
+    // `self.player` — that is now the local Owner, and stopping it would
+    // kill the playback the Take just delivered.
+    let (mut app, local_cmd_rx) =
+        make_local_daemon_app_stub_with_cmd_rx_and_compat(make_audio_items(2), owner_compat());
+    let (mut peer, _stub_rx, peer_cmd_rx) =
+        RemotePlayer::stub_with_command_rx(make_audio_items(3), 1);
+    peer.set_ctrl_compatibility_for_test(peer_compat(true, true, false));
+    let sess = peer_session("peer-owner");
+    let (_dropped_tx, attach_rx) = mpsc::channel();
+    app.switch_to_direct_remote(
+        &sess,
+        peer,
+        attach_rx,
+        &DaemonEndpoint::Tcp("127.0.0.1:47788".parse().unwrap()),
+    );
+    app.panel_targets = vec![PanelTarget::Emby(Box::new(sess))];
+    // The local Owner's post-replacement answer, pre-pushed onto its
+    // suspended link: the start slot is observed active and playing.
+    let (home_tx, home_rx) = mpsc::channel();
+    app.suspended_local.as_mut().unwrap().player_rx = home_rx;
+    home_tx
+        .send(applied(1, peer_snapshot(&make_audio_items(3), 1, true)))
+        .unwrap();
+    while local_cmd_rx.try_recv().is_ok() {}
+    while peer_cmd_rx.try_recv().is_ok() {}
+
+    app.begin_queue_transfer(QueueTransferDirection::Take, &transfer_key());
+    app.pending_overlay = None;
+    app.apply_confirm_action(
+        ConfirmAction::ConfirmQueueTransfer(transfer_key()),
+        confirm_key(KeyCode::Enter),
+    );
+    assert!(
+        app.pending_queue_transfer.is_some(),
+        "the confirmed Take armed the pending transfer"
+    );
+
+    // The peer link drops and the teardown reinstalls the home link (auto
+    // reattach disabled or failed): `self.player` is the local Owner again.
+    app.restore_local_mode("Daemon disconnected — returned to local mode");
+
+    let mut harness = TickHarness::new(app);
+    harness.step();
+
+    let app = &harness.model().app;
+    assert!(app.pending_queue_transfer.is_none(), "the transfer settles");
+    assert!(
+        !stop_sent_to(&local_cmd_rx),
+        "the source stop must never land on the local Owner"
+    );
+    assert!(
+        app.local_owner_plays(),
+        "the local Owner keeps playing the taken queue"
+    );
+    assert!(
+        !app.direct_remote_connected && !app.has_remote_queue(),
+        "the Take ends unconnected"
+    );
+}
+
+#[test]
 fn a_dead_home_link_refuses_the_connected_take_before_anything_is_sent() {
     // Review P2 (row 8.1): behind an attachment whose home link died, the
     // local Owner link is gone — the copy must not reach the peer

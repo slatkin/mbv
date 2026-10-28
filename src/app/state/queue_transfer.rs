@@ -485,7 +485,21 @@ impl App {
                     // attachment, whose socket the follow-up's disconnect
                     // tears down: the stop must be delivered first (review
                     // P1). The Hand off arm above never closes its link, so
-                    // it needs no proof.
+                    // it needs no proof. When the attachment no longer holds
+                    // the source — the peer link dropped mid-transfer and
+                    // the teardown reinstalled the home link, or the link is
+                    // dead and its teardown is still pending — `queue_link`
+                    // falls through to `self.player`, which is then the
+                    // local Owner the Take just started; a gone source is
+                    // nothing to stop (PR #973 review).
+                    if !self.can_disconnect_remote() || self.player.is_remote_disconnected() {
+                        tracing::warn!(
+                            name: "queue_transfer.source_link_missing",
+                            target: "queue_transfer",
+                            "the peer attachment is gone; skipping the source stop"
+                        );
+                        return;
+                    }
                     let (proxy, _rx) = self.queue_link(direction.source_link());
                     proxy.stop_and_await_ack(QUEUE_OP_ANSWER_BOUND);
                 }
