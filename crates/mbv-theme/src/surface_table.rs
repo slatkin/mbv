@@ -82,11 +82,8 @@ pub(super) const fn slots(surface: Surface) -> (Slot, Slot) {
         // The hero overview's alternating credits row and the modal frame's
         // border rule.
         Surface::CreditsStripe | Surface::PopupBorder => (Slot::Bg1, Slot::Bg1),
-        // The selected library pill chip and hint chip 0 (blue), and the
-        // queue's selected link pill (the Direct-remote aqua, `CONTEXT.md`,
-        // "Direct remote control" — its own row, not the library pill's blue).
+        // The selected library pill chip and hint chip 0 (blue).
         Surface::PillChipSelected | Surface::HintChip0 => (Slot::Blue, Slot::Blue),
-        Surface::QueueLinkPillSelected => (Slot::Aqua, Slot::Aqua),
         Surface::HintChip1 => (Slot::Yellow, Slot::Yellow),
         Surface::HintChip2 => (Slot::Orange, Slot::Orange),
     }
