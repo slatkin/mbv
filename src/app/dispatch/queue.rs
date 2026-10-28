@@ -18,7 +18,7 @@ mod replacement;
 
 impl App {
     pub(in crate::app) fn remove_from_queue(&mut self, pos: usize) {
-        let link = self.viewed_queue_link();
+        let link = self.playing_queue_link();
         if pos >= self.queue_for_link(link).total_queue_len() {
             let view = self.queue_for_link_mut(link);
             view.set_cursor(view.cursor());
@@ -213,7 +213,7 @@ impl App {
     /// rather than this function re-reading `queue.cursor()` as an
     /// ambient argument channel.
     fn move_queue_item_by(&mut self, from: usize, delta: isize) {
-        let link = self.viewed_queue_link();
+        let link = self.playing_queue_link();
         let queue = self.queue_for_link(link);
         let len = queue.total_queue_len();
         let to = if delta < 0 {
@@ -233,7 +233,7 @@ impl App {
 
     /// Moves the item at `from` to `to` within `link`'s queue by asking the
     /// link's Player owner to move the slot (row 5.2). `link` is passed
-    /// explicitly (D2) rather than re-read from `viewed_queue_link()` as an
+    /// explicitly (D2) rather than re-read from `playing_queue_link()` as an
     /// ambient channel.
     pub(in crate::app) fn move_queue_item_to(&mut self, link: QueueLink, from: usize, to: usize) {
         let len = self.queue_for_link(link).total_queue_len();

@@ -125,7 +125,7 @@ impl Model {
     }
 
     fn prepare_queue_projection(&mut self) -> QueueProjectionUpdate {
-        let link = self.app.viewed_queue_link();
+        let link = self.app.playing_queue_link();
         let playback = self.app.displayed_queue_playback_state();
         let pending_slot = self.pending_queue_projection_slot(link);
         let fingerprint = self.queue_projection_fingerprint(link, playback, pending_slot);
@@ -146,13 +146,11 @@ impl Model {
         update
     }
 
-    // The adopted pending slot counts only while it is still in the viewed
+    // The adopted pending slot counts only while it is still in the shown
     // queue: a stale target must not move now-playing off the observed row.
     fn pending_queue_projection_slot(&self, link: QueueLink) -> Option<QueueSlotId> {
         self.app
-            .queue_link_is_playback(link)
-            .then(|| self.app.pending_playback_slot())
-            .flatten()
+            .pending_playback_slot()
             .filter(|target| self.app.queue_for_link(link).slot(*target).is_some())
     }
 

@@ -473,7 +473,7 @@ impl Model {
             )],
         });
         if slot_ids.len() > 1 {
-            let link = self.app.viewed_queue_link();
+            let link = self.app.playing_queue_link();
             let (items, remove_targets, capabilities) = slot_ids
                 .iter()
                 .filter_map(|sid| {

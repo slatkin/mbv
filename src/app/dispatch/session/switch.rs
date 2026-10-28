@@ -52,7 +52,7 @@ impl App {
         self.rebind_mpris_to_current_player();
 
         let daemon_view = replacement_view(initial_unified_state.as_ref());
-        let shown_before = self.viewed_queue_link();
+        let shown_before = self.playing_queue_link();
         if endpoint.is_local() {
             self.adopt_local_daemon_queue(daemon_view);
         } else {
@@ -216,7 +216,7 @@ impl App {
         if let Some(local_view) = reconnected_local_daemon {
             self.local_view = local_view;
         }
-        let shown_before = self.viewed_queue_link();
+        let shown_before = self.playing_queue_link();
         self.remote_view = None;
         self.reanchor_queue_cursor_after_link_change(shown_before);
         self.advance_queue_epoch();

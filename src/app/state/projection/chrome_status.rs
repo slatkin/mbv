@@ -191,7 +191,7 @@ impl App {
     /// resolution mirrors the remote pill's (`remote_label`): route name,
     /// session device name, endpoint label.
     pub(in crate::app) fn queue_owner_label(&self) -> String {
-        if self.viewed_queue_link() == QueueLink::Peer {
+        if self.playing_queue_link() == QueueLink::Peer {
             let daemon_endpoint = self.config.lock().unwrap().daemon_client_endpoint.clone();
             self.active_route
                 .as_ref()

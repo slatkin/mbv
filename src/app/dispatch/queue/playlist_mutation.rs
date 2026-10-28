@@ -216,7 +216,7 @@ impl App {
     /// edit. The visible-queue mutation is the success confirmation; no
     /// enqueue success toast is emitted.
     pub(super) fn append_item_to_queue(&mut self, item: EmbyItem) {
-        let link = self.viewed_queue_link();
+        let link = self.playing_queue_link();
         self.append_on_owner(link, vec![QueueItem::Emby(Box::new(item))]);
     }
 }

@@ -5,7 +5,7 @@ use mbv_remote_player::{DaemonEndpoint, RemotePlayer};
 
 impl App {
     pub(in crate::app) fn reset_local_daemon_queue_view(&mut self) {
-        let shown_before = self.viewed_queue_link();
+        let shown_before = self.playing_queue_link();
         self.remote_view = None;
         self.remote_queue_undo_stack.clear();
         self.reanchor_queue_cursor_after_link_change(shown_before);

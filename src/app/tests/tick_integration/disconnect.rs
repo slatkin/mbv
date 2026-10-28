@@ -61,7 +61,7 @@ fn suspended_home_snapshot_updates_local_queue_while_remote_is_viewed() {
     harness.step();
 
     let app = &harness.model().app;
-    assert_eq!(app.viewed_queue_link(), QueueLink::Peer);
+    assert_eq!(app.playing_queue_link(), QueueLink::Peer);
     assert_eq!(app.local_view.emby_items(), make_items(3));
     assert!(matches!(
         app.local_view.source(),
@@ -267,7 +267,7 @@ fn tick_remote_disconnect_restores_local_daemon_queue_and_surfaces_toast() {
 
     assert!(app.home_is_local_daemon);
     assert!(app.remote_view.is_some());
-    assert_eq!(app.viewed_queue_link(), QueueLink::Peer);
+    assert_eq!(app.playing_queue_link(), QueueLink::Peer);
     assert_eq!(app.displayed_queue().emby_items().len(), 3);
 
     let mut harness = TickHarness::new(app);
@@ -281,7 +281,7 @@ fn tick_remote_disconnect_restores_local_daemon_queue_and_surfaces_toast() {
     let app = &harness.model().app;
     assert!(app.home_is_local_daemon);
     assert!(app.remote_view.is_none());
-    assert_eq!(app.viewed_queue_link(), QueueLink::Local);
+    assert_eq!(app.playing_queue_link(), QueueLink::Local);
     assert_eq!(app.displayed_queue().emby_items().len(), local_items.len());
     assert_eq!(app.displayed_queue().emby_items(), local_items);
     assert_eq!(app.status, CONNECTION_LOST_MESSAGE);
@@ -311,7 +311,7 @@ fn user_disconnect_shows_local_queue_and_sends_the_peer_no_stop() {
         mpsc::channel().1,
         &DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
     );
-    assert_eq!(app.viewed_queue_link(), QueueLink::Peer);
+    assert_eq!(app.playing_queue_link(), QueueLink::Peer);
     // The stub owner plays by default; the no-Stop contract is about a
     // playing peer.
     assert!(app.player.status_snapshot().active);
@@ -326,7 +326,7 @@ fn user_disconnect_shows_local_queue_and_sends_the_peer_no_stop() {
 
     let app = &harness.model().app;
     assert!(!app.direct_remote_connected);
-    assert_eq!(app.viewed_queue_link(), QueueLink::Local);
+    assert_eq!(app.playing_queue_link(), QueueLink::Local);
     assert_eq!(app.displayed_queue().emby_items(), local_items);
     while let Ok(cmd) = peer_cmd_rx.try_recv() {
         assert!(

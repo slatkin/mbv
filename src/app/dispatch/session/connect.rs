@@ -238,7 +238,7 @@ impl App {
         let tab = initial_unified_state
             .as_ref()
             .map_or_else(QueueView::default, QueueView::from_snapshot);
-        let shown_before = self.viewed_queue_link();
+        let shown_before = self.playing_queue_link();
         self.remote_view = Some(tab);
         self.direct_remote_connected = true;
         self.advance_queue_epoch();

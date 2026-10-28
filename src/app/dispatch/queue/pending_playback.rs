@@ -41,7 +41,7 @@ impl App {
     }
 
     pub(super) fn execute_pending_queue_clear(&mut self) {
-        let link = self.viewed_queue_link();
+        let link = self.playing_queue_link();
         let had_items = self.queue_for_link(link).total_queue_len() > 0;
         if had_items {
             // Row 5.3 (design D6): the clear reaches the viewed queue's owner

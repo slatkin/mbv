@@ -106,15 +106,11 @@ impl App {
         link == self.playing_queue_link()
     }
 
-    fn action_queue_link(&self, action: &PendingQueueAction) -> QueueLink {
-        match action {
-            PendingQueueAction::PlayItems { .. } => self.playing_queue_link(),
-            PendingQueueAction::ClearQueue => self.viewed_queue_link(),
-        }
-    }
-
-    pub(in crate::app) fn action_touches_local_queue(&self, action: &PendingQueueAction) -> bool {
-        self.local_queue_metadata_applies(self.action_queue_link(action))
+    pub(in crate::app) fn action_touches_local_queue(&self, _action: &PendingQueueAction) -> bool {
+        // ADR 0034: each Player owner keeps its own queue and the shown
+        // queue follows the connection, so every queue action lands on the
+        // playback target's link — the action itself no longer picks one.
+        self.local_queue_metadata_applies(self.playing_queue_link())
     }
 
     /// Adopt the owner's snapshot source and reconcile a pending
@@ -135,20 +131,20 @@ impl App {
         self.queue_undo_stack.clear();
     }
 
+    /// The queue link both the shown queue and the Player-owner playback
+    /// resolve to (ADR 0034: each Player owner keeps its own queue, and the
+    /// shown queue follows the connection, so the viewed and playing links
+    /// are one link — there is no split accessor).
     pub(in crate::app) fn playing_queue_link(&self) -> QueueLink {
         self.queue_link_resolution().playback_target()
     }
 
-    pub(in crate::app) fn viewed_queue_link(&self) -> QueueLink {
-        self.queue_link_resolution().playback_target()
-    }
-
     pub(in crate::app) fn displayed_queue(&self) -> &QueueView {
-        self.queue_for_link(self.viewed_queue_link())
+        self.queue_for_link(self.playing_queue_link())
     }
 
     pub(in crate::app) fn displayed_queue_mut(&mut self) -> &mut QueueView {
-        self.queue_for_link_mut(self.viewed_queue_link())
+        self.queue_for_link_mut(self.playing_queue_link())
     }
 
     pub(in crate::app) fn playback_queue(&self) -> &QueueView {
@@ -212,7 +208,7 @@ impl App {
         &mut self,
         previous_shown: QueueLink,
     ) {
-        let shown = self.viewed_queue_link();
+        let shown = self.playing_queue_link();
         if shown != previous_shown {
             self.pending_queue_cursor_reanchor = Some(shown);
         }

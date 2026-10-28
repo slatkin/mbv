@@ -65,7 +65,7 @@ fn the_footer_owner_label_flips_in_the_frame_that_first_shows_the_peer_queue() {
     harness.step();
 
     assert_eq!(
-        harness.model().app.viewed_queue_link(),
+        harness.model().app.playing_queue_link(),
         QueueLink::Peer,
         "the connect shows the peer queue"
     );

@@ -357,7 +357,7 @@ impl App {
                 // queue's owner as one answered Append op; the Client holds
                 // no editable queue, so the entries appear only when the
                 // owner's answer is adopted.
-                let link = self.viewed_queue_link();
+                let link = self.playing_queue_link();
                 self.append_on_owner(
                     link,
                     items
@@ -394,11 +394,9 @@ impl App {
         item: QueueItem,
         start_playback: bool,
     ) -> bool {
-        let link = if start_playback {
-            self.playing_queue_link()
-        } else {
-            self.viewed_queue_link()
-        };
+        // The shown queue is always the playback target's queue (ADR 0034),
+        // so both submit shapes target one link.
+        let link = self.playing_queue_link();
         if !start_playback {
             return self.append_on_owner(link, vec![item]);
         }

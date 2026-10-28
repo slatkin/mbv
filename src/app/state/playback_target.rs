@@ -90,11 +90,10 @@ impl App {
     pub(in crate::app) fn displayed_queue_playback_state(
         &self,
     ) -> mbv_ui_model::playback::PlaybackState {
-        if self.queue_link_is_playback(self.viewed_queue_link()) {
-            self.effective_playback_state()
-        } else {
-            mbv_ui_model::playback::PlaybackState::default()
-        }
+        // ADR 0034: each Player owner keeps its own queue and the shown
+        // queue follows the connection, so the shown queue is always the
+        // playback target's queue — there is no idle fallback to paint.
+        self.effective_playback_state()
     }
 }
 

@@ -533,8 +533,7 @@ impl App {
         let active = status.active;
         let current_idx = status.current_idx;
         let queue = self.displayed_queue();
-        let is_jump =
-            active && self.viewed_queue_link() == self.playing_queue_link() && t != current_idx;
+        let is_jump = active && t != current_idx;
         if is_jump {
             if let Some(slot_id) = queue.slot_id_at(t) {
                 let _ = self.request_slot_jump(slot_id);
@@ -583,12 +582,13 @@ impl App {
     ) {
         // Local / direct-remote playback. The same path handles
         // both Feed and Emby items: jump to an active slot or
-        // cold-start the full canonical queue.
-        let link = self.viewed_queue_link();
+        // cold-start the full canonical queue. The shown queue is always
+        // the playback target's queue (ADR 0034), so `active` alone gates
+        // the jump against the cold start.
         let st = self.player.status_snapshot();
         let active = st.active;
         let current_idx = st.current_idx;
-        if active && self.queue_link_is_playback(link) {
+        if active {
             if t == current_idx {
                 let _ = self.player.send_command(PlayerCommand::SeekAbsolute(0.0));
             } else if t != current_idx {

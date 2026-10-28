@@ -191,7 +191,7 @@ impl Model {
             .into_iter()
             .map(|item| QueueItem::Emby(Box::new(item)))
             .collect();
-        let link = self.app.viewed_queue_link();
+        let link = self.app.playing_queue_link();
         self.app.append_on_owner(link, items);
     }
 }

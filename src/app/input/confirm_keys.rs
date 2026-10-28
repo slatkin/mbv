@@ -232,7 +232,7 @@ impl App {
     /// displayed queue untouched, stop playback, then remove the slot through
     /// the Player owner from the resulting `Stopped` event.
     fn confirm_remove_active_queue_item(&mut self, pos: usize) {
-        let link = self.viewed_queue_link();
+        let link = self.playing_queue_link();
         let slot_id = self.queue_for_link_mut(link).slot_id_at(pos);
         if let Some(slot_id) = slot_id {
             self.pending_delete_slot = Some(slot_id);
@@ -246,7 +246,7 @@ impl App {
 
     /// Show the clear-queue confirmation modal (called from `QueueIntent::Clear`).
     pub(in crate::app) fn request_clear_queue(&mut self) {
-        let link = self.viewed_queue_link();
+        let link = self.playing_queue_link();
         // Legacy `handle_key_clear_queue_prompt` refused a Queue-focused remote
         // link outright, which also swallowed `c` for a socket-attached mbvd
         // whose queue the confirm's `y` handler can clear. The direct-remote
