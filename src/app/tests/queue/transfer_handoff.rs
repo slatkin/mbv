@@ -128,10 +128,12 @@ fn hand_off_source_app(items: Vec<EmbyItem>) -> (App, mpsc::Receiver<CtrlCmd>) {
 /// A local-daemon app already connected to a peer stub: the connected Hand
 /// off shape (design D1). Returns the local and peer command receivers and
 /// the peer event sender, so a test can pre-push the replacement's answer and
-/// later events. The peer queue is empty, so no confirm gate applies.
+/// later events. `peer_items` seeds the peer queue: empty skips the confirm
+/// gate, populated raises it.
 fn connected_hand_off_app(
     compat: CtrlCompatibility,
     local_items: Vec<EmbyItem>,
+    peer_items: Vec<EmbyItem>,
 ) -> (
     App,
     mpsc::Receiver<CtrlCmd>,
@@ -140,7 +142,7 @@ fn connected_hand_off_app(
 ) {
     let (mut app, local_cmd_rx) = hand_off_source_app(local_items);
     let sess = peer_session("peer-owner");
-    let (mut peer, peer_rx, peer_cmd_rx) = RemotePlayer::stub_with_command_rx(Vec::new(), 0);
+    let (mut peer, peer_rx, peer_cmd_rx) = RemotePlayer::stub_with_command_rx(peer_items, 0);
     peer.set_ctrl_compatibility_for_test(compat);
     app.switch_to_direct_remote(
         &sess,
@@ -337,6 +339,7 @@ fn an_audio_only_peer_refuses_a_video_active_item_and_sends_nothing() {
                 item
             })
             .collect(),
+        Vec::new(),
     );
     let mut app = app;
 
@@ -366,8 +369,11 @@ fn an_older_peer_without_the_start_position_capability_is_refused() {
     // queue-handoff "Hand off and Take need a peer that accepts a start
     // position", scenario "Older peer": the refusal names the cause and
     // neither queue nor playback changes.
-    let (mut app, local_cmd_rx, peer_cmd_rx, _peer_tx) =
-        connected_hand_off_app(peer_compat(true, false, false), make_audio_items(2));
+    let (mut app, local_cmd_rx, peer_cmd_rx, _peer_tx) = connected_hand_off_app(
+        peer_compat(true, false, false),
+        make_audio_items(2),
+        Vec::new(),
+    );
 
     app.begin_queue_transfer(QueueTransferDirection::HandOff, &hand_off_key());
 
@@ -390,8 +396,11 @@ fn a_peer_link_lost_before_observation_leaves_local_playing() {
     // queue-handoff "A failed Hand off or Take leaves the source playing",
     // scenario "Connection lost during Hand off": the copy was answered, the
     // peer dropped before reporting playback, and local playback continues.
-    let (mut app, local_cmd_rx, _peer_cmd_rx, peer_tx) =
-        connected_hand_off_app(peer_compat(true, true, false), make_audio_items(2));
+    let (mut app, local_cmd_rx, _peer_cmd_rx, peer_tx) = connected_hand_off_app(
+        peer_compat(true, true, false),
+        make_audio_items(2),
+        Vec::new(),
+    );
     // The answer carries the start slot still queued but not yet audible, so
     // the armed transfer keeps waiting instead of settling at once.
     peer_tx
@@ -507,8 +516,11 @@ fn a_dead_home_link_never_stops_the_peer_at_the_success_settlement() {
     // source link left — it must skip the source stop instead of falling
     // through to `self.player`, which is the peer and would kill the
     // just-handed-off playback.
-    let (mut app, _local_cmd_rx, peer_cmd_rx, peer_tx) =
-        connected_hand_off_app(peer_compat(true, true, false), make_audio_items(2));
+    let (mut app, _local_cmd_rx, peer_cmd_rx, peer_tx) = connected_hand_off_app(
+        peer_compat(true, true, false),
+        make_audio_items(2),
+        Vec::new(),
+    );
     // The peer's answer already shows the start slot active and playing, so
     // the very next settlement succeeds.
     peer_tx
@@ -542,5 +554,132 @@ fn a_dead_home_link_never_stops_the_peer_at_the_success_settlement() {
             mbv_ui_msg::ModalId::DaemonLost
         )),
         "the dead home link raised the daemon-lost modal"
+    );
+}
+
+#[test]
+fn a_peer_loss_during_the_hand_off_confirm_drops_the_prompt_and_sends_nothing() {
+    // PR #973 review: the connected Hand off's confirm prompt outlived the
+    // peer link — Enter then sent the copy through `queue_link(Peer)`,
+    // which the disconnect teardown had made the local Owner, replacing the
+    // source queue and panicking on the Peer queue view. The teardown must
+    // drop the staged transfer and its prompt before any answer can run it.
+    let (mut app, local_cmd_rx, _peer_cmd_rx, _peer_tx) = connected_hand_off_app(
+        peer_compat(true, true, false),
+        make_audio_items(2),
+        make_audio_items(3),
+    );
+
+    app.begin_queue_transfer(QueueTransferDirection::HandOff, &hand_off_key());
+
+    assert!(
+        matches!(app.pending_overlay, Some(OverlayRequest::Confirm(_))),
+        "the populated peer queue asks first"
+    );
+    assert!(
+        app.staged_queue_transfer.is_some(),
+        "the connected Hand off is staged behind the prompt"
+    );
+
+    // The peer link dies while the prompt is up; auto-reconnect is off in
+    // the stub config, so the teardown restores the local link.
+    app.handle_player_event(PlayerEvent::RemoteDisconnected("peer gone".into()));
+
+    assert!(
+        app.staged_queue_transfer.is_none(),
+        "the staged transfer dies with the connection"
+    );
+    assert!(
+        matches!(app.pending_overlay, Some(OverlayRequest::DismissConfirm)),
+        "the teardown dismisses the transfer prompt, got {:?}",
+        app.pending_overlay.as_ref().map(std::mem::discriminant)
+    );
+    assert!(
+        !app.direct_remote_connected && !app.has_remote_queue(),
+        "the teardown restored the local link"
+    );
+
+    // The prompt's answer is now inert: nothing reaches the local Owner.
+    app.apply_confirm_action(
+        ConfirmAction::ConfirmQueueTransfer(hand_off_key()),
+        confirm_key(KeyCode::Enter),
+    );
+
+    let sent = local_owner_commands(&local_cmd_rx);
+    assert!(
+        !sent
+            .iter()
+            .any(|cmd| matches!(cmd, CtrlCmd::UnifiedQueueReplace { .. })),
+        "the staged Hand off never reaches the local Owner, got {sent:?}"
+    );
+    assert!(app.pending_queue_transfer.is_none());
+    assert_eq!(
+        app.local_view
+            .slots()
+            .iter()
+            .map(|slot| slot.slot_id.raw())
+            .collect::<Vec<_>>(),
+        vec![1, 2],
+        "the source queue is unchanged"
+    );
+}
+
+#[test]
+fn a_confirmed_hand_off_without_a_peer_link_reports_and_sends_nothing() {
+    // PR #973 review: `queue_link(Peer)` falls through to `self.player` —
+    // the local Owner the disconnect teardown reinstalled — so the copy
+    // re-verifies the peer link before it is sent, the same gate the
+    // Take's copy applies to its own target link.
+    let (mut app, local_cmd_rx, peer_cmd_rx, _peer_tx) = connected_hand_off_app(
+        peer_compat(true, true, false),
+        make_audio_items(2),
+        make_audio_items(3),
+    );
+
+    // The peer link dies and the teardown restores the local link.
+    app.handle_player_event(PlayerEvent::RemoteDisconnected("peer gone".into()));
+    assert!(!app.has_remote_queue());
+
+    // Re-stage the connected shape directly: `link = None` reads the
+    // current attachment at the copy, which is now the local Owner.
+    app.staged_queue_transfer = Some(crate::app::state::queue_transfer::StagedQueueTransfer {
+        direction: QueueTransferDirection::HandOff,
+        target: hand_off_key(),
+        sess: peer_session("peer-owner"),
+        endpoint: DaemonEndpoint::Tcp("127.0.0.1:47788".parse().unwrap()),
+        link: None,
+    });
+    app.apply_confirm_action(
+        ConfirmAction::ConfirmQueueTransfer(hand_off_key()),
+        confirm_key(KeyCode::Enter),
+    );
+
+    assert_eq!(app.status_severity, ToastSeverity::Error);
+    assert!(
+        app.status
+            .contains("Hand off failed: the peer connection was lost"),
+        "the loss is reported, got {:?}",
+        app.status
+    );
+    let local_sent = local_owner_commands(&local_cmd_rx);
+    assert!(
+        !local_sent
+            .iter()
+            .any(|cmd| matches!(cmd, CtrlCmd::UnifiedQueueReplace { .. })),
+        "the copy never reaches the local Owner, got {local_sent:?}"
+    );
+    assert!(
+        peer_replace(&peer_cmd_rx).is_none(),
+        "the peer receives nothing"
+    );
+    assert!(app.pending_queue_transfer.is_none());
+    assert_eq!(
+        app.local_view
+            .slots()
+            .iter()
+            .map(|slot| slot.slot_id.raw())
+            .collect::<Vec<_>>(),
+        vec![1, 2],
+        "the source queue is unchanged"
     );
 }

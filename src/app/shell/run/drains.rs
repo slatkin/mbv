@@ -103,6 +103,7 @@ impl Model {
                 } => self.app.adopt_home_snapshot(&snapshot),
                 mbv_ctrl::player::PlayerEvent::RemoteDisconnected(_) => {
                     self.app.suspended_local = None;
+                    self.app.drop_staged_queue_transfer_on_teardown();
                     self.app.raise_daemon_lost_modal();
                 }
                 mbv_ctrl::player::PlayerEvent::DaemonShutdownAnnounced => {

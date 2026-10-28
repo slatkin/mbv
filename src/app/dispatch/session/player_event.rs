@@ -207,6 +207,7 @@ impl App {
         // The owner connection is gone; its playback output is no longer the
         // active one (cast-owner-output design D13 reset rule).
         self.playback_output = None;
+        self.drop_staged_queue_transfer_on_teardown();
         if from_home_link || self.is_local_daemon() {
             self.suspended_local = None;
             self.pending_exit_message =
@@ -261,6 +262,7 @@ impl App {
     /// paths): modal-or-reattach-or-fallback, always ending the tick.
     fn handle_stopped_remote_disconnected(&mut self) -> bool {
         self.next_up_item = None;
+        self.drop_staged_queue_transfer_on_teardown();
         // An announced shutdown never reaches here: the reader
         // thread sends PlayerEvent::DaemonShutdownAnnounced
         // instead of a synthetic Stopped for that case (see the
@@ -541,6 +543,7 @@ impl App {
         // active one (cast-owner-output design D13 reset rule).
         self.playback_output = None;
         self.next_up_item = None;
+        self.drop_staged_queue_transfer_on_teardown();
         if self.is_local_daemon() {
             self.suspended_local = None;
             self.raise_daemon_lost_modal();

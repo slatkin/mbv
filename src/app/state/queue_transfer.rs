@@ -254,6 +254,20 @@ impl App {
         self.drop_staged_queue_transfer();
     }
 
+    /// Connection teardown drops a staged transfer and its prompt (PR #973
+    /// review): the confirm names a link the teardown took down, so its
+    /// answer must never run against a different owner — the connected
+    /// shape reads the peer link as `self.player`, which the restore has
+    /// already made the local Owner. The armed pending transfer survives:
+    /// its copy already landed and its settlement owns the report.
+    pub(in crate::app) fn drop_staged_queue_transfer_on_teardown(&mut self) {
+        if self.staged_queue_transfer.is_none() {
+            return;
+        }
+        self.drop_staged_queue_transfer();
+        self.dismiss_confirm();
+    }
+
     /// Drop the staged transfer, closing a link opened for it (#233: an
     /// explicit disconnect lets the connection's reader thread exit instead
     /// of leaking).

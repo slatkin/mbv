@@ -153,6 +153,22 @@ impl App {
     /// slot ids are the local queue's own (design D8), so the settlement's
     /// `start_slot` survives into the peer's snapshots.
     fn send_queue_hand_off_copy(&mut self, target: &SessionTargetKey) {
+        // The target gate, re-checked at the copy (PR #973 review): the
+        // connected shape's peer link can die while the confirm prompt is
+        // up, and `queue_link(Peer)` would then fall through to
+        // `self.player` — the local Owner the teardown reinstalled. The
+        // copy must not replace the source queue it has to leave playing,
+        // the same gate the Take's copy applies to its target link.
+        if !self.queue_hand_off_target_link_present() {
+            self.flash(
+                transfer_failure_message(
+                    QueueTransferDirection::HandOff,
+                    TransferFailure::LinkLost,
+                ),
+                ToastSeverity::Error,
+            );
+            return;
+        }
         let Some((start_slot, start_idx, position_secs)) = self.queue_hand_off_source_start()
         else {
             // A stale F3 row (design D2): the Client sends nothing, changes
@@ -236,6 +252,15 @@ impl App {
     /// playback of an active slot.
     fn queue_hand_off_source_is_playing(&self) -> bool {
         self.queue_hand_off_source_start().is_some()
+    }
+
+    /// The peer link the Hand off's copy must reach (design D1): the
+    /// current attachment holding a peer queue. Absent once the
+    /// connection's teardown has reinstalled the local link — the copy
+    /// would then reach the local Owner instead of the peer (PR #973
+    /// review).
+    fn queue_hand_off_target_link_present(&self) -> bool {
+        self.has_remote_queue() && !self.player.is_remote_disconnected()
     }
 
     /// Whether the local active item is audio (design D3's pre-check input).
