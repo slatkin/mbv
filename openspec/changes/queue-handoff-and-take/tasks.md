@@ -32,8 +32,8 @@
 
 ## 7. Hand off
 
-- [ ] 7.1 Add the shell `PendingQueueTransfer` value and its tick-phase settlement (design D2): success, failure (rejection, missing start slot, link loss), and cancel by a newer F3 action. Verify with `cargo check -p mbv`.
-- [ ] 7.2 Implement Hand off (design D1 left column, D3 admission pre-check, `queue-handoff` confirm requirement through the existing replace-confirm path). When not connected, open the peer link to read its queue and attach only after confirmation; cancel drops the link. Verify with tests in `src/app/tests/` that mock both links: success stops local only after the peer observes the start slot; audio-only peer with an active video refuses and sends nothing; link loss before observation leaves local playing; an older peer is refused. `cargo nextest run -p mbv`.
+- [x] 7.1 Add the shell `PendingQueueTransfer` value and its tick-phase settlement (design D2): success, failure (rejection, missing start slot, link loss), and cancel by a newer F3 action. Verify with `cargo check -p mbv`.
+- [x] 7.2 Implement Hand off (design D1 left column, D3 admission pre-check, `queue-handoff` confirm requirement through the existing replace-confirm path). When not connected, open the peer link to read its queue and attach only after confirmation; cancel drops the link. Verify with tests in `src/app/tests/` that mock both links: success stops local only after the peer observes the start slot; audio-only peer with an active video refuses and sends nothing; link loss before observation leaves local playing; an older peer is refused. `cargo nextest run -p mbv`.
 
 ## 8. Take
 
