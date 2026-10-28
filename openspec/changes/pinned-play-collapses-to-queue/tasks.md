@@ -21,8 +21,8 @@
 
 ## 5. Gates
 
-- [ ] 5.1 Run `cargo fmt --all`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run --workspace`. Verify: all three are green.
-- [ ] 5.2 Just before the push, run `make check-code-file-lines`. Verify: no file is over 800 lines (`src/app/dispatch/action.rs` is at 643 now).
+- [x] 5.1 Run `cargo fmt --all`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run --workspace`. Verify: all three are green.
+- [x] 5.2 Just before the push, run `make check-code-file-lines`. Verify: no file is over 800 lines (`src/app/dispatch/action.rs` is at 643 now).
 
 ## Workflow follow-up
 
