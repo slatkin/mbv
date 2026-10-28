@@ -22,9 +22,9 @@
 
 ## 5. Shown queue follows the connection
 
-- [ ] 5.1 Remove the user-selectable scope: the `queue_scope` field, `QueueRequest::Scope`, `set_queue_scope`, `display_peer_queue_on_connect`, the `visible_scope` half of `QueueScopeResolution`, and the `[`/`]` handler in `crates/mbv-components/src/queue/keys.rs`. The shown queue is `remote_view` when a peer link is current, else `local_view`. Delete the tests that only cover the removed scope switch. Verify with `cargo nextest run -p mbv -p mbv-components`.
-- [ ] 5.2 Update the edit and push paths so edits and active-index pushes address the shown link (`unified-playback-queue` and `queue-canonical-list` deltas). Extend the existing disconnect tests in `src/app/tests/tick_integration/disconnect.rs` to assert the local Owner queue is shown after disconnect and the peer link received no `Stop` (contract: disconnect leaves the peer playing). Verify with `cargo nextest run -p mbv`.
-- [ ] 5.3 Make the queue footer indicator always name the shown Player owner (design D7; `queue-playback-panel` delta). Verify with one render-layer test per the Tests matrix in `docs/architecture/tui-frontend.md` (contract: the label changes in the frame that first shows the peer queue).
+- [x] 5.1 Remove the user-selectable scope: the `queue_scope` field, `QueueRequest::Scope`, `set_queue_scope`, `display_peer_queue_on_connect`, the `visible_scope` half of `QueueScopeResolution`, and the `[`/`]` handler in `crates/mbv-components/src/queue/keys.rs`. The shown queue is `remote_view` when a peer link is current, else `local_view`. Delete the tests that only cover the removed scope switch. Verify with `cargo nextest run -p mbv -p mbv-components`.
+- [x] 5.2 Update the edit and push paths so edits and active-index pushes address the shown link (`unified-playback-queue` and `queue-canonical-list` deltas). Extend the existing disconnect tests in `src/app/tests/tick_integration/disconnect.rs` to assert the local Owner queue is shown after disconnect and the peer link received no `Stop` (contract: disconnect leaves the peer playing). Verify with `cargo nextest run -p mbv`.
+- [x] 5.3 Make the queue footer indicator always name the shown Player owner (design D7; `queue-playback-panel` delta). Verify with one render-layer test per the Tests matrix in `docs/architecture/tui-frontend.md` (contract: the label changes in the frame that first shows the peer queue).
 
 ## 6. F3 Hand off and Take requests
 
