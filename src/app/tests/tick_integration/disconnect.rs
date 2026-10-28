@@ -5,6 +5,7 @@ use crate::app::tests::{
 };
 use mbv_ctrl::player::CONNECTION_LOST_MESSAGE;
 use mbv_remote_player::{DaemonEndpoint, RemotePlayer};
+use mbv_ui_msg::{Msg, ShellRequest};
 use std::sync::mpsc;
 
 fn reconnect_local_daemon(
@@ -254,7 +255,7 @@ fn tick_remote_disconnect_restores_local_daemon_queue_and_surfaces_toast() {
     // This test covers the disconnect projection, not an unrelated failed
     // Emby refresh that `refresh_after_stop` may perform.
     app.emby_runtime = crate::app::state::service_runtime::EmbyRuntime::default();
-    let (remote, _) = RemotePlayer::stub(make_items(3), 0);
+    let (remote, _peer_events, peer_cmd_rx) = RemotePlayer::stub_with_command_rx(make_items(3), 0);
     let (event_tx, event_rx) = mpsc::channel();
     let endpoint = DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap());
     app.switch_to_direct_remote(
@@ -284,6 +285,53 @@ fn tick_remote_disconnect_restores_local_daemon_queue_and_surfaces_toast() {
     assert_eq!(app.displayed_queue().emby_items().len(), local_items.len());
     assert_eq!(app.displayed_queue().emby_items(), local_items);
     assert_eq!(app.status, CONNECTION_LOST_MESSAGE);
+    // The Client cannot command a link it already lost, but the contract
+    // also forbids a last-moment Stop on the way down: the disconnect
+    // handling must tear the link down without sending anything (the peer
+    // keeps playing whatever it was playing).
+    while let Ok(cmd) = peer_cmd_rx.try_recv() {
+        assert!(!matches!(cmd, mbv_ctrl::CtrlCmd::Stop));
+    }
 
     *crate::app::DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = None;
+}
+
+// Owns queue-handoff-and-take 5.2 (remote-queue-disconnect delta): a user
+// disconnect (`d`) shows the local Owner queue and leaves the peer playing —
+// the peer link receives no `Stop` ("A user disconnect SHALL NOT stop or
+// change the remote playback or queue").
+#[test]
+fn user_disconnect_shows_local_queue_and_sends_the_peer_no_stop() {
+    let local_items = make_items(1);
+    let mut app = make_local_daemon_app_stub(local_items.clone());
+    let (remote, _peer_events, peer_cmd_rx) = RemotePlayer::stub_with_command_rx(make_items(2), 0);
+    app.switch_to_direct_remote(
+        &mbv_emby::test_support::make_session("remote-owner", "mbv"),
+        remote,
+        mpsc::channel().1,
+        &DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
+    );
+    assert_eq!(app.viewed_queue_link(), QueueLink::Peer);
+    // The stub owner plays by default; the no-Stop contract is about a
+    // playing peer.
+    assert!(app.player.status_snapshot().active);
+
+    let mut harness = TickHarness::new(app);
+    let (mut music_resize, mut tv_resize) = (false, false);
+    harness.model_mut().handle_terminal_message(
+        Msg::Shell(Box::new(ShellRequest::DetachSessions)),
+        &mut music_resize,
+        &mut tv_resize,
+    );
+
+    let app = &harness.model().app;
+    assert!(!app.direct_remote_connected);
+    assert_eq!(app.viewed_queue_link(), QueueLink::Local);
+    assert_eq!(app.displayed_queue().emby_items(), local_items);
+    while let Ok(cmd) = peer_cmd_rx.try_recv() {
+        assert!(
+            !matches!(cmd, mbv_ctrl::CtrlCmd::Stop),
+            "a user disconnect must not stop the peer"
+        );
+    }
 }
