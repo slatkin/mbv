@@ -23,6 +23,11 @@ pub enum QueueOp {
         items: Vec<mbv_ctrl::UnifiedQueueSlot>,
         start_idx: Option<usize>,
         source: QueueSource,
+        /// One-time start position for the start slot, in seconds. Sent only
+        /// to an owner that advertises `queue-replace-start-position`; the
+        /// owner otherwise ignores the field and would start at the wrong
+        /// position (queue-handoff-and-take design D4).
+        start_position_secs: Option<f64>,
     },
     Append {
         items: Vec<QueueItem>,
@@ -442,6 +447,14 @@ impl RemotePlayer {
         self.ctrl_compatibility.supports_queue_shuffle
     }
 
+    /// The owner honors the optional `start_position_secs` field on a
+    /// whole-queue replacement (queue-handoff-and-take design D4).
+    #[must_use]
+    pub fn supports_queue_replace_start_position(&self) -> bool {
+        self.ctrl_compatibility
+            .supports_queue_replace_start_position
+    }
+
     #[must_use]
     pub fn supports_playback_output(&self) -> bool {
         self.ctrl_compatibility.supports_playback_output
@@ -465,13 +478,23 @@ impl RemotePlayer {
                 items,
                 start_idx,
                 source,
-            } => CtrlCmd::UnifiedQueueReplace {
-                items: items.iter().map(|slot| slot.item.clone()).collect(),
-                slots: items,
-                start_idx,
-                source,
-                op,
-            },
+                start_position_secs,
+            } => {
+                // An owner without the capability ignores the field and would
+                // start the slot at its resume source instead — never send it
+                // there (queue-handoff-and-take spec, owner without the
+                // capability).
+                let start_position_secs =
+                    start_position_secs.filter(|_| self.supports_queue_replace_start_position());
+                CtrlCmd::UnifiedQueueReplace {
+                    items: items.iter().map(|slot| slot.item.clone()).collect(),
+                    slots: items,
+                    start_idx,
+                    source,
+                    start_position_secs,
+                    op,
+                }
+            }
             QueueOp::Append { items, before } => CtrlCmd::UnifiedQueueAppend { items, before, op },
             QueueOp::RemoveSlot { slot_id } => CtrlCmd::UnifiedQueueRemoveSlot { slot_id, op },
             QueueOp::RemoveSlots { slot_ids } => CtrlCmd::UnifiedQueueRemoveSlots { slot_ids, op },

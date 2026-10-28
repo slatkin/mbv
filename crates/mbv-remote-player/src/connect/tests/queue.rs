@@ -496,3 +496,36 @@ fn unified_queue_state_preserves_canonical_coordinates_and_source() {
         _ => panic!("expected UnifiedQueueUpdated"),
     }
 }
+
+// queue-handoff-and-take task 2.3: the `start_position_secs` field is
+// capability-gated — an owner that does not advertise
+// `queue-replace-start-position` receives the replacement without the field,
+// because it would ignore it and start the slot at its resume source instead
+// (design D4).
+#[rstest::rstest]
+#[case::owner_without_the_capability(false, None)]
+#[case::owner_with_the_capability(true, Some(95.5))]
+fn replace_start_position_is_sent_only_to_an_owner_that_advertises_the_capability(
+    #[case] advertises: bool,
+    #[case] expected: Option<f64>,
+) {
+    let (mut remote, _events, commands) = RemotePlayer::stub_with_command_rx(Vec::new(), 0);
+    remote
+        .ctrl_compatibility
+        .supports_queue_replace_start_position = advertises;
+
+    remote
+        .send_queue_op(QueueOp::Replace {
+            items: Vec::new(),
+            start_idx: Some(2),
+            source: QueueSource::Unknown,
+            start_position_secs: Some(95.5),
+        })
+        .unwrap();
+
+    assert!(matches!(
+        commands.try_recv(),
+        Ok(CtrlCmd::UnifiedQueueReplace { start_position_secs, .. })
+            if start_position_secs == expected
+    ));
+}

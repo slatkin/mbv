@@ -54,6 +54,7 @@ impl App {
                 items: slots,
                 start_idx: Some(start_idx),
                 source,
+                start_position_secs: None,
             },
         )
     }
