@@ -297,7 +297,7 @@ pub(crate) fn make_built_app() -> App {
         audiobookshelf_socket_generation: None,
         local_view: QueueView::default(),
         remote_view: None,
-        initial_queue_scope: QueueScope::Local,
+        initial_queue_link: QueueLink::Local,
         system_notifications: false,
         image_protocol: None,
         image_protocol_enabled: false,

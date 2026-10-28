@@ -29,31 +29,31 @@ impl App {
         // the owner replaces its canonical queue, begins playback at
         // `start_idx`, and the Client adopts the resulting snapshot; the
         // Client holds no editable queue of its own.
-        let scope = self.playing_queue_scope();
-        let sent = self.replace_emby_queue_on_owner(scope, items, start_idx, source);
+        let link = self.playing_queue_link();
+        let sent = self.replace_emby_queue_on_owner(link, items, start_idx, source);
         if sent == QueueOpEdit::NotApplied {
             return;
         }
         self.collapse_pinned_view_after_play();
-        self.set_queue_scope(scope);
+        self.set_queue_link(link);
         let _ = self
             .player
             .send_command(PlayerCommand::SetMute(self.mute_on));
     }
 
     pub(super) fn execute_pending_queue_clear(&mut self) {
-        let scope = self.viewed_queue_scope();
-        let had_items = self.queue_for_scope(scope).total_queue_len() > 0;
+        let link = self.viewed_queue_link();
+        let had_items = self.queue_for_link(link).total_queue_len() > 0;
         if had_items {
             // Row 5.3 (design D6): the clear reaches the viewed queue's owner
             // as an answered op (UnifiedQueueClearOp for a capable owner); the
             // owner stops its player, clears the canonical queue, and the
             // Client adopts the empty queue only from the answer.
-            let sent = self.queue_op(scope, mbv_remote_player::QueueOp::Clear);
+            let sent = self.queue_op(link, mbv_remote_player::QueueOp::Clear);
             if sent == QueueOpEdit::NotApplied {
                 return;
             }
-            if self.local_queue_metadata_applies(scope) {
+            if self.local_queue_metadata_applies(link) {
                 self.clear_local_queue_metadata();
             } else {
                 self.remote_queue_undo_stack.clear();

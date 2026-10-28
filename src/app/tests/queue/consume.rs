@@ -272,7 +272,7 @@ fn consuming_a_video_on_direct_remote_queue_does_not_touch_local_queue_or_dirty_
     let remote_items = make_items(2);
     let mut app = make_remote_app_stub(local_items.clone(), remote_items);
     // The local queue happens to be a saved playlist with autosave-on-consume enabled —
-    // the trap scenario: before the scope gate, consuming on the *remote* queue would
+    // the trap scenario: before the link gate, consuming on the *remote* queue would
     // still fire save_playlist_to_emby() and push the unrelated, unmodified local
     // playlist to Emby.
     app.local_view
@@ -402,7 +402,7 @@ fn multi_delete_including_active_confirms_whole_selection_before_any_removal() {
         app.playback_queue().slot_id_at(2).unwrap(),
     ];
 
-    app.remove_slots_from_queue(QueueScope::Local, &slot_ids);
+    app.remove_slots_from_queue(QueueLink::Local, &slot_ids);
 
     assert_eq!(
         app.local_view.emby_items().len(),
@@ -421,10 +421,10 @@ fn multi_delete_including_active_confirms_whole_selection_before_any_removal() {
     };
     match pending {
         ConfirmAction::RemoveActiveQueueSelection {
-            scope,
+            link,
             slot_ids: ids,
         } => {
-            assert_eq!(scope, QueueScope::Local);
+            assert_eq!(link, QueueLink::Local);
             assert_eq!(ids, slot_ids);
         }
         other => panic!("the pending confirm must gate the whole selection, got {other:?}"),
@@ -458,11 +458,11 @@ fn confirmed_multi_delete_with_active_removes_all_slots_in_one_owner_edit() {
         .copied()
         .map(mbv_ctrl::slot_id_to_u64)
         .collect();
-    app.remove_slots_from_queue(QueueScope::Local, &slot_ids);
+    app.remove_slots_from_queue(QueueLink::Local, &slot_ids);
     app.pending_overlay = None;
     app.apply_confirm_action(
         ConfirmAction::RemoveActiveQueueSelection {
-            scope: QueueScope::Local,
+            link: QueueLink::Local,
             slot_ids: slot_ids.clone(),
         },
         KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
@@ -525,11 +525,11 @@ fn cancelled_multi_delete_with_active_removes_nothing() {
         app.playback_queue().slot_id_at(0).unwrap(),
         app.playback_queue().slot_id_at(2).unwrap(),
     ];
-    app.remove_slots_from_queue(QueueScope::Local, &slot_ids);
+    app.remove_slots_from_queue(QueueLink::Local, &slot_ids);
     app.pending_overlay = None;
     app.apply_confirm_action(
         ConfirmAction::RemoveActiveQueueSelection {
-            scope: QueueScope::Local,
+            link: QueueLink::Local,
             slot_ids,
         },
         KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE),

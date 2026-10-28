@@ -15,8 +15,8 @@ use mbv_ui_model::playback::PlaybackState;
 /// `displayed_playback_state()` — the playing queue's state, with a pending
 /// slot already applied as the active index — plus the playing queue's item
 /// at that index. Deliberately not `displayed_queue_playback_state()`: that
-/// value the Queue column gates by its viewed scope, and the Workspace must
-/// not go blank when the user views the other queue scope.
+/// value the Queue column gates by its viewed link, and the Workspace must
+/// not go blank when the user views the other queue link.
 ///
 /// Feed entries and Audiobookshelf podcast episodes derive nothing: no
 /// workspace projects their rows (change non-goals).

@@ -18,7 +18,7 @@ use mbv_render::components::media_list::WideMediaListPaintPolicy;
 use mbv_render::components::queue::{render_empty_queue, render_queue_status};
 use mbv_render::components::widgets::render_queue_panel_frame;
 use mbv_theme::Surface;
-use mbv_ui_model::playback::{PlaybackState, QueueScope};
+use mbv_ui_model::playback::{PlaybackState, QueueLink};
 use mbv_ui_msg::UserEvent;
 use mbv_ui_msg::{Msg, QueueRequest};
 
@@ -31,7 +31,7 @@ pub use self::rows::{queue_media_row, queue_media_rows};
 
 /// Why the shell is pushing a cursor. `Preserve` keeps the user's selection
 /// pinned to its slot across a content refresh; `Set` is an authoritative
-/// move (follow-the-playhead, jump-to-now-playing, wheel scroll, scope switch)
+/// move (follow-the-playhead, jump-to-now-playing, wheel scroll, link switch)
 /// that must win over slot-identity reconciliation.
 #[derive(Debug)]
 pub enum QueueCursorUpdate {
@@ -46,7 +46,7 @@ pub struct QueueComponent {
     /// cursor, the resting scroll offset, and viewport/scrollbar geometry; the
     /// parent keeps only the prepared projection and shell-owned chrome below.
     carrier: MediaListCarrier<QueueSlotId>,
-    scope: QueueScope,
+    link: QueueLink,
     focused: bool,
     /// The panel surface's focused bit, projected per frame from the shell's
     /// panel-focus fact (the same value the legacy base frame used for the
@@ -85,7 +85,7 @@ impl QueueComponent {
     }
 
     /// Reset the Queue's local presentation (cursor, marks, scroll) without
-    /// replacing its rows, scope or playback projection. A transient reorder
+    /// replacing its rows, link or playback projection. A transient reorder
     /// grab is dropped so no pointer gesture survives the reset.
     pub fn reset_presentation(&mut self) {
         self.carrier.reset_presentation();
@@ -101,7 +101,7 @@ impl QueueComponent {
     pub fn new() -> Self {
         Self {
             carrier: MediaListCarrier::new(),
-            scope: QueueScope::Local,
+            link: QueueLink::Local,
             focused: false,
             frame_focused: false,
             mini_view: false,
@@ -162,13 +162,13 @@ impl QueueComponent {
         }
     }
 
-    /// Deliver the current scope independently of row delivery.
-    pub fn set_scope(&mut self, scope: QueueScope) {
-        if scope != self.scope {
+    /// Deliver the current link independently of row delivery.
+    pub fn set_link(&mut self, link: QueueLink) {
+        if link != self.link {
             self.carrier.set_scroll(0);
         }
-        self.scope = scope;
-        self.empty_text = if scope == QueueScope::Local {
+        self.link = link;
+        self.empty_text = if link == QueueLink::Local {
             "¯\\_(ツ)_/¯".into()
         } else {
             "Remote queue is empty".into()
@@ -226,7 +226,7 @@ impl QueueComponent {
     fn cursor_message(&self) -> Option<Msg> {
         self.carrier.selected_target().map(|&slot_id| {
             Msg::Queue(QueueRequest::Cursor {
-                scope: self.scope,
+                link: self.link,
                 slot_id,
             })
         })
@@ -248,11 +248,11 @@ impl QueueComponent {
         )
     }
 
-    /// The scope/slot pair for Queue's current selection.
-    fn selected_slot(&self) -> Option<(QueueScope, QueueSlotId)> {
+    /// The link/slot pair for Queue's current selection.
+    fn selected_slot(&self) -> Option<(QueueLink, QueueSlotId)> {
         self.carrier
             .selected_target()
-            .map(|&slot_id| (self.scope, slot_id))
+            .map(|&slot_id| (self.link, slot_id))
     }
 
     /// Clamp the shared owner's fixed-row viewport to the queue's content

@@ -47,8 +47,8 @@ fn direct_remote_connect_shows_the_peer_queue_even_when_empty() {
 
     app.switch_to_direct_remote(&sess, remote, remote_rx, &stub_endpoint());
 
-    assert_eq!(app.queue_scope, QueueScope::Remote);
-    assert_eq!(app.viewed_queue_scope(), QueueScope::Remote);
+    assert_eq!(app.queue_link, QueueLink::Peer);
+    assert_eq!(app.viewed_queue_link(), QueueLink::Peer);
     assert_eq!(
         app.remote_view.as_ref().unwrap().emby_items(),
         [] as [mbv_emby_model::EmbyItem; 0]
@@ -57,7 +57,7 @@ fn direct_remote_connect_shows_the_peer_queue_even_when_empty() {
 }
 
 #[test]
-fn direct_remote_connect_switches_to_remote_scope_when_remote_queue_has_items() {
+fn direct_remote_connect_switches_to_peer_link_when_remote_queue_has_items() {
     let mut app = make_app_stub();
     app.local_view
         .adopt_items(make_items(2), app.local_view.cursor());
@@ -67,8 +67,8 @@ fn direct_remote_connect_switches_to_remote_scope_when_remote_queue_has_items() 
 
     app.switch_to_direct_remote(&sess, remote, remote_rx, &stub_endpoint());
 
-    assert_eq!(app.queue_scope, QueueScope::Remote);
-    assert_eq!(app.viewed_queue_scope(), QueueScope::Remote);
+    assert_eq!(app.queue_link, QueueLink::Peer);
+    assert_eq!(app.viewed_queue_link(), QueueLink::Peer);
     assert_eq!(
         app.remote_view.as_ref().unwrap().emby_items()[0].id,
         remote_items[0].id
@@ -77,7 +77,7 @@ fn direct_remote_connect_switches_to_remote_scope_when_remote_queue_has_items() 
 }
 
 #[test]
-fn switch_to_library_route_sets_remote_queue_scope_when_daemon_has_items() {
+fn switch_to_library_route_sets_remote_queue_link_when_daemon_has_items() {
     let mut app = make_app_stub();
     let (remote, remote_rx) = mbv_remote_player::RemotePlayer::stub(make_items(2), 0);
 
@@ -95,8 +95,8 @@ fn library_route_connect_shows_the_peer_queue_even_when_empty() {
 
     app.switch_to_library_route("music", remote, remote_rx, &stub_endpoint());
 
-    assert_eq!(app.queue_scope, QueueScope::Remote);
-    assert_eq!(app.viewed_queue_scope(), QueueScope::Remote);
+    assert_eq!(app.queue_link, QueueLink::Peer);
+    assert_eq!(app.viewed_queue_link(), QueueLink::Peer);
     assert_eq!(
         app.remote_view.as_ref().unwrap().emby_items(),
         [] as [mbv_emby_model::EmbyItem; 0]
@@ -226,7 +226,7 @@ fn local_daemon_attach_adopts_the_owner_queue_as_the_unified_local_view() {
     );
 
     assert_eq!(app.remote_slot_state(), RemoteSlotState::LocalDaemon);
-    assert_eq!(app.viewed_queue_scope(), QueueScope::Local);
+    assert_eq!(app.viewed_queue_link(), QueueLink::Local);
     assert!(app.remote_view.is_none());
     assert_eq!(app.local_view.emby_items()[0].id, daemon_items[0].id);
 }

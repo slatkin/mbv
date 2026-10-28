@@ -1,4 +1,4 @@
-use super::playback::QueueScope;
+use super::playback::QueueLink;
 
 /// What happens when the shared confirmation modal (`ConfirmModal`) is
 /// accepted. Each variant carries whatever state its effect needs, so
@@ -14,7 +14,7 @@ pub enum ConfirmAction {
     /// the user answers. Confirming stops playback, then removes every
     /// named slot in one owner edit from the resulting `Stopped` event.
     RemoveActiveQueueSelection {
-        scope: QueueScope,
+        link: QueueLink,
         slot_ids: Vec<mbv_queue::QueueSlotId>,
     },
     RescanLibrary(usize),

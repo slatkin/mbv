@@ -4,7 +4,7 @@
 //! The F2 Settings action (row 5.2, not yet wired) calls
 //! [`Model::reset_ui_state`]. The coordinator returns live presentation state
 //! to its defaults without touching the protected domain-state inventory
-//! (playback transport, queue contents/scope, volume/mute, credentials,
+//! (playback transport, queue contents/link, volume/mute, credentials,
 //! Service setup, caches, launch-window acknowledgements), then clears saved
 //! presentation state through `mbv_config::clear_saved_ui_presentation_state`
 //! (row 4.1).
@@ -108,7 +108,7 @@ impl Model {
     /// Reset the mounted presentation owners: the Library panel resets every
     /// retained owner (active and inactive) plus its own overlay/gesture
     /// state, and the Queue component resets its cursor/marks/scroll without
-    /// changing the viewed scope or queue data.
+    /// changing the viewed link or queue data.
     fn reset_mounted_presentation(&mut self) {
         if let Some(panel) = self
             .application

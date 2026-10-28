@@ -16,13 +16,13 @@ pub struct PlaybackState {
 ///
 /// `Local` is this TUI instance's own queue and carries local-only metadata:
 /// dirty state, undo history, saved-playlist source, and on-disk persistence.
-/// `Remote` is the queue owned by a directly-controlled mbv daemon or remote
-/// instance. A stale `Remote` UI preference is ignored unless a direct remote
+/// `Peer` is the queue owned by a directly-controlled mbv daemon or remote
+/// instance. A stale `Peer` UI preference is ignored unless a direct remote
 /// queue is actually present.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum QueueScope {
+pub enum QueueLink {
     Local,
-    Remote,
+    Peer,
 }
 
 /// Volume change applied by one volume key press or status-bar pill notch.

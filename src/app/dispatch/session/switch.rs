@@ -1,5 +1,5 @@
 use crate::app::dispatch::notify::ToastSeverity;
-use crate::app::{App, QueueScope, QueueView, SuspendedLocalSession};
+use crate::app::{App, QueueLink, QueueView, SuspendedLocalSession};
 use mbv_ctrl::player::PlayerEvent;
 use mbv_player::PlayerProxy;
 use std::sync::mpsc;
@@ -217,7 +217,7 @@ impl App {
             self.local_view = local_view;
         }
         self.remote_view = None;
-        self.set_queue_scope(QueueScope::Local);
+        self.set_queue_link(QueueLink::Local);
         self.advance_queue_epoch();
         self.direct_remote_connected = false;
         self.direct_remote_label = None;

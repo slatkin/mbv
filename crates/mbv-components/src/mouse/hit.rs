@@ -1,5 +1,5 @@
 //! [`HitRegions`] — a last-push-wins rectangle registry for **irregular
-//! painted chrome only** (design.md D6): pills, Queue scope buttons, transport
+//! painted chrome only** (design.md D6): pills, Queue link buttons, transport
 //! controls, group selectors, overlay rows.
 //!
 //! This is not a new shape — it formalises the hand-rolled `Vec<(Rect, T)>`

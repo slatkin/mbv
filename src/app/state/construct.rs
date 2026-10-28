@@ -251,7 +251,7 @@ impl App {
             series_detail_loading: std::collections::HashSet::new(),
             series_season_loading: std::collections::HashSet::new(),
             pending_series_season_expansions: std::collections::HashSet::new(),
-            queue_scope: init.initial_queue_scope,
+            queue_link: init.initial_queue_link,
             launched_as_remote: false,
             player_endpoint: None,
             home_is_local_daemon: false,

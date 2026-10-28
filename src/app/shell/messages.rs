@@ -473,11 +473,11 @@ impl Model {
             )],
         });
         if slot_ids.len() > 1 {
-            let scope = self.app.viewed_queue_scope();
+            let link = self.app.viewed_queue_link();
             let (items, remove_targets, capabilities) = slot_ids
                 .iter()
                 .filter_map(|sid| {
-                    let slot = self.app.queue_for_scope(scope).slot(*sid)?;
+                    let slot = self.app.queue_for_link(link).slot(*sid)?;
                     let item = slot.item.as_emby().cloned();
                     let remove = mbv_ui_model::context_menu::BulkRemoveTarget::Queue(*sid);
                     let capability =

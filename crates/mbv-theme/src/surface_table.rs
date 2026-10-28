@@ -83,10 +83,10 @@ pub(super) const fn slots(surface: Surface) -> (Slot, Slot) {
         // border rule.
         Surface::CreditsStripe | Surface::PopupBorder => (Slot::Bg1, Slot::Bg1),
         // The selected library pill chip and hint chip 0 (blue), and the
-        // queue's selected scope pill (the Direct-remote aqua, `CONTEXT.md`,
+        // queue's selected link pill (the Direct-remote aqua, `CONTEXT.md`,
         // "Direct remote control" — its own row, not the library pill's blue).
         Surface::PillChipSelected | Surface::HintChip0 => (Slot::Blue, Slot::Blue),
-        Surface::QueueScopePillSelected => (Slot::Aqua, Slot::Aqua),
+        Surface::QueueLinkPillSelected => (Slot::Aqua, Slot::Aqua),
         Surface::HintChip1 => (Slot::Yellow, Slot::Yellow),
         Surface::HintChip2 => (Slot::Orange, Slot::Orange),
     }

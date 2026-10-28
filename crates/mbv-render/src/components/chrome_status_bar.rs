@@ -4,7 +4,7 @@
 //! (`crates/mbv-components/src/status_bar_panel.rs`) owns the status row's pill hit
 //! regions, overflow drop-order and click/scroll resolution. This module owns
 //! its visual model, layout, and the single painter. The Local/Remote queue-
-//! scope pills are queue concern and paint in the `QueueColumn` footer
+//! link pills are queue concern and paint in the `QueueColumn` footer
 //! (`render_queue_status`), never here.
 
 use mbv_theme as palette;
@@ -36,7 +36,7 @@ pub struct VisualModeIndicator {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct StatusBarModel {
     /// Whether the remote/session pill participates (the base frame has
-    /// always passed `false` here — the queue-scope pills below show the
+    /// always passed `false` here — the queue-link pills below show the
     /// same info; the parameter is retained verbatim).
     pub show_session_pill: bool,
     /// Remote/session pill spans (empty unless `show_session_pill`).
@@ -45,7 +45,7 @@ pub struct StatusBarModel {
     pub mute: Option<Vec<Span<'static>>>,
     /// Volume pill spans.
     pub volume: Vec<Span<'static>>,
-    /// Fully built right segment (scope label, username, service glyphs).
+    /// Fully built right segment (link label, username, service glyphs).
     pub right: Vec<Span<'static>>,
     /// Visual-mode count indicator, when selected items exist.
     pub visual_mode: Option<VisualModeIndicator>,
@@ -75,10 +75,10 @@ pub struct StatusBarRegions {
 /// placement) and return the painted pill regions.
 ///
 /// Persistent bottom status bar. Left side: volume, connection,
-/// and mute status groups. Right side: queue source/save-state/scope
+/// and mute status groups. Right side: queue source/save-state/link
 /// detail and the service-state glyphs (Emby, Audiobookshelf,
 /// stay-alive). The playlist status pill renders in the left queue panel
-/// instead; the Local/Remote queue-scope pills paint in the `QueueColumn`
+/// instead; the Local/Peer queue-link pills paint in the `QueueColumn`
 /// footer (`render_queue_status`), never here.
 struct StatusBarLeftSegments {
     mute: Option<Vec<Span<'static>>>,

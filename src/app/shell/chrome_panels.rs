@@ -210,7 +210,7 @@ impl Model {
     /// Mount/unmount the `StatusBarPanel` to the `RootFrame.status_bar`
     /// placement and project the status-row content (pill and right-segment
     /// spans, built by `chrome_status.rs`'s App-side builders). The
-    /// Local/Remote queue-scope pills are queue concern: the shell projects
+    /// Local/Peer queue-link pills are queue concern: the shell projects
     /// them into the `QueueComponent` footer in `sync_queue`, never here.
     pub(in crate::app) fn sync_status_bar_panel(&mut self) {
         // An expired toast stops projecting: clear the state first so this
@@ -234,7 +234,7 @@ impl Model {
         } else {
             Vec::new()
         };
-        // Queue-scope pills are queue concern (projected into the
+        // Queue-link pills are queue concern (projected into the
         // `QueueComponent` footer in `sync_queue`); the status row carries
         // only the focused list's count-only summary.
         let focused_summary = if self.app.effective_panel_focus() == PanelFocus::Queue {

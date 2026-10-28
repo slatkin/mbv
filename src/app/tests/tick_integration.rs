@@ -265,9 +265,7 @@ fn tick_delivers_key_to_focused_queue_before_root_observer_once() {
     assert_eq!(outcome.raw_messages.len(), 2, "one leaf and one observer");
     assert!(matches!(
         outcome.raw_messages.first(),
-        Some(Msg::Queue(QueueRequest::Scope(
-            crate::app::QueueScope::Local
-        )))
+        Some(Msg::Queue(QueueRequest::Link(crate::app::QueueLink::Local)))
     ));
     assert!(matches!(
         outcome.raw_messages.get(1),
@@ -277,7 +275,7 @@ fn tick_delivers_key_to_focused_queue_before_root_observer_once() {
         outcome
             .raw_messages
             .iter()
-            .filter(|msg| matches!(msg, Msg::Queue(QueueRequest::Scope(_))))
+            .filter(|msg| matches!(msg, Msg::Queue(QueueRequest::Link(_))))
             .count(),
         1
     );

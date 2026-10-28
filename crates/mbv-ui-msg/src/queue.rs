@@ -1,8 +1,8 @@
-//! Queue-scoped request and intent types. Split from `msg.rs` (task 8.3) to
+//! Queue-link request and intent types. Split from `msg.rs` (task 8.3) to
 //! keep the central `Msg` file below the 800-line cap.
 //!
 //! The queue can be reordered by the Player between paint and dispatch, so
-//! these types carry slot identity (or the focused scope), not a snapshot
+//! these types carry slot identity (or the focused link), not a snapshot
 //! index.
 
 use mbv_queue::QueueSlotId;
@@ -12,37 +12,37 @@ use mbv_queue::QueueSlotId;
 #[derive(Debug, Clone, PartialEq)]
 pub enum QueueRequest {
     Cursor {
-        scope: mbv_ui_model::playback::QueueScope,
+        link: mbv_ui_model::playback::QueueLink,
         slot_id: QueueSlotId,
     },
-    Scope(mbv_ui_model::playback::QueueScope),
+    Link(mbv_ui_model::playback::QueueLink),
     Play {
-        scope: mbv_ui_model::playback::QueueScope,
+        link: mbv_ui_model::playback::QueueLink,
         slot_id: QueueSlotId,
     },
     Remove {
-        scope: mbv_ui_model::playback::QueueScope,
+        link: mbv_ui_model::playback::QueueLink,
         slot_id: QueueSlotId,
     },
     /// Remove the selected queue slots, resolving each slot position when the
     /// shell executes the request because the queue may have changed since it
     /// was painted.
     RemoveSelection {
-        scope: mbv_ui_model::playback::QueueScope,
+        link: mbv_ui_model::playback::QueueLink,
         slot_ids: Vec<QueueSlotId>,
     },
     Move {
-        scope: mbv_ui_model::playback::QueueScope,
+        link: mbv_ui_model::playback::QueueLink,
         slot_id: QueueSlotId,
         direction: QueueMove,
     },
     MoveTo {
-        scope: mbv_ui_model::playback::QueueScope,
+        link: mbv_ui_model::playback::QueueLink,
         slot_id: QueueSlotId,
         onto: QueueSlotId,
     },
     Undo {
-        scope: mbv_ui_model::playback::QueueScope,
+        link: mbv_ui_model::playback::QueueLink,
     },
     ResizeColumnLive(u16),
     ResizeColumnEnd(u16),
@@ -58,7 +58,7 @@ pub enum QueueMove {
 pub enum QueueIntent {
     Clear,
     Navigate {
-        scope: mbv_ui_model::playback::QueueScope,
+        link: mbv_ui_model::playback::QueueLink,
         slot_id: QueueSlotId,
     },
     PlayNow,

@@ -1,6 +1,6 @@
 use crate::app::SidebarId;
 use crate::app::{
-    App, ConfirmAction, ConfirmModal, PanelFocus, PendingQueueAction, QueueScope,
+    App, ConfirmAction, ConfirmModal, PanelFocus, PendingQueueAction, QueueLink,
     SavePlaylistDialog, SavePlaylistStage,
 };
 use crossterm::event::{KeyCode, KeyEvent};
@@ -20,9 +20,9 @@ impl App {
             ConfirmAction::RemoveActiveQueueItem(pos) => {
                 self.confirm_remove_active_queue_item_for_key(pos, key);
             }
-            ConfirmAction::RemoveActiveQueueSelection { scope, slot_ids } => {
+            ConfirmAction::RemoveActiveQueueSelection { link, slot_ids } => {
                 if key.code == KeyCode::Enter {
-                    self.confirm_remove_active_queue_selection(scope, &slot_ids);
+                    self.confirm_remove_active_queue_selection(link, &slot_ids);
                 }
             }
             ConfirmAction::RescanLibrary(lib_idx) => self.confirm_rescan_library(lib_idx, key),
@@ -194,28 +194,28 @@ impl App {
     /// was up, the remainder is a plain batch edit with no stop.
     fn confirm_remove_active_queue_selection(
         &mut self,
-        scope: QueueScope,
+        link: QueueLink,
         slot_ids: &[mbv_queue::QueueSlotId],
     ) {
         let live: Vec<mbv_queue::QueueSlotId> = slot_ids
             .iter()
             .copied()
-            .filter(|slot_id| self.slot_index(scope, *slot_id).is_some())
+            .filter(|slot_id| self.slot_index(link, *slot_id).is_some())
             .collect();
         if live.is_empty() {
             return;
         }
         let still_needs = live.iter().any(|slot_id| {
-            self.slot_index(scope, *slot_id)
-                .is_some_and(|pos| self.queue_pos_needs_active_confirm(scope, pos))
+            self.slot_index(link, *slot_id)
+                .is_some_and(|pos| self.queue_pos_needs_active_confirm(link, pos))
         });
         if !still_needs {
-            self.remove_slots_from_queue(scope, &live);
+            self.remove_slots_from_queue(link, &live);
             return;
         }
         self.pending_delete_selection = Some(live);
         self.player.stop();
-        if self.local_queue_metadata_applies(scope) {
+        if self.local_queue_metadata_applies(link) {
             self.queue_dirty = true;
         }
         self.advance_queue_epoch();
@@ -225,12 +225,12 @@ impl App {
     /// displayed queue untouched, stop playback, then remove the slot through
     /// the Player owner from the resulting `Stopped` event.
     fn confirm_remove_active_queue_item(&mut self, pos: usize) {
-        let scope = self.viewed_queue_scope();
-        let slot_id = self.queue_for_scope_mut(scope).slot_id_at(pos);
+        let link = self.viewed_queue_link();
+        let slot_id = self.queue_for_link_mut(link).slot_id_at(pos);
         if let Some(slot_id) = slot_id {
             self.pending_delete_slot = Some(slot_id);
             self.player.stop();
-            if self.local_queue_metadata_applies(scope) {
+            if self.local_queue_metadata_applies(link) {
                 self.queue_dirty = true;
             }
             self.advance_queue_epoch();
@@ -239,12 +239,12 @@ impl App {
 
     /// Show the clear-queue confirmation modal (called from `QueueIntent::Clear`).
     pub(in crate::app) fn request_clear_queue(&mut self) {
-        let scope = self.viewed_queue_scope();
+        let link = self.viewed_queue_link();
         // Legacy `handle_key_clear_queue_prompt` refused a Queue-focused remote
-        // scope outright, which also swallowed `c` for a socket-attached mbvd
+        // link outright, which also swallowed `c` for a socket-attached mbvd
         // whose queue the confirm's `y` handler can clear. The direct-remote
         // daemon queue falls through to the same prompt a local queue gets.
-        if self.queue_for_scope(scope).total_queue_len() == 0 {
+        if self.queue_for_link(link).total_queue_len() == 0 {
             return;
         }
         self.ask_confirm(ConfirmModal::two_button(

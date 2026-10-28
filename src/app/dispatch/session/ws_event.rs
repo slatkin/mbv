@@ -131,7 +131,7 @@ impl App {
             items[start_idx].playback_position_ticks = start_position_ticks;
         }
         self.replace_emby_queue_on_owner(
-            self.playing_queue_scope(),
+            self.playing_queue_link(),
             items,
             start_idx,
             mbv_queue::QueueSource::Remote,

@@ -1,5 +1,5 @@
 use super::*;
-use crate::app::QueueScope;
+use crate::app::QueueLink;
 
 #[rstest]
 #[case::ctrl_attached(true, false, true, &["Video"], PlaybackEligibility::WhollyUnplayable { unplayable_count: 1 })]
@@ -155,7 +155,7 @@ fn confirmed_local_fall_through_stops_and_detaches_remote_owner() {
 
     assert!(!app.queue_deferrals.has_local_play());
     assert!(app.is_local_daemon());
-    assert_eq!(app.queue_scope, QueueScope::Local);
+    assert_eq!(app.queue_link, QueueLink::Local);
     let commands: Vec<_> = command_rx.try_iter().collect();
     assert!(commands.iter().any(|command| {
         matches!(

@@ -3,7 +3,7 @@ use crate::app::state::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
 use mbv_ctrl::player::PlayerEvent;
 use mbv_player::PlayerProxy;
 use mbv_ui_model::feed::IdleFeed;
-use mbv_ui_model::playback::QueueScope;
+use mbv_ui_model::playback::QueueLink;
 use mbv_ws::WsEvent;
 use std::sync::{Arc, Mutex, mpsc};
 
@@ -23,7 +23,7 @@ pub(in crate::app) struct AppInit {
         Option<mbv_core::service_runtime::SetupGeneration>,
     pub(in crate::app) local_view: QueueView,
     pub(in crate::app) remote_view: Option<QueueView>,
-    pub(in crate::app) initial_queue_scope: QueueScope,
+    pub(in crate::app) initial_queue_link: QueueLink,
     pub(in crate::app) system_notifications: bool,
     pub(in crate::app) image_protocol: Option<String>,
     pub(in crate::app) image_protocol_enabled: bool,

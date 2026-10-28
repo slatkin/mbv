@@ -53,9 +53,9 @@ impl App {
     /// happened on a direct-remote/daemon queue, autosaving here would push an unrelated,
     /// unmodified local playlist to Emby instead of the queue that actually changed.
     pub(in crate::app) fn on_video_consumed(&mut self) {
-        let scope = self.playing_queue_scope();
-        tracing::info!(name: "consume.video.processed", target: "consume", scope = ?scope, has_local_metadata = self.local_queue_metadata_applies(scope), "video consume processed");
-        if !self.local_queue_metadata_applies(scope) {
+        let link = self.playing_queue_link();
+        tracing::info!(name: "consume.video.processed", target: "consume", link = ?link, has_local_metadata = self.local_queue_metadata_applies(link), "video consume processed");
+        if !self.local_queue_metadata_applies(link) {
             return;
         }
         self.queue_dirty = true;
@@ -74,9 +74,9 @@ impl App {
     /// than a shared helper with a boolean parameter) so the video and audio consume paths
     /// stay independently readable and don't require the caller to track which flag applies.
     pub(in crate::app) fn on_audio_consumed(&mut self) {
-        let scope = self.playing_queue_scope();
-        tracing::info!(name: "consume.audio.processed", target: "consume", scope = ?scope, has_local_metadata = self.local_queue_metadata_applies(scope), "audio consume processed");
-        if !self.local_queue_metadata_applies(scope) {
+        let link = self.playing_queue_link();
+        tracing::info!(name: "consume.audio.processed", target: "consume", link = ?link, has_local_metadata = self.local_queue_metadata_applies(link), "audio consume processed");
+        if !self.local_queue_metadata_applies(link) {
             return;
         }
         self.queue_dirty = true;

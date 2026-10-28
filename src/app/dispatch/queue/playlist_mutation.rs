@@ -3,7 +3,7 @@
 //! within the repository's file-size limit.
 
 use super::{
-    App, EmbyItem, PlaylistMutation, QueueItem, QueueScope, SessionEvent, ToastSeverity,
+    App, EmbyItem, PlaylistMutation, QueueItem, QueueLink, SessionEvent, ToastSeverity,
     is_playable, queue_op::QueueOpEdit,
 };
 use crate::app::state::queue_owner::QueueOrigin;
@@ -146,7 +146,7 @@ impl App {
     ) -> bool {
         let lineage = origin.lineage;
         let sent = self.queue_op(
-            QueueScope::Local,
+            QueueLink::Local,
             mbv_remote_player::QueueOp::SourceUpdate {
                 source: source.clone(),
                 lineage,
@@ -209,15 +209,15 @@ impl App {
     }
 
     /// Appends one item to the viewed queue by sending the answered Append op
-    /// to that scope's Player owner (row 5.3, design D6): the Client holds no
+    /// to that link's Player owner (row 5.3, design D6): the Client holds no
     /// editable queue, so the entry appears only when the owner's answer (or
     /// a legacy owner's later snapshot) is adopted. Marks local playlist
     /// metadata dirty and advances the queue epoch when the owner took the
     /// edit. The visible-queue mutation is the success confirmation; no
     /// enqueue success toast is emitted.
     pub(super) fn append_item_to_queue(&mut self, item: EmbyItem) {
-        let scope = self.viewed_queue_scope();
-        self.append_on_owner(scope, vec![QueueItem::Emby(Box::new(item))]);
+        let link = self.viewed_queue_link();
+        self.append_on_owner(link, vec![QueueItem::Emby(Box::new(item))]);
     }
 }
 

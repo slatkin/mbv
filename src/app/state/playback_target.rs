@@ -49,7 +49,7 @@ impl App {
     }
 
     pub(in crate::app) fn pending_playback_slot(&self) -> Option<mbv_queue::QueueSlotId> {
-        self.queue_for_scope(self.playing_queue_scope())
+        self.queue_for_link(self.playing_queue_link())
             .pending_playback_slot()
     }
 
@@ -83,14 +83,14 @@ impl App {
     /// The adopted pending slot's position while the owner has not confirmed it.
     fn pending_playback_index(&self) -> Option<usize> {
         let target = self.pending_playback_slot()?;
-        self.queue_for_scope(self.playing_queue_scope())
+        self.queue_for_link(self.playing_queue_link())
             .slot_index(target)
     }
 
     pub(in crate::app) fn displayed_queue_playback_state(
         &self,
     ) -> mbv_ui_model::playback::PlaybackState {
-        if self.queue_scope_is_playback(self.viewed_queue_scope()) {
+        if self.queue_link_is_playback(self.viewed_queue_link()) {
             self.effective_playback_state()
         } else {
             mbv_ui_model::playback::PlaybackState::default()

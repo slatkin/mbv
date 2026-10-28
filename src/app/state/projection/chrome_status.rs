@@ -6,7 +6,7 @@
 //! methods here are content production only: they read app state and build
 //! the pill/right-segment spans the shell projects into the component.
 //!
-//! The Local/Remote queue-scope pills are queue concern and paint in the
+//! The Local/Peer queue-link pills are queue concern and paint in the
 //! `QueueColumn` footer (`render_queue_status`), never here.
 
 use crate::app::dispatch::notify::ToastSeverity;
@@ -364,7 +364,7 @@ impl App {
         ]
     }
 
-    /// The status row's right segment: queue-source scope label, username,
+    /// The status row's right segment: queue-source link label, username,
     /// and the service-state glyphs (Emby,
     /// Audiobookshelf, stay-alive) — always visible, coloured by state. Built
     /// shell-side (task 2.2); the mounted `StatusBarPanel` positions and
@@ -456,7 +456,7 @@ impl App {
             ),
             Span::raw(" "),
         ]);
-        // Remote queue scope is omitted here: the active queue is already
+        // Peer queue link is omitted here: the active queue is already
         // apparent from the queue UI.
         right_spans
     }

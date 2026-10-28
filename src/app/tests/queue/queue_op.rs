@@ -10,7 +10,7 @@ use crate::app::tests::{
     QueueViewTestExt, close_initial_services, emby_unified_state, make_items,
     make_local_daemon_app_stub, make_local_daemon_app_stub_with_cmd_rx, remote_stub_config,
 };
-use crate::app::{App, QueueScope};
+use crate::app::{App, QueueLink};
 use crate::pin::{PINNED_REQUEST_OVERRIDE, PINNED_REQUEST_TEST_LOCK, PINNED_REQUESTS};
 use mbv_ctrl::player::PlayerEvent;
 use mbv_ctrl::{CtrlCmd, QueueOpId, QueueOpOutcome};
@@ -105,7 +105,7 @@ fn queue_op_adopts_the_earlier_snapshot_inline_before_the_answer() {
     .unwrap();
 
     app.queue_op(
-        QueueScope::Local,
+        QueueLink::Local,
         QueueOp::Append {
             items: one_queue_item(),
             before: None,
@@ -113,7 +113,7 @@ fn queue_op_adopts_the_earlier_snapshot_inline_before_the_answer() {
     );
 
     assert_eq!(
-        app.queue_for_scope(QueueScope::Local).total_queue_len(),
+        app.queue_for_link(QueueLink::Local).total_queue_len(),
         4,
         "the matching answer's snapshot is the adopted state"
     );
@@ -156,7 +156,7 @@ fn suspended_home_queue_op_disconnect_is_drained_as_a_home_event() {
     tx.send(applied(1, snapshot(2))).unwrap();
 
     app.queue_op(
-        QueueScope::Local,
+        QueueLink::Local,
         QueueOp::Append {
             items: one_queue_item(),
             before: None,
@@ -197,10 +197,10 @@ fn await_queue_op_defers_an_interleaved_remote_disconnected_to_the_next_tick() {
     })
     .unwrap();
 
-    app.await_queue_op(QueueScope::Local, QueueOpId(9));
+    app.await_queue_op(QueueLink::Local, QueueOpId(9));
 
     assert_eq!(
-        app.queue_for_scope(QueueScope::Local).total_queue_len(),
+        app.queue_for_link(QueueLink::Local).total_queue_len(),
         4,
         "the answer is still adopted"
     );
@@ -236,7 +236,7 @@ fn await_queue_op_timeout_flashes_and_a_late_applied_is_adopted_afterwards() {
     app.local_view.adopt_items(make_items(2), 0);
     let tx = inject_player_rx(&mut app);
 
-    app.await_queue_op_with_bound(QueueScope::Local, QueueOpId(3), Duration::ZERO);
+    app.await_queue_op_with_bound(QueueLink::Local, QueueOpId(3), Duration::ZERO);
 
     assert_eq!(
         app.status, "Playback owner did not respond to the queue edit",
@@ -244,7 +244,7 @@ fn await_queue_op_timeout_flashes_and_a_late_applied_is_adopted_afterwards() {
     );
     assert_eq!(app.status_severity, ToastSeverity::Error);
     assert_eq!(
-        app.queue_for_scope(QueueScope::Local).total_queue_len(),
+        app.queue_for_link(QueueLink::Local).total_queue_len(),
         2,
         "the timeout leaves the view unchanged"
     );
@@ -260,7 +260,7 @@ fn await_queue_op_timeout_flashes_and_a_late_applied_is_adopted_afterwards() {
         harness
             .model()
             .app
-            .queue_for_scope(QueueScope::Local)
+            .queue_for_link(QueueLink::Local)
             .total_queue_len(),
         5,
         "the late Applied is adopted as a background snapshot"
@@ -302,7 +302,7 @@ fn rapid_repeated_removals_each_act_on_the_answered_state() {
         "removal 2 and 3 target slots of the previously answered snapshots"
     );
     assert_eq!(
-        app.queue_for_scope(QueueScope::Local).total_queue_len(),
+        app.queue_for_link(QueueLink::Local).total_queue_len(),
         1,
         "three entries were removed"
     );
@@ -334,7 +334,7 @@ fn undoing_a_removal_appends_before_the_entry_now_at_that_index() {
     tx.send(applied(1, Box::new(undo_answer))).unwrap();
 
     app.remove_from_queue(2);
-    app.undo_last_queue_edit(QueueScope::Local);
+    app.undo_last_queue_edit(QueueLink::Local);
 
     let _remove = cmd_rx.try_recv().unwrap();
     let undo = cmd_rx.try_recv().unwrap();
@@ -364,7 +364,7 @@ fn undoing_a_removal_past_the_end_appends_at_the_end() {
     tx.send(applied(1, snapshot_from_base(1, 100))).unwrap();
 
     app.remove_from_queue(1);
-    app.undo_last_queue_edit(QueueScope::Local);
+    app.undo_last_queue_edit(QueueLink::Local);
 
     let _remove = cmd_rx.try_recv().unwrap();
     let undo = cmd_rx.try_recv().unwrap();
@@ -391,7 +391,7 @@ fn queue_op_to_a_legacy_owner_returns_without_waiting() {
     let _tx = inject_player_rx(&mut app);
 
     app.queue_op(
-        QueueScope::Local,
+        QueueLink::Local,
         QueueOp::Append {
             items: one_queue_item(),
             before: None,
@@ -424,7 +424,7 @@ fn queue_refresh_is_an_answered_owner_op_and_shows_only_the_answer() {
     // The owner answers Applied at once with the refreshed queue.
     tx.send(applied(1, snapshot_from_base(3, 500))).unwrap();
 
-    app.queue_op(QueueScope::Local, QueueOp::Refresh);
+    app.queue_op(QueueLink::Local, QueueOp::Refresh);
 
     assert!(
         matches!(
@@ -434,12 +434,12 @@ fn queue_refresh_is_an_answered_owner_op_and_shows_only_the_answer() {
         "the refresh is sent as an answered owner operation"
     );
     assert_eq!(
-        app.queue_for_scope(QueueScope::Local).total_queue_len(),
+        app.queue_for_link(QueueLink::Local).total_queue_len(),
         3,
         "the viewed queue is the owner's refreshed snapshot"
     );
     assert_eq!(
-        app.queue_for_scope(QueueScope::Local)
+        app.queue_for_link(QueueLink::Local)
             .slot_id_at(0)
             .map(mbv_ctrl::slot_id_to_u64),
         Some(500),
@@ -465,7 +465,7 @@ fn single_item_play_replaces_the_populated_queue_with_the_played_item() {
     assert!(app.submit_queue_item(played, true));
 
     assert_eq!(
-        app.queue_for_scope(QueueScope::Local).total_queue_len(),
+        app.queue_for_link(QueueLink::Local).total_queue_len(),
         1,
         "the played item is the whole queue"
     );

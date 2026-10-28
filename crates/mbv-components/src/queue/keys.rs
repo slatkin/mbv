@@ -2,7 +2,7 @@ use tuirealm::event::{Key, KeyEvent};
 
 use crate::media_list::{MediaListSurfaceInput, RowIntent};
 use mbv_ui_model::context_menu::ContextMenuTargets;
-use mbv_ui_model::playback::QueueScope;
+use mbv_ui_model::playback::QueueLink;
 use mbv_ui_msg::{
     LeafKeyResult, Msg, QueueColumnResize, QueueIntent, QueueMove, QueueRequest, ShellRequest,
 };
@@ -49,7 +49,7 @@ impl QueueComponent {
                 self.carrier.selection_summary(),
             ))));
         }
-        if let Some(message) = self.handle_scope_key(key) {
+        if let Some(message) = self.handle_link_key(key) {
             return Some(message);
         }
         if let Some(message) = Self::handle_resize_key(key) {
@@ -65,7 +65,7 @@ impl QueueComponent {
                     .modifiers
                     .contains(tuirealm::event::KeyModifiers::CONTROL) =>
             {
-                Some(Msg::Queue(QueueRequest::Undo { scope: self.scope }))
+                Some(Msg::Queue(QueueRequest::Undo { link: self.link }))
             }
             Key::Char('.') if key.modifiers.is_empty() => Some(self.open_context_menu()),
             Key::Char('i') => self.navigate_to_selection(),
@@ -88,8 +88,8 @@ impl QueueComponent {
         }
     }
 
-    fn handle_scope_key(&mut self, key: &KeyEvent) -> Option<Msg> {
-        let scope = match key.code {
+    fn handle_link_key(&mut self, key: &KeyEvent) -> Option<Msg> {
+        let link = match key.code {
             Key::Char('[' | ']')
                 if !key
                     .modifiers
@@ -97,17 +97,17 @@ impl QueueComponent {
                     && !key.modifiers.contains(tuirealm::event::KeyModifiers::ALT) =>
             {
                 if key.code == Key::Char('[') {
-                    QueueScope::Local
+                    QueueLink::Local
                 } else {
-                    QueueScope::Remote
+                    QueueLink::Peer
                 }
             }
             _ => return None,
         };
-        self.scope = scope;
-        // Scope is preassigned before the shell request, so set_content will not reset scroll.
+        self.link = link;
+        // Link is preassigned before the shell request, so set_content will not reset scroll.
         self.carrier.set_scroll(0);
-        Some(Msg::Queue(QueueRequest::Scope(self.scope)))
+        Some(Msg::Queue(QueueRequest::Link(self.link)))
     }
 
     fn handle_resize_key(key: &KeyEvent) -> Option<Msg> {
@@ -140,9 +140,9 @@ impl QueueComponent {
             } else {
                 QueueMove::Down
             };
-            return self.selected_slot().map(|(scope, slot_id)| {
+            return self.selected_slot().map(|(link, slot_id)| {
                 Msg::Queue(QueueRequest::Move {
-                    scope,
+                    link,
                     slot_id,
                     direction,
                 })
@@ -180,7 +180,7 @@ impl QueueComponent {
             .external_intent
         {
             Some(RowIntent::Activate(slot_id)) => Some(Msg::Queue(QueueRequest::Play {
-                scope: self.scope,
+                link: self.link,
                 slot_id,
             })),
             _ => None,
@@ -192,12 +192,12 @@ impl QueueComponent {
             let slot_ids = self.carrier.multi_selection().to_vec();
             self.carrier.clear_owner_selection();
             return Some(Msg::Queue(QueueRequest::RemoveSelection {
-                scope: self.scope,
+                link: self.link,
                 slot_ids,
             }));
         }
         self.selected_slot()
-            .map(|(scope, slot_id)| Msg::Queue(QueueRequest::Remove { scope, slot_id }))
+            .map(|(link, slot_id)| Msg::Queue(QueueRequest::Remove { link, slot_id }))
     }
 
     fn open_context_menu(&mut self) -> Msg {
@@ -220,9 +220,9 @@ impl QueueComponent {
     }
 
     fn navigate_to_selection(&self) -> Option<Msg> {
-        self.selected_slot().map(|(scope, slot_id)| {
+        self.selected_slot().map(|(link, slot_id)| {
             Msg::Shell(Box::new(ShellRequest::QueueIntent(QueueIntent::Navigate {
-                scope,
+                link,
                 slot_id,
             })))
         })

@@ -130,8 +130,8 @@ impl App {
                     }
                 }
                 if !queue_slot_ids.is_empty() {
-                    let scope = self.viewed_queue_scope();
-                    self.remove_slots_from_queue(scope, &queue_slot_ids);
+                    let link = self.viewed_queue_link();
+                    self.remove_slots_from_queue(link, &queue_slot_ids);
                 }
                 None
             }
@@ -306,11 +306,11 @@ impl App {
                 None
             }
             Some(ContextAction::AudiobookshelfEnqueue(targets)) => {
-                // The bound-scope admission check the deleted single-row
+                // The bound-link admission check the deleted single-row
                 // enqueue held: the owner capability gates only a queue the
                 // Player owns.
-                let scope = self.viewed_queue_scope();
-                let bound = scope == self.playing_queue_scope();
+                let link = self.viewed_queue_link();
+                let bound = link == self.playing_queue_link();
                 if bound && !self.player.can_admit_audiobookshelf() {
                     self.flash(
                         "Audiobookshelf playback owner is unavailable".into(),

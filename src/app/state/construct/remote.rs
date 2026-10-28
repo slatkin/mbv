@@ -9,7 +9,7 @@ use mbv_ctrl::player::PlayerEvent;
 use mbv_emby::EmbyClient;
 use mbv_player::PlayerProxy;
 use mbv_remote_player::DaemonEndpoint;
-use mbv_ui_model::playback::QueueScope;
+use mbv_ui_model::playback::QueueLink;
 use std::sync::{Arc, Mutex, mpsc};
 
 /// Start MPRIS against the daemon's `RemotePlayer` (#175, previously done in
@@ -39,7 +39,7 @@ fn start_mpris(remote: &mbv_remote_player::RemotePlayer) -> mbv_desktop::mpris::
 }
 
 /// The daemon-side queue snapshot an attaching session seeds its queue
-/// scope, local-daemon bootstrap, and queue tabs from.
+/// link, local-daemon bootstrap, and queue tabs from.
 struct RemoteSnapshot {
     unified_state: Option<mbv_ctrl::UnifiedQueueStateData>,
 }
@@ -58,13 +58,13 @@ impl RemoteSnapshot {
             .is_some_and(|state| !state.slots.is_empty())
     }
 
-    /// The queue scope the session opens in: remote when a network daemon
+    /// The queue link the session opens in: remote when a network daemon
     /// already plays something, local otherwise.
-    fn scope(&self, is_local: bool) -> QueueScope {
+    fn link(&self, is_local: bool) -> QueueLink {
         if !is_local && self.has_items() {
-            QueueScope::Remote
+            QueueLink::Peer
         } else {
-            QueueScope::Local
+            QueueLink::Local
         }
     }
 
@@ -85,7 +85,7 @@ impl RemoteSnapshot {
     ) -> (QueueView, Option<QueueView>) {
         if is_local {
             // Local daemon: one unified queue, exactly like plain local
-            // playback — no separate remote_view, no scope pill.
+            // playback — no separate remote_view, no link pill.
             (
                 local_daemon_bootstrap.as_ref().unwrap().local_view.clone(),
                 None,
@@ -174,7 +174,7 @@ impl App {
     ///   daemon owns mpv instead of an in-process `Player`.
     /// - `Tcp`/`Unix`: a separate `remote_view` is kept so the user
     ///   can browse locally while a daemon elsewhere plays something else,
-    ///   with the Local/Remote scope split (`[`/`]`) to switch between them.
+    ///   with the Local/Peer link split (`[`/`]`) to switch between them.
     #[cfg(test)]
     pub fn new_remote_with_config(
         client: EmbyClient,
@@ -222,7 +222,7 @@ impl App {
         let services = remote_services(&app_config, client_arc.as_ref());
         let config = Arc::new(Mutex::new(app_config));
         let snapshot = RemoteSnapshot::take(&remote);
-        let initial_queue_scope = snapshot.scope(endpoint.is_local());
+        let initial_queue_link = snapshot.link(endpoint.is_local());
         let local_daemon_bootstrap = endpoint.is_local().then(|| snapshot.local_bootstrap());
         #[cfg(not(test))]
         let mpris_handle = Some(start_mpris(&remote));
@@ -247,7 +247,7 @@ impl App {
             audiobookshelf_socket_generation: None,
             local_view,
             remote_view,
-            initial_queue_scope,
+            initial_queue_link,
             system_notifications,
             image_protocol: ui_config.image_protocol.clone(),
             image_protocol_enabled: ui_config.image_protocol.is_some(),

@@ -1,4 +1,4 @@
-use crate::app::QueueScope;
+use crate::app::QueueLink;
 use crate::app::tests::tick_integration::harness::TickHarness;
 use crate::app::tests::{
     QueueViewTestExt, emby_unified_state, make_items, make_local_daemon_app_stub,
@@ -60,7 +60,7 @@ fn suspended_home_snapshot_updates_local_queue_while_remote_is_viewed() {
     harness.step();
 
     let app = &harness.model().app;
-    assert_eq!(app.viewed_queue_scope(), QueueScope::Remote);
+    assert_eq!(app.viewed_queue_link(), QueueLink::Peer);
     assert_eq!(app.local_view.emby_items(), make_items(3));
     assert!(matches!(
         app.local_view.source(),
@@ -266,7 +266,7 @@ fn tick_remote_disconnect_restores_local_daemon_queue_and_surfaces_toast() {
 
     assert!(app.home_is_local_daemon);
     assert!(app.remote_view.is_some());
-    assert_eq!(app.queue_scope, QueueScope::Remote);
+    assert_eq!(app.queue_link, QueueLink::Peer);
     assert_eq!(app.displayed_queue().emby_items().len(), 3);
 
     let mut harness = TickHarness::new(app);
@@ -280,7 +280,7 @@ fn tick_remote_disconnect_restores_local_daemon_queue_and_surfaces_toast() {
     let app = &harness.model().app;
     assert!(app.home_is_local_daemon);
     assert!(app.remote_view.is_none());
-    assert_eq!(app.queue_scope, QueueScope::Local);
+    assert_eq!(app.queue_link, QueueLink::Local);
     assert_eq!(app.displayed_queue().emby_items().len(), local_items.len());
     assert_eq!(app.displayed_queue().emby_items(), local_items);
     assert_eq!(app.status, CONNECTION_LOST_MESSAGE);

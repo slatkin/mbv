@@ -227,7 +227,7 @@ impl App {
         // The jump is an answered owner operation, so
         // the playing slot changes only through the owner's answer.
         let sent = self.queue_op(
-            self.playing_queue_scope(),
+            self.playing_queue_link(),
             mbv_remote_player::QueueOp::PlaySlot {
                 slot_id: mbv_ctrl::slot_id_to_u64(slot_id),
             },
@@ -534,7 +534,7 @@ impl App {
         let current_idx = status.current_idx;
         let queue = self.displayed_queue();
         let is_jump =
-            active && self.viewed_queue_scope() == self.playing_queue_scope() && t != current_idx;
+            active && self.viewed_queue_link() == self.playing_queue_link() && t != current_idx;
         if is_jump {
             if let Some(slot_id) = queue.slot_id_at(t) {
                 let _ = self.request_slot_jump(slot_id);
@@ -584,11 +584,11 @@ impl App {
         // Local / direct-remote playback. The same path handles
         // both Feed and Emby items: jump to an active slot or
         // cold-start the full canonical queue.
-        let scope = self.viewed_queue_scope();
+        let link = self.viewed_queue_link();
         let st = self.player.status_snapshot();
         let active = st.active;
         let current_idx = st.current_idx;
-        if active && self.queue_scope_is_playback(scope) {
+        if active && self.queue_link_is_playback(link) {
             if t == current_idx {
                 let _ = self.player.send_command(PlayerCommand::SeekAbsolute(0.0));
             } else if t != current_idx {
