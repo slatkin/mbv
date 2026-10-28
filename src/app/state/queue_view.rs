@@ -130,6 +130,13 @@ impl QueueView {
         self.pending_playback_slot
     }
 
+    /// The owner's observed active slot, as the latest adopted snapshot named
+    /// it (invariant 25): `None` when the owner reports no active slot.
+    #[must_use]
+    pub fn active_slot_id(&self) -> Option<QueueSlotId> {
+        self.queue.active_slot_id()
+    }
+
     #[must_use]
     pub fn total_queue_len(&self) -> usize {
         self.queue.len()

@@ -253,6 +253,11 @@ pub struct App {
     pub(in crate::app) remote_queue_undo_stack: Vec<UndoEntry>,
     /// One-shot cursor re-anchor for the next queue sync.
     pub(in crate::app) pending_queue_cursor_reanchor: Option<QueueLink>,
+    /// The at-most-one in-flight queue transfer (queue-handoff-and-take
+    /// design D2): armed after the replacement is sent to the target and
+    /// settled in the tick phase that adopts owner snapshots.
+    pub(in crate::app) pending_queue_transfer:
+        Option<crate::app::state::queue_transfer::PendingQueueTransfer>,
     pub(in crate::app) next_up_item: Option<EmbyItem>,
     // Main UI scalars.
     // reuses shared self.libs.

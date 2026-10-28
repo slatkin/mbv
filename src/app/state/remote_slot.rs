@@ -82,6 +82,10 @@ impl App {
 
     pub(in crate::app) fn disconnect_remote(&mut self) {
         if self.direct_remote_connected {
+            // A disconnect cancels the pending transfer without a report
+            // (queue-handoff-and-take design D2): both owners keep what they
+            // play, and the source keeps playing.
+            self.cancel_pending_queue_transfer();
             self.restore_local_mode("Disconnected from direct remote session");
         } else {
             self.flash("No session selected".to_string(), ToastSeverity::Neutral);
