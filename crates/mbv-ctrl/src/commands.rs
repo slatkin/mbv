@@ -55,6 +55,13 @@ pub enum CtrlCmd {
         start_idx: Option<usize>,
         #[serde(default)]
         source: QueueSource,
+        /// One-time start position for the start slot, in seconds. Meaningful
+        /// only with `start_idx`. Sent only to an owner that advertises
+        /// `CTRL_CAP_QUEUE_REPLACE_START_POSITION`; an owner without the
+        /// capability ignores the field and would start at the wrong
+        /// position, so the Client must not send it there.
+        #[serde(default)]
+        start_position_secs: Option<f64>,
         #[serde(default)]
         op: Option<QueueOpId>,
     },
@@ -241,6 +248,7 @@ impl CtrlCmd {
             slots,
             start_idx,
             source,
+            start_position_secs: None,
             op: None,
         }
     }

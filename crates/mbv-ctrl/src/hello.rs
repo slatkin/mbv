@@ -3,8 +3,8 @@ use super::{
     CTRL_CAP_ANSWERED_QUEUE_OPS, CTRL_CAP_AUDIO_ONLY, CTRL_CAP_CONTROL_AUTH,
     CTRL_CAP_EMBY_SESSION_OUTPUT, CTRL_CAP_LIFECYCLE_SHUTDOWN, CTRL_CAP_OWNER_ACTION,
     CTRL_CAP_OWNER_QUEUE_SOURCE_UPDATE, CTRL_CAP_PIN_SWAP, CTRL_CAP_PINNED_SURFACE,
-    CTRL_CAP_PLAYBACK_OUTPUT, CTRL_CAP_QUEUE_SHUFFLE, CTRL_CAP_QUEUE_STATE,
-    CTRL_CAP_SERVICE_SETUP_ADMIN, CTRL_CAP_START_INDEX, CTRL_CAP_STATUS_ONLY,
+    CTRL_CAP_PLAYBACK_OUTPUT, CTRL_CAP_QUEUE_REPLACE_START_POSITION, CTRL_CAP_QUEUE_SHUFFLE,
+    CTRL_CAP_QUEUE_STATE, CTRL_CAP_SERVICE_SETUP_ADMIN, CTRL_CAP_START_INDEX, CTRL_CAP_STATUS_ONLY,
     CTRL_PROTOCOL_VERSION,
 };
 use serde::{Deserialize, Serialize};
@@ -54,6 +54,7 @@ impl CtrlHello {
                 CTRL_CAP_OWNER_QUEUE_SOURCE_UPDATE.to_string(),
                 CTRL_CAP_ANSWERED_QUEUE_OPS.to_string(),
                 CTRL_CAP_QUEUE_SHUFFLE.to_string(),
+                CTRL_CAP_QUEUE_REPLACE_START_POSITION.to_string(),
             ],
             control_token: None,
             swap_token: None,
@@ -208,6 +209,15 @@ impl CtrlHello {
             .any(|cap| cap == CTRL_CAP_QUEUE_SHUFFLE)
     }
 
+    /// The peer honors the optional `start_position_secs` field on
+    /// `CtrlCmd::UnifiedQueueReplace` (queue-handoff-and-take design D4).
+    #[must_use]
+    pub fn supports_queue_replace_start_position(&self) -> bool {
+        self.capabilities
+            .iter()
+            .any(|cap| cap == CTRL_CAP_QUEUE_REPLACE_START_POSITION)
+    }
+
     #[must_use]
     pub fn supports_playback_output(&self) -> bool {
         self.capabilities
@@ -290,6 +300,10 @@ pub struct CtrlCompatibility {
     /// The peer accepts `CtrlCmd::UnifiedQueueShuffle`; set from the peer
     /// Hello's `queue-shuffle` capability by the Client's handshake.
     pub supports_queue_shuffle: bool,
+    /// The peer honors the optional `start_position_secs` field on
+    /// `CtrlCmd::UnifiedQueueReplace`; set from the peer Hello's
+    /// `queue-replace-start-position` capability by the Client's handshake.
+    pub supports_queue_replace_start_position: bool,
     /// The peer accepts `CtrlCmd::SelectPlaybackOutput` and reports
     /// `CtrlEvent::PlaybackOutput` (cast-owner-output design D3); set from
     /// the peer Hello's `playback-output` capability by the Client's
@@ -321,6 +335,7 @@ impl CtrlCompatibility {
                 supports_answered_queue_ops: false,
                 supports_owner_action: false,
                 supports_queue_shuffle: false,
+                supports_queue_replace_start_position: false,
                 supports_playback_output: false,
                 supports_emby_session_output: false,
             }),

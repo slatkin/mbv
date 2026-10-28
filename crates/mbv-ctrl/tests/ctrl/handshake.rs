@@ -50,6 +50,20 @@ fn peer_without_queue_shuffle_capability_reads_false() {
     peer.validate_peer().unwrap();
 }
 
+// queue-handoff-and-take task 2.1: the start-position capability is additive,
+// so the current hello advertises it and a peer without it reads false — the
+// Client must not send `start_position_secs` to that peer (design D4).
+#[test]
+fn peer_without_queue_replace_start_position_capability_reads_false() {
+    assert!(CtrlHello::current().supports_queue_replace_start_position());
+
+    let mut peer = CtrlHello::current();
+    peer.capabilities
+        .retain(|cap| cap != CTRL_CAP_QUEUE_REPLACE_START_POSITION);
+    assert!(!peer.supports_queue_replace_start_position());
+    peer.validate_peer().unwrap();
+}
+
 #[test]
 fn current_hello_has_no_service_credential_field() {
     let json = serde_json::to_string(&CtrlHello::current()).unwrap();

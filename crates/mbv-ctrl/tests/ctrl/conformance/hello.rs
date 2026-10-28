@@ -95,6 +95,7 @@ fn daemon_capabilities(control_auth: bool) -> Vec<String> {
     capabilities.push(CTRL_CAP_OWNER_QUEUE_SOURCE_UPDATE.to_owned());
     capabilities.push(CTRL_CAP_ANSWERED_QUEUE_OPS.to_owned());
     capabilities.push(CTRL_CAP_QUEUE_SHUFFLE.to_owned());
+    capabilities.push(CTRL_CAP_QUEUE_REPLACE_START_POSITION.to_owned());
     capabilities.push(CTRL_CAP_OWNER_ACTION.to_owned());
     capabilities
 }
