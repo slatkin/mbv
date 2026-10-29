@@ -193,15 +193,8 @@ pub(crate) enum FinishReason {
 pub(crate) fn advance_decision(input: &AdvanceDecisionInput) -> (bool, bool, bool, i64) {
     let finished = !matches!(input.finish, FinishReason::Unfinished);
     let played = finished && matches!(input.media, CompletedMedia::Video);
-    let (natural, near_end) = match input.finish {
-        FinishReason::Natural => (true, false),
-        FinishReason::NearEnd => (false, true),
-        FinishReason::NextUp | FinishReason::Unfinished => (false, false),
-    };
     let position = crate::queue_completed_pos(
         matches!(input.media, CompletedMedia::Audio),
-        natural,
-        near_end,
         input.last_valid_pos,
     );
     (finished, played, finished, position)

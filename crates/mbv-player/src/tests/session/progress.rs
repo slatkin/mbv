@@ -32,7 +32,7 @@ fn abs_natural_eof_uses_runtime_without_changing_generic_audio_reporting() {
         provider_lifecycle_close_pos(&emby_audio, true, runtime, actual),
         actual
     );
-    assert_eq!(queue_completed_pos(true, true, false, actual), 0);
+    assert_eq!(queue_completed_pos(true, actual), 0);
 }
 
 #[test]
@@ -42,7 +42,7 @@ fn mid_episode_quit_preserves_position() {
     // user pressed q rather than clicking the overlay. Position must be preserved.
     let pos = 528 * TICKS_PER_SECOND;
     assert!(!is_near_end(false, false, pos, RUNTIME)); // 88% < 95%
-    assert_eq!(queue_completed_pos(false, false, false, pos), pos);
+    assert_eq!(queue_completed_pos(false, pos), pos);
 }
 
 #[test]
@@ -52,35 +52,28 @@ fn next_up_fired_preserves_position() {
     // to completed_pos — queue_completed_pos doesn't receive it at all.
     let pos = 540 * TICKS_PER_SECOND; // 90% — past 60s-before-end threshold
     assert!(!is_near_end(false, false, pos, RUNTIME)); // still below 95%
-    assert_eq!(queue_completed_pos(false, false, false, pos), pos);
-}
-
-#[test]
-fn natural_end_carries_position() {
-    // A played Emby video's natural end carries the real position: the shared
-    // record rule mirrors the resume point the stop report leaves on the
-    // server, so the row shows in progress instead of a blank played bar.
-    let pos = RUNTIME - TICKS_PER_SECOND; // 1 s before end
-    assert_eq!(queue_completed_pos(false, true, false, pos), pos);
+    assert_eq!(queue_completed_pos(false, pos), pos);
 }
 
 #[test]
 fn near_end_boundary_carries_position() {
     // Exactly 95% (19/20) is near-end; 94% is not. Near-end no longer zeroes:
-    // the record rule decides what a played finish keeps.
+    // the shared `ProgressObservation` record rule decides what a played
+    // finish keeps — `queue_completed_pos` carries the position through for
+    // every non-audio finish, natural or near-end alike.
     let at_95 = RUNTIME * 19 / 20;
     let below = at_95 - 1;
     assert!(is_near_end(false, false, at_95, RUNTIME));
     assert!(!is_near_end(false, false, below, RUNTIME));
-    assert_eq!(queue_completed_pos(false, false, true, at_95), at_95);
-    assert_eq!(queue_completed_pos(false, false, false, below), below);
+    assert_eq!(queue_completed_pos(false, at_95), at_95);
+    assert_eq!(queue_completed_pos(false, below), below);
 }
 
 #[test]
 fn audio_track_always_resets_position() {
     let pos = 300 * TICKS_PER_SECOND; // 50%
     assert!(!is_near_end(true, false, pos, RUNTIME));
-    assert_eq!(queue_completed_pos(true, false, false, pos), 0);
+    assert_eq!(queue_completed_pos(true, pos), 0);
 }
 
 #[test]

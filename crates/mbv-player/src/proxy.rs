@@ -255,12 +255,7 @@ pub(crate) fn is_near_end(
 // resume point the stop report leaves on the server. was_next_up alone does
 // NOT zero the position — the user may have dismissed or ignored the overlay,
 // and we must preserve where they actually were.
-pub(crate) fn queue_completed_pos(
-    is_audio: bool,
-    _natural: bool,
-    _near_end: bool,
-    last_valid_pos: i64,
-) -> i64 {
+pub(crate) fn queue_completed_pos(is_audio: bool, last_valid_pos: i64) -> i64 {
     if is_audio { 0 } else { last_valid_pos }
 }
 
