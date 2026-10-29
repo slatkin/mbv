@@ -24,7 +24,10 @@ impl App {
             view.set_cursor(view.cursor());
             return;
         }
-        if self.queue_pos_needs_active_confirm(link, pos) {
+        let Some(slot_id) = self.queue_for_link(link).slot_id_at(pos) else {
+            return;
+        };
+        if self.queue_slot_needs_active_confirm(link, slot_id) {
             self.ask_confirm(ConfirmModal::two_button(
                 "Remove now-playing item and stop playback?".into(),
                 "Confirm",
@@ -38,9 +41,6 @@ impl App {
         // holds no editable queue, so the view changes only when the
         // owner's answer is adopted.
         let cursor_before = self.queue_for_link(link).cursor();
-        let Some(slot_id) = self.queue_for_link(link).slot_id_at(pos) else {
-            return;
-        };
         let Some(item) = self.queue_for_link(link).item_at(pos).cloned() else {
             return;
         };
@@ -71,22 +71,32 @@ impl App {
         }
     }
 
-    /// Whether removing the slot at `pos` from `link`'s playback queue needs
-    /// the dedicated now-playing confirmation: the slot is the actively
-    /// playing item. Non-playback links never need it.
-    pub(in crate::app) fn queue_pos_needs_active_confirm(
+    /// Whether removing `slot_id` from `link`'s playback queue needs the
+    /// dedicated now-playing confirmation: the slot is the actively playing
+    /// item. Identity, not ordinals: queue edits shift ordinals while the
+    /// status' `current_idx` stays stale (invariant 26), so the comparison
+    /// names the owner's observed active slot and falls back to the status
+    /// ordinal only while no snapshot has named one. Non-playback links
+    /// never need it.
+    pub(in crate::app) fn queue_slot_needs_active_confirm(
         &self,
         link: QueueLink,
-        pos: usize,
+        slot_id: mbv_queue::QueueSlotId,
     ) -> bool {
         if !self.queue_link_is_playback(link) {
             return false;
         }
-        let (active, current_idx) = {
-            let s = self.player.status_snapshot();
-            (s.active, s.current_idx)
-        };
-        active && current_idx == pos
+        let status = self.player.status_snapshot();
+        if !status.active {
+            return false;
+        }
+        let queue = self.queue_for_link(link);
+        match queue.active_slot_id() {
+            Some(active) => active == slot_id,
+            None => queue
+                .slot_index(slot_id)
+                .is_some_and(|pos| pos == status.current_idx),
+        }
     }
 
     /// Remove the slots named by `slot_ids` from `link`'s queue as one
@@ -106,10 +116,9 @@ impl App {
         link: QueueLink,
         slot_ids: &[mbv_queue::QueueSlotId],
     ) {
-        let needs_confirm = slot_ids.iter().any(|slot_id| {
-            self.slot_index(link, *slot_id)
-                .is_some_and(|pos| self.queue_pos_needs_active_confirm(link, pos))
-        });
+        let needs_confirm = slot_ids
+            .iter()
+            .any(|slot_id| self.queue_slot_needs_active_confirm(link, *slot_id));
         if needs_confirm {
             let mut confirmed: Vec<mbv_queue::QueueSlotId> = slot_ids.to_vec();
             confirmed.sort_unstable();

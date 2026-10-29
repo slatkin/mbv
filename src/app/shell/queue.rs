@@ -602,6 +602,41 @@ mod tests {
     }
 
     #[test]
+    fn deleting_playing_row_after_ordinal_shift_still_asks_now_playing_confirm() {
+        // Regression (2026-10-29 queue index errors): after the delete before
+        // the playing row shifts ordinals, the status' `current_idx` still
+        // names the stale ordinal — an ordinal comparison no longer
+        // recognizes the playing row, so it used to skip the confirmation
+        // and stop playback as a plain edit. The guard resolves the owner's
+        // observed active slot by identity.
+        let items = make_items(2);
+        let mut app = make_app_stub();
+        app.local_view =
+            crate::app::QueueView::from_snapshot(&crate::app::tests::emby_unified_state(&items, 1));
+        app.player.update_status(|status| {
+            status.active = true;
+            status.current_idx = 1;
+        });
+
+        // Same post-delete adoption as the highlight regression: the playing
+        // slot (101) is now first while `current_idx` still names ordinal 1.
+        let mut after_delete = crate::app::tests::emby_unified_state(&items[1..], 0);
+        after_delete.slots[0].slot_id = 101;
+        after_delete.active_slot = Some(101);
+        app.local_view.adopt(
+            &after_delete,
+            crate::app::state::queue_view::AdoptCause::OwnAnswer,
+        );
+
+        app.remove_from_queue(0);
+
+        assert!(matches!(
+            app.pending_overlay,
+            Some(mbv_ui_model::overlay::OverlayRequest::Confirm(_))
+        ));
+    }
+
+    #[test]
     fn unchanged_queue_revision_skips_projection_rebuild() {
         let mut app = make_app_stub();
         app.local_view.adopt_items(make_items(2), 0);

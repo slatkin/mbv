@@ -212,10 +212,9 @@ impl App {
         if live.is_empty() {
             return;
         }
-        let still_needs = live.iter().any(|slot_id| {
-            self.slot_index(link, *slot_id)
-                .is_some_and(|pos| self.queue_pos_needs_active_confirm(link, pos))
-        });
+        let still_needs = live
+            .iter()
+            .any(|slot_id| self.queue_slot_needs_active_confirm(link, *slot_id));
         if !still_needs {
             self.remove_slots_from_queue(link, &live);
             return;

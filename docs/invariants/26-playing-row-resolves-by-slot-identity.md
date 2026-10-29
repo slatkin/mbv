@@ -34,10 +34,18 @@ user's mental model. Identity survives every one of those edits.
 - The owner broadcast carries `active_slot` as identity, re-derived from the
   observed active slot on every snapshot (`unified_queue_state_for_peer`,
   invariant 25).
-- Guard test: `deleting_before_playing_row_keeps_highlight_on_playing_slot`
-  (`src/app/shell/queue.rs`) adopts a post-delete snapshot while the status
-  still names the pre-delete ordinal, and asserts the highlight stays on the
-  playing slot.
+- The now-playing removal guard (`queue_slot_needs_active_confirm`,
+  `src/app/dispatch/queue.rs`) asks "stop playback?" by the same rule: the
+  removed slot is the owner's observed active slot, falling back to the
+  status ordinal only while no snapshot has named one. An ordinal
+  comparison there would skip the confirmation — and stop playback as a
+  plain edit — right after an ordinal-shifting delete.
+- Guard tests (`src/app/shell/queue.rs`):
+  `deleting_before_playing_row_keeps_highlight_on_playing_slot` adopts a
+  post-delete snapshot while the status still names the pre-delete ordinal
+  and asserts the highlight stays on the playing slot;
+  `deleting_playing_row_after_ordinal_shift_still_asks_now_playing_confirm`
+  asserts the removal of that row still asks the confirmation.
 
 ## Where it currently fails / how it could regress
 
@@ -46,6 +54,9 @@ user's mental model. Identity survives every one of those edits.
   ordinal. `play_queue_cursor_locally`'s `t == current_idx` restart-vs-jump
   comparison is a known residual: the cursor index and the owner's ordinal
   can disagree mid-edit until the next status refresh.
+  `handle_disconnected_queue_play`'s `t != current_idx` jump-vs-warn split
+  reads the same stale ordinal on the remote-disconnected path; the jump
+  itself is slot-addressed, so the residual is only a misrouted warning.
 - An owner that changes the active slot without broadcasting a queue snapshot
   leaves the client's identity stale until the next broadcast; the ordinal
   fallback then wins for one refresh at most.
