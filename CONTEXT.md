@@ -92,7 +92,7 @@ _Avoid_: output target, active player, sink, enqueue, cast queue, load (bare)
 
 Session output:
 The relation of a Player owner to the Emby Session that is its *Playback output*. The Owner keys it by the Emby device identity and never by the Session identity. It observes the Session by polling the Emby Sessions and infers its end from the Session. A user selection makes the Session the output. A selection while local playback or a Cast receiver is the output is a hand-off of the active slot. It differs from Direct remote control and from a *Session* used as a remote-control target. Those are Client relations to another device. The Session output is an Owner output relation.
-_Avoid_: session watch, attach (bare), session attach, monitor, remote session (bare), tracked session, tracking
+_Avoid_: session watch, attach (bare), session attach, monitor, remote session (bare), tracked session, tracking, Queue handoff
 
 mpv script set:
 The entry script `mbv.lua` and its sibling Lua fragments. They build the mpv on-screen control overlay (OSC) and the Next-Up prompt. Exactly one copy is live per playback run. It is the copy of the running build. It is never a leftover from the removed installer, a prior version, or another build. It differs from mpv configuration and user scripts. mbv never reads or edits those.
@@ -236,11 +236,11 @@ The rule that decides whether a prior watched entry resumes or starts over. When
 _Avoid_: continue threshold, resume percent, watched threshold
 
 Resume source:
-The authority that a QueueItem kind reads its start position from, decided in one place by `resume_source` in `crates/mbv-player/src/resume.rs`. The values are Server, Session, Local, and Beginning. An Emby video reads the position Emby reports when the start is decided. Audiobookshelf reads the position of the opened playback session. A Feed entry keeps its locally recorded position. Emby audio always starts from the beginning. Every resume decision matches on the source and never on the item kind, and a new kind must name its source. The Playback resume rule gates the position of each source.
+The authority that a QueueItem kind reads its start position from, decided in one place by `resume_source` in `crates/mbv-player/src/resume.rs`. The values are Server, Session, Local, Handoff, and Beginning. An Emby video reads the position Emby reports when the start is decided. Audiobookshelf reads the position of the opened playback session. A Feed entry keeps its locally recorded position. Emby audio always starts from the beginning. Handoff is the one-time start position that a *Queue handoff* or *Take* carries from the source Player owner for its start slot. It is not derived by `resume_source`. Every resume decision matches on the source and never on the item kind, and a new kind must name its source. The Playback resume rule gates the position of each source.
 _Avoid_: progress source, position source
 
 Playhead:
-The one reconciled answer of the shell to where playback is. It names the queue scope that plays. It names the active slot in it. It tells whether that slot is confirmed by the Player owner or is an optimistic prediction not yet acknowledged. A prediction records its reason. A queue edit moved the still-playing item, or a different item was selected to play. Reconciliation happens in one tick-phase step against owner status. It never happens during paint. Playback position itself stays a live read.
+The one reconciled answer of the shell to where playback is. It names the Player owner that plays. It names the active slot in that owner's queue. It tells whether that slot is confirmed by the Player owner or is an optimistic prediction not yet acknowledged. A prediction records its reason. A queue edit moved the still-playing item, or a different item was selected to play. Reconciliation happens in one tick-phase step against owner status. It never happens during paint. Playback position itself stays a live read.
 _Avoid_: pending active index, cursor push, now-playing index, active_idx
 
 ## Browsing and tabs
@@ -357,7 +357,7 @@ The Queue-visible behavior of the shell when fully idle. It removes the card fro
 _Avoid_: idle hide, collapsed queue, empty player
 
 Playback target:
-The place where explicit playback actions go. It is the *Playback output* of the local Owner process, that is local playback, one Cast receiver, or one Emby Session, or a directly controlled remote Player owner through ctrl. It resolves per action from queue scope, active route, and attachment. Only a Player owner target carries queue authority.
+The place where explicit playback actions go. It is the *Playback output* of the local Owner process, that is local playback, one Cast receiver, or one Emby Session, or a directly controlled remote Player owner through ctrl. It resolves per action from the shown Player owner, active route, and attachment. Only a Player owner target carries queue authority.
 _Avoid_: play target, output target, active player
 
 Kind-qualified target:
@@ -627,12 +627,24 @@ Retired term. An Emby Session without a direct endpoint becomes a *Session outpu
 _Avoid_: Session watch
 
 Direct remote control:
-A client with its own control-socket connection to the Player owner of another device. It gives the same queue management as local playback, that is reorder, remove, play next, and all of it. The device stays the connected row in the Sessions sidebar. Take of the control socket does not erase that. The Owner process is never Direct remote control. The aqua queue-scope pill shows it.
+A client with its own control-socket connection to the Player owner of another device. Connect moves only control: the client sees and edits the queue of the connected Player owner, and the music stays where it plays. Disconnect returns the queue panel to the local Owner queue and leaves the peer playing. It gives the same queue management as local playback, that is reorder, remove, play next, and all of it. The device stays the connected row in the Sessions sidebar. Attachment does not erase that. The Owner process is never Direct remote control. Copying a queue between Player owners is *Queue handoff* or *Take*, never connect.
 _Avoid_: green pill, remote takeover, queue management (alone)
 
+Queue handoff:
+The Client action that copies the local Owner queue and its position to a directly reachable peer Player owner, starts the copy there, and stops local playback. It needs playback on the local Owner. It asks for confirmation before it replaces a populated peer queue. It never stops the source until the peer plays. It stays connected to the peer when it succeeds. It differs from *hand-off*, which moves the active slot between the *Playback outputs* of one Player owner. The reverse action is *Take*. Both actions are the user-facing faces of *Queue transfer*.
+_Avoid_: hand-off, push queue, copy on connect
+
+Take:
+The reverse of *Queue handoff*. The Client action that copies the queue and its position of a directly reachable peer Player owner to the local Owner, starts the copy here, and stops the peer. It works from a Sessions-sidebar row with or without a connection. It needs playback on the peer. It asks for confirmation before it replaces a populated local queue. It never stops the peer until the local Owner plays. It disconnects from the peer when it succeeds from a connection.
+_Avoid_: queue handoff (for the reverse), pull queue, control takeover
+
+Queue transfer:
+The code-facing name (`queue_transfer`, `PendingQueueTransfer`) for the pending copy machinery that *Queue handoff* and *Take* share: one Player owner's queue and its position are staged while the confirm prompt is up, sent to the target, and settled in the tick phase that observes the start slot. The user-facing actions for its two directions remain *Queue handoff* and *Take*.
+_Avoid_: queue sync, queue move
+
 Queue scope:
-Local or Remote. It tells which queue the queue panel shows. It shows the queue on the local side of the controlling terminal or the queue of the directly controlled remote Player owner. It exists during Sessions-sidebar Direct remote control and explicit remote owner attachment, not a Session output or a Library route. Remote scope is selectable only when a direct remote queue exists. Otherwise Local is forced.
-_Avoid_: split view, pill state
+Retired term. Each Player owner keeps its own queue. The queue panel shows the queue of the connected Player owner, or the local Owner queue when no peer is connected. Connect moves control only; *Queue handoff* and *Take* copy a queue.
+_Avoid_: split view, pill state, Local scope, Remote scope, scope pill, scope switching, Queue scope
 
 Library route:
 A stored per-library assignment that sends playback of that library to a selected device. It is set from the library-routing picker and not from the Sessions sidebar. It is stored as `lowercased name -> tcp://host:port` endpoint (device name is transient in the picker and resolves at once to an endpoint before storage). It is independent of Session output and Direct remote control. Connection through the Sessions sidebar tears down an active route first. F2 Settings manages routes. Hand edit of `config.toml` is supported. Malformed non-`tcp://` values are logged and skipped.
@@ -646,7 +658,7 @@ _Avoid_: chromecast device, TV, cast device
 
 Cast attachment:
 The relation of a Player owner to the Cast receiver that is its *Playback output*. Selection of one makes that receiver the output of the Owner. A receiver becomes the output only by explicit user selection. The Owner never selects a receiver at start. When local playback is active, the Owner hands it over. It connects to the receiver first. Only after the connect succeeds does it stop the old output. It then loads the active slot on the receiver at its position. Playback targets are mutually exclusive. A cast output, an Emby Session output, a direct remote, and a library route cannot be active at one time. A Session selection while a receiver is the output is a hand-off. When the user selects a Direct remote while a receiver is the output, the Owner stops the receiver and returns to local playback. While the output is a receiver, the Owner reconnects after a dropped connection. It joins the running receiver app and does not launch it again. It differs from Attach above. It is not a ctrl connection and makes no Client relation, even though both name one process that reaches a playback target.
-_Avoid_: attach (bare, without "cast"), cast session, cast connection
+_Avoid_: attach (bare, without "cast"), cast session, cast connection, Queue handoff
 
 Dispatch:
 Retired term. The receiver holds no queue of its own. The Owner loads the active slot on it and advances through the canonical queue. Use *Playback output* and *Cast attachment*.

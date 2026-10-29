@@ -14,8 +14,9 @@ use mbv_emby_model::{EmbyItem, seconds_to_ticks, ticks_to_seconds};
 use mbv_queue::{AudiobookshelfItem, PlaybackQueue, QueueItem, QueueSlotId};
 
 /// Which authority an item kind reads its start position from (resume-seam
-/// design D2).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// design D2), plus the one override a queue replacement carries for its start
+/// slot (queue-handoff-and-take design D4).
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) enum ResumeSource {
     /// Emby video: the position Emby reports when the start is decided.
     Server,
@@ -25,6 +26,12 @@ pub(crate) enum ResumeSource {
     Local,
     /// Emby audio: always the beginning.
     Beginning,
+    /// One-time override for the start slot of a queue replacement that
+    /// carries a start position (Hand off or Take): the carried seconds.
+    /// `resume_source` never derives it — the replace path sets it for its
+    /// start slot only, and the one-percent gate does not apply. Every later
+    /// start in that queue uses the per-medium sources above.
+    Handoff(f64),
 }
 
 /// The resume source for `item`'s kind.
@@ -57,26 +64,30 @@ fn resume_seconds(position_ticks: i64, runtime_ticks: i64) -> f64 {
     }
 }
 
-/// The resume position mpv should start `item` from, per the same per-kind
+/// The start position `source` yields for `item`, in seconds. A `Handoff`
+/// override returns its carried seconds ungated; every other arm applies the
+/// one-percent gate through its per-medium source.
+pub(crate) fn source_start_seconds(source: ResumeSource, item: &QueueItem) -> f64 {
+    match source {
+        ResumeSource::Handoff(seconds) => seconds,
+        ResumeSource::Server | ResumeSource::Session => {
+            resume_seconds(item.playback_position_ticks(), item.runtime_ticks())
+        }
+        ResumeSource::Local => {
+            let runtime = i64::try_from(item.duration().unwrap_or(0)).unwrap_or(i64::MAX);
+            resume_seconds(item.playback_position_ticks(), runtime)
+        }
+        ResumeSource::Beginning => 0.0,
+    }
+}
+
+/// The resume position mpv should start `item` from, per the same per-medium
 /// gate `mpv_load_opts` bakes into a fresh `loadfile`'s `start=` option.
 /// Reused by the daemon's slot-jump dispatch to re-seek a re-visited entry —
 /// `loadfile`'s baked `start=` only applies the first time an entry loads, so
 /// a later `playlist-pos` jump back to it needs this recomputed explicitly.
 pub(crate) fn resume_start_pos(item: &QueueItem) -> f64 {
-    match resume_source(item) {
-        // Emby video reads the position Emby reports; Audiobookshelf reads the
-        // position of the opened playback session. Both pass the same gate.
-        ResumeSource::Server | ResumeSource::Session => {
-            resume_seconds(item.playback_position_ticks(), item.runtime_ticks())
-        }
-        // Feed keeps the position recorded locally, gated the same way.
-        ResumeSource::Local => {
-            let runtime = i64::try_from(item.duration().unwrap_or(0)).unwrap_or(i64::MAX);
-            resume_seconds(item.playback_position_ticks(), runtime)
-        }
-        // Emby audio always starts from the beginning.
-        ResumeSource::Beginning => 0.0,
-    }
+    source_start_seconds(resume_source(item), item)
 }
 
 /// `resume_start_pos`, in ticks rather than seconds, gated on being positive.
@@ -94,6 +105,25 @@ pub fn resume_ticks_for_item(item: &QueueItem) -> Option<i64> {
 #[must_use]
 pub fn resume_ticks_for_slot(queue: &PlaybackQueue, slot_id: QueueSlotId) -> Option<i64> {
     resume_ticks_for_item(&queue.slot(slot_id)?.item)
+}
+
+/// The resume position for the start slot of a queue replacement, in ticks
+/// (queue-handoff-and-take design D4): `start_position_secs` is that slot's
+/// one-time `Handoff` override, ungated by the one-percent rule, while every
+/// other start in the queue keeps its per-medium source. `None` when the slot
+/// is gone or the position is not positive.
+#[must_use]
+pub fn resume_ticks_for_replace_start(
+    queue: &PlaybackQueue,
+    slot_id: QueueSlotId,
+    start_position_secs: Option<f64>,
+) -> Option<i64> {
+    let item = &queue.slot(slot_id)?.item;
+    let seconds = source_start_seconds(
+        start_position_secs.map_or_else(|| resume_source(item), ResumeSource::Handoff),
+        item,
+    );
+    (seconds > 0.0).then_some(seconds_to_ticks(seconds))
 }
 
 /// Retry delays for the Emby resume-position fetch (design D2): two delays
@@ -186,8 +216,12 @@ impl<'a> ResumeSeam<'a> {
             // Feed keeps the owner's locally recorded position.
             ResumeSource::Local => owner_ticks,
             // The session position is already baked into the prepared source,
-            // and an Emby audio item always starts from the beginning.
-            ResumeSource::Session | ResumeSource::Beginning => None,
+            // and an Emby audio item always starts from the beginning. A
+            // jump's target is never a replacement's start slot either: the
+            // `Handoff` override is one-time at the replacement's own start
+            // (queue-handoff-and-take design D4), and `resume_source` derives
+            // no `Handoff`, so the arm only keeps the match total.
+            ResumeSource::Session | ResumeSource::Beginning | ResumeSource::Handoff(_) => None,
         }
     }
 }
@@ -200,6 +234,9 @@ fn server_item(item: &mut QueueItem) -> Option<&mut EmbyItem> {
             QueueItem::Emby(emby) => Some(emby),
             QueueItem::Feed(_) | QueueItem::Audiobookshelf(_) => None,
         },
-        ResumeSource::Session | ResumeSource::Local | ResumeSource::Beginning => None,
+        ResumeSource::Session
+        | ResumeSource::Local
+        | ResumeSource::Beginning
+        | ResumeSource::Handoff(_) => None,
     }
 }

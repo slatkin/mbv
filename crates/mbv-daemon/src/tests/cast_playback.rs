@@ -557,3 +557,62 @@ pub(super) fn playing_status_at(content_id: &str, position_seconds: f32) -> Cast
         ..playing_status(content_id)
     }
 }
+
+/// Contract: a whole-queue replacement that carries a start position starts
+/// that slot at the carried position on the receiver, and no earlier slot is
+/// loaded (queue-handoff-and-take design D4; spec "A whole-queue replacement
+/// can carry a start position", scenario "Owner with the capability").
+#[test]
+fn a_replace_with_a_start_position_loads_the_start_slot_at_the_carried_position() {
+    let mut t = test_loop_with_queue(
+        crate::DaemonRole::Local,
+        vec![
+            feed_qi_with_url("a", "https://feed/a.mp3"),
+            feed_qi_with_url("b", "https://feed/b.mp3"),
+            feed_qi_with_url("c", "https://feed/c.mp3"),
+        ],
+        0,
+    );
+    let (client_id, _rx, calls) = select_cast_output(&mut t, CastStatus::idle());
+    let slots: Vec<mbv_ctrl::UnifiedQueueSlot> = t
+        .event_loop
+        .owner
+        .core
+        .queue
+        .slots()
+        .iter()
+        .map(|slot| mbv_ctrl::UnifiedQueueSlot {
+            slot_id: slot.slot_id.raw(),
+            item: slot.item.clone(),
+        })
+        .collect();
+
+    t.event_loop.handle_event(DaemonEvent::Ctrl(
+        CtrlCmd::UnifiedQueueReplace {
+            items: vec![],
+            slots,
+            start_idx: Some(1),
+            source: QueueSource::Album,
+            start_position_secs: Some(95.0),
+            op: None,
+        },
+        client_id,
+        mpsc::channel().0,
+    ));
+    // The start slot's resolve re-enters through the loop and loads it.
+    pump(&mut t);
+    wait_for_worker_jobs(&t.event_loop.owner.output);
+
+    let loads: Vec<String> = calls
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|call| call.starts_with("load("))
+        .cloned()
+        .collect();
+    assert_eq!(
+        loads,
+        vec!["load(https://feed/b.mp3, 95)".to_string()],
+        "the start slot loads at the carried position and no earlier slot loads"
+    );
+}

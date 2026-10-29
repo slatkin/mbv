@@ -37,31 +37,6 @@ pub fn pause_icon(use_nerd_fonts: bool) -> &'static str {
     }
 }
 
-pub fn daemon_endpoint_label(endpoint: &str) -> Option<String> {
-    let endpoint = endpoint.trim();
-    if endpoint.is_empty() || endpoint.eq_ignore_ascii_case("local") {
-        return None;
-    }
-    if let Some(tcp) = endpoint.strip_prefix("tcp://") {
-        return tcp
-            .rsplit_once(':')
-            .map(|(host, _port)| host)
-            .filter(|host| !host.is_empty())
-            .map(str::to_string);
-    }
-    if let Some(path) = endpoint.strip_prefix("unix://") {
-        return std::path::Path::new(path)
-            .file_name()
-            .and_then(|name| name.to_str())
-            .map(str::to_string);
-    }
-    std::path::Path::new(endpoint)
-        .file_name()
-        .and_then(|name| name.to_str())
-        .filter(|name| !name.is_empty())
-        .map(str::to_string)
-}
-
 // --- Render-seam free functions (design D9, task 3.1) ---
 //
 // Extracted from `App` methods so Interactive Components can call them

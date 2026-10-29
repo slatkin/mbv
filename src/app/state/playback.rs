@@ -3,46 +3,35 @@ use mbv_ctrl::player::PlayerEvent;
 use mbv_emby_model::EmbyItem;
 use mbv_player::PlayerProxy;
 use mbv_queue::{QueueItem, QueueSlotId};
-use mbv_ui_model::playback::QueueScope;
+use mbv_ui_model::playback::QueueLink;
 use std::collections::VecDeque;
 use std::sync::mpsc;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(in crate::app) struct QueueScopeResolution {
+pub(in crate::app) struct QueueLinkResolution {
     pub has_direct_remote_queue: bool,
-    pub requested_visible_scope: QueueScope,
 }
 
-impl QueueScopeResolution {
+impl QueueLinkResolution {
     #[must_use]
-    pub fn new(has_direct_remote_queue: bool, requested_visible_scope: QueueScope) -> Self {
+    pub fn new(has_direct_remote_queue: bool) -> Self {
         Self {
             has_direct_remote_queue,
-            requested_visible_scope,
         }
     }
 
     #[must_use]
-    pub fn playback_target(self) -> QueueScope {
+    pub fn playback_target(self) -> QueueLink {
         if self.has_direct_remote_queue {
-            QueueScope::Remote
+            QueueLink::Peer
         } else {
-            QueueScope::Local
+            QueueLink::Local
         }
     }
 
     #[must_use]
-    pub fn visible_scope(self) -> QueueScope {
-        if self.has_direct_remote_queue && self.requested_visible_scope == QueueScope::Remote {
-            QueueScope::Remote
-        } else {
-            QueueScope::Local
-        }
-    }
-
-    #[must_use]
-    pub fn local_metadata_applies(self, scope: QueueScope) -> bool {
-        scope == QueueScope::Local || !self.has_direct_remote_queue
+    pub fn local_metadata_applies(self, link: QueueLink) -> bool {
+        link == QueueLink::Local || !self.has_direct_remote_queue
     }
 }
 

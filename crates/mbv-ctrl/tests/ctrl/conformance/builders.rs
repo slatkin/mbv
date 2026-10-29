@@ -36,6 +36,9 @@ pub(crate) const ABS_EPISODE_ID: &str = "abs-episode-1";
 pub(crate) const ABS_BOOK_ITEM_ID: &str = "abs-book-1";
 /// Playback position the progress-shaped fixtures carry (30 s in ticks).
 pub(crate) const POSITION_TICKS: i64 = 30_000_000;
+/// The start position the start-position replace fixture carries (the spec
+/// scenario's 95 seconds).
+pub(crate) const START_POSITION_SECS: f64 = 95.5;
 /// The queued transition's request id, distinct from `REQUEST_ID` so the
 /// two `TransitionSummary` rows of the transitions fixture stay separable.
 pub(crate) const QUEUED_REQUEST_ID: u64 = 8;
@@ -111,6 +114,20 @@ pub(crate) fn feed_queue_item() -> QueueItem {
         position_ticks: 0,
         played: false,
     })
+}
+
+/// The two-slot list both `UnifiedQueueReplace` fixture rows carry.
+pub(crate) fn unified_queue_replace_slots() -> Vec<UnifiedQueueSlot> {
+    vec![
+        UnifiedQueueSlot {
+            slot_id: 1,
+            item: emby_queue_item(),
+        },
+        UnifiedQueueSlot {
+            slot_id: 2,
+            item: feed_queue_item(),
+        },
+    ]
 }
 
 /// The provider-qualified progress update the progress-relay fixture

@@ -106,6 +106,14 @@ pub const CTRL_CAP_EMBY_SESSION_OUTPUT: &str = "emby-session-output";
 /// Peer supports `CtrlCmd::UnifiedQueueShuffle`, the one-time reorder of the
 /// queue contents. Additive — no protocol-version bump.
 pub const CTRL_CAP_QUEUE_SHUFFLE: &str = "queue-shuffle";
+/// Peer honors the optional `start_position_secs` field on
+/// `CtrlCmd::UnifiedQueueReplace`: the start slot begins at the carried
+/// position instead of its per-medium resume source. The field is additive
+/// (a `#[serde(default)]` decode), so an old owner silently ignores it and
+/// starts at the wrong position — that is why the Client sends the field
+/// only to a peer that advertises this capability. Additive — no
+/// protocol-version bump.
+pub const CTRL_CAP_QUEUE_REPLACE_START_POSITION: &str = "queue-replace-start-position";
 /// Peer supports correlated owner-answered queue operations.
 /// Additive — no protocol-version bump.
 pub const CTRL_CAP_ANSWERED_QUEUE_OPS: &str = "answered-queue-ops";

@@ -345,13 +345,18 @@ fn prepare_replacement_slots(
 }
 
 /// `CtrlCmd::UnifiedQueueReplace`: replace the entire queue with item-generic
-/// slots and optionally begin playback from `start_idx`.
+/// slots and optionally begin playback from `start_idx`. `start_position_secs`
+/// is the start slot's one-time override (queue-handoff-and-take design D4):
+/// the start slot loads at the carried position, ungated by the one-percent
+/// rule, on every output branch, and every later start keeps its per-medium
+/// source. Meaningful only with `start_idx`.
 pub(super) fn handle_queue_replace(
     ctx: &mut CtrlContext<'_>,
     lineage: mbv_queue::QueueLineage,
     items: Vec<QueueItem>,
     slots: Vec<mbv_ctrl::UnifiedQueueSlot>,
     start_idx: Option<usize>,
+    start_position_secs: Option<f64>,
     new_source: mbv_queue::QueueSource,
 ) {
     let has_emby = ctx.has_emby();
@@ -394,9 +399,12 @@ pub(super) fn handle_queue_replace(
             mbv_player::transition::Transition::new(request_id, generation, start_slot);
         match ctx.owner.core.transitions.accept(transition) {
             mbv_player::transition::DispatchDecision::DispatchNow(t) => {
-                let resume_ticks =
-                    mbv_player::resume_ticks_for_slot(&ctx.owner.core.queue, start_slot)
-                        .unwrap_or(0);
+                let resume_ticks = mbv_player::resume_ticks_for_replace_start(
+                    &ctx.owner.core.queue,
+                    start_slot,
+                    start_position_secs,
+                )
+                .unwrap_or(0);
                 crate::cast::dispatch_cast_load(
                     &mut DaemonOwnerContext {
                         player: ctx.player,
@@ -440,13 +448,14 @@ pub(super) fn handle_queue_replace(
         ctx.owner.output,
         crate::cast::PlaybackOutput::EmbySession(_)
     ) {
-        replace_on_emby_session(ctx, except_op_client);
+        replace_on_emby_session(ctx, except_op_client, start_position_secs);
         return;
     }
     submit_queue_slots_for_replace(
         ctx.player,
         ctx.owner.core.queue.slot_pairs(),
         next_cursor,
+        start_position_secs,
         ctx.client,
     );
     // The replacement installs a new lineage before the observation clear.
@@ -479,15 +488,23 @@ pub(super) fn handle_queue_replace(
 /// identity, so an observation that shows the loaded item settles it and a
 /// rejected item expires and reports it to the replacing Client. The local
 /// run is never started.
-fn replace_on_emby_session(ctx: &mut CtrlContext<'_>, except_op_client: Option<CtrlClientId>) {
+fn replace_on_emby_session(
+    ctx: &mut CtrlContext<'_>,
+    except_op_client: Option<CtrlClientId>,
+    start_position_secs: Option<f64>,
+) {
     let Some(start_slot) = ctx.owner.core.queue.active_slot_id() else {
         tracing::warn!(name: "daemon.emby_session_queue_replace.no_start_slot", target: "daemon", "the replaced queue has no start slot; nothing was loaded");
         return;
     };
     let (request_id, generation) = ctx.owner.core.transitions.mint_local_id();
     let transition = mbv_player::transition::Transition::new(request_id, generation, start_slot);
-    let resume_ticks =
-        mbv_player::resume_ticks_for_slot(&ctx.owner.core.queue, start_slot).unwrap_or(0);
+    let resume_ticks = mbv_player::resume_ticks_for_replace_start(
+        &ctx.owner.core.queue,
+        start_slot,
+        start_position_secs,
+    )
+    .unwrap_or(0);
     crate::emby_session::dispatch_accepted(
         &mut DaemonOwnerContext {
             player: ctx.player,

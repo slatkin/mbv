@@ -4,8 +4,7 @@ use super::*;
 fn remote_app_starts_on_remote_queue_when_remote_queue_has_items() {
     let app = make_remote_app_stub(make_items(2), make_items(1));
 
-    assert_eq!(app.queue_scope, QueueScope::Remote);
-    assert_eq!(app.viewed_queue_scope(), QueueScope::Remote);
+    assert_eq!(app.playing_queue_link(), QueueLink::Peer);
 }
 
 // `item_text_and_style` and its dedicated tests above were deleted

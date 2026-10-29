@@ -297,7 +297,6 @@ pub(crate) fn make_built_app() -> App {
         audiobookshelf_socket_generation: None,
         local_view: QueueView::default(),
         remote_view: None,
-        initial_queue_scope: QueueScope::Local,
         system_notifications: false,
         image_protocol: None,
         image_protocol_enabled: false,
@@ -420,11 +419,25 @@ pub(crate) fn make_local_daemon_app_stub(remote_items: Vec<EmbyItem>) -> App {
 pub(crate) fn make_local_daemon_app_stub_with_cmd_rx(
     remote_items: Vec<EmbyItem>,
 ) -> (App, std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
+    make_local_daemon_app_stub_with_cmd_rx_and_compat(
+        remote_items,
+        mbv_ctrl::CtrlCompatibility::current(),
+    )
+}
+
+/// Variant whose Owner advertises `compat` instead of the stub's all-off
+/// capability baseline — for flows that gate on or use an owner capability
+/// a real Owner advertises from its Hello handshake.
+pub(crate) fn make_local_daemon_app_stub_with_cmd_rx_and_compat(
+    remote_items: Vec<EmbyItem>,
+    compat: mbv_ctrl::CtrlCompatibility,
+) -> (App, std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
     use crate::config::Config;
     use mbv_emby::EmbyClient;
 
-    let (remote, player_rx, cmd_rx) =
+    let (mut remote, player_rx, cmd_rx) =
         mbv_remote_player::RemotePlayer::stub_with_command_rx(remote_items, 0);
+    remote.set_ctrl_compatibility_for_test(compat);
     let config = Config {
         stay_alive: true,
         ..remote_stub_config()

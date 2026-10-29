@@ -9,7 +9,6 @@ use mbv_ctrl::player::PlayerEvent;
 use mbv_emby::EmbyClient;
 use mbv_player::PlayerProxy;
 use mbv_remote_player::DaemonEndpoint;
-use mbv_ui_model::playback::QueueScope;
 use std::sync::{Arc, Mutex, mpsc};
 
 /// Start MPRIS against the daemon's `RemotePlayer` (#175, previously done in
@@ -39,7 +38,7 @@ fn start_mpris(remote: &mbv_remote_player::RemotePlayer) -> mbv_desktop::mpris::
 }
 
 /// The daemon-side queue snapshot an attaching session seeds its queue
-/// scope, local-daemon bootstrap, and queue tabs from.
+/// link, local-daemon bootstrap, and queue tabs from.
 struct RemoteSnapshot {
     unified_state: Option<mbv_ctrl::UnifiedQueueStateData>,
 }
@@ -48,23 +47,6 @@ impl RemoteSnapshot {
     fn take(remote: &mbv_remote_player::RemotePlayer) -> Self {
         Self {
             unified_state: remote.unified_queue_state(),
-        }
-    }
-
-    /// Whether the daemon side has any queue content to present.
-    fn has_items(&self) -> bool {
-        self.unified_state
-            .as_ref()
-            .is_some_and(|state| !state.slots.is_empty())
-    }
-
-    /// The queue scope the session opens in: remote when a network daemon
-    /// already plays something, local otherwise.
-    fn scope(&self, is_local: bool) -> QueueScope {
-        if !is_local && self.has_items() {
-            QueueScope::Remote
-        } else {
-            QueueScope::Local
         }
     }
 
@@ -85,7 +67,7 @@ impl RemoteSnapshot {
     ) -> (QueueView, Option<QueueView>) {
         if is_local {
             // Local daemon: one unified queue, exactly like plain local
-            // playback — no separate remote_view, no scope pill.
+            // playback — no separate remote_view, no link pill.
             (
                 local_daemon_bootstrap.as_ref().unwrap().local_view.clone(),
                 None,
@@ -173,8 +155,9 @@ impl App {
     ///   normal queue-state persistence — the only difference is that the
     ///   daemon owns mpv instead of an in-process `Player`.
     /// - `Tcp`/`Unix`: a separate `remote_view` is kept so the user
-    ///   can browse locally while a daemon elsewhere plays something else,
-    ///   with the Local/Remote scope split (`[`/`]`) to switch between them.
+    ///   can browse locally while a daemon elsewhere plays something else.
+    ///   The shown queue follows the connection (ADR 0034): the peer link
+    ///   while it is attached, the Local link otherwise.
     #[cfg(test)]
     pub fn new_remote_with_config(
         client: EmbyClient,
@@ -222,7 +205,6 @@ impl App {
         let services = remote_services(&app_config, client_arc.as_ref());
         let config = Arc::new(Mutex::new(app_config));
         let snapshot = RemoteSnapshot::take(&remote);
-        let initial_queue_scope = snapshot.scope(endpoint.is_local());
         let local_daemon_bootstrap = endpoint.is_local().then(|| snapshot.local_bootstrap());
         #[cfg(not(test))]
         let mpris_handle = Some(start_mpris(&remote));
@@ -247,7 +229,6 @@ impl App {
             audiobookshelf_socket_generation: None,
             local_view,
             remote_view,
-            initial_queue_scope,
             system_notifications,
             image_protocol: ui_config.image_protocol.clone(),
             image_protocol_enabled: ui_config.image_protocol.is_some(),

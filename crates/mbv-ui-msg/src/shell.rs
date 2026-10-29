@@ -183,6 +183,13 @@ pub enum ShellRequest {
     SelectSession(mbv_ui_model::panel_targets::SessionTargetKey),
     /// Detach the current session/cast playback target.
     DetachSessions,
+    /// Hand the local Owner's queue off to the selected F3 target (design
+    /// D6): the component carries the target's stable identity, as
+    /// `SelectSession` does; the shell resolves it against the current
+    /// snapshot.
+    HandOffSession(mbv_ui_model::panel_targets::SessionTargetKey),
+    /// Take the selected F3 target's queue onto the local Owner (design D6).
+    TakeSession(mbv_ui_model::panel_targets::SessionTargetKey),
     /// Refresh the Feeds subscriptions through the shell-owned worker.
     RefreshFeeds,
     /// Play the exact entry selected by the Feeds component; `None` reports

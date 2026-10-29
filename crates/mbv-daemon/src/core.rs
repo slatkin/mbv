@@ -591,12 +591,20 @@ pub(crate) fn submit_queue_slots_for_replace(
     player: &Player,
     slots: Vec<ExecSlot>,
     start_idx: usize,
+    start_position_secs: Option<f64>,
     client: &Arc<Mutex<EmbyClient>>,
 ) -> bool {
     let all_audio = all_audio(slots.iter().map(|slot| &slot.item));
     let client = Arc::new(client.lock().unwrap().clone());
     let headless = player.headless_for(&client, all_audio);
-    player.submit_queue_slots(slots, start_idx, Some(client), headless, 100)
+    player.submit_queue_slots(
+        slots,
+        start_idx,
+        start_position_secs,
+        Some(client),
+        headless,
+        100,
+    )
 }
 
 pub(super) fn broadcast(clients: &ClientRegistry, event: &CtrlEvent) {

@@ -42,6 +42,8 @@ pub struct SessionsComponent {
     emby_output_device_id: Option<String>,
     cast_attachment_id: Option<String>,
     can_disconnect: bool,
+    /// The shell-owned transfer gating (design D6).
+    transfer_gates: mbv_ui_model::panel_targets::SessionTransferGates,
     display: SessionsDisplayContext,
     requested_panel_area: Option<Rect>,
     painted_panel_area: Option<Rect>,
@@ -64,6 +66,7 @@ impl SessionsComponent {
             emby_output_device_id: None,
             cast_attachment_id: None,
             can_disconnect: false,
+            transfer_gates: mbv_ui_model::panel_targets::SessionTransferGates::default(),
             display: SessionsDisplayContext {
                 use_nerd_fonts: false,
                 emby_color: palette::Role::TextMuted.color(),
@@ -84,6 +87,7 @@ impl SessionsComponent {
         emby_output_device_id: Option<&str>,
         cast_attachment_id: Option<&str>,
         can_disconnect: bool,
+        transfer_gates: mbv_ui_model::panel_targets::SessionTransferGates,
         panel_area: Option<Rect>,
     ) {
         let geometry_changed = self.requested_panel_area != panel_area
@@ -98,6 +102,7 @@ impl SessionsComponent {
         self.emby_output_device_id = emby_output_device_id.map(str::to_owned);
         self.cast_attachment_id = cast_attachment_id.map(str::to_owned);
         self.can_disconnect = can_disconnect;
+        self.transfer_gates = transfer_gates;
         self.requested_panel_area = panel_area;
         self.content_dirty = true;
         if geometry_changed {
@@ -175,8 +180,73 @@ impl SessionsComponent {
             {
                 Some(Msg::Shell(Box::new(ShellRequest::DetachSessions)))
             }
+            // The fixed transfer keys (design D6): like `r` and `d`, not
+            // registry actions. Each emits only while its D6 conditions
+            // hold for the selected row; the request carries the stable
+            // target identity and the shell resolves it. Unmodified keys
+            // only, matching the policy layer's exact-chord scope.
+            Key::Char('h') if key.modifiers.is_empty() && self.hand_off_available() => self
+                .list
+                .selected_target()
+                .cloned()
+                .map(|key| Msg::Shell(Box::new(ShellRequest::HandOffSession(key)))),
+            Key::Char('t') if key.modifiers.is_empty() && self.take_available() => self
+                .list
+                .selected_target()
+                .cloned()
+                .map(|key| Msg::Shell(Box::new(ShellRequest::TakeSession(key)))),
             _ => None,
         }
+    }
+
+    /// The row the component-owned selection names, resolved against the
+    /// shell-owned snapshot.
+    fn selected_row(&self) -> Option<&SessionTargetRow> {
+        let key = self.list.selected_target()?;
+        self.targets.iter().find(|target| target.key() == *key)
+    }
+
+    /// Whether the selected target has a direct Player-owner endpoint other
+    /// than the local Owner (design D6): the per-row projection. A Cast row
+    /// never has one.
+    fn selected_has_direct_endpoint(&self) -> bool {
+        self.selected_row().is_some_and(|row| match row {
+            SessionTargetRow::Emby {
+                has_direct_endpoint,
+                ..
+            } => *has_direct_endpoint,
+            SessionTargetRow::Cast { .. } => false,
+        })
+    }
+
+    /// Whether the selected row shows its peer playing (design D6): the
+    /// row's `now_playing` present and not paused. A Cast row shows no
+    /// playback state and is never a Take target.
+    fn selected_row_plays(&self) -> bool {
+        self.selected_row().is_some_and(|row| match row {
+            SessionTargetRow::Emby {
+                now_playing,
+                is_paused,
+                ..
+            } => now_playing.is_some() && !is_paused,
+            SessionTargetRow::Cast { .. } => false,
+        })
+    }
+
+    /// Design D6: Hand off is offered on a peer with a direct endpoint,
+    /// only while the home is the local Owner and the local Owner plays.
+    fn hand_off_available(&self) -> bool {
+        self.transfer_gates.home_is_local_daemon
+            && self.transfer_gates.local_owner_plays
+            && self.selected_has_direct_endpoint()
+    }
+
+    /// Design D6: Take is offered on a peer with a direct endpoint, only
+    /// while the home is the local Owner and the row shows the peer playing.
+    fn take_available(&self) -> bool {
+        self.transfer_gates.home_is_local_daemon
+            && self.selected_row_plays()
+            && self.selected_has_direct_endpoint()
     }
 
     /// The parent recognizes gestures; the embedded list resolves completed
@@ -384,6 +454,10 @@ impl Component for SessionsComponent {
             self.targets.len(),
             self.loading,
             self.can_disconnect,
+            mbv_ui_model::panel_targets::SessionTransferOffers {
+                hand_off: self.hand_off_available(),
+                take: self.take_available(),
+            },
         );
         self.painted_panel_area = Some(panel_area);
         if has_content {
@@ -442,182 +516,4 @@ impl AppComponent<Msg, UserEvent> for SessionsComponent {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use ratatui::Terminal;
-    use ratatui::backend::TestBackend;
-    use ratatui::layout::Position;
-    use tuirealm::event::{KeyModifiers, MouseButton};
-
-    fn key(code: Key) -> KeyEvent {
-        KeyEvent {
-            code,
-            modifiers: KeyModifiers::NONE,
-        }
-    }
-
-    #[test]
-    fn test_session_disconnect_key_detaches_cast_only_attachment() {
-        let mut component = SessionsComponent::new();
-        component.can_disconnect = false;
-        component.cast_attachment_id = Some("cast-1".to_string());
-        assert_eq!(
-            component.handle_key(&key(Key::Char('d'))),
-            Some(Msg::Shell(Box::new(ShellRequest::DetachSessions)))
-        );
-    }
-
-    #[test]
-    fn test_session_cross_boundary_keys_are_typed() {
-        let mut component = SessionsComponent::new();
-        assert_eq!(
-            component.handle_key(&key(Key::Esc)),
-            Some(Msg::Shell(Box::new(ShellRequest::DismissSessions)))
-        );
-        assert_eq!(
-            component.handle_key(&key(Key::Char('r'))),
-            Some(Msg::Shell(Box::new(ShellRequest::RefreshSessions)))
-        );
-        component.list.set_content(vec![ThreeLineItem::new(
-            SessionTargetKey::Cast("cast-1".into()),
-            std::array::from_fn(|_| Vec::new()),
-        )]);
-        assert_eq!(
-            component.handle_key(&key(Key::Enter)),
-            Some(Msg::Shell(Box::new(ShellRequest::SelectSession(
-                SessionTargetKey::Cast("cast-1".into())
-            ))))
-        );
-    }
-
-    fn emby_target(id: &str) -> SessionTargetRow {
-        SessionTargetRow::Emby {
-            id: id.to_string(),
-            device_id: format!("device-{id}"),
-            device_name: format!("device-{id}"),
-            client: "mbv".to_string(),
-            user_name: "user".to_string(),
-            host: "host".to_string(),
-            now_playing: None,
-            is_paused: false,
-            position_s: 0,
-            runtime_s: 0,
-        }
-    }
-
-    fn emby_targets(count: usize) -> Vec<SessionTargetRow> {
-        (0..count)
-            .map(|index| emby_target(&format!("s-{index}")))
-            .collect()
-    }
-
-    fn painted_component() -> SessionsComponent {
-        let targets = vec![emby_target("a"), emby_target("b")];
-        let mut component = SessionsComponent::new();
-        component.set_content(
-            &targets,
-            false,
-            None,
-            None,
-            None,
-            false,
-            Some(Rect::new(0, 0, 40, 12)),
-        );
-        let mut terminal = Terminal::new(TestBackend::new(40, 12)).unwrap();
-        terminal
-            .draw(|frame| component.view(frame, frame.area()))
-            .unwrap();
-        component
-    }
-
-    fn wheel_down() -> MouseEvent {
-        MouseEvent {
-            kind: MouseEventKind::ScrollDown,
-            column: 5,
-            row: 5,
-            modifiers: KeyModifiers::NONE,
-        }
-    }
-
-    fn left_down(column: u16, row: u16) -> MouseEvent {
-        MouseEvent {
-            kind: MouseEventKind::Down(MouseButton::Left),
-            column,
-            row,
-            modifiers: KeyModifiers::NONE,
-        }
-    }
-
-    #[test]
-    fn test_session_mouse_click_on_selected_item_connects() {
-        let mut component = painted_component();
-        let content = component.content_area_for_test().unwrap();
-        assert_eq!(
-            component.handle_mouse(left_down(content.x, content.y)),
-            Some(Msg::Shell(Box::new(ShellRequest::SelectSession(
-                SessionTargetKey::Emby("a".into())
-            ))))
-        );
-    }
-
-    #[test]
-    fn test_session_mouse_click_on_unselected_item_selects_then_reclick_connects() {
-        let mut component = painted_component();
-        let point = Position {
-            x: 10,
-            y: component.content_area_for_test().unwrap().y + 4,
-        };
-        // The second item starts immediately after the first item's three lines.
-        assert_eq!(component.handle_mouse(left_down(point.x, point.y)), None);
-        assert_eq!(
-            component.list.selected_target(),
-            Some(&SessionTargetKey::Emby("b".into()))
-        );
-        component.view_for_test();
-        component.reset_mouse_gestures_for_test();
-        assert_eq!(
-            component.handle_mouse(left_down(point.x, point.y)),
-            Some(Msg::Shell(Box::new(ShellRequest::SelectSession(
-                SessionTargetKey::Emby("b".into())
-            ))))
-        );
-    }
-
-    impl SessionsComponent {
-        fn view_for_test(&mut self) {
-            let mut terminal = Terminal::new(TestBackend::new(40, 12)).unwrap();
-            terminal
-                .draw(|frame| self.view(frame, frame.area()))
-                .unwrap();
-        }
-    }
-
-    /// wheel-scrolls-viewport 5.2: the Sessions wheel applies the shared
-    /// viewport scroll to the gesture delta and never moves the selection.
-    #[test]
-    fn a_wheel_event_scrolls_sessions_and_keeps_the_selection() {
-        let targets = emby_targets(10);
-        let mut component = SessionsComponent::new();
-        component.set_content(
-            &targets,
-            false,
-            None,
-            None,
-            None,
-            false,
-            Some(Rect::new(0, 0, 40, 12)),
-        );
-        component.view_for_test();
-        let content = component.content_area_for_test().unwrap();
-        assert_eq!(content.height, 7);
-
-        assert_eq!(
-            component.handle_mouse(wheel_down()),
-            Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
-        );
-
-        let (selection, offset) = component.selection_and_offset_for_test();
-        assert_eq!(selection, Some(SessionTargetKey::Emby("s-0".into())));
-        assert_eq!(offset, 3, "the wheel moved the viewport by one step");
-    }
-}
+mod tests;

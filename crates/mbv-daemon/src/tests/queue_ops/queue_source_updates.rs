@@ -28,6 +28,7 @@ fn unified_queue_replace_publishes_the_start_slot_as_active() {
             ],
             start_idx: Some(1),
             source: QueueSource::Album,
+            start_position_secs: None,
             op: None,
         },
         client_id,
@@ -89,6 +90,7 @@ fn unified_queue_replace_clears_observed_active_slot() {
             }],
             start_idx: Some(0),
             source: QueueSource::Unknown,
+            start_position_secs: None,
             op: None,
         },
         client_id,
@@ -236,6 +238,7 @@ fn matching_source_update_publishes_without_replacing_queue_or_playback() {
             }],
             start_idx: Some(0),
             source: QueueSource::Album,
+            start_position_secs: None,
             op: None,
         },
     );
@@ -342,6 +345,7 @@ fn delayed_source_update_is_rejected_after_another_client_replaces_queue() {
                     id: Some(slot_id.to_string()),
                     name: playlist_name.to_string(),
                 },
+                start_position_secs: None,
                 op: None,
             },
         );

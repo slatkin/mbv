@@ -1,4 +1,5 @@
-use super::playback::QueueScope;
+use super::panel_targets::SessionTargetKey;
+use super::playback::QueueLink;
 
 /// What happens when the shared confirmation modal (`ConfirmModal`) is
 /// accepted. Each variant carries whatever state its effect needs, so
@@ -14,7 +15,7 @@ pub enum ConfirmAction {
     /// the user answers. Confirming stops playback, then removes every
     /// named slot in one owner edit from the resulting `Stopped` event.
     RemoveActiveQueueSelection {
-        scope: QueueScope,
+        link: QueueLink,
         slot_ids: Vec<mbv_queue::QueueSlotId>,
     },
     RescanLibrary(usize),
@@ -41,6 +42,13 @@ pub enum ConfirmAction {
     /// with `QueueDeferrals::bind_to_save` and
     /// `QueueDeferrals::take_on_save_complete`.
     ReplacePopulatedQueue,
+    /// queue-handoff-and-take design D1/D2: the user answered the transfer
+    /// prompt that asks before a Hand off replaces a populated peer queue
+    /// (Take is row 8.1). The key names the target the prompt was raised
+    /// for; the staged transfer in the shell state carries the direction and
+    /// any link opened to read the target queue — confirming attaches that
+    /// link, cancelling drops it.
+    ConfirmQueueTransfer(SessionTargetKey),
 }
 
 /// How a modal button reads: the affirmative choice in the accent green, the

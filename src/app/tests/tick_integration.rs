@@ -21,8 +21,7 @@ use mbv_ui_model::confirm::{ConfirmAction, ConfirmButton, ConfirmModal};
 use mbv_ui_model::overlay::OverlayRequest;
 use mbv_ui_model::overlay::SidebarId;
 use mbv_ui_msg::{
-    ComponentId, ModalId, Msg, OverlayId, QueueRequest, ShellRequest, TerminalObserverEvent,
-    UserEvent,
+    ComponentId, ModalId, Msg, OverlayId, ShellRequest, TerminalObserverEvent, UserEvent,
 };
 use mbv_ui_msg::{ConfirmIntent, PlaybackRequest, ServiceRequest};
 
@@ -256,7 +255,7 @@ fn tick_delivers_seekbar_double_click_to_unfocused_playback_as_a_fraction() {
 #[test]
 fn tick_delivers_key_to_focused_queue_before_root_observer_once() {
     let mut harness = queue_focused_harness();
-    harness.inject(key(Key::Char('[')));
+    harness.inject(key(Key::Char('p')));
 
     let outcome = harness.step();
 
@@ -265,9 +264,7 @@ fn tick_delivers_key_to_focused_queue_before_root_observer_once() {
     assert_eq!(outcome.raw_messages.len(), 2, "one leaf and one observer");
     assert!(matches!(
         outcome.raw_messages.first(),
-        Some(Msg::Queue(QueueRequest::Scope(
-            crate::app::QueueScope::Local
-        )))
+        Some(Msg::Shell(boxed)) if matches!(**boxed, ShellRequest::QueueIntent(_))
     ));
     assert!(matches!(
         outcome.raw_messages.get(1),
@@ -277,7 +274,7 @@ fn tick_delivers_key_to_focused_queue_before_root_observer_once() {
         outcome
             .raw_messages
             .iter()
-            .filter(|msg| matches!(msg, Msg::Queue(QueueRequest::Scope(_))))
+            .filter(|msg| matches!(msg, Msg::Shell(boxed) if matches!(**boxed, ShellRequest::QueueIntent(_))))
             .count(),
         1
     );
@@ -291,7 +288,7 @@ fn tick_delivers_key_to_focused_queue_before_root_observer_once() {
     );
     assert_eq!(outcome.messages.len(), 1, "observer key is fold-only");
 
-    harness.inject(key(Key::Char('[')));
+    harness.inject(key(Key::Char('p')));
     let next = harness.step();
     assert_eq!(next.raw_messages.len(), 2);
     assert_eq!(next.messages.len(), 1);
@@ -605,6 +602,7 @@ mod mouse;
 mod mouse_sidebar;
 mod playback_title_parts;
 mod prefix_mode;
+mod queue_owner;
 mod queue_playback;
 mod sessions;
 mod settings;

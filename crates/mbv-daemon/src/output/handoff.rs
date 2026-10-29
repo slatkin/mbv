@@ -225,6 +225,7 @@ fn continue_slot_on_local(
         &daemon.player,
         daemon.owner.core.queue.slot_pairs(),
         start_idx,
+        None,
         &daemon.client,
     ) {
         tracing::warn!(

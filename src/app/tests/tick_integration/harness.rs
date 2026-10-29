@@ -82,6 +82,9 @@ impl TickHarness {
         if let Some(event) = event {
             self.model.app.handle_player_event(event);
         }
+        // Mirror the run loop's pending-transfer settlement, which runs in the
+        // same tick phase that adopts owner snapshots (row 7.1, design D2).
+        self.model.app.settle_pending_queue_transfer();
         self.model.sync_mounted_surfaces();
         if let Some(Msg::Service(request)) = self.model.tick_search_clock(Instant::now()) {
             self.model.handle_service_request(request);

@@ -138,6 +138,7 @@
       "name": "Conformance Playlist",
       "type": "playlist"
     },
-    "start_idx": 0
+    "start_idx": 0,
+    "start_position_secs": null
   }
 }

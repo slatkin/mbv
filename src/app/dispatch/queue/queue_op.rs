@@ -1,13 +1,13 @@
 //! Answered owner queue operations (queue-owner-process row 5.1, design D6).
 //!
-//! `App::queue_op` sends one [`QueueOp`] to the scope's Player owner and,
+//! `App::queue_op` sends one [`QueueOp`] to the link's Player owner and,
 //! when the owner advertises `answered-queue-ops`, pumps that link's event
 //! receiver until the correlated `QueueOpResult` arrives or
 //! [`QUEUE_OP_ANSWER_BOUND`] passes. Snapshots seen along the way are adopted
 //! inline so the answer applies to current state; every other event is
 //! deferred to the drain for the link that produced it.
 
-use super::{App, QueueScope, ToastSeverity};
+use super::{App, QueueLink, ToastSeverity};
 use mbv_ctrl::player::PlayerEvent;
 use mbv_ctrl::{QueueOpId, UnifiedQueueStateData};
 use std::time::{Duration, Instant};
@@ -28,14 +28,14 @@ pub(in crate::app) enum QueueOpEdit {
 pub(in crate::app) const QUEUE_OP_ANSWER_BOUND: Duration = Duration::from_millis(250);
 
 impl App {
-    /// Send a whole-queue replacement to `scope`'s Player owner as an
+    /// Send a whole-queue replacement to `link`'s Player owner as an
     /// answered op (row 5.3, design D6): the owner replaces its canonical
     /// queue, begins playback at `start_idx`, and answers with the snapshot
     /// the Client adopts — the Client holds no editable queue of its own.
     /// Slot identities are minted client-side (1..=n).
     pub(in crate::app) fn replace_queue_on_owner(
         &mut self,
-        scope: QueueScope,
+        link: QueueLink,
         items: Vec<mbv_queue::QueueItem>,
         start_idx: usize,
         source: mbv_queue::QueueSource,
@@ -49,24 +49,25 @@ impl App {
             })
             .collect();
         self.queue_op(
-            scope,
+            link,
             mbv_remote_player::QueueOp::Replace {
                 items: slots,
                 start_idx: Some(start_idx),
                 source,
+                start_position_secs: None,
             },
         )
     }
 
     pub(in crate::app) fn replace_emby_queue_on_owner(
         &mut self,
-        scope: QueueScope,
+        link: QueueLink,
         items: Vec<mbv_emby_model::EmbyItem>,
         start_idx: usize,
         source: mbv_queue::QueueSource,
     ) -> QueueOpEdit {
         self.replace_queue_on_owner(
-            scope,
+            link,
             items
                 .into_iter()
                 .map(|item| mbv_queue::QueueItem::Emby(Box::new(item)))
@@ -76,7 +77,7 @@ impl App {
         )
     }
 
-    /// Send `operation` to `scope`'s Player owner, then adopt its answer.
+    /// Send `operation` to `link`'s Player owner, then adopt its answer.
     /// Owners without the capability get the legacy form and no wait (the
     /// displayed queue follows their later snapshots instead). Returns
     /// whether the owner's queue now holds the edit (design D6):
@@ -85,10 +86,10 @@ impl App {
     /// timeout, or a failed send.
     pub(in crate::app) fn queue_op(
         &mut self,
-        scope: QueueScope,
+        link: QueueLink,
         operation: mbv_remote_player::QueueOp,
     ) -> QueueOpEdit {
-        let remote = self.queue_link(scope).0.remote();
+        let remote = self.queue_link(link).0.remote();
         let answer = match remote.send_queue_op(operation) {
             Ok(answer) => answer,
             Err(e) => {
@@ -100,54 +101,54 @@ impl App {
             // Legacy owner: the edit is sent, and there is no answer to wait for.
             return QueueOpEdit::SentLegacy;
         };
-        if self.await_queue_op(scope, id) {
+        if self.await_queue_op(link, id) {
             QueueOpEdit::Applied
         } else {
             QueueOpEdit::NotApplied
         }
     }
 
-    /// Pump `scope`'s link receiver until `QueueOpResult{op: id}` or
+    /// Pump `link`'s link receiver until `QueueOpResult{op: id}` or
     /// [`QUEUE_OP_ANSWER_BOUND`]. Adopted inline: `UnifiedQueueUpdated` and
     /// the matching `Applied`. Other events are deferred to the next tick's
     /// drain for the link that produced them. Returns whether the matching
     /// answer was `Applied`; a late or unmatched
     /// `Applied` is adopted as a background snapshot, a late `Rejected`
     /// reports nothing more.
-    pub(in crate::app) fn await_queue_op(&mut self, scope: QueueScope, id: QueueOpId) -> bool {
-        self.await_queue_op_with_bound(scope, id, QUEUE_OP_ANSWER_BOUND)
+    pub(in crate::app) fn await_queue_op(&mut self, link: QueueLink, id: QueueOpId) -> bool {
+        self.await_queue_op_with_bound(link, id, QUEUE_OP_ANSWER_BOUND)
     }
 
     /// Test seam: `bound` is injectable so tests can force the timeout
     /// without real sleeps (zeroed bound on an empty receiver).
     pub(in crate::app) fn await_queue_op_with_bound(
         &mut self,
-        scope: QueueScope,
+        link: QueueLink,
         id: QueueOpId,
         bound: Duration,
     ) -> bool {
-        self.pump_queue_op_answer(scope, id, bound)
+        self.pump_queue_op_answer(link, id, bound)
     }
 
-    /// Pump `scope`'s link receiver until `QueueOpResult{op: id}` or `bound`.
+    /// Pump `link`'s link receiver until `QueueOpResult{op: id}` or `bound`.
     /// Adopted inline: `UnifiedQueueUpdated` and the matching `Applied`.
     /// Deferred to the next tick's source-link drain: every other event.
     /// Returns whether the matching answer was `Applied`; a late or unmatched
     /// `Applied` is adopted as a background snapshot, a late `Rejected`
     /// reports nothing more.
-    fn pump_queue_op_answer(&mut self, scope: QueueScope, id: QueueOpId, bound: Duration) -> bool {
-        let deferred_home = scope == QueueScope::Local && self.suspended_local.is_some();
+    fn pump_queue_op_answer(&mut self, link: QueueLink, id: QueueOpId, bound: Duration) -> bool {
+        let deferred_home = link == QueueLink::Local && self.suspended_local.is_some();
         let deadline = Instant::now() + bound;
         loop {
             let remaining = deadline.saturating_duration_since(Instant::now());
-            let event = self.queue_link(scope).1.recv_timeout(remaining);
+            let event = self.queue_link(link).1.recv_timeout(remaining);
             match event {
                 Ok(PlayerEvent::UnifiedQueueUpdated(snapshot)) => {
-                    self.adopt_queue_op_snapshot(scope, &snapshot, false);
+                    self.adopt_queue_op_snapshot(link, &snapshot, false);
                 }
                 Ok(PlayerEvent::QueueOpResult { op, outcome }) if op == id => match outcome {
                     mbv_ctrl::QueueOpOutcome::Applied(snapshot) => {
-                        self.adopt_queue_op_snapshot(scope, &snapshot, true);
+                        self.adopt_queue_op_snapshot(link, &snapshot, true);
                         return true;
                     }
                     mbv_ctrl::QueueOpOutcome::Rejected(reason) => {
@@ -159,7 +160,7 @@ impl App {
                     // Another op's answer (or a duplicate): adopt its state
                     // like any other owner snapshot, and keep waiting.
                     if let mbv_ctrl::QueueOpOutcome::Applied(snapshot) = outcome {
-                        self.adopt_queue_op_snapshot(scope, &snapshot, false);
+                        self.adopt_queue_op_snapshot(link, &snapshot, false);
                     }
                 }
                 Ok(other) => {
@@ -188,22 +189,22 @@ impl App {
     /// and through the live `UnifiedQueueUpdated` adoption otherwise.
     fn adopt_queue_op_snapshot(
         &mut self,
-        scope: QueueScope,
+        link: QueueLink,
         unified: &UnifiedQueueStateData,
         own_answer: bool,
     ) {
         if own_answer {
-            if scope == self.playing_queue_scope() {
+            if link == self.playing_queue_link() {
                 self.player.set_status(unified.status.clone());
             }
-            self.queue_for_scope_mut(scope).adopt(
+            self.queue_for_link_mut(link).adopt(
                 unified,
                 crate::app::state::queue_view::AdoptCause::OwnAnswer,
             );
-            if scope == QueueScope::Local {
+            if link == QueueLink::Local {
                 self.adopt_owner_source(unified);
             }
-        } else if scope == QueueScope::Local && self.suspended_local.is_some() {
+        } else if link == QueueLink::Local && self.suspended_local.is_some() {
             self.adopt_home_snapshot(unified);
         } else {
             let _ = self.handle_unified_queue_updated(unified);

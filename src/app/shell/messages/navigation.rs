@@ -1,4 +1,5 @@
 use super::{DestinationLatestSource, ShellRequest, ToastSeverity};
+use crate::app::state::queue_transfer::QueueTransferDirection;
 
 impl super::super::Model {
     pub(super) fn handle_navigation_request(
@@ -29,7 +30,9 @@ impl super::super::Model {
             request @ (ShellRequest::DismissSessions
             | ShellRequest::RefreshSessions
             | ShellRequest::SelectSession(_)
-            | ShellRequest::DetachSessions) => {
+            | ShellRequest::DetachSessions
+            | ShellRequest::HandOffSession(_)
+            | ShellRequest::TakeSession(_)) => {
                 self.handle_sessions_navigation(request);
                 None
             }
@@ -190,7 +193,32 @@ impl super::super::Model {
                 }
                 self.dismiss_sidebar(super::super::SidebarId::Sessions);
             }
+            // The Client-run Hand off sequence lands here in row 7.2 and
+            // the Take sequence in row 8.1 (design D1/D2). D6: the shell
+            // resolves the key against the current snapshot and does nothing
+            // when the target is gone. Either action replaces any pending
+            // transfer (design D2 cancel).
+            ShellRequest::HandOffSession(key) => {
+                self.begin_queue_transfer_action(QueueTransferDirection::HandOff, &key);
+            }
+            ShellRequest::TakeSession(key) => {
+                self.begin_queue_transfer_action(QueueTransferDirection::Take, &key);
+            }
             _ => unreachable!("request is a sessions navigation request"),
+        }
+    }
+
+    /// Resolve an F3 transfer target (design D6) and start its action. A key
+    /// the current snapshot no longer names does nothing.
+    fn begin_queue_transfer_action(
+        &mut self,
+        direction: QueueTransferDirection,
+        key: &mbv_ui_model::panel_targets::SessionTargetKey,
+    ) {
+        if crate::app::state::panel_targets::resolve_session_target(&self.app.panel_targets, key)
+            .is_some()
+        {
+            self.app.begin_queue_transfer(direction, key);
         }
     }
 

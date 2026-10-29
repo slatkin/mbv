@@ -25,7 +25,7 @@ impl PanelTarget {
     }
 
     #[must_use]
-    pub(in crate::app) fn row(&self) -> SessionTargetRow {
+    pub(in crate::app) fn row(&self, has_direct_endpoint: bool) -> SessionTargetRow {
         match self {
             Self::Emby(session) => SessionTargetRow::Emby {
                 id: session.id.clone(),
@@ -38,6 +38,7 @@ impl PanelTarget {
                 is_paused: session.is_paused,
                 position_s: session.position_s,
                 runtime_s: session.runtime_s,
+                has_direct_endpoint,
             },
             Self::Cast(receiver) => SessionTargetRow::Cast {
                 id: receiver.id.clone(),

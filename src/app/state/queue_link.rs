@@ -1,4 +1,4 @@
-use crate::app::{App, PendingQueueAction, QueueScope, QueueScopeResolution, QueueView, UndoEntry};
+use crate::app::{App, PendingQueueAction, QueueLink, QueueLinkResolution, QueueView, UndoEntry};
 use mbv_queue::{QueueItem, QueueSlotId};
 
 impl App {
@@ -14,107 +14,103 @@ impl App {
     /// queue. Local resolves to the suspended home link when present.
     pub(in crate::app) fn queue_link(
         &mut self,
-        scope: QueueScope,
+        link: QueueLink,
     ) -> (
         &mbv_player::PlayerProxy,
         &mut std::sync::mpsc::Receiver<mbv_ctrl::player::PlayerEvent>,
     ) {
-        match (scope, self.suspended_local.as_mut()) {
-            (QueueScope::Local, Some(home)) => (&home.player, &mut home.player_rx),
+        match (link, self.suspended_local.as_mut()) {
+            (QueueLink::Local, Some(home)) => (&home.player, &mut home.player_rx),
             _ => (&self.player, &mut self.player_rx),
         }
     }
 
     /// The `PlayerProxy` that owns the Local queue's state: the suspended home
     /// link when present, else the current player. Read-only counterpart of
-    /// [`App::queue_link`] for `QueueScope::Local`.
+    /// [`App::queue_link`] for `QueueLink::Local`.
     pub(in crate::app) fn local_queue_player(&self) -> &mbv_player::PlayerProxy {
         self.suspended_local
             .as_ref()
             .map_or(&self.player, |home| &home.player)
     }
 
-    pub(in crate::app) fn queue_for_scope(&self, scope: QueueScope) -> &QueueView {
-        match scope {
-            QueueScope::Local => &self.local_view,
-            QueueScope::Remote => self
+    pub(in crate::app) fn queue_for_link(&self, link: QueueLink) -> &QueueView {
+        match link {
+            QueueLink::Local => &self.local_view,
+            QueueLink::Peer => self
                 .remote_view
                 .as_ref()
-                .expect("remote queue scope requires remote queue"),
+                .expect("remote queue link requires remote queue"),
         }
     }
 
-    /// Position of `slot_id` in `scope`'s queue, if present.
+    /// Position of `slot_id` in `link`'s queue, if present.
     pub(in crate::app) fn slot_index(
         &self,
-        scope: QueueScope,
+        link: QueueLink,
         slot_id: QueueSlotId,
     ) -> Option<usize> {
-        self.queue_for_scope(scope).slot_index(slot_id)
+        self.queue_for_link(link).slot_index(slot_id)
     }
 
     pub(in crate::app) fn remove_queue_slots_where(
         &mut self,
         predicate: impl Fn(&QueueItem) -> bool,
     ) {
-        for scope in [QueueScope::Local, QueueScope::Remote] {
-            if scope == QueueScope::Remote && !self.has_remote_queue() {
+        for link in [QueueLink::Local, QueueLink::Peer] {
+            if link == QueueLink::Peer && !self.has_remote_queue() {
                 continue;
             }
             let slot_ids = self
-                .queue_for_scope(scope)
+                .queue_for_link(link)
                 .slots()
                 .iter()
                 .filter(|slot| predicate(&slot.item))
                 .map(|slot| mbv_ctrl::slot_id_to_u64(slot.slot_id))
                 .collect::<Vec<_>>();
             if !slot_ids.is_empty() {
-                self.queue_op(scope, mbv_remote_player::QueueOp::RemoveSlots { slot_ids });
+                self.queue_op(link, mbv_remote_player::QueueOp::RemoveSlots { slot_ids });
             }
         }
     }
 
-    pub(in crate::app) fn queue_for_scope_mut(&mut self, scope: QueueScope) -> &mut QueueView {
-        match scope {
-            QueueScope::Local => &mut self.local_view,
-            QueueScope::Remote => self
+    pub(in crate::app) fn queue_for_link_mut(&mut self, link: QueueLink) -> &mut QueueView {
+        match link {
+            QueueLink::Local => &mut self.local_view,
+            QueueLink::Peer => self
                 .remote_view
                 .as_mut()
-                .expect("remote queue scope requires remote queue"),
+                .expect("remote queue link requires remote queue"),
         }
     }
 
-    pub(in crate::app) fn undo_stack_for_scope_mut(
+    pub(in crate::app) fn undo_stack_for_link_mut(
         &mut self,
-        scope: QueueScope,
+        link: QueueLink,
     ) -> &mut Vec<UndoEntry> {
-        match scope {
-            QueueScope::Local => &mut self.queue_undo_stack,
-            QueueScope::Remote => &mut self.remote_queue_undo_stack,
+        match link {
+            QueueLink::Local => &mut self.queue_undo_stack,
+            QueueLink::Peer => &mut self.remote_queue_undo_stack,
         }
     }
 
-    fn queue_scope_resolution(&self) -> QueueScopeResolution {
-        QueueScopeResolution::new(self.has_direct_remote_queue(), self.queue_scope)
+    fn queue_link_resolution(&self) -> QueueLinkResolution {
+        QueueLinkResolution::new(self.has_direct_remote_queue())
     }
 
-    pub(in crate::app) fn local_queue_metadata_applies(&self, scope: QueueScope) -> bool {
-        self.queue_scope_resolution().local_metadata_applies(scope)
+    pub(in crate::app) fn local_queue_metadata_applies(&self, link: QueueLink) -> bool {
+        self.queue_link_resolution().local_metadata_applies(link)
     }
 
-    pub(in crate::app) fn queue_scope_is_playback(&self, scope: QueueScope) -> bool {
-        scope == self.playing_queue_scope()
+    pub(in crate::app) fn queue_link_is_playback(&self, link: QueueLink) -> bool {
+        link == self.playing_queue_link()
     }
 
-    fn action_queue_scope(&self, action: &PendingQueueAction) -> QueueScope {
-        match action {
-            PendingQueueAction::PlayItems { .. } => self.playing_queue_scope(),
-            PendingQueueAction::ClearQueue => self.viewed_queue_scope(),
-        }
-    }
-
-    pub(in crate::app) fn action_touches_local_queue(&self, action: &PendingQueueAction) -> bool {
-        self.local_queue_metadata_applies(self.action_queue_scope(action))
+    pub(in crate::app) fn action_touches_local_queue(&self, _action: &PendingQueueAction) -> bool {
+        // ADR 0034: each Player owner keeps its own queue and the shown
+        // queue follows the connection, so every queue action lands on the
+        // playback target's link — the action itself no longer picks one.
+        self.local_queue_metadata_applies(self.playing_queue_link())
     }
 
     /// Adopt the owner's snapshot source and reconcile a pending
@@ -135,28 +131,28 @@ impl App {
         self.queue_undo_stack.clear();
     }
 
-    pub(in crate::app) fn playing_queue_scope(&self) -> QueueScope {
-        self.queue_scope_resolution().playback_target()
-    }
-
-    pub(in crate::app) fn viewed_queue_scope(&self) -> QueueScope {
-        self.queue_scope_resolution().visible_scope()
+    /// The queue link both the shown queue and the Player-owner playback
+    /// resolve to (ADR 0034: each Player owner keeps its own queue, and the
+    /// shown queue follows the connection, so the viewed and playing links
+    /// are one link — there is no split accessor).
+    pub(in crate::app) fn playing_queue_link(&self) -> QueueLink {
+        self.queue_link_resolution().playback_target()
     }
 
     pub(in crate::app) fn displayed_queue(&self) -> &QueueView {
-        self.queue_for_scope(self.viewed_queue_scope())
+        self.queue_for_link(self.playing_queue_link())
     }
 
     pub(in crate::app) fn displayed_queue_mut(&mut self) -> &mut QueueView {
-        self.queue_for_scope_mut(self.viewed_queue_scope())
+        self.queue_for_link_mut(self.playing_queue_link())
     }
 
     pub(in crate::app) fn playback_queue(&self) -> &QueueView {
-        self.queue_for_scope(self.playing_queue_scope())
+        self.queue_for_link(self.playing_queue_link())
     }
 
     pub(in crate::app) fn playback_queue_mut(&mut self) -> &mut QueueView {
-        self.queue_for_scope_mut(self.playing_queue_scope())
+        self.queue_for_link_mut(self.playing_queue_link())
     }
 
     /// Whether the previous/next transport controls (playback-header mouse
@@ -202,28 +198,19 @@ impl App {
         (should_consume, is_audio)
     }
 
-    /// Connected to an mbv daemon/client: the peer's queue is the displayed
-    /// queue, empty or not. A Local-endpoint attach has no remote tab, so the
-    /// scope resolution lands back on the adopted unified Local view.
-    pub(in crate::app) fn display_peer_queue_on_connect(&mut self) {
-        self.set_queue_scope(QueueScope::Remote);
-    }
-
-    pub(in crate::app) fn set_queue_scope(&mut self, scope: QueueScope) {
-        let resolved = if scope == QueueScope::Remote && self.has_direct_remote_queue() {
-            QueueScope::Remote
-        } else {
-            QueueScope::Local
-        };
-        if resolved != self.queue_scope {
-            // A real scope switch (`[`/`]`, scope pill, session
-            // attach/detach) must adopt the new scope's own follow
-            // position rather than reconciling by slot identity: the two
-            // queues hand out colliding `QueueSlotId`s (each is a
-            // per-`PlaybackQueue` counter starting at 1), so identity
-            // reconciliation can park the cursor on an unrelated slot.
-            self.pending_queue_cursor_reanchor = Some(resolved);
+    /// D5: the shown queue follows the connection, so the shown link only
+    /// flips when `remote_view` is installed or cleared. When it flips, arm
+    /// the cursor re-anchor: the component must adopt the newly shown
+    /// queue's own follow position rather than reconcile by slot identity
+    /// (the two queues hand out colliding `QueueSlotId`s, each a
+    /// per-`PlaybackQueue` counter starting at 1).
+    pub(in crate::app) fn reanchor_queue_cursor_after_link_change(
+        &mut self,
+        previous_shown: QueueLink,
+    ) {
+        let shown = self.playing_queue_link();
+        if shown != previous_shown {
+            self.pending_queue_cursor_reanchor = Some(shown);
         }
-        self.queue_scope = resolved;
     }
 }

@@ -1360,6 +1360,15 @@
                 "integer",
                 "null"
               ]
+            },
+            "start_position_secs": {
+              "default": null,
+              "description": "One-time start position for the start slot, in seconds. Meaningful\nonly with `start_idx`. Sent only to an owner that advertises\n`CTRL_CAP_QUEUE_REPLACE_START_POSITION`; an owner without the\ncapability ignores the field and would start at the wrong\nposition, so the Client must not send it there.",
+              "format": "double",
+              "type": [
+                "number",
+                "null"
+              ]
             }
           },
           "required": [

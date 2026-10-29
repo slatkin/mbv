@@ -1,5 +1,5 @@
 use super::Model;
-use super::{PanelFocus, PlaybackState, QueueScope};
+use super::{PanelFocus, PlaybackState, QueueLink};
 use crate::app::dispatch::notify::ToastSeverity;
 use mbv_components::{QueueComponent, QueueCursorUpdate};
 use mbv_queue::QueueSlotId;
@@ -13,7 +13,7 @@ use mbv_ui_msg::{ComponentId, QueueColumnResize, QueueIntent, QueueMove, QueueRe
 pub(in crate::app) struct QueueProjectionFingerprint {
     revision: u64,
     lineage: mbv_queue::QueueLineage,
-    scope: QueueScope,
+    link: QueueLink,
     active: bool,
     active_target: Option<QueueSlotId>,
     /// The adopted pending transition awaiting playback-owner observation.
@@ -49,7 +49,7 @@ fn projected_active_target(
 }
 
 struct QueueProjectionUpdate {
-    scope: QueueScope,
+    link: QueueLink,
     playback: PlaybackState,
     pending_slot: Option<QueueSlotId>,
     fingerprint: QueueProjectionFingerprint,
@@ -125,14 +125,14 @@ impl Model {
     }
 
     fn prepare_queue_projection(&mut self) -> QueueProjectionUpdate {
-        let scope = self.app.viewed_queue_scope();
+        let link = self.app.playing_queue_link();
         let playback = self.app.displayed_queue_playback_state();
-        let pending_slot = self.pending_queue_projection_slot(scope);
-        let fingerprint = self.queue_projection_fingerprint(scope, playback, pending_slot);
+        let pending_slot = self.pending_queue_projection_slot(link);
+        let fingerprint = self.queue_projection_fingerprint(link, playback, pending_slot);
         let (rows_changed, bucket_only) = self.queue_projection_changes(&fingerprint);
-        let cursor = self.queue_projection_cursor(scope);
+        let cursor = self.queue_projection_cursor(link);
         let mut update = QueueProjectionUpdate {
-            scope,
+            link,
             playback,
             pending_slot,
             fingerprint,
@@ -146,27 +146,25 @@ impl Model {
         update
     }
 
-    // The adopted pending slot counts only while it is still in the viewed
+    // The adopted pending slot counts only while it is still in the shown
     // queue: a stale target must not move now-playing off the observed row.
-    fn pending_queue_projection_slot(&self, scope: QueueScope) -> Option<QueueSlotId> {
+    fn pending_queue_projection_slot(&self, link: QueueLink) -> Option<QueueSlotId> {
         self.app
-            .queue_scope_is_playback(scope)
-            .then(|| self.app.pending_playback_slot())
-            .flatten()
-            .filter(|target| self.app.queue_for_scope(scope).slot(*target).is_some())
+            .pending_playback_slot()
+            .filter(|target| self.app.queue_for_link(link).slot(*target).is_some())
     }
 
     fn queue_projection_fingerprint(
         &self,
-        scope: QueueScope,
+        link: QueueLink,
         playback: PlaybackState,
         pending_slot: Option<QueueSlotId>,
     ) -> QueueProjectionFingerprint {
-        let queue = self.app.queue_for_scope(scope);
+        let queue = self.app.queue_for_link(link);
         QueueProjectionFingerprint {
             revision: queue.revision().raw(),
             lineage: queue.lineage(),
-            scope,
+            link,
             active: playback.active,
             active_target: projected_active_target(queue, playback, pending_slot),
             pending_target: pending_slot,
@@ -183,7 +181,7 @@ impl Model {
         let bucket_only = previous.is_some_and(|old| {
             old.revision == fingerprint.revision
                 && old.lineage == fingerprint.lineage
-                && old.scope == fingerprint.scope
+                && old.link == fingerprint.link
                 && old.active == fingerprint.active
                 && old.active_target == fingerprint.active_target
                 && old.pending_target == fingerprint.pending_target
@@ -195,10 +193,10 @@ impl Model {
     // Re-anchor only for authoritative content changes; routine updates preserve
     // the component-owned cursor. Cursor and chrome delivery is intentionally
     // independent of the row fingerprint.
-    fn queue_projection_cursor(&mut self, scope: QueueScope) -> QueueCursorUpdate {
+    fn queue_projection_cursor(&mut self, link: QueueLink) -> QueueCursorUpdate {
         match self.app.pending_queue_cursor_reanchor.take() {
-            Some(reanchor) if reanchor == scope => {
-                QueueCursorUpdate::Set(self.app.queue_for_scope(scope).cursor())
+            Some(reanchor) if reanchor == link => {
+                QueueCursorUpdate::Set(self.app.queue_for_link(link).cursor())
             }
             _ => QueueCursorUpdate::Preserve,
         }
@@ -206,11 +204,11 @@ impl Model {
 
     fn prepare_queue_projection_rows(&self, update: &mut QueueProjectionUpdate) {
         update.slots = (!update.bucket_only && update.rows_changed)
-            .then(|| self.app.queue_for_scope(update.scope).slots().to_vec());
+            .then(|| self.app.queue_for_link(update.link).slots().to_vec());
         update.patch = update
             .bucket_only
             .then(|| {
-                let queue = self.app.queue_for_scope(update.scope);
+                let queue = self.app.queue_for_link(update.link);
                 let target = update.fingerprint.active_target?;
                 let index = queue.slot_index(target)?;
                 let slot = queue.slots().get(index)?;
@@ -239,12 +237,15 @@ impl Model {
                 queue.set_row_patch(target, row);
             }
             queue.set_cursor(&update.cursor);
-            queue.set_scope(update.scope);
-            // The footer pills are all queue concern (playlist source,
-            // autosave prefix, dirty suffix) — never the library column's
-            // status bar. The remote target lives on the queue header row
-            // now; the footer pill is gone.
+            queue.set_link(update.link);
+            // The footer pills are all queue concern (owner indicator, playlist
+            // source, autosave prefix, dirty suffix) — never the library
+            // column's status bar. The owner pill always names the shown
+            // Player owner (design D7), so it flips in the same sync pass the
+            // shown link flips; the playback target's host lives on the queue
+            // header row.
             queue.set_status_pills(
+                self.app.queue_owner_status_spans(),
                 self.app.playlist_status_spans(),
                 self.app.autosave_status_spans(),
                 self.app.dirty_status_spans(),
@@ -296,49 +297,44 @@ impl Model {
 
     pub(in crate::app) fn handle_queue_request(&mut self, request: QueueRequest) {
         match request {
-            QueueRequest::Scope(scope) => {
-                if scope == QueueScope::Local || self.app.has_direct_remote_queue() {
-                    self.app.set_queue_scope(scope);
-                }
-            }
-            QueueRequest::Cursor { scope, slot_id } => {
-                // Plain navigation: select_queue_slot applies the scope/focus/
+            QueueRequest::Cursor { link, slot_id } => {
+                // Plain navigation: select_queue_slot applies the link/focus/
                 // hold-window side effects; there is no effect to drive with
                 // the resolved index (D2), so it is discarded.
-                let _ = self.select_queue_slot(scope, slot_id);
+                let _ = self.select_queue_slot(link, slot_id);
             }
-            QueueRequest::Play { scope, slot_id } => {
-                if let Some(index) = self.select_queue_slot(scope, slot_id) {
+            QueueRequest::Play { link, slot_id } => {
+                if let Some(index) = self.select_queue_slot(link, slot_id) {
                     self.app
                         .dispatch(&crate::app::dispatch::action::AppCommand::QueuePlayCursor(
                             index,
                         ));
                 }
             }
-            QueueRequest::Remove { scope, slot_id } => {
-                if let Some(index) = self.select_queue_slot(scope, slot_id) {
+            QueueRequest::Remove { link, slot_id } => {
+                if let Some(index) = self.select_queue_slot(link, slot_id) {
                     self.app.remove_from_queue(index);
                 }
             }
-            QueueRequest::RemoveSelection { scope, slot_ids } => {
+            QueueRequest::RemoveSelection { link, slot_ids } => {
                 // One batch edit: the owner applies the whole range before
                 // publishing a queue snapshot, so the list does not shrink one
                 // row per removal.
-                self.app.remove_slots_from_queue(scope, &slot_ids);
+                self.app.remove_slots_from_queue(link, &slot_ids);
             }
             QueueRequest::Move {
-                scope,
+                link,
                 slot_id,
                 direction,
             } => {
-                self.handle_queue_move(scope, slot_id, direction);
+                self.handle_queue_move(link, slot_id, direction);
             }
             QueueRequest::MoveTo {
-                scope,
+                link,
                 slot_id,
                 onto,
             } => {
-                self.handle_queue_move_to(scope, slot_id, onto);
+                self.handle_queue_move_to(link, slot_id, onto);
             }
             QueueRequest::ResizeColumnLive(width) => {
                 self.app.queue_column_width = width;
@@ -349,14 +345,14 @@ impl Model {
                 self.app.queue_column_width = width;
                 self.app.save_prefs();
             }
-            QueueRequest::Undo { scope } => {
-                self.handle_queue_undo(scope);
+            QueueRequest::Undo { link } => {
+                self.handle_queue_undo(link);
             }
         }
     }
 
-    fn handle_queue_move(&mut self, scope: QueueScope, slot_id: QueueSlotId, direction: QueueMove) {
-        if let Some(index) = self.select_queue_slot(scope, slot_id) {
+    fn handle_queue_move(&mut self, link: QueueLink, slot_id: QueueSlotId, direction: QueueMove) {
+        if let Some(index) = self.select_queue_slot(link, slot_id) {
             match direction {
                 QueueMove::Up => self.app.move_queue_item_up(index),
                 QueueMove::Down => self.app.move_queue_item_down(index),
@@ -364,36 +360,36 @@ impl Model {
         }
     }
 
-    fn handle_queue_move_to(&mut self, scope: QueueScope, slot_id: QueueSlotId, onto: QueueSlotId) {
-        let Some(from) = self.select_queue_slot(scope, slot_id) else {
+    fn handle_queue_move_to(&mut self, link: QueueLink, slot_id: QueueSlotId, onto: QueueSlotId) {
+        let Some(from) = self.select_queue_slot(link, slot_id) else {
             return;
         };
-        let Some(to) = self.slot_index(scope, onto) else {
+        let Some(to) = self.slot_index(link, onto) else {
             return;
         };
         if from != to {
-            self.app.move_queue_item_to(scope, from, to);
+            self.app.move_queue_item_to(link, from, to);
         }
     }
 
-    fn handle_queue_undo(&mut self, scope: QueueScope) {
-        // The component can still be showing (and emit for) `Remote`
+    fn handle_queue_undo(&mut self, link: QueueLink) {
+        // The component can still be showing (and emit for) `Peer`
         // for a frame after a remote disconnect, before the projection
         // refresh flips it back. Once no direct remote queue exists the
         // visible queue is the Local one, so treat the undo as
         // targeting Local rather than flashing a spurious error.
-        let scope = if scope == QueueScope::Remote && !self.app.has_direct_remote_queue() {
-            QueueScope::Local
+        let link = if link == QueueLink::Peer && !self.app.has_direct_remote_queue() {
+            QueueLink::Local
         } else {
-            scope
+            link
         };
-        if scope == QueueScope::Remote {
+        if link == QueueLink::Peer {
             self.app.flash(
                 "Undo is not supported for remote queue edits".into(),
                 ToastSeverity::Error,
             );
         } else {
-            self.app.undo_last_queue_edit(scope);
+            self.app.undo_last_queue_edit(link);
         }
     }
 
@@ -413,9 +409,8 @@ impl Model {
                 };
                 if active {
                     self.app.playback_queue_mut().set_cursor(current_idx);
-                    self.app.set_queue_scope(QueueScope::Remote);
                     // Jump-to-now-playing is an explicit, authoritative move.
-                    self.app.pending_queue_cursor_reanchor = Some(self.app.playing_queue_scope());
+                    self.app.pending_queue_cursor_reanchor = Some(self.app.playing_queue_link());
                 } else {
                     self.app
                         .flash("Nothing is playing".into(), ToastSeverity::Error);
@@ -430,11 +425,11 @@ impl Model {
                         });
                 }
             }
-            QueueIntent::Navigate { scope, slot_id } => {
-                let Some(cursor) = self.select_queue_slot(scope, slot_id) else {
+            QueueIntent::Navigate { link, slot_id } => {
+                let Some(cursor) = self.select_queue_slot(link, slot_id) else {
                     return;
                 };
-                let Some(item) = self.app.queue_for_scope(scope).emby_item_at(cursor) else {
+                let Some(item) = self.app.queue_for_link(link).emby_item_at(cursor) else {
                     return;
                 };
                 let item_id = item.id.clone();
@@ -457,8 +452,8 @@ impl Model {
         }
     }
 
-    /// Resolves `slot_id` to its index in `scope`'s queue and applies the
-    /// scope/focus/hold-window side effects, returning the resolved index.
+    /// Resolves `slot_id` to its index in `link`'s queue and applies the
+    /// link/focus/hold-window side effects, returning the resolved index.
     /// The index is the operand for the shell-owned effect the caller is
     /// about to run (D2: `remove_from_queue(index)`, `move_queue_item_up/
     /// down(index)`, `AppCommand::QueuePlayCursor(index)`). The component's
@@ -466,27 +461,26 @@ impl Model {
     /// not written here (task 3.1: the mirror is gone).
     fn select_queue_slot(
         &mut self,
-        scope: QueueScope,
+        link: QueueLink,
         slot_id: mbv_queue::QueueSlotId,
     ) -> Option<usize> {
-        if scope == QueueScope::Remote && !self.app.has_direct_remote_queue() {
+        if link == QueueLink::Peer && !self.app.has_direct_remote_queue() {
             return None;
         }
-        let index = self.slot_index(scope, slot_id)?;
-        self.app.set_queue_scope(scope);
+        let index = self.slot_index(link, slot_id)?;
         self.app.set_panel_focus(PanelFocus::Queue);
         self.app.mark_queue_cursor_user_active();
         Some(index)
     }
 
-    /// Position of `slot_id` in `scope`'s queue, if present. Pure lookup with
-    /// none of `select_queue_slot`'s scope/focus/hold-window side effects.
+    /// Position of `slot_id` in `link`'s queue, if present. Pure lookup with
+    /// none of `select_queue_slot`'s link/focus/hold-window side effects.
     pub(crate) fn slot_index(
         &self,
-        scope: QueueScope,
+        link: QueueLink,
         slot_id: mbv_queue::QueueSlotId,
     ) -> Option<usize> {
-        self.app.slot_index(scope, slot_id)
+        self.app.slot_index(link, slot_id)
     }
 }
 
@@ -751,7 +745,7 @@ mod tests {
     #[test]
     fn remote_undo_falls_back_to_local_when_no_direct_remote_queue() {
         // Finding 5: after a remote disconnect the still-mounted component can
-        // emit Undo { scope: Remote } for a frame. With no direct remote queue
+        // emit Undo { link: Peer } for a frame. With no direct remote queue
         // the visible queue is Local, so the Local undo entry is consumed and
         // its inverse edit is sent to the Local owner instead of flashing a
         // spurious remote-undo-unsupported error.
@@ -769,7 +763,7 @@ mod tests {
         assert!(!model.app.has_direct_remote_queue());
 
         model.handle_queue_request(QueueRequest::Undo {
-            scope: QueueScope::Remote,
+            link: QueueLink::Peer,
         });
 
         assert_ne!(

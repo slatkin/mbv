@@ -71,7 +71,7 @@ fn update_player_queue(
         player.stop();
         return;
     }
-    let _ = submit_queue_slots_for_replace(player, items, active_index, client);
+    let _ = submit_queue_slots_for_replace(player, items, active_index, None, client);
 }
 
 pub(super) fn reconcile_packaged_emby(

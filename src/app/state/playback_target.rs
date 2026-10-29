@@ -49,7 +49,7 @@ impl App {
     }
 
     pub(in crate::app) fn pending_playback_slot(&self) -> Option<mbv_queue::QueueSlotId> {
-        self.queue_for_scope(self.playing_queue_scope())
+        self.queue_for_link(self.playing_queue_link())
             .pending_playback_slot()
     }
 
@@ -83,18 +83,17 @@ impl App {
     /// The adopted pending slot's position while the owner has not confirmed it.
     fn pending_playback_index(&self) -> Option<usize> {
         let target = self.pending_playback_slot()?;
-        self.queue_for_scope(self.playing_queue_scope())
+        self.queue_for_link(self.playing_queue_link())
             .slot_index(target)
     }
 
     pub(in crate::app) fn displayed_queue_playback_state(
         &self,
     ) -> mbv_ui_model::playback::PlaybackState {
-        if self.queue_scope_is_playback(self.viewed_queue_scope()) {
-            self.effective_playback_state()
-        } else {
-            mbv_ui_model::playback::PlaybackState::default()
-        }
+        // ADR 0034: each Player owner keeps its own queue and the shown
+        // queue follows the connection, so the shown queue is always the
+        // playback target's queue — there is no idle fallback to paint.
+        self.effective_playback_state()
     }
 }
 

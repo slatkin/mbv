@@ -138,6 +138,7 @@ fn unified_queue_replace_decodes_without_slot_identity() {
         items,
         start_idx: Some(0),
         source: QueueSource::Album,
+        start_position_secs: None,
         op: None,
     };
     let mut legacy: serde_json::Value =
@@ -158,6 +159,7 @@ fn unified_queue_replace_decodes_without_slot_identity() {
         start_idx,
         source,
         op,
+        ..
     } = serde_json::from_value(legacy).unwrap()
     else {
         panic!("expected legacy UnifiedQueueReplace")
@@ -167,4 +169,46 @@ fn unified_queue_replace_decodes_without_slot_identity() {
     assert_eq!(start_idx, Some(0));
     assert_eq!(source, QueueSource::Unknown);
     assert_eq!(op, None);
+}
+
+// queue-handoff-and-take task 2.1: `start_position_secs` is additive — a
+// carried position round-trips, and a payload from a peer that predates the
+// field decodes with `None` (design D4). The corpus pins the canonical
+// populated shape; this pins the missing-field decode tolerance.
+#[test]
+fn unified_queue_replace_start_position_round_trips_and_a_missing_field_decodes_none() {
+    let cmd = CtrlCmd::UnifiedQueueReplace {
+        items: vec![],
+        slots: vec![],
+        start_idx: Some(2),
+        source: QueueSource::Unknown,
+        start_position_secs: Some(95.5),
+        op: None,
+    };
+    let wire = serde_json::to_string(&cmd).unwrap();
+    let CtrlCmd::UnifiedQueueReplace {
+        start_idx,
+        start_position_secs,
+        ..
+    } = serde_json::from_str(&wire).unwrap()
+    else {
+        panic!("expected UnifiedQueueReplace")
+    };
+    assert_eq!(start_idx, Some(2));
+    assert_eq!(start_position_secs, Some(95.5));
+
+    let stale: CtrlCmd = serde_json::from_str(
+        r#"{"UnifiedQueueReplace":{"items":[],"slots":[],"start_idx":2,"source":{"type":"unknown"}}}"#,
+    )
+    .unwrap();
+    let CtrlCmd::UnifiedQueueReplace {
+        start_idx,
+        start_position_secs,
+        ..
+    } = stale
+    else {
+        panic!("expected UnifiedQueueReplace")
+    };
+    assert_eq!(start_idx, Some(2));
+    assert_eq!(start_position_secs, None);
 }

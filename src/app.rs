@@ -29,7 +29,7 @@ pub(in crate::app) use crate::app::state::events::{
     SeriesEvent,
 };
 use crate::app::state::playback::{
-    DestinationLatestSource, PendingQueueAction, QueueScopeResolution, RemoteSlotState,
+    DestinationLatestSource, PendingQueueAction, QueueLinkResolution, RemoteSlotState,
     ReplacementExecutor, RoutedReplacementPrep, SuspendedLocalSession, UndoEntry,
 };
 use crate::app::state::queue_deferrals::QueueDeferrals;
@@ -55,7 +55,7 @@ use mbv_ui_model::feed::{
 };
 use mbv_ui_model::library_tab::LibraryTab;
 pub(in crate::app) use mbv_ui_model::overlay::SidebarId;
-use mbv_ui_model::playback::{PlaybackState, QueueScope};
+use mbv_ui_model::playback::{PlaybackState, QueueLink};
 #[cfg(test)]
 use mbv_ui_model::settings::SettingKey;
 use mbv_ui_model::settings::{PanelFocus, PanelMode};

@@ -8,7 +8,7 @@
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use mbv_ctrl::player::{PlayerCommand, PlayerEvent, PlayerStatus};
 use mbv_ctrl::{CtrlCmd, CtrlCompatibility, PlaybackIntent, QueueOpId, WireCommand};
@@ -23,6 +23,11 @@ pub enum QueueOp {
         items: Vec<mbv_ctrl::UnifiedQueueSlot>,
         start_idx: Option<usize>,
         source: QueueSource,
+        /// One-time start position for the start slot, in seconds. Sent only
+        /// to an owner that advertises `queue-replace-start-position`; the
+        /// owner otherwise ignores the field and would start at the wrong
+        /// position (queue-handoff-and-take design D4).
+        start_position_secs: Option<f64>,
     },
     Append {
         items: Vec<QueueItem>,
@@ -104,6 +109,9 @@ pub(crate) mod connect;
 mod error;
 #[doc(inline)]
 pub use error::RemotePlayerError;
+
+#[cfg(any(test, feature = "test"))]
+mod stub;
 
 #[cfg(test)]
 mod tests;
@@ -377,6 +385,59 @@ impl RemotePlayer {
             .send_playback_intent(self.new_playback_intent(mbv_ctrl::PlaybackIntentAction::Stop));
     }
 
+    /// Send the guarded `Stop` and wait, bounded, for the owner's
+    /// correlated reply (queue-handoff-and-take review P1, row 8.1): a
+    /// caller that tears this connection down right after needs the reply
+    /// as the delivery proof — a `Stop` still queued on the writer thread
+    /// loses the race against the socket shutdown. The wait is best-effort:
+    /// past the bound, or on a connection lost mid-wait, the caller's
+    /// teardown proceeds the same way.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `pending_playback` mutex is poisoned: a previous owner
+    /// panicked while holding it.
+    pub fn stop_and_await_ack(&self, bound: Duration) {
+        let intent = self.new_playback_intent(mbv_ctrl::PlaybackIntentAction::Stop);
+        let request_id = intent.request_id;
+        if self.send_playback_intent(intent) {
+            let _ = self.await_playback_intent(request_id, bound);
+        }
+    }
+
+    /// Bounded wait until the owner answered the playback intent
+    /// `request_id` — the reader thread drops the pending entry when the
+    /// correlated `PlaybackIntent` reply arrives, which proves the writer
+    /// thread delivered the command and the owner read it. The delivery
+    /// proof a caller needs before it tears the connection down: a `Stop`
+    /// enqueued just before `disconnect` is otherwise only a queued write,
+    /// and the shutdown can eat it (queue-handoff-and-take review P1,
+    /// row 8.1). `false` on timeout or a connection already lost.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `pending_playback` mutex is poisoned: a previous owner
+    /// panicked while holding it.
+    #[must_use]
+    pub fn await_playback_intent(&self, request_id: u64, bound: Duration) -> bool {
+        let deadline = Instant::now() + bound;
+        while !self.is_disconnected() {
+            if !self
+                .pending_playback
+                .lock()
+                .unwrap()
+                .contains_key(&request_id)
+            {
+                return true;
+            }
+            if Instant::now() >= deadline {
+                return false;
+            }
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        false
+    }
+
     /// Actively tears down the control-socket connection (#233): shuts
     /// down the shared underlying socket so the reader thread's blocking
     /// `read()` (inside `reader.lines()` in `connect_endpoint`) observes
@@ -442,6 +503,14 @@ impl RemotePlayer {
         self.ctrl_compatibility.supports_queue_shuffle
     }
 
+    /// The owner honors the optional `start_position_secs` field on a
+    /// whole-queue replacement (queue-handoff-and-take design D4).
+    #[must_use]
+    pub fn supports_queue_replace_start_position(&self) -> bool {
+        self.ctrl_compatibility
+            .supports_queue_replace_start_position
+    }
+
     #[must_use]
     pub fn supports_playback_output(&self) -> bool {
         self.ctrl_compatibility.supports_playback_output
@@ -465,13 +534,23 @@ impl RemotePlayer {
                 items,
                 start_idx,
                 source,
-            } => CtrlCmd::UnifiedQueueReplace {
-                items: items.iter().map(|slot| slot.item.clone()).collect(),
-                slots: items,
-                start_idx,
-                source,
-                op,
-            },
+                start_position_secs,
+            } => {
+                // An owner without the capability ignores the field and would
+                // start the slot at its resume source instead — never send it
+                // there (queue-handoff-and-take spec, owner without the
+                // capability).
+                let start_position_secs =
+                    start_position_secs.filter(|_| self.supports_queue_replace_start_position());
+                CtrlCmd::UnifiedQueueReplace {
+                    items: items.iter().map(|slot| slot.item.clone()).collect(),
+                    slots: items,
+                    start_idx,
+                    source,
+                    start_position_secs,
+                    op,
+                }
+            }
             QueueOp::Append { items, before } => CtrlCmd::UnifiedQueueAppend { items, before, op },
             QueueOp::RemoveSlot { slot_id } => CtrlCmd::UnifiedQueueRemoveSlot { slot_id, op },
             QueueOp::RemoveSlots { slot_ids } => CtrlCmd::UnifiedQueueRemoveSlots { slot_ids, op },
@@ -644,124 +723,5 @@ impl RemotePlayer {
         if let Some(state) = self.unified_queue.lock().unwrap().as_mut() {
             apply(state);
         }
-    }
-
-    #[cfg(any(test, feature = "test"))]
-    pub(crate) fn stub_status(current_idx: usize, queue_len: usize) -> PlayerStatus {
-        PlayerStatus {
-            current_idx,
-            queue_len,
-            active: true,
-            ..Default::default()
-        }
-    }
-
-    /// Test helper for root-crate integration tests that need a remote-player
-    /// stand-in without a live daemon connection.
-    #[cfg(any(test, feature = "test"))]
-    #[must_use]
-    pub fn stub(items: Vec<EmbyItem>, current_idx: usize) -> (Self, mpsc::Receiver<PlayerEvent>) {
-        let (remote, event_rx, _cmd_rx) = Self::stub_with_command_rx(items, current_idx);
-        (remote, event_rx)
-    }
-
-    /// Test helper variant that also exposes commands sent to the daemon.
-    #[cfg(any(test, feature = "test"))]
-    #[must_use]
-    pub fn stub_with_command_rx(
-        items: impl AsRef<[EmbyItem]>,
-        current_idx: usize,
-    ) -> (Self, mpsc::Receiver<PlayerEvent>, mpsc::Receiver<CtrlCmd>) {
-        let slots: Vec<_> = items
-            .as_ref()
-            .iter()
-            .enumerate()
-            .map(|(index, item)| mbv_ctrl::UnifiedQueueSlot {
-                slot_id: index as u64 + 1,
-                item: QueueItem::Emby(Box::new(item.clone())),
-            })
-            .collect();
-        let status = Self::stub_status(current_idx, slots.len());
-        let unified_queue = mbv_ctrl::UnifiedQueueStateData {
-            status: status.clone(),
-            active_slot: slots.get(current_idx).map(|slot| slot.slot_id),
-            slots,
-            revision: 0,
-            source: QueueSource::Unknown,
-            lineage: QueueLineage::default(),
-            in_flight_transition: None,
-            queued_latest_transition: None,
-        };
-        let status = Arc::new(Mutex::new(status));
-        let subtitle_prefs = Arc::new(Mutex::new(mbv_ctrl::player::SubtitlePrefs::default()));
-        let disconnected = Arc::new(AtomicBool::new(false));
-        let shutdown_announced = Arc::new(AtomicBool::new(false));
-        let next_playback_id = Arc::new(std::sync::atomic::AtomicU64::new(1));
-        let pending_playback = Arc::new(Mutex::new(HashMap::new()));
-        let (cmd_tx, cmd_rx) = mpsc::channel::<CtrlCmd>();
-        let (_event_tx, event_rx) = mpsc::channel::<PlayerEvent>();
-        let compat = CtrlCompatibility::current();
-        (
-            RemotePlayer {
-                status,
-                subtitle_prefs,
-                unified_queue: Arc::new(Mutex::new(Some(unified_queue))),
-                playback_output: Arc::new(Mutex::new(None)),
-                cmd_tx,
-                disconnected,
-                shutdown_announced,
-                ctrl_compatibility: compat,
-                control_stream: Arc::new(Mutex::new(None)),
-                next_playback_id,
-                next_queue_op_id: Arc::new(std::sync::atomic::AtomicU64::new(1)),
-                pending_playback,
-                shutdown_request_tx: Arc::new(Mutex::new(None)),
-            },
-            event_rx,
-            cmd_rx,
-        )
-    }
-
-    /// Test-support stub whose advertised ctrl capability accepts the
-    /// owner's queue source updates (`QueueOp::SourceUpdate` sends its
-    /// `UnifiedQueueSourceUpdate` instead of failing the operation).
-    #[cfg(any(test, feature = "test"))]
-    #[must_use]
-    pub fn stub_owner_queue_source_update_with_command_rx(
-        items: Vec<EmbyItem>,
-        current_idx: usize,
-    ) -> (Self, mpsc::Receiver<PlayerEvent>, mpsc::Receiver<CtrlCmd>) {
-        let (mut remote, event_rx, cmd_rx) = Self::stub_with_command_rx(items, current_idx);
-        remote.ctrl_compatibility.supports_owner_queue_source_update = true;
-        (remote, event_rx, cmd_rx)
-    }
-
-    /// Test-support stub whose advertised ctrl capability identifies an
-    /// audio-only playback owner.
-    #[cfg(any(test, feature = "test"))]
-    #[must_use]
-    pub fn stub_audio_only_with_command_rx(
-        items: Vec<EmbyItem>,
-        current_idx: usize,
-    ) -> (Self, mpsc::Receiver<PlayerEvent>, mpsc::Receiver<CtrlCmd>) {
-        let (mut remote, event_rx, cmd_rx) = Self::stub_with_command_rx(items, current_idx);
-        remote.ctrl_compatibility.supports_audio_only = true;
-        (remote, event_rx, cmd_rx)
-    }
-
-    /// Test-support stub whose owner answers correlated queue operations
-    /// (queue-owner-process row 5.1: the Client waits for `QueueOpResult`).
-    /// A daemon advertising `answered-queue-ops` always advertises
-    /// `owner-queue-load` with it (one capability list), so the stub sets both.
-    #[cfg(any(test, feature = "test"))]
-    #[must_use]
-    pub fn stub_answered_queue_ops_with_command_rx(
-        items: Vec<EmbyItem>,
-        current_idx: usize,
-    ) -> (Self, mpsc::Receiver<PlayerEvent>, mpsc::Receiver<CtrlCmd>) {
-        let (mut remote, event_rx, cmd_rx) = Self::stub_with_command_rx(items, current_idx);
-        remote.ctrl_compatibility.supports_answered_queue_ops = true;
-        remote.ctrl_compatibility.supports_owner_queue_source_update = true;
-        (remote, event_rx, cmd_rx)
     }
 }

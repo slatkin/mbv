@@ -350,6 +350,11 @@ impl Model {
             if self.drain_player_events(&mut had_events) {
                 continue 'outer;
             }
+            // Pending queue transfer settlement (queue-handoff-and-take row
+            // 7.1, design D2): the same tick phase that adopted owner
+            // snapshots above is the first point where the target's
+            // post-replacement state is observable.
+            had_events |= self.app.settle_pending_queue_transfer();
             if self.drain_iteration_work(&mut had_events, &mut music_resize, &mut tv_resize) {
                 break 'outer;
             }

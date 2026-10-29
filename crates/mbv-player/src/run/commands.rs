@@ -83,14 +83,18 @@ impl PlaybackRun {
                 self.cmd_load_new(&url, start_pos, &item, mpv, progress);
                 cancel_stop = true;
             }
-            PlayerCommand::SubmitQueue { items, start_idx } => {
+            PlayerCommand::SubmitQueue {
+                items,
+                start_idx,
+                start_position_secs,
+            } => {
                 if !items.is_empty() {
                     self.run_identity = self.status.lock().unwrap().sequence_generation;
                     // The accepted submission carries the fresh identity:
                     // nothing rules its end out of reporting again.
                     self.run_lifecycle.submission_accepted();
                 }
-                self.cmd_submit_queue(items, start_idx, mpv, progress);
+                self.cmd_submit_queue(items, start_idx, start_position_secs, mpv, progress);
                 cancel_stop = true;
             }
             command => self.handle_simple_command(command, mpv),

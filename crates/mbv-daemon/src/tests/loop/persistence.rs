@@ -201,6 +201,7 @@ fn queue_replace_command_persists_once_through_injected_store() {
             }],
             start_idx: Some(0),
             source: QueueSource::Album,
+            start_position_secs: None,
             op: None,
         },
         client_id,

@@ -81,7 +81,7 @@ impl Model {
             let event = if self.app.suspended_local.is_some() {
                 self.app.deferred_home_events.pop_front().or_else(|| {
                     self.app
-                        .queue_link(crate::app::QueueScope::Local)
+                        .queue_link(crate::app::QueueLink::Local)
                         .1
                         .try_recv()
                         .ok()
@@ -103,6 +103,7 @@ impl Model {
                 } => self.app.adopt_home_snapshot(&snapshot),
                 mbv_ctrl::player::PlayerEvent::RemoteDisconnected(_) => {
                     self.app.suspended_local = None;
+                    self.app.drop_staged_queue_transfer_on_teardown();
                     self.app.raise_daemon_lost_modal();
                 }
                 mbv_ctrl::player::PlayerEvent::DaemonShutdownAnnounced => {

@@ -13,7 +13,7 @@ impl QueueComponent {
     /// from the private `MouseGestureState` (ADR 0024, design.md D3). Row
     /// identity comes from the embedded control's retained current-frame
     /// point resolution (design.md D6). The component emits a semantic `Msg`
-    /// with a resolved `QueueSlotId`/scope — never raw coordinates — except
+    /// with a resolved `QueueSlotId`/link — never raw coordinates — except
     /// the context-menu anchor (design.md D4).
     pub fn handle_mouse(&mut self, mouse: MouseEvent) -> Option<Msg> {
         // Queue does not consume hover-move (design.md D7).
@@ -113,7 +113,7 @@ impl QueueComponent {
         }
         self.delegate_row_local_input(MediaListSurfaceInput::Click(to), Some(grabbed));
         Some(Msg::Queue(QueueRequest::MoveTo {
-            scope: self.scope,
+            link: self.link,
             slot_id: grabbed,
             onto: resolved,
         }))

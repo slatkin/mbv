@@ -102,6 +102,7 @@ fn cold_start_at_slot(ctx: &mut DaemonOwnerContext<'_>, target: QueueSlotId) -> 
         ctx.player,
         ctx.owner.core.queue.slot_pairs(),
         start_idx,
+        None,
         ctx.client,
     ) {
         tracing::warn!(name: "daemon.transition_dispatch.cold_start.rejected", target: "transition", slot = ?target, "the cold-start submission was rejected");

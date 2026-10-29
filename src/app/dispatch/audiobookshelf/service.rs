@@ -360,7 +360,7 @@ impl App {
             finished: progress.is_finished,
         };
         let result = {
-            let (player, _) = self.queue_link(crate::app::QueueScope::Local);
+            let (player, _) = self.queue_link(crate::app::QueueLink::Local);
             player
                 .remote()
                 .send_queue_op(mbv_remote_player::QueueOp::ApplyProgress {

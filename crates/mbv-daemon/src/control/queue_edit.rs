@@ -55,6 +55,7 @@ pub(super) fn handle_queue_remove_slot(
             ctx.player.send_command(PlayerCommand::SubmitQueue {
                 items: Vec::new(),
                 start_idx: 0,
+                start_position_secs: None,
             });
             ctx.player.stop();
             reset_slot_jumps(transitions, queued_transition_origin);
@@ -138,6 +139,7 @@ pub(super) fn handle_queue_remove_slots(ctx: &mut CtrlContext<'_>, slot_ids: Vec
         ctx.player.send_command(PlayerCommand::SubmitQueue {
             items: Vec::new(),
             start_idx: 0,
+            start_position_secs: None,
         });
         ctx.player.stop();
         reset_slot_jumps(transitions, queued_transition_origin);
@@ -355,6 +357,7 @@ pub(super) fn handle_queue_clear(ctx: &mut CtrlContext<'_>) {
     ctx.player.send_command(PlayerCommand::SubmitQueue {
         items: Vec::new(),
         start_idx: 0,
+        start_position_secs: None,
     });
     ctx.player.stop();
     reset_slot_jumps(

@@ -3,7 +3,7 @@ use super::{
     mpv_load_opts, mpv_url_for_queue_item, reject_stale_jump, resolve_jump_target,
     spawn_progress_reporter,
 };
-use crate::resume::{EMBY_RESUME_RETRY_DELAYS, ResumeSeam};
+use crate::resume::{EMBY_RESUME_RETRY_DELAYS, ResumeSeam, resume_source};
 use crate::run::{ForcedJump, JumpArm, StopReport};
 
 impl PlaybackRun {
@@ -262,7 +262,7 @@ impl PlaybackRun {
         };
         for (item, source) in items.iter().zip(sources) {
             let url = mpv_url_for_queue_item(source, &self.server_url, &self.token);
-            let opts = mpv_load_opts(item);
+            let opts = mpv_load_opts(item, resume_source(item));
             if let Err(e) = mpv.command(
                 "loadfile",
                 &[url.as_str(), "append-play", "-1", opts.as_str()],

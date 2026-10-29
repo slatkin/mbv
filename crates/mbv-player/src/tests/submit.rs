@@ -58,14 +58,16 @@ fn submit_queue_slots_preserves_caller_slot_ids() {
             item: QueueItem::Feed(make_feed_entry(guid, guid)),
         })
         .collect();
-    player.submit_queue_slots(items, 1, None, false, 100);
+    player.submit_queue_slots(items, 1, None, None, false, 100);
 
     match cmd_rx
         .expect("the stub installed the command spy")
         .try_recv()
         .expect("expected a command")
     {
-        PlayerCommand::SubmitQueue { items, start_idx } => {
+        PlayerCommand::SubmitQueue {
+            items, start_idx, ..
+        } => {
             assert_eq!(start_idx, 1);
             assert_eq!(
                 items.iter().map(|slot| slot.slot_id).collect::<Vec<_>>(),
@@ -95,6 +97,7 @@ fn submit_queue_fast_path_seeds_status_for_the_start_item() {
             item: QueueItem::Feed(entry),
         }],
         0,
+        None,
         None,
         false,
         100,
@@ -252,6 +255,7 @@ fn complete_bare_player_admits_audiobookshelf_without_ctrl_transport() {
         }],
         0,
         None,
+        None,
         false,
         100,
     ));
@@ -260,7 +264,7 @@ fn complete_bare_player_admits_audiobookshelf_without_ctrl_transport() {
             .expect("the stub installed the command spy")
             .try_recv()
             .unwrap(),
-        PlayerCommand::SubmitQueue { items, start_idx }
+        PlayerCommand::SubmitQueue { items, start_idx, .. }
             if start_idx == 0 && items.len() == 1 && items[0].item.is_audiobookshelf()
     ));
 }
@@ -410,6 +414,7 @@ fn context_loss_rejects_audiobookshelf_without_mutating_bound_submission() {
         }],
         0,
         None,
+        None,
         false,
         100,
     ));
@@ -420,6 +425,7 @@ fn context_loss_rejects_audiobookshelf_without_mutating_bound_submission() {
             item: audiobookshelf_book_item(),
         }],
         0,
+        None,
         None,
         false,
         100,
@@ -622,6 +628,7 @@ fn queue_replacement_decision_follows_the_d1_order(#[case] case: ReplaceDecision
             }],
             0,
             None,
+            None,
             false,
             100,
         );
@@ -654,7 +661,9 @@ fn queue_replacement_decision_follows_the_d1_order(#[case] case: ReplaceDecision
                 .try_recv()
                 .expect("the live run received the replacement");
             match cmd {
-                PlayerCommand::SubmitQueue { items, start_idx } => {
+                PlayerCommand::SubmitQueue {
+                    items, start_idx, ..
+                } => {
                     assert_eq!(start_idx, 0);
                     assert_eq!(items.len(), 1);
                     assert!(matches!(items[0].item, QueueItem::Feed(_)));

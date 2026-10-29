@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use super::{
     AlbumIndexState, App, BrowseLevel, ConfirmAction, ConfirmModal, IdleFeed, LibEvent, PanelFocus,
-    PanelMode, PlaybackState, QueueScope, QueueView, SavePlaylistDialog, SavePlaylistStage,
+    PanelMode, PlaybackState, QueueLink, QueueView, SavePlaylistDialog, SavePlaylistStage,
     SidebarId, TabSelection, ToastSeverity,
 };
 use super::{
@@ -201,7 +201,7 @@ pub struct Model {
     /// `QueueComponent`. `sync_queue` runs every run-loop tick; rebuilding the
     /// row vec (slot clone + per-row `format!`) on a tick where nothing the
     /// projection depends on changed is pure waste (#675). The fingerprint
-    /// gates the rebuild: queue revision + viewed scope + active slot + a
+    /// gates the rebuild: queue revision + viewed link + active slot + a
     /// progress-% bucket + paused + the title model.
     pub(in crate::app) last_queue_projection: Option<queue::QueueProjectionFingerprint>,
     /// Shell-owned projection of the focused list's Visual selection.

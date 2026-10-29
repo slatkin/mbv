@@ -190,7 +190,7 @@ impl App {
         // and the Client adopts the resulting snapshot; the Client holds no
         // editable queue of its own.
         let sent = self.replace_emby_queue_on_owner(
-            self.playing_queue_scope(),
+            self.playing_queue_link(),
             items,
             start_idx,
             queue_source,
@@ -245,11 +245,10 @@ impl App {
         self.play_single_item(item, direct_remote, &label);
     }
 
-    /// The queue-view tail the library play paths share: the played scope
+    /// The queue-view tail the library play paths share: the played link
     /// becomes the viewed one, and focus moves to the queue unless the play
     /// started in the library.
     fn adopt_played_queue_view(&mut self) {
-        self.set_queue_scope(self.playing_queue_scope());
         if !matches!(self.effective_panel_focus(), PanelFocus::Library) {
             self.set_panel_focus(PanelFocus::Queue);
         }
@@ -276,7 +275,7 @@ impl App {
         // Row 5.3 (design D6): the replacement is an answered owner
         // op; the Client holds no editable queue of its own.
         let sent = self.replace_emby_queue_on_owner(
-            self.playing_queue_scope(),
+            self.playing_queue_link(),
             episodes,
             0,
             mbv_queue::QueueSource::Series,
@@ -302,7 +301,7 @@ impl App {
         // Row 5.3 (design D6): the replacement is an answered owner op; the
         // Client holds no editable queue of its own.
         let sent = self.replace_emby_queue_on_owner(
-            self.playing_queue_scope(),
+            self.playing_queue_link(),
             vec![item],
             0,
             mbv_queue::QueueSource::Unknown,
@@ -358,9 +357,9 @@ impl App {
                 // queue's owner as one answered Append op; the Client holds
                 // no editable queue, so the entries appear only when the
                 // owner's answer is adopted.
-                let scope = self.viewed_queue_scope();
+                let link = self.playing_queue_link();
                 self.append_on_owner(
-                    scope,
+                    link,
                     items
                         .into_iter()
                         .map(|item| QueueItem::Emby(Box::new(item)))
@@ -395,13 +394,11 @@ impl App {
         item: QueueItem,
         start_playback: bool,
     ) -> bool {
-        let scope = if start_playback {
-            self.playing_queue_scope()
-        } else {
-            self.viewed_queue_scope()
-        };
+        // The shown queue is always the playback target's queue (ADR 0034),
+        // so both submit shapes target one link.
+        let link = self.playing_queue_link();
         if !start_playback {
-            return self.append_on_owner(scope, vec![item]);
+            return self.append_on_owner(link, vec![item]);
         }
         if self.player.is_remote_disconnected() {
             self.flash(CONNECTION_LOST_MESSAGE.into(), ToastSeverity::Warning);
@@ -411,7 +408,7 @@ impl App {
             self.on_queue_replace_silent();
         }
         let answered = self
-            .queue_link(scope)
+            .queue_link(link)
             .0
             .remote()
             .supports_answered_queue_ops();
@@ -421,7 +418,7 @@ impl App {
         // when none is alive); legacy owners get the same replace in its
         // legacy wire form.
         let sent =
-            self.replace_queue_on_owner(scope, vec![item], 0, mbv_queue::QueueSource::Unknown);
+            self.replace_queue_on_owner(link, vec![item], 0, mbv_queue::QueueSource::Unknown);
         if sent == QueueOpEdit::NotApplied {
             return false;
         }
@@ -431,7 +428,6 @@ impl App {
                 .player
                 .send_command(PlayerCommand::SetMute(self.mute_on));
         }
-        self.set_queue_scope(scope);
         if !matches!(self.effective_panel_focus(), PanelFocus::Library) {
             self.set_panel_focus(PanelFocus::Queue);
         }
@@ -440,12 +436,12 @@ impl App {
 
     pub(in crate::app) fn append_on_owner(
         &mut self,
-        scope: crate::app::QueueScope,
+        link: crate::app::QueueLink,
         items: Vec<QueueItem>,
     ) -> bool {
         // Entries appear only when the owner's answered Append is adopted.
         let sent = self.queue_op(
-            scope,
+            link,
             mbv_remote_player::QueueOp::Append {
                 items,
                 before: None,
@@ -454,7 +450,7 @@ impl App {
         if sent == QueueOpEdit::NotApplied {
             return false;
         }
-        if self.local_queue_metadata_applies(scope) {
+        if self.local_queue_metadata_applies(link) {
             self.queue_dirty = true;
         }
         self.advance_queue_epoch();

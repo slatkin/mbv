@@ -9,8 +9,8 @@ use strum::IntoEnumIterator;
 
 use super::builders::{
     CAST_HOST, CAST_NAME, CAST_PORT, CAST_RECEIVER_ID, EMBY_DEVICE_ID, EMBY_DEVICE_NAME,
-    EMBY_ITEM_ID, GENERATION, REQUEST_ID, REVISION, emby_queue_item, feed_queue_item,
-    progress_update, queue_source,
+    EMBY_ITEM_ID, GENERATION, REQUEST_ID, REVISION, START_POSITION_SECS, emby_queue_item,
+    feed_queue_item, progress_update, queue_source, unified_queue_replace_slots,
 };
 use super::*;
 
@@ -35,6 +35,7 @@ enum CommandShape {
     RunOwnerActionSwapPanel,
     RunOwnerActionOpenTerminal,
     UnifiedQueueReplace,
+    UnifiedQueueReplaceWithStartPosition,
     UnifiedQueueSourceUpdate,
     UnifiedQueueAppend,
     UnifiedQueueRemoveSlot,
@@ -77,6 +78,7 @@ impl CommandShape {
                 | CommandShape::RunOwnerActionSwapPanel
                 | CommandShape::RunOwnerActionOpenTerminal
                 | CommandShape::UnifiedQueueReplace
+                | CommandShape::UnifiedQueueReplaceWithStartPosition
                 | CommandShape::UnifiedQueueSourceUpdate
                 | CommandShape::UnifiedQueueAppend
                 | CommandShape::UnifiedQueueRemoveSlot
@@ -113,6 +115,9 @@ impl CommandShape {
             CommandShape::RunOwnerActionSwapPanel => "RunOwnerAction.SwapPanel".into(),
             CommandShape::RunOwnerActionOpenTerminal => "RunOwnerAction.OpenTerminal".into(),
             CommandShape::UnifiedQueueReplace => "UnifiedQueueReplace".into(),
+            CommandShape::UnifiedQueueReplaceWithStartPosition => {
+                "UnifiedQueueReplace.WithStartPosition".into()
+            }
             CommandShape::UnifiedQueueSourceUpdate => "UnifiedQueueSourceUpdate".into(),
             CommandShape::UnifiedQueueAppend => "UnifiedQueueAppend".into(),
             CommandShape::UnifiedQueueRemoveSlot => "UnifiedQueueRemoveSlot".into(),
@@ -159,16 +164,7 @@ impl CommandShape {
                 CtrlCmd::RunOwnerAction(OwnerAction::OpenTerminal)
             }
             CommandShape::UnifiedQueueReplace => {
-                let slots = vec![
-                    UnifiedQueueSlot {
-                        slot_id: 1,
-                        item: emby_queue_item(),
-                    },
-                    UnifiedQueueSlot {
-                        slot_id: 2,
-                        item: feed_queue_item(),
-                    },
-                ];
+                let slots = unified_queue_replace_slots();
                 // The legacy `items` payload mirrors the slots, as
                 // `CtrlCmd::unified_queue_replace` derives it.
                 let items = slots.iter().map(|slot| slot.item.clone()).collect();
@@ -177,6 +173,19 @@ impl CommandShape {
                     slots,
                     start_idx: Some(0),
                     source: queue_source(),
+                    start_position_secs: None,
+                    op: Some(QueueOpId(41)),
+                }
+            }
+            CommandShape::UnifiedQueueReplaceWithStartPosition => {
+                let slots = unified_queue_replace_slots();
+                let items = slots.iter().map(|slot| slot.item.clone()).collect();
+                CtrlCmd::UnifiedQueueReplace {
+                    items,
+                    slots,
+                    start_idx: Some(0),
+                    source: queue_source(),
+                    start_position_secs: Some(START_POSITION_SECS),
                     op: Some(QueueOpId(41)),
                 }
             }
@@ -250,6 +259,10 @@ fn shape_of(cmd: &CtrlCmd) -> CommandShape {
             OwnerAction::SwapPanel => CommandShape::RunOwnerActionSwapPanel,
             OwnerAction::OpenTerminal => CommandShape::RunOwnerActionOpenTerminal,
         },
+        CtrlCmd::UnifiedQueueReplace {
+            start_position_secs: Some(_),
+            ..
+        } => CommandShape::UnifiedQueueReplaceWithStartPosition,
         CtrlCmd::UnifiedQueueReplace { .. } => CommandShape::UnifiedQueueReplace,
         CtrlCmd::UnifiedQueueSourceUpdate { .. } => CommandShape::UnifiedQueueSourceUpdate,
         CtrlCmd::UnifiedQueueAppend { .. } => CommandShape::UnifiedQueueAppend,

@@ -18,7 +18,7 @@ use mbv_render::components::media_list::WideMediaListPaintPolicy;
 use mbv_render::components::queue::{render_empty_queue, render_queue_status};
 use mbv_render::components::widgets::render_queue_panel_frame;
 use mbv_theme::Surface;
-use mbv_ui_model::playback::{PlaybackState, QueueScope};
+use mbv_ui_model::playback::{PlaybackState, QueueLink};
 use mbv_ui_msg::UserEvent;
 use mbv_ui_msg::{Msg, QueueRequest};
 
@@ -31,7 +31,7 @@ pub use self::rows::{queue_media_row, queue_media_rows};
 
 /// Why the shell is pushing a cursor. `Preserve` keeps the user's selection
 /// pinned to its slot across a content refresh; `Set` is an authoritative
-/// move (follow-the-playhead, jump-to-now-playing, wheel scroll, scope switch)
+/// move (follow-the-playhead, jump-to-now-playing, wheel scroll, link switch)
 /// that must win over slot-identity reconciliation.
 #[derive(Debug)]
 pub enum QueueCursorUpdate {
@@ -46,7 +46,7 @@ pub struct QueueComponent {
     /// cursor, the resting scroll offset, and viewport/scrollbar geometry; the
     /// parent keeps only the prepared projection and shell-owned chrome below.
     carrier: MediaListCarrier<QueueSlotId>,
-    scope: QueueScope,
+    link: QueueLink,
     focused: bool,
     /// The panel surface's focused bit, projected per frame from the shell's
     /// panel-focus fact (the same value the legacy base frame used for the
@@ -64,9 +64,10 @@ pub struct QueueComponent {
     /// `view()` (component-retained geometry, task 3.1): the list body, the
     /// empty-state text, and the context-menu keyboard anchor panel.
     content_area: Rect,
-    /// The projected status pill row (playlist source, autosave prefix, dirty
-    /// suffix), pushed by the queue projection and painted at the panel's
-    /// own status row.
+    /// The projected status pill row (owner indicator, playlist source,
+    /// autosave prefix, dirty suffix), pushed by the queue projection and
+    /// painted at the panel's own status row.
+    status_owner: Vec<Span<'static>>,
     status_playlist: Vec<Span<'static>>,
     status_autosave: Option<Vec<Span<'static>>>,
     status_dirty: Option<Vec<Span<'static>>>,
@@ -85,7 +86,7 @@ impl QueueComponent {
     }
 
     /// Reset the Queue's local presentation (cursor, marks, scroll) without
-    /// replacing its rows, scope or playback projection. A transient reorder
+    /// replacing its rows, link or playback projection. A transient reorder
     /// grab is dropped so no pointer gesture survives the reset.
     pub fn reset_presentation(&mut self) {
         self.carrier.reset_presentation();
@@ -101,13 +102,14 @@ impl QueueComponent {
     pub fn new() -> Self {
         Self {
             carrier: MediaListCarrier::new(),
-            scope: QueueScope::Local,
+            link: QueueLink::Local,
             focused: false,
             frame_focused: false,
             mini_view: false,
             empty_text: String::new(),
             area: Rect::default(),
             content_area: Rect::default(),
+            status_owner: Vec::new(),
             status_playlist: Vec::new(),
             status_autosave: None,
             status_dirty: None,
@@ -162,13 +164,13 @@ impl QueueComponent {
         }
     }
 
-    /// Deliver the current scope independently of row delivery.
-    pub fn set_scope(&mut self, scope: QueueScope) {
-        if scope != self.scope {
+    /// Deliver the current link independently of row delivery.
+    pub fn set_link(&mut self, link: QueueLink) {
+        if link != self.link {
             self.carrier.set_scroll(0);
         }
-        self.scope = scope;
-        self.empty_text = if scope == QueueScope::Local {
+        self.link = link;
+        self.empty_text = if link == QueueLink::Local {
             "¯\\_(ツ)_/¯".into()
         } else {
             "Remote queue is empty".into()
@@ -195,14 +197,17 @@ impl QueueComponent {
         self.mini_view = mini_view;
     }
 
-    /// Project the status pill row (playlist source, autosave prefix, dirty
-    /// suffix), painted at the `QueueColumn` footer below the recessed box.
+    /// Project the status pill row: the owner indicator (always shown, design
+    /// D7), the playlist source, the autosave prefix, and the dirty suffix,
+    /// painted at the `QueueColumn` footer below the recessed box.
     pub fn set_status_pills(
         &mut self,
+        owner: Vec<Span<'static>>,
         playlist: Vec<Span<'static>>,
         autosave: Option<Vec<Span<'static>>>,
         dirty: Option<Vec<Span<'static>>>,
     ) {
+        self.status_owner = owner;
         self.status_playlist = playlist;
         self.status_autosave = autosave;
         self.status_dirty = dirty;
@@ -226,7 +231,7 @@ impl QueueComponent {
     fn cursor_message(&self) -> Option<Msg> {
         self.carrier.selected_target().map(|&slot_id| {
             Msg::Queue(QueueRequest::Cursor {
-                scope: self.scope,
+                link: self.link,
                 slot_id,
             })
         })
@@ -248,11 +253,11 @@ impl QueueComponent {
         )
     }
 
-    /// The scope/slot pair for Queue's current selection.
-    fn selected_slot(&self) -> Option<(QueueScope, QueueSlotId)> {
+    /// The link/slot pair for Queue's current selection.
+    fn selected_slot(&self) -> Option<(QueueLink, QueueSlotId)> {
         self.carrier
             .selected_target()
-            .map(|&slot_id| (self.scope, slot_id))
+            .map(|&slot_id| (self.link, slot_id))
     }
 
     /// Clamp the shared owner's fixed-row viewport to the queue's content
@@ -314,6 +319,7 @@ impl Component for QueueComponent {
             let regions = render_queue_status(
                 frame,
                 footer_row,
+                self.status_owner.clone(),
                 self.status_playlist.clone(),
                 self.status_autosave.clone(),
                 self.status_dirty.clone(),

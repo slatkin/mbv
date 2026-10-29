@@ -10,7 +10,7 @@
 //! projected one-way by `Model::sync_status_bar_panel`; the component owns
 //! the overflow drop-order, pill geometry and event resolution.
 //!
-//! The Local/Remote queue-scope pills are queue concern and live in the
+//! The Local/Peer queue-link pills are queue concern and live in the
 //! `QueueColumn` footer (`QueueComponent`), never here.
 
 use ratatui::Frame;
@@ -81,8 +81,8 @@ impl StatusBarPanel {
                 Some(Msg::Playback(PlaybackRequest::ToggleMute))
             }
             // The visual-mode indicator clears the multi-selection; the
-            // Local/Remote queue-scope pills live in the QueueColumn footer
-            // (`QueueComponent`), so the status row has no scope dispatch.
+            // Local/Peer queue-link pills live in the QueueColumn footer
+            // (`QueueComponent`), so the status row has no link dispatch.
             MouseEventKind::Down(MouseButton::Left)
                 if self.regions.visual_clear.is_some_and(|r| r.contains(at)) =>
             {

@@ -207,6 +207,7 @@ impl App {
         // The owner connection is gone; its playback output is no longer the
         // active one (cast-owner-output design D13 reset rule).
         self.playback_output = None;
+        self.drop_staged_queue_transfer_on_teardown();
         if from_home_link || self.is_local_daemon() {
             self.suspended_local = None;
             self.pending_exit_message =
@@ -261,6 +262,7 @@ impl App {
     /// paths): modal-or-reattach-or-fallback, always ending the tick.
     fn handle_stopped_remote_disconnected(&mut self) -> bool {
         self.next_up_item = None;
+        self.drop_staged_queue_transfer_on_teardown();
         // An announced shutdown never reaches here: the reader
         // thread sends PlayerEvent::DaemonShutdownAnnounced
         // instead of a synthetic Stopped for that case (see the
@@ -329,7 +331,7 @@ impl App {
                 .map(|slot_id| mbv_ctrl::slot_id_to_u64(*slot_id))
                 .collect();
             self.queue_op(
-                self.playing_queue_scope(),
+                self.playing_queue_link(),
                 mbv_remote_player::QueueOp::RemoveSlots { slot_ids: raw },
             );
         } else if deleted_slot.is_some() {
@@ -337,7 +339,7 @@ impl App {
             // now asks the owner to remove the stable slot identity.
             if let Some(deleted_slot) = deleted_slot {
                 self.queue_op(
-                    self.playing_queue_scope(),
+                    self.playing_queue_link(),
                     mbv_remote_player::QueueOp::RemoveSlot {
                         slot_id: mbv_ctrl::slot_id_to_u64(deleted_slot),
                     },
@@ -488,13 +490,13 @@ impl App {
         // Adopt the owner snapshot as one value. Do not combine its
         // queue with a separately delivered PlayerStatus coordinate.
         self.player.set_status(unified.status.clone());
-        let scope = self.playing_queue_scope();
+        let link = self.playing_queue_link();
         let held = self.queue_cursor_held_by_user();
-        self.queue_for_scope_mut(scope).adopt(
+        self.queue_for_link_mut(link).adopt(
             unified,
             crate::app::state::queue_view::AdoptCause::Background { held },
         );
-        if scope == crate::app::QueueScope::Local {
+        if link == crate::app::QueueLink::Local {
             self.adopt_owner_source(unified);
         }
         false
@@ -541,6 +543,7 @@ impl App {
         // active one (cast-owner-output design D13 reset rule).
         self.playback_output = None;
         self.next_up_item = None;
+        self.drop_staged_queue_transfer_on_teardown();
         if self.is_local_daemon() {
             self.suspended_local = None;
             self.raise_daemon_lost_modal();

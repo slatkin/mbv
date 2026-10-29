@@ -116,6 +116,7 @@ fn replace_queue_succeeds_unconditionally() {
             }],
             start_idx: Some(0),
             source: QueueSource::Album,
+            start_position_secs: None,
             op: None,
         },
         CtrlContext {

@@ -19,7 +19,7 @@ use mbv_ui_model::feed::IdleFeed;
 use mbv_ui_model::feed::SavePlaylistDialog;
 use mbv_ui_model::feed_tab::FeedTabState;
 use mbv_ui_model::library_tab::LibraryTab;
-use mbv_ui_model::playback::QueueScope;
+use mbv_ui_model::playback::QueueLink;
 use mbv_ui_model::settings::{PanelFocus, PanelMode, SettingsDestination};
 use mbv_ui_model::tab_selection::TabSelection;
 use mbv_visualizer::{PipeWireWorker, StereoSampleWindow};
@@ -252,7 +252,19 @@ pub struct App {
     pub(in crate::app) queue_undo_stack: Vec<UndoEntry>,
     pub(in crate::app) remote_queue_undo_stack: Vec<UndoEntry>,
     /// One-shot cursor re-anchor for the next queue sync.
-    pub(in crate::app) pending_queue_cursor_reanchor: Option<QueueScope>,
+    pub(in crate::app) pending_queue_cursor_reanchor: Option<QueueLink>,
+    /// The at-most-one in-flight queue transfer (queue-handoff-and-take
+    /// design D2): armed after the replacement is sent to the target and
+    /// settled in the tick phase that adopts owner snapshots.
+    pub(in crate::app) pending_queue_transfer:
+        Option<crate::app::state::queue_transfer::PendingQueueTransfer>,
+    /// The queue transfer staged for its confirmation prompt
+    /// (queue-handoff-and-take design D1): the resolved target plus, when the
+    /// target link was not the current attachment, the link opened to read
+    /// the target's queue. Confirm attaches that link; cancel drops it.
+    /// `None` when nothing is staged.
+    pub(in crate::app) staged_queue_transfer:
+        Option<crate::app::state::queue_transfer::StagedQueueTransfer>,
     pub(in crate::app) next_up_item: Option<EmbyItem>,
     // Main UI scalars.
     // reuses shared self.libs.
@@ -505,7 +517,6 @@ pub struct App {
         std::collections::HashSet<(String, String)>,
     pub(in crate::app) images: mbv_images::cache::ImageCache,
     pub(in crate::app) library_position_state: mbv_queue::LibraryPositionState,
-    pub(in crate::app) queue_scope: QueueScope,
     pub(in crate::app) idle_feed: Option<IdleFeed>,
     pub(in crate::app) feed_tab: FeedTabState,
     /// Local, machine-scoped feed-entry playback state (resume position and

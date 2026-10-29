@@ -4,6 +4,19 @@ use mbv_ctrl::{CtrlCmd, OutputSelection};
 use mbv_remote_player::DaemonEndpoint;
 
 impl App {
+    /// Whether the local Owner currently plays (design D6's Hand off gate):
+    /// its status while the home link is suspended behind a peer
+    /// connection, else the current link's status — the same link when no
+    /// connection is attached. `active` alone only marks a loaded item; the
+    /// paused flag decides audible playback, as `now_playing_status` does.
+    pub(in crate::app) fn local_owner_plays(&self) -> bool {
+        let status = match &self.suspended_local {
+            Some(suspended) => suspended.player.status_snapshot(),
+            None => self.player.status_snapshot(),
+        };
+        status.active && !status.paused
+    }
+
     pub(in crate::app) fn is_local_daemon(&self) -> bool {
         matches!(self.player_endpoint, Some(DaemonEndpoint::Local))
     }
@@ -67,8 +80,19 @@ impl App {
         self.direct_remote_connected
     }
 
+    /// Whether the F3 transfer target's peer link is the current attachment
+    /// (queue-handoff-and-take design D1): the transfer then reads the peer
+    /// queue and capabilities from the current link instead of opening one.
+    pub(in crate::app) fn queue_transfer_peer_link_is_current(&self, sess_id: &str) -> bool {
+        self.direct_remote_connected && self.direct_remote_session_id.as_deref() == Some(sess_id)
+    }
+
     pub(in crate::app) fn disconnect_remote(&mut self) {
         if self.direct_remote_connected {
+            // A disconnect cancels the pending transfer without a report
+            // (queue-handoff-and-take design D2): both owners keep what they
+            // play, and the source keeps playing.
+            self.cancel_pending_queue_transfer();
             self.restore_local_mode("Disconnected from direct remote session");
         } else {
             self.flash("No session selected".to_string(), ToastSeverity::Neutral);

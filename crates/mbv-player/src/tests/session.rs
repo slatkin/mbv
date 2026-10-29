@@ -252,6 +252,7 @@ fn quit_after_a_failed_active_file_replacement_sends_no_second_stopped() {
         PlayerCommand::SubmitQueue {
             items: owner_paired(vec![abs_item(), abs_item()]),
             start_idx: 0,
+            start_position_secs: None,
         },
         &mpv,
         &mut progress,
@@ -283,6 +284,41 @@ fn quit_after_a_failed_active_file_replacement_sends_no_second_stopped() {
     assert_eq!(
         repeat, 0,
         "the quit must not report the ended run identity a second time"
+    );
+}
+
+/// Contract: a queue replacement that carries a start position seeds the run's
+/// status position from the carried seconds, not the item's stored ticks
+/// (queue-handoff-and-take review P2): a take at 3600s must not briefly
+/// report the stored 0 until the first playback observation.
+#[test]
+fn a_replace_with_a_start_position_seeds_the_status_position_from_the_carried_seconds() {
+    let (mut session, status, _events, http) = make_queue_session_for_pos_tests_with_mock(0);
+    // The outgoing item's stopped report is the one reporting call the
+    // replacement makes before the new queue's start.
+    http.respond(200, "");
+    let (ours, _peer) = std::os::unix::net::UnixStream::pair().expect("socket pair");
+    let mpv =
+        Mpv::for_test(crate::mpv_session::ipc::IpcSession::from_stream(ours).expect("session"));
+    let mut progress = noop_progress();
+
+    session.handle_command(
+        PlayerCommand::SubmitQueue {
+            items: owner_paired(vec![
+                QueueItem::Feed(make_feed_entry("feed-a", "Episode A")),
+                QueueItem::Feed(make_feed_entry("feed-b", "Episode B")),
+            ]),
+            start_idx: 1,
+            start_position_secs: Some(3600.0),
+        },
+        &mpv,
+        &mut progress,
+    );
+
+    assert_eq!(
+        status.lock().unwrap().position_ticks,
+        3600 * TICKS_PER_SECOND,
+        "the seeded status position is the carried position"
     );
 }
 
