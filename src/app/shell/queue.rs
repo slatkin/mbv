@@ -558,6 +558,50 @@ mod tests {
     }
 
     #[test]
+    fn deleting_before_playing_row_keeps_highlight_on_playing_slot() {
+        // Regression (2026-10-29 queue index errors): deleting a row before
+        // the playing one shifts ordinals while the status' `current_idx`
+        // still names the old row. The highlight must follow the active
+        // slot's identity, so the stale ordinal cannot paint a different
+        // item as playing.
+        let items = make_items(2);
+        let mut app = make_app_stub();
+        app.local_view =
+            crate::app::QueueView::from_snapshot(&crate::app::tests::emby_unified_state(&items, 1));
+        app.player.update_status(|status| {
+            status.active = true;
+            status.current_idx = 1;
+        });
+
+        // The owner applied the delete of the first row: the playing slot
+        // (101) is now first. The status has not refreshed yet —
+        // `current_idx` still names the stale ordinal 1.
+        let mut after_delete = crate::app::tests::emby_unified_state(&items[1..], 0);
+        after_delete.slots[0].slot_id = 101;
+        after_delete.active_slot = Some(101);
+        app.local_view.adopt(
+            &after_delete,
+            crate::app::state::queue_view::AdoptCause::OwnAnswer,
+        );
+
+        let displayed = app.displayed_queue_playback_state();
+        assert_eq!(displayed.active_idx, Some(0));
+        let rows = mbv_components::queue::queue_media_rows(
+            app.local_view.slots(),
+            displayed,
+            app.pending_playback_slot(),
+        );
+        assert!(matches!(
+            &rows[0],
+            mbv_render::components::media_list::MediaListRow::Item {
+                semantic_state:
+                    mbv_render::components::media_list::MediaSemanticState::NowPlaying { .. },
+                ..
+            }
+        ));
+    }
+
+    #[test]
     fn unchanged_queue_revision_skips_projection_rebuild() {
         let mut app = make_app_stub();
         app.local_view.adopt_items(make_items(2), 0);

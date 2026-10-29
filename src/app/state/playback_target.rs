@@ -18,7 +18,7 @@ impl App {
         let active_idx = if self.emby_session_now_playing().is_some() {
             None
         } else {
-            Some(s.current_idx)
+            Some(self.resolved_active_index(s.current_idx))
         };
         let (position_ticks, runtime_ticks) = (s.position_ticks, s.runtime_ticks);
         mbv_ui_model::playback::PlaybackState {
@@ -28,6 +28,21 @@ impl App {
             runtime_ticks,
             paused: s.paused,
         }
+    }
+
+    /// The playing row's ordinal, resolved by slot identity first: the
+    /// playing queue's own active slot (the owner's observed authority,
+    /// invariant 25) mapped to its current index. Queue edits shift ordinals
+    /// between status refreshes, so the status' raw `current_idx` can name a
+    /// different row after a remove or undo — the identity cannot. Falls back
+    /// to the status ordinal when the queue view names no active slot (no
+    /// snapshot has arrived yet).
+    fn resolved_active_index(&self, status_idx: usize) -> usize {
+        let queue = self.queue_for_link(self.playing_queue_link());
+        queue
+            .active_slot_id()
+            .and_then(|slot_id| queue.slot_index(slot_id))
+            .unwrap_or(status_idx)
     }
 
     /// Derives the now-playing header status from the effective playback
