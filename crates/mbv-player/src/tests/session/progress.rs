@@ -56,19 +56,23 @@ fn next_up_fired_preserves_position() {
 }
 
 #[test]
-fn natural_end_resets_position() {
+fn natural_end_carries_position() {
+    // A played Emby video's natural end carries the real position: the shared
+    // record rule mirrors the resume point the stop report leaves on the
+    // server, so the row shows in progress instead of a blank played bar.
     let pos = RUNTIME - TICKS_PER_SECOND; // 1 s before end
-    assert_eq!(queue_completed_pos(false, true, false, pos), 0);
+    assert_eq!(queue_completed_pos(false, true, false, pos), pos);
 }
 
 #[test]
-fn near_end_boundary_resets_position() {
-    // Exactly 95% (19/20) is near-end; 94% is not.
+fn near_end_boundary_carries_position() {
+    // Exactly 95% (19/20) is near-end; 94% is not. Near-end no longer zeroes:
+    // the record rule decides what a played finish keeps.
     let at_95 = RUNTIME * 19 / 20;
     let below = at_95 - 1;
     assert!(is_near_end(false, false, at_95, RUNTIME));
     assert!(!is_near_end(false, false, below, RUNTIME));
-    assert_eq!(queue_completed_pos(false, false, true, at_95), 0);
+    assert_eq!(queue_completed_pos(false, false, true, at_95), at_95);
     assert_eq!(queue_completed_pos(false, false, false, below), below);
 }
 

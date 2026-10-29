@@ -3,6 +3,15 @@ use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND};
 
 const MEANINGFUL_TRACK_COMPLETED_PROGRESS_TICKS: i64 = 30 * TICKS_PER_SECOND;
 
+/// Whether a played occurrence records its observed position instead of zero:
+/// only Emby video, whose server keeps the stop report's position as a resume
+/// point for a played item. Feed played-state is local curation and resumes
+/// from the locally recorded position, and audio never resumes from a
+/// recorded position, so both keep zero.
+fn played_emby_video(item: &QueueItem) -> bool {
+    !matches!(item, QueueItem::Feed(_)) && !item.is_audio()
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProgressObservation {
     Completed { position_ticks: i64, played: bool },
@@ -18,7 +27,11 @@ impl ProgressObservation {
                 played,
             } => {
                 if played {
-                    return 0;
+                    return if played_emby_video(item) {
+                        position_ticks
+                    } else {
+                        0
+                    };
                 }
                 if position_ticks >= MEANINGFUL_TRACK_COMPLETED_PROGRESS_TICKS && !item.is_audio() {
                     return position_ticks;
@@ -31,7 +44,11 @@ impl ProgressObservation {
             } => (position_ticks, played),
         };
         if played {
-            0
+            if played_emby_video(item) && position_ticks > 0 {
+                position_ticks
+            } else {
+                0
+            }
         } else if position_ticks > 0 && !item.is_audio() {
             position_ticks
         } else {

@@ -249,21 +249,19 @@ pub(crate) fn is_near_end(
     !natural && !is_audio && runtime_ticks > 0 && last_valid_pos * 20 / runtime_ticks >= 19
 }
 
-// Position to report to Emby when a playlist track ends.
-// Zero means "treat as fully played / reset resume point".
-// was_next_up alone does NOT zero the position — the user may have dismissed
-// or ignored the overlay, and we must preserve where they actually were.
+// Position the run outcome carries for a playlist track that ended. The
+// shared `ProgressObservation` record rule decides what the queue keeps; for
+// Emby video even a played finish carries the real position, mirroring the
+// resume point the stop report leaves on the server. was_next_up alone does
+// NOT zero the position — the user may have dismissed or ignored the overlay,
+// and we must preserve where they actually were.
 pub(crate) fn queue_completed_pos(
     is_audio: bool,
-    natural: bool,
-    near_end: bool,
+    _natural: bool,
+    _near_end: bool,
     last_valid_pos: i64,
 ) -> i64 {
-    if is_audio || natural || near_end {
-        0
-    } else {
-        last_valid_pos
-    }
+    if is_audio { 0 } else { last_valid_pos }
 }
 
 pub(super) fn quit_timeout_stop_flags(

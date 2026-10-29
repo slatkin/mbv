@@ -611,8 +611,10 @@ When the user explicitly picks content to replace the playback queue, the system
 
 Each Player owner and each client copy of the canonical queue SHALL decide the position to record for a finished occurrence using one rule per observation kind, and every copy SHALL reach the same result for the same observation:
 
-- A **completion** observation (the occurrence ended and playback moved on) SHALL record position zero when the occurrence counts as played. Otherwise it SHALL record the observed position only for non-audio media at or beyond 30 seconds, and SHALL keep the previously recorded position in every other case.
-- A **stop** observation (the user stopped playback) SHALL record position zero when the occurrence counts as played. Otherwise it SHALL record any positive observed position for non-audio media, and SHALL keep the previously recorded position for audio or a non-positive position.
+- A **completion** observation (the occurrence ended and playback moved on) SHALL record the observed position when the occurrence counts as played and is an Emby video, because Emby keeps the stop report's position as a resume point for a played item and the queue mirrors it. It SHALL record position zero for a played occurrence of any other kind. Otherwise it SHALL record the observed position only for non-audio media at or beyond 30 seconds, and SHALL keep the previously recorded position in every other case.
+- A **stop** observation (the user stopped playback) SHALL record the observed position when it is positive and the occurrence counts as played and is an Emby video, and position zero otherwise, for the same mirror reason. It SHALL record position zero for a played occurrence of any other kind. Otherwise it SHALL record any positive observed position for non-audio media, and SHALL keep the previously recorded position for audio or a non-positive position.
+
+A played occurrence that keeps its position SHALL present as in progress, not as played: the row's resume bar follows the recorded position whatever the played state. Resume behavior is unchanged and stays governed by the `playback-resume` rules.
 
 #### Scenario: Video completes under 30 seconds
 
@@ -631,7 +633,13 @@ Each Player owner and each client copy of the canonical queue SHALL decide the p
 
 #### Scenario: Played occurrence
 
-- **WHEN** an occurrence counts as played when its completion or stop is observed
+- **WHEN** an Emby video occurrence counts as played when its completion or stop is observed
+- **THEN** every copy of the queue SHALL record the observed position for it
+- **AND** the row SHALL present as in progress with that position, not as played
+
+#### Scenario: Played occurrence with no observed position
+
+- **WHEN** an occurrence of any kind counts as played and the observation carries no positive position, or the occurrence is a feed entry or audio
 - **THEN** every copy of the queue SHALL record position zero for it
 
 ### Requirement: A slot resumes the same however it is reached

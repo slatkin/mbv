@@ -101,3 +101,4 @@ Before any TUI change, read `docs/architecture/tui-frontend.md`. It covers the t
 * Prefer synchronous code first. `tokio` is edge-only (`crates/mbv-desktop`, `zbus`). Do not spread it.
 * For sharing, prefer owned data and `Msg` identities over new `Arc` or `Rc`.
 * For docs and concept discovery (ADRs, openspec, CONTEXT.md), run `qmd query "..."` (collection `mbv`). Use `rg` only for exact strings.
+* Do not write openspec changes without being prompted. Treat bug reports as issues to be fixed immediately.

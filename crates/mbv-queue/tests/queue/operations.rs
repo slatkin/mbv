@@ -118,11 +118,13 @@ fn is_music_excludes_feeds_and_audiobookshelf_however_audio_they_are() {
 #[case::completed_below_floor(ProgressObservation::Completed { position_ticks: 29 * TICKS_PER_SECOND, played: false }, "Video", 7 * TICKS_PER_SECOND, 7 * TICKS_PER_SECOND, false)]
 #[case::completed_at_floor(ProgressObservation::Completed { position_ticks: 30 * TICKS_PER_SECOND, played: false }, "Video", 7 * TICKS_PER_SECOND, 30 * TICKS_PER_SECOND, false)]
 #[case::completed_audio(ProgressObservation::Completed { position_ticks: 40 * TICKS_PER_SECOND, played: false }, "Audio", 7 * TICKS_PER_SECOND, 7 * TICKS_PER_SECOND, false)]
-#[case::completed_played(ProgressObservation::Completed { position_ticks: 40 * TICKS_PER_SECOND, played: true }, "Video", 7 * TICKS_PER_SECOND, 0, true)]
+#[case::completed_played(ProgressObservation::Completed { position_ticks: 40 * TICKS_PER_SECOND, played: true }, "Video", 7 * TICKS_PER_SECOND, 40 * TICKS_PER_SECOND, true)]
 #[case::stopped_positive(ProgressObservation::Stopped { position_ticks: 12 * TICKS_PER_SECOND, played: false }, "Video", 7 * TICKS_PER_SECOND, 12 * TICKS_PER_SECOND, false)]
 #[case::stopped_zero(ProgressObservation::Stopped { position_ticks: 0, played: false }, "Video", 7 * TICKS_PER_SECOND, 7 * TICKS_PER_SECOND, false)]
 #[case::stopped_audio(ProgressObservation::Stopped { position_ticks: 12 * TICKS_PER_SECOND, played: false }, "Audio", 7 * TICKS_PER_SECOND, 7 * TICKS_PER_SECOND, false)]
-#[case::stopped_played(ProgressObservation::Stopped { position_ticks: 12 * TICKS_PER_SECOND, played: true }, "Video", 7 * TICKS_PER_SECOND, 0, true)]
+#[case::stopped_played(ProgressObservation::Stopped { position_ticks: 12 * TICKS_PER_SECOND, played: true }, "Video", 7 * TICKS_PER_SECOND, 12 * TICKS_PER_SECOND, true)]
+#[case::completed_played_audio(ProgressObservation::Completed { position_ticks: 40 * TICKS_PER_SECOND, played: true }, "Audio", 7 * TICKS_PER_SECOND, 0, true)]
+#[case::stopped_played_audio(ProgressObservation::Stopped { position_ticks: 12 * TICKS_PER_SECOND, played: true }, "Audio", 7 * TICKS_PER_SECOND, 0, true)]
 fn progress_observation_records_expected_position(
     #[case] observation: ProgressObservation,
     #[case] media_type: &str,
@@ -139,4 +141,23 @@ fn progress_observation_records_expected_position(
         expected_position
     );
     assert_eq!(observation.played(), expected_played);
+}
+
+// A played feed entry always records zero: its resume source is the locally
+// recorded position, so a kept position would turn a rewatch into a resume
+// from the end. The `#[case]` table above is Emby-shaped; this pins the feed
+// arm of the same rule for both observation kinds.
+#[test]
+fn played_feed_occurrences_record_zero_position() {
+    let entry = QueueItem::Feed(feed("f1"));
+    let completed = ProgressObservation::Completed {
+        position_ticks: 40 * TICKS_PER_SECOND,
+        played: true,
+    };
+    let stopped = ProgressObservation::Stopped {
+        position_ticks: 40 * TICKS_PER_SECOND,
+        played: true,
+    };
+    assert_eq!(completed.position_to_record(&entry), 0);
+    assert_eq!(stopped.position_to_record(&entry), 0);
 }
