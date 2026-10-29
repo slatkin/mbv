@@ -52,7 +52,7 @@ behavior.
 
 ### Requirement: Each medium has one source of resume progress
 
-The position mbv resumes from SHALL come from one source per medium. For an Emby video item it SHALL be the position Emby reports for that item when the start position is decided. For an Audiobookshelf item it SHALL be the position returned by the Audiobookshelf playback session opened to play it. For a feed entry it SHALL be the locally recorded position. No locally stored or remembered position SHALL be used as the resume position for Emby or Audiobookshelf media. The one-percent eligibility rule SHALL apply to the position from that source.
+The position mbv resumes from SHALL come from one source per medium. For an Emby video item it SHALL be the position Emby reports for that item when the start position is decided. For an Audiobookshelf item it SHALL be the position returned by the Audiobookshelf playback session opened to play it. For a feed entry it SHALL be the locally recorded position. No locally stored or remembered position SHALL be used as the resume position for Emby or Audiobookshelf media. The one-percent eligibility rule SHALL apply to the position from that source. One exception applies: the start slot of a queue replacement that carries a start position (Hand off or Take) SHALL start at that carried position for every medium, without the one-percent rule; every later start in that queue SHALL use the per-medium source.
 
 #### Scenario: Restored queue resumes the server position
 
@@ -81,6 +81,16 @@ The position mbv resumes from SHALL come from one source per medium. For an Emby
 
 - **WHEN** a feed entry with a locally recorded position is played
 - **THEN** playback SHALL start from that local position under the one-percent rule
+
+#### Scenario: Hand off continues a song mid-way
+
+- **WHEN** an Emby audio track plays at 1:30 and the user hands it off to a peer
+- **THEN** the peer SHALL start that track at 1:30, not from the beginning
+
+#### Scenario: Later slots after a Hand off use their own source
+
+- **WHEN** the handed-off start slot ends and the peer advances to the next feed entry
+- **THEN** that entry SHALL start from the peer's locally recorded position under the one-percent rule
 
 ### Requirement: A failed Emby position fetch retries, then starts from the beginning
 

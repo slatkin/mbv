@@ -12,11 +12,12 @@ disconnected remote.
 
 When a client that is attached to a local daemon (`home_is_local_daemon`) disconnects from a
 remote mbvd — by user action, by unannounced connection loss, or by an announced daemon
-shutdown — it SHALL return to the plain local-daemon presentation: a single unified queue owned
-by the daemon, no separate remote queue tab, no remote queue control, and no queue-scope pill.
-Disconnecting SHALL NOT empty the queue — the daemon's current queue SHALL remain displayed.
-The return-to-local behavior SHALL be driven by the disconnect itself, not only by the user's
-disconnect key: a reader- or writer-detected connection loss SHALL trigger the same
+shutdown — it SHALL return to the plain local-daemon presentation: the queue panel SHALL show
+the local Owner queue, SHALL name the local Owner as its Player owner, and SHALL offer no
+control of the remote queue. Disconnecting SHALL NOT empty the queue — the daemon's current
+queue SHALL remain displayed. A user disconnect SHALL NOT stop or change the remote playback or
+queue. The return-to-local behavior SHALL be driven by the disconnect itself, not only by the
+user's disconnect key: a reader- or writer-detected connection loss SHALL trigger the same
 presentation restore, and the client SHALL NOT remain presenting (or accepting commands for)
 the stale adopted remote queue snapshot.
 
@@ -24,24 +25,25 @@ the stale adopted remote queue snapshot.
 
 - **WHEN** a stay-alive client attached to a local daemon is connected to a remote mbvd and the
   user disconnects (`d`)
-- **THEN** the client SHALL present the local daemon's unified queue
-- **THEN** the client SHALL NOT present a remote queue tab or remote queue control
-- **THEN** the queue-scope pill SHALL NOT be shown
+- **THEN** the client SHALL present the local daemon's queue
+- **THEN** the client SHALL NOT present remote queue control
+- **THEN** the queue panel SHALL name the local Owner
 - **THEN** the daemon's current queue items SHALL remain visible
+- **THEN** the remote mbvd SHALL continue its playback
 
 #### Scenario: Remote device disconnects on its own
 
 - **WHEN** a stay-alive client attached to a local daemon is connected to a remote mbvd and the
   remote device disconnects without a user action
-- **THEN** the client SHALL present the local daemon's unified queue
-- **THEN** the queue-scope pill SHALL NOT be shown
+- **THEN** the client SHALL present the local daemon's queue
+- **THEN** the queue panel SHALL name the local Owner
 
 #### Scenario: Daemon loss and announced shutdown
 
 - **WHEN** a stay-alive client attached to a local daemon loses its remote mbvd connection through
   unannounced daemon loss or an announced daemon shutdown
-- **THEN** the client SHALL present the local daemon's unified queue
-- **THEN** the queue-scope pill SHALL NOT be shown
+- **THEN** the client SHALL present the local daemon's queue
+- **THEN** the queue panel SHALL name the local Owner
 
 #### Scenario: Write-side loss with no reader event
 
@@ -55,20 +57,20 @@ the stale adopted remote queue snapshot.
 ### Requirement: Reconnect does not create a remote queue for the local daemon
 
 When a stay-alive client reconnects to its local daemon after a remote disconnect, the daemon's
-reconnected queue SHALL be adopted into the client's single unified queue. The reconnect SHALL NOT
-create a remote queue tab, SHALL NOT set queue scope to `Remote`, and SHALL be equivalent to the
+reconnected queue SHALL be adopted as the local Owner queue that the queue panel shows. The
+reconnect SHALL NOT present the queue of any remote Player owner and SHALL be equivalent to the
 presentation the client established at startup for the same local-daemon baseline.
 
 #### Scenario: Local daemon holds items at reconnect
 
 - **WHEN** a stay-alive client disconnects from a remote mbvd and reconnects to its local daemon
   while that daemon holds a non-empty queue
-- **THEN** the client SHALL show those items in its unified queue
-- **THEN** the queue scope SHALL be `Local`
+- **THEN** the client SHALL show those items in the queue panel
+- **THEN** the queue panel SHALL name the local Owner
 
 #### Scenario: Local daemon holds no items at reconnect
 
 - **WHEN** a stay-alive client disconnects from a remote mbvd and reconnects to its local daemon
   while that daemon holds an empty queue
-- **THEN** the client SHALL show its unified queue
-- **THEN** the queue scope SHALL be `Local`
+- **THEN** the client SHALL show the empty local Owner queue
+- **THEN** the queue panel SHALL name the local Owner

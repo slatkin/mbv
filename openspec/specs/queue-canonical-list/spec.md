@@ -18,9 +18,9 @@ The Queue Interactive Component SHALL embed `WideMediaList<QueueSlotId>` directl
 
 #### Scenario: Queue state remains parent-owned where required
 
-- **WHEN** the user changes Queue scope, reorders, activates, removes, or plays a slot
+- **WHEN** the user reorders, activates, removes, or plays a slot
 - **THEN** the Queue parent emits the corresponding typed request
-- **AND** the shell retains Local/Remote scope, Player/queue authority, persistence, title, and playback effects
+- **AND** the shell retains the choice of shown Player owner, Player/queue authority, persistence, title, and playback effects
 - **AND** the child does not receive a Service client, Player, persistence handle, credentials, or callbacks
 
 ### Requirement: Queue projection is bounded presentation data
@@ -29,13 +29,13 @@ Queue SHALL project selectable rows with stable opaque `QueueSlotId` targets and
 
 The now-playing row SHALL show its total duration like every other row. It SHALL project the `NowPlaying` semantic state with live progress following the playback position; the live percentage renders inline as trailing metadata, exactly as resume progress does. When runtime is unknown the row SHALL project no `progress_percent` and show no duration. A non-active row SHALL project its stored resume position as inline trailing progress metadata, whatever the item's provider kind — feed, Audiobookshelf, or Emby — with the duration slot unchanged. The playing row's live ticks SHALL win over that stored position.
 
-The projection's semantic active state — which queue scope is playing, which slot within it, and whether that slot is observed by the Player owner or is the owner's pending transition awaiting observation — SHALL be one owned value derived from the adopted owner snapshot outside the render path. The Client SHALL NOT originate a prediction of its own: a pending slot SHALL come only from the transition the owner published.
+The projection's semantic active state — whether the shown Player owner is playing, which slot in its queue, and whether that slot is observed by the Player owner or is the owner's pending transition awaiting observation — SHALL be one owned value derived from the adopted owner snapshot outside the render path. The Client SHALL NOT originate a prediction of its own: a pending slot SHALL come only from the transition the owner published.
 
 While the owner's pending transition names a different slot from the observed one, the projection SHALL report the pending slot as now-playing with no `progress_percent` until the owner observes it. Whenever the active slot is observed, `progress_percent` SHALL follow the live playback position.
 
-`QueueRevision` SHALL be authoritative for every mutation that changes a projected row (slot add/remove/move/replace, item replacement, progress application, refresh merge); queue replacement SHALL invalidate previously issued revisions. Queue rows SHALL rebuild only when the `(viewed_scope, revision, playback.active, projected active target, progress-percentage bucket)` fingerprint changes. The no-change tick path SHALL perform no slot clone, no row projection, and no row push. A change to the progress bucket alone SHALL patch the now-playing row in place rather than rebuild every row. Cursor pushes and scope/chrome/title delivery SHALL NOT be gated by the fingerprint: they are delivered on every tick regardless of whether rows changed.
+`QueueRevision` SHALL be authoritative for every mutation that changes a projected row (slot add/remove/move/replace, item replacement, progress application, refresh merge); queue replacement SHALL invalidate previously issued revisions. Queue rows SHALL rebuild only when the `(shown Player owner, revision, playback.active, projected active target, progress-percentage bucket)` fingerprint changes. The no-change tick path SHALL perform no slot clone, no row projection, and no row push. A change to the progress bucket alone SHALL patch the now-playing row in place rather than rebuild every row. Cursor pushes and owner/chrome/title delivery SHALL NOT be gated by the fingerprint: they are delivered on every tick regardless of whether rows changed.
 
-A push that forces the child to adopt a specific active index SHALL be scoped to one queue scope and SHALL be consumed only while that scope is the one on screen; a push armed for a scope the user is not viewing SHALL be dropped rather than move the viewed scope's independent selection.
+A push that forces the child to adopt a specific active index SHALL be scoped to the queue of one Player owner and SHALL be consumed only while that queue is the one on screen; a push armed for a queue that is not shown SHALL be dropped rather than move the shown queue's independent selection.
 
 #### Scenario: Active progress is safe to paint
 
@@ -65,10 +65,10 @@ A push that forces the child to adopt a specific active index SHALL be scoped to
 
 #### Scenario: Unchanged queue skips projection
 
-- **WHEN** a shell tick finds the viewed scope, queue revision, playback-active flag, projected active target, and progress bucket all unchanged
+- **WHEN** a shell tick finds the shown Player owner, queue revision, playback-active flag, projected active target, and progress bucket all unchanged
 - **THEN** no slot list is cloned, no rows are projected, and no rows are pushed to the child
 - **AND** projected row data is unchanged (the painted frame may still differ via title marquee or other non-row state)
-- **AND** any pending cursor push and the current scope/chrome/title are still delivered
+- **AND** any pending cursor push and the current owner/chrome/title are still delivered
 
 #### Scenario: Progress-bucket change patches one row
 
@@ -97,7 +97,7 @@ A push that forces the child to adopt a specific active index SHALL be scoped to
 
 #### Scenario: Playback stopping clears now-playing
 
-- **WHEN** playback becomes inactive (stop, queue exhausted, or scope switch away from the playing scope)
+- **WHEN** playback becomes inactive (stop, queue exhausted, or a connect or disconnect that shows the queue of a Player owner that does not play)
 - **THEN** no row carries the `NowPlaying` state
 - **AND** the former row loses all now-playing decoration
 
@@ -122,9 +122,9 @@ A push that forces the child to adopt a specific active index SHALL be scoped to
 
 #### Scenario: A push targets a scope the user is not viewing
 
-- **WHEN** an authoritative active-index push is armed for one queue scope while the user is viewing a different scope
-- **THEN** the viewed scope's selection is unchanged
-- **AND** the push does not take effect when the user later switches to its scope unless it is re-armed
+- **WHEN** an authoritative active-index push is armed for one Player owner's queue while the queue of a different Player owner is shown
+- **THEN** the shown queue's selection is unchanged
+- **AND** the push does not take effect when that queue is shown later unless it is re-armed
 
 #### Scenario: Reconciliation does not run during paint
 
