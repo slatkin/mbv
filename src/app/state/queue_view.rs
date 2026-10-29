@@ -80,6 +80,18 @@ impl QueueView {
         self.queue.slots()
     }
 
+    /// The slots in ctrl wire form, for a queue copy sent to another Owner.
+    #[must_use]
+    pub fn to_unified_slots(&self) -> Vec<mbv_ctrl::UnifiedQueueSlot> {
+        self.slots()
+            .iter()
+            .map(|slot| mbv_ctrl::UnifiedQueueSlot {
+                slot_id: mbv_ctrl::slot_id_to_u64(slot.slot_id),
+                item: slot.item.clone(),
+            })
+            .collect()
+    }
+
     #[must_use]
     pub fn slot(&self, id: QueueSlotId) -> Option<&QueueSlot> {
         self.queue.slot(id)

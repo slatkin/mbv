@@ -8,8 +8,7 @@
 use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::dispatch::queue::QueueOpEdit;
 use crate::app::state::queue_transfer::{
-    PendingQueueTransfer, QueueTransferDirection, QueueTransferFollowUp, StagedQueueTransfer,
-    StagedQueueTransferLink,
+    PendingQueueTransfer, QueueTransferDirection, StagedQueueTransfer, StagedQueueTransferLink,
 };
 use crate::app::{App, QueueLink};
 use mbv_queue::QueueSlotId;
@@ -239,7 +238,6 @@ impl App {
             direction: QueueTransferDirection::Take,
             target: target.clone(),
             start_slot,
-            op: QueueTransferFollowUp::for_direction(QueueTransferDirection::Take),
             source_link,
         });
     }
@@ -266,14 +264,7 @@ impl App {
             }
             let view = self.queue_for_link(QueueLink::Peer);
             Some(QueueTakeSource {
-                slots: view
-                    .slots()
-                    .iter()
-                    .map(|slot| mbv_ctrl::UnifiedQueueSlot {
-                        slot_id: mbv_ctrl::slot_id_to_u64(slot.slot_id),
-                        item: slot.item.clone(),
-                    })
-                    .collect(),
+                slots: view.to_unified_slots(),
                 source: view.source().clone(),
                 active_slot: view.active_slot_id(),
                 status: self.player.status_snapshot(),

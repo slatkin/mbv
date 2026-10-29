@@ -1,7 +1,5 @@
 use crate::app::dispatch::notify::ToastSeverity;
-use crate::app::state::queue_transfer::{
-    PendingQueueTransfer, QueueTransferDirection, QueueTransferFollowUp,
-};
+use crate::app::state::queue_transfer::{PendingQueueTransfer, QueueTransferDirection};
 use crate::app::tests::tick_integration::harness::TickHarness;
 use crate::app::tests::{make_audio_items, make_local_daemon_app_stub_with_cmd_rx};
 use mbv_ctrl::player::PlayerStatus;
@@ -58,7 +56,6 @@ fn a_target_snapshot_without_the_start_slot_stops_the_target_and_never_the_sourc
         direction: QueueTransferDirection::HandOff,
         target: mbv_ui_model::panel_targets::SessionTargetKey::Emby("peer-owner".to_string()),
         start_slot: QueueSlotId::from_raw(1),
-        op: QueueTransferFollowUp::StayConnected,
         source_link: None,
     });
 

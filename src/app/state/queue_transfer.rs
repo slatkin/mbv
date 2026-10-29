@@ -44,29 +44,6 @@ impl QueueTransferDirection {
     }
 }
 
-/// The step-7 follow-up a settled transfer runs after it stops the source
-/// (design D1/D2). The settlement stays direction-agnostic by dispatching on
-/// this value; rows 7.2 (Hand off) and 8.1 (Take) fill their own tail.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(in crate::app) enum QueueTransferFollowUp {
-    /// Hand off step 7: the Client stays connected to the peer.
-    StayConnected,
-    /// Take step 7: the Client closes the peer link; the queue panel shows
-    /// the local Owner queue.
-    ClosePeerLink,
-}
-
-impl QueueTransferFollowUp {
-    /// The tail each direction's flow arms (design D1 step 7): a Hand off
-    /// stays connected to the peer, a Take closes the peer link.
-    pub(in crate::app) fn for_direction(direction: QueueTransferDirection) -> Self {
-        match direction {
-            QueueTransferDirection::HandOff => Self::StayConnected,
-            QueueTransferDirection::Take => Self::ClosePeerLink,
-        }
-    }
-}
-
 /// The at-most-one in-flight queue transfer (design D2). Armed after the
 /// replacement is sent to the target; settled in the tick phase that adopts
 /// owner snapshots. `start_slot` is the submitted slot id the target must
@@ -77,7 +54,6 @@ pub(in crate::app) struct PendingQueueTransfer {
     /// The F3 target the transfer was started for (stable identity, D6).
     pub target: SessionTargetKey,
     pub start_slot: QueueSlotId,
-    pub op: QueueTransferFollowUp,
     /// The peer link opened to read an unconnected Take's source queue
     /// (design D1 unconnected Take). It never became `self.player`, so the
     /// settlement's source stop and its close go through it. `None` when the
@@ -154,8 +130,7 @@ impl App {
             target: "queue_transfer",
             {
                 direction = ?direction,
-                session = ?target,
-                follow_up = ?QueueTransferFollowUp::for_direction(direction)
+                session = ?target
             },
             "F3 transfer action replaces any pending transfer"
         );
@@ -281,8 +256,11 @@ impl App {
         }
     }
 
-    /// Drop a probe link the pre-checks refused, before any staging happened.
-    /// Free of `self` on purpose: the link is dropped where it was refused.
+    /// Close a transfer link: one the pre-checks refused before staging, or
+    /// the source link an unconnected Take carried (design D1 step 7). An
+    /// explicit disconnect lets the connection's reader thread exit instead
+    /// of leaking (#233). Free of `self` on purpose: the link is closed where
+    /// its owner settles it.
     fn drop_staged_probe_link(link: Option<StagedQueueTransferLink>) {
         if let Some(link) = link {
             link.remote.disconnect();
@@ -295,7 +273,7 @@ impl App {
     /// transfer prompt, dropping any link opened for it.
     pub(in crate::app) fn cancel_pending_queue_transfer(&mut self) {
         if let Some(transfer) = self.pending_queue_transfer.take() {
-            Self::close_transfer_source_link(transfer.source_link);
+            Self::drop_staged_probe_link(transfer.source_link);
         }
         self.drop_staged_queue_transfer();
     }
@@ -305,19 +283,9 @@ impl App {
     /// replacement's rejection travels through this same report path.
     pub(in crate::app) fn fail_pending_queue_transfer(&mut self, message: String) {
         if let Some(transfer) = self.pending_queue_transfer.take() {
-            Self::close_transfer_source_link(transfer.source_link);
+            Self::drop_staged_probe_link(transfer.source_link);
         }
         self.flash(message, ToastSeverity::Error);
-    }
-
-    /// Close the source link an unconnected Take carried (design D1 step 7):
-    /// an explicit disconnect lets the connection's reader thread exit
-    /// instead of leaking (#233). Free of `self`: the link is closed where
-    /// its owner settles it.
-    fn close_transfer_source_link(link: Option<StagedQueueTransferLink>) {
-        if let Some(link) = link {
-            link.remote.disconnect();
-        }
     }
 
     /// Tick-phase settlement (design D2): the run loop calls this right after
@@ -335,16 +303,15 @@ impl App {
             direction,
             target,
             start_slot,
-            op,
             source_link,
         } = transfer;
         if self.transfer_target_link_lost(direction) {
-            Self::close_transfer_source_link(source_link);
+            Self::drop_staged_probe_link(source_link);
             let message = transfer_failure_message(direction, TransferFailure::LinkLost);
             self.fail_pending_queue_transfer(message);
             return true;
         }
-        self.settle_target_observation(direction, target, start_slot, op, source_link)
+        self.settle_target_observation(direction, target, start_slot, source_link)
     }
 
     /// Whether the current peer attachment still holds the transfer's own
@@ -403,7 +370,6 @@ impl App {
         direction: QueueTransferDirection,
         target: SessionTargetKey,
         start_slot: QueueSlotId,
-        op: QueueTransferFollowUp,
         source_link: Option<StagedQueueTransferLink>,
     ) -> bool {
         let target_playing = self.transfer_target_playing(direction);
@@ -422,14 +388,13 @@ impl App {
                 {
                     direction = ?direction,
                     session = ?target,
-                    start_slot = ?start_slot,
-                    follow_up = ?op
+                    start_slot = ?start_slot
                 },
                 "target reports the start slot playing"
             );
             self.stop_transfer_source(direction, &target, source_link.as_ref());
-            self.run_queue_transfer_follow_up(op, &target);
-            Self::close_transfer_source_link(source_link);
+            self.run_queue_transfer_follow_up(direction, &target);
+            Self::drop_staged_probe_link(source_link);
             self.pending_queue_transfer = None;
             return true;
         }
@@ -440,7 +405,6 @@ impl App {
                 direction,
                 target,
                 start_slot,
-                op,
                 source_link,
             });
             return false;
@@ -452,7 +416,7 @@ impl App {
             "target no longer holds the start slot"
         );
         self.stop_transfer_target(direction);
-        Self::close_transfer_source_link(source_link);
+        Self::drop_staged_probe_link(source_link);
         let message = transfer_failure_message(direction, TransferFailure::StartSlotDropped);
         self.fail_pending_queue_transfer(message);
         true
@@ -553,17 +517,17 @@ impl App {
     /// link is closed by the settlement itself.
     fn run_queue_transfer_follow_up(
         &mut self,
-        op: QueueTransferFollowUp,
+        direction: QueueTransferDirection,
         target: &SessionTargetKey,
     ) {
-        match op {
-            QueueTransferFollowUp::StayConnected => tracing::debug!(
+        match direction {
+            QueueTransferDirection::HandOff => tracing::debug!(
                 name: "queue_transfer.hand_off.stayed_connected",
                 target: "queue_transfer",
                 session = ?target,
                 "Hand off settled: the Client stays attached to the peer"
             ),
-            QueueTransferFollowUp::ClosePeerLink => {
+            QueueTransferDirection::Take => {
                 // The connection the Take ran over — close only while the
                 // current attachment still owns it: a dropped peer's
                 // teardown already restored local, and a different peer

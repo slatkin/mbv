@@ -6,8 +6,7 @@
 use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::dispatch::queue::QueueOpEdit;
 use crate::app::state::queue_transfer::{
-    QueueTransferDirection, QueueTransferFollowUp, StagedQueueTransfer, TransferFailure,
-    transfer_failure_message,
+    QueueTransferDirection, StagedQueueTransfer, TransferFailure, transfer_failure_message,
 };
 use crate::app::{App, QueueLink};
 use mbv_queue::QueueSlotId;
@@ -179,15 +178,7 @@ impl App {
             );
             return;
         };
-        let slots: Vec<mbv_ctrl::UnifiedQueueSlot> = self
-            .local_view
-            .slots()
-            .iter()
-            .map(|slot| mbv_ctrl::UnifiedQueueSlot {
-                slot_id: mbv_ctrl::slot_id_to_u64(slot.slot_id),
-                item: slot.item.clone(),
-            })
-            .collect();
+        let slots = self.local_view.to_unified_slots();
         let source = self.local_view.source().clone();
         tracing::info!(
             name: "queue_transfer.hand_off.sending",
@@ -225,7 +216,6 @@ impl App {
                 direction: QueueTransferDirection::HandOff,
                 target: target.clone(),
                 start_slot,
-                op: QueueTransferFollowUp::for_direction(QueueTransferDirection::HandOff),
                 source_link: None,
             });
     }
