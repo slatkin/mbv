@@ -422,12 +422,15 @@ impl TvContent {
         let target = self.browser.resolve_current_point(at)?.clone();
         self.browser.apply(TreeOperation::Select(target.clone()));
         match target {
-            TvTreeTarget::Show(_) => self.show_item_for_tree_target(&target).map(|item| {
-                Msg::Shell(Box::new(ShellRequest::TvHitDoubleClick {
-                    hit: TvHit::SeriesRow(item.id),
-                }))
-            }),
-            TvTreeTarget::Season { .. } => self.toggle_tree_expansion(target),
+            // A parent row's double click toggles its branch, matching the
+            // shared tree double-click rule
+            // (`grouped-music-tree-browser`'s "Tree double-click expands an
+            // expandable node and plays a track"). Expanding emits
+            // `TvTreeExpand`, whose shell fetch loads the children; a collapse
+            // needs no shell effect.
+            TvTreeTarget::Show(_) | TvTreeTarget::Season { .. } => {
+                self.toggle_tree_expansion(target)
+            }
             TvTreeTarget::Episode { .. } => self
                 .show_item_for_tree_target(&target)
                 .map(|episode| Msg::Shell(Box::new(ShellRequest::TvEpisodeActivate { episode }))),

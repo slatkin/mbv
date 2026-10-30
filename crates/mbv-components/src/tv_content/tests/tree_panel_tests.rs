@@ -215,3 +215,83 @@ fn tree_episode_double_click_uses_its_show_target_when_selection_is_stale() {
         Some(Msg::Shell(ref shell_boxed))
              if matches!(shell_boxed.as_ref(), ShellRequest::TvEpisodeActivate { episode: selected } if selected.id == episode.id && selected.series_id == show.id)));
 }
+
+#[test]
+fn show_tree_double_click_toggles_the_branch() {
+    use crate::library_panel::LibraryPanel;
+    use crate::media_list::MediaListSurfaceInput;
+    use mbv_ui_model::library::LibraryKey;
+    use mbv_ui_msg::TvTreeTarget;
+    use ratatui::layout::Rect;
+    use tuirealm::component::Component;
+
+    // Guards the show-row arm of `show_tree_list_double_click`: a parent
+    // row's double click toggles its branch (the shared tree double-click
+    // rule) instead of re-sending an activate the shell resolves against a
+    // cached series detail, which was a visible no-op.
+    let show = tv_show("Alpha", "show-a");
+    let mut season = make_item("Season 1", "Season");
+    season.id = "season-1".into();
+    let detail = mbv_ui_model::browse::SeriesDetail {
+        seasons: vec![season],
+        episodes: std::collections::HashMap::new(),
+    };
+    let mut owner = TvContent::new();
+    owner.set_is_wide(false);
+    owner.set_content(tv_tree_context(
+        vec![show],
+        Some("show-a"),
+        Some(detail),
+        false,
+    ));
+    let show_target = TvTreeTarget::Show("tv-id:6:show-a".into());
+    let key = LibraryKey::Service {
+        service: mbv_queue::ServiceKind::Emby,
+        library_id: "lib-tv".into(),
+        kind: mbv_ui_model::library::LibraryKind::TvShows,
+    };
+    let mut panel = LibraryPanel::new();
+    panel.insert_owner(key.clone(), Box::new(owner));
+    panel.set_active(Some(key.clone()));
+    let mut terminal = Terminal::new(TestBackend::new(80, 20)).unwrap();
+    terminal
+        .draw(|frame| Component::view(&mut panel, frame, Rect::new(0, 0, 80, 20)))
+        .unwrap();
+    let row = tree_point(
+        &panel
+            .owner(&key)
+            .and_then(|owner| owner.as_any().downcast_ref::<TvContent>())
+            .unwrap()
+            .browser,
+        &show_target,
+    );
+    let at = ratatui::layout::Position { x: row.x, y: row.y };
+
+    {
+        let owner = panel
+            .owner_mut(&key)
+            .and_then(|owner| owner.as_any_mut().downcast_mut::<TvContent>())
+            .unwrap();
+        let expand = owner.show_tree_list_event(MediaListSurfaceInput::DoubleClick(at));
+        assert!(matches!(
+            expand,
+            Some(Msg::Shell(ref shell_boxed))
+                if matches!(shell_boxed.as_ref(), ShellRequest::TvTreeExpand { target } if *target == show_target)
+        ));
+        assert!(owner.browser.is_expanded(&show_target));
+    };
+
+    // The shell re-pushes and repaints after `TvTreeExpand`, so the collapse
+    // click resolves against refreshed geometry like the live flow does.
+    terminal
+        .draw(|frame| Component::view(&mut panel, frame, Rect::new(0, 0, 80, 20)))
+        .unwrap();
+
+    let owner = panel
+        .owner_mut(&key)
+        .and_then(|owner| owner.as_any_mut().downcast_mut::<TvContent>())
+        .unwrap();
+    let collapse = owner.show_tree_list_event(MediaListSurfaceInput::DoubleClick(at));
+    assert!(collapse.is_none());
+    assert!(!owner.browser.is_expanded(&show_target));
+}
