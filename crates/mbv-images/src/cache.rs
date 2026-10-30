@@ -1,20 +1,29 @@
-use super::{CachedImage, ImageFetchReq};
+use super::{CachedImage, ImageFetchOutcome, ImageFetchReq};
 use crate::resize::{ResizeRegisterTx, ResizeResponseRx};
 use crate::title_overlay::DERIVED_SEP;
 use ratatui_image::picker::Picker;
 use std::sync::mpsc;
+use std::time::{Duration, Instant};
+
+/// How long an interrupted key waits before a surface may fetch it again.
+/// Retries are demand-driven: only a key a surface still asks for runs again.
+const INTERRUPTED_FETCH_RETRY_DELAY: Duration = Duration::from_secs(10);
 
 pub struct ImageCache {
     card_image_states: foldhash::HashMap<String, CachedImage>,
     image_lru: std::collections::VecDeque<String>,
     cache_size: usize,
     card_image_loading: foldhash::HashSet<String>,
+    /// Keys whose last fetch got no answer, with the earliest retry time.
+    /// A key leaves only when a fetch resolves (invariant 27).
+    interrupted_fetches: foldhash::HashMap<String, Instant>,
+    interrupted_fetch_retry_delay: Duration,
     last_card_height: u16,
     last_card_width: u16,
     pending_image_fetches: std::collections::VecDeque<ImageFetchReq>,
     image_fetches_active: usize,
-    card_image_tx: mpsc::Sender<(String, Option<image::DynamicImage>)>,
-    card_image_rx: mpsc::Receiver<(String, Option<image::DynamicImage>)>,
+    card_image_tx: mpsc::Sender<(String, ImageFetchOutcome)>,
+    card_image_rx: mpsc::Receiver<(String, ImageFetchOutcome)>,
     /// Registers a freshly created per-cache-key `ResizeRequest` receiver
     /// with the resize worker thread (see `spawn_resize_worker`), so the
     /// worker can service many concurrently-alive `ThreadProtocol`s off the
@@ -48,8 +57,8 @@ impl ImageCache {
         cache_size: usize,
         image_protocol: Option<String>,
         image_protocol_enabled: bool,
-        card_image_tx: mpsc::Sender<(String, Option<image::DynamicImage>)>,
-        card_image_rx: mpsc::Receiver<(String, Option<image::DynamicImage>)>,
+        card_image_tx: mpsc::Sender<(String, ImageFetchOutcome)>,
+        card_image_rx: mpsc::Receiver<(String, ImageFetchOutcome)>,
         resize_register_tx: ResizeRegisterTx,
         resize_response_rx: ResizeResponseRx,
     ) -> Self {
@@ -58,6 +67,8 @@ impl ImageCache {
             image_lru: std::collections::VecDeque::new(),
             cache_size,
             card_image_loading: foldhash::HashSet::default(),
+            interrupted_fetches: foldhash::HashMap::default(),
+            interrupted_fetch_retry_delay: INTERRUPTED_FETCH_RETRY_DELAY,
             last_card_height: 0,
             last_card_width: 0,
             pending_image_fetches: std::collections::VecDeque::new(),
@@ -153,6 +164,21 @@ impl ImageCache {
         self.card_image_states.contains_key(key)
     }
 
+    /// Whether `key`'s last fetch got no answer and no later fetch has
+    /// resolved it. A surface treats this as art still to come.
+    #[must_use]
+    pub fn is_fetch_interrupted(&self, key: &str) -> bool {
+        self.interrupted_fetches.contains_key(key)
+    }
+
+    /// Whether `key` is interrupted and its retry time has not come yet.
+    #[must_use]
+    pub fn is_fetch_retry_waiting(&self, key: &str) -> bool {
+        self.interrupted_fetches
+            .get(key)
+            .is_some_and(|retry_at| Instant::now() < *retry_at)
+    }
+
     #[must_use]
     pub fn image(&self, key: &str) -> Option<&CachedImage> {
         self.card_image_states.get(key)
@@ -196,6 +222,7 @@ impl ImageCache {
     pub fn clear_images_and_loading(&mut self) {
         self.card_image_states.clear();
         self.card_image_loading.clear();
+        self.interrupted_fetches.clear();
     }
 
     pub fn clear_audiobookshelf_images(&mut self) {
@@ -204,6 +231,8 @@ impl ImageCache {
             .retain(|key, _| !key.starts_with(prefix));
         self.card_image_loading
             .retain(|key| !key.starts_with(prefix));
+        self.interrupted_fetches
+            .retain(|key, _| !key.starts_with(prefix));
         self.image_lru.retain(|key| !key.starts_with(prefix));
         self.pending_image_fetches
             .retain(|req| !matches!(req.source, super::ImageSource::Audiobookshelf { .. }));
@@ -218,7 +247,10 @@ impl ImageCache {
 
     pub fn reserve_fetch(&mut self, req: ImageFetchReq, limit: usize) -> FetchReservation {
         let key = &req.cache_key;
-        if self.card_image_loading.contains(key) || self.card_image_states.contains_key(key) {
+        if self.card_image_loading.contains(key)
+            || self.card_image_states.contains_key(key)
+            || self.is_fetch_retry_waiting(key)
+        {
             return FetchReservation::Duplicate;
         }
         self.card_image_loading.insert(req.cache_key.clone());
@@ -242,13 +274,26 @@ impl ImageCache {
         Some(req)
     }
 
+    /// The fetch could not start (no client yet). The receiver balances the
+    /// in-flight count when it handles this message.
     pub fn fetch_start_failed(&mut self, key: String) {
+        let _ = self
+            .card_image_tx
+            .send((key, ImageFetchOutcome::Interrupted));
+    }
+
+    /// Record a fetch that got no answer. No cache entry is written, because
+    /// an entry with no image means the art does not exist.
+    pub fn fetch_interrupted(&mut self, key: String) {
+        self.card_image_loading.remove(&key);
         self.image_fetches_active = self.image_fetches_active.saturating_sub(1);
-        let _ = self.card_image_tx.send((key, None));
+        self.interrupted_fetches
+            .insert(key, Instant::now() + self.interrupted_fetch_retry_delay);
     }
 
     pub fn complete_fetch(&mut self, key: String, entry: CachedImage) {
         self.card_image_loading.remove(&key);
+        self.interrupted_fetches.remove(&key);
         self.image_fetches_active = self.image_fetches_active.saturating_sub(1);
         self.remove_derived_variants_for(&key);
         if entry.img.is_some() {
@@ -264,9 +309,7 @@ impl ImageCache {
         self.card_image_states.insert(key, entry);
     }
 
-    pub fn try_recv_card_image(
-        &self,
-    ) -> Result<(String, Option<image::DynamicImage>), mpsc::TryRecvError> {
+    pub fn try_recv_card_image(&self) -> Result<(String, ImageFetchOutcome), mpsc::TryRecvError> {
         self.card_image_rx.try_recv()
     }
 
@@ -295,7 +338,7 @@ impl ImageCache {
     }
 
     #[must_use]
-    pub fn card_image_tx(&self) -> &mpsc::Sender<(String, Option<image::DynamicImage>)> {
+    pub fn card_image_tx(&self) -> &mpsc::Sender<(String, ImageFetchOutcome)> {
         &self.card_image_tx
     }
 
@@ -358,7 +401,7 @@ impl std::fmt::Debug for ImageCache {
 
 #[cfg(test)]
 mod tests {
-    use super::{CachedImage, ImageCache};
+    use super::{CachedImage, INTERRUPTED_FETCH_RETRY_DELAY, ImageCache};
     use std::sync::mpsc;
 
     fn cache(capacity: usize) -> ImageCache {
@@ -431,6 +474,43 @@ mod tests {
                 .image("base:P")
                 .is_some_and(|entry| entry.protocols.is_empty()),
             "cached protocols must be dropped so they re-register with the new worker"
+        );
+    }
+
+    fn fetch_req(key: &str) -> super::ImageFetchReq {
+        super::ImageFetchReq {
+            cache_key: key.into(),
+            item_id: "item".into(),
+            series_id: String::new(),
+            types: Vec::new(),
+            source: super::super::ImageSource::Emby,
+        }
+    }
+
+    /// User report 2026-10-30: three episodes that timed out at 05:57 showed
+    /// the no-image placeholder for the rest of the run. A key with no answer
+    /// keeps no entry, waits out the delay, and can then fetch again.
+    #[rstest::rstest]
+    #[case::before_the_delay(INTERRUPTED_FETCH_RETRY_DELAY, false)]
+    #[case::after_the_delay(std::time::Duration::ZERO, true)]
+    fn interrupted_fetch_writes_no_entry_and_retries_after_the_delay(
+        #[case] delay: std::time::Duration,
+        #[case] retries: bool,
+    ) {
+        let mut cache = cache(2);
+        cache.interrupted_fetch_retry_delay = delay;
+        cache.reserve_fetch(fetch_req("item:P"), 6);
+
+        cache.fetch_interrupted("item:P".into());
+
+        assert!(!cache.is_cached("item:P"));
+        assert!(cache.is_fetch_interrupted("item:P"));
+        assert_eq!(
+            matches!(
+                cache.reserve_fetch(fetch_req("item:P"), 6),
+                super::FetchReservation::Start(_)
+            ),
+            retries
         );
     }
 

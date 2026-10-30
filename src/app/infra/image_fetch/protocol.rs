@@ -1,7 +1,7 @@
 use super::super::super::App;
 use mbv_images::{
-    ImageFetchReq, ImageSource, QUEUE_CARD_PLACEHOLDER_BYTES, QUEUE_CARD_PLACEHOLDER_KEY,
-    RENDER_FILTER, cover_fill_hero_box,
+    ImageFetchOutcome, ImageFetchReq, ImageSource, QUEUE_CARD_PLACEHOLDER_BYTES,
+    QUEUE_CARD_PLACEHOLDER_KEY, RENDER_FILTER, cover_fill_hero_box,
 };
 use mbv_theme as palette;
 use ratatui_image::picker::Picker;
@@ -499,19 +499,33 @@ impl App {
             let cache_key_outer = cache_key.clone();
             let tx_outer = tx.clone();
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                let bytes = fetch_image_bytes(req, &server_url, &token);
                 // Decode off the UI thread; the main loop only builds the protocol.
-                let img = bytes.and_then(|b| image::load_from_memory(&b).ok());
-                let _ = tx.send((cache_key, img));
+                let outcome = match fetch_image_bytes(req, &server_url, &token) {
+                    FetchedBytes::Bytes(bytes) => image::load_from_memory(&bytes)
+                        .map_or(ImageFetchOutcome::Empty, ImageFetchOutcome::Image),
+                    FetchedBytes::Missing => ImageFetchOutcome::Empty,
+                    FetchedBytes::Interrupted => ImageFetchOutcome::Interrupted,
+                };
+                let _ = tx.send((cache_key, outcome));
             }));
             if result.is_err() {
-                let _ = tx_outer.send((cache_key_outer, None));
+                let _ = tx_outer.send((cache_key_outer, ImageFetchOutcome::Empty));
             }
         });
     }
 }
 
-fn fetch_image_bytes(req: ImageFetchReq, emby_url: &str, token: &str) -> Option<Vec<u8>> {
+/// One image request's result (invariant 27).
+#[derive(Debug, PartialEq)]
+enum FetchedBytes {
+    Bytes(Vec<u8>),
+    /// The server answered without an image: the next kind may have one.
+    Missing,
+    /// No answer. A later kind could be the series' art, so the chain stops.
+    Interrupted,
+}
+
+fn fetch_image_bytes(req: ImageFetchReq, emby_url: &str, token: &str) -> FetchedBytes {
     let ImageFetchReq {
         cache_key,
         item_id,
@@ -535,24 +549,34 @@ fn fetch_audiobookshelf_image(
     server_url: &str,
     api_key: &str,
     item_id: &str,
-) -> Option<Vec<u8>> {
+) -> FetchedBytes {
     if let Some(cached) = crate::config::read_image_disk_cache(cache_key) {
-        return Some(cached);
+        return FetchedBytes::Bytes(cached);
     }
-    let client = mbv_audiobookshelf::AudiobookshelfClient::new(server_url).ok();
-    let result = client.and_then(|client| {
-        client
-            .cover_bounded(
-                api_key,
-                item_id,
-                mbv_audiobookshelf::AudiobookshelfClient::REQUEST_HARD_BOUND,
-            )
-            .ok()
-    });
-    if let Some(ref bytes) = result {
-        crate::config::write_image_disk_cache(cache_key, bytes);
+    let Ok(client) = mbv_audiobookshelf::AudiobookshelfClient::new(server_url) else {
+        return FetchedBytes::Missing;
+    };
+    let result = client.cover_bounded(
+        api_key,
+        item_id,
+        mbv_audiobookshelf::AudiobookshelfClient::REQUEST_HARD_BOUND,
+    );
+    match result {
+        Ok(bytes) => {
+            crate::config::write_image_disk_cache(cache_key, &bytes);
+            FetchedBytes::Bytes(bytes)
+        }
+        Err(error)
+            if matches!(
+                error.class,
+                mbv_audiobookshelf::AudiobookshelfFailureClass::Connectivity
+                    | mbv_audiobookshelf::AudiobookshelfFailureClass::Unavailable
+            ) =>
+        {
+            FetchedBytes::Interrupted
+        }
+        Err(_) => FetchedBytes::Missing,
     }
-    result
 }
 
 fn fetch_emby_image(
@@ -562,20 +586,31 @@ fn fetch_emby_image(
     types: &[String],
     server_url: &str,
     token: &str,
-) -> Option<Vec<u8>> {
+) -> FetchedBytes {
     if let Some(cached) = crate::config::read_image_disk_cache(cache_key) {
         // Local-only cache hits power dim-then-undim cycles for warm-cache modals.
         tracing::debug!(name: "images.disk_cache.hit", target: "images", item = %item_id, "image disk cache hit");
-        return Some(cached);
+        return FetchedBytes::Bytes(cached);
     }
-    let fetched = types
-        .iter()
-        .find_map(|kind| fetch_emby_image_type(kind, item_id, series_id, server_url, token));
+    let fetched = first_image(types, |kind| {
+        fetch_emby_image_type(kind, item_id, series_id, server_url, token)
+    });
     // Cache original server bytes as-is; Emby already resized these to maxHeight=400.
-    if let Some(ref bytes) = fetched {
+    if let FetchedBytes::Bytes(ref bytes) = fetched {
         crate::config::write_image_disk_cache(cache_key, bytes);
     }
     fetched
+}
+
+/// Walks the image kinds in order: only `Missing` moves on to the next kind.
+fn first_image(kinds: &[String], mut fetch: impl FnMut(&str) -> FetchedBytes) -> FetchedBytes {
+    for kind in kinds {
+        match fetch(kind) {
+            FetchedBytes::Missing => {}
+            result => return result,
+        }
+    }
+    FetchedBytes::Missing
 }
 
 fn fetch_emby_image_type(
@@ -584,18 +619,25 @@ fn fetch_emby_image_type(
     series_id: &str,
     server_url: &str,
     token: &str,
-) -> Option<Vec<u8>> {
+) -> FetchedBytes {
     if kind == "AudioChild" {
         let child_url = format!(
             "{server_url}/Items?ParentId={item_id}&IncludeItemTypes=Audio&Limit=1&api_key={token}"
         );
-        let child_id = fetch_url(&child_url)
-            .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
+        let bytes = match fetch_url(&child_url) {
+            FetchedBytes::Bytes(bytes) => bytes,
+            result => return result,
+        };
+        let child_id = serde_json::from_slice::<serde_json::Value>(&bytes)
+            .ok()
             .and_then(|value| {
                 value["Items"]
                     .get(0)
                     .and_then(|item| item["Id"].as_str().map(str::to_owned))
-            })?;
+            });
+        let Some(child_id) = child_id else {
+            return FetchedBytes::Missing;
+        };
         let url = format!(
             "{server_url}/Items/{child_id}/Images/Primary?maxHeight=400&quality=80&api_key={token}"
         );
@@ -618,22 +660,35 @@ fn fetch_emby_image_type(
     fetch_url(&url)
 }
 
-fn fetch_url(url: &str) -> Option<Vec<u8>> {
+fn fetch_url(url: &str) -> FetchedBytes {
     let agent = mbv_net::native_tls_agent(
         mbv_net::HttpService::Emby,
         None,
         Some(std::time::Duration::from_secs(10)),
     );
-    agent.get(url).call().ok().and_then(|response| {
-        let mut bytes = Vec::new();
-        response
-            .into_body()
-            .into_reader()
-            .take(10 * 1024 * 1024)
-            .read_to_end(&mut bytes)
-            .ok()?;
-        Some(bytes)
-    })
+    let response = match agent.get(url).call() {
+        Ok(response) => response,
+        Err(error) => return request_failure(&error),
+    };
+    let mut bytes = Vec::new();
+    match response
+        .into_body()
+        .into_reader()
+        .take(10 * 1024 * 1024)
+        .read_to_end(&mut bytes)
+    {
+        Ok(_) => FetchedBytes::Bytes(bytes),
+        Err(_) => FetchedBytes::Interrupted,
+    }
+}
+
+/// A status code is the server's answer; every other failure is no answer.
+fn request_failure(error: &ureq::Error) -> FetchedBytes {
+    if matches!(error, ureq::Error::StatusCode(_)) {
+        FetchedBytes::Missing
+    } else {
+        FetchedBytes::Interrupted
+    }
 }
 #[cfg(test)]
 mod protocol_tests;

@@ -189,9 +189,15 @@ impl Model {
     pub(in crate::app) fn drain_card_image_completions(&mut self) -> bool {
         let mut series_image_changed = false;
         let mut drained = false;
-        while let Ok((cache_key, img_opt)) = self.app.images.try_recv_card_image() {
+        while let Ok((cache_key, outcome)) = self.app.images.try_recv_card_image() {
             drained = true;
             series_image_changed |= cache_key.contains(SERIES_IMAGE_CACHE_KEY_INFIX);
+            let interrupted = matches!(outcome, mbv_images::ImageFetchOutcome::Interrupted);
+            let img_opt = match outcome {
+                mbv_images::ImageFetchOutcome::Image(img) => Some(img),
+                mbv_images::ImageFetchOutcome::Empty
+                | mbv_images::ImageFetchOutcome::Interrupted => None,
+            };
             let entry = self.app.images.build_cached_image(
                 &cache_key,
                 img_opt,
@@ -216,7 +222,13 @@ impl Model {
                             available: entry.img.is_some(),
                         })
                     });
-            self.app.images.complete_fetch(cache_key, entry);
+            // The artist flow's only completion is the event above, so its
+            // keys stay final; every other surface asks again on its next sync.
+            if interrupted && artist_completion.is_none() {
+                self.app.images.fetch_interrupted(cache_key);
+            } else {
+                self.app.images.complete_fetch(cache_key, entry);
+            }
             if let Some(event) = artist_completion {
                 let _ = self.app.channels.lib_tx.send(event);
             }

@@ -110,14 +110,16 @@ fn title_site_skip_reason(
     } else if !(slotless_active || item.is_some() && playback.active_idx.is_some()) {
         Some(TitleSiteGate::ForceHeader("NoActiveItem"))
     } else if projection.cache_key.as_deref().is_some_and(|key| {
-        app.images
-            .image(key)
-            .is_some_and(|entry| entry.img.is_none())
+        app.images.is_fetch_interrupted(key)
+            || app
+                .images
+                .image(key)
+                .is_some_and(|entry| entry.img.is_none())
     }) {
-        // The fetch resolved empty: no art will ever exist to carry the
-        // title, so the header stays its home. A pending fetch (entry still
-        // absent) falls through — eligibility is decided before the art
-        // arrives.
+        // The fetch resolved empty, or got no answer and may never: no art
+        // carries the title, so the header stays its home. A pending fetch
+        // (entry still absent) falls through — eligibility is decided before
+        // the art arrives.
         Some(TitleSiteGate::ForceHeader("NoBaseArt"))
     } else if height == 0 || width == 0 {
         // The protocol's cell size is not measured yet (before the first
@@ -304,7 +306,8 @@ impl App {
             projection.cache_key = None;
         }
         let key = artwork_key.as_deref().unwrap_or(QUEUE_CARD_PLACEHOLDER_KEY);
-        let loading = !placeholder_slot && self.images.is_loading(key);
+        let loading = !placeholder_slot
+            && (self.images.is_loading(key) || self.images.is_fetch_interrupted(key));
         let last_card = self.images.last_card_size();
         let terminal_height = self.terminal_height;
         let image = self.cached_image_protocol_mut(key);

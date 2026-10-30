@@ -1,4 +1,5 @@
 use super::super::App;
+use super::{FetchedBytes, first_image, request_failure};
 use crate::app::tests::make_app_stub;
 use mbv_images::CachedImage;
 use ratatui_image::picker::{Picker, ProtocolType};
@@ -33,6 +34,32 @@ fn app_with_base() -> App {
     app.images
         .insert_image(BASE_KEY.to_owned(), cached(Some(image(4, 2))));
     app
+}
+
+/// User report 2026-10-30: only a status code is an answer. A timeout says
+/// nothing about the art, and must not become a final "no image".
+#[rstest::rstest]
+#[case::status_code(ureq::Error::StatusCode(404), FetchedBytes::Missing)]
+#[case::timeout(ureq::Error::Timeout(ureq::Timeout::Global), FetchedBytes::Interrupted)]
+fn request_failure_separates_an_answer_from_no_answer(
+    #[case] error: ureq::Error,
+    #[case] expected: FetchedBytes,
+) {
+    assert_eq!(request_failure(&error), expected);
+}
+
+/// Same report: a timed-out `Primary` must not fall through to the series'
+/// `Thumb`, which would cache series art under the episode's own key.
+#[test]
+fn an_interrupted_kind_stops_the_image_chain() {
+    let kinds = ["Primary".to_owned(), "Thumb".to_owned()];
+
+    let result = first_image(&kinds, |kind| match kind {
+        "Primary" => FetchedBytes::Interrupted,
+        _ => FetchedBytes::Bytes(vec![1]),
+    });
+
+    assert_eq!(result, FetchedBytes::Interrupted);
 }
 
 fn build_count(app: &App) -> u32 {

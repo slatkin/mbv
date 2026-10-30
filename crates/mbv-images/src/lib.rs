@@ -140,6 +140,17 @@ impl CachedImage {
     }
 }
 
+/// What a card-image fetch concluded (invariant 27).
+#[derive(Debug)]
+pub enum ImageFetchOutcome {
+    Image(image::DynamicImage),
+    /// The server answered and no usable image exists. Final.
+    Empty,
+    /// No answer: a timeout, a transport failure, or no client yet. This says
+    /// nothing about whether art exists, so the key stays open to a retry.
+    Interrupted,
+}
+
 /// A pending card-image fetch, queued when the in-flight limit is reached.
 pub struct ImageFetchReq {
     pub cache_key: String,

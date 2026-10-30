@@ -70,14 +70,10 @@ fn series_image_completion_repushes_tv_workspace_content() {
         model.drain_card_image_completions(),
         "the Series prefetch must resolve into the cache"
     );
-    assert!(
-        model.app.images.is_cached(&painted_key),
-        "the painted Series key must be cached"
-    );
-    // The fixture's fetch resolves to an empty cache entry (no pixel
-    // protocol is available), so the shared producer now treats the
-    // placeholder as final while the shell still re-projects the cached key.
-    assert!(model.app.images.is_cached(&painted_key));
+    // The fixture has no Emby client, so the fetch cannot start: the key stays
+    // open to a retry (invariant 27) and the shell still re-projects it.
+    assert!(model.app.images.is_fetch_interrupted(&painted_key));
+    assert!(!model.app.images.is_cached(&painted_key));
 }
 
 /// Task 2.3: no other image namespace may drive the TV projection. The cached

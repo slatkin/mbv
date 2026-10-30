@@ -73,6 +73,19 @@ fn paint_slot_in(app: &mut App, area: Rect) {
         .unwrap();
 }
 
+/// User report 2026-10-30: a fetch that got no answer says nothing about the
+/// art, so the slot must not show the final no-image placeholder (invariant 27).
+#[test]
+fn an_interrupted_fetch_does_not_paint_the_no_image_placeholder() {
+    let mut app = app_with_card_image();
+    app.images.remove_image(CARD_KEY);
+    app.images.fetch_interrupted(CARD_KEY.to_owned());
+
+    paint_slot(&mut app);
+
+    assert!(!app.images.is_cached(mbv_images::QUEUE_CARD_PLACEHOLDER_KEY));
+}
+
 /// Same slot, but square artwork: its fitted size is the tier cap bounded by
 /// half the slot width, so the arithmetic is easy to reason about.
 fn app_with_square_card_image() -> App {

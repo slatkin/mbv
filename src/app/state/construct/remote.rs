@@ -179,7 +179,7 @@ impl App {
         let (_, ws_rx) = mpsc::channel::<mbv_ws::WsEvent>();
         let (_, transport_rx) = mpsc::channel::<mbv_ctrl::TransportCommand>();
         let (card_image_tx, card_image_rx) =
-            mpsc::channel::<(String, Option<image::DynamicImage>)>();
+            mpsc::channel::<(String, mbv_images::ImageFetchOutcome)>();
         let channels = crate::app::state::runtime_channels::RuntimeChannels::new();
         let ui_config = crate::config::load_ui_config().unwrap_or_default();
         let hidden_libraries = app_config.hidden_libraries.clone();

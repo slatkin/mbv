@@ -32,8 +32,8 @@ pub(in crate::app) struct AppInit {
     pub(in crate::app) indicator_style: mbv_render::indicators::IndicatorStyle,
     pub(in crate::app) image_cache_size: usize,
     pub(in crate::app) visualizer_glyph: String,
-    pub(in crate::app) card_image_tx: mpsc::Sender<(String, Option<image::DynamicImage>)>,
-    pub(in crate::app) card_image_rx: mpsc::Receiver<(String, Option<image::DynamicImage>)>,
+    pub(in crate::app) card_image_tx: mpsc::Sender<(String, mbv_images::ImageFetchOutcome)>,
+    pub(in crate::app) card_image_rx: mpsc::Receiver<(String, mbv_images::ImageFetchOutcome)>,
     pub(in crate::app) channels: super::runtime_channels::RuntimeChannels,
     pub(in crate::app) idle_feed: Option<IdleFeed>,
 }

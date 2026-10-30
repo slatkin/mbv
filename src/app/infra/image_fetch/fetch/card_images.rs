@@ -73,6 +73,7 @@ impl App {
         if !self.images.protocol_enabled()
             || self.images.is_loading(&cache_key)
             || self.images.is_cached(&cache_key)
+            || self.images.is_fetch_retry_waiting(&cache_key)
         {
             return;
         }
