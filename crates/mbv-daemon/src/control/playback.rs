@@ -255,7 +255,23 @@ pub(super) fn handle_playback_intent(ctx: &mut CtrlContext<'_>, intent: mbv_ctrl
             start_ticks,
             intent_source,
         ),
-        mbv_ctrl::PlaybackIntentAction::Stop => handle_stop(ctx),
+        // A Stop has no resolve/open lifecycle, so it applies on the spot and
+        // settles now (the same rule as the SetPaused arm): an unresolved Stop
+        // would coalesce every later Stop from its connection behind an intent
+        // that can never settle, swallowing the user's next press.
+        mbv_ctrl::PlaybackIntentAction::Stop => {
+            handle_stop(ctx);
+            if let Some(event) = ctx.owner.intents.applied_if_current(
+                ctx.client_id,
+                intent_request_id,
+                intent_generation,
+            ) {
+                ctx.ctrl_clients
+                    .lock()
+                    .unwrap()
+                    .send_to_client(ctx.client_id, &CtrlEvent::PlaybackIntent(event));
+            }
+        }
         mbv_ctrl::PlaybackIntentAction::SetPaused { paused } => {
             if matches!(
                 ctx.owner.output,

@@ -261,8 +261,9 @@ fn a_lookup_result_after_the_output_was_stopped_adopts_nothing() {
     poll_once(&mut t, t0);
     script.set_sessions(vec![session_presenting_at("f", 0, RUNTIME_TICKS)]);
     poll_once(&mut t, t0 + EMBY_SESSION_POLL_INTERVAL);
-    // The user stops the output while the lookup runs: the loaded item is
-    // gone, and the device keeps the foreign content it started.
+    // The user stops the output while the lookup runs: the stop clears the
+    // loaded item and sends the device its stop, so the lookup result has
+    // nothing left to adopt.
     t.event_loop.handle_event(DaemonEvent::Ctrl(
         CtrlCmd::Stop,
         client_id,

@@ -18,7 +18,7 @@ use mbv_queue::QueueSlotId;
 use crate::CtrlSender;
 use crate::DaemonLoop;
 use crate::cast::PlaybackOutput;
-use crate::cast::{broadcast_output_change, queue_teardown_job, stop_active_output};
+use crate::cast::{StopScope, broadcast_output_change, queue_teardown_job, stop_active_output};
 use crate::send_to;
 
 /// The active playback a selection captures from the old output for the
@@ -136,6 +136,7 @@ pub(crate) fn stop_old_output_for_handoff(daemon: &mut DaemonLoop) {
         &mut daemon.owner.output,
         &daemon.owner.core.queue,
         &daemon.ctrl_clients,
+        StopScope::LoadedItemOnly,
     );
     if old_output_is_cast {
         teardown_old_receiver_app(daemon);

@@ -6,9 +6,14 @@
 
 use rstest::rstest;
 
+use std::time::Instant;
+
 use super::cast_output::connect_output_client_with_caps;
 use super::cast_playback::drained_events;
-use super::emby_session_output::{session_output, wait_for_session_jobs};
+use super::emby_session_output::{poll_once, session_output, wait_for_session_jobs};
+use super::emby_session_support::{
+    play_slot, session_output_with_queue, session_presenting_at, timed,
+};
 use super::r#loop::TestLoop;
 use super::*;
 
@@ -177,4 +182,80 @@ fn transport_commands_route_per_the_session_table(
     let routed = drive(&mut t, client_id, reply_tx, &rx, &calls, route);
 
     assert_routed(expected, routed);
+}
+
+/// One second of media in ticks.
+const SECOND_TICKS: i64 = mbv_emby_model::TICKS_PER_SECOND;
+
+/// Sends one `PlaybackIntentAction::Stop` through the owner's ctrl handler.
+fn send_stop_intent(t: &mut TestLoop, client_id: u64, request_id: u64) {
+    t.event_loop.handle_event(DaemonEvent::Ctrl(
+        CtrlCmd::PlaybackIntent(PlaybackIntent {
+            request_id,
+            generation: request_id,
+            action: PlaybackIntentAction::Stop,
+        }),
+        client_id,
+        mpsc::channel().0,
+    ));
+}
+
+/// The Stop transport commands the fake recorded, in order.
+fn stop_calls(calls: &Arc<Mutex<Vec<SessionCall>>>) -> Vec<SessionCall> {
+    calls
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|call| {
+            matches!(
+                call,
+                SessionCall::Transport { command, .. } if command == "Stop"
+            )
+        })
+        .cloned()
+        .collect()
+}
+
+/// Contract: spec "play, pause, next, previous, and stop from either Client
+/// act on that receiver" — a Client's Stop stops the loaded item, and the
+/// intent settles at once, so a later Stop is accepted instead of coalescing
+/// behind a Stop that can never settle.
+#[test]
+fn a_client_stop_intent_stops_the_loaded_item_on_every_press() {
+    let fake = FakeSessionApi::with_sessions(vec![session("device-1", "session-1")]);
+    let script = fake.clone();
+    let (mut t, calls, _rx) =
+        session_output_with_queue(fake, vec![timed("movie", 600 * SECOND_TICKS)]);
+    let (client_id, _reply_tx, client_rx) =
+        connect_output_client_with_caps(&t.event_loop.ctrl_clients, true, true);
+    let slot = t.event_loop.owner.core.queue.slots()[0].slot_id;
+    play_slot(&mut t, client_id, slot);
+    script.set_sessions(vec![session_presenting_at(
+        "movie",
+        100 * SECOND_TICKS,
+        600 * SECOND_TICKS,
+    )]);
+    poll_once(&mut t, Instant::now());
+
+    for request_id in [1, 2] {
+        send_stop_intent(&mut t, client_id, request_id);
+        wait_for_session_jobs(&t.event_loop.owner.output);
+        let outcomes: Vec<_> = drained_events(&client_rx)
+            .into_iter()
+            .filter_map(|event| match event {
+                CtrlEvent::PlaybackIntent(intent) => Some(intent.outcome),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            outcomes,
+            vec![mbv_ctrl::PlaybackIntentOutcome::Applied],
+            "press {request_id} is applied, never coalesced behind an unresolved Stop"
+        );
+    }
+    assert_eq!(
+        stop_calls(&calls).len(),
+        2,
+        "every Stop press reaches the device"
+    );
 }

@@ -331,6 +331,42 @@ fn selecting_local_while_foreign_content_plays_sends_no_stop() {
     );
 }
 
+/// Contract: spec "play, pause, next, previous, and stop from either Client
+/// act on that receiver" — an explicit Stop stops the device whatever it
+/// plays, the same rule the Cast arm applies. Only the output-change stop
+/// leaves content the Owner did not load playing (design D11).
+#[test]
+fn a_user_stop_while_foreign_content_plays_stops_the_device() {
+    let fake = FakeSessionApi::with_sessions(vec![session("device-1", "session-1")]);
+    let script = fake.clone();
+    let (mut t, calls, _rx) =
+        session_output_with_queue(fake, vec![timed("movie", 600 * SECOND_TICKS)]);
+    let (client_id, _reply_tx, _client_rx) =
+        connect_output_client_with_caps(&t.event_loop.ctrl_clients, true, true);
+    script.set_sessions(vec![session_presenting_at(
+        "other-item",
+        10 * SECOND_TICKS,
+        600 * SECOND_TICKS,
+    )]);
+    poll_once(&mut t, Instant::now());
+
+    t.event_loop.handle_event(DaemonEvent::Ctrl(
+        CtrlCmd::Stop,
+        client_id,
+        mpsc::channel().0,
+    ));
+    wait_for_session_jobs(&t.event_loop.owner.output);
+
+    assert_eq!(
+        stop_calls(&calls),
+        vec![SessionCall::Transport {
+            session_id: "session-1".to_string(),
+            command: "Stop".to_string(),
+        }],
+        "the user's stop reaches the device that plays the foreign content"
+    );
+}
+
 /// The Session entry that presents `item_id` paused at `position_ticks`, so the
 /// exit hand-over's position estimate is the observed position itself — a
 /// paused Session adds no elapsed time (design D6).

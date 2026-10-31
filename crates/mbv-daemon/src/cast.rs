@@ -508,6 +508,18 @@ pub(super) fn report_resolve_failure(
     }
 }
 
+/// What an output stop acts on (emby-session-owner-output design D9/D11): an
+/// explicit stop from a Client or from the transport acts on whatever the
+/// output plays; the stop an output change issues only ends the Owner's own
+/// load and leaves content the Owner did not load playing.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum StopScope {
+    /// A user stop: the output's device stops whatever it plays.
+    Everything,
+    /// The old output's stop on an output change: only the loaded item stops.
+    LoadedItemOnly,
+}
+
 /// Stops the active output's media (design D4, row 5.3): Local stops the
 /// run; Cast stops the receiver media and forgets the loaded item, so a
 /// later idle status of the stopped receiver can neither settle nor advance
@@ -521,6 +533,7 @@ pub(super) fn stop_active_output(
     output: &mut PlaybackOutput,
     queue: &mbv_queue::PlaybackQueue,
     ctrl_clients: &crate::ctrl::ClientRegistry,
+    scope: StopScope,
 ) {
     match output {
         PlaybackOutput::Local => player.stop(),
@@ -565,13 +578,24 @@ pub(super) fn stop_active_output(
             );
             *player.status.lock().unwrap() = presented;
         }
-        // An Emby Session's stop sends the device `transport("Stop")` only
-        // while it plays the loaded item (emby-session-owner-output design
-        // D9/D11, task 6.2); content the Owner did not load is left playing.
-        // Whatever happened, the loaded item and the end it may have started
-        // are gone, so a stopped output advances nothing.
+        // An explicit stop acts on the Session's device whatever it plays,
+        // exactly as the Cast arm does (spec "play, pause, next, previous,
+        // and stop from either Client act on that receiver";
+        // emby-session-owner-output design D9). The stop an output change
+        // issues sends `transport("Stop")` only while the device plays the
+        // loaded item, and leaves content the Owner did not load playing
+        // (design D11). Whatever happened, the loaded item and the end it may
+        // have started are gone, so a stopped output advances nothing.
         PlaybackOutput::EmbySession(session) => {
-            let stopped = crate::emby_session::command::stop_loaded_item(session);
+            let stopped = match scope {
+                StopScope::Everything => {
+                    crate::emby_session::command::stop(session);
+                    true
+                }
+                StopScope::LoadedItemOnly => {
+                    crate::emby_session::command::stop_loaded_item(session)
+                }
+            };
             session.loaded = None;
             session.advance = None;
             session.pending_pause = false;
