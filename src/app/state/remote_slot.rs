@@ -21,13 +21,6 @@ impl App {
         matches!(self.player_endpoint, Some(DaemonEndpoint::Local))
     }
 
-    pub(in crate::app) fn player_owner_is_on_this_machine(&self) -> bool {
-        !matches!(
-            self.player_endpoint,
-            Some(DaemonEndpoint::Tcp(_) | DaemonEndpoint::Unix(_))
-        )
-    }
-
     pub(in crate::app) fn remote_slot_state(&self) -> RemoteSlotState {
         if self.has_remote_queue() {
             RemoteSlotState::DirectRemote

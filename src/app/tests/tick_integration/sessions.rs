@@ -652,3 +652,91 @@ fn tick_sessions_emby_row_on_a_capabilityless_owner_selects_no_output() {
         harness.model().app.status
     );
 }
+
+/// Regression: F3 activation of a Session that advertises a direct endpoint
+/// switches the Client's own attachment even when the current owner is a
+/// remote endpoint — the shape of a Client connected to packaged `mbvd`,
+/// whose hello carries neither output capability, so the owner-output
+/// fallback would otherwise refuse and do nothing. Only a Session with no
+/// direct endpoint falls through to that owner-output path
+/// (spec `sessions-sidebar` "F3 activates the selected stable target",
+/// `cast-session-control` "Playback targets are mutually exclusive").
+#[test]
+fn tick_sessions_direct_endpoint_activation_switches_away_from_an_mbvd_owner() {
+    use crate::app::{DIRECT_CONNECT_OVERRIDE, DIRECT_CONNECT_TEST_LOCK};
+    use std::sync::Mutex;
+
+    static REQUESTED: Mutex<Option<mbv_remote_player::DaemonEndpoint>> = Mutex::new(None);
+
+    fn connect_to_peer(
+        endpoint: &mbv_remote_player::DaemonEndpoint,
+    ) -> Result<
+        (
+            mbv_remote_player::RemotePlayer,
+            std::sync::mpsc::Receiver<mbv_ctrl::player::PlayerEvent>,
+        ),
+        mbv_remote_player::RemotePlayerError,
+    > {
+        // Only the selected peer's advertised endpoint is reachable.
+        let peer = mbv_remote_player::DaemonEndpoint::Tcp("192.168.1.20:47788".parse().unwrap());
+        if *endpoint != peer {
+            return Err(
+                mbv_remote_player::RemotePlayerError::owner_build_mismatch_for_test(
+                    "test",
+                    "test-build",
+                ),
+            );
+        }
+        *REQUESTED.lock().unwrap() = Some(endpoint.clone());
+        Ok(mbv_remote_player::RemotePlayer::stub(Vec::new(), 0))
+    }
+
+    let _guard = DIRECT_CONNECT_TEST_LOCK.lock().unwrap();
+    *REQUESTED.lock().unwrap() = None;
+    *DIRECT_CONNECT_OVERRIDE.lock().unwrap() = Some(connect_to_peer);
+
+    // The owner is the packaged daemon this Client is already attached to.
+    let (mut app, cmd_rx) = capabilityless_owner_app();
+    app.terminal_width = 100;
+    app.terminal_height = 14;
+    app.player_endpoint = Some(mbv_remote_player::DaemonEndpoint::Tcp(
+        "192.168.1.9:47788".parse().unwrap(),
+    ));
+    app.direct_remote_connected = true;
+    app.direct_remote_session_id = Some("sess-mbvd".into());
+    let mut session = mbv_emby::test_support::make_session("peer-host", "mbv");
+    session.id = "sess-peer".into();
+    session.device_id = "device-peer".into();
+    session.host = "192.168.1.20".into();
+    session.supported_commands = vec![mbv_emby::mbv_direct_tcp_port_command(47788)];
+    app.panel_targets = vec![PanelTarget::Emby(Box::new(session))];
+    let mut harness = TickHarness::new(app);
+    open_sessions(&mut harness);
+
+    let request = enter_request(&mut harness);
+    assert_eq!(request, SessionTargetKey::Emby("sess-peer".into()));
+    let (mut music_resize, mut tv_resize) = (false, false);
+    harness.model_mut().handle_terminal_message(
+        Msg::Shell(Box::new(ShellRequest::SelectSession(request))),
+        &mut music_resize,
+        &mut tv_resize,
+    );
+    *DIRECT_CONNECT_OVERRIDE.lock().unwrap() = None;
+
+    let peer_endpoint =
+        mbv_remote_player::DaemonEndpoint::Tcp("192.168.1.20:47788".parse().unwrap());
+    assert_eq!(
+        REQUESTED.lock().unwrap().clone(),
+        Some(peer_endpoint.clone()),
+        "the activation connects to the selected Session's direct endpoint"
+    );
+    let app = &harness.model().app;
+    assert_eq!(app.player_endpoint, Some(peer_endpoint));
+    assert_eq!(app.direct_remote_session_id.as_deref(), Some("sess-peer"));
+    assert_eq!(app.direct_remote_label.as_deref(), Some("peer-host"));
+    assert!(app.direct_remote_connected);
+    assert!(
+        cmd_rx.try_recv().is_err(),
+        "the previous owner is severed without an output selection: mbvd keeps its own playback"
+    );
+}

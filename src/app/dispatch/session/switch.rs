@@ -421,19 +421,21 @@ impl App {
     }
 
     /// Attempt the Direct remote control path for `sess`, when it advertises
-    /// an endpoint and the current owner is on this machine. `Ok(true)` means
-    /// the client now targets that endpoint (or restored local playback),
-    /// `Ok(false)` means the Session has no direct endpoint, and `Err` means
-    /// the endpoint was advertised but the connect failed. The caller severs
-    /// the previous target first, because the direct path can replace a Cast
-    /// output or a library route.
+    /// an endpoint. `Ok(true)` means the client now targets that endpoint (or
+    /// restored local playback), `Ok(false)` means the Session has no direct
+    /// endpoint, and `Err` means the endpoint was advertised but the connect
+    /// failed. The caller severs the previous target first, because the direct
+    /// path can replace a Cast output or a library route.
+    ///
+    /// The current attachment's locality does not gate this: a Client already
+    /// attached to a remote owner (an mbv peer or `mbvd`) switches to another
+    /// Session's direct endpoint by severing that link first, exactly as it
+    /// does from the Local owner. Only a Session with no direct endpoint falls
+    /// through to the owner-output path.
     fn connect_direct_session(
         &mut self,
         sess: &mbv_emby::SessionInfo,
     ) -> Result<bool, mbv_remote_player::RemotePlayerError> {
-        if !self.player_owner_is_on_this_machine() {
-            return Ok(false);
-        }
         let Some(endpoint) = self.session_direct_endpoint(sess) else {
             return Ok(false);
         };
@@ -486,8 +488,7 @@ impl App {
     /// (spec scenario "An Emby Session is selected while a cast target is
     /// attached").
     pub(in crate::app) fn activate_session_target(&mut self, sess: &mbv_emby::SessionInfo) {
-        let has_direct_endpoint =
-            self.player_owner_is_on_this_machine() && self.session_direct_endpoint(sess).is_some();
+        let has_direct_endpoint = self.session_direct_endpoint(sess).is_some();
         if has_direct_endpoint {
             // A direct connect replaces a Cast output or a library route, so
             // it severs with the hand-back first, exactly as `connect_to_session`.
