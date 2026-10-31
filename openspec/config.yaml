@@ -7,6 +7,7 @@ context: |
 rules:
   tasks:
     - Keep tasks small enough for one agent without filling its compact window.
+    - Do not require acceptance testing in tasks. Acceptance testing is post-implementation.
   specs:
     - Specs state behavior and layout, never paint.
     - Never pin strings, glyphs, colors, spacing, alignment, truncation.

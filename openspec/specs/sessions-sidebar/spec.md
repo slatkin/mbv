@@ -1,4 +1,4 @@
-# sessions-sidebar Specification
+# Specification
 
 ## Purpose
 
