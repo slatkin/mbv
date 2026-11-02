@@ -255,9 +255,9 @@ fn transport_toggle_panel_runs_the_request_only_with_a_pinned_client() {
     t.event_loop.ctrl_clients.lock().unwrap().connect_with_role(
         client_tx,
         CtrlTransport::Local,
-        mbv_ctrl::CtrlAudiobookshelfCapabilities::default(),
-        crate::ctrl::PeerHelloCapabilities::default(),
         false,
+        false,
+        crate::ctrl::PeerHelloCapabilities::default(),
         Some(crate::ctrl::SwapSurface::Pinned),
         crate::ctrl::CtrlConnectionRole::Client,
     );

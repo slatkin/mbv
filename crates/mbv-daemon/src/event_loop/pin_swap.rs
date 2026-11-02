@@ -432,7 +432,6 @@ mod tests {
     use crate::ctrl::{
         CtrlClients, CtrlConnectionRole, CtrlOutbound, CtrlTransport, PeerHelloCapabilities,
     };
-    use mbv_ctrl::CtrlAudiobookshelfCapabilities;
 
     type NotifyCalls = Arc<Mutex<Vec<String>>>;
 
@@ -477,9 +476,9 @@ mod tests {
         clients.lock().unwrap().connect_with_role(
             client_tx,
             CtrlTransport::Local,
-            CtrlAudiobookshelfCapabilities::default(),
-            PeerHelloCapabilities::default(),
             false,
+            false,
+            PeerHelloCapabilities::default(),
             Some(SwapSurface::Terminal),
             CtrlConnectionRole::Client,
         );

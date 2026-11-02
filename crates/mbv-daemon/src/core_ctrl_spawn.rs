@@ -28,7 +28,6 @@ pub fn decode_ctrl_cmd(line: &str) -> Result<CtrlCmd, serde_json::Error> {
 struct HelloClassification {
     audiobookshelf: CtrlAudiobookshelfCapabilities,
     capabilities: crate::ctrl::PeerHelloCapabilities,
-    supports_twitch_queue: bool,
     role: CtrlConnectionRole,
     swap_surface: Option<SwapSurface>,
     swap_token: Option<String>,
@@ -56,19 +55,24 @@ fn ctrl_client_capabilities(
                 return None;
             }
             let role = connection_role_from_hello(&info)?;
+            let audiobookshelf = CtrlAudiobookshelfCapabilities {
+                queue: info.supports_abs_queue(),
+                progress: info.supports_abs_progress(),
+                book_queue: info.supports_abs_book_queue(),
+                book_progress: info.supports_abs_book_progress(),
+            };
             Some(HelloClassification {
-                audiobookshelf: CtrlAudiobookshelfCapabilities {
-                    queue: info.supports_abs_queue(),
-                    progress: info.supports_abs_progress(),
-                    book_queue: info.supports_abs_book_queue(),
-                    book_progress: info.supports_abs_book_progress(),
-                },
+                audiobookshelf,
                 capabilities: crate::ctrl::PeerHelloCapabilities {
                     owner_queue_source_update: info.supports_owner_queue_source_update(),
                     playback_output: info.supports_playback_output(),
                     emby_session_output: info.supports_emby_session_output(),
+                    queue_transport: crate::ctrl::QueueTransport {
+                        abs_episode: audiobookshelf.queue,
+                        abs_book: audiobookshelf.book_queue,
+                        twitch: info.supports_twitch_queue(),
+                    },
                 },
-                supports_twitch_queue: info.supports_twitch_queue(),
                 role,
                 swap_surface: swap_surface_from_hello(&info),
                 swap_token: info.swap_token,
@@ -255,9 +259,7 @@ fn initial_queue_state_json(
         observed_active_slot,
         None,
         None,
-        hello.audiobookshelf.queue,
-        hello.audiobookshelf.book_queue,
-        hello.supports_twitch_queue,
+        hello.capabilities.queue_transport,
     );
     serde_json::to_string(&init_event).ok()
 }
@@ -379,9 +381,9 @@ impl CtrlClientSession {
         let client_id = clients.connect_with_role(
             ev_tx,
             transport,
-            hello.audiobookshelf,
+            hello.audiobookshelf.progress,
+            hello.audiobookshelf.book_progress,
             hello.capabilities,
-            hello.supports_twitch_queue,
             hello.swap_surface,
             hello.role,
         );
@@ -565,9 +567,9 @@ mod tests {
         clients.connect_with_role(
             client_tx,
             CtrlTransport::Local,
-            CtrlAudiobookshelfCapabilities::default(),
-            crate::ctrl::PeerHelloCapabilities::default(),
             false,
+            false,
+            crate::ctrl::PeerHelloCapabilities::default(),
             swap_surface_from_hello(&hello_with_caps(&[mbv_ctrl::CTRL_CAP_PINNED_SURFACE])),
             CtrlConnectionRole::Client,
         );
@@ -594,9 +596,9 @@ mod tests {
         clients.connect_with_role(
             client_tx,
             CtrlTransport::Local,
-            CtrlAudiobookshelfCapabilities::default(),
-            crate::ctrl::PeerHelloCapabilities::default(),
             false,
+            false,
+            crate::ctrl::PeerHelloCapabilities::default(),
             None,
             CtrlConnectionRole::Client,
         );

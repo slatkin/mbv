@@ -13,17 +13,17 @@ pub(super) fn connect_op_requester(
     let id = clients.connect_with_role(
         tx.clone(),
         CtrlTransport::Local,
-        mbv_ctrl::CtrlAudiobookshelfCapabilities {
-            queue: true,
-            progress: true,
-            book_queue: true,
-            book_progress: true,
-        },
+        true,
+        true,
         crate::ctrl::PeerHelloCapabilities {
             owner_queue_source_update: true,
+            queue_transport: crate::ctrl::QueueTransport {
+                abs_episode: true,
+                abs_book: true,
+                twitch: true,
+            },
             ..Default::default()
         },
-        true,
         None,
         crate::ctrl::CtrlConnectionRole::Client,
     );

@@ -154,13 +154,9 @@ fn reject_command(ctx: &RejectContext<'_>, reason: &str) {
     }
     send_to(reply_tx, &CtrlEvent::CommandRejected(reason.to_string()));
     let status = player.status.lock().unwrap().clone();
-    let (supports_abs_queue, supports_abs_book_queue, supports_twitch_queue) = {
+    let queue_transport = {
         let clients = ctrl_clients.lock().unwrap();
-        (
-            clients.supports_abs_queue(client_id),
-            clients.supports_abs_book_queue(client_id),
-            clients.supports_twitch_queue(client_id),
-        )
+        clients.queue_transport(client_id)
     };
     send_to(
         reply_tx,
@@ -172,9 +168,7 @@ fn reject_command(ctx: &RejectContext<'_>, reason: &str) {
             queue.active_slot_id(),
             None,
             None,
-            supports_abs_queue,
-            supports_abs_book_queue,
-            supports_twitch_queue,
+            queue_transport,
         ),
     );
 }
@@ -346,13 +340,9 @@ fn queue_op_id(cmd: &CtrlCmd) -> Option<QueueOpId> {
 fn answer_queue_op(ctx: &CtrlContext<'_>, op: QueueOpId) {
     let status = ctx.player.status.lock().unwrap().clone();
     let (in_flight, queued_latest) = ctx.owner.core.transitions.summaries();
-    let (supports_abs_queue, supports_abs_book_queue, supports_twitch_queue) = {
+    let queue_transport = {
         let clients = ctx.ctrl_clients.lock().unwrap();
-        (
-            clients.supports_abs_queue(ctx.client_id),
-            clients.supports_abs_book_queue(ctx.client_id),
-            clients.supports_twitch_queue(ctx.client_id),
-        )
+        clients.queue_transport(ctx.client_id)
     };
     let event = unified_queue_state_for_peer(
         &status,
@@ -362,9 +352,7 @@ fn answer_queue_op(ctx: &CtrlContext<'_>, op: QueueOpId) {
         *ctx.shared_queue.observed_active_slot.lock().unwrap(),
         in_flight,
         queued_latest,
-        supports_abs_queue,
-        supports_abs_book_queue,
-        supports_twitch_queue,
+        queue_transport,
     );
     // The projection always builds a queue state. A different event is a
     // projection bug: report the op as rejected instead of killing the

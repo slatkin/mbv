@@ -21,9 +21,11 @@ fn abs_queue_projection_includes_abs_slots_for_capable_peer_only() {
         None,
         None,
         None,
-        true,
-        false,
-        true,
+        QueueTransport {
+            abs_episode: true,
+            abs_book: false,
+            twitch: true,
+        },
     ) else {
         panic!("expected UnifiedQueueState");
     };
@@ -37,9 +39,11 @@ fn abs_queue_projection_includes_abs_slots_for_capable_peer_only() {
         None,
         None,
         None,
-        true,
-        false,
-        false,
+        QueueTransport {
+            abs_episode: true,
+            abs_book: false,
+            twitch: false,
+        },
     ) else {
         panic!("expected UnifiedQueueState");
     };
@@ -51,9 +55,7 @@ fn abs_queue_projection_includes_abs_slots_for_capable_peer_only() {
         None,
         None,
         None,
-        false,
-        false,
-        false,
+        QueueTransport::default(),
     ) else {
         panic!("expected UnifiedQueueState");
     };
@@ -102,9 +104,7 @@ fn abs_queue_projection_clears_active_slot_for_old_peer_when_abs_is_active() {
         None,
         None,
         None,
-        false,
-        false,
-        false,
+        QueueTransport::default(),
     ) else {
         panic!("expected UnifiedQueueState");
     };

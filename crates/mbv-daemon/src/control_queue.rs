@@ -1,4 +1,6 @@
-use super::{ClientRegistry, DaemonPlayerOwner, SharedQueueState, serialize_ctrl_event};
+use super::{
+    ClientRegistry, DaemonPlayerOwner, QueueTransport, SharedQueueState, serialize_ctrl_event,
+};
 use mbv_ctrl::CtrlEvent;
 use mbv_player::Player;
 use mbv_queue::{AudiobookshelfItem, PlaybackQueue, QueueItem};
@@ -102,17 +104,17 @@ pub(crate) fn unified_queue_state_for_peer(
     observed_active_slot: Option<mbv_queue::QueueSlotId>,
     in_flight_transition: Option<mbv_ctrl::TransitionSummary>,
     queued_latest_transition: Option<mbv_ctrl::TransitionSummary>,
-    supports_abs_queue: bool,
-    supports_abs_book_queue: bool,
-    supports_twitch_queue: bool,
+    queue_transport: QueueTransport,
 ) -> CtrlEvent {
     let slots: Vec<mbv_ctrl::UnifiedQueueSlot> = queue
         .slots()
         .iter()
         .filter(|s| match &s.item {
-            QueueItem::Audiobookshelf(AudiobookshelfItem::Episode(_)) => supports_abs_queue,
-            QueueItem::Audiobookshelf(AudiobookshelfItem::Book(_)) => supports_abs_book_queue,
-            QueueItem::Twitch(_) => supports_twitch_queue,
+            QueueItem::Audiobookshelf(AudiobookshelfItem::Episode(_)) => {
+                queue_transport.abs_episode
+            }
+            QueueItem::Audiobookshelf(AudiobookshelfItem::Book(_)) => queue_transport.abs_book,
+            QueueItem::Twitch(_) => queue_transport.twitch,
             QueueItem::Emby(_) | QueueItem::Feed(_) => true,
         })
         .map(|s| mbv_ctrl::UnifiedQueueSlot {
@@ -161,16 +163,12 @@ pub(crate) fn broadcast_queue_state(
     // ── Unified-queue peers, gate ABS episodes, books, and Twitch
     //    independently ──. The projection serializes lazily, once per
     //    distinct capability combination among the connected peers.
-    let mut projected: std::collections::HashMap<(bool, bool, bool), Option<String>> =
+    let mut projected: std::collections::HashMap<QueueTransport, Option<String>> =
         std::collections::HashMap::new();
     ctrl_clients.lock().unwrap().broadcast_state_gated(
-        |supports_abs_queue, supports_abs_book_queue, supports_twitch_queue| {
+        |queue_transport| {
             projected
-                .entry((
-                    supports_abs_queue,
-                    supports_abs_book_queue,
-                    supports_twitch_queue,
-                ))
+                .entry(queue_transport)
                 .or_insert_with(|| {
                     serialize_ctrl_event(&unified_queue_state_for_peer(
                         &status,
@@ -180,9 +178,7 @@ pub(crate) fn broadcast_queue_state(
                         observed_active_slot,
                         in_flight.clone(),
                         queued_latest.clone(),
-                        supports_abs_queue,
-                        supports_abs_book_queue,
-                        supports_twitch_queue,
+                        queue_transport,
                     ))
                 })
                 .clone()
@@ -287,17 +283,16 @@ pub(crate) fn daemon_admits(
 /// than silently dropping the unsupported item.
 pub(crate) fn abs_queue_transport_rejection<'a>(
     items: impl IntoIterator<Item = &'a QueueItem> + Clone,
-    supports_abs_queue: bool,
-    supports_abs_book_queue: bool,
+    queue_transport: QueueTransport,
 ) -> Option<String> {
-    if !supports_abs_queue
+    if !queue_transport.abs_episode
         && items
             .clone()
             .into_iter()
             .any(|item| item.as_audiobookshelf().is_some())
     {
         Some("peer did not negotiate Audiobookshelf queue transport".to_string())
-    } else if !supports_abs_book_queue
+    } else if !queue_transport.abs_book
         && items
             .into_iter()
             .any(|item| item.as_audiobookshelf_book().is_some())
@@ -316,9 +311,9 @@ pub(crate) fn abs_queue_transport_rejection<'a>(
 /// unsupported item.
 pub(crate) fn twitch_queue_transport_rejection<'a>(
     items: impl IntoIterator<Item = &'a QueueItem>,
-    supports_twitch_queue: bool,
+    queue_transport: QueueTransport,
 ) -> Option<String> {
-    (!supports_twitch_queue
+    (!queue_transport.twitch
         && items
             .into_iter()
             .any(|item| matches!(item, QueueItem::Twitch(_))))

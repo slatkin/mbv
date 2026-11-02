@@ -43,17 +43,12 @@ pub(super) fn handle_adopt_queue(
         );
         return;
     }
-    let (supports_abs_queue, supports_abs_book_queue, supports_twitch_queue) = {
+    let queue_transport = {
         let clients = ctx.ctrl_clients.lock().unwrap();
-        (
-            clients.supports_abs_queue(ctx.client_id),
-            clients.supports_abs_book_queue(ctx.client_id),
-            clients.supports_twitch_queue(ctx.client_id),
-        )
+        clients.queue_transport(ctx.client_id)
     };
-    if let Some(reason) =
-        abs_queue_transport_rejection(&items, supports_abs_queue, supports_abs_book_queue)
-            .or_else(|| twitch_queue_transport_rejection(&items, supports_twitch_queue))
+    if let Some(reason) = abs_queue_transport_rejection(&items, queue_transport)
+        .or_else(|| twitch_queue_transport_rejection(&items, queue_transport))
     {
         reject_command(
             &RejectContext {
@@ -307,20 +302,12 @@ fn prepare_replacement_slots(
         .iter()
         .map(|(_, item)| item.clone())
         .collect();
-    let (supports_abs_queue, supports_abs_book_queue, supports_twitch_queue) = {
+    let queue_transport = {
         let clients = ctx.ctrl_clients.lock().unwrap();
-        (
-            clients.supports_abs_queue(ctx.client_id),
-            clients.supports_abs_book_queue(ctx.client_id),
-            clients.supports_twitch_queue(ctx.client_id),
-        )
+        clients.queue_transport(ctx.client_id)
     };
-    if let Some(reason) = abs_queue_transport_rejection(
-        &submitted_items,
-        supports_abs_queue,
-        supports_abs_book_queue,
-    )
-    .or_else(|| twitch_queue_transport_rejection(&submitted_items, supports_twitch_queue))
+    if let Some(reason) = abs_queue_transport_rejection(&submitted_items, queue_transport)
+        .or_else(|| twitch_queue_transport_rejection(&submitted_items, queue_transport))
     {
         return Err(crate::DaemonLibError::queue_setup(reason));
     }
@@ -575,17 +562,12 @@ fn admit_append_items(
     lineage: mbv_queue::QueueLineage,
 ) -> Option<Vec<QueueItem>> {
     let reject = |reason: &str| reject_command(&ctx.rejection_context(lineage), reason);
-    let (supports_abs_queue, supports_abs_book_queue, supports_twitch_queue) = {
+    let queue_transport = {
         let clients = ctx.ctrl_clients.lock().unwrap();
-        (
-            clients.supports_abs_queue(ctx.client_id),
-            clients.supports_abs_book_queue(ctx.client_id),
-            clients.supports_twitch_queue(ctx.client_id),
-        )
+        clients.queue_transport(ctx.client_id)
     };
-    if let Some(reason) =
-        abs_queue_transport_rejection(&items, supports_abs_queue, supports_abs_book_queue)
-            .or_else(|| twitch_queue_transport_rejection(&items, supports_twitch_queue))
+    if let Some(reason) = abs_queue_transport_rejection(&items, queue_transport)
+        .or_else(|| twitch_queue_transport_rejection(&items, queue_transport))
     {
         reject(&reason);
         return None;
