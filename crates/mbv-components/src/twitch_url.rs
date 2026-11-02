@@ -16,6 +16,17 @@ fn intent_msg(intent: TwitchUrlIntent) -> Msg {
     Msg::Shell(Box::new(ShellRequest::TwitchUrlIntent(intent)))
 }
 
+/// A painted pill's identity. Hit regions resolve clicks to this marker,
+/// never to a payload-carrying intent: the submit payload is the
+/// component's live input at click time, so a click always submits what the
+/// user typed (unit-C review P1: the pill used to store an empty
+/// `Submit` payload).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TwitchUrlPill {
+    Submit,
+    Cancel,
+}
+
 /// The Twitch URL prompt (twitch-url-playback D7, task 5.3): a modal text
 /// prompt on the model of [`SavePlaylistComponent`](super::save_playlist).
 /// It owns the typed input, the shell-pushed refusal text, the painted
@@ -30,7 +41,7 @@ pub struct TwitchUrlComponent {
     /// The painted modal rect (last frame) — the outside-click boundary.
     frame: Rect,
     /// Painted button pills (last frame): submit, then cancel.
-    hit_buttons: HitRegions<TwitchUrlIntent>,
+    hit_buttons: HitRegions<TwitchUrlPill>,
     /// Private per-parent gesture recognition (ADR 0024, design.md D3).
     mouse_gestures: MouseGestureState,
 }
@@ -97,8 +108,12 @@ impl TwitchUrlComponent {
         let MouseGesture::Click { at, .. } = gesture else {
             return None;
         };
-        if let Some(intent) = self.hit_buttons.resolve(at).cloned() {
-            return Some(intent_msg(intent));
+        match self.hit_buttons.resolve(at) {
+            Some(TwitchUrlPill::Submit) => {
+                return Some(intent_msg(TwitchUrlIntent::Submit(self.input.clone())));
+            }
+            Some(TwitchUrlPill::Cancel) => return Some(intent_msg(TwitchUrlIntent::Cancel)),
+            None => {}
         }
         if self.frame.contains(at) {
             return None;
@@ -125,12 +140,9 @@ impl Component for TwitchUrlComponent {
         // rects for button clicks (twitch-url-playback task 5.3).
         self.frame = geometry.frame;
         self.hit_buttons.clear();
-        let intents = [
-            TwitchUrlIntent::Submit(String::new()),
-            TwitchUrlIntent::Cancel,
-        ];
-        for (rect, intent) in geometry.buttons.into_iter().zip(intents) {
-            self.hit_buttons.push(rect, intent);
+        let pills = [TwitchUrlPill::Submit, TwitchUrlPill::Cancel];
+        for (rect, pill) in geometry.buttons.into_iter().zip(pills) {
+            self.hit_buttons.push(rect, pill);
         }
     }
 
@@ -169,12 +181,23 @@ impl AppComponent<Msg, UserEvent> for TwitchUrlComponent {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tuirealm::event::KeyModifiers;
+    use ratatui::Terminal;
+    use ratatui::backend::TestBackend;
+    use tuirealm::event::{KeyModifiers, MouseButton};
 
     fn type_url(comp: &mut TwitchUrlComponent, url: &str) {
         for c in url.chars() {
             let key = KeyEvent::new(Key::Char(c), KeyModifiers::NONE);
             comp.on(&Event::Keyboard(key));
+        }
+    }
+
+    fn left_down(column: u16, row: u16) -> MouseEvent {
+        MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column,
+            row,
+            modifiers: KeyModifiers::NONE,
         }
     }
 
@@ -213,6 +236,29 @@ mod tests {
             if matches!(shell_boxed.as_ref(), ShellRequest::TwitchUrlIntent(
                 TwitchUrlIntent::Cancel
             ))
+        ));
+    }
+
+    /// Regression for the unit-C review P1: the submit pill used to store an
+    /// empty `Submit` payload at paint time, so a click always submitted an
+    /// empty URL. The click now resolves to the pill marker and emits the
+    /// component's live input at click time.
+    #[test]
+    fn click_submit_pill_submits_the_typed_input() {
+        let mut comp = TwitchUrlComponent::new();
+        type_url(&mut comp, "https://www.twitch.tv/somechannel");
+        let mut terminal = Terminal::new(TestBackend::new(80, 24)).expect("test terminal");
+        terminal
+            .draw(|frame| comp.view(frame, frame.area()))
+            .expect("draw twitch-url prompt");
+        let submit = comp.hit_buttons.regions()[0].0;
+        let msg = comp.on(&Event::Mouse(left_down(submit.x + 1, submit.y)));
+        assert!(matches!(
+            msg,
+            Some(Msg::Shell(ref shell_boxed))
+            if matches!(shell_boxed.as_ref(), ShellRequest::TwitchUrlIntent(
+                TwitchUrlIntent::Submit(url)
+            ) if url == "https://www.twitch.tv/somechannel")
         ));
     }
 }
