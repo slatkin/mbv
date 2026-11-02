@@ -30,11 +30,11 @@ Follow `docs/recipes.md`, *Add a ctrl protocol variant*, steps 1 to 8.
 
 Read `docs/architecture/tui-frontend.md` first. Follow `docs/recipes.md`, *Add a keybind action*.
 
-- [ ] 5.1 Add `TwitchUrlIntent { Submit(String), Cancel }` and `ShellRequest::TwitchUrlIntent` in `crates/mbv-ui-msg/`. `cargo check -p mbv-ui-msg`.
-- [ ] 5.2 Add the painter in `crates/mbv-render/` beside `render_save_playlist_content`: input line, a refusal line when set, submit and cancel pills. `cargo check -p mbv-render`.
-- [ ] 5.3 Add `TwitchUrlComponent` in `crates/mbv-components/` on the model of `SavePlaylistComponent` (design D7): owns input, refusal text, hit regions, gestures; Enter sends `Submit`, Escape or the cancel pill sends `Cancel`. One component test for each of Submit and Cancel (contract: the component emits the intent; it performs no host check). `cargo nextest run -p mbv-components`.
-- [ ] 5.4 Add keybind action `twitch_url_open` (Global, default `Shift+T`, rebindable) per recipe steps 1, 2, and 5. `cargo nextest run -p mbv-keybinds -p mbv`.
-- [ ] 5.5 Shell: mount the prompt on the action through the focus stack; on `Cancel` unmount; on `Submit` check the owner's Twitch capability (design D6), call `TwitchItem::from_url`, push the refusal on error, or unmount and call `submit_queue_item(QueueItem::Twitch(item), true)` on success. Add shell tests in `src/app/tests/` for: refused URL keeps the prompt mounted and leaves the queue unchanged; accepted URL submits a play-now Twitch item; owner without the capability sends nothing. `cargo nextest run -p mbv`.
+- [x] 5.1 Add `TwitchUrlIntent { Submit(String), Cancel }` and `ShellRequest::TwitchUrlIntent` in `crates/mbv-ui-msg/`. `cargo check -p mbv-ui-msg`.
+- [x] 5.2 Add the painter in `crates/mbv-render/` beside `render_save_playlist_content`: input line, a refusal line when set, submit and cancel pills. `cargo check -p mbv-render`.
+- [x] 5.3 Add `TwitchUrlComponent` in `crates/mbv-components/` on the model of `SavePlaylistComponent` (design D7): owns input, refusal text, hit regions, gestures; Enter sends `Submit`, Escape or the cancel pill sends `Cancel`. One component test for each of Submit and Cancel (contract: the component emits the intent; it performs no host check). `cargo nextest run -p mbv-components`.
+- [x] 5.4 Add keybind action `twitch_url_open` (Global, default `Shift+T`, rebindable) per recipe steps 1, 2, and 5. `cargo nextest run -p mbv-keybinds -p mbv`.
+- [x] 5.5 Shell: mount the prompt on the action through the focus stack; on `Cancel` unmount; on `Submit` check the owner's Twitch capability (design D6), call `TwitchItem::from_url`, push the refusal on error, or unmount and call `submit_queue_item(QueueItem::Twitch(item), true)` on success. Add shell tests in `src/app/tests/` for: refused URL keeps the prompt mounted and leaves the queue unchanged; accepted URL submits a play-now Twitch item; owner without the capability sends nothing. `cargo nextest run -p mbv`.
 
 ## 6. Gates
 
