@@ -201,6 +201,24 @@ fn hello_current_advertises_abs_capabilities() {
     );
 }
 
+// twitch-url-playback task 4.1: the Twitch queue transport is additive —
+// the current hello advertises `twitch-queue` and every peer accepts it as
+// an unknown capability.
+#[test]
+fn hello_current_advertises_twitch_queue_capability() {
+    let hello = CtrlHello::current();
+    assert!(
+        hello.supports_twitch_queue(),
+        "hello must advertise twitch-queue"
+    );
+    assert!(
+        hello
+            .capabilities
+            .iter()
+            .any(|c| c == CTRL_CAP_TWITCH_QUEUE)
+    );
+}
+
 #[test]
 fn ctrl_compatibility_current_supports_abs_capabilities() {
     let compat = CtrlCompatibility::current();

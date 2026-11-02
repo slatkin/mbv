@@ -77,20 +77,30 @@ pub(crate) enum SwapSurface {
     Pinned,
 }
 
+/// The optional per-peer capabilities negotiated at Hello beyond the
+/// Audiobookshelf pair, each independently advertised (see the `CTRL_CAP_*`
+/// docs): owner-queue source updates and the playback-output surfaces.
+/// Field names mirror [`CtrlAudiobookshelfCapabilities`], without the
+/// `supports_` prefixes.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) struct PeerHelloCapabilities {
+    pub(crate) owner_queue_source_update: bool,
+    pub(crate) playback_output: bool,
+    pub(crate) emby_session_output: bool,
+}
+
 struct CtrlClient {
     id: CtrlClientId,
     tx: CtrlSender,
     transport: CtrlTransport,
     /// Capabilities advertised by this peer at Hello.
     audiobookshelf: CtrlAudiobookshelfCapabilities,
-    supports_owner_queue_source_update: bool,
-    /// Whether the peer negotiated `playback-output` at Hello
-    /// (cast-owner-output design D3); gates `CtrlEvent::PlaybackOutput`.
-    supports_playback_output: bool,
-    /// Whether the peer negotiated `emby-session-output` at Hello
-    /// (emby-session-owner-output design D3); a peer without it receives
-    /// `OutputState::Local` in place of an Emby Session output.
-    supports_emby_session_output: bool,
+    capabilities: PeerHelloCapabilities,
+    /// Whether the peer negotiated `twitch-queue` at Hello
+    /// (twitch-url-playback design D6); gates `QueueItem::Twitch` transport
+    /// in both directions. Kept beside the bundle it joins late so the
+    /// bundle stays within the bool-count lint.
+    supports_twitch_queue: bool,
     role: CtrlConnectionRole,
     swap_surface: Option<SwapSurface>,
 }
@@ -178,9 +188,8 @@ impl CtrlClients {
         tx: CtrlSender,
         transport: CtrlTransport,
         audiobookshelf: CtrlAudiobookshelfCapabilities,
-        supports_owner_queue_source_update: bool,
-        supports_playback_output: bool,
-        supports_emby_session_output: bool,
+        capabilities: PeerHelloCapabilities,
+        supports_twitch_queue: bool,
         swap_surface: Option<SwapSurface>,
         role: CtrlConnectionRole,
     ) -> CtrlClientId {
@@ -198,9 +207,8 @@ impl CtrlClients {
             tx,
             transport,
             audiobookshelf,
-            supports_owner_queue_source_update,
-            supports_playback_output,
-            supports_emby_session_output,
+            capabilities,
+            supports_twitch_queue,
             role,
             swap_surface,
         });
@@ -282,14 +290,13 @@ impl CtrlClients {
             .is_some_and(|c| c.audiobookshelf.queue)
     }
 
-    /// Whether the client `id` advertised `abs-book-queue` support at Hello.
-    /// Used to gate Audiobookshelf book `QueueItem` transport in both
-    /// directions.
+    /// Whether the client `id` advertised `owner-queue-load` support at
+    /// Hello.
     pub(crate) fn supports_owner_queue_source_update(&self, id: CtrlClientId) -> bool {
         self.connection
             .iter()
             .find(|c| c.id == id)
-            .is_some_and(|c| c.supports_owner_queue_source_update)
+            .is_some_and(|c| c.capabilities.owner_queue_source_update)
     }
 
     pub(crate) fn supports_abs_book_queue(&self, id: CtrlClientId) -> bool {
@@ -297,6 +304,15 @@ impl CtrlClients {
             .iter()
             .find(|c| c.id == id)
             .is_some_and(|c| c.audiobookshelf.book_queue)
+    }
+
+    /// Whether the client `id` advertised `twitch-queue` support at Hello.
+    /// Used to gate Twitch `QueueItem` transport in both directions.
+    pub(crate) fn supports_twitch_queue(&self, id: CtrlClientId) -> bool {
+        self.connection
+            .iter()
+            .find(|c| c.id == id)
+            .is_some_and(|c| c.supports_twitch_queue)
     }
 
     pub(crate) fn send_to_client(&self, id: CtrlClientId, event: &CtrlEvent) {
@@ -322,39 +338,31 @@ impl CtrlClients {
         });
     }
 
-    /// Broadcasts a state event gated per client, excluding `except` when
-    /// provided:
-    /// - `unified_full_json` → peers advertising `abs-queue` + `abs-book-queue`
-    /// - `unified_abs_json` → peers advertising `abs-queue` only
-    /// - `unified_book_json` → peers advertising `abs-book-queue` only
-    /// - `unified_json` → all others
+    /// Broadcasts a unified-queue state event gated per client, excluding
+    /// `except` when provided: `json_for` projects the event for one peer's
+    /// negotiated capabilities — the Audiobookshelf episode and book queue
+    /// transports and the Twitch queue transport, each independent. A
+    /// `None` projection skips that peer. Callers memoize the serialization
+    /// so each distinct capability combination serializes once.
     ///
     /// Mirrors `broadcast_to_all`'s drop-on-failed-send behavior.
     pub(crate) fn broadcast_state_gated(
         &mut self,
-        unified_full_json: &str,
-        unified_abs_json: &str,
-        unified_book_json: &str,
-        unified_json: &str,
+        mut json_for: impl FnMut(bool, bool, bool) -> Option<String>,
         except: Option<CtrlClientId>,
     ) {
         self.retain_clients(|client| {
             if except == Some(client.id) {
                 return true;
             }
-            let json = match (
+            let Some(json) = json_for(
                 client.audiobookshelf.queue,
                 client.audiobookshelf.book_queue,
-            ) {
-                (true, true) => unified_full_json,
-                (true, false) => unified_abs_json,
-                (false, true) => unified_book_json,
-                (false, false) => unified_json,
+                client.supports_twitch_queue,
+            ) else {
+                return true;
             };
-            client
-                .tx
-                .send(CtrlOutbound::Event(json.to_string()))
-                .is_ok()
+            client.tx.send(CtrlOutbound::Event(json)).is_ok()
         });
     }
 
@@ -380,10 +388,10 @@ impl CtrlClients {
     /// `broadcast_progress_gated`.
     pub(crate) fn broadcast_playback_output_gated(&mut self, state: &mbv_ctrl::OutputState) {
         self.retain_clients(|client| {
-            if !client.supports_playback_output {
+            if !client.capabilities.playback_output {
                 return true;
             }
-            let state = output_state_for_peer(state, client.supports_emby_session_output);
+            let state = output_state_for_peer(state, client.capabilities.emby_session_output);
             let Some(json) = serialize_ctrl_event(&CtrlEvent::PlaybackOutput(state)) else {
                 return true;
             };
@@ -478,8 +486,7 @@ mod tests {
             tx,
             transport,
             CtrlAudiobookshelfCapabilities::default(),
-            false,
-            false,
+            PeerHelloCapabilities::default(),
             false,
             surface,
             CtrlConnectionRole::Client,
@@ -546,8 +553,7 @@ mod tests {
             tx,
             CtrlTransport::Local,
             CtrlAudiobookshelfCapabilities::default(),
-            false,
-            false,
+            PeerHelloCapabilities::default(),
             false,
             None,
             CtrlConnectionRole::OwnerAction,
@@ -557,8 +563,7 @@ mod tests {
             tx,
             CtrlTransport::Local,
             CtrlAudiobookshelfCapabilities::default(),
-            false,
-            false,
+            PeerHelloCapabilities::default(),
             false,
             None,
             CtrlConnectionRole::ServiceSetupAdmin,
@@ -604,8 +609,7 @@ mod tests {
             tx,
             CtrlTransport::Local,
             CtrlAudiobookshelfCapabilities::default(),
-            false,
-            false,
+            PeerHelloCapabilities::default(),
             false,
             None,
             CtrlConnectionRole::OwnerAction,

@@ -19,9 +19,11 @@ pub(super) fn connect_op_requester(
             book_queue: true,
             book_progress: true,
         },
+        crate::ctrl::PeerHelloCapabilities {
+            owner_queue_source_update: true,
+            ..Default::default()
+        },
         true,
-        false,
-        false,
         None,
         crate::ctrl::CtrlConnectionRole::Client,
     );

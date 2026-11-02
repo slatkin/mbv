@@ -27,9 +27,8 @@ pub fn decode_ctrl_cmd(line: &str) -> Result<CtrlCmd, serde_json::Error> {
 /// (tray-pin-swap design D7).
 struct HelloClassification {
     audiobookshelf: CtrlAudiobookshelfCapabilities,
-    supports_owner_queue_source_update: bool,
-    supports_playback_output: bool,
-    supports_emby_session_output: bool,
+    capabilities: crate::ctrl::PeerHelloCapabilities,
+    supports_twitch_queue: bool,
     role: CtrlConnectionRole,
     swap_surface: Option<SwapSurface>,
     swap_token: Option<String>,
@@ -64,9 +63,12 @@ fn ctrl_client_capabilities(
                     book_queue: info.supports_abs_book_queue(),
                     book_progress: info.supports_abs_book_progress(),
                 },
-                supports_owner_queue_source_update: info.supports_owner_queue_source_update(),
-                supports_playback_output: info.supports_playback_output(),
-                supports_emby_session_output: info.supports_emby_session_output(),
+                capabilities: crate::ctrl::PeerHelloCapabilities {
+                    owner_queue_source_update: info.supports_owner_queue_source_update(),
+                    playback_output: info.supports_playback_output(),
+                    emby_session_output: info.supports_emby_session_output(),
+                },
+                supports_twitch_queue: info.supports_twitch_queue(),
                 role,
                 swap_surface: swap_surface_from_hello(&info),
                 swap_token: info.swap_token,
@@ -238,8 +240,7 @@ fn restricted_command_rejection(role: CtrlConnectionRole, cmd: &CtrlCmd) -> Opti
 fn initial_queue_state_json(
     player_status: &Arc<Mutex<mbv_ctrl::player::PlayerStatus>>,
     shared_queue: &SharedQueueState,
-    supports_abs_queue: bool,
-    supports_abs_book_queue: bool,
+    hello: &HelloClassification,
 ) -> Option<String> {
     let status = player_status.lock().unwrap().clone();
     let q = shared_queue.queue.lock().unwrap().clone();
@@ -254,8 +255,9 @@ fn initial_queue_state_json(
         observed_active_slot,
         None,
         None,
-        supports_abs_queue,
-        supports_abs_book_queue,
+        hello.audiobookshelf.queue,
+        hello.audiobookshelf.book_queue,
+        hello.supports_twitch_queue,
     );
     serde_json::to_string(&init_event).ok()
 }
@@ -271,11 +273,11 @@ fn seed_playback_output(
     hello: &HelloClassification,
     ev_tx: &mpsc::Sender<CtrlOutbound>,
 ) {
-    if !hello.supports_playback_output {
+    if !hello.capabilities.playback_output {
         return;
     }
     let state = shared_queue.playback_output.lock().unwrap().clone();
-    let state = crate::ctrl::output_state_for_peer(&state, hello.supports_emby_session_output);
+    let state = crate::ctrl::output_state_for_peer(&state, hello.capabilities.emby_session_output);
     if let Ok(json) = serde_json::to_string(&CtrlEvent::PlaybackOutput(state)) {
         let _ = ev_tx.send(CtrlOutbound::Event(json));
     }
@@ -351,12 +353,7 @@ impl CtrlClientSession {
             return;
         }
         let stay_alive = role != DaemonRole::Local || (owner_settings)().stay_alive;
-        let initial_state = initial_queue_state_json(
-            &player_status,
-            &shared_queue,
-            hello.audiobookshelf.queue,
-            hello.audiobookshelf.book_queue,
-        );
+        let initial_state = initial_queue_state_json(&player_status, &shared_queue, &hello);
 
         let mut clients = ctrl_clients.lock().unwrap();
         match send_admission_refusal(
@@ -383,9 +380,8 @@ impl CtrlClientSession {
             ev_tx,
             transport,
             hello.audiobookshelf,
-            hello.supports_owner_queue_source_update,
-            hello.supports_playback_output,
-            hello.supports_emby_session_output,
+            hello.capabilities,
+            hello.supports_twitch_queue,
             hello.swap_surface,
             hello.role,
         );
@@ -570,8 +566,7 @@ mod tests {
             client_tx,
             CtrlTransport::Local,
             CtrlAudiobookshelfCapabilities::default(),
-            false,
-            false,
+            crate::ctrl::PeerHelloCapabilities::default(),
             false,
             swap_surface_from_hello(&hello_with_caps(&[mbv_ctrl::CTRL_CAP_PINNED_SURFACE])),
             CtrlConnectionRole::Client,
@@ -600,8 +595,7 @@ mod tests {
             client_tx,
             CtrlTransport::Local,
             CtrlAudiobookshelfCapabilities::default(),
-            false,
-            false,
+            crate::ctrl::PeerHelloCapabilities::default(),
             false,
             None,
             CtrlConnectionRole::Client,

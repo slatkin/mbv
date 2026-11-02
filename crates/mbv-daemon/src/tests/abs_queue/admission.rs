@@ -4,8 +4,12 @@ use super::*;
 fn abs_queue_projection_includes_abs_slots_for_capable_peer_only() {
     let abs = abs_qi("li_1", "ep_1");
     let emby = emby_qi("movie1", "Video", "Movie");
-    let queue =
-        PlaybackQueue::from_queue_items(vec![abs, emby], Some(0), crate::tests::revision_mint());
+    let twitch = twitch_qi("somechannel");
+    let queue = PlaybackQueue::from_queue_items(
+        vec![abs, emby, twitch],
+        Some(0),
+        crate::tests::revision_mint(),
+    );
     let status = mbv_ctrl::player::PlayerStatus::default();
     let source = mbv_queue::QueueSource::Unknown;
 
@@ -18,6 +22,23 @@ fn abs_queue_projection_includes_abs_slots_for_capable_peer_only() {
         None,
         None,
         true,
+        false,
+        true,
+    ) else {
+        panic!("expected UnifiedQueueState");
+    };
+    // twitch-url-playback task 4.2: a peer with the ABS transports but
+    // without `twitch-queue` keeps the ABS slots and loses the Twitch slot.
+    let CtrlEvent::UnifiedQueueState(no_twitch_data) = super::unified_queue_state_for_peer(
+        &status,
+        &queue,
+        &source,
+        mbv_queue::QueueLineage::default(),
+        None,
+        None,
+        None,
+        true,
+        false,
         false,
     ) else {
         panic!("expected UnifiedQueueState");
@@ -32,11 +53,28 @@ fn abs_queue_projection_includes_abs_slots_for_capable_peer_only() {
         None,
         false,
         false,
+        false,
     ) else {
         panic!("expected UnifiedQueueState");
     };
 
-    assert_eq!(capable_data.slots.len(), 2, "capable peer sees ABS+Emby");
+    assert_eq!(
+        capable_data.slots.len(),
+        3,
+        "capable peer sees ABS+Emby+Twitch"
+    );
+    assert_eq!(
+        no_twitch_data.slots.len(),
+        2,
+        "peer without twitch-queue sees ABS+Emby only"
+    );
+    assert!(
+        no_twitch_data
+            .slots
+            .iter()
+            .all(|slot| !matches!(&slot.item, QueueItem::Twitch(_))),
+        "no Twitch slot may reach a peer without twitch-queue"
+    );
     assert_eq!(old_data.slots.len(), 1, "old peer sees Emby only");
     assert!(
         old_data.slots[0].item.is_emby(),
@@ -64,6 +102,7 @@ fn abs_queue_projection_clears_active_slot_for_old_peer_when_abs_is_active() {
         None,
         None,
         None,
+        false,
         false,
         false,
     ) else {
@@ -115,7 +154,13 @@ fn broadcast_projects_abs_slots_per_connection_capability() {
     // broadcast can only carry the requested slot if the cold-start path
     // moved the marker to it.
     let queue = PlaybackQueue::from_queue_items(
-        vec![abs_qi("li_1", "ep_1"), emby_qi("movie1", "Video", "Movie")],
+        vec![
+            abs_qi("li_1", "ep_1"),
+            emby_qi("movie1", "Video", "Movie"),
+            // twitch-url-playback task 4.2: the broadcast gate also filters
+            // Twitch slots per peer capability.
+            twitch_qi("somechannel"),
+        ],
         Some(0),
         crate::tests::revision_mint(),
     );
@@ -156,8 +201,8 @@ fn broadcast_projects_abs_slots_per_connection_capability() {
 
     assert_eq!(
         capable_data.slots.len(),
-        2,
-        "capable peer broadcast includes ABS+Emby"
+        3,
+        "capable peer broadcast includes ABS+Emby+Twitch"
     );
     assert_eq!(
         old_data.slots.len(),
@@ -165,6 +210,13 @@ fn broadcast_projects_abs_slots_per_connection_capability() {
         "old peer broadcast includes Emby only"
     );
     assert!(old_data.slots[0].item.is_emby());
+    assert!(
+        old_data
+            .slots
+            .iter()
+            .all(|slot| !matches!(&slot.item, QueueItem::Twitch(_))),
+        "old peer broadcast must not include the Twitch slot"
+    );
 
     // A cold owner has no live run to jump: the fallback submission
     // cold-starts playback at the requested slot, and the cold-start
@@ -228,6 +280,70 @@ fn old_peer_submitting_abs_items_is_transport_rejected() {
         CtrlEvent::CommandRejected(reason) => assert!(
             reason.contains("did not negotiate"),
             "rejection must name the missing capability, got: {reason}"
+        ),
+        _ => panic!("expected CommandRejected"),
+    }
+
+    // No broadcast goes out — the rejection short-circuits before broadcast_queue_state.
+    assert!(
+        old_rx.try_recv().is_err(),
+        "old peer must not receive a broadcast when transport rejection fires"
+    );
+}
+
+// twitch-url-playback task 4.2 (spec *Twitch item transport is additively
+// negotiated*, "Peer without the capability submits a Twitch item"): an
+// inbound mutation from a peer without `twitch-queue` carrying a Twitch item
+// is transport-rejected before the canonical queue is touched — the item is
+// refused with a reason, never dropped silently.
+#[test]
+fn old_peer_submitting_a_twitch_item_is_transport_rejected() {
+    let player = cold_player();
+    let client = Arc::new(Mutex::new(mbv_emby::EmbyClient::new(Config::default())));
+    let registry = Arc::new(Mutex::new(CtrlClients::default()));
+    let (old_id, old_rx) = connect_old_unified_peer(&mut registry.lock().unwrap());
+    let (reply_tx, reply_rx) = mpsc::channel();
+    let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
+    let queue = crate::tests::empty_queue();
+    let source = QueueSource::Unknown;
+
+    let mut owner = DaemonPlayerOwner {
+        core: PlayerOwnerState::new(queue, source),
+        ..Default::default()
+    };
+    handle_ctrl_for_role(
+        CtrlCmd::UnifiedAdoptQueue {
+            items: vec![twitch_qi("somechannel")],
+            cursor: 0,
+            source: QueueSource::Remote,
+        },
+        CtrlContext {
+            reply_tx: &reply_tx,
+            client_id: old_id,
+            client: &client,
+            player: &player,
+            audio_only: false,
+            owner: &mut owner,
+            shared_queue: &shared_queue_state(),
+            ctrl_clients: &registry,
+            audiobookshelf: None,
+            merged_tx: &dummy_merged_tx,
+            owner_settings: crate::owner_settings::fixed_reader(false),
+            role: crate::DaemonRole::Packaged,
+            op: std::cell::Cell::new(None),
+        },
+    );
+    let queue = owner.core.queue;
+
+    assert!(
+        queue.is_empty(),
+        "queue must not be mutated by transport-rejected submission"
+    );
+
+    match recv_event(&reply_rx) {
+        CtrlEvent::CommandRejected(reason) => assert!(
+            reason.contains("did not negotiate Twitch queue transport"),
+            "rejection must name the missing Twitch capability, got: {reason}"
         ),
         _ => panic!("expected CommandRejected"),
     }

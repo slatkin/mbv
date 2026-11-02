@@ -64,9 +64,12 @@ pub(super) fn connect_output_client_with_caps(
         tx.clone(),
         CtrlTransport::Local,
         mbv_ctrl::CtrlAudiobookshelfCapabilities::default(),
+        crate::ctrl::PeerHelloCapabilities {
+            playback_output: supports_playback_output,
+            emby_session_output: supports_emby_session_output,
+            ..Default::default()
+        },
         false,
-        supports_playback_output,
-        supports_emby_session_output,
         None,
         crate::ctrl::CtrlConnectionRole::Client,
     );

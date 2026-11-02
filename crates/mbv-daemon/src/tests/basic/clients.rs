@@ -133,7 +133,10 @@ fn ordinary_disconnect_is_not_shutdown_emits_when_gated_broadcast_prunes_last_cl
     let (_id, client_rx) = connect_client(&mut clients);
     drop(client_rx);
 
-    clients.broadcast_state_gated("full", "abs", "book", "legacy", None);
+    clients.broadcast_state_gated(
+        |abs, book, twitch| Some(format!("state({abs},{book},{twitch})")),
+        None,
+    );
 
     assert!(matches!(
         merged_rx.try_recv(),
@@ -150,7 +153,10 @@ fn gated_broadcast_on_an_empty_registry_emits_nothing() {
     let (merged_tx, merged_rx) = mpsc::channel();
     let mut clients = test_clients(merged_tx);
 
-    clients.broadcast_state_gated("full", "abs", "book", "legacy", None);
+    clients.broadcast_state_gated(
+        |abs, book, twitch| Some(format!("state({abs},{book},{twitch})")),
+        None,
+    );
 
     assert!(!clients.has_driver());
     assert!(matches!(

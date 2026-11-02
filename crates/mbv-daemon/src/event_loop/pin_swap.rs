@@ -429,7 +429,9 @@ impl PinSwapState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ctrl::{CtrlClients, CtrlConnectionRole, CtrlOutbound, CtrlTransport};
+    use crate::ctrl::{
+        CtrlClients, CtrlConnectionRole, CtrlOutbound, CtrlTransport, PeerHelloCapabilities,
+    };
     use mbv_ctrl::CtrlAudiobookshelfCapabilities;
 
     type NotifyCalls = Arc<Mutex<Vec<String>>>;
@@ -476,8 +478,7 @@ mod tests {
             client_tx,
             CtrlTransport::Local,
             CtrlAudiobookshelfCapabilities::default(),
-            false,
-            false,
+            PeerHelloCapabilities::default(),
             false,
             Some(SwapSurface::Terminal),
             CtrlConnectionRole::Client,

@@ -82,9 +82,11 @@ pub fn connect_client(clients: &mut CtrlClients) -> (u64, mpsc::Receiver<CtrlOut
             book_queue: true,
             book_progress: true,
         },
+        crate::ctrl::PeerHelloCapabilities {
+            owner_queue_source_update: true,
+            ..Default::default()
+        },
         true,
-        false,
-        false,
         None,
         crate::ctrl::CtrlConnectionRole::Client,
     );
