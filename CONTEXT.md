@@ -220,8 +220,12 @@ The Emby-side item type of the queue. It is the serialized record of an Emby lib
 _Avoid_: MediaItem, media item, emby entry
 
 QueueItem:
-The media snapshot of the queue. It is an EmbyItem, a FeedEntry, or an AudiobookshelfItem (`Episode(AudiobookshelfQueueItem)` or `Book(AudiobookshelfBookQueueItem)`). Generic queue operations use shared presentation and identity behavior. Service admission, source preparation, lifecycle, progress, and cleanup stay as explicit boundaries. Stored data round-trips tagged QueueItem values. Legacy untagged Emby-only payloads stay readable.
+The media snapshot of the queue. It is an EmbyItem, a FeedEntry, an AudiobookshelfItem (`Episode(AudiobookshelfQueueItem)` or `Book(AudiobookshelfBookQueueItem)`), or a TwitchItem. Generic queue operations use shared presentation and identity behavior. Service admission, source preparation, lifecycle, progress, and cleanup stay as explicit boundaries. Stored data round-trips tagged QueueItem values. Legacy untagged Emby-only payloads stay readable.
 _Avoid_: queue entry, playable, mixed item
+
+Twitch item:
+A QueueItem that holds a pasted Twitch URL and the title derived from that URL. Only mpv plays it: mpv and its yt-dlp hook resolve the stream, and mbv never resolves, rewrites, or selects it. It keeps no playback state: no resume position and no played state. A Cast output and an Emby Session output refuse it.
+_Avoid_: Twitch entry, stream item, live item
 
 Transport command:
 The command to the Player owner for transport control. `Step(Direction)` asks for an owner-resolved relative queue move. `Player(PlayerCommand)` carries a playback command such as pause or seek. `Stop` stops playback and clears the owner's slot-jump state; it is not a `PlayerCommand`, and it works while no run exists. A step is not a `PlayerCommand`. It resolves against the owner canonical queue.
