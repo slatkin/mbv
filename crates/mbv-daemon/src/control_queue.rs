@@ -1,4 +1,6 @@
-use super::{ClientRegistry, DaemonPlayerOwner, SharedQueueState, serialize_ctrl_event};
+use super::{
+    ClientRegistry, DaemonPlayerOwner, QueueTransport, SharedQueueState, serialize_ctrl_event,
+};
 use mbv_ctrl::CtrlEvent;
 use mbv_player::Player;
 use mbv_queue::{AudiobookshelfItem, PlaybackQueue, QueueItem};
@@ -90,7 +92,8 @@ pub(crate) fn project_queue_state(
 /// Projects the canonical queue into `UnifiedQueueStateData` for one
 /// connection. Audiobookshelf slots are included only when the peer
 /// negotiated the matching capability (`abs-queue` for episodes,
-/// `abs-book-queue` for books); when a slot is dropped, `active_slot` is
+/// `abs-book-queue` for books), and Twitch slots only with `twitch-queue`
+/// (twitch-url-playback design D6); when a slot is dropped, `active_slot` is
 /// cleared too if the active slot was itself dropped, so a peer never
 /// receives an `active_slot` pointing at a slot missing from `slots`.
 pub(crate) fn unified_queue_state_for_peer(
@@ -101,15 +104,17 @@ pub(crate) fn unified_queue_state_for_peer(
     observed_active_slot: Option<mbv_queue::QueueSlotId>,
     in_flight_transition: Option<mbv_ctrl::TransitionSummary>,
     queued_latest_transition: Option<mbv_ctrl::TransitionSummary>,
-    supports_abs_queue: bool,
-    supports_abs_book_queue: bool,
+    queue_transport: QueueTransport,
 ) -> CtrlEvent {
     let slots: Vec<mbv_ctrl::UnifiedQueueSlot> = queue
         .slots()
         .iter()
         .filter(|s| match &s.item {
-            QueueItem::Audiobookshelf(AudiobookshelfItem::Episode(_)) => supports_abs_queue,
-            QueueItem::Audiobookshelf(AudiobookshelfItem::Book(_)) => supports_abs_book_queue,
+            QueueItem::Audiobookshelf(AudiobookshelfItem::Episode(_)) => {
+                queue_transport.abs_episode
+            }
+            QueueItem::Audiobookshelf(AudiobookshelfItem::Book(_)) => queue_transport.abs_book,
+            QueueItem::Twitch(_) => queue_transport.twitch,
             QueueItem::Emby(_) | QueueItem::Feed(_) => true,
         })
         .map(|s| mbv_ctrl::UnifiedQueueSlot {
@@ -155,71 +160,31 @@ pub(crate) fn broadcast_queue_state(
     let observed_active_slot = *shared_queue.observed_active_slot.lock().unwrap();
     let lineage = *shared_queue.lineage.lock().unwrap();
 
-    // ── Unified-queue peers, gate ABS episodes and books independently ──
-    let unified_full_json = serialize_ctrl_event(&unified_queue_state_for_peer(
-        &status,
-        queue,
-        source,
-        lineage,
-        observed_active_slot,
-        in_flight.clone(),
-        queued_latest.clone(),
-        true,
-        true,
-    ));
-    let unified_abs_json = serialize_ctrl_event(&unified_queue_state_for_peer(
-        &status,
-        queue,
-        source,
-        lineage,
-        observed_active_slot,
-        in_flight.clone(),
-        queued_latest.clone(),
-        true,
-        false,
-    ));
-    let unified_book_json = serialize_ctrl_event(&unified_queue_state_for_peer(
-        &status,
-        queue,
-        source,
-        lineage,
-        observed_active_slot,
-        in_flight.clone(),
-        queued_latest.clone(),
-        false,
-        true,
-    ));
-    let unified_json = serialize_ctrl_event(&unified_queue_state_for_peer(
-        &status,
-        queue,
-        source,
-        lineage,
-        observed_active_slot,
-        in_flight,
-        queued_latest,
-        false,
-        false,
-    ));
-
-    if let (
-        Some(unified_full_json),
-        Some(unified_abs_json),
-        Some(unified_book_json),
-        Some(unified_json),
-    ) = (
-        unified_full_json,
-        unified_abs_json,
-        unified_book_json,
-        unified_json,
-    ) {
-        ctrl_clients.lock().unwrap().broadcast_state_gated(
-            &unified_full_json,
-            &unified_abs_json,
-            &unified_book_json,
-            &unified_json,
-            except,
-        );
-    }
+    // ── Unified-queue peers, gate ABS episodes, books, and Twitch
+    //    independently ──. The projection serializes lazily, once per
+    //    distinct capability combination among the connected peers.
+    let mut projected: std::collections::HashMap<QueueTransport, Option<String>> =
+        std::collections::HashMap::new();
+    ctrl_clients.lock().unwrap().broadcast_state_gated(
+        |queue_transport| {
+            projected
+                .entry(queue_transport)
+                .or_insert_with(|| {
+                    serialize_ctrl_event(&unified_queue_state_for_peer(
+                        &status,
+                        queue,
+                        source,
+                        lineage,
+                        observed_active_slot,
+                        in_flight.clone(),
+                        queued_latest.clone(),
+                        queue_transport,
+                    ))
+                })
+                .clone()
+        },
+        except,
+    );
 
     // Update the reconnect snapshot.
     *shared_queue.queue.lock().unwrap() = queue.clone();
@@ -318,17 +283,16 @@ pub(crate) fn daemon_admits(
 /// than silently dropping the unsupported item.
 pub(crate) fn abs_queue_transport_rejection<'a>(
     items: impl IntoIterator<Item = &'a QueueItem> + Clone,
-    supports_abs_queue: bool,
-    supports_abs_book_queue: bool,
+    queue_transport: QueueTransport,
 ) -> Option<String> {
-    if !supports_abs_queue
+    if !queue_transport.abs_episode
         && items
             .clone()
             .into_iter()
             .any(|item| item.as_audiobookshelf().is_some())
     {
         Some("peer did not negotiate Audiobookshelf queue transport".to_string())
-    } else if !supports_abs_book_queue
+    } else if !queue_transport.abs_book
         && items
             .into_iter()
             .any(|item| item.as_audiobookshelf_book().is_some())
@@ -337,4 +301,21 @@ pub(crate) fn abs_queue_transport_rejection<'a>(
     } else {
         None
     }
+}
+
+/// Returns a rejection reason when `items` contains a Twitch item submitted
+/// by a peer that did not negotiate the `twitch-queue` queue transport
+/// (twitch-url-playback design D6, spec *Twitch item transport is additively
+/// negotiated*). Checked ahead of queue mutation so an incapable peer's
+/// operation is refused outright rather than silently dropping the
+/// unsupported item.
+pub(crate) fn twitch_queue_transport_rejection<'a>(
+    items: impl IntoIterator<Item = &'a QueueItem>,
+    queue_transport: QueueTransport,
+) -> Option<String> {
+    (!queue_transport.twitch
+        && items
+            .into_iter()
+            .any(|item| matches!(item, QueueItem::Twitch(_))))
+    .then(|| "peer did not negotiate Twitch queue transport".to_string())
 }

@@ -63,10 +63,13 @@ pub(super) fn connect_output_client_with_caps(
     let id = clients.lock().unwrap().connect_with_role(
         tx.clone(),
         CtrlTransport::Local,
-        mbv_ctrl::CtrlAudiobookshelfCapabilities::default(),
         false,
-        supports_playback_output,
-        supports_emby_session_output,
+        false,
+        crate::ctrl::PeerHelloCapabilities {
+            playback_output: supports_playback_output,
+            emby_session_output: supports_emby_session_output,
+            ..Default::default()
+        },
         None,
         crate::ctrl::CtrlConnectionRole::Client,
     );

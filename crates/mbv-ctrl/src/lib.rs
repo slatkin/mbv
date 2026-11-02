@@ -36,9 +36,9 @@ pub use protocol::{
     CTRL_CAP_OWNER_QUEUE_SOURCE_UPDATE, CTRL_CAP_PIN_SWAP, CTRL_CAP_PINNED_SURFACE,
     CTRL_CAP_PLAYBACK_OUTPUT, CTRL_CAP_QUEUE_REPLACE_START_POSITION, CTRL_CAP_QUEUE_SHUFFLE,
     CTRL_CAP_QUEUE_STATE, CTRL_CAP_SERVICE_SETUP_ADMIN, CTRL_CAP_START_INDEX, CTRL_CAP_STATUS_ONLY,
-    CTRL_CAP_UNIFIED_QUEUE, CTRL_PROTOCOL_VERSION, PlaybackGeneration, PlaybackRequestId,
-    ProgressUpdate, QueueOpId, SWAP_TOKEN_ENV, TransitionSummary, UnifiedQueueSlot,
-    UnifiedQueueStateData, slot_id_to_u64,
+    CTRL_CAP_TWITCH_QUEUE, CTRL_CAP_UNIFIED_QUEUE, CTRL_PROTOCOL_VERSION, PlaybackGeneration,
+    PlaybackRequestId, ProgressUpdate, QueueOpId, SWAP_TOKEN_ENV, TransitionSummary,
+    UnifiedQueueSlot, UnifiedQueueStateData, slot_id_to_u64,
 };
 
 mod error;

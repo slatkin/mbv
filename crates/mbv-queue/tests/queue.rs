@@ -481,4 +481,5 @@ mod queue {
     mod operations;
     mod schema;
     mod title_parts;
+    mod twitch;
 }

@@ -36,7 +36,7 @@ pub use self::intents::{
     AlbumCursorKind, AudiobookshelfBookIntent, AudiobookshelfBookMove, BookChapterTarget,
     ConfirmIntent, ContextMenuIntent, DaemonLostIntent, FeedsManageIntent, MusicTreeAction,
     PlaylistsTarget, PodcastEpisodeIntent, PodcastEpisodeTarget, SavePlaylistIntent,
-    SettingsIntent,
+    SettingsIntent, TwitchUrlIntent,
 };
 #[doc(inline)]
 pub use self::playback::PlaybackRequest;

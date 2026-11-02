@@ -5,7 +5,7 @@ use super::{
     CTRL_CAP_OWNER_QUEUE_SOURCE_UPDATE, CTRL_CAP_PIN_SWAP, CTRL_CAP_PINNED_SURFACE,
     CTRL_CAP_PLAYBACK_OUTPUT, CTRL_CAP_QUEUE_REPLACE_START_POSITION, CTRL_CAP_QUEUE_SHUFFLE,
     CTRL_CAP_QUEUE_STATE, CTRL_CAP_SERVICE_SETUP_ADMIN, CTRL_CAP_START_INDEX, CTRL_CAP_STATUS_ONLY,
-    CTRL_PROTOCOL_VERSION,
+    CTRL_CAP_TWITCH_QUEUE, CTRL_PROTOCOL_VERSION,
 };
 use serde::{Deserialize, Serialize};
 
@@ -55,6 +55,7 @@ impl CtrlHello {
                 CTRL_CAP_ANSWERED_QUEUE_OPS.to_string(),
                 CTRL_CAP_QUEUE_SHUFFLE.to_string(),
                 CTRL_CAP_QUEUE_REPLACE_START_POSITION.to_string(),
+                CTRL_CAP_TWITCH_QUEUE.to_string(),
             ],
             control_token: None,
             swap_token: None,
@@ -186,6 +187,15 @@ impl CtrlHello {
             .any(|cap| cap == CTRL_CAP_ANSWERED_QUEUE_OPS)
     }
 
+    /// The peer can decode `QueueItem::Twitch` in unified queue commands,
+    /// snapshots, and broadcasts (twitch-url-playback design D6).
+    #[must_use]
+    pub fn supports_twitch_queue(&self) -> bool {
+        self.capabilities
+            .iter()
+            .any(|cap| cap == CTRL_CAP_TWITCH_QUEUE)
+    }
+
     #[must_use]
     pub fn supports_service_setup_admin(&self) -> bool {
         self.capabilities
@@ -313,6 +323,10 @@ pub struct CtrlCompatibility {
     /// (emby-session-owner-output design D3); set from the peer Hello's
     /// `emby-session-output` capability by the Client's handshake.
     pub supports_emby_session_output: bool,
+    /// The peer can decode `QueueItem::Twitch` in unified queue commands,
+    /// snapshots, and broadcasts (twitch-url-playback design D6); set from
+    /// the peer Hello's `twitch-queue` capability by the Client's handshake.
+    pub supports_twitch_queue: bool,
 }
 
 impl CtrlCompatibility {
@@ -338,6 +352,7 @@ impl CtrlCompatibility {
                 supports_queue_replace_start_position: false,
                 supports_playback_output: false,
                 supports_emby_session_output: false,
+                supports_twitch_queue: false,
             }),
             _ => Err(CtrlError::incompatible_protocol(peer_protocol_version)),
         }

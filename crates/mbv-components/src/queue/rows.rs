@@ -133,6 +133,17 @@ fn queue_row_fields(
             },
             i64::try_from(book.duration_ticks.unwrap_or(0)).unwrap_or(i64::MAX),
         ),
+        // A Twitch item keeps no playback state, so a non-active row paints
+        // no position and no runtime.
+        QueueItem::Twitch(item) => (
+            item.title.clone(),
+            if is_active {
+                playback.position_ticks
+            } else {
+                stored_ticks
+            },
+            0,
+        ),
     }
 }
 

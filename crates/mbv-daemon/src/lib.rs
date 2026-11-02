@@ -11,8 +11,8 @@ pub(crate) use ctrl::CtrlOutbound;
 #[doc(inline)]
 pub use ctrl::CtrlTransport;
 pub(crate) use ctrl::{
-    AuthorityHolder, ClientRegistry, CtrlClientId, CtrlClients, CtrlSender, send_to,
-    serialize_ctrl_event, take_authority_for_emby_remote,
+    AuthorityHolder, ClientRegistry, CtrlClientId, CtrlClients, CtrlSender, QueueTransport,
+    send_to, serialize_ctrl_event, take_authority_for_emby_remote,
 };
 
 mod context;

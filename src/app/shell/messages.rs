@@ -149,6 +149,9 @@ impl Model {
             // keyboard dismiss is SettingsIntent::Back. Mouse-only, inert under D16
             // (migrate-tui-to-tuirealm design D16, #628).
             ShellRequest::DismissSettings => {}
+            // Twitch-url-playback task 5.5: the shell owns the capability
+            // check, the host check, and the submission.
+            ShellRequest::TwitchUrlIntent(intent) => self.handle_twitch_url_intent(intent),
             request @ (ShellRequest::QueueRowClick { .. }
             | ShellRequest::QueueRowActivate { .. }
             | ShellRequest::ResizeListPaneLive(_)

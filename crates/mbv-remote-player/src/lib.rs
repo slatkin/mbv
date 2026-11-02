@@ -521,6 +521,13 @@ impl RemotePlayer {
         self.ctrl_compatibility.supports_emby_session_output
     }
 
+    /// The owner accepts Twitch items in unified queue commands
+    /// (twitch-url-playback design D6).
+    #[must_use]
+    pub fn supports_twitch_queue(&self) -> bool {
+        self.ctrl_compatibility.supports_twitch_queue
+    }
+
     /// Send an owner queue operation, using answered correlation when negotiated.
     pub fn send_queue_op(
         &self,

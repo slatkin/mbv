@@ -63,21 +63,30 @@ pub fn video_feed_qi(guid: &str) -> QueueItem {
         played: false,
     })
 }
+
+pub fn twitch_qi(title: &str) -> QueueItem {
+    QueueItem::Twitch(mbv_queue::TwitchItem {
+        url: format!("https://www.twitch.tv/{title}"),
+        title: title.into(),
+    })
+}
 /// Connects a client the same way the accept thread does.
 pub fn connect_client(clients: &mut CtrlClients) -> (u64, mpsc::Receiver<CtrlOutbound>) {
     let (tx, rx) = mpsc::channel();
     let id = clients.connect_with_role(
         tx,
         CtrlTransport::Local,
-        mbv_ctrl::CtrlAudiobookshelfCapabilities {
-            queue: true,
-            progress: true,
-            book_queue: true,
-            book_progress: true,
-        },
         true,
-        false,
-        false,
+        true,
+        crate::ctrl::PeerHelloCapabilities {
+            owner_queue_source_update: true,
+            queue_transport: crate::ctrl::QueueTransport {
+                abs_episode: true,
+                abs_book: true,
+                twitch: true,
+            },
+            ..Default::default()
+        },
         None,
         crate::ctrl::CtrlConnectionRole::Client,
     );

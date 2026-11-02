@@ -153,6 +153,7 @@ impl Model {
         self.dismiss_modal(&Self::confirm_id());
         self.dismiss_modal(&Self::daemon_lost_id());
         self.dismiss_modal(&ComponentId::Modal(ModalId::SavePlaylist));
+        self.dismiss_modal(&ComponentId::Modal(ModalId::TwitchUrl));
         // Re-homes the playback-event trigger that used to clear `App::context_menu`
         // (player_event.rs `raise_daemon_lost_modal`, task 5.3c).
         self.dismiss_modal(&ComponentId::Overlay(OverlayId::ContextMenu));

@@ -9,7 +9,7 @@ use mbv_queue::{PlaybackQueue, QueueItem, QueueRevisionMint, QueueSlotId};
 use rstest::rstest;
 
 use crate::DaemonEvent;
-use crate::tests::{emby_qi, item, video_feed_qi};
+use crate::tests::{emby_qi, item, twitch_qi, video_feed_qi};
 
 use super::EmbySessionEvent;
 use super::fake::{FakeSessionApi, SessionCall, session};
@@ -78,6 +78,7 @@ fn worker_runs_jobs_in_order_and_returns_the_poll_as_an_owner_event() {
 #[case::video_on_a_session_with_no_advertised_kinds(&[], emby_qi("movie", "Video", "Movie"), None)]
 #[case::video_on_an_audio_only_session(&["Audio"], emby_qi("movie", "Video", "Movie"), Some(("movie", "the Session does not play Video items")))]
 #[case::feed_entry_on_any_session(&[], video_feed_qi("episode-1"), Some(("episode-1", "the Emby Session output plays only Emby items")))]
+#[case::twitch_item_on_any_session(&[], twitch_qi("somechannel"), Some(("somechannel", "the Emby Session output plays only Emby items")))]
 fn admission_admits_only_emby_items_the_session_plays(
     #[case] advertised: &[&str],
     #[case] item: QueueItem,

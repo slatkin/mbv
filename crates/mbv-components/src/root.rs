@@ -13,6 +13,7 @@ const OVERLAY_IDS: &[ComponentId] = &[
     ComponentId::Overlay(OverlayId::Settings),
     ComponentId::Overlay(OverlayId::Playlists),
     ComponentId::Modal(ModalId::SavePlaylist),
+    ComponentId::Modal(ModalId::TwitchUrl),
     ComponentId::Overlay(OverlayId::Help),
     ComponentId::Modal(ModalId::Confirm),
     ComponentId::Modal(ModalId::DaemonLost),

@@ -232,3 +232,36 @@ fn f5_with_queue_focus_refreshes_the_selected_library_through_tick() {
         "F5 must not send an owner Queue refresh"
     );
 }
+
+/// The Twitch URL opener mounts the prompt through the live tick path
+/// (twitch-url-playback task 5.5): Shift+T resolves the shell-owned mount
+/// command and the dispatch mounts the modal with the focus on it.
+#[test]
+fn twitch_url_opener_mounts_the_prompt_through_tick() {
+    let mut harness = TickHarness::new(make_app_stub());
+
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Char('T'),
+        modifiers: KeyModifiers::SHIFT,
+    }));
+    let outcome = harness.step();
+    assert_eq!(
+        outcome.router,
+        RouterOutcome::Command(ShellCommand::OpenTwitchUrl.into()),
+        "Shift+T resolves the Twitch URL opener through tick()"
+    );
+    harness
+        .model_mut()
+        .dispatch_router_command(&ShellCommand::OpenTwitchUrl.into());
+
+    let prompt = mbv_ui_msg::ComponentId::Modal(mbv_ui_msg::ModalId::TwitchUrl);
+    assert!(
+        harness.model().application.mounted(&prompt),
+        "the opener must mount the Twitch URL prompt"
+    );
+    assert_eq!(
+        harness.model().application.focus(),
+        Some(&prompt),
+        "the prompt must hold the focus while it is open"
+    );
+}

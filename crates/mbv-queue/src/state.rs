@@ -65,7 +65,11 @@ impl QueueState {
             .iter()
             .filter_map(|qi| match qi {
                 crate::QueueItem::Emby(e) => Some((**e).clone()),
-                crate::QueueItem::Feed(_) | crate::QueueItem::Audiobookshelf(_) => None,
+                // Feed, Audiobookshelf, and Twitch items have no Emby
+                // counterpart.
+                crate::QueueItem::Feed(_)
+                | crate::QueueItem::Audiobookshelf(_)
+                | crate::QueueItem::Twitch(_) => None,
             })
             .collect()
     }
@@ -175,7 +179,9 @@ impl QueueState {
                 crate::QueueItem::Audiobookshelf(crate::AudiobookshelfItem::Book(book)) => {
                     book.position_ticks = 0;
                 }
-                crate::QueueItem::Feed(_) => {}
+                // Feed keeps its locally recorded position and a Twitch
+                // item keeps no playback state.
+                crate::QueueItem::Feed(_) | crate::QueueItem::Twitch(_) => {}
             }
         }
         state

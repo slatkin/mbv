@@ -152,6 +152,9 @@ impl Model {
                     anchor,
                 );
             }
+            // A Twitch row offers the generic queue actions only: it carries
+            // no Service destination menu (design D8).
+            QueueItem::Twitch(_) => {}
         }
     }
 
@@ -454,6 +457,7 @@ mod tests {
                     book.title.clone()
                 }
                 QueueItem::Feed(entry) => entry.title.clone(),
+                QueueItem::Twitch(item) => item.title.clone(),
             })
             .collect();
         assert_eq!(titles, vec!["Entry", "Episode", "Movie"]);

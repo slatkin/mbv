@@ -15,7 +15,7 @@ use super::home::HomeRequest;
 use super::intents::{
     AlbumCursorKind, AudiobookshelfBookIntent, AudiobookshelfBookMove, ConfirmIntent,
     ContextMenuIntent, DaemonLostIntent, FeedsManageIntent, PodcastEpisodeIntent,
-    SavePlaylistIntent, SettingsIntent,
+    SavePlaylistIntent, SettingsIntent, TwitchUrlIntent,
 };
 use super::queue::QueueIntent;
 use mbv_ui_model::context_menu::ContextMenuTargets;
@@ -291,6 +291,10 @@ pub enum ShellRequest {
     DismissSettings,
     /// Semantic save-playlist action; local text editing stays in the component.
     SavePlaylistIntent(SavePlaylistIntent),
+    /// Semantic Twitch URL prompt action (twitch-url-playback D7): the
+    /// component owns the typed URL and the refusal display; the shell owns
+    /// the host check, the capability check, and the submission effect.
+    TwitchUrlIntent(TwitchUrlIntent),
     QueueIntent(QueueIntent),
     /// A Queue-surface wheel scroll over the component's own list area
     /// Semantic settings navigation/action intent; local cursor state stays

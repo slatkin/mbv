@@ -290,7 +290,9 @@ impl ActiveItemLifecycle {
                 }
                 _ => Self::None,
             },
-            QueueItem::Feed(_) => Self::None,
+            // Neither a Feed entry nor a Twitch item owns a playback
+            // lifecycle: a Twitch item keeps no playback state.
+            QueueItem::Feed(_) | QueueItem::Twitch(_) => Self::None,
         }
     }
 

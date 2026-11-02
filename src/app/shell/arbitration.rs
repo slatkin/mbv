@@ -386,6 +386,13 @@ impl Model {
                     self.mount_help();
                     false
                 }
+                // The Twitch URL prompt is shell-owned like Help: the mount
+                // happens on the `TuiRealm` focus stack (twitch-url-playback
+                // D7, task 5.5).
+                ShellCommand::OpenTwitchUrl => {
+                    self.mount_twitch_url_modal();
+                    false
+                }
                 // The podcast Latest pill is component-local state; the refresh
                 // carries the owner's pill answer so the destination shelf is
                 // fetched only while Latest is selected (spec

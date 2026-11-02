@@ -82,10 +82,9 @@ fn admission_session(
         clients.lock().unwrap().connect_with_role(
             existing_tx,
             CtrlTransport::Local,
-            mbv_ctrl::CtrlAudiobookshelfCapabilities::default(),
             false,
             false,
-            false,
+            crate::ctrl::PeerHelloCapabilities::default(),
             None,
             crate::ctrl::CtrlConnectionRole::Client,
         );

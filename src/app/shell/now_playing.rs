@@ -30,7 +30,12 @@ pub(in crate::app) fn derive_workspace_now_playing(app: &App) -> Option<Workspac
             item_id: ItemId::new(item.id.clone()),
             progress: clamped_live_progress(state.position_ticks, state.runtime_ticks),
         }),
-        QueueItem::Feed(_) | QueueItem::Audiobookshelf(AudiobookshelfItem::Episode(_)) => None,
+        // Feed entries, Audiobookshelf podcast episodes, and Twitch items
+        // derive nothing: no workspace projects their rows (change non-goals;
+        // a Twitch item keeps no playback state).
+        QueueItem::Feed(_)
+        | QueueItem::Audiobookshelf(AudiobookshelfItem::Episode(_))
+        | QueueItem::Twitch(_) => None,
         QueueItem::Audiobookshelf(AudiobookshelfItem::Book(book)) => {
             playing_book_chapter(app, &state, book)
         }

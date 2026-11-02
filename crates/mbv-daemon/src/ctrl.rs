@@ -4,10 +4,7 @@ use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use mbv_ctrl::{
-    AttachedClients, AttachedClientsCell, CtrlAudiobookshelfCapabilities, CtrlEvent,
-    DisconnectReason,
-};
+use mbv_ctrl::{AttachedClients, AttachedClientsCell, CtrlEvent, DisconnectReason};
 
 pub(crate) type CtrlClientId = u64;
 pub(crate) type CtrlSender = mpsc::Sender<CtrlOutbound>;
@@ -77,20 +74,39 @@ pub(crate) enum SwapSurface {
     Pinned,
 }
 
+/// Which `QueueItem` kinds a ctrl peer transports in unified-queue
+/// commands, snapshots, and broadcasts, each independently negotiated at
+/// Hello (`abs-queue` for Audiobookshelf episodes, `abs-book-queue` for
+/// books, `twitch-queue` for Twitch; spec *Twitch item transport is
+/// additively negotiated*). Gates transport in both directions: the slots
+/// the Owner sends and the items a peer submits.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Hash)]
+pub(crate) struct QueueTransport {
+    pub(crate) abs_episode: bool,
+    pub(crate) abs_book: bool,
+    pub(crate) twitch: bool,
+}
+
+/// The optional per-peer capabilities negotiated at Hello beyond the
+/// Audiobookshelf progress pair, each independently advertised (see the
+/// `CTRL_CAP_*` docs): owner-queue source updates, the playback-output
+/// surfaces, and the per-item-kind queue transports ([`QueueTransport`]).
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) struct PeerHelloCapabilities {
+    pub(crate) owner_queue_source_update: bool,
+    pub(crate) playback_output: bool,
+    pub(crate) emby_session_output: bool,
+    pub(crate) queue_transport: QueueTransport,
+}
+
 struct CtrlClient {
     id: CtrlClientId,
     tx: CtrlSender,
     transport: CtrlTransport,
     /// Capabilities advertised by this peer at Hello.
-    audiobookshelf: CtrlAudiobookshelfCapabilities,
-    supports_owner_queue_source_update: bool,
-    /// Whether the peer negotiated `playback-output` at Hello
-    /// (cast-owner-output design D3); gates `CtrlEvent::PlaybackOutput`.
-    supports_playback_output: bool,
-    /// Whether the peer negotiated `emby-session-output` at Hello
-    /// (emby-session-owner-output design D3); a peer without it receives
-    /// `OutputState::Local` in place of an Emby Session output.
-    supports_emby_session_output: bool,
+    abs_progress: bool,
+    abs_book_progress: bool,
+    capabilities: PeerHelloCapabilities,
     role: CtrlConnectionRole,
     swap_surface: Option<SwapSurface>,
 }
@@ -173,14 +189,17 @@ impl CtrlClients {
     /// authority returns to `Ctrl`. A non-Client role keeps the admin
     /// registry rules (design D7): never a driver, never held, never a Pin
     /// target.
+    /// Connects `tx` as a new ctrl connection. `abs_progress` and
+    /// `abs_book_progress` carry the Audiobookshelf progress negotiations;
+    /// `capabilities` carries the remaining Hello capabilities including the
+    /// per-item-kind queue transports.
     pub(crate) fn connect_with_role(
         &mut self,
         tx: CtrlSender,
         transport: CtrlTransport,
-        audiobookshelf: CtrlAudiobookshelfCapabilities,
-        supports_owner_queue_source_update: bool,
-        supports_playback_output: bool,
-        supports_emby_session_output: bool,
+        abs_progress: bool,
+        abs_book_progress: bool,
+        capabilities: PeerHelloCapabilities,
         swap_surface: Option<SwapSurface>,
         role: CtrlConnectionRole,
     ) -> CtrlClientId {
@@ -197,10 +216,9 @@ impl CtrlClients {
             id,
             tx,
             transport,
-            audiobookshelf,
-            supports_owner_queue_source_update,
-            supports_playback_output,
-            supports_emby_session_output,
+            abs_progress,
+            abs_book_progress,
+            capabilities,
             role,
             swap_surface,
         });
@@ -273,30 +291,24 @@ impl CtrlClients {
             .map(|client| client.transport)
     }
 
-    /// Whether the client `id` advertised `abs-queue` support at Hello.
-    /// Used to gate Audiobookshelf `QueueItem` transport in both directions.
-    pub(crate) fn supports_abs_queue(&self, id: CtrlClientId) -> bool {
+    /// The queue transports client `id` negotiated at Hello. Used to gate
+    /// `QueueItem` transport in both directions; an unknown id negotiates
+    /// no transports at all.
+    pub(crate) fn queue_transport(&self, id: CtrlClientId) -> QueueTransport {
         self.connection
             .iter()
             .find(|c| c.id == id)
-            .is_some_and(|c| c.audiobookshelf.queue)
+            .map(|c| c.capabilities.queue_transport)
+            .unwrap_or_default()
     }
 
-    /// Whether the client `id` advertised `abs-book-queue` support at Hello.
-    /// Used to gate Audiobookshelf book `QueueItem` transport in both
-    /// directions.
+    /// Whether the client `id` advertised `owner-queue-load` support at
+    /// Hello.
     pub(crate) fn supports_owner_queue_source_update(&self, id: CtrlClientId) -> bool {
         self.connection
             .iter()
             .find(|c| c.id == id)
-            .is_some_and(|c| c.supports_owner_queue_source_update)
-    }
-
-    pub(crate) fn supports_abs_book_queue(&self, id: CtrlClientId) -> bool {
-        self.connection
-            .iter()
-            .find(|c| c.id == id)
-            .is_some_and(|c| c.audiobookshelf.book_queue)
+            .is_some_and(|c| c.capabilities.owner_queue_source_update)
     }
 
     pub(crate) fn send_to_client(&self, id: CtrlClientId, event: &CtrlEvent) {
@@ -322,39 +334,26 @@ impl CtrlClients {
         });
     }
 
-    /// Broadcasts a state event gated per client, excluding `except` when
-    /// provided:
-    /// - `unified_full_json` → peers advertising `abs-queue` + `abs-book-queue`
-    /// - `unified_abs_json` → peers advertising `abs-queue` only
-    /// - `unified_book_json` → peers advertising `abs-book-queue` only
-    /// - `unified_json` → all others
+    /// Broadcasts a unified-queue state event gated per client, excluding
+    /// `except` when provided: `json_for` projects the event for one peer's
+    /// negotiated queue transports ([`QueueTransport`]). A `None` projection
+    /// skips that peer. Callers memoize the serialization so each distinct
+    /// transport combination serializes once.
     ///
     /// Mirrors `broadcast_to_all`'s drop-on-failed-send behavior.
     pub(crate) fn broadcast_state_gated(
         &mut self,
-        unified_full_json: &str,
-        unified_abs_json: &str,
-        unified_book_json: &str,
-        unified_json: &str,
+        mut json_for: impl FnMut(QueueTransport) -> Option<String>,
         except: Option<CtrlClientId>,
     ) {
         self.retain_clients(|client| {
             if except == Some(client.id) {
                 return true;
             }
-            let json = match (
-                client.audiobookshelf.queue,
-                client.audiobookshelf.book_queue,
-            ) {
-                (true, true) => unified_full_json,
-                (true, false) => unified_abs_json,
-                (false, true) => unified_book_json,
-                (false, false) => unified_json,
+            let Some(json) = json_for(client.capabilities.queue_transport) else {
+                return true;
             };
-            client
-                .tx
-                .send(CtrlOutbound::Event(json.to_string()))
-                .is_ok()
+            client.tx.send(CtrlOutbound::Event(json)).is_ok()
         });
     }
 
@@ -363,13 +362,13 @@ impl CtrlClients {
     /// silently skipped (not dropped) — mirrors `broadcast_state_gated`'s
     /// drop-on-failed-send semantics for the peers that do receive it.
     pub(crate) fn broadcast_progress_gated(&mut self, json: &str) {
-        self.broadcast_gated(json, |client| client.audiobookshelf.progress);
+        self.broadcast_gated(json, |client| client.abs_progress);
     }
 
     /// Sends redacted Audiobookshelf book progress `json` only to clients
     /// that advertised `abs-book-progress` at Hello.
     pub(crate) fn broadcast_book_progress_gated(&mut self, json: &str) {
-        self.broadcast_gated(json, |client| client.audiobookshelf.book_progress);
+        self.broadcast_gated(json, |client| client.abs_book_progress);
     }
 
     /// Sends the playback-output state only to clients that negotiated
@@ -380,10 +379,10 @@ impl CtrlClients {
     /// `broadcast_progress_gated`.
     pub(crate) fn broadcast_playback_output_gated(&mut self, state: &mbv_ctrl::OutputState) {
         self.retain_clients(|client| {
-            if !client.supports_playback_output {
+            if !client.capabilities.playback_output {
                 return true;
             }
-            let state = output_state_for_peer(state, client.supports_emby_session_output);
+            let state = output_state_for_peer(state, client.capabilities.emby_session_output);
             let Some(json) = serialize_ctrl_event(&CtrlEvent::PlaybackOutput(state)) else {
                 return true;
             };
@@ -477,10 +476,9 @@ mod tests {
         clients.connect_with_role(
             tx,
             transport,
-            CtrlAudiobookshelfCapabilities::default(),
             false,
             false,
-            false,
+            PeerHelloCapabilities::default(),
             surface,
             CtrlConnectionRole::Client,
         )
@@ -545,10 +543,9 @@ mod tests {
         clients.connect_with_role(
             tx,
             CtrlTransport::Local,
-            CtrlAudiobookshelfCapabilities::default(),
             false,
             false,
-            false,
+            PeerHelloCapabilities::default(),
             None,
             CtrlConnectionRole::OwnerAction,
         );
@@ -556,10 +553,9 @@ mod tests {
         clients.connect_with_role(
             tx,
             CtrlTransport::Local,
-            CtrlAudiobookshelfCapabilities::default(),
             false,
             false,
-            false,
+            PeerHelloCapabilities::default(),
             None,
             CtrlConnectionRole::ServiceSetupAdmin,
         );
@@ -603,10 +599,9 @@ mod tests {
         admin_only.connect_with_role(
             tx,
             CtrlTransport::Local,
-            CtrlAudiobookshelfCapabilities::default(),
             false,
             false,
-            false,
+            PeerHelloCapabilities::default(),
             None,
             CtrlConnectionRole::OwnerAction,
         );

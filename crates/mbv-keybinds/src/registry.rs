@@ -146,7 +146,7 @@ impl KeybindAction {
 /// hard binding (`Ctrl+q` already triggers quit in the daemon-lost overlay).
 pub const RESERVED_CHORDS: &[&str] = &["Ctrl+q"];
 
-/// The declared action table: 20 router-owned global chords plus the 12
+/// The declared action table: the router-owned global actions plus the 12
 /// split transport actions, grouped by section.
 pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
     // ── Global (chrome not tied to one settings domain) ─────────────────
@@ -165,6 +165,17 @@ pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
         default_chords: &["F2"],
         gate: KeyGate::NoBlockingOverlay,
         policy: "settings_open",
+        rebindable: true,
+        prefix_addressable: true,
+    },
+    KeybindAction {
+        id: "twitch_url_open",
+        section: KeySection::Global,
+        // Crossterm-case treatment (as `next_track`): Shift+t arrives as
+        // Char('T') + SHIFT, so the declared chord carries SHIFT.
+        default_chords: &["Shift+T"],
+        gate: KeyGate::NoBlockingOverlay,
+        policy: "twitch_url_open",
         rebindable: true,
         prefix_addressable: true,
     },

@@ -141,6 +141,12 @@ pub fn prepare_cast_source(
             &name,
             &CastError::audiobookshelf_book(&book.title),
         )),
+        // A Twitch URL is a page URL, not a castable media URL, so the item
+        // is uncastable.
+        QueueItem::Twitch(item) => Err(Uncastable::for_item(
+            &name,
+            &CastError::twitch_page_url(&item.title),
+        )),
     }
 }
 

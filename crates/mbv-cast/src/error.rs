@@ -41,6 +41,7 @@ pub(crate) enum TransportKind {
 #[derive(Debug, Clone, Copy)]
 enum DispatchKind {
     FeedNoUrl,
+    TwitchPageUrl,
     AudiobookshelfHls,
     AudiobookshelfBook,
     EmbyUnavailable,
@@ -114,6 +115,15 @@ impl CastError {
         Self::new(
             CastErrorKind::Dispatch(DispatchKind::FeedNoUrl),
             format!("\"{title}\" has no media URL to cast"),
+        )
+    }
+
+    /// A Twitch item's URL is a page URL, not a castable media URL.
+    #[must_use]
+    pub fn twitch_page_url(title: &str) -> Self {
+        Self::new(
+            CastErrorKind::Dispatch(DispatchKind::TwitchPageUrl),
+            format!("\"{title}\" is a Twitch URL and can't be cast"),
         )
     }
 
@@ -277,6 +287,7 @@ impl DispatchKind {
     fn kind_name(self) -> &'static str {
         match self {
             Self::FeedNoUrl => "cast.feed_no_url",
+            Self::TwitchPageUrl => "cast.twitch_page_url",
             Self::AudiobookshelfHls => "cast.audiobookshelf_hls",
             Self::AudiobookshelfBook => "cast.audiobookshelf_book",
             Self::EmbyUnavailable => "cast.emby_unavailable",

@@ -7,7 +7,9 @@
 //! truncates and wraps).
 
 use mbv_emby_model::{EmbyItem, TICKS_PER_SECOND};
-use mbv_queue::{AudiobookshelfBookQueueItem, AudiobookshelfQueueItem, FeedEntry, QueueItem};
+use mbv_queue::{
+    AudiobookshelfBookQueueItem, AudiobookshelfQueueItem, FeedEntry, QueueItem, TwitchItem,
+};
 
 use mbv_render::components::hero_model::{SERIES_LANDSCAPE_IMAGE_TYPES, emby_hero_meta_rows_plain};
 use mbv_render::components::home_video::format_release_date;
@@ -489,6 +491,31 @@ pub fn hero_content_queue(item: &QueueItem) -> HeroContentData {
             hero_content_abs_book(book)
         }
         QueueItem::Feed(entry) => hero_content_feed(entry),
+        QueueItem::Twitch(item) => hero_content_twitch(item),
+    }
+}
+
+/// The Twitch producer (design D8): the URL-derived title only — a Twitch
+/// item carries no provider metadata, duration, or progress.
+#[must_use]
+pub fn hero_content_twitch(item: &TwitchItem) -> HeroContentData {
+    let facts = HeroFacts {
+        title: item.title.clone(),
+        meta_rows: Vec::new(),
+        duration_row: None,
+        progress_row: None,
+        links: Vec::new(),
+        artwork: HeroArtwork {
+            shape: ArtworkShape::Landscape,
+            source: None,
+            decoration: None,
+            image: HeroImageState::None,
+        },
+    };
+    HeroContentData {
+        facts,
+        overview: None,
+        credits: None,
     }
 }
 

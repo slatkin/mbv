@@ -3,7 +3,7 @@ use super::{
     PlaybackQueue, PlayerCommand, PlayerOwnerState, QueueItem, QueueSlotId, RejectContext,
     abs_queue_transport_rejection, admit_queue_items, admit_queue_slots, audio_only_rejection,
     broadcast_queue_state, daemon_admits, mint_queue_lineage, reject_command, reset_slot_jumps,
-    submit_queue_slots_for_replace,
+    submit_queue_slots_for_replace, twitch_queue_transport_rejection,
 };
 use crate::AudiobookshelfOwnerContext;
 use crate::ctrl::CtrlClientId;
@@ -43,18 +43,12 @@ pub(super) fn handle_adopt_queue(
         );
         return;
     }
-    let supports_abs_queue = ctx
-        .ctrl_clients
-        .lock()
-        .unwrap()
-        .supports_abs_queue(ctx.client_id);
-    let supports_abs_book_queue = ctx
-        .ctrl_clients
-        .lock()
-        .unwrap()
-        .supports_abs_book_queue(ctx.client_id);
-    if let Some(reason) =
-        abs_queue_transport_rejection(&items, supports_abs_queue, supports_abs_book_queue)
+    let queue_transport = {
+        let clients = ctx.ctrl_clients.lock().unwrap();
+        clients.queue_transport(ctx.client_id)
+    };
+    if let Some(reason) = abs_queue_transport_rejection(&items, queue_transport)
+        .or_else(|| twitch_queue_transport_rejection(&items, queue_transport))
     {
         reject_command(
             &RejectContext {
@@ -308,21 +302,13 @@ fn prepare_replacement_slots(
         .iter()
         .map(|(_, item)| item.clone())
         .collect();
-    let supports_abs_queue = ctx
-        .ctrl_clients
-        .lock()
-        .unwrap()
-        .supports_abs_queue(ctx.client_id);
-    let supports_abs_book_queue = ctx
-        .ctrl_clients
-        .lock()
-        .unwrap()
-        .supports_abs_book_queue(ctx.client_id);
-    if let Some(reason) = abs_queue_transport_rejection(
-        &submitted_items,
-        supports_abs_queue,
-        supports_abs_book_queue,
-    ) {
+    let queue_transport = {
+        let clients = ctx.ctrl_clients.lock().unwrap();
+        clients.queue_transport(ctx.client_id)
+    };
+    if let Some(reason) = abs_queue_transport_rejection(&submitted_items, queue_transport)
+        .or_else(|| twitch_queue_transport_rejection(&submitted_items, queue_transport))
+    {
         return Err(crate::DaemonLibError::queue_setup(reason));
     }
     let (slots, next_cursor) = admit_queue_slots(
@@ -576,18 +562,12 @@ fn admit_append_items(
     lineage: mbv_queue::QueueLineage,
 ) -> Option<Vec<QueueItem>> {
     let reject = |reason: &str| reject_command(&ctx.rejection_context(lineage), reason);
-    let supports_abs_queue = ctx
-        .ctrl_clients
-        .lock()
-        .unwrap()
-        .supports_abs_queue(ctx.client_id);
-    let supports_abs_book_queue = ctx
-        .ctrl_clients
-        .lock()
-        .unwrap()
-        .supports_abs_book_queue(ctx.client_id);
-    if let Some(reason) =
-        abs_queue_transport_rejection(&items, supports_abs_queue, supports_abs_book_queue)
+    let queue_transport = {
+        let clients = ctx.ctrl_clients.lock().unwrap();
+        clients.queue_transport(ctx.client_id)
+    };
+    if let Some(reason) = abs_queue_transport_rejection(&items, queue_transport)
+        .or_else(|| twitch_queue_transport_rejection(&items, queue_transport))
     {
         reject(&reason);
         return None;

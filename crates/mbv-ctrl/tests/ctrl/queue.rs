@@ -171,6 +171,56 @@ fn unified_queue_replace_decodes_without_slot_identity() {
     assert_eq!(op, None);
 }
 
+// twitch-url-playback task 4.1: a Twitch item rides the existing unified
+// queue shapes unchanged; the round trip pins the `Twitch` serde tag and the
+// item's field shape on the command path (the conformance fixture pins the
+// same shape as a corpus row).
+#[test]
+fn unified_queue_replace_round_trips_a_twitch_item() {
+    let item = QueueItem::Twitch(
+        mbv_queue::TwitchItem::from_url("https://twitch.tv/somechannel").unwrap(),
+    );
+    let cmd = CtrlCmd::UnifiedQueueReplace {
+        items: vec![item.clone()],
+        slots: vec![UnifiedQueueSlot {
+            slot_id: 1,
+            item: item.clone(),
+        }],
+        start_idx: Some(0),
+        source: QueueSource::Unknown,
+        start_position_secs: None,
+        op: None,
+    };
+
+    let wire = serde_json::to_string(&cmd).unwrap();
+    let decoded: CtrlCmd = serde_json::from_str(&wire).unwrap();
+
+    // The decode re-encodes to the same wire bytes, so no field was dropped.
+    assert_eq!(wire, serde_json::to_string(&decoded).unwrap());
+
+    let CtrlCmd::UnifiedQueueReplace {
+        items,
+        slots,
+        start_idx,
+        ..
+    } = decoded
+    else {
+        panic!("expected UnifiedQueueReplace")
+    };
+    assert_eq!(start_idx, Some(0));
+    let [item] = items.as_slice() else {
+        panic!("expected one item")
+    };
+    let QueueItem::Twitch(twitch) = item else {
+        panic!("expected a Twitch item")
+    };
+    assert_eq!(twitch.url, "https://twitch.tv/somechannel");
+    assert_eq!(twitch.title, "somechannel");
+    assert_eq!(slots.len(), 1);
+    assert_eq!(slots[0].slot_id, 1);
+    assert!(matches!(&slots[0].item, QueueItem::Twitch(_)));
+}
+
 // queue-handoff-and-take task 2.1: `start_position_secs` is additive — a
 // carried position round-trips, and a payload from a peer that predates the
 // field decodes with `None` (design D4). The corpus pins the canonical

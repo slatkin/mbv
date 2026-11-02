@@ -138,6 +138,7 @@ fn item_kind(item: &QueueItem) -> &str {
         }
         QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Book(_)) => "AudiobookshelfBook",
         QueueItem::Feed(_) => "Feed",
+        QueueItem::Twitch(_) => "Twitch",
     }
 }
 

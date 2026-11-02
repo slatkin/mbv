@@ -197,7 +197,9 @@ pub(in crate::app) fn is_blocking_overlay(id: &ComponentId) -> bool {
     matches!(
         id,
         ComponentId::Overlay(OverlayId::ContextMenu)
-            | ComponentId::Modal(ModalId::Confirm | ModalId::DaemonLost | ModalId::SavePlaylist,)
+            | ComponentId::Modal(
+                ModalId::Confirm | ModalId::DaemonLost | ModalId::SavePlaylist | ModalId::TwitchUrl,
+            )
             | ComponentId::Popup(
                 PopupId::Multiselect | PopupId::LibraryRoutes | PopupId::FeedManage,
             )

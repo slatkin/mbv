@@ -649,6 +649,18 @@ fn initial_item_state(item: &QueueItem) -> InitialItemState {
                 past: false,
             }
         }
+        // A Twitch item keeps no playback state: it starts at the beginning
+        // and carries only its URL-derived OSD title.
+        QueueItem::Twitch(item) => InitialItemState {
+            position_ticks: 0,
+            osd_title: item.title.clone(),
+            series_id: ItemId::empty(),
+            season: 0,
+            episode: 0,
+            intro_start: 0,
+            intro_end: 0,
+            past: false,
+        },
         QueueItem::Audiobookshelf(item) => {
             let runtime = i64::try_from(item.duration().unwrap_or(0)).unwrap_or(i64::MAX);
             let position_ticks = item.playback_position_ticks();
@@ -691,6 +703,9 @@ pub(crate) fn mpv_url_for_queue_item(
             )
         }
         MpvUrlSource::Feed(entry) => entry.primary_source().unwrap_or("").to_string(),
+        // mpv's built-in yt-dlp hook resolves the Twitch URL (design D3): the
+        // URL goes to mpv unchanged.
+        MpvUrlSource::Twitch(item) => item.url.clone(),
     }
 }
 
@@ -702,3 +717,6 @@ impl Drop for PlaybackRun {
         self.close_prepared_source();
     }
 }
+
+#[cfg(test)]
+mod tests;

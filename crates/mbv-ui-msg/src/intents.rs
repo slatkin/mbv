@@ -195,3 +195,12 @@ pub enum SavePlaylistIntent {
     Dismiss,
     Submit,
 }
+
+/// Semantic Twitch URL prompt intent (twitch-url-playback D7). The component
+/// owns text editing and reports the typed URL; the shell owns the host
+/// check (`TwitchItem::from_url`) and the submission effect.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TwitchUrlIntent {
+    Submit(String),
+    Cancel,
+}

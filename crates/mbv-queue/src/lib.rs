@@ -23,6 +23,9 @@ pub use items::{
     MpvUrlSource, PlaybackTitlePart, PlaybackTitlePartRole, PlaybackTitleParts, QueueItem,
     QueueItemContentId, QueueItemKind,
 };
+mod twitch;
+#[doc(inline)]
+pub use twitch::{TwitchItem, TwitchUrlError};
 mod kinds;
 #[doc(inline)]
 pub use kinds::{FeedKind, ServiceKind};
@@ -586,10 +589,12 @@ impl PlaybackQueue {
         let mut changed = false;
 
         for mut slot in old_slots {
-            // Feed and Audiobookshelf slots (both episode and book shapes)
-            // have no Emby server counterpart; keep them as-is
+            // Feed, Twitch, and Audiobookshelf slots (both episode and book
+            // shapes) have no Emby server counterpart; keep them as-is
             // (group_fetched_items_by_item_id is Emby-only).
-            if matches!(slot.item, QueueItem::Feed(_)) || slot.item.is_audiobookshelf() {
+            if matches!(slot.item, QueueItem::Feed(_) | QueueItem::Twitch(_))
+                || slot.item.is_audiobookshelf()
+            {
                 if should_protect_missing_slot(&slot, active_slot_id) {
                     result.protected_slots.push(slot.slot_id);
                 }

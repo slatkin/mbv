@@ -132,6 +132,9 @@ pub(in crate::app) enum KeyPolicyBinding {
     SessionsSidebarTransfer,
     PlaylistsOpen,
     SearchOpen,
+    /// The Twitch URL prompt opener (twitch-url-playback D7): a
+    /// shell-owned modal mount, dispatched as a `ShellCommand` like Help.
+    TwitchUrlOpen,
     HelpOpen,
     Quit,
     NextLibraryTab,
@@ -319,6 +322,13 @@ pub(in crate::app) const KEY_POLICY: &[KeyPolicyEntry] = &[
         name: "search_open",
         global: true,
         binding: KeyPolicyBinding::SearchOpen,
+        gate: KeyPolicyGate::NoBlockingOverlay,
+        blocking: false,
+    },
+    KeyPolicyEntry {
+        name: "twitch_url_open",
+        global: true,
+        binding: KeyPolicyBinding::TwitchUrlOpen,
         gate: KeyPolicyGate::NoBlockingOverlay,
         blocking: false,
     },
@@ -606,6 +616,7 @@ fn command_for_simple_binding(binding: KeyPolicyBinding) -> Option<Command> {
         KeyPolicyBinding::SessionsOpen => Some(NavigationIntent::OpenSessions.into()),
         KeyPolicyBinding::PlaylistsOpen => Some(NavigationIntent::OpenPlaylists.into()),
         KeyPolicyBinding::SearchOpen => Some(NavigationIntent::OpenSearch.into()),
+        KeyPolicyBinding::TwitchUrlOpen => Some(ShellCommand::OpenTwitchUrl.into()),
         KeyPolicyBinding::HelpOpen => Some(ShellCommand::OpenHelp.into()),
         KeyPolicyBinding::Quit => Some(AppCommand::Quit.into()),
         KeyPolicyBinding::PanelRight => Some(PanelIntent::FocusPanel(PanelFocus::Library).into()),

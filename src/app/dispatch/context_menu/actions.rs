@@ -611,6 +611,9 @@ impl App {
                 let finished = self.audiobookshelf_target_finished(&target);
                 self.start_audiobookshelf_mark(vec![target], !finished);
             }
+            // A Twitch row offers the generic queue actions only: played
+            // state is a Service concept it does not carry (design D8).
+            QueueItem::Twitch(_) => {}
         }
     }
 

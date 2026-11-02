@@ -117,6 +117,11 @@ pub const CTRL_CAP_QUEUE_REPLACE_START_POSITION: &str = "queue-replace-start-pos
 /// Peer supports correlated owner-answered queue operations.
 /// Additive — no protocol-version bump.
 pub const CTRL_CAP_ANSWERED_QUEUE_OPS: &str = "answered-queue-ops";
+/// Peer can decode `QueueItem::Twitch` in unified queue commands, snapshots,
+/// and broadcasts. Static protocol support only — does not imply a daemon
+/// owner is eligible to bind or play the item. Additive — no protocol-version
+/// bump.
+pub const CTRL_CAP_TWITCH_QUEUE: &str = "twitch-queue";
 
 pub type PlaybackRequestId = u64;
 pub type PlaybackGeneration = u64;

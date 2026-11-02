@@ -816,6 +816,19 @@
             "kind"
           ],
           "type": "object"
+        },
+        {
+          "$ref": "#/$defs/TwitchItem",
+          "properties": {
+            "kind": {
+              "const": "Twitch",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
         }
       ]
     },
@@ -897,6 +910,22 @@
                 "library_item_id"
               ],
               "type": "object"
+            }
+          },
+          "required": [
+            "provider",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "provider": {
+              "const": "Twitch",
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
             }
           },
           "required": [
@@ -1035,6 +1064,22 @@
           "type": "string"
         }
       ]
+    },
+    "TwitchItem": {
+      "description": "A queued Twitch URL: the URL as given plus a title derived from it.",
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "url",
+        "title"
+      ],
+      "type": "object"
     },
     "UnifiedQueueSlot": {
       "description": "One slot in the unified queue representation.  The `slot_id` is the\nstable runtime identity of the occurrence (not the item's content ID).",

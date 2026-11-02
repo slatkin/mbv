@@ -58,6 +58,7 @@ mod root;
 mod run;
 mod settings;
 mod tv_workspace;
+mod twitch_url;
 mod ui_state_reset;
 
 /// How often the `TuiRealm` crossterm listener worker polls the terminal for
