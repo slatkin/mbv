@@ -48,6 +48,9 @@ pub(crate) fn resume_source(item: &QueueItem) -> ResumeSource {
             }
         }
         QueueItem::Feed(_) => ResumeSource::Local,
+        // A Twitch item keeps no playback state anywhere, so it always starts
+        // from the beginning.
+        QueueItem::Twitch(_) => ResumeSource::Beginning,
         QueueItem::Audiobookshelf(AudiobookshelfItem::Episode(_) | AudiobookshelfItem::Book(_)) => {
             ResumeSource::Session
         }
@@ -232,7 +235,8 @@ fn server_item(item: &mut QueueItem) -> Option<&mut EmbyItem> {
     match resume_source(item) {
         ResumeSource::Server => match item {
             QueueItem::Emby(emby) => Some(emby),
-            QueueItem::Feed(_) | QueueItem::Audiobookshelf(_) => None,
+            // A Twitch item keeps no playback state, so no server refresh.
+            QueueItem::Feed(_) | QueueItem::Audiobookshelf(_) | QueueItem::Twitch(_) => None,
         },
         ResumeSource::Session
         | ResumeSource::Local

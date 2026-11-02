@@ -7,7 +7,7 @@
 use mbv_emby_model::{EmbyImageTags, EmbyItem};
 use mbv_queue::{
     AudiobookshelfBookQueueItem, AudiobookshelfItem, AudiobookshelfQueueItem, FeedEntry, FeedKind,
-    QueueItem, QueueItemContentId, QueueLineage, QueueSource,
+    QueueItem, QueueItemContentId, QueueLineage, QueueSource, TwitchItem,
 };
 
 use super::*;
@@ -21,6 +21,7 @@ pub(crate) const FEED_GUID: &str = "conformance-feed-guid";
 pub(crate) const FEED_TITLE: &str = "Conformance Feed Entry";
 pub(crate) const FEED_URL: &str = "https://feeds.example/conformance/episode-1.mp3";
 pub(crate) const FEED_ID: &str = "https://feeds.example/conformance.xml";
+pub(crate) const TWITCH_URL: &str = "https://twitch.tv/conformance";
 pub(crate) const PLAYLIST_NAME: &str = "Conformance Playlist";
 pub(crate) const REQUEST_ID: u64 = 7;
 pub(crate) const GENERATION: u64 = 3;
@@ -114,6 +115,11 @@ pub(crate) fn feed_queue_item() -> QueueItem {
         position_ticks: 0,
         played: false,
     })
+}
+
+/// The canonical Twitch item: a fixed Twitch URL the prompt could submit.
+pub(crate) fn twitch_queue_item() -> QueueItem {
+    QueueItem::Twitch(TwitchItem::from_url(TWITCH_URL).expect("conformance URL is a Twitch URL"))
 }
 
 /// The two-slot list both `UnifiedQueueReplace` fixture rows carry.

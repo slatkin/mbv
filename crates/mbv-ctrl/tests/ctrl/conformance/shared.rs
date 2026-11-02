@@ -15,7 +15,7 @@ use strum::IntoEnumIterator;
 
 use super::builders::{
     GENERATION, POSITION_TICKS, abs_book_queue_item, abs_episode_queue_item, emby_queue_item,
-    feed_queue_item, player_status, unified_queue_state_with_transitions,
+    feed_queue_item, player_status, twitch_queue_item, unified_queue_state_with_transitions,
 };
 use super::*;
 
@@ -29,6 +29,7 @@ enum ItemKind {
     Feed,
     Audiobookshelf,
     AudiobookshelfBook,
+    Twitch,
 }
 
 impl ItemKind {
@@ -40,6 +41,7 @@ impl ItemKind {
             QueueItemKind::Feed => ItemKind::Feed,
             QueueItemKind::Audiobookshelf => ItemKind::Audiobookshelf,
             QueueItemKind::AudiobookshelfBook => ItemKind::AudiobookshelfBook,
+            QueueItemKind::Twitch => ItemKind::Twitch,
         }
     }
 
@@ -50,6 +52,7 @@ impl ItemKind {
             ItemKind::Feed => "Feed",
             ItemKind::Audiobookshelf => "Audiobookshelf",
             ItemKind::AudiobookshelfBook => "AudiobookshelfBook",
+            ItemKind::Twitch => "Twitch",
         }
     }
 
@@ -60,6 +63,7 @@ impl ItemKind {
             ItemKind::Feed => feed_queue_item(),
             ItemKind::Audiobookshelf => abs_episode_queue_item(),
             ItemKind::AudiobookshelfBook => abs_book_queue_item(),
+            ItemKind::Twitch => twitch_queue_item(),
         }
     }
 }

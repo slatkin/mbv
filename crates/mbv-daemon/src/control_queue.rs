@@ -110,7 +110,10 @@ pub(crate) fn unified_queue_state_for_peer(
         .filter(|s| match &s.item {
             QueueItem::Audiobookshelf(AudiobookshelfItem::Episode(_)) => supports_abs_queue,
             QueueItem::Audiobookshelf(AudiobookshelfItem::Book(_)) => supports_abs_book_queue,
-            QueueItem::Emby(_) | QueueItem::Feed(_) => true,
+            // Twitch slots currently go to every peer like Emby and Feed
+            // slots; the `twitch-queue` capability gate lands with the
+            // ctrl-protocol work (design D6).
+            QueueItem::Emby(_) | QueueItem::Feed(_) | QueueItem::Twitch(_) => true,
         })
         .map(|s| mbv_ctrl::UnifiedQueueSlot {
             slot_id: mbv_ctrl::slot_id_to_u64(s.slot_id),

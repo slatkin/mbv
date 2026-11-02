@@ -101,6 +101,11 @@ impl PlayerStatus {
                 self.title.clone_from(&book.title);
                 self.art_item_id.clone_from(&book.library_item_id);
             }
+            // A Twitch item contributes its URL-path title only; it has no
+            // provider art identity.
+            QueueItem::Twitch(item) => {
+                self.title.clone_from(&item.title);
+            }
         }
     }
 

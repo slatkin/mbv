@@ -39,7 +39,10 @@ pub fn provider_timestamp_secs(item: &QueueItem) -> Option<u64> {
         QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Episode(episode)) => {
             episode.pub_date_secs
         }
-        QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Book(_)) => None,
+        // Neither an Audiobookshelf book nor a Twitch item carries a provider
+        // timestamp, so both belong to no Latest window.
+        QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Book(_))
+        | QueueItem::Twitch(_) => None,
     }
 }
 

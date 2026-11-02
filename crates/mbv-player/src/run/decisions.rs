@@ -62,6 +62,10 @@ pub(crate) fn active_item_state(item: Option<&QueueItem>) -> ActiveItemState {
                 0
             };
         }
+        // A Twitch item keeps no playback state: its OSD title only.
+        Some(QueueItem::Twitch(item)) => {
+            state.osd_title.clone_from(&item.title);
+        }
         None => {}
     }
     state

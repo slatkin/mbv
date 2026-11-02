@@ -218,6 +218,14 @@ pub(super) fn prepare_source(
             server_url,
             token,
         )),
+        // A Twitch item plays through mpv's built-in yt-dlp hook, so it is a
+        // plain source like Emby and Feed (design D3).
+        QueueItem::Twitch(twitch) => Ok(PreparedSource::plain(
+            item,
+            MpvUrlSource::Twitch(twitch),
+            server_url,
+            token,
+        )),
     }
 }
 
