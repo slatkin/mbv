@@ -2,15 +2,15 @@
 
 ## 1. Twitch item type (`mbv-queue`)
 
-- [ ] 1.1 Add `crates/mbv-queue/src/twitch.rs` with `TwitchItem { url, title }`, `TwitchUrlError` (domain error type), and `TwitchItem::from_url` per design D2. Re-export from `lib.rs`. Verify with a `#[case]` table in `crates/mbv-queue/tests/queue/` (contract: host check of spec *The prompt accepts only Twitch hosts*): live, VOD, clip pass; other host, look-alike host, and non-http scheme fail; plus one case per distinct derived title. `cargo nextest run -p mbv-queue`.
-- [ ] 1.2 Add `QueueItem::Twitch`, `QueueItemKind::Twitch`, `QueueItemContentId::Twitch`, `MpvUrlSource::Twitch`, and the `"Twitch"` serde tag in `QueueItemSerialize` and the manual decode (design D1). Give each `QueueItem` method in `items.rs` an explicit arm. Extend the existing serde round-trip test with one Twitch case (contract: spec *A Twitch item persists with the queue*). `cargo nextest run -p mbv-queue`.
-- [ ] 1.3 Extend the existing owner-admission test with one case: an audio-only owner refuses a Twitch item (spec *Only mpv output plays a Twitch item*, audio-only scenario). `cargo nextest run -p mbv-queue`.
-- [ ] 1.4 Add *Twitch item* to `CONTEXT.md` (Queue section): what it holds, that only mpv plays it, that it keeps no playback state. Verify the term appears and names its *Avoid* terms.
+- [x] 1.1 Add `crates/mbv-queue/src/twitch.rs` with `TwitchItem { url, title }`, `TwitchUrlError` (domain error type), and `TwitchItem::from_url` per design D2. Re-export from `lib.rs`. Verify with a `#[case]` table in `crates/mbv-queue/tests/queue/` (contract: host check of spec *The prompt accepts only Twitch hosts*): live, VOD, clip pass; other host, look-alike host, and non-http scheme fail; plus one case per distinct derived title. `cargo nextest run -p mbv-queue`.
+- [x] 1.2 Add `QueueItem::Twitch`, `QueueItemKind::Twitch`, `QueueItemContentId::Twitch`, `MpvUrlSource::Twitch`, and the `"Twitch"` serde tag in `QueueItemSerialize` and the manual decode (design D1). Give each `QueueItem` method in `items.rs` an explicit arm. Extend the existing serde round-trip test with one Twitch case (contract: spec *A Twitch item persists with the queue*). `cargo nextest run -p mbv-queue`.
+- [x] 1.3 Extend the existing owner-admission test with one case: an audio-only owner refuses a Twitch item (spec *Only mpv output plays a Twitch item*, audio-only scenario). `cargo nextest run -p mbv-queue`.
+- [x] 1.4 Add *Twitch item* to `CONTEXT.md` (Queue section): what it holds, that only mpv plays it, that it keeps no playback state. Verify the term appears and names its *Avoid* terms.
 
 ## 2. Workspace match arms
 
-- [ ] 2.1 Give every `match` on `QueueItem` outside `mbv-queue` that fails to compile an explicit Twitch arm per design D4 and D8 (no wildcard). Covers `crates/mbv-player`, `crates/mbv-daemon` (except Cast and ctrl, groups 3 and 4), `crates/mbv-desktop`, `crates/mbv-components`, `crates/mbv-render`, and `src/`. Add one line to `docs/invariants/06-queue-progress-application-sites.md`: a Twitch item applies no progress. Verify `cargo check --workspace --all-targets`.
-- [ ] 2.2 Implement design D3: `mpv_url_for_queue_item` returns the Twitch URL unchanged; `prepare_source` sends it through `PreparedSource::plain`. Add one unit test in `mbv-player` (contract: spec *mpv receives the Twitch URL unchanged*). `cargo nextest run -p mbv-player`.
+- [x] 2.1 Give every `match` on `QueueItem` outside `mbv-queue` that fails to compile an explicit Twitch arm per design D4 and D8 (no wildcard). Covers `crates/mbv-player`, `crates/mbv-daemon` (except Cast and ctrl, groups 3 and 4), `crates/mbv-desktop`, `crates/mbv-components`, `crates/mbv-render`, and `src/`. Add one line to `docs/invariants/06-queue-progress-application-sites.md`: a Twitch item applies no progress. Verify `cargo check --workspace --all-targets`.
+- [x] 2.2 Implement design D3: `mpv_url_for_queue_item` returns the Twitch URL unchanged; `prepare_source` sends it through `PreparedSource::plain`. Add one unit test in `mbv-player` (contract: spec *mpv receives the Twitch URL unchanged*). `cargo nextest run -p mbv-player`.
 
 ## 3. Outputs
 
