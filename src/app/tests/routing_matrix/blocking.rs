@@ -1,7 +1,7 @@
 //! Routing matrix: blocking precedence and policy rows.
 
 use super::support::*;
-use crate::app::dispatch::action::PlaybackIntent;
+use crate::app::dispatch::action::{PlaybackIntent, ShellCommand};
 use crate::app::input::router::{
     RouterOutcome, RouterSnapshot, resolve_router_outcome_with_focused,
 };
@@ -140,6 +140,37 @@ fn fallthrough_with_no_leaf_message_fires_no_global_effect() {
     assert!(
         out.is_empty(),
         "no leaf message + FallThrough must run nothing (no global effect)"
+    );
+}
+
+/// The Twitch URL opener (twitch-url-playback task 5.4): Shift+T resolves
+/// the shell-owned mount command when no overlay blocks it.
+#[test]
+fn twitch_url_open_resolves_to_its_shell_command_on_the_default_chord() {
+    let key =
+        crossterm::event::KeyEvent::new(KeyCode::Char('T'), crossterm::event::KeyModifiers::SHIFT);
+    assert_eq!(
+        resolve_router_outcome_with_focused(key, &idle_snapshot(), None, &default_keybinds()),
+        RouterOutcome::Command(ShellCommand::OpenTwitchUrl.into())
+    );
+}
+
+/// The opener's gate is `NoBlockingOverlay`: while a blocking overlay is
+/// mounted the chord is swallowed and the prompt does not open.
+#[test]
+fn twitch_url_open_is_swallowed_under_a_blocking_overlay() {
+    let key =
+        crossterm::event::KeyEvent::new(KeyCode::Char('T'), crossterm::event::KeyModifiers::SHIFT);
+    let snapshot = RouterSnapshot {
+        overlays: crate::app::input::RouterOverlayState {
+            focus: crate::app::input::OverlayFocus::Blocking,
+            ..Default::default()
+        },
+        ..RouterSnapshot::default()
+    };
+    assert_eq!(
+        resolve_router_outcome_with_focused(key, &snapshot, None, &default_keybinds()),
+        RouterOutcome::Swallow
     );
 }
 

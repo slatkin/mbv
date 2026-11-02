@@ -56,12 +56,16 @@ pub enum OverlayId {
     ContextMenu,
 }
 
-/// Blocking modal identity (design D3 names: Confirm, `DaemonLost`, `SavePlaylist`).
+/// Blocking modal identity (design D3 names: Confirm, `DaemonLost`,
+/// `SavePlaylist`; twitch-url-playback adds `TwitchUrl`).
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub enum ModalId {
     Confirm,
     DaemonLost,
     SavePlaylist,
+    /// The Twitch URL prompt (twitch-url-playback D7): a blocking modal
+    /// text prompt owned by the shell through the focus stack.
+    TwitchUrl,
 }
 
 /// Nested Settings popup identity (design D3 names: Multiselect,

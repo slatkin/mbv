@@ -55,6 +55,12 @@ impl TwitchUrlComponent {
         self.refusal = Some(refusal);
     }
 
+    /// The shell-pushed refusal for the last submitted URL, if any.
+    #[must_use]
+    pub fn refusal(&self) -> Option<&str> {
+        self.refusal.as_deref()
+    }
+
     #[must_use]
     pub fn input(&self) -> &str {
         &self.input

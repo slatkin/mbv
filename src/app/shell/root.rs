@@ -21,6 +21,9 @@ impl Model {
                 ComponentId::Modal(ModalId::SavePlaylist) => {
                     self.render_save_playlist_overlay(frame);
                 }
+                ComponentId::Modal(ModalId::TwitchUrl) => {
+                    self.render_twitch_url_overlay(frame);
+                }
                 ComponentId::Overlay(OverlayId::Help) => self.render_help_overlay(frame),
                 ComponentId::Modal(ModalId::Confirm) => self.render_confirm_overlay(frame),
                 ComponentId::Modal(ModalId::DaemonLost) => self.render_daemon_lost_overlay(frame),
@@ -56,6 +59,7 @@ impl Model {
             ComponentId::Modal(ModalId::Confirm),
             ComponentId::Modal(ModalId::DaemonLost),
             ComponentId::Modal(ModalId::SavePlaylist),
+            ComponentId::Modal(ModalId::TwitchUrl),
             ComponentId::Popup(PopupId::Multiselect),
             ComponentId::Popup(PopupId::LibraryRoutes),
             ComponentId::Popup(PopupId::FeedManage),

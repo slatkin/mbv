@@ -48,6 +48,9 @@ pub(in crate::app) enum Command {
 pub(in crate::app) enum ShellCommand {
     /// Model-owned because mounting Help belongs to the `TuiRealm` shell.
     OpenHelp,
+    /// Model-owned because mounting the Twitch URL prompt belongs to the
+    /// `TuiRealm` shell (twitch-url-playback D7).
+    OpenTwitchUrl,
     /// The podcast Latest pill is component-local state, so the refresh
     /// carries the owner's pill answer for the lazy destination shelf fetch
     /// (spec `destination-latest-modes`, "Destination Latest lists load

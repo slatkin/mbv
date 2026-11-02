@@ -12,6 +12,7 @@ const EXPECTED_SECTIONS: &[&str] = &[
 /// `global: true`, minus the blocking `alt_swallow`).
 const GLOBAL_ACTION_IDS: &[&str] = &[
     "settings_open",
+    "twitch_url_open",
     "sessions_open",
     "playlists_open",
     "search_open",
@@ -266,6 +267,7 @@ fn display_round_trips_every_declared_chord() {
 const EXPECTED_DEFAULTS: &[(&str, &[&str])] = &[
     ("help_open", &["F1"]),
     ("settings_open", &["F2"]),
+    ("twitch_url_open", &["Shift+T"]),
     ("quit", &["q"]),
     ("sessions_open", &["F3"]),
     ("search_open", &["Ctrl+/", "Ctrl+_"]),

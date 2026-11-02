@@ -323,6 +323,10 @@ pub struct CtrlCompatibility {
     /// (emby-session-owner-output design D3); set from the peer Hello's
     /// `emby-session-output` capability by the Client's handshake.
     pub supports_emby_session_output: bool,
+    /// The peer can decode `QueueItem::Twitch` in unified queue commands,
+    /// snapshots, and broadcasts (twitch-url-playback design D6); set from
+    /// the peer Hello's `twitch-queue` capability by the Client's handshake.
+    pub supports_twitch_queue: bool,
 }
 
 impl CtrlCompatibility {
@@ -348,6 +352,7 @@ impl CtrlCompatibility {
                 supports_queue_replace_start_position: false,
                 supports_playback_output: false,
                 supports_emby_session_output: false,
+                supports_twitch_queue: false,
             }),
             _ => Err(CtrlError::incompatible_protocol(peer_protocol_version)),
         }

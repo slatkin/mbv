@@ -32,6 +32,7 @@ mod session_connect;
 mod settings_activation;
 mod split_browse_state_browse_level_tests;
 pub(crate) mod tick_integration;
+mod twitch_url;
 
 use mbv_emby::test_support::make_session;
 use mbv_emby_model::test_support::make_item;

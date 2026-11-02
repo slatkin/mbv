@@ -161,6 +161,7 @@ pub(super) fn read_server_hello(
         info.supports_queue_replace_start_position();
     compatibility.supports_playback_output = info.supports_playback_output();
     compatibility.supports_emby_session_output = info.supports_emby_session_output();
+    compatibility.supports_twitch_queue = info.supports_twitch_queue();
     tracing::info!(name: "remote.daemon_protocol_validation.succeeded", target: "remote", protocol_version = info.protocol_version, app_version = %info.app_version, capabilities = ?info.capabilities, "daemon protocol validated");
     Ok(compatibility)
 }
