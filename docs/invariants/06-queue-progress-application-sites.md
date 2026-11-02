@@ -29,6 +29,10 @@ to the server's current position rather than the owner's loaded value. A
 position from the item's open session, so `override_jump_resume` skips it. A
 `Beginning` slot arms no resume seek.
 
+A Twitch item applies no progress at any site: it owns no playback
+lifecycle, records no observation, and always resumes from the beginning
+(`QueueItem::Twitch` no-op arms, change `twitch-url-playback` design D4).
+
 A resume position read at a cold start must include the previous run's stop
 report, so a run drains its report worker before its thread ends. After the
 loop returns and the mpv child is dropped, `run()` calls
