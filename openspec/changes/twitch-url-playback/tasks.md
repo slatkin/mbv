@@ -14,17 +14,17 @@
 
 ## 3. Outputs
 
-- [ ] 3.1 `prepare_cast_source` returns `Uncastable` for a Twitch item through a new `CastError` constructor that names the item (design D5). Add one case to the existing Cast resolve tests (contract: Cast scenario of spec *Only mpv output plays a Twitch item*). `cargo nextest run -p mbv-daemon -p mbv-cast`.
-- [ ] 3.2 Add one case to the existing Emby Session `admit` tests: a Twitch item is refused and named (no code change expected). `cargo nextest run -p mbv-daemon`.
+- [x] 3.1 `prepare_cast_source` returns `Uncastable` for a Twitch item through a new `CastError` constructor that names the item (design D5). Add one case to the existing Cast resolve tests (contract: Cast scenario of spec *Only mpv output plays a Twitch item*). `cargo nextest run -p mbv-daemon -p mbv-cast`.
+- [x] 3.2 Add one case to the existing Emby Session `admit` tests: a Twitch item is refused and named (no code change expected). `cargo nextest run -p mbv-daemon`.
 
 ## 4. Ctrl capability `twitch-queue`
 
 Follow `docs/recipes.md`, *Add a ctrl protocol variant*, steps 1 to 8.
 
-- [ ] 4.1 Add `CTRL_CAP_TWITCH_QUEUE`, advertise it in `CtrlHello::current()`, add `supports_twitch_queue`, and set it in `DaemonHelloCaps`. Add a handshake case in `crates/mbv-ctrl/tests/ctrl/handshake.rs` and the queue-shape round trip in `queue.rs`. `cargo nextest run -p mbv-ctrl`.
-- [ ] 4.2 Record the capability in `HelloClassification` and on the client record. Filter Twitch slots for incapable peers in `unified_queue_state_for_peer` and `broadcast_state_gated`. Add `twitch_queue_transport_rejection` beside `abs_queue_transport_rejection` and call it at the same sites. Extend the existing filter and rejection tests with one Twitch case each (contract: spec delta *Twitch item transport is additively negotiated*). `cargo nextest run -p mbv-daemon`.
-- [ ] 4.3 Check the `CtrlEvent` decode in `crates/mbvd/src/main.rs` still matches. `cargo nextest run -p mbvd`.
-- [ ] 4.4 Add the Twitch fixture in `protocol/ctrl/v10/` and regenerate schemas with `MBV_PROTOCOL_BLESS=1 cargo nextest run -p mbv-ctrl conformance`. Review the diff, then `cargo nextest run -p mbv-ctrl conformance`.
+- [x] 4.1 Add `CTRL_CAP_TWITCH_QUEUE`, advertise it in `CtrlHello::current()`, add `supports_twitch_queue`, and set it in `DaemonHelloCaps`. Add a handshake case in `crates/mbv-ctrl/tests/ctrl/handshake.rs` and the queue-shape round trip in `queue.rs`. `cargo nextest run -p mbv-ctrl`.
+- [x] 4.2 Record the capability in `HelloClassification` and on the client record. Filter Twitch slots for incapable peers in `unified_queue_state_for_peer` and `broadcast_state_gated`. Add `twitch_queue_transport_rejection` beside `abs_queue_transport_rejection` and call it at the same sites. Extend the existing filter and rejection tests with one Twitch case each (contract: spec delta *Twitch item transport is additively negotiated*). `cargo nextest run -p mbv-daemon`.
+- [x] 4.3 Check the `CtrlEvent` decode in `crates/mbvd/src/main.rs` still matches. `cargo nextest run -p mbvd`.
+- [x] 4.4 Add the Twitch fixture in `protocol/ctrl/v10/` and regenerate schemas with `MBV_PROTOCOL_BLESS=1 cargo nextest run -p mbv-ctrl conformance`. Review the diff, then `cargo nextest run -p mbv-ctrl conformance`.
 
 ## 5. Prompt and keybind action
 
