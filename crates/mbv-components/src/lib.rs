@@ -34,6 +34,7 @@ pub mod settings;
 pub mod status_bar_panel;
 pub mod tab_panel;
 pub mod tv_content;
+pub mod twitch_url;
 
 #[must_use]
 pub fn selector_markers(len: usize, latest_marker: bool) -> Vec<bool> {
@@ -98,6 +99,8 @@ pub use self::settings::{SettingsComponent, SettingsSnapshot};
 pub use self::status_bar_panel::StatusBarPanel;
 #[doc(inline)]
 pub use self::tab_panel::TabPanel;
+#[doc(inline)]
+pub use self::twitch_url::TwitchUrlComponent;
 
 #[cfg(test)]
 mod tests;

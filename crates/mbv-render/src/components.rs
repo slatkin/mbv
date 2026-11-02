@@ -36,4 +36,5 @@ pub mod settings_component;
 pub mod three_line_flat_list;
 pub mod tree_browser;
 pub mod tv_wide;
+pub mod twitch_url;
 pub mod widgets;

@@ -86,6 +86,8 @@ pub use components::tree_browser::{render_tree_browser, tree_row_is_full_width};
 #[doc(inline)]
 pub use components::tv_wide::TvWideRenderCtx;
 #[doc(inline)]
+pub use components::twitch_url::{TwitchUrlRenderGeometry, render_twitch_url_content};
+#[doc(inline)]
 pub use components::widgets::{PillBar, PillBarWindow, render_pill_bar, render_placeholder};
 // Render-seam re-exports (design D9, task 3.1): the panel shell/scrollbar/row
 // free functions extracted from `impl App` in `chrome.rs`. Used by the

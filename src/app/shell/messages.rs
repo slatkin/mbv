@@ -148,7 +148,11 @@ impl Model {
             // Emitted only from SettingsComponent::handle_mouse (settings.rs:318); the
             // keyboard dismiss is SettingsIntent::Back. Mouse-only, inert under D16
             // (migrate-tui-to-tuirealm design D16, #628).
-            ShellRequest::DismissSettings => {}
+            // `TwitchUrlIntent` is likewise consumed with no effect yet: the
+            // prompt's shell mount and effects are twitch-url-playback task
+            // 5.5 (unit U6); this arm keeps the boundary dispatch exhaustive
+            // now.
+            ShellRequest::DismissSettings | ShellRequest::TwitchUrlIntent(_) => {}
             request @ (ShellRequest::QueueRowClick { .. }
             | ShellRequest::QueueRowActivate { .. }
             | ShellRequest::ResizeListPaneLive(_)
