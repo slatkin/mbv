@@ -49,7 +49,16 @@ impl TwitchItem {
             })?;
         let authority_end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
         let authority = rest[..authority_end].to_ascii_lowercase();
-        let host = authority.split(':').next().unwrap_or_default();
+        if authority.contains('\\') {
+            return Err(TwitchUrlError::new(
+                "not a Twitch URL: the host is not a twitch.tv host",
+            ));
+        }
+        // Userinfo precedes the host in an authority and may smuggle a
+        // look-alike (`twitch.tv:443@evil.com`); the host is what follows
+        // the last `@`.
+        let host = authority.rsplit('@').next().unwrap_or_default();
+        let host = host.split(':').next().unwrap_or_default();
         if host != "twitch.tv" && !host.ends_with(".twitch.tv") {
             return Err(TwitchUrlError::new(format!(
                 "not a Twitch URL: {host} is not a twitch.tv host"

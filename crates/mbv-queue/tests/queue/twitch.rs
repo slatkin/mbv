@@ -40,6 +40,8 @@ fn from_url_accepts_twitch_hosts_and_derives_title(
 #[case::other_host("https://www.youtube.com/watch?v=abc")]
 #[case::look_alike_host("https://nottwitch.tv/somechannel")]
 #[case::non_http_scheme("ftp://twitch.tv/somechannel")]
+#[case::userinfo_smuggled_host("https://twitch.tv:443@evil.com/x")]
+#[case::backslash_in_authority("https://evil.com\\.twitch.tv")]
 fn from_url_refuses_non_twitch_urls(#[case] input: &str) {
     assert!(
         TwitchItem::from_url(input).is_err(),
