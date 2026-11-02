@@ -63,6 +63,13 @@ pub fn video_feed_qi(guid: &str) -> QueueItem {
         played: false,
     })
 }
+
+pub fn twitch_qi(title: &str) -> QueueItem {
+    QueueItem::Twitch(mbv_queue::TwitchItem {
+        url: format!("https://www.twitch.tv/{title}"),
+        title: title.into(),
+    })
+}
 /// Connects a client the same way the accept thread does.
 pub fn connect_client(clients: &mut CtrlClients) -> (u64, mpsc::Receiver<CtrlOutbound>) {
     let (tx, rx) = mpsc::channel();

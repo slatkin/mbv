@@ -145,7 +145,7 @@ pub fn prepare_cast_source(
         // is uncastable.
         QueueItem::Twitch(item) => Err(Uncastable::for_item(
             &name,
-            &CastError::feed_no_url(&item.title),
+            &CastError::twitch_page_url(&item.title),
         )),
     }
 }

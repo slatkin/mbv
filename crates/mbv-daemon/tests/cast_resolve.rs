@@ -5,7 +5,9 @@
 //! hermetic.
 
 use mbv_daemon::{CastResolveContext, prepare_cast_source};
-use mbv_queue::{AudiobookshelfBookQueueItem, AudiobookshelfItem, FeedEntry, QueueItem};
+use mbv_queue::{
+    AudiobookshelfBookQueueItem, AudiobookshelfItem, FeedEntry, QueueItem, TwitchItem,
+};
 use rstest::rstest;
 
 fn book_item() -> QueueItem {
@@ -37,9 +39,17 @@ fn feed_item_without_url() -> QueueItem {
     })
 }
 
+fn twitch_item() -> QueueItem {
+    QueueItem::Twitch(TwitchItem {
+        url: "https://www.twitch.tv/somechannel".into(),
+        title: "somechannel".into(),
+    })
+}
+
 #[rstest]
 #[case::abs_book(book_item(), "A Long Book", "multi-file audiobook")]
 #[case::feed_without_media_url(feed_item_without_url(), "An Episode", "no media URL to cast")]
+#[case::twitch_page_url(twitch_item(), "somechannel", "is a Twitch URL and can't be cast")]
 fn an_uncastable_item_is_classified_with_its_name_and_reason(
     #[case] item: QueueItem,
     #[case] name: &str,
