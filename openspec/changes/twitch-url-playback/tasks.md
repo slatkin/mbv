@@ -38,8 +38,8 @@ Read `docs/architecture/tui-frontend.md` first. Follow `docs/recipes.md`, *Add a
 
 ## 6. Gates
 
-- [ ] 6.1 Run `cargo fmt --all`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run --workspace`. All pass.
-- [ ] 6.2 Run `make check-code-file-lines` just before push. Split any file over 800 lines along a responsibility seam.
+- [x] 6.1 Run `cargo fmt --all`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run --workspace`. All pass.
+- [x] 6.2 Run `make check-code-file-lines` just before push. Split any file over 800 lines along a responsibility seam.
 
 ## Workflow follow-up
 
