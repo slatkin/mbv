@@ -1,4 +1,5 @@
 use super::*;
+use twitch::twitch_item;
 
 #[test]
 fn audiobookshelf_episode_queue_item_wire_format_round_trips() {
@@ -83,11 +84,32 @@ fn queue_item_deserializes(
         (QueueItem::Emby(_), true) | (QueueItem::Feed(_), false) => {}
         (QueueItem::Emby(_), false) => panic!("expected Feed variant"),
         (QueueItem::Feed(_), true) => panic!("expected Emby variant"),
-        (QueueItem::Audiobookshelf(_), _) => {
+        (QueueItem::Audiobookshelf(_) | QueueItem::Twitch(_), _) => {
             panic!("unexpected queue item variant")
         }
     }
     assert_eq!(qi.id(), expected_id);
+}
+
+#[test]
+fn twitch_queue_item_wire_format_round_trips() {
+    // Contract: spec *A Twitch item persists with the queue* — the tagged
+    // "Twitch" kind survives serialize and restore with URL and title intact.
+    let item =
+        QueueItem::Twitch(TwitchItem::from_url("https://www.twitch.tv/somechannel").unwrap());
+    let expected =
+        r#"{"kind":"Twitch","url":"https://www.twitch.tv/somechannel","title":"somechannel"}"#;
+    let json = serde_json::to_string(&item).unwrap();
+    let restored: QueueItem = serde_json::from_str(expected).unwrap();
+
+    assert_eq!(json, expected);
+    if let QueueItem::Twitch(twitch) = &restored {
+        assert_eq!(twitch.url, "https://www.twitch.tv/somechannel");
+        assert_eq!(twitch.title, "somechannel");
+    } else {
+        panic!("expected Twitch variant");
+    }
+    assert_eq!(serde_json::to_string(&restored).unwrap(), expected);
 }
 
 #[test]
@@ -122,14 +144,14 @@ fn queue_state_round_trip_preserves_item_kind() {
     match &restored[0] {
         QueueItem::Emby(e) => assert_eq!(e.id, "emby-1"),
         QueueItem::Feed(_) => panic!("expected Emby variant"),
-        QueueItem::Audiobookshelf(_) => {
+        QueueItem::Audiobookshelf(_) | QueueItem::Twitch(_) => {
             panic!("expected Emby variant")
         }
     }
 
     // Feed kind preserved
     match &restored[1] {
-        QueueItem::Emby(_) | QueueItem::Audiobookshelf(_) => {
+        QueueItem::Emby(_) | QueueItem::Audiobookshelf(_) | QueueItem::Twitch(_) => {
             panic!("expected Feed variant")
         }
         QueueItem::Feed(f) => {
@@ -238,6 +260,13 @@ fn audiobookshelf_admission_and_purge_keep_other_kinds() {
     assert!(!abs.admissible_for_owner(false, |_| true));
     assert!(!abs.admissible_for_owner(true, |_| false));
     assert!(QueueItem::Feed(feed("feed-1")).admissible_for_owner(true, |_| false));
+
+    // A Twitch item is video, so an audio-only owner refuses it and a video
+    // owner admits it without Service setup (spec *Only mpv output plays a
+    // Twitch item*, audio-only scenario).
+    let twitch = twitch_item("https://www.twitch.tv/somechannel");
+    assert!(!twitch.admissible_for_owner(true, |_| true));
+    assert!(twitch.admissible_for_owner(false, |_| true));
 
     let state = mbv_queue::QueueState {
         source: mbv_queue::QueueSource::Unknown,

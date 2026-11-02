@@ -4,6 +4,8 @@ use mbv_emby_model::EmbyItem;
 pub use super::audiobookshelf::{
     AudiobookshelfBookQueueItem, AudiobookshelfItem, AudiobookshelfQueueItem,
 };
+#[doc(inline)]
+pub use super::twitch::TwitchItem;
 
 // ---------------------------------------------------------------------------
 // Content identity — typed provider-qualified identity, avoiding formatted
@@ -24,6 +26,7 @@ pub enum QueueItemContentId {
     AudiobookshelfBook {
         library_item_id: String,
     },
+    Twitch(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -32,6 +35,7 @@ pub enum QueueItemKind {
     Feed,
     Audiobookshelf,
     AudiobookshelfBook,
+    Twitch,
 }
 
 // ---------------------------------------------------------------------------
@@ -153,6 +157,7 @@ pub enum QueueItem {
     Emby(Box<EmbyItem>),
     Feed(FeedEntry),
     Audiobookshelf(AudiobookshelfItem),
+    Twitch(TwitchItem),
 }
 
 /// A queued source that can be resolved directly to an mpv URL.
@@ -160,6 +165,7 @@ pub enum QueueItem {
 pub enum MpvUrlSource<'a> {
     Emby(&'a EmbyItem),
     Feed(&'a FeedEntry),
+    Twitch(&'a TwitchItem),
 }
 
 // Serialize through the original flat internally-tagged representation. This
@@ -177,6 +183,8 @@ enum QueueItemSerialize<'a> {
     Audiobookshelf(&'a AudiobookshelfQueueItem),
     #[serde(rename = "AudiobookshelfBook")]
     AudiobookshelfBook(&'a AudiobookshelfBookQueueItem),
+    #[serde(rename = "Twitch")]
+    Twitch(&'a TwitchItem),
 }
 
 impl schemars::JsonSchema for QueueItem {
@@ -209,6 +217,7 @@ impl serde::Serialize for QueueItem {
             Self::Audiobookshelf(AudiobookshelfItem::Book(item)) => {
                 QueueItemSerialize::AudiobookshelfBook(item)
             }
+            Self::Twitch(item) => QueueItemSerialize::Twitch(item),
         };
         proxy.serialize(serializer)
     }
@@ -246,9 +255,19 @@ impl<'de> serde::Deserialize<'de> for QueueItem {
                         .map_err(de::Error::custom)?;
                     Ok(QueueItem::Audiobookshelf(AudiobookshelfItem::Book(item)))
                 }
+                "Twitch" => {
+                    let item = TwitchItem::deserialize(value).map_err(de::Error::custom)?;
+                    Ok(QueueItem::Twitch(item))
+                }
                 other => Err(de::Error::unknown_variant(
                     other,
-                    &["Emby", "Feed", "Audiobookshelf", "AudiobookshelfBook"],
+                    &[
+                        "Emby",
+                        "Feed",
+                        "Audiobookshelf",
+                        "AudiobookshelfBook",
+                        "Twitch",
+                    ],
                 )),
             };
         }
@@ -265,6 +284,7 @@ impl QueueItem {
         match self {
             Self::Emby(item) => Some(MpvUrlSource::Emby(item)),
             Self::Feed(entry) => Some(MpvUrlSource::Feed(entry)),
+            Self::Twitch(item) => Some(MpvUrlSource::Twitch(item)),
             Self::Audiobookshelf(_) => None,
         }
     }
@@ -275,6 +295,7 @@ impl QueueItem {
             Self::Emby(item) => &item.name,
             Self::Feed(entry) => &entry.title,
             Self::Audiobookshelf(item) => item.title(),
+            Self::Twitch(item) => &item.title,
         }
     }
 
@@ -286,6 +307,8 @@ impl QueueItem {
                 .filter(|_| item.runtime_ticks > 0),
             Self::Feed(entry) => entry.duration_ticks,
             Self::Audiobookshelf(item) => item.duration(),
+            // mpv reports a live stream's runtime; the item carries none.
+            Self::Twitch(_) => None,
         }
     }
 
@@ -299,6 +322,8 @@ impl QueueItem {
                 _ => entry.feed_kind.map_or("Video", |k| k.as_str()),
             },
             Self::Audiobookshelf(item) => item.media_kind(),
+            // A Twitch stream is video, so audio-only owners refuse it.
+            Self::Twitch(_) => "Video",
         }
     }
 
@@ -312,6 +337,7 @@ impl QueueItem {
                 _ => entry.feed_kind == Some(crate::FeedKind::Audio),
             },
             Self::Audiobookshelf(item) => item.is_audio(),
+            Self::Twitch(_) => false,
         }
     }
 
@@ -320,7 +346,8 @@ impl QueueItem {
     pub fn is_music(&self) -> bool {
         match self {
             Self::Emby(item) => item.is_music(),
-            Self::Feed(_) => false,
+            // Feeds and Twitch streams are not music.
+            Self::Feed(_) | Self::Twitch(_) => false,
             Self::Audiobookshelf(item) => item.is_music(),
         }
     }
@@ -335,6 +362,7 @@ impl QueueItem {
                 _ => entry.feed_kind == Some(crate::FeedKind::Video),
             },
             Self::Audiobookshelf(item) => item.is_video(),
+            Self::Twitch(_) => true,
         }
     }
 
@@ -348,7 +376,7 @@ impl QueueItem {
     #[must_use]
     pub fn artwork_url(&self) -> Option<&str> {
         match self {
-            Self::Emby(_) | Self::Feed(_) => None,
+            Self::Emby(_) | Self::Feed(_) | Self::Twitch(_) => None,
             Self::Audiobookshelf(item) => item.artwork_url(),
         }
     }
@@ -360,6 +388,8 @@ impl QueueItem {
             Self::Emby(item) => &item.id,
             Self::Feed(entry) => &entry.guid,
             Self::Audiobookshelf(item) => item.id(),
+            // The URL is the only identity a Twitch item carries.
+            Self::Twitch(item) => &item.url,
         }
     }
 
@@ -369,6 +399,7 @@ impl QueueItem {
             Self::Emby(item) => item.display_name_parts(),
             Self::Audiobookshelf(item) => item.display_name_parts(),
             other @ Self::Feed(_) => (other.display_name(), None),
+            Self::Twitch(item) => (item.title.clone(), None),
         }
     }
 
@@ -408,6 +439,7 @@ impl QueueItem {
                 }
             }
             Self::Audiobookshelf(item) => item.playback_title_parts(),
+            Self::Twitch(item) => PlaybackTitleParts::single(item.title.clone()),
         }
     }
 
@@ -417,6 +449,7 @@ impl QueueItem {
             Self::Emby(item) => item.display_name(),
             Self::Feed(entry) => entry.title.clone(),
             Self::Audiobookshelf(item) => item.display_name(),
+            Self::Twitch(item) => item.title.clone(),
         }
     }
 
@@ -426,7 +459,7 @@ impl QueueItem {
     pub fn overview(&self) -> Option<&str> {
         match self {
             Self::Emby(item) => (!item.overview.is_empty()).then_some(item.overview.as_str()),
-            Self::Feed(_) => None,
+            Self::Feed(_) | Self::Twitch(_) => None,
             Self::Audiobookshelf(item) => item.overview(),
         }
     }
@@ -437,6 +470,7 @@ impl QueueItem {
             Self::Emby(item) => item.runtime_ticks,
             Self::Feed(entry) => duration_ticks_as_i64(entry.duration_ticks.unwrap_or(0)),
             Self::Audiobookshelf(item) => item.runtime_ticks(),
+            Self::Twitch(_) => 0,
         }
     }
 
@@ -446,6 +480,7 @@ impl QueueItem {
             Self::Emby(item) => item.playback_position_ticks,
             Self::Feed(entry) => entry.position_ticks,
             Self::Audiobookshelf(item) => item.playback_position_ticks(),
+            Self::Twitch(_) => 0,
         }
     }
 
@@ -455,6 +490,7 @@ impl QueueItem {
             Self::Emby(item) => item.played,
             Self::Feed(entry) => entry.played,
             Self::Audiobookshelf(item) => item.played(),
+            Self::Twitch(_) => false,
         }
     }
 
@@ -514,6 +550,7 @@ impl QueueItem {
             Self::Emby(_) => QueueItemKind::Emby,
             Self::Feed(_) => QueueItemKind::Feed,
             Self::Audiobookshelf(item) => item.kind(),
+            Self::Twitch(_) => QueueItemKind::Twitch,
         }
     }
 
@@ -525,6 +562,7 @@ impl QueueItem {
             Self::Emby(item) => QueueItemContentId::Emby(item.id.clone()),
             Self::Feed(entry) => QueueItemContentId::Feed(entry.guid.clone()),
             Self::Audiobookshelf(item) => item.content_id(),
+            Self::Twitch(item) => QueueItemContentId::Twitch(item.url.clone()),
         }
     }
 
@@ -541,7 +579,7 @@ impl QueueItem {
     pub fn required_service(&self) -> Option<crate::ServiceKind> {
         match self {
             Self::Audiobookshelf(_) => Some(crate::ServiceKind::Audiobookshelf),
-            Self::Emby(_) | Self::Feed(_) => None,
+            Self::Emby(_) | Self::Feed(_) | Self::Twitch(_) => None,
         }
     }
 
@@ -569,7 +607,7 @@ impl QueueItem {
     pub fn playlist_item_id(&self) -> &str {
         match self {
             Self::Emby(item) => &item.playlist_item_id,
-            Self::Feed(_) => "",
+            Self::Feed(_) | Self::Twitch(_) => "",
             Self::Audiobookshelf(item) => item.playlist_item_id(),
         }
     }

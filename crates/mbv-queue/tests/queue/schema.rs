@@ -7,7 +7,7 @@ use super::*;
 /// The `QueueItem` schema's variant branches pin the four `kind` tags —
 /// `Emby`, `Feed`, `Audiobookshelf`, `AudiobookshelfBook` — one per branch.
 #[test]
-fn queue_item_schema_offers_all_four_kind_tags() {
+fn queue_item_schema_offers_all_kind_tags() {
     let schema = schemars::schema_for!(QueueItem);
     let value = schema.as_value();
     let branches = ["oneOf", "anyOf"]
@@ -30,6 +30,7 @@ fn queue_item_schema_offers_all_four_kind_tags() {
             "Feed".to_owned(),
             "Audiobookshelf".to_owned(),
             "AudiobookshelfBook".to_owned(),
+            "Twitch".to_owned(),
         ])
     );
 }

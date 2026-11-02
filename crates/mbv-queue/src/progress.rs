@@ -5,11 +5,11 @@ const MEANINGFUL_TRACK_COMPLETED_PROGRESS_TICKS: i64 = 30 * TICKS_PER_SECOND;
 
 /// Whether a played occurrence records its observed position instead of zero:
 /// only Emby video, whose server keeps the stop report's position as a resume
-/// point for a played item. Feed played-state is local curation and resumes
-/// from the locally recorded position, and audio never resumes from a
-/// recorded position, so both keep zero.
+/// point. Feed played-state is local curation and resumes from the locally
+/// recorded position, audio never resumes from a recorded position, and a
+/// Twitch item keeps no playback state, so all of them keep zero.
 fn played_emby_video(item: &QueueItem) -> bool {
-    !matches!(item, QueueItem::Feed(_)) && !item.is_audio()
+    !matches!(item, QueueItem::Feed(_) | QueueItem::Twitch(_)) && !item.is_audio()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -92,6 +92,11 @@ impl SlotProgress {
                 position_ticks: item.playback_position_ticks(),
                 played: item.played(),
             },
+            // A Twitch item keeps no playback state (design D4).
+            QueueItem::Twitch(_) => Self {
+                position_ticks: 0,
+                played: false,
+            },
         }
     }
 }
@@ -122,5 +127,7 @@ pub(crate) fn apply_progress_to_queue_item(
             book.played = played;
             book.is_finished = played;
         }
+        // A Twitch item keeps no playback state, so progress never writes it.
+        QueueItem::Twitch(_) => {}
     }
 }
