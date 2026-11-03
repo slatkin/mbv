@@ -380,10 +380,9 @@ fn parse_panel_section(panel: Option<&toml::Value>) -> PanelConfig {
     }
 }
 
-/// The `[panel] cols` and `cols_expanded` keys of an earlier version: read
-/// only to log one warning that names whichever of the two the file
-/// still sets, then ignored, because `width` and `width_expanded` are logical
-/// pixels. A save writes `[panel]` in full, so it drops them.
+/// The removed `[mbvd.client] endpoint` key of the explicit daemon-endpoint
+/// mode (issue #972): read only to log one warning, then ignored. A save
+/// drops the whole `[mbvd.client]` table, like the old `[panel]` column keys.
 fn warn_removed_client_endpoint(mbvd: Option<&toml::Value>) {
     let stale = mbvd
         .and_then(|d| d.get("client"))
@@ -401,6 +400,10 @@ fn warn_removed_client_endpoint(mbvd: Option<&toml::Value>) {
     );
 }
 
+/// The `[panel] cols` and `cols_expanded` keys of an earlier version: read
+/// only to log one warning that names whichever of the two the file
+/// still sets, then ignored, because `width` and `width_expanded` are logical
+/// pixels. A save writes `[panel]` in full, so it drops them.
 fn warn_old_panel_width_keys(panel: &toml::Value) {
     let present: Vec<&str> = ["cols", "cols_expanded"]
         .into_iter()

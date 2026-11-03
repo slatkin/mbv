@@ -309,6 +309,10 @@ fn write_mbvd_section(table: &mut toml::map::Map<String, toml::Value>, cfg: &Con
             mbvd.remove("audio_pipe_playout_delay_ms");
         }
     }
+    // The removed `[mbvd.client]` table (the explicit daemon-endpoint mode,
+    // issue #972) is dropped on the first save, like the old `[panel]`
+    // column keys.
+    mbvd.remove("client");
     let mbvd_server = section(mbvd, "server");
     if cfg.daemon_server_tcp_listen.trim().is_empty() {
         mbvd_server.remove("tcp_listen");
