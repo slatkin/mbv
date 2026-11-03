@@ -129,8 +129,8 @@ impl App {
             let config = self.config.lock().unwrap();
             config.stay_alive
         };
-        let should_request_shutdown = !swapped_out && self.home_is_local_daemon && !stay_alive;
-        tracing::info!(name: "daemon_shutdown.teardown.evaluated", target: "daemon_shutdown", home_is_local_daemon = self.home_is_local_daemon, stay_alive, should_request_shutdown, swapped_out, "daemon shutdown policy evaluated");
+        let should_request_shutdown = !swapped_out && !stay_alive;
+        tracing::info!(name: "daemon_shutdown.teardown.evaluated", target: "daemon_shutdown", stay_alive, should_request_shutdown, swapped_out, "daemon shutdown policy evaluated");
         self.flush_settings_save();
         let shutdown_response =
             self.request_teardown_shutdown(quit_timeout, should_request_shutdown);
@@ -149,26 +149,14 @@ impl App {
     /// two independent ways to end up thin-client, and #223's
     /// `restore_local_mode` / `connect_to_session` never let both be set at
     /// once. Gated on `auto_reconnect` so the file is never written (or read)
-    /// at all when the feature is off, and on
-    /// `launched_as_remote && !home_is_local_daemon`: keyed off
-    /// `home_is_local_daemon` (the immutable launch-time snapshot) rather than
-    /// the mutable `is_local_daemon`, because a local-daemon-launched session
-    /// now routinely calls `try_auto_reconnect()` on attach (`App::new_remote`)
-    /// and may reconnect to a genuinely remote target mid-session, flipping
-    /// `is_local_daemon` to `false` while still needing its connection
-    /// persisted at teardown. A genuinely remote launch (`--connect-daemon`)
-    /// never flips `home_is_local_daemon`, so running this for it would always
-    /// compute `None` and wipe out a real record saved by a different
-    /// `App::new` session (per ADR 0010, `new_remote`'s path is unaffected by
-    /// #236). A same-host local daemon is meant to behave exactly like a local
-    /// session (see the `new_remote` doc comment), so it must not be skipped.
+    /// at all when the feature is off. A mid-session remote swap repoints
+    /// `player_endpoint` but must not change what is saved here, so the gate
+    /// reads only the config setting.
     fn persist_auto_reconnect_target_on_teardown(&mut self) {
-        if self.launched_as_remote && !self.home_is_local_daemon {
-            tracing::info!(name: "auto_reconnect.target_persist.skipped", target: "auto_reconnect", reason = "launched_as_remote", "auto-reconnect target persistence skipped");
-        } else if !self.config.lock().unwrap().auto_reconnect {
-            tracing::info!(name: "auto_reconnect.target_persist.skipped", target: "auto_reconnect", reason = "disabled", "auto-reconnect target persistence skipped");
-        } else {
+        if self.config.lock().unwrap().auto_reconnect {
             self.persist_auto_reconnect_target();
+        } else {
+            tracing::info!(name: "auto_reconnect.target_persist.skipped", target: "auto_reconnect", reason = "disabled", "auto-reconnect target persistence skipped");
         }
     }
 
@@ -312,7 +300,6 @@ mod tests {
     fn quitting_with_stay_alive_off_stops_this_machines_local_daemon() {
         let _guard = crate::config::TestStateDirGuard::new();
         let mut app = make_app_stub();
-        app.home_is_local_daemon = true;
         app.config.lock().unwrap().stay_alive = false;
 
         let (home_remote, home_rx, home_peer) =
@@ -354,7 +341,6 @@ mod tests {
     #[test]
     fn teardown_after_local_restart_uses_the_live_home_link() {
         let mut app = make_app_stub();
-        app.home_is_local_daemon = true;
         app.config.lock().unwrap().stay_alive = false;
 
         let (dead_home, dead_rx, dead_peer) =

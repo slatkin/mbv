@@ -70,7 +70,7 @@ impl App {
         remote_rx: mpsc::Receiver<PlayerEvent>,
         endpoint: &mbv_remote_player::DaemonEndpoint,
     ) {
-        let current_is_home = self.home_is_local_daemon && self.is_local_daemon();
+        let current_is_home = self.is_local_daemon();
         self.stop_visualizer_capture();
         if !self.attach_remote_owner(remote, remote_rx, endpoint, current_is_home) {
             return;
@@ -114,7 +114,7 @@ impl App {
         // back to Local first, exactly as a session connect does
         // (design D13) — `self.player` is still the outgoing owner here.
         self.hand_remote_output_back_to_local();
-        let current_is_home = self.home_is_local_daemon && self.is_local_daemon();
+        let current_is_home = self.is_local_daemon();
         self.stop_visualizer_capture();
         let previous_route = self.active_route.clone();
         if !self.attach_remote_owner(remote, remote_rx, endpoint, current_is_home) {
@@ -135,7 +135,7 @@ impl App {
     pub(in crate::app) fn prepare_local_player(
         &mut self,
     ) -> Result<Option<SuspendedLocalSession>, mbv_remote_player::RemotePlayerError> {
-        if self.home_is_local_daemon && self.is_local_daemon() {
+        if self.is_local_daemon() {
             return Ok(None);
         }
         if let Some(suspended) = self.suspended_local.take()
@@ -290,7 +290,7 @@ impl App {
     pub(in crate::app) fn restore_local_mode(&mut self, status: &str) {
         let previous_route = self.active_route.clone();
         tracing::info!(name: "library_route.playback_route.restoring_local", target: "library_route", previous_route = ?previous_route, reason = %status, "restoring local playback");
-        if self.home_is_local_daemon && self.is_local_daemon() && self.suspended_local.is_none() {
+        if self.is_local_daemon() && self.suspended_local.is_none() {
             self.finish_local_mode(status.to_string(), None);
             return;
         }
@@ -310,13 +310,12 @@ impl App {
             .filter(|suspended| !suspended.player.is_remote_disconnected())
         {
             self.install_suspended_local(suspended);
-        } else if self.home_is_local_daemon {
-            // This app's baseline was never a genuinely local in-process
-            // player -- it was an `App::new_remote` thin client attached to
-            // the local daemon (`home_is_local_daemon`), so nothing was ever
-            // suspended above. Reconnect to the local daemon directly so
-            // "restore local mode" actually lands back on this app's real
-            // baseline instead of leaving the player disconnected.
+        } else {
+            // This app's baseline is a connection to the local daemon, and
+            // nothing was suspended above. Reconnect to the local daemon
+            // directly so "restore local mode" actually lands back on this
+            // app's real baseline instead of leaving the player
+            // disconnected.
             match Self::try_daemon_route_connect(
                 &mbv_remote_player::DaemonEndpoint::Local,
                 "owner process",
@@ -382,10 +381,7 @@ impl App {
         endpoint: &mbv_remote_player::DaemonEndpoint,
         was_routed: bool,
     ) {
-        if endpoint.is_local()
-            && (self.suspended_local.is_some()
-                || (self.home_is_local_daemon && self.is_local_daemon()))
-        {
+        if endpoint.is_local() && (self.suspended_local.is_some() || self.is_local_daemon()) {
             self.restore_local_mode("Local playback restored");
             return;
         }
@@ -439,10 +435,7 @@ impl App {
         let Some(endpoint) = self.session_direct_endpoint(sess) else {
             return Ok(false);
         };
-        if endpoint.is_local()
-            && (self.suspended_local.is_some()
-                || (self.home_is_local_daemon && self.is_local_daemon()))
-        {
+        if endpoint.is_local() && (self.suspended_local.is_some() || self.is_local_daemon()) {
             self.restore_local_mode("Local playback restored");
             return Ok(true);
         }

@@ -15,8 +15,9 @@ impl App {
     /// (task 7.3): mirrors `main.rs`'s `Resolution::Fresh`/`Resolution::Attach`
     /// startup branches, but as an in-process reconnect rather than a fresh
     /// process, since the whole daemon *process* may be gone, not just this
-    /// client's socket. Only called for a `home_is_local_daemon` app, so
-    /// `player_endpoint` is always the managed local daemon after this succeeds.
+    /// client's socket. Only called for a Client whose current Player owner
+    /// is the local daemon, so `player_endpoint` is always the managed local
+    /// daemon after this succeeds.
     ///
     /// The owner reloads its own persisted queue; this Client never seeds it
     /// from its per-user snapshot.

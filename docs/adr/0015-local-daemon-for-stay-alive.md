@@ -12,8 +12,9 @@ Stay-alive is **ensure the local daemon exists, then attach**, not a relay.
 There is one local daemon per user, serving `$XDG_RUNTIME_DIR/mbv-ctrl.sock`.
 The launching `mbv` authenticates, self-spawns a hidden local-daemon
 subcommand if nothing is listening on that socket, and then runs its own
-full TUI as an ordinary client of `DaemonEndpoint::Local` — the same client
-path `--connect-daemon` already uses. There is no pty, no byte-pipe terminal
+full TUI as an ordinary client of `DaemonEndpoint::Local` — the only client
+path there is. (Amended, issue #972: the `--connect-daemon` path this
+decision once shared with is removed.) There is no pty, no byte-pipe terminal
 client, and no eviction: any number of terminals may attach at once.
 
 - **An ordinary disconnect never stops the local daemon.** Stopping it is

@@ -88,7 +88,6 @@ pub fn parse_config(text: &str) -> Result<Config, ConfigError> {
         progress_interval_secs: session.progress_interval_secs,
         quit_timeout_secs: session.quit_timeout_secs,
         daemon_broadcast_ms: mbvd.broadcast_ms,
-        daemon_client_endpoint: mbvd.client_endpoint,
         daemon_server_tcp_listen: mbvd.server_tcp_listen,
         auto_reconnect: session.auto_reconnect,
         idle_feed_rss_url: idle_feed.rss_url,
@@ -326,11 +325,11 @@ fn parse_display_section(display: Option<&toml::Value>) -> DisplaySettings {
 
 struct MbvdSettings {
     broadcast_ms: u64,
-    client_endpoint: String,
     server_tcp_listen: String,
 }
 
 fn parse_mbvd_section(mbvd: Option<&toml::Value>) -> MbvdSettings {
+    warn_removed_client_endpoint(mbvd);
     MbvdSettings {
         broadcast_ms: mbvd
             .and_then(|d| d.get("broadcast_ms"))
@@ -338,12 +337,6 @@ fn parse_mbvd_section(mbvd: Option<&toml::Value>) -> MbvdSettings {
             .map_or(500, |v| {
                 u64::try_from(v.clamp(100, 60_000)).unwrap_or(u64::MAX)
             }),
-        client_endpoint: mbvd
-            .and_then(|d| d.get("client"))
-            .and_then(|c| c.get("endpoint"))
-            .and_then(toml::Value::as_str)
-            .unwrap_or("")
-            .to_string(),
         server_tcp_listen: mbvd
             .and_then(|d| d.get("server"))
             .and_then(|s| s.get("tcp_listen"))
@@ -391,6 +384,23 @@ fn parse_panel_section(panel: Option<&toml::Value>) -> PanelConfig {
 /// only to log one warning that names whichever of the two the file
 /// still sets, then ignored, because `width` and `width_expanded` are logical
 /// pixels. A save writes `[panel]` in full, so it drops them.
+fn warn_removed_client_endpoint(mbvd: Option<&toml::Value>) {
+    let stale = mbvd
+        .and_then(|d| d.get("client"))
+        .and_then(|c| c.get("endpoint"))
+        .and_then(toml::Value::as_str)
+        .map(str::trim)
+        .filter(|v| !v.is_empty());
+    if stale.is_none() {
+        return;
+    }
+    tracing::warn!(
+        name: "config.mbvd.client_endpoint",
+        target: "config",
+        "ignoring removed [mbvd.client] endpoint; mbv attaches to the per-user local Owner automatically"
+    );
+}
+
 fn warn_old_panel_width_keys(panel: &toml::Value) {
     let present: Vec<&str> = ["cols", "cols_expanded"]
         .into_iter()

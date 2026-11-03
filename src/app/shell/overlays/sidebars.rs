@@ -163,7 +163,6 @@ impl Model {
                 cast_attachment_id,
                 self.app.can_disconnect_remote(),
                 mbv_ui_model::panel_targets::SessionTransferGates {
-                    home_is_local_daemon: self.app.home_is_local_daemon,
                     local_owner_plays: self.app.local_owner_plays(),
                 },
                 panel_area,

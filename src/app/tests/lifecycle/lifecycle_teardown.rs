@@ -63,40 +63,6 @@ fn teardown_never_touches_persisted_state_when_auto_reconnect_disabled() {
     );
 }
 
-#[test]
-fn teardown_skips_persistence_for_an_explicit_remote_daemon_launch() {
-    // The existing skip case, unaffected by rebasing the gate onto
-    // `home_is_local_daemon`: an explicit `--connect-daemon` launch has
-    // `home_is_local_daemon = false` for its entire lifetime, so it must
-    // still be skipped and must not overwrite an existing saved record.
-    let _guard = crate::config::TestStateDirGuard::new();
-    let _ = crate::config::save_last_remote_connection(Some(
-        &crate::config::LastRemoteConnection::LibraryRoute {
-            library: "music".to_string(),
-        },
-    ));
-    let mut app = make_app_stub();
-    app.config.lock().unwrap().auto_reconnect = true;
-    app.launched_as_remote = true;
-    app.home_is_local_daemon = false;
-    app.player_endpoint = Some(mbv_remote_player::DaemonEndpoint::Tcp(
-        "127.0.0.1:0".parse().unwrap(),
-    ));
-    app.active_route = None;
-
-    app.teardown(
-        Duration::from_secs(1),
-        crate::app::dispatch::run_loop::teardown::test_quit_exit_kind(),
-    );
-
-    assert_eq!(
-        crate::config::load_last_remote_connection().unwrap(),
-        Some(crate::config::LastRemoteConnection::LibraryRoute {
-            library: "music".to_string()
-        })
-    );
-}
-
 // Owns daemon-lifecycle "Swapped-out TUI with Stay Alive off" (tray-pin-swap
 // 4.4, shell layer per docs/architecture/tui-frontend.md): a `SwapQuit` marks
 // the shell exit swapped-out, and teardown then sends no coordinated shutdown
@@ -109,7 +75,6 @@ fn swapped_out_teardown_sends_no_shutdown_request() {
     let _guard = crate::config::TestStateDirGuard::new();
     crate::app::QUIT_REQUESTED.store(false, std::sync::atomic::Ordering::Relaxed);
     let mut app = make_app_stub();
-    app.home_is_local_daemon = true;
     app.config.lock().unwrap().stay_alive = false;
 
     let (home_remote, _home_rx, home_peer) = mbv_remote_player::connect_stub_daemon_pair().unwrap();

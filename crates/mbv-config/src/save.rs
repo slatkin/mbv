@@ -309,15 +309,6 @@ fn write_mbvd_section(table: &mut toml::map::Map<String, toml::Value>, cfg: &Con
             mbvd.remove("audio_pipe_playout_delay_ms");
         }
     }
-    let mbvd_client = section(mbvd, "client");
-    if cfg.daemon_client_endpoint.trim().is_empty() {
-        mbvd_client.remove("endpoint");
-    } else {
-        mbvd_client.insert(
-            "endpoint".to_string(),
-            toml::Value::String(cfg.daemon_client_endpoint.clone()),
-        );
-    }
     let mbvd_server = section(mbvd, "server");
     if cfg.daemon_server_tcp_listen.trim().is_empty() {
         mbvd_server.remove("tcp_listen");

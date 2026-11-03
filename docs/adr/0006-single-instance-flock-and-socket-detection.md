@@ -1,6 +1,9 @@
 # Single-instance via flock + socket connectability
 
 > **Amended (2026-09-30):** The Owner process is now the only local Player-owner host; refusal no longer means a Bare TUI. See [ADR 0030](0030-owner-process-is-the-only-local-player-owner.md).
+> **Amended (issue #972):** The explicit `--connect-daemon` / `[mbvd.client] endpoint`
+> thin-client mode is removed. Every local launch attaches to the per-user Owner process, and the
+> thin-client bullet below applies to Clients of that Owner only.
 
 ## Decision
 
@@ -26,9 +29,8 @@ disambiguate the two "a lock is held" cases.
   false "alive".
 - The app writes its **PID into the lock file** after acquiring it; `mbv -q`
   reads it and `SIGTERM`s the app for a graceful, non-interactive shutdown.
-- **Thin clients** (explicit `--connect-daemon` / configured endpoint to an
-  `mbvd`) own no Player and take **no flock**; stay-alive does not apply to
-  them.
+- **Clients** own no Player and take **no flock**; the Player owner holds
+  it for its whole lifetime.
 
 ## Considered options
 

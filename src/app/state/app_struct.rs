@@ -196,14 +196,6 @@ pub struct App {
     pub(in crate::app) status: String,
     pub(in crate::app) status_expires: Option<Instant>,
     pub(in crate::app) status_severity: crate::app::dispatch::notify::ToastSeverity,
-    /// `true` only for instances built via `App::new_remote` (the
-    /// `--connect-daemon` / local-daemon-auto-detect thin-client launch
-    /// path). Those instances never populate `active_route` (set by runtime
-    /// library-route switches, which only apply to `App::new` instances), so
-    /// `teardown`'s auto-reconnect persistence (#236) must skip this flag
-    /// entirely rather than compute (and save) a bogus `None` record that
-    /// would wipe out a real record saved by a different `App::new` session.
-    pub(in crate::app) launched_as_remote: bool,
     /// The daemon endpoint for the current player target. `None` means an
     /// in-process player (bare mode). `Some(DaemonEndpoint::Local)` is this
     /// machine's managed local daemon. `Some(Tcp | Unix)` is a different
@@ -211,17 +203,6 @@ pub struct App {
     /// transition records its source of truth rather than projecting it
     /// down to a bool that must be manually kept in sync.
     pub(in crate::app) player_endpoint: Option<mbv_remote_player::DaemonEndpoint>,
-    /// The one-time, launch-time launch classification: `true` only for
-    /// `App::new_remote` instances constructed for the managed local
-    /// daemon, and never updated afterward. Kept independent of
-    /// `player_endpoint`, which tracks the *current* player target and can
-    /// change at runtime. Kept fixed at its construction-time value so
-    /// `restore_local_mode` can tell whether this app's baseline (the state
-    /// to return to when a route switch is undone) was a genuinely local
-    /// in-process player (nothing to do here) or a connection to the local
-    /// daemon (which must be reconnected, since there's no suspended local
-    /// player to restore in that case).
-    pub(in crate::app) home_is_local_daemon: bool,
     pub(in crate::app) hidden_libraries: Vec<String>,
     pub(in crate::app) home_latest_launch_window: mbv_ui_model::home_latest::HomeLatestLaunchWindow,
     /// `Config.library_routes` at startup (#256). Values are resolved

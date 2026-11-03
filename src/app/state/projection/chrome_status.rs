@@ -101,10 +101,9 @@ impl App {
     }
 
     /// The connected Player-owner endpoint's host label (PR #973 review):
-    /// names the attachment the Client actually holds — never the
-    /// configured `daemon_client_endpoint`, which can name a different
-    /// host. `Local` carries no peer name; the caller's device-name
-    /// fallback covers it.
+    /// names the attachment the Client actually holds — never an assumed
+    /// or configured host. `Local` carries no peer name; the caller's
+    /// device-name fallback covers it.
     fn connected_player_endpoint_label(&self) -> Option<String> {
         self.player_endpoint
             .as_ref()
@@ -545,13 +544,12 @@ mod tests {
     };
 
     /// The queue owner label and the remote pill name the connected peer's
-    /// endpoint when its device name is empty — never the configured
-    /// `daemon_client_endpoint`, which can name a different host (PR #973
-    /// review).
+    /// endpoint when its device name is empty — the connected endpoint, never
+    /// a configured or assumed one (PR #973 review; issue #972 drops the
+    /// configured-endpoint config key, the label contract stays).
     #[test]
     fn an_empty_named_peer_labels_the_connected_endpoint_not_the_configured_one() {
         let (mut app, _cmd_rx) = make_local_daemon_app_stub_with_cmd_rx(make_audio_items(2));
-        app.config.lock().unwrap().daemon_client_endpoint = "tcp://10.9.9.9:1111".to_string();
         let mut sess = mbv_emby::test_support::make_session("", "mbv");
         sess.id = "peer-1".to_string();
         let (peer, peer_rx, _peer_cmd_rx) =

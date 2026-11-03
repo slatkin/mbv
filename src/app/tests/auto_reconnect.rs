@@ -1,12 +1,12 @@
 use super::*;
 
 #[test]
-fn new_remote_does_not_auto_reconnect_for_an_explicit_remote_daemon() {
-    // Regression guard for design.md's Decision 1 gating: an explicit
-    // `--connect-daemon`/`daemon_client_endpoint` launch (`is_local_daemon:
-    // false`) is the user stating a target directly, so it must not
-    // silently override that with a different auto-reconnect target, even
-    // when one is saved and `auto_reconnect` is enabled.
+fn new_remote_does_not_auto_reconnect_for_a_non_local_endpoint() {
+    // Regression guard for the constructor's own gating: a construction on a
+    // non-local endpoint never runs the auto-reconnect replay. The replay
+    // belongs to the local-Owner attach path (issue #972 removed the explicit
+    // endpoint launch mode; the constructor guard keeps a non-local
+    // construction from attempting real connections).
     let _guard = crate::config::TestStateDirGuard::new();
     let _ = crate::config::save_last_remote_connection(Some(
         &crate::config::LastRemoteConnection::LibraryRoute {

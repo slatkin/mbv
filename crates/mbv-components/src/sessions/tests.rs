@@ -83,11 +83,7 @@ fn peer_target(
     }
 }
 
-fn component_with_rows(
-    rows: &[SessionTargetRow],
-    home_is_local_daemon: bool,
-    local_owner_plays: bool,
-) -> SessionsComponent {
+fn component_with_rows(rows: &[SessionTargetRow], local_owner_plays: bool) -> SessionsComponent {
     let mut component = SessionsComponent::new();
     component.set_content(
         rows,
@@ -96,18 +92,15 @@ fn component_with_rows(
         None,
         None,
         false,
-        mbv_ui_model::panel_targets::SessionTransferGates {
-            home_is_local_daemon,
-            local_owner_plays,
-        },
+        mbv_ui_model::panel_targets::SessionTransferGates { local_owner_plays },
         Some(Rect::new(0, 0, 40, 12)),
     );
     component.view_for_test();
     component
 }
 
-/// Design D6: `h` emits `HandOffSession` with the selected row's stable
-/// key only while the home is the local Owner, the local Owner plays,
+/// Design D6 (issue #972 drops the home gate): `h` emits `HandOffSession`
+/// with the selected row's stable key only while the local Owner plays
 /// and the row carries a direct endpoint; every closed gate emits
 /// nothing.
 #[test]
@@ -115,7 +108,7 @@ fn hand_off_key_emits_the_request_only_when_its_conditions_hold() {
     let peer = peer_target("peer", Some("Song"), false, true);
     let own_row = peer_target("self", Some("Song"), false, false);
 
-    let mut component = component_with_rows(std::slice::from_ref(&peer), true, true);
+    let mut component = component_with_rows(std::slice::from_ref(&peer), true);
     assert_eq!(
         component.handle_key(&key(Key::Char('h'))),
         Some(Msg::Shell(Box::new(ShellRequest::HandOffSession(
@@ -124,15 +117,11 @@ fn hand_off_key_emits_the_request_only_when_its_conditions_hold() {
     );
 
     // The local Owner paused: no Hand off.
-    let mut component = component_with_rows(std::slice::from_ref(&peer), true, false);
-    assert_eq!(component.handle_key(&key(Key::Char('h'))), None);
-
-    // Not the local Owner's home: no Hand off.
-    let mut component = component_with_rows(std::slice::from_ref(&peer), false, true);
+    let mut component = component_with_rows(std::slice::from_ref(&peer), false);
     assert_eq!(component.handle_key(&key(Key::Char('h'))), None);
 
     // This device's own row carries no direct endpoint: no Hand off.
-    let mut component = component_with_rows(std::slice::from_ref(&own_row), true, true);
+    let mut component = component_with_rows(std::slice::from_ref(&own_row), true);
     assert_eq!(component.handle_key(&key(Key::Char('h'))), None);
 
     // No selection: no request.
@@ -140,9 +129,9 @@ fn hand_off_key_emits_the_request_only_when_its_conditions_hold() {
     assert_eq!(component.handle_key(&key(Key::Char('h'))), None);
 }
 
-/// Design D6: `t` emits `TakeSession` with the selected row's stable key
-/// only while the home is the local Owner, the row shows the peer
-/// playing, and the row carries a direct endpoint. The local Owner's own
+/// Design D6 (issue #972 drops the home gate): `t` emits `TakeSession`
+/// with the selected row's stable key only while the row shows the peer
+/// playing and the row carries a direct endpoint. The local Owner's own
 /// playback state does not gate Take.
 #[test]
 fn take_key_emits_the_request_only_when_its_conditions_hold() {
@@ -152,7 +141,7 @@ fn take_key_emits_the_request_only_when_its_conditions_hold() {
     let own_row = peer_target("self", Some("Song"), false, false);
 
     // The local Owner's playback state is irrelevant to Take.
-    let mut component = component_with_rows(std::slice::from_ref(&playing), true, false);
+    let mut component = component_with_rows(std::slice::from_ref(&playing), false);
     assert_eq!(
         component.handle_key(&key(Key::Char('t'))),
         Some(Msg::Shell(Box::new(ShellRequest::TakeSession(
@@ -161,19 +150,15 @@ fn take_key_emits_the_request_only_when_its_conditions_hold() {
     );
 
     // The row shows the peer paused: no Take.
-    let mut component = component_with_rows(std::slice::from_ref(&paused), true, true);
+    let mut component = component_with_rows(std::slice::from_ref(&paused), true);
     assert_eq!(component.handle_key(&key(Key::Char('t'))), None);
 
     // The row shows the peer idle: no Take.
-    let mut component = component_with_rows(std::slice::from_ref(&idle), true, true);
-    assert_eq!(component.handle_key(&key(Key::Char('t'))), None);
-
-    // Not the local Owner's home: no Take.
-    let mut component = component_with_rows(std::slice::from_ref(&playing), false, true);
+    let mut component = component_with_rows(std::slice::from_ref(&idle), true);
     assert_eq!(component.handle_key(&key(Key::Char('t'))), None);
 
     // This device's own row carries no direct endpoint: no Take.
-    let mut component = component_with_rows(std::slice::from_ref(&own_row), true, true);
+    let mut component = component_with_rows(std::slice::from_ref(&own_row), true);
     assert_eq!(component.handle_key(&key(Key::Char('t'))), None);
 }
 
@@ -183,7 +168,7 @@ fn take_key_emits_the_request_only_when_its_conditions_hold() {
 #[test]
 fn modifier_bearing_transfer_presses_emit_nothing() {
     let peer = peer_target("peer", Some("Song"), false, true);
-    let mut component = component_with_rows(std::slice::from_ref(&peer), true, true);
+    let mut component = component_with_rows(std::slice::from_ref(&peer), true);
     let ctrl_h = KeyEvent {
         code: Key::Char('h'),
         modifiers: KeyModifiers::CONTROL,

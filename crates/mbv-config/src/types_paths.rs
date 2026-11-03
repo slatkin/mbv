@@ -87,7 +87,6 @@ pub struct Config {
     pub progress_interval_secs: u64, // how often to report playback progress to Emby (seconds)
     pub quit_timeout_secs: u64,      // how long quit waits for local player teardown (seconds)
     pub daemon_broadcast_ms: u64, // how often the daemon broadcasts status to connected TUIs (ms)
-    pub daemon_client_endpoint: String, // [daemon.client] endpoint; empty = auto-detect local daemon
     pub daemon_server_tcp_listen: String, // [daemon.server] tcp_listen; empty = unix-only unless system instance default applies
     /// Reconnect at startup to whatever remote connection (a #223 library
     /// route, or a Sessions-panel direct-remote/attached session) was
@@ -165,7 +164,6 @@ impl Default for Config {
             progress_interval_secs: 10,
             quit_timeout_secs: 5,
             daemon_broadcast_ms: 500,
-            daemon_client_endpoint: String::new(),
             daemon_server_tcp_listen: String::new(),
             auto_reconnect: false,
             idle_feed_rss_url: "https://novaramedia.com/feed/".to_string(),

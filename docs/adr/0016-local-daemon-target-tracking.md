@@ -10,6 +10,12 @@
 > the manual-sync hazard described under Consequences is the thing that
 > refactor removed.
 
+> **Amended (issue #972).** The launch-mode half of the split is removed. The explicit
+> daemon-endpoint mode is gone, so every launch attaches to the local Owner and the
+> `home_is_local_daemon` snapshot was constant `true`; the field and the special cases that
+> read it (teardown persistence skip, the Sessions transfer home gate) are deleted.
+> `player_endpoint` remains the single record of the current Player-owner target.
+
 ## Decision
 
 `App` tracks a thin client's relationship to its own Local daemon with two

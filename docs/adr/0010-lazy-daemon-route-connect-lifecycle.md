@@ -4,9 +4,9 @@
 
 A daemon-route connect attempt (the general "route everything" wildcard case
 in #222, and the per-library case #223 builds on top of it) follows four
-rules, distinct from the existing startup-only `--connect-daemon` /
-`daemon_client_endpoint` thin-client path (`main.rs`'s `explicit_daemon_endpoint`
-branch), which is unaffected by this ADR:
+rules, distinct from the startup attach path (`main.rs`'s `attach_owner_process`), which is
+unaffected by this ADR. (Amended, issue #972: the startup-only `--connect-daemon` /
+`daemon_client_endpoint` thin-client path this ADR originally carved out is removed.)
 
 1. **Lazy connect, with an opt-in startup exception.** By default, mbv
    never attempts a daemon-route connection at startup — the first
@@ -111,6 +111,5 @@ client") against its body: #222 was supposed to deliver reconnect-at-
 startup, not rule it out. Issue #236 corrected this: `App::new` now calls
 `App::try_auto_reconnect` once, gated on the new `auto_reconnect`
 config flag (default off), restoring whichever connection was active at
-last exit. `App::new_remote` (the separate, pre-existing
-`--connect-daemon`/`daemon_client_endpoint` path) remains untouched, as
-rule 1 always intended.
+last exit. `App::new_remote` remains the construction path every launch
+takes, as rule 1 always intended for the attach path.

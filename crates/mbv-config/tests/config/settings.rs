@@ -104,16 +104,22 @@ fn audio_device_configuration_table() {
     assert_eq!(Config::default().audio_device, "alsa");
 }
 
+/// Issue #972: `[mbvd.client] endpoint` (the removed explicit daemon-endpoint
+/// mode) is ignored with a one-time warning, and the rest of the file still
+/// parses.
 #[test]
-fn parse_daemon_client_endpoint() {
+fn parse_ignores_removed_daemon_client_endpoint_key() {
     let toml = r#"
 [server]
 url = "http://localhost:8096"
 [mbvd.client]
 endpoint = "unix:///tmp/mbv.sock"
+[mbvd]
+broadcast_ms = 750
 "#;
     let cfg = parse_config(toml).unwrap();
-    assert_eq!(cfg.daemon_client_endpoint, "unix:///tmp/mbv.sock");
+    assert_eq!(cfg.daemon_broadcast_ms, 750);
+    assert_eq!(cfg.server_url, "http://localhost:8096");
 }
 
 #[test]

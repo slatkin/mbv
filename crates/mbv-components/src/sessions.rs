@@ -234,19 +234,16 @@ impl SessionsComponent {
     }
 
     /// Design D6: Hand off is offered on a peer with a direct endpoint,
-    /// only while the home is the local Owner and the local Owner plays.
+    /// only while the local Owner plays.
     fn hand_off_available(&self) -> bool {
-        self.transfer_gates.home_is_local_daemon
-            && self.transfer_gates.local_owner_plays
-            && self.selected_has_direct_endpoint()
+        self.transfer_gates.local_owner_plays && self.selected_has_direct_endpoint()
     }
 
-    /// Design D6: Take is offered on a peer with a direct endpoint, only
-    /// while the home is the local Owner and the row shows the peer playing.
+    /// Design D6: Take is offered on a peer with a direct endpoint,
+    /// only while the row shows the peer playing. The local Owner's own
+    /// playback state does not gate Take.
     fn take_available(&self) -> bool {
-        self.transfer_gates.home_is_local_daemon
-            && self.selected_row_plays()
-            && self.selected_has_direct_endpoint()
+        self.selected_row_plays() && self.selected_has_direct_endpoint()
     }
 
     /// The parent recognizes gestures; the embedded list resolves completed

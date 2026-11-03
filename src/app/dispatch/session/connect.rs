@@ -172,7 +172,7 @@ impl App {
     ///
     /// Returns `true` when the player has been swapped to a live reattach and
     /// the caller must skip `restore_local_mode`. Local daemons are excluded:
-    /// those already have the modal / `home_is_local_daemon` reconnect paths.
+    /// those already have the modal reconnect paths.
     pub(in crate::app) fn try_reattach_remote_daemon(&mut self) -> bool {
         self.try_reattach_remote_daemon_with_sleep(std::thread::sleep)
     }
@@ -257,14 +257,13 @@ impl App {
     /// path (construct.rs) when the Emby client is already available at
     /// construction, or from `apply_emby_completion`
     /// (`app_emby_service_completion.rs`) once the async Emby startup used by
-    /// async Emby startup completes. A genuinely remote
-    /// `--connect-daemon` launch is a separate, unaffected mechanism per
-    /// ADR 0010. A no-op unless `auto_reconnect` is enabled and
-    /// `load_last_remote_connection` has a record. One shot, no retry: a
-    /// failed connect, a route no longer present in `library_routes`, or a
-    /// device not found in the current session list all fall back to (stay
-    /// on) local playback, exactly like #222's per-play lazy-connect
-    /// fallback rule -- never a hard failure at startup.
+    /// async Emby startup completes. A no-op unless `auto_reconnect` is
+    /// enabled and `load_last_remote_connection` has a record. One shot, no
+    /// retry: a failed connect, a route no longer present in
+    /// `library_routes`, or a device not found in the current session list
+    /// all fall back to (stay on) local playback, exactly like #222's
+    /// per-play lazy-connect fallback rule -- never a hard failure at
+    /// startup.
     pub(in crate::app) fn try_auto_reconnect(&mut self) {
         if !self.config.lock().unwrap().auto_reconnect {
             tracing::info!(name: "auto_reconnect.reconnect.disabled", target: "auto_reconnect", "auto-reconnect disabled; staying local");
@@ -308,10 +307,7 @@ impl App {
             tracing::info!(name: "auto_reconnect.library_route.unresolved", target: "auto_reconnect", library = %library, "persisted library route no longer resolves; staying local");
             return;
         };
-        if endpoint.is_local()
-            && (self.suspended_local.is_some()
-                || (self.home_is_local_daemon && self.is_local_daemon()))
-        {
+        if endpoint.is_local() && (self.suspended_local.is_some() || self.is_local_daemon()) {
             self.restore_local_mode("Local playback restored");
             return;
         }

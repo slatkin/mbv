@@ -44,13 +44,11 @@ pub struct SessionTransferOffers {
     pub take: bool,
 }
 
-/// The shell-owned transfer gating inputs (design D6): whether the home of
-/// the Client is the local Owner, and whether the local Owner plays. The
-/// component resolves them against its own selection into
+/// The shell-owned transfer gating input (design D6): whether the local
+/// Owner plays. The component resolves it against its own selection into
 /// `SessionTransferOffers`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct SessionTransferGates {
-    pub home_is_local_daemon: bool,
     pub local_owner_plays: bool,
 }
 

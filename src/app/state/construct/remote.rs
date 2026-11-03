@@ -246,9 +246,7 @@ impl App {
         });
         app.mpris = mpris_handle;
         app.player_endpoint = Some(endpoint.clone());
-        app.home_is_local_daemon = endpoint.is_local();
         app.sync_subtitle_prefs_to_player();
-        app.launched_as_remote = true;
         debug_assert!(app.player_endpoint.is_some(), "player-endpoint invariant");
         if endpoint.is_local() {
             app.try_auto_reconnect();
