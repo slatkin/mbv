@@ -16,7 +16,6 @@ mbv is a Rust terminal media client for Emby, Audiobookshelf, and Feeds. It embe
 * Keep no file over 800 lines at push time. Split along responsibility seams. Run `make check-code-file-lines` just before you push. Never use it as a per-task, CI, or acceptance gate.
 * Coding standards live in `docs/standards/README.md` (Microsoft Pragmatic Rust Guidelines, pinned locally, one file per rule). Scan its checklist. Then run `qmd query` for the full text of a rule. Never read every rule.
 * Prevent test inflation. Do not cover every execution path for every addition. Small additions need few tests, if any.
-comp
 
 ## Repository map
 
