@@ -12,12 +12,11 @@ durability and targeting guarantees for coordinated shutdown.
 The `stay_alive` configuration setting SHALL be the only setting determining whether this
 machine's local daemon automatically outlives a TUI attached to it. No command-line flag
 SHALL enable Stay Alive. Explicit lifecycle controls such as `mbv -q`, tray Quit, and
-operating-system termination remain independent of this setting. A TUI launched without an
-explicit daemon endpoint SHALL always reach playback through this machine's local daemon;
-`stay_alive` SHALL decide only that daemon's lifetime, how many TUIs it admits, and whether its
-tray is forced on, never whether it exists. No other Client or Player-owner behaviour SHALL
-depend on `stay_alive`: in particular, playback route switching and system notifications SHALL
-behave the same whatever it is set to.
+operating-system termination remain independent of this setting. Every TUI SHALL always reach
+playback through this machine's local daemon; `stay_alive` SHALL decide only that daemon's
+lifetime, how many TUIs it admits, and whether its tray is forced on, never whether it exists.
+No other Client or Player-owner behaviour SHALL depend on `stay_alive`: in particular, playback
+route switching and system notifications SHALL behave the same whatever it is set to.
 
 #### Scenario: Stay Alive enabled
 
@@ -48,6 +47,13 @@ behave the same whatever it is set to.
 - **THEN** the TUI SHALL NOT stop the local daemon's playback
 - **THEN** returning to the local route SHALL show the local queue still playing, or finished
   if it ran out
+
+#### Scenario: Removed daemon-connect flag is rejected
+
+- **WHEN** the user invokes `mbv --connect-daemon <endpoint>`
+- **THEN** mbv SHALL exit with guidance naming the flag's removal and pointing at the automatic
+  local-Owner attach and the Sessions panel for reaching a remote Player owner
+- **THEN** mbv SHALL NOT silently treat the invocation as an ordinary local launch
 
 ### Requirement: Quitting with Stay Alive off stops this machine's local daemon
 

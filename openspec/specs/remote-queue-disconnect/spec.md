@@ -10,16 +10,15 @@ disconnected remote.
 
 ### Requirement: Disconnecting from a remote mbvd returns to the local unified queue
 
-When a client that is attached to a local daemon (`home_is_local_daemon`) disconnects from a
-remote mbvd — by user action, by unannounced connection loss, or by an announced daemon
-shutdown — it SHALL return to the plain local-daemon presentation: the queue panel SHALL show
-the local Owner queue, SHALL name the local Owner as its Player owner, and SHALL offer no
-control of the remote queue. Disconnecting SHALL NOT empty the queue — the daemon's current
-queue SHALL remain displayed. A user disconnect SHALL NOT stop or change the remote playback or
-queue. The return-to-local behavior SHALL be driven by the disconnect itself, not only by the
-user's disconnect key: a reader- or writer-detected connection loss SHALL trigger the same
-presentation restore, and the client SHALL NOT remain presenting (or accepting commands for)
-the stale adopted remote queue snapshot.
+When a Client that is connected to a remote mbvd disconnects from it — by user action, by
+unannounced connection loss, or by an announced daemon shutdown — it SHALL return to the plain
+local-daemon presentation: the queue panel SHALL show the local Owner queue, SHALL name the local
+Owner as its Player owner, and SHALL offer no control of the remote queue. Disconnecting SHALL NOT
+empty the queue — the daemon's current queue SHALL remain displayed. A user disconnect SHALL NOT
+stop or change the remote playback or queue. The return-to-local behavior SHALL be driven by the
+disconnect itself, not only by the user's disconnect key: a reader- or writer-detected connection
+loss SHALL trigger the same presentation restore, and the Client SHALL NOT remain presenting (or
+accepting commands for) the stale adopted remote queue snapshot.
 
 #### Scenario: Stay-alive client disconnects from a remote device
 

@@ -40,17 +40,14 @@ clients. It SHALL NOT disconnect, evict, or suspend a client that is already att
 - **WHEN** mbv resolves to attach and other clients are already attached to that daemon
 - **THEN** all previously attached clients SHALL remain attached and usable
 
-### Requirement: Clients take no lock
-A client SHALL NOT acquire the lock, whether it is a client of a local daemon or of a daemon
-reached through an explicit endpoint. Only the Player owner SHALL hold it.
+### Requirement: A client never holds the lock
+
+A client SHALL NOT acquire the lock. Only the Player owner SHALL hold it.
 
 #### Scenario: Several clients run at once
+
 - **WHEN** several clients of the same local daemon are running
 - **THEN** exactly one process — the daemon — SHALL hold the lock
-
-#### Scenario: Explicit-endpoint client starts
-- **WHEN** mbv starts with an explicit daemon endpoint
-- **THEN** mbv SHALL NOT acquire the lock and SHALL NOT be affected by whether it is held
 
 ### Requirement: The local daemon holds the owner lock
 mbv SHALL use an advisory lock file in the user's runtime directory to identify the Player owner.

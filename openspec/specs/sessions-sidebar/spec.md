@@ -54,7 +54,7 @@ F3 SHALL preserve selection by kind-qualified stable target identity across inde
 
 ### Requirement: F3 offers Hand off and Take on a peer target
 
-F3 SHALL offer Hand off and Take as separate actions on the selected target when that target has a direct Player-owner endpoint other than the local Owner and the home of the Client is the local Owner. Each action SHALL name the selected target by its stable identity, as activation does. F3 SHALL NOT offer them on a target without a direct endpoint; activation of such a target SHALL stay unchanged.
+F3 SHALL offer Hand off and Take as separate actions on the selected target when that target has a direct Player-owner endpoint other than the local Owner. Each action SHALL name the selected target by its stable identity, as activation does. F3 SHALL NOT offer them on a target without a direct endpoint; activation of such a target SHALL stay unchanged.
 
 #### Scenario: Peer target selected
 
