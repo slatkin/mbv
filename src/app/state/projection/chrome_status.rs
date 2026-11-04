@@ -64,17 +64,18 @@ impl App {
 
     /// The label naming the remote receiver that is the owner's playback
     /// output, per the last `CtrlEvent::PlaybackOutput` (design D12/D13).
-    /// Shared by the status-bar remote pill and the queue header so both name
-    /// the output consistently; the owner's report carries the discovered or
-    /// device name. An Emby Session output names the Session device.
+    /// Feeds the queue header so it names the output consistently; the
+    /// owner's report carries the discovered or device name. An Emby Session
+    /// output names the Session device.
     fn remote_output_label(&self) -> Option<String> {
         match &self.playback_output {
             Some(mbv_ctrl::OutputState::Cast {
                 connection, name, ..
             }) => match connection {
-                // A target marked disconnected must not read as connected: the
-                // pill falls back to the local label until the reconnect lands,
-                // so it never contradicts the header's "Cast: disconnected".
+                // A target marked disconnected must not read as connected:
+                // the header falls back to the local label until the
+                // reconnect lands, so it never contradicts its own
+                // "Cast: disconnected" status word.
                 mbv_ctrl::OutputConnection::Disconnected => None,
                 mbv_ctrl::OutputConnection::Connecting | mbv_ctrl::OutputConnection::Connected => {
                     Some(name.clone())
@@ -92,9 +93,9 @@ impl App {
         }
     }
 
-    /// Whether the remote pill shows its connected state: a remote output
-    /// (Cast receiver or Emby Session) is attached and live, or the remote
-    /// slot names a direct route.
+    /// Whether the playback output reads as connected for the queue header:
+    /// a remote output (Cast receiver or Emby Session) is attached and live,
+    /// or the remote slot names a direct route.
     fn remote_connected(&self, remote_state: RemoteSlotState) -> bool {
         self.remote_output_label().is_some()
             || matches!(remote_state, RemoteSlotState::DirectRemote)
@@ -117,10 +118,10 @@ impl App {
             })
     }
 
-    /// The remote pill label, gap included. An attached remote output names it
-    /// first; otherwise the remote slot names it, and this machine's device
-    /// name is the fallback. `or_else` leaves the slot unread while a receiver
-    /// is attached.
+    /// The playback target's label, gap-prefixed. An attached remote output
+    /// names it first; otherwise the remote slot names it, and this machine's
+    /// device name is the fallback. `or_else` leaves the slot unread while a
+    /// receiver is attached. The queue-header caller trims the gap.
     fn remote_label(&self, remote_state: RemoteSlotState) -> String {
         let gap = if self.use_nerd_fonts { " " } else { "  " };
         let target = self.remote_output_label().or_else(|| match remote_state {
@@ -136,53 +137,6 @@ impl App {
             Some(target) => format!("{gap}{target}"),
             None => format!("{gap}{}", mbv_emby::device_name()),
         }
-    }
-
-    pub(in crate::app) fn remote_status_spans(
-        &self,
-        remote_state: RemoteSlotState,
-    ) -> Vec<Span<'static>> {
-        let remote_on = self.remote_connected(remote_state);
-        let glyph_style = Style::default()
-            .bg(mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false).fill)
-            .fg(ratatui::style::Color::White);
-
-        let label = self.remote_label(remote_state);
-        let label_style = Style::default()
-            .fg(if remote_on {
-                mbv_theme::Role::Accent.color()
-            } else {
-                ratatui::style::Color::Black
-            })
-            .bg(mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false).fill);
-
-        vec![
-            Span::styled(
-                " ",
-                Style::default().bg(mbv_theme::surface_colors(
-                    mbv_theme::Surface::StatusBarPill,
-                    false,
-                )
-                .fill),
-            ),
-            Span::styled(
-                if self.use_nerd_fonts {
-                    "\u{f1616}"
-                } else {
-                    "\u{1F5A7}"
-                },
-                glyph_style,
-            ),
-            Span::styled(label, label_style),
-            Span::styled(
-                " ",
-                Style::default().bg(mbv_theme::surface_colors(
-                    mbv_theme::Surface::StatusBarPill,
-                    false,
-                )
-                .fill),
-            ),
-        ]
     }
 
     /// The playback target's host label plus whether it names a remote target
@@ -202,7 +156,7 @@ impl App {
     /// The shown queue's Player owner's name (design D7, `queue-playback-panel`
     /// delta): the connected peer by device name while the shown queue is the
     /// peer link, else this machine's device name (the local Owner). The peer
-    /// resolution mirrors the remote pill's (`remote_label`): route name,
+    /// resolution mirrors `remote_label`: route name,
     /// session device name, connected endpoint host.
     pub(in crate::app) fn queue_owner_label(&self) -> String {
         if self.playing_queue_link() == QueueLink::Peer {
@@ -537,16 +491,15 @@ fn queue_source_status_label(
 
 #[cfg(test)]
 mod tests {
-    use crate::app::RemoteSlotState;
     use crate::app::dispatch::notify::ToastSeverity;
     use crate::app::tests::{
         make_app_stub, make_audio_items, make_local_daemon_app_stub_with_cmd_rx,
     };
 
-    /// The queue owner label and the remote pill name the connected peer's
-    /// endpoint when its device name is empty — the connected endpoint, never
-    /// a configured or assumed one (PR #973 review; issue #972 drops the
-    /// configured-endpoint config key, the label contract stays).
+    /// The queue owner label names the connected peer's endpoint when its
+    /// device name is empty — the connected endpoint, never a configured or
+    /// assumed one (PR #973 review; issue #972 drops the configured-endpoint
+    /// config key, the label contract stays).
     #[test]
     fn an_empty_named_peer_labels_the_connected_endpoint_not_the_configured_one() {
         let (mut app, _cmd_rx) = make_local_daemon_app_stub_with_cmd_rx(make_audio_items(2));
@@ -562,37 +515,6 @@ mod tests {
         );
 
         assert_eq!(app.queue_owner_label(), "127.0.0.1");
-        assert!(
-            app.remote_status_spans(RemoteSlotState::DirectRemote)
-                .iter()
-                .any(|span| span.content.contains("127.0.0.1")),
-            "the pill names the connected endpoint's host"
-        );
-    }
-
-    /// Same consistency contract as the queue header: the status-bar remote
-    /// pill names the owner's cast output instead of this machine's device
-    /// name, with the remote-on styling.
-    #[test]
-    fn attached_cast_receiver_names_the_status_bar_pill() {
-        let mut app = make_app_stub();
-        app.handle_player_event(mbv_ctrl::player::PlayerEvent::PlaybackOutput(
-            mbv_ctrl::OutputState::Cast {
-                receiver_id: "device-1".to_string(),
-                name: "Living Room".to_string(),
-                connection: mbv_ctrl::OutputConnection::Connected,
-            },
-        ));
-
-        let spans = app.remote_status_spans(RemoteSlotState::LocalDaemon);
-
-        assert!(
-            spans
-                .iter()
-                .any(|span| span.content.contains("Living Room")),
-            "the pill names the attached receiver: {:?}",
-            spans.iter().map(|s| s.content.as_ref()).collect::<Vec<_>>()
-        );
     }
 
     /// The owner's cast output names the queue header's host, matching
@@ -614,32 +536,6 @@ mod tests {
 
         assert_eq!(host, "Living Room");
         assert!(is_remote);
-    }
-
-    /// A cast output reported disconnected (7.6, D13) must not read as
-    /// connected: the pill falls back to the local label until the
-    /// reconnect lands, so it never contradicts the header's "Cast:
-    /// disconnected".
-    #[test]
-    fn a_disconnected_cast_target_stops_naming_the_status_bar_pill() {
-        let mut app = make_app_stub();
-        app.handle_player_event(mbv_ctrl::player::PlayerEvent::PlaybackOutput(
-            mbv_ctrl::OutputState::Cast {
-                receiver_id: "device-1".to_string(),
-                name: "Living Room".to_string(),
-                connection: mbv_ctrl::OutputConnection::Disconnected,
-            },
-        ));
-
-        let spans = app.remote_status_spans(RemoteSlotState::LocalDaemon);
-
-        assert!(
-            !spans
-                .iter()
-                .any(|span| span.content.contains("Living Room")),
-            "the pill stops naming a disconnected receiver: {:?}",
-            spans.iter().map(|s| s.content.as_ref()).collect::<Vec<_>>()
-        );
     }
 
     /// A live toast projects its message with the severity color on the

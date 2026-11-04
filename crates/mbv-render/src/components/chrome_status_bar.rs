@@ -35,12 +35,6 @@ pub struct VisualModeIndicator {
 /// mounted `StatusBarPanel` owns overflow, hit regions and Visual-mode clearing.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct StatusBarModel {
-    /// Whether the remote/session pill participates (the base frame has
-    /// always passed `false` here — the queue-link pills below show the
-    /// same info; the parameter is retained verbatim).
-    pub show_session_pill: bool,
-    /// Remote/session pill spans (empty unless `show_session_pill`).
-    pub remote: Vec<Span<'static>>,
     /// Mute pill spans (absent when not muted).
     pub mute: Option<Vec<Span<'static>>>,
     /// Volume pill spans.
@@ -65,8 +59,6 @@ pub struct StatusBarRegions {
     pub volume: Option<Rect>,
     /// Mute pill: click toggles mute.
     pub mute: Option<Rect>,
-    /// Remote/session pill region, when the session pill is enabled.
-    pub remote: Option<Rect>,
     /// Visual-mode region; clicking it clears selection.
     pub visual_clear: Option<Rect>,
 }
@@ -74,41 +66,32 @@ pub struct StatusBarRegions {
 /// Paint the one-row status bar within `area` (the `RootFrame.status_bar`
 /// placement) and return the painted pill regions.
 ///
-/// Persistent bottom status bar. Left side: volume, connection,
-/// and mute status groups. Right side: queue source/save-state/link
-/// detail and the service-state glyphs (Emby, Audiobookshelf,
+/// Persistent bottom status bar. Left side: the volume and mute
+/// status groups. Right side: queue source/save-state/link detail and the service-state glyphs (Emby, Audiobookshelf,
 /// stay-alive). The playlist status pill renders in the left queue panel
 /// instead; the Local/Peer queue-link pills paint in the `QueueColumn`
 /// footer (`render_queue_status`), never here.
 struct StatusBarLeftSegments {
     mute: Option<Vec<Span<'static>>>,
     volume: Vec<Span<'static>>,
-    remote: Vec<Span<'static>>,
     armed: Option<Vec<Span<'static>>>,
     visual: Option<Vec<Span<'static>>>,
     volume_width: u16,
-    remote_width: u16,
     visual_width: u16,
     fits: StatusBarFit,
     visibility: StatusBarVisibility,
 }
 
-#[expect(
-    clippy::struct_excessive_bools,
-    reason = "four independent per-segment visibility results over distinct status-bar fit drop tiers; all four are simultaneously true at StatusBarFit::All (design analysis, issue #804)"
-)]
 #[derive(Clone, Copy)]
 struct StatusBarVisibility {
     visual: bool,
     armed: bool,
-    remote: bool,
     volume: bool,
 }
 
 struct StatusBarWidths {
     visual: u16,
     armed: u16,
-    remote: u16,
     mute: u16,
     volume: u16,
 }
@@ -118,7 +101,6 @@ enum StatusBarFit {
     All,
     WithoutMute,
     WithoutVolume,
-    WithoutRemote,
     None,
 }
 
@@ -133,27 +115,18 @@ fn status_bar_fit(widths: &StatusBarWidths, available: u16) -> StatusBarFit {
         }
         total
     };
-    let all = joined_width(&[
-        widths.visual,
-        widths.armed,
-        widths.remote,
-        widths.mute,
-        widths.volume,
-    ]) <= available;
-    let without_mute = !all
-        && joined_width(&[widths.visual, widths.armed, widths.remote, widths.volume]) <= available;
+    let all = joined_width(&[widths.visual, widths.armed, widths.mute, widths.volume]) <= available;
+    let without_mute =
+        !all && joined_width(&[widths.visual, widths.armed, widths.volume]) <= available;
     let without_volume = !all
         && !without_mute
-        && joined_width(&[widths.visual, widths.armed, widths.remote, widths.mute]) <= available;
+        && joined_width(&[widths.visual, widths.armed, widths.mute]) <= available;
     if all {
         StatusBarFit::All
     } else if without_mute {
         StatusBarFit::WithoutMute
     } else if without_volume {
         StatusBarFit::WithoutVolume
-    } else if joined_width(&[widths.visual, widths.armed, widths.mute, widths.volume]) <= available
-    {
-        StatusBarFit::WithoutRemote
     } else {
         StatusBarFit::None
     }
@@ -162,18 +135,12 @@ fn status_bar_fit(widths: &StatusBarWidths, available: u16) -> StatusBarFit {
 fn status_bar_left_segments(model: &StatusBarModel, available: u16) -> StatusBarLeftSegments {
     let mute = model.mute.clone();
     let volume = model.volume.clone();
-    let remote = if model.show_session_pill {
-        model.remote.clone()
-    } else {
-        Vec::new()
-    };
     let armed = model.prefix_armed.clone();
 
     // Preserve the existing left-segment overflow order: mute drops
-    // first, then the volume pill, then remote. The armed pill sits with
+    // first, then the volume pill. The armed pill sits with
     // the visual-mode indicator at the top persistence tier: it drops only
     // when nothing else is left (it names the active routing mode).
-    let remote_width = status_width(&remote);
     let armed_width = armed.as_ref().map_or(0, |spans| status_width(spans));
     let visual = model.visual_mode.as_ref().map(|indicator| {
         vec![Span::styled(
@@ -190,7 +157,6 @@ fn status_bar_left_segments(model: &StatusBarModel, available: u16) -> StatusBar
         &StatusBarWidths {
             visual: visual_width,
             armed: armed_width,
-            remote: remote_width,
             mute: mute_width,
             volume: volume_width,
         },
@@ -200,24 +166,14 @@ fn status_bar_left_segments(model: &StatusBarModel, available: u16) -> StatusBar
     let visibility = StatusBarVisibility {
         visual: visual_width > 0 && any_fit,
         armed: armed_width > 0 && any_fit,
-        remote: remote_width > 0
-            && matches!(
-                fits,
-                StatusBarFit::All | StatusBarFit::WithoutMute | StatusBarFit::WithoutVolume
-            ),
-        volume: matches!(
-            fits,
-            StatusBarFit::All | StatusBarFit::WithoutMute | StatusBarFit::WithoutRemote
-        ),
+        volume: matches!(fits, StatusBarFit::All | StatusBarFit::WithoutMute),
     };
     StatusBarLeftSegments {
         mute,
         volume,
-        remote,
         armed,
         visual,
         volume_width,
-        remote_width,
         visual_width,
         fits,
         visibility,
@@ -252,19 +208,6 @@ fn render_status_bar_left(
             x: vol_x,
             y: area.y,
             width: segments.volume_width,
-            height: 1,
-        });
-    }
-    let remote_x = segments
-        .visibility
-        .remote
-        .then(|| area.x + status_width(&spans) + u16::from(!spans.is_empty()));
-    if segments.visibility.remote {
-        append_status(&mut spans, segments.remote);
-        regions.remote = remote_x.map(|x| Rect {
-            x,
-            y: area.y,
-            width: segments.remote_width,
             height: 1,
         });
     }

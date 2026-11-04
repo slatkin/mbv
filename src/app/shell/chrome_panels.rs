@@ -219,13 +219,6 @@ impl Model {
         let placement = self.sync_chrome_root().status_bar;
         self.mount_to_placement(ChromePanel::StatusBar, placement);
         let id = ChromePanel::StatusBar.id();
-        // The base frame has always passed `show_session_pill: false` here.
-        let show_session_pill = false;
-        let remote_status = if show_session_pill {
-            self.app.remote_status_spans(self.app.remote_slot_state())
-        } else {
-            Vec::new()
-        };
         // Queue-link pills are queue concern (projected into the
         // `QueueComponent` footer in `sync_queue`); the status row carries
         // only the focused list's count-only summary.
@@ -248,8 +241,6 @@ impl Model {
             .filter(|summary| summary.count > 0)
             .map(|summary| (self.app.effective_panel_focus(), summary.count));
         let model = StatusBarModel {
-            show_session_pill,
-            remote: remote_status,
             mute: self.app.mute_status_spans(),
             volume: self.app.volume_status_spans(),
             right: self.app.status_bar_right_spans(),

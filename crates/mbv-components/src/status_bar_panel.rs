@@ -2,10 +2,7 @@
 //! (`RootFrame.status_bar` placement, task 2.2; design D10).
 //!
 //! Owns the status row's pointer regions: the volume pill (scroll adjusts
-//! the volume) and the mute pill (click toggles mute). The remote/session
-//! pill region is retained verbatim, but it has no click dispatch:
-//! `show_session_pill` is hard-coded `false` (preserved from the base
-//! frame), so the pill never paints and the region stays `None`. The
+//! the volume) and the mute pill (click toggles mute). The
 //! pill/right-segment spans are shell-produced content (`chrome_status.rs`),
 //! projected one-way by `Model::sync_status_bar_panel`; the component owns
 //! the overflow drop-order, pill geometry and event resolution.
@@ -28,7 +25,7 @@ use mbv_ui_msg::UserEvent;
 use mbv_ui_msg::{Msg, PlaybackRequest, ShellRequest};
 
 /// The status row panel: paints the status row where `RootFrame` places it
-/// and retains its volume/mute/remote pill regions.
+/// and retains its volume/mute pill regions.
 #[derive(Debug)]
 pub struct StatusBarPanel {
     model: StatusBarModel,
@@ -148,8 +145,6 @@ mod tests {
 
     fn model(volume: Vec<Span<'static>>, mute: Option<Vec<Span<'static>>>) -> StatusBarModel {
         StatusBarModel {
-            show_session_pill: false,
-            remote: Vec::new(),
             mute,
             volume,
             right: pill("R", Color::White),
