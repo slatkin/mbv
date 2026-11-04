@@ -20,7 +20,7 @@ the app environment, size and reserve mode in one request,
 `set-gutters` command.
 
 The full design and its alternatives are in
-`openspec/changes/pinwin-app-host/design.md` (decisions D1 to D4).
+`openspec/changes/archive/2026-10-18-pinwin-app-host/design.md` (decisions D1 to D4).
 
 ## Decision
 

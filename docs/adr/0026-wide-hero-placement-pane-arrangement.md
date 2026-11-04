@@ -43,7 +43,7 @@ role-named geometry without re-splitting rectangles.
 
 Pane focus remains browser focus versus structured-workspace focus, independent
 of physical side. Enter/Esc transitions, key dispatch, typed requests, and
-pointer targets do not change. See `openspec/changes/adopt-wide-hero/design.md`
+pointer targets do not change. See `openspec/changes/archive/2026-09-06-adopt-wide-hero/design.md`
 D1 (rename) and D2 (mirror only the shared arrangement).
 
 ## Considered options

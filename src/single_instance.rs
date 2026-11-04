@@ -46,7 +46,7 @@ pub enum Resolution {
     /// any others already attached.
     Attach,
     /// A live app holds the lock but the control socket is refused/absent:
-    /// a bare foreground TUI owns it (no local daemon). Caller should
+    /// the Owner process is not accepting connections. Caller should
     /// refuse.
     Refuse,
 }

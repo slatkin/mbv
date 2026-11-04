@@ -26,7 +26,7 @@ map, the global router) rather than migrate it. Five surfaces (`browser`,
 `home`, `queue`, `tv_workspace`, partially `music_workspace`) took ownership of
 their own painted geometry before that decision, but the delivery half was never
 rebuilt: `UiRoot`'s observer collapses `Event::Mouse` to
-`TerminalObserverEvent::Mouse` and drops it (`shell.rs:349`), TuiRealm otherwise
+`TerminalObserverEvent::Mouse` and drops it, TuiRealm otherwise
 delivers `Event::Mouse` only to the focused component, and `PlaybackComponent`
 carries a full seekbar/transport `mouse()` handler that is never reached because
 the component is never made active. Clicking a surface that does not hold
@@ -130,7 +130,7 @@ no message to undo. One mechanism resolves all three previously-separate
 problems: blocking-overlay swallow, overlay-over-panel precedence, and
 mounted-but-not-painted destinations.
 
-**The fold survives with a smaller job.** `shell_run.rs` folds the mouse-derived
+**The fold survives with a smaller job.** `src/app/shell/run.rs` folds the mouse-derived
 messages out of a `tick()` beside the keyboard router fold: it applies at most
 one (first in `tick()` order) and, in debug builds, asserts that at most one was
 produced. It does **not** rank surfaces. Eligible components paint disjoint
@@ -201,9 +201,9 @@ retired here:
 
 | Site | Closure |
 | --- | --- |
-| `mouse_gestures.rs:27` — `seek_to_col` reads `layout.playback.seekbar_area` | `PlaybackRequest::SeekTo(u16)` becomes `SeekTo(f64)` carrying a fraction resolved by `PlaybackComponent` against its own `seekbar_area`; `App::seek_to_col` becomes `seek_to_fraction(f64)`. |
-| `mouse_gestures.rs:13` — `is_browse_layout_current` reads `layout.main.browse_destination` on a paint-inference gate | Both callers (the stubbed `handle_mouse_scroll_browse` and the Home wheel) are deleted or moved to component-owned recognition, so the gate is deleted. |
-| `input.rs:97` — `ensure_tab_visible` reads `layout.tabs_area.width` on a **keyboard** path | The tab-bar width derivation (`render/arrangements/chrome.rs:113`, from terminal width and right-panel visibility) becomes a pure arrangement function called by both the painter and `ensure_tab_visible`, so the keyboard path stops reading the painted rect. |
+| `mouse_gestures.rs` — `seek_to_col` reads `layout.playback.seekbar_area` | `PlaybackRequest::SeekTo(u16)` becomes `SeekTo(f64)` carrying a fraction resolved by `PlaybackComponent` against its own `seekbar_area`; `App::seek_to_col` becomes `seek_to_fraction(f64)`. |
+| `mouse_gestures.rs` — `is_browse_layout_current` reads `layout.main.browse_destination` on a paint-inference gate | Both callers (the stubbed `handle_mouse_scroll_browse` and the Home wheel) are deleted or moved to component-owned recognition, so the gate is deleted. |
+| `input.rs` — `ensure_tab_visible` reads `layout.tabs_area.width` on a **keyboard** path | The tab-bar width derivation (`crates/mbv-render/src/arrangements/chrome.rs`, from terminal width and right-panel visibility) becomes a pure arrangement function called by both the painter and `ensure_tab_visible`, so the keyboard path stops reading the painted rect. |
 
 The third is a shared layout invariant, so it lands in the arrangement layer
 (one primitive both callers use), not as a local fix in `input.rs`. When all
@@ -269,7 +269,7 @@ list names only Residuals B and C.
   precedence a function (`UiRoot` router) rather than an emergent property of
   fan-out delivery; this ADR makes mouse arbitration a function of the
   subscription table rather than a post-hoc fold. Both sit on the same
-  `Application::tick` two-message fold in `shell_run.rs`, and neither changes the
+  `Application::tick` two-message fold in `src/app/shell/run.rs`, and neither changes the
   other — keyboard routing and the ADR 0023 fold are untouched.
 - ADR 0022's completion bar is unaffected: mouse parity is added to existing
   ledger rows and does not re-open any row's migration status. ADR 0022 Residual

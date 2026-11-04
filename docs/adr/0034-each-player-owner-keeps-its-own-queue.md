@@ -12,7 +12,7 @@ extends [ADR 0012](0012-sessions-panel-connection-ownership.md) and supersedes
 the Queue-scope sentences of
 [ADR 0017](0017-composed-and-bound-queue-stages.md). The full design and its
 alternatives are in
-[the change design](../../openspec/changes/queue-handoff-and-take/design.md)
+[the change design](../../openspec/changes/archive/2026-10-29-queue-handoff-and-take/design.md)
 (decisions D1 to D9).
 
 ## Decision

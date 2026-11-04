@@ -83,8 +83,8 @@ satisfy a geometry-scoped request.
 
 ## References
 
-- `openspec/changes/add-non-wide-library-palette/` (proposal, design, delta specs)
-- `openspec/changes/unify-narrow-library-with-wide-browser-pane/` (the change that retired
+- `openspec/changes/archive/2026-09-16-add-non-wide-library-palette/` (proposal, design, delta specs)
+- `openspec/changes/archive/2026-09-16-unify-narrow-library-with-wide-browser-pane/` (the change that retired
   `NarrowLibraryBody` and `PanelListPaintPolicy::Narrow`)
 - `openspec/specs/ui-design-system/spec.md` (the render-tree boundary and role vocabulary)
 - `docs/architecture/interactive-surface-ledger.md` (surface ownership)

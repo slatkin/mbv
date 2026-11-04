@@ -80,17 +80,13 @@ from this framework migration.
 
 Known deviations from the authority bar, each with an owner:
 
-- **Residual B — paint-inference keyboard branching.** Tracked by issue #643.
-  Keyboard paths branch on
-  `is_wide_*_active()` (`src/app/layout.rs:209`, `:213`, `:220`, `:227`), which
-  infers layout from the last painted frame and so is wrong for one frame after
-  a resize. Consumed at `src/app/input_browse_dispatch.rs:35`,
-  `src/app/actions_navigation.rs:205`, `src/app/shell_messages.rs:32`,
-  `src/app/audiobookshelf_book_modal_actions.rs:57-59`,
-  `src/app/shell_browser.rs:196`, `src/app/shell_inline_search.rs:49`,
-  `src/app/shell_inline_search.rs:267`.
+- ~~**Residual B — paint-inference keyboard branching.**~~ Closed (2026-09-05,
+  #643). Keyboard paths branched on the `is_wide_*_active()` predicates, which
+  inferred layout from the last painted frame and so were wrong for one frame
+  after a resize. A mount-area breakpoint predicate replaced them, and the
+  predicates are deleted.
 - **Residual C — page rows off global geometry.** Page-size rows are computed
-  from global layout geometry at `src/app/actions.rs:121`.
+  from global layout geometry in `App::lib_page_size`.
 
 ## Considered Options
 

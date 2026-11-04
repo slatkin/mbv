@@ -1,6 +1,6 @@
 # Core Playback Queue
 
-We will model the playback queue as a core playback concept in `mbv-core`, not as TUI-only state. The queue model owns ordered queue slots, stable runtime slot identity, active playback identity, queue revision, and progress merge/protection rules; client-specific cursor, scroll, focus, and visible local/remote scope remain UI state. This lets local playback, direct remote control, daemon/thin-client control, and mpv adapter events share one queue authority instead of maintaining parallel index-based mirrors.
+We will model the playback queue as a core playback concept in a core crate (`crates/mbv-queue`), not as TUI-only state. The queue model owns ordered queue slots, stable runtime slot identity, active playback identity, queue revision, and progress merge/protection rules; client-specific cursor, scroll, focus, and visible local/remote scope remain UI state. This lets local playback, direct remote control, daemon/thin-client control, and mpv adapter events share one queue authority instead of maintaining parallel index-based mirrors.
 
 A Playback run operates over one `PlaybackQueue`: standalone playback is a
 one-slot queue, not a separate domain concept. mpv projects mbv's queue and

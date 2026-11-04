@@ -176,11 +176,12 @@ before implementation.
   the queue's (ADR 0011). This ADR gives the test by which to revisit them. It
   does not revisit them.
 
-This ADR records the accepted queue-stage model and the proposed #431
-application. Generic daemon admission already discards owner-inadmissible
-QueueItems. The proposed audio-only capability and mixed-submission semantics
-(`openspec/changes/audio-only-mixed-queue-admission`) and Client fall-through
-(`openspec/changes/audio-only-owner-fall-through`) remain unimplemented.
+This ADR records the accepted queue-stage model and its #431 application.
+Generic daemon admission discards owner-inadmissible QueueItems. The
+unified-playback-queue spec owns the audio-only mixed-submission semantics.
+Client fall-through was first designed in
+`openspec/changes/archive/2026-08-12-audio-only-owner-fall-through/`; the
+2026-09-15 Correction below records what replaced it.
 
 ## Correction (2026-09-15)
 

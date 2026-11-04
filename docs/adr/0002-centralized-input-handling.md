@@ -86,9 +86,9 @@ Tracked as separate issues under a GitHub Project.
    another modal/sidebar, and mandatory daemon-loss activation clears the menu before
    rendering so exactly one modal surface remains active.
 8. **Done (#136). Guardrail docs** — no raw shortcut handling outside the
-   registry except text-entry state machines. `src/app/input_resolver.rs` owns
-   the `CONTEXT_STACK`; `src/app/input_browse_dispatch.rs` is the final
-   destination-specific browse rendezvous beneath it.
+   registry except text-entry state machines. Keyboard routing lives only in
+   `src/app/input/` (`router.rs` precedence, `resolver.rs` chords); see
+   [ADR 0023](0023-one-central-keyboard-router.md).
 
 ## Roadmap (not scheduled): user-configurable keybindings
 
