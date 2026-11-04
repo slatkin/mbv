@@ -432,14 +432,22 @@ impl App {
                     .bg(mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false).fill),
             ));
         }
-        // Service-state glyphs — Emby coloured by state (brand colour
+        // Service-state indicators — Emby coloured by state (brand colour
         // when active, grey when inactive), Audiobookshelf always
         // yellow, stay-alive daemon lost = yellow. One leading space
-        // per glyph, no trailing space.
+        // per indicator, no trailing space. Without Nerd Fonts the Emby
+        // and Audiobookshelf private-use code points fall back to the
+        // plain labels the sessions panel uses (bug fix: the service
+        // glyphs ignored `use_nerd_fonts` and painted as missing-glyph
+        // boxes under the default config).
         right_spans.extend([
             Span::raw(" "),
             Span::styled(
-                "\u{F06B4}",
+                if self.use_nerd_fonts {
+                    "\u{F06B4}"
+                } else {
+                    "EMBY"
+                },
                 Style::default().fg(service_state_color(
                     self.emby_runtime.state,
                     mbv_theme::Role::Accent.color(),
@@ -447,7 +455,11 @@ impl App {
             ),
             Span::raw(" "),
             Span::styled(
-                "\u{EDE2}",
+                if self.use_nerd_fonts {
+                    "\u{EDE2}"
+                } else {
+                    "ABS"
+                },
                 Style::default().fg(mbv_theme::Role::AccentAudiobookshelf.color()),
             ),
             Span::raw(" "),
@@ -536,6 +548,28 @@ mod tests {
 
         assert_eq!(host, "Living Room");
         assert!(is_remote);
+    }
+
+    /// With the default (non-Nerd-Font) config, the service indicators emit
+    /// the plain text labels instead of Nerd Font private-use code points,
+    /// which would paint as missing-glyph boxes (bug: the service glyphs
+    /// ignored `use_nerd_fonts`).
+    #[test]
+    fn service_indicators_fall_back_to_text_without_nerd_fonts() {
+        let app = make_app_stub();
+        assert!(!app.use_nerd_fonts, "the stub defaults to no Nerd Fonts");
+
+        let spans = app.status_bar_right_spans();
+
+        assert!(
+            !spans
+                .iter()
+                .any(|span| span.content.contains('\u{F06B4}')
+                    || span.content.contains('\u{EDE2}')),
+            "no Nerd Font private-use glyph without use_nerd_fonts"
+        );
+        assert!(spans.iter().any(|span| span.content.contains("EMBY")));
+        assert!(spans.iter().any(|span| span.content.contains("ABS")));
     }
 
     /// A live toast projects its message with the severity color on the
