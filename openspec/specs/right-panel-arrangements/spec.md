@@ -10,38 +10,38 @@ of one another and a new screen inherits a known arrangement without being indiv
 
 ### Requirement: Each screen is assigned one wide arrangement
 
-Every hero-bearing right-panel browse surface SHALL use Wide hero for its wide presentation. This includes Home, Movies, TV shows, grouped Music, Emby home videos, Audiobookshelf podcasts, Audiobookshelf books, and Feeds. A read-only selected-item hero SHALL remain a projection of the left-hand browser selection. A surface whose right detail workspace contains episodes, tracks, or chapters MAY expose that existing interactive content without changing the shared placement rule. No hero-bearing browse surface SHALL declare a separate detail placement or a surface-specific responsive placement.
+Every hero-bearing right-panel browse surface SHALL use Wide hero for its wide presentation. This includes Home, Movies, TV shows, grouped Music, Emby home videos, Audiobookshelf podcasts, Audiobookshelf books, and Feeds. A read-only selected-item hero SHALL remain a projection of the browser-rail selection. A surface whose hero-pane detail workspace contains episodes, tracks, or chapters MAY expose that existing interactive content without changing the shared placement rule. No hero-bearing browse surface SHALL declare a separate detail placement or a surface-specific responsive placement.
 
 #### Scenario: Wide read-only hero surface
 - **WHEN** Home, Movies, an Emby home-video library, or Feeds is displayed with wide geometry
-- **THEN** the selected-item hero renders in the right pane
-- **AND** the left rail remains the only focusable browser pane
+- **THEN** the selected-item hero renders in the hero pane
+- **AND** the browser rail remains the only focusable browser pane
 
 #### Scenario: Wide interactive detail surface
 - **WHEN** TV shows, grouped Music, an Audiobookshelf podcast library, or an Audiobookshelf book library is displayed with wide geometry
-- **THEN** the selected item's persistent detail workspace renders in the right pane
-- **AND** the single-column catalog browser renders in the left rail
+- **THEN** the selected item's persistent detail workspace renders in the hero pane
+- **AND** the single-column catalog browser renders in the browser rail
 - **AND** existing episode, track, or chapter focus behavior remains available where that surface already provides it
 
 #### Scenario: Movies is displayed at a wide width
 - **WHEN** the dedicated Movies library meets the wide geometry conditions
-- **THEN** the selected-media hero is on the right
-- **AND** the letter-range pills and one-column Movies list are in the left rail
+- **THEN** the selected-media hero is in the hero pane
+- **AND** the letter-range pills and one-column Movies list are in the browser rail
 
 #### Scenario: TV shows is displayed at a wide width
 - **WHEN** the TV shows library meets the wide geometry conditions
-- **THEN** the selected Series detail, season pills, and persistent episode preview are on the right
-- **AND** TV letter-range pills and the one-column Series list are in the left rail
+- **THEN** the selected Series detail, season pills, and persistent episode preview are in the hero pane
+- **AND** TV letter-range pills and the one-column Series list are in the browser rail
 
 #### Scenario: Feeds is displayed at a wide width
 - **WHEN** Feeds meets the wide geometry conditions
-- **THEN** the selected entry's hero is on the right
-- **AND** group and watched selectors plus the one-column entry browser are in the left rail
+- **THEN** the selected entry's hero is in the hero pane
+- **AND** group and watched selectors plus the one-column entry browser are in the browser rail
 
 #### Scenario: Audiobookshelf podcast library is displayed at a wide width
 - **WHEN** an Audiobookshelf podcast library meets the wide geometry conditions
-- **THEN** the selected show and its filtered episode workspace are on the right
-- **AND** the one-column Audiobookshelf podcast-show browser is in the left rail
+- **THEN** the selected show and its filtered episode workspace are in the hero pane
+- **AND** the one-column Audiobookshelf podcast-show browser is in the browser rail
 
 #### Scenario: Audiobookshelf book library is displayed at a wide width
 - **WHEN** an Audiobookshelf book library meets the wide geometry conditions
@@ -54,11 +54,11 @@ Every hero-bearing right-panel browse surface SHALL use Wide hero for its wide p
 
 #### Scenario: Wide TV shows has an interactive left hero
 - **WHEN** TV shows meets the wide geometry conditions
-- **THEN** Series browsing remains on the left and the interactive episode workspace remains on the right
+- **THEN** Series browsing remains in the browser rail on the right and the interactive episode workspace remains in the hero pane on the left
 
 #### Scenario: Wide Movies has its selected-media hero
 - **WHEN** Movies meets the wide geometry conditions
-- **THEN** its selected-media hero renders on the right and its one-column browser on the left
+- **THEN** its selected-media hero renders in the hero pane and its one-column browser in the browser rail
 
 #### Scenario: TV shows falls below the breakpoint
 - **WHEN** TV shows does not meet the wide geometry conditions
@@ -70,7 +70,7 @@ Every hero-bearing right-panel browse surface SHALL use Wide hero for its wide p
 
 #### Scenario: Home videos is displayed at a wide width
 - **WHEN** an Emby home-video library meets the wide geometry conditions
-- **THEN** it renders Wide hero with a one-column left-rail browser
+- **THEN** it renders Wide hero with a one-column browser rail
 
 #### Scenario: Audiobooks is displayed at a wide width
 - **WHEN** an Audiobookshelf book library meets the wide geometry conditions
@@ -122,126 +122,126 @@ arrangement.
 - **AND** only the choice of which breakpoint branch to take is required to be paint-free, not
   every rect consumed once inside that branch
 
-### Requirement: The Wide hero right pane is a shared filled container
+### Requirement: The Wide hero pane is a shared filled container
 
-Every Wide hero destination's right pane SHALL be painted by a single shared arrangement
-primitive. That primitive SHALL derive the right pane's extent from the shared Wide hero
+Every Wide hero destination's hero pane SHALL be painted by a single shared arrangement
+primitive. That primitive SHALL derive the hero pane's extent from the shared Wide hero
 presentation itself, fill that extent, and return the one shared content-inset rect that
-destinations lay their hero content into. A destination SHALL NOT be able to supply a right-pane
+destinations lay their hero content into. A destination SHALL NOT be able to supply a hero-pane
 extent of its own to the primitive.
 
 The fill SHALL be unconditional: it does not depend on whether an item is selected, whether the
 destination has hero data, which provider supplied the item, or how tall the painted content is.
 A destination SHALL NOT resize, re-derive, clamp, or conditionally skip the fill, and SHALL NOT
-apply a destination-specific content inset. The right pane's content inset SHALL be the single
+apply a destination-specific content inset. The hero pane's content inset SHALL be the single
 shared pane inset used by every Wide hero destination; no destination defines its own.
 
 The status-row reserve remains owned solely by the shared Wide hero presentation: the filled
-right pane SHALL bottom out exactly one row above the status bar on every destination, in every
+hero pane SHALL bottom out exactly one row above the status bar on every destination, in every
 selection state, at every Wide geometry. Destinations SHALL NOT paint a separate strip below the
-right pane to simulate that reserve.
+hero pane to simulate that reserve.
 
-#### Scenario: Every Wide hero destination fills its right pane
+#### Scenario: Every Wide hero destination fills its hero pane
 
 - **WHEN** any Wide hero destination renders at Wide geometry
-- **THEN** every cell of its right pane carries the shared hero-pane surface
-- **AND** no cell of the right pane shows the left column's backdrop surface
+- **THEN** every cell of its hero pane carries the shared hero-pane surface
+- **AND** no cell of the hero pane shows the browser rail's backdrop surface
 
 #### Scenario: Nothing is selected
 
 - **WHEN** a Wide hero destination renders at Wide geometry with no selected item, no hero
   data, or an empty library
-- **THEN** its right pane is still filled to its full extent
+- **THEN** its hero pane is still filled to its full extent
 - **AND** only the pane's content is absent, not the pane
 
 #### Scenario: Hero content is shorter than the pane
 
-- **WHEN** a Wide hero destination's hero content occupies fewer rows than the right pane
+- **WHEN** a Wide hero destination's hero content occupies fewer rows than the hero pane
 - **THEN** the content is anchored to the top of the pane's content inset
 - **AND** the pane's painted extent is unchanged by the content's height
 
-#### Scenario: The right pane bottoms out one row above the status bar
+#### Scenario: The hero pane bottoms out one row above the status bar
 
 - **WHEN** any Wide hero destination renders at Wide geometry
-- **THEN** the filled right pane's bottom edge is exactly one row above the status bar
-- **AND** no destination paints an additional row of any surface below the right pane
+- **THEN** the filled hero pane's bottom edge is exactly one row above the status bar
+- **AND** no destination paints an additional row of any surface below the hero pane
 
 #### Scenario: A destination attempts to supply its own pane extent
 
-- **WHEN** a destination has computed or mutated a right-pane rect of its own
+- **WHEN** a destination has computed or mutated a hero-pane rect of its own
 - **THEN** that rect cannot be used to paint the pane
 - **AND** the painted extent is the one the shared Wide hero presentation produced
 
 #### Scenario: Every destination uses one content inset
 
 - **WHEN** two Wide hero destinations render at the same Wide geometry
-- **THEN** their hero content begins at the same offset from their right pane's edges
+- **THEN** their hero content begins at the same offset from their hero pane's edges
 
 ### Requirement: Pane focus treatment follows one rule
 
-A Wide hero right pane SHALL render the focused surface treatment when, and only when, that
+A Wide hero pane SHALL render the focused surface treatment when, and only when, that
 pane hosts a workspace that can hold focus and that workspace currently holds focus. This rule
 SHALL be resolved by the shared pane primitive, not by each destination: a destination SHALL
-declare only which of the two closed kinds its right pane is — a read-only hero, or a focusable
+declare only which of the two closed kinds its hero pane is — a read-only hero, or a focusable
 workspace together with that workspace's current focus state — and the primitive SHALL derive
 the surface treatment from that declaration. A destination SHALL NOT be able to declare a
 read-only pane as focused, and SHALL NOT select a surface treatment directly.
 
-A right pane whose content is a read-only projection of the left rail's selection SHALL always
-render the resting surface treatment, regardless of whether the right panel or the left rail is
+A hero pane whose content is a read-only projection of the browser rail's selection SHALL always
+render the resting surface treatment, regardless of whether the right panel or the browser rail is
 focused.
 
 #### Scenario: A focusable left workspace holds focus
 
-- **WHEN** a Wide hero destination whose right pane hosts a focusable workspace has focus in
+- **WHEN** a Wide hero destination whose hero pane hosts a focusable workspace has focus in
   that workspace
-- **THEN** its right pane renders the focused surface treatment
+- **THEN** its hero pane renders the focused surface treatment
 
 #### Scenario: A focusable left workspace does not hold focus
 
-- **WHEN** the same destination's focus is in the left rail, or the right panel is unfocused
-- **THEN** its right pane renders the resting surface treatment
+- **WHEN** the same destination's focus is in the browser rail, or the right panel is unfocused
+- **THEN** its hero pane renders the resting surface treatment
 
 #### Scenario: A read-only hero pane never renders as focused
 
-- **WHEN** a destination whose right pane is a read-only hero renders in any focus state
-- **THEN** its right pane renders the resting surface treatment
+- **WHEN** a destination whose hero pane is a read-only hero renders in any focus state
+- **THEN** its hero pane renders the resting surface treatment
 
 ### Requirement: Wide hero presents up to two focusable panes
 
 The Wide hero arrangement SHALL present up to two panes, of which at most one is focused, and
 only while the right panel itself is focused. A screen with a read-only hero pane — Home, the
-wide Movies library, and Feeds — SHALL expose only its left-hand list as focusable content. A
-screen whose right pane hosts an interactive workspace — the wide TV shows library, grouped
+wide Movies library, and Feeds — SHALL expose only its browser-rail list as focusable content. A
+screen whose hero pane hosts an interactive workspace — the wide TV shows library, grouped
 Music, an Audiobookshelf book library, and an Audiobookshelf podcast library — SHALL expose both
-the left-hand list and that right workspace as focusable content. While left-rail browsing is
-active, the right pane SHALL remain a projection of the selected item; when the right workspace's
-selection is active, the right pane SHALL receive focus.
+the browser-rail list and that hero-pane workspace as focusable content. While browser-rail browsing is
+active, the hero pane SHALL remain a projection of the selected item; when the hero-pane workspace's
+selection is active, the hero pane SHALL receive focus.
 
 #### Scenario: Wide Movies has Library focus
 
 - **WHEN** the wide Movies library is displayed and the Library panel has focus
-- **THEN** the left-hand Movies list is the focused pane
+- **THEN** the browser-rail Movies list is the focused pane
 - **AND** the right selected-media hero remains read-only and does not become a second focus target
 
 #### Scenario: Wide TV shows has Series-list focus
 
 - **WHEN** the wide TV shows library is displayed and episode selection is inactive
-- **THEN** the left-hand Series list is the focused pane
+- **THEN** the browser-rail Series list is the focused pane
 - **AND** the right Series and episode workspace renders as an unfocused preview
 
 #### Scenario: Wide TV shows has episode focus
 
 - **WHEN** episode selection is active in the wide TV shows library
 - **THEN** the right-hand episode workspace is the focused pane
-- **AND** the left-hand Series list renders its unfocused treatment
+- **AND** the browser-rail Series list renders its unfocused treatment
 
 #### Scenario: An Audiobookshelf podcast workspace takes focus
 
 - **WHEN** episode selection is active in a wide Audiobookshelf podcast library
 - **THEN** the right-hand episode workspace is the focused pane and renders the focused surface
   treatment
-- **AND** the left-hand show list renders its unfocused treatment
+- **AND** the browser-rail show list renders its unfocused treatment
 
 #### Scenario: Focus moves between panes
 
@@ -300,7 +300,7 @@ own box geometry or surface.
 
 ### Requirement: The right panel has exactly two hero presentations
 
-The right panel SHALL provide exactly two responsive hero presentations for every hero-bearing browse surface. At or above the shared breakpoint, when the existing minimum-height guard is satisfied, the surface SHALL use Wide hero: the selected hero or detail workspace occupies the right pane and a single-column browser occupies the left rail. Otherwise the surface SHALL use selected-row replacement: the selected item's ordinary row is replaced by its variable-height detail block in the single-column scrolling browser.
+The right panel SHALL provide exactly two responsive hero presentations for every hero-bearing browse surface. At or above the shared breakpoint, when the existing minimum-height guard is satisfied, the surface SHALL use Wide hero: the selected hero or detail workspace occupies the hero pane on the left and a single-column browser occupies the browser rail on the right. Otherwise the surface SHALL use selected-row replacement: the selected item's ordinary row is replaced by its variable-height detail block in the single-column scrolling browser.
 
 A separate detail block SHALL NOT be an arrangement or fallback. A surface SHALL NOT reserve a hero in a separate full-width area above its browser. Every library is hero-bearing.
 
@@ -325,7 +325,7 @@ The inline hero SHALL render one content shape across all surfaces: title, optio
 
 - **WHEN** a hero-bearing browse surface meets the shared width and minimum-height conditions
 - **THEN** it renders Wide hero
-- **AND** its browser is a single-column left rail
+- **AND** its browser is a single-column browser rail
 
 #### Scenario: Panel mode changes
 
@@ -373,13 +373,13 @@ The shared Wide hero arrangement primitive SHALL reserve the one status-bar row 
 
 ### Requirement: Music and Audiobookshelf adopt the TV and Movies Wide precedent
 
-Grouped Music and Audiobookshelf Podcast and Book destinations SHALL use the same Wide right-panel contract established by TV and Movies. When the shared width and minimum-height predicate is satisfied, the provider-owned detail/workspace SHALL occupy the right pane, while parent-owned browser-level pills followed by ordinary one-column rows SHALL occupy the left rail. The arrangement SHALL reuse the shared predicate, pane framing, content spacing, and short-height fallback. No Wide presentation SHALL use an Inline hero or selected-row replacement in the left rail.
+Grouped Music and Audiobookshelf Podcast and Book destinations SHALL use the same Wide right-panel contract established by TV and Movies. When the shared width and minimum-height predicate is satisfied, the provider-owned detail/workspace SHALL occupy the hero pane, while parent-owned browser-level pills followed by ordinary one-column rows SHALL occupy the browser rail. The arrangement SHALL reuse the shared predicate, pane framing, content spacing, and short-height fallback. No Wide presentation SHALL use an Inline hero or selected-row replacement in the browser rail.
 
 #### Scenario: Wide provider workspace and ordinary right rail
 - **WHEN** grouped Music or an Audiobookshelf Podcast or Book destination meets the shared Wide geometry conditions
-- **THEN** its provider-owned detail/workspace renders in the right pane
-- **AND** its browser-level pills and ordinary one-column rows render in the left rail
-- **AND** the left rail contains no Wide Inline hero or selected-row replacement.
+- **THEN** its provider-owned detail/workspace renders in the hero pane
+- **AND** its browser-level pills and ordinary one-column rows render in the browser rail
+- **AND** the browser rail contains no Wide Inline hero or selected-row replacement.
 
 #### Scenario: Shared geometry fallback is retained
 - **WHEN** the destination crosses the shared width or minimum-height guard
@@ -387,16 +387,16 @@ Grouped Music and Audiobookshelf Podcast and Book destinations SHALL use the sam
 - **AND** it uses the shared Inline fallback, or suppresses detail when the shared minimum cannot fit
 - **AND** it does not define a destination-specific breakpoint or arrangement.
 
-### Requirement: Audiobookshelf Podcast and Book Wide surfaces route through the shared left pane
+### Requirement: Audiobookshelf Podcast and Book Wide surfaces route through the shared browser rail
 
-The Audiobookshelf Podcast Wide surface SHALL render through the shared Wide hero left-pane arrangement rather than a bespoke painter. The Audiobookshelf Book Wide left rail already routes through the shared left pane; its defect is that the `render_book_browser` call reused there carries the inline selected-row replacement path, and that replacement path SHALL NOT be used in the Wide left rail. These are provider-arrangement repairs this slice owns, distinct from the canonical list control itself. The Podcast Wide left rail SHALL present the same pill row it presents at Narrow width. The Book Wide right pane SHALL use the shared provider-detail-workspace framing and content spacing used by grouped Music, and its left rail SHALL show ordinary fixed-height one-column rows with no selected-row replacement and no Inline hero. Neither surface SHALL define a destination-specific breakpoint, column-sizing rule, or fallback.
+The Audiobookshelf Podcast Wide surface SHALL render through the shared Wide hero browser-rail arrangement rather than a bespoke painter. The Audiobookshelf Book Wide browser rail already routes through the shared browser rail; its defect is that the `render_book_browser` call reused there carries the inline selected-row replacement path, and that replacement path SHALL NOT be used in the Wide browser rail. These are provider-arrangement repairs this slice owns, distinct from the canonical list control itself. The Podcast Wide browser rail SHALL present the same pill row it presents at Narrow width. The Book Wide hero pane SHALL use the shared provider-detail-workspace framing and content spacing used by grouped Music, and its browser rail SHALL show ordinary fixed-height one-column rows with no selected-row replacement and no Inline hero. Neither surface SHALL define a destination-specific breakpoint, column-sizing rule, or fallback.
 
 #### Scenario: Audiobookshelf Podcast Wide has pill-row parity with Narrow
 - **WHEN** an Audiobookshelf Podcast library meets the shared Wide geometry conditions
-- **THEN** its left rail renders the shared pill row over the one-column show browser
-- **AND** it routes through the shared Wide hero left pane, not a surface-specific painter.
+- **THEN** its browser rail renders the shared pill row over the one-column show browser
+- **AND** it routes through the shared Wide hero browser rail, not a surface-specific painter.
 
 #### Scenario: Book Wide uses shared workspace framing
 - **WHEN** an Audiobookshelf Book library meets the shared Wide geometry conditions
-- **THEN** the selected book's provider detail workspace renders in the right pane with the shared framing and spacing used by grouped Music
-- **AND** the left rail renders ordinary fixed-height one-column rows with no selected-row replacement or Inline hero.
+- **THEN** the selected book's provider detail workspace renders in the hero pane with the shared framing and spacing used by grouped Music
+- **AND** the browser rail renders ordinary fixed-height one-column rows with no selected-row replacement or Inline hero.

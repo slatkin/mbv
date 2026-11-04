@@ -7,11 +7,11 @@ TBD - created by archiving change two-column-library-list. Update Purpose after 
 
 ### Requirement: Column count derives from the list pane width
 
-The library list SHALL choose its column count from the width available to the list pane itself, not from terminal width, and SHALL use at most two columns. The shared responsive breakpoint SHALL NOT be derived from minimum cell width. A hero-bearing browse surface SHALL render a single-column browser in both presentations: in the left rail for Wide hero and in the full-width list for inline hero. A non-hero list MAY use two columns at or above the shared breakpoint and SHALL use one column below it.
+The library list SHALL choose its column count from the width available to the list pane itself, not from terminal width, and SHALL use at most two columns. The shared responsive breakpoint SHALL NOT be derived from minimum cell width. A hero-bearing browse surface SHALL render a single-column browser in both presentations: in the browser rail for Wide hero and in the full-width list for inline hero. A non-hero list MAY use two columns at or above the shared breakpoint and SHALL use one column below it.
 
 #### Scenario: Wide hero-bearing browser
 - **WHEN** a hero-bearing browse surface meets the wide geometry conditions
-- **THEN** its left-rail browser SHALL render one column
+- **THEN** its browser rail SHALL render one column
 
 #### Scenario: Inline hero browser
 - **WHEN** a hero-bearing browse surface uses the inline presentation
@@ -40,7 +40,7 @@ The library list SHALL choose its column count from the width available to the l
 
 #### Scenario: Wide hero list stays single-column
 - **WHEN** a Wide hero browser is at or above the shared breakpoint
-- **THEN** its left rail SHALL render a single column
+- **THEN** its browser rail SHALL render a single column
 
 ### Requirement: Items flow row-major across columns
 

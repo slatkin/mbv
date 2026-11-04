@@ -151,7 +151,7 @@ The Audiobookshelf podcast tab is the one surface whose rows are not hero-bearin
 - **THEN** letter-range pills render at the top of the right-hand Series rail
 - **AND** season pills render in the left Series workspace above its episode list
 
-#### Scenario: Wide Movies pills sit in the left rail
+#### Scenario: Wide Movies pills sit in the right rail
 
 - **WHEN** wide Movies is eligible for letter-range pills
 - **THEN** the pill row renders at the top of the right-hand list rail

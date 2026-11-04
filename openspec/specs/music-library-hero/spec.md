@@ -7,7 +7,7 @@ Provides a responsive grouped Music layout that preserves the current narrow her
 
 ### Requirement: Grouped Music uses responsive compositions
 
-The grouped Music tree view SHALL use Wide hero when it meets the shared wide geometry conditions. Its right pane SHALL contain detail and a track Workspace for the selected artist root or album leaf, and its left rail SHALL contain the single-column tree browser. Otherwise an album leaf, or an artist root with no tree filter active, SHALL open its Library Hero overlay through its existing Enter activation, and Right on an already expanded artist root SHALL also open the artist Library Hero overlay and focus its Workspace. Grouped Music SHALL NOT evaluate the breakpoint or minimum-height guard itself and SHALL NOT use a separate fallback.
+The grouped Music tree view SHALL use Wide hero when it meets the shared wide geometry conditions. Its hero pane SHALL contain detail and a track Workspace for the selected artist root or album leaf, and its browser rail SHALL contain the single-column tree browser. Otherwise an album leaf, or an artist root with no tree filter active, SHALL open its Library Hero overlay through its existing Enter activation, and Right on an already expanded artist root SHALL also open the artist Library Hero overlay and focus its Workspace. Grouped Music SHALL NOT evaluate the breakpoint or minimum-height guard itself and SHALL NOT use a separate fallback.
 
 Album-leaf detail SHALL retain the album title, metadata, album art, and album-track Workspace. In every composition, an album leaf's release year SHALL be shown once; artist roots and yearless leaves show no year. Artist-root detail SHALL show artist artwork when stable Service identity and artwork are available, artist name, in-scope album count and year span, and an artist-track Workspace grouped by album. Fallback artist roots with no Service artist identity SHALL use the existing no-artwork presentation.
 
@@ -18,7 +18,7 @@ Album-leaf detail SHALL retain the album title, metadata, album art, and album-t
 
 #### Scenario: Grouped Music at the breakpoint
 - **WHEN** grouped Music meets the shared wide geometry conditions
-- **THEN** it renders Wide hero with the selected artist or album detail and tracks in the right pane
+- **THEN** it renders Wide hero with the selected artist or album detail and tracks in the hero pane
 
 #### Scenario: Album year is shown once
 - **WHEN** an album leaf with a release year paints in any Grouped Music composition
@@ -34,22 +34,22 @@ Album-leaf detail SHALL retain the album title, metadata, album art, and album-t
 - **THEN** it continues to render Wide hero with its one-column browser
 
 
-### Requirement: Wide right pane persistently shows album detail and tracks
+### Requirement: Wide hero pane persistently shows album detail and tracks
 
-The wide grouped Music right pane SHALL show detail and tracks for the selected tree node. An album leaf SHALL show that album's title, metadata, artwork, and track list. An artist root SHALL show that artist's artwork when available, name, in-scope album count and year span, and all in-scope tracks grouped by album. The Workspace SHALL remain visible whether tree browsing or track selection has focus. Artwork SHALL yield vertical space before the Workspace disappears, and a present Workspace SHALL retain a visible track viewport whenever the content height can fit one.
+The wide grouped Music hero pane SHALL show detail and tracks for the selected tree node. An album leaf SHALL show that album's title, metadata, artwork, and track list. An artist root SHALL show that artist's artwork when available, name, in-scope album count and year span, and all in-scope tracks grouped by album. The Workspace SHALL remain visible whether tree browsing or track selection has focus. Artwork SHALL yield vertical space before the Workspace disappears, and a present Workspace SHALL retain a visible track viewport whenever the content height can fit one.
 
 #### Scenario: Album browsing is active
 - **WHEN** an album leaf is selected in the wide tree and track selection is inactive
-- **THEN** the right pane shows that album's large hero treatment and a readable, non-cursor track preview
+- **THEN** the hero pane shows that album's large hero treatment and a readable, non-cursor track preview
 
 #### Scenario: Artist root is focused
 - **WHEN** an artist root is selected in the wide tree
-- **THEN** the right pane immediately shows its text summary and artwork state
+- **THEN** the hero pane immediately shows its text summary and artwork state
 - **AND** its Workspace shows or loads only tracks from the root's in-scope albums
 
 #### Scenario: Selected album changes
 - **WHEN** the selected album leaf changes
-- **THEN** the right-pane title, metadata, artwork, loading state, and tracks follow the newly selected album
+- **THEN** the hero-pane title, metadata, artwork, loading state, and tracks follow the newly selected album
 - **AND** tracks from the prior album never paint under the new title
 
 #### Scenario: Album tracks are loading
@@ -61,22 +61,22 @@ The wide grouped Music right pane SHALL show detail and tracks for the selected 
 - **THEN** the artwork shrinks before the persistent track region is removed
 
 
-### Requirement: Wide album browser occupies the left rail
+### Requirement: Wide album browser occupies the browser rail
 
-In the wide grouped Music composition, the music-group pills SHALL render at the top of the left rail and the artist/album tree browser SHALL render below them. Artist roots and album leaves SHALL render one per row regardless of available left-rail width. Artist roots SHALL span the rail as focusable expandable nodes; album leaves SHALL show their hierarchy beneath them.
+In the wide grouped Music composition, the music-group pills SHALL render at the top of the browser rail and the artist/album tree browser SHALL render below them. Artist roots and album leaves SHALL render one per row regardless of available browser-rail width. Artist roots SHALL span the rail as focusable expandable nodes; album leaves SHALL show their hierarchy beneath them.
 
 #### Scenario: Wide grouped Music renders
 - **WHEN** grouped Music uses the horizontal composition
-- **THEN** the left rail shows group pills followed by the one-column artist/album tree
+- **THEN** the browser rail shows group pills followed by the one-column artist/album tree
 
 #### Scenario: Artist group contains several albums
-- **WHEN** an expanded artist root is visible in the wide left rail
+- **WHEN** an expanded artist root is visible in the wide browser rail
 - **THEN** each album occupies its own indented leaf row beneath that root
 
 #### Scenario: Group pill changes selection
 - **WHEN** the user selects another music-group pill in wide mode
-- **THEN** the left rail loads that group's settled tree and returns focus to tree browsing
-- **AND** the right pane follows the resulting selected node
+- **THEN** the browser rail loads that group's settled tree and returns focus to tree browsing
+- **AND** the hero pane follows the resulting selected node
 
 
 ### Requirement: Wide hero uses one focus treatment
@@ -154,7 +154,7 @@ Each visible wide-mode Workspace track SHALL have a logical mouse target coverin
 - **THEN** track selection clears, that tree node becomes selected, and visual focus returns left
 
 #### Scenario: Click artwork
-- **WHEN** the user clicks artist or album artwork or blank space in the wide right hero
+- **WHEN** the user clicks artist or album artwork or blank space in the wide hero pane
 - **THEN** no track is selected and no playback action is invoked
 
 

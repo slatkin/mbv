@@ -204,15 +204,15 @@ TV show-browsing modes (`All` and the alphabet ranges) SHALL present their shows
 
 ### Requirement: TV and Movies establish the Wide composition precedent
 
-When grouped Music or an Audiobookshelf Podcast or Book destination meets the shared Wide width and minimum-height predicate, it SHALL follow the TV/Movies composition: its provider-owned detail/workspace SHALL occupy the right pane, and its parent-owned browser-level pills followed by its one-column browser SHALL occupy the left rail. Grouped Music SHALL place its shallow artist/album tree in that browser slot, TV show-browsing modes SHALL place the shared show/season/episode tree there, and the other destinations SHALL place ordinary canonical rows there. The arrangement SHALL use the same shared predicate, pane framing, content spacing, and short-height fallback as TV/Movies. The Wide presentation SHALL NOT use an Inline hero or selected-row replacement in the left rail; when the shared predicate is not met, the destination SHALL use the shared Inline fallback (or suppress detail when the shared minimum cannot fit), not a bespoke arrangement. The arrangement mechanics of this precedent — shared predicate, pane framing, content spacing, and short-height fallback — are specified by the `right-panel-arrangements` spec; this requirement governs only how the browser control composes into that arrangement.
+When grouped Music or an Audiobookshelf Podcast or Book destination meets the shared Wide width and minimum-height predicate, it SHALL follow the TV/Movies composition: its provider-owned detail/workspace SHALL occupy the hero pane, and its parent-owned browser-level pills followed by its one-column browser SHALL occupy the browser rail. Grouped Music SHALL place its shallow artist/album tree in that browser slot, TV show-browsing modes SHALL place the shared show/season/episode tree there, and the other destinations SHALL place ordinary canonical rows there. The arrangement SHALL use the same shared predicate, pane framing, content spacing, and short-height fallback as TV/Movies. The Wide presentation SHALL NOT use an Inline hero or selected-row replacement in the browser rail; when the shared predicate is not met, the destination SHALL use the shared Inline fallback (or suppress detail when the shared minimum cannot fit), not a bespoke arrangement. The arrangement mechanics of this precedent — shared predicate, pane framing, content spacing, and short-height fallback — are specified by the `right-panel-arrangements` spec; this requirement governs only how the browser control composes into that arrangement.
 
 #### Scenario: Wide provider workspace and ordinary rail
 
 - **WHEN** grouped Music or an Audiobookshelf Podcast or Book destination meets the shared Wide geometry conditions
-- **THEN** its provider-owned detail/workspace is on the right
-- **AND** its browser-level pills and one-column browser are on the left
+- **THEN** its provider-owned detail/workspace is in the hero pane
+- **AND** its browser-level pills and one-column browser are in the browser rail
 - **AND** Grouped Music and TV show-browsing modes use the tree browser while the other destinations use canonical media rows
-- **AND** no Wide Inline hero or selected-row replacement is painted in the left rail
+- **AND** no Wide Inline hero or selected-row replacement is painted in the browser rail
 
 #### Scenario: Shared predicate and fallback apply
 
