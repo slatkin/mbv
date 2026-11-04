@@ -90,14 +90,15 @@ Tracked as separate issues under a GitHub Project.
    `src/app/input/` (`router.rs` precedence, `resolver.rs` chords); see
    [ADR 0023](0023-one-central-keyboard-router.md).
 
-## Roadmap (not scheduled): user-configurable keybindings
+## User-configurable keybindings
 
-Recorded as a future phase, not part of #129. Rationale: a user spans multiple terminals
+A later phase, not part of #129. The `configurable-keybinds` spec owns its
+behavior. Rationale: a user spans multiple terminals
 and DE/WM global shortcuts, so bind conflicts are plausible and being able to remap is
 genuinely useful. Because the registry makes bindings *data*, this becomes a later phase
 that loads user overrides over the same table (with conflict detection, validation,
 config migration, and help rendering of overrides) rather than a re-architecture — which
-is precisely why it is safe to defer until the internal model is stable.
+is why it was safe to defer until the internal model was stable.
 
 ## Consequences
 

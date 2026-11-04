@@ -273,12 +273,14 @@ list names only Residuals B and C.
   other — keyboard routing and the ADR 0023 fold are untouched.
 - ADR 0022's completion bar is unaffected: mouse parity is added to existing
   ledger rows and does not re-open any row's migration status. ADR 0022 Residual
-  A is closed and struck; Residuals B (#643) and C remain.
+  A is closed and struck. ADR 0022's Residual debt list owns the state of
+  Residuals B and C.
 - The `interactive-component-framework` spec gains "mounted **and** painted in
   the most recent frame" as the mouse-delivery precondition.
 - Drag-and-drop and hover become additive: `MouseGestureState` starts emitting
   the reserved `Drag*`/`Hover*` variants and the component adds `Msg` variants
   and transient local state — no change to `mouse_sub()`, the eligibility rule,
-  or the fold.
+  or the fold. Drag uses this path. The `Hover*` variants stay reserved until a
+  component needs hover.
 - The `is_in_range` kind/modifier-ignoring behaviour is a pinned-version
   assumption; a `tuirealm` bump is a gated event that must re-verify it.

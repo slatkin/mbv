@@ -39,8 +39,8 @@ Each group is one commit (mirrors design D5's commit plan). Gate for every group
 
 ## 5. Futures-that-arrived
 
-- [ ] 5.1 ADR 0002: replace the "Roadmap (not scheduled)" keybinds block with a landed statement pointing at the `configurable-keybinds` spec. Verify: diff read; the block no longer describes shipped work as future.
-- [ ] 5.2 ADRs 0022 and 0024: correct the Residual B (#643) sentences per the audit (closed 2026-09-05; predicates deleted) and the Residual C sentences per 2.2; correct 0024's drag/hover note to drag-shipped/hover-pending. Verify: diff read; no ADR lists a closed residual as remaining.
+- [x] 5.1 ADR 0002: replace the "Roadmap (not scheduled)" keybinds block with a landed statement pointing at the `configurable-keybinds` spec. Verify: diff read; the block no longer describes shipped work as future.
+- [x] 5.2 ADRs 0022 and 0024: correct the Residual B (#643) sentences per the audit (closed 2026-09-05; predicates deleted) and the Residual C sentences per 2.2; correct 0024's drag/hover note to drag-shipped/hover-pending. Verify: diff read; no ADR lists a closed residual as remaining.
 
 ## 6. Final sweep
 
