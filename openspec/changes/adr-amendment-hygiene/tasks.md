@@ -44,8 +44,9 @@ Each group is one commit (mirrors design D5's commit plan). Gate for every group
 
 ## 6. Final sweep
 
-- [ ] 6.1 Run the rot-pattern sweep across all of `docs/adr/` and `CONTEXT.md` (`rg` for the inventory patterns: milestone, PR #, "on main", undated openspec/changes, .rs line anchors), check that every repo path in a touched ADR or `CONTEXT.md` section exists (`fd` per path), and confirm every remaining hit is an intentional historical/decision reference. Verify: the hit list with a one-word justification per survivor.
-- [ ] 6.2 Full read-through of every file touched by this change, checked against the new `docs/adr/README.md` rule. Verify: no file violates the rule; `openspec validate adr-amendment-hygiene --strict` green.
+- [x] 6.1 Run the rot-pattern sweep across all of `docs/adr/` and `CONTEXT.md` (`rg` for the inventory patterns: milestone, PR #, "on main", undated openspec/changes, .rs line anchors), check that every repo path in a touched ADR or `CONTEXT.md` section exists (`fd` per path), and confirm every remaining hit is an intentional historical/decision reference. Verify: the hit list with a one-word justification per survivor.
+  - Survivors: `docs/adr/README.md` rule text (examples); ADR 0016 PR #426 / `3359c81` (historical, merged). Dead paths kept: ADR 0015 `src/relay.rs`, `src/terminal_client.rs`, `src/app/stay_alive.rs` (historical, deleted by that decision); ADR 0024 `0022-…md` (abbreviation); ADR 0010 originating plan (historical, marked "since deleted"). Repointed: ADR 0028 `surface_table.rs` → `crates/mbv-theme`.
+- [x] 6.2 Full read-through of every file touched by this change, checked against the new `docs/adr/README.md` rule. Verify: no file violates the rule; `openspec validate adr-amendment-hygiene --strict` green.
 
 ## Workflow follow-up
 

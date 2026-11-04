@@ -7,7 +7,7 @@ status: accepted
 ## Problem
 
 The render tree resolves every painted fill through one closed surface table
-(`src/app/render/theme/surface_table.rs`). A row names a *structural position* — the library content
+(`crates/mbv-theme/src/surface_table.rs`). A row names a *structural position* — the library content
 box, the queue panel, a pill row — not a screen or a geometry, and the one resolver takes the call
 site's own focus bit: `surface_colors(surface, focused)`.
 

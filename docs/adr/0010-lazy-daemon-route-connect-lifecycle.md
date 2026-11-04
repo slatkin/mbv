@@ -105,7 +105,7 @@ This ADR's original rule 1 stated flatly that mbv "never attempts a
 daemon connection at startup, regardless of config" and that
 `try_daemon_route_connect` "must not be invoked from `App::new`,
 `App::new_remote`, or `App::build`" (from this ADR's originating plan,
-`docs/superpowers/plans/2026-07-17-daemon-connect-lifecycle.md`). That
+`docs/superpowers/plans/2026-07-17-daemon-connect-lifecycle.md`, since deleted). That
 was a misreading of issue #222's own title ("auto-reconnect to remote
 client") against its body: #222 was supposed to deliver reconnect-at-
 startup, not rule it out. Issue #236 corrected this: `App::new` now calls
