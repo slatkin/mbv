@@ -66,25 +66,22 @@ impl App {
     /// output, per the last `CtrlEvent::PlaybackOutput` (design D12/D13).
     /// Feeds the queue header so it names the output consistently; the
     /// owner's report carries the discovered or device name. An Emby Session
-    /// output names the Session device.
+    /// output names the Session device. A disconnected output keeps the
+    /// device name with a " (disconnected)" suffix so the header presents
+    /// it as disconnected (spec `cast-session-control` "Connection drops
+    /// while attached", `owner-playback-output` "Device disappears"; bug:
+    /// a disconnected output looked like local playback).
     fn remote_output_label(&self) -> Option<String> {
         match &self.playback_output {
-            Some(mbv_ctrl::OutputState::Cast {
-                connection, name, ..
-            }) => match connection {
-                // A target marked disconnected must not read as connected:
-                // the header falls back to the local label until the
-                // reconnect lands, so it never contradicts its own
-                // "Cast: disconnected" status word.
-                mbv_ctrl::OutputConnection::Disconnected => None,
-                mbv_ctrl::OutputConnection::Connecting | mbv_ctrl::OutputConnection::Connected => {
-                    Some(name.clone())
+            Some(
+                mbv_ctrl::OutputState::Cast {
+                    connection, name, ..
                 }
-            },
-            Some(mbv_ctrl::OutputState::EmbySession {
-                connection, name, ..
-            }) => match connection {
-                mbv_ctrl::OutputConnection::Disconnected => None,
+                | mbv_ctrl::OutputState::EmbySession {
+                    connection, name, ..
+                },
+            ) => match connection {
+                mbv_ctrl::OutputConnection::Disconnected => Some(format!("{name} (disconnected)")),
                 mbv_ctrl::OutputConnection::Connecting | mbv_ctrl::OutputConnection::Connected => {
                     Some(name.clone())
                 }
@@ -94,8 +91,9 @@ impl App {
     }
 
     /// Whether the playback output reads as connected for the queue header:
-    /// a remote output (Cast receiver or Emby Session) is attached and live,
-    /// or the remote slot names a direct route.
+    /// a remote output (Cast receiver or Emby Session) is attached — live
+    /// or disconnected, which must still present as remote — or the remote
+    /// slot names a direct route.
     fn remote_connected(&self, remote_state: RemoteSlotState) -> bool {
         self.remote_output_label().is_some()
             || matches!(remote_state, RemoteSlotState::DirectRemote)
@@ -547,6 +545,30 @@ mod tests {
         let (host, is_remote) = app.playback_host_label_and_remote();
 
         assert_eq!(host, "Living Room");
+        assert!(is_remote);
+    }
+
+    /// A disconnected Cast output keeps naming the header's host with a
+    /// " (disconnected)" suffix and still counts as remote, so the header
+    /// presents the output as disconnected instead of looking like local
+    /// playback (bug: a disconnected output looked like local playback;
+    /// spec `cast-session-control` "Connection drops while attached",
+    /// `owner-playback-output` "Device disappears" — every Client
+    /// presents the output as disconnected).
+    #[test]
+    fn a_disconnected_cast_output_names_the_queue_header_as_disconnected() {
+        let mut app = make_app_stub();
+        app.handle_player_event(mbv_ctrl::player::PlayerEvent::PlaybackOutput(
+            mbv_ctrl::OutputState::Cast {
+                receiver_id: "device-1".to_string(),
+                name: "Living Room".to_string(),
+                connection: mbv_ctrl::OutputConnection::Disconnected,
+            },
+        ));
+
+        let (host, is_remote) = app.playback_host_label_and_remote();
+
+        assert_eq!(host, "Living Room (disconnected)");
         assert!(is_remote);
     }
 
