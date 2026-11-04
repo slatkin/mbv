@@ -41,7 +41,7 @@ A secret from Emby or Audiobookshelf that authorizes mbv to that Service. It bel
 _Avoid_: account credential, mbv token, control token
 
 Control credential:
-A secret owned by mbv. The Owner process uses it to admit Clients. It works apart from all Service credentials. It grants control access. It grants no identity and no login. Packaged mbvd does not use it yet. It still uses legacy Emby-token ctrl authentication. It will migrate to filesystem and trusted-LAN authorization under issue #523.
+A secret owned by mbv. The Owner process uses it to admit Clients. It works apart from all Service credentials. It grants control access. It grants no identity and no login. Packaged mbvd does not use it. Unix-socket filesystem permissions and trusted-LAN reachability are its access boundaries (`ctrl-protocol` spec).
 _Avoid_: Emby token, API key, login token
 
 Service-owned state:
@@ -53,7 +53,7 @@ A per-Service counter that rises in order. It guards late async setup completion
 _Avoid_: setup version, auth generation, connection ID
 
 Owner admission / Service eligibility:
-The rule by which a Player owner accepts a QueueItem into its Bound queue. It tests media kind, that is audio against video. It tests whether the required Remote Service setup and credential are loaded in that owner process. It tests whether ctrl peers negotiated transport for that item kind. The local Owner process and packaged mbvd admit Emby and Feed today. Audio-only owners admit only the audio subset of a mixed submission. Audiobookshelf owner admission is tracked in milestone #524.
+The rule by which a Player owner accepts a QueueItem into its Bound queue. It tests media kind, that is audio against video. It tests whether the required Remote Service setup and credential are loaded in that owner process. It tests whether ctrl peers negotiated transport for that item kind. Audio-only owners admit only the audio subset of a mixed submission. `daemon_admits` (`crates/mbv-daemon`) owns the per-Service rule.
 _Avoid_: owner capability, queue capability, supported kinds
 
 ## Playback ownership
@@ -116,7 +116,7 @@ Stay-alive process:
 _Avoid_: Stay-alive process
 
 mbvd:
-The separately packaged headless server daemon. It runs as a system service, a systemd unit, often on a headless server with no desktop session. It has its own configuration, state, and socket. Users reach it from an already running mbv. They use the F3 Sessions sidebar. That path matches control of an Emby Session device (Direct remote control). It is never the path that starts mbv. It has no Tray, no pinned panel, and no other desktop or Client function. Its limits never limit a Local process. It is a different product surface from the Packaged Player owner. No terminal UI starts it. On `main` it is still Emby-gated. It constructs `EmbyClient` without condition, requires cached credentials at start, and uses legacy Emby-token ctrl authentication. Service-independent startup (zero Services), Feed playback without Emby, and optional Emby runtime live in open PR #529 for issue #523. Filesystem and trusted-LAN authorized ctrl and `mbvd --connect emby` administration also live there. Do not describe them as landed on `main`.
+The separately packaged headless server daemon. It runs as a system service, a systemd unit, often on a headless server with no desktop session. It has its own configuration, state, and socket. Users reach it from an already running mbv. They use the F3 Sessions sidebar. That path matches control of an Emby Session device (Direct remote control). It is never the path that starts mbv. It has no Tray, no pinned panel, and no other desktop or Client function. Its limits never limit a Local process. It is a different product surface from the Packaged Player owner. No terminal UI starts it. It starts with zero or more Services, and `mbvd --connect` administers its Services. The `packaged-daemon-service-runtime` and `ctrl-protocol` specs own its startup and ctrl authentication.
 _Avoid_: system daemon, the daemon
 
 Client:
@@ -158,7 +158,7 @@ The one exit snapshot that a completed TUI session leaves. It is the start locat
 _Avoid_: session state, saved session, launch preferences
 
 UI-state reset:
-The global F2 Settings action labelled `Reset UI State`. It returns all presentation and interaction state of the running TUI to defaults. It acts as a whole and not only on the focused Panel. Every retained destination returns to its root scope and default sort, filter, pill, selection, scroll, and expansion. Queue local cursor, marks, and scroll start again without change to scope, slots, or playback. Home is selected with default Panel mode, widths, artwork presentation, and startup focus rules. Transient overlays, Inline Search, multi-selection, Visual mode, drafts, and pending UI navigation are cleared. Media, credentials, settings, queue contents, playback, progress, and caches are untouched. The F5 data refresh is a different action. It refetches content. It is the one deliberate exception to TUI launch state as exit-only. It clears the saved launch snapshot and the per-library saved positions and presentation preferences that a launch restores. A Client started before the next orderly exit then starts from defaults.
+The global F2 Settings action labelled `Reset UI State`. It returns all presentation and interaction state of the running TUI to defaults. It acts as a whole and not only on the focused Panel. Every retained destination returns to its root scope and default sort, filter, pill, selection, scroll, and expansion. Queue local cursor, marks, and scroll start again without change to slots or playback. Home is selected with default Panel mode, widths, artwork presentation, and startup focus rules. Transient overlays, Inline Search, multi-selection, Visual mode, drafts, and pending UI navigation are cleared. Media, credentials, settings, queue contents, playback, progress, and caches are untouched. The F5 data refresh is a different action. It refetches content. It is the one deliberate exception to TUI launch state as exit-only. It clears the saved launch snapshot and the per-library saved positions and presentation preferences that a launch restores. A Client started before the next orderly exit then starts from defaults.
 _Avoid_: factory reset, clear cache, data reset, hard reset
 
 Attach:

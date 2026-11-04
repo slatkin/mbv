@@ -4,7 +4,7 @@
 
 **Supersedes ADR 0003** (Exclusive Ctrl-Socket Connection).
 
-> **Amended (2026-08-14):** Protocol version has advanced from v4 (described below) to v7 on `main` via `retire-pty-relay-for-local-daemon-stay-alive` (v6→v7) and `stop-daemon-when-stay-alive-off` added capability `lifecycle-shutdown`. `crates/mbv-core/src/ctrl.rs` `CTRL_PROTOCOL_VERSION = 7` on `main`. Additive capabilities since added: `feed-playback`, `unified-queue`, `control-auth`. Open PR #529 tracking issue #523 will reconcile the pre-existing v7-vs-archived-v8 drift and ship v9 removing legacy `auth_token`. Multi-connection semantics unchanged.
+> **Amended (2026-08-14):** The protocol version and capability set have moved on from the v4 that this ADR describes. `CTRL_PROTOCOL_VERSION` and the capability constants in `crates/mbv-ctrl`, with the `ctrl-protocol` spec, own the current version and capabilities. The multi-connection semantics below are unchanged.
 
 ## Decision
 

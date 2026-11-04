@@ -4,7 +4,7 @@
 
 **Supersedes ADR 0005** (Owned pty relay for stay-alive mode).
 
-> **Amended (2026-08-14, Control credential):** Local daemon ctrl authentication now uses the mbv-owned Control credential (`control-auth` capability, `crates/mbv-core/src/ctrl.rs:43`) rather than an Emby Service token. `src/local_daemon.rs:125` `load_or_create_control_credential`, `spawn_detached` waits for socket connectable within bounded poll. `mbvd` on `main` still uses legacy Emby-token auth (`crates/mbvd/src/main.rs:117-120`) until PR #529 tracking #523 migrates it to filesystem/trusted-LAN authorization.
+> **Amended (2026-08-14, Control credential):** Local daemon ctrl authentication uses the mbv-owned Control credential (`control-auth` capability) rather than an Emby Service token. `load_or_create_control_credential` (`crates/mbv-config`) loads or creates it, and `local_daemon::spawn_detached` waits within a bounded poll for the socket to accept a connection. Packaged `mbvd` ctrl authentication is owned by the `ctrl-protocol` spec.
 
 ## Decision
 

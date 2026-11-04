@@ -1,6 +1,6 @@
 # Service-Independent Interactive Architecture
 
-> **Note (2026-08-14):** Packaged `mbvd` Service-independent startup (zero Services, Feed without Emby, filesystem/trusted-LAN ctrl auth, `mbvd --connect emby` admin) is implemented in open PR #529 tracking issue #523, not landed on `main`. On `main`, `crates/mbvd/src/main.rs:117-120` still constructs `EmbyClient` unconditionally and requires cached credentials. Local daemon Service-independence is landed.
+> **Note (2026-08-14):** Service independence applies to packaged `mbvd` as well as to the local Owner process. The `packaged-daemon-service-runtime` and `ctrl-protocol` specs own the current `mbvd` startup, Service administration, and ctrl authentication.
 
 ## Decision
 
@@ -15,8 +15,8 @@ at genuinely shared boundaries such as QueueItem construction and Player-owner
 admission.
 
 The same independence applies to the user-owned Local daemon: it may become a
-Player owner without a usable Remote Service. Packaged `mbvd` is outside this
-decision and remains Emby-gated until a separate accepted change migrates it.
+Player owner without a usable Remote Service. Packaged `mbvd` was outside the
+original scope of this decision; the 2026-08-14 note above extends it.
 
 ## Context
 
