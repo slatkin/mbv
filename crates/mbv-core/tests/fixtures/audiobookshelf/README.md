@@ -1,7 +1,7 @@
 # Audiobookshelf contract fixtures
 
 These minimal fixtures were captured on 2026-08-13 from live Audiobookshelf
-2.36.0 responses with `audiobookshelf_contract_probe`, then reduced and
+2.36.0 responses with the since-removed `audiobookshelf_contract_probe` example, then reduced and
 deterministically sanitized. IDs, device/user identity, titles, URLs, hostnames,
 credentials, and filesystem paths are placeholders. `session-sync.json` and
 `session-close.json` each preserve the two-byte `{}` body returned by the

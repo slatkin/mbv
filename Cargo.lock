@@ -1886,21 +1886,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "libmpv2"
-version = "6.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f3d44c1c29b866d44453249d1d8b2822d891fdabd08359a5b85bb6944445e70"
-dependencies = [
- "libmpv2-sys",
-]
-
-[[package]]
-name = "libmpv2-sys"
-version = "4.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "edb32cabe7176b7d270b0dca6ff418b75187ae8d3854423e3d06fbff376841e4"
-
-[[package]]
 name = "libspa"
 version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2122,8 +2107,6 @@ dependencies = [
 name = "mbv-core"
 version = "0.26.6"
 dependencies = [
- "libmpv2",
- "libmpv2-sys",
  "log",
  "mbv-audiobookshelf",
  "mbv-config",
@@ -2131,7 +2114,6 @@ dependencies = [
  "mbv-queue",
  "rstest",
  "rust_cast",
- "serde_json",
  "time",
  "tracing",
  "tracing-log",

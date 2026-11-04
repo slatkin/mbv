@@ -1,5 +1,6 @@
 //! Classifier and decoder contracts on mpv JSON IPC traces recorded by
-//! `mpv_ipc_probe` (`openspec/changes/mpv-ipc-event-probe`, design D6).
+//! the since-removed `mpv_ipc_probe` example
+//! (`openspec/changes/archive/2026-10-13-mpv-ipc-event-probe`, design D6).
 
 use super::ipc::DecodeError;
 use super::{EndFileReason, MpvEvent, MpvFailure};
