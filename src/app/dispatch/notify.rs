@@ -1,29 +1,7 @@
 use crate::app::App;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
-/// Severity class for toast notifications. Neutral and Success display for 2 s;
-/// Warning and Error display for 5 s.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum ToastSeverity {
-    /// Progress, information, lifecycle events.
-    #[default]
-    Neutral,
-    /// A user-requested action completed.
-    Success,
-    /// An operation failed but recovered through a working fallback.
-    Warning,
-    /// An operation failed without recovery.
-    Error,
-}
-
-impl ToastSeverity {
-    pub fn ttl(self) -> Duration {
-        match self {
-            ToastSeverity::Neutral | ToastSeverity::Success => Duration::from_secs(2),
-            ToastSeverity::Warning | ToastSeverity::Error => Duration::from_secs(5),
-        }
-    }
-}
+pub use mbv_ui_model::toast::ToastSeverity;
 
 impl App {
     fn notify_system(&self, msg: &str) {

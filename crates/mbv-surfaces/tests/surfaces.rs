@@ -18,6 +18,9 @@ mod media_list {
 mod queue_playback {
     mod tests;
 }
+mod status_bar {
+    mod tests;
+}
 
 use mbv_surfaces::FocusStack;
 use mbv_ui_model::settings::PanelFocus;

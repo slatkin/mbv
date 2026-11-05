@@ -247,8 +247,6 @@ impl Model {
             visual_mode: self
                 .visual_selection
                 .map(|(_, count)| VisualModeIndicator { count }),
-            prefix_armed: self.app.prefix_armed_status_spans(),
-            toast: self.app.toast_status_spans(),
         };
         if let Some(comp) = self.application.get_component_mut(&id)
             && let Some(panel) = comp.as_any_mut().downcast_mut::<StatusBarPanel>()
@@ -259,6 +257,11 @@ impl Model {
                 panel.set_visual_origin(origin);
             }
             panel.set_model(model);
+            // The prefix-armed display and the live toast ride the Status
+            // bar's Surface state (add-gui-front-end row 4.6); the adapter
+            // builds the painted chrome from it.
+            panel.set_prefix_armed(self.app.prefix_armed);
+            panel.set_toast(self.app.toast_presentation());
         }
     }
 

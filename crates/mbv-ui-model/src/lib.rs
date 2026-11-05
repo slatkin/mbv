@@ -54,4 +54,5 @@ pub mod settings;
 pub mod sort_filter;
 pub mod tab_selection;
 pub mod targets;
+pub mod toast;
 pub mod ui_util;

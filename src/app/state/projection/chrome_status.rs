@@ -13,21 +13,23 @@ use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::{App, PanelFocus, QueueLink, RemoteSlotState};
 use mbv_render::components::widgets::service_state_color;
 use mbv_render::indicators;
+use mbv_ui_model::toast::StatusToast;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Span;
 
 impl App {
-    /// Build the live toast's spans for the status row, or `None` when no
+    /// The live toast's presentation for the status row, or `None` when no
     /// toast should render in-app (spec `toast-notification-semantics`).
     /// Restores the in-app toast surface dropped during the `TuiRealm`
     /// migration (commit `e9f3ab957`): Neutral toasts always render in-app;
     /// Success/Warning/Error toasts render in-app only when system
     /// notifications are disabled or the desktop notification failed
     /// (`notif_failed`), because a delivered desktop notification hides the
-    /// in-app row. Severity colors ride on the status-bar surface: the span
-    /// carries only the severity foreground, the row background comes from
-    /// the painter's `bar_style`.
-    pub(in crate::app) fn toast_status_spans(&self) -> Option<Vec<Span<'static>>> {
+    /// in-app row. The presentation is neutral (add-gui-front-end row 4.6):
+    /// the Severity's colour is the painters' choice, and the presented
+    /// facts — the text and the severity — ride the Status bar's Surface
+    /// state.
+    pub(in crate::app) fn toast_presentation(&self) -> Option<StatusToast> {
         if self.status.is_empty() || !self.status_toast_live() {
             return None;
         }
@@ -37,18 +39,10 @@ impl App {
         if delivered_offscreen {
             return None;
         }
-        let fg = match self.status_severity {
-            ToastSeverity::Neutral => mbv_theme::Role::TextPrimary,
-            ToastSeverity::Success => mbv_theme::Role::StatusAvailable,
-            ToastSeverity::Warning => mbv_theme::Role::TextFocusAccent,
-            ToastSeverity::Error => mbv_theme::Role::StatusError,
-        }
-        .color()
-        .to_ratatui();
-        Some(vec![Span::styled(
-            self.status.clone(),
-            Style::default().fg(fg),
-        )])
+        Some(StatusToast {
+            text: self.status.clone(),
+            severity: self.status_severity,
+        })
     }
 
     /// Build the playback status indicator items (res/codec, audio lang, CC), space-separated.
@@ -289,46 +283,6 @@ impl App {
                     "muted",
                     Style::default()
                         .fg(mbv_theme::Role::StatusError.color().to_ratatui())
-                        .bg(
-                            mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false)
-                                .fill
-                                .to_ratatui(),
-                        )
-                        .add_modifier(Modifier::BOLD),
-                ),
-                Span::styled(
-                    " ",
-                    Style::default().bg(mbv_theme::surface_colors(
-                        mbv_theme::Surface::StatusBarPill,
-                        false,
-                    )
-                    .fill
-                    .to_ratatui()),
-                ),
-            ]
-        })
-    }
-
-    /// The prefix-armed pill (design D7, task 7.3): present only while
-    /// prefix mode is armed, styled like the other left-segment pills.
-    /// Non-interactive: any mouse event already disarms prefix mode
-    /// silently, so the pill carries no hit region.
-    pub(in crate::app) fn prefix_armed_status_spans(&self) -> Option<Vec<Span<'static>>> {
-        self.prefix_armed.then(|| {
-            vec![
-                Span::styled(
-                    " ",
-                    Style::default().bg(mbv_theme::surface_colors(
-                        mbv_theme::Surface::StatusBarPill,
-                        false,
-                    )
-                    .fill
-                    .to_ratatui()),
-                ),
-                Span::styled(
-                    " PREFIX ",
-                    Style::default()
-                        .fg(mbv_theme::Role::Accent.color().to_ratatui())
                         .bg(
                             mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false)
                                 .fill
@@ -702,8 +656,8 @@ mod tests {
         app.status_expires = Some(toast_expiry(expiry));
 
         assert_eq!(
-            app.toast_status_spans()
-                .is_some_and(|spans| spans.iter().any(|span| span.content.contains("Scanning"))),
+            app.toast_presentation()
+                .is_some_and(|toast| toast.text.contains("Scanning")),
             projected,
         );
     }

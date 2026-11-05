@@ -14,6 +14,7 @@ pub mod media_list;
 pub mod queue;
 pub mod queue_playback;
 pub mod seekbar;
+pub mod status_bar;
 
 #[doc(inline)]
 pub use capacity::ListCapacity;
