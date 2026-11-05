@@ -430,9 +430,9 @@ impl App {
                     .bg(mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false).fill),
             ));
         }
-        // Service-state indicators — Emby coloured by state (brand colour
-        // when active, grey when inactive), Audiobookshelf always
-        // yellow, stay-alive daemon lost = yellow. One leading space
+        // Service-state indicators — Emby and Audiobookshelf coloured by
+        // state (brand colour when ready, grey when not configured, error
+        // otherwise), stay-alive daemon lost = yellow. One leading space
         // per indicator, no trailing space. Without Nerd Fonts the Emby
         // and Audiobookshelf private-use code points fall back to the
         // plain labels the sessions panel uses (bug fix: the service
@@ -458,7 +458,10 @@ impl App {
                 } else {
                     "ABS"
                 },
-                Style::default().fg(mbv_theme::Role::AccentAudiobookshelf.color()),
+                Style::default().fg(service_state_color(
+                    self.audiobookshelf_runtime.state,
+                    mbv_theme::Role::AccentAudiobookshelf.color(),
+                )),
             ),
             Span::raw(" "),
             Span::styled(
@@ -505,6 +508,7 @@ mod tests {
     use crate::app::tests::{
         make_app_stub, make_audio_items, make_local_daemon_app_stub_with_cmd_rx,
     };
+    use mbv_render::components::widgets::service_state_color;
 
     /// The queue owner label names the connected peer's endpoint when its
     /// device name is empty — the connected endpoint, never a configured or
@@ -592,6 +596,30 @@ mod tests {
         );
         assert!(spans.iter().any(|span| span.content.contains("EMBY")));
         assert!(spans.iter().any(|span| span.content.contains("ABS")));
+    }
+
+    /// The status row's Audiobookshelf glyph colours through the same
+    /// `service_state_color` policy as the Emby glyph (issue #976: it was
+    /// always painted `AccentAudiobookshelf`, so an unconfigured, connecting,
+    /// or failed Service looked healthy).
+    #[rstest::rstest]
+    #[case::not_configured(mbv_core::service_runtime::ServiceState::NotConfigured)]
+    #[case::ready(mbv_core::service_runtime::ServiceState::Ready)]
+    #[case::unavailable(mbv_core::service_runtime::ServiceState::Unavailable)]
+    fn the_abs_glyph_colour_follows_the_audiobookshelf_service_state(
+        #[case] state: mbv_core::service_runtime::ServiceState,
+    ) {
+        let mut app = make_app_stub();
+        app.audiobookshelf_runtime.state = state;
+
+        let expected = service_state_color(state, mbv_theme::Role::AccentAudiobookshelf.color());
+
+        let spans = app.status_bar_right_spans();
+        let abs = spans
+            .iter()
+            .find(|span| span.content.contains("ABS"))
+            .expect("the status row shows the Audiobookshelf glyph");
+        assert_eq!(abs.style.fg, Some(expected));
     }
 
     /// A live toast projects its message with the severity color on the
