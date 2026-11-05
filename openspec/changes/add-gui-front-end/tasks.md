@@ -32,7 +32,7 @@
 - [x] 4.5 Extract the state that the Queue playback panel owns (transport focus, seek target) into Surface state and make `QueuePlaybackPanel` an adapter. Verify with `queue_playback_panel` tests and the playback tick-integration tests.
 - [x] 4.6 Extract the state that the Status bar owns (prefix-armed display, toast presentation) into Surface state and make `status_bar_panel.rs` an adapter. Verify with the existing status bar and prefix-mode tests.
 - [ ] 4.7 Update `docs/architecture/interactive-surface-ledger.md` and `docs/architecture/tui-frontend.md` for the adapter and Surface state split (where state lives now, and the "behaviour lives once" rule). Verify that the ledger rows for Queue, Queue playback, and Status bar name their Surface state.
-- [ ] 4.8 Move the pointer gesture policy into the Client core: the double-click window, the uniform wheel step, the drag anchor, and the Ctrl/Shift choice of toggle or range selection. Widen the neutral `PointerEvent` with modifiers so that both Clients send the same input. The TUI `mouse/gesture.rs` and `queue/pointer.rs` keep only geometry and translation. Verify with the existing queue mouse tests unchanged and one public-API test of the gesture policy in `mbv-surfaces`.
+- [x] 4.8 Move the pointer gesture policy into the Client core: the double-click window, the uniform wheel step, the drag anchor, and the Ctrl/Shift choice of toggle or range selection. Widen the neutral `PointerEvent` with modifiers so that both Clients send the same input. The TUI `mouse/gesture.rs` and `queue/pointer.rs` keep only geometry and translation. Verify with the existing queue mouse tests unchanged and one public-API test of the gesture policy in `mbv-surfaces`.
 
 ## 5. Client-neutral tick and library target
 
