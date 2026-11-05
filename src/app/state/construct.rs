@@ -1,6 +1,6 @@
 use crate::app::state::app_struct::LaunchRestore;
 use crate::app::state::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
-use crate::app::{App, AppInit, spawn_resize_worker};
+use crate::app::{App, AppInit, spawn_resize_worker, spawn_waking_relay};
 use indexmap::IndexMap;
 use mbv_render::layout;
 use mbv_render::layout::LEFT_WIDTH_DEFAULT;
@@ -82,6 +82,10 @@ impl App {
             mbv_config::load_tui_launch_state().map_or(LaunchRestore::Done, LaunchRestore::Pending);
         let (resize_register_tx, resize_response_rx) = spawn_resize_worker();
         let setup = crate::app::state::service_setup::ServiceSetup::new();
+        // The Owner-snapshot link relays share this wake handle (design D7
+        // of `add-gui-front-end`); `ClientCore` adopts it so a Client's
+        // installed waker reaches every relay, including the one below.
+        let client_waker = crate::app::ClientWaker::new();
         let mut app = App {
             #[cfg(test)]
             _test_state_dir_guard: test_state_dir_guard,
@@ -99,7 +103,8 @@ impl App {
             audiobookshelf_book_browse: Vec::new(),
             player: init.player,
             mpris: None,
-            player_rx: init.player_rx,
+            client_waker: client_waker.clone(),
+            player_rx: spawn_waking_relay(init.player_rx, client_waker),
             deferred_player_events: std::collections::VecDeque::new(),
             deferred_home_events: std::collections::VecDeque::new(),
             ws_rx: init.ws_rx,

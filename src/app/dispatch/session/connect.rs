@@ -232,7 +232,7 @@ impl App {
         // rule); the replaced owner's state must not leak into it.
         self.playback_output = None;
         self.player = PlayerProxy::from_remote(remote, always_play_next);
-        self.player_rx = remote_rx;
+        self.player_rx = self.waking_player_rx(remote_rx);
         self.player_endpoint = Some(endpoint.clone());
         self.rebind_mpris_to_current_player();
         let tab = initial_unified_state

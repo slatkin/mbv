@@ -71,7 +71,7 @@ Each painter returns, for the frame, the whole items that fit in each list and a
 
 ### D7. A Client-neutral tick
 
-The `App`-side phases of the run loop (runtime and channel drains, Owner snapshot adoption, effects, toast expiry) move into `ClientCore::tick(now) -> TickOutcome`. `Model::run` calls it, then the TuiRealm tick and draw. The GUI calls it at the start of each eframe `update`. Worker threads wake the GUI through a waker callback that the GUI installs at construction (it calls `egui::Context::request_repaint`). The TUI installs a no-op waker and keeps its poll cadence. The GUI also calls `request_repaint_after` with the same idle cadence as the TUI, so timers still fire when no event arrives.
+The `App`-side phases of the run loop (runtime and channel drains, Owner snapshot adoption, effects, toast expiry) move into `ClientCore::tick(now) -> TickOutcome`. `Model::run` calls it, then the TuiRealm tick and draw. The GUI calls it at the start of each eframe `update`. The Owner-snapshot links (the active `player_rx` and the suspended home link) feed their drains through an app-side relay thread that forwards each event in order and then calls the waker the Client installed — a shared `ClientWaker` slot that the `App` and the `ClientCore` hold, so the install reaches every relay, including the one the initial attach already spawned. The GUI installs `egui::Context::request_repaint`. The TUI installs a no-op waker and keeps its poll cadence. Every other channel relies on the GUI's `request_repaint_after` at the same idle cadence as the TUI's 50 ms poll, so timers and worker results still land when no event wakes the Client.
 
 ### D8. Toolkit: eframe with the glow renderer, custom painting
 

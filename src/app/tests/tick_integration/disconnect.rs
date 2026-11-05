@@ -261,9 +261,14 @@ fn tick_remote_disconnect_restores_local_daemon_queue_and_surfaces_toast() {
     app.switch_to_direct_remote(
         &mbv_emby::test_support::make_session("remote-owner", "mbv"),
         remote,
-        event_rx,
+        mpsc::channel().1,
         &endpoint,
     );
+    // The production attach wraps the link in the wake relay (design D7 of
+    // `add-gui-front-end`), which forwards asynchronously; the injected
+    // event must drain synchronously inside `step`, so the test drives the
+    // raw channel like the other disconnect tests do.
+    app.player_rx = event_rx;
 
     assert!(app.remote_view.is_some());
     assert_eq!(app.playing_queue_link(), QueueLink::Peer);

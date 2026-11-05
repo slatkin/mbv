@@ -8,6 +8,7 @@
 //! `shell::run`; the GUI Client implements the same phases over its own
 //! surfaces.
 
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use mbv_ui_msg::{Msg, ServiceRequest};
@@ -130,36 +131,75 @@ pub trait ClientTickHost {
     fn tick_input(&mut self, outcome: &mut TickOutcome);
 }
 
+/// The wake callback a [`ClientWaker`] slot holds once `install` fills it.
+type WakeCallback = Box<dyn Fn() + Send + Sync>;
+
+/// The wake handle worker-side senders call when new input lands for a
+/// sleeping Client (design D7 of `add-gui-front-end`). One shared slot
+/// backs every clone, so `install` reaches senders that were handed a
+/// clone earlier — a relay spawned before the install wakes with the
+/// installed callback. An empty slot is a no-op.
+#[derive(Clone)]
+pub struct ClientWaker {
+    callback: Arc<Mutex<Option<WakeCallback>>>,
+}
+
+impl ClientWaker {
+    /// An empty handle: `wake` does nothing until `install` fills the slot.
+    pub fn new() -> Self {
+        Self {
+            callback: Arc::new(Mutex::new(None)),
+        }
+    }
+
+    /// Install the callback every clone's `wake` invokes. The GUI Client
+    /// installs `egui::Context::request_repaint`.
+    pub fn install(&self, waker: impl Fn() + Send + Sync + 'static) {
+        *self.callback.lock().unwrap() = Some(Box::new(waker));
+    }
+
+    /// Invoke the installed callback; a no-op while the slot is empty.
+    pub fn wake(&self) {
+        if let Some(callback) = self.callback.lock().unwrap().as_ref() {
+            callback();
+        }
+    }
+}
+
+impl Default for ClientWaker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// The shared run-loop sequencer every Client drives once per iteration.
 /// It holds no `App` or surface state — the [`ClientTickHost`] supplies
 /// those — so the same `tick` serves the TUI Client's shell and the GUI
 /// Client's eframe `update`.
 pub struct ClientCore {
-    /// Invoked after a tick that observed new input, so a sleeping Client
-    /// wakes instead of waiting out its idle cadence. `install_waker`
-    /// replaces it; the TUI Client keeps the no-op default — its listener
-    /// poll already bounds input latency.
-    waker: Box<dyn Fn() + Send + Sync>,
+    /// The shared wake handle the `App` hands to its sender-side relays.
+    /// The core shares the `App`'s handle so `install_waker` reaches every
+    /// relay, including the one the initial attach already spawned.
+    waker: ClientWaker,
 }
 
 impl ClientCore {
-    /// A core whose waker does nothing — the TUI Client's choice.
-    pub fn new() -> Self {
-        Self {
-            waker: Box::new(|| {}),
-        }
+    /// A core sharing the `App`'s wake handle.
+    pub fn new(waker: ClientWaker) -> Self {
+        Self { waker }
     }
 
-    /// Install the callback `tick` invokes when worker or channel input
-    /// arrived this iteration. The GUI Client installs
-    /// `egui::Context::request_repaint`.
-    pub fn install_waker(&mut self, waker: impl Fn() + Send + Sync + 'static) {
-        self.waker = Box::new(waker);
+    /// Install the callback the Client's waking senders invoke when new
+    /// input lands. The GUI Client installs
+    /// `egui::Context::request_repaint`; the TUI Client installs a no-op —
+    /// its listener poll cadence already bounds input latency.
+    pub fn install_waker(&self, waker: impl Fn() + Send + Sync + 'static) {
+        self.waker.install(waker);
     }
 
     /// Run one iteration of the shared phases in run-loop order. `now` is
     /// the wall clock the phase clocks fire with.
-    pub fn tick(&self, host: &mut dyn ClientTickHost, now: Instant) -> TickOutcome {
+    pub fn tick(host: &mut dyn ClientTickHost, now: Instant) -> TickOutcome {
         let mut outcome = TickOutcome::default();
 
         outcome.input_received |= host.drain_startup_workers();
@@ -215,16 +255,13 @@ impl ClientCore {
             host.app_mut().sync_volume_from_player();
             host.app_mut().advance_idle_feed_rotation();
         }
-        if outcome.input_received {
-            (self.waker)();
-        }
         outcome
     }
 }
 
 impl Default for ClientCore {
     fn default() -> Self {
-        Self::new()
+        Self::new(ClientWaker::new())
     }
 }
 

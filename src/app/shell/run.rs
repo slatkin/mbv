@@ -333,9 +333,10 @@ impl Model {
             .checked_sub(Duration::from_secs(2))
             .unwrap_or_else(Instant::now);
         // Design D7 (`add-gui-front-end`): the Client core sequences the
-        // App-side phases; the TUI Client installs a no-op waker — the
-        // listener poll cadence already bounds input latency.
-        let mut client_core = ClientCore::new();
+        // App-side phases and shares the App's wake handle; the TUI Client
+        // installs a no-op waker — the listener poll cadence already bounds
+        // input latency.
+        let client_core = ClientCore::new(self.app.client_waker.clone());
         client_core.install_waker(|| {});
 
         'outer: loop {
@@ -344,7 +345,7 @@ impl Model {
                 break;
             }
 
-            let mut outcome = client_core.tick(&mut *self, Instant::now());
+            let mut outcome = ClientCore::tick(&mut *self, Instant::now());
             if outcome.restart_requested {
                 continue 'outer;
             }

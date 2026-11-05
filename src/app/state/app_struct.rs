@@ -174,6 +174,12 @@ pub struct App {
     /// whichever one currently owns playback, not whatever was live when
     /// the D-Bus service was first registered.
     pub(in crate::app) mpris: Option<mbv_desktop::mpris::MprisHandle>,
+    /// The shared wake handle (design D7 of `add-gui-front-end`): the
+    /// Owner-snapshot link relays clone it and call `wake` after each
+    /// forwarded event. `ClientCore` shares this handle, so a Client's
+    /// installed waker reaches every relay — including one the initial
+    /// attach already spawned.
+    pub(in crate::app) client_waker: crate::app::ClientWaker,
     pub(in crate::app) player_rx: mpsc::Receiver<PlayerEvent>,
     /// Player events the answer pump set aside while waiting for a queue-op
     /// answer. `drain_player_events` takes these before
@@ -530,6 +536,18 @@ pub struct App {
 }
 
 impl App {
+    /// Relay one freshly attached Owner event channel through the wake
+    /// relay (design D7 of `add-gui-front-end`): forwarded events reach the
+    /// drain in order and each send wakes the Client. Receivers already
+    /// behind a relay — a resumed suspended home link included — must not
+    /// be re-wrapped.
+    pub(in crate::app) fn waking_player_rx(
+        &self,
+        rx: mpsc::Receiver<PlayerEvent>,
+    ) -> mpsc::Receiver<PlayerEvent> {
+        crate::app::spawn_waking_relay(rx, self.client_waker.clone())
+    }
+
     /// Whether a flash toast is still live: its expiry instant is strictly
     /// in the future. One predicate for every liveness reader (the status-row
     /// projection, the expiry cleanup, and the startup guards) so the rule

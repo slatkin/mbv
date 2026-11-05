@@ -3,8 +3,9 @@ mod dispatch;
 mod infra;
 mod input;
 pub(crate) mod state;
+mod waking_relay;
 
-pub use self::client_core::{ClientCore, ClientTickHost, TickOutcome};
+pub use self::client_core::{ClientCore, ClientTickHost, ClientWaker, TickOutcome};
 pub(in crate::app) use self::infra::paging::{PAGE_SIZE, PREFETCH_AHEAD};
 pub(in crate::app) use self::infra::signals::{
     QUIT_REQUESTED, install_signal_handlers, start_quit_watchdog,
@@ -12,6 +13,7 @@ pub(in crate::app) use self::infra::signals::{
 pub(crate) use self::infra::terminal::set_mouse_capture;
 pub(in crate::app) use self::infra::terminal::{init_terminal, open_url, restore_terminal};
 pub use self::state::app_struct::App;
+pub(in crate::app) use self::waking_relay::spawn_waking_relay;
 #[cfg(test)]
 mod test_seams;
 #[cfg(test)]
