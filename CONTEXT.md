@@ -120,8 +120,24 @@ The separately packaged headless server daemon. It runs as a system service, a s
 _Avoid_: system daemon, the daemon
 
 Client:
-A terminal UI attached to an out-of-process Player owner over ctrl. Local Clients attach to the Owner process. Attachment establishes no Service identity. Any number can attach when Stay-alive is enabled. With it disabled, admission is exclusive.
+A TUI Client or a GUI Client attached to an out-of-process Player owner over ctrl. Local Clients attach to the Owner process. Attachment establishes no Service identity. Any number can attach when Stay-alive is enabled. With it disabled, admission is exclusive.
 _Avoid_: thin client, terminal client, viewer, attachment
+
+TUI Client:
+The Client kind that presents the full terminal UI. It is the `mbv` program. It attaches to an out-of-process Player owner over ctrl like every Client. It hosts the TuiRealm Interactive Components, translates its raw key and pointer events into neutral events, and paints with ratatui. It presents the focus that the *Client core* derives.
+_Avoid_: terminal client, thin client, viewer
+
+GUI Client:
+The Client kind that presents a native window. It is the `mbv-gui` program. It attaches to an out-of-process Player owner over ctrl like every Client. It never touches mpv; video plays in mpv's own window. It shares the *Client core* with the TUI Client: the same Surface state, focus stack, neutral events, Keyboard Router, and breakpoint classes. It paints with its own egui painters and translates its raw input into neutral events.
+_Avoid_: windowed client, desktop client, GUI (bare, for the app)
+
+Client core:
+The layer of interaction behaviour that the TUI Client and the GUI Client share. It holds each interaction rule one time: Surface state, the focus stack, neutral key and pointer events, the one Keyboard Router, list capacity, and the semantic hit map. A Client owns only three things: painting, its own geometry, and the translation of raw input into neutral events. It never reimplements an interaction rule.
+_Avoid_: core (bare), shared UI layer, interaction layer (bare)
+
+Surface state:
+The interaction state of one interactive surface, held one time where both Clients share it. Cursor, selection, marks, viewport counted in items, local focus, and drafts are examples. It depends on no terminal library, no terminal UI framework, and no GUI toolkit. A Client's adapter forwards neutral events to it and paints from it. The adapter holds no copy of its values.
+_Avoid_: widget state, UI state (bare), duplicate state
 
 Local process:
 Any mbv process on the user machine. It is a Client or the Owner process. Control of mbvd or another device from F3 happens inside an already running Local process. Its Owner process and Tray keep running. Desktop features belong to Local processes and never to mbvd. The Tray and the pinned panel are examples.
