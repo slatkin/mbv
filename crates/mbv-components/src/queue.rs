@@ -70,8 +70,8 @@ pub struct QueueComponent {
     playlist_hit: Rect,
     pending_slot: Option<QueueSlotId>,
     drag_grab: Option<QueueSlotId>,
-    /// Private per-parent gesture recognition (ADR 0024, design.md D3): owns
-    /// the double-click window and wheel throttle.
+    /// Private per-parent gesture recognition state (ADR 0024, design.md D3).
+    /// The gesture policy itself lives in `mbv_surfaces::gesture`.
     mouse_gestures: MouseGestureState,
 }
 
