@@ -22,16 +22,17 @@ The trees have colliding file names: `crates/mbv-components/src/help.rs` and
 `crates/mbv-render/src/components/help.rs` are different things.
 
 | Tree | What lives there | Example |
-|---|---|---|
-| `crates/mbv-components/src/` | **Interactive Components** — TuiRealm `impl Component`: local interaction state, event interpretation, `update()`, and the `view()` entry point | `HelpComponent` |
+| --- | --- | --- |
+| `crates/mbv-components/src/` | **Interactive Components** — TuiRealm `impl Component`: event interpretation, `update()`, and the `view()` entry point. A component over a shared surface is an adapter: it forwards neutral events into the surface's Surface state in `mbv-surfaces` and paints from it | `HelpComponent`, the `QueueComponent` adapter |
 | `crates/mbv-render/src/` | **The visual substrate** — painters, arrangements, and layout a component's `view()` calls into | `render_help_panel` |
 
 `Component::view(&mut self, f, area)` receives an outer area from an arrangement
 or the root layout and delegates painting to `mbv-render`. A component holds
-cursor, scroll, drafts, viewport, and hit geometry; `mbv-render` holds pixels.
-When unsure, ask "is this interaction, state, painting, layout, or style?" and
-route to `mbv-components` / `screens/` / `components/` / `arrangements/` /
-`crates/mbv-theme/`.
+cursor, scroll, drafts, viewport, and hit geometry — in its Surface state
+where the surface is shared with the GUI Client, in the component otherwise;
+`mbv-render` holds pixels. When unsure, ask "is this interaction, state,
+painting, layout, or style?" and route to `mbv-components` / `screens/` /
+`components/` / `arrangements/` / `crates/mbv-theme/`.
 
 `crates/mbv-render/src/` modules (from the archived
 `enforce-mbv-ui-design-system` change):
@@ -45,6 +46,36 @@ route to `mbv-components` / `screens/` / `components/` / `arrangements/` /
 
 Dependency order: `screens -> arrangements -> components -> Ratatui`.
 Rendering never performs Service/image/playback/persistence effects.
+
+## Surface state and adapters
+
+A surface that both Clients share keeps its interaction state one time, in
+`crates/mbv-surfaces/`, as Surface state: no terminal library, no terminal UI
+framework, no GUI toolkit, and a viewport counted in items. The shared
+surfaces today are the Queue (`QueueSurface`, whose `MediaList<QueueSlotId>`
+owner holds the rows, cursor, marks, selection, and viewport), the Queue
+playback panel (`QueuePlaybackSurface`), and the Status bar
+(`StatusBarSurface`). The core also owns `FocusStack` (mount, Panel focus,
+and the overlay stack), `HitMap<Target>` (pointer resolution against the last
+painted frame), `ListCapacity` (the visible-item count behind paging stride
+and viewport clamping), and the pointer gesture policy in
+`mbv_surfaces::gesture` (the double-click window with `SamePlace` and
+`DOUBLE_CLICK_SLOP`, the uniform wheel step, the drag anchor, and the
+Ctrl/Shift choice of toggle or range selection).
+
+The mounted TuiRealm component of a shared surface is an adapter. It forwards
+neutral events into the state, paints from the state, and reports each
+frame's capacity and `HitMap` from its own painted geometry. It keeps only
+geometry and translation — paint policy, painted rectangles, retained hit
+geometry, raw-input translation — and holds no copy of a value the Surface
+state owns.
+
+Behaviour lives once: each interaction rule exists in the Client core one
+time, and each Client only translates input and paints. Add a cursor,
+selection, paging, focus, or gesture rule to `mbv-surfaces`, never to an
+adapter, so both Clients show it. A surface that is not yet shared keeps its
+state in its component until its row in the surface ledger names a Surface
+state.
 
 ## Panel and slot composition
 
@@ -118,6 +149,8 @@ none of it:
   role or surface row for a concept that already has one;
 - a second near-identical arrangement instead of extending the first;
 - a `sync_*`/push helper carrying component-local state back into `App`;
+- an adapter holding a second copy of a value its Surface state owns, or an
+  interaction rule reimplemented in a Client instead of the core;
 - hit-test arithmetic that no longer matches painted geometry;
 - `App`, a Service client, `PlayerProxy`, `Config`, or a channel reaching a
   component.
