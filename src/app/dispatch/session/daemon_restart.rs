@@ -56,8 +56,7 @@ impl App {
 
         let (remote, remote_rx) = RemotePlayer::connect_endpoint(
             &DaemonEndpoint::Local,
-            crate::pin::is_pinned(),
-            crate::pin::swap_token(),
+            crate::pin::pin_swap_hello().as_ref(),
         )
         .map_err(|error| {
             std::io::Error::other(format!("failed to attach to local daemon: {error}"))

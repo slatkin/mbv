@@ -19,7 +19,6 @@ use std::path::Path;
 use crate::app::App;
 use crate::config::Config;
 use crate::local_daemon;
-use crate::pin;
 use crate::single_instance;
 use mbv_emby::EmbyClient;
 use mbv_remote_player::{DaemonEndpoint, RemotePlayer, RemotePlayerError};
@@ -84,7 +83,10 @@ pub fn start_owner(options: &OwnerStartOptions<'_>) -> Result<(), RemotePlayerEr
 /// `owner_exe` is the `mbv` program this Client starts an Owner from when
 /// none runs, and again after an Owner restart: `None` for the TUI Client,
 /// which is `mbv` itself; the `mbv` program the GUI Client resolved, so the
-/// Owner is never the GUI program (design D9).
+/// Owner is never the GUI program (design D9). The Pin-swap advertisement
+/// every connection sends follows the Client kind this process declared at
+/// start-up ([`declare_gui_client`]): the TUI Client advertises `pin-swap`,
+/// the GUI Client sends a plain Hello.
 ///
 /// The Owner link starts MPRIS from `App` construction (#160, moved there from
 /// `startup` in #175 so `App` owns the resulting handle and can `rebind` it
@@ -98,8 +100,7 @@ pub fn attach_owner(config: &Config, owner_exe: Option<&Path>) -> Result<App, Re
     let client = cached_emby_client(config);
     let (remote, player_rx) = RemotePlayer::connect_endpoint(
         &DaemonEndpoint::Local,
-        pin::is_pinned(),
-        pin::swap_token(),
+        crate::pin::pin_swap_hello().as_ref(),
     )?;
     let mut app = App::new_remote_optional_with_config(
         client,
@@ -114,10 +115,12 @@ pub fn attach_owner(config: &Config, owner_exe: Option<&Path>) -> Result<App, Re
 
 /// The notice a Client shows when a live Owner holds the lock but does not
 /// accept connections. It names the Owner's PID when the lock file carries
-/// one.
+/// one. One text for every Client: the TUI Client exits with it, and the GUI
+/// Client shows it in its window.
 #[must_use]
-pub fn refusal_text(lock_path: &Path) -> String {
-    let pid = match mbv_daemon::locked_owner_pid(lock_path) {
+pub fn refusal_text() -> String {
+    let lock_path = mbv_config::owner_lock_path();
+    let pid = match mbv_daemon::locked_owner_pid(&lock_path) {
         Some(pid) => format!(
             "mbv: owner process PID is {pid} (per {}).",
             lock_path.display()
@@ -131,6 +134,31 @@ pub fn refusal_text(lock_path: &Path) -> String {
         "mbv: the local owner process is not accepting connections.\n{pid}\n\
          mbv: use `mbv -q` to stop the owner, then try again."
     )
+}
+
+/// The notice a Client shows when a live Owner already serves an exclusive
+/// Client and stay-alive is off. One text for every Client, byte for byte:
+/// the TUI Client exits with it (`startup::run_local_instance`), and the GUI
+/// Client shows it in its window — the spec's "the same explanation a second
+/// TUI Client gets".
+#[must_use]
+pub fn exclusive_owner_refusal_text(error: &RemotePlayerError) -> String {
+    format!(
+        "mbv: refusing a second terminal: {error}.\n\
+         mbv: only one terminal may use playback while stay-alive is off.\n\
+         mbv: close or stop that instance with `mbv -q`, or enable stay-alive to run several terminals at once."
+    )
+}
+
+/// Declare this process the GUI Client (design D9 of `add-gui-front-end`).
+/// Its Owner-link connections — the initial attach and every later App-side
+/// reconnect — send a plain Client Hello, so the Owner never picks this
+/// Client as a Pin-swap target: the GUI program is neither a terminal Client
+/// nor a pinned panel, and the swap's launch snapshot is a TUI shell query
+/// it cannot produce. Call once at start-up, before the first Owner
+/// connection. The TUI Client is the default and always takes part.
+pub fn declare_gui_client() {
+    crate::pin::claim_pin_swap_participant(false);
 }
 
 /// The cached Emby client the shell starts from: the saved credential and the

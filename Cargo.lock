@@ -3112,6 +3112,7 @@ dependencies = [
  "mbv",
  "mbv-theme",
  "mbv-ui-msg",
+ "rstest",
 ]
 
 [[package]]

@@ -18,6 +18,8 @@ use mbv_ctrl::{
 };
 use mbv_net::stream::SocketStream;
 
+use crate::PinSwapHello;
+
 use crate::RemotePlayer;
 
 mod endpoint;
@@ -250,8 +252,7 @@ fn apply_unified_queue_state(
 
 pub(crate) fn connect_endpoint(
     endpoint: &DaemonEndpoint,
-    pinned: bool,
-    swap_token: Option<String>,
+    pin_swap: Option<&PinSwapHello>,
 ) -> Result<(RemotePlayer, mpsc::Receiver<PlayerEvent>), crate::RemotePlayerError> {
     let peer_build = if matches!(endpoint, DaemonEndpoint::Local) {
         PeerBuild::MustMatch
@@ -260,7 +261,7 @@ pub(crate) fn connect_endpoint(
     };
     let stream = endpoint.connect_stream()?;
     tracing::info!(name: "remote.daemon_connection.started", target: "remote", endpoint = %endpoint, "connecting to daemon endpoint");
-    connect_stream(stream, peer_build, pinned, swap_token)
+    connect_stream(stream, peer_build, pin_swap)
 }
 
 struct ReaderThreadState {
@@ -296,8 +297,7 @@ struct HandshakeOutcome {
 fn run_bounded_handshake(
     handshake_stream: SocketStream,
     peer_build: PeerBuild,
-    pinned: bool,
-    swap_token: Option<String>,
+    pin_swap: Option<PinSwapHello>,
     seed_read_timeout: Duration,
 ) -> Result<HandshakeOutcome, crate::RemotePlayerError> {
     mbv_net::bounded::run_with_hard_bound_or_error(
@@ -307,8 +307,7 @@ fn run_bounded_handshake(
                 || Ok(mbv_config::load_or_create_control_credential()?),
                 HandshakeRole::Client,
                 peer_build,
-                pinned,
-                swap_token,
+                pin_swap.as_ref(),
             )?;
             // An Owner that advertises `playback-output` cold-seeds a
             // claiming Client with `CtrlEvent::PlaybackOutput` right after
@@ -343,14 +342,12 @@ fn run_bounded_handshake(
 fn connect_stream(
     stream: SocketStream,
     peer_build: PeerBuild,
-    pinned: bool,
-    swap_token: Option<String>,
+    pin_swap: Option<&PinSwapHello>,
 ) -> Result<(RemotePlayer, mpsc::Receiver<PlayerEvent>), crate::RemotePlayerError> {
     connect_stream_with_seed_timeout(
         stream,
         peer_build,
-        pinned,
-        swap_token,
+        pin_swap,
         PLAYBACK_OUTPUT_SEED_READ_TIMEOUT,
     )
 }
@@ -360,8 +357,7 @@ fn connect_stream(
 fn connect_stream_with_seed_timeout(
     stream: SocketStream,
     peer_build: PeerBuild,
-    pinned: bool,
-    swap_token: Option<String>,
+    pin_swap: Option<&PinSwapHello>,
     seed_read_timeout: Duration,
 ) -> Result<(RemotePlayer, mpsc::Receiver<PlayerEvent>), crate::RemotePlayerError> {
     // Kept aside for `disconnect()` (#233) -- taken before `stream` is
@@ -409,8 +405,7 @@ fn connect_stream_with_seed_timeout(
     } = run_bounded_handshake(
         stream.try_clone()?,
         peer_build,
-        pinned,
-        swap_token,
+        pin_swap.cloned(),
         seed_read_timeout,
     )?;
     let SeedLineRead {
@@ -717,7 +712,11 @@ pub fn connect_stub_daemon_pair() -> Result<
             }
         }
     });
-    let (player, rx) = connect_stream(SocketStream::Unix(client), PeerBuild::Any, false, None)
-        .map_err(|error| error.to_string())?;
+    let (player, rx) = connect_stream(
+        SocketStream::Unix(client),
+        PeerBuild::Any,
+        Some(&crate::PinSwapHello::default()),
+    )
+    .map_err(|error| error.to_string())?;
     Ok((player, rx, peer))
 }

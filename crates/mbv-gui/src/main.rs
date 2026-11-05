@@ -9,6 +9,7 @@
 
 mod app;
 mod attach;
+mod owner_exe;
 mod tick_host;
 
 /// The window title, and the Wayland/X11 application id pinwin takes the
@@ -27,6 +28,11 @@ fn native_options() -> eframe::NativeOptions {
 }
 
 fn main() -> eframe::Result {
+    // This process is the GUI Client (design D9): never the Owner, and never
+    // a Pin-swap participant — it is neither a terminal Client nor a pinned
+    // panel, so its Owner connections send a plain Hello and the Owner never
+    // picks this window as a swap target.
+    mbv::declare_gui_client();
     eframe::run_native(
         APP_ID,
         native_options(),

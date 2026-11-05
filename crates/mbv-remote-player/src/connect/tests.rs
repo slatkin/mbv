@@ -98,8 +98,12 @@ fn connected_pair_for_disconnect_test() -> (RemotePlayer, mpsc::Receiver<PlayerE
         writeln!(writer, "{}", serde_json::to_string(&state).unwrap()).unwrap();
         daemon_tx.send(writer).unwrap();
     });
-    let (remote, events) =
-        connect_stream(SocketStream::Unix(client), PeerBuild::Any, false, None).unwrap();
+    let (remote, events) = connect_stream(
+        SocketStream::Unix(client),
+        PeerBuild::Any,
+        Some(&crate::PinSwapHello::default()),
+    )
+    .unwrap();
     let daemon = daemon_rx.recv().unwrap();
     peer.join().unwrap();
     (remote, events, daemon)
@@ -383,8 +387,7 @@ fn local_handshake_rejects_a_mismatched_owner_build_before_client_hello(
         || Ok("unused".to_string()),
         HandshakeRole::Client,
         PeerBuild::MustMatch,
-        false,
-        None,
+        Some(&crate::PinSwapHello::default()),
     )
     .unwrap_err();
 
@@ -439,11 +442,77 @@ fn local_handshake_accepts_identical_owner_build() {
         || Ok("unused".to_string()),
         HandshakeRole::Client,
         PeerBuild::MustMatch,
-        false,
-        None,
+        Some(&crate::PinSwapHello::default()),
     )
     .unwrap();
     peer.join().unwrap();
+}
+
+/// The Hello advertisement follows the connect's Pin-swap argument
+/// (`add-gui-front-end` EDGE-1 fix): a Client that takes no part in Pin swap
+/// (`None` — the GUI Client, design D9) sends a plain Hello the Owner never
+/// picks as a swap target, and a participating Client (`Some` — the TUI)
+/// advertises `pin-swap`. The Owner's classification of those capabilities
+/// into a swap surface is the daemon's `swap_surface_from_hello` contract,
+/// already pinned there.
+#[rstest]
+#[case::no_pin_swap(None, false)]
+#[case::pin_swap(Some(&crate::PinSwapHello::default()), true)]
+fn the_client_hello_pin_swap_advertisement_follows_the_connect_argument(
+    #[case] pin_swap: Option<&crate::PinSwapHello>,
+    #[case] advertised: bool,
+) {
+    use std::io::{BufRead, BufReader, Write};
+    use std::os::unix::net::UnixStream;
+
+    let (client, daemon) = UnixStream::pair().unwrap();
+    let (hello_tx, hello_rx) = mpsc::channel::<String>();
+    let peer = std::thread::spawn(move || {
+        let mut writer = daemon.try_clone().unwrap();
+        let mut reader = BufReader::new(daemon);
+        writeln!(
+            writer,
+            "{}",
+            serde_json::to_string(&CtrlEvent::Hello(CtrlHello::current())).unwrap()
+        )
+        .unwrap();
+        let mut client_hello = String::new();
+        reader.read_line(&mut client_hello).unwrap();
+        hello_tx.send(client_hello).unwrap();
+        writeln!(
+            writer,
+            "{}",
+            serde_json::to_string(&CtrlEvent::UnifiedQueueState(UnifiedQueueStateData {
+                status: PlayerStatus::default(),
+                slots: Vec::new(),
+                active_slot: None,
+                revision: 0,
+                source: QueueSource::Unknown,
+                lineage: mbv_queue::QueueLineage::default(),
+                in_flight_transition: None,
+                queued_latest_transition: None,
+            }))
+            .unwrap()
+        )
+        .unwrap();
+    });
+
+    perform_handshake_with_role(
+        SocketStream::Unix(client),
+        || Ok("unused".to_string()),
+        HandshakeRole::Client,
+        PeerBuild::MustMatch,
+        pin_swap,
+    )
+    .unwrap();
+    peer.join().unwrap();
+
+    let client_hello = hello_rx.recv().unwrap();
+    assert_eq!(
+        client_hello.contains(mbv_ctrl::CTRL_CAP_PIN_SWAP),
+        advertised,
+        "the Hello's pin-swap capability must follow the connect's Pin-swap argument"
+    );
 }
 
 #[test]
@@ -585,8 +654,12 @@ fn connect_with_advertised_hello(
             }
         }
     });
-    let (player, event_rx) =
-        connect_stream(SocketStream::Unix(client), PeerBuild::Any, false, None).unwrap();
+    let (player, event_rx) = connect_stream(
+        SocketStream::Unix(client),
+        PeerBuild::Any,
+        Some(&crate::PinSwapHello::default()),
+    )
+    .unwrap();
     (player, event_rx, peer)
 }
 
@@ -740,8 +813,7 @@ fn a_late_partial_seed_line_is_never_consumed() {
     let (player, event_rx) = connect_stream_with_seed_timeout(
         SocketStream::Unix(client),
         PeerBuild::Any,
-        false,
-        None,
+        Some(&crate::PinSwapHello::default()),
         Duration::from_millis(200),
     )
     .unwrap();

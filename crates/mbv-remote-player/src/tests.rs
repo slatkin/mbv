@@ -109,9 +109,11 @@ fn a_stop_intent_is_delivered_before_the_connection_closes() {
             "the peer must read the Stop before the client closes the connection"
         );
     });
-    let (player, _event_rx) =
-        RemotePlayer::connect_endpoint(&super::DaemonEndpoint::Unix(path.clone()), false, None)
-            .unwrap();
+    let (player, _event_rx) = RemotePlayer::connect_endpoint(
+        &super::DaemonEndpoint::Unix(path.clone()),
+        Some(&super::PinSwapHello::default()),
+    )
+    .unwrap();
 
     player.stop_and_await_ack(std::time::Duration::from_secs(2));
     player.disconnect();

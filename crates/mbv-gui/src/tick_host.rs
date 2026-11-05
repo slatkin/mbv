@@ -58,7 +58,9 @@ impl ClientTickHost for GuiTickHost {
             match self.app.drain_home_event() {
                 HomeEventDrain::Empty => return had_events,
                 HomeEventDrain::Consumed => had_events = true,
-                // A GUI Client holds no terminal and no panel to swap.
+                // This Client's Hello does not advertise `pin-swap`
+                // (design D9), so the Owner never sends a swap event to it;
+                // the exhaustive arm stays a documented no-op.
                 HomeEventDrain::Client(
                     ClientLifecycle::SwapPrepare | ClientLifecycle::SwapQuit,
                 ) => {
@@ -71,7 +73,9 @@ impl ClientTickHost for GuiTickHost {
     fn drain_player_events(&mut self, input_received: &mut bool) -> bool {
         match self.app.drain_player_event() {
             PlayerEventDrain::Empty => false,
-            // A GUI Client holds no terminal and no panel to swap.
+            // This Client's Hello does not advertise `pin-swap` (design
+            // D9), so the Owner never sends a swap event to it; the
+            // exhaustive arm stays a documented no-op.
             PlayerEventDrain::Client(ClientLifecycle::SwapPrepare | ClientLifecycle::SwapQuit) => {
                 *input_received = true;
                 false

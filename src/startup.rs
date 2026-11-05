@@ -387,7 +387,7 @@ fn run_local_instance(config: &Config, log_level: Option<&applog::LogSpec>) {
             OwnerState::Attach => {
                 tracing::info!(name: "startup.owner_process.detected", target: "startup", "Owner process detected; attaching");
             }
-            OwnerState::Refuse => pin::fatal(owner_link::refusal_text(&lock_path)),
+            OwnerState::Refuse => pin::fatal(owner_link::refusal_text()),
         }
 
         match owner_link::attach_owner(config, None) {
@@ -425,11 +425,7 @@ fn run_local_instance(config: &Config, log_level: Option<&applog::LogSpec>) {
                     }
                 }
                 owner_restart::FollowUp::RefuseSecondTerminal => {
-                    pin::fatal(format!(
-                        "mbv: refusing a second terminal: {error}.\n\
-                         mbv: only one terminal may use playback while stay-alive is off.\n\
-                         mbv: close or stop that instance with `mbv -q`, or enable stay-alive to run several terminals at once."
-                    ));
+                    pin::fatal(owner_link::exclusive_owner_refusal_text(&error));
                 }
                 owner_restart::FollowUp::Other => {
                     pin::fatal(format!("mbv: failed to attach to Owner process: {error}"));

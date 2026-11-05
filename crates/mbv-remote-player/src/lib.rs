@@ -127,18 +127,32 @@ pub use connect::signal_local_daemon_service_setup;
 pub use connect::{DaemonEndpoint, resolve_library_route};
 pub(crate) use mbv_net::stream::SocketStream;
 
+/// What a Client Hello advertises for the Pin swap (tray-pin-swap design
+/// D2): the `pin-swap` capability makes the Client a swap target that answers
+/// `SwapPrepared`, `pinned` adds the `pinned-surface` capability, and
+/// `swap_token` marks the Hello of an Owner-launched swap replacement.
+/// `None` at [`RemotePlayer::connect_endpoint`] sends a plain Client Hello,
+/// so the Owner never picks that Client as a swap target — the GUI Client,
+/// which is neither a terminal Client nor a pinned panel and cannot produce
+/// the swap's TUI launch snapshot, connects that way.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct PinSwapHello {
+    /// Advertise `pinned-surface`: this Client runs in the pinwin panel.
+    pub pinned: bool,
+    /// The one-shot token an Owner-launched swap replacement carries.
+    pub swap_token: Option<String>,
+}
+
 impl RemotePlayer {
-    /// Connect to `endpoint` as a control Client. `pinned` advertises the
-    /// `pinned-surface` capability (this TUI runs in a pinned panel) and
-    /// `swap_token` marks this Client as one the Owner itself started for a
-    /// Pin swap (tray-pin-swap design D2/D6); every TUI Client advertises
-    /// `pin-swap`.
+    /// Connect to `endpoint` as a control Client. `Some(pin_swap)` advertises
+    /// the Pin-swap capabilities and token (tray-pin-swap design D2/D6); the
+    /// TUI Client always connects that way. `None` sends a plain Client
+    /// Hello, so the Owner never picks this Client as a swap target.
     pub fn connect_endpoint(
         endpoint: &DaemonEndpoint,
-        pinned: bool,
-        swap_token: Option<String>,
+        pin_swap: Option<&PinSwapHello>,
     ) -> Result<(Self, mpsc::Receiver<PlayerEvent>), RemotePlayerError> {
-        connect::connect_endpoint(endpoint, pinned, swap_token)
+        connect::connect_endpoint(endpoint, pin_swap)
     }
 
     #[must_use]

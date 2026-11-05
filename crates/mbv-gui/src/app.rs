@@ -17,16 +17,15 @@ use crate::attach;
 use crate::tick_host::GuiTickHost;
 
 /// The attached Client: the `App` the shared tick's surface phases read. It
-/// exists once the Owner link attaches (row 6.2 owns the start, refusal, and
-/// executable-resolution steps that widen this).
+/// exists once the Owner link attaches.
 struct Session {
     host: GuiTickHost,
 }
 
 pub(crate) struct GuiClient {
     session: Option<Session>,
-    /// Why the window holds no Client session. Painted in the window until
-    /// row 6.2 presents the Owner start and refusal path.
+    /// Why the window holds no Client session: a failed Owner find, start,
+    /// or attach, including the shared refusal texts. Painted in the window.
     notice: Option<String>,
 }
 

@@ -154,7 +154,6 @@ where
         &compatibility,
         load_control_token,
         HandshakeRole::OwnerAction,
-        false,
         None,
     )?;
     read_initial_state(reader).map(|_| ())
