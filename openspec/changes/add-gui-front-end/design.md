@@ -79,7 +79,7 @@ eframe's default glow (OpenGL) renderer keeps the dependency tree smaller than w
 
 `mbv-gui` pins eframe 0.33, the last release that satisfies both halves of this decision: its default features are the glow renderer with the Wayland and X11 backends (0.35 makes wgpu a default feature), and its `App` trait takes the per-frame `update` hook (0.34 deprecates `update` for `logic` and `ui`). A pin bump lands with a rewrite of the frame hook and this row together.
 
-The GUI's proportional font is Inter. `mbv-gui` embeds the Inter font files (SIL Open Font License 1.1, license text shipped beside them) and installs Inter as the first proportional family at start-up, so the font does not depend on the fonts on the user's system. egui's built-in fonts stay as fallbacks for glyphs that Inter does not have, such as emoji. The monospace family stays egui's default.
+The GUI's proportional font is Inter, and its monospace font is JetBrains Mono. `mbv-gui` embeds the font files of both (each under the SIL Open Font License 1.1, with the license texts shipped beside them). At start-up it installs Inter as the first proportional family and JetBrains Mono as the first monospace family, so the fonts do not depend on the fonts on the user's system. egui's built-in fonts stay as fallbacks for glyphs that these fonts do not have, such as emoji.
 
 ### D9. GUI Owner launch
 
