@@ -242,7 +242,7 @@ impl Model {
         }) else {
             return RouterOutcome::FallThrough;
         };
-        let key = crate::app::input::resolver::tuirealm_key_to_crossterm(tui_key);
+        let key = crate::app::input::resolver::neutral_key_to_crossterm(tui_key);
         // `player.status` is a plain (non-reentrant) mutex and `RouterSnapshot`
         // initializers below call `effective_playback_state()`, which locks it
         // again. A temporary created anywhere inside the struct literal lives
@@ -439,11 +439,11 @@ mod mouse_fold_tests {
 
     #[test]
     fn fold_passes_a_keyboard_tick_through_untouched() {
-        use tuirealm::event::{Key, KeyEvent, KeyModifiers};
-        let key = Msg::TerminalEvent(TerminalObserverEvent::Key(KeyEvent {
-            code: Key::Down,
-            modifiers: KeyModifiers::NONE,
-        }));
+        use mbv_ui_msg::{Key, KeyEvent, KeyModifiers};
+        let key = Msg::TerminalEvent(TerminalObserverEvent::Key(KeyEvent::new(
+            Key::Down,
+            KeyModifiers::NONE,
+        )));
         let leaf = Msg::Playback(PlaybackRequest::TogglePlayPause);
         assert_eq!(
             fold_mouse_messages(vec![leaf.clone(), key.clone()]),

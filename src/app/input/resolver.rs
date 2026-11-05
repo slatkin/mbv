@@ -1,6 +1,6 @@
 //! Central input normalization: the chord shape (`KeyChord`) the Keyboard
 //! Router's ordered policy (`key_policy.rs` + `router.rs`) matches against,
-//! plus the TuiRealm-to-crossterm key conversion. See
+//! plus the neutral-to-crossterm key conversion. See
 //! `docs/adr/0002-centralized-input-handling.md`.
 //!
 //! The legacy `CONTEXT_STACK` and its handler functions were removed in the
@@ -90,47 +90,96 @@ fn registry_mods_to_modifiers(mods: mbv_keybinds::KeyMods) -> KeyModifiers {
     out
 }
 
-/// Convert a `TuiRealm` `KeyEvent` to a crossterm `KeyEvent` for the
-/// central keyboard router.
-pub(in crate::app) fn tuirealm_key_to_crossterm(
-    key: tuirealm::event::KeyEvent,
+/// Convert a neutral `KeyEvent` (`add-gui-front-end` design D4) to a
+/// crossterm `KeyEvent` for the central keyboard router, until the router
+/// itself moves onto the neutral type.
+pub(in crate::app) fn neutral_key_to_crossterm(
+    key: mbv_ui_msg::KeyEvent,
 ) -> crossterm::event::KeyEvent {
-    use tuirealm::event::{Key as TuiKey, KeyModifiers as TuiMods};
-    const KEY_CODES: &[(TuiKey, KeyCode)] = &[
-        (TuiKey::Backspace, KeyCode::Backspace),
-        (TuiKey::Enter, KeyCode::Enter),
-        (TuiKey::Left, KeyCode::Left),
-        (TuiKey::Right, KeyCode::Right),
-        (TuiKey::Up, KeyCode::Up),
-        (TuiKey::Down, KeyCode::Down),
-        (TuiKey::Home, KeyCode::Home),
-        (TuiKey::End, KeyCode::End),
-        (TuiKey::PageUp, KeyCode::PageUp),
-        (TuiKey::PageDown, KeyCode::PageDown),
-        (TuiKey::Tab, KeyCode::Tab),
-        (TuiKey::BackTab, KeyCode::BackTab),
-        (TuiKey::Delete, KeyCode::Delete),
-        (TuiKey::Insert, KeyCode::Insert),
-        (TuiKey::Esc, KeyCode::Esc),
-        (TuiKey::Null, KeyCode::Null),
-    ];
+    use mbv_ui_msg::Key as NeutralKey;
     let code = match key.code {
-        TuiKey::Char(c) => KeyCode::Char(c),
-        TuiKey::Function(n) => KeyCode::F(n),
-        code => KEY_CODES
-            .iter()
-            .find_map(|(tui_code, mapped_code)| (*tui_code == code).then_some(*mapped_code))
-            .unwrap_or(KeyCode::Null),
+        NeutralKey::Backspace => KeyCode::Backspace,
+        NeutralKey::Enter => KeyCode::Enter,
+        NeutralKey::Esc => KeyCode::Esc,
+        NeutralKey::Left => KeyCode::Left,
+        NeutralKey::Right => KeyCode::Right,
+        NeutralKey::Up => KeyCode::Up,
+        NeutralKey::Down => KeyCode::Down,
+        NeutralKey::Home => KeyCode::Home,
+        NeutralKey::End => KeyCode::End,
+        NeutralKey::PageUp => KeyCode::PageUp,
+        NeutralKey::PageDown => KeyCode::PageDown,
+        NeutralKey::Tab => KeyCode::Tab,
+        NeutralKey::BackTab => KeyCode::BackTab,
+        NeutralKey::Delete => KeyCode::Delete,
+        NeutralKey::Insert => KeyCode::Insert,
+        NeutralKey::Function(n) => KeyCode::F(n),
+        NeutralKey::Char(c) => KeyCode::Char(c),
+        NeutralKey::Null => KeyCode::Null,
     };
     let mut modifiers = crossterm::event::KeyModifiers::empty();
-    if key.modifiers.contains(TuiMods::SHIFT) {
+    if key.modifiers.contains(mbv_ui_msg::KeyModifiers::SHIFT) {
         modifiers.insert(crossterm::event::KeyModifiers::SHIFT);
     }
-    if key.modifiers.contains(TuiMods::CONTROL) {
+    if key.modifiers.contains(mbv_ui_msg::KeyModifiers::CONTROL) {
         modifiers.insert(crossterm::event::KeyModifiers::CONTROL);
     }
-    if key.modifiers.contains(TuiMods::ALT) {
+    if key.modifiers.contains(mbv_ui_msg::KeyModifiers::ALT) {
         modifiers.insert(crossterm::event::KeyModifiers::ALT);
     }
     crossterm::event::KeyEvent::new(code, modifiers)
+}
+
+/// Convert a crossterm `KeyEvent` to the neutral `KeyEvent` the observer
+/// payload carries. Test-only: production input enters through the `TuiRealm`
+/// listener and is translated in `mbv-components` (`UiRoot` observer edge);
+/// the routing-matrix and shell tests drive the seam with crossterm keys.
+#[cfg(test)]
+pub(in crate::app) fn crossterm_key_to_neutral(
+    key: crossterm::event::KeyEvent,
+) -> mbv_ui_msg::KeyEvent {
+    use mbv_ui_msg::Key as NeutralKey;
+    const KEY_CODES: &[(KeyCode, NeutralKey)] = &[
+        (KeyCode::Backspace, NeutralKey::Backspace),
+        (KeyCode::Enter, NeutralKey::Enter),
+        (KeyCode::Esc, NeutralKey::Esc),
+        (KeyCode::Left, NeutralKey::Left),
+        (KeyCode::Right, NeutralKey::Right),
+        (KeyCode::Up, NeutralKey::Up),
+        (KeyCode::Down, NeutralKey::Down),
+        (KeyCode::Home, NeutralKey::Home),
+        (KeyCode::End, NeutralKey::End),
+        (KeyCode::PageUp, NeutralKey::PageUp),
+        (KeyCode::PageDown, NeutralKey::PageDown),
+        (KeyCode::Tab, NeutralKey::Tab),
+        (KeyCode::BackTab, NeutralKey::BackTab),
+        (KeyCode::Delete, NeutralKey::Delete),
+        (KeyCode::Insert, NeutralKey::Insert),
+        (KeyCode::Null, NeutralKey::Null),
+    ];
+    let code = match key.code {
+        KeyCode::Char(c) => NeutralKey::Char(c),
+        KeyCode::F(n) => NeutralKey::Function(n),
+        code => KEY_CODES
+            .iter()
+            .find_map(|(xterm_code, mapped_code)| (*xterm_code == code).then_some(*mapped_code))
+            .unwrap_or(NeutralKey::Null),
+    };
+    let mut modifiers = mbv_ui_msg::KeyModifiers::NONE;
+    if key
+        .modifiers
+        .contains(crossterm::event::KeyModifiers::SHIFT)
+    {
+        modifiers = modifiers.union(mbv_ui_msg::KeyModifiers::SHIFT);
+    }
+    if key
+        .modifiers
+        .contains(crossterm::event::KeyModifiers::CONTROL)
+    {
+        modifiers = modifiers.union(mbv_ui_msg::KeyModifiers::CONTROL);
+    }
+    if key.modifiers.contains(crossterm::event::KeyModifiers::ALT) {
+        modifiers = modifiers.union(mbv_ui_msg::KeyModifiers::ALT);
+    }
+    mbv_ui_msg::KeyEvent::new(code, modifiers)
 }

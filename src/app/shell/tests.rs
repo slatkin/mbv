@@ -1,6 +1,7 @@
 use super::*;
 use crate::app::LibraryTab;
 use crate::app::dispatch::action::{PlaybackIntent, ShellCommand};
+use crate::app::input::resolver::crossterm_key_to_neutral;
 use crate::app::tests::{install_test_emby, make_app_stub, make_remote_app_stub_with_cmd_rx};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use mbv_emby_model::EmbyItem;
@@ -14,7 +15,9 @@ use std::sync::{Arc, Mutex};
 fn ui_root_router_command_opens_help() {
     let mut model = Model::new(make_app_stub());
     let key = KeyEvent::new(KeyCode::F(1), KeyModifiers::NONE);
-    let messages = vec![Msg::TerminalEvent(TerminalObserverEvent::Key(key.into()))];
+    let messages = vec![Msg::TerminalEvent(TerminalObserverEvent::Key(
+        crossterm_key_to_neutral(key),
+    ))];
     assert_eq!(
         model.router_outcome(&messages),
         RouterOutcome::Command(ShellCommand::OpenHelp.into())
@@ -47,7 +50,7 @@ fn consumed_space_cancels_the_playback_candidate_and_leaves_no_state() {
     // for its row-local toggle; the shell sees the leaf's consumption only.
     model.visual_selection = Some((PanelFocus::Library, 2));
     let messages = vec![Msg::TerminalEvent(TerminalObserverEvent::Key(
-        KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE).into(),
+        crossterm_key_to_neutral(KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE)),
     ))];
 
     assert_eq!(

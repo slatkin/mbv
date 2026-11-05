@@ -7,7 +7,60 @@ use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 use tuirealm::subscription::{EventClause, Sub, SubClause};
 
-use mbv_ui_msg::{ComponentId, ModalId, Msg, OverlayId, PopupId, TerminalObserverEvent, UserEvent};
+use mbv_ui_msg::{
+    ComponentId, Key as NeutralKey, KeyEvent as NeutralKeyEvent, KeyModifiers as NeutralMods,
+    ModalId, Msg, OverlayId, PopupId, TerminalObserverEvent, UserEvent,
+};
+
+/// Convert a `TuiRealm` keyboard event to the neutral `KeyEvent`
+/// (`add-gui-front-end` design D4): the router resolves chords only from the
+/// neutral shape, and the TUI adapter owns the translation. Terminal keys the
+/// neutral vocabulary cannot represent become `Key::Null`, which matches no
+/// chord, exactly as the unmapped codes did before the conversion existed.
+#[must_use]
+pub fn neutral_key(key: tuirealm::event::KeyEvent) -> NeutralKeyEvent {
+    use tuirealm::event::Key as TuiKey;
+    const KEY_CODES: &[(TuiKey, NeutralKey)] = &[
+        (TuiKey::Backspace, NeutralKey::Backspace),
+        (TuiKey::Enter, NeutralKey::Enter),
+        (TuiKey::Left, NeutralKey::Left),
+        (TuiKey::Right, NeutralKey::Right),
+        (TuiKey::Up, NeutralKey::Up),
+        (TuiKey::Down, NeutralKey::Down),
+        (TuiKey::Home, NeutralKey::Home),
+        (TuiKey::End, NeutralKey::End),
+        (TuiKey::PageUp, NeutralKey::PageUp),
+        (TuiKey::PageDown, NeutralKey::PageDown),
+        (TuiKey::Tab, NeutralKey::Tab),
+        (TuiKey::BackTab, NeutralKey::BackTab),
+        (TuiKey::Delete, NeutralKey::Delete),
+        (TuiKey::Insert, NeutralKey::Insert),
+        (TuiKey::Esc, NeutralKey::Esc),
+        (TuiKey::Null, NeutralKey::Null),
+    ];
+    let code = match key.code {
+        TuiKey::Char(c) => NeutralKey::Char(c),
+        TuiKey::Function(n) => NeutralKey::Function(n),
+        code => KEY_CODES
+            .iter()
+            .find_map(|(tui_code, mapped_code)| (*tui_code == code).then_some(*mapped_code))
+            .unwrap_or(NeutralKey::Null),
+    };
+    let mut modifiers = NeutralMods::NONE;
+    if key.modifiers.contains(tuirealm::event::KeyModifiers::SHIFT) {
+        modifiers = modifiers.union(NeutralMods::SHIFT);
+    }
+    if key
+        .modifiers
+        .contains(tuirealm::event::KeyModifiers::CONTROL)
+    {
+        modifiers = modifiers.union(NeutralMods::CONTROL);
+    }
+    if key.modifiers.contains(tuirealm::event::KeyModifiers::ALT) {
+        modifiers = modifiers.union(NeutralMods::ALT);
+    }
+    NeutralKeyEvent::new(code, modifiers)
+}
 
 const OVERLAY_IDS: &[ComponentId] = &[
     ComponentId::Overlay(OverlayId::Settings),
@@ -77,7 +130,7 @@ impl Component for UiRootComponent {
 impl AppComponent<Msg, UserEvent> for UiRootComponent {
     fn on(&mut self, ev: &Event<UserEvent>) -> Option<Msg> {
         let observed = match ev {
-            Event::Keyboard(key) => TerminalObserverEvent::Key(*key),
+            Event::Keyboard(key) => TerminalObserverEvent::Key(neutral_key(*key)),
             Event::WindowResize(width, height) => TerminalObserverEvent::Resize {
                 width: *width,
                 height: *height,

@@ -23,6 +23,7 @@
 //! candidate policy: a consumed chord falls through to the leaf, and the
 //! candidate resolves as `Deferred`.
 
+use crate::app::input::resolver::crossterm_key_to_neutral;
 use crate::app::input::router::{
     RouterOutcome, RouterSnapshot, resolve_router_outcome_with_focused,
 };
@@ -63,7 +64,9 @@ pub(crate) fn fold_tick(
     if let Some(leaf) = leaf {
         messages.push(leaf);
     }
-    messages.push(Msg::TerminalEvent(TerminalObserverEvent::Key(key.into())));
+    messages.push(Msg::TerminalEvent(TerminalObserverEvent::Key(
+        crossterm_key_to_neutral(key),
+    )));
     let outcome = resolve_router_outcome_with_focused(key, &snapshot, None, &default_keybinds());
     fold_keyboard_messages(messages, focused, &outcome)
 }
@@ -82,7 +85,9 @@ pub(crate) fn fold_tick_with_outcome(
     if let Some(leaf) = leaf {
         messages.push(leaf);
     }
-    messages.push(Msg::TerminalEvent(TerminalObserverEvent::Key(key.into())));
+    messages.push(Msg::TerminalEvent(TerminalObserverEvent::Key(
+        crossterm_key_to_neutral(key),
+    )));
     fold_keyboard_messages(messages, focused, outcome)
 }
 
@@ -96,7 +101,9 @@ pub(crate) fn fold_tick_focused(
     if let Some(leaf) = leaf {
         messages.push(leaf);
     }
-    messages.push(Msg::TerminalEvent(TerminalObserverEvent::Key(key.into())));
+    messages.push(Msg::TerminalEvent(TerminalObserverEvent::Key(
+        crossterm_key_to_neutral(key),
+    )));
     let outcome = resolve_router_outcome_with_focused(key, &snapshot, focused, &default_keybinds());
     fold_keyboard_messages(messages, focused, &outcome)
 }
