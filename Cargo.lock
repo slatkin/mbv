@@ -3110,6 +3110,7 @@ version = "0.26.6"
 dependencies = [
  "eframe",
  "mbv",
+ "mbv-config",
  "mbv-queue",
  "mbv-surfaces",
  "mbv-theme",

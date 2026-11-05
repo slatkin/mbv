@@ -124,3 +124,6 @@ fn to_egui(rgb: mbv_theme::Rgb) -> egui::Color32 {
 fn role_color(role: mbv_theme::Role) -> egui::Color32 {
     to_egui(role.color())
 }
+
+#[cfg(test)]
+mod tests;

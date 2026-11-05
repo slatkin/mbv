@@ -545,7 +545,7 @@ pub struct App {
     /// The last sync pass that saw a live resize drag; starts the settle
     /// window (invariant 20). The live bit stays with the gesture components.
     pub(in crate::app) resize_drag_activity: Option<std::time::Instant>,
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test"))]
     pub(in crate::app) _test_state_dir_guard: Option<crate::config::TestStateDirGuard>,
 }
 

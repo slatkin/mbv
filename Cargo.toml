@@ -210,7 +210,7 @@ path = "src/main.rs"
 # tests; the shipped builds never enable it. The stub reaches the test
 # support surfaces of the crates it builds from.
 [features]
-test = ["mbv-emby-model/test", "mbv-images/test", "mbv-remote-player/test"]
+test = ["mbv-config/test", "mbv-emby-model/test", "mbv-images/test", "mbv-remote-player/test"]
 
 [dependencies]
 mbv-core = { path = "crates/mbv-core" }

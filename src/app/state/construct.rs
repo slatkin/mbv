@@ -74,8 +74,10 @@ impl App {
         // `state_dir()` to an isolated tmpdir, and `load_prefs()` resolves
         // its path through that same lookup. Installing the guard after
         // reading prefs left tests reading (and initializing state from)
-        // the real on-disk prefs.json instead of a fresh one.
-        #[cfg(test)]
+        // the real on-disk prefs.json instead of a fresh one. The `test`
+        // feature installs it too: a dependent crate's test build (mbv-gui)
+        // compiles this crate without `cfg(test)`.
+        #[cfg(any(test, feature = "test"))]
         let test_state_dir_guard = crate::config::TestStateDirGuard::new_if_unset();
         let prefs = Self::load_prefs();
         let launch_restore =
@@ -87,7 +89,7 @@ impl App {
         // installed waker reaches every relay, including the one below.
         let client_waker = crate::app::ClientWaker::new();
         let mut app = App {
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test"))]
             _test_state_dir_guard: test_state_dir_guard,
             config: init.config,
             emby_runtime: init.emby_runtime,

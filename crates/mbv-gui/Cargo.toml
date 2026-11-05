@@ -33,3 +33,6 @@ rstest.workspace = true
 # The headless GUI tests build their `App` from the root package's stub
 # construction (`mbv::stub_app`, design D11 of `add-gui-front-end`).
 mbv = { path = "../..", features = ["test"] }
+# The isolation test reads the state and config directories through the
+# mbv-config API (U17 re-review). The `test` feature above enables its guard.
+mbv-config = { path = "../mbv-config" }
