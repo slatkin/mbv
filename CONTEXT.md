@@ -270,7 +270,7 @@ The shared provider-neutral owner for one logical media-row flow. It owns rows, 
 _Avoid_: generic list, generic media list, two-column list
 
 Row flow:
-The one ordered row sequence that a list presents, in paint order. Row position, viewport offset, and point resolution all address this same sequence. List order is the order in which its rows paint. The shared `crates/mbv-components/src/list/` seam owns it. Cursor movement, viewport resolution, retained paint geometry, and multi-selection each have one shared implementation over it.
+The one ordered row sequence that a list presents, in paint order. Row position, viewport offset, and point resolution all address this same sequence. List order is the order in which its rows paint. The shared list seam owns it: `crates/mbv-surfaces/src/list/` holds cursor, viewport, row flow, and marks, and `crates/mbv-components/src/list/` holds retained paint geometry. Cursor movement, viewport resolution, retained paint geometry, and multi-selection each have one shared implementation over it.
 _Avoid_: item list, row list, flat list
 
 Viewport anchor:
