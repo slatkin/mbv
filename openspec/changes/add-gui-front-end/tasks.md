@@ -15,11 +15,11 @@
 
 - [x] 3.1 Create `crates/mbv-surfaces` (no ratatui, TuiRealm, or crossterm dependency) and add it to the workspace. Verify with `cargo tree -p mbv-surfaces | rg 'ratatui|tuirealm|crossterm'` (no output).
 - [x] 3.2 Add `FocusStack` to `mbv-surfaces`: mounted set, Panel focus, overlay stack keyed by `ComponentId`, with deterministic restore on dismiss. Add public-API tests in `crates/mbv-surfaces/tests/surfaces.rs` for push, dismiss-restore independent of mount order, and Panel focus moves. Verify that they pass.
-- [ ] 3.3 Fold `App`'s `PanelFocus` into the shell-held `FocusStack`. Add the one sync step in `sync_mounted_surfaces` that applies the stack to TuiRealm. Verify with the existing panel-focus tick-integration tests.
-- [ ] 3.4 Route the modal mount, dismiss, and focus call sites in `src/app/shell/overlays/modals.rs` through `FocusStack`. Verify with the existing modal tick-integration tests.
-- [ ] 3.5 Route the sidebar and menu call sites (`shell/overlays/sidebars.rs`, `shell/overlays/menus.rs`) through `FocusStack`. Verify with the existing sidebar and context-menu tick-integration tests.
-- [ ] 3.6 Route the remaining TuiRealm `active`/`mount`/`umount` call sites in `src/app/shell/` (root, library, queue, feeds_manage, arbitration, twitch_url, and others) through `FocusStack`, so that the sync step is the only TuiRealm focus caller. Verify with `rg -n '\.active\(|\.blur\(' src/app/shell -g '!**/tests/**'`: it reports only the sync step. Verify also that the full `cargo nextest run -p mbv` passes.
-- [ ] 3.7 Add one tick-integration test, "TuiRealm focus follows the core stack": a stack change is the focused TuiRealm component after the sync pass. Verify that it passes.
+- [x] 3.3 Fold `App`'s `PanelFocus` into the shell-held `FocusStack`. Add the one sync step in `sync_mounted_surfaces` that applies the stack to TuiRealm. Verify with the existing panel-focus tick-integration tests.
+- [x] 3.4 Route the modal mount, dismiss, and focus call sites in `src/app/shell/overlays/modals.rs` through `FocusStack`. Verify with the existing modal tick-integration tests.
+- [x] 3.5 Route the sidebar and menu call sites (`shell/overlays/sidebars.rs`, `shell/overlays/menus.rs`) through `FocusStack`. Verify with the existing sidebar and context-menu tick-integration tests.
+- [x] 3.6 Route the remaining TuiRealm `active`/`mount`/`umount` call sites in `src/app/shell/` (root, library, queue, feeds_manage, arbitration, twitch_url, and others) through `FocusStack`, so that the sync step is the only TuiRealm focus caller. Verify with `rg -n '\.active\(|\.blur\(' src/app/shell -g '!**/tests/**'`: it reports only the sync step. Verify also that the full `cargo nextest run -p mbv` passes.
+- [x] 3.7 Add one tick-integration test, "TuiRealm focus follows the core stack": a stack change is the focused TuiRealm component after the sync pass. Verify that it passes.
 - [ ] 3.8 Write the ADR for the decision "the Client core owns focus; TuiRealm is the TUI adapter" (read `docs/adr/README.md` first). Mark the focus part of ADR 0022 as superseded. Verify that the ADR follows the README amendment rules.
 - [ ] 3.9 Add the `CONTEXT.md` terms TUI Client, GUI Client, Client core, and Surface state, and change the `Client` definition to cover both kinds (design D1). Verify that no new term uses an *Avoid* word.
 
