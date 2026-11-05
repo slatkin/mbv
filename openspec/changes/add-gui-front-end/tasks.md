@@ -36,7 +36,7 @@
 
 ## 5. Client-neutral tick and library target
 
-- [ ] 5.1 Move the `App`-side run-loop phases (runtime and channel drains, Owner snapshot adoption, effects, toast expiry) from `src/app/shell/run.rs` into `ClientCore::tick(now) -> TickOutcome`, with an installable waker callback. `Model::run` calls it before the TuiRealm tick. Verify that the full `cargo nextest run -p mbv` passes.
+- [x] 5.1 Move the `App`-side run-loop phases (runtime and channel drains, Owner snapshot adoption, effects, toast expiry) from `src/app/shell/run.rs` into `ClientCore::tick(now) -> TickOutcome`, with an installable waker callback. `Model::run` calls it before the TuiRealm tick. Verify that the full `cargo nextest run -p mbv` passes.
 - [ ] 5.2 Add a library target to the root `mbv` package (`src/lib.rs`) that exposes `ClientCore`, the Owner find, start, and attach entry with an override for the `mbv` executable path, and the router entry. The `mbv` binary uses the library. Verify with `cargo build -p mbv` and `cargo tree -p mbv -e normal | rg 'eframe|egui|wgpu|glow'` (no output).
 - [ ] 5.3 Update the `AGENTS.md` repository map for `mbv-surfaces`, `mbv-gui`, and the root library target. Verify that each new crate has one line.
 
