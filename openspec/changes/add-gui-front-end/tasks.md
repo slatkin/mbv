@@ -8,8 +8,8 @@
 
 ## 2. Router on neutral keys
 
-- [ ] 2.1 Translate crossterm key and mouse events to the neutral types at the TUI event-listener edge. Add one `#[case]` table test of the mapping (modifier lowercase rule included). Verify that the table test passes.
-- [ ] 2.2 Move `src/app/input/router.rs`, `key_policy.rs`, `resolver.rs`, and `confirm_keys.rs` from `crossterm::event` to the neutral key type. Verify that `cargo nextest run -p mbv` passes with the routing-matrix and tick-integration tests unchanged.
+- [x] 2.1 Translate crossterm key and mouse events to the neutral types at the TUI event-listener edge. Add one `#[case]` table test of the mapping (modifier lowercase rule included). Verify that the table test passes.
+- [x] 2.2 Move `src/app/input/router.rs`, `key_policy.rs`, `resolver.rs`, and `confirm_keys.rs` from `crossterm::event` to the neutral key type. Verify that `cargo nextest run -p mbv` passes with the routing-matrix and tick-integration tests unchanged.
 
 ## 3. Core focus stack
 
