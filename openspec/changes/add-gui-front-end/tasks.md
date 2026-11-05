@@ -25,8 +25,8 @@
 
 ## 4. Surface state for the Queue slice
 
-- [ ] 4.1 Move `crates/mbv-components/src/list/{cursor,viewport,row_flow,marks}.rs` and their tests into `mbv-surfaces`. Re-export them from `mbv-components` only where needed. Verify that `cargo nextest run -p mbv-surfaces -p mbv-components` passes with the moved tests and no duplicates.
-- [ ] 4.2 Add `HitMap<Target>` (regions in `f32` logical units, point-in-region resolution, no geometry computation) and a per-list capacity report to `mbv-surfaces`. Add public-API tests for hit, miss, and resolve-against-last-frame. Verify that they pass.
+- [x] 4.1 Move `crates/mbv-components/src/list/{cursor,viewport,row_flow,marks}.rs` and their tests into `mbv-surfaces`. Re-export them from `mbv-components` only where needed. Verify that `cargo nextest run -p mbv-surfaces -p mbv-components` passes with the moved tests and no duplicates.
+- [x] 4.2 Add `HitMap<Target>` (regions in `f32` logical units, point-in-region resolution, no geometry computation) and a per-list capacity report to `mbv-surfaces`. Add public-API tests for hit, miss, and resolve-against-last-frame. Verify that they pass.
 - [ ] 4.3 Extract the Queue cursor, marks, selection, viewport, and key rules from `crates/mbv-components/src/queue.rs` and `queue/keys.rs` into a Queue Surface state in `mbv-surfaces`. Move the matching tests. Verify with `cargo nextest run -p mbv-surfaces -p mbv-components`.
 - [ ] 4.4 Make `QueueComponent` a TuiRealm adapter over the Queue Surface state: it forwards neutral events, paints from the state, and reports capacity and a `HitMap` from `queue/pointer.rs` geometry. It holds no copy of state values. Verify with the queue tick-integration and mouse tests (wheel, row click, obscured-queue rejection).
 - [ ] 4.5 Extract the state that the Queue playback panel owns (transport focus, seek target) into Surface state and make `QueuePlaybackPanel` an adapter. Verify with `queue_playback_panel` tests and the playback tick-integration tests.
