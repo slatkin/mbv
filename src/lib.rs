@@ -21,7 +21,7 @@ mod startup;
 
 pub use self::app::{
     App, AppCommand, CLIENT_IDLE_CADENCE, ClientCore, ClientLifecycle, ClientTickHost, ClientWaker,
-    Command, HomeContent, HomeEventDrain, NavigationIntent, OverlayFocus, PanelIntent,
+    Command, GuiInput, HomeContent, HomeEventDrain, NavigationIntent, OverlayFocus, PanelIntent,
     PlaybackIntent, PlayerEventDrain, RemoteControlTarget, RouterOutcome, RouterOverlayState,
     RouterPlaybackState, RouterSnapshot, ShellCommand, StartupWorkerDrain, TickOutcome,
     VisualIntent, WorkspaceRelayout, resolve_router_outcome_with_focused,

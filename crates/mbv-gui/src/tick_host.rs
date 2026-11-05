@@ -12,19 +12,39 @@
 use std::fmt;
 use std::time::Instant;
 
-use mbv::{App, ClientLifecycle, ClientTickHost, HomeEventDrain, PlayerEventDrain, TickOutcome};
-use mbv_ui_msg::{Msg, ServiceRequest};
+use eframe::egui;
+use mbv::{
+    App, ClientLifecycle, ClientTickHost, GuiInput, HomeEventDrain, PlayerEventDrain, TickOutcome,
+};
+use mbv_surfaces::gesture::PointerGestureState;
+use mbv_ui_msg::{Msg, Position, ServiceRequest};
+
+use crate::input::neutral_input;
 
 /// The `App` the Client core drives, and the Client-owned parts of the tick.
 /// The GUI holds no interaction state here: cursor, selection, marks, and
 /// viewport live in Surface state (design D5).
 pub(crate) struct GuiTickHost {
     app: App,
+    /// The egui context this Client reads its raw input from. It is the
+    /// window's context, so the input phase reads the same frame's events
+    /// the window paints with (design D7).
+    ctx: egui::Context,
+    /// The GUI's gesture recognizer: the Client core's pointer gesture
+    /// policy over the egui logical points the translated pointer events
+    /// carry (`mbv_ui_msg::Position`, whose `SamePlace` rule is the core's
+    /// double-click slop). The Client-owned analog of the TUI edge's
+    /// per-parent recognizer (`mbv_components::mouse::gesture`).
+    gestures: PointerGestureState<Position>,
 }
 
 impl GuiTickHost {
-    pub(crate) fn new(app: App) -> Self {
-        Self { app }
+    pub(crate) fn new(app: App, ctx: egui::Context) -> Self {
+        Self {
+            app,
+            ctx,
+            gestures: PointerGestureState::new(),
+        }
     }
 }
 
@@ -177,8 +197,37 @@ impl ClientTickHost for GuiTickHost {
     }
 
     fn tick_input(&mut self, outcome: &mut TickOutcome) {
-        // Row 6.3 fills this: egui key and pointer events translated to the
-        // neutral types and routed through the shared router.
-        let _ = outcome;
+        // Row 6.3: the frame's raw egui events, translated to the neutral
+        // vocabulary (design D4) and routed through the shared router. The
+        // pointer state the translation reads is the frame's: egui's wheel
+        // event carries no position, and its movement events carry no
+        // button state, so the frame's pointer facts stand in for both.
+        let (events, frame_modifiers, primary_down, pointer_pos) = self.ctx.input(|input| {
+            (
+                input.events.clone(),
+                input.modifiers,
+                input.pointer.primary_down(),
+                input.pointer.latest_pos(),
+            )
+        });
+        for input in neutral_input(&events, frame_modifiers, primary_down, pointer_pos) {
+            outcome.input_received = true;
+            if self.app.route_gui_input(input) {
+                outcome.quit_requested = true;
+            }
+            // Feed the translated pointer events through the Client core's
+            // gesture policy so the recognizer's double-click and drag state
+            // stays current across frames. The first slice paints no
+            // targets: resolving a recognized gesture against the painters'
+            // hit maps is rows 6.4 and 6.5.
+            if let GuiInput::Pointer(event) = &input {
+                let _gesture = self.gestures.recognize(
+                    event.kind,
+                    event.modifiers,
+                    event.position,
+                    Instant::now(),
+                );
+            }
+        }
     }
 }

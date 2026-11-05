@@ -72,9 +72,12 @@ fn open_session(cc: &eframe::CreationContext<'_>) -> Result<Session, String> {
     let app = attach::attach()?;
     let core = ClientCore::from_app(&app);
     let ctx = cc.egui_ctx.clone();
-    core.install_waker(move || ctx.request_repaint());
+    core.install_waker({
+        let waker_ctx = ctx.clone();
+        move || waker_ctx.request_repaint()
+    });
     Ok(Session {
-        host: GuiTickHost::new(app),
+        host: GuiTickHost::new(app, ctx),
     })
 }
 

@@ -19,6 +19,7 @@ workspace = true
 
 [dependencies]
 mbv = { path = "../.." }
+mbv-surfaces = { path = "../mbv-surfaces" }
 mbv-theme = { path = "../mbv-theme" }
 mbv-ui-msg = { path = "../mbv-ui-msg" }
 # eframe's default features are the glow (OpenGL) renderer plus the Wayland
