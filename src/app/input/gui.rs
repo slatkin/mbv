@@ -316,8 +316,9 @@ impl App {
     }
 
     /// The `ShellRequest` dispatch for the GUI Client's Queue Surface state.
-    /// The Queue Surface state emits only `QueueIntent`, `RowContextMenu`,
-    /// and `SelectionProjection` shell requests; the remaining variants have
+    /// The Queue Surface state emits `QueueIntent`, `QueueRowClick`, and
+    /// `QueueRowActivate` (the TUI's single and double click gestures), plus
+    /// `RowContextMenu` and `SelectionProjection`. The remaining variants have
     /// no producer on this surface, and a request that reaches one of those
     /// arms would name a surface the Client does not present, so the arm is
     /// the same documented absence
@@ -325,6 +326,17 @@ impl App {
     fn handle_gui_queue_shell_request(&mut self, request: ShellRequest) {
         match request {
             ShellRequest::QueueIntent(intent) => self.handle_gui_queue_intent(intent),
+            // A pointer single click on a row runs the TUI single click's App
+            // effects: Queue panel focus, the queue hold window, and the
+            // displayed cursor. The surface has already pinned its selection.
+            ShellRequest::QueueRowClick { slot_id } => {
+                let _ = self.handle_mouse_single_click_queue(slot_id);
+            }
+            // A pointer double click on a row runs the TUI double click: the
+            // same single-click effects, then the play of the resolved row.
+            ShellRequest::QueueRowActivate { slot_id } => {
+                self.handle_mouse_double_click_queue(slot_id);
+            }
             // Both open a surface the first slice does not present: the
             // context-menu overlay and the Status bar that shows the
             // selection summary (row 6.5). The requests stay undelivered
@@ -371,3 +383,6 @@ impl App {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;
