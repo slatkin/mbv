@@ -1,0 +1,26 @@
+[package]
+name = "mbv-gui"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "GUI Client program for mbv: one native window over the shared Client core."
+readme = "../../README.md"
+
+[[bin]]
+name = "mbv-gui"
+path = "src/main.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+mbv = { path = "../.." }
+mbv-theme = { path = "../mbv-theme" }
+mbv-ui-msg = { path = "../mbv-ui-msg" }
+# eframe's default features are the glow (OpenGL) renderer plus the Wayland
+# and X11 backends (design D8 of `add-gui-front-end`). Do not add `wgpu`.
+eframe = "0.33"
