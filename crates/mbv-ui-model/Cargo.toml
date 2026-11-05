@@ -23,7 +23,6 @@ mbv-config = { path = "../mbv-config" }
 mbv-audiobookshelf = { path = "../mbv-audiobookshelf" }
 unicode-width.workspace = true
 time.workspace = true
-ratatui.workspace = true
 
 [features]
 test = []

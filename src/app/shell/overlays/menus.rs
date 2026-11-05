@@ -53,7 +53,7 @@ impl Model {
         &self,
         anchor: ContextMenuAnchor,
         entries: &[ContextMenuEntry],
-        bounds: Option<Rect>,
+        bounds: Option<mbv_ui_model::geom::Rect>,
     ) -> Rect {
         let layout = &self.app.layout;
         let size = ContextMenu::rendered_size(entries);
@@ -62,9 +62,14 @@ impl Model {
         // chrome, so panel focus must not decide its clamp. For
         // component-owned destinations, use the geometry exported by the
         // active control. Other destinations and Queue focus keep using
-        // `AppLayout` as before.
+        // `AppLayout` as before. The opener-named bounds are already the
+        // neutral presentation `Rect`; the render geometry converts at the
+        // edge (`add-gui-front-end` task 1.2).
         let (panel_rect, anchor_rect): (Rect, Option<Rect>) = if let Some(bounds) = bounds {
-            (bounds, None)
+            (
+                Rect::new(bounds.x, bounds.y, bounds.width, bounds.height),
+                None,
+            )
         } else {
             match &anchor {
                 ContextMenuAnchor::SelectedItem(focus) => {
@@ -114,7 +119,15 @@ impl Model {
             ContextMenuAnchor::Pointer { x, y } => Some((*x, *y)),
             ContextMenuAnchor::SelectedItem(_) => None,
         };
-        let (x, y) = ContextMenu::place(panel_rect, size, anchor_rect.as_ref(), pointer);
+        let (x, y) = ContextMenu::place(
+            mbv_render::layout::rect_to_presentation(panel_rect),
+            size,
+            anchor_rect
+                .as_ref()
+                .map(|rect| mbv_render::layout::rect_to_presentation(*rect))
+                .as_ref(),
+            pointer,
+        );
         Rect {
             x,
             y,

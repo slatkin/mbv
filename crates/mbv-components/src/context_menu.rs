@@ -37,8 +37,9 @@ pub struct ContextMenuComponent {
     menu_rect: Rect,
     /// The containing panel the shell clamps a menu inside, when the opener
     /// named one (the queue visual slot's chrome menu). `None` keeps the
-    /// shell's destination-derived panel.
-    bounds: Option<Rect>,
+    /// shell's destination-derived panel. Neutral presentation `Rect`: the
+    /// value round-trips to `ContextMenu::place` and never paints.
+    bounds: Option<mbv_ui_model::geom::Rect>,
 }
 
 impl ContextMenuComponent {
@@ -60,7 +61,7 @@ impl ContextMenuComponent {
         anchor: ContextMenuAnchor,
         entries: Vec<ContextMenuEntry>,
         cursor: usize,
-        bounds: Option<Rect>,
+        bounds: Option<mbv_ui_model::geom::Rect>,
     ) {
         self.anchor = anchor;
         self.entries = entries;
@@ -87,9 +88,10 @@ impl ContextMenuComponent {
     }
 
     /// The opener-named containing panel, used by the shell to recompute
-    /// `menu_rect` ahead of the destination-derived panel.
+    /// `menu_rect` ahead of the destination-derived panel. Neutral
+    /// presentation `Rect` (`add-gui-front-end` task 1.2).
     #[must_use]
-    pub fn bounds(&self) -> Option<Rect> {
+    pub fn bounds(&self) -> Option<mbv_ui_model::geom::Rect> {
         self.bounds
     }
 
