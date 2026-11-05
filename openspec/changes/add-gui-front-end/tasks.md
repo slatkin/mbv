@@ -13,8 +13,8 @@
 
 ## 3. Core focus stack
 
-- [ ] 3.1 Create `crates/mbv-surfaces` (no ratatui, TuiRealm, or crossterm dependency) and add it to the workspace. Verify with `cargo tree -p mbv-surfaces | rg 'ratatui|tuirealm|crossterm'` (no output).
-- [ ] 3.2 Add `FocusStack` to `mbv-surfaces`: mounted set, Panel focus, overlay stack keyed by `ComponentId`, with deterministic restore on dismiss. Add public-API tests in `crates/mbv-surfaces/tests/surfaces.rs` for push, dismiss-restore independent of mount order, and Panel focus moves. Verify that they pass.
+- [x] 3.1 Create `crates/mbv-surfaces` (no ratatui, TuiRealm, or crossterm dependency) and add it to the workspace. Verify with `cargo tree -p mbv-surfaces | rg 'ratatui|tuirealm|crossterm'` (no output).
+- [x] 3.2 Add `FocusStack` to `mbv-surfaces`: mounted set, Panel focus, overlay stack keyed by `ComponentId`, with deterministic restore on dismiss. Add public-API tests in `crates/mbv-surfaces/tests/surfaces.rs` for push, dismiss-restore independent of mount order, and Panel focus moves. Verify that they pass.
 - [ ] 3.3 Fold `App`'s `PanelFocus` into the shell-held `FocusStack`. Add the one sync step in `sync_mounted_surfaces` that applies the stack to TuiRealm. Verify with the existing panel-focus tick-integration tests.
 - [ ] 3.4 Route the modal mount, dismiss, and focus call sites in `src/app/shell/overlays/modals.rs` through `FocusStack`. Verify with the existing modal tick-integration tests.
 - [ ] 3.5 Route the sidebar and menu call sites (`shell/overlays/sidebars.rs`, `shell/overlays/menus.rs`) through `FocusStack`. Verify with the existing sidebar and context-menu tick-integration tests.
