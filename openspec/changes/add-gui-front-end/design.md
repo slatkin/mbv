@@ -110,6 +110,14 @@ The GUI reuses the library's Owner find, start, and attach code. It starts the O
 
 There is no user data or protocol migration. `mbv-gui` is not packaged or released in this change. The steps land in this order, and each one keeps the TUI green: neutral types, focus stack, Surface state extraction, Client-neutral tick, library target, then the GUI program. Rollback is the revert of the GUI crate. The earlier steps are TUI refactors that stand on their own.
 
+## Known arrangement divergences
+
+Recorded so that archive-time spec sync does not read them as misses.
+
+- The Queue playback title paints on the transport title row, not inside the header row. The `queue-playback-panel` spec carries it "on its header row" (`NowPlayingTitleSite::Header`). The GUI paints the same projected content one row down. Same content, different placement: the GUI owns its geometry (D8).
+- The status word and the footer pills paint in regular weight. The bundled fonts expose no bold face, so the TUI's BOLD spans have no GUI counterpart.
+- The playback-target indicator in the header row is not clickable. The Sessions surface is outside this change's first slice.
+
 ## Open Questions
 
 - Which font the GUI bundles, if any. This is a presentation choice.
