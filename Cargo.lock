@@ -2340,6 +2340,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "mbv-surfaces"
+version = "0.26.6"
+dependencies = [
+ "mbv-ui-model",
+ "mbv-ui-msg",
+ "rstest",
+]
+
+[[package]]
 name = "mbv-text"
 version = "0.26.6"
 dependencies = [
