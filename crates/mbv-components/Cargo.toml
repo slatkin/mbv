@@ -17,6 +17,7 @@ workspace = true
 test = ["mbv-ui-msg/test", "mbv-render/test"]
 
 [dependencies]
+mbv-surfaces = { path = "../mbv-surfaces" }
 mbv-ui-msg = { path = "../mbv-ui-msg" }
 mbv-render = { path = "../mbv-render" }
 mbv-ui-model = { path = "../mbv-ui-model" }

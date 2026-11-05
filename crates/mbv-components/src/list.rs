@@ -4,103 +4,22 @@
 //! of the tree-list widget crate. Adapters retain their own state and implement
 //! only the primitive hooks required by the composed traits.
 //!
-//! Shared mechanics are kept explicit: production callers use the seam, and
-//! declarations without a production consumer are removed rather than hidden
-//! behind lint suppressions.
+//! The cursor, viewport, row-flow, and mark mechanics are front-end-neutral
+//! Surface state and live in `mbv-surfaces` (add-gui-front-end design D2/D5);
+//! this module re-exports them for the TUI adapters. Shared mechanics are kept
+//! explicit: production callers use the seam, and declarations without a
+//! production consumer are removed rather than hidden behind lint suppressions.
 
-mod cursor;
-mod marks;
 mod paint;
-mod row_flow;
 pub mod three_line;
 pub mod tree_browser;
-mod viewport;
 
-#[doc(inline)]
-pub use self::cursor::Cursored;
-#[doc(inline)]
-pub use self::marks::{AggregateMarkState, MarkSelection, MarkSelectionState};
 #[doc(inline)]
 pub use self::paint::{PaintRetained, PaintRetainedState};
 #[doc(inline)]
-pub use self::row_flow::{Row, RowFlow};
-#[doc(inline)]
 pub use self::three_line::ThreeLineFlatList;
 #[doc(inline)]
-pub use self::viewport::{
-    PagingPolicy, ViewportAnchor, Viewported, max_viewport_offset_for_len, scrolled_viewport_offset,
+pub use mbv_surfaces::list::{
+    AggregateMarkState, Cursored, MarkSelection, MarkSelectionState, PagingPolicy, Row, RowFlow,
+    ViewportAnchor, Viewported, max_viewport_offset_for_len, scrolled_viewport_offset,
 };
-
-#[cfg(test)]
-#[derive(Default, Debug)]
-pub struct TestListState {
-    pub selected: Option<u8>,
-    pub offset: usize,
-    pub anchor: ViewportAnchor,
-}
-
-#[cfg(test)]
-impl Cursored<u8> for TestListState {
-    fn selected_target(&self) -> Option<&u8> {
-        self.selected.as_ref()
-    }
-
-    fn set_selected_target(&mut self, target: Option<&u8>) {
-        self.selected = target.copied();
-    }
-}
-
-#[cfg(test)]
-impl Viewported<u8> for TestListState {
-    fn viewport_offset(&self) -> usize {
-        self.offset
-    }
-
-    fn set_viewport_offset(&mut self, offset: usize) {
-        self.offset = offset;
-    }
-
-    fn viewport_anchor(&self) -> ViewportAnchor {
-        self.anchor
-    }
-
-    fn set_viewport_anchor(&mut self, anchor: ViewportAnchor) {
-        self.anchor = anchor;
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    // Keep a module at the seam root so the focused nextest filter also
-    // exercises the public composition boundary, not only private submodules.
-    use super::{
-        Cursored, MarkSelectionState, PaintRetainedState, Row, RowFlow, TestListState, Viewported,
-    };
-
-    #[derive(PartialEq, Eq)]
-    struct NonDefaultTarget;
-
-    #[test]
-    fn carriers_default_without_a_target_default_bound() {
-        let _: MarkSelectionState<NonDefaultTarget> = MarkSelectionState::default();
-        let _: PaintRetainedState<NonDefaultTarget> = PaintRetainedState::default();
-        let _ = MarkSelectionState::<NonDefaultTarget>::new();
-        let _ = PaintRetainedState::<NonDefaultTarget>::new();
-    }
-
-    #[test]
-    fn composed_cursor_and_viewport_share_the_same_flow_positions() {
-        let flow = RowFlow::new(vec![
-            Row::structural(),
-            Row::selectable(1),
-            Row::structural(),
-            Row::selectable(2),
-        ]);
-        let mut state = TestListState::default();
-
-        assert_eq!(state.first(&flow), Some(1));
-        assert_eq!(state.index(&flow), Some(1));
-        assert_eq!(state.keep_cursor_visible(&flow, 1), 1);
-        assert_eq!(state.offset, 1);
-    }
-}

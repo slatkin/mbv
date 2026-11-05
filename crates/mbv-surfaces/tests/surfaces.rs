@@ -124,3 +124,13 @@ fn the_focus_hold_takes_focus_off_every_surface_until_released() {
         "release restores the derived focus"
     );
 }
+
+/// The moved list seam: cursor, viewport, row flow, and marks over one
+/// ordered row flow, with the shared test shapes in `list::helpers`.
+mod list {
+    mod cursor;
+    mod helpers;
+    mod marks;
+    mod row_flow;
+    mod viewport;
+}

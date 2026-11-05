@@ -2077,6 +2077,7 @@ dependencies = [
  "mbv-keybinds",
  "mbv-queue",
  "mbv-render",
+ "mbv-surfaces",
  "mbv-text",
  "mbv-theme",
  "mbv-ui-model",
