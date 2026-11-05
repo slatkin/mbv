@@ -94,6 +94,11 @@ impl Model {
         // Mouse eligibility is derived off the same active-destination
         // derivation, in the same pass, right after it.
         self.sync_mouse_subscriptions();
+        // The one focus step (design D3 of `add-gui-front-end`): the core
+        // focus stack, fed and reconciled above, now applies its derived
+        // focus to TuiRealm. Rows 3.5/3.6 route the remaining call sites;
+        // from then on this is the only TuiRealm focus caller.
+        self.apply_focus_stack();
     }
 
     /// Terminal-resize side effects, applied in the sync pass before any

@@ -88,3 +88,39 @@ fn unmounting_an_overlay_drops_it_from_the_stack() {
     assert_eq!(stack.overlay_stack(), []);
     assert_eq!(stack.focused(), Some(ComponentId::Queue));
 }
+
+/// The focus hold (design D6, prefix-armed capture): while held, no surface
+/// resolves as focused whatever the stack holds; releasing restores the
+/// derived focus. The hold is not an overlay, so no dismissal lifts it.
+#[test]
+fn the_focus_hold_takes_focus_off_every_surface_until_released() {
+    let mut stack = FocusStack::new();
+    stack.mount(ComponentId::Queue);
+    stack.set_panel_focus(PanelFocus::Queue);
+    let overlay = ComponentId::Modal(ModalId::Confirm);
+    stack.push_overlay(overlay.clone());
+    assert_eq!(stack.focused(), Some(overlay.clone()));
+
+    stack.hold_focus();
+    assert!(stack.focus_held());
+    assert_eq!(
+        stack.focused(),
+        None,
+        "the hold takes focus off every surface"
+    );
+
+    stack.dismiss(&overlay);
+    assert_eq!(
+        stack.focused(),
+        None,
+        "the hold outlives a dismissal made under it"
+    );
+
+    stack.release_focus();
+    assert!(!stack.focus_held());
+    assert_eq!(
+        stack.focused(),
+        Some(ComponentId::Queue),
+        "release restores the derived focus"
+    );
+}

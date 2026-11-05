@@ -225,6 +225,7 @@ mbv-theme = { path = "crates/mbv-theme", features = ["ratatui"] }
 mbv-images = { path = "crates/mbv-images" }
 mbv-ui-model = { path = "crates/mbv-ui-model" }
 mbv-ui-msg = { path = "crates/mbv-ui-msg" }
+mbv-surfaces = { path = "crates/mbv-surfaces" }
 mbv-render = { path = "crates/mbv-render" }
 mbv-components = { path = "crates/mbv-components" }
 mbv-emby-model = { path = "crates/mbv-emby-model" }

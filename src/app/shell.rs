@@ -40,6 +40,7 @@ mod emby_library;
 mod emby_library_content;
 mod feeds;
 mod feeds_manage;
+mod focus;
 mod home;
 mod home_content;
 mod inline_search;
@@ -61,7 +62,7 @@ mod tv_workspace;
 mod twitch_url;
 mod ui_state_reset;
 
-/// How often the `TuiRealm` crossterm listener worker polls the terminal for
+/// How often the ``TuiRealm`` crossterm listener worker polls the terminal for
 /// events. The listener's `poll` blocks for half of this; the worker cycle is
 /// this long. Set to 8 ms so event latency matches the legacy loop's fastest
 /// cadence (the visualizer's 8 ms poll). The main thread's per-iteration wait
@@ -125,7 +126,7 @@ pub(in crate::app) enum PendingMusicReanchor {
     FirstAlbumOfLevel,
 }
 
-/// Shell model holding the legacy `App` and the `TuiRealm` `Application`.
+/// Shell model holding the legacy `App` and the ``TuiRealm`` `Application`.
 pub struct Model {
     pub app: App,
     pub(in crate::app) application: Application<ComponentId, Msg, UserEvent>,
@@ -226,6 +227,21 @@ pub struct Model {
     /// restores it (falling back to the sync passes' canonical
     /// re-derivation when it was unmounted meanwhile).
     pub(in crate::app) prefix_armed_focus: Option<ComponentId>,
+    /// The core focus stack (design D3 of `add-gui-front-end`, capability
+    /// `client-interaction-core`): the shell-held focus authority over the
+    /// mounted surfaces, the Panel focus in effect, and the overlay stack.
+    /// Call sites request a change on the stack instead of calling `TuiRealm`
+    /// focus directly, and the sync pass's one `apply_focus_stack` step
+    /// applies the derived focus to `TuiRealm`. The stored Panel-focus record
+    /// (launch restore, the mini-view interplay) stays on `App`; the stack
+    /// holds the focus in effect for the derivation.
+    pub(in crate::app) focus_stack: mbv_surfaces::FocusStack,
+    /// Armed by a call site that routed an overlay push through the stack and
+    /// consumed by the next `apply_focus_stack`: the push must take focus even
+    /// over a surface whose call site still activates its component directly
+    /// (the sidebar, menu, and remaining rows 3.5/3.6 sites). Transitional
+    /// until every call site routes; then the derived focus alone decides.
+    pub(in crate::app) focus_stack_pushed: bool,
     /// Shell-owned exit kind (tray-pin-swap design D6): set once the Owner
     /// sent `SwapQuit`, so `teardown` skips the launch-state save and the
     /// coordinated shutdown request. Never reset within a run.
@@ -242,7 +258,7 @@ pub struct Model {
 }
 
 impl Model {
-    /// Construct the model, starting the `TuiRealm` crossterm listener and
+    /// Construct the model, starting the ``TuiRealm`` crossterm listener and
     /// mounting the permanent root observer.
     #[cfg(test)]
     pub fn new(app: App) -> Self {
@@ -311,6 +327,14 @@ impl Model {
         // config the App was built with; later config saves never rewrite it
         // for the running session.
         let keybinds = app.config.lock().unwrap().keybinds.clone();
+        // The stack starts from the mounts this constructor performs below:
+        // `UiRoot` and the whole-session Library panel. The Queue panel mounts
+        // lazily at its first sync pass, whose focus step mirrors it into the
+        // stack (`focus.rs`).
+        let mut focus_stack = mbv_surfaces::FocusStack::new();
+        focus_stack.mount(ComponentId::UiRoot);
+        focus_stack.mount(ComponentId::Library);
+        focus_stack.set_panel_focus(app.effective_panel_focus());
         let mut model = Self {
             app,
             application,
@@ -334,6 +358,8 @@ impl Model {
             context_action_snapshot: None,
             keybinds,
             prefix_armed_focus: None,
+            focus_stack,
+            focus_stack_pushed: false,
             swapped_out_exit: false,
             workspace_now_playing: None,
             move_gate,
