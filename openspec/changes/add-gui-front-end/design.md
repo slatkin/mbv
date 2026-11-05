@@ -77,6 +77,8 @@ The `App`-side phases of the run loop (runtime and channel drains, Owner snapsho
 
 eframe's default glow (OpenGL) renderer keeps the dependency tree smaller than wgpu, and it runs on Wayland and X11 through winit. GUI lists are painted with the egui `Painter`, not with `ScrollArea` or other stateful egui widgets, because scroll and cursor belong to Surface state. egui's own widget memory is not used for any interaction state.
 
+`mbv-gui` pins eframe 0.33, the last release that satisfies both halves of this decision: its default features are the glow renderer with the Wayland and X11 backends (0.35 makes wgpu a default feature), and its `App` trait takes the per-frame `update` hook (0.34 deprecates `update` for `logic` and `ui`). A pin bump lands with a rewrite of the frame hook and this row together.
+
 ### D9. GUI Owner launch
 
 The GUI reuses the library's Owner find, start, and attach code. It starts the Owner from the `mbv` program: first from the directory of its own executable, then from `PATH`. The Owner is never the GUI program, so the Owner process never maps the window stack (`headless-playback-memory-footprint`).
