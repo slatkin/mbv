@@ -358,7 +358,7 @@ fn split_band(rect: egui::Rect, band_height: f32) -> (egui::Rect, egui::Rect) {
 
 /// Test evidence for the headless GUI tests (rows 6.4 and 6.5): the Queue
 /// panel's cursor, scroll, and last painted report, and the Queue playback
-/// band's report, shown state, and last request.
+/// band's report, shown state, header paint, and last request.
 #[cfg(test)]
 impl GuiTickHost {
     pub(crate) fn queue_test_cursor(&self) -> usize {
@@ -389,6 +389,10 @@ impl GuiTickHost {
 
     pub(crate) fn playback_test_shown(&self) -> bool {
         self.playback.shown()
+    }
+
+    pub(crate) fn playback_test_header_painted(&self) -> bool {
+        self.playback.header_painted()
     }
 
     pub(crate) fn queue_test_footer(&self) -> Option<&mbv::QueueFooterProjection> {

@@ -53,8 +53,8 @@ fn a_click_on_play_pause_sends_the_toggle_request() {
     );
 }
 
-/// An idle queue paints no transport band: the band reserves no rows, and the
-/// panel reports no regions a press could resolve against.
+/// An idle queue collapses the transport section: the panel reports no regions
+/// a press could resolve against.
 #[test]
 fn empty_queue_paints_no_transport_band() {
     let ctx = egui::Context::default();
@@ -63,4 +63,16 @@ fn empty_queue_paints_no_transport_band() {
 
     assert!(!host.playback_test_shown());
     assert!(host.playback_test_report().hit_map.is_empty());
+}
+
+/// An idle queue still paints the band's header row: the status word and the
+/// target indicator stay on the band while the transport section collapses
+/// (row 6.5's header).
+#[test]
+fn an_idle_band_paints_its_header_row() {
+    let ctx = egui::Context::default();
+    let mut host = GuiTickHost::new(mbv::stub_app_with_queue(0), ctx.clone());
+    run_frame(&ctx, &mut host, frame_input(Vec::new()));
+
+    assert!(host.playback_test_header_painted());
 }

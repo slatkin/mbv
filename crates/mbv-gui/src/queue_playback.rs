@@ -1,7 +1,9 @@
 //! The GUI Client's Queue playback band (row 6.5): the egui `Painter` over the
-//! Queue playback Surface state. The band paints the now-playing title, the
-//! four transport controls, and the seekbar with its elapsed and total times,
-//! every colour resolved through the theme's neutral `Rgb`.
+//! Queue playback Surface state. The band paints a header row (the
+//! playback-target indicator and the status word) in every state. Under it, while
+//! playback shows, the band paints the now-playing title, the four transport
+//! controls, and the seekbar with its elapsed and total times. Every colour
+//! resolves through the theme's neutral `Rgb`.
 //!
 //! The band holds no interaction state of its own. The transport focus and the
 //! scrub throttle live in `QueuePlaybackSurface`, and no stateful egui widget
@@ -21,15 +23,30 @@ use mbv_surfaces::queue_playback::{
 use mbv_surfaces::{HitMap, HitRegion};
 use mbv_theme::{Role, Surface};
 use mbv_ui_model::playback::PlaybackState;
+use mbv_ui_model::playback_target::NowPlayingStatus;
 use mbv_ui_model::ui_util::fmt_duration_short;
 use mbv_ui_msg::{ComponentId, KeyEvent, LeafKeyResult, Msg, PlaybackRequest, Position};
 
 use crate::queue::{PANEL_PADDING, ROW_HEIGHT, role_colour, surface_fill, to_region};
 
-/// The band's height: the title row, the controls row, and the seek row, each
-/// one fixed row, with the panel padding above and below (`specs/gui-client`:
-/// fixed row heights).
-const BAND_HEIGHT: f32 = 3.0 * ROW_HEIGHT + 2.0 * PANEL_PADDING;
+/// The header row's height: the playback-target indicator and the status word,
+/// one fixed row. The header paints in every state (`specs/gui-client`: fixed
+/// row heights).
+const HEADER_HEIGHT: f32 = ROW_HEIGHT;
+
+/// The transport section's height: the title row, the controls row, and the seek
+/// row, each one fixed row. The section collapses while idle.
+const TRANSPORT_HEIGHT: f32 = 3.0 * ROW_HEIGHT;
+
+/// The gap between the header's painted elements (the target icon, the host
+/// name, and the status word), in logical points.
+const HEADER_GAP: f32 = 4.0;
+
+/// The playback-target icon: the TUI's glyph while nerd fonts are off
+/// (`target_icon` in `chrome_player/title/header.rs`). This Client has no
+/// nerd-font setting, so it paints this glyph in both target states. egui's
+/// bundled emoji font covers it.
+const TARGET_ICON: &str = "\u{1F5A7}";
 
 /// The width of one transport control's cell, in logical points.
 const CONTROL_WIDTH: f32 = 32.0;
@@ -57,6 +74,10 @@ pub(crate) struct QueuePlaybackPanel {
     /// The painted seekbar span in the last completed frame. Zero when no bar
     /// painted, so a seek or scrub resolves nothing.
     seek_bar: HitRegion,
+    /// The header row's rect in the last completed frame: the paint evidence
+    /// the headless tests read (`queue_playback/tests.rs`).
+    #[cfg(test)]
+    header: HitRegion,
     /// The last completed frame's report: the hit map presses resolve against.
     last_report: QueuePlaybackFrameReport,
     /// The request the last gesture sent across the shell boundary, kept for
@@ -79,6 +100,8 @@ impl QueuePlaybackPanel {
             projection: QueuePlaybackProjection::default(),
             band: HitRegion::new(0.0, 0.0, 0.0, 0.0),
             seek_bar: HitRegion::new(0.0, 0.0, 0.0, 0.0),
+            #[cfg(test)]
+            header: HitRegion::new(0.0, 0.0, 0.0, 0.0),
             last_report: QueuePlaybackFrameReport {
                 hit_map: HitMap::new(),
             },
@@ -92,12 +115,20 @@ impl QueuePlaybackPanel {
         self.projection = projection;
     }
 
-    /// The height the band reserves this frame: the full band while playback
-    /// shows, and no rows while idle (task 3.6's collapse).
+    /// The height the band reserves this frame: the header row, always present,
+    /// and the transport section while playback shows, inside the panel padding
+    /// above and below.
     #[must_use]
     pub(crate) fn band_height(&self) -> f32 {
+        2.0 * PANEL_PADDING + HEADER_HEIGHT + self.transport_height()
+    }
+
+    /// The transport section's height this frame: zero while idle, which
+    /// collapses it (task 3.6).
+    #[must_use]
+    fn transport_height(&self) -> f32 {
         if self.projection.shown {
-            BAND_HEIGHT
+            TRANSPORT_HEIGHT
         } else {
             0.0
         }
@@ -109,17 +140,15 @@ impl QueuePlaybackPanel {
         self.band.contains(at)
     }
 
-    /// Paint one frame over `rect` and report the frame's hit map. An idle
-    /// frame paints nothing and reports no regions.
+    /// Paint one frame over `rect` and report the frame's hit map. The header
+    /// row paints in every state. The transport section paints only while
+    /// playback shows, and it reports its regions only then.
     pub(crate) fn paint(&mut self, painter: &egui::Painter, rect: egui::Rect) {
         self.band = to_region(rect);
         self.seek_bar = HitRegion::new(0.0, 0.0, 0.0, 0.0);
         self.last_report = QueuePlaybackFrameReport {
             hit_map: HitMap::new(),
         };
-        if !self.projection.shown {
-            return;
-        }
         painter.rect_filled(
             rect,
             0.0,
@@ -128,11 +157,21 @@ impl QueuePlaybackPanel {
                 self.surface.transport_focused(),
             ),
         );
+        let inner = rect.shrink(PANEL_PADDING);
+        let header_row =
+            egui::Rect::from_min_size(inner.min, egui::vec2(inner.width(), HEADER_HEIGHT));
+        paint_header(painter, header_row, &self.projection);
+        // The headless tests read the header row's paint (test evidence, not
+        // production state).
+        #[cfg(test)]
+        let _ = std::mem::replace(&mut self.header, to_region(header_row));
+        if !self.projection.shown {
+            return;
+        }
         let Some(title) = self.projection.now_playing_title.as_deref() else {
             return;
         };
-        let inner = rect.shrink(PANEL_PADDING);
-        let title_row = egui::Rect::from_min_size(inner.min, egui::vec2(inner.width(), ROW_HEIGHT));
+        let title_row = header_row.translate(egui::vec2(0.0, HEADER_HEIGHT));
         let controls_row = title_row.translate(egui::vec2(0.0, ROW_HEIGHT));
         let seek_row = controls_row.translate(egui::vec2(0.0, ROW_HEIGHT));
         paint_elided(
@@ -221,6 +260,12 @@ impl QueuePlaybackPanel {
         self.projection.shown
     }
 
+    /// Whether the header row painted in the last completed frame (test
+    /// evidence).
+    pub(crate) fn header_painted(&self) -> bool {
+        self.header.width > 0.0
+    }
+
     /// The request the last gesture sent across the shell boundary (test
     /// evidence).
     pub(crate) fn last_request(&self) -> Option<&Msg> {
@@ -246,6 +291,57 @@ fn paint_elided(painter: &egui::Painter, rect: egui::Rect, text: &str, colour: e
         .anchor_size(rect.left_center(), galley.size())
         .min;
     painter.with_clip_rect(rect).galley(origin, galley, colour);
+}
+
+/// The header row: the playback-target indicator at the left (the icon and,
+/// while a remote target owns playback, the host name after it) and the status
+/// word at the right. The colours are the TUI header's roles
+/// (`chrome_player/title/header.rs`). The header reports no region: the TUI's
+/// indicator click (the F3 sessions shortcut) is not wired in this slice.
+fn paint_header(painter: &egui::Painter, row: egui::Rect, projection: &QueuePlaybackProjection) {
+    let (word, status_role) = status_word(projection.status);
+    let status = painter.text(
+        row.right_center(),
+        egui::Align2::RIGHT_CENTER,
+        word,
+        egui::FontId::proportional(TEXT_SIZE),
+        role_colour(status_role),
+    );
+    let icon_role = if projection.host_is_remote {
+        Role::PlaybackTargetRemoteFg
+    } else {
+        Role::PlaybackTargetLocalFg
+    };
+    let icon = painter.text(
+        row.left_center(),
+        egui::Align2::LEFT_CENTER,
+        TARGET_ICON,
+        egui::FontId::proportional(TEXT_SIZE),
+        role_colour(icon_role),
+    );
+    if projection.host_is_remote && !projection.host.is_empty() {
+        let zone = egui::Rect::from_min_max(
+            egui::pos2(icon.right() + HEADER_GAP, row.top()),
+            egui::pos2(status.left() - HEADER_GAP, row.bottom()),
+        );
+        paint_elided(
+            painter,
+            zone,
+            &projection.host,
+            role_colour(Role::TextPrimary),
+        );
+    }
+}
+
+/// The status word and its theme role for one now-playing status: the TUI's
+/// header vocabulary (`header_status_word`, `status_color`). This crate does not
+/// link the TUI render crate, so the pair is spelled here.
+fn status_word(status: NowPlayingStatus) -> (&'static str, Role) {
+    match status {
+        NowPlayingStatus::Playing => ("PLAYING", Role::Accent),
+        NowPlayingStatus::Paused => ("PAUSED", Role::TextFocusAccent),
+        NowPlayingStatus::Idle => ("IDLE", Role::TextMuted),
+    }
 }
 
 /// The four transport controls in their cells, with the TUI's ASCII glyph

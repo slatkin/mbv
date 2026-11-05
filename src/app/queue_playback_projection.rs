@@ -10,12 +10,21 @@ use mbv_ui_model::playback_target::NowPlayingStatus;
 
 use crate::app::App;
 
-/// The transport band's facts for one tick. The band collapses while idle
-/// (task 3.6): `shown` is false, and the band reserves no rows and reports
+/// The Queue playback band's facts for one tick. The header row paints in
+/// every state, idle included. The transport section collapses while idle
+/// (task 3.6): `shown` is false, and the section reserves no rows and reports
 /// no regions.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct QueuePlaybackProjection {
-    /// Whether the transport band paints. Idle collapses it.
+    /// The now-playing status the header row shows. The header paints in
+    /// every state.
+    pub status: NowPlayingStatus,
+    /// The playback target's host label, painted after the target icon while
+    /// a remote target owns playback. Empty when the label is empty.
+    pub host: String,
+    /// Whether the playback target is remote. The flag picks the icon's colour.
+    pub host_is_remote: bool,
+    /// Whether the transport section paints. Idle collapses it.
     pub shown: bool,
     /// The displayed playback state: the seek row's position, runtime, and
     /// paused flag.
@@ -37,8 +46,13 @@ impl App {
     #[must_use]
     pub fn queue_playback_projection(&self) -> QueuePlaybackProjection {
         let playback = self.displayed_playback_state();
+        let status = self.now_playing_status();
+        let (host, host_is_remote) = self.playback_host_label_and_remote();
         QueuePlaybackProjection {
-            shown: self.now_playing_status() != NowPlayingStatus::Idle,
+            status,
+            host,
+            host_is_remote,
+            shown: status != NowPlayingStatus::Idle,
             playback,
             show_controls: playback.active || self.output_is_cast(),
             now_playing_title: self.now_playing_title_text(playback),

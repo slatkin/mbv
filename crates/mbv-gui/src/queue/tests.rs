@@ -41,10 +41,11 @@ fn empty_queue_paints_no_row_regions() {
     let mut host = GuiTickHost::new(mbv::stub_app_with_queue(0), ctx.clone());
     run_frame(&ctx, &mut host, frame_input(Vec::new()));
 
-    // The 480x640 test window less the Status bar row, the panel padding, and
-    // the footer row leaves 576 points of list: 24 rows.
+    // The 480x640 test window less the Status bar row, the idle band's header
+    // row with its panel padding (40 points), the list's panel padding, and the
+    // footer row leaves 536 points of list: 22 rows.
     let report = host.queue_test_report();
-    assert_eq!(report.capacity.whole_items(), 24);
+    assert_eq!(report.capacity.whole_items(), 22);
     assert!(report.hit_map.is_empty());
 }
 
@@ -73,10 +74,13 @@ fn a_click_on_a_painted_row_selects_that_slot() {
     run_frame(&ctx, &mut host, frame_input(Vec::new()));
     let before = host.queue_test_cursor();
 
-    // The row below the cursor row: the panel padding is 8 points and one
-    // row is 24, so the third row's band is the click's target.
+    // The row below the cursor row. The idle band's header row sits above the
+    // list: its two panel paddings and one row, then the list's own panel
+    // padding, put the first row 48 points down. One row is 24, so the third
+    // row's band is the click's target.
+    let list_top = 3.0 * super::PANEL_PADDING + super::ROW_HEIGHT;
     let click = frame_input(vec![egui::Event::PointerButton {
-        pos: egui::pos2(240.0, 8.0 + 2.5 * super::ROW_HEIGHT),
+        pos: egui::pos2(240.0, list_top + 2.5 * super::ROW_HEIGHT),
         button: egui::PointerButton::Primary,
         pressed: true,
         modifiers: egui::Modifiers::NONE,
