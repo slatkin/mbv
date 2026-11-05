@@ -2,9 +2,9 @@
 
 ## 1. Neutral vocabulary
 
-- [ ] 1.1 Add neutral `KeyEvent` (code, modifiers) and `PointerEvent` (kind, position in `f32` logical units) to `mbv-ui-msg`. Replace `TuiKeyEvent` in `UserEvent::Key` and `LeafKeyResult`, and remove the `tuirealm` dependency from `crates/mbv-ui-msg/Cargo.toml`. Verify with `cargo check --workspace` and `cargo tree -p mbv-ui-msg | rg tuirealm` (no output).
-- [ ] 1.2 Replace `ratatui::layout::Rect` in `crates/mbv-ui-model/src/context_menu.rs` with a neutral rectangle type and remove the ratatui dependency from `mbv-ui-model`. Convert at the TUI painter edge. Verify with `cargo check --workspace` and the existing context-menu tests.
-- [ ] 1.3 Make `mbv-theme` roles and surface rows resolve to a neutral `Rgb`. Put the ratatui conversion behind a `ratatui` cargo feature that only the TUI crates enable. Keep `Slot`, the theme value, and `active()` crate-private. Verify with `cargo check --workspace` and `cargo nextest run -p mbv-theme`.
+- [x] 1.1 Add neutral `KeyEvent` (code, modifiers) and `PointerEvent` (kind, position in `f32` logical units) to `mbv-ui-msg`. Replace `TuiKeyEvent` in `UserEvent::Key` and `LeafKeyResult`, and remove the `tuirealm` dependency from `crates/mbv-ui-msg/Cargo.toml`. Verify with `cargo check --workspace` and `cargo tree -p mbv-ui-msg | rg tuirealm` (no output).
+- [x] 1.2 Replace `ratatui::layout::Rect` in `crates/mbv-ui-model/src/context_menu.rs` with a neutral rectangle type and remove the ratatui dependency from `mbv-ui-model`. Convert at the TUI painter edge. Verify with `cargo check --workspace` and the existing context-menu tests.
+- [x] 1.3 Make `mbv-theme` roles and surface rows resolve to a neutral `Rgb`. Put the ratatui conversion behind a `ratatui` cargo feature that only the TUI crates enable. Keep `Slot`, the theme value, and `active()` crate-private. Verify with `cargo check --workspace` and `cargo nextest run -p mbv-theme`.
 
 ## 2. Router on neutral keys
 
