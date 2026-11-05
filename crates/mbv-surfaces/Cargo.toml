@@ -16,6 +16,7 @@ workspace = true
 [dependencies]
 mbv-ui-model = { path = "../mbv-ui-model" }
 mbv-ui-msg = { path = "../mbv-ui-msg" }
+mbv-queue = { path = "../mbv-queue" }
 
 [dev-dependencies]
 rstest.workspace = true

@@ -80,8 +80,6 @@ pub use self::playlists::PlaylistsContent;
 #[doc(inline)]
 pub use self::queue::QueueComponent;
 #[doc(inline)]
-pub use self::queue::QueueCursorUpdate;
-#[doc(inline)]
 pub use self::queue_boundary::QueueBoundaryComponent;
 #[doc(inline)]
 pub use self::queue_playback_panel::QueuePlaybackPanel;
@@ -101,6 +99,8 @@ pub use self::status_bar_panel::StatusBarPanel;
 pub use self::tab_panel::TabPanel;
 #[doc(inline)]
 pub use self::twitch_url::TwitchUrlComponent;
+#[doc(inline)]
+pub use mbv_surfaces::queue::QueueCursorUpdate;
 
 #[cfg(test)]
 mod tests;

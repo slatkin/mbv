@@ -2345,6 +2345,7 @@ dependencies = [
 name = "mbv-surfaces"
 version = "0.26.6"
 dependencies = [
+ "mbv-queue",
  "mbv-ui-model",
  "mbv-ui-msg",
  "rstest",

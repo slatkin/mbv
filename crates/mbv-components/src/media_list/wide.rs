@@ -61,6 +61,7 @@ impl<Target> WidePresentationState<Target> {
         self.invalidate_paint();
     }
 
+    #[must_use]
     pub fn view_geometry(&self, area: Rect) -> (Rect, Rect) {
         self.configured_geometry.unwrap_or((area, area))
     }
@@ -89,21 +90,25 @@ impl<Target> WidePresentationState<Target> {
     }
 
     /// The current frame's content rectangle, if `view` completed.
+    #[must_use]
     pub fn current_content_rect(&self) -> Option<Rect> {
         self.paint.content_rect()
     }
 
     /// The current frame's selected-row rectangle, if it is visible.
+    #[must_use]
     pub fn current_selected_row_rect(&self) -> Option<Rect> {
         self.paint.selected_row_rect()
     }
 
     /// Whether the current frame's painted list claims `point`.
+    #[must_use]
     pub fn claims_current_point(&self, point: Position) -> bool {
         self.paint.claims_point(point)
     }
 
     /// Resolve `point` from the current frame's retained painted geometry.
+    #[must_use]
     pub fn resolve_current_point(&self, point: Position) -> Option<&Target> {
         self.paint.resolve_point(point)
     }

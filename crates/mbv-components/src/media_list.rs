@@ -27,5 +27,6 @@ pub use mbv_surfaces::media_list::{
 };
 #[doc(inline)]
 pub use types::MediaListSurfaceInput;
+pub(crate) use wide::render_wide_media_list;
 #[doc(inline)]
-pub use wide::WideMediaList;
+pub use wide::{WideMediaList, WidePresentationState};

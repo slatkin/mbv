@@ -168,3 +168,35 @@ fn a_wheel_scroll_stops_with_the_last_row_at_the_viewport_bottom() {
 
     assert_eq!(list.viewport_offset(), 15);
 }
+
+/// The carrier's visual-key entry point translates the `TuiRealm` key at the
+/// adapter edge and delegates to the canonical owner's neutral rule
+/// (add-gui-front-end 4.3); the assertion is unchanged from the selection
+/// tests' former home.
+#[test]
+fn ctrl_a_selects_all_through_the_carrier_visual_key() {
+    use tuirealm::event::{Key, KeyEvent, KeyModifiers};
+
+    fn u8_item(target: u8) -> MediaListRow<u8> {
+        MediaListRow::Item {
+            target,
+            primary: target.to_string(),
+            secondary: None,
+            trailing: None,
+            duration: None,
+            kind: MediaKind::Media,
+            semantic_state: MediaSemanticState::Ordinary,
+        }
+    }
+
+    let mut carrier = MediaListCarrier::<u8>::new();
+    carrier.set_content((1..=8).map(u8_item).collect());
+    assert_eq!(
+        carrier.handle_visual_key(&KeyEvent {
+            code: Key::Char('a'),
+            modifiers: KeyModifiers::CONTROL,
+        }),
+        Some(8)
+    );
+    assert_eq!(carrier.multi_selection(), &[1, 2, 3, 4, 5, 6, 7, 8]);
+}
