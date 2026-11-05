@@ -23,7 +23,7 @@ mbv is a Rust terminal media client for Emby, Audiobookshelf, and Feeds. It embe
 * `crates/mbv-gui/`: the GUI Client program (eframe window, glow renderer, egui `Painter` over Surface state). It links the `mbv` library and adds the window stack; it never becomes the Owner.
 * `src/app/shell/`: interactive shell and TuiRealm `Model`. It holds `App`, mount and focus, runtime lifecycle, projections, dispatch, effects, and the single tick and draw path (`shell/run.rs`, `shell/draw.rs`).
 * `crates/mbv-surfaces/`: Surface state (cursor, selection, marks, viewport), the core `FocusStack`, `HitMap`, and per-list capacity. No ratatui, TuiRealm, crossterm, or GUI toolkit.
-* `crates/mbv-components/`: TuiRealm Interactive Components. It holds local interaction state, embedded list controls, and pointer primitives (`Msg`s live in `mbv-ui-msg`).
+* `crates/mbv-components/`: TuiRealm Interactive Components. Each is an adapter over Surface state: it forwards neutral events, paints from that state, and reports geometry and typed `Msg`s (`Msg`s live in `mbv-ui-msg`).
 * `crates/mbv-render/`: `screens/` prepare content, `arrangements/` place it, `components/` paint it, and `layout.rs` composes layouts.
 * `src/app/input/`: the only keyboard routing site (`router.rs` precedence, `key_policy.rs` order, `resolver.rs` chords). Never add another.
 * `src/local_daemon.rs`: Local-daemon bootstrap. The rest of `src/` is the TUI binary.
