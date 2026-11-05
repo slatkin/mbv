@@ -7,7 +7,7 @@ use mbv_ui_model::settings;
 use mbv_ui_model::settings::{
     SERVICE_ENTRIES, SETTING_SECTIONS, SettingKey, SettingValueKind, SettingsDestination,
 };
-use mbv_ui_msg::{ComponentId, PopupId, ServiceRequest, SettingsIntent};
+use mbv_ui_msg::{ComponentId, ServiceRequest, SettingsIntent};
 use ratatui::layout::Rect;
 use std::fmt::Write as _;
 
@@ -17,20 +17,9 @@ impl Model {
         if !self.application.mounted(&id) {
             return;
         }
-        let child_open = self
-            .application
-            .mounted(&ComponentId::Popup(PopupId::Multiselect))
-            || self
-                .application
-                .mounted(&ComponentId::Popup(PopupId::LibraryRoutes))
-            || self
-                .application
-                .mounted(&ComponentId::Popup(PopupId::FeedManage));
-        // Prefix-armed capture holds focus off while
-        // armed; the disarm restores what the arm displaced.
-        if !child_open && self.application.focus() != Some(&id) && !self.app.prefix_armed {
-            self.application.active(&id).expect("activate Settings");
-        }
+        // Focus derives from the core focus stack (design D3 of
+        // `add-gui-front-end`): while a Settings child popup holds the stack,
+        // the derivation keeps it focused; its dismissal re-derives Settings.
 
         let snapshot = self.settings_snapshot();
         if let Some(comp) = self.application.get_component_mut(&id)

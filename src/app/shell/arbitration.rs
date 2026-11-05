@@ -310,29 +310,29 @@ impl Model {
         outcome
     }
 
-    /// Arm prefix mode (design D6, task 6.1): set the App-owned bit and
-    /// withhold the keyboard from the focused leaf for the armed ticks.
+    /// Arm prefix mode (design D6, task 6.1): set the App-owned bit and hold
+    /// focus off through the core focus stack for the armed ticks.
     /// tuirealm forwards every chord to the focused component before the
     /// router fold (`Application::tick` → `forward_to_active_component`),
-    /// so armed capture — no chord reaches any component — blurs focus for
-    /// the armed ticks, exactly how blocking overlays withhold underlying
-    /// input. The displaced focus is saved for the disarm restore; the
-    /// focus-managing sync passes gate on the armed bit so they never steal
-    /// focus back mid-capture. The arm tick's own chord was already
-    /// delivered to the leaf before this runs — unavoidable, and the prefix
-    /// chord performs no other action at the router.
+    /// so armed capture — no chord reaches any component — holds focus off
+    /// for the armed ticks, exactly how blocking overlays withhold underlying
+    /// input. The hold applies through the one focus step immediately, so the
+    /// arm tick never leaves a leaf focused; the disarm releases the hold and
+    /// the same step re-derives the focus the arm displaced. The arm tick's
+    /// own chord was already delivered to the leaf before this runs —
+    /// unavoidable, and the prefix chord performs no other action at the
+    /// router.
     pub(in crate::app) fn arm_prefix_mode(&mut self) {
         if self.app.prefix_armed {
             return;
         }
-        self.prefix_armed_focus = self.application.focus().cloned();
         self.app.prefix_armed = true;
-        if self.application.focus().is_some() {
-            self.application.blur().expect("blur for prefix arm");
-        }
+        self.focus_stack.hold_focus();
+        self.apply_focus_stack();
     }
 
-    /// Disarm prefix mode: clear the App-owned bit and restore the focus the
+    /// Disarm prefix mode: clear the App-owned bit and release the core
+    /// focus stack's hold; the focus step re-derives and restores what the
     /// arm displaced. A mouse-event disarm restores it too, so the event is
     /// handled exactly as if prefix mode had never been armed.
     pub(in crate::app) fn disarm_prefix_mode(&mut self) {
@@ -340,13 +340,8 @@ impl Model {
             return;
         }
         self.app.prefix_armed = false;
-        if let Some(id) = self.prefix_armed_focus.take()
-            && self.application.mounted(&id)
-        {
-            self.application
-                .active(&id)
-                .expect("restore prefix-displaced focus");
-        }
+        self.focus_stack.release_focus();
+        self.apply_focus_stack();
     }
 
     /// Apply a deferred candidate after the focused leaf has been arbitrated.

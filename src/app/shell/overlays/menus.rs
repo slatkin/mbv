@@ -257,9 +257,7 @@ impl Model {
 
     fn dismiss_context_menu(&mut self) {
         let id = Self::context_menu_id();
-        if self.application.mounted(&id) {
-            let _ = self.application.umount(&id);
-        }
+        self.dismiss_focus_overlay(&id);
     }
 
     // --- Settings Multiselect popup ----------------------------------------
@@ -428,8 +426,10 @@ impl Model {
             self.application
                 .mount(id.clone(), Box::new(MultiselectComponent::new()), vec![])
                 .expect("mount Multiselect");
-            self.application.active(&id).expect("activate Multiselect");
         }
+        // Focus routes through the core focus stack (design D3): the push
+        // takes focus over the Settings sidebar beneath it.
+        self.push_focus_overlay(&id);
         if let Some(comp) = self.application.get_component_mut(&id)
             && let Some(multiselect) = comp.as_any_mut().downcast_mut::<MultiselectComponent>()
         {
@@ -517,10 +517,8 @@ impl Model {
             self.application
                 .mount(id.clone(), Box::new(LibraryRoutesComponent::new()), vec![])
                 .expect("mount LibraryRoutes");
-            self.application
-                .active(&id)
-                .expect("activate LibraryRoutes");
         }
+        self.push_focus_overlay(&id);
         self.set_library_routes_content(&LibraryRoutePopup {
             stage: LibraryRouteStage::PickLibrary { items },
             cursor: 0,
@@ -750,8 +748,6 @@ impl Model {
     }
 
     fn dismiss_popup(&mut self, id: &ComponentId) {
-        if self.application.mounted(id) {
-            let _ = self.application.umount(id);
-        }
+        self.dismiss_focus_overlay(id);
     }
 }

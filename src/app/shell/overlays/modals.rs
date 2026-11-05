@@ -149,12 +149,8 @@ impl Model {
         // Dismissal routes through the core focus stack (design D3): the
         // stack drops the overlay so the derived focus returns to the surface
         // beneath it, and TuiRealm's own LIFO focus restore moves the focus
-        // at the umount. An id the stack does not know (a not-yet-routed
-        // popup or modal) dismisses from TuiRealm alone.
-        self.focus_stack.dismiss(id);
-        if self.application.mounted(id) {
-            let _ = self.application.umount(id);
-        }
+        // at the umount.
+        self.dismiss_focus_overlay(id);
     }
 
     pub(in crate::app) fn dismiss_blocking_modals(&mut self) {

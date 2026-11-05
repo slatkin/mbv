@@ -4,48 +4,78 @@
 //! `mbv_surfaces::FocusStack` is the one focus authority: it owns the mounted
 //! set, the Panel focus in effect, and the overlay stack, and it derives the
 //! focused surface from them. Shell call sites request a change on the stack
-//! instead of calling `TuiRealm` focus directly, and the sync pass applies the
-//! derived focus to `TuiRealm` in this module's one [`Model::apply_focus_stack`]
-//! step. During the routing rows (3.3-3.6) the not-yet-routed call sites
-//! still activate their components directly; the step leaves focus those
-//! sites hold alone until their rows route them.
+//! ([`Model::push_focus_overlay`] and [`Model::dismiss_focus_overlay`], plus a
+//! plain mount record for the panel surfaces) instead of calling `TuiRealm`
+//! focus directly, and [`Model::apply_focus_stack`] — the sync pass's one
+//! focus step — applies the derived focus to `TuiRealm`. No other shell code
+//! calls `TuiRealm` `active`/`blur`.
 
 use super::Model;
 use mbv_ui_msg::ComponentId;
 
-/// The permanent panel surfaces the derived focus can name. Their mount
-/// sites do not route through the stack until row 3.6, so the focus step
-/// mirrors their ``TuiRealm`` mount state into the stack each pass.
+/// The permanent panel surfaces the derived focus can name. Their mount sites
+/// route a plain mount record to the stack; the focus step still mirrors their
+/// `TuiRealm` mount state each pass, so a mount or umount any site missed
+/// cannot leave the stack stale.
 const PANEL_SURFACE_IDS: [ComponentId; 3] = [
     ComponentId::UiRoot,
     ComponentId::Library,
     ComponentId::Queue,
 ];
 
+/// Every overlay identity the shell mounts — the sidebars, the context menu,
+/// the blocking modals, and the Settings popups — in the order
+/// [`Model::overlay_holds_focus`] checks them.
+pub(in crate::app) fn overlay_surface_ids() -> [ComponentId; 13] {
+    use mbv_ui_msg::{ModalId, OverlayId, PopupId};
+    [
+        ComponentId::Overlay(OverlayId::Search),
+        ComponentId::Overlay(OverlayId::Settings),
+        ComponentId::Overlay(OverlayId::Sessions),
+        ComponentId::Overlay(OverlayId::Playlists),
+        ComponentId::Overlay(OverlayId::Help),
+        ComponentId::Overlay(OverlayId::ContextMenu),
+        ComponentId::Modal(ModalId::Confirm),
+        ComponentId::Modal(ModalId::DaemonLost),
+        ComponentId::Modal(ModalId::SavePlaylist),
+        ComponentId::Modal(ModalId::TwitchUrl),
+        ComponentId::Popup(PopupId::Multiselect),
+        ComponentId::Popup(PopupId::LibraryRoutes),
+        ComponentId::Popup(PopupId::FeedManage),
+    ]
+}
+
 impl Model {
     /// Routes an overlay mount through the core focus stack (design D3): the
-    /// stack records the push, and the sync pass's focus step gives the
-    /// overlay focus. A mount site that calls this never calls ``TuiRealm``
-    /// `active` itself.
+    /// stack records the push and the focus step applies the derived focus —
+    /// the pushed overlay — to `TuiRealm` right away, where the pre-routing
+    /// call sites activated their component directly. A mount site that calls
+    /// this never calls `TuiRealm` `active` itself.
     pub(in crate::app) fn push_focus_overlay(&mut self, id: &ComponentId) {
         self.focus_stack.push_overlay(id.clone());
-        self.focus_stack_pushed = true;
+        self.apply_focus_stack();
+    }
+
+    /// Routes an overlay dismissal through the core focus stack (design D3):
+    /// the stack drops the overlay so the derived focus returns to the surface
+    /// beneath it, `TuiRealm`'s own LIFO focus restore moves the focus at the
+    /// umount, and the focus step re-derives. An id the stack does not know (a
+    /// component a test mounted by hand) dismisses from `TuiRealm` alone; the
+    /// next focus step's reconcile drops such a component from the stack too.
+    pub(in crate::app) fn dismiss_focus_overlay(&mut self, id: &ComponentId) {
+        self.focus_stack.dismiss(id);
+        if self.application.mounted(id) {
+            let _ = self.application.umount(id);
+        }
+        self.apply_focus_stack();
     }
 
     /// The sync pass's one focus step: feed the stack the shell-held inputs,
-    /// reconcile the mount state the not-yet-routed call sites hold directly,
-    /// and apply the stack's derived focus to `TuiRealm`. Rows 3.5/3.6 route
-    /// the remaining call sites; from then on no other shell code calls
-    /// `TuiRealm` `active`/`blur`.
+    /// reconcile the stack against `TuiRealm`'s mount state, and apply the
+    /// stack's derived focus to `TuiRealm`. The pass calls it through
+    /// `sync_active_destination`; no other shell code calls `TuiRealm`
+    /// `active`/`blur`.
     pub(in crate::app) fn apply_focus_stack(&mut self) {
-        // Prefix-armed capture (design D6, task 6.1) holds focus off outside
-        // the stack until the arm and disarm sites route through the stack's
-        // hold (row 3.6): the arm blurs `TuiRealm` directly and the disarm
-        // restores what it displaced, so this step must not re-derive focus
-        // mid-capture.
-        if self.app.prefix_armed {
-            return;
-        }
         // The panel focus in effect decides the focused panel surface; the
         // stored record (mini view, launch restore, the hidden empty-queue
         // hand-off) stays App-owned and feeds the stack here.
@@ -53,20 +83,7 @@ impl Model {
             .set_panel_focus(self.app.effective_panel_focus());
         self.reconcile_focus_stack_mounts();
         let desired = self.focus_stack.focused();
-        let pushed = std::mem::take(&mut self.focus_stack_pushed);
         if desired.as_ref() == self.application.focus() {
-            return;
-        }
-        // A routed overlay push takes focus even over a surface whose call
-        // site still activates its component directly (a Confirm raised from
-        // the Playlists sidebar). Any other focus move waits until the holder
-        // routes: an untracked overlay's own activation is its call site's
-        // decision, not drift the stack corrects.
-        let held_outside = self
-            .application
-            .focus()
-            .is_some_and(|focused| self.focus_held_outside_the_stack(focused));
-        if held_outside && !pushed {
             return;
         }
         match desired {
@@ -89,11 +106,11 @@ impl Model {
         }
     }
 
-    /// Mirrors the `TuiRealm` mount state the not-yet-routed call sites hold
-    /// into the stack: the permanent panel surfaces' mount sites (row 3.6),
-    /// and any stack overlay a direct umount removed. Every dismissal routes
-    /// through `Model::dismiss_modal`, so the overlay sweep only catches a
-    /// not-yet-routed direct umount of a routed modal.
+    /// Reconciles the stack against `TuiRealm`'s mount state, both ways: the
+    /// permanent panel surfaces follow their `TuiRealm` mount state, a stack
+    /// overlay a direct umount removed leaves the stack, and a mounted overlay
+    /// the stack does not know (a component a test mounted by hand) is adopted
+    /// so the derivation keeps it focused as the top overlay.
     fn reconcile_focus_stack_mounts(&mut self) {
         for id in PANEL_SURFACE_IDS.iter().cloned() {
             if self.application.mounted(&id) {
@@ -102,22 +119,12 @@ impl Model {
                 self.focus_stack.umount(&id);
             }
         }
-        for id in self.focus_stack.overlay_stack().to_vec() {
-            if !self.application.mounted(&id) {
+        for id in overlay_surface_ids() {
+            if self.application.mounted(&id) {
+                self.focus_stack.push_overlay(id);
+            } else {
                 self.focus_stack.dismiss(&id);
             }
         }
-    }
-
-    /// Whether `TuiRealm`'s focus sits on an overlay the stack does not know: a
-    /// mount site that still activates its component directly (the sidebar,
-    /// menu, and remaining row 3.5/3.6 call sites, and components a test
-    /// mounted by hand). The step leaves such focus alone; the owning row
-    /// routes the site and this check shrinks with it.
-    fn focus_held_outside_the_stack(&self, focused: &ComponentId) -> bool {
-        matches!(
-            focused,
-            ComponentId::Overlay(_) | ComponentId::Modal(_) | ComponentId::Popup(_)
-        ) && !self.focus_stack.overlay_stack().contains(focused)
     }
 }

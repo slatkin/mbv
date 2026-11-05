@@ -40,7 +40,7 @@ impl Model {
         ] {
             let other_id = Self::sidebar_component_id(other);
             if other_id != id && self.application.mounted(&other_id) {
-                let _ = self.application.umount(&other_id);
+                self.dismiss_focus_overlay(&other_id);
             }
         }
         if !self.application.mounted(&id) {
@@ -53,7 +53,9 @@ impl Model {
                 .mount(id.clone(), Self::sidebar_component(sidebar), vec![])
                 .expect("mount sidebar");
         }
-        self.application.active(&id).expect("activate sidebar");
+        // Focus routes through the core focus stack (design D3): the push
+        // takes focus over any surface beneath it in the stack.
+        self.push_focus_overlay(&id);
         if sidebar == SidebarId::Sessions {
             self.app.spawn_sessions_load();
             self.app.spawn_cast_discovery();
@@ -65,7 +67,7 @@ impl Model {
 
     pub(in crate::app) fn dismiss_sidebar(&mut self, sidebar: SidebarId) {
         let id = Self::sidebar_component_id(sidebar);
-        let _ = self.application.umount(&id);
+        self.dismiss_focus_overlay(&id);
     }
 
     pub(in crate::app) fn toggle_sidebar(&mut self, sidebar: SidebarId) {
@@ -184,17 +186,14 @@ impl Model {
                 vec![],
             )
             .expect("mount Help");
-        self.application
-            .active(&ComponentId::Overlay(OverlayId::Help))
-            .expect("activate Help");
+        self.push_focus_overlay(&ComponentId::Overlay(OverlayId::Help));
     }
 
-    /// Unmount the Help overlay; `TuiRealm`'s LIFO focus stack auto-restores
-    /// focus to the prior component.
+    /// Unmount the Help overlay; the core focus stack's dismissal re-derives
+    /// the focus beneath it, and `TuiRealm`'s LIFO focus restore moves the
+    /// focus at the umount.
     pub(in crate::app) fn umount_help(&mut self) {
-        let _ = self
-            .application
-            .umount(&ComponentId::Overlay(OverlayId::Help));
+        self.dismiss_focus_overlay(&ComponentId::Overlay(OverlayId::Help));
     }
 
     /// Render the Help overlay if mounted, after the legacy `App::render`.

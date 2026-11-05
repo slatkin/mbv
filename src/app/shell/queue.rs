@@ -74,7 +74,7 @@ impl Model {
         if self.app.queue_column_hidden_empty() && self.app.panel_focus == PanelFocus::Queue {
             self.app.panel_focus = PanelFocus::Library;
         }
-        self.mount_and_focus_queue();
+        self.mount_queue_panel();
         let update = self.prepare_queue_projection();
         if update.rows_changed {
             self.last_queue_projection = Some(update.fingerprint);
@@ -98,29 +98,17 @@ impl Model {
         self.push_queue_projection(update);
     }
 
-    fn mount_and_focus_queue(&mut self) {
+    fn mount_queue_panel(&mut self) {
         let id = ComponentId::Queue;
         if !self.application.mounted(&id) {
             self.application
                 .mount(id.clone(), Box::new(QueueComponent::new()), vec![])
                 .expect("mount Queue");
-        }
-
-        let queue_focused = matches!(self.app.effective_panel_focus(), PanelFocus::Queue)
-            && !self.blocking_overlay_active();
-        // A mounted sidebar/modal/popup owns focus while it is up; re-activating
-        // Queue here would steal the keypress it needs to close itself (mini
-        // view keeps `effective_panel_focus` on Queue, so this pass fires every
-        // tick otherwise). Prefix-armed capture (design D6, task 6.1) holds
-        // focus off while armed, so this pass must not re-activate mid-capture.
-        if !self.overlay_holds_focus() && !self.app.prefix_armed {
-            if queue_focused {
-                if self.application.focus() != Some(&id) {
-                    self.application.active(&id).expect("activate Queue");
-                }
-            } else if self.application.focus() == Some(&id) {
-                self.application.blur().expect("blur Queue");
-            }
+            // The mount routes through the core focus stack (design D3): the
+            // record joins the mounted set, and the sync pass's focus step
+            // applies the derived focus — Queue while the Panel focus is
+            // Queue and no overlay holds the stack.
+            self.focus_stack.mount(id.clone());
         }
     }
 

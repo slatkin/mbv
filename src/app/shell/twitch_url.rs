@@ -14,17 +14,18 @@ impl Model {
         ComponentId::Modal(ModalId::TwitchUrl)
     }
 
-    /// Mount the prompt modal and give it the focus (`TuiRealm` focus
-    /// stack). The opener's `NoBlockingOverlay` gate keeps this reachable
-    /// only with no blocking overlay mounted, and the mount dismisses any
-    /// blocking modal first the same way the other modal mounts do.
+    /// Mount the prompt modal and give it the focus (through the core focus
+    /// stack, design D3 of `add-gui-front-end`). The opener's
+    /// `NoBlockingOverlay` gate keeps this reachable only with no blocking
+    /// overlay mounted, and the mount dismisses any blocking modal first the
+    /// same way the other modal mounts do.
     pub(in crate::app) fn mount_twitch_url_modal(&mut self) {
         self.dismiss_blocking_modals();
         let id = Self::twitch_url_id();
         self.application
             .mount(id.clone(), Box::new(TwitchUrlComponent::new()), vec![])
             .expect("mount TwitchUrl");
-        self.application.active(&id).expect("activate TwitchUrl");
+        self.push_focus_overlay(&id);
     }
 
     /// Render the prompt overlay if mounted.

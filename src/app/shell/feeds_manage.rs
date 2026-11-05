@@ -41,8 +41,11 @@ impl super::Model {
             self.application
                 .mount(id.clone(), Box::new(FeedsManageComponent::new()), vec![])
                 .expect("mount FeedManage");
-            self.application.active(&id).expect("activate FeedManage");
         }
+        // Focus routes through the core focus stack (design D3 of
+        // `add-gui-front-end`): the push takes focus over the Settings
+        // sidebar beneath it.
+        self.push_focus_overlay(&id);
         self.push_feeds_manage_content();
         // A fresh component starts with no stage; open the popup at the List
         // stage (task 5.3d — no per-tick stage mirror).
@@ -113,9 +116,7 @@ impl super::Model {
 
     pub(in crate::app) fn dismiss_feeds_manage(&mut self) {
         let id = ComponentId::Popup(PopupId::FeedManage);
-        if self.application.mounted(&id) {
-            let _ = self.application.umount(&id);
-        }
+        self.dismiss_focus_overlay(&id);
         self.feeds_manage = None;
     }
 

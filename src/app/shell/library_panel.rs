@@ -393,6 +393,9 @@ impl Model {
             self.application
                 .mount(id.clone(), Box::new(LibraryPanel::new()), vec![])
                 .expect("mount LibraryPanel");
+            // The mount routes through the core focus stack (design D3 of
+            // `add-gui-front-end`): the record joins the mounted set.
+            self.focus_stack.mount(id.clone());
         }
         // Embedded owners are installed/projected after the panel is mounted
         // so the first painted frame has a current owner and geometry, and

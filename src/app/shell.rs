@@ -220,13 +220,6 @@ pub struct Model {
     /// assignments. Shell-owned plain data the router reads as its
     /// `&Keybinds` parameter (Unit 3); never mirrored into components.
     pub keybinds: mbv_keybinds::Keybinds,
-    /// The focus displaced by arming prefix mode (design D6, task 6.1).
-    /// tuirealm forwards every chord to the focused component before the
-    /// router fold, so armed capture blurs focus for the armed ticks; this
-    /// records what was focused when the shell armed, and the disarm
-    /// restores it (falling back to the sync passes' canonical
-    /// re-derivation when it was unmounted meanwhile).
-    pub(in crate::app) prefix_armed_focus: Option<ComponentId>,
     /// The core focus stack (design D3 of `add-gui-front-end`, capability
     /// `client-interaction-core`): the shell-held focus authority over the
     /// mounted surfaces, the Panel focus in effect, and the overlay stack.
@@ -236,12 +229,6 @@ pub struct Model {
     /// (launch restore, the mini-view interplay) stays on `App`; the stack
     /// holds the focus in effect for the derivation.
     pub(in crate::app) focus_stack: mbv_surfaces::FocusStack,
-    /// Armed by a call site that routed an overlay push through the stack and
-    /// consumed by the next `apply_focus_stack`: the push must take focus even
-    /// over a surface whose call site still activates its component directly
-    /// (the sidebar, menu, and remaining rows 3.5/3.6 sites). Transitional
-    /// until every call site routes; then the derived focus alone decides.
-    pub(in crate::app) focus_stack_pushed: bool,
     /// Shell-owned exit kind (tray-pin-swap design D6): set once the Owner
     /// sent `SwapQuit`, so `teardown` skips the launch-state save and the
     /// coordinated shutdown request. Never reset within a run.
@@ -329,8 +316,8 @@ impl Model {
         let keybinds = app.config.lock().unwrap().keybinds.clone();
         // The stack starts from the mounts this constructor performs below:
         // `UiRoot` and the whole-session Library panel. The Queue panel mounts
-        // lazily at its first sync pass, whose focus step mirrors it into the
-        // stack (`focus.rs`).
+        // lazily at its first sync pass and routes its mount record to the
+        // stack there (`focus.rs`).
         let mut focus_stack = mbv_surfaces::FocusStack::new();
         focus_stack.mount(ComponentId::UiRoot);
         focus_stack.mount(ComponentId::Library);
@@ -357,9 +344,7 @@ impl Model {
             context_menu_origin: None,
             context_action_snapshot: None,
             keybinds,
-            prefix_armed_focus: None,
             focus_stack,
-            focus_stack_pushed: false,
             swapped_out_exit: false,
             workspace_now_playing: None,
             move_gate,
@@ -383,9 +368,11 @@ impl Model {
             .expect("activate UiRoot");
         // The Library panel is mounted for the whole session (it holds every
         // library's embedded content owners, design D2's retention rule) but
-        // never made active directly: `sync_active_destination` routes focus
-        // to it while a migrated library is active, and it paints only a
-        // migrated owner's surface (the transitional branch, task 5.9).
+        // never made active directly: the sync pass's focus step derives the
+        // focused surface from the core focus stack (design D3 of
+        // `add-gui-front-end`), and it routes to the panel while a migrated
+        // library is active. It paints only a migrated owner's surface (the
+        // transitional branch, task 5.9).
         // Home's and Feeds' owners are installed with the panel: both tabs
         // are always migrated, so `active_surface_id` routes them to the
         // panel from the first sync (tasks 5.11, 7.3). The other destinations
