@@ -208,8 +208,8 @@ pub(crate) fn swap_token() -> Option<String> {
 static PIN_SWAP_PARTICIPANT: OnceLock<bool> = OnceLock::new();
 
 /// Claim whether this process's Client connections take part in Pin swap.
-/// Called once at start-up; the TUI Client claims `true` in `startup::run`,
-/// and the GUI Client claims `false` through the library's
+/// Called once at start-up. The unclaimed default `true` is the TUI Client's
+/// claim; the GUI Client claims `false` through the library's
 /// [`crate::declare_gui_client`].
 pub(crate) fn claim_pin_swap_participant(participates: bool) {
     let _ = PIN_SWAP_PARTICIPANT.set(participates);
