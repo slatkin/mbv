@@ -45,10 +45,10 @@ impl GuiClient {
         }
     }
 
-    /// The empty window's surface: one themed panel. Rows 6.4 and 6.5 paint
-    /// the Queue, the Queue playback panel, and the Status bar on top of it
-    /// with the egui `Painter`.
-    fn paint(&self, ctx: &egui::Context) {
+    /// The no-session window's surface: one themed panel with the attach
+    /// notice. A failed Owner find, start, or attach is the only thing this
+    /// window can say before the Client session exists.
+    fn paint_notice(&self, ctx: &egui::Context) {
         egui::CentralPanel::default()
             .frame(egui::Frame::NONE.fill(theme_fill()))
             .show(ctx, |ui| {
@@ -93,8 +93,13 @@ impl eframe::App for GuiClient {
             if outcome.quit_requested {
                 ctx.send_viewport_cmd(egui::ViewportCommand::Close);
             }
+            // The surface sync runs before the paint, once per frame: the
+            // GUI Client's analog of the TUI Client's sync pass (design D5).
+            session.host.sync_surfaces();
+            session.host.paint(ctx);
+        } else {
+            self.paint_notice(ctx);
         }
-        self.paint(ctx);
         // The idle cadence the TUI Client polls at: a repaint at least this
         // often keeps timers and worker results landing with no waker.
         ctx.request_repaint_after(CLIENT_IDLE_CADENCE);

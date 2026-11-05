@@ -14,16 +14,19 @@ use std::time::Instant;
 
 use eframe::egui;
 use mbv::{
-    App, ClientLifecycle, ClientTickHost, GuiInput, HomeEventDrain, PlayerEventDrain, TickOutcome,
+    App, ClientLifecycle, ClientTickHost, GuiInput, GuiSurfaceLeaf, HomeEventDrain,
+    PlayerEventDrain, TickOutcome,
 };
 use mbv_surfaces::gesture::PointerGestureState;
 use mbv_ui_msg::{Msg, Position, ServiceRequest};
 
-use crate::input::neutral_input;
+use crate::input::{WheelAccumulator, neutral_input};
+use crate::queue::QueuePanel;
 
 /// The `App` the Client core drives, and the Client-owned parts of the tick.
 /// The GUI holds no interaction state here: cursor, selection, marks, and
-/// viewport live in Surface state (design D5).
+/// viewport live in Surface state (design D5) — the Queue panel's Surface
+/// state is `queue`.
 pub(crate) struct GuiTickHost {
     app: App,
     /// The egui context this Client reads its raw input from. It is the
@@ -36,6 +39,13 @@ pub(crate) struct GuiTickHost {
     /// double-click slop). The Client-owned analog of the TUI edge's
     /// per-parent recognizer (`mbv_components::mouse::gesture`).
     gestures: PointerGestureState<Position>,
+    /// The Queue panel: the Queue Surface state plus the painted-geometry
+    /// report the pointer gestures resolve against (row 6.4).
+    queue: QueuePanel,
+    /// The wheel-delta accumulator (the row 6.3 review finding): pixel-unit
+    /// wheel events fold into whole steps before the gesture policy sees
+    /// them.
+    wheel: WheelAccumulator,
 }
 
 impl GuiTickHost {
@@ -44,7 +54,29 @@ impl GuiTickHost {
             app,
             ctx,
             gestures: PointerGestureState::new(),
+            queue: QueuePanel::new(),
+            wheel: WheelAccumulator::new(),
         }
+    }
+
+    /// Push the App-owned queue projection into the Queue panel: the GUI
+    /// Client's analog of the TUI Client's sync pass, once per frame before
+    /// the paint (design D5).
+    pub(crate) fn sync_surfaces(&mut self) {
+        let projection = self.app.queue_surface_projection();
+        self.queue.sync(projection);
+    }
+
+    /// Paint the frame's surfaces. The Queue panel is the whole window in
+    /// the first slice, and it is the surface that holds the GUI's focus —
+    /// the GUI's focus stack arrives with its later surfaces — so its
+    /// appearance focus is focused.
+    pub(crate) fn paint(&mut self, ctx: &egui::Context) {
+        egui::CentralPanel::default()
+            .frame(egui::Frame::NONE)
+            .show(ctx, |ui| {
+                self.queue.paint(ui.painter(), ui.max_rect(), true);
+            });
     }
 }
 
@@ -210,24 +242,79 @@ impl ClientTickHost for GuiTickHost {
                 input.pointer.latest_pos(),
             )
         });
-        for input in neutral_input(&events, frame_modifiers, primary_down, pointer_pos) {
+        let points_per_line = self
+            .ctx
+            .options(|options| options.input_options.line_scroll_speed);
+        let Self {
+            app,
+            queue,
+            gestures,
+            wheel,
+            ..
+        } = self;
+        for input in neutral_input(
+            &events,
+            frame_modifiers,
+            primary_down,
+            pointer_pos,
+            wheel,
+            points_per_line,
+        ) {
             outcome.input_received = true;
-            if self.app.route_gui_input(input) {
-                outcome.quit_requested = true;
-            }
-            // Feed the translated pointer events through the Client core's
-            // gesture policy so the recognizer's double-click and drag state
-            // stays current across frames. The first slice paints no
-            // targets: resolving a recognized gesture against the painters'
-            // hit maps is rows 6.4 and 6.5.
-            if let GuiInput::Pointer(event) = &input {
-                let _gesture = self.gestures.recognize(
-                    event.kind,
-                    event.modifiers,
-                    event.position,
-                    Instant::now(),
-                );
+            match input {
+                GuiInput::Key(_) => {
+                    if app.route_gui_input(input, Some(gui_leaf(queue))) {
+                        outcome.quit_requested = true;
+                    }
+                }
+                GuiInput::Pointer(event) => {
+                    // Feed the translated pointer events through the Client
+                    // core's gesture policy so the recognizer's double-click
+                    // and drag state stays current across frames, then
+                    // resolve the recognized gesture against the Queue
+                    // panel's last painted hit map (design D6).
+                    if let Some(gesture) = gestures.recognize(
+                        event.kind,
+                        event.modifiers,
+                        event.position,
+                        Instant::now(),
+                    ) {
+                        app.route_gui_pointer(gesture, Some(gui_leaf(queue)));
+                    } else {
+                        // A hover move claims nothing but still disarms
+                        // prefix mode, as every pointer event does.
+                        let _ = app.route_gui_input(input, None);
+                    }
+                }
             }
         }
+    }
+}
+
+/// The focused Queue panel as the router's leaf. The Queue panel is the
+/// GUI's one mounted surface, and it holds the GUI's focus; the GUI's focus
+/// stack arrives with its later surfaces, which extend this decision.
+fn gui_leaf(queue: &mut QueuePanel) -> &mut dyn GuiSurfaceLeaf {
+    queue
+}
+
+/// Test evidence for the headless GUI tests (row 6.4): the Queue panel's
+/// cursor, scroll, and last painted report.
+#[cfg(test)]
+impl GuiTickHost {
+    pub(crate) fn queue_test_cursor(&self) -> usize {
+        self.queue.test_cursor()
+    }
+
+    pub(crate) fn queue_test_mark_count(&self) -> usize {
+        self.queue.test_mark_count()
+    }
+
+    pub(crate) fn queue_test_capacity(&self) -> usize {
+        self.queue.last_report().capacity.whole_items()
+    }
+
+    pub(crate) fn queue_test_report(&self) -> &mbv_surfaces::queue::QueueFrameReport {
+        self.queue.last_report()
     }
 }

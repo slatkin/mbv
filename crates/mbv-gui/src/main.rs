@@ -12,6 +12,7 @@ mod attach;
 mod fonts;
 mod input;
 mod owner_exe;
+mod queue;
 mod tick_host;
 
 /// The window title, and the Wayland/X11 application id pinwin takes the

@@ -33,21 +33,71 @@ use mbv_ui_msg::{
 /// `primary_down` is whether the primary button is held (a movement with it
 /// held is a drag); `pointer_pos` is the pointer's latest position, which a
 /// wheel event resolves against because egui's wheel event carries none.
+/// The wheel-delta accumulator. egui's wheel events carry their deltas in
+/// the backend's unit — pixel deltas for a touchpad, line deltas for a mouse
+/// wheel — and the gesture policy's uniform step is one scroll gesture per
+/// event. Folding the deltas into whole steps first keeps one notch one
+/// 3-row step on every device, instead of one step per event (the row 6.3
+/// review finding).
+#[derive(Debug, Default)]
+pub(crate) struct WheelAccumulator {
+    /// The carried remainder of not-yet-complete steps, in lines. Positive
+    /// is a wheel-up remainder, in the wheel delta's own direction.
+    residual: f32,
+}
+
+impl WheelAccumulator {
+    pub(crate) fn new() -> Self {
+        Self::default()
+    }
+
+    /// Fold one wheel event's vertical delta, normalized to lines (positive
+    /// scrolls the content up), and return the whole steps it completes:
+    /// positive is a wheel-up step count, negative a wheel-down one. The
+    /// whole-unit count comes out of the residual by comparison, not by a
+    /// float cast: a device's delta is bounded by real scrolling, and the
+    /// loop runs at most once per unit of it.
+    fn fold(&mut self, delta_lines: f32) -> i64 {
+        self.residual += delta_lines;
+        let mut steps = 0;
+        while self.residual >= 1.0 {
+            self.residual -= 1.0;
+            steps += 1;
+        }
+        while self.residual <= -1.0 {
+            self.residual += 1.0;
+            steps -= 1;
+        }
+        steps
+    }
+}
+
 #[must_use]
 pub(crate) fn neutral_input(
     events: &[egui::Event],
     frame_modifiers: egui::Modifiers,
     primary_down: bool,
     pointer_pos: Option<egui::Pos2>,
+    wheel: &mut WheelAccumulator,
+    points_per_line: f32,
 ) -> Vec<GuiInput> {
     let mut out = Vec::new();
     for event in events {
         if let Some(key) = neutral_key(event, frame_modifiers) {
             out.push(GuiInput::Key(key));
         }
-        if let Some(pointer) = neutral_pointer(event, frame_modifiers, primary_down, pointer_pos) {
-            out.push(GuiInput::Pointer(pointer));
-        }
+        out.extend(
+            neutral_pointer(
+                event,
+                frame_modifiers,
+                primary_down,
+                pointer_pos,
+                wheel,
+                points_per_line,
+            )
+            .into_iter()
+            .map(GuiInput::Pointer),
+        );
     }
     out
 }
@@ -258,23 +308,26 @@ fn text_key(event: &egui::Event, frame_modifiers: egui::Modifiers) -> Option<Neu
     Some(NeutralKeyEvent::new(code, mods))
 }
 
-/// Translate one egui event to the neutral pointer event it carries, `None`
-/// when it carries none. A movement with the primary button held is a drag;
-/// a movement without one is a hover move, which the gesture policy
-/// recognizes as nothing.
+/// Translate one egui event to the neutral pointer events it carries, one
+/// per whole wheel step (see [`WheelAccumulator`]), `None` when it carries
+/// none. A movement with the primary button held is a drag; a movement
+/// without one is a hover move, which the gesture policy recognizes as
+/// nothing.
 fn neutral_pointer(
     event: &egui::Event,
     frame_modifiers: egui::Modifiers,
     primary_down: bool,
     pointer_pos: Option<egui::Pos2>,
-) -> Option<PointerEvent> {
-    let (kind, position, modifiers) = match event {
+    wheel: &mut WheelAccumulator,
+    points_per_line: f32,
+) -> Vec<PointerEvent> {
+    let (kinds, position, modifiers) = match event {
         egui::Event::PointerMoved(pos) => (
-            if primary_down {
+            vec![if primary_down {
                 PointerKind::Drag
             } else {
                 PointerKind::Move
-            },
+            }],
             *pos,
             frame_modifiers,
         ),
@@ -284,11 +337,11 @@ fn neutral_pointer(
             pressed,
             modifiers,
         } => (
-            if *pressed {
+            vec![if *pressed {
                 PointerKind::Press
             } else {
                 PointerKind::Release
-            },
+            }],
             *pos,
             *modifiers,
         ),
@@ -297,32 +350,59 @@ fn neutral_pointer(
             button: egui::PointerButton::Secondary,
             pressed: true,
             modifiers,
-        } => (PointerKind::RightPress, *pos, *modifiers),
+        } => (vec![PointerKind::RightPress], *pos, *modifiers),
         egui::Event::MouseWheel {
-            delta, modifiers, ..
+            delta,
+            unit,
+            modifiers,
+            ..
         } => {
             // winit's wheel delta is positive away from the user, so a
             // positive delta is a wheel-up step. egui's wheel event carries
             // no position; the pointer's latest one stands in, and with no
             // pointer on the window the step resolves against no surface.
-            let kind = match delta.y.partial_cmp(&0.0) {
-                Some(std::cmp::Ordering::Greater) => PointerKind::ScrollUp,
-                Some(std::cmp::Ordering::Less) => PointerKind::ScrollDown,
-                _ => return None,
+            let Some(pos) = pointer_pos else {
+                return Vec::new();
             };
-            let pos = pointer_pos?;
-            (kind, pos, *modifiers)
+            // Fold the delta into whole steps in lines: a line delta is
+            // already in notches, a pixel delta (a touchpad) divides by the
+            // line height the backend scales wheel lines with. A page-unit
+            // delta is one native page gesture, treated as one step.
+            let delta_lines = match unit {
+                // A line delta is already in notches; a page-unit delta is
+                // one native page gesture, treated as one notch.
+                egui::MouseWheelUnit::Line | egui::MouseWheelUnit::Page => delta.y,
+                // A pixel delta (a touchpad) divides by the line height the
+                // backend scales wheel lines with.
+                egui::MouseWheelUnit::Point => delta.y / points_per_line,
+            };
+            let steps = wheel.fold(delta_lines);
+            let kind = match steps.cmp(&0) {
+                std::cmp::Ordering::Greater => PointerKind::ScrollUp,
+                std::cmp::Ordering::Less => PointerKind::ScrollDown,
+                std::cmp::Ordering::Equal => return Vec::new(),
+            };
+            (
+                (0..steps.unsigned_abs()).map(|_| kind).collect::<Vec<_>>(),
+                pos,
+                *modifiers,
+            )
         }
-        _ => return None,
+        _ => return Vec::new(),
     };
-    Some(PointerEvent::new(
-        kind,
-        Position {
-            x: position.x,
-            y: position.y,
-        },
-        neutral_mods(modifiers),
-    ))
+    kinds
+        .into_iter()
+        .map(|kind| {
+            PointerEvent::new(
+                kind,
+                Position {
+                    x: position.x,
+                    y: position.y,
+                },
+                neutral_mods(modifiers),
+            )
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -348,13 +428,20 @@ mod tests {
         events: &[egui::Event],
         frame_modifiers: egui::Modifiers,
     ) -> Vec<NeutralKeyEvent> {
-        neutral_input(events, frame_modifiers, false, None)
-            .into_iter()
-            .filter_map(|input| match input {
-                GuiInput::Key(key) => Some(key),
-                GuiInput::Pointer(_) => None,
-            })
-            .collect()
+        neutral_input(
+            events,
+            frame_modifiers,
+            false,
+            None,
+            &mut WheelAccumulator::new(),
+            egui::Options::default().input_options.line_scroll_speed,
+        )
+        .into_iter()
+        .filter_map(|input| match input {
+            GuiInput::Key(key) => Some(key),
+            GuiInput::Pointer(_) => None,
+        })
+        .collect()
     }
 
     /// One table over the egui key mapping (add-gui-front-end task 6.3):
