@@ -31,9 +31,9 @@ pub enum Key {
     Null,
 }
 
-/// The modifier keys held during a key press. The set carries only the
-/// modifiers the keybind registry can bind (Ctrl, Shift, Alt), so the
-/// pressed chord and the configured chord compare losslessly.
+/// The modifier keys held during a key press or a pointer press. The set
+/// carries only the modifiers the keybind registry can bind (Ctrl, Shift,
+/// Alt), so the pressed chord and the configured chord compare losslessly.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct KeyModifiers(u8);
 

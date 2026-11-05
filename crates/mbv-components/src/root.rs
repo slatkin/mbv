@@ -78,11 +78,13 @@ pub fn neutral_key(key: tuirealm::event::KeyEvent) -> NeutralKeyEvent {
 }
 
 /// Convert a `TuiRealm` mouse event to the neutral `PointerEvent`
-/// (`add-gui-front-end` design D4). The terminal reports cells, so a cell is
-/// one logical unit: `column`/`row` map onto `x`/`y` unchanged. A mouse kind
-/// the neutral vocabulary cannot represent (other buttons, drags, horizontal
-/// wheel) yields `None`, which routes to no target, exactly as the events the
-/// components' kind filters already drop.
+/// (`add-gui-front-end` design D4, row 4.8). The terminal reports cells, so
+/// a cell is one logical unit: `column`/`row` map onto `x`/`y` unchanged.
+/// The modifiers carry over, so the Client core's gesture policy reads the
+/// same Ctrl/Shift choice both Clients report. A mouse kind the neutral
+/// vocabulary cannot represent (the middle button, a right-button drag or
+/// release, horizontal wheel) yields `None`, which routes to no target,
+/// exactly as the events the components' kind filters already drop.
 #[must_use]
 pub fn neutral_pointer(mouse: tuirealm::event::MouseEvent) -> Option<PointerEvent> {
     use tuirealm::event::MouseButton as TuiMouseButton;
@@ -91,16 +93,35 @@ pub fn neutral_pointer(mouse: tuirealm::event::MouseEvent) -> Option<PointerEven
         TuiMouseKind::Down(TuiMouseButton::Left) => PointerKind::Press,
         TuiMouseKind::Up(TuiMouseButton::Left) => PointerKind::Release,
         TuiMouseKind::Moved => PointerKind::Move,
+        TuiMouseKind::Drag(TuiMouseButton::Left) => PointerKind::Drag,
         TuiMouseKind::ScrollDown => PointerKind::ScrollDown,
         TuiMouseKind::ScrollUp => PointerKind::ScrollUp,
+        TuiMouseKind::Down(TuiMouseButton::Right) => PointerKind::RightPress,
         _ => return None,
     };
+    let mut modifiers = NeutralMods::NONE;
+    if mouse
+        .modifiers
+        .contains(tuirealm::event::KeyModifiers::SHIFT)
+    {
+        modifiers = modifiers.union(NeutralMods::SHIFT);
+    }
+    if mouse
+        .modifiers
+        .contains(tuirealm::event::KeyModifiers::CONTROL)
+    {
+        modifiers = modifiers.union(NeutralMods::CONTROL);
+    }
+    if mouse.modifiers.contains(tuirealm::event::KeyModifiers::ALT) {
+        modifiers = modifiers.union(NeutralMods::ALT);
+    }
     Some(PointerEvent::new(
         kind,
         Position {
             x: f32::from(mouse.column),
             y: f32::from(mouse.row),
         },
+        modifiers,
     ))
 }
 
@@ -237,7 +258,15 @@ mod tests {
     }
 
     fn pointer(kind: PointerKind, x: f32, y: f32) -> Mapped {
-        Mapped::Pointer(Some(PointerEvent::new(kind, Position { x, y })))
+        Mapped::Pointer(Some(PointerEvent::new(
+            kind,
+            Position { x, y },
+            NeutralMods::NONE,
+        )))
+    }
+
+    fn pointer_with(kind: PointerKind, x: f32, y: f32, modifiers: NeutralMods) -> Mapped {
+        Mapped::Pointer(Some(PointerEvent::new(kind, Position { x, y }, modifiers)))
     }
 
     #[rstest]
@@ -293,12 +322,34 @@ mod tests {
         Raw::Mouse(mouse(MouseEventKind::ScrollUp, 9, 2)),
         pointer(PointerKind::ScrollUp, 9.0, 2.0)
     )]
-    #[case::other_button_has_no_neutral_kind(
+    #[case::right_press(
         Raw::Mouse(mouse(MouseEventKind::Down(MouseButton::Right), 1, 1)),
+        pointer(PointerKind::RightPress, 1.0, 1.0)
+    )]
+    #[case::left_drag(
+        Raw::Mouse(mouse(MouseEventKind::Drag(MouseButton::Left), 1, 1)),
+        pointer(PointerKind::Drag, 1.0, 1.0)
+    )]
+    #[case::ctrl_shift_click_carries_the_modifiers(
+        Raw::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            modifiers: KeyModifiers::CONTROL | KeyModifiers::SHIFT,
+            column: 2,
+            row: 3,
+        }),
+        pointer_with(
+            PointerKind::Press,
+            2.0,
+            3.0,
+            NeutralMods::CONTROL.union(NeutralMods::SHIFT)
+        )
+    )]
+    #[case::middle_button_has_no_neutral_kind(
+        Raw::Mouse(mouse(MouseEventKind::Down(MouseButton::Middle), 1, 1)),
         Mapped::Pointer(None)
     )]
-    #[case::drag_has_no_neutral_kind(
-        Raw::Mouse(mouse(MouseEventKind::Drag(MouseButton::Left), 1, 1)),
+    #[case::right_drag_has_no_neutral_kind(
+        Raw::Mouse(mouse(MouseEventKind::Drag(MouseButton::Right), 1, 1)),
         Mapped::Pointer(None)
     )]
     fn terminal_events_translate_to_the_neutral_vocabulary(

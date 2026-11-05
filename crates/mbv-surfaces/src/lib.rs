@@ -8,6 +8,7 @@
 
 mod capacity;
 mod focus_stack;
+pub mod gesture;
 mod hit_map;
 pub mod list;
 pub mod media_list;

@@ -1,6 +1,9 @@
 //! Public-API tests for the core focus stack (task 3.2): push, dismiss-restore
 //! independent of mount order, and Panel focus moves.
 
+mod gesture {
+    mod tests;
+}
 mod hit_map {
     mod tests;
 }
