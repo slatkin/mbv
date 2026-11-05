@@ -8,13 +8,17 @@
 //! key plus an `Event::Text` twin carrying the produced character, and it
 //! suppresses the twin when Ctrl or the platform command key is held. The
 //! character twin is authoritative for printable presses — it carries the
-//! shifted symbol a punctuation key produces, exactly as the terminal
-//! delivers it — so a `Key` event for a character key stands down whenever
-//! its character arrived as text in the same frame, and it maps only when
-//! the twin cannot exist (a named or function key, or a Ctrl/command-held
-//! press). That keeps one press one chord, with no double dispatch and no
-//! wildcard mapping: an egui key the neutral vocabulary cannot represent
-//! yields nothing, exactly as the TUI edge's `Key::Null` matches no chord.
+//! produced character (the shifted symbol a punctuation key produces, the
+//! character a non-Latin layout produces), exactly as the terminal delivers
+//! it — so a `Key` event over a character key stands down whenever Ctrl and
+//! the platform command key are both absent, because egui-winit always
+//! pushes the twin then. egui-winit maps a non-US-ASCII produced character
+//! onto the physical Latin key (Cyrillic й reports `Key::Q`), so no
+//! character equality can pair a `Key` event with its twin; the modifier
+//! condition, not the character, decides. The twin rule keeps one press one
+//! chord, with no double dispatch and no wildcard mapping: an egui key the
+//! neutral vocabulary cannot represent yields nothing, exactly as the TUI
+//! edge's `Key::Null` matches no chord.
 
 use eframe::egui;
 use mbv::GuiInput;
@@ -36,23 +40,9 @@ pub(crate) fn neutral_input(
     primary_down: bool,
     pointer_pos: Option<egui::Pos2>,
 ) -> Vec<GuiInput> {
-    let text_chars: Vec<char> = events
-        .iter()
-        .filter_map(text_char)
-        .map(|c| {
-            // The folded code the character's `Key` twin maps to: egui
-            // reports letter keys caselessly, so an uppercase text character
-            // and its caseless key denote one press.
-            if c.is_ascii_uppercase() {
-                c.to_ascii_lowercase()
-            } else {
-                c
-            }
-        })
-        .collect();
     let mut out = Vec::new();
     for event in events {
-        if let Some(key) = neutral_key(event, frame_modifiers, &text_chars) {
+        if let Some(key) = neutral_key(event, frame_modifiers) {
             out.push(GuiInput::Key(key));
         }
         if let Some(pointer) = neutral_pointer(event, frame_modifiers, primary_down, pointer_pos) {
@@ -214,11 +204,7 @@ fn neutral_mods(modifiers: egui::Modifiers) -> NeutralMods {
 
 /// Translate one egui event to the neutral key chord it carries, `None` when
 /// it carries none. See the module docs for the character-key rule.
-fn neutral_key(
-    event: &egui::Event,
-    frame_modifiers: egui::Modifiers,
-    text_chars: &[char],
-) -> Option<NeutralKeyEvent> {
+fn neutral_key(event: &egui::Event, frame_modifiers: egui::Modifiers) -> Option<NeutralKeyEvent> {
     let egui::Event::Key {
         key,
         pressed,
@@ -240,12 +226,13 @@ fn neutral_key(
         code = NeutralKey::BackTab;
     }
     // A character key's press has a `Text` twin unless Ctrl or the platform
-    // command key is held (egui-winit suppresses it); the twin carries the
-    // produced character, so the `Key` event stands down for it.
-    let has_text_twin = !modifiers.ctrl
-        && !modifiers.command
-        && matches!(code, NeutralKey::Char(c) if text_chars.contains(&c));
-    if has_text_twin {
+    // command key is held (egui-winit suppresses it), so the `Key` event
+    // stands down whenever those are absent: egui-winit maps a non-US-ASCII
+    // produced character onto the physical Latin key (Cyrillic й reports
+    // `Key::Q`), so character equality cannot pair the two and the twin
+    // always decides. Named and function keys are not character keys and
+    // never stand down.
+    if !modifiers.ctrl && !modifiers.command && matches!(code, NeutralKey::Char(_)) {
         return None;
     }
     Some(NeutralKeyEvent::new(code, mods))
@@ -406,6 +393,17 @@ mod tests {
         egui::Modifiers::SHIFT,
         &[pressed(egui::Key::N, egui::Modifiers::SHIFT), egui::Event::Text("N".to_string())],
         &[NeutralKeyEvent::new(NeutralKey::Char('n'), NeutralMods::SHIFT)]
+    )]
+    #[case::non_latin_character_key_stands_down_for_its_text_twin(
+        // egui-winit maps a non-US-ASCII produced character onto the
+        // physical Latin key (Cyrillic с reports `Key::C`), so the char
+        // equality the twin check once used never paired the two and the
+        // press emitted two chords — Char('q') quit the Client. A character
+        // key without Ctrl or the command key always stands down, and the
+        // `Text` twin carries the chord (add-gui-front-end U16 review F1).
+        egui::Modifiers::NONE,
+        &[pressed(egui::Key::C, egui::Modifiers::NONE), egui::Event::Text("с".to_string())],
+        &[NeutralKeyEvent::new(NeutralKey::Char('с'), NeutralMods::NONE)]
     )]
     #[case::key_release_maps_to_nothing(
         egui::Modifiers::NONE,
