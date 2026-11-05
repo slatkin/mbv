@@ -111,9 +111,13 @@ impl App {
         };
         if rows_changed {
             self.last_queue_projection = Some(fingerprint);
-            projection.slots = Some(self.queue_for_link(link).slots().to_vec());
-        } else if bucket_only {
+        }
+        // A progress-only move also changes the fingerprint, so `bucket_only`
+        // is tested first: the row set stands and one row re-projects.
+        if bucket_only {
             projection.patch = self.queue_projection_patch(&fingerprint, playback, pending_slot);
+        } else if rows_changed {
+            projection.slots = Some(self.queue_for_link(link).slots().to_vec());
         }
         projection
     }
