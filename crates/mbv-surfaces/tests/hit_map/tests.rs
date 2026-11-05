@@ -73,3 +73,18 @@ fn the_last_region_painted_over_a_point_wins() {
         Some(&"background")
     );
 }
+
+/// The region iteration exposes the recorded regions in push order with
+/// their targets, so a Client composing a surface report from several
+/// painted layers can read the map it holds.
+#[test]
+fn region_iteration_yields_the_pushed_regions_in_order() {
+    let mut map = HitMap::new();
+    map.push(region(0.0, 0.0, 10.0, 1.0), "first");
+    map.push(region(0.0, 1.0, 10.0, 1.0), "second");
+
+    let regions: Vec<_> = map.iter().collect();
+    assert_eq!(regions.len(), 2);
+    assert_eq!(regions[0].1, &"first");
+    assert_eq!(regions[1].1, &"second");
+}

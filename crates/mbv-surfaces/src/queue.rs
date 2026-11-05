@@ -3,6 +3,7 @@
 //! GUI Clients hold this state and paint from it; neither reimplements a rule.
 
 use crate::media_list::{MediaList, MediaListOperation, MediaListTransition, RowIntent};
+use crate::{HitMap, ListCapacity};
 use mbv_queue::QueueSlotId;
 use mbv_ui_model::context_menu::ContextMenuTargets;
 use mbv_ui_model::media_list::{MediaListRow, SelectionOrigin};
@@ -20,6 +21,33 @@ use mbv_ui_msg::{
 pub enum QueueCursorUpdate {
     Preserve,
     Set(usize),
+}
+
+/// The semantic target of one painted Queue region (design D6): what a
+/// pointer press on the region resolves to.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum QueueHitTarget {
+    /// A queue row painted for this stable slot identity.
+    Slot(QueueSlotId),
+    /// The playlist pill in the queue footer; a press there opens the
+    /// playlists overlay.
+    PlaylistPill,
+}
+
+/// One frame's Queue interaction report (design D6): how many whole queue
+/// rows the painted list fits, and the painted regions a pointer press
+/// resolves against. A Client derives it from its own painted geometry and
+/// hands it to the Client core; the core reads it and never computes
+/// geometry itself.
+#[derive(Debug, Clone, PartialEq)]
+pub struct QueueFrameReport {
+    /// The whole queue rows the painted list fits. It is the same viewport
+    /// height the Surface state clamps its resting scroll with, so the core
+    /// derives the same paging stride the TUI Client shows.
+    pub capacity: ListCapacity,
+    /// The frame's painted regions and their semantic targets. Rows resolve
+    /// to their stable slot; the playlist pill resolves to the pill target.
+    pub hit_map: HitMap<QueueHitTarget>,
 }
 
 /// The Queue's Surface state: the canonical media-list owner over the queue's
@@ -180,6 +208,13 @@ impl QueueSurface {
     #[must_use]
     pub const fn scroll(&self) -> usize {
         self.list.scroll()
+    }
+
+    /// The painted viewport height the Client last reported (the capacity
+    /// report's source: the whole queue rows the painted list fits).
+    #[must_use]
+    pub const fn viewport_height(&self) -> usize {
+        self.viewport_height
     }
 
     /// The Queue's key rules over the neutral `KeyEvent` (moved from the TUI

@@ -7,6 +7,7 @@ use crate::list::{
     Viewported,
 };
 use mbv_render::components::media_list::{MediaListRow, MediaListTitleReveal, RowGeometry};
+use mbv_surfaces::{HitMap, HitRegion};
 use mbv_ui_msg::KeyEvent as NeutralKeyEvent;
 use ratatui::Frame;
 use ratatui::layout::{Position, Rect};
@@ -14,6 +15,19 @@ use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::Component;
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
+
+/// The TUI's cell-rectangle-to-logical-unit conversion (design D6): one cell
+/// is one logical unit, so a painted cell rectangle maps positionally onto
+/// the hit region the Client reports.
+#[must_use]
+pub(crate) fn hit_region(rect: Rect) -> HitRegion {
+    HitRegion::new(
+        f32::from(rect.x),
+        f32::from(rect.y),
+        f32::from(rect.width),
+        f32::from(rect.height),
+    )
+}
 
 /// The TUI-side presentation state of one Wide media list: the semantic paint
 /// policy, the configured claim/content rectangles, and the retained painted
@@ -25,6 +39,11 @@ pub struct WidePresentationState<Target> {
     policy: WideMediaListPaintPolicy,
     configured_geometry: Option<(Rect, Rect)>,
     paint: PaintRetainedState<Target>,
+    /// The last completed paint's target-bearing row regions in logical
+    /// units (design D6): the report a Client adapter composes its surface
+    /// hit map from. `begin_view` clears it; a completed paint refills it, so
+    /// between frames it always describes the last painted frame.
+    hit_map: HitMap<Target>,
 }
 
 impl<Target> Default for WidePresentationState<Target> {
@@ -40,6 +59,7 @@ impl<Target> WidePresentationState<Target> {
             policy: WideMediaListPaintPolicy::new(false),
             configured_geometry: None,
             paint: PaintRetainedState::new(),
+            hit_map: HitMap::new(),
         }
     }
 
@@ -68,6 +88,7 @@ impl<Target> WidePresentationState<Target> {
 
     pub fn begin_view(&mut self) {
         self.invalidate_paint();
+        self.hit_map = HitMap::new();
     }
 
     pub fn finish_view(
@@ -80,6 +101,10 @@ impl<Target> WidePresentationState<Target> {
         Target: Clone,
     {
         let rows = row_geometry.target_rects(claim_rect, content_rect);
+        self.hit_map = rows.iter().fold(HitMap::new(), |mut map, (rect, target)| {
+            map.push(hit_region(*rect), target.clone());
+            map
+        });
         PaintRetained::finish(
             self,
             claim_rect,
@@ -87,6 +112,15 @@ impl<Target> WidePresentationState<Target> {
             rows,
             selected_row_rect.copied(),
         );
+    }
+
+    /// The last completed frame's painted row regions in logical units with
+    /// their stable targets (design D6). Empty until a paint completes and
+    /// after a frame that paints no rows; between frames it always describes
+    /// the last painted frame.
+    #[must_use]
+    pub fn frame_hit_map(&self) -> &HitMap<Target> {
+        &self.hit_map
     }
 
     /// The current frame's content rectangle, if `view` completed.

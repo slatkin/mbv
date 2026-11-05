@@ -7,7 +7,9 @@ use tuirealm::event::Event;
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::media_list::{MediaListSurfaceInput, MediaListTransition, WidePresentationState};
+use super::media_list::{
+    MediaListSurfaceInput, MediaListTransition, WidePresentationState, hit_region,
+};
 use super::mouse::gesture::MouseGestureState;
 use mbv_queue::{QueueSlot, QueueSlotId};
 use mbv_render::arrangements::queue::{queue_footer_row, queue_list_content};
@@ -16,7 +18,8 @@ use mbv_render::components::media_list::MediaSemanticState;
 use mbv_render::components::media_list::{MediaListRow, WideMediaListPaintPolicy};
 use mbv_render::components::queue::{render_empty_queue, render_queue_status};
 use mbv_render::components::widgets::render_queue_panel_frame;
-use mbv_surfaces::queue::{QueueCursorUpdate, QueueSurface};
+use mbv_surfaces::queue::{QueueCursorUpdate, QueueFrameReport, QueueHitTarget, QueueSurface};
+use mbv_surfaces::{HitMap, ListCapacity};
 use mbv_theme::Surface;
 use mbv_ui_model::playback::{PlaybackState, QueueLink};
 use mbv_ui_msg::Msg;
@@ -248,6 +251,28 @@ impl QueueComponent {
     #[must_use]
     pub fn selection_summary(&self) -> mbv_ui_msg::SelectionSummary {
         self.surface.selection_summary()
+    }
+
+    /// The current frame's interaction report (design D6): the capacity the
+    /// painted list reports and the hit map over the painted geometry. The
+    /// regions are the last completed paint's rows plus the playlist pill,
+    /// resolved in the same retained geometry `queue/pointer.rs` resolves
+    /// against; the capacity is the viewport height the Surface state clamps
+    /// and strides with. The shell and the Client core read this report;
+    /// neither recomputes the geometry.
+    #[must_use]
+    pub fn frame_report(&self) -> QueueFrameReport {
+        let mut hit_map = HitMap::new();
+        for (region, target) in self.wide.frame_hit_map().iter() {
+            hit_map.push(*region, QueueHitTarget::Slot(*target));
+        }
+        if self.playlist_hit.width > 0 {
+            hit_map.push(hit_region(self.playlist_hit), QueueHitTarget::PlaylistPill);
+        }
+        QueueFrameReport {
+            capacity: ListCapacity::new(self.surface.viewport_height()),
+            hit_map,
+        }
     }
 
     #[cfg(any(test, feature = "test"))]

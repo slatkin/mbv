@@ -92,4 +92,11 @@ impl<Target> HitMap<Target> {
             .find(|(region, _)| region.contains(position))
             .map(|(_, target)| target)
     }
+
+    /// Iterate the recorded regions with their targets, in push order. A
+    /// Client composing a surface report from several painted layers reads
+    /// the regions here; it never reaches into the private storage.
+    pub fn iter(&self) -> impl Iterator<Item = (&HitRegion, &Target)> {
+        self.regions.iter().map(|(region, target)| (region, target))
+    }
 }
