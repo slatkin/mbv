@@ -3,7 +3,7 @@ use std::io::Cursor;
 use rstest::rstest;
 
 use super::{Choice, FollowUp, ask, follow_up};
-use crate::remote_player::RemotePlayerError;
+use mbv_remote_player::RemotePlayerError;
 
 fn mismatch_error(owner_app_version: &str) -> RemotePlayerError {
     RemotePlayerError::owner_build_mismatch_for_test(owner_app_version, "owner-build-1")

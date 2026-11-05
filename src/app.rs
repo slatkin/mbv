@@ -5,13 +5,22 @@ mod input;
 pub(crate) mod state;
 mod waking_relay;
 
-pub use self::client_core::{ClientCore, ClientTickHost, ClientWaker, TickOutcome};
+pub use self::client_core::{
+    CLIENT_IDLE_CADENCE, ClientCore, ClientTickHost, ClientWaker, TickOutcome, WorkspaceRelayout,
+};
+pub use self::dispatch::action::{
+    AppCommand, Command, NavigationIntent, PanelIntent, PlaybackIntent, ShellCommand, VisualIntent,
+};
 pub(in crate::app) use self::infra::paging::{PAGE_SIZE, PREFETCH_AHEAD};
 pub(in crate::app) use self::infra::signals::{
     QUIT_REQUESTED, install_signal_handlers, start_quit_watchdog,
 };
 pub(crate) use self::infra::terminal::set_mouse_capture;
 pub(in crate::app) use self::infra::terminal::{init_terminal, open_url, restore_terminal};
+pub use self::input::key_policy::{
+    OverlayFocus, RemoteControlTarget, RouterOverlayState, RouterPlaybackState, RouterSnapshot,
+};
+pub use self::input::router::{RouterOutcome, resolve_router_outcome_with_focused};
 pub use self::state::app_struct::App;
 pub(in crate::app) use self::waking_relay::spawn_waking_relay;
 #[cfg(test)]

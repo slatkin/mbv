@@ -527,7 +527,7 @@ impl Model {
         let poll_timeout = if self.app.visualizer.is_some() {
             Duration::from_millis(8)
         } else {
-            Duration::from_millis(50)
+            crate::app::CLIENT_IDLE_CADENCE
         };
         let tick_started = Instant::now();
         let ticked = self.application.tick(PollStrategy::Once(poll_timeout));

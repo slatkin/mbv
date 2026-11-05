@@ -159,6 +159,7 @@ impl App {
     ///   The shown queue follows the connection (ADR 0034): the peer link
     ///   while it is attached, the Local link otherwise.
     #[cfg(test)]
+    #[must_use]
     pub fn new_remote_with_config(
         client: EmbyClient,
         remote: mbv_remote_player::RemotePlayer,
@@ -169,6 +170,7 @@ impl App {
         Self::new_remote_optional_with_config(Some(client), remote, player_rx, endpoint, config)
     }
 
+    #[must_use]
     pub fn new_remote_optional_with_config(
         client: Option<EmbyClient>,
         remote: mbv_remote_player::RemotePlayer,

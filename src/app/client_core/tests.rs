@@ -34,3 +34,31 @@ fn relay_forwards_in_order_wakes_and_disconnects() {
     drop(tx);
     relayed.recv().unwrap_err();
 }
+
+// The waker must outlive a panicking callback (carried review finding on row
+// 5.1): the slot is not poisoned, so the relay thread's next `wake` still
+// reaches the Client instead of panicking, dropping `tx`, and reading as a
+// false Owner disconnect.
+#[test]
+fn a_panicking_callback_does_not_silence_later_wakes() {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+
+    let waker = ClientWaker::new();
+    let wake_count = Arc::new(AtomicUsize::new(0));
+    let panics_once = Arc::new(AtomicBool::new(true));
+    let counter = Arc::clone(&wake_count);
+    waker.install(move || {
+        assert!(
+            !panics_once.swap(false, Ordering::SeqCst),
+            "the installed callback failed"
+        );
+        counter.fetch_add(1, Ordering::SeqCst);
+    });
+
+    let first = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| waker.wake()));
+    assert!(first.is_err(), "the first wake must surface the panic");
+
+    waker.wake();
+    assert_eq!(wake_count.load(Ordering::SeqCst), 1);
+}

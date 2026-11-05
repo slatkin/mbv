@@ -16,7 +16,7 @@ use mbv_ui_msg::{Key, KeyModifiers};
 
 /// Which remote-control target currently owns transport shortcuts.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub(in crate::app) enum RemoteControlTarget {
+pub enum RemoteControlTarget {
     #[default]
     None,
     DirectRemote,
@@ -24,7 +24,7 @@ pub(in crate::app) enum RemoteControlTarget {
 
 /// Playback facts read by the central keyboard policy.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub(in crate::app) struct RouterPlaybackState {
+pub struct RouterPlaybackState {
     pub player_active: bool,
     pub remote_target: RemoteControlTarget,
     pub queue_only_idle: bool,
@@ -40,7 +40,7 @@ pub(in crate::app) struct RouterPlaybackState {
 /// settable bools. `help`/`sessions_sidebar`/`text_entry_focused` stay
 /// independent and live on `RouterOverlayState`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub(in crate::app) enum OverlayFocus {
+pub enum OverlayFocus {
     /// No overlay holds `TuiRealm` focus; the panels own the keyboard.
     #[default]
     Free,
@@ -72,7 +72,7 @@ impl OverlayFocus {
 
 /// Overlay facts read by the central keyboard policy.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub(in crate::app) struct RouterOverlayState {
+pub struct RouterOverlayState {
     /// Which overlay-focus situation the keyboard sees.
     pub focus: OverlayFocus,
     /// Whether the (non-blocking) Help overlay is mounted.
@@ -88,7 +88,7 @@ pub(in crate::app) struct RouterOverlayState {
 
 /// Plain-data state read by the central keyboard policy.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub(in crate::app) struct RouterSnapshot {
+pub struct RouterSnapshot {
     pub playback: RouterPlaybackState,
     pub overlays: RouterOverlayState,
     pub panel_mode: PanelMode,

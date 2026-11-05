@@ -151,7 +151,7 @@ impl App {
             match crate::single_instance::resolve(&socket_path, &lock_path)? {
                 crate::single_instance::Resolution::Fresh(guard) => {
                     drop(guard);
-                    crate::local_daemon::spawn_detached(&socket_path.to_string_lossy(), None)?;
+                    self.start_local_daemon()?;
                 }
                 crate::single_instance::Resolution::Attach => {}
                 crate::single_instance::Resolution::Refuse => {

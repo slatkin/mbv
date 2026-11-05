@@ -37,7 +37,7 @@ impl App {
                 // immediately (the spawned daemon reacquires it for real)
                 // before attaching as a client.
                 drop(guard);
-                crate::local_daemon::spawn_detached(&socket_path.to_string_lossy(), None)?;
+                self.start_local_daemon()?;
             }
             Ok(crate::single_instance::Resolution::Refuse) => {
                 return Err(std::io::Error::other(

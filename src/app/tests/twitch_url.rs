@@ -5,7 +5,6 @@
 //! `twitch-queue` capability receives nothing and keeps the prompt open.
 
 use super::*;
-use crate::app::dispatch::action::{Command, ShellCommand};
 use mbv_components::TwitchUrlComponent;
 use mbv_queue::QueueItem;
 use mbv_ui_msg::{ComponentId, ModalId, Msg, ShellRequest, TwitchUrlIntent};

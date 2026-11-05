@@ -336,7 +336,7 @@ impl Model {
         // App-side phases and shares the App's wake handle; the TUI Client
         // installs a no-op waker — the listener poll cadence already bounds
         // input latency.
-        let client_core = ClientCore::new(self.app.client_waker.clone());
+        let client_core = ClientCore::from_app(&self.app);
         client_core.install_waker(|| {});
 
         'outer: loop {

@@ -10,7 +10,7 @@
 
 use std::io::{BufRead, Write};
 
-use crate::remote_player::RemotePlayerError;
+use mbv_remote_player::RemotePlayerError;
 
 #[derive(Debug, PartialEq, Eq)]
 pub(super) enum Choice {

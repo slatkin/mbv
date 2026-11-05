@@ -20,7 +20,7 @@ pub(in crate::app) use super::key_policy::RouterSnapshot;
 /// focused component's message before subscribers'; the router's outcome
 /// selects between running the leaf's request and discarding it.
 #[derive(Debug, Clone, PartialEq)]
-pub(in crate::app) enum RouterOutcome {
+pub enum RouterOutcome {
     /// Run this semantic command and discard the leaf's message for this tick.
     Command(Command),
     /// Run nothing and discard the leaf's message for this tick.
@@ -66,7 +66,7 @@ pub(in crate::app) enum RouterOutcome {
 ///
 /// The `blocking_overlay_open` catch-all rules stay: they still discard the
 /// focused leaf's message when no overlay is mounted.
-pub(in crate::app) fn resolve_router_outcome_with_focused(
+pub fn resolve_router_outcome_with_focused(
     key: KeyEvent,
     snapshot: &RouterSnapshot,
     focused: Option<&ComponentId>,

@@ -8,12 +8,19 @@
 //! `shell::run`; the GUI Client implements the same phases over its own
 //! surfaces.
 
-use std::sync::{Arc, Mutex};
-use std::time::Instant;
+use std::fmt;
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::time::{Duration, Instant};
 
 use mbv_ui_msg::{Msg, ServiceRequest};
 
 use super::App;
+
+/// The idle cadence every Client repaints at when no event wakes it (design
+/// D7): the TUI Client's terminal poll timeout, and the interval the GUI
+/// Client asks eframe to repaint after. Timers and worker results still land
+/// on this cadence when no waker fires.
+pub const CLIENT_IDLE_CADENCE: Duration = Duration::from_millis(50);
 
 /// What one [`ClientCore::tick`] hands back to the Client's run step. Each
 /// field names what the tick observed, not how a Client uses it.
@@ -132,7 +139,7 @@ pub trait ClientTickHost {
 }
 
 /// The wake callback a [`ClientWaker`] slot holds once `install` fills it.
-type WakeCallback = Box<dyn Fn() + Send + Sync>;
+type WakeCallback = Arc<dyn Fn() + Send + Sync>;
 
 /// The wake handle worker-side senders call when new input lands for a
 /// sleeping Client (design D7 of `add-gui-front-end`). One shared slot
@@ -146,7 +153,7 @@ pub struct ClientWaker {
 
 impl ClientWaker {
     /// An empty handle: `wake` does nothing until `install` fills the slot.
-    pub fn new() -> Self {
+    pub(in crate::app) fn new() -> Self {
         Self {
             callback: Arc::new(Mutex::new(None)),
         }
@@ -155,20 +162,33 @@ impl ClientWaker {
     /// Install the callback every clone's `wake` invokes. The GUI Client
     /// installs `egui::Context::request_repaint`.
     pub fn install(&self, waker: impl Fn() + Send + Sync + 'static) {
-        *self.callback.lock().unwrap() = Some(Box::new(waker));
+        *self.lock_slot() = Some(Arc::new(waker));
     }
 
     /// Invoke the installed callback; a no-op while the slot is empty.
     pub fn wake(&self) {
-        if let Some(callback) = self.callback.lock().unwrap().as_ref() {
+        // Take the callback out of the slot and release the lock before
+        // invoking it: a panicking callback then cannot poison the slot and
+        // leave the next wake — inside the relay thread — panicking, which
+        // would drop `tx` and read as a false Owner disconnect.
+        let callback = self.lock_slot().as_ref().map(Arc::clone);
+        if let Some(callback) = callback {
             callback();
         }
     }
+
+    /// The callback slot, recovered from a poisoned lock: a poisoned slot
+    /// must never silence the Client's wakes.
+    fn lock_slot(&self) -> MutexGuard<'_, Option<WakeCallback>> {
+        self.callback.lock().unwrap_or_else(PoisonError::into_inner)
+    }
 }
 
-impl Default for ClientWaker {
-    fn default() -> Self {
-        Self::new()
+impl fmt::Debug for ClientWaker {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ClientWaker")
+            .field("installed", &self.lock_slot().is_some())
+            .finish()
     }
 }
 
@@ -184,9 +204,17 @@ pub struct ClientCore {
 }
 
 impl ClientCore {
-    /// A core sharing the `App`'s wake handle.
-    pub fn new(waker: ClientWaker) -> Self {
-        Self { waker }
+    /// A core sharing the `App`'s wake handle, so `install_waker` reaches
+    /// every relay the `App` spawned — including the one the initial attach
+    /// already started.
+    ///
+    /// This is the only way to build a core: a core over an unshared handle
+    /// would install a waker that no relay ever calls.
+    #[must_use]
+    pub fn from_app(app: &App) -> Self {
+        Self {
+            waker: app.client_waker(),
+        }
     }
 
     /// Install the callback the Client's waking senders invoke when new
@@ -259,9 +287,11 @@ impl ClientCore {
     }
 }
 
-impl Default for ClientCore {
-    fn default() -> Self {
-        Self::new(ClientWaker::new())
+impl fmt::Debug for ClientCore {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ClientCore")
+            .field("waker", &self.waker)
+            .finish()
     }
 }
 

@@ -180,6 +180,12 @@ pub struct App {
     /// installed waker reaches every relay — including one the initial
     /// attach already spawned.
     pub(in crate::app) client_waker: crate::app::ClientWaker,
+    /// The `mbv` program this Client starts the Owner from (design D9 of
+    /// `add-gui-front-end`). `None` starts this process's own executable —
+    /// the TUI Client, which is `mbv` itself. The GUI Client records the
+    /// `mbv` program it resolved, so an Owner restart never starts the GUI
+    /// program as the Owner.
+    pub(in crate::app) owner_exe: Option<std::path::PathBuf>,
     pub(in crate::app) player_rx: mpsc::Receiver<PlayerEvent>,
     /// Player events the answer pump set aside while waiting for a queue-op
     /// answer. `drain_player_events` takes these before
@@ -536,6 +542,35 @@ pub struct App {
 }
 
 impl App {
+    /// The shared wake handle this `App` hands to its Owner-snapshot relays
+    /// (design D7 of `add-gui-front-end`). The Client core shares it, so the
+    /// waker the Client installs reaches every relay, including one the
+    /// initial attach already spawned.
+    #[must_use]
+    pub fn client_waker(&self) -> crate::app::ClientWaker {
+        self.client_waker.clone()
+    }
+
+    /// Record the `mbv` program this Client starts the Owner from (design
+    /// D9 of `add-gui-front-end`). The Owner link sets it at attach time;
+    /// `None` keeps this process's own executable.
+    pub(crate) fn set_owner_exe(&mut self, owner_exe: Option<std::path::PathBuf>) {
+        self.owner_exe = owner_exe;
+    }
+
+    /// Start this machine's Owner process from the Client's `mbv` program and
+    /// wait until its control socket accepts connections. Every App-side
+    /// Owner start goes through here so a GUI Client never starts itself as
+    /// the Owner (design D9 of `add-gui-front-end`).
+    pub(in crate::app) fn start_local_daemon(
+        &self,
+    ) -> Result<(), mbv_remote_player::RemotePlayerError> {
+        crate::owner_link::start_owner(&crate::owner_link::OwnerStartOptions {
+            owner_exe: self.owner_exe.as_deref(),
+            log_level: None,
+        })
+    }
+
     /// Relay one freshly attached Owner event channel through the wake
     /// relay (design D7 of `add-gui-front-end`): forwarded events reach the
     /// drain in order and each send wakes the Client. Receivers already
@@ -656,5 +691,14 @@ impl App {
 
     pub(in crate::app) fn dismiss_save_playlist(&mut self) {
         self.pending_overlay = Some(mbv_ui_model::overlay::OverlayRequest::DismissSavePlaylist);
+    }
+}
+
+/// `App` carries the shell's whole state machine, including live Player,
+/// protocol, and channel handles, so its `Debug` names the type and stops
+/// there instead of walking that state.
+impl std::fmt::Debug for App {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("App").finish_non_exhaustive()
     }
 }
