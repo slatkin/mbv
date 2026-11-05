@@ -23,3 +23,22 @@ pub use mbv_surfaces::list::{
     AggregateMarkState, Cursored, MarkSelection, MarkSelectionState, PagingPolicy, Row, RowFlow,
     ViewportAnchor, Viewported, max_viewport_offset_for_len, scrolled_viewport_offset,
 };
+
+#[cfg(test)]
+mod tests {
+    // The seam-root module stays so the focused nextest filter exercises the
+    // root boundary. Its cursor/viewport composition test moved with the seam
+    // to `mbv-surfaces`; the mark-carrier half of the carrier-default test
+    // moved with it, and this half stays with `PaintRetainedState`, which
+    // never left `mbv-components`.
+    use super::PaintRetainedState;
+
+    #[derive(PartialEq, Eq)]
+    struct NonDefaultTarget;
+
+    #[test]
+    fn carriers_default_without_a_target_default_bound() {
+        let _: PaintRetainedState<NonDefaultTarget> = PaintRetainedState::default();
+        let _ = PaintRetainedState::<NonDefaultTarget>::new();
+    }
+}

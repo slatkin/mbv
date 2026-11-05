@@ -46,3 +46,15 @@ fn action_targets_follow_display_order_not_click_order() {
     assert_eq!(marks.action_targets(&flow), vec![4, 1, 3]);
     assert_eq!(marks.marks.targets(), &[3, 1, 4]);
 }
+
+#[derive(PartialEq, Eq)]
+struct NonDefaultTarget;
+
+/// Restored half of the seam-root test from `mbv-components` (`list.rs`):
+/// the mark carrier defaults without a `Default` target bound. The
+/// `PaintRetainedState` half stays at the `mbv-components` seam root.
+#[test]
+fn carriers_default_without_a_target_default_bound() {
+    let _: MarkSelectionState<NonDefaultTarget> = MarkSelectionState::default();
+    let _ = MarkSelectionState::<NonDefaultTarget>::new();
+}
