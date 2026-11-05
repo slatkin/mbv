@@ -1,7 +1,6 @@
 use super::Model;
 use super::{PanelFocus, palette};
 use mbv_components::PlaybackProjection;
-use mbv_render::components::chrome_player::TransportAvailability;
 use mbv_ui_msg::PlaybackRequest;
 
 impl crate::app::App {
@@ -32,6 +31,49 @@ impl crate::app::App {
     }
 }
 
+impl crate::app::App {
+    /// The App-side effect of one playback request (`Msg::Playback`). The TUI
+    /// shell and the GUI Client both apply it here, so each transport control
+    /// does one thing in both Clients.
+    pub(in crate::app) fn handle_playback_request(&mut self, request: &PlaybackRequest) {
+        use crate::app::dispatch::action::AppCommand;
+        use crate::app::dispatch::action::PlaybackIntent;
+        match request {
+            PlaybackRequest::TogglePlayPause => {
+                self.dispatch_playback(&AppCommand::Playback(PlaybackIntent::TogglePlayPause));
+            }
+            PlaybackRequest::Stop => {
+                self.dispatch_playback(&AppCommand::Playback(PlaybackIntent::Stop));
+            }
+            PlaybackRequest::Previous => {
+                self.dispatch_playback(&AppCommand::Playback(PlaybackIntent::PreviousTrack));
+            }
+            PlaybackRequest::Next => {
+                self.dispatch_playback(&AppCommand::Playback(PlaybackIntent::NextTrack));
+            }
+            PlaybackRequest::SeekTo(fraction) => self.seek_to_fraction(*fraction),
+            PlaybackRequest::ToggleMute => {
+                self.dispatch_playback(&AppCommand::Playback(PlaybackIntent::ToggleMute));
+            }
+            PlaybackRequest::VolumeDelta(delta) => {
+                self.dispatch_playback(&AppCommand::Playback(PlaybackIntent::AdjustVolume(*delta)));
+            }
+            PlaybackRequest::CycleAudio => {
+                self.dispatch_playback(&AppCommand::Playback(PlaybackIntent::CycleAudio));
+            }
+            PlaybackRequest::CycleSubtitle => {
+                self.dispatch_playback(&AppCommand::Playback(
+                    PlaybackIntent::CycleOrToggleSubtitle,
+                ));
+            }
+        }
+    }
+
+    fn dispatch_playback(&mut self, command: &crate::app::dispatch::action::AppCommand) {
+        let _ = self.dispatch(command);
+    }
+}
+
 impl Model {
     /// The shared transport projection both playback panels consume (task
     /// 3.5, D10): one builder so the queue-column panel and the right-column
@@ -45,8 +87,8 @@ impl Model {
         // The typed title parts are built from the queue item itself (D1/D4)
         // whenever the active slot is addressable locally; the fallback
         // title below covers only the targets the queue cannot address.
-        // One queue lookup feeds both: the parts and the plain title
-        // describe the same slot.
+        // The plain title comes from the shared helper, so the parts and the
+        // title stay one rule (`queue_playback_projection`).
         let active_item = state
             .active_idx
             .filter(|_| state.active)
@@ -57,18 +99,10 @@ impl Model {
         let title_parts = active_item
             .map(|item| self.app.playback_title_parts(item))
             .or_else(|| slotless_title_parts.clone());
-        let title = state
-            .active
-            .then(|| {
-                active_item
-                    .map(|item| item.title().to_string())
-                    .or_else(|| slotless_title_parts.map(|parts| parts.title.text))
-            })
-            .flatten();
+        let title = self.app.now_playing_title_text(state);
         let now_playing_title =
             title.map(|title| (title, palette::Role::PlaybackValueFg.color().to_ratatui()));
         let show_controls = state.active || self.app.output_is_cast();
-        let (prev_available, next_available) = self.app.transport_prev_next_available();
         PlaybackProjection {
             state,
             show_controls,
@@ -90,50 +124,12 @@ impl Model {
                 })
             }),
             use_nerd_fonts: self.app.use_nerd_fonts,
-            availability: TransportAvailability {
-                stop: state.active,
-                previous: prev_available,
-                next: next_available,
-            },
+            availability: self.app.transport_availability(state),
         }
     }
 
     pub(in crate::app) fn handle_playback_request(&mut self, request: &PlaybackRequest) {
-        use crate::app::dispatch::action::AppCommand;
-        use crate::app::dispatch::action::PlaybackIntent;
-        match request {
-            PlaybackRequest::TogglePlayPause => {
-                self.dispatch_playback(&AppCommand::Playback(PlaybackIntent::TogglePlayPause));
-            }
-            PlaybackRequest::Stop => {
-                self.dispatch_playback(&AppCommand::Playback(PlaybackIntent::Stop));
-            }
-            PlaybackRequest::Previous => {
-                self.dispatch_playback(&AppCommand::Playback(PlaybackIntent::PreviousTrack));
-            }
-            PlaybackRequest::Next => {
-                self.dispatch_playback(&AppCommand::Playback(PlaybackIntent::NextTrack));
-            }
-            PlaybackRequest::SeekTo(fraction) => self.app.seek_to_fraction(*fraction),
-            PlaybackRequest::ToggleMute => {
-                self.dispatch_playback(&AppCommand::Playback(PlaybackIntent::ToggleMute));
-            }
-            PlaybackRequest::VolumeDelta(delta) => {
-                self.dispatch_playback(&AppCommand::Playback(PlaybackIntent::AdjustVolume(*delta)));
-            }
-            PlaybackRequest::CycleAudio => {
-                self.dispatch_playback(&AppCommand::Playback(PlaybackIntent::CycleAudio));
-            }
-            PlaybackRequest::CycleSubtitle => {
-                self.dispatch_playback(&AppCommand::Playback(
-                    PlaybackIntent::CycleOrToggleSubtitle,
-                ));
-            }
-        }
-    }
-
-    fn dispatch_playback(&mut self, command: &crate::app::dispatch::action::AppCommand) {
-        let _ = self.app.dispatch(command);
+        self.app.handle_playback_request(request);
     }
 }
 

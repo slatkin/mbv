@@ -195,15 +195,17 @@ impl App {
         }
     }
 
-    /// Dispatch one message the GUI's focused surface emitted. The Queue
-    /// Surface state emits only `Queue` and `Shell` requests; the other
-    /// variants belong to surfaces the first slice does not present, so
-    /// their arms stay the documented no-ops.
+    /// Dispatch one message a GUI surface emitted. The Queue Surface state
+    /// emits `Queue` and `Shell` requests, and the Queue playback panel emits
+    /// `Playback` requests, which run the same App-side effects the TUI shell
+    /// runs. The `Service` and `TerminalEvent` variants belong to surfaces the
+    /// first slice does not present, so their arms stay the documented no-ops.
     pub(crate) fn handle_gui_surface_msg(&mut self, msg: Msg) {
         match msg {
             Msg::Queue(request) => self.handle_gui_queue_request(request),
             Msg::Shell(request) => self.handle_gui_queue_shell_request(*request),
-            Msg::Playback(_) | Msg::Service(_) | Msg::TerminalEvent(_) => {}
+            Msg::Playback(request) => self.handle_playback_request(&request),
+            Msg::Service(_) | Msg::TerminalEvent(_) => {}
         }
     }
 

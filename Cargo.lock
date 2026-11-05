@@ -3111,6 +3111,7 @@ dependencies = [
  "eframe",
  "mbv",
  "mbv-config",
+ "mbv-emby-model",
  "mbv-queue",
  "mbv-surfaces",
  "mbv-theme",

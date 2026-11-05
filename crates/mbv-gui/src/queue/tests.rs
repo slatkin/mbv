@@ -2,50 +2,12 @@
 //! composition with synthetic `RawInput`, asserting the core state the frame
 //! drives, never appearance (design D11).
 
-use std::time::Instant;
-
 use eframe::egui;
 
+use crate::headless::{frame_input, key_input, run_frame};
 use crate::tick_host::GuiTickHost;
-use mbv::ClientCore;
 use mbv_queue::QueueSlotId;
 use mbv_ui_model::media_list::{MediaKind, MediaListRow, MediaSemanticState};
-
-/// One headless frame, in the production order: the Client core's tick over
-/// the frame's raw input (the input phase reads it inside the frame, as the
-/// real window's `update` does), then the surface sync, then the paint.
-fn run_frame(ctx: &egui::Context, host: &mut GuiTickHost, raw_input: egui::RawInput) {
-    // The frame's `FullOutput` is paint bookkeeping the test does not read.
-    let _ = ctx.run(raw_input, |ctx| {
-        ClientCore::tick(host, Instant::now());
-        host.sync_surfaces();
-        host.paint(ctx);
-    });
-}
-
-/// One frame's input over a fixed window: the Queue panel paints the whole
-/// window in the first slice.
-fn frame_input(events: Vec<egui::Event>) -> egui::RawInput {
-    egui::RawInput {
-        screen_rect: Some(egui::Rect::from_min_size(
-            egui::Pos2::ZERO,
-            egui::vec2(480.0, 640.0),
-        )),
-        events,
-        ..egui::RawInput::default()
-    }
-}
-
-/// One pressed key event over the fixed window.
-fn key_input(key: egui::Key) -> egui::RawInput {
-    frame_input(vec![egui::Event::Key {
-        key,
-        physical_key: None,
-        pressed: true,
-        repeat: false,
-        modifiers: egui::Modifiers::NONE,
-    }])
-}
 
 /// Row 6.4's verification: a `PageDown` press moves the queue cursor by the
 /// page stride the reported capacity drives — one row short of the whole

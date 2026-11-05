@@ -17,11 +17,12 @@ use mbv::{
     App, ClientLifecycle, ClientTickHost, GuiInput, GuiSurfaceLeaf, HomeEventDrain,
     PlayerEventDrain, TickOutcome,
 };
-use mbv_surfaces::gesture::PointerGestureState;
+use mbv_surfaces::gesture::{PointerGesture, PointerGestureState};
 use mbv_ui_msg::{Msg, Position, ServiceRequest};
 
 use crate::input::{WheelAccumulator, neutral_input};
 use crate::queue::QueuePanel;
+use crate::queue_playback::QueuePlaybackPanel;
 
 /// The `App` the Client core drives, and the Client-owned parts of the tick.
 /// The GUI holds no interaction state here: cursor, selection, marks, and
@@ -42,6 +43,9 @@ pub(crate) struct GuiTickHost {
     /// The Queue panel: the Queue Surface state plus the painted-geometry
     /// report the pointer gestures resolve against (row 6.4).
     queue: QueuePanel,
+    /// The Queue playback band: the transport band's Surface state and the
+    /// painted report the pointer gestures resolve against (row 6.5).
+    playback: QueuePlaybackPanel,
     /// The wheel-delta accumulator (the row 6.3 review finding): pixel-unit
     /// wheel events fold into whole steps before the gesture policy sees
     /// them.
@@ -55,27 +59,31 @@ impl GuiTickHost {
             ctx,
             gestures: PointerGestureState::new(),
             queue: QueuePanel::new(),
+            playback: QueuePlaybackPanel::new(),
             wheel: WheelAccumulator::new(),
         }
     }
 
-    /// Push the App-owned queue projection into the Queue panel: the GUI
-    /// Client's analog of the TUI Client's sync pass, once per frame before
-    /// the paint (design D5).
+    /// Push the App-owned projections into the Queue panel and the Queue
+    /// playback band: the GUI Client's analog of the TUI Client's sync pass,
+    /// once per frame before the paint (design D5).
     pub(crate) fn sync_surfaces(&mut self) {
         let projection = self.app.queue_surface_projection();
         self.queue.sync(projection);
+        self.playback.sync(self.app.queue_playback_projection());
     }
 
-    /// Paint the frame's surfaces. The Queue panel is the whole window in
-    /// the first slice, and it is the surface that holds the GUI's focus —
-    /// the GUI's focus stack arrives with its later surfaces — so its
-    /// appearance focus is focused.
+    /// Paint the frame's surfaces. The Queue playback band sits above the
+    /// Queue list, as the TUI's `queue_playback` placement sits above `queue`.
+    /// The Queue panel holds the GUI's focus (the GUI's focus stack arrives
+    /// with its later surfaces), so its appearance focus is focused.
     pub(crate) fn paint(&mut self, ctx: &egui::Context) {
         egui::CentralPanel::default()
             .frame(egui::Frame::NONE)
             .show(ctx, |ui| {
-                self.queue.paint(ui.painter(), ui.max_rect(), true);
+                let (band, list) = split_band(ui.max_rect(), self.playback.band_height());
+                self.playback.paint(ui.painter(), band);
+                self.queue.paint(ui.painter(), list, true);
             });
     }
 }
@@ -248,6 +256,7 @@ impl ClientTickHost for GuiTickHost {
         let Self {
             app,
             queue,
+            playback,
             gestures,
             wheel,
             ..
@@ -271,15 +280,16 @@ impl ClientTickHost for GuiTickHost {
                     // Feed the translated pointer events through the Client
                     // core's gesture policy so the recognizer's double-click
                     // and drag state stays current across frames, then
-                    // resolve the recognized gesture against the Queue
-                    // panel's last painted hit map (design D6).
+                    // resolve the recognized gesture against the painted
+                    // surface its anchor lands in (design D6).
                     if let Some(gesture) = gestures.recognize(
                         event.kind,
                         event.modifiers,
                         event.position,
                         Instant::now(),
                     ) {
-                        app.route_gui_pointer(gesture, Some(gui_leaf(queue)));
+                        let leaf = pointer_leaf(queue, playback, gesture);
+                        app.route_gui_pointer(gesture, Some(leaf));
                     } else {
                         // A hover move claims nothing but still disarms
                         // prefix mode, as every pointer event does.
@@ -298,8 +308,47 @@ fn gui_leaf(queue: &mut QueuePanel) -> &mut dyn GuiSurfaceLeaf {
     queue
 }
 
-/// Test evidence for the headless GUI tests (row 6.4): the Queue panel's
-/// cursor, scroll, and last painted report.
+/// The surface a recognized pointer gesture resolves against: the Queue
+/// playback band when the gesture's anchor lies inside it, and the Queue list
+/// otherwise. A drag anchors at its press, so a drag that starts on the
+/// seekbar scrubs it, and a drag from a row moves that row (the TUI's anchor
+/// rule).
+fn pointer_leaf<'a>(
+    queue: &'a mut QueuePanel,
+    playback: &'a mut QueuePlaybackPanel,
+    gesture: PointerGesture<Position>,
+) -> &'a mut dyn GuiSurfaceLeaf {
+    match gesture_anchor(gesture) {
+        Some(at) if playback.claims(at) => playback,
+        _ => queue,
+    }
+}
+
+/// The point a gesture is anchored at, or `None` for a gesture that carries no
+/// point (the end of a drag).
+fn gesture_anchor(gesture: PointerGesture<Position>) -> Option<Position> {
+    match gesture {
+        PointerGesture::Click { at, .. }
+        | PointerGesture::DoubleClick(at)
+        | PointerGesture::RightClick(at)
+        | PointerGesture::Scroll { at, .. } => Some(at),
+        PointerGesture::Drag { from, .. } => Some(from),
+        PointerGesture::DragEnd => None,
+    }
+}
+
+/// The band and list rects of one frame: the Queue playback band takes the top
+/// `band_height` points of the window, and the Queue list takes the rest.
+fn split_band(rect: egui::Rect, band_height: f32) -> (egui::Rect, egui::Rect) {
+    let band = egui::Rect::from_min_size(rect.min, egui::vec2(rect.width(), band_height));
+    let list =
+        egui::Rect::from_min_max(egui::pos2(rect.left(), rect.top() + band_height), rect.max);
+    (band, list)
+}
+
+/// Test evidence for the headless GUI tests (rows 6.4 and 6.5): the Queue
+/// panel's cursor, scroll, and last painted report, and the Queue playback
+/// band's report, shown state, and last request.
 #[cfg(test)]
 impl GuiTickHost {
     pub(crate) fn queue_test_cursor(&self) -> usize {
@@ -316,5 +365,19 @@ impl GuiTickHost {
 
     pub(crate) fn queue_test_report(&self) -> &mbv_surfaces::queue::QueueFrameReport {
         self.queue.last_report()
+    }
+
+    pub(crate) fn playback_test_report(
+        &self,
+    ) -> &mbv_surfaces::queue_playback::QueuePlaybackFrameReport {
+        self.playback.last_report()
+    }
+
+    pub(crate) fn playback_test_request(&self) -> Option<&Msg> {
+        self.playback.last_request()
+    }
+
+    pub(crate) fn playback_test_shown(&self) -> bool {
+        self.playback.shown()
     }
 }

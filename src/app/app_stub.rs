@@ -64,6 +64,24 @@ pub fn stub_app_with_queue(n: usize) -> App {
         queued_latest_transition: None,
     };
     app.local_view = QueueView::from_snapshot(&state);
+    // The stub player is idle, so the Queue playback band collapses and the
+    // list keeps the whole window (task 3.6).
+    app.player.update_status(|status| status.active = false);
+    app
+}
+
+/// The `App` a Client's test drives with `n` projected queue slots and the
+/// first one playing, so the Queue playback band shows its transport
+/// (`add-gui-front-end` row 6.5).
+#[cfg(feature = "test")]
+#[must_use]
+pub fn stub_app_with_playing_queue(n: usize) -> App {
+    let app = stub_app_with_queue(n);
+    app.player.update_status(|status| {
+        status.active = true;
+        status.current_idx = 0;
+        status.queue_len = n;
+    });
     app
 }
 

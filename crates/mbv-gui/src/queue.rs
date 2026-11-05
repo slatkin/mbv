@@ -32,7 +32,7 @@ pub(crate) const ROW_HEIGHT: f32 = 24.0;
 
 /// The padding between the panel edge and the list content, in logical
 /// points.
-const PANEL_PADDING: f32 = 8.0;
+pub(crate) const PANEL_PADDING: f32 = 8.0;
 
 /// The gap between a title's column and the duration column, in logical
 /// points.
@@ -419,12 +419,12 @@ fn rows_fitting(height: f32, row_height: f32) -> usize {
 }
 
 /// A surface's fill, through the neutral `Rgb` (task 1.3).
-fn surface_fill(surface: Surface, focused: bool) -> egui::Color32 {
+pub(crate) fn surface_fill(surface: Surface, focused: bool) -> egui::Color32 {
     to_egui(surface_colors(surface, focused).fill)
 }
 
 /// A role's colour, through the neutral `Rgb` (task 1.3).
-fn role_colour(role: Role) -> egui::Color32 {
+pub(crate) fn role_colour(role: Role) -> egui::Color32 {
     to_egui(role.color())
 }
 
@@ -432,7 +432,7 @@ fn to_egui(rgb: mbv_theme::Rgb) -> egui::Color32 {
     egui::Color32::from_rgb(rgb.r, rgb.g, rgb.b)
 }
 
-fn to_region(rect: egui::Rect) -> HitRegion {
+pub(crate) fn to_region(rect: egui::Rect) -> HitRegion {
     HitRegion::new(rect.left(), rect.top(), rect.width(), rect.height())
 }
 

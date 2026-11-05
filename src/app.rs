@@ -4,9 +4,10 @@ mod client_core;
 mod client_drains;
 mod dispatch;
 #[cfg(feature = "test")]
-pub use self::app_stub::stub_app_with_queue;
+pub use self::app_stub::{stub_app_with_playing_queue, stub_app_with_queue};
 mod infra;
 mod input;
+mod queue_playback_projection;
 mod queue_surface;
 pub mod state;
 mod waking_relay;
@@ -32,6 +33,7 @@ pub use self::input::key_policy::{
     OverlayFocus, RemoteControlTarget, RouterOverlayState, RouterPlaybackState, RouterSnapshot,
 };
 pub use self::input::router::{RouterOutcome, resolve_router_outcome_with_focused};
+pub use self::queue_playback_projection::QueuePlaybackProjection;
 pub use self::queue_surface::QueueSurfaceProjection;
 pub use self::state::app_struct::App;
 pub use self::state::playback::HomeContent;
