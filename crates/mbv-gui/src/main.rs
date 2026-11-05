@@ -9,6 +9,7 @@
 
 mod app;
 mod attach;
+mod fonts;
 mod input;
 mod owner_exe;
 mod tick_host;

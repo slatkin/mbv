@@ -14,6 +14,7 @@ use mbv::{CLIENT_IDLE_CADENCE, ClientCore};
 use mbv_theme::{Surface, surface_colors};
 
 use crate::attach;
+use crate::fonts;
 use crate::tick_host::GuiTickHost;
 
 /// The attached Client: the `App` the shared tick's surface phases read. It
@@ -31,6 +32,7 @@ pub(crate) struct GuiClient {
 
 impl GuiClient {
     pub(crate) fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        fonts::install(&cc.egui_ctx);
         match open_session(cc) {
             Ok(session) => Self {
                 session: Some(session),
