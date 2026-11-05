@@ -1,5 +1,4 @@
 use super::*;
-use crate::mouse::seekbar::SEEKBAR_SCRUB_INTERVAL;
 use mbv_ui_model::playback::NowPlayingTitleSite;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
@@ -92,12 +91,14 @@ fn transport_clicks_resolve_against_retained_geometry() {
     assert!(panel.on(&click(5, 4)).is_none());
 }
 
-/// A seekbar scrub admits one seek per throttle interval, and only for a
-/// drag that anchored inside the bar span: a drag that merely crosses the
-/// bar is not a scrub of it. The throttle records the outcome of the interval
-/// passing, so the test never sleeps.
+/// A drag scrub routes through the Surface state's throttled seek rule: the
+/// first in-bar drag scrubs to the pointer column's fraction, a second scrub
+/// inside the throttle interval is suppressed, and a drag that anchored
+/// outside the bar never scrubs. The interval's expiry is the Surface state
+/// test's proof (mbv-surfaces `tests/queue_playback`), which injects the
+/// clock instead of backdating the state.
 #[test]
-fn seekbar_scrub_needs_an_in_bar_anchor_and_one_seek_per_interval() {
+fn seekbar_scrub_routes_through_the_surface_states_throttled_rule() {
     let mut panel = painted_panel();
     let (_, seekbar) = panel.transport_hits();
     let drag = |panel: &mut QueuePlaybackPanel, from: u16, to: u16| {
@@ -118,14 +119,60 @@ fn seekbar_scrub_needs_an_in_bar_anchor_and_one_seek_per_interval() {
         drag(&mut panel, seekbar.x + 1, target + 1).is_none(),
         "a second scrub inside the interval is throttled"
     );
-    panel.scrub_at = Instant::now().checked_sub(SEEKBAR_SCRUB_INTERVAL);
-    assert!(
-        drag(&mut panel, seekbar.x + 2, target + 1).is_some(),
-        "a scrub after the interval is admitted again"
-    );
     assert!(
         drag(&mut panel, seekbar.x - 1, target).is_none(),
         "a drag that anchored outside the bar never scrubs"
+    );
+}
+
+/// The frame report resolves the panel's painted regions to their semantic
+/// targets (design D6; the control hit maps row 6.5 paints from): the
+/// transport glyphs, the seekbar, and the header's playback-target
+/// indicator, while a collapsed panel reports no transport region.
+#[test]
+fn frame_report_resolves_the_painted_transport_regions() {
+    let mut panel = painted_panel();
+    panel.transport.availability.previous = true;
+    panel.transport.availability.next = true;
+    let at = |x: u16, y: u16| mbv_ui_msg::Position {
+        x: f32::from(x),
+        y: f32::from(y),
+    };
+    let resolve = |panel: &QueuePlaybackPanel, x: u16, y: u16| {
+        panel.frame_report().hit_map.resolve(at(x, y)).copied()
+    };
+
+    let (play_pause, seekbar) = panel.transport_hits();
+    let (prev, next) = panel.transport_nav_hits();
+    assert_eq!(
+        resolve(&panel, play_pause.x + 1, play_pause.y),
+        Some(QueuePlaybackHitTarget::PlayPause),
+    );
+    assert_eq!(
+        resolve(&panel, seekbar.x + 3, seekbar.y),
+        Some(QueuePlaybackHitTarget::Seekbar),
+    );
+    assert_eq!(
+        resolve(&panel, prev.x, prev.y),
+        Some(QueuePlaybackHitTarget::Previous)
+    );
+    assert_eq!(
+        resolve(&panel, next.x, next.y),
+        Some(QueuePlaybackHitTarget::Next)
+    );
+    let target = panel.target_area_for_test();
+    assert_eq!(
+        resolve(&panel, target.x + target.width - 1, target.y),
+        Some(QueuePlaybackHitTarget::PlaybackTarget),
+    );
+
+    // A collapsed panel (no transport painted) resolves no transport region;
+    // the header's indicator stays, it is painted in every layout.
+    panel.set_transport_area(None);
+    assert!(resolve(&panel, 5, 4).is_none());
+    assert_eq!(
+        resolve(&panel, target.x + target.width - 1, target.y),
+        Some(QueuePlaybackHitTarget::PlaybackTarget),
     );
 }
 

@@ -311,6 +311,10 @@ impl Model {
             // included — so the label resolution (its config lock and two
             // allocations) runs on every sync pass.
             let (host, host_is_remote) = self.app.playback_host_label_and_remote();
+            // The transport band's focus presentation rides the Surface
+            // state (add-gui-front-end row 4.5): the queue column forces
+            // the band unfocused, and both Clients paint that fact.
+            panel.set_transport_focused(transport.panel_focused);
             panel.set_header(status, host, host_is_remote);
             panel.set_transport(transport);
             panel.set_transport_area(transport_area);

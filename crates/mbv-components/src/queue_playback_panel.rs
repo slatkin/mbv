@@ -30,14 +30,18 @@ use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
 use super::library_playback_panel::PlaybackProjection;
+use crate::media_list::hit_region;
 use crate::mouse::gesture::{MouseGesture, MouseGestureState};
-use crate::mouse::seekbar::{scrub_fraction, seek_fraction};
 use mbv_render::PlaybackStripAreas;
 use mbv_render::arrangements::chrome::QUEUE_TRANSPORT_ROWS;
 use mbv_render::components::chrome_player::TransportAvailability;
 use mbv_render::components::widgets::queue_panel_inset;
 use mbv_render::{
     HeaderTitle, PlaybackRenderContext, render_header_title, render_player_panel, target_icon,
+};
+use mbv_surfaces::HitMap;
+use mbv_surfaces::queue_playback::{
+    QueuePlaybackFrameReport, QueuePlaybackHitTarget, QueuePlaybackSurface,
 };
 use mbv_theme as palette;
 use mbv_ui_model::playback_target::NowPlayingStatus;
@@ -83,9 +87,11 @@ pub struct QueuePlaybackPanel {
     /// double-click window that separates a transport glyph's single press
     /// from a seekbar seek, and the drag anchor a scrub needs.
     mouse_gestures: MouseGestureState,
-    /// The last admitted seekbar scrub; `None` admits the next one. Set only
-    /// by an admitted scrub, so the throttle measures real scrubs.
-    scrub_at: Option<Instant>,
+    /// The Queue playback Surface state (add-gui-front-end design D5, row
+    /// 4.5): the transport band's focus presentation and the seek target's
+    /// throttle state. The adapter paints from it and delegates the seek
+    /// rules to it; it holds no copy of a state value.
+    surface: QueuePlaybackSurface,
     /// Panel-local marquee state (the title row's scrolling title).
     marquee_text: String,
     marquee_started_at: Instant,
@@ -124,7 +130,7 @@ impl QueuePlaybackPanel {
             prev_area: Rect::default(),
             seekbar_area: Rect::default(),
             mouse_gestures: MouseGestureState::new(),
-            scrub_at: None,
+            surface: QueuePlaybackSurface::new(),
             marquee_text: String::new(),
             marquee_started_at: Instant::now(),
             target_area: Rect::default(),
@@ -171,6 +177,13 @@ impl QueuePlaybackPanel {
             .unwrap_or_default();
     }
 
+    /// Project the transport band's focus presentation (the Surface state's
+    /// transport focus, design D5): the focus-derived fill the painter
+    /// resolves. The queue column forces the band unfocused today.
+    pub fn set_transport_focused(&mut self, focused: bool) {
+        self.surface.set_transport_focused(focused);
+    }
+
     /// Test-only: the retained transport hit geometry (task 3.7).
     #[cfg(any(test, feature = "test"))]
     #[must_use]
@@ -212,6 +225,35 @@ impl QueuePlaybackPanel {
     #[must_use]
     pub fn target_area_for_test(&self) -> Rect {
         self.target_area
+    }
+
+    /// The current frame's interaction report (design D6): the hit map over
+    /// the panel's painted geometry. The regions are the last completed
+    /// paint's transport glyphs, seekbar, visual slot, and the header's
+    /// playback-target indicator, resolved in the same retained geometry the
+    /// pointer path resolves against. The shell and the Client core read this
+    /// report; neither recomputes the geometry.
+    #[must_use]
+    pub fn frame_report(&self) -> QueuePlaybackFrameReport {
+        let mut hit_map = HitMap::new();
+        // Push order is resolution precedence: the last pushed region wins,
+        // so the header's playback-target indicator (painted above the
+        // transport band) pushes after the transport controls, exactly the
+        // precedence the pointer path resolves with.
+        for (area, target) in [
+            (self.play_pause_area, QueuePlaybackHitTarget::PlayPause),
+            (self.stop_area, QueuePlaybackHitTarget::Stop),
+            (self.prev_area, QueuePlaybackHitTarget::Previous),
+            (self.next_area, QueuePlaybackHitTarget::Next),
+            (self.seekbar_area, QueuePlaybackHitTarget::Seekbar),
+            (self.visual_slot_area, QueuePlaybackHitTarget::VisualSlot),
+            (self.target_area, QueuePlaybackHitTarget::PlaybackTarget),
+        ] {
+            if area.width > 0 {
+                hit_map.push(hit_region(area), target);
+            }
+        }
+        QueuePlaybackFrameReport { hit_map }
     }
 
     /// Resolve one pointer event. The transport glyphs and the target
@@ -276,18 +318,37 @@ impl QueuePlaybackPanel {
     }
 
     /// The seek intent a column resolves: its fraction of the painted bar
-    /// span. `None` when the panel painted no bar.
+    /// span, through the Surface state's seek rule. `None` when the panel
+    /// painted no bar.
     fn seek_intent(&self, column: u16) -> Option<Msg> {
-        seek_fraction(self.seekbar_area, column)
+        self.surface
+            .seek_target(hit_region(self.seekbar_area), f32::from(column))
             .map(|fraction| Msg::Playback(PlaybackRequest::SeekTo(fraction)))
     }
 
-    /// Scrub the bar for one recognized left-drag motion. The drag must have
-    /// anchored inside the bar span and the pointer must still be over it —
-    /// a drag that merely crossed the bar (a queue-row drag, say) is not a
-    /// scrub of this bar. Admitted at most once per `SEEKBAR_SCRUB_INTERVAL`.
+    /// Scrub the bar for one recognized left-drag motion, through the
+    /// Surface state's throttled admission. The drag must have anchored
+    /// inside the bar span and the pointer must still be over it — a drag
+    /// that merely crossed the bar (a queue-row drag, say) is not a scrub of
+    /// this bar. Admitted at most once per the Surface state's scrub
+    /// interval.
     fn scrub(&mut self, gesture: Option<MouseGesture>) -> Option<Msg> {
-        scrub_fraction(self.seekbar_area, &mut self.scrub_at, gesture)
+        let MouseGesture::Drag { from, to } = gesture? else {
+            return None;
+        };
+        self.surface
+            .admit_scrub(
+                hit_region(self.seekbar_area),
+                mbv_ui_msg::Position {
+                    x: f32::from(from.x),
+                    y: f32::from(from.y),
+                },
+                mbv_ui_msg::Position {
+                    x: f32::from(to.x),
+                    y: f32::from(to.y),
+                },
+                Instant::now(),
+            )
             .map(|fraction| Msg::Playback(PlaybackRequest::SeekTo(fraction)))
     }
 }
@@ -363,9 +424,12 @@ impl Component for QueuePlaybackPanel {
         // taller than the four transport rows) stay on the chrome band.
         frame.render_widget(
             Block::default().style(
-                Style::default().bg(palette::surface_colors(TRANSPORT_SURFACE, false)
-                    .fill
-                    .to_ratatui()),
+                Style::default().bg(palette::surface_colors(
+                    TRANSPORT_SURFACE,
+                    self.surface.transport_focused(),
+                )
+                .fill
+                .to_ratatui()),
             ),
             transport_area,
         );
@@ -385,7 +449,7 @@ impl Component for QueuePlaybackPanel {
                     show: self.transport.show_controls,
                     use_nerd_fonts: self.transport.use_nerd_fonts,
                     availability: self.transport.availability,
-                    panel_focused: false,
+                    panel_focused: self.surface.transport_focused(),
                     progress: (
                         self.transport.state.position_ticks,
                         self.transport.state.runtime_ticks,
