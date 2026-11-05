@@ -1,6 +1,15 @@
 //! Public-API tests for the core focus stack (task 3.2): push, dismiss-restore
 //! independent of mount order, and Panel focus moves.
 
+mod hit_map;
+mod list {
+    mod cursor;
+    mod helpers;
+    mod marks;
+    mod row_flow;
+    mod viewport;
+}
+
 use mbv_surfaces::FocusStack;
 use mbv_ui_model::settings::PanelFocus;
 use mbv_ui_msg::{ComponentId, ModalId, OverlayId};
@@ -123,14 +132,4 @@ fn the_focus_hold_takes_focus_off_every_surface_until_released() {
         Some(ComponentId::Queue),
         "release restores the derived focus"
     );
-}
-
-/// The moved list seam: cursor, viewport, row flow, and marks over one
-/// ordered row flow, with the shared test shapes in `list::helpers`.
-mod list {
-    mod cursor;
-    mod helpers;
-    mod marks;
-    mod row_flow;
-    mod viewport;
 }

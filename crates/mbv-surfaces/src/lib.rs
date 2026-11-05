@@ -6,8 +6,14 @@
 //! once. Nothing in this crate depends on a terminal library, a terminal UI
 //! framework, or a GUI toolkit.
 
+mod capacity;
 mod focus_stack;
+mod hit_map;
 pub mod list;
 
 #[doc(inline)]
+pub use capacity::ListCapacity;
+#[doc(inline)]
 pub use focus_stack::FocusStack;
+#[doc(inline)]
+pub use hit_map::{HitMap, HitRegion};
