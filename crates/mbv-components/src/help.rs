@@ -17,9 +17,10 @@ use tuirealm::event::{Event, Key, KeyEvent, MouseEvent, MouseEventKind};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::mouse::gesture::{MouseGesture, MouseGestureState};
+use super::mouse::gesture::MouseGestureState;
 use mbv_keybinds::Keybinds;
 use mbv_render::{HelpDestination, HelpRenderGeometry, help_destination, render_help_panel};
+use mbv_surfaces::gesture::PointerGesture;
 use mbv_ui_model::settings::PanelFocus;
 use mbv_ui_model::tab_selection::TabSelection;
 use mbv_ui_msg::UserEvent;
@@ -138,7 +139,7 @@ impl HelpComponent {
             return None;
         }
         match self.mouse_gestures.recognize(mouse)? {
-            MouseGesture::Click { at, .. } | MouseGesture::DoubleClick(at) => {
+            PointerGesture::Click { at, .. } | PointerGesture::DoubleClick(at) => {
                 if self
                     .painted_panel_area
                     .is_some_and(|area| area.contains(at))
@@ -150,7 +151,7 @@ impl HelpComponent {
                     Some(Msg::Shell(Box::new(ShellRequest::DismissHelp)))
                 }
             }
-            MouseGesture::Scroll { delta, .. } => {
+            PointerGesture::Scroll { delta, .. } => {
                 let geometry = self.content_geometry.as_ref()?;
                 let delta = i16::try_from(delta).unwrap_or(if delta.is_negative() {
                     i16::MIN

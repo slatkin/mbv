@@ -25,13 +25,14 @@ use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEven
 use tuirealm::props::{AttrValue, Attribute, Props, QueryResult};
 use tuirealm::state::State;
 
-use crate::mouse::gesture::{MouseGesture, MouseGestureState};
+use crate::mouse::gesture::MouseGestureState;
 use crate::mouse::seekbar::{scrub_fraction, seek_fraction};
 use mbv_queue::PlaybackTitleParts;
 use mbv_render::PlaybackStripAreas;
 use mbv_render::arrangements::chrome::PLAYER_BOX_HEIGHT;
 use mbv_render::components::chrome_player::TransportAvailability;
 use mbv_render::{PlaybackRenderContext, render_player_panel};
+use mbv_surfaces::gesture::PointerGesture;
 use mbv_theme as palette;
 use mbv_ui_model::playback::{NowPlayingTitleSite, PlaybackState};
 use mbv_ui_msg::UserEvent;
@@ -201,7 +202,7 @@ impl LibraryPlaybackPanel {
             MouseEventKind::Down(MouseButton::Left)
                 if self.seekbar_area.width > 0
                     && self.seekbar_area.contains(point)
-                    && matches!(gesture, Some(MouseGesture::DoubleClick(_))) =>
+                    && matches!(gesture, Some(PointerGesture::DoubleClick(_))) =>
             {
                 self.seek_intent(event.column)
             }
@@ -221,7 +222,7 @@ impl LibraryPlaybackPanel {
     /// anchored inside the bar span and the pointer must still be over it —
     /// a drag that merely crossed the bar is not a scrub of this bar.
     /// Admitted at most once per `SEEKBAR_SCRUB_INTERVAL`.
-    fn scrub(&mut self, gesture: Option<MouseGesture>) -> Option<Msg> {
+    fn scrub(&mut self, gesture: Option<PointerGesture<ratatui::layout::Position>>) -> Option<Msg> {
         scrub_fraction(self.seekbar_area, &mut self.scrub_at, gesture)
             .map(|fraction| Msg::Playback(PlaybackRequest::SeekTo(fraction)))
     }

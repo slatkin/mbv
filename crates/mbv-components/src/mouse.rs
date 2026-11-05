@@ -3,7 +3,7 @@
 //! Phase 1 of `restore-mouse-support`: the subscription helper that every
 //! mouse-eligible component is subscribed with by `sync_mouse_subscriptions`
 //! (`src/app/shell/library.rs`). Phase 2 adds [`hit`] (`HitRegions<Tag>`) and
-//! [`gesture`] (`MouseGestureState`) alongside this.
+//! [`gesture`] (the TUI's translation edge over the Client core's
 
 pub mod gesture;
 pub mod hit;

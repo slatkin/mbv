@@ -9,8 +9,8 @@ use std::time::Instant;
 
 use ratatui::layout::Rect;
 
-use super::gesture::MouseGesture;
 use crate::media_list::hit_region;
+use mbv_surfaces::gesture::PointerGesture;
 use mbv_ui_msg::Position;
 
 pub use mbv_surfaces::seekbar::SEEKBAR_SCRUB_INTERVAL;
@@ -32,9 +32,9 @@ pub fn seek_fraction(bar: Rect, column: u16) -> Option<f64> {
 pub fn scrub_fraction(
     bar: Rect,
     last_scrub: &mut Option<Instant>,
-    gesture: Option<MouseGesture>,
+    gesture: Option<PointerGesture<ratatui::layout::Position>>,
 ) -> Option<f64> {
-    let MouseGesture::Drag { from, to } = gesture? else {
+    let PointerGesture::Drag { from, to } = gesture? else {
         return None;
     };
     mbv_surfaces::seekbar::scrub_fraction(

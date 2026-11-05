@@ -1,9 +1,9 @@
 //! Pointer-event interpretation against the last painted frame's retained slot geometry, resolving pill, list, hero, and split-drag gestures into typed Msgs.
 
 use super::{
-    ClickModifier, LeafKeyResult, LibraryKey, LibraryPanel, LibrarySlotEvent,
-    MediaListSurfaceInput, MouseButton, MouseEvent, MouseEventKind, MouseGesture,
-    MouseGestureState, Msg, Position, ShellRequest, SkeletonHits, TerminalObserverEvent,
+    ClickSelection, LeafKeyResult, LibraryKey, LibraryPanel, LibrarySlotEvent,
+    MediaListSurfaceInput, MouseButton, MouseEvent, MouseEventKind, MouseGestureState, Msg,
+    PointerGesture, Position, ShellRequest, SkeletonHits, TerminalObserverEvent,
     normalize_list_pane_width,
 };
 
@@ -123,7 +123,7 @@ impl LibraryPanel {
 
     fn split_gesture_msg(
         &mut self,
-        gesture: MouseGesture,
+        gesture: PointerGesture<Position>,
         at: ratatui::layout::Position,
     ) -> Option<Msg> {
         let Some(split) = self.split.as_ref() else {
@@ -132,21 +132,21 @@ impl LibraryPanel {
         };
         match gesture {
             // Press-and-release without motion changes nothing.
-            MouseGesture::Click { .. } if split.gap.contains(at) => {
+            PointerGesture::Click { .. } if split.gap.contains(at) => {
                 self.split_changed = false;
                 None
             }
             // A second press in the gap is a double click, not a changed
             // drag. Clear the changed bit so its later release cannot emit
             // an end request for an earlier drag.
-            MouseGesture::DoubleClick(_) => {
+            PointerGesture::DoubleClick(_) => {
                 self.split_changed = false;
                 None
             }
             // A recognized `Drag` implies an armed press inside the gap, so
             // every drag resolves -- tracking necessarily continues outside
             // the gap once the pointer leaves it.
-            MouseGesture::Drag { to, .. } => {
+            PointerGesture::Drag { to, .. } => {
                 let width = normalize_list_pane_width(
                     Some(split.pane_origin_x.saturating_sub(to.x)),
                     split.content_width,
@@ -161,9 +161,9 @@ impl LibraryPanel {
                     width,
                 ))))
             }
-            MouseGesture::DragEnd => std::mem::take(&mut self.split_changed).then_some(Msg::Shell(
-                Box::new(ShellRequest::ResizeListPaneEnd(split.width)),
-            )),
+            PointerGesture::DragEnd => std::mem::take(&mut self.split_changed).then_some(
+                Msg::Shell(Box::new(ShellRequest::ResizeListPaneEnd(split.width))),
+            ),
             _ => None,
         }
     }
@@ -174,11 +174,11 @@ impl LibraryPanel {
     fn surface_gesture(&mut self, mouse: MouseEvent) -> Option<Msg> {
         let gesture = self.gestures.recognize(mouse)?;
         let at = match gesture {
-            MouseGesture::Click { at, .. }
-            | MouseGesture::DoubleClick(at)
-            | MouseGesture::RightClick(at)
-            | MouseGesture::Scroll { at, .. } => at,
-            MouseGesture::Drag { .. } | MouseGesture::DragEnd => return None,
+            PointerGesture::Click { at, .. }
+            | PointerGesture::DoubleClick(at)
+            | PointerGesture::RightClick(at)
+            | PointerGesture::Scroll { at, .. } => at,
+            PointerGesture::Drag { .. } | PointerGesture::DragEnd => return None,
         };
         if let Some(message) = self.selector_or_link_gesture(gesture, at) {
             return Some(message);
@@ -195,14 +195,18 @@ impl LibraryPanel {
     /// the latest frame is the one that resolves (ADR 0024). Link labels are
     /// ordinary text; the panel retains valid URL geometry and owns the click
     /// effect request.
-    fn selector_or_link_gesture(&mut self, gesture: MouseGesture, at: Position) -> Option<Msg> {
+    fn selector_or_link_gesture(
+        &mut self,
+        gesture: PointerGesture<Position>,
+        at: Position,
+    ) -> Option<Msg> {
         if let Some(&index) = self.hits.selector.resolve(at) {
             return self.slot_event(LibrarySlotEvent::SelectorPicked(index));
         }
         if let Some(&index) = self.hits.workspace_selector.resolve(at) {
             return self.slot_event(LibrarySlotEvent::WorkspaceSelectorPicked(index));
         }
-        if let MouseGesture::Click { .. } = gesture
+        if let PointerGesture::Click { .. } = gesture
             && let Some(&index) = self.hits.links.resolve(at)
             && let Some(url) =
                 self.painted_link_urls.get(index).cloned().and_then(|url| {
@@ -215,23 +219,23 @@ impl LibraryPanel {
     }
 
     /// Resolve the hero pane's own input, including Workspace box episode rows.
-    fn hero_surface_gesture(&mut self, gesture: MouseGesture) -> Option<Msg> {
+    fn hero_surface_gesture(&mut self, gesture: PointerGesture<Position>) -> Option<Msg> {
         match gesture {
-            MouseGesture::Click { at, modifier } => {
-                let input = match modifier {
-                    ClickModifier::Ctrl => MediaListSurfaceInput::ToggleClick(at),
-                    ClickModifier::Shift => MediaListSurfaceInput::RangeClick(at),
-                    ClickModifier::None => MediaListSurfaceInput::Click(at),
+            PointerGesture::Click { at, selection } => {
+                let input = match selection {
+                    ClickSelection::Toggle => MediaListSurfaceInput::ToggleClick(at),
+                    ClickSelection::Range => MediaListSurfaceInput::RangeClick(at),
+                    ClickSelection::Plain => MediaListSurfaceInput::Click(at),
                 };
                 self.slot_event(LibrarySlotEvent::HeroPane(input))
             }
-            MouseGesture::DoubleClick(at) => self.slot_event(LibrarySlotEvent::HeroPane(
+            PointerGesture::DoubleClick(at) => self.slot_event(LibrarySlotEvent::HeroPane(
                 MediaListSurfaceInput::DoubleClick(at),
             )),
-            MouseGesture::RightClick(at) => self.slot_event(LibrarySlotEvent::HeroPane(
+            PointerGesture::RightClick(at) => self.slot_event(LibrarySlotEvent::HeroPane(
                 MediaListSurfaceInput::ContextClick(at),
             )),
-            MouseGesture::Scroll { at, delta } => {
+            PointerGesture::Scroll { at, delta } => {
                 self.slot_event(LibrarySlotEvent::HeroPane(MediaListSurfaceInput::Wheel {
                     at,
                     delta,
@@ -242,27 +246,27 @@ impl LibraryPanel {
     }
 
     /// Resolve gestures inside the painted browser list slot.
-    fn list_surface_gesture(&mut self, gesture: MouseGesture) -> Option<Msg> {
+    fn list_surface_gesture(&mut self, gesture: PointerGesture<Position>) -> Option<Msg> {
         let at = match gesture {
-            MouseGesture::Click { at, .. }
-            | MouseGesture::DoubleClick(at)
-            | MouseGesture::RightClick(at)
-            | MouseGesture::Scroll { at, .. } => at,
-            MouseGesture::Drag { .. } | MouseGesture::DragEnd => return None,
+            PointerGesture::Click { at, .. }
+            | PointerGesture::DoubleClick(at)
+            | PointerGesture::RightClick(at)
+            | PointerGesture::Scroll { at, .. } => at,
+            PointerGesture::Drag { .. } | PointerGesture::DragEnd => return None,
         };
         if !self.list_rect().is_some_and(|rect| rect.contains(at)) {
             return None;
         }
         match gesture {
-            MouseGesture::Click { at, modifier } => {
-                let input = match modifier {
-                    ClickModifier::Ctrl => MediaListSurfaceInput::ToggleClick(at),
-                    ClickModifier::Shift => MediaListSurfaceInput::RangeClick(at),
-                    ClickModifier::None => MediaListSurfaceInput::Click(at),
+            PointerGesture::Click { at, selection } => {
+                let input = match selection {
+                    ClickSelection::Toggle => MediaListSurfaceInput::ToggleClick(at),
+                    ClickSelection::Range => MediaListSurfaceInput::RangeClick(at),
+                    ClickSelection::Plain => MediaListSurfaceInput::Click(at),
                 };
                 self.slot_event(LibrarySlotEvent::List(input))
             }
-            MouseGesture::DoubleClick(at) => {
+            PointerGesture::DoubleClick(at) => {
                 // Only a destination whose browser rows are hero-bearing
                 // opens the Library Hero overlay on double-click; a
                 // not-hero-bearing owner (the podcast tab) activates the
@@ -279,16 +283,16 @@ impl LibraryPanel {
                     at,
                 )))
             }
-            MouseGesture::RightClick(at) => self.slot_event(LibrarySlotEvent::List(
+            PointerGesture::RightClick(at) => self.slot_event(LibrarySlotEvent::List(
                 MediaListSurfaceInput::ContextClick(at),
             )),
-            MouseGesture::Scroll { at, delta } => {
+            PointerGesture::Scroll { at, delta } => {
                 self.slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::Wheel {
                     at,
                     delta,
                 }))
             }
-            MouseGesture::Drag { .. } | MouseGesture::DragEnd => None,
+            PointerGesture::Drag { .. } | PointerGesture::DragEnd => None,
         }
     }
 
@@ -298,7 +302,7 @@ impl LibraryPanel {
         if let Some(&index) = self.hits.workspace_selector.resolve(at) {
             return self.slot_event(LibrarySlotEvent::WorkspaceSelectorPicked(index));
         }
-        if let MouseGesture::Click { .. } = gesture
+        if let PointerGesture::Click { .. } = gesture
             && let Some(&index) = self.hits.links.resolve(at)
             && let Some(url) =
                 self.painted_link_urls.get(index).cloned().and_then(|url| {
@@ -314,7 +318,7 @@ impl LibraryPanel {
         {
             return self.hero_surface_gesture(gesture);
         }
-        if matches!(gesture, MouseGesture::DoubleClick(_)) {
+        if matches!(gesture, PointerGesture::DoubleClick(_)) {
             return self.activate_overlay_hero_selection();
         }
         Some(Msg::TerminalEvent(

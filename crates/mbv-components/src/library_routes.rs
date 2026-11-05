@@ -8,9 +8,10 @@ use tuirealm::event::{Event, Key, KeyEvent, MouseEvent, MouseEventKind};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::mouse::gesture::{MouseGesture, MouseGestureState};
+use super::mouse::gesture::MouseGestureState;
 use super::mouse::hit::HitRegions;
 use mbv_render::{LibraryRoutesRenderModel, render_library_routes_content};
+use mbv_surfaces::gesture::PointerGesture;
 use mbv_ui_model::context_menu::{LibraryRoutePopup, LibraryRouteStage};
 use mbv_ui_msg::UserEvent;
 use mbv_ui_msg::{LeafKeyResult, Msg, ShellRequest};
@@ -101,7 +102,7 @@ impl LibraryRoutesComponent {
             return None;
         }
         match self.mouse_gestures.recognize(mouse)? {
-            MouseGesture::Click { at, .. } => {
+            PointerGesture::Click { at, .. } => {
                 if let Some(&index) = self.hit_rows.resolve(at) {
                     self.cursor = index;
                     return None;
@@ -111,7 +112,7 @@ impl LibraryRoutesComponent {
                 }
                 None
             }
-            MouseGesture::DoubleClick(at) => {
+            PointerGesture::DoubleClick(at) => {
                 if let Some(&index) = self.hit_rows.resolve(at) {
                     self.cursor = index;
                     return Some(Msg::Shell(Box::new(ShellRequest::LibraryRoutesEnter)));

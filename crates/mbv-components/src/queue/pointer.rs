@@ -2,7 +2,7 @@ use ratatui::layout::Position;
 use tuirealm::event::{MouseEvent, MouseEventKind};
 
 use crate::media_list::{MediaListSurfaceInput, RowIntent};
-use crate::mouse::gesture::{ClickModifier, MouseGesture};
+use mbv_surfaces::gesture::{ClickSelection, PointerGesture};
 use mbv_ui_model::context_menu::ContextMenuTargets;
 use mbv_ui_msg::{Msg, QueueRequest, ShellRequest, TerminalObserverEvent};
 
@@ -21,12 +21,12 @@ impl QueueComponent {
             return None;
         }
         match self.mouse_gestures.recognize(mouse)? {
-            MouseGesture::Scroll { at, delta } => self.handle_scroll(at, delta),
-            MouseGesture::Click { at, modifier } => self.handle_click(at, modifier),
-            MouseGesture::DoubleClick(at) => self.handle_double_click(at),
-            MouseGesture::RightClick(at) => self.handle_right_click(at, mouse.column, mouse.row),
-            MouseGesture::Drag { to, .. } => self.handle_drag(to),
-            MouseGesture::DragEnd => {
+            PointerGesture::Scroll { at, delta } => self.handle_scroll(at, delta),
+            PointerGesture::Click { at, selection } => self.handle_click(at, selection),
+            PointerGesture::DoubleClick(at) => self.handle_double_click(at),
+            PointerGesture::RightClick(at) => self.handle_right_click(at, mouse.column, mouse.row),
+            PointerGesture::Drag { to, .. } => self.handle_drag(to),
+            PointerGesture::DragEnd => {
                 self.drag_grab = None;
                 None
             }
@@ -44,7 +44,7 @@ impl QueueComponent {
         Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
     }
 
-    fn handle_click(&mut self, at: Position, modifier: ClickModifier) -> Option<Msg> {
+    fn handle_click(&mut self, at: Position, selection: ClickSelection) -> Option<Msg> {
         if self.playlist_hit.width > 0 && self.playlist_hit.contains(at) {
             self.drag_grab = None;
             return Some(Msg::Shell(Box::new(ShellRequest::OpenPlaylists)));
@@ -54,14 +54,14 @@ impl QueueComponent {
         }
         let target = self.wide.resolve_current_point(at).copied();
         if let Some(target) = target {
-            let input = match modifier {
-                ClickModifier::Ctrl => MediaListSurfaceInput::ToggleClick(at),
-                ClickModifier::Shift => MediaListSurfaceInput::RangeClick(at),
-                ClickModifier::None => MediaListSurfaceInput::Click(at),
+            let input = match selection {
+                ClickSelection::Toggle => MediaListSurfaceInput::ToggleClick(at),
+                ClickSelection::Range => MediaListSurfaceInput::RangeClick(at),
+                ClickSelection::Plain => MediaListSurfaceInput::Click(at),
             };
             self.delegate_row_local_input(input, Some(target));
         }
-        self.drag_grab = if modifier == ClickModifier::None {
+        self.drag_grab = if selection == ClickSelection::Plain {
             target
         } else {
             None

@@ -14,9 +14,10 @@ use ratatui::layout::Position;
 use tuirealm::event::{MouseButton, MouseEvent, MouseEventKind};
 
 use crate::media_list::MediaListSurfaceInput;
-use crate::mouse::gesture::{ClickModifier, MouseGesture, MouseGestureState};
+use crate::mouse::gesture::MouseGestureState;
 use mbv_render::arrangements::wide_hero::normalize_list_pane_width;
 use mbv_render::wide_hero_fits;
+use mbv_surfaces::gesture::{ClickSelection, PointerGesture};
 use mbv_ui_model::library::LibraryKey;
 use mbv_ui_model::media_list::{LibrarySelectionOrigin, SelectionOrigin};
 use mbv_ui_msg::SelectionSummary;

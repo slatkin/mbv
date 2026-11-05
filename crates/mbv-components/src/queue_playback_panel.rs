@@ -31,7 +31,7 @@ use tuirealm::state::State;
 
 use super::library_playback_panel::PlaybackProjection;
 use crate::media_list::hit_region;
-use crate::mouse::gesture::{MouseGesture, MouseGestureState};
+use crate::mouse::gesture::MouseGestureState;
 use mbv_render::PlaybackStripAreas;
 use mbv_render::arrangements::chrome::QUEUE_TRANSPORT_ROWS;
 use mbv_render::components::chrome_player::TransportAvailability;
@@ -40,6 +40,7 @@ use mbv_render::{
     HeaderTitle, PlaybackRenderContext, render_header_title, render_player_panel, target_icon,
 };
 use mbv_surfaces::HitMap;
+use mbv_surfaces::gesture::PointerGesture;
 use mbv_surfaces::queue_playback::{
     QueuePlaybackFrameReport, QueuePlaybackHitTarget, QueuePlaybackSurface,
 };
@@ -299,7 +300,7 @@ impl QueuePlaybackPanel {
             MouseEventKind::Down(MouseButton::Left)
                 if self.seekbar_area.width > 0
                     && self.seekbar_area.contains(point)
-                    && matches!(gesture, Some(MouseGesture::DoubleClick(_))) =>
+                    && matches!(gesture, Some(PointerGesture::DoubleClick(_))) =>
             {
                 self.seek_intent(event.column)
             }
@@ -332,8 +333,8 @@ impl QueuePlaybackPanel {
     /// that merely crossed the bar (a queue-row drag, say) is not a scrub of
     /// this bar. Admitted at most once per the Surface state's scrub
     /// interval.
-    fn scrub(&mut self, gesture: Option<MouseGesture>) -> Option<Msg> {
-        let MouseGesture::Drag { from, to } = gesture? else {
+    fn scrub(&mut self, gesture: Option<PointerGesture<ratatui::layout::Position>>) -> Option<Msg> {
+        let PointerGesture::Drag { from, to } = gesture? else {
             return None;
         };
         self.surface
