@@ -22,7 +22,6 @@ use crate::app::App;
 use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::dispatch::queue::QueueOpEdit;
 use crate::app::input::resolver::KeyChord;
-use crossterm::event::KeyCode;
 use mbv_ctrl::Direction;
 use mbv_ctrl::player::PlayerCommand;
 use mbv_queue::QueueSlotId;
@@ -197,7 +196,7 @@ pub(in crate::app) fn idle_feed_command_for_key(
     context: &IdleFeedLinkContext,
 ) -> Option<Command> {
     match chord.code {
-        KeyCode::Char('o')
+        mbv_ui_msg::Key::Char('o')
             if chord.mods.is_empty()
                 && !context.player_active
                 && !context.playback_panel_present_idle

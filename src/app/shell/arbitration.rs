@@ -242,7 +242,8 @@ impl Model {
         }) else {
             return RouterOutcome::FallThrough;
         };
-        let key = crate::app::input::resolver::neutral_key_to_crossterm(tui_key);
+        // The router resolves the neutral chord the TUI edge translated
+        // (`add-gui-front-end` design D4); no back-conversion exists.
         // `player.status` is a plain (non-reentrant) mutex and `RouterSnapshot`
         // initializers below call `effective_playback_state()`, which locks it
         // again. A temporary created anywhere inside the struct literal lives
@@ -291,7 +292,7 @@ impl Model {
         };
 
         let outcome = resolve_router_outcome_with_focused(
-            key,
+            tui_key,
             &snapshot,
             self.application.focus(),
             &self.keybinds,

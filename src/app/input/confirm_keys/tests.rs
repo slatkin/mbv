@@ -1,7 +1,8 @@
 use super::*;
 use crate::app::state::playback::{ReplacementExecutor, RoutedReplacementPrep};
+use crate::app::test_seams::crossterm_key_to_neutral;
 use crate::app::tests::*;
-use crossterm::event::KeyModifiers;
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use mbv_emby_model::EmbyItem;
 use mbv_emby_model::test_support::make_item;
 
@@ -23,8 +24,10 @@ fn audio(id: &str) -> EmbyItem {
     item
 }
 
-fn key(code: KeyCode) -> KeyEvent {
-    KeyEvent::new(code, KeyModifiers::NONE)
+/// A neutral key with no modifiers, translated from the crossterm-case code
+/// the tests spell (`add-gui-front-end` task 2.2: confirm keys are neutral).
+fn key(code: KeyCode) -> mbv_ui_msg::KeyEvent {
+    crossterm_key_to_neutral(KeyEvent::new(code, KeyModifiers::NONE))
 }
 
 /// Whether the shared confirm modal is the current pending overlay.

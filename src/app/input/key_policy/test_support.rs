@@ -1,5 +1,7 @@
 //! Shared builders for the key-policy tests: default and rebound keybinds, a Both-panels snapshot, and the normalizing chord constructor.
 use super::*;
+use crate::app::test_seams::crossterm_key_to_neutral;
+use crossterm::event::{KeyCode, KeyModifiers};
 use mbv_keybinds::{Chord, KeySection, SectionBindings};
 
 pub(super) fn keybinds() -> Keybinds {
@@ -29,7 +31,10 @@ pub(super) fn snapshot() -> RouterSnapshot {
 }
 
 pub(super) fn chord(code: KeyCode, mods: KeyModifiers) -> KeyChord {
-    // Through the normalizing constructor, mirroring how the router
-    // derives a chord from a pressed key (`KeyChord::from_key`).
-    KeyChord::new(code, mods)
+    // Through the normalizing constructor, mirroring how the router derives a
+    // chord from a pressed key (`KeyChord::from_key`): the crossterm-case key
+    // is translated at the edge first, then normalized.
+    KeyChord::from_key(crossterm_key_to_neutral(crossterm::event::KeyEvent::new(
+        code, mods,
+    )))
 }

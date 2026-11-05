@@ -9,7 +9,8 @@ use tuirealm::subscription::{EventClause, Sub, SubClause};
 
 use mbv_ui_msg::{
     ComponentId, Key as NeutralKey, KeyEvent as NeutralKeyEvent, KeyModifiers as NeutralMods,
-    ModalId, Msg, OverlayId, PopupId, TerminalObserverEvent, UserEvent,
+    ModalId, Msg, OverlayId, PointerEvent, PointerKind, PopupId, Position, TerminalObserverEvent,
+    UserEvent,
 };
 
 /// Convert a `TuiRealm` keyboard event to the neutral `KeyEvent`
@@ -17,6 +18,14 @@ use mbv_ui_msg::{
 /// neutral shape, and the TUI adapter owns the translation. Terminal keys the
 /// neutral vocabulary cannot represent become `Key::Null`, which matches no
 /// chord, exactly as the unmapped codes did before the conversion existed.
+///
+/// The modifier lowercase rule: when SHIFT is held, an uppercase ASCII
+/// character is reported as its lowercase letter with SHIFT kept. Crossterm
+/// delivers Shift+n as `Char('N')` + SHIFT, while a GUI toolkit reports the
+/// caseless key with the modifier set; folding the case into the modifier
+/// gives both Clients one chord for one physical press. The resolver applies
+/// the same rule to configured chords, which the keybind registry stores in
+/// crossterm-case (`Shift+N`).
 #[must_use]
 pub fn neutral_key(key: tuirealm::event::KeyEvent) -> NeutralKeyEvent {
     use tuirealm::event::Key as TuiKey;
@@ -59,7 +68,40 @@ pub fn neutral_key(key: tuirealm::event::KeyEvent) -> NeutralKeyEvent {
     if key.modifiers.contains(tuirealm::event::KeyModifiers::ALT) {
         modifiers = modifiers.union(NeutralMods::ALT);
     }
+    let code = match code {
+        NeutralKey::Char(c) if modifiers.contains(NeutralMods::SHIFT) && c.is_ascii_uppercase() => {
+            NeutralKey::Char(c.to_ascii_lowercase())
+        }
+        code => code,
+    };
     NeutralKeyEvent::new(code, modifiers)
+}
+
+/// Convert a `TuiRealm` mouse event to the neutral `PointerEvent`
+/// (`add-gui-front-end` design D4). The terminal reports cells, so a cell is
+/// one logical unit: `column`/`row` map onto `x`/`y` unchanged. A mouse kind
+/// the neutral vocabulary cannot represent (other buttons, drags, horizontal
+/// wheel) yields `None`, which routes to no target, exactly as the events the
+/// components' kind filters already drop.
+#[must_use]
+pub fn neutral_pointer(mouse: tuirealm::event::MouseEvent) -> Option<PointerEvent> {
+    use tuirealm::event::MouseButton as TuiMouseButton;
+    use tuirealm::event::MouseEventKind as TuiMouseKind;
+    let kind = match mouse.kind {
+        TuiMouseKind::Down(TuiMouseButton::Left) => PointerKind::Press,
+        TuiMouseKind::Up(TuiMouseButton::Left) => PointerKind::Release,
+        TuiMouseKind::Moved => PointerKind::Move,
+        TuiMouseKind::ScrollDown => PointerKind::ScrollDown,
+        TuiMouseKind::ScrollUp => PointerKind::ScrollUp,
+        _ => return None,
+    };
+    Some(PointerEvent::new(
+        kind,
+        Position {
+            x: f32::from(mouse.column),
+            y: f32::from(mouse.row),
+        },
+    ))
 }
 
 const OVERLAY_IDS: &[ComponentId] = &[
@@ -165,7 +207,110 @@ impl AppComponent<Msg, UserEvent> for UiRootComponent {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tuirealm::event::{Key, KeyEvent, KeyModifiers};
+    use rstest::rstest;
+    use tuirealm::event::{Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+
+    /// One table over the listener-edge mapping (add-gui-front-end task 2.1):
+    /// the crossterm-delivered key and mouse events the `UiRoot` observer
+    /// sees, and the neutral event each must become. The key rows pin the
+    /// modifier lowercase rule; the pointer rows pin the cell-to-logical-unit
+    /// position and the kind fold.
+    #[derive(Debug, PartialEq)]
+    enum Raw {
+        Key(KeyEvent),
+        Mouse(MouseEvent),
+    }
+
+    #[derive(Debug, PartialEq)]
+    enum Mapped {
+        Key(NeutralKeyEvent),
+        Pointer(Option<PointerEvent>),
+    }
+
+    fn mouse(kind: MouseEventKind, column: u16, row: u16) -> MouseEvent {
+        MouseEvent {
+            kind,
+            column,
+            row,
+            modifiers: KeyModifiers::NONE,
+        }
+    }
+
+    fn pointer(kind: PointerKind, x: f32, y: f32) -> Mapped {
+        Mapped::Pointer(Some(PointerEvent::new(kind, Position { x, y })))
+    }
+
+    #[rstest]
+    #[case::plain_char(
+        Raw::Key(KeyEvent { code: Key::Char('n'), modifiers: KeyModifiers::NONE }),
+        Mapped::Key(NeutralKeyEvent::new(NeutralKey::Char('n'), NeutralMods::NONE))
+    )]
+    #[case::shift_uppercase_char_lowercases(
+        // The modifier lowercase rule: crossterm delivers Shift+n as
+        // `Char('N')` + SHIFT; the neutral chord reports the lowercase
+        // letter with SHIFT kept, so a GUI toolkit's caseless key plus
+        // SHIFT denotes the same chord.
+        Raw::Key(KeyEvent { code: Key::Char('N'), modifiers: KeyModifiers::SHIFT }),
+        Mapped::Key(NeutralKeyEvent::new(NeutralKey::Char('n'), NeutralMods::SHIFT))
+    )]
+    #[case::ctrl_letter_arrives_lowercase(
+        Raw::Key(KeyEvent { code: Key::Char('l'), modifiers: KeyModifiers::CONTROL }),
+        Mapped::Key(NeutralKeyEvent::new(NeutralKey::Char('l'), NeutralMods::CONTROL))
+    )]
+    #[case::shift_non_char_keeps_shift(
+        Raw::Key(KeyEvent { code: Key::Left, modifiers: KeyModifiers::SHIFT }),
+        Mapped::Key(NeutralKeyEvent::new(NeutralKey::Left, NeutralMods::SHIFT))
+    )]
+    #[case::backtab_keeps_shift(
+        Raw::Key(KeyEvent { code: Key::BackTab, modifiers: KeyModifiers::SHIFT }),
+        Mapped::Key(NeutralKeyEvent::new(NeutralKey::BackTab, NeutralMods::SHIFT))
+    )]
+    #[case::function_key(
+        Raw::Key(KeyEvent { code: Key::Function(5), modifiers: KeyModifiers::NONE }),
+        Mapped::Key(NeutralKeyEvent::new(NeutralKey::Function(5), NeutralMods::NONE))
+    )]
+    #[case::unrepresentable_key_maps_to_null(
+        Raw::Key(KeyEvent { code: Key::CapsLock, modifiers: KeyModifiers::NONE }),
+        Mapped::Key(NeutralKeyEvent::new(NeutralKey::Null, NeutralMods::NONE))
+    )]
+    #[case::left_press(
+        Raw::Mouse(mouse(MouseEventKind::Down(MouseButton::Left), 3, 7)),
+        pointer(PointerKind::Press, 3.0, 7.0)
+    )]
+    #[case::left_release(
+        Raw::Mouse(mouse(MouseEventKind::Up(MouseButton::Left), 3, 7)),
+        pointer(PointerKind::Release, 3.0, 7.0)
+    )]
+    #[case::pointer_move(
+        Raw::Mouse(mouse(MouseEventKind::Moved, 12, 4)),
+        pointer(PointerKind::Move, 12.0, 4.0)
+    )]
+    #[case::wheel_down(
+        Raw::Mouse(mouse(MouseEventKind::ScrollDown, 0, 0)),
+        pointer(PointerKind::ScrollDown, 0.0, 0.0)
+    )]
+    #[case::wheel_up(
+        Raw::Mouse(mouse(MouseEventKind::ScrollUp, 9, 2)),
+        pointer(PointerKind::ScrollUp, 9.0, 2.0)
+    )]
+    #[case::other_button_has_no_neutral_kind(
+        Raw::Mouse(mouse(MouseEventKind::Down(MouseButton::Right), 1, 1)),
+        Mapped::Pointer(None)
+    )]
+    #[case::drag_has_no_neutral_kind(
+        Raw::Mouse(mouse(MouseEventKind::Drag(MouseButton::Left), 1, 1)),
+        Mapped::Pointer(None)
+    )]
+    fn terminal_events_translate_to_the_neutral_vocabulary(
+        #[case] raw: Raw,
+        #[case] expected: Mapped,
+    ) {
+        let translated = match raw {
+            Raw::Key(key) => Mapped::Key(neutral_key(key)),
+            Raw::Mouse(mouse) => Mapped::Pointer(neutral_pointer(mouse)),
+        };
+        assert_eq!(translated, expected);
+    }
 
     #[test]
     fn root_observer_marks_none_returning_local_key_as_processed() {

@@ -12,6 +12,11 @@
 # Blind spot: only the five crossterm/tuirealm event types below; a new
 # raw-input type needs a regex addition.
 #
+# Exception: `src/key.rs` is the neutral key vocabulary itself (design D4,
+# add-gui-front-end task 1.1) — its `KeyEvent`/`KeyModifiers` declarations are
+# the neutral types the rule protects, not raw terminal events, so the file
+# is ignored while raw event references elsewhere in the crate still warn.
+#
 # The rule carries its own `files` scope for the crate and `ignores`
 # globs for the crate's test paths, so one plain repo scan covers the
 # tree without an explicit path argument per rule.
@@ -62,3 +67,4 @@ ignores:
   - "**/tests.rs"
   - "**/*_tests.rs"
   - "**/test_*.rs"
+  - "crates/mbv-ui-msg/src/key.rs"

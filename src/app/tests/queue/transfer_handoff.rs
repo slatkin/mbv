@@ -110,8 +110,8 @@ pub(super) fn hand_off_key() -> SessionTargetKey {
     SessionTargetKey::Emby("peer-owner".to_string())
 }
 
-pub(super) fn confirm_key(code: KeyCode) -> KeyEvent {
-    KeyEvent::new(code, KeyModifiers::NONE)
+pub(super) fn confirm_key(code: KeyCode) -> mbv_ui_msg::KeyEvent {
+    crate::app::test_seams::crossterm_key_to_neutral(KeyEvent::new(code, KeyModifiers::NONE))
 }
 
 /// A local-daemon app whose local Owner plays `items`, plus the local Owner's

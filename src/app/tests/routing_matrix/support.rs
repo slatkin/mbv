@@ -23,14 +23,14 @@
 //! candidate policy: a consumed chord falls through to the leaf, and the
 //! candidate resolves as `Deferred`.
 
-use crate::app::input::resolver::crossterm_key_to_neutral;
 use crate::app::input::router::{
     RouterOutcome, RouterSnapshot, resolve_router_outcome_with_focused,
 };
 use crate::app::shell::fold_keyboard_messages;
+use crate::app::test_seams::crossterm_key_to_neutral;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use mbv_keybinds::{Chord, KeySection, Keybinds, SectionBindings};
-use mbv_ui_msg::{ComponentId, Msg, TerminalObserverEvent};
+use mbv_ui_msg::{ComponentId, KeyEvent as NeutralKeyEvent, Msg, TerminalObserverEvent};
 
 /// The registry-defaults configuration the matrix resolves against (task
 /// 3.2): no prefix, every declared action on its declared chords.
@@ -56,7 +56,7 @@ pub(crate) fn keybinds_with_override(id: &'static str, chord: &str) -> Keybinds 
 
 pub(crate) fn fold_tick(
     leaf: Option<Msg>,
-    key: KeyEvent,
+    key: NeutralKeyEvent,
     focused: Option<&ComponentId>,
     snapshot: RouterSnapshot,
 ) -> Vec<Msg> {
@@ -64,20 +64,24 @@ pub(crate) fn fold_tick(
     if let Some(leaf) = leaf {
         messages.push(leaf);
     }
-    messages.push(Msg::TerminalEvent(TerminalObserverEvent::Key(
-        crossterm_key_to_neutral(key),
-    )));
+    messages.push(Msg::TerminalEvent(TerminalObserverEvent::Key(key)));
     let outcome = resolve_router_outcome_with_focused(key, &snapshot, None, &default_keybinds());
     fold_keyboard_messages(messages, focused, &outcome)
 }
 
-pub(crate) fn key(code: KeyCode) -> KeyEvent {
-    KeyEvent::new(code, KeyModifiers::NONE)
+/// A chord with modifiers, delivered crossterm-case and translated at the
+/// edge like every production key.
+pub(crate) fn key_mod(code: KeyCode, modifiers: KeyModifiers) -> NeutralKeyEvent {
+    crossterm_key_to_neutral(KeyEvent::new(code, modifiers))
+}
+
+pub(crate) fn key(code: KeyCode) -> NeutralKeyEvent {
+    key_mod(code, KeyModifiers::NONE)
 }
 
 pub(crate) fn fold_tick_with_outcome(
     leaf: Option<Msg>,
-    key: KeyEvent,
+    key: NeutralKeyEvent,
     focused: Option<&ComponentId>,
     outcome: &RouterOutcome,
 ) -> Vec<Msg> {
@@ -85,15 +89,13 @@ pub(crate) fn fold_tick_with_outcome(
     if let Some(leaf) = leaf {
         messages.push(leaf);
     }
-    messages.push(Msg::TerminalEvent(TerminalObserverEvent::Key(
-        crossterm_key_to_neutral(key),
-    )));
+    messages.push(Msg::TerminalEvent(TerminalObserverEvent::Key(key)));
     fold_keyboard_messages(messages, focused, outcome)
 }
 
 pub(crate) fn fold_tick_focused(
     leaf: Option<Msg>,
-    key: KeyEvent,
+    key: NeutralKeyEvent,
     focused: Option<&ComponentId>,
     snapshot: RouterSnapshot,
 ) -> Vec<Msg> {
@@ -101,9 +103,7 @@ pub(crate) fn fold_tick_focused(
     if let Some(leaf) = leaf {
         messages.push(leaf);
     }
-    messages.push(Msg::TerminalEvent(TerminalObserverEvent::Key(
-        crossterm_key_to_neutral(key),
-    )));
+    messages.push(Msg::TerminalEvent(TerminalObserverEvent::Key(key)));
     let outcome = resolve_router_outcome_with_focused(key, &snapshot, focused, &default_keybinds());
     fold_keyboard_messages(messages, focused, &outcome)
 }

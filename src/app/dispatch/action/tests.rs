@@ -1,14 +1,21 @@
 use super::*;
+use crate::app::test_seams::crossterm_key_to_neutral;
 use crate::app::tests::{make_app_stub, make_remote_app_stub};
 use crate::app::{LibEvent, PlaylistEvent};
-use crossterm::event::KeyModifiers;
+use crossterm::event::{KeyCode, KeyModifiers};
 
 fn key(code: KeyCode) -> KeyChord {
-    KeyChord::new(code, KeyModifiers::NONE)
+    KeyChord::from_key(crossterm_key_to_neutral(crossterm::event::KeyEvent::new(
+        code,
+        KeyModifiers::NONE,
+    )))
 }
 
 fn key_ctrl(code: KeyCode) -> KeyChord {
-    KeyChord::new(code, KeyModifiers::CONTROL)
+    KeyChord::from_key(crossterm_key_to_neutral(crossterm::event::KeyEvent::new(
+        code,
+        KeyModifiers::CONTROL,
+    )))
 }
 /// Focus switches keep the queue card checkpoint: the checkpoint is the
 /// measured image geometry and focus does not change the artwork, so a

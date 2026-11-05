@@ -6,8 +6,8 @@
 //! `Swallow` (run nothing, discard the leaf's message), or `FallThrough` (the
 //! leaf's own typed request stands).
 
-use crossterm::event::{KeyCode, KeyEvent};
 use mbv_keybinds::Keybinds;
+use mbv_ui_msg::{Key, KeyEvent};
 
 use super::key_policy::{KeyPolicyBinding, command_for_policy, resolve_policy};
 use super::resolver::KeyChord;
@@ -108,7 +108,7 @@ pub(in crate::app) fn resolve_router_outcome_with_focused(
                     RouterOutcome::Deferred(cmd)
                 }
                 Some(cmd @ Command::App(AppCommand::Playback(PlaybackIntent::Stop)))
-                    if chord.code == KeyCode::Esc =>
+                    if chord.code == Key::Esc =>
                 {
                     RouterOutcome::Deferred(cmd)
                 }

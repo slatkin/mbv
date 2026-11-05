@@ -1,7 +1,7 @@
 use super::*;
 use crate::app::LibraryTab;
 use crate::app::dispatch::action::{PlaybackIntent, ShellCommand};
-use crate::app::input::resolver::crossterm_key_to_neutral;
+use crate::app::test_seams::crossterm_key_to_neutral;
 use crate::app::tests::{install_test_emby, make_app_stub, make_remote_app_stub_with_cmd_rx};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use mbv_emby_model::EmbyItem;

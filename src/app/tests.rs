@@ -47,10 +47,10 @@ use ratatui::Terminal;
 pub(crate) fn confirm_replace_queue(app: &mut App) {
     app.apply_confirm_action(
         crate::app::ConfirmAction::ReplacePopulatedQueue,
-        crossterm::event::KeyEvent::new(
+        crate::app::test_seams::crossterm_key_to_neutral(crossterm::event::KeyEvent::new(
             crossterm::event::KeyCode::Enter,
             crossterm::event::KeyModifiers::NONE,
-        ),
+        )),
     );
 }
 

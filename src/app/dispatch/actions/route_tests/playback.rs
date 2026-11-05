@@ -87,10 +87,10 @@ fn make_home_audio_only_owner() -> (App, std::sync::mpsc::Receiver<CtrlCmd>) {
 fn confirm_local_fall_through(app: &mut App) {
     app.apply_confirm_action(
         ConfirmAction::PlayLocallyInstead,
-        crossterm::event::KeyEvent::new(
+        crate::app::test_seams::crossterm_key_to_neutral(crossterm::event::KeyEvent::new(
             crossterm::event::KeyCode::Enter,
             crossterm::event::KeyModifiers::NONE,
-        ),
+        )),
     );
 }
 

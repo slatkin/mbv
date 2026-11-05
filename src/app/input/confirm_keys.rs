@@ -3,7 +3,7 @@ use crate::app::{
     App, ConfirmAction, ConfirmModal, PanelFocus, PendingQueueAction, QueueLink,
     SavePlaylistDialog, SavePlaylistStage,
 };
-use crossterm::event::{KeyCode, KeyEvent};
+use mbv_ui_msg::{Key, KeyEvent};
 
 impl App {
     /// Shared dispatcher for the confirmation modal: matches on which
@@ -21,7 +21,7 @@ impl App {
                 self.confirm_remove_active_queue_item_for_key(pos, key);
             }
             ConfirmAction::RemoveActiveQueueSelection { link, slot_ids } => {
-                if key.code == KeyCode::Enter {
+                if key.code == Key::Enter {
                     self.confirm_remove_active_queue_selection(link, &slot_ids);
                 }
             }
@@ -54,7 +54,7 @@ impl App {
             // staged flow (attach a link opened for it, copy, arm the pending
             // transfer); every other key cancels and drops an opened link.
             ConfirmAction::ConfirmQueueTransfer(_target) => match key.code {
-                KeyCode::Enter => self.run_staged_queue_transfer(),
+                Key::Enter => self.run_staged_queue_transfer(),
                 _ => self.cancel_staged_queue_transfer(),
             },
         }
@@ -62,27 +62,27 @@ impl App {
     }
 
     fn confirm_clear_queue(&mut self, key: KeyEvent) {
-        if key.code == KeyCode::Enter {
+        if key.code == Key::Enter {
             self.replace_queue_or_prompt(PendingQueueAction::ClearQueue);
         }
     }
 
     fn confirm_remove_active_queue_item_for_key(&mut self, pos: usize, key: KeyEvent) {
-        if key.code == KeyCode::Enter {
+        if key.code == Key::Enter {
             self.confirm_remove_active_queue_item(pos);
         }
     }
 
     fn confirm_rescan_library(&mut self, lib_idx: usize, key: KeyEvent) {
-        if key.code == KeyCode::Enter {
+        if key.code == Key::Enter {
             self.trigger_lib_rescan(lib_idx);
         }
     }
 
     fn confirm_save_overwrite_playlist(&mut self, existing_id: &str, name: String, key: KeyEvent) {
         match key.code {
-            KeyCode::Enter => self.do_overwrite_playlist(existing_id, &name),
-            KeyCode::Esc => self.open_save_playlist_dialog(SavePlaylistDialog {
+            Key::Enter => self.do_overwrite_playlist(existing_id, &name),
+            Key::Esc => self.open_save_playlist_dialog(SavePlaylistDialog {
                 input: name,
                 stage: SavePlaylistStage::EnterName,
             }),
@@ -91,19 +91,19 @@ impl App {
     }
 
     fn confirm_delete_playlist(&mut self, id: String, name: String, key: KeyEvent) {
-        if key.code == KeyCode::Enter {
+        if key.code == Key::Enter {
             self.spawn_delete_playlist(id, name);
         }
     }
 
     fn confirm_remove_feed_subscription(&mut self, index: usize, key: KeyEvent) {
-        if key.code == KeyCode::Enter {
+        if key.code == Key::Enter {
             self.remove_feed_confirmed(index);
         }
     }
 
     fn confirm_remove_emby(&mut self, key: KeyEvent) {
-        if key.code == KeyCode::Enter {
+        if key.code == Key::Enter {
             self.remove_emby_confirmed();
         }
     }
@@ -113,15 +113,15 @@ impl App {
         generation: mbv_core::service_runtime::SetupGeneration,
         key: KeyEvent,
     ) {
-        if key.code == KeyCode::Esc {
+        if key.code == Key::Esc {
             self.setup.pending_emby_replacement = None;
-        } else if key.code == KeyCode::Enter {
+        } else if key.code == Key::Enter {
             self.replace_emby_confirmed(generation);
         }
     }
 
     fn confirm_remove_audiobookshelf(&mut self, key: KeyEvent) {
-        if key.code == KeyCode::Enter {
+        if key.code == Key::Enter {
             self.remove_audiobookshelf_confirmed();
         }
     }
@@ -131,19 +131,19 @@ impl App {
         generation: mbv_core::service_runtime::SetupGeneration,
         key: KeyEvent,
     ) {
-        if key.code == KeyCode::Esc {
+        if key.code == Key::Esc {
             self.setup.pending_audiobookshelf_replacement = None;
-        } else if key.code == KeyCode::Enter {
+        } else if key.code == Key::Enter {
             self.replace_audiobookshelf_confirmed(generation);
         }
     }
 
     fn confirm_play_locally(&mut self, key: KeyEvent) {
         match key.code {
-            KeyCode::Enter => {
+            Key::Enter => {
                 self.play_pending_local_play();
             }
-            KeyCode::Esc => {
+            Key::Esc => {
                 self.queue_deferrals.cancel_local_play();
             }
             _ => {}
@@ -158,11 +158,11 @@ impl App {
     fn confirm_discard_or_save_dirty_playlist(&mut self, key: KeyEvent) {
         let play_after = self.queue_deferrals.save_answer_is_play();
         match key.code {
-            KeyCode::Char('s' | 'S') => {
+            Key::Char('s' | 'S') => {
                 let mutation_id = self.save_playlist_to_emby();
                 self.queue_deferrals.bind_to_save(mutation_id);
             }
-            KeyCode::Char('d' | 'D') => {
+            Key::Char('d' | 'D') => {
                 if let Some(action) = self.queue_deferrals.take_on_discard() {
                     self.execute_pending_queue_action(action);
                 }
@@ -171,7 +171,7 @@ impl App {
                     self.set_panel_focus(PanelFocus::Queue);
                 }
             }
-            KeyCode::Esc => {
+            Key::Esc => {
                 self.queue_deferrals.cancel_save_answer();
             }
             _ => {}
@@ -183,7 +183,7 @@ impl App {
     /// executable payload can fire at a later step.
     fn confirm_replace_populated_queue(&mut self, key: KeyEvent) {
         match key.code {
-            KeyCode::Enter => {
+            Key::Enter => {
                 if let Some((action, via)) = self.queue_deferrals.take_confirmed_replacement() {
                     self.run_replacement(action, &via);
                 }
