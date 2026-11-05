@@ -79,6 +79,8 @@ eframe's default glow (OpenGL) renderer keeps the dependency tree smaller than w
 
 `mbv-gui` pins eframe 0.33, the last release that satisfies both halves of this decision: its default features are the glow renderer with the Wayland and X11 backends (0.35 makes wgpu a default feature), and its `App` trait takes the per-frame `update` hook (0.34 deprecates `update` for `logic` and `ui`). A pin bump lands with a rewrite of the frame hook and this row together.
 
+The GUI's proportional font is Inter. `mbv-gui` embeds the Inter font files (SIL Open Font License 1.1, license text shipped beside them) and installs Inter as the first proportional family at start-up, so the font does not depend on the fonts on the user's system. egui's built-in fonts stay as fallbacks for glyphs that Inter does not have, such as emoji. The monospace family stays egui's default.
+
 ### D9. GUI Owner launch
 
 The GUI reuses the library's Owner find, start, and attach code. It starts the Owner from the `mbv` program: first from the directory of its own executable, then from `PATH`. The Owner is never the GUI program, so the Owner process never maps the window stack (`headless-playback-memory-footprint`).
