@@ -34,6 +34,10 @@ pub(crate) const ROW_HEIGHT: f32 = 24.0;
 /// points.
 const PANEL_PADDING: f32 = 8.0;
 
+/// The gap between a title's column and the duration column, in logical
+/// points.
+const COLUMN_GAP: f32 = 8.0;
+
 /// The Queue panel: the Surface state plus the projection inputs the TUI
 /// adapter also holds, and the last completed frame's interaction report.
 pub(crate) struct QueuePanel {
@@ -339,26 +343,38 @@ fn paint_row_text(
         title.push(' ');
         title.push_str(&percent);
     }
-    let title_width = painter
-        .layout_no_wrap(
-            title.clone(),
-            egui::FontId::proportional(13.0),
-            title_colour,
-        )
-        .size()
-        .x;
-    let title_width = title_width.min(row_rect.width() - (x - row_rect.left()));
-    let _ = title_width;
-    painter.text(
-        egui::pos2(x, y),
-        baseline,
+    // The title's column runs from the marker to one gap short of the
+    // duration. A title wider than that column elides with an ellipsis, and
+    // the clip rect keeps every glyph inside the column.
+    let duration = duration.as_deref().filter(|text| !text.is_empty());
+    let duration_width = duration.map_or(0.0, |text| {
+        let width = painter
+            .layout_no_wrap(
+                text.to_owned(),
+                egui::FontId::proportional(13.0),
+                role_colour(Role::Duration),
+            )
+            .size()
+            .x;
+        width + COLUMN_GAP
+    });
+    let title_right = (row_rect.right() - PANEL_PADDING - duration_width).max(x);
+    let mut job = egui::text::LayoutJob::simple_singleline(
         title,
         egui::FontId::proportional(13.0),
         title_colour,
     );
-    if let Some(duration) = duration
-        && !duration.is_empty()
-    {
+    job.wrap = egui::text::TextWrapping::truncate_at_width(title_right - x);
+    let galley = painter.layout_job(job);
+    let column = egui::Rect::from_min_max(
+        egui::pos2(x, row_rect.top()),
+        egui::pos2(title_right, row_rect.bottom()),
+    );
+    let origin = baseline.anchor_size(egui::pos2(x, y), galley.size()).min;
+    painter
+        .with_clip_rect(column)
+        .galley(origin, galley, title_colour);
+    if let Some(duration) = duration {
         painter.text(
             egui::pos2(row_rect.right() - PANEL_PADDING, y),
             egui::Align2::RIGHT_CENTER,
