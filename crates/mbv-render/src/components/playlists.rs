@@ -32,7 +32,9 @@ pub fn render_save_playlist_content(
         dim_backdrop_active,
         60,
         7,
-        palette::surface_colors(palette::Surface::PopupFrame, false).fill,
+        palette::surface_colors(palette::Surface::PopupFrame, false)
+            .fill
+            .to_ratatui(),
     );
     let inner = modal.inner;
     let label = "Name: ";
@@ -58,7 +60,7 @@ pub fn render_save_playlist_content(
         Paragraph::new(Span::styled(
             title,
             Style::default()
-                .fg(palette::Role::TextHeroTitle.color())
+                .fg(palette::Role::TextHeroTitle.color().to_ratatui())
                 .add_modifier(Modifier::BOLD),
         ))
         .alignment(Alignment::Center),
@@ -72,7 +74,7 @@ pub fn render_save_playlist_content(
     f.render_widget(
         Paragraph::new(Span::styled(
             input_line,
-            Style::default().fg(palette::Role::TextStrong.color()),
+            Style::default().fg(palette::Role::TextStrong.color().to_ratatui()),
         ))
         .alignment(Alignment::Center),
         Rect {
@@ -188,7 +190,7 @@ pub fn render_playlists_content(frame: &mut Frame, area: Rect, view: PlaylistsVi
         frame.render_widget(
             Paragraph::new(Span::styled(
                 " Loading…",
-                Style::default().fg(palette::Role::TextSecondary.color()),
+                Style::default().fg(palette::Role::TextSecondary.color().to_ratatui()),
             )),
             content,
         );
@@ -198,7 +200,7 @@ pub fn render_playlists_content(frame: &mut Frame, area: Rect, view: PlaylistsVi
         frame.render_widget(
             Paragraph::new(Span::styled(
                 " No playlists found",
-                Style::default().fg(palette::Role::TextSecondary.color()),
+                Style::default().fg(palette::Role::TextSecondary.color().to_ratatui()),
             )),
             content,
         );
@@ -243,20 +245,28 @@ fn paint_rows(
         let selected = index == cursor;
         // Keep zebra parity tied to the absolute row so bands hold still under scroll.
         let bg = if selected {
-            Some(palette::surface_colors(palette::Surface::SelectedRow, false).fill)
+            Some(
+                palette::surface_colors(palette::Surface::SelectedRow, false)
+                    .fill
+                    .to_ratatui(),
+            )
         } else if index % 2 == 1 {
-            Some(palette::surface_colors(palette::Surface::ListStripe, false).fill)
+            Some(
+                palette::surface_colors(palette::Surface::ListStripe, false)
+                    .fill
+                    .to_ratatui(),
+            )
         } else {
             None
         };
         let row = row_content(index);
         let (fg, muted_fg) = if selected {
             (
-                palette::Role::SelectedRowFg.color(),
-                palette::Role::SelectedRowFg.color(),
+                palette::Role::SelectedRowFg.color().to_ratatui(),
+                palette::Role::SelectedRowFg.color().to_ratatui(),
             )
         } else {
-            (row.title_fg, palette::Role::TextMuted.color())
+            (row.title_fg, palette::Role::TextMuted.color().to_ratatui())
         };
         let title_style = if row.bold_title && !selected {
             Style::default().fg(fg).add_modifier(Modifier::BOLD)
@@ -319,9 +329,9 @@ fn render_playlist_rows(
                     String::new()
                 },
                 title_fg: if loaded {
-                    palette::Role::PlaylistLoadedFg.color()
+                    palette::Role::PlaylistLoadedFg.color().to_ratatui()
                 } else {
-                    palette::Role::TextPrimary.color()
+                    palette::Role::TextPrimary.color().to_ratatui()
                 },
             }
         },
@@ -341,7 +351,7 @@ fn render_open_playlist_content(
         frame.render_widget(
             Paragraph::new(Span::styled(
                 " Loading…",
-                Style::default().fg(palette::Role::TextSecondary.color()),
+                Style::default().fg(palette::Role::TextSecondary.color().to_ratatui()),
             )),
             content,
         );
@@ -351,7 +361,7 @@ fn render_open_playlist_content(
         frame.render_widget(
             Paragraph::new(Span::styled(
                 " Playlist is empty",
-                Style::default().fg(palette::Role::TextSecondary.color()),
+                Style::default().fg(palette::Role::TextSecondary.color().to_ratatui()),
             )),
             content,
         );
@@ -363,7 +373,7 @@ fn render_open_playlist_content(
             title: items[i].display_name(),
             bold_title: false,
             trail: String::new(),
-            title_fg: palette::Role::TextPrimary.color(),
+            title_fg: palette::Role::TextPrimary.color().to_ratatui(),
         }
     });
 }

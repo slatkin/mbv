@@ -62,8 +62,11 @@ pub fn render_modal_frame_bounds(
     // content body (`bg`) is cut out of it — the same pixels as painting the
     // two 2-column sides, the top band, and the bottom row individually, in
     // two widgets instead of four.
-    let border =
-        Style::default().bg(palette::surface_colors(palette::Surface::PopupBorder, false).fill);
+    let border = Style::default().bg(
+        palette::surface_colors(palette::Surface::PopupBorder, false)
+            .fill
+            .to_ratatui(),
+    );
     f.render_widget(Block::default().style(border), rect);
     let top_h = 1_u16.min(rect.height);
     let bottom_h = 1_u16.min(rect.height.saturating_sub(top_h));

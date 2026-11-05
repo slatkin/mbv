@@ -52,7 +52,9 @@ fn mini_view_library_body_fill_rests_while_wide_keeps_the_focused_fill() {
     let harness = TickHarness::new(mini);
     assert_eq!(
         harness.model().library_body_fill(),
-        mbv_theme::surface_colors(mbv_theme::Surface::LibraryColumn, false).fill,
+        mbv_theme::surface_colors(mbv_theme::Surface::LibraryColumn, false)
+            .fill
+            .to_ratatui(),
     );
 
     let mut wide = make_app_stub();
@@ -61,7 +63,9 @@ fn mini_view_library_body_fill_rests_while_wide_keeps_the_focused_fill() {
     let wide_harness = TickHarness::new(wide);
     assert_eq!(
         wide_harness.model().library_body_fill(),
-        mbv_theme::surface_colors(mbv_theme::Surface::LibraryColumn, true).fill,
+        mbv_theme::surface_colors(mbv_theme::Surface::LibraryColumn, true)
+            .fill
+            .to_ratatui(),
     );
 }
 
@@ -85,8 +89,12 @@ fn mini_view_paints_the_focused_queue_panel_with_the_unfocused_palette() {
         .draw(|frame| harness.model_mut().draw_frame(frame, false, false))
         .unwrap();
 
-    let resting_zebra = mbv_theme::surface_colors(mbv_theme::Surface::QueueColumn, false).fill;
-    let focused_zebra = mbv_theme::surface_colors(mbv_theme::Surface::QueueColumn, true).fill;
+    let resting_zebra = mbv_theme::surface_colors(mbv_theme::Surface::QueueColumn, false)
+        .fill
+        .to_ratatui();
+    let focused_zebra = mbv_theme::surface_colors(mbv_theme::Surface::QueueColumn, true)
+        .fill
+        .to_ratatui();
     assert_ne!(
         resting_zebra, focused_zebra,
         "the QueueColumn focus pair must differ for this proof to bind"
@@ -110,19 +118,33 @@ fn mini_view_paints_the_focused_queue_panel_with_the_unfocused_palette() {
     // begins one row below it.
     assert_eq!(
         buf[(box_area.x, box_area.y)].style().bg,
-        Some(mbv_theme::surface_colors(mbv_theme::Surface::QueuePanel, false).fill),
+        Some(
+            mbv_theme::surface_colors(mbv_theme::Surface::QueuePanel, false)
+                .fill
+                .to_ratatui()
+        ),
         "mini view keeps the box's top pad on the recessed panel's fill"
     );
     assert_eq!(
         buf[(rows.x, rows.y)].style().bg,
-        Some(mbv_theme::surface_colors(mbv_theme::Surface::SelectedRow, false).fill),
+        Some(
+            mbv_theme::surface_colors(mbv_theme::Surface::SelectedRow, false)
+                .fill
+                .to_ratatui()
+        ),
         "mini view keeps the cursor bar on the first row"
     );
     let mut striped = 0;
     for y in rows.y..rows.bottom() {
         for x in box_area.x..box_area.right() {
             let bg = buf[(x, y)].style().bg;
-            if bg == Some(mbv_theme::surface_colors(mbv_theme::Surface::SelectedRow, false).fill) {
+            if bg
+                == Some(
+                    mbv_theme::surface_colors(mbv_theme::Surface::SelectedRow, false)
+                        .fill
+                        .to_ratatui(),
+                )
+            {
                 continue;
             }
             assert_ne!(

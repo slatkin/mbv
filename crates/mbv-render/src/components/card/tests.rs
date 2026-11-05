@@ -37,7 +37,9 @@ fn the_loading_placeholder_stays_inside_the_slot_region() {
         .unwrap();
     let (recorded_h, recorded_w, loading, painted) = recorded.unwrap();
 
-    let fill = palette::surface_colors(palette::Surface::ArtworkLoadingPlaceholder, false).fill;
+    let fill = palette::surface_colors(palette::Surface::ArtworkLoadingPlaceholder, false)
+        .fill
+        .to_ratatui();
     let buf = terminal.backend().buffer();
     assert_eq!(
         buf[(0, 0)].style().bg,

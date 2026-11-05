@@ -126,7 +126,7 @@ pub fn render_wide_media_list_with_zebra<Target: Clone + Eq>(
             row_paint_area,
             total_rows.saturating_sub(content_area.height as usize),
             offset,
-            palette::Role::Scrollbar.color(),
+            palette::Role::Scrollbar.color().to_ratatui(),
         );
     }
 
@@ -164,7 +164,9 @@ fn selected_row_surface_color(_surface: SelectedRowSurface, _focused: bool) -> C
     // Every selected row paints the same opaque bar, regardless of the
     // owning tab or whether the selected row is a focused cursor or a
     // multi-selected row.
-    palette::surface_colors(palette::Surface::SelectedRow, false).fill
+    palette::surface_colors(palette::Surface::SelectedRow, false)
+        .fill
+        .to_ratatui()
 }
 
 /// Borrowed data needed to paint a wide media list.

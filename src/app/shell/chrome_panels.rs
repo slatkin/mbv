@@ -354,9 +354,14 @@ impl Model {
         // when its content is hidden. Idle placements have a zero-height
         // slot region, so this remains a no-op while idle.
         frame.render_widget(
-            ratatui::widgets::Block::default().style(ratatui::style::Style::default().bg(
-                mbv_theme::surface_colors(mbv_theme::Surface::QueueOnlyPlaybackPanel, false).fill,
-            )),
+            ratatui::widgets::Block::default().style(
+                ratatui::style::Style::default().bg(mbv_theme::surface_colors(
+                    mbv_theme::Surface::QueueOnlyPlaybackPanel,
+                    false,
+                )
+                .fill
+                .to_ratatui()),
+            ),
             slot_region,
         );
         if self.app.visual_slot_shown() {

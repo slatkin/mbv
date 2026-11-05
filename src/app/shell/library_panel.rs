@@ -482,7 +482,9 @@ impl Model {
     /// 80+ columns ignores window focus (`panel_appearance_focus`).
     pub(in crate::app) fn library_body_fill(&self) -> ratatui::style::Color {
         let focused = self.app.panel_appearance_focus(super::PanelFocus::Library);
-        mbv_theme::surface_colors(mbv_theme::Surface::LibraryColumn, focused).fill
+        mbv_theme::surface_colors(mbv_theme::Surface::LibraryColumn, focused)
+            .fill
+            .to_ratatui()
     }
 
     /// The transitional draw step: give the library rect to the mounted

@@ -43,7 +43,8 @@ impl App {
             ToastSeverity::Warning => mbv_theme::Role::TextFocusAccent,
             ToastSeverity::Error => mbv_theme::Role::StatusError,
         }
-        .color();
+        .color()
+        .to_ratatui();
         Some(vec![Span::styled(
             self.status.clone(),
             Style::default().fg(fg),
@@ -175,8 +176,12 @@ impl App {
     /// informational only.
     pub(in crate::app) fn queue_owner_status_spans(&self) -> Vec<Span<'static>> {
         let style = Style::default()
-            .fg(mbv_theme::Role::TextFocusAccent.color())
-            .bg(mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false).fill);
+            .fg(mbv_theme::Role::TextFocusAccent.color().to_ratatui())
+            .bg(
+                mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false)
+                    .fill
+                    .to_ratatui(),
+            );
         let icon = if self.use_nerd_fonts {
             "\u{f1616}"
         } else {
@@ -198,12 +203,16 @@ impl App {
             _ => (String::new(), false),
         };
         let fg = if loaded {
-            mbv_theme::Role::TextMetadata.color()
+            mbv_theme::Role::TextMetadata.color().to_ratatui()
         } else {
-            mbv_theme::Role::TextMuted.color()
+            mbv_theme::Role::TextMuted.color().to_ratatui()
         };
         let style = Style::default()
-            .bg(mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false).fill)
+            .bg(
+                mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false)
+                    .fill
+                    .to_ratatui(),
+            )
             .fg(fg);
         let glyph = if self.use_nerd_fonts {
             "\u{f0411}"
@@ -230,9 +239,11 @@ impl App {
         if !autosave_on {
             return None;
         }
-        let pill_bg = mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false).fill;
+        let pill_bg = mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false)
+            .fill
+            .to_ratatui();
         let style = Style::default()
-            .fg(mbv_theme::Role::Accent.color())
+            .fg(mbv_theme::Role::Accent.color().to_ratatui())
             .bg(pill_bg);
         Some(if self.use_nerd_fonts {
             vec![Span::styled("\u{f18ea}", style)]
@@ -248,9 +259,11 @@ impl App {
         if !self.queue_dirty {
             return None;
         }
-        let pill_bg = mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false).fill;
+        let pill_bg = mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false)
+            .fill
+            .to_ratatui();
         let style = Style::default()
-            .fg(mbv_theme::Role::TextFocusAccent.color())
+            .fg(mbv_theme::Role::TextFocusAccent.color().to_ratatui())
             .add_modifier(Modifier::BOLD)
             .bg(pill_bg);
         Some(if self.use_nerd_fonts {
@@ -269,15 +282,17 @@ impl App {
                         mbv_theme::Surface::StatusBarPill,
                         false,
                     )
-                    .fill),
+                    .fill
+                    .to_ratatui()),
                 ),
                 Span::styled(
                     "muted",
                     Style::default()
-                        .fg(mbv_theme::Role::StatusError.color())
+                        .fg(mbv_theme::Role::StatusError.color().to_ratatui())
                         .bg(
                             mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false)
-                                .fill,
+                                .fill
+                                .to_ratatui(),
                         )
                         .add_modifier(Modifier::BOLD),
                 ),
@@ -287,7 +302,8 @@ impl App {
                         mbv_theme::Surface::StatusBarPill,
                         false,
                     )
-                    .fill),
+                    .fill
+                    .to_ratatui()),
                 ),
             ]
         })
@@ -306,15 +322,17 @@ impl App {
                         mbv_theme::Surface::StatusBarPill,
                         false,
                     )
-                    .fill),
+                    .fill
+                    .to_ratatui()),
                 ),
                 Span::styled(
                     " PREFIX ",
                     Style::default()
-                        .fg(mbv_theme::Role::Accent.color())
+                        .fg(mbv_theme::Role::Accent.color().to_ratatui())
                         .bg(
                             mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false)
-                                .fill,
+                                .fill
+                                .to_ratatui(),
                         )
                         .add_modifier(Modifier::BOLD),
                 ),
@@ -324,7 +342,8 @@ impl App {
                         mbv_theme::Surface::StatusBarPill,
                         false,
                     )
-                    .fill),
+                    .fill
+                    .to_ratatui()),
                 ),
             ]
         })
@@ -349,19 +368,28 @@ impl App {
                     mbv_theme::Surface::StatusBarPill,
                     false,
                 )
-                .fill),
+                .fill
+                .to_ratatui()),
             ),
             Span::styled(
                 icon,
                 Style::default()
-                    .fg(mbv_theme::Role::PlaybackMetaFg.color())
-                    .bg(mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false).fill),
+                    .fg(mbv_theme::Role::PlaybackMetaFg.color().to_ratatui())
+                    .bg(
+                        mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false)
+                            .fill
+                            .to_ratatui(),
+                    ),
             ),
             Span::styled(
                 format!(" {volume}"),
                 Style::default()
-                    .fg(mbv_theme::Role::Accent.color())
-                    .bg(mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false).fill)
+                    .fg(mbv_theme::Role::Accent.color().to_ratatui())
+                    .bg(
+                        mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false)
+                            .fill
+                            .to_ratatui(),
+                    )
                     .add_modifier(Modifier::BOLD),
             ),
         ]
@@ -383,11 +411,11 @@ impl App {
         // current player target: a stay-alive client that routes playback to
         // another daemon is still in stay-alive mode.
         let alive_color = if !stay_alive {
-            mbv_theme::Role::TextMuted.color()
+            mbv_theme::Role::TextMuted.color().to_ratatui()
         } else if self.player.is_remote_disconnected() {
-            mbv_theme::Role::TextFocusAccent.color()
+            mbv_theme::Role::TextFocusAccent.color().to_ratatui()
         } else {
-            mbv_theme::Role::StatusError.color()
+            mbv_theme::Role::StatusError.color().to_ratatui()
         };
         let mut right_spans: Vec<Span> = Vec::new();
         let source_label = queue_source_status_label(
@@ -409,7 +437,8 @@ impl App {
                         mbv_theme::Surface::StatusBarPill,
                         false,
                     )
-                    .fill),
+                    .fill
+                    .to_ratatui()),
                 ),
             );
         }
@@ -420,14 +449,22 @@ impl App {
             right_spans.push(Span::styled(
                 " 🯅",
                 Style::default()
-                    .fg(mbv_theme::Role::TextMetadata.color())
-                    .bg(mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false).fill),
+                    .fg(mbv_theme::Role::TextMetadata.color().to_ratatui())
+                    .bg(
+                        mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false)
+                            .fill
+                            .to_ratatui(),
+                    ),
             ));
             right_spans.push(Span::styled(
                 format!(" {username} "),
                 Style::default()
-                    .fg(mbv_theme::Role::PlaybackMetaFg.color())
-                    .bg(mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false).fill),
+                    .fg(mbv_theme::Role::PlaybackMetaFg.color().to_ratatui())
+                    .bg(
+                        mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false)
+                            .fill
+                            .to_ratatui(),
+                    ),
             ));
         }
         // Service-state indicators — Emby and Audiobookshelf coloured by
@@ -448,7 +485,7 @@ impl App {
                 },
                 Style::default().fg(service_state_color(
                     self.emby_runtime.state,
-                    mbv_theme::Role::Accent.color(),
+                    mbv_theme::Role::Accent.color().to_ratatui(),
                 )),
             ),
             Span::raw(" "),
@@ -460,7 +497,7 @@ impl App {
                 },
                 Style::default().fg(service_state_color(
                     self.audiobookshelf_runtime.state,
-                    mbv_theme::Role::AccentAudiobookshelf.color(),
+                    mbv_theme::Role::AccentAudiobookshelf.color().to_ratatui(),
                 )),
             ),
             Span::raw(" "),
@@ -499,7 +536,7 @@ fn queue_source_status_label(
             return None;
         }
     };
-    Some((label, mbv_theme::Role::TextMuted.color()))
+    Some((label, mbv_theme::Role::TextMuted.color().to_ratatui()))
 }
 
 #[cfg(test)]
@@ -612,7 +649,10 @@ mod tests {
         let mut app = make_app_stub();
         app.audiobookshelf_runtime.state = state;
 
-        let expected = service_state_color(state, mbv_theme::Role::AccentAudiobookshelf.color());
+        let expected = service_state_color(
+            state,
+            mbv_theme::Role::AccentAudiobookshelf.color().to_ratatui(),
+        );
 
         let spans = app.status_bar_right_spans();
         let abs = spans

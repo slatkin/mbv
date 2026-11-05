@@ -7,20 +7,21 @@
 //! site's own cursor predicate. Each row states its two slots directly
 //! (`surface_table::slots`), so the bool selects between exactly two fills.
 
-use ratatui::style::Color;
-
+use super::rgb::Rgb;
 use super::slot::{Theme, active};
 use super::surface::Surface;
 use super::surface_table::slots;
 
-/// The resolved colour of one rendered surface for one frame.
+/// The resolved colour of one rendered surface for one frame. The fill is
+/// the neutral [`Rgb`]; the render toolkit converts under the crate's
+/// `ratatui` feature.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct SurfaceColors {
-    pub fill: Color,
+    pub fill: Rgb,
 }
 
 impl SurfaceColors {
-    const fn fill(fill: Color) -> Self {
+    const fn fill(fill: Rgb) -> Self {
         Self { fill }
     }
 }

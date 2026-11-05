@@ -20,8 +20,8 @@ pub const MUSIC_ALBUM_IMAGE_TYPES: &[&str] = &["AudioChild"];
 pub fn service_state_color(state: ServiceState, ready: Color) -> Color {
     match state {
         ServiceState::Ready => ready,
-        ServiceState::NotConfigured => Role::TextMuted.color(),
-        _ => Role::StatusError.color(),
+        ServiceState::NotConfigured => Role::TextMuted.color().to_ratatui(),
+        _ => Role::StatusError.color().to_ratatui(),
     }
 }
 
@@ -169,14 +169,14 @@ pub fn render_block_separator(f: &mut Frame, area: Rect) {
     }
     f.render_widget(
         Paragraph::new("\u{2581}".repeat(area.width as usize))
-            .style(Style::default().fg(Role::HeroOverviewSeparator.color())),
+            .style(Style::default().fg(Role::HeroOverviewSeparator.color().to_ratatui())),
         Rect { height: 1, ..area },
     );
 }
 
 /// Fill `area` with `surface`'s resolved background, clearing it first.
 pub fn fill_surface(f: &mut Frame, area: Rect, surface: palette::Surface, focused: bool) {
-    let bg = palette::surface_colors(surface, focused).fill;
+    let bg = palette::surface_colors(surface, focused).fill.to_ratatui();
     f.render_widget(Clear, area);
     f.render_widget(Block::default().style(Style::default().bg(bg)), area);
 }
@@ -206,11 +206,11 @@ pub fn render_queue_panel_frame(f: &mut Frame, area: Rect, focused: bool) -> Rec
 /// letter filters, and series seasons).
 fn selector_pill_fg(selected: bool, hovered: bool) -> Color {
     if selected {
-        Role::PillSelectedFg.color()
+        Role::PillSelectedFg.color().to_ratatui()
     } else if hovered {
-        Role::TextEmphasis.color()
+        Role::TextEmphasis.color().to_ratatui()
     } else {
-        Role::TextMuted.color()
+        Role::TextMuted.color().to_ratatui()
     }
 }
 
@@ -247,7 +247,9 @@ fn push_pill_shell(
         // dedicated marker role.
         spans.push(Span::styled(
             "•",
-            Style::default().fg(Role::AccentActive.color()).bg(fill),
+            Style::default()
+                .fg(Role::AccentActive.color().to_ratatui())
+                .bg(fill),
         ));
     }
     spans.push(Span::styled(
@@ -437,7 +439,7 @@ fn render_visible_pills(
         } else {
             palette::Surface::PillChip
         };
-        let fill = palette::surface_colors(chip, selected).fill;
+        let fill = palette::surface_colors(chip, selected).fill.to_ratatui();
         let pill_w = u16::try_from(pill_shell_width(label, marked, 1)).unwrap_or(u16::MAX);
         selector_tabs.push((
             Rect {
@@ -498,7 +500,9 @@ pub fn render_pill_bar(
     f.render_widget(ratatui::widgets::Clear, area);
     f.render_widget(
         Block::default().style(
-            Style::default().bg(palette::surface_colors(palette::Surface::PillRow, false).fill),
+            Style::default().bg(palette::surface_colors(palette::Surface::PillRow, false)
+                .fill
+                .to_ratatui()),
         ),
         area,
     );
@@ -524,13 +528,15 @@ pub fn render_pill_bar(
             spans.push(Span::styled(
                 "  ",
                 Style::default()
-                    .fg(Role::StatusAvailable.color())
-                    .bg(palette::surface_colors(palette::Surface::PillRow, false).fill),
+                    .fg(Role::StatusAvailable.color().to_ratatui())
+                    .bg(palette::surface_colors(palette::Surface::PillRow, false)
+                        .fill
+                        .to_ratatui()),
             ));
         } else {
             spans.push(Span::styled(
                 prefix.to_string(),
-                Style::default().fg(Role::TextMetadata.color()),
+                Style::default().fg(Role::TextMetadata.color().to_ratatui()),
             ));
         }
         x_cursor += u16::try_from(prefix_w).unwrap_or(u16::MAX);
@@ -539,7 +545,7 @@ pub fn render_pill_bar(
         let chunk = "\u{2039} ";
         spans.push(Span::styled(
             chunk,
-            Style::default().fg(Role::PillOverflowFg.color()),
+            Style::default().fg(Role::PillOverflowFg.color().to_ratatui()),
         ));
         x_cursor += u16::try_from(chunk.width()).unwrap_or(u16::MAX);
     }
@@ -552,7 +558,7 @@ pub fn render_pill_bar(
         let chunk = " \u{203a}";
         spans.push(Span::styled(
             chunk,
-            Style::default().fg(Role::PillOverflowFg.color()),
+            Style::default().fg(Role::PillOverflowFg.color().to_ratatui()),
         ));
         x_cursor += u16::try_from(chunk.width()).unwrap_or(u16::MAX);
     }
@@ -564,7 +570,9 @@ pub fn render_pill_bar(
     if remaining > 0 {
         spans.push(Span::styled(
             " ".repeat(remaining),
-            Style::default().bg(palette::surface_colors(palette::Surface::PillRow, false).fill),
+            Style::default().bg(palette::surface_colors(palette::Surface::PillRow, false)
+                .fill
+                .to_ratatui()),
         ));
     }
 
@@ -584,14 +592,19 @@ pub fn render_hint_pill_bar(f: &mut Frame, area: Rect, hints: &[&str]) {
         return;
     }
     let area = Rect { height: 1, ..area };
-    let row_bg = palette::surface_colors(palette::Surface::PillRow, false).fill;
+    let row_bg = palette::surface_colors(palette::Surface::PillRow, false)
+        .fill
+        .to_ratatui();
     f.render_widget(Clear, area);
     f.render_widget(Block::default().style(Style::default().bg(row_bg)), area);
     if hints.is_empty() {
         return;
     }
-    let fill_of =
-        |idx: usize| palette::surface_colors(HINT_CHIPS[idx % HINT_CHIPS.len()], false).fill;
+    let fill_of = |idx: usize| {
+        palette::surface_colors(HINT_CHIPS[idx % HINT_CHIPS.len()], false)
+            .fill
+            .to_ratatui()
+    };
     let widths: Vec<usize> = hints
         .iter()
         .map(|hint| pill_shell_width(hint, false, 1))
@@ -610,7 +623,14 @@ pub fn render_hint_pill_bar(f: &mut Frame, area: Rect, hints: &[&str]) {
     }
     for (idx, hint) in hints.iter().enumerate() {
         let fill = fill_of(idx);
-        push_pill_shell(&mut spans, hint, false, Role::TextOnAccent.color(), fill, 1);
+        push_pill_shell(
+            &mut spans,
+            hint,
+            false,
+            Role::TextOnAccent.color().to_ratatui(),
+            fill,
+            1,
+        );
     }
     // Clear the rest of the row with the row background so the hint bar reads
     // as the same surface as a pill bar.
@@ -635,7 +655,7 @@ pub fn render_placeholder(f: &mut Frame, area: Rect, msg: &str) {
     f.render_widget(
         Paragraph::new(Span::styled(
             msg.to_string(),
-            Style::default().fg(Role::TextMuted.color()),
+            Style::default().fg(Role::TextMuted.color().to_ratatui()),
         )),
         area,
     );

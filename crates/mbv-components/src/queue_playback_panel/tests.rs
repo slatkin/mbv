@@ -30,8 +30,10 @@ fn motion(column: u16, row: u16) -> Event<UserEvent> {
 fn painted_panel() -> QueuePlaybackPanel {
     let mut panel = QueuePlaybackPanel::new();
     panel.set_header(NowPlayingStatus::Playing, String::new(), false);
-    panel.transport.now_playing_title =
-        Some(("Example".into(), palette::Role::PlaybackValueFg.color()));
+    panel.transport.now_playing_title = Some((
+        "Example".into(),
+        palette::Role::PlaybackValueFg.color().to_ratatui(),
+    ));
     panel.transport.show_controls = true;
     panel.transport.state.position_ticks = 375_000_000;
     panel.transport.state.runtime_ticks = 300 * mbv_emby_model::TICKS_PER_SECOND;
@@ -168,8 +170,10 @@ fn header_row_paints_the_target_status_and_the_header_site_title() {
     let mut panel = QueuePlaybackPanel::new();
     panel.set_header(NowPlayingStatus::Playing, "Living Room".into(), false);
     panel.transport.use_nerd_fonts = true;
-    panel.transport.now_playing_title =
-        Some(("Example".into(), palette::Role::PlaybackValueFg.color()));
+    panel.transport.now_playing_title = Some((
+        "Example".into(),
+        palette::Role::PlaybackValueFg.color().to_ratatui(),
+    ));
     panel.set_transport_area(Some(Rect::new(0, 2, 40, 6)));
     let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
     let header_row = |terminal: &Terminal<TestBackend>| {
@@ -227,8 +231,10 @@ fn header_row_paints_the_target_status_and_the_header_site_title() {
     assert_eq!(
         (icon_cell.fg, icon_cell.bg),
         (
-            palette::Role::PlaybackTargetLocalFg.color(),
-            palette::surface_colors(palette::Surface::QueueOnlyPlaybackPanel, false).fill
+            palette::Role::PlaybackTargetLocalFg.color().to_ratatui(),
+            palette::surface_colors(palette::Surface::QueueOnlyPlaybackPanel, false)
+                .fill
+                .to_ratatui()
         ),
         "the local target icon paints the target colour on the panel fill"
     );
@@ -237,7 +243,9 @@ fn header_row_paints_the_target_status_and_the_header_site_title() {
         (word_cell.symbol().to_string(), word_cell.bg),
         (
             "P".to_string(),
-            palette::surface_colors(palette::Surface::QueueOnlyPlaybackPanel, false).fill
+            palette::surface_colors(palette::Surface::QueueOnlyPlaybackPanel, false)
+                .fill
+                .to_ratatui()
         ),
         "the right-aligned status word keeps the panel fill"
     );
@@ -272,8 +280,10 @@ fn the_target_indicator_carries_the_remote_host_and_opens_sessions_on_click() {
     assert_eq!(
         (icon_cell.fg, icon_cell.bg),
         (
-            palette::Role::PlaybackTargetRemoteFg.color(),
-            palette::surface_colors(palette::Surface::QueueOnlyPlaybackPanel, false).fill
+            palette::Role::PlaybackTargetRemoteFg.color().to_ratatui(),
+            palette::surface_colors(palette::Surface::QueueOnlyPlaybackPanel, false)
+                .fill
+                .to_ratatui()
         ),
         "the remote target icon paints the target colour on the panel fill"
     );

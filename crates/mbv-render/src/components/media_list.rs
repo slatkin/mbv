@@ -220,8 +220,11 @@ impl WideMediaListPaintPolicy {
 
     #[must_use]
     pub fn zebra_bg(self) -> Option<Color> {
-        self.zebra
-            .map(|surface| palette::surface_colors(surface, self.palette_focused).fill)
+        self.zebra.map(|surface| {
+            palette::surface_colors(surface, self.palette_focused)
+                .fill
+                .to_ratatui()
+        })
     }
 
     #[must_use]
@@ -397,7 +400,9 @@ impl<Target: Clone> RowGeometry<Target> {
 /// recessed `QueuePanel` surface; the stripe is the `QueueColumn` surface.
 #[must_use]
 pub fn queue_row_background(focused: bool) -> Color {
-    palette::surface_colors(palette::Surface::QueuePanel, focused).fill
+    palette::surface_colors(palette::Surface::QueuePanel, focused)
+        .fill
+        .to_ratatui()
 }
 
 /// The text a list's marquee clock keys on for one row: the full title text the

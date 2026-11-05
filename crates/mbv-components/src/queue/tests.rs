@@ -66,7 +66,7 @@ fn count_bg(buf: &ratatui::buffer::Buffer, area: Rect, color: ratatui::style::Co
 fn mini_view_rows_paint_the_focused_palette_when_the_appearance_bit_is_focused() {
     let buf = draw_mini_queue(true);
 
-    let focused_zebra = surface_colors(Surface::QueueColumn, true).fill;
+    let focused_zebra = surface_colors(Surface::QueueColumn, true).fill.to_ratatui();
     let row_area = queue_list_box(Rect::new(0, 0, 60, 24));
     assert!(
         count_bg(&buf, row_area, focused_zebra) > 0,
@@ -76,7 +76,9 @@ fn mini_view_rows_paint_the_focused_palette_when_the_appearance_bit_is_focused()
         count_bg(
             &buf,
             row_area,
-            surface_colors(Surface::SelectedRow, false).fill
+            surface_colors(Surface::SelectedRow, false)
+                .fill
+                .to_ratatui()
         ) > 0,
         "the selected row bar painted"
     );
@@ -92,7 +94,7 @@ fn mini_view_rows_paint_the_focused_palette_when_the_appearance_bit_is_focused()
 fn mini_view_rows_rest_when_the_appearance_bit_is_resting() {
     let buf = draw_mini_queue(false);
 
-    let focused_zebra = surface_colors(Surface::QueueColumn, true).fill;
+    let focused_zebra = surface_colors(Surface::QueueColumn, true).fill.to_ratatui();
     let row_area = queue_list_box(Rect::new(0, 0, 60, 24));
     assert_eq!(
         count_bg(&buf, row_area, focused_zebra),
@@ -103,7 +105,9 @@ fn mini_view_rows_rest_when_the_appearance_bit_is_resting() {
         count_bg(
             &buf,
             row_area,
-            surface_colors(Surface::SelectedRow, false).fill
+            surface_colors(Surface::SelectedRow, false)
+                .fill
+                .to_ratatui()
         ) > 0,
         "the cursor bar stayed on the resting stripe"
     );

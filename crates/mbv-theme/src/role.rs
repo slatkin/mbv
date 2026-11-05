@@ -5,8 +5,7 @@
 //! the slot of the `Palette` variant it painted with (design D1). Call sites
 //! resolve with [`Role::color`], which reads the active theme.
 
-use ratatui::style::Color;
-
+use super::rgb::Rgb;
 use super::slot::{Slot, Theme, active};
 
 /// A semantic foreground colour: text, indicators, scrollbar, underline.
@@ -107,15 +106,17 @@ impl Role {
         }
     }
 
-    /// The role's colour, resolved through the active theme.
+    /// The role's colour, resolved through the active theme. The value is
+    /// the neutral [`Rgb`]; the render toolkit converts under the crate's
+    /// `ratatui` feature.
     #[must_use]
-    pub fn color(self) -> Color {
+    pub fn color(self) -> Rgb {
         self.color_in(active())
     }
 
     /// The role's colour in `theme` (the theme-swap test resolves through
     /// this; design D3).
-    pub(crate) fn color_in(self, theme: &Theme) -> Color {
+    pub(crate) fn color_in(self, theme: &Theme) -> Rgb {
         theme.get(self.slot())
     }
 }

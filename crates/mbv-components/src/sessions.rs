@@ -69,7 +69,7 @@ impl SessionsComponent {
             transfer_gates: mbv_ui_model::panel_targets::SessionTransferGates::default(),
             display: SessionsDisplayContext {
                 use_nerd_fonts: false,
-                emby_color: palette::Role::TextMuted.color(),
+                emby_color: palette::Role::TextMuted.color().to_ratatui(),
             },
             requested_panel_area: None,
             painted_panel_area: None,
@@ -379,7 +379,7 @@ impl SessionsComponent {
                         let (kind, kind_w) = self.kind_span(
                             "[CAST] ",
                             glyph,
-                            palette::Role::TextFocusAccent.color(),
+                            palette::Role::TextFocusAccent.color().to_ratatui(),
                         );
                         [
                             vec![

@@ -28,7 +28,7 @@ pub fn render_empty_queue(frame: &mut Frame, content: Rect, text: &str) {
         return;
     }
     let style = Style::default()
-        .fg(palette::Role::EmptyQueueFg.color())
+        .fg(palette::Role::EmptyQueueFg.color().to_ratatui())
         .add_modifier(Modifier::BOLD);
     let emblem_rows = u16::try_from(EMPTY_QUEUE_EMBLEM.len()).unwrap_or(u16::MAX);
     let unit_height = emblem_rows + 2;
@@ -98,15 +98,20 @@ pub fn render_queue_status(
 ) -> QueueFooterRegions {
     frame.render_widget(
         Block::default().style(
-            Style::default()
-                .bg(palette::surface_colors(palette::Surface::QueuePanelBand, false).fill),
+            Style::default().bg(
+                palette::surface_colors(palette::Surface::QueuePanelBand, false)
+                    .fill
+                    .to_ratatui(),
+            ),
         ),
         area,
     );
     if area.width == 0 || area.height == 0 {
         return QueueFooterRegions::default();
     }
-    let pill_bg = palette::surface_colors(palette::Surface::StatusBarPill, false).fill;
+    let pill_bg = palette::surface_colors(palette::Surface::StatusBarPill, false)
+        .fill
+        .to_ratatui();
     let pad = Span::styled(" ", Style::default().bg(pill_bg));
     let mut left = vec![pad.clone()];
     if let Some(spans) = autosave {

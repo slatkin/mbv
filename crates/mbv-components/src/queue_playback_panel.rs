@@ -362,8 +362,11 @@ impl Component for QueuePlaybackPanel {
         // rows paint over it: the side-by-side slot's leftover rows (a slot
         // taller than the four transport rows) stay on the chrome band.
         frame.render_widget(
-            Block::default()
-                .style(Style::default().bg(palette::surface_colors(TRANSPORT_SURFACE, false).fill)),
+            Block::default().style(
+                Style::default().bg(palette::surface_colors(TRANSPORT_SURFACE, false)
+                    .fill
+                    .to_ratatui()),
+            ),
             transport_area,
         );
         // The painted row budget is always the four base transport rows:

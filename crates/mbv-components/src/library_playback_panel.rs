@@ -331,7 +331,10 @@ mod tests {
             show_controls: true,
             panel: palette::Surface::PlaybackPanel,
             panel_focused: false,
-            now_playing_title: Some(("Example".into(), palette::Role::PlaybackValueFg.color())),
+            now_playing_title: Some((
+                "Example".into(),
+                palette::Role::PlaybackValueFg.color().to_ratatui(),
+            )),
             title_parts: None,
             title_site: NowPlayingTitleSite::Header,
             status_indicators: None,
@@ -375,7 +378,10 @@ mod tests {
             panel_focused: false,
             // The painter paints the typed parts only over an attached
             // target's plain title; the parts replace it when present.
-            now_playing_title: Some(("Fallback".into(), palette::Role::PlaybackValueFg.color())),
+            now_playing_title: Some((
+                "Fallback".into(),
+                palette::Role::PlaybackValueFg.color().to_ratatui(),
+            )),
             title_parts: Some(parts),
             title_site: NowPlayingTitleSite::Header,
             status_indicators: None,
@@ -437,7 +443,7 @@ mod tests {
             &text,
             &fgs,
             title,
-            palette::Role::PlaybackTitleFg.color(),
+            palette::Role::PlaybackTitleFg.color().to_ratatui(),
             "the title part",
         );
         if let Some(context) = context {
@@ -465,7 +471,7 @@ mod tests {
             for i in 0..=context.chars().count() {
                 assert_eq!(
                     fgs[start + i],
-                    palette::Role::PlaybackContextFg.color(),
+                    palette::Role::PlaybackContextFg.color().to_ratatui(),
                     "the context part and the space paint in the context role: {text:?}"
                 );
             }
@@ -477,14 +483,14 @@ mod tests {
             if title_start > 0 {
                 assert_ne!(
                     fgs[title_start - 1],
-                    palette::Role::PlaybackContextFg.color(),
+                    palette::Role::PlaybackContextFg.color().to_ratatui(),
                     "no context part before the title: {text:?}"
                 );
             }
             let after = title_start + title.chars().count();
             assert_ne!(
                 fgs[after],
-                palette::Role::PlaybackContextFg.color(),
+                palette::Role::PlaybackContextFg.color().to_ratatui(),
                 "no context part after the title: {text:?}"
             );
         }

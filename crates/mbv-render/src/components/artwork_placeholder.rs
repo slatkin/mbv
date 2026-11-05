@@ -10,7 +10,8 @@ pub fn render_artwork_placeholder(f: &mut Frame, area: Rect) {
                 palette::Surface::ArtworkPlaceholder,
                 false,
             )
-            .fill),
+            .fill
+            .to_ratatui()),
         ),
         area,
     );

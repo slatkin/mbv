@@ -65,7 +65,8 @@ impl Model {
                     .or_else(|| slotless_title_parts.map(|parts| parts.title.text))
             })
             .flatten();
-        let now_playing_title = title.map(|title| (title, palette::Role::PlaybackValueFg.color()));
+        let now_playing_title =
+            title.map(|title| (title, palette::Role::PlaybackValueFg.color().to_ratatui()));
         let show_controls = state.active || self.app.output_is_cast();
         let (prev_available, next_available) = self.app.transport_prev_next_available();
         PlaybackProjection {

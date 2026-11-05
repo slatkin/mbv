@@ -37,12 +37,16 @@ pub fn render_queue_band(frame: &mut Frame, band: &QueueBand, ctx: &mut Playback
         ctx.playback.clear();
         return;
     }
-    let panel_bg = palette::surface_colors(ctx.panel, ctx.controls.panel_focused).fill;
+    let panel_bg = palette::surface_colors(ctx.panel, ctx.controls.panel_focused)
+        .fill
+        .to_ratatui();
     let (_, _, paused) = ctx.controls.progress;
     let glyphs = control_glyphs(ctx, paused);
     // The top row's own fill (the transport row surface) plus its plain
     // indicator text, measured for the buttons-fit rule below.
-    let row_bg = palette::surface_colors(palette::Surface::TransportRow, false).fill;
+    let row_bg = palette::surface_colors(palette::Surface::TransportRow, false)
+        .fill
+        .to_ratatui();
     let (indicators, indicators_w) = queue_indicator_spans(ctx, row_bg);
     render_transport_controls_row(
         ctx,
@@ -77,7 +81,8 @@ fn queue_indicator_spans(
             continue;
         }
         let mut style = span.style;
-        if style.fg == Some(palette::Role::TextOnAccent.color()) && style.bg.is_some() {
+        if style.fg == Some(palette::Role::TextOnAccent.color().to_ratatui()) && style.bg.is_some()
+        {
             style.fg = style.bg;
         }
         style.bg = Some(row_bg);
@@ -120,7 +125,7 @@ fn render_queue_seek_row(
         frame.render_widget(
             Paragraph::new(Span::styled(
                 bar,
-                Style::default().fg(palette::Role::ProgressTrack.color()),
+                Style::default().fg(palette::Role::ProgressTrack.color().to_ratatui()),
             ))
             .style(Style::default().bg(panel_bg)),
             row,
@@ -145,7 +150,7 @@ fn render_queue_seek_row(
                 Span::styled(
                     clipped.to_string(),
                     Style::default()
-                        .fg(palette::Role::PlaybackMetaFg.color())
+                        .fg(palette::Role::PlaybackMetaFg.color().to_ratatui())
                         .bg(panel_bg),
                 ),
                 Span::styled(" ".repeat(gap), Style::default().bg(panel_bg)),
@@ -170,7 +175,7 @@ fn render_queue_seek_row(
             Span::styled(
                 pos_str,
                 Style::default()
-                    .fg(palette::Role::PlaybackMetaFg.color())
+                    .fg(palette::Role::PlaybackMetaFg.color().to_ratatui())
                     .bg(panel_bg),
             ),
             Span::styled(" ", Style::default().bg(panel_bg)),
@@ -179,7 +184,7 @@ fn render_queue_seek_row(
             Span::styled(
                 dur_str,
                 Style::default()
-                    .fg(palette::Role::PlaybackMetaFg.color())
+                    .fg(palette::Role::PlaybackMetaFg.color().to_ratatui())
                     .bg(panel_bg),
             ),
             Span::styled(" ", Style::default().bg(panel_bg)),
@@ -197,8 +202,12 @@ fn render_queue_seek_row(
             .label("")
             .gauge_style(
                 Style::default()
-                    .fg(palette::Role::Accent.color())
-                    .bg(palette::surface_colors(palette::Surface::TransportRow, false).fill),
+                    .fg(palette::Role::Accent.color().to_ratatui())
+                    .bg(
+                        palette::surface_colors(palette::Surface::TransportRow, false)
+                            .fill
+                            .to_ratatui(),
+                    ),
             ),
         ctx.playback.seekbar,
     );

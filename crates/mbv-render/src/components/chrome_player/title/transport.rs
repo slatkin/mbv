@@ -25,12 +25,12 @@ pub(super) fn control_glyphs(ctx: &PlaybackRenderContext<'_>, paused: bool) -> T
     let play = if paused {
         (
             play_icon(ctx.controls.use_nerd_fonts),
-            palette::Role::Accent.color(),
+            palette::Role::Accent.color().to_ratatui(),
         )
     } else {
         (
             pause_icon(ctx.controls.use_nerd_fonts),
-            palette::Role::TextFocusAccent.color(),
+            palette::Role::TextFocusAccent.color().to_ratatui(),
         )
     };
     let stop = (
@@ -40,9 +40,9 @@ pub(super) fn control_glyphs(ctx: &PlaybackRenderContext<'_>, paused: bool) -> T
             "X"
         },
         if ctx.controls.availability.stop {
-            palette::Role::StatusError.color()
+            palette::Role::StatusError.color().to_ratatui()
         } else {
-            palette::Role::TextMuted.color()
+            palette::Role::TextMuted.color().to_ratatui()
         },
     );
     let prev = (
@@ -52,9 +52,9 @@ pub(super) fn control_glyphs(ctx: &PlaybackRenderContext<'_>, paused: bool) -> T
             "<<"
         },
         if ctx.controls.availability.previous {
-            palette::Role::TextStrong.color()
+            palette::Role::TextStrong.color().to_ratatui()
         } else {
-            palette::Role::TextMuted.color()
+            palette::Role::TextMuted.color().to_ratatui()
         },
     );
     let next = (
@@ -64,9 +64,9 @@ pub(super) fn control_glyphs(ctx: &PlaybackRenderContext<'_>, paused: bool) -> T
             ">>"
         },
         if ctx.controls.availability.next {
-            palette::Role::TextStrong.color()
+            palette::Role::TextStrong.color().to_ratatui()
         } else {
-            palette::Role::TextMuted.color()
+            palette::Role::TextMuted.color().to_ratatui()
         },
     );
     TransportGlyphs {
@@ -159,7 +159,9 @@ pub(super) fn render_transport_glyphs(
 /// (`padded_status_pill`). The queue band paints its own plain-text cluster
 /// (`queue_indicator_spans`) instead.
 fn status_pill_spans(ctx: &PlaybackRenderContext<'_>) -> Vec<Span<'static>> {
-    let pill_bg = palette::surface_colors(palette::Surface::PlaybackStatusPill, false).fill;
+    let pill_bg = palette::surface_colors(palette::Surface::PlaybackStatusPill, false)
+        .fill
+        .to_ratatui();
     let mut codec_value_next = false;
     let mut right = ctx
         .status_indicators
@@ -174,18 +176,21 @@ fn status_pill_spans(ctx: &PlaybackRenderContext<'_>) -> Vec<Span<'static>> {
                 codec_value_next = true;
                 Span::styled(
                     span.content.to_string(),
-                    span.style.fg(palette::Role::PlaybackMetaFg.color()),
+                    span.style
+                        .fg(palette::Role::PlaybackMetaFg.color().to_ratatui()),
                 )
             } else if codec_value_next {
                 codec_value_next = false;
                 Span::styled(
                     span.content.to_string(),
-                    span.style.fg(palette::Role::PlaybackValueFg.color()),
+                    span.style
+                        .fg(palette::Role::PlaybackValueFg.color().to_ratatui()),
                 )
             } else if is_caption {
                 Span::styled(
                     span.content.to_string(),
-                    span.style.fg(palette::Role::PlaybackMetaFg.color()),
+                    span.style
+                        .fg(palette::Role::PlaybackMetaFg.color().to_ratatui()),
                 )
             } else {
                 span
@@ -214,7 +219,8 @@ pub(super) fn padded_status_pill(ctx: &PlaybackRenderContext<'_>) -> Vec<Span<'s
                 palette::Surface::PlaybackStatusPill,
                 false,
             )
-            .fill),
+            .fill
+            .to_ratatui()),
         ));
     }
     spans

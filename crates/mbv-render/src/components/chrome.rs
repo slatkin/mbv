@@ -68,8 +68,12 @@ pub fn left_panel_content_area(sidebar: Rect) -> Rect {
 
 pub fn render_panel_shell_at(f: &mut Frame, sidebar: Rect, title: &str, hints: &str) -> Rect {
     f.render_widget(Clear, sidebar);
-    let body_bg = palette::surface_colors(palette::Surface::SidebarBody, false).fill;
-    let band_bg = palette::surface_colors(palette::Surface::SidebarBand, false).fill;
+    let body_bg = palette::surface_colors(palette::Surface::SidebarBody, false)
+        .fill
+        .to_ratatui();
+    let band_bg = palette::surface_colors(palette::Surface::SidebarBand, false)
+        .fill
+        .to_ratatui();
     // Too short to fit a title row, a content row, and the 2-row footer;
     // bail out rather than let `footer_y = sidebar.y + sidebar.height - 2`
     // underflow below.
@@ -83,7 +87,7 @@ pub fn render_panel_shell_at(f: &mut Frame, sidebar: Rect, title: &str, hints: &
     let inner_w = sidebar.width.saturating_sub(4);
     let ix = sidebar.x + 2;
     let header_style = Style::default()
-        .fg(palette::Role::TextPrimary.color())
+        .fg(palette::Role::TextPrimary.color().to_ratatui())
         .bg(band_bg)
         .add_modifier(Modifier::BOLD);
     f.render_widget(
@@ -103,7 +107,7 @@ pub fn render_panel_shell_at(f: &mut Frame, sidebar: Rect, title: &str, hints: &
     f.render_widget(
         Paragraph::new(Line::from(vec![Span::styled(
             trunc_str(hints, inner_w as usize),
-            Style::default().fg(palette::Role::TextPrimary.color()),
+            Style::default().fg(palette::Role::TextPrimary.color().to_ratatui()),
         )]))
         .style(Style::default().bg(band_bg)),
         Rect {
@@ -141,7 +145,7 @@ pub fn render_sidebar_scrollbar(f: &mut Frame, content: Rect, total: usize, scro
         scroll,
         content.x.saturating_add(content.width),
         thin_vertical_thumb(GlyphSet::minimal()),
-        palette::Role::SidebarScrollbar.color(),
+        palette::Role::SidebarScrollbar.color().to_ratatui(),
     );
 }
 
@@ -170,7 +174,7 @@ pub fn render_panel_row(
     } else {
         (
             if selected { "\u{258c}" } else { " " },
-            Some(palette::Role::Accent.color()),
+            Some(palette::Role::Accent.color().to_ratatui()),
         )
     };
     let mut mark_style = Style::default();

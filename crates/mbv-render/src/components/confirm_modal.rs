@@ -39,14 +39,16 @@ pub fn render_confirm_modal_content(
         dim_flag,
         60,
         7,
-        mbv_theme::surface_colors(mbv_theme::Surface::PopupFrame, false).fill,
+        mbv_theme::surface_colors(mbv_theme::Surface::PopupFrame, false)
+            .fill
+            .to_ratatui(),
     );
     let inner = modal.inner;
     let base_y = inner.y + (inner.height.saturating_sub(3)) / 2;
     f.render_widget(
         Paragraph::new(Span::styled(
             message,
-            Style::default().fg(mbv_theme::Role::TextStrong.color()),
+            Style::default().fg(mbv_theme::Role::TextStrong.color().to_ratatui()),
         ))
         .alignment(Alignment::Center),
         Rect {
@@ -72,8 +74,8 @@ fn button_width(button: &ConfirmButton) -> u16 {
 
 fn button_fg(tone: ConfirmButtonTone) -> Color {
     match tone {
-        ConfirmButtonTone::Affirmative => palette::Role::AccentActive.color(),
-        ConfirmButtonTone::Cancel => palette::Role::StatusError.color(),
+        ConfirmButtonTone::Affirmative => palette::Role::AccentActive.color().to_ratatui(),
+        ConfirmButtonTone::Cancel => palette::Role::StatusError.color().to_ratatui(),
     }
 }
 
@@ -105,7 +107,11 @@ pub(crate) fn render_button_row(
             Paragraph::new(Span::styled(
                 format!(" {} {} ", button.keys, button.label),
                 Style::default()
-                    .bg(palette::surface_colors(palette::Surface::ModalButton, false).fill)
+                    .bg(
+                        palette::surface_colors(palette::Surface::ModalButton, false)
+                            .fill
+                            .to_ratatui(),
+                    )
                     .fg(button_fg(button.tone)),
             )),
             rect,

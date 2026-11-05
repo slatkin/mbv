@@ -2365,7 +2365,6 @@ dependencies = [
  "mbv-feed",
  "mbv-ids",
  "mbv-queue",
- "ratatui",
  "rstest",
  "time",
  "unicode-width",
@@ -2379,7 +2378,6 @@ dependencies = [
  "mbv-ids",
  "mbv-queue",
  "mbv-ui-model",
- "tuirealm",
 ]
 
 [[package]]

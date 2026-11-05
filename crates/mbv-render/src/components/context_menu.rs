@@ -31,13 +31,17 @@ pub fn render_context_menu_content(
         .enumerate()
         .map(|(i, (label, is_selectable))| {
             let style = if !is_selectable {
-                Style::default().fg(palette::Role::TextSecondary.color())
+                Style::default().fg(palette::Role::TextSecondary.color().to_ratatui())
             } else if i == cursor {
                 Style::default()
-                    .fg(palette::Role::TextOnAccent.color())
-                    .bg(palette::surface_colors(palette::Surface::SelectedRow, false).fill)
+                    .fg(palette::Role::TextOnAccent.color().to_ratatui())
+                    .bg(
+                        palette::surface_colors(palette::Surface::SelectedRow, false)
+                            .fill
+                            .to_ratatui(),
+                    )
             } else {
-                Style::default().fg(palette::Role::TextPrimary.color())
+                Style::default().fg(palette::Role::TextPrimary.color().to_ratatui())
             };
             ListItem::new(format!(" {label} ")).style(style)
         })

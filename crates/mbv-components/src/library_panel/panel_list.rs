@@ -237,7 +237,9 @@ mod panel_list_tests {
             .unwrap();
         assert_eq!(
             terminal.backend().buffer()[(area.x, area.y)].bg,
-            palette::surface_colors(palette::Surface::SelectedRow, false).fill
+            palette::surface_colors(palette::Surface::SelectedRow, false)
+                .fill
+                .to_ratatui()
         );
 
         terminal
@@ -251,7 +253,9 @@ mod panel_list_tests {
             .unwrap();
         assert_eq!(
             terminal.backend().buffer()[(area.x, area.y)].bg,
-            palette::surface_colors(palette::Surface::SelectedRow, false).fill,
+            palette::surface_colors(palette::Surface::SelectedRow, false)
+                .fill
+                .to_ratatui(),
             "the focused Workspace uses the canonical Iris selected-row bar"
         );
     }
@@ -270,11 +274,15 @@ mod panel_list_tests {
         for (focused, expected) in [
             (
                 true,
-                palette::surface_colors(palette::Surface::WorkspaceStripe, true).fill,
+                palette::surface_colors(palette::Surface::WorkspaceStripe, true)
+                    .fill
+                    .to_ratatui(),
             ),
             (
                 false,
-                palette::surface_colors(palette::Surface::WorkspaceStripe, false).fill,
+                palette::surface_colors(palette::Surface::WorkspaceStripe, false)
+                    .fill
+                    .to_ratatui(),
             ),
         ] {
             terminal
@@ -328,12 +336,16 @@ mod panel_list_tests {
             // background, so the stripe is read from the title column.
             assert_eq!(
                 buf[(area.x + 2, area.y + 1)].bg,
-                palette::surface_colors(palette::Surface::LibraryColumn, focused).fill,
+                palette::surface_colors(palette::Surface::LibraryColumn, focused)
+                    .fill
+                    .to_ratatui(),
                 "striped row, focused={focused}"
             );
             assert_ne!(
                 buf[(area.x + 2, area.y + 1)].bg,
-                palette::surface_colors(palette::Surface::LibraryPanel, focused).fill,
+                palette::surface_colors(palette::Surface::LibraryPanel, focused)
+                    .fill
+                    .to_ratatui(),
                 "the stripe must be visible against the box fill, focused={focused}"
             );
         }
@@ -364,15 +376,21 @@ mod panel_list_tests {
             })
             .unwrap();
         let buf = terminal.backend().buffer();
-        let resting = palette::surface_colors(palette::Surface::LibraryColumn, false).fill;
+        let resting = palette::surface_colors(palette::Surface::LibraryColumn, false)
+            .fill
+            .to_ratatui();
         assert_ne!(
             resting,
-            palette::surface_colors(palette::Surface::LibraryColumn, true).fill,
+            palette::surface_colors(palette::Surface::LibraryColumn, true)
+                .fill
+                .to_ratatui(),
             "the LibraryColumn focus pair must differ for this proof to bind"
         );
         assert_eq!(
             buf[(area.x, area.y)].bg,
-            palette::surface_colors(palette::Surface::SelectedRow, false).fill,
+            palette::surface_colors(palette::Surface::SelectedRow, false)
+                .fill
+                .to_ratatui(),
             "the focused row keeps its bar on the resting palette"
         );
         assert_eq!(
@@ -435,10 +453,12 @@ mod panel_list_tests {
                 })
                 .unwrap();
             let buf = terminal.backend().buffer();
-            let box_fill =
-                palette::surface_colors(palette::Surface::LibraryPanel, palette_focused).fill;
-            let stripe =
-                palette::surface_colors(palette::Surface::LibraryColumn, palette_focused).fill;
+            let box_fill = palette::surface_colors(palette::Surface::LibraryPanel, palette_focused)
+                .fill
+                .to_ratatui();
+            let stripe = palette::surface_colors(palette::Surface::LibraryColumn, palette_focused)
+                .fill
+                .to_ratatui();
             let case = format!("focused={focused}, palette_focused={palette_focused}");
             assert_eq!(
                 buf[(x, 0)].bg,
@@ -471,7 +491,9 @@ mod panel_list_tests {
                 // including on the resting mini-view palette.
                 assert_eq!(
                     buf[(claim.x, 4)].bg,
-                    palette::surface_colors(palette::Surface::SelectedRow, false).fill,
+                    palette::surface_colors(palette::Surface::SelectedRow, false)
+                        .fill
+                        .to_ratatui(),
                     "the selected row keeps its bar, {case}"
                 );
             }

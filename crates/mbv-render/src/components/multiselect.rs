@@ -52,14 +52,16 @@ pub fn render_multiselect_content(
         dim_backdrop_active,
         width,
         height,
-        palette::surface_colors(palette::Surface::PopupFrame, false).fill,
+        palette::surface_colors(palette::Surface::PopupFrame, false)
+            .fill
+            .to_ratatui(),
     );
 
     let hint = "Space toggle  ·  Esc / Enter close";
     f.render_widget(
         Paragraph::new(Span::styled(
             hint,
-            Style::default().fg(palette::Role::TextMuted.color()),
+            Style::default().fg(palette::Role::TextMuted.color().to_ratatui()),
         )),
         Rect {
             x: inner.x,
@@ -114,14 +116,14 @@ pub fn render_multiselect_content(
             let arrow = if focused { "▸ " } else { "  " };
             let check = if *is_hidden { "[x]" } else { "[ ]" };
             let check_style = if focused {
-                Style::default().fg(palette::Role::TextAccentMuted.color())
+                Style::default().fg(palette::Role::TextAccentMuted.color().to_ratatui())
             } else {
-                Style::default().fg(palette::Role::TextMuted.color())
+                Style::default().fg(palette::Role::TextMuted.color().to_ratatui())
             };
             let name_style = if focused {
-                Style::default().fg(palette::Role::TextPrimary.color())
+                Style::default().fg(palette::Role::TextPrimary.color().to_ratatui())
             } else {
-                Style::default().fg(palette::Role::TextSecondary.color())
+                Style::default().fg(palette::Role::TextSecondary.color().to_ratatui())
             };
             Line::from(vec![
                 Span::raw(arrow),

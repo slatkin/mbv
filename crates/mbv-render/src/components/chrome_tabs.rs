@@ -94,7 +94,8 @@ pub fn render_tab_bar(
                 palette::Surface::TabBar,
                 false,
             )
-            .fill),
+            .fill
+            .to_ratatui()),
         ),
         area,
     );
@@ -113,7 +114,7 @@ pub fn render_tab_bar(
     let (vis_start, vis_end) = visible_tab_range(&widths, model.scroll, tabs_w);
     let has_left = vis_start > 0;
     let has_right = vis_end < widths.len();
-    let ind_style = Style::default().fg(palette::Role::TextStrong.color());
+    let ind_style = Style::default().fg(palette::Role::TextStrong.color().to_ratatui());
     let left_w: u16 = if has_left { 2 } else { 0 };
     let right_w: u16 = if has_right { 2 } else { 0 };
     if has_left {
@@ -175,7 +176,7 @@ fn paint_visible_tabs(
                 if marked {
                     Span::styled(
                         "•",
-                        Style::default().fg(palette::Role::AccentActive.color()),
+                        Style::default().fg(palette::Role::AccentActive.color().to_ratatui()),
                     )
                 } else {
                     Span::styled(" ", style)
@@ -190,12 +191,12 @@ fn paint_visible_tabs(
             // it keeps the active colour but paints no block runs below.
             let style = if index == selected_tab {
                 Style::default()
-                    .fg(palette::Role::AccentActive.color())
+                    .fg(palette::Role::AccentActive.color().to_ratatui())
                     .add_modifier(Modifier::BOLD)
             } else if model.hovered == Some(position) {
-                Style::default().fg(palette::Role::TextStrong.color())
+                Style::default().fg(palette::Role::TextStrong.color().to_ratatui())
             } else {
-                Style::default().fg(palette::Role::TextMuted.color())
+                Style::default().fg(palette::Role::TextMuted.color().to_ratatui())
             };
             let line = Line::from(vec![
                 Span::styled(" ", style),
@@ -222,7 +223,7 @@ fn paint_visible_tabs(
     f.render_widget(
         Tabs::new(titles)
             .select(usize::MAX)
-            .style(Style::default().fg(palette::Role::TextSecondary.color()))
+            .style(Style::default().fg(palette::Role::TextSecondary.color().to_ratatui()))
             .highlight_style(Style::default())
             .divider(Span::raw(""))
             .padding("", ""),
@@ -247,8 +248,10 @@ fn paint_visible_tabs(
         if run.width > 0 && !selected_is_home_icon {
             let mut paint_run = |glyph: &str, y: u16| {
                 f.render_widget(
-                    Paragraph::new(glyph.repeat(run.width as usize))
-                        .style(Style::default().fg(palette::Role::TabSelectedUnderline.color())),
+                    Paragraph::new(glyph.repeat(run.width as usize)).style(
+                        Style::default()
+                            .fg(palette::Role::TabSelectedUnderline.color().to_ratatui()),
+                    ),
                     Rect { y, ..run },
                 );
             };

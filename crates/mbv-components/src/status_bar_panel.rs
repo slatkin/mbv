@@ -135,7 +135,9 @@ mod tests {
     use mbv_theme as palette;
 
     fn pill(text: impl Into<String>, fg: Color) -> Vec<Span<'static>> {
-        let fill = palette::surface_colors(palette::Surface::StatusBarPill, false).fill;
+        let fill = palette::surface_colors(palette::Surface::StatusBarPill, false)
+            .fill
+            .to_ratatui();
         vec![
             Span::styled(" ", Style::default().bg(fill)),
             Span::styled(text.into(), Style::default().fg(fg).bg(fill)),
@@ -160,7 +162,10 @@ mod tests {
     /// `toast-notification-semantics`; restored in-app toast surface).
     #[test]
     fn a_live_toast_takes_over_the_status_row() {
-        let mut model = model(pill(" 60", palette::Role::Accent.color()), None);
+        let mut model = model(
+            pill(" 60", palette::Role::Accent.color().to_ratatui()),
+            None,
+        );
         model.toast = Some(vec![Span::styled(
             "Scanning 'Movies'...",
             Style::default().fg(Color::White),
@@ -208,7 +213,11 @@ mod tests {
     /// anywhere else on the row does not.
     #[test]
     fn scroll_on_the_volume_pill_emits_the_volume_intent() {
-        let (mut panel, _) = drawn_panel(60, pill(" 60", palette::Role::Accent.color()), None);
+        let (mut panel, _) = drawn_panel(
+            60,
+            pill(" 60", palette::Role::Accent.color().to_ratatui()),
+            None,
+        );
         let vol = panel.regions().volume.expect("volume region");
         let mouse = |kind, column, row| {
             Event::Mouse(tuirealm::event::MouseEvent {
@@ -240,8 +249,11 @@ mod tests {
     fn click_on_the_mute_pill_emits_the_mute_intent() {
         let (mut panel, _) = drawn_panel(
             60,
-            pill(" 60", palette::Role::Accent.color()),
-            Some(pill("muted", palette::Role::StatusError.color())),
+            pill(" 60", palette::Role::Accent.color().to_ratatui()),
+            Some(pill(
+                "muted",
+                palette::Role::StatusError.color().to_ratatui(),
+            )),
         );
         let mute = panel.regions().mute.expect("mute region");
         let mouse = Event::Mouse(tuirealm::event::MouseEvent {

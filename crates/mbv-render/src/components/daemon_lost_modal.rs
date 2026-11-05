@@ -25,27 +25,29 @@ pub fn render_daemon_lost_modal_content(
         dim_flag,
         64,
         10,
-        palette::surface_colors(palette::Surface::PopupFrame, false).fill,
+        palette::surface_colors(palette::Surface::PopupFrame, false)
+            .fill
+            .to_ratatui(),
     );
 
     let mut lines = vec![Line::from(Span::styled(
         "The local daemon connection was lost unexpectedly.",
-        Style::default().fg(palette::Role::TextStrong.color()),
+        Style::default().fg(palette::Role::TextStrong.color().to_ratatui()),
     ))];
     if let Some(title) = last_playing_title {
         lines.push(Line::from(Span::styled(
             format!("Was playing: {title}"),
-            Style::default().fg(palette::Role::TextSecondary.color()),
+            Style::default().fg(palette::Role::TextSecondary.color().to_ratatui()),
         )));
     }
     lines.push(Line::from(Span::styled(
         format!("Daemon log: {daemon_log_path}"),
-        Style::default().fg(palette::Role::TextSecondary.color()),
+        Style::default().fg(palette::Role::TextSecondary.color().to_ratatui()),
     )));
     if let Some(error) = restart_error {
         lines.push(Line::from(Span::styled(
             format!("Restart failed: {error}"),
-            Style::default().fg(palette::Role::StatusError.color()),
+            Style::default().fg(palette::Role::StatusError.color().to_ratatui()),
         )));
     }
     f.render_widget(
@@ -60,7 +62,7 @@ pub fn render_daemon_lost_modal_content(
     f.render_widget(
         Paragraph::new(Span::styled(
             "[R] Restart and resume    [S] Restart, don't resume    [Q] Quit",
-            Style::default().fg(palette::Role::TextEmphasis.color()),
+            Style::default().fg(palette::Role::TextEmphasis.color().to_ratatui()),
         )),
         Rect {
             x: inner.x + 1,

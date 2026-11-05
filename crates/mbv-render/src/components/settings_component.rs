@@ -90,19 +90,19 @@ fn render_services(frame: &mut Frame, content: Rect, services: &[ServiceRow], cu
                     row.name.clone(),
                     if focused {
                         Style::default()
-                            .fg(palette::Role::TextPrimary.color())
+                            .fg(palette::Role::TextPrimary.color().to_ratatui())
                             .add_modifier(Modifier::BOLD)
                     } else {
-                        Style::default().fg(palette::Role::TextSecondary.color())
+                        Style::default().fg(palette::Role::TextSecondary.color().to_ratatui())
                     },
                 ),
                 Span::raw("  "),
                 Span::styled(
                     row.detail.clone(),
                     Style::default().fg(if row.muted {
-                        palette::Role::TextMuted.color()
+                        palette::Role::TextMuted.color().to_ratatui()
                     } else {
-                        palette::Role::Accent.color()
+                        palette::Role::Accent.color().to_ratatui()
                     }),
                 ),
             ])
@@ -141,7 +141,7 @@ fn render_settings_rows(
                 Span::styled(
                     row.label.clone(),
                     Style::default()
-                        .fg(palette::Role::TextMetadata.color())
+                        .fg(palette::Role::TextMetadata.color().to_ratatui())
                         .add_modifier(Modifier::BOLD),
                 ),
             ]));
@@ -152,14 +152,14 @@ fn render_settings_rows(
                 Span::styled(
                     row.label.clone(),
                     if focused {
-                        Style::default().fg(palette::Role::TextPrimary.color())
+                        Style::default().fg(palette::Role::TextPrimary.color().to_ratatui())
                     } else {
-                        Style::default().fg(palette::Role::PlaybackMetaFg.color())
+                        Style::default().fg(palette::Role::PlaybackMetaFg.color().to_ratatui())
                     },
                 ),
                 Span::styled(
                     format!("{:>width$}", row.value, width = value_width),
-                    Style::default().fg(palette::Role::Accent.color()),
+                    Style::default().fg(palette::Role::Accent.color().to_ratatui()),
                 ),
             ];
             // A Paragraph line style leaves trailing cells on the
@@ -169,7 +169,9 @@ fn render_settings_rows(
                 for span in &mut spans {
                     span.style =
                         span.style
-                            .bg(palette::surface_colors(palette::Surface::ListStripe, false).fill);
+                            .bg(palette::surface_colors(palette::Surface::ListStripe, false)
+                                .fill
+                                .to_ratatui());
                 }
                 let used: usize = spans.iter().map(|span| span.content.width()).sum();
                 let pad = (content.width as usize).saturating_sub(used);
@@ -180,7 +182,8 @@ fn render_settings_rows(
                             palette::Surface::ListStripe,
                             false,
                         )
-                        .fill),
+                        .fill
+                        .to_ratatui()),
                     ));
                 }
             }
@@ -229,9 +232,9 @@ fn render_setup(frame: &mut Frame, content: Rect, setup: &SetupDraft) {
             *label,
             Style::default()
                 .fg(if focused {
-                    palette::Role::TextMetadata.color()
+                    palette::Role::TextMetadata.color().to_ratatui()
                 } else {
-                    palette::Role::TextSecondary.color()
+                    palette::Role::TextSecondary.color().to_ratatui()
                 })
                 .add_modifier(if focused {
                     Modifier::BOLD
@@ -246,16 +249,16 @@ fn render_setup(frame: &mut Frame, content: Rect, setup: &SetupDraft) {
         };
         lines.push(Line::from(Span::styled(
             format!("  {value}{}", if focused && !busy { "▏" } else { "" }),
-            Style::default().fg(palette::Role::TextPrimary.color()),
+            Style::default().fg(palette::Role::TextPrimary.color().to_ratatui()),
         )));
     }
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
         if busy { "Working…" } else { error },
         Style::default().fg(if busy {
-            palette::Role::TextMuted.color()
+            palette::Role::TextMuted.color().to_ratatui()
         } else {
-            palette::Role::StatusError.color()
+            palette::Role::StatusError.color().to_ratatui()
         }),
     )));
     frame.render_widget(Paragraph::new(lines), content);

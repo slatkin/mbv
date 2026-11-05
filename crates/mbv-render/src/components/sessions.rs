@@ -38,7 +38,7 @@ pub fn render_sessions_overlay_content(
         f.render_widget(
             Paragraph::new(Span::styled(
                 " Loading…",
-                Style::default().fg(palette::Role::TextSecondary.color()),
+                Style::default().fg(palette::Role::TextSecondary.color().to_ratatui()),
             )),
             content,
         );
@@ -48,7 +48,7 @@ pub fn render_sessions_overlay_content(
         f.render_widget(
             Paragraph::new(Span::styled(
                 " No sessions or cast receivers found",
-                Style::default().fg(palette::Role::TextSecondary.color()),
+                Style::default().fg(palette::Role::TextSecondary.color().to_ratatui()),
             )),
             content,
         );
@@ -81,10 +81,14 @@ fn paint_transfer_hint_row(
     f.render_widget(
         Paragraph::new(Span::styled(
             hints,
-            Style::default().fg(palette::Role::TextPrimary.color()),
+            Style::default().fg(palette::Role::TextPrimary.color().to_ratatui()),
         ))
         .style(
-            Style::default().bg(palette::surface_colors(palette::Surface::SidebarBody, false).fill),
+            Style::default().bg(
+                palette::surface_colors(palette::Surface::SidebarBody, false)
+                    .fill
+                    .to_ratatui(),
+            ),
         ),
         Rect {
             x: panel_area.x + 2,

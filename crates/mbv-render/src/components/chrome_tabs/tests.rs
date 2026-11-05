@@ -118,7 +118,7 @@ fn the_selected_tab_gets_an_eighth_block_run_around_its_title(
         assert_eq!(cell.symbol(), glyph, "column {x} carries the run");
         assert_eq!(
             cell.style().fg,
-            Some(palette::Role::TabSelectedUnderline.color())
+            Some(palette::Role::TabSelectedUnderline.color().to_ratatui())
         );
     }
     for x in rect.x..rect.x + rect.width {
@@ -180,7 +180,7 @@ fn the_selected_home_icon_tab_paints_no_block_runs_and_keeps_the_active_colour()
     }
     assert_eq!(
         buf[(1, 1)].style().fg,
-        Some(palette::Role::AccentActive.color()),
+        Some(palette::Role::AccentActive.color().to_ratatui()),
         "the selected Home icon keeps the active colour"
     );
 }

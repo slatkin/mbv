@@ -146,8 +146,12 @@ fn status_bar_left_segments(model: &StatusBarModel, available: u16) -> StatusBar
         vec![Span::styled(
             format!("-- VISUAL ({}) --", indicator.count),
             Style::default()
-                .fg(palette::Role::TextFocusAccent.color())
-                .bg(palette::surface_colors(palette::Surface::StatusBarPill, false).fill),
+                .fg(palette::Role::TextFocusAccent.color().to_ratatui())
+                .bg(
+                    palette::surface_colors(palette::Surface::StatusBarPill, false)
+                        .fill
+                        .to_ratatui(),
+                ),
         )]
     });
     let visual_width = visual.as_ref().map_or(0, |spans| status_width(spans));
@@ -290,7 +294,9 @@ fn render_status_bar_right(
 pub fn render_status_bar(f: &mut Frame, area: Rect, model: &StatusBarModel) -> StatusBarRegions {
     // Keep the row itself darker so the pills read as segments sitting on top of it.
     let bar_style =
-        Style::default().bg(palette::surface_colors(palette::Surface::StatusBar, false).fill);
+        Style::default().bg(palette::surface_colors(palette::Surface::StatusBar, false)
+            .fill
+            .to_ratatui());
     // `Clear` blanks every cell's symbol first (task 12.2): a bare
     // `Block::style` only recolors a cell, it never overwrites a stale
     // glyph left by whatever painted this placement before the status bar

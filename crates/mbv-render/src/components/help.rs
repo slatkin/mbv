@@ -152,12 +152,12 @@ fn help_line_label(key_w: usize, key: &str, desc: Cow<'static, str>) -> Line<'st
         Span::styled(
             format!("{key:<key_w$}"),
             Style::default()
-                .fg(palette::Role::TextPrimary.color())
+                .fg(palette::Role::TextPrimary.color().to_ratatui())
                 .add_modifier(Modifier::BOLD),
         ),
         Span::styled(
             desc,
-            Style::default().fg(palette::Role::TextSecondary.color()),
+            Style::default().fg(palette::Role::TextSecondary.color().to_ratatui()),
         ),
     ])
 }
@@ -168,7 +168,7 @@ fn help_section_line(label: &'static str) -> Line<'static> {
         Span::styled(
             label.to_owned(),
             Style::default()
-                .fg(palette::Role::TextMetadata.color())
+                .fg(palette::Role::TextMetadata.color().to_ratatui())
                 .add_modifier(Modifier::BOLD),
         ),
     ])

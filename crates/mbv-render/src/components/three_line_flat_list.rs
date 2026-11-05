@@ -1,4 +1,5 @@
 use mbv_theme as palette;
+use mbv_theme::Role;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Color;
@@ -34,7 +35,9 @@ pub fn render_three_line_flat_list<Target: Clone + Eq>(
     content_rect: Rect,
     input: &ThreeLineFlatListPaintInput<'_, Target>,
 ) -> ThreeLineFlatListPaintResult<Target> {
-    let surface = palette::surface_colors(palette::Surface::SidebarBody, false).fill;
+    let surface = palette::surface_colors(palette::Surface::SidebarBody, false)
+        .fill
+        .to_ratatui();
     frame.render_widget(
         Paragraph::new(" ").style(Style::default().bg(surface)),
         content_rect,
@@ -60,9 +63,13 @@ pub fn render_three_line_flat_list<Target: Clone + Eq>(
         };
         let rect = Rect::new(row_x, y, row_width, 3);
         let bg = if selected {
-            palette::surface_colors(palette::Surface::SelectedRow, false).fill
+            palette::surface_colors(palette::Surface::SelectedRow, false)
+                .fill
+                .to_ratatui()
         } else if index % 2 == 1 {
-            palette::surface_colors(palette::Surface::ListStripe, false).fill
+            palette::surface_colors(palette::Surface::ListStripe, false)
+                .fill
+                .to_ratatui()
         } else {
             surface
         };
@@ -79,14 +86,14 @@ pub fn render_three_line_flat_list<Target: Clone + Eq>(
                         let fg = if selected
                             && !matches!(span.role, ThreeLineRole::Accent | ThreeLineRole::Badge(_))
                         {
-                            palette::Role::SelectedRowFg.color()
+                            palette::Role::SelectedRowFg.color().to_ratatui()
                         } else {
                             match span.role {
-                                ThreeLineRole::Name => palette::Role::TextPrimary.color(),
-                                ThreeLineRole::Kind => palette::Role::TextEmphasis.color(),
-                                ThreeLineRole::Detail => palette::Role::TextMuted.color(),
-                                ThreeLineRole::Status => palette::Role::StatusAvailable.color(),
-                                ThreeLineRole::Accent => palette::Role::AccentActive.color(),
+                                ThreeLineRole::Name => Role::TextPrimary.color().to_ratatui(),
+                                ThreeLineRole::Kind => Role::TextEmphasis.color().to_ratatui(),
+                                ThreeLineRole::Detail => Role::TextMuted.color().to_ratatui(),
+                                ThreeLineRole::Status => Role::StatusAvailable.color().to_ratatui(),
+                                ThreeLineRole::Accent => Role::AccentActive.color().to_ratatui(),
                                 ThreeLineRole::Badge(color) => color,
                             }
                         };

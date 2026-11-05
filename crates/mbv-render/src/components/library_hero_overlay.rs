@@ -36,8 +36,11 @@ pub fn paint_library_hero_overlay(
     // underneath would show through.
     f.render_widget(Clear, overlay);
     f.render_widget(
-        Block::default()
-            .style(Style::default().bg(palette::surface_colors(OVERLAY_SHEET_SURFACE, false).fill)),
+        Block::default().style(
+            Style::default().bg(palette::surface_colors(OVERLAY_SHEET_SURFACE, false)
+                .fill
+                .to_ratatui()),
+        ),
         overlay,
     );
     if overlay.height > 0 {
