@@ -1,5 +1,6 @@
 use super::{
-    MediaList, MediaListOperation, MediaListTransition, WideMediaListPaintPolicy, WideViewport,
+    MediaList, MediaListOperation, MediaListPaintBorrow, MediaListTransition,
+    WideMediaListPaintPolicy, WideViewport,
 };
 use crate::list::{
     Cursored, MarkSelection, MarkSelectionState, PaintRetained, PaintRetainedState, ViewportAnchor,
@@ -14,38 +15,28 @@ use tuirealm::component::Component;
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-/// Embedded plain fixed-height, one-column media list: owns the display-row
-/// list, the selectable index over it, the cursor, and the resting scroll
-/// offset through its shared [`MediaList`] owner. It has no mouse hit-resolution API
-/// and accepts no column-count or inline-detail options (design.md D1).
-/// Painting is performed by its `Component::view` through the render adapter;
-/// current-frame point resolution and geometry are retained by the shared
-/// paint carrier.
+/// The TUI-side presentation state of one Wide media list: the semantic paint
+/// policy, the configured claim/content rectangles, and the retained painted
+/// geometry. It owns no interaction state — the [`MediaList`] Surface state
+/// does — so a Client adapter can hold the Surface state and this presentation
+/// side by side (add-gui-front-end design D5).
 #[derive(Debug)]
-pub struct WideMediaList<Target> {
-    core: MediaList<Target>,
+pub struct WidePresentationState<Target> {
     policy: WideMediaListPaintPolicy,
     configured_geometry: Option<(Rect, Rect)>,
     paint: PaintRetainedState<Target>,
 }
 
-impl<Target> Default for WideMediaList<Target> {
+impl<Target> Default for WidePresentationState<Target> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<Target> WideMediaList<Target> {
+impl<Target> WidePresentationState<Target> {
     #[must_use]
     pub fn new() -> Self {
-        Self::from_media_list(MediaList::new())
-    }
-
-    /// Reconfigure this logical flow as a Wide presentation without copying
-    /// its rows or interaction state.
-    pub fn from_media_list(core: MediaList<Target>) -> Self {
         Self {
-            core,
             policy: WideMediaListPaintPolicy::new(false),
             configured_geometry: None,
             paint: PaintRetainedState::new(),
@@ -117,6 +108,187 @@ impl<Target> WideMediaList<Target> {
         self.paint.resolve_point(point)
     }
 
+    /// The painted viewport length the wheel clamp uses (#928): the last
+    /// painted content rectangle's height, falling back to the one-row
+    /// minimum before any paint. The retained height survives invalidation,
+    /// so consecutive wheel notches between paints clamp consistently.
+    #[must_use]
+    pub fn painted_viewport_len(&self) -> usize {
+        self.paint
+            .last_content_rect()
+            .map_or(1, |rect| usize::from(rect.height.max(1)))
+    }
+}
+
+impl<Target> PaintRetained<Target> for WidePresentationState<Target> {
+    fn paint_retained(&self) -> &PaintRetainedState<Target> {
+        &self.paint
+    }
+
+    fn paint_retained_mut(&mut self) -> &mut PaintRetainedState<Target> {
+        &mut self.paint
+    }
+}
+
+/// Paint one Wide media-list frame from the Surface state's canonical owner
+/// and the presentation's policy and retained geometry. The one body both the
+/// owned-core [`WideMediaList`] and a Client adapter over a separately held
+/// Surface state run (add-gui-front-end design D5).
+pub(crate) fn render_wide_media_list<Target: Clone + Eq>(
+    core: &mut MediaList<Target>,
+    presentation: &mut WidePresentationState<Target>,
+    frame: &mut Frame,
+    area: Rect,
+) {
+    presentation.begin_view();
+    let (claim_rect, content_rect) = presentation.view_geometry(area);
+    if area.is_empty() || claim_rect.is_empty() || content_rect.is_empty() || core.is_empty() {
+        return;
+    }
+    let policy = presentation.policy;
+    let geometry = row_geometry(core, content_rect.height as usize);
+    let key = policy
+        .focused()
+        .then_some(geometry.selected_row())
+        .flatten()
+        .and_then(|row| core.rows().get(row))
+        .and_then(mbv_render::components::media_list::row_marquee_key);
+    let marquee_key = key;
+    if let Some(key) = marquee_key.as_deref() {
+        core.marquee_state(key);
+    }
+    let MediaListPaintBorrow {
+        rows,
+        multi_selection,
+        title_reveal,
+        marquee_text,
+        marquee_started_at,
+    } = core.paint_borrow();
+    let marquee = marquee_key
+        .as_deref()
+        .map(|key| (key, marquee_text, marquee_started_at));
+    let paint = mbv_render::render_wide_media_list_component(
+        frame,
+        mbv_render::components::media_list::WideMediaListPaintInput {
+            rows,
+            row_geometry: geometry,
+            multi_selection,
+            title_reveal,
+            marquee,
+            policy,
+            claim_rect,
+            content_rect,
+        },
+    );
+    core.set_scroll(paint.row_geometry.offset());
+    presentation.finish_view(
+        claim_rect,
+        content_rect,
+        &paint.row_geometry,
+        paint.selected_row_rect.as_ref(),
+    );
+}
+
+/// Export the fixed one-column flow used by the painter.
+fn row_geometry<Target: Clone + Eq>(
+    core: &MediaList<Target>,
+    viewport_height: usize,
+) -> RowGeometry<Target> {
+    let viewport = core.resolve_viewport(viewport_height);
+    RowGeometry::source(core.rows(), viewport.offset, core.selected_display_row())
+}
+
+/// Embedded plain fixed-height, one-column media list: owns the display-row
+/// list, the selectable index over it, the cursor, and the resting scroll
+/// offset through its shared [`MediaList`] owner. It has no mouse hit-resolution API
+/// and accepts no column-count or inline-detail options (design.md D1).
+/// Painting is performed by its `Component::view` through the render adapter;
+/// current-frame point resolution and geometry are retained by the shared
+/// paint carrier.
+#[derive(Debug)]
+pub struct WideMediaList<Target> {
+    core: MediaList<Target>,
+    presentation: WidePresentationState<Target>,
+}
+
+impl<Target> Default for WideMediaList<Target> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<Target> WideMediaList<Target> {
+    #[must_use]
+    pub fn new() -> Self {
+        Self::from_media_list(MediaList::new())
+    }
+
+    /// Reconfigure this logical flow as a Wide presentation without copying
+    /// its rows or interaction state.
+    pub fn from_media_list(core: MediaList<Target>) -> Self {
+        Self {
+            core,
+            presentation: WidePresentationState::new(),
+        }
+    }
+
+    pub fn invalidate_paint(&mut self) {
+        self.presentation.invalidate_paint();
+    }
+
+    /// Configure the semantic policy used by the next `view`.
+    pub fn set_paint_policy(&mut self, policy: WideMediaListPaintPolicy) {
+        self.presentation.set_paint_policy(policy);
+    }
+
+    /// Configure the parent-owned claim and row-flow rectangles for the next
+    /// `view`. The rectangles may differ in width, as when a framed list
+    /// claims its full panel while rows use an inset flow.
+    pub fn set_geometry(&mut self, claim_rect: Rect, content_rect: Rect) {
+        self.presentation.set_geometry(claim_rect, content_rect);
+    }
+
+    pub fn view_geometry(&self, area: Rect) -> (Rect, Rect) {
+        self.presentation.view_geometry(area)
+    }
+
+    pub fn begin_view(&mut self) {
+        self.presentation.begin_view();
+    }
+
+    pub fn finish_view(
+        &mut self,
+        claim_rect: Rect,
+        content_rect: Rect,
+        row_geometry: &RowGeometry<Target>,
+        selected_row_rect: Option<&Rect>,
+    ) where
+        Target: Clone,
+    {
+        self.presentation
+            .finish_view(claim_rect, content_rect, row_geometry, selected_row_rect);
+    }
+
+    /// The current frame's content rectangle, if `view` completed.
+    pub fn current_content_rect(&self) -> Option<Rect> {
+        self.presentation.current_content_rect()
+    }
+
+    /// The current frame's selected-row rectangle, if it is visible.
+    pub fn current_selected_row_rect(&self) -> Option<Rect> {
+        self.presentation.current_selected_row_rect()
+    }
+
+    /// Whether the current frame's painted list claims `point`.
+    pub fn claims_current_point(&self, point: Position) -> bool {
+        self.presentation.claims_current_point(point)
+    }
+
+    /// Resolve `point` from the current frame's retained painted geometry.
+    pub fn resolve_current_point(&self, point: Position) -> Option<&Target> {
+        self.presentation.resolve_current_point(point)
+    }
+
     pub fn rows(&self) -> &[MediaListRow<Target>] {
         self.core.rows()
     }
@@ -183,12 +355,7 @@ impl<Target: Clone + Eq> WideMediaList<Target> {
 
     /// Export the fixed one-column flow used by the painter.
     pub fn row_geometry(&self, viewport_height: usize) -> RowGeometry<Target> {
-        let viewport = self.core.resolve_viewport(viewport_height);
-        RowGeometry::source(
-            self.core.rows(),
-            viewport.offset,
-            self.core.selected_display_row(),
-        )
+        row_geometry(&self.core, viewport_height)
     }
 }
 
@@ -275,10 +442,7 @@ impl<Target: Clone + Eq> WideMediaList<Target> {
         // height (#928), falling back to the one-row minimum before any
         // paint. The retained height survives invalidation, so consecutive
         // wheel notches between paints clamp consistently.
-        let viewport_len = self
-            .paint
-            .last_content_rect()
-            .map_or(1, |rect| usize::from(rect.height.max(1)));
+        let viewport_len = self.presentation.painted_viewport_len();
         self.core
             .delegate_operation_with_viewport_len(operation, viewport_len)
     }
@@ -326,65 +490,9 @@ impl<Target: Clone + Eq> MarkSelection<Target> for WideMediaList<Target> {
     }
 }
 
-impl<Target> PaintRetained<Target> for WideMediaList<Target> {
-    fn paint_retained(&self) -> &PaintRetainedState<Target> {
-        &self.paint
-    }
-
-    fn paint_retained_mut(&mut self) -> &mut PaintRetainedState<Target> {
-        &mut self.paint
-    }
-}
-
 impl<Target: Clone + Eq> Component for WideMediaList<Target> {
     fn view(&mut self, frame: &mut Frame, area: Rect) {
-        self.begin_view();
-        let (claim_rect, content_rect) = self.view_geometry(area);
-        if area.is_empty() || claim_rect.is_empty() || content_rect.is_empty() || self.is_empty() {
-            return;
-        }
-        let policy = self.policy;
-        let geometry = self.row_geometry(content_rect.height as usize);
-        let key = policy
-            .focused()
-            .then_some(geometry.selected_row())
-            .flatten()
-            .and_then(|row| self.rows().get(row))
-            .and_then(mbv_render::components::media_list::row_marquee_key);
-        let marquee_key = key;
-        if let Some(key) = marquee_key.as_deref() {
-            self.marquee_state(key);
-        }
-        let crate::media_list::MediaListPaintBorrow {
-            rows,
-            multi_selection,
-            title_reveal,
-            marquee_text,
-            marquee_started_at,
-        } = self.core.paint_borrow();
-        let marquee = marquee_key
-            .as_deref()
-            .map(|key| (key, marquee_text, marquee_started_at));
-        let paint = mbv_render::render_wide_media_list_component(
-            frame,
-            mbv_render::components::media_list::WideMediaListPaintInput {
-                rows,
-                row_geometry: geometry,
-                multi_selection,
-                title_reveal,
-                marquee,
-                policy,
-                claim_rect,
-                content_rect,
-            },
-        );
-        self.set_scroll(paint.row_geometry.offset());
-        self.finish_view(
-            claim_rect,
-            content_rect,
-            &paint.row_geometry,
-            paint.selected_row_rect.as_ref(),
-        );
+        render_wide_media_list(&mut self.core, &mut self.presentation, frame, area);
     }
 
     fn query(&self, _attr: Attribute) -> Option<QueryResult<'_>> {
