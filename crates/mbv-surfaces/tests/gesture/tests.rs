@@ -111,6 +111,44 @@ fn press_drag_and_release_reports_the_full_gesture() {
     );
 }
 
+/// The same-place rule for the GUI's `f32` logical points: two presses
+/// within the core's slop radius recognize as the same place, so a real
+/// pointer's second press — which rarely repeats the first exactly — still
+/// promotes to a double click, while a press at another place does not
+/// (review of b26ab301e: exact `p == at` would never fire in the GUI).
+#[test]
+fn two_nearby_presses_are_a_double_click_and_two_far_ones_are_not() {
+    let mut state = PointerGestureState::new();
+    let t0 = Instant::now();
+    assert_eq!(
+        recognize(&mut state, bare(3.0, 4.0), t0),
+        Some(PointerGesture::Click {
+            at: Position { x: 3.0, y: 4.0 },
+            selection: ClickSelection::Plain,
+        })
+    );
+    assert_eq!(
+        recognize(&mut state, bare(5.0, 5.0), t0 + Duration::from_millis(100)),
+        Some(PointerGesture::DoubleClick(Position { x: 5.0, y: 5.0 }))
+    );
+
+    let mut state = PointerGestureState::new();
+    assert_eq!(
+        recognize(&mut state, bare(3.0, 4.0), t0),
+        Some(PointerGesture::Click {
+            at: Position { x: 3.0, y: 4.0 },
+            selection: ClickSelection::Plain,
+        })
+    );
+    assert_eq!(
+        recognize(&mut state, bare(20.0, 4.0), t0 + Duration::from_millis(100)),
+        Some(PointerGesture::Click {
+            at: Position { x: 20.0, y: 4.0 },
+            selection: ClickSelection::Plain,
+        })
+    );
+}
+
 /// The modifier choice is part of the gesture policy: the recognizer derives
 /// the selection from the event's modifiers, so both Clients toggle and
 /// range-select the same way (add-gui-front-end row 4.8).

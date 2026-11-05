@@ -11,7 +11,11 @@
 //!
 //! ## Chosen intervals
 //!
-//! * **Double-click window: 400 ms**, exact-position match (legacy standard).
+//! * **Double-click window: 400 ms**, same-place match (legacy standard).
+//!   The same-place rule is the coordinate type's own (`SamePlace`): the
+//!   TUI's painted cells compare exactly, and the GUI's `f32` logical
+//!   points compare within [`DOUBLE_CLICK_SLOP`], because a toolkit pointer
+//!   rarely repeats a position exactly.
 //! * **Wheel step: 3 rows, no throttle.** Every wheel event the Client
 //!   translates is recognized and emitted as `Scroll { delta: ±WHEEL_STEP }`;
 //!   none is dropped or coalesced. The uniform step is the policy: consumers
@@ -23,12 +27,35 @@
 
 use std::time::{Duration, Instant};
 
-use mbv_ui_msg::{KeyModifiers, PointerKind};
+use mbv_ui_msg::{KeyModifiers, PointerKind, Position};
 
 /// Double-click recognition window. See module docs.
 pub const DOUBLE_CLICK_WINDOW: Duration = Duration::from_millis(400);
 /// Uniform wheel scroll step, in rows, per wheel event. See module docs.
 pub const WHEEL_STEP: i64 = 3;
+/// The double-click slop radius, in logical units, for the `f32` logical
+/// points the GUI Client recognizes over. The rule lives here so the GUI
+/// does not choose its own tolerance; the TUI's painted cells compare
+/// exactly and never see it.
+pub const DOUBLE_CLICK_SLOP: f32 = 4.0;
+
+/// Whether two positions name the same place for the double-click rule. Each
+/// Client's coordinate type decides: the TUI's painted cells name the same
+/// place only when they are equal, and the GUI's `f32` logical points name
+/// the same place within [`DOUBLE_CLICK_SLOP`].
+pub trait SamePlace {
+    /// Whether `self` and `other` name the same place.
+    #[must_use]
+    fn same_place(&self, other: &Self) -> bool;
+}
+
+impl SamePlace for Position {
+    fn same_place(&self, other: &Self) -> bool {
+        let dx = self.x - other.x;
+        let dy = self.y - other.y;
+        dx * dx + dy * dy <= DOUBLE_CLICK_SLOP * DOUBLE_CLICK_SLOP
+    }
+}
 
 /// The selection a click requests. The choice is part of the gesture policy:
 /// the recognizer derives it from the event's modifiers, so both Clients
@@ -98,7 +125,7 @@ impl<P> Default for PointerGestureState<P> {
     }
 }
 
-impl<P: Copy + PartialEq> PointerGestureState<P> {
+impl<P: Copy + SamePlace> PointerGestureState<P> {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
@@ -126,7 +153,7 @@ impl<P: Copy + PartialEq> PointerGestureState<P> {
             PointerKind::Press => {
                 let is_double = selection == ClickSelection::Plain
                     && self.last_click.is_some_and(|(t, p)| {
-                        now.duration_since(t) < DOUBLE_CLICK_WINDOW && p == at
+                        now.duration_since(t) < DOUBLE_CLICK_WINDOW && p.same_place(&at)
                     });
                 self.last_click = (selection == ClickSelection::Plain).then_some((now, at));
                 self.drag_anchor = (selection == ClickSelection::Plain).then_some(at);

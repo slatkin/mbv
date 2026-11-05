@@ -17,9 +17,24 @@ use std::time::Instant;
 use ratatui::layout::Position;
 use tuirealm::event::MouseEvent;
 
-use mbv_surfaces::gesture::{PointerGesture, PointerGestureState};
+use mbv_surfaces::gesture::{PointerGesture, PointerGestureState, SamePlace};
 
 use crate::root::neutral_pointer;
+
+/// The TUI's painted-cell coordinate for gesture recognition: one cell is
+/// one logical unit (design D6), and two cells name the same place for the
+/// double-click rule only when they are equal. The wrapper exists so the
+/// TUI can implement the core's [`SamePlace`] for its own type: the trait's
+/// `f32` logical-point rule is the GUI's, and this crate cannot implement a
+/// foreign trait for ratatui's position.
+#[derive(Clone, Copy, Debug)]
+struct CellPoint(Position);
+
+impl SamePlace for CellPoint {
+    fn same_place(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
 
 /// The TUI's gesture recognition state: the Client core's
 /// [`PointerGestureState`] over the TUI's painted cells, fed by
@@ -30,7 +45,7 @@ use crate::root::neutral_pointer;
 /// geometry resolves against; no coordinate conversion happens on this path.
 #[derive(Debug, Default)]
 pub struct MouseGestureState {
-    core: PointerGestureState<Position>,
+    core: PointerGestureState<CellPoint>,
 }
 
 impl MouseGestureState {
@@ -47,12 +62,32 @@ impl MouseGestureState {
     #[must_use]
     pub fn recognize(&mut self, event: MouseEvent) -> Option<PointerGesture<Position>> {
         let pointer = neutral_pointer(event)?;
-        let at = Position {
+        let at = CellPoint(Position {
             x: event.column,
             y: event.row,
-        };
+        });
         self.core
             .recognize(pointer.kind, pointer.modifiers, at, Instant::now())
+            .map(Self::to_cells)
+    }
+
+    /// The recognized gesture in the core's cell coordinate: the positions
+    /// unwrap to the painted cells the adapters resolve against.
+    fn to_cells(gesture: PointerGesture<CellPoint>) -> PointerGesture<Position> {
+        match gesture {
+            PointerGesture::Click { at, selection } => PointerGesture::Click {
+                at: at.0,
+                selection,
+            },
+            PointerGesture::DoubleClick(at) => PointerGesture::DoubleClick(at.0),
+            PointerGesture::RightClick(at) => PointerGesture::RightClick(at.0),
+            PointerGesture::Scroll { at, delta } => PointerGesture::Scroll { at: at.0, delta },
+            PointerGesture::Drag { from, to } => PointerGesture::Drag {
+                from: from.0,
+                to: to.0,
+            },
+            PointerGesture::DragEnd => PointerGesture::DragEnd,
+        }
     }
 }
 
