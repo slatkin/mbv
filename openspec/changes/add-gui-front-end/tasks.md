@@ -20,8 +20,8 @@
 - [x] 3.5 Route the sidebar and menu call sites (`shell/overlays/sidebars.rs`, `shell/overlays/menus.rs`) through `FocusStack`. Verify with the existing sidebar and context-menu tick-integration tests.
 - [x] 3.6 Route the remaining TuiRealm `active`/`mount`/`umount` call sites in `src/app/shell/` (root, library, queue, feeds_manage, arbitration, twitch_url, and others) through `FocusStack`, so that the sync step is the only TuiRealm focus caller. Verify with `rg -n '\.active\(|\.blur\(' src/app/shell -g '!**/tests/**'`: it reports only the sync step. Verify also that the full `cargo nextest run -p mbv` passes.
 - [x] 3.7 Add one tick-integration test, "TuiRealm focus follows the core stack": a stack change is the focused TuiRealm component after the sync pass. Verify that it passes.
-- [ ] 3.8 Write the ADR for the decision "the Client core owns focus; TuiRealm is the TUI adapter" (read `docs/adr/README.md` first). Mark the focus part of ADR 0022 as superseded. Verify that the ADR follows the README amendment rules.
-- [ ] 3.9 Add the `CONTEXT.md` terms TUI Client, GUI Client, Client core, and Surface state, and change the `Client` definition to cover both kinds (design D1). Verify that no new term uses an *Avoid* word.
+- [x] 3.8 Write the ADR for the decision "the Client core owns focus; TuiRealm is the TUI adapter" (read `docs/adr/README.md` first). Mark the focus part of ADR 0022 as superseded. Verify that the ADR follows the README amendment rules.
+- [x] 3.9 Add the `CONTEXT.md` terms TUI Client, GUI Client, Client core, and Surface state, and change the `Client` definition to cover both kinds (design D1). Verify that no new term uses an *Avoid* word.
 
 ## 4. Surface state for the Queue slice
 
