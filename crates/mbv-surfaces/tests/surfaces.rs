@@ -11,6 +11,10 @@ mod list {
     mod row_flow;
     mod viewport;
 }
+mod media_list {
+    mod helpers;
+    mod tests;
+}
 
 use mbv_surfaces::FocusStack;
 use mbv_ui_model::settings::PanelFocus;

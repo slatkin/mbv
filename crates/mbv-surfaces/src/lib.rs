@@ -10,6 +10,7 @@ mod capacity;
 mod focus_stack;
 mod hit_map;
 pub mod list;
+pub mod media_list;
 
 #[doc(inline)]
 pub use capacity::ListCapacity;

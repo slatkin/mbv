@@ -6,6 +6,7 @@ use crate::list::{
     Viewported,
 };
 use mbv_render::components::media_list::{MediaListRow, MediaListTitleReveal, RowGeometry};
+use mbv_ui_msg::KeyEvent as NeutralKeyEvent;
 use ratatui::Frame;
 use ratatui::layout::{Position, Rect};
 use tuirealm::command::{Cmd, CmdResult};
@@ -156,7 +157,7 @@ impl<Target> WideMediaList<Target> {
 
     #[cfg(any(test, feature = "test"))]
     pub fn title_reveal(&self) -> MediaListTitleReveal {
-        self.core.title_reveal
+        self.core.title_reveal()
     }
 
     pub fn set_title_reveal(&mut self, policy: MediaListTitleReveal) {
@@ -235,6 +236,18 @@ impl<Target: Clone + Eq> WideMediaList<Target> {
     /// valid for pointer gestures until the next view begins.
     pub fn select_target(&mut self, target: &Target) -> bool {
         self.core.select_target(target)
+    }
+
+    /// The neutral visual-mode key rule lives on the canonical owner; this
+    /// presentation wrapper invalidates the retained painted geometry for the
+    /// arms that replace the whole mark set (select-all, enter Visual mode),
+    /// exactly as the pre-split wrappers did.
+    pub fn handle_visual_key(&mut self, key: &NeutralKeyEvent) -> Option<usize> {
+        let outcome = self.core.handle_visual_key(key)?;
+        if outcome.marks_replaced {
+            self.invalidate_paint();
+        }
+        Some(outcome.selected)
     }
 
     pub fn toggle_selection(&mut self, target: &Target) {
@@ -342,24 +355,16 @@ impl<Target: Clone + Eq> Component for WideMediaList<Target> {
         if let Some(key) = marquee_key.as_deref() {
             self.marquee_state(key);
         }
-        let crate::media_list::MediaList {
-            rows: list_rows,
+        let crate::media_list::MediaListPaintBorrow {
+            rows,
             multi_selection,
             title_reveal,
             marquee_text,
             marquee_started_at,
-            ..
-        } = &mut self.core;
-        let rows = &**list_rows;
-        let multi_selection = multi_selection.targets();
-        let title_reveal = *title_reveal;
-        let marquee_state = marquee_key
-            .as_ref()
-            .map(|_| (&mut *marquee_text, &mut *marquee_started_at));
+        } = self.core.paint_borrow();
         let marquee = marquee_key
             .as_deref()
-            .zip(marquee_state)
-            .map(|(key, (text, started_at))| (key, text, started_at));
+            .map(|key| (key, marquee_text, marquee_started_at));
         let paint = mbv_render::render_wide_media_list_component(
             frame,
             mbv_render::components::media_list::WideMediaListPaintInput {
