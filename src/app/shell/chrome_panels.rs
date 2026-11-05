@@ -260,8 +260,9 @@ impl Model {
             // The prefix-armed display and the live toast ride the Status
             // bar's Surface state (add-gui-front-end row 4.6); the adapter
             // builds the painted chrome from it.
-            panel.set_prefix_armed(self.app.prefix_armed);
-            panel.set_toast(self.app.toast_presentation());
+            let status = self.app.status_bar_projection();
+            panel.set_prefix_armed(status.prefix_armed);
+            panel.set_toast(status.toast);
         }
     }
 

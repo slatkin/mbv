@@ -1,11 +1,13 @@
 use super::Model;
 use super::{PanelFocus, QueueLink};
-use crate::app::QueueSurfaceProjection;
 use crate::app::dispatch::notify::ToastSeverity;
+use crate::app::{FooterPill, QueueSurfaceProjection};
 use mbv_components::QueueComponent;
 use mbv_queue::QueueSlotId;
 use mbv_ui_model::playback_target::NowPlayingStatus;
 use mbv_ui_msg::{ComponentId, QueueColumnResize, QueueIntent, QueueMove, QueueRequest};
+use ratatui::style::{Modifier, Style};
+use ratatui::text::Span;
 
 impl Model {
     pub(in crate::app) fn sync_queue(&mut self) {
@@ -74,11 +76,12 @@ impl Model {
             // Player owner (design D7), so it flips in the same sync pass the
             // shown link flips; the playback target's host lives on the queue
             // header row.
+            let footer = self.app.queue_footer_projection();
             queue.set_status_pills(
-                self.app.queue_owner_status_spans(),
-                self.app.playlist_status_spans(),
-                self.app.autosave_status_spans(),
-                self.app.dirty_status_spans(),
+                footer_pill_spans(&footer.owner),
+                footer_pill_spans(&footer.playlist),
+                footer.autosave.as_ref().map(footer_pill_spans),
+                footer.dirty.as_ref().map(footer_pill_spans),
             );
             // The queue panel's placement (task 3.1): computed from the
             // same paint-free checkpoint the draw path consumes (the last
@@ -312,6 +315,24 @@ impl Model {
     ) -> Option<usize> {
         self.app.slot_index(link, slot_id)
     }
+}
+
+/// One footer pill as the TUI footer paints it: the pill's text in its
+/// foreground role on the status pill surface. The TUI painter edge builds
+/// these spans from the neutral footer projection (design D5).
+fn footer_pill_spans(pill: &FooterPill) -> Vec<Span<'static>> {
+    let mut style =
+        Style::default()
+            .fg(pill.role.color().to_ratatui())
+            .bg(
+                mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false)
+                    .fill
+                    .to_ratatui(),
+            );
+    if pill.bold {
+        style = style.add_modifier(Modifier::BOLD);
+    }
+    vec![Span::styled(pill.text.clone(), style)]
 }
 
 #[cfg(test)]

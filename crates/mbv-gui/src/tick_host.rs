@@ -21,8 +21,9 @@ use mbv_surfaces::gesture::{PointerGesture, PointerGestureState};
 use mbv_ui_msg::{Msg, Position, ServiceRequest};
 
 use crate::input::{WheelAccumulator, neutral_input};
-use crate::queue::QueuePanel;
+use crate::queue::{QueuePanel, split_bottom};
 use crate::queue_playback::QueuePlaybackPanel;
+use crate::status_bar::{STATUS_BAR_HEIGHT, StatusBarPanel};
 
 /// The `App` the Client core drives, and the Client-owned parts of the tick.
 /// The GUI holds no interaction state here: cursor, selection, marks, and
@@ -46,6 +47,9 @@ pub(crate) struct GuiTickHost {
     /// The Queue playback band: the transport band's Surface state and the
     /// painted report the pointer gestures resolve against (row 6.5).
     playback: QueuePlaybackPanel,
+    /// The Status bar: its Surface state, which the App's projection adopts each
+    /// frame, painted on the window's bottom row (row 6.5).
+    status: StatusBarPanel,
     /// The wheel-delta accumulator (the row 6.3 review finding): pixel-unit
     /// wheel events fold into whole steps before the gesture policy sees
     /// them.
@@ -60,30 +64,36 @@ impl GuiTickHost {
             gestures: PointerGestureState::new(),
             queue: QueuePanel::new(),
             playback: QueuePlaybackPanel::new(),
+            status: StatusBarPanel::new(),
             wheel: WheelAccumulator::new(),
         }
     }
 
-    /// Push the App-owned projections into the Queue panel and the Queue
-    /// playback band: the GUI Client's analog of the TUI Client's sync pass,
-    /// once per frame before the paint (design D5).
+    /// Push the App-owned projections into the Queue panel, the Queue playback
+    /// band, and the Status bar: the GUI Client's analog of the TUI Client's
+    /// sync pass, once per frame before the paint (design D5).
     pub(crate) fn sync_surfaces(&mut self) {
         let projection = self.app.queue_surface_projection();
         self.queue.sync(projection);
+        self.queue.sync_footer(self.app.queue_footer_projection());
         self.playback.sync(self.app.queue_playback_projection());
+        self.status.sync(self.app.status_bar_projection());
     }
 
     /// Paint the frame's surfaces. The Queue playback band sits above the
     /// Queue list, as the TUI's `queue_playback` placement sits above `queue`.
     /// The Queue panel holds the GUI's focus (the GUI's focus stack arrives
-    /// with its later surfaces), so its appearance focus is focused.
+    /// with its later surfaces), so its appearance focus is focused. The Status
+    /// bar takes the window's bottom row, as the TUI's status row does.
     pub(crate) fn paint(&mut self, ctx: &egui::Context) {
         egui::CentralPanel::default()
             .frame(egui::Frame::NONE)
             .show(ctx, |ui| {
-                let (band, list) = split_band(ui.max_rect(), self.playback.band_height());
+                let (body, status) = split_bottom(ui.max_rect(), STATUS_BAR_HEIGHT);
+                let (band, list) = split_band(body, self.playback.band_height());
                 self.playback.paint(ui.painter(), band);
                 self.queue.paint(ui.painter(), list, true);
+                self.status.paint(ui.painter(), status);
             });
     }
 }
@@ -379,5 +389,13 @@ impl GuiTickHost {
 
     pub(crate) fn playback_test_shown(&self) -> bool {
         self.playback.shown()
+    }
+
+    pub(crate) fn queue_test_footer(&self) -> Option<&mbv::QueueFooterProjection> {
+        self.queue.test_footer()
+    }
+
+    pub(crate) fn status_test_projection(&self) -> mbv::StatusBarProjection {
+        self.status.test_projection()
     }
 }

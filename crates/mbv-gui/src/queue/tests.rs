@@ -41,9 +41,26 @@ fn empty_queue_paints_no_row_regions() {
     let mut host = GuiTickHost::new(mbv::stub_app_with_queue(0), ctx.clone());
     run_frame(&ctx, &mut host, frame_input(Vec::new()));
 
+    // The 480x640 test window less the Status bar row, the panel padding, and
+    // the footer row leaves 576 points of list: 24 rows.
     let report = host.queue_test_report();
-    assert_eq!(report.capacity.whole_items(), 26);
+    assert_eq!(report.capacity.whole_items(), 24);
     assert!(report.hit_map.is_empty());
+}
+
+/// An unsaved queue carries its dirty pill into the Queue footer: the
+/// projection the frame adopts holds the pill the footer paints (row 6.4's
+/// footer, design D11).
+#[test]
+fn an_unsaved_queue_paints_the_dirty_pill_in_the_footer() {
+    let ctx = egui::Context::default();
+    let mut host = GuiTickHost::new(mbv::stub_app_with_unsaved_queue(4), ctx.clone());
+    run_frame(&ctx, &mut host, frame_input(Vec::new()));
+
+    assert!(
+        host.queue_test_footer()
+            .is_some_and(|footer| footer.dirty.is_some())
+    );
 }
 
 /// A pointer press on a painted row moves the queue cursor to that slot,

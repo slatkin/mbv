@@ -1,7 +1,7 @@
 //! The GUI Client's Queue panel (row 6.4): the egui `Painter` over the
 //! Queue Surface state, with the fixed-row list, the active-slot mark, the
-//! cursor, the marks, and the empty-queue state, every colour resolved
-//! through the theme's neutral `Rgb`.
+//! cursor, the marks, the empty-queue state, and the footer's status pills
+//! (design D5), every colour resolved through the theme's neutral `Rgb`.
 //!
 //! The panel holds no interaction state of its own beyond the projection
 //! inputs the TUI adapter also holds: cursor, marks, selection, and viewport
@@ -11,7 +11,7 @@
 //! gestures resolve against the last completed frame's report.
 
 use eframe::egui;
-use mbv::GuiSurfaceLeaf;
+use mbv::{FooterPill, GuiSurfaceLeaf, QueueFooterProjection};
 use mbv_queue::QueueSlotId;
 use mbv_surfaces::gesture::{ClickSelection, PointerGesture};
 use mbv_surfaces::media_list::MediaListOperation;
@@ -33,6 +33,10 @@ pub(crate) const ROW_HEIGHT: f32 = 24.0;
 /// The padding between the panel edge and the list content, in logical
 /// points.
 pub(crate) const PANEL_PADDING: f32 = 8.0;
+
+/// The gap between two footer pills, and the inset a pill group paints around
+/// its text, in logical points (the TUI's one-cell pad).
+pub(crate) const PILL_PAD: f32 = 6.0;
 
 /// The gap between a title's column and the duration column, in logical
 /// points.
@@ -58,6 +62,9 @@ pub(crate) struct QueuePanel {
     /// anchor lives in the Client core's gesture policy; the grabbed target
     /// is this surface's own).
     drag_grab: Option<QueueSlotId>,
+    /// The Queue footer's status pills the last sync adopted. `None` before the
+    /// first sync, when the footer paints nothing.
+    footer: Option<QueueFooterProjection>,
 }
 
 impl Default for QueuePanel {
@@ -79,6 +86,7 @@ impl QueuePanel {
             },
             list_rect: HitRegion::new(0.0, 0.0, 0.0, 0.0),
             drag_grab: None,
+            footer: None,
         }
     }
 
@@ -106,6 +114,12 @@ impl QueuePanel {
         }
     }
 
+    /// Adopt the Queue footer's projection the `App` computed for this tick
+    /// (design D5).
+    pub(crate) fn sync_footer(&mut self, footer: QueueFooterProjection) {
+        self.footer = Some(footer);
+    }
+
     /// The last completed frame's interaction report.
     #[cfg(test)]
     pub(crate) fn last_report(&self) -> &QueueFrameReport {
@@ -122,6 +136,12 @@ impl QueuePanel {
     #[cfg(test)]
     pub(crate) fn test_mark_count(&self) -> usize {
         self.surface.multi_selection().len()
+    }
+
+    /// The footer projection the last sync adopted (test evidence).
+    #[cfg(test)]
+    pub(crate) fn test_footer(&self) -> Option<&QueueFooterProjection> {
+        self.footer.as_ref()
     }
 
     /// Resolve one recognized pointer gesture against the last completed
@@ -158,8 +178,8 @@ impl QueuePanel {
     fn row_target(&self, at: Position) -> Option<QueueSlotId> {
         match self.last_report.hit_map.resolve(at)? {
             QueueHitTarget::Slot(slot_id) => Some(*slot_id),
-            // The playlist pill is a footer control the GUI does not paint
-            // yet; the list target claims nothing for a press.
+            // The playlist pill's press opens the Playlists surface, which the
+            // GUI does not present; the list target claims nothing for it.
             QueueHitTarget::PlaylistPill => None,
         }
     }
@@ -210,10 +230,11 @@ impl QueuePanel {
     }
 
     /// Paint one frame over `rect` and report the frame's capacity and hit
-    /// map. The viewport height the Surface state clamps with is the painted
-    /// capacity, so the page stride the keys derive is the painted one.
+    /// map. The footer takes the panel's bottom row below the list. The
+    /// viewport height the Surface state clamps with is the painted capacity,
+    /// so the page stride the keys derive is the painted one.
     pub(crate) fn paint(&mut self, painter: &egui::Painter, rect: egui::Rect, focused: bool) {
-        let list_rect = rect.shrink(PANEL_PADDING);
+        let (list_rect, footer_rect) = split_bottom(rect.shrink(PANEL_PADDING), ROW_HEIGHT);
         self.list_rect = to_region(list_rect);
         let capacity = ListCapacity::new(rows_fitting(list_rect.height(), ROW_HEIGHT));
         self.surface.set_viewport_height(capacity.whole_items());
@@ -250,6 +271,9 @@ impl QueuePanel {
         }
         if self.surface.is_empty() {
             paint_empty_queue(painter, list_rect, &self.empty_text);
+        }
+        if let Some(footer) = &self.footer {
+            paint_footer(painter, footer_rect, footer);
         }
         self.last_report = QueueFrameReport { capacity, hit_map };
     }
@@ -404,6 +428,109 @@ fn paint_empty_queue(painter: &egui::Painter, list_rect: egui::Rect, text: &str)
     );
 }
 
+/// One run of a footer pill group: a pill's text, or the pad between two
+/// pills, which paints in the pill surface with no text.
+enum FooterRun<'a> {
+    Gap,
+    Pill(&'a FooterPill),
+}
+
+/// The Queue footer's status pills (row 6.4's footer, design D5), on the footer
+/// band. The left group reads [pad, autosave, pad, playlist, pad]; the right
+/// group reads [pad, dirty, pad, owner] and is right-anchored. The right group
+/// drops when it would reach the left group, as the TUI footer does. The pills
+/// claim no press: the owner is informational, and the playlist pill's press
+/// opens the Playlists surface, which the GUI does not present.
+fn paint_footer(painter: &egui::Painter, rect: egui::Rect, footer: &QueueFooterProjection) {
+    painter.rect_filled(rect, 0.0, surface_fill(Surface::QueuePanelBand, false));
+    let left = left_runs(footer);
+    let left_width = runs_width(painter, &left);
+    paint_runs(painter, rect, rect.left(), &left, left_width);
+    let right = right_runs(footer);
+    let right_width = runs_width(painter, &right);
+    let right_x = rect.right() - right_width;
+    if right_x >= rect.left() + left_width {
+        paint_runs(painter, rect, right_x, &right, right_width);
+    }
+}
+
+/// The left pill group's runs: the autosave indicator when present, then the
+/// playlist pill.
+fn left_runs(footer: &QueueFooterProjection) -> Vec<FooterRun<'_>> {
+    let mut runs = vec![FooterRun::Gap];
+    if let Some(autosave) = &footer.autosave {
+        runs.extend([FooterRun::Pill(autosave), FooterRun::Gap]);
+    }
+    runs.extend([FooterRun::Pill(&footer.playlist), FooterRun::Gap]);
+    runs
+}
+
+/// The right pill group's runs: the dirty marker when present, then the owner.
+fn right_runs(footer: &QueueFooterProjection) -> Vec<FooterRun<'_>> {
+    let mut runs = Vec::new();
+    if let Some(dirty) = &footer.dirty {
+        runs.extend([FooterRun::Gap, FooterRun::Pill(dirty), FooterRun::Gap]);
+    }
+    runs.push(FooterRun::Pill(&footer.owner));
+    runs
+}
+
+/// The painted width of one pill group: its pads and its texts.
+fn runs_width(painter: &egui::Painter, runs: &[FooterRun<'_>]) -> f32 {
+    runs.iter()
+        .map(|run| match run {
+            FooterRun::Gap => PILL_PAD,
+            FooterRun::Pill(pill) => pill_text_width(painter, pill),
+        })
+        .sum()
+}
+
+/// One pill group at `x` on the footer band: the group's pill surface, then
+/// each run's text in its role. The pads advance the cursor without text.
+fn paint_runs(
+    painter: &egui::Painter,
+    band: egui::Rect,
+    x: f32,
+    runs: &[FooterRun<'_>],
+    width: f32,
+) {
+    painter.rect_filled(
+        egui::Rect::from_min_size(egui::pos2(x, band.top()), egui::vec2(width, band.height())),
+        0.0,
+        surface_fill(Surface::StatusBarPill, false),
+    );
+    let mut cursor = x;
+    for run in runs {
+        match run {
+            FooterRun::Gap => cursor += PILL_PAD,
+            FooterRun::Pill(pill) => {
+                painter.text(
+                    egui::pos2(cursor, band.center().y),
+                    egui::Align2::LEFT_CENTER,
+                    &pill.text,
+                    pill_font(),
+                    role_colour(pill.role),
+                );
+                cursor += pill_text_width(painter, pill);
+            }
+        }
+    }
+}
+
+/// The painted width of one pill's text.
+fn pill_text_width(painter: &egui::Painter, pill: &FooterPill) -> f32 {
+    painter
+        .layout_no_wrap(pill.text.clone(), pill_font(), role_colour(pill.role))
+        .size()
+        .x
+}
+
+/// The font the footer's pills paint in. The bold flag is not painted: the
+/// bundled families expose no bold face to select.
+fn pill_font() -> egui::FontId {
+    egui::FontId::proportional(13.0)
+}
+
 /// The whole rows of `row_height` that fit inside `height`, by comparison:
 /// the largest count whose rows the height still covers. No float-to-integer
 /// cast: the count is small, and the additions stay exact while the partial
@@ -434,6 +561,17 @@ fn to_egui(rgb: mbv_theme::Rgb) -> egui::Color32 {
 
 pub(crate) fn to_region(rect: egui::Rect) -> HitRegion {
     HitRegion::new(rect.left(), rect.top(), rect.width(), rect.height())
+}
+
+/// Split `rect` into the part above its bottom `height` points and that bottom
+/// part: the Queue list above its footer row, and the window body above the
+/// Status bar. The bottom part never exceeds `rect`.
+pub(crate) fn split_bottom(rect: egui::Rect, height: f32) -> (egui::Rect, egui::Rect) {
+    let split = (rect.bottom() - height).max(rect.top());
+    (
+        egui::Rect::from_min_max(rect.min, egui::pos2(rect.right(), split)),
+        egui::Rect::from_min_max(egui::pos2(rect.left(), split), rect.max),
+    )
 }
 
 /// The Queue panel as the shared router's leaf: the focused surface the

@@ -85,6 +85,31 @@ pub fn stub_app_with_playing_queue(n: usize) -> App {
     app
 }
 
+/// The `App` a Client's test drives with `n` projected queue slots and the
+/// queue marked unsaved, so the Queue footer carries its dirty pill
+/// (`add-gui-front-end` row 6.4).
+#[cfg(feature = "test")]
+#[must_use]
+pub fn stub_app_with_unsaved_queue(n: usize) -> App {
+    let mut app = stub_app_with_queue(n);
+    app.queue_dirty = true;
+    app
+}
+
+/// The `App` a Client's test drives with prefix mode armed and `message`
+/// flashed as a live Neutral toast, so the Status bar carries both
+/// (`add-gui-front-end` row 6.5).
+#[cfg(feature = "test")]
+#[must_use]
+pub fn stub_app_with_prefix_and_toast(message: &str) -> App {
+    use mbv_ui_model::toast::ToastSeverity;
+
+    let mut app = make_app_stub();
+    app.prefix_armed = true;
+    app.flash(message.to_string(), ToastSeverity::Neutral);
+    app
+}
+
 /// The ordinary `App::build` construction over stub channels: no live
 /// Owner, no live Service, and the stub player whose command channel is
 /// already dropped.

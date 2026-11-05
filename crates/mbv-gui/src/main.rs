@@ -16,6 +16,7 @@ mod input;
 mod owner_exe;
 mod queue;
 mod queue_playback;
+mod status_bar;
 mod tick_host;
 
 /// The window title, and the Wayland/X11 application id pinwin takes the
