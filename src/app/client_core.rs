@@ -3,10 +3,13 @@
 //! adoption, effects, and expiries — sequenced one time for every Client.
 //!
 //! `ClientCore` holds no terminal, `TuiRealm`, or GUI-toolkit type. Each
-//! Client supplies its own half of the tick through [`ClientTickHost`]: the
-//! TUI Client's `Model` delegates to the shell drains and projections in
-//! `shell::run`; the GUI Client implements the same phases over its own
-//! surfaces.
+//! Client supplies its own half of the tick through [`ClientTickHost`].
+//!
+//! The surface-neutral body of a phase lives on `App`
+//! ([`crate::app::client_drains`]), so both Clients run one implementation of
+//! the event semantics. A host method then owns only what a Client can know:
+//! its projections, its mount sync, its own input, and the lifecycle it alone
+//! acts on (the TUI Client's pin swap).
 
 use std::fmt;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
@@ -54,11 +57,12 @@ pub struct WorkspaceRelayout {
 /// interleaves the `App`-side drains. [`ClientCore::tick`] calls these in
 /// run-loop order; each Client implements them over its own surfaces.
 ///
-/// The TUI Client implements it for `Model` (see `shell::run::tick_host`),
-/// delegating to the existing shell drains and projections. A Client that
-/// does not present a surface still drains that surface's events and
-/// answers with a no-op projection — the `App`-side sequence runs once, in
-/// the core.
+/// The surface-neutral part of a phase is an `App` drain
+/// ([`crate::app::client_drains`]); what stays in a host method is the
+/// Client's own: its projections, the lifecycle it alone acts on, and the
+/// phases only one Client can run (the TUI terminal poll, the TUI search and
+/// card surfaces, image resize). The TUI Client implements the trait for
+/// `Model` (see `shell::run::tick_host`).
 pub trait ClientTickHost {
     /// The shared runtime state the drains read and mutate.
     fn app_mut(&mut self) -> &mut App;

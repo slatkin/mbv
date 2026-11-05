@@ -214,24 +214,6 @@ impl Model {
         }
     }
 
-    pub(in crate::app) fn apply_emby_completion_drain(
-        &mut self,
-        completion: crate::app::dispatch::session::service_startup::Completion,
-    ) {
-        if let Some(content) = self.app.apply_emby_completion(completion) {
-            self.assign_home_content(content);
-        }
-    }
-
-    pub(in crate::app) fn apply_emby_setup_completion_drain(
-        &mut self,
-        completion: crate::app::dispatch::session::service_startup::SetupCompletion,
-    ) {
-        if let Some(content) = self.app.apply_emby_setup_completion(completion) {
-            self.assign_home_content(content);
-        }
-    }
-
     pub(in crate::app) fn home_continue_watching_selected() -> bool {
         true
     }

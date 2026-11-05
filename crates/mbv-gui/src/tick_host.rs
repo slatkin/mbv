@@ -3,25 +3,21 @@
 //!
 //! [`ClientCore::tick`] runs the App-side drain sequence one time for every
 //! Client and calls into this host for the surface phases that interleave it.
-//! The first GUI slice presents the Queue, the Queue playback panel, and the
-//! Status bar (rows 6.4 and 6.5), so every phase that feeds another surface
-//! answers with a no-op projection; the comment names the row that fills the
-//! phase it sits on.
-//!
-//! The drains these phases call are TUI-shell code today (`shell::run`), not
-//! `App` entry points, so the GUI cannot reach them from outside the library
-//! yet. Rows 6.4 and 6.5 need the ones the slice reads — see the unit
-//! report's open question.
+//! The surface-neutral body of each phase is the Client core's drain
+//! ([`mbv::App`]); what stays here is what only a Client can know. The first
+//! GUI slice presents the Queue, the Queue playback panel, and the Status bar
+//! (rows 6.4 and 6.5), so every projection this host would make is a no-op
+//! with the row that fills it named.
 
 use std::fmt;
 use std::time::Instant;
 
-use mbv::{App, ClientTickHost, TickOutcome};
+use mbv::{App, ClientLifecycle, ClientTickHost, HomeEventDrain, PlayerEventDrain, TickOutcome};
 use mbv_ui_msg::{Msg, ServiceRequest};
 
-/// The `App` the Client core drives, and the surface phases it calls back
-/// into. The GUI holds no interaction state here: cursor, selection, marks,
-/// and viewport live in Surface state (design D5).
+/// The `App` the Client core drives, and the Client-owned parts of the tick.
+/// The GUI holds no interaction state here: cursor, selection, marks, and
+/// viewport live in Surface state (design D5).
 pub(crate) struct GuiTickHost {
     app: App,
 }
@@ -45,9 +41,10 @@ impl ClientTickHost for GuiTickHost {
     }
 
     fn drain_startup_workers(&mut self) -> bool {
-        // Library content is outside the first slice (rows 6.4 and 6.5
-        // present the Queue, Queue playback, and Status bar).
-        false
+        // The rebuilt Home content a completion carries has no surface in the
+        // first slice; rows 6.4 and 6.5 present the Queue, Queue playback, and
+        // Status bar.
+        self.app.drain_startup_workers().events
     }
 
     fn reproject_audiobookshelf_content(&mut self) {
@@ -56,19 +53,47 @@ impl ClientTickHost for GuiTickHost {
     }
 
     fn drain_suspended_home_events(&mut self) -> bool {
-        // Home is outside the first slice (rows 6.4 and 6.5).
-        false
+        let mut had_events = false;
+        loop {
+            match self.app.drain_home_event() {
+                HomeEventDrain::Empty => return had_events,
+                HomeEventDrain::Consumed => had_events = true,
+                // A GUI Client holds no terminal and no panel to swap.
+                HomeEventDrain::Client(
+                    ClientLifecycle::SwapPrepare | ClientLifecycle::SwapQuit,
+                ) => {
+                    had_events = true;
+                }
+            }
+        }
     }
 
     fn drain_player_events(&mut self, input_received: &mut bool) -> bool {
-        // Row 6.4 fills this: the Queue slice adopts Owner snapshots here.
-        let _ = input_received;
-        false
+        match self.app.drain_player_event() {
+            PlayerEventDrain::Empty => false,
+            // A GUI Client holds no terminal and no panel to swap.
+            PlayerEventDrain::Client(ClientLifecycle::SwapPrepare | ClientLifecycle::SwapQuit) => {
+                *input_received = true;
+                false
+            }
+            PlayerEventDrain::Handled { restart } => {
+                // Rows 6.4 and 6.5 project the Queue, the Queue playback panel,
+                // and the Status bar from this event's App state.
+                *input_received = true;
+                restart
+            }
+        }
     }
 
     fn drain_lib_events(&mut self) -> bool {
-        // Library content is outside the first slice (rows 6.4 and 6.5).
-        false
+        let mut had_events = false;
+        // The core's drain applies the App-owned half of every library event;
+        // the library content state it does not keep belongs to rows that
+        // present a library surface.
+        while self.app.drain_lib_event() {
+            had_events = true;
+        }
+        had_events
     }
 
     fn drain_search_results(&mut self) -> bool {
@@ -110,36 +135,41 @@ impl ClientTickHost for GuiTickHost {
     }
 
     fn drain_resize_responses(&mut self) -> bool {
-        // Artwork is outside the first slice: rows 6.4 and 6.5 paint no
-        // images.
+        // Terminal image protocols are a TUI Client concern; the GUI paints
+        // with the egui `Painter` (rows 6.4 and 6.5).
         false
     }
 
     fn drain_transport_events(&mut self) -> bool {
-        // Row 6.4 fills this: the Queue slice reads queue and transport state
-        // from the ctrl transport drain.
-        false
+        // The core drains it; rows 6.4 and 6.5 project the state it changes.
+        self.app.drain_transport_events()
     }
 
     fn drain_ws_events(&mut self) -> bool {
-        // The Emby websocket feeds library and Home state, outside the first
-        // slice (rows 6.4 and 6.5).
-        false
+        let mut had_events = false;
+        // The core handles each event; the content it changes belongs to rows
+        // that present a library surface.
+        while self.app.drain_ws_event() {
+            had_events = true;
+        }
+        had_events
     }
 
     fn drain_audiobookshelf_socket_events(&mut self) -> bool {
-        // Audiobookshelf state is outside the first slice (rows 6.4 and 6.5).
-        false
+        let mut had_events = false;
+        while self.app.drain_audiobookshelf_socket_event() {
+            had_events = true;
+        }
+        had_events
     }
 
     fn drain_idle_feed(&mut self) -> bool {
-        // The idle feed is outside the first slice (rows 6.4 and 6.5).
-        false
+        // The core drains it; the idle feed has no surface in the first slice.
+        self.app.drain_idle_feed()
     }
 
     fn run_periodic_maintenance(&mut self) {
-        // The session polls and the websocket keepalive are App-side work the
-        // TUI shell owns today, beside the drains above.
+        self.app.run_periodic_maintenance();
     }
 
     fn tick_input(&mut self, outcome: &mut TickOutcome) {

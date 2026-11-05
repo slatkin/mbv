@@ -77,13 +77,16 @@ impl DestinationLatestSnapshot {
     }
 }
 
-/// Model-owned Home content (task 5.3d): the authoritative snapshot the
-/// shell pushes to `HomeComponent` at its writers. Re-homed from the deleted
-/// `App.home` (`HomePane`) + `App.home_loading`; `loading` mirrors the old
+/// Home content (task 5.3d): the authoritative snapshot the Client pushes to
+/// its Home surface at its writers. Re-homed from the deleted `App.home`
+/// (`HomePane`) + `App.home_loading`; `loading` mirrors the old
 /// `home_loading` flag (true from startup until the first fetch completes,
-/// then set false synchronously after every content computation). The
+/// then set false synchronously after every content computation). The Client
+/// core hands a rebuilt snapshot to its Client
+/// ([`crate::app::StartupWorkerDrain`]), which stores it in the state it
+/// presents.
 #[derive(Debug)]
-pub(in crate::app) struct HomeContent {
+pub struct HomeContent {
     pub continue_items: Vec<EmbyItem>,
     pub loading: bool,
 }

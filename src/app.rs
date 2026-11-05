@@ -1,12 +1,16 @@
 mod client_core;
+mod client_drains;
 mod dispatch;
 mod infra;
 mod input;
-pub(crate) mod state;
+pub mod state;
 mod waking_relay;
 
 pub use self::client_core::{
     CLIENT_IDLE_CADENCE, ClientCore, ClientTickHost, ClientWaker, TickOutcome, WorkspaceRelayout,
+};
+pub use self::client_drains::{
+    ClientLifecycle, HomeEventDrain, PlayerEventDrain, StartupWorkerDrain,
 };
 pub use self::dispatch::action::{
     AppCommand, Command, NavigationIntent, PanelIntent, PlaybackIntent, ShellCommand, VisualIntent,
@@ -22,6 +26,7 @@ pub use self::input::key_policy::{
 };
 pub use self::input::router::{RouterOutcome, resolve_router_outcome_with_focused};
 pub use self::state::app_struct::App;
+pub use self::state::playback::HomeContent;
 pub(in crate::app) use self::waking_relay::spawn_waking_relay;
 #[cfg(test)]
 mod test_seams;
