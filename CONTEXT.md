@@ -1,6 +1,6 @@
 # mbv
 
-mbv is a terminal client for Emby, Audiobookshelf, and Feeds. It browses catalogs and plays media. Every local launch attaches to the per-user Owner process. That process is the only local Player-owner host. Stay-alive controls whether that process outlives its Clients.
+mbv is a media client for Emby, Audiobookshelf, and Feeds. It browses catalogs and plays media through a TUI Client or a GUI Client. Every local launch attaches to the per-user Owner process. That process is the only local Player-owner host. Stay-alive controls whether that process outlives its Clients.
 
 ## Services
 
