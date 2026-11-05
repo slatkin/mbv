@@ -171,7 +171,7 @@ impl App {
     }
 
     #[must_use]
-    pub fn new_remote_optional_with_config(
+    pub(crate) fn new_remote_optional_with_config(
         client: Option<EmbyClient>,
         remote: mbv_remote_player::RemotePlayer,
         player_rx: mpsc::Receiver<PlayerEvent>,
