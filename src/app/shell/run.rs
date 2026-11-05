@@ -1,9 +1,10 @@
 use crate::app::{BrowseEvent, MusicEvent};
+use crate::app::{ClientCore, TickOutcome};
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
 use super::{
-    IdleFeed, Model, Msg, PanelFocus, PollStrategy, QUIT_REQUESTED, init_terminal,
+    IdleFeed, Model, PanelFocus, PollStrategy, QUIT_REQUESTED, init_terminal,
     install_signal_handlers, restore_terminal, start_quit_watchdog,
 };
 // The run-loop tests reach `App` through this module's scope.
@@ -331,59 +332,30 @@ impl Model {
         let mut last_render = Instant::now()
             .checked_sub(Duration::from_secs(2))
             .unwrap_or_else(Instant::now);
+        // Design D7 (`add-gui-front-end`): the Client core sequences the
+        // App-side phases; the TUI Client installs a no-op waker — the
+        // listener poll cadence already bounds input latency.
+        let mut client_core = ClientCore::new();
+        client_core.install_waker(|| {});
 
         'outer: loop {
-            let mut had_events = false;
-            let mut music_resize = false;
-            let mut tv_resize = false;
             let drain_started = Instant::now();
             if QUIT_REQUESTED.load(Ordering::Relaxed) {
                 break;
             }
 
-            had_events |= self.drain_startup_workers();
-            let drained_abs_events = self.app.drain_audiobookshelf_events();
-            had_events |= drained_abs_events;
-            // ABS startup/refresh reset the browse state and reconcile
-            // per-episode progress; re-project the active podcast browser.
-            // Only project when the drain actually reported
-            // an event.
-            if drained_abs_events {
-                self.push_audiobookshelf_podcast_content();
-                self.push_audiobookshelf_book_content();
-                self.push_music_workspace_content();
-                // ABS teardown, replacement, and catalog rebuilds restructure
-                // `audiobookshelf_libraries` inside the App-side drain; evict
-                // fetched Home rows whose podcast library is gone (review P2
-                // of Unit C). Only an actual eviction re-projects Home; once
-                // the rebuild lands, the Home fetch refills the sources.
-                if self.evict_gone_home_recently_added() {
-                    self.push_home_content();
-                }
-            }
-            had_events |= self.drain_suspended_home_events();
-            if self.drain_player_events(&mut had_events) {
+            let mut outcome = client_core.tick(&mut *self, Instant::now());
+            if outcome.restart_requested {
                 continue 'outer;
             }
-            // Pending queue transfer settlement (queue-handoff-and-take row
-            // 7.1, design D2): the same tick phase that adopted owner
-            // snapshots above is the first point where the target's
-            // post-replacement state is observable.
-            had_events |= self.app.settle_pending_queue_transfer();
-            if self.drain_iteration_work(&mut had_events, &mut music_resize, &mut tv_resize) {
+            if outcome.quit_requested {
                 break 'outer;
             }
-            // The drain phase includes the terminal tick, which logs its own
+            // The drain phase includes the input tick, which logs its own
             // slow-phase WARN; a tick WARN plus this one pinpoints the tick.
             warn_slow_phase("drain", drain_started);
 
-            if self.finish_run_iteration(
-                terminal,
-                had_events,
-                &mut last_render,
-                music_resize,
-                tv_resize,
-            )? {
+            if self.finish_run_iteration(terminal, &mut outcome, &mut last_render)? {
                 break 'outer;
             }
         }
@@ -402,10 +374,8 @@ impl Model {
     fn finish_run_iteration(
         &mut self,
         terminal: &mut ratatui::Terminal<ratatui::backend::CrosstermBackend<std::io::Stdout>>,
-        had_events: bool,
+        outcome: &mut TickOutcome,
         last_render: &mut Instant,
-        mut music_resize: bool,
-        mut tv_resize: bool,
     ) -> Result<bool, Box<dyn std::error::Error>> {
         // Apply the Settings panel's live mouse-capture flip before the next draw.
         if let Some(enabled) = self.app.mouse_capture_pending.take() {
@@ -413,7 +383,10 @@ impl Model {
         }
         // Drain deferred component intents after primary messages, including
         // ticks with no primary component message.
-        if self.drain_deferred_library_message(&mut music_resize, &mut tv_resize) {
+        if self.drain_deferred_library_message(
+            &mut outcome.workspace_relayout.music,
+            &mut outcome.workspace_relayout.tv,
+        ) {
             return Ok(true);
         }
 
@@ -421,60 +394,14 @@ impl Model {
         let sync_started = Instant::now();
         self.sync_mounted_surfaces();
         warn_slow_phase("sync", sync_started);
-        self.app.expire_music_grouping_candidates();
-        self.app.sync_volume_from_player();
-        self.app.advance_idle_feed_rotation();
-        self.draw_frame_if_due(had_events, last_render, music_resize, tv_resize, terminal)?;
+        self.draw_frame_if_due(
+            outcome.input_received,
+            last_render,
+            outcome.workspace_relayout.music,
+            outcome.workspace_relayout.tv,
+            terminal,
+        )?;
         Ok(false)
-    }
-
-    fn drain_iteration_work(
-        &mut self,
-        had_events: &mut bool,
-        music_resize: &mut bool,
-        tv_resize: &mut bool,
-    ) -> bool {
-        *had_events |= self.app.drain_notif_actions();
-        *had_events |= self.drain_lib_events();
-
-        // Search results drain: the shell drains `search_rx` and writes each
-        // result into the SearchSidebarComponent. The debounce is component-
-        // owned; the shell fires the wall clock via the sweep below (#609)
-        // and routes any emitted request through the normal service handler.
-        *had_events |= self.drain_search_results();
-
-        // The shell supplies the wall-clock tick directly once per loop.
-        if let Some(Msg::Service(request)) = self.tick_search_clock(Instant::now()) {
-            *had_events = true;
-            self.handle_service_request(request);
-        }
-        *had_events |= self.tick_inline_search_clock(Instant::now());
-
-        *had_events |= self.app.drain_session_events();
-        *had_events |= self.app.drain_cast_events();
-        *had_events |= self.app.drain_pinned_requests();
-
-        // Feed results update their embedded destination owner.
-        if self.app.drain_feed_tab_results() {
-            *had_events = true;
-            self.push_active_emby_library_owner_content();
-            // Feeds rows are derived from `all_entries` at Home-push time
-            // (spec `home-latest-sections`), so a feed refresh
-            // re-projects Home.
-            self.push_home_content();
-        }
-
-        *had_events |= self.drain_feed_add_results();
-        *had_events |= self.drain_card_image_completions();
-        self.app.drain_image_fetches();
-        *had_events |= self.drain_resize_responses();
-        *had_events |= self.drain_transport_events();
-        *had_events |= self.drain_ws_events();
-        *had_events |= self.drain_audiobookshelf_socket_events();
-        *had_events |= self.drain_idle_feed();
-        self.app.sync_visualizer();
-        self.run_periodic_maintenance();
-        self.tick_terminal_messages(had_events, music_resize, tv_resize)
     }
 }
 
@@ -482,3 +409,4 @@ mod drains;
 mod pin_swap;
 #[cfg(test)]
 mod tests;
+mod tick_host;
