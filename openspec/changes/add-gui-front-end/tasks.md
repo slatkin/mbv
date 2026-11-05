@@ -38,11 +38,11 @@
 
 - [x] 5.1 Move the `App`-side run-loop phases (runtime and channel drains, Owner snapshot adoption, effects, toast expiry) from `src/app/shell/run.rs` into `ClientCore::tick(now) -> TickOutcome`, with an installable waker callback. `Model::run` calls it before the TuiRealm tick. Verify that the full `cargo nextest run -p mbv` passes.
 - [x] 5.2 Add a library target to the root `mbv` package (`src/lib.rs`) that exposes `ClientCore`, the Owner find, start, and attach entry with an override for the `mbv` executable path, and the router entry. The `mbv` binary uses the library. Verify with `cargo build -p mbv` and `cargo tree -p mbv -e normal | rg 'eframe|egui|wgpu|glow'` (no output).
-- [ ] 5.3 Update the `AGENTS.md` repository map for `mbv-surfaces`, `mbv-gui`, and the root library target. Verify that each new crate has one line.
+- [x] 5.3 Update the `AGENTS.md` repository map for `mbv-surfaces`, `mbv-gui`, and the root library target. Verify that each new crate has one line.
 
 ## 6. GUI Client program
 
-- [ ] 6.1 Create `crates/mbv-gui` (binary, eframe with the glow renderer). Open one window and construct `ClientCore`, installing a waker that calls `request_repaint`. Call `ClientCore::tick` at the start of each `update` and `request_repaint_after` at the TUI idle cadence. Verify that `cargo build -p mbv-gui` succeeds.
+- [x] 6.1 Create `crates/mbv-gui` (binary, eframe with the glow renderer). Open one window and construct `ClientCore`, installing a waker that calls `request_repaint`. Call `ClientCore::tick` at the start of each `update` and `request_repaint_after` at the TUI idle cadence. Verify that `cargo build -p mbv-gui` succeeds.
 - [ ] 6.2 Find, start, and attach to the Owner process through the library entry. Resolve `mbv` from the GUI executable's directory, then `PATH`. Show the same refusal text as the TUI when an exclusive Owner refuses. Verify with a unit test of the executable-resolution order.
 - [ ] 6.3 Translate egui `RawInput` key and pointer events to the neutral types and route keys through the shared router. Add one `#[case]` table test of the key mapping. Verify that it passes.
 - [ ] 6.4 Paint the Queue panel from the Queue Surface state with the egui `Painter`: fixed-row list, active-slot mark, cursor, marks, empty-queue state, theme roles through `Rgb`. Report capacity and a `HitMap` each frame. Use no stateful egui widget for interaction state. Verify with a headless egui test (`Context::run`, synthetic `RawInput`): a page-down moves the cursor by the reported capacity.
