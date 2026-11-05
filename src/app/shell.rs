@@ -3,8 +3,8 @@ use std::time::Duration;
 
 use super::{
     AlbumIndexState, App, BrowseLevel, ConfirmAction, ConfirmModal, IdleFeed, LibEvent, PanelFocus,
-    PanelMode, PlaybackState, QueueLink, QueueView, SavePlaylistDialog, SavePlaylistStage,
-    SidebarId, TabSelection, ToastSeverity,
+    PanelMode, QueueLink, SavePlaylistDialog, SavePlaylistStage, SidebarId, TabSelection,
+    ToastSeverity,
 };
 use super::{
     QUIT_REQUESTED, init_terminal, install_signal_handlers, restore_terminal, start_quit_watchdog,
@@ -199,13 +199,6 @@ pub struct Model {
     /// (a direct frame, a fixture) never arms it.
     pub(in crate::app) pending_terminal_resize: bool,
     /// Terminal hyperlink support resolved once during terminal initialization.
-    /// Fingerprint of the inputs `sync_queue` last projected into the mounted
-    /// `QueueComponent`. `sync_queue` runs every run-loop tick; rebuilding the
-    /// row vec (slot clone + per-row `format!`) on a tick where nothing the
-    /// projection depends on changed is pure waste (#675). The fingerprint
-    /// gates the rebuild: queue revision + viewed link + active slot + a
-    /// progress-% bucket + paused + the title model.
-    pub(in crate::app) last_queue_projection: Option<queue::QueueProjectionFingerprint>,
     /// Shell-owned projection of the focused list's Visual selection.
     pub(in crate::app) visual_selection: Option<(mbv_ui_model::settings::PanelFocus, usize)>,
     pub(in crate::app) context_menu_origin: Option<mbv_ui_model::media_list::SelectionOrigin>,
@@ -339,7 +332,6 @@ impl Model {
             home_context_item: None,
             handled_terminal_size: initial_terminal_size,
             pending_terminal_resize: false,
-            last_queue_projection: None,
             visual_selection: None,
             context_menu_origin: None,
             context_action_snapshot: None,

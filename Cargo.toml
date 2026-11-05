@@ -206,6 +206,12 @@ unused_lifetimes = "warn"
 name = "mbv"
 path = "src/main.rs"
 
+# Exposes the `App` stub construction (`app_stub`) to dependent crates'
+# tests; the shipped builds never enable it. The stub reaches the test
+# support surfaces of the crates it builds from.
+[features]
+test = ["mbv-emby-model/test", "mbv-images/test", "mbv-remote-player/test"]
+
 [dependencies]
 mbv-core = { path = "crates/mbv-core" }
 mbv-emby = { path = "crates/mbv-emby" }

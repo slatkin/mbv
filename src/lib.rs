@@ -21,10 +21,11 @@ mod startup;
 
 pub use self::app::{
     App, AppCommand, CLIENT_IDLE_CADENCE, ClientCore, ClientLifecycle, ClientTickHost, ClientWaker,
-    Command, GuiInput, HomeContent, HomeEventDrain, NavigationIntent, OverlayFocus, PanelIntent,
-    PlaybackIntent, PlayerEventDrain, RemoteControlTarget, RouterOutcome, RouterOverlayState,
-    RouterPlaybackState, RouterSnapshot, ShellCommand, StartupWorkerDrain, TickOutcome,
-    VisualIntent, WorkspaceRelayout, resolve_router_outcome_with_focused,
+    Command, GuiInput, GuiSurfaceLeaf, HomeContent, HomeEventDrain, NavigationIntent, OverlayFocus,
+    PanelIntent, PlaybackIntent, PlayerEventDrain, QueueSurfaceProjection, RemoteControlTarget,
+    RouterOutcome, RouterOverlayState, RouterPlaybackState, RouterSnapshot, ShellCommand,
+    StartupWorkerDrain, TickOutcome, VisualIntent, WorkspaceRelayout,
+    resolve_router_outcome_with_focused,
 };
 pub use self::config::{Config, load_config};
 pub use self::owner_link::{
@@ -32,3 +33,9 @@ pub use self::owner_link::{
     find_owner, refusal_text, start_owner,
 };
 pub use self::startup::run;
+
+/// The `App` stub construction a Client's own tests build their `App` from
+/// (`add-gui-front-end` design D11). Compiled only under the root package's
+/// `test` feature, which no shipped build enables.
+#[cfg(feature = "test")]
+pub use self::app::stub_app_with_queue;

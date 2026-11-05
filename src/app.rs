@@ -1,8 +1,13 @@
+#[cfg(any(test, feature = "test"))]
+mod app_stub;
 mod client_core;
 mod client_drains;
 mod dispatch;
+#[cfg(feature = "test")]
+pub use self::app_stub::stub_app_with_queue;
 mod infra;
 mod input;
+mod queue_surface;
 pub mod state;
 mod waking_relay;
 
@@ -22,10 +27,12 @@ pub(in crate::app) use self::infra::signals::{
 pub(crate) use self::infra::terminal::set_mouse_capture;
 pub(in crate::app) use self::infra::terminal::{init_terminal, open_url, restore_terminal};
 pub use self::input::gui::GuiInput;
+pub use self::input::gui::GuiSurfaceLeaf;
 pub use self::input::key_policy::{
     OverlayFocus, RemoteControlTarget, RouterOverlayState, RouterPlaybackState, RouterSnapshot,
 };
 pub use self::input::router::{RouterOutcome, resolve_router_outcome_with_focused};
+pub use self::queue_surface::QueueSurfaceProjection;
 pub use self::state::app_struct::App;
 pub use self::state::playback::HomeContent;
 pub(in crate::app) use self::waking_relay::spawn_waking_relay;
@@ -74,7 +81,7 @@ use mbv_ui_model::feed::{
 };
 use mbv_ui_model::library_tab::LibraryTab;
 pub(in crate::app) use mbv_ui_model::overlay::SidebarId;
-use mbv_ui_model::playback::{PlaybackState, QueueLink};
+use mbv_ui_model::playback::QueueLink;
 #[cfg(test)]
 use mbv_ui_model::settings::SettingKey;
 use mbv_ui_model::settings::{PanelFocus, PanelMode};

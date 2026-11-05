@@ -49,6 +49,9 @@ pub mod overlay;
 pub mod panel_targets;
 pub mod playback;
 pub mod playback_target;
+#[doc(inline)]
+pub use queue_rows::{queue_media_row, queue_media_rows};
+pub mod queue_rows;
 pub mod search_sidebar;
 pub mod settings;
 pub mod sort_filter;

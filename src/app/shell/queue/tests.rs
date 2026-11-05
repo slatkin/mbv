@@ -153,7 +153,7 @@ fn unchanged_queue_revision_skips_projection_rebuild() {
     let mut model = Model::new(app);
     model.sync_queue();
 
-    let update = model.prepare_queue_projection();
+    let update = model.app.queue_surface_projection();
 
     assert!(update.slots.is_none());
 }
@@ -179,7 +179,7 @@ fn lineage_change_rebuilds_same_revision_queue_rows_review_p2_1() {
     replacement.lineage = mbv_queue::QueueLineage(1);
     model.app.local_view = crate::app::QueueView::from_snapshot(&replacement);
     assert_eq!(model.app.local_view.revision(), previous_revision);
-    let update = model.prepare_queue_projection();
+    let update = model.app.queue_surface_projection();
 
     assert!(update.slots.is_some());
 }

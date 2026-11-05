@@ -1,67 +1,11 @@
 use super::Model;
-use super::{PanelFocus, PlaybackState, QueueLink};
+use super::{PanelFocus, QueueLink};
+use crate::app::QueueSurfaceProjection;
 use crate::app::dispatch::notify::ToastSeverity;
-use mbv_components::{QueueComponent, QueueCursorUpdate};
+use mbv_components::QueueComponent;
 use mbv_queue::QueueSlotId;
 use mbv_ui_model::playback_target::NowPlayingStatus;
 use mbv_ui_msg::{ComponentId, QueueColumnResize, QueueIntent, QueueMove, QueueRequest};
-
-/// The row projection inputs that can change queue rows. Chrome and pause
-/// state are delivered independently; pause only affects the paint-time
-/// progress bucket.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(in crate::app) struct QueueProjectionFingerprint {
-    revision: u64,
-    lineage: mbv_queue::QueueLineage,
-    link: QueueLink,
-    active: bool,
-    active_target: Option<QueueSlotId>,
-    /// The adopted pending transition awaiting playback-owner observation.
-    /// It moves the now-playing row before the owner reports it, so it remains
-    /// part of the fingerprint even while `active_target` is unchanged.
-    pending_target: Option<QueueSlotId>,
-    progress_bucket: u16,
-}
-
-fn progress_bucket(playback: PlaybackState) -> u16 {
-    if playback.active && playback.position_ticks > 0 && playback.runtime_ticks > 0 {
-        u16::try_from((playback.position_ticks * 100 / playback.runtime_ticks).clamp(0, 100))
-            .expect("clamped progress bucket fits in u16")
-    } else {
-        u16::MAX
-    }
-}
-
-/// The observed active slot, or the owner's pending slot when idle.
-fn projected_active_target(
-    queue: &super::QueueView,
-    playback: PlaybackState,
-    pending_slot: Option<QueueSlotId>,
-) -> Option<QueueSlotId> {
-    if playback.active {
-        playback
-            .active_idx
-            .and_then(|idx| queue.slots().get(idx))
-            .map(|slot| slot.slot_id)
-    } else {
-        pending_slot
-    }
-}
-
-struct QueueProjectionUpdate {
-    link: QueueLink,
-    playback: PlaybackState,
-    pending_slot: Option<QueueSlotId>,
-    fingerprint: QueueProjectionFingerprint,
-    rows_changed: bool,
-    bucket_only: bool,
-    cursor: QueueCursorUpdate,
-    slots: Option<Vec<mbv_queue::QueueSlot>>,
-    patch: Option<(
-        QueueSlotId,
-        mbv_render::components::media_list::MediaListRow<QueueSlotId>,
-    )>,
-}
 
 impl Model {
     pub(in crate::app) fn sync_queue(&mut self) {
@@ -75,10 +19,9 @@ impl Model {
             self.app.panel_focus = PanelFocus::Library;
         }
         self.mount_queue_panel();
-        let update = self.prepare_queue_projection();
-        if update.rows_changed {
-            self.last_queue_projection = Some(update.fingerprint);
-        }
+        // The projection lives once on the `App` (add-gui-front-end design
+        // D5): the TUI and the GUI Clients consume the same update.
+        let update = self.app.queue_surface_projection();
         // The visual slot's image projection (task 3.4, D9): the queue
         // projection — not the painter — issues every fetch for the now-playing
         // item and projects the slot's image state. The slot only paints while
@@ -112,108 +55,7 @@ impl Model {
         }
     }
 
-    fn prepare_queue_projection(&mut self) -> QueueProjectionUpdate {
-        let link = self.app.playing_queue_link();
-        let playback = self.app.displayed_queue_playback_state();
-        let pending_slot = self.pending_queue_projection_slot(link);
-        let fingerprint = self.queue_projection_fingerprint(link, playback, pending_slot);
-        let (rows_changed, bucket_only) = self.queue_projection_changes(&fingerprint);
-        let cursor = self.queue_projection_cursor(link);
-        let mut update = QueueProjectionUpdate {
-            link,
-            playback,
-            pending_slot,
-            fingerprint,
-            rows_changed,
-            bucket_only,
-            cursor,
-            slots: None,
-            patch: None,
-        };
-        self.prepare_queue_projection_rows(&mut update);
-        update
-    }
-
-    // The adopted pending slot counts only while it is still in the shown
-    // queue: a stale target must not move now-playing off the observed row.
-    fn pending_queue_projection_slot(&self, link: QueueLink) -> Option<QueueSlotId> {
-        self.app
-            .pending_playback_slot()
-            .filter(|target| self.app.queue_for_link(link).slot(*target).is_some())
-    }
-
-    fn queue_projection_fingerprint(
-        &self,
-        link: QueueLink,
-        playback: PlaybackState,
-        pending_slot: Option<QueueSlotId>,
-    ) -> QueueProjectionFingerprint {
-        let queue = self.app.queue_for_link(link);
-        QueueProjectionFingerprint {
-            revision: queue.revision().raw(),
-            lineage: queue.lineage(),
-            link,
-            active: playback.active,
-            active_target: projected_active_target(queue, playback, pending_slot),
-            pending_target: pending_slot,
-            progress_bucket: progress_bucket(playback),
-        }
-    }
-
-    // `sync_queue` runs on every run-loop tick. When nothing the projection
-    // depends on changed and no authoritative cursor re-anchor is armed,
-    // rebuilding rows would only reproduce current content -- skip it (#675).
-    fn queue_projection_changes(&self, fingerprint: &QueueProjectionFingerprint) -> (bool, bool) {
-        let previous = self.last_queue_projection.as_ref();
-        let rows_changed = previous != Some(fingerprint);
-        let bucket_only = previous.is_some_and(|old| {
-            old.revision == fingerprint.revision
-                && old.lineage == fingerprint.lineage
-                && old.link == fingerprint.link
-                && old.active == fingerprint.active
-                && old.active_target == fingerprint.active_target
-                && old.pending_target == fingerprint.pending_target
-                && old.progress_bucket != fingerprint.progress_bucket
-        });
-        (rows_changed, bucket_only)
-    }
-
-    // Re-anchor only for authoritative content changes; routine updates preserve
-    // the component-owned cursor. Cursor and chrome delivery is intentionally
-    // independent of the row fingerprint.
-    fn queue_projection_cursor(&mut self, link: QueueLink) -> QueueCursorUpdate {
-        match self.app.pending_queue_cursor_reanchor.take() {
-            Some(reanchor) if reanchor == link => {
-                QueueCursorUpdate::Set(self.app.queue_for_link(link).cursor())
-            }
-            _ => QueueCursorUpdate::Preserve,
-        }
-    }
-
-    fn prepare_queue_projection_rows(&self, update: &mut QueueProjectionUpdate) {
-        update.slots = (!update.bucket_only && update.rows_changed)
-            .then(|| self.app.queue_for_link(update.link).slots().to_vec());
-        update.patch = update
-            .bucket_only
-            .then(|| {
-                let queue = self.app.queue_for_link(update.link);
-                let target = update.fingerprint.active_target?;
-                let index = queue.slot_index(target)?;
-                let slot = queue.slots().get(index)?;
-                Some((
-                    target,
-                    mbv_components::queue::queue_media_row(
-                        slot,
-                        index,
-                        update.playback,
-                        update.pending_slot,
-                    ),
-                ))
-            })
-            .flatten();
-    }
-
-    fn push_queue_projection(&mut self, update: QueueProjectionUpdate) {
+    fn push_queue_projection(&mut self, update: QueueSurfaceProjection) {
         let id = ComponentId::Queue;
         if let Some(comp) = self.application.get_component_mut(&id)
             && let Some(queue) = comp.as_any_mut().downcast_mut::<QueueComponent>()

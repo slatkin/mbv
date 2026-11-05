@@ -1,16 +1,18 @@
+//! Project Queue slots into the canonical provider-neutral row vocabulary
+//! (migrate-queue-to-canonical-list D2): a stable `QueueSlotId` target, the
+//! slot title, duration/elapsed metadata, and semantic active state whose
+//! progress is clamped to `0..=100` at this projection boundary. No ticks,
+//! runtime, source, credentials, callbacks, or effects cross this edge; the
+//! projection is the one both Clients' Queue surfaces consume
+//! (`add-gui-front-end` design D5).
+
+use crate::media_list::{ActiveProgress, MediaKind, MediaListRow, MediaSemanticState};
+use crate::playback::PlaybackState;
+use crate::ui_util::fmt_duration_short;
 use mbv_emby_model::TICKS_PER_SECOND;
 use mbv_queue::{QueueItem, QueueSlot, QueueSlotId};
-use mbv_render::components::media_list::{
-    ActiveProgress, MediaKind, MediaListRow, MediaSemanticState,
-};
-use mbv_ui_model::playback::PlaybackState;
-use mbv_ui_model::ui_util::fmt_duration_short;
 
-/// Project Queue slots into the canonical provider-neutral row vocabulary
-/// (migrate-queue-to-canonical-list D2): a stable `QueueSlotId` target, the
-/// slot title, duration/elapsed metadata, and semantic active state whose
-/// progress is clamped to `0..=100` at this projection boundary. No ticks,
-/// runtime, source, credentials, callbacks, or effects cross the child edge.
+/// Project every Queue slot into a row, in queue order.
 #[must_use]
 pub fn queue_media_rows(
     slots: &[QueueSlot],
@@ -24,6 +26,7 @@ pub fn queue_media_rows(
         .collect()
 }
 
+/// Project one Queue slot into a row.
 #[must_use]
 pub fn queue_media_row(
     slot: &QueueSlot,

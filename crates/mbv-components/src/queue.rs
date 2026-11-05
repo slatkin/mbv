@@ -26,10 +26,9 @@ use mbv_ui_msg::Msg;
 use mbv_ui_msg::UserEvent;
 
 mod pointer;
-mod rows;
 
 #[doc(inline)]
-pub use self::rows::{queue_media_row, queue_media_rows};
+pub use mbv_ui_model::{queue_media_row, queue_media_rows};
 
 #[derive(Debug)]
 pub struct QueueComponent {

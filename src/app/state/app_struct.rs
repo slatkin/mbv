@@ -246,6 +246,14 @@ pub struct App {
     pub(in crate::app) remote_queue_undo_stack: Vec<UndoEntry>,
     /// One-shot cursor re-anchor for the next queue sync.
     pub(in crate::app) pending_queue_cursor_reanchor: Option<QueueLink>,
+    /// Fingerprint of the queue projection `queue_surface_projection` last
+    /// pushed to a Client's Queue Surface state. The projection runs once per
+    /// Client tick; rebuilding the row vec (slot clone + per-row `format!`)
+    /// on a tick where nothing the projection depends on changed is pure
+    /// waste (#675). The fingerprint gates the rebuild: queue revision +
+    /// viewed link + active slot + a progress-% bucket + the pending target.
+    pub(in crate::app) last_queue_projection:
+        Option<crate::app::queue_surface::QueueProjectionFingerprint>,
     /// The at-most-one in-flight queue transfer (queue-handoff-and-take
     /// design D2): armed after the replacement is sent to the target and
     /// settled in the tick phase that adopts owner snapshots.
