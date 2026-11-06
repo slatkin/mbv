@@ -6,6 +6,7 @@
 //! once. Nothing in this crate depends on a terminal library, a terminal UI
 //! framework, or a GUI toolkit.
 
+pub mod breakpoint;
 mod capacity;
 mod focus_stack;
 pub mod gesture;
