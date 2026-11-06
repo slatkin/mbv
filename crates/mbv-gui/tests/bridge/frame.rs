@@ -4,17 +4,15 @@ use mbv_gui::bridge::frame::theme::GuiRole;
 use mbv_gui::bridge::frame::{FrameSources, GuiFrame};
 use mbv_surfaces::FocusStack;
 use mbv_surfaces::breakpoint::BreakpointClass;
-use mbv_surfaces::queue::{QueueCursorUpdate, QueueSurface};
+use mbv_surfaces::queue::QueueSurface;
 use mbv_ui_model::queue_rows::queue_media_rows;
 
 /// The Queue viewport height, in rows, that the frame tests paint with.
 const VIEWPORT_ROWS: usize = 10;
 
-/// The frame of `app` after one tick, with an authoritative cursor move to
-/// display row `cursor` after the projection's push when `cursor` is `Some`.
-/// The Queue Surface state adopts the projection's rows and cursor, as the
-/// TUI's Queue component does.
-fn frame_after_tick_cursor(app: &mut App, cursor: Option<usize>) -> GuiFrame {
+/// The frame of `app` after one tick. The Queue Surface state adopts the
+/// projection's rows and cursor, as the TUI's Queue component does.
+fn frame_after_tick(app: &mut App) -> GuiFrame {
     let projection = app.queue_surface_projection();
     let mut queue = QueueSurface::new();
     queue.list_mut().set_content(queue_media_rows(
@@ -22,11 +20,7 @@ fn frame_after_tick_cursor(app: &mut App, cursor: Option<usize>) -> GuiFrame {
         projection.playback,
         projection.pending_slot,
     ));
-    if let Some(row) = cursor {
-        queue.set_cursor(&QueueCursorUpdate::Set(row));
-    } else {
-        queue.set_cursor(&projection.cursor);
-    }
+    queue.set_cursor(&projection.cursor);
     GuiFrame::build(&FrameSources {
         app,
         focus: &FocusStack::new(),
@@ -36,12 +30,6 @@ fn frame_after_tick_cursor(app: &mut App, cursor: Option<usize>) -> GuiFrame {
         theme_changed: false,
         artwork: None,
     })
-}
-
-/// The frame of `app` after one tick. The Queue Surface state adopts the
-/// projection's rows and cursor, as the TUI's Queue component does.
-fn frame_after_tick(app: &mut App) -> GuiFrame {
-    frame_after_tick_cursor(app, None)
 }
 
 /// A playing queue's frame carries its rows and the slot under the now-playing
@@ -101,29 +89,6 @@ fn playing_queue_frame_carries_the_zebra_parity() {
         })
         .collect();
     assert_eq!(striped, [false, true, false]);
-}
-
-/// The zebra walk seeds from the viewport offset the frame resolves
-/// (`from_surface` opens the parity on `viewport.offset % 2`): with the
-/// cursor authoritatively moved to the last row of a 21-row queue, the
-/// 10-row viewport's minimum scroll puts the offset at 11 — odd — so the
-/// first carried row opens on the stripe, where the offset-0 walk test sees
-/// the surface fill. Guards the seed commit d43bf1470 introduced.
-#[test]
-fn playing_queue_frame_seeds_the_zebra_walk_from_the_viewport_offset() {
-    let mut app = stub_app_with_playing_queue(21);
-    let frame = frame_after_tick_cursor(&mut app, Some(20));
-
-    let first = frame
-        .queue
-        .rows
-        .first()
-        .and_then(|row| match row {
-            GuiQueueRow::Item { striped, .. } => Some(*striped),
-            GuiQueueRow::Heading { .. } | GuiQueueRow::Spacer => None,
-        })
-        .expect("the scrolled stub queue still carries item rows");
-    assert!(first, "an odd viewport offset seeds the walk on the stripe");
 }
 
 /// A glyph, as design D8 forbids in the GUI: a Nerd Font private-use

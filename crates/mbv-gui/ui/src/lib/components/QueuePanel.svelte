@@ -46,8 +46,7 @@
 		footer: GuiQueueFooter;
 		/** Whether the queue surface holds interaction focus
 		 * (`GuiFocus::surface`): the selection bar's rule, the TUI's
-		 * `focused || multi_selected`, and the striped row's fill resolution —
-		 * the TUI's `palette_focused` bit. */
+		 * `focused || multi_selected`. */
 		focused: boolean;
 		/** Whether the queue Panel holds the frame's appearance focus
 		 * (`GuiFocus::panel`): the TUI's `panel_appearance_focus`, which
@@ -184,7 +183,7 @@
 							style:background={barred
 								? 'var(--mbv-duration)'
 								: row.striped
-									? focused
+									? panelFocused
 										? 'var(--mbv-queueColumnFocused)'
 										: 'var(--mbv-queueColumn)'
 									: undefined}
