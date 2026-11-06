@@ -10,6 +10,11 @@
 	// The row sits on the `StatusBar` surface — the BgDim slot
 	// `--mbv-pillSelectedFg` carries — and floats clear of the content above
 	// it with the column's padding, as the TUI's `status_bar_row` insets it.
+	// The fill paints only while the bar has something to show: the slice's
+	// bar carries no pill content, so an idle bar would otherwise paint a
+	// contentless band in the palette's darkest tier — the user-reported
+	// black bar under the queue footer. The row keeps its height either way,
+	// so a toast's arrival moves no layout.
 	//
 	// The slice's `GuiStatusBar` carries no volume, mute, or visual-mode
 	// content, so the bar paints no interactive pill and reports an empty
@@ -73,7 +78,9 @@
 <div class="px-2 pt-1 pb-2" bind:this={barEl}>
 	<div
 		class="flex h-7 items-center overflow-hidden px-2 whitespace-nowrap"
-		style:background="var(--mbv-pillSelectedFg)"
+		style:background={status.toast || status.prefixArmed
+			? 'var(--mbv-pillSelectedFg)'
+			: undefined}
 	>
 		{#if status.toast}
 			<span
