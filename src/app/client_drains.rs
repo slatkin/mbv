@@ -1,4 +1,4 @@
-//! The Client-neutral drain bodies (design D7 of `add-gui-front-end`): every
+//! The Client-neutral drain bodies (design D7 of `extract-client-core`): every
 //! per-tick drain whose work is `App` state, not a Client's surfaces. They sit
 //! beside [`crate::app::client_core`], which sequences them: the core owns the
 //! order, this module owns the event semantics.

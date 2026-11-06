@@ -258,7 +258,7 @@ impl Model {
             }
             panel.set_model(model);
             // The prefix-armed display and the live toast ride the Status
-            // bar's Surface state (add-gui-front-end row 4.6); the adapter
+            // bar's Surface state (extract-client-core row 4.6); the adapter
             // builds the painted chrome from it.
             let status = self.app.status_bar_projection();
             panel.set_prefix_armed(status.prefix_armed);
@@ -316,7 +316,7 @@ impl Model {
             // allocations) runs on every sync pass.
             let (host, host_is_remote) = self.app.playback_host_label_and_remote();
             // The transport band's focus presentation rides the Surface
-            // state (add-gui-front-end row 4.5): the queue column forces
+            // state (extract-client-core row 4.5): the queue column forces
             // the band unfocused, and both Clients paint that fact.
             panel.set_transport_focused(transport.panel_focused);
             panel.set_header(status, host, host_is_remote);

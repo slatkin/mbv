@@ -88,7 +88,7 @@ pub struct QueuePlaybackPanel {
     /// double-click window that separates a transport glyph's single press
     /// from a seekbar seek, and the drag anchor a scrub needs.
     mouse_gestures: MouseGestureState,
-    /// The Queue playback Surface state (add-gui-front-end design D5, row
+    /// The Queue playback Surface state (extract-client-core design D5, row
     /// 4.5): the transport band's focus presentation and the seek target's
     /// throttle state. The adapter paints from it and delegates the seek
     /// rules to it; it holds no copy of a state value.

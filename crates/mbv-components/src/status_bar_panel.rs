@@ -7,7 +7,7 @@
 //! projected one-way by `Model::sync_status_bar_panel`; the component owns
 //! the overflow drop-order, pill geometry and event resolution. The
 //! prefix-armed display and the toast presentation are the Status bar's
-//! Surface state (add-gui-front-end row 4.6): the shell projects the armed
+//! Surface state (extract-client-core row 4.6): the shell projects the armed
 //! flag and the live toast into it, and this adapter builds the painted
 //! chrome from the state at paint time.
 //!
@@ -38,7 +38,7 @@ use mbv_ui_msg::{Msg, PlaybackRequest, ShellRequest};
 /// and retains its volume/mute pill regions.
 #[derive(Debug)]
 pub struct StatusBarPanel {
-    /// The Status bar's Surface state (add-gui-front-end row 4.6): the
+    /// The Status bar's Surface state (extract-client-core row 4.6): the
     /// prefix-armed display state and the toast presentation. The adapter
     /// paints from it and holds no copy of a state value.
     surface: StatusBarSurface,
@@ -63,12 +63,12 @@ impl StatusBarPanel {
         self.model = model;
     }
 
-    /// Project the prefix-armed display state (add-gui-front-end row 4.6).
+    /// Project the prefix-armed display state (extract-client-core row 4.6).
     pub fn set_prefix_armed(&mut self, armed: bool) {
         self.surface.set_prefix_armed(armed);
     }
 
-    /// Project the live toast presentation (add-gui-front-end row 4.6);
+    /// Project the live toast presentation (extract-client-core row 4.6);
     /// `None` presents no toast.
     pub fn set_toast(&mut self, toast: Option<StatusToast>) {
         self.surface.set_toast(toast);

@@ -1,4 +1,4 @@
-//! Public-API tests for the Queue playback Surface state (add-gui-front-end
+//! Public-API tests for the Queue playback Surface state (extract-client-core
 //! row 4.5): the seekbar's throttled scrub admission and the seek-target
 //! fraction rule, moved from the TUI adapter's `queue_playback_panel` tests.
 

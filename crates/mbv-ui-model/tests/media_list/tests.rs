@@ -1,5 +1,5 @@
 //! The row model moved with `MediaSemanticState` from the render painter
-//! (add-gui-front-end row 4.3): the assertions are unchanged from their
+//! (extract-client-core row 4.3): the assertions are unchanged from their
 //! `mbv-components` home.
 
 use mbv_ui_model::media_list::MediaSemanticState;

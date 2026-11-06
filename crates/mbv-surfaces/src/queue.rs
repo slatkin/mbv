@@ -1,4 +1,4 @@
-//! The Queue Surface state (add-gui-front-end design D5): the Queue's cursor,
+//! The Queue Surface state (extract-client-core design D5): the Queue's cursor,
 //! marks, selection, viewport, and key rules, front-end-neutral. The TUI and
 //! GUI Clients hold this state and paint from it; neither reimplements a rule.
 
@@ -218,7 +218,7 @@ impl QueueSurface {
     }
 
     /// The Queue's key rules over the neutral `KeyEvent` (moved from the TUI
-    /// adapter's `queue/keys.rs`, add-gui-front-end row 4.3). The neutral
+    /// adapter's `queue/keys.rs`, extract-client-core row 4.3). The neutral
     /// vocabulary folds a Shift+uppercase press into its lowercase letter
     /// with SHIFT held; the SHIFT guards below keep the match set the
     /// `TuiRealm` rules had, where only the literal lowercase char matched.

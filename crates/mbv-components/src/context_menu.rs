@@ -89,7 +89,7 @@ impl ContextMenuComponent {
 
     /// The opener-named containing panel, used by the shell to recompute
     /// `menu_rect` ahead of the destination-derived panel. Neutral
-    /// presentation `Rect` (`add-gui-front-end` task 1.2).
+    /// presentation `Rect` (`extract-client-core` task 1.2).
     #[must_use]
     pub fn bounds(&self) -> Option<mbv_ui_model::geom::Rect> {
         self.bounds

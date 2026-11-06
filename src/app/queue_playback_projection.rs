@@ -1,4 +1,4 @@
-//! The Queue playback projection every Client consumes (`add-gui-front-end`
+//! The Queue playback projection every Client consumes (`extract-client-core`
 //! design D5, row 6.5): the transport facts the queue column's transport band
 //! paints, computed once from the `App` so both Clients read the same title,
 //! availability, and idle-collapse rules. The TUI shell's `PlaybackProjection`

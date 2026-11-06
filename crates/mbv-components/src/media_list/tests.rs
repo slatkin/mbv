@@ -171,7 +171,7 @@ fn a_wheel_scroll_stops_with_the_last_row_at_the_viewport_bottom() {
 
 /// The carrier's visual-key entry point translates the `TuiRealm` key at the
 /// adapter edge and delegates to the canonical owner's neutral rule
-/// (add-gui-front-end 4.3); the assertion is unchanged from the selection
+/// (extract-client-core 4.3); the assertion is unchanged from the selection
 /// tests' former home.
 #[test]
 fn ctrl_a_selects_all_through_the_carrier_visual_key() {

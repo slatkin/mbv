@@ -25,7 +25,7 @@ fn audio(id: &str) -> EmbyItem {
 }
 
 /// A neutral key with no modifiers, translated from the crossterm-case code
-/// the tests spell (`add-gui-front-end` task 2.2: confirm keys are neutral).
+/// the tests spell (`extract-client-core` task 2.2: confirm keys are neutral).
 fn key(code: KeyCode) -> mbv_ui_msg::KeyEvent {
     crossterm_key_to_neutral(KeyEvent::new(code, KeyModifiers::NONE))
 }

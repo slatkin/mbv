@@ -1,4 +1,4 @@
-//! Public-API tests for the Status bar Surface state (add-gui-front-end row
+//! Public-API tests for the Status bar Surface state (extract-client-core row
 //! 4.6): the prefix-armed display state and the toast presentation the
 //! adapters project through and paint from.
 

@@ -1,5 +1,5 @@
 //! Shared builders for the canonical media-list owner's public-API tests
-//! (moved with `MediaList` from `mbv-components`, add-gui-front-end 4.3).
+//! (moved with `MediaList` from `mbv-components`, extract-client-core 4.3).
 
 use mbv_surfaces::media_list::MediaList;
 use mbv_ui_model::media_list::{MediaKind, MediaListRow, MediaSemanticState};

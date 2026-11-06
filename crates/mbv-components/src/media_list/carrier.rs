@@ -128,7 +128,7 @@ impl<Target: Clone + Eq> MediaListCarrier<Target> {
     }
 
     /// The neutral visual-mode key rule lives on the canonical owner
-    /// (`mbv-surfaces`, add-gui-front-end row 4.3); this wrapper translates
+    /// (`mbv-surfaces`, extract-client-core row 4.3); this wrapper translates
     /// the `TuiRealm` key at the adapter edge and delegates.
     pub fn handle_visual_key(&mut self, key: &KeyEvent) -> Option<usize> {
         self.wide.handle_visual_key(&crate::root::neutral_key(*key))

@@ -1,4 +1,4 @@
-//! Public-API tests for the shared breakpoint classes (add-gui-front-end row
+//! Public-API tests for the shared breakpoint classes (extract-client-core row
 //! 6.6): the width on each side of a threshold edge takes the class on that
 //! side.
 

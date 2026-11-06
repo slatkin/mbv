@@ -265,7 +265,7 @@ fn tick_remote_disconnect_restores_local_daemon_queue_and_surfaces_toast() {
         &endpoint,
     );
     // The production attach wraps the link in the wake relay (design D7 of
-    // `add-gui-front-end`), which forwards asynchronously; the injected
+    // `extract-client-core`), which forwards asynchronously; the injected
     // event must drain synchronously inside `step`, so the test drives the
     // raw channel like the other disconnect tests do.
     app.player_rx = event_rx;

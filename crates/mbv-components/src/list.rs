@@ -5,7 +5,7 @@
 //! only the primitive hooks required by the composed traits.
 //!
 //! The cursor, viewport, row-flow, and mark mechanics are front-end-neutral
-//! Surface state and live in `mbv-surfaces` (add-gui-front-end design D2/D5);
+//! Surface state and live in `mbv-surfaces` (extract-client-core design D2/D5);
 //! this module re-exports them for the TUI adapters. Shared mechanics are kept
 //! explicit: production callers use the seam, and declarations without a
 //! production consumer are removed rather than hidden behind lint suppressions.

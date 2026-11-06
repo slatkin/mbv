@@ -85,7 +85,7 @@ impl App {
         let (resize_register_tx, resize_response_rx) = spawn_resize_worker();
         let setup = crate::app::state::service_setup::ServiceSetup::new();
         // The Owner-snapshot link relays share this wake handle (design D7
-        // of `add-gui-front-end`); `ClientCore` adopts it so a Client's
+        // of `extract-client-core`); `ClientCore` adopts it so a Client's
         // installed waker reaches every relay, including the one below.
         let client_waker = crate::app::ClientWaker::new();
         let mut app = App {

@@ -1,5 +1,5 @@
 //! The core focus stack's shell seam (design D3 of change
-//! `add-gui-front-end`, capability `client-interaction-core`).
+//! `extract-client-core`, capability `client-interaction-core`).
 //!
 //! `mbv_surfaces::FocusStack` is the one focus authority: it owns the mounted
 //! set, the Panel focus in effect, and the overlay stack, and it derives the

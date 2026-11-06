@@ -174,14 +174,14 @@ pub struct App {
     /// whichever one currently owns playback, not whatever was live when
     /// the D-Bus service was first registered.
     pub(in crate::app) mpris: Option<mbv_desktop::mpris::MprisHandle>,
-    /// The shared wake handle (design D7 of `add-gui-front-end`): the
+    /// The shared wake handle (design D7 of `extract-client-core`): the
     /// Owner-snapshot link relays clone it and call `wake` after each
     /// forwarded event. `ClientCore` shares this handle, so a Client's
     /// installed waker reaches every relay — including one the initial
     /// attach already spawned.
     pub(in crate::app) client_waker: crate::app::ClientWaker,
     /// The `mbv` program this Client starts the Owner from (design D9 of
-    /// `add-gui-front-end`). `None` starts this process's own executable —
+    /// `extract-client-core`). `None` starts this process's own executable —
     /// the TUI Client, which is `mbv` itself. The GUI Client records the
     /// `mbv` program it resolved, so an Owner restart never starts the GUI
     /// program as the Owner.
@@ -544,7 +544,7 @@ pub struct App {
 
 impl App {
     /// The shared wake handle this `App` hands to its Owner-snapshot relays
-    /// (design D7 of `add-gui-front-end`). The Client core shares it, so the
+    /// (design D7 of `extract-client-core`). The Client core shares it, so the
     /// waker the Client installs reaches every relay, including one the
     /// initial attach already spawned.
     #[must_use]
@@ -553,7 +553,7 @@ impl App {
     }
 
     /// Record the `mbv` program this Client starts the Owner from (design
-    /// D9 of `add-gui-front-end`). The Owner link sets it at attach time;
+    /// D9 of `extract-client-core`). The Owner link sets it at attach time;
     /// `None` keeps this process's own executable.
     pub(crate) fn set_owner_exe(&mut self, owner_exe: Option<std::path::PathBuf>) {
         self.owner_exe = owner_exe;
@@ -562,7 +562,7 @@ impl App {
     /// Start this machine's Owner process from the Client's `mbv` program and
     /// wait until its control socket accepts connections. Every App-side
     /// Owner start goes through here so a GUI Client never starts itself as
-    /// the Owner (design D9 of `add-gui-front-end`).
+    /// the Owner (design D9 of `extract-client-core`).
     pub(in crate::app) fn start_local_daemon(
         &self,
     ) -> Result<(), mbv_remote_player::RemotePlayerError> {
@@ -573,7 +573,7 @@ impl App {
     }
 
     /// Relay one freshly attached Owner event channel through the wake
-    /// relay (design D7 of `add-gui-front-end`): forwarded events reach the
+    /// relay (design D7 of `extract-client-core`): forwarded events reach the
     /// drain in order and each send wakes the Client. Receivers already
     /// behind a relay — a resumed suspended home link included — must not
     /// be re-wrapped.

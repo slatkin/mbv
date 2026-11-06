@@ -45,7 +45,7 @@ pub struct StatusBarModel {
     pub visual_mode: Option<VisualModeIndicator>,
 }
 /// The status chrome the Status bar's Surface state owns and the adapter
-/// paints (add-gui-front-end row 4.6): the prefix-armed pill and the live
+/// paints (extract-client-core row 4.6): the prefix-armed pill and the live
 /// toast, built from the Surface state at paint time instead of projected
 /// as shell content.
 #[derive(Clone, Debug, Default, PartialEq)]

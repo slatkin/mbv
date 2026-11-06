@@ -1,4 +1,4 @@
-//! The TUI Client's [`ClientTickHost`] (design D7 of `add-gui-front-end`):
+//! The TUI Client's [`ClientTickHost`] (design D7 of `extract-client-core`):
 //! `Model` delegates each shared phase to the existing drains and
 //! projections, so [`ClientCore::tick`] runs the run loop's exact phase
 //! order over the `TuiRealm` shell.

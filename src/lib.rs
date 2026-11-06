@@ -1,6 +1,6 @@
 //! The `mbv` library: the shell `App`, the Client core tick that every Client
 //! drives, the central keyboard router, and the Client-side Owner link
-//! (design D2 and D7 of `add-gui-front-end`).
+//! (design D2 and D7 of `extract-client-core`).
 //!
 //! The `mbv` binary is a thin `main` over [`run`], and a GUI Client
 //! program shares the rest of this surface: the core tick, the router
@@ -36,7 +36,7 @@ pub use self::owner_link::{
 pub use self::startup::run;
 
 /// The `App` stub construction a Client's own tests build their `App` from
-/// (`add-gui-front-end` design D11). Compiled only under the root package's
+/// (`extract-client-core` design D11). Compiled only under the root package's
 /// `test` feature, which no shipped build enables.
 #[cfg(feature = "test")]
 pub use self::app::{

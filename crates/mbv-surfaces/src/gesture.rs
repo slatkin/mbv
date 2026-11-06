@@ -1,4 +1,4 @@
-//! The pointer gesture policy (`add-gui-front-end` row 4.8): the recognition
+//! The pointer gesture policy (`extract-client-core` row 4.8): the recognition
 //! rules the TUI Client and the GUI Client share, held one time in the
 //! Client core. A Client translates its raw pointer input into the neutral
 //! [`PointerEvent`] at its own edge and feeds the recognizer; the adapter

@@ -64,7 +64,7 @@ impl Model {
         // active control. Other destinations and Queue focus keep using
         // `AppLayout` as before. The opener-named bounds are already the
         // neutral presentation `Rect`; the render geometry converts at the
-        // edge (`add-gui-front-end` task 1.2).
+        // edge (`extract-client-core` task 1.2).
         let (panel_rect, anchor_rect): (Rect, Option<Rect>) = if let Some(bounds) = bounds {
             (
                 Rect::new(bounds.x, bounds.y, bounds.width, bounds.height),

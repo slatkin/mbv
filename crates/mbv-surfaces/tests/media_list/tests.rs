@@ -1,5 +1,5 @@
 //! The canonical media-list owner's public-API tests, moved with `MediaList`
-//! from `mbv-components` (add-gui-front-end 4.3). Assertions are unchanged;
+//! from `mbv-components` (extract-client-core 4.3). Assertions are unchanged;
 //! the pointer-input construction the adapter owned (`into_operation`) stayed
 //! there, so the moved selection tests name the target-resolved operation.
 
@@ -197,7 +197,7 @@ fn esc_after_freeze_clears_everything() {
     assert!(!list.is_visual_mode());
 }
 
-/// The neutral visual-mode rule moved with the owner (add-gui-front-end
+/// The neutral visual-mode rule moved with the owner (extract-client-core
 /// 4.3): the same key set the destination-side carrier matched before, now
 /// over the neutral `KeyEvent`, with the mark count as its outcome.
 #[test]

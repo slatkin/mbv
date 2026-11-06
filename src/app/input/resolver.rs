@@ -1,6 +1,6 @@
 //! Central input normalization: the chord shape (`KeyChord`) the Keyboard
 //! Router's ordered policy (`key_policy.rs` + `router.rs`) matches against,
-//! built only from the neutral key vocabulary (`add-gui-front-end` design
+//! built only from the neutral key vocabulary (`extract-client-core` design
 //! D4). See `docs/adr/0002-centralized-input-handling.md`.
 //!
 //! The legacy `CONTEXT_STACK` and its handler functions were removed in the

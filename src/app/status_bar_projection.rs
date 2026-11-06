@@ -1,4 +1,4 @@
-//! The Status bar projection every Client consumes (`add-gui-front-end` design
+//! The Status bar projection every Client consumes (`extract-client-core` design
 //! D5, row 6.5): the prefix-armed display and the live toast the status row
 //! presents, computed once from the `App` so both Clients read the same
 //! delivery and expiry rules. The Status bar's Surface state adopts it each

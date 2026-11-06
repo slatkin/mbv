@@ -1,4 +1,4 @@
-//! The Queue playback Surface state (add-gui-front-end design D5, row 4.5):
+//! The Queue playback Surface state (extract-client-core design D5, row 4.5):
 //! the transport focus and the seek state the Queue playback panel owns,
 //! front-end-neutral. The TUI and GUI Clients hold this state and paint from
 //! it; neither reimplements a rule.

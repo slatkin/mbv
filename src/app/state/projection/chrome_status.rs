@@ -25,7 +25,7 @@ impl App {
     /// Success/Warning/Error toasts render in-app only when system
     /// notifications are disabled or the desktop notification failed
     /// (`notif_failed`), because a delivered desktop notification hides the
-    /// in-app row. The presentation is neutral (add-gui-front-end row 4.6):
+    /// in-app row. The presentation is neutral (extract-client-core row 4.6):
     /// the Severity's colour is the painters' choice, and the presented
     /// facts — the text and the severity — ride the Status bar's Surface
     /// state.

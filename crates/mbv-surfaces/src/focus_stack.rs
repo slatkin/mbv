@@ -101,7 +101,7 @@ impl FocusStack {
     /// Holds focus off every surface: `focused` resolves to `None` until
     /// [`FocusStack::release_focus`] clears the hold. This is the state the
     /// prefix-armed capture cannot otherwise represent (design D6 of change
-    /// `add-gui-front-end`): armed capture withholds the keyboard from every
+    /// `extract-client-core`): armed capture withholds the keyboard from every
     /// surface with no overlay open, so the hold is not an overlay and no
     /// dismissal can lift it.
     pub fn hold_focus(&mut self) {

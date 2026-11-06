@@ -1,4 +1,4 @@
-//! The seekbar's seek rules (add-gui-front-end row 4.5): the fraction a
+//! The seekbar's seek rules (extract-client-core row 4.5): the fraction a
 //! pointer position resolves against a painted bar, and the scrub admission
 //! for a left-drag anchored inside it. Moved from the TUI adapter's
 //! `mouse/seekbar.rs` so both Clients resolve the same seek target.

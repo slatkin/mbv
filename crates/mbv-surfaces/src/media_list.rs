@@ -1,5 +1,5 @@
 //! The canonical media-list owner: the one Surface state for one logical
-//! provider-neutral media-row flow (add-gui-front-end design D5).
+//! provider-neutral media-row flow (extract-client-core design D5).
 //!
 //! [`MediaList`] holds the rows, the cursor, the resting scroll offset, the
 //! mark set, and the viewport anchor. Presentations embed or receive this
@@ -293,7 +293,7 @@ impl<Target> MediaList<Target> {
 
 impl<Target: Clone + Eq> MediaList<Target> {
     /// The neutral visual-mode key rule (moved from the destination-side
-    /// carrier, add-gui-front-end row 4.3): Ctrl+A selects every row, Shift+V
+    /// carrier, extract-client-core row 4.3): Ctrl+A selects every row, Shift+V
     /// begins Visual mode at the cursor, and inside Visual mode an unmodified
     /// Escape clears the marks and an unmodified Space toggles the cursor row.
     /// The outcome reports the mark count and whether the whole set was

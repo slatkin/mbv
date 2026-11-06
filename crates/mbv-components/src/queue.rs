@@ -32,7 +32,7 @@ pub use mbv_ui_model::{queue_media_row, queue_media_rows};
 
 #[derive(Debug)]
 pub struct QueueComponent {
-    /// The Queue's Surface state (add-gui-front-end design D5): the canonical
+    /// The Queue's Surface state (extract-client-core design D5): the canonical
     /// owner over the queue's stable slot identities plus the queue's cursor,
     /// mark, selection, viewport, and key rules. The adapter paints from it
     /// and forwards neutral input; it holds no copy of a state value.

@@ -15,7 +15,7 @@ impl Model {
     }
 
     /// Mount the prompt modal and give it the focus (through the core focus
-    /// stack, design D3 of `add-gui-front-end`). The opener's
+    /// stack, design D3 of `extract-client-core`). The opener's
     /// `NoBlockingOverlay` gate keeps this reachable only with no blocking
     /// overlay mounted, and the mount dismisses any blocking modal first the
     /// same way the other modal mounts do.

@@ -1,4 +1,4 @@
-//! The Client-side Owner link (design D2, D7, and D9 of `add-gui-front-end`):
+//! The Client-side Owner link (design D2, D7, and D9 of `extract-client-core`):
 //! every local Client — the TUI Client and the GUI Client — finds this
 //! machine's Owner process, starts it when none runs, and attaches to it as a
 //! Client.
@@ -150,7 +150,7 @@ pub fn exclusive_owner_refusal_text(error: &RemotePlayerError) -> String {
     )
 }
 
-/// Declare this process the GUI Client (design D9 of `add-gui-front-end`).
+/// Declare this process the GUI Client (design D9 of `extract-client-core`).
 /// Its Owner-link connections — the initial attach and every later App-side
 /// reconnect — send a plain Client Hello, so the Owner never picks this
 /// Client as a Pin-swap target: the GUI program is neither a terminal Client

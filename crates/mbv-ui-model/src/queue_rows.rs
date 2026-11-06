@@ -4,7 +4,7 @@
 //! progress is clamped to `0..=100` at this projection boundary. No ticks,
 //! runtime, source, credentials, callbacks, or effects cross this edge; the
 //! projection is the one both Clients' Queue surfaces consume
-//! (`add-gui-front-end` design D5).
+//! (`extract-client-core` design D5).
 
 use crate::media_list::{ActiveProgress, MediaKind, MediaListRow, MediaSemanticState};
 use crate::playback::PlaybackState;

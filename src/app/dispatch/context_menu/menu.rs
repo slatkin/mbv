@@ -671,7 +671,7 @@ impl App {
         Self::push_context_action(&mut entries, "Hide", ContextAction::HideVisualSlot);
         let bounds = {
             let area = self.layout.left_area;
-            // Neutral presentation `Rect` (`add-gui-front-end` task 1.2); the
+            // Neutral presentation `Rect` (`extract-client-core` task 1.2); the
             // render layout converts at the edge.
             (area.width > 0 && area.height > 0).then(|| rect_to_presentation(area))
         };

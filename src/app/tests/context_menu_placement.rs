@@ -14,7 +14,7 @@ use mbv_ui_msg::{ComponentId, Msg, OverlayId};
 use ratatui::layout::Rect;
 
 /// Convert a render-layer rectangle to the neutral presentation `Rect`
-/// (`add-gui-front-end` task 1.2): the tests read painted geometry as
+/// (`extract-client-core` task 1.2): the tests read painted geometry as
 /// `ratatui::Rect` and resolve placement against the neutral shape.
 fn neutral(rect: Rect) -> mbv_ui_model::geom::Rect {
     mbv_ui_model::geom::Rect::new(rect.x, rect.y, rect.width, rect.height)

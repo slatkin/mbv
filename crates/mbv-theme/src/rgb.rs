@@ -1,4 +1,4 @@
-//! The neutral colour value (`add-gui-front-end` task 1.3).
+//! The neutral colour value (`extract-client-core` task 1.3).
 //!
 //! [`Rgb`] is the one value roles and surface rows resolve to. It names no
 //! toolkit: the TUI crates convert to the render toolkit's colour under the

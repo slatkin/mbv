@@ -243,7 +243,7 @@ impl Model {
             return RouterOutcome::FallThrough;
         };
         // The router resolves the neutral chord the TUI edge translated
-        // (`add-gui-front-end` design D4); no back-conversion exists.
+        // (`extract-client-core` design D4); no back-conversion exists.
         // `player.status` is a plain (non-reentrant) mutex and `RouterSnapshot`
         // initializers below call `effective_playback_state()`, which locks it
         // again. A temporary created anywhere inside the struct literal lives

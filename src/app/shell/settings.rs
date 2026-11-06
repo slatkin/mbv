@@ -18,7 +18,7 @@ impl Model {
             return;
         }
         // Focus derives from the core focus stack (design D3 of
-        // `add-gui-front-end`): while a Settings child popup holds the stack,
+        // `extract-client-core`): while a Settings child popup holds the stack,
         // the derivation keeps it focused; its dismissal re-derives Settings.
 
         let snapshot = self.settings_snapshot();

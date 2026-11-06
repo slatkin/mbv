@@ -1,5 +1,5 @@
 //! Seekbar pointer geometry shared by the playback panels (ADR 0024): the
-//! TUI translation over the Surface state's seek rules (add-gui-front-end
+//! TUI translation over the Surface state's seek rules (extract-client-core
 //! row 4.5). The admission throttle and the fraction rule live once in
 //! `mbv_surfaces::seekbar`; this module converts the TUI's painted cell
 //! rectangles and gesture positions and delegates, so a fix to either rule

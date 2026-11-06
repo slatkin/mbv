@@ -3,7 +3,7 @@ use super::PanelMode;
 use mbv_ui_msg::ComponentId;
 
 impl Model {
-    /// The sync pass's focus step (design D3 of `add-gui-front-end`): the
+    /// The sync pass's focus step (design D3 of `extract-client-core`): the
     /// core focus stack derives the active destination from the Panel focus
     /// in effect and the overlay stack, and [`Model::apply_focus_stack`]
     /// applies it to `TuiRealm`. The pass calls the step here — after every

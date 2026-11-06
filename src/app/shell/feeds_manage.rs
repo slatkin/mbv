@@ -43,7 +43,7 @@ impl super::Model {
                 .expect("mount FeedManage");
         }
         // Focus routes through the core focus stack (design D3 of
-        // `add-gui-front-end`): the push takes focus over the Settings
+        // `extract-client-core`): the push takes focus over the Settings
         // sidebar beneath it.
         self.push_focus_overlay(&id);
         self.push_feeds_manage_content();

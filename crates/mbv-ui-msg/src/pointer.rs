@@ -1,4 +1,4 @@
-//! The neutral pointer vocabulary (`add-gui-front-end` design D4).
+//! The neutral pointer vocabulary (`extract-client-core` design D4).
 //!
 //! [`PointerEvent`] is the one pointer shape every Client translates its raw
 //! pointer input into before the core resolves it against a hit map.
@@ -37,7 +37,7 @@ pub enum PointerKind {
 
 /// A neutral pointer event: the kind, where it happened, and the modifiers
 /// held. The modifiers carry the Ctrl/Shift choice a click's recognition
-/// reads (`add-gui-front-end` row 4.8), so both Clients report a click the
+/// reads (`extract-client-core` row 4.8), so both Clients report a click the
 /// same way and the choice lives once in the Client core.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct PointerEvent {

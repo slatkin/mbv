@@ -1,4 +1,4 @@
-//! The GUI Client's routing entry (`add-gui-front-end` row 6.3): one call
+//! The GUI Client's routing entry (`extract-client-core` row 6.3): one call
 //! that resolves translated neutral input through the shared keyboard router
 //! (ADR 0023) and applies the outcome to the `App`.
 //!

@@ -1,4 +1,4 @@
-//! The Client core tick (design D7 of `add-gui-front-end`): the `App`-side
+//! The Client core tick (design D7 of `extract-client-core`): the `App`-side
 //! phases of the run loop — runtime and channel drains, Owner snapshot
 //! adoption, effects, and expiries — sequenced one time for every Client.
 //!
@@ -146,7 +146,7 @@ pub trait ClientTickHost {
 type WakeCallback = Arc<dyn Fn() + Send + Sync>;
 
 /// The wake handle worker-side senders call when new input lands for a
-/// sleeping Client (design D7 of `add-gui-front-end`). One shared slot
+/// sleeping Client (design D7 of `extract-client-core`). One shared slot
 /// backs every clone, so `install` reaches senders that were handed a
 /// clone earlier — a relay spawned before the install wakes with the
 /// installed callback. An empty slot is a no-op.

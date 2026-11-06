@@ -1,4 +1,4 @@
-//! Public-API tests for the pointer gesture policy (add-gui-front-end row
+//! Public-API tests for the pointer gesture policy (extract-client-core row
 //! 4.8): the double-click window, the uniform wheel step, the drag anchor,
 //! and the Ctrl/Shift selection choice, moved from the TUI adapter's
 //! `mouse/gesture.rs` tests and recognized here over the neutral vocabulary
@@ -151,7 +151,7 @@ fn two_nearby_presses_are_a_double_click_and_two_far_ones_are_not() {
 
 /// The modifier choice is part of the gesture policy: the recognizer derives
 /// the selection from the event's modifiers, so both Clients toggle and
-/// range-select the same way (add-gui-front-end row 4.8).
+/// range-select the same way (extract-client-core row 4.8).
 #[rstest::rstest]
 #[case::ctrl_toggles(KeyModifiers::CONTROL, ClickSelection::Toggle)]
 #[case::shift_extends(KeyModifiers::SHIFT, ClickSelection::Range)]

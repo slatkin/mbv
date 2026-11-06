@@ -1,5 +1,5 @@
 //! The TUI's gesture-translation edge over the Client core's pointer gesture
-//! policy (`add-gui-front-end` row 4.8). The recognition rules — the
+//! policy (`extract-client-core` row 4.8). The recognition rules — the
 //! double-click window, the uniform wheel step, the drag anchor, and the
 //! Ctrl/Shift selection choice — live once in `mbv_surfaces::gesture`; this
 //! module only translates: `neutral_pointer` fills the neutral kind and

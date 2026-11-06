@@ -180,7 +180,7 @@ where
     // (tray-pin-swap D2/D6); the restricted-role handshakes stay plain. A
     // Client that takes no part in Pin swap sends a plain Hello too, so the
     // Owner never picks it as a swap target (the GUI Client, design D9 of
-    // `add-gui-front-end`).
+    // `extract-client-core`).
     let mut client_hello = match role {
         HandshakeRole::ServiceSetupAdmin => CtrlHello::current_service_setup_admin(control_token),
         HandshakeRole::OwnerAction => {

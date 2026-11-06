@@ -33,7 +33,7 @@ pub(crate) fn hit_region(rect: Rect) -> HitRegion {
 /// policy, the configured claim/content rectangles, and the retained painted
 /// geometry. It owns no interaction state — the [`MediaList`] Surface state
 /// does — so a Client adapter can hold the Surface state and this presentation
-/// side by side (add-gui-front-end design D5).
+/// side by side (extract-client-core design D5).
 #[derive(Debug)]
 pub struct WidePresentationState<Target> {
     policy: WideMediaListPaintPolicy,
@@ -172,7 +172,7 @@ impl<Target> PaintRetained<Target> for WidePresentationState<Target> {
 /// Paint one Wide media-list frame from the Surface state's canonical owner
 /// and the presentation's policy and retained geometry. The one body both the
 /// owned-core [`WideMediaList`] and a Client adapter over a separately held
-/// Surface state run (add-gui-front-end design D5).
+/// Surface state run (extract-client-core design D5).
 pub(crate) fn render_wide_media_list<Target: Clone + Eq>(
     core: &mut MediaList<Target>,
     presentation: &mut WidePresentationState<Target>,

@@ -1,4 +1,4 @@
-//! The neutral keyboard vocabulary (`add-gui-front-end` design D4).
+//! The neutral keyboard vocabulary (`extract-client-core` design D4).
 //!
 //! [`KeyEvent`] is the one key shape every Client translates its raw key
 //! input into before routing. It carries no terminal- or toolkit-specific

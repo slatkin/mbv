@@ -4,7 +4,7 @@
 //! owner. Painting lives in `mbv-render::components::media_list`.
 //!
 //! The canonical owner is front-end-neutral Surface state and lives in
-//! `mbv-surfaces` (add-gui-front-end design D2/D5); this module re-exports it
+//! `mbv-surfaces` (extract-client-core design D2/D5); this module re-exports it
 //! for the TUI adapters and keeps the TUI-side carrier, wide presentation,
 //! pointer-input mapping, and letter grouping.
 

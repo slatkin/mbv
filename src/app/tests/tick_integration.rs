@@ -511,7 +511,7 @@ fn esc_closes_a_sidebar_in_mini_view() {
     assert!(!harness.model().application.mounted(&id));
 }
 
-/// Task 3.7 (design D3 of `add-gui-front-end`, spec
+/// Task 3.7 (design D3 of `extract-client-core`, spec
 /// `client-interaction-core`): ``TuiRealm`` focus follows the core focus stack.
 /// A surface the shell pushes onto the stack is the focused ``TuiRealm``
 /// component after the sync pass, and the dismissal that drops it from the

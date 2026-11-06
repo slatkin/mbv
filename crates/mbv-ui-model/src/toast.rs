@@ -1,4 +1,4 @@
-//! Toast presentation models (add-gui-front-end row 4.6): the neutral
+//! Toast presentation models (extract-client-core row 4.6): the neutral
 //! severity class and the presented toast the Status bar's Surface state
 //! carries. The TUI and GUI painters style the severity each in their own
 //! way; the presented facts are the shared state.

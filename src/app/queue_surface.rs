@@ -1,5 +1,5 @@
 //! The Queue Surface projection every Client consumes
-//! (`add-gui-front-end` design D5): the App-owned facts a Queue Surface
+//! (`extract-client-core` design D5): the App-owned facts a Queue Surface
 //! state adopts each tick, computed once for both Clients. The fingerprint
 //! gates the row rebuild (#675): rebuilding the row vec (slot clone +
 //! per-row `format!`) on a tick where nothing the projection depends on

@@ -216,7 +216,7 @@ fn a_preserve_push_after_a_wheel_scroll_keeps_the_scrolled_offset() {
     assert_eq!(component.test_cursor(), 0);
 }
 
-/// The frame report (add-gui-front-end 4.4, design D6): the capacity is the
+/// The frame report (extract-client-core 4.4, design D6): the capacity is the
 /// viewport height the Surface state clamps and strides with, and a press on
 /// a painted row resolves through the hit map to that row's stable slot,
 /// while a press outside every painted row region resolves to no target.

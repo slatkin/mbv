@@ -1,4 +1,4 @@
-//! The wake relay (design D7 of `add-gui-front-end`): one thread per
+//! The wake relay (design D7 of `extract-client-core`): one thread per
 //! waking channel forwards each upstream item in order, then calls the
 //! installed `ClientWaker` so a sleeping Client repaints on the new input
 //! instead of waiting out its idle cadence.

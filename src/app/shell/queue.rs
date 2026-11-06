@@ -21,7 +21,7 @@ impl Model {
             self.app.panel_focus = PanelFocus::Library;
         }
         self.mount_queue_panel();
-        // The projection lives once on the `App` (add-gui-front-end design
+        // The projection lives once on the `App` (extract-client-core design
         // D5): the TUI and the GUI Clients consume the same update.
         let update = self.app.queue_surface_projection();
         // The visual slot's image projection (task 3.4, D9): the queue

@@ -1,4 +1,4 @@
-//! The shared breakpoint classes (add-gui-front-end design D10, row 6.6).
+//! The shared breakpoint classes (extract-client-core design D10, row 6.6).
 //!
 //! Each Client maps its own size to a [`BreakpointClass`] with its own
 //! threshold set: the TUI counts terminal columns and the GUI counts window

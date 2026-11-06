@@ -1,5 +1,5 @@
 //! A self-contained `App` stub for the Clients' own tests
-//! (`add-gui-front-end` design D11): the ordinary `App::build` construction
+//! (`extract-client-core` design D11): the ordinary `App::build` construction
 //! with stub-friendly defaults, no live Owner, and no live Service. The GUI
 //! Client's headless tests build their `App` here, exactly as the TUI
 //! Client's tests build theirs in `app::tests`.
@@ -71,7 +71,7 @@ pub fn stub_app_with_queue(n: usize) -> App {
 
 /// The `App` a Client's test drives with `n` projected queue slots and the
 /// first one playing, so the Queue playback band shows its transport
-/// (`add-gui-front-end` row 6.5).
+/// (`extract-client-core` row 6.5).
 #[cfg(feature = "test")]
 #[must_use]
 pub fn stub_app_with_playing_queue(n: usize) -> App {
@@ -86,7 +86,7 @@ pub fn stub_app_with_playing_queue(n: usize) -> App {
 
 /// The `App` a Client's test drives with `n` projected queue slots and the
 /// queue marked unsaved, so the Queue footer carries its dirty pill
-/// (`add-gui-front-end` row 6.4).
+/// (`extract-client-core` row 6.4).
 #[cfg(feature = "test")]
 #[must_use]
 pub fn stub_app_with_unsaved_queue(n: usize) -> App {
@@ -97,7 +97,7 @@ pub fn stub_app_with_unsaved_queue(n: usize) -> App {
 
 /// The `App` a Client's test drives with prefix mode armed and `message`
 /// flashed as a live Neutral toast, so the Status bar carries both
-/// (`add-gui-front-end` row 6.5).
+/// (`extract-client-core` row 6.5).
 #[cfg(feature = "test")]
 #[must_use]
 pub fn stub_app_with_prefix_and_toast(message: &str) -> App {

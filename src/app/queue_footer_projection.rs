@@ -1,4 +1,4 @@
-//! The Queue footer projection every Client consumes (`add-gui-front-end`
+//! The Queue footer projection every Client consumes (`extract-client-core`
 //! design D5, row 6.4's footer): the status pills the queue panel's footer
 //! paints, computed once from the `App` as plain text and theme roles so both
 //! Clients read the same owner, playlist, autosave, and dirty rules. The TUI

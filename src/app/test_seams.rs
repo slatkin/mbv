@@ -41,7 +41,7 @@ pub(in crate::app) type SessionsLoadFn =
 pub(in crate::app) static SESSIONS_LOAD_OVERRIDE: Mutex<Option<SessionsLoadFn>> = Mutex::new(None);
 
 /// Convert a crossterm `KeyEvent` to the neutral `KeyEvent` the router
-/// resolves (`add-gui-front-end` design D4, task 2.2). Test-only: production
+/// resolves (`extract-client-core` design D4, task 2.2). Test-only: production
 /// input enters through the `TuiRealm` listener and is translated at the
 /// `UiRoot` observer edge (`mbv_components::root::neutral_key`); the
 /// routing-matrix and shell tests drive the seam with crossterm keys, so

@@ -3,7 +3,7 @@
 use super::*;
 
 /// The Hello advertisement follows the connect's Pin-swap argument
-/// (`add-gui-front-end` EDGE-1 fix): a Client that takes no part in Pin swap
+/// (`extract-client-core` EDGE-1 fix): a Client that takes no part in Pin swap
 /// (`None` — the GUI Client, design D9) sends a plain Hello the Owner never
 /// picks as a swap target, and a participating Client (`Some` — the TUI)
 /// advertises `pin-swap`. The Owner's classification of those capabilities

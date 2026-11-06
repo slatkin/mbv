@@ -94,7 +94,7 @@ impl Model {
         self.sync_active_destination();
         // Mouse eligibility is derived off the same active-destination
         // derivation, in the same pass, right after it — the focus step above
-        // (design D3 of `add-gui-front-end`) has already applied the core
+        // (design D3 of `extract-client-core`) has already applied the core
         // focus stack's derived focus to TuiRealm, and this pass's only other
         // TuiRealm focus caller is that step.
         self.sync_mouse_subscriptions();
@@ -332,7 +332,7 @@ impl Model {
         let mut last_render = Instant::now()
             .checked_sub(Duration::from_secs(2))
             .unwrap_or_else(Instant::now);
-        // Design D7 (`add-gui-front-end`): the Client core sequences the
+        // Design D7 (`extract-client-core`): the Client core sequences the
         // App-side phases and shares the App's wake handle; the TUI Client
         // installs a no-op waker — the listener poll cadence already bounds
         // input latency.

@@ -1,4 +1,4 @@
-//! The Status bar's Surface state (add-gui-front-end design D5, row 4.6):
+//! The Status bar's Surface state (extract-client-core design D5, row 4.6):
 //! the prefix-armed display and the toast presentation the status row owns,
 //! front-end-neutral. The TUI and GUI Clients hold this state and paint from
 //! it; neither reimplements a rule.

@@ -14,7 +14,7 @@ use mbv_ui_msg::{
 };
 
 /// Convert a `TuiRealm` keyboard event to the neutral `KeyEvent`
-/// (`add-gui-front-end` design D4): the router resolves chords only from the
+/// (`extract-client-core` design D4): the router resolves chords only from the
 /// neutral shape, and the TUI adapter owns the translation. Terminal keys the
 /// neutral vocabulary cannot represent become `Key::Null`, which matches no
 /// chord, exactly as the unmapped codes did before the conversion existed.
@@ -78,7 +78,7 @@ pub fn neutral_key(key: tuirealm::event::KeyEvent) -> NeutralKeyEvent {
 }
 
 /// Convert a `TuiRealm` mouse event to the neutral `PointerEvent`
-/// (`add-gui-front-end` design D4, row 4.8). The terminal reports cells, so
+/// (`extract-client-core` design D4, row 4.8). The terminal reports cells, so
 /// a cell is one logical unit: `column`/`row` map onto `x`/`y` unchanged.
 /// The modifiers carry over, so the Client core's gesture policy reads the
 /// same Ctrl/Shift choice both Clients report. A mouse kind the neutral
@@ -231,7 +231,7 @@ mod tests {
     use rstest::rstest;
     use tuirealm::event::{Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
-    /// One table over the listener-edge mapping (add-gui-front-end task 2.1):
+    /// One table over the listener-edge mapping (extract-client-core task 2.1):
     /// the crossterm-delivered key and mouse events the `UiRoot` observer
     /// sees, and the neutral event each must become. The key rows pin the
     /// modifier lowercase rule; the pointer rows pin the cell-to-logical-unit

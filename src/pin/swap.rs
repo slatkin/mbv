@@ -8,7 +8,7 @@ use super::{is_pinned, swap_token};
 /// it answers `SwapPrepare` and is a swap target — and the GUI Client never
 /// does: it is neither a terminal Client nor a pinned panel, and the swap's
 /// launch snapshot is a TUI shell query it cannot produce (design D9 of
-/// `add-gui-front-end`). Claimed once at start-up, before the first Owner
+/// `extract-client-core`). Claimed once at start-up, before the first Owner
 /// connection, so every connection this process makes advertises alike.
 static PIN_SWAP_PARTICIPANT: OnceLock<bool> = OnceLock::new();
 

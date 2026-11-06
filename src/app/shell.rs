@@ -213,7 +213,7 @@ pub struct Model {
     /// assignments. Shell-owned plain data the router reads as its
     /// `&Keybinds` parameter (Unit 3); never mirrored into components.
     pub keybinds: mbv_keybinds::Keybinds,
-    /// The core focus stack (design D3 of `add-gui-front-end`, capability
+    /// The core focus stack (design D3 of `extract-client-core`, capability
     /// `client-interaction-core`): the shell-held focus authority over the
     /// mounted surfaces, the Panel focus in effect, and the overlay stack.
     /// Call sites request a change on the stack instead of calling `TuiRealm`
@@ -362,7 +362,7 @@ impl Model {
         // library's embedded content owners, design D2's retention rule) but
         // never made active directly: the sync pass's focus step derives the
         // focused surface from the core focus stack (design D3 of
-        // `add-gui-front-end`), and it routes to the panel while a migrated
+        // `extract-client-core`), and it routes to the panel while a migrated
         // library is active. It paints only a migrated owner's surface (the
         // transitional branch, task 5.9).
         // Home's and Feeds' owners are installed with the panel: both tabs
