@@ -101,11 +101,11 @@ impl GuiTickHost {
     /// with its later surfaces), so its appearance focus is focused. The Status
     /// bar takes the window's bottom row, as the TUI's status row does. The
     /// frame classifies the window's width into its breakpoint class first.
-    pub(crate) fn paint(&mut self, ctx: &egui::Context) {
-        self.breakpoint = classify(ctx.viewport_rect().width(), GUI_BREAKPOINTS);
+    pub(crate) fn paint(&mut self, ui: &mut egui::Ui) {
+        self.breakpoint = classify(ui.ctx().viewport_rect().width(), GUI_BREAKPOINTS);
         egui::CentralPanel::default()
             .frame(egui::Frame::NONE)
-            .show(ctx, |ui| {
+            .show(ui, |ui| {
                 let (body, status) = split_bottom(ui.max_rect(), STATUS_BAR_HEIGHT);
                 let (band, list) = split_band(body, self.playback.band_height());
                 self.playback.paint(ui.painter(), band);

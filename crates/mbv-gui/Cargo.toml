@@ -25,9 +25,12 @@ mbv-ui-model = { path = "../mbv-ui-model" }
 mbv-ui-msg = { path = "../mbv-ui-msg" }
 mbv-queue = { path = "../mbv-queue" }
 mbv-emby-model = { path = "../mbv-emby-model" }
-# eframe's default features are the glow (OpenGL) renderer plus the Wayland
-# and X11 backends (design D8 of `add-gui-front-end`). Do not add `wgpu`.
-eframe = "0.33"
+# eframe 0.37 with the D8 feature list (design D8 of `add-gui-front-end`).
+# Default features are off, so the list stays explicit. `wayland` and `x11`
+# are the window backends. `glow` is named because eframe 0.34 made wgpu the
+# default renderer; do not add `wgpu`. `system_fonts` lets egui fall back to
+# installed fonts for glyphs the bundled fonts lack.
+eframe = { version = "0.37.0", default-features = false, features = ["glow", "wayland", "x11", "default_fonts", "clipboard", "links", "accesskit", "system_fonts"] }
 
 [dev-dependencies]
 rstest.workspace = true

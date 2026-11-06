@@ -48,10 +48,10 @@ impl GuiClient {
     /// The no-session window's surface: one themed panel with the attach
     /// notice. A failed Owner find, start, or attach is the only thing this
     /// window can say before the Client session exists.
-    fn paint_notice(&self, ctx: &egui::Context) {
+    fn paint_notice(&self, ui: &mut egui::Ui) {
         egui::CentralPanel::default()
             .frame(egui::Frame::NONE.fill(theme_fill()))
-            .show(ctx, |ui| {
+            .show(ui, |ui| {
                 if let Some(notice) = &self.notice {
                     ui.painter().text(
                         ui.max_rect().left_top() + egui::vec2(16.0, 16.0),
@@ -84,10 +84,11 @@ fn open_session(cc: &eframe::CreationContext<'_>) -> Result<Session, String> {
 }
 
 impl eframe::App for GuiClient {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // The shared tick runs at the start of every frame (design D7): the
         // App-side drains and expiries, then this Client's input phase inside
-        // them.
+        // them. eframe also calls `logic` with no `ui` while the window is
+        // hidden, so the tick runs then too.
         if let Some(session) = &mut self.session {
             let outcome = ClientCore::tick(&mut session.host, Instant::now());
             if outcome.quit_requested {
@@ -96,13 +97,18 @@ impl eframe::App for GuiClient {
             // The surface sync runs before the paint, once per frame: the
             // GUI Client's analog of the TUI Client's sync pass (design D5).
             session.host.sync_surfaces();
-            session.host.paint(ctx);
-        } else {
-            self.paint_notice(ctx);
         }
         // The idle cadence the TUI Client polls at: a repaint at least this
         // often keeps timers and worker results landing with no waker.
         ctx.request_repaint_after(CLIENT_IDLE_CADENCE);
+    }
+
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        if let Some(session) = &mut self.session {
+            session.host.paint(ui);
+        } else {
+            self.paint_notice(ui);
+        }
     }
 
     fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
