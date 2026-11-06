@@ -52,8 +52,8 @@ const GUI_BREAKPOINTS: BreakpointThresholds<f32> = BreakpointThresholds {
 };
 
 /// One message the core thread's channel carries (design D3): the front
-/// end's translated input, a layout report, or the wake value the installed
-/// `ClientWaker` sends into the same channel.
+/// end's translated input, a layout report, the wake value the installed
+/// `ClientWaker` sends, or the window's close.
 #[derive(Debug)]
 pub enum CoreInput {
     /// A key chord, translated on the Rust side (design D6) and routed
@@ -69,6 +69,14 @@ pub enum CoreInput {
     /// The wake value the installed `ClientWaker` sends (design D3), so
     /// Owner events and timers wake the core as they wake the TUI.
     Wake,
+    /// The window closed (design D9). The `main` window's `Destroyed` event
+    /// delivers it (design D9's close delivery): the App's waker keeps the
+    /// channel connected for the core thread's whole life, so a sender drop
+    /// cannot carry the close, and the run ends on this input instead. The
+    /// attached run answers it as a quit: the quit edge runs (a no-op on the
+    /// window that is already gone), the run ends, and the `App`'s drop
+    /// releases the Client.
+    Close,
 }
 
 /// The sink every emitted frame goes through (design D3). Production wires
@@ -83,11 +91,12 @@ pub type QuitSink = Box<dyn Fn() + Send + 'static>;
 
 /// Start the core thread (design D3): it loads the configuration, attaches
 /// to the Owner, and runs the tick loop for the life of the process. The
-/// thread is detached; a routed quit key ends the run, and the senders'
-/// drop ends it too — the waker's sender dies with the `App`, the returned
-/// one with the commands' managed state at app exit. Returns that sender,
-/// which the Tauri commands push through; they never touch the `App`
-/// (design D3).
+/// thread is detached; nothing joins it. The run ends when the window
+/// closes — the `main` window's `Destroyed` event delivers a
+/// [`CoreInput::Close`] through the returned sender, which the Tauri
+/// commands push through; they never touch the `App` (design D3). The
+/// App's waker keeps the channel connected for the thread's whole life, so
+/// a sender drop cannot carry the close.
 #[must_use]
 pub fn spawn(sink: FrameSink, quit: QuitSink) -> Sender<CoreInput> {
     let (tx, rx) = mpsc::channel();
@@ -373,9 +382,9 @@ impl CoreThread {
     }
 
     /// Run the loop (design D3): wait for input, wake, or the idle cadence,
-    /// then tick. The loop ends when a routed key quit or the channel
-    /// disconnects: the commands' managed sender and the waker's both drop
-    /// when the app exits.
+    /// then tick. The loop ends when the window closes — its close arrives
+    /// as a [`CoreInput::Close`], and a routed quit key answers the same
+    /// way — or when the channel itself ends.
     pub fn run(&mut self) {
         while self.step() {}
     }
@@ -389,7 +398,8 @@ impl CoreThread {
             // The idle cadence keeps the maintenance phases running with no
             // input queued.
             Err(RecvTimeoutError::Timeout) => {}
-            // The front end and its commands are gone; the run is over.
+            // The channel itself ended: the same consequence as the window's
+            // close, and unreachable while the App's waker holds its sender.
             Err(RecvTimeoutError::Disconnected) => return false,
         }
         let outcome = ClientCore::tick(self, Instant::now());
@@ -626,6 +636,14 @@ impl ClientTickHost for CoreThread {
                     self.apply_layout(&report);
                     self.frame_requested = true;
                     self.theme_pending = true;
+                }
+                CoreInput::Close => {
+                    // The window closed (design D9): the run ends as a quit
+                    // does, so the same edge runs — a no-op on the window
+                    // that is already gone — and the App's drop releases
+                    // the Client.
+                    outcome.quit_requested = true;
+                    break;
                 }
             }
         }

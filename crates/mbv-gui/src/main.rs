@@ -22,9 +22,11 @@ static GLOBAL: MiMalloc = MiMalloc;
 const FRAME_EVENT: &str = "mbv://frame";
 
 /// The managed sender of the core thread's channel (design D3): every
-/// command pushes through it and never touches the `App`. Its drop — the app
-/// exiting — ends the core thread's run, together with the waker's sender
-/// that dies with the `App`.
+/// command pushes through it and never touches the `App`. The window's
+/// `Destroyed` event pushes a [`CoreInput::Close`] through it too (design
+/// D9's close delivery): the App's waker keeps the channel connected for
+/// the core thread's whole life, so the close travels as an input, not as
+/// a sender drop.
 struct CoreChannel(Sender<CoreInput>);
 
 /// The `key` command (design D4): the front end sends every keyboard event
@@ -59,9 +61,8 @@ fn report_layout(channel: State<'_, CoreChannel>, report: LayoutReport) {
 /// Push one input into the core channel (design D3): the command hands the
 /// state guard over — the Tauri command contract passes the managed state as
 /// an owned guard, so the push takes it for the send and reads the channel
-/// through it. A failed send means the core thread is gone — an Owner attach
-/// failure ends it, and row 2.6 owns that window state — so the input logs
-/// its drop.
+/// through it. A failed send means the core thread is gone — the window's
+/// close ended it — so the input logs its drop.
 fn push(channel: impl Deref<Target = CoreChannel>, input: CoreInput) {
     if channel.0.send(input).is_err() {
         tracing::warn!(
@@ -89,6 +90,17 @@ fn main() -> tauri::Result<()> {
         .append_invoke_initialization_script(
             "document.addEventListener('contextmenu', (event) => { event.preventDefault(); });",
         )
+        // The window's close ends the core thread (design D9): the
+        // `Destroyed` event delivers a [`CoreInput::Close`] through the
+        // managed channel, because the App's waker keeps the channel
+        // connected for the thread's whole life and a sender drop cannot
+        // carry the close. The quit edge's own close lands here too, after
+        // the run it ends has already returned.
+        .on_window_event(|window, event| {
+            if window.label() == "main" && matches!(event, tauri::WindowEvent::Destroyed) {
+                push(window.app_handle().state::<CoreChannel>(), CoreInput::Close);
+            }
+        })
         .setup(|app| {
             // The frames emit from the core thread, any thread, through the
             // window event loop (design D3).

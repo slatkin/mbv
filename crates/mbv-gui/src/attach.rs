@@ -4,7 +4,10 @@
 //! attach immediately, it shows the window state that
 //! `startup::run_local_instance` gives the TUI Client. There is no `App`
 //! before the attach, so the campaign resolves the mismatch state's own keys
-//! and button presses itself; the front end interprets nothing.
+//! and button presses itself; the front end interprets nothing. The campaign
+//! ends when the attach succeeds, the user quits the mismatch state, or the
+//! window closes — the close arrives as a [`CoreInput::Close`], because the
+//! App's waker keeps the channel connected for the core thread's whole life.
 
 use std::cell::Cell;
 use std::io;
@@ -43,14 +46,22 @@ const STILL_SHUTTING_DOWN: &str =
     "the local owner is still shutting down; use `mbv -q` to stop it.";
 
 /// One poll of a shutting-down Owner (design D9). Production checks the
-/// campaign's deadline and then probes; the tests inject the outcome.
+/// campaign's deadline and then probes; the tests inject the outcome. Every
+/// outcome resolves one campaign step, as the TUI's run returns the probe's
+/// state and its loop acts on it: the wind-down's repeated attach attempts
+/// come from the campaign loop re-entering the wait, not from the wait
+/// polling internally.
 #[derive(Debug)]
 pub enum OwnerWait {
-    /// A live Owner still holds the lock; the wait polls again.
-    StillRunning,
     /// The Owner exited: the lock is free, so the campaign starts an Owner
     /// and attaches.
     Exited,
+    /// The probe sees a live Owner that accepts connections — another Client
+    /// started a healthy Owner between polls, or the wind-down's socket still
+    /// accepts. The campaign attaches to it and lets the handshake decide;
+    /// it starts no second Owner, as the TUI's run attaches to the probe's
+    /// state verbatim.
+    Attachable,
     /// The probe sees a live Owner that refuses connections: the campaign
     /// parks the window on the refusal text, as the TUI's run does.
     Refused,
@@ -79,16 +90,18 @@ pub trait OwnerSteps {
     fn refusal_text(&self) -> String;
 }
 
-/// How the campaign ended without an `App` (design D9). The window's channel
-/// disconnecting is the window closing; a mismatch Quit closes it through the
-/// quit edge before the campaign ends.
+/// How the campaign ended without an `App` (design D9). The window's close
+/// arrives as a [`CoreInput::Close`]; a channel that ends without one means
+/// the same, and the mismatch Quit closes the window through the quit edge
+/// before the campaign ends.
 #[derive(Debug)]
 pub enum CampaignEnd {
     /// The user quit the mismatch state (key Q or the Quit button): the quit
     /// edge closed the window.
     Quit,
-    /// The window's channel disconnected: the window is gone.
-    Disconnected,
+    /// The window closed: the close arrived as a [`CoreInput::Close`], or the
+    /// channel ended.
+    Closed,
 }
 
 /// The mismatch prompt's choice (design D9).
@@ -228,36 +241,35 @@ impl<'a> AttachCampaign<'a> {
         )))
     }
 
-    /// Shows the waiting state and polls the shutting-down Owner until it
-    /// exits (design D9). The poll runs first, and the channel serving runs
-    /// between polls, so a report from the window re-shows the state; keys
-    /// and pointer events resolve to nothing, as the TUI's wait reads no
-    /// input.
+    /// Shows the waiting state and runs one paced poll of the shutting-down
+    /// Owner (design D9). The paced channel read comes first, as the TUI's
+    /// wait sleeps before it probes: a report from the window re-shows the
+    /// state, a close ends the wait, and the poll's outcome resolves one
+    /// campaign step. The campaign loop re-enters the wait on the wind-down's
+    /// next shutting-down failure, so the wind-down's repeated attach
+    /// attempts pace one probe per entry, exactly as the TUI's loop re-runs
+    /// its state.
     fn wait_for_owner_exit(&mut self) -> Result<OwnerState, CampaignEnd> {
         let waiting = GuiAttachState::Waiting;
         self.show(&waiting);
-        loop {
-            match self.steps.wait_tick() {
-                OwnerWait::StillRunning => {}
-                OwnerWait::Exited => return Ok(OwnerState::Start),
-                OwnerWait::Refused => {
-                    return self.park(&GuiAttachState::Refusal(self.steps.refusal_text()));
-                }
-                OwnerWait::TimedOut => {
-                    return self.park(&GuiAttachState::Failed(STILL_SHUTTING_DOWN.to_owned()));
-                }
-                OwnerWait::Probe(error) => {
-                    return self.park(&GuiAttachState::Failed(format!(
-                        "single-instance check failed: {error}"
-                    )));
-                }
+        match self.rx.recv_timeout(self.poll_interval) {
+            Ok(CoreInput::Layout(..)) => self.reshow(&waiting),
+            Ok(CoreInput::Close) | Err(RecvTimeoutError::Disconnected) => {
+                return Err(CampaignEnd::Closed);
             }
-            match self.rx.recv_timeout(self.poll_interval) {
-                Ok(CoreInput::Layout(..)) => self.reshow(&waiting),
-                Ok(CoreInput::Key(_) | CoreInput::Pointer(_) | CoreInput::Wake)
-                | Err(RecvTimeoutError::Timeout) => {}
-                Err(RecvTimeoutError::Disconnected) => return Err(CampaignEnd::Disconnected),
+            Ok(CoreInput::Key(_) | CoreInput::Pointer(_) | CoreInput::Wake)
+            | Err(RecvTimeoutError::Timeout) => {}
+        }
+        match self.steps.wait_tick() {
+            OwnerWait::Exited => Ok(OwnerState::Start),
+            OwnerWait::Attachable => Ok(OwnerState::Attach),
+            OwnerWait::Refused => self.park(&GuiAttachState::Refusal(self.steps.refusal_text())),
+            OwnerWait::TimedOut => {
+                self.park(&GuiAttachState::Failed(STILL_SHUTTING_DOWN.to_owned()))
             }
+            OwnerWait::Probe(error) => self.park(&GuiAttachState::Failed(format!(
+                "single-instance check failed: {error}"
+            ))),
         }
     }
 
@@ -291,7 +303,9 @@ impl<'a> AttachCampaign<'a> {
                     }
                 }
                 Ok(CoreInput::Wake) => {}
-                Err(RecvError) => return Err(CampaignEnd::Disconnected),
+                Ok(CoreInput::Close) | Err(RecvError) => {
+                    return Err(CampaignEnd::Closed);
+                }
             }
         }
     }
@@ -348,11 +362,12 @@ impl<'a> AttachCampaign<'a> {
     }
 
     /// Parks the window in a state that answers nothing (design D9): the run
-    /// ends only when the window's channel disconnects. Between reports the
-    /// loop serves the channel, so a reload re-shows the state with its
-    /// theme; keys and pointer events resolve to nothing. The `Ok` type is
-    /// the caller's, and no call site can reach it: the loop only ends
-    /// through the disconnect.
+    /// ends only when the window closes — the close arrives as a
+    /// [`CoreInput::Close`], and a channel that ends without one means the
+    /// same. Between reports the loop serves the channel, so a reload
+    /// re-shows the state with its theme; keys and pointer events resolve to
+    /// nothing. The `Ok` type is the caller's, and no call site can reach it:
+    /// the loop only ends through the close.
     fn park<T>(&mut self, state: &GuiAttachState) -> Result<T, CampaignEnd> {
         tracing::warn!(
             name: "gui_core.attach_parked",
@@ -368,7 +383,9 @@ impl<'a> AttachCampaign<'a> {
                     self.reshow(state);
                 }
                 Ok(CoreInput::Key(_) | CoreInput::Pointer(_) | CoreInput::Wake) => {}
-                Err(RecvError) => return Err(CampaignEnd::Disconnected),
+                Ok(CoreInput::Close) | Err(RecvError) => {
+                    return Err(CampaignEnd::Closed);
+                }
             }
         }
     }
@@ -482,8 +499,14 @@ impl OwnerSteps for LibraryOwnerSteps<'_> {
             return OwnerWait::TimedOut;
         }
         match find_owner() {
+            // The Owner exited: the lock is free, so the campaign starts an
+            // Owner and attaches.
             Ok(OwnerState::Start) => OwnerWait::Exited,
-            Ok(OwnerState::Attach) => OwnerWait::StillRunning,
+            // A live Owner accepts connections — another Client's healthy
+            // Owner, or the wind-down's socket. The campaign attaches to it
+            // and lets the handshake decide; it starts no second Owner, as
+            // the TUI's run attaches to the probe's state verbatim.
+            Ok(OwnerState::Attach) => OwnerWait::Attachable,
             Ok(OwnerState::Refuse) => OwnerWait::Refused,
             Err(error) => OwnerWait::Probe(error),
         }

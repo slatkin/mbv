@@ -337,3 +337,15 @@ fn a_routed_quit_key_fires_the_quit_edge_and_ends_the_run() {
     assert!(!test.core.step());
     test.quits.try_recv().expect("the quit edge fired");
 }
+
+/// The window's close ends the run (design D9): the close the window event
+/// delivers is an input the core answers as a quit, so the worker stops and
+/// the App's drop releases the Client — no sender drop can carry it, because
+/// the App's waker keeps the channel connected for the thread's whole life.
+#[test]
+fn a_window_close_ends_the_run() {
+    let mut test = test_core(2);
+    test.tx.send(CoreInput::Close).unwrap();
+    assert!(!test.core.step());
+    test.quits.try_recv().expect("the quit edge ran");
+}

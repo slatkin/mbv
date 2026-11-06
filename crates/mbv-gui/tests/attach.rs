@@ -100,6 +100,7 @@ struct MockSteps {
     attach_results: RefCell<VecDeque<Result<App, RemotePlayerError>>>,
     wait_ticks: RefCell<VecDeque<OwnerWait>>,
     signals: Cell<usize>,
+    starts: Cell<usize>,
     refusal: String,
 }
 
@@ -112,6 +113,7 @@ impl OwnerSteps for MockSteps {
     }
 
     fn start(&self, _program: &Path) -> Result<(), RemotePlayerError> {
+        self.starts.set(self.starts.get() + 1);
         Ok(())
     }
 
@@ -148,6 +150,7 @@ impl MockSteps {
             attach_results: RefCell::new(VecDeque::new()),
             wait_ticks: RefCell::new(VecDeque::new()),
             signals: Cell::new(0),
+            starts: Cell::new(0),
             refusal: MOCK_REFUSAL.to_owned(),
         }
     }
@@ -164,12 +167,17 @@ impl MockSteps {
             attach_results: RefCell::new(attach_results),
             wait_ticks: RefCell::new(VecDeque::from(ticks)),
             signals: Cell::new(0),
+            starts: Cell::new(0),
             refusal: MOCK_REFUSAL.to_owned(),
         }
     }
 
     fn restarts(&self) -> usize {
         self.signals.get()
+    }
+
+    fn starts(&self) -> usize {
+        self.starts.get()
     }
 }
 
@@ -189,8 +197,9 @@ fn mock_for(outcome: InjectedOutcome) -> MockSteps {
 }
 
 /// The harness a test drives: the frame capture and the quit capture. The
-/// channel's sender and receiver travel separately, so a test drops the
-/// sender to end the campaign the way a closing window does.
+/// channel's sender and receiver travel separately, so a test delivers the
+/// window's close — the input the runs end on — or the inputs a state
+/// answers.
 struct Harness {
     sink: FrameSink,
     quit: QuitSink,
@@ -276,6 +285,12 @@ fn key_press(letter: char) -> CoreInput {
     CoreInput::Key(KeyEvent::new(Key::Char(letter), KeyModifiers::NONE))
 }
 
+/// The window's close, as the `main` window's `Destroyed` event delivers it
+/// (design D9): the input the campaign's runs end on.
+fn close_input() -> CoreInput {
+    CoreInput::Close
+}
+
 /// A layout report the front end measured with `regions` painted, as a
 /// report on the attach screens carries.
 fn layout_with(regions: Vec<LayoutRegion>) -> CoreInput {
@@ -322,7 +337,7 @@ fn each_attach_outcome_shows_its_window_state(
     #[case] expected: ShownState,
 ) {
     let (harness, tx, rx) = Harness::new();
-    drop(tx);
+    tx.send(close_input()).unwrap();
     let steps = mock_for(outcome);
     let mut campaign = campaign(&harness.sink, &harness.quit, &rx, &steps);
     let _outcome = campaign.run();
@@ -338,7 +353,7 @@ fn each_attach_outcome_shows_its_window_state(
 fn the_generic_attach_error_text_is_exact() {
     let expected = format!("failed to attach to Owner process: {}", other_error());
     let (harness, tx, rx) = Harness::new();
-    drop(tx);
+    tx.send(close_input()).unwrap();
     let steps = MockSteps::attach_fails(vec![other_error()], vec![]);
     let mut campaign = campaign(&harness.sink, &harness.quit, &rx, &steps);
     let _outcome = campaign.run();
@@ -352,7 +367,7 @@ fn the_generic_attach_error_text_is_exact() {
 #[test]
 fn the_refusal_text_is_carried_verbatim() {
     let (harness, tx, rx) = Harness::new();
-    drop(tx);
+    tx.send(close_input()).unwrap();
     let steps = MockSteps::refusing_probe();
     let mut campaign = campaign(&harness.sink, &harness.quit, &rx, &steps);
     let _outcome = campaign.run();
@@ -369,7 +384,7 @@ fn the_refusal_text_is_carried_verbatim() {
 fn the_exclusive_refusal_uses_the_shared_text() {
     let expected = exclusive_owner_refusal_text(&exclusive_error());
     let (harness, tx, rx) = Harness::new();
-    drop(tx);
+    tx.send(close_input()).unwrap();
     let steps = MockSteps::attach_fails(vec![exclusive_error()], vec![]);
     let mut campaign = campaign(&harness.sink, &harness.quit, &rx, &steps);
     let _outcome = campaign.run();
@@ -388,7 +403,7 @@ fn the_mismatch_text_names_the_mismatch_and_the_restart_cost() {
         mismatch_error()
     );
     let (harness, tx, rx) = Harness::new();
-    drop(tx);
+    tx.send(close_input()).unwrap();
     let steps = MockSteps::attach_fails(vec![mismatch_error()], vec![]);
     let mut campaign = campaign(&harness.sink, &harness.quit, &rx, &steps);
     let _outcome = campaign.run();
@@ -496,22 +511,76 @@ fn the_quit_button_resolves_through_the_reported_regions() {
     harness.assert_quit_fired();
 }
 
-/// The wait polls a still-running Owner until it exits (design D9): a poll
-/// that sees the Owner still running shows the waiting state again and keeps
-/// polling.
+/// The wind-down's attach cycle: a shutting-down Owner still accepts
+/// connections, so the campaign attaches to it, the handshake refuses with
+/// the shutting-down error again, and the campaign re-enters the wait until
+/// the Owner exits — then it starts a new Owner and attaches (design D9).
 #[test]
-fn the_wait_polls_until_the_owner_exits() {
+fn a_wind_down_attaches_repeatedly_until_the_owner_exits() {
     let (harness, _tx, rx) = Harness::new();
     let steps = MockSteps::attach_fails(
-        vec![shutting_down_error()],
-        vec![OwnerWait::StillRunning, OwnerWait::Exited],
+        vec![shutting_down_error(), shutting_down_error()],
+        vec![OwnerWait::Attachable, OwnerWait::Exited],
     );
     let mut campaign = campaign(&harness.sink, &harness.quit, &rx, &steps);
     let outcome = campaign.run();
-    assert!(outcome.is_ok(), "the wait attached: {outcome:?}");
+    assert!(outcome.is_ok(), "the wind-down attached: {outcome:?}");
+    // One new Owner: started only after the old one exited.
+    assert_eq!(steps.starts(), 1);
+    let states = harness.attach_states();
+    assert_eq!(states.len(), 2);
+    assert!(ShownState::Waiting.matches(&states[0]));
+    assert!(ShownState::Waiting.matches(&states[1]));
+}
+
+/// A healthy Owner that another Client starts between the wait's polls is
+/// attached to, not replaced (design D9, the TUI's run attaches to the
+/// probe's state verbatim): the wait's probe reports it, the campaign
+/// attaches to the existing Owner, and it starts no second Owner (the
+/// regression for the false-timeout race the first attach campaign's
+/// `StillRunning` mapping carried).
+#[test]
+fn a_healthy_owner_started_during_the_wait_is_attached_to() {
+    let (harness, _tx, rx) = Harness::new();
+    let steps = MockSteps::attach_fails(vec![shutting_down_error()], vec![OwnerWait::Attachable]);
+    let mut campaign = campaign(&harness.sink, &harness.quit, &rx, &steps);
+    let outcome = campaign.run();
+    assert!(outcome.is_ok(), "the healthy Owner attached: {outcome:?}");
+    assert_eq!(steps.starts(), 0);
     let states = harness.attach_states();
     assert_eq!(states.len(), 1);
     assert!(ShownState::Waiting.matches(&states[0]));
+}
+
+/// A window close during the wait ends the campaign (design D9): the close
+/// arrives as an input between the wait's paced reads.
+#[test]
+fn a_window_close_during_the_wait_ends_the_campaign() {
+    let (harness, tx, rx) = Harness::new();
+    tx.send(close_input()).unwrap();
+    let steps = MockSteps::attach_fails(vec![shutting_down_error()], vec![OwnerWait::Attachable]);
+    let mut campaign = campaign(&harness.sink, &harness.quit, &rx, &steps);
+    let outcome = campaign.run();
+    assert!(matches!(outcome, Err(CampaignEnd::Closed)));
+    let states = harness.attach_states();
+    assert_eq!(states.len(), 1);
+    assert!(ShownState::Waiting.matches(&states[0]));
+}
+
+/// A window close during the mismatch prompt ends the campaign without the
+/// quit edge (design D9): the window is already gone, so the edge must not
+/// close it again.
+#[test]
+fn a_window_close_during_the_mismatch_ends_the_campaign() {
+    let (harness, tx, rx) = Harness::new();
+    tx.send(close_input()).unwrap();
+    let steps = MockSteps::attach_fails(vec![mismatch_error()], vec![]);
+    let mut campaign = campaign(&harness.sink, &harness.quit, &rx, &steps);
+    let outcome = campaign.run();
+    assert!(matches!(outcome, Err(CampaignEnd::Closed)));
+    let states = harness.attach_states();
+    assert_eq!(states.len(), 1);
+    assert!(ShownState::Mismatch.matches(&states[0]));
 }
 
 /// A wait whose deadline passes shows the still-shutting-down state the TUI's
@@ -520,7 +589,10 @@ fn the_wait_polls_until_the_owner_exits() {
 #[test]
 fn a_wait_past_its_deadline_shows_the_still_shutting_down_state() {
     let (harness, tx, rx) = Harness::new();
-    drop(tx);
+    // The key keeps the close from ending the wait before its poll runs: the
+    // wait reads it, ignores it, and its poll's deadline fires.
+    tx.send(key_press('x')).unwrap();
+    tx.send(close_input()).unwrap();
     let steps = MockSteps::attach_fails(vec![shutting_down_error()], vec![OwnerWait::TimedOut]);
     let mut campaign = campaign(&harness.sink, &harness.quit, &rx, &steps);
     let _outcome = campaign.run();
@@ -540,11 +612,11 @@ fn a_wait_past_its_deadline_shows_the_still_shutting_down_state() {
 fn a_report_during_a_dead_end_re_shows_the_state() {
     let (harness, tx, rx) = Harness::new();
     tx.send(layout_with(vec![])).unwrap();
-    drop(tx);
+    tx.send(close_input()).unwrap();
     let steps = MockSteps::refusing_probe();
     let mut campaign = campaign(&harness.sink, &harness.quit, &rx, &steps);
     let outcome = campaign.run();
-    assert!(matches!(outcome, Err(CampaignEnd::Disconnected)));
+    assert!(matches!(outcome, Err(CampaignEnd::Closed)));
     let states = harness.attach_states();
     assert_eq!(states.len(), 2);
     assert!(ShownState::Refusal.matches(&states[0]));
@@ -559,7 +631,7 @@ fn a_report_during_a_dead_end_re_shows_the_state() {
 fn a_report_re_arms_the_attach_theme() {
     let (harness, tx, rx) = Harness::new();
     tx.send(layout_with(vec![])).unwrap();
-    drop(tx);
+    tx.send(close_input()).unwrap();
     let steps = MockSteps::refusing_probe();
     let mut campaign = campaign(&harness.sink, &harness.quit, &rx, &steps);
     let _outcome = campaign.run();
