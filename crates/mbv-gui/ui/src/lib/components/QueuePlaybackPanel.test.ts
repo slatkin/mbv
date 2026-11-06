@@ -59,6 +59,7 @@ function playing(overrides: Partial<GuiQueuePlayback> = {}): GuiQueuePlayback {
 		showControls: true,
 		nowPlayingTitle: 'Track title',
 		availability: { stop: true, next: true, previous: false },
+		statusIndicators: null,
 		artwork: null,
 		...overrides,
 	};
@@ -80,6 +81,22 @@ test('a playing frame renders the header, transport controls, and seek times', (
 			`${target} paints`,
 		).toBeTruthy();
 	}
+});
+
+test('the controls row paints the status-indicator cluster the frame carries', () => {
+	const { getByText } = render(QueuePlaybackPanel, {
+		playback: playing({
+			statusIndicators: [
+				{ label: 'FHD', role: 'indicatorResolutionFg' },
+				{ label: 'EN', role: 'indicatorAudioFg' },
+				{ label: 'ENG', role: 'textMetadata' },
+			],
+		}),
+	});
+
+	expect(getByText('FHD')).toBeTruthy();
+	expect(getByText('EN')).toBeTruthy();
+	expect(getByText('ENG')).toBeTruthy();
 });
 
 test('an idle frame renders the header alone', () => {

@@ -103,9 +103,21 @@ export interface GuiQueuePlayback {
 	showControls: boolean;
 	nowPlayingTitle: string | null;
 	availability: GuiTransportAvailability;
+	/** The status-indicator cluster the queue band paints on its controls
+	 * row: `null` while the local player is inactive — the cluster's data
+	 * source is the local player's stream, so a band whose playback rides a
+	 * remote output paints none, as the TUI's does. */
+	statusIndicators: GuiStatusIndicator[] | null;
 	/** The visual slot's artwork; `null` unless the art changed for this
 	 * window (design D10) — the component keeps the last carried value. */
 	artwork: GuiCardArtwork | null;
+}
+
+/** One status indicator of the queue band's cluster: the uppercased label
+ * and the foreground role its text paints in. */
+export interface GuiStatusIndicator {
+	label: string;
+	role: GuiRole;
 }
 
 /** The visual slot's artwork one frame carries (design D10). The image and

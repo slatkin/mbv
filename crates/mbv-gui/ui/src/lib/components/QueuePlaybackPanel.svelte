@@ -74,6 +74,10 @@
 	 * slot keeps painting between frames. */
 	let art = $state<GuiCardArtwork | null>(null);
 
+	/** The queue band's status-indicator cluster; empty while the frame
+	 * carries none. */
+	const statusIndicators = $derived(playback.statusIndicators ?? []);
+
 	/** `fmt_duration_short`: `M:SS` under an hour, `H:MM:SS` at or over it. */
 	function fmtDurationShort(ticks: number): string {
 		const s = Math.trunc(ticks / TICKS_PER_SECOND);
@@ -259,6 +263,17 @@
 				color={glyphColor(playback.availability.next, 'textStrong')}
 			/>
 		</span>
+		{#if statusIndicators.length > 0}
+			<!-- The queue band's status-indicator cluster, right-aligned on the
+				controls row as the TUI paints it: the uppercased labels, one
+				space apart, each in its role colour. The TUI reports no hit
+				region for the cluster, so it carries no target. -->
+			<span class="ml-auto flex items-center gap-1 font-bold">
+				{#each statusIndicators as indicator, i (i)}
+					<span style:color={roleVar(indicator.role)}>{indicator.label}</span>
+				{/each}
+			</span>
+		{/if}
 	</div>
 	<div class="flex items-center gap-1 px-2" style:height="{ROW_HEIGHT}px">
 		{#if playback.showControls}

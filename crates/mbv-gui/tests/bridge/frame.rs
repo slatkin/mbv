@@ -1,4 +1,5 @@
 use mbv::{App, stub_app_with_playing_queue, stub_app_with_queue, stub_app_with_unsaved_queue};
+use mbv_gui::bridge::frame::theme::GuiRole;
 use mbv_gui::bridge::frame::{FrameSources, GuiFrame};
 use mbv_surfaces::FocusStack;
 use mbv_surfaces::breakpoint::BreakpointClass;
@@ -74,4 +75,22 @@ fn is_glyph(c: char) -> bool {
         || ('\u{E000}'..='\u{F8FF}').contains(&c)
         || ('\u{F0000}'..='\u{FFFFD}').contains(&c)
         || ('\u{100000}'..='\u{10FFFD}').contains(&c)
+}
+
+/// The stub player is audio-only with no codec, so the frame's cluster
+/// collapses to the unresolved resolution label in the muted role: the
+/// frame carries the cluster as the queue band paints it, audio and
+/// subtitles dropped.
+#[test]
+fn playing_queue_frame_carries_the_status_indicator_cluster() {
+    let mut app = stub_app_with_playing_queue(3);
+    let frame = frame_after_tick(&mut app);
+
+    let items = frame
+        .playback
+        .status_indicators
+        .expect("the playing frame carries the cluster");
+    assert_eq!(items.len(), 1, "audio-only playback collapses the cluster");
+    assert_eq!(items[0].label, "--");
+    assert_eq!(items[0].role, GuiRole::TextMuted);
 }

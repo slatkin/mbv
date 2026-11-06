@@ -5,6 +5,8 @@ use mbv::QueuePlaybackProjection;
 use mbv_ui_model::playback::PlaybackState;
 use mbv_ui_model::playback_target::NowPlayingStatus;
 use serde::Serialize;
+
+use super::theme::GuiRole;
 /// The Queue playback band's facts for one frame.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -25,10 +27,25 @@ pub struct GuiQueuePlayback {
     pub now_playing_title: Option<String>,
     /// Which transport controls are actionable.
     pub availability: GuiTransportAvailability,
+    /// The status-indicator cluster the queue band paints on its controls
+    /// row: `None` while the local player is inactive — the cluster's data
+    /// source is the local player's stream, so a band whose playback rides a
+    /// remote output paints none, as the TUI's does.
+    pub status_indicators: Option<Vec<GuiStatusIndicator>>,
     /// The visual slot's artwork (design D10): `None` unless the slot's art
     /// changed for this window — the theme's arming rule (design D7). The
     /// front end keeps the last carried value and paints it until the next.
     pub artwork: Option<GuiCardArtwork>,
+}
+
+/// One status indicator of the queue band's cluster, mirroring
+/// `mbv_render::indicators::StatusIndicator`: the uppercased label and the
+/// foreground role its text paints in.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GuiStatusIndicator {
+    pub label: String,
+    pub role: GuiRole,
 }
 
 /// The Queue playback visual slot's artwork one frame carries (design D10).
@@ -66,6 +83,15 @@ impl From<&QueuePlaybackProjection> for GuiQueuePlayback {
                 next: projection.availability.next,
                 previous: projection.availability.previous,
             },
+            status_indicators: projection.status_indicators.as_ref().map(|items| {
+                items
+                    .iter()
+                    .map(|item| GuiStatusIndicator {
+                        label: item.label.clone(),
+                        role: GuiRole::from(item.role),
+                    })
+                    .collect()
+            }),
             artwork: None,
         }
     }

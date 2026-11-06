@@ -5,6 +5,7 @@
 //! builds its title and availability from the same helpers.
 
 use mbv_render::components::chrome_player::TransportAvailability;
+use mbv_render::components::indicators::{StatusIndicator, status_indicator_items};
 use mbv_ui_model::playback::PlaybackState;
 use mbv_ui_model::playback_target::NowPlayingStatus;
 
@@ -38,6 +39,12 @@ pub struct QueuePlaybackProjection {
     pub now_playing_title: Option<String>,
     /// Which transport controls are actionable.
     pub availability: TransportAvailability,
+    /// The status-indicator cluster the queue band paints on its controls
+    /// row (the resolution, audio, and subtitle facts the local player
+    /// resolves): `None` while the local player is inactive — the cluster's
+    /// data source is the local player's stream, so a band whose playback
+    /// rides a remote output paints none, as the TUI's does.
+    pub status_indicators: Option<Vec<StatusIndicator>>,
 }
 
 impl App {
@@ -57,6 +64,8 @@ impl App {
             show_controls: playback.active || self.output_is_cast(),
             now_playing_title: self.now_playing_title_text(playback),
             availability: self.transport_availability(playback),
+            status_indicators: crate::app::LocalPlaybackTarget::indicator_data(self)
+                .map(|data| status_indicator_items(&data)),
         }
     }
 
