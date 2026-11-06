@@ -3379,7 +3379,9 @@ name = "mbv-gui"
 version = "0.26.6"
 dependencies = [
  "mbv",
+ "mbv-config",
  "mbv-queue",
+ "mbv-remote-player",
  "mbv-surfaces",
  "mbv-theme",
  "mbv-ui-model",
@@ -3390,6 +3392,7 @@ dependencies = [
  "serde_json",
  "tauri",
  "tauri-build",
+ "tracing",
 ]
 
 [[package]]

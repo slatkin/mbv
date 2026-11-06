@@ -1,4 +1,6 @@
-//! The `mbv-gui` library: the bridge between the native window's front end and
-//! the Rust Client core (`openspec/changes/add-tauri-gui-client/design.md` D4).
+//! The `mbv-gui` library: the native window Client's core thread (design D3
+//! of `add-tauri-gui-client`) and the bridge between the window's front end
+//! and the Rust Client core (design D4).
 
 pub mod bridge;
+pub mod core_thread;
