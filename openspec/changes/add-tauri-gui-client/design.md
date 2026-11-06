@@ -87,7 +87,7 @@ The DOM key fields are translated to `KeyEvent` in Rust, in `bridge/keys.rs`. A 
 
 ### D7. Theme
 
-`mbv-theme` resolves each role to a neutral `Rgb`. The frame carries a role-to-colour map. The front end writes it into CSS custom properties on `:root`, and the shadcn-svelte theme variables (`--background`, `--foreground`, `--primary`, `--muted`, `--accent`, `--border`, `--ring`, and the rest) point at mbv role properties. shadcn-svelte components therefore paint in the mbv palette with no second palette.
+`mbv-theme` resolves each role to a neutral `Rgb`. The frame carries a role-to-colour map plus a chrome section: the fill values the shadcn-svelte chrome variables (`--background`, `--card`, `--popover`, `--muted`, `--secondary`, `--sidebar`, `--border`, `--input`, and the sidebar aliases) point at. Each chrome fill resolves the `Surface` the TUI paints the same concept with, through `surface_colors(surface, false)`; the `mbv-theme` surface table is the one fill authority. `Role` stays foreground-only — the chrome fields are fill resolutions, not new `Role` variants. The front end writes roles and chrome fills into `--mbv-<name>` custom properties on `:root`, and the shadcn-svelte theme variables (`--foreground`, `--primary`, `--accent`, `--ring`, and the rest) point at mbv properties. shadcn-svelte components therefore paint in the mbv palette with no second palette.
 
 ### D8. Fonts and icons
 
