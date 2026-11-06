@@ -27,9 +27,9 @@ Implementation starts after `extract-client-core` (PR #984) merges.
 
 ## 4. Docs
 
-- [ ] 4.1 Update `AGENTS.md`: the repository map line for `crates/mbv-gui`, and `mbv-gui` in the tokio edge list (D12). Update the `CONTEXT.md` GUI Client definition if it names a toolkit.
-- [ ] 4.2 Add `docs/architecture/gui-client.md`: the core thread, the bridge contract, layout reports and the hit map, theme mapping, how to add a surface to the GUI, and the `WEBKIT_DISABLE_DMABUF_RENDERER` note. Link it from `docs/architecture/tui-frontend.md`.
-- [ ] 4.3 Update `docs/recipes.md` where a recipe (keybind action, surface projection) now has a GUI site.
+- [x] 4.1 Update `AGENTS.md`: the repository map line for `crates/mbv-gui`, and `mbv-gui` in the tokio edge list (D12). Update the `CONTEXT.md` GUI Client definition if it names a toolkit.
+- [x] 4.2 Add `docs/architecture/gui-client.md`: the core thread, the bridge contract, layout reports and the hit map, theme mapping, how to add a surface to the GUI, and the `WEBKIT_DISABLE_DMABUF_RENDERER` note. Link it from `docs/architecture/tui-frontend.md`.
+- [x] 4.3 Update `docs/recipes.md` where a recipe (keybind action, surface projection) now has a GUI site.
 
 ## 5. Integration checks
 
