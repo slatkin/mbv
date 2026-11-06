@@ -50,11 +50,12 @@
 - [x] 6.6 Create the shared `BreakpointClass` (`Mini`, `Narrow`, `Wide`) with `classify` and the core Wide-hero rule in `mbv-surfaces`. The GUI classifies its window width with a GUI logical-point threshold constant and keeps the class on its frame state. Verify with one headless test at two widths that asserts the class, not the geometry. Applying the class to the Queue playback arrangement waits for the visual-slot row. No TUI threshold moves in this change.
 - [x] 6.7 Enforce the interaction contract: hover never moves focus or cursor, scroll follows the cursor after every key move, and no animation delays a key. Verify with headless tests: hover with no press leaves the cursor unchanged, and a move past the last visible row keeps the cursor row fully visible.
 - [x] 6.8 Add a GUI section to `docs/architecture/tui-frontend.md` (or a sibling `gui-client.md` that it links): where GUI painters live, the interaction contract, and the rule that GUI code holds no interaction rule. Verify that the doc names each contract rule from `specs/gui-client`.
+- [ ] 6.9 Embed the Lucide icon font (ISC, ship its licence text) and replace every glyph the GUI paints with a Lucide icon: the playback-target indicator, the transport controls, and the playing-row marker. No Nerd Font or emoji glyph remains in `crates/mbv-gui`. Verify with a headless test that the icon font family is installed, and with the user's live check.
 
 ## 7. Integration checks
 
 - [x] 7.1 Run `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run --workspace`, and verify that all pass.
-- [ ] 7.2 Measure the CI workspace build time with `mbv-gui`, and decide whether `mbv-gui` goes in `default-members` (design Open Questions). Verify that the decision is recorded in `design.md`.
+- [x] 7.2 Measure the CI workspace build time with `mbv-gui`, and decide whether `mbv-gui` goes in `default-members` (design Open Questions). Verify that the decision is recorded in `design.md`. Decision: out of `default-members`, no CI test step for `mbv-gui` (design Risks).
 - [x] 7.3 Run `make check-code-file-lines` before the push, and verify that no file exceeds 800 lines.
 
 ## Workflow follow-up

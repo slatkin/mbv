@@ -79,7 +79,9 @@ eframe's default glow (OpenGL) renderer keeps the dependency tree smaller than w
 
 `mbv-gui` pins eframe 0.33, the last release that satisfies both halves of this decision: its default features are the glow renderer with the Wayland and X11 backends (0.35 makes wgpu a default feature), and its `App` trait takes the per-frame `update` hook (0.34 deprecates `update` for `logic` and `ui`). A pin bump lands with a rewrite of the frame hook and this row together.
 
-The GUI's proportional font is the SUSE typeface (github.com/SUSE/suse-font, packaged on Arch as `ttf-suse`), and its monospace font is JetBrains Mono. `mbv-gui` embeds the font files of both (each under the SIL Open Font License 1.1, with the license texts shipped beside them). At start-up it installs SUSE as the first proportional family and JetBrains Mono as the first monospace family, so the fonts do not depend on the fonts on the user's system. egui's built-in fonts stay as fallbacks for glyphs that these fonts do not have, such as emoji.
+The GUI's proportional font is the SUSE typeface (github.com/SUSE/suse-font, packaged on Arch as `ttf-suse`), and its monospace font is JetBrains Mono. `mbv-gui` embeds the font files of both (each under the SIL Open Font License 1.1, with the license texts shipped beside them). At start-up it installs SUSE as the first proportional family and JetBrains Mono as the first monospace family, so the fonts do not depend on the fonts on the user's system. egui's built-in fonts stay as fallbacks for glyphs that these fonts do not cover.
+
+The GUI's icon set is **Lucide** (ISC licence). `mbv-gui` embeds the Lucide icon font in egui `FontDefinitions` and paints its icons with the egui `Painter`. Every text-, emoji-, or Nerd-Font-derived glyph the GUI paints comes from Lucide: the playback-target indicator (today the U+1F5A7 emoji), the ASCII transport glyphs, and the "▶ " playing-row marker. No Nerd Font or emoji glyph remains in `crates/mbv-gui`. Phosphor was rejected by the user. A component library (shadcn-rs) was rejected because its widgets carry their own interaction rules; it stays usable as a visual reference only.
 
 ### D9. GUI Owner launch
 
@@ -101,9 +103,9 @@ The GUI reuses the library's Owner find, start, and attach code. It starts the O
 - [The focus-stack move touches every overlay path] → Do it as its own step before any GUI code. The tick-integration focus and overlay tests must pass unchanged.
 - [Two Clients double the cost of each UI change] → The user accepts this until parity. The "behaviour lives once" rule keeps the doubled part to painting only.
 - [The GUI links ratatui and TuiRealm through the `mbv` library] → Accepted for now (D2). A later change can move `App` to a Client crate.
-- [The TUI's Nerd Font glyphs may be missing in the GUI font] → The GUI painters choose their own icons. Specs pin no glyphs.
+- [The TUI's Nerd Font glyphs may be missing in the GUI font] → Settled: the GUI paints its own Lucide icons (D8). Specs pin no glyphs.
 - [eframe owns the main thread] → The GUI program has no terminal loop to conflict with. All mbv work runs in `ClientCore::tick` inside `update`.
-- [Workspace build time in CI grows] → Measure it in the PR. `mbv-gui` stays out of `default-members` if local `cargo` runs get too slow.
+- [Workspace build time in CI grows] → Decided (user, 2026-11-06): `mbv-gui` stays out of `default-members`, and this change adds no CI test step for it. CI release build and nextest use the default selection, so they skip `mbv-gui`; CI clippy (`--workspace`), fmt, and the cargo-hack feature matrix already cover it. Measured cost of adding it: +114 external crates (318 → 433), ~11–15 s on a cold 28-core release build (83 s → 94 s, single run), +392 MiB target dir. The binary is not shipped.
 - [GUI live behaviour on Wayland cannot be unit tested] → The user runs the live check.
 
 ## Migration Plan
@@ -120,5 +122,4 @@ Recorded so that archive-time spec sync does not read them as misses.
 
 ## Open Questions
 
-- Which font the GUI bundles, if any. This is a presentation choice.
-- Whether `mbv-gui` belongs in `default-members`. Decide from the measured build time.
+- None. The GUI fonts (SUSE, JetBrains Mono) and the icon set (Lucide) are decided in D8. `mbv-gui` stays out of `default-members` (Risks).
