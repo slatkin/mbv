@@ -29,19 +29,40 @@ const JETBRAINS_MONO: EmbeddedFont = EmbeddedFont {
     bold: include_bytes!("../assets/fonts/JetBrainsMono-Bold.ttf"),
 };
 
+/// The hinting for each embedded face. Horizontal grid-fitting is on and
+/// symmetric rendering is off: the instructions can widen stems, which looks
+/// blurrier under egui's analytic rasterizer. The smooth target stays, and
+/// every other field keeps its default.
+fn embedded_tweak() -> egui::FontTweak {
+    let hinting = egui::epaint::text::SmoothHinting {
+        symmetric_rendering: false,
+        preserve_linear_metrics: false,
+        ..egui::epaint::text::SmoothHinting::default()
+    };
+    egui::FontTweak {
+        hinting_target: egui::epaint::text::HintingTarget::Smooth(hinting),
+        ..egui::FontTweak::default()
+    }
+}
+
 /// Install the embedded families as the leading proportional and monospace
 /// families at egui's default sizes (design D8). egui's built-in fonts stay
-/// in each family behind the embedded ones as fallbacks.
+/// in each family behind the embedded ones as fallbacks. Sub-pixel binning
+/// is off because it blurs glyphs.
 pub(crate) fn install(ctx: &egui::Context) {
     let mut fonts = egui::FontDefinitions::default();
     for font in [&SUSE, &JETBRAINS_MONO] {
         fonts.font_data.insert(
             format!("{}-regular", font.family),
-            egui::FontData::from_static(font.regular).into(),
+            egui::FontData::from_static(font.regular)
+                .tweak(embedded_tweak())
+                .into(),
         );
         fonts.font_data.insert(
             format!("{}-bold", font.family),
-            egui::FontData::from_static(font.bold).into(),
+            egui::FontData::from_static(font.bold)
+                .tweak(embedded_tweak())
+                .into(),
         );
     }
     // Insert at index 0 so the embedded family leads and egui's built-ins
@@ -59,4 +80,6 @@ pub(crate) fn install(ctx: &egui::Context) {
         slots.insert(1, format!("{}-bold", font.family));
     }
     ctx.set_fonts(fonts);
+    // Both theme styles, so a theme switch keeps the setting.
+    ctx.all_styles_mut(|style| style.visuals.text_options.subpixel_binning = false);
 }
