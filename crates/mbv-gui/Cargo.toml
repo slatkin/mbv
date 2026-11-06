@@ -1,0 +1,22 @@
+[package]
+name = "mbv-gui"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Native window Client for mbv, built with Tauri 2."
+readme = "../../README.md"
+
+[lints]
+workspace = true
+
+# Exact pins per openspec/changes/add-tauri-gui-client/design.md D2.
+[dependencies]
+mimalloc.workspace = true
+tauri = "=2.12.5"
+
+[build-dependencies]
+tauri-build = "=2.7.4"

@@ -6,6 +6,7 @@
 .obsidian/
 .agents
 /target
+/crates/mbv-gui/gen
 *.jpg
 *.png
 !assets/*.png
