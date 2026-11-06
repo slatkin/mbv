@@ -58,11 +58,11 @@ pre-attach state. The front end keeps only the last frame
 (`ui/src/lib/bridge/frames.ts`), so each frame carries everything the window
 paints: the focused surface and Panel (`GuiFocus`, mirroring `ComponentId`
 and `PanelFocus`), the Queue viewport rows with their stable `QueueSlotId`
-raw numbers, cursor, marks, and active slot (`GuiQueue`), the Queue playback
-projection (`GuiQueuePlayback`), the footer pills (`GuiQueueFooter`), the
-Status bar projection (`GuiStatusBar`), the breakpoint class
-(`GuiBreakpoint`, mirroring `BreakpointClass`), and the theme when it is
-armed (`GuiTheme`).
+raw numbers, cursor, marks, active slot, and each item row's zebra parity
+(`GuiQueue`), the Queue playback projection (`GuiQueuePlayback`), the
+footer pills (`GuiQueueFooter`), the Status bar projection
+(`GuiStatusBar`), the breakpoint class (`GuiBreakpoint`, mirroring
+`BreakpointClass`), and the theme when it is armed (`GuiTheme`).
 
 `GuiQueuePlayback` carries two facts beside the transport that the TUI's
 queue band also paints. The status-indicator cluster (`statusIndicators`)
@@ -80,9 +80,14 @@ changed, while a window-content reload's `report_layout` re-arms it and the
 front end keeps the last carried value between frames. The payload is a
 `data:` URL of bytes the core's image cache already holds, never a fetch
 the webview makes, so the CSP grows only `img-src 'self' data:`. The band
-paints the TUI's wide arrangement — artwork left, transport beside it —
-reports the slot's `visualSlot` region (the TUI's hit target), and the art
-element's resizes report the regions a swapped bitmap moved.
+keeps the TUI's width-driven arrangement
+(`queue_playback_transport_area` over `queue_playback_column_wide`):
+below 100 column cells the art centers above the stacked transport rows,
+and at 100 and over the art sits left-aligned with the transport beside
+it after the two-column `SLOT_TRANSPORT_GAP`, the taller of the two
+governing the band's height. The band reports the slot's `visualSlot`
+region (the TUI's hit target), and the art element's resizes report the
+regions a swapped bitmap moved.
 
 Front end to Rust there are three commands, registered in
 `src/main.rs`. Each only pushes into the core channel:
@@ -156,14 +161,21 @@ The frame's `GuiTheme` (`src/bridge/frame/theme.rs`) carries two things. The
 variant for variant — `Role` stays foreground-only — and the two `From`
 conversions are exhaustive, so a new role fails the build until both sides
 carry it (`GuiRole::ALL` is the one unchecked list; add the role there too).
-The `chrome` section carries the nine fill values the shadcn-svelte chrome
-variables point at (`background`, `card`, `popover`, `muted`, `secondary`,
-`sidebar`, `border`, `input`, `queueColumn`). Each chrome fill resolves the
-`Surface` the TUI paints the same concept with through
-`surface_colors(surface, false)` — `queueColumn` resolves
-`Surface::QueueColumn`, the gutter fill the TUI's queue column paints —
-the `mbv-theme` surface table is the one fill authority, so a palette edit
-recolours the chrome together with the roles.
+The `chrome` section carries the eight fill values the shadcn-svelte
+chrome variables point at (`background`, `card`, `popover`, `muted`,
+`secondary`, `sidebar`, `border`, `input`) plus the queue column's own
+surfaces: `queueColumn` and `queueColumnFocused`
+(`Surface::QueueColumn`'s resting and focused fills, the gutter the
+column paints), `queuePanel` and `queuePanelFocused`
+(`Surface::QueuePanel`, the recessed box), `queuePlaybackBand`
+(`Surface::QueueOnlyPlaybackPanel`, the fixed fill of the header row and
+transport band), and `queueFooterBand` (`Surface::QueuePanelBand`, behind
+the footer pills). Each chrome fill resolves the `Surface` the TUI paints
+the same concept with through `surface_colors` — the focus-reactive
+pairs carry both slots, and the front end picks between them on the
+frame's Panel-focus fact — so the `mbv-theme` surface table stays the
+one fill authority and a palette edit recolours the chrome together with
+the roles.
 
 The theme rides a frame only when armed: the first frame, and the first
 frame after each `report_layout`, carry it — a window-content reload
@@ -185,29 +197,70 @@ The GUI paints no emoji and no Nerd Font glyph. Icons come from
 the playback-target indicator are Lucide icons. The transport glyphs paint
 as solid shapes — `fill` and `stroke` both the role colour, as the TUI's
 solid transport glyphs paint — with the availability the colour already
-carried gating them. `FooterPill.label` carries glyph-free text; each
-pill's slot maps to its Lucide icon in the component.
+carried gating them. The header's playback-target indicator maps both of
+`target_icon`'s states to the one Lucide `Cast` — the TUI paints the
+cast family for local and remote alike — so the role colour and the
+host label carry the distinction. `GuiFooterPill.text` carries glyph-free
+text; each pill's slot maps to its Lucide icon in the component —
+`ListMusic` for the playlist, `Cable` for the owner indicator,
+`SaveCheck` for autosave, `SaveOff` for the dirty pill — with the label
+beside the icon where the frame carries one.
 
 ## The queue-only window
 
 The slice's one window paints the TUI's queue-column arrangement
-(`App.svelte`). The queue column's backdrop — the `queueColumn` chrome
-fill — owns the window. The Queue playback band sits one row below the
-column's top edge and two columns inside it with a gap row below; the Queue
-panel's recessed box sits another two columns inside the placement with its
-one-row top pad and bottom spacer, and the footer row paints below the box
-between gap rows. The Status bar floats at the column's bottom.
+(`App.svelte`) in cell units: `ui/src/lib/bridge/cells.ts` fixes one TUI
+text row at 28 logical pixels (the Queue list's row height) and one text
+column at 14 (the terminal cell's 1:2 aspect at that height), writes them
+to the `--mbv-cell-row` and `--mbv-cell-col` properties, and every
+queue-column offset a component paints — the bands' two-column insets,
+the one-row pads and gaps, the rows' two-column indent, the six-column
+date gutter — is a `calc()` over the two, mapped from
+`crates/mbv-render/src/arrangements/chrome.rs`, `arrangements/queue.rs`,
+and `components/media_list/row.rs`.
+
+The queue column's backdrop — the `queueColumn` pair, picked on the
+frame's Panel-focus fact — owns the window. The Queue playback band sits
+one row below the column's top edge and two columns inside it with a gap
+row below. Its header row paints in every state — target icon, remote
+host name, right-aligned status word — and the now-playing title paints
+on its own row below it: where the TUI composites the title into the
+artwork's top text row with a scrolling marquee, the GUI truncates it
+with CSS ellipsis. The transport band keeps the TUI's width-driven
+arrangement (100 column cells): below it the visual slot's art centers
+above the stacked band rows, and at and over it the art sits
+left-aligned with the band rows beside it after the two-column
+`SLOT_TRANSPORT_GAP`, the taller of the two governing the band's
+height. The art has no fixed pixel box: the slot sizes from the TUI's
+`queue_card_height_cap` tiers — 12 rows under 40 terminal rows of window
+height, 16 under 50, 24 otherwise — read off the window's own height in
+row units.
+
+The Queue panel's recessed box sits another two columns inside the
+placement on the `queuePanel` pair, with its one-row top pad and bottom
+spacer, and the item rows zebra-stripe as the TUI's `media_list/wide.rs`
+walk paints them: the frame carries each row's parity — a grouped list
+alternates within each group from its first member, an ungrouped list
+throughout — and a striped row takes the `queueColumn` fill inside the
+box. The footer row
+paints below the box between gap rows on the `queueFooterBand` fill. The
+list paints no scrollbar column yet — the TUI reserves one only while
+the list is focused and overflows. The Status bar floats over the
+placement's bottom pad row instead of reserving a band.
 
 ## The Status bar
 
 `GuiStatusBar` mirrors the shared `StatusBarProjection`: the prefix-armed
 state and the live toast with its severity. `StatusBar.svelte` shows the
 armed pill while prefix mode is armed, and a live toast takes over the row
-in its severity colour, as the TUI's status bar paints it. The bar's fill
-paints only while it has content — prefix mode armed or a live toast; an
-idle bar keeps its height but lets the queue column's backdrop show
-through, so a toast's arrival moves no layout, as the queue-only TUI paints
-that region with no status bar. The spec permits the GUI to show toasts in
+in its severity colour, as the TUI's status bar paints it. The bar
+reserves no band: it floats over the queue placement's bottom pad row —
+the TUI's queue-only mode paints no status bar there — so the queue
+footer keeps its one-row clearance and a toast's arrival moves no
+layout. Its fill (the `StatusBar` surface's slot, carried on
+`--mbv-pillSelectedFg`, inset two columns each side like the TUI's
+`status_bar_row`) paints only while the bar has content; an idle bar
+paints nothing. The spec permits the GUI to show toasts in
 a conventional GUI form that TUI geometry does not constrain, so a toast
 presentation outside the bar is lawful.
 
