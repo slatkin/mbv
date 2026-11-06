@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { frames } from '$lib/bridge/frames';
   import { installInput } from '$lib/bridge/input';
+  import AttachScreen from '$lib/components/AttachScreen.svelte';
   import QueuePanel from '$lib/components/QueuePanel.svelte';
   import QueuePlaybackPanel from '$lib/components/QueuePlaybackPanel.svelte';
   import StatusBar from '$lib/components/StatusBar.svelte';
@@ -42,5 +43,11 @@
       </div>
       <StatusBar status={$frames.slice.status} />
     </div>
+  {:else}
+    <!-- The pre-attach states (design D9): the wait before the first
+      frame, the Owner attach outcomes, and the mismatch prompt. -->
+    <AttachScreen
+      attach={$frames && 'attach' in $frames ? $frames.attach.state : null}
+    />
   {/if}
 </main>
