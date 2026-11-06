@@ -1,7 +1,7 @@
-//! The Queue playback band's headless tests (row 6.5): the egui `Context::run`
-//! composition with synthetic `RawInput`, asserting the request the shell
-//! boundary receives and the band an idle queue reserves, never appearance
-//! (design D11).
+//! The Queue playback band's headless tests (row 6.5): the egui
+//! `Context::run_ui` composition with synthetic `RawInput`, asserting the
+//! request the shell boundary receives and the band an idle queue reserves,
+//! never appearance (design D11).
 
 use eframe::egui;
 use mbv_surfaces::queue_playback::QueuePlaybackHitTarget;

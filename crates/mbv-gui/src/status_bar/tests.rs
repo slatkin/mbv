@@ -1,4 +1,4 @@
-//! The Status bar's headless tests (row 6.5): the egui `Context::run`
+//! The Status bar's headless tests (row 6.5): the egui `Context::run_ui`
 //! composition with synthetic `RawInput`, asserting the projection the frame
 //! adopts and the painter reads, never appearance (design D11).
 

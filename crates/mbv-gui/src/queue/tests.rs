@@ -1,6 +1,6 @@
-//! The Queue panel's headless tests (rows 6.4 and 6.7): the egui `Context::run`
-//! composition with synthetic `RawInput`, asserting the core state the frame
-//! drives, never appearance (design D11).
+//! The Queue panel's headless tests (rows 6.4 and 6.7): the egui
+//! `Context::run_ui` composition with synthetic `RawInput`, asserting the
+//! core state the frame drives, never appearance (design D11).
 
 use eframe::egui;
 
@@ -138,8 +138,8 @@ fn visual_selection_claims_space_ahead_of_the_global_toggle() {
     // Shift+V begins Visual mode at the cursor: the press arrives as egui's
     // caseless key with SHIFT plus its `Text` twin, the shape the
     // translation edge maps to the neutral chord. The `Text` twin reads the
-    // frame's modifier state (`RawInput.modifiers`, which winit's
-    // ModifiersChanged keeps current), so the fixture sets it.
+    // frame's modifier state, which the frame's `ModifiersChanged` event sets
+    // (as winit reports it), so the fixture sends that event.
     let mut shift_v = frame_input(vec![
         egui::Event::Key {
             key: egui::Key::V,
@@ -150,7 +150,9 @@ fn visual_selection_claims_space_ahead_of_the_global_toggle() {
         },
         egui::Event::Text("V".to_string()),
     ]);
-    shift_v.modifiers = egui::Modifiers::SHIFT;
+    shift_v
+        .events
+        .push(egui::Event::ModifiersChanged(egui::Modifiers::SHIFT));
     run_frame(&ctx, &mut host, shift_v);
     assert_eq!(host.queue_test_mark_count(), 1);
 
@@ -176,12 +178,17 @@ fn visual_selection_claims_space_ahead_of_the_global_toggle() {
 #[test]
 fn a_long_title_paints_no_further_right_than_its_column() {
     let ctx = egui::Context::default();
-    let output = ctx.run(frame_input(Vec::new()), |ctx| {
-        let painter = ctx.layer_painter(egui::LayerId::background());
+    let output = ctx.run_ui(frame_input(Vec::new()), |ui| {
+        let painter = ui.ctx().layer_painter(egui::LayerId::background());
         super::paint_row_text(&painter, row_rect(), &long_title_row(), false);
     });
 
-    assert!(title_clip(&output).right() <= duration_bounds(&output).left());
+    let title = title_clip(&output);
+    let duration = duration_bounds(&output);
+    // No GPU applies the texture deltas. Dropping them before the assertion
+    // keeps a failure from aborting while the output unwinds.
+    output.drop_without_applying_deltas();
+    assert!(title.right() <= duration.left());
 }
 
 /// The duration text the long-title row paints. The title is every other

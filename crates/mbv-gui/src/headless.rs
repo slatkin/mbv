@@ -1,6 +1,6 @@
 //! The GUI Client's headless frame harness (design D11 of `add-gui-front-end`):
-//! one egui `Context::run` over synthetic `RawInput`, with no window and no
-//! GPU. The tests built on it assert core state and delivery, never
+//! one egui `Context::run_ui` pass over synthetic `RawInput`, with no window
+//! and no GPU. The tests built on it assert core state and delivery, never
 //! appearance.
 
 use std::time::Instant;
@@ -12,14 +12,16 @@ use crate::tick_host::GuiTickHost;
 
 /// One headless frame, in the production order: the Client core's tick over
 /// the frame's raw input (the input phase reads it inside the frame, as the
-/// real window's `update` does), then the surface sync, then the paint.
+/// real window's `logic` does), then the surface sync, then the paint.
 pub(crate) fn run_frame(ctx: &egui::Context, host: &mut GuiTickHost, raw_input: egui::RawInput) {
-    // The frame's `FullOutput` is paint bookkeeping the test does not read.
-    let _ = ctx.run(raw_input, |ctx| {
+    // The frame's `FullOutput` is paint bookkeeping the test does not read,
+    // and no GPU applies its texture deltas, so they are dropped unapplied.
+    ctx.run_ui(raw_input, |ui| {
         ClientCore::tick(host, Instant::now());
         host.sync_surfaces();
-        host.paint(ctx);
-    });
+        host.paint(ui);
+    })
+    .drop_without_applying_deltas();
 }
 
 /// One frame's input over a fixed window.
