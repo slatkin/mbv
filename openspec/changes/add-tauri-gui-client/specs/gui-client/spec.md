@@ -44,7 +44,7 @@ The GUI Client SHALL present one player panel whose content, arrangement, and st
 
 ### Requirement: GUI keyboard interaction matches the TUI Client
 
-For every action the GUI Client presents, each key chord SHALL have the same effect as in the TUI Client. The GUI Client SHALL use the same `[keys]` configuration and the same keyboard router. The key hints that the canvas shows are the default bindings.
+For every action the GUI Client presents, each key chord SHALL have the same effect as in the TUI Client. The GUI Client SHALL use the same `[keys]` configuration and the same keyboard router. The key hints that the canvas shows are the default bindings. The canvas chords `z` (collapse), `q` (queue fold), and `c` (cycle subtitle) bind in a GUI-only key context; the TUI Client's default bindings SHALL NOT change.
 
 #### Scenario: A configured binding is used in both Clients
 
@@ -171,18 +171,13 @@ The scrubber SHALL show the progress, the chapter boundaries, the intro and cred
 
 ### Requirement: Track chips open popovers
 
-The panel SHALL show one chip each for the video stream, the audio track, and the subtitle track of the active item. A chip SHALL open a popover that lists the choices and marks the chosen one. The chosen track SHALL be sent to the Owner process. The `c` key SHALL cycle the subtitle track and the `[` and `]` keys SHALL change the subtitle offset.
+The panel SHALL show one chip each for the video stream, the audio track, and the subtitle track of the active item. The video chip SHALL show the resolved stream label and SHALL NOT open a popover. The audio and subtitle chips SHALL each open a popover that lists the choices and marks the chosen one. The chosen track SHALL be sent to the Owner process. The `c` key SHALL cycle the subtitle track.
 
 #### Scenario: A subtitle track is chosen
 
 - **WHEN** the user opens the subtitle popover and chooses a track
 - **THEN** the Owner process switches to that track and the popover marks it
 - **AND** the popover lists Off and each subtitle track with its format
-
-#### Scenario: The subtitle offset changes
-
-- **WHEN** the user presses `]` or the later control
-- **THEN** the subtitle offset grows by one step and the popover shows the new value
 
 ### Requirement: The queue shows finish times, a row menu, and drag reorder
 

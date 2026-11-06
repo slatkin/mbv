@@ -68,7 +68,7 @@ Rust to front end, one event `mbv://frame` that carries a `GuiFrame`:
 - the queue summary: remaining count, queue finish clock, the right-column mode, and the filter text;
 - the playback projection: title and parent line, season and episode badge, artwork, playback state, elapsed and remaining time and the finish clock, chapters with intro and credits marks, the trickplay source, and the transport state;
 - the playback target and the cast choices;
-- the track chips: the video stream, the audio track, and the subtitle track, each with its choices, the chosen one, and the subtitle offset;
+- the track chips: the video stream's resolved label, and the audio and subtitle tracks each with its choices and the chosen one;
 - the open menu or popover and its items, with key hints from the keybind registry;
 - the collapse and queue-fold toggles;
 - the footer line: the queue source, the session marker, the prefix-armed state, and the toasts;
@@ -78,7 +78,7 @@ Each projection is a serde DTO in `mbv-gui/src/bridge/`, built from the library 
 
 #### D4a. Data sources
 
-The source of every datum the frame carries. "Held" means the Owner, the `App`, or the Client's Surface state supplies it today, and the task only projects it. "New core state" means a datum the change introduces on the Client core; it needs no outside source. "GAP" means nothing holds it; the proposed source follows, and the user rules on it before its task starts.
+The source of every datum the frame carries. "Held" means the Owner, the `App`, or the Client's Surface state supplies it today, and the task only projects it. "New core state" means a datum the change introduces on the Client core; it needs no outside source. "GAP" means nothing held it when this table was written; each gap row records the source and the user's ruling.
 
 | Datum | Source | Status |
 | --- | --- | --- |
@@ -98,16 +98,15 @@ The source of every datum the frame carries. "Held" means the Owner, the `App`, 
 | Artwork | `App::queue_card_artwork` (`src/app/queue_card_artwork.rs`) → display-encoded JPEG; Emby and Audiobookshelf covers through `src/app/infra/image_fetch` | Held (fill path below) |
 | Playback state, elapsed, remaining | `QueuePlaybackProjection.playback` (`PlaybackState` over `PlayerStatus.position_ticks`/`runtime_ticks`/`paused`) | Held |
 | Transport state | `QueuePlaybackProjection.availability` (`TransportAvailability`) plus `PlaybackState.paused` | Held |
-| Chapters (scrubber boundaries, hover name) | Nothing holds them. Proposed: Emby `Chapters[]` (`Name`, `StartPositionTicks`) on the item DTO, fetched by `ItemId`; Audiobookshelf `GET /api/items/{id}?expanded=1` `media.chapters` through `AudiobookshelfClient::book_detail` (already in `mbv-audiobookshelf`) | GAP |
-| Intro and credits marks | Nothing holds them. The player plumbing exists (`PlaybackRun.intro_start`/`intro_end`, `IntroState`, `PlayerEvent::IntroStarted`, `PlayerCommand::SkipIntroDismiss`) but is seeded with 0 since the dead Chapter-API fetch was removed (546dba398). Proposed: `GET /MediaSegments/{itemId}` (segment `Type` Intro/Outro with tick bounds); requires a server that has detection data | GAP |
-| Trickplay frames | Nothing holds them. Proposed: Emby `GET /Videos/{itemId}/Trickplay` (`TrickplayInfo` tile grids) and `GET /Videos/{itemId}/Trickplay/{width}/{index}.jpg` for the tiles, fetched on the Rust side and carried as bytes per D11 | GAP |
+| Chapters (scrubber boundaries, hover name) | Emby `Chapters[]` (`Name`, `StartPositionTicks`) on the item DTO, fetched by `ItemId`; Audiobookshelf `GET /api/items/{id}?expanded=1` `media.chapters` through `AudiobookshelfClient::book_detail` (already in `mbv-audiobookshelf`) | GAP — ruled: approved as a Client-side fetch by the active `ItemId`, decoration only |
+| Intro and credits marks | `GET /MediaSegments/{itemId}` (segment `Type` Intro/Outro with tick bounds); requires a server that has detection data. The player plumbing exists (`PlaybackRun.intro_start`/`intro_end`, `IntroState`, `PlayerEvent::IntroStarted`, `PlayerCommand::SkipIntroDismiss`) but is seeded with 0 since the dead Chapter-API fetch was removed (546dba398) | GAP — ruled: approved as a Client-side fetch by the active `ItemId`, decoration only |
+| Trickplay frames | Emby `GET /Videos/{itemId}/Trickplay` (`TrickplayInfo` tile grids) and `GET /Videos/{itemId}/Trickplay/{width}/{index}.jpg` for the tiles, fetched on the Rust side and carried as bytes per D11 | GAP — ruled: approved as a Client-side fetch by the active `ItemId`, decoration only |
 | Playback target | `App::playback_host_label_and_remote` (`src/app/state/projection/chrome_status.rs`): the attached output's name, the remote route/label, else `mbv_emby::device_name()` | Held |
 | Cast and session choices | `App.sessions` (Emby `/Sessions`, `SessionEvent::Loaded`) merged with `App.cast_receivers` (`spawn_cast_discovery` → `mbv_cast::discovery::browse_cast_receivers`) by `build_panel_targets` (`src/app/state/panel_targets.rs`), gated on `supports_playback_output` | Held (fill path below) |
 | Audio chip: choices, chosen | `PlayerStatus.audio_tracks` (mpv id + label), `audio_id`, `audio_lang`; `PlayerCommand::SetAudio` switches | Held |
 | Subtitle chip: choices, chosen | `PlayerStatus.sub_tracks` (mpv id + label + forced), `sub_id`, `sub_lang`, `sub_track_stream_indexes`; `PlayerCommand::SetSub` switches, `cycle_sub` cycles | Held |
-| Subtitle offset | Nothing holds it: no `PlayerStatus` field and no `PlayerCommand`. Proposed: mpv's `sub-delay` property, which needs a new ctrl command and status field — that conflicts with the Non-Goal "any change to ctrl, the Owner process, mpv" | GAP |
 | Video chip: label | `PlayerStatus.video_height` → `short_resolution_label`, `audio_codec`, `video_is_image` (the `IndicatorData` resolution of `LocalPlaybackTarget::indicator_data`) | Held |
-| Video chip: choice list | Nothing holds it: mpv's `track-list` video entries are not projected into `PlayerStatus`. Proposed: `PlaybackInfo` `MediaSources[].MediaStreams[]` (`Type=Video`) — most items carry exactly one video stream | GAP |
+| Video chip: choice list | Nothing holds it: mpv's `track-list` video entries are not projected into `PlayerStatus`, and most items carry exactly one video stream | GAP — ruled: the chip shows the resolved label only and opens no popover |
 | Open menu or popover, items | Row-menu semantics on `ContextMenu`/`ContextMenuEntry`/`ContextAction` (`src/app/dispatch/context_menu/menu.rs`): the canvas's Play now, Mark watched, Go to episode, Remove map to `PlayQueue`, `MarkPlayed*`, `GoToLibrary`, `RemoveFromQueue`; "Play next" is a new `ContextAction`-level action. The open popover (a track list, the menu) is new Client-core state | Held + new core state |
 | Menu item key hints | `mbv-keybinds`' `Keybinds`: the configured chords per action id, default chords from the registry | Held |
 | Collapse (`z`) and queue-fold (`q`) toggles | New Client-core state; the spec assigns it to the Client core | New core state |
@@ -118,18 +117,18 @@ The source of every datum the frame carries. "Held" means the Owner, the `App`, 
 
 **Non-Emby kinds.** The badge is an Emby-episode datum only: `AudiobookshelfQueueItem`, `FeedEntry`, and `TwitchItem` carry no season or episode ordinal, so their artwork shows no badge. The parent line is `PlaybackTitleParts.context` per kind: an Emby episode shows `series_name`, an Emby audio item the track artist then the album artist, a Feed entry the configured subscription's name (`App::feed_subscription_display_name` against `config.feeds`), an Audiobookshelf episode `show_title`, and an Audiobookshelf book or Twitch item no line. Chapters exist only for Audiobookshelf (`media.chapters`, through the existing `book_detail` call); Feed and Twitch items carry none and the scrubber shows no boundaries. The track chips are kind-agnostic: they read `PlayerStatus`, which reports mpv's track list for whatever file is loaded, so an audio-only item shows no video chip and an item with no subtitles shows the subtitle chip as Off.
 
-**Remote outputs.** The chips' source is the local player's status, so while playback rides a Cast receiver they have no data, as the TUI's indicator cluster is absent (`status_indicators` is `None` for remote output). An Emby Session output can supply its lists from `SessionInfo.media_info` (`SessionMediaInfo.audio_streams`/`subtitle_streams`/`video_label`), already in `App.sessions`; the session's subtitle-offset datum does not exist, so the offset control applies to local output only.
+**Remote outputs.** The chips' source is the local player's status, so while playback rides a Cast receiver they have no data, as the TUI's indicator cluster is absent (`status_indicators` is `None` for remote output). An Emby Session output can supply its lists from `SessionInfo.media_info` (`SessionMediaInfo.audio_streams`/`subtitle_streams`/`video_label`), already in `App.sessions`.
 
-**Fill path.** `App.sessions`, `App.cast_receivers`, the Emby artwork fetch, and the proposed Emby metadata fetches (chapters, marks, trickplay) all need an Emby client, and `App::emby_client` reads `emby_runtime.client`, which `spawn_startup_services` fills — a shell step the GUI core does not run (D9). The GUI core runs a minimal fill: the Emby client (and the session and cast discovery it feeds), not the library bootstrap. Audiobookshelf fetches need no service runtime: `AudiobookshelfClient::new(server_url)` plus the configured credential suffices, as the cover fetch in `src/app/infra/image_fetch/protocol.rs` does.
+**Fill path (ruled: approved).** `App.sessions`, `App.cast_receivers`, the Emby artwork fetch, and the approved Emby metadata fetches (chapters, marks, trickplay) all need an Emby client, and `App::emby_client` reads `emby_runtime.client`, which `spawn_startup_services` fills — a shell step the GUI core does not run. Ruled: the GUI core runs a minimal fill of `emby_runtime.client` and the session and cast discovery it feeds, not the library bootstrap; D9 records the decision. Audiobookshelf fetches need no service runtime: `AudiobookshelfClient::new(server_url)` plus the configured credential suffices, as the cover fetch in `src/app/infra/image_fetch/protocol.rs` does.
 
-**Key-chord collision.** The spec's canvas chords collide with existing defaults: `z` is `cycle_subtitle`'s chord, `q` is `quit`'s, and `c` is `clear_queue_prompt_c`'s. The canvas remaps `cycle_subtitle` to `c`; the conflict between the spec's `z`/`q`/`c` bindings and a user's configured `[keys]` resolves at the registry, not per Client.
+**Key-chord collision (ruled).** The canvas chords collide with the TUI defaults: `z` is `cycle_subtitle`'s chord, `q` is `quit`'s, and `c` is `clear_queue_prompt_c`'s. Ruled: the canvas's `z` (collapse), `q` (queue fold), and `c` (cycle subtitle) bind in a GUI-only key context, so a configured TUI binding for `z` or `q` does not follow into the GUI; the TUI Client's default bindings stay unchanged.
 
-**Gaps the user rules on:**
+**Gap rulings:**
 
-1. Chapters and the intro/credits marks (both GAPs): fetch `Chapters` and `/MediaSegments` on the Client keyed on the active `ItemId`, cached like artwork — presentation data, so no Owner change. The dormant `intro_start`/`intro_end` plumbing stays dormant. Recommendation: approve.
-2. Trickplay (GAP): same Client-side fetch against `/Videos/{itemId}/Trickplay`; absent data falls back to the time and chapter preview the spec defines. Recommendation: approve.
-3. Subtitle offset (GAP): the spec requires the `[`/`]` chords and the displayed value, and only mpv's `sub-delay` supplies it — a `PlayerCommand` plus a `PlayerStatus` field. Recommendation: lift the ctrl Non-Goal narrowly for this one datum, or the slice ships without the offset control.
-4. Video-chip choice list (GAP): most items have one video stream. Recommendation: the chip shows the resolved stream label and opens no popover until a multi-source item needs one; revisit then.
+1. Chapters and the intro/credits marks (GAPs): ruled approved — `Chapters` and `/MediaSegments` fetches on the Client keyed on the active `ItemId`, cached like artwork; presentation data, so no Owner change. The dormant `intro_start`/`intro_end` plumbing stays dormant.
+2. Trickplay (GAP): ruled approved — the same Client-side fetch against `/Videos/{itemId}/Trickplay`; absent data falls back to the time and chapter preview the spec defines.
+3. Subtitle offset (GAP): ruled rejected — no subtitle-offset datum or control ships in this slice; the Non-Goal "any change to ctrl, the Owner process, mpv" stands.
+4. Video-chip choice list (GAP): ruled — the chip shows the resolved stream label only and opens no popover; revisit when a multi-source item needs a choice.
 
 Front end to Rust, three commands:
 
@@ -181,6 +180,8 @@ Before attach there is no `App`. In these states the core thread handles R and Q
 
 The core thread does not run the TUI's post-attach service bootstrap. `spawn_startup_services`, `fetch_home_at_startup`, `init_idle_feed`, and capability registration (`src/app/shell/run/drains.rs:521`, `src/app/shell/run.rs:319-324`) belong to the TUI shell `Model`, not to `App`. The first slice presents no library surface (Non-Goals), so the core thread does not run those steps, and a configured-but-uncached provider does not bootstrap for the GUI Client. A later change that ports a library surface must first factor those steps into a shared Client step; it must not duplicate them in `mbv-gui`.
 
+One ruled exception (D4a, "Fill path"): the GUI core fills `emby_runtime.client` — the minimal Emby client fill that feeds the session list, cast discovery, artwork, and the item-metadata fetches of D4a — without the library bootstrap. This is a fill of `App` state, not `spawn_startup_services`, so it does not contradict the rule above.
+
 ### D10. Panel states
 
 The canvas switches the panel between four states (expanded, compact strip, expanded without queue, rail) on the panel's own size, through CSS container queries, not on the window size. The front end picks the layout this way. This is presentation: it holds no interaction state. The container size goes to the core in `LayoutReport` so that the hit map and the list capacity match the painted layout. The `z` (collapse) and `q` (queue fold) toggles live in the core and arrive in the frame.
@@ -216,7 +217,7 @@ The target is the design canvas "mbv Svelte Player" (https://claude.ai/artifact/
 | --- | --- | --- |
 | Queue panel — expanded | header, artwork, title, scrubber, transport, track chips, queue, footer; 30 px rows; Length / Ends at; finish clocks | player panel; scrubber; queue |
 | Collapsed states | compact strip, expanded without queue, 72 px rail; container-query switching; `z` and `q` | panel states |
-| Track popover, row menu, drag | subtitle popover with offset; row hover, grip, actions button, menu with key hints; drag ghost and insertion line; `Alt+J` / `Alt+K` | track chips; queue |
+| Track popover, row menu, drag | subtitle popover; row hover, grip, actions button, menu with key hints; drag ghost and insertion line; `Alt+J` / `Alt+K` | track chips; queue |
 
 Where the canvas and a TUI behaviour disagree, the canvas wins. Where the canvas is silent, keyboard behaviour follows the TUI through the one router, and a missing visual (the empty-queue state, the attach states of D9) follows the canvas's type, colour, and spacing.
 
@@ -238,7 +239,7 @@ There is no user data or protocol migration. `mbv-gui` is not packaged. Implemen
 
 ## Open Questions
 
-- ~~Where each new datum comes from (D4).~~ Answered in D4a: every datum names a held source, a new-core state, or a gap with a proposed source. The four gaps the user rules on are listed at the end of D4a (chapters and marks, trickplay, the subtitle offset, the video-chip choice list).
+- ~~Where each new datum comes from (D4).~~ Answered in D4a: every datum names a held source, a new-core state, or a ruled gap. The gap rulings are recorded at the end of D4a (chapters, marks, and trickplay approved; the subtitle offset rejected; the video chip label-only).
 - ~~Audiobookshelf and Feed items: how the badge, the parent line, the chapters, and the track chips map for those kinds.~~ Answered in D4a ("Non-Emby kinds"): no badge, `PlaybackTitleParts.context` for the parent line, chapters only for Audiobookshelf, kind-agnostic chips.
 - ~~The meaning of the footer's right-hand marker ("woims ●" on the canvas).~~ Answered in D4a: the Player-owner label (`queue_owner_label`/`playback_host_label_and_remote`; `mbv_emby::device_name()` for the local Owner) with its live-state dot.
 - The canvas palette is Everforest-like. Confirm that the default `mbv-theme` palette resolves to the same values, so that D7 reproduces the canvas by default.
