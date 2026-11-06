@@ -31,3 +31,4 @@ tauri-build = "=2.7.4"
 [dev-dependencies]
 mbv = { path = "../..", features = ["test"] }
 rstest.workspace = true
+serde_json.workspace = true

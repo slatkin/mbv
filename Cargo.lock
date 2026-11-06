@@ -3387,6 +3387,7 @@ dependencies = [
  "mimalloc",
  "rstest",
  "serde",
+ "serde_json",
  "tauri",
  "tauri-build",
 ]

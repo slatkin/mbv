@@ -17,6 +17,11 @@ pub struct LayoutReport {
     pub lists: Vec<ListRows>,
     /// The painted regions, each with the semantic target a press on it resolves to.
     pub regions: Vec<LayoutRegion>,
+    /// The window's inner width in logical pixels (design D10). The core
+    /// thread classifies it with the shared breakpoint classes. A front end
+    /// that omits it reads as 0.0.
+    #[serde(default)]
+    pub width: f32,
 }
 
 /// The whole visible rows of one list.
