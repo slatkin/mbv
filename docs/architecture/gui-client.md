@@ -11,8 +11,9 @@ repeated here.
 
 ## Where GUI painters live
 
-The GUI Client is the `crates/mbv-gui/` program: an eframe window whose
-`update` hook runs the shared `ClientCore::tick` and then paints. It links
+The GUI Client is the `crates/mbv-gui/` program: an eframe window whose `App::logic` hook runs the shared
+`ClientCore::tick` (the frame's input and surface sync) and whose `App::ui`
+hook paints. It links
 the `mbv` library for the shell `App`, the dispatch, the keyboard router,
 and the Owner find/start/attach steps; the `mbv` program itself carries no
 windowing or GPU stack.
@@ -126,6 +127,6 @@ not read them as misses:
 ## Tests
 
 GUI composition tests run the headless harness (`headless.rs`): one egui
-`Context::run` over synthetic `RawInput`, with no window and no GPU. They
+`Context::run_ui` over synthetic `RawInput`, with no window and no GPU. They
 assert core state and delivery, never appearance. Each input translator has
 one `#[case]` table of its mapping.

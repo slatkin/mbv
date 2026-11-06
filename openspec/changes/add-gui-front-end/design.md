@@ -95,7 +95,7 @@ The GUI reuses the library's Owner find, start, and attach code. It starts the O
 
 - Surface state public-API tests go in `crates/mbv-surfaces/tests/<name>.rs`. Existing queue and list tests move with the code. They are not duplicated.
 - TUI composition stays proven by the existing `src/app/tests/tick_integration/` tests. A new tick test proves that TuiRealm focus follows the core stack.
-- GUI composition tests run egui headless (`egui::Context::run` with synthetic `RawInput`), with no window and no GPU. They assert core state and delivery, never appearance.
+- GUI composition tests run egui headless (`egui::Context::run_ui` with synthetic `RawInput`), with no window and no GPU. They assert core state and delivery, never appearance.
 - Each input translator has one `#[case]` table.
 
 ## Risks / Trade-offs
