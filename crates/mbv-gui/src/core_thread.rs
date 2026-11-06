@@ -16,23 +16,25 @@ use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::time::{Duration, Instant};
 
 use mbv::{
-    App, CLIENT_IDLE_CADENCE, ClientCore, ClientLifecycle, ClientTickHost, Config, HomeEventDrain,
-    OwnerStartOptions, OwnerState, PlayerEventDrain, TickOutcome, attach_owner, declare_gui_client,
-    find_owner, load_config, start_owner,
+    App, CLIENT_IDLE_CADENCE, ClientCore, ClientLifecycle, ClientTickHost, Config, GuiInput,
+    HomeEventDrain, OwnerStartOptions, OwnerState, PlayerEventDrain, TickOutcome, attach_owner,
+    declare_gui_client, find_owner, load_config, start_owner,
 };
 use mbv_config::ensure_runtime_dir;
 use mbv_remote_player::RemotePlayerError;
-use mbv_surfaces::FocusStack;
-use mbv_surfaces::breakpoint::BreakpointClass;
+use mbv_surfaces::breakpoint::{BreakpointClass, BreakpointThresholds, classify};
+use mbv_surfaces::gesture::{PointerGesture, PointerGestureState};
 use mbv_surfaces::queue::QueueSurface;
 use mbv_surfaces::queue_playback::QueuePlaybackSurface;
 use mbv_surfaces::status_bar::StatusBarSurface;
+use mbv_surfaces::{FocusStack, HitMap, HitRegion};
 use mbv_ui_model::queue_rows::queue_media_rows;
 use mbv_ui_model::settings::PanelFocus;
-use mbv_ui_msg::{ComponentId, KeyEvent, Msg, PointerEvent, ServiceRequest};
+use mbv_ui_msg::{ComponentId, KeyEvent, Msg, PointerEvent, Position, ServiceRequest};
 
 use crate::bridge::frame::{FrameSources, GuiFrame};
-use crate::bridge::layout::LayoutReport;
+use crate::bridge::layout::{LayoutReport, ListId, QueueTargetId, RegionTarget};
+use crate::leaves::{PlaybackLeaf, QueueLeaf, StatusBarLeaf, TransportAvailability, gesture_point};
 
 /// The viewport height before the first `report_layout` measures the window:
 /// the frame carries every row the queue holds. The front end reports the
@@ -40,20 +42,30 @@ use crate::bridge::layout::LayoutReport;
 /// survives the first report.
 const INITIAL_VIEWPORT_ROWS: usize = usize::MAX;
 
+/// The GUI Client's breakpoint thresholds, in window logical points (design
+/// D10). The implementer picks the values (the design's open question); they
+/// change no spec. `mini_below` mirrors the TUI's 80-column mini threshold at
+/// roughly nine points per column, and `wide_from` is the width a desktop
+/// window needs before the later hero surfaces sit side by side.
+const GUI_BREAKPOINTS: BreakpointThresholds<f32> = BreakpointThresholds {
+    mini_below: 720.0,
+    wide_from: 1200.0,
+};
+
 /// One message the core thread's channel carries (design D3): the front
 /// end's translated input, a layout report, or the wake value the installed
 /// `ClientWaker` sends into the same channel.
 #[derive(Debug)]
 pub enum CoreInput {
-    /// A key chord, translated on the Rust side (design D6). Row 2.4 routes
-    /// it through `App::route_gui_input` with the focused surface.
+    /// A key chord, translated on the Rust side (design D6) and routed
+    /// through `App::route_gui_input` with the focused surface.
     Key(KeyEvent),
-    /// A pointer event, translated on the Rust side (design D4). Row 2.4
-    /// resolves its gesture against the slice hit map.
+    /// A pointer event, translated on the Rust side (design D4) and resolved
+    /// against the slice hit map.
     Pointer(PointerEvent),
     /// A layout report from the front end. The frame it triggers emits
-    /// whether or not a tick changed state (design D3); row 2.4 applies it
-    /// to the Surface state's capacity and hit map.
+    /// whether or not a tick changed state (design D3); the report applies
+    /// to the Surface state's capacity and hit map first.
     Layout(LayoutReport),
     /// The wake value the installed `ClientWaker` sends (design D3), so
     /// Owner events and timers wake the core as they wake the TUI.
@@ -102,8 +114,8 @@ impl std::error::Error for AttachError {
 
 /// Start the core thread (design D3): it loads the configuration, attaches
 /// to the Owner, and runs the tick loop for the life of the process. The
-/// thread is detached; in this unit nothing ends the loop — the disconnect
-/// arrives with row 2.5's command senders, and row 2.4 routes no quit yet.
+/// thread is detached; a routed quit key ends the run, and row 2.5's
+/// command senders end it when the front end drops.
 pub fn spawn() {
     let (tx, rx) = mpsc::channel();
     // Row 2.5 replaces this sink with `AppHandle::emit`; the placeholder
@@ -195,8 +207,21 @@ pub struct CoreThread {
     app: App,
     focus: FocusStack,
     queue: QueueSurface,
+    /// The Queue playback Surface state: the transport band's focus
+    /// presentation and the seek throttle.
     playback: QueuePlaybackSurface,
     status_bar: StatusBarSurface,
+    /// The recognized pointer gestures over the window's logical points (the
+    /// GUI's `SamePlace` slop rule, design D4). One recognizer serves the
+    /// whole window: the first slice's surfaces paint disjoint regions, and
+    /// the TUI's per-parent recognizers all see the same event stream, so
+    /// their click and drag states are the same facts.
+    gestures: PointerGestureState<Position>,
+    /// The painted regions of the last `LayoutReport` (design D4), in paint
+    /// order: the semantic targets a pointer gesture resolves against across
+    /// the whole slice. An empty map resolves nothing until the first report
+    /// arrives.
+    regions: HitMap<RegionTarget>,
     /// The whole Queue rows the viewport fits. Row 2.4 sets it from the
     /// `LayoutReport`; until then the frame carries every row.
     viewport_rows: usize,
@@ -238,6 +263,8 @@ impl CoreThread {
             queue: QueueSurface::new(),
             playback: QueuePlaybackSurface::new(),
             status_bar: StatusBarSurface::new(),
+            gestures: PointerGestureState::new(),
+            regions: HitMap::new(),
             viewport_rows: INITIAL_VIEWPORT_ROWS,
             breakpoint: BreakpointClass::Wide,
             rx,
@@ -265,11 +292,144 @@ impl CoreThread {
         self.idle_cadence = cadence;
     }
 
+    /// Apply one `LayoutReport` to the Surface state's capacity and the hit
+    /// map (design D4, task row 2.4): the reported whole rows become the
+    /// Queue viewport's height — the paging stride's source and the resting
+    /// scroll's clamp — and the reported regions rebuild the combined slice
+    /// hit map, the last painted regions a press resolves against. The
+    /// reported width classifies into the shared breakpoint classes through
+    /// the GUI's own thresholds (design D10).
+    fn apply_layout(&mut self, report: &LayoutReport) {
+        for list in &report.lists {
+            match list.list {
+                ListId::Queue => {
+                    self.viewport_rows = list.whole_rows;
+                    self.queue.set_viewport_height(list.whole_rows);
+                }
+            }
+        }
+        let mut regions = HitMap::new();
+        for region in &report.regions {
+            regions.push(
+                HitRegion::new(
+                    region.rect.x,
+                    region.rect.y,
+                    region.rect.width,
+                    region.rect.height,
+                ),
+                region.target,
+            );
+        }
+        self.regions = regions;
+        self.breakpoint = classify(report.width, GUI_BREAKPOINTS);
+    }
+
+    /// Route one translated key chord through the shared router with the
+    /// focused surface as the leaf (design D4, task row 2.4). The first
+    /// slice's only focusable surface is the Queue; with no focused surface
+    /// no leaf can consume anything. Returns whether the `App` asked to
+    /// quit, which the GUI Client answers by closing its window.
+    fn route_key(&mut self, key: KeyEvent) -> bool {
+        if self.focus.focused().as_ref() != Some(&ComponentId::Queue) {
+            return self.app.route_gui_input(GuiInput::Key(key), None);
+        }
+        let Self {
+            app,
+            queue,
+            regions,
+            ..
+        } = self;
+        let mut leaf = QueueLeaf::new(queue, regions);
+        app.route_gui_input(GuiInput::Key(key), Some(&mut leaf))
+    }
+
+    /// Route one translated pointer event (design D4, task row 2.4):
+    /// recognize the gesture over the window's logical points, resolve the
+    /// gesture's point against the combined hit map of the last
+    /// `LayoutReport`, apply the focus change the matching TUI click applies,
+    /// and hand the surface that owns the region to
+    /// [`App::route_gui_pointer`]. A gesture whose point resolves to no
+    /// reported region — and a `DragEnd`, which carries no point — resolves
+    /// to nothing (`client-interaction-core`: pointer targets resolve from a
+    /// semantic hit map).
+    fn route_pointer(&mut self, event: PointerEvent) {
+        let now = Instant::now();
+        let Some(gesture) =
+            self.gestures
+                .recognize(event.kind, event.modifiers, event.position, now)
+        else {
+            return;
+        };
+        let Some(point) = gesture_point(&gesture) else {
+            return;
+        };
+        match self.regions.resolve(point) {
+            Some(RegionTarget::Queue(target)) => {
+                // The TUI click's focus change (design D4): a click, double
+                // click, or right click on a queue row runs the TUI single
+                // click's effects, one of which focuses the Queue panel. The
+                // dispatched `QueueRowClick` and `QueueRowActivate` apply the
+                // App-side half; the core mirrors the panel focus on its own
+                // stack — whose derived focus the frame carries and the next
+                // keys' routing reads — because the right click's
+                // `RowContextMenu` dispatch is the documented no-op. The pill
+                // and the wheel take no focus, exactly as the TUI's matching
+                // gestures do not.
+                if matches!(
+                    gesture,
+                    PointerGesture::Click { .. }
+                        | PointerGesture::DoubleClick(_)
+                        | PointerGesture::RightClick(_)
+                ) && matches!(target, QueueTargetId::Slot(_))
+                {
+                    self.focus.set_panel_focus(PanelFocus::Queue);
+                }
+                let Self {
+                    app,
+                    queue,
+                    regions,
+                    ..
+                } = self;
+                let mut leaf = QueueLeaf::new(queue, regions);
+                app.route_gui_pointer(gesture, Some(&mut leaf));
+            }
+            Some(RegionTarget::QueuePlayback(_)) => {
+                // The TUI's playback-panel click applies no focus change, so
+                // the core applies none: the press works while the Queue
+                // panel holds focus (design D4).
+                let availability = self.app.queue_playback_projection().availability;
+                let Self {
+                    app,
+                    playback,
+                    regions,
+                    ..
+                } = self;
+                let mut leaf = PlaybackLeaf::new(
+                    playback,
+                    regions,
+                    TransportAvailability {
+                        stop: availability.stop,
+                        previous: availability.previous,
+                        next: availability.next,
+                    },
+                );
+                app.route_gui_pointer(gesture, Some(&mut leaf));
+            }
+            Some(RegionTarget::StatusBar(_)) => {
+                // The TUI's status-row click applies no focus change either.
+                let Self { app, regions, .. } = self;
+                let mut leaf = StatusBarLeaf::new(regions);
+                app.route_gui_pointer(gesture, Some(&mut leaf));
+            }
+            // A point in no reported region resolves to nothing.
+            None => {}
+        }
+    }
+
     /// Run the loop (design D3): wait for input, wake, or the idle cadence,
-    /// then tick. In this unit the loop runs for the life of the process:
-    /// the only `Sender` lives in the installed waker, so the channel never
-    /// disconnects, and row 2.4 routes no quit. Row 2.5 adds the front end's
-    /// command senders, and their drop ends the run.
+    /// then tick. The loop ends when a routed key quit or the channel
+    /// disconnects: row 2.5 adds the front end's command senders, and their
+    /// drop ends the run.
     pub fn run(&mut self) {
         while self.step() {}
     }
@@ -343,6 +503,7 @@ impl fmt::Debug for CoreThread {
             .field("queue", &self.queue)
             .field("playback", &self.playback)
             .field("status_bar", &self.status_bar)
+            .field("regions", &self.regions.len())
             .field("viewport_rows", &self.viewport_rows)
             .field("breakpoint", &self.breakpoint)
             .field("pending", &self.pending.len())
@@ -485,26 +646,35 @@ impl ClientTickHost for CoreThread {
     }
 
     fn tick_input(&mut self, outcome: &mut TickOutcome) {
-        for input in self.pending.drain(..) {
+        // Take the collected inputs out first: the routing borrows the
+        // whole `self`, which the drain's field borrow would conflict with.
+        for input in std::mem::take(&mut self.pending) {
             match input {
                 CoreInput::Wake => outcome.input_received = true,
-                CoreInput::Key(_) => {
-                    // Row 2.4 routes the chord through `App::route_gui_input`
-                    // with the focused surface as the leaf.
+                CoreInput::Key(key) => {
+                    // The chord routes through `App::route_gui_input` with
+                    // the focused surface as the leaf (design D4); a routed
+                    // quit ends the run.
                     outcome.input_received = true;
+                    if self.route_key(key) {
+                        outcome.quit_requested = true;
+                    }
                 }
-                CoreInput::Pointer(_) => {
-                    // Row 2.4 resolves the gesture against the slice hit map
-                    // and routes it through `App::route_gui_pointer`.
+                CoreInput::Pointer(event) => {
+                    // The gesture resolves against the slice hit map and
+                    // routes through `App::route_gui_pointer` with the
+                    // surface that owns the region (design D4).
                     outcome.input_received = true;
+                    self.route_pointer(event);
                 }
-                CoreInput::Layout(_) => {
+                CoreInput::Layout(report) => {
                     // A `report_layout` always emits the current frame,
                     // changed or not (design D3), and re-arms the theme: the
                     // front end sends the report when it mounts, so the
                     // frame after a reload carries the theme again (design
-                    // D7). Row 2.4 applies the report to the capacity and
-                    // the hit map first.
+                    // D7). The report applies to the capacity and the hit
+                    // map first.
+                    self.apply_layout(&report);
                     self.frame_requested = true;
                     self.theme_pending = true;
                 }
