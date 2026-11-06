@@ -76,6 +76,23 @@
 	/** The visual slot's height cap in logical pixels. */
 	const artCapPx = $derived(cardHeightCapRows(windowHeight) * ROW_HEIGHT);
 
+	/** The column width at which the queue column's visual slot and
+	 * transport render side by side rather than stacked: the TUI's
+	 * `queue_playback_column_wide` breakpoint, 100 columns
+	 * (`QUEUE_PLAYBACK_WIDE_COLUMNS` in `arrangements/chrome.rs`), carried
+	 * in cell units — no pixel threshold of the GUI's own. */
+	const WIDE_COLUMNS = 100;
+
+	/** The queue column's width in column cells, refreshed by the layout
+	 * observer with the window height. */
+	let columnCells = $state(0);
+
+	/** Whether the band takes the TUI's wide arrangement: art left-aligned
+	 * with the transport beside it after the two-column gap
+	 * (`queue_playback_transport_area`'s wide branch), stacked below it
+	 * otherwise. */
+	const wide = $derived(columnCells >= WIDE_COLUMNS);
+
 	/** Emby ticks in one second (`mbv_emby_model::TICKS_PER_SECOND`). */
 	const TICKS_PER_SECOND = 10_000_000;
 
@@ -185,6 +202,7 @@
 
 	function report(): void {
 		windowHeight = window.innerHeight;
+		columnCells = Math.floor((panelEl?.clientWidth ?? 0) / CELL_COL_PX);
 		reportLayout(reportKey, { lists: [], regions: currentRegions() });
 	}
 
@@ -283,20 +301,165 @@
 	</div>
 	{#if playback.shown}
 		<!-- The transport band on the `QueueOnlyPlaybackPanel` fill
-			(`--mbv-queuePlaybackBand`), stacked at the band's full width at
-			every window width — the TUI's queue band has no side-by-side
-			arrangement (`render_queue_panel` paints the art rows, then
-			`queue_band_rows`' four rows: the controls with the status text,
-			a blank row, the seekbar with its flanking times, one blank gap
-			row). The band sits two columns inside the column
-			(`queue_panel_inset`), and every row height is one cell row. The
-			controls and seek rows paint their content only while a
-			now-playing title rides; without one the TUI paints the four rows
-			as blanks on the band's own fill, so the GUI does too. -->
+			(`--mbv-queuePlaybackBand`). The band sits two columns inside the
+			column (`queue_panel_inset`), and every row height is one cell
+			row. The arrangement is the TUI's width-driven one
+			(`queue_playback_transport_area`): at 100 column cells and wider
+			the artwork sits left-aligned with the transport beside it after
+			the two-column gap (`SLOT_TRANSPORT_GAP`) and the taller of the
+			two governs the band's height; below that the artwork centers and
+			the transport's four rows stack below it at the band's full
+			width. The four rows are the controls with the status text, a
+			blank row, the seekbar with its flanking times, one blank gap row
+			(`queue_band_rows`). The controls and seek rows paint their
+			content only while a now-playing title rides; without one the TUI
+			paints the four rows as blanks on the band's own fill, so the GUI
+			does too. -->
 		<div
 			style:margin-inline="calc(var(--mbv-cell-col) * 2)"
 			style:background="var(--mbv-queuePlaybackBand)"
 		>
+			{#snippet artwork(artwork: Exclude<GuiCardArtwork, { kind: 'hidden' }>)}
+				{#if artwork.kind === 'loading'}
+					<div
+						class="aspect-square"
+						bind:this={artEl}
+						data-target="visualSlot"
+						style:width="min(100%, {artCapPx}px)"
+						style:background="var(--mbv-textMuted)"
+					></div>
+				{:else}
+					<img
+						class="max-w-full object-contain"
+						alt=""
+						bind:this={artEl}
+						data-target="visualSlot"
+						src={artwork.detail}
+						style:max-height="{artCapPx}px"
+					/>
+				{/if}
+			{/snippet}
+			{#snippet bandRows()}
+				{#if playback.nowPlayingTitle}
+					<div
+						class="flex items-center"
+						style:height="var(--mbv-cell-row)"
+						style:padding-inline="var(--mbv-cell-col)"
+						style:gap="var(--mbv-cell-col)"
+						style:background="var(--mbv-secondary)"
+					>
+						<span
+							class="flex items-center"
+							bind:this={playPauseEl}
+							data-target="playPause"
+						>
+							{#if playback.playback.paused}
+								<Play
+									size={16}
+									fill={roleVar('accent')}
+									color={roleVar('accent')}
+								/>
+							{:else}
+								<Pause
+									size={16}
+									fill={roleVar('textFocusAccent')}
+									color={roleVar('textFocusAccent')}
+								/>
+							{/if}
+						</span>
+						<span class="flex items-center" bind:this={stopEl} data-target="stop">
+							<Square
+								size={14}
+								fill={glyphColor(playback.availability.stop, 'statusError')}
+								color={glyphColor(playback.availability.stop, 'statusError')}
+							/>
+						</span>
+						<span class="flex items-center" bind:this={prevEl} data-target="previous">
+							<SkipBack
+								size={14}
+								fill={glyphColor(playback.availability.previous, 'textStrong')}
+								color={glyphColor(playback.availability.previous, 'textStrong')}
+							/>
+						</span>
+						<span class="flex items-center" bind:this={nextEl} data-target="next">
+							<SkipForward
+								size={14}
+								fill={glyphColor(playback.availability.next, 'textStrong')}
+								color={glyphColor(playback.availability.next, 'textStrong')}
+							/>
+						</span>
+						{#if statusIndicators.length > 0}
+							<!-- The queue band's status-indicator cluster, right-aligned on
+								the controls row in both arrangements as the TUI paints it:
+								the uppercased labels, one space apart, each in its role
+								colour. The TUI reports no hit region for the cluster, so it
+								carries no target. -->
+							<span
+								class="ml-auto flex items-center font-bold"
+								style:gap="var(--mbv-cell-col)"
+							>
+								{#each statusIndicators as indicator, i (i)}
+									<span style:color={roleVar(indicator.role)}>{indicator.label}</span>
+								{/each}
+							</span>
+						{/if}
+					</div>
+					<!-- The band's blank row between the controls and the seekbar: the
+						TUI's former title row, kept blank (the title lives elsewhere). -->
+					<div style:height="var(--mbv-cell-row)"></div>
+					<div
+						class="flex items-center"
+						style:height="var(--mbv-cell-row)"
+						style:padding-inline={
+							playback.showControls ? 'var(--mbv-cell-col)' : '0'
+						}
+						style:gap="var(--mbv-cell-col)"
+					>
+						{#if playback.showControls}
+							<span
+								class="shrink-0 font-mono"
+								style:color={roleVar('playbackMetaFg')}
+								>{fmtDurationShort(playback.playback.positionTicks)}</span
+							>
+							<div
+								class="h-full min-w-4 flex-1"
+								bind:this={seekbarEl}
+								data-target="seekbar"
+								style:background="var(--mbv-secondary)"
+							>
+								<div
+									class="h-full"
+									style:width="{seekRatio() * 100}%"
+									style:background="var(--mbv-accent)"
+								></div>
+							</div>
+							<span
+								class="shrink-0 font-mono"
+								style:color={roleVar('playbackMetaFg')}
+								>{fmtDurationShort(playback.playback.runtimeTicks)}</span
+							>
+						{:else}
+							<!-- The controls and seekbar carry no playback: the TUI paints
+								the track indicator across the row's full width with no inset
+								and no times, and it resolves no seek. -->
+							<div
+								class="h-full flex-1"
+								style:background="var(--mbv-progressTrack)"
+							></div>
+						{/if}
+					</div>
+					<!-- The band's trailing blank row, on the band's own fill. -->
+					<div style:height="var(--mbv-cell-row)"></div>
+				{:else}
+					<!-- Without a now-playing title the TUI paints the four band rows
+						as blanks on the band's own fill (`render_queue_panel`): the
+						controls, former-title, seek, and gap rows. -->
+					<div style:height="var(--mbv-cell-row)"></div>
+					<div style:height="var(--mbv-cell-row)"></div>
+					<div style:height="var(--mbv-cell-row)"></div>
+					<div style:height="var(--mbv-cell-row)"></div>
+				{/if}
+			{/snippet}
 			{#if playback.nowPlayingTitle}
 				<!-- The now-playing title's own row, below the column top and
 					inset one column each side: the TUI composites the artwork-site
@@ -318,147 +481,30 @@
 				</div>
 			{/if}
 			{#if art && art.kind !== 'hidden'}
-				<!-- The visual slot: the artwork spans the band's full inner
-					width — the TUI's slot region is the column inset two columns
-					each side, and `render_card_painting` fits the image within its
-					width and the queue column's height tier (`queue_card_height_cap`),
-					centered. No fixed box: the image's own fit sizes the rows, and
-					the loading reservation is the TUI's capped square estimate. -->
-				<div class="flex items-center justify-center">
-					{#if art.kind === 'loading'}
-						<div
-							class="aspect-square"
-							bind:this={artEl}
-							data-target="visualSlot"
-							style:width="min(100%, {artCapPx}px)"
-							style:background="var(--mbv-textMuted)"
-						></div>
-					{:else}
-						<img
-							class="max-w-full object-contain"
-							alt=""
-							bind:this={artEl}
-							data-target="visualSlot"
-							src={art.detail}
-							style:max-height="{artCapPx}px"
-						/>
-					{/if}
-				</div>
-			{/if}
-			{#if playback.nowPlayingTitle}
-				<div
-					class="flex items-center"
-					style:height="var(--mbv-cell-row)"
-					style:padding-inline="var(--mbv-cell-col)"
-					style:gap="var(--mbv-cell-col)"
-					style:background="var(--mbv-secondary)"
-				>
-					<span
+				<!-- The visual slot: `render_card_painting` fits the image
+					within the slot region's width and the queue column's height
+					tier (`queue_card_height_cap`) — left-aligned in the wide
+					arrangement, centered when stacked. No fixed box: the image's
+					own fit sizes the rows, and the loading reservation is the
+					TUI's capped square estimate. -->
+				{#if wide}
+					<div
 						class="flex items-center"
-						bind:this={playPauseEl}
-						data-target="playPause"
+						style:gap="calc(var(--mbv-cell-col) * 2)"
 					>
-						{#if playback.playback.paused}
-							<Play
-								size={16}
-								fill={roleVar('accent')}
-								color={roleVar('accent')}
-							/>
-						{:else}
-							<Pause
-								size={16}
-								fill={roleVar('textFocusAccent')}
-								color={roleVar('textFocusAccent')}
-							/>
-						{/if}
-					</span>
-					<span class="flex items-center" bind:this={stopEl} data-target="stop">
-						<Square
-							size={14}
-							fill={glyphColor(playback.availability.stop, 'statusError')}
-							color={glyphColor(playback.availability.stop, 'statusError')}
-						/>
-					</span>
-					<span class="flex items-center" bind:this={prevEl} data-target="previous">
-						<SkipBack
-							size={14}
-							fill={glyphColor(playback.availability.previous, 'textStrong')}
-							color={glyphColor(playback.availability.previous, 'textStrong')}
-						/>
-					</span>
-					<span class="flex items-center" bind:this={nextEl} data-target="next">
-						<SkipForward
-							size={14}
-							fill={glyphColor(playback.availability.next, 'textStrong')}
-							color={glyphColor(playback.availability.next, 'textStrong')}
-						/>
-					</span>
-					{#if statusIndicators.length > 0}
-						<!-- The queue band's status-indicator cluster, right-aligned on
-							the controls row as the TUI paints it: the uppercased labels,
-							one space apart, each in its role colour. The TUI reports no hit
-							region for the cluster, so it carries no target. -->
-						<span class="ml-auto flex items-center font-bold" style:gap="var(--mbv-cell-col)">
-							{#each statusIndicators as indicator, i (i)}
-								<span style:color={roleVar(indicator.role)}>{indicator.label}</span>
-							{/each}
-						</span>
-					{/if}
-				</div>
-				<!-- The band's blank row between the controls and the seekbar: the
-					TUI's former title row, kept blank (the title lives elsewhere). -->
-				<div style:height="var(--mbv-cell-row)"></div>
-				<div
-					class="flex items-center"
-					style:height="var(--mbv-cell-row)"
-					style:padding-inline={
-						playback.showControls ? 'var(--mbv-cell-col)' : '0'
-					}
-					style:gap="var(--mbv-cell-col)"
-				>
-					{#if playback.showControls}
-						<span
-							class="shrink-0 font-mono"
-							style:color={roleVar('playbackMetaFg')}
-							>{fmtDurationShort(playback.playback.positionTicks)}</span
-						>
-						<div
-							class="h-full min-w-4 flex-1"
-							bind:this={seekbarEl}
-							data-target="seekbar"
-							style:background="var(--mbv-secondary)"
-						>
-							<div
-								class="h-full"
-								style:width="{seekRatio() * 100}%"
-								style:background="var(--mbv-accent)"
-							></div>
+						{@render artwork(art)}
+						<div class="flex min-w-0 flex-1 flex-col">
+							{@render bandRows()}
 						</div>
-						<span
-							class="shrink-0 font-mono"
-							style:color={roleVar('playbackMetaFg')}
-							>{fmtDurationShort(playback.playback.runtimeTicks)}</span
-						>
-					{:else}
-						<!-- The controls and seekbar carry no playback: the TUI paints
-							the track indicator across the row's full width with no inset
-							and no times, and it resolves no seek. -->
-						<div
-							class="h-full flex-1"
-							style:background="var(--mbv-progressTrack)"
-						></div>
-					{/if}
-				</div>
-				<!-- The band's trailing blank row, on the band's own fill. -->
-				<div style:height="var(--mbv-cell-row)"></div>
+					</div>
+				{:else}
+					<div class="flex items-center justify-center">
+						{@render artwork(art)}
+					</div>
+					{@render bandRows()}
+				{/if}
 			{:else}
-				<!-- Without a now-playing title the TUI paints the four band rows
-					as blanks on the band's own fill (`render_queue_panel`): the
-					controls, former-title, seek, and gap rows. -->
-				<div style:height="var(--mbv-cell-row)"></div>
-				<div style:height="var(--mbv-cell-row)"></div>
-				<div style:height="var(--mbv-cell-row)"></div>
-				<div style:height="var(--mbv-cell-row)"></div>
+				{@render bandRows()}
 			{/if}
 		</div>
 	{/if}
