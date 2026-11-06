@@ -61,7 +61,7 @@ The core thread also emits the current frame, changed or not, after every `repor
 
 ### D4. The bridge contract
 
-Rust to front end, one event `mbv://frame` that carries a `GuiFrame`: the focus (surface and Panel), the Queue rows inside the current viewport with their stable `QueueSlotId`, cursor, marks, and the active slot; the Queue playback projection; the footer pills; the Status bar projection; the breakpoint class; and the theme (D7) when it changes. Each projection is a serde DTO in `mbv-gui/src/bridge/`, built from the library projections. The front end keeps only the last frame.
+Rust to front end, one event `mbv://frame` that carries a `GuiFrame`: the focus (surface and Panel), the Queue rows inside the current viewport with their stable `QueueSlotId`, cursor, marks, and the active slot; the Queue playback projection; the footer pills; the Status bar projection; the breakpoint class; and the theme (D7) when it changes. Each projection is a serde DTO in `mbv-gui/src/bridge/`, built from the library projections. The front end keeps only the last frame. The GUI Status bar shows the prefix-armed state and the toasts of the Status bar projection; it MAY show the toasts in a conventional GUI form that TUI geometry does not constrain.
 
 Front end to Rust, three commands:
 

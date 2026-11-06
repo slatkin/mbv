@@ -61,7 +61,7 @@ The GUI Client SHALL NOT start, embed, or control mpv directly. It SHALL send pl
 
 ### Requirement: The first GUI slice presents the Queue, Queue playback, and Status bar
 
-The GUI Client SHALL present the Queue panel, the Queue playback panel, and the Status bar. Each SHALL show the same content, Panel arrangement, and states as its TUI counterpart in the queue-only Panel mode. A surface that the GUI Client does not yet present SHALL be absent. It SHALL NOT be a stub or a placeholder.
+The GUI Client SHALL present the Queue panel, the Queue playback panel, and the Status bar. The Queue panel and the Queue playback panel SHALL show the same content, Panel arrangement, and states as their TUI counterparts in the queue-only Panel mode. The Status bar SHALL show the prefix-armed state and the toasts of the shared Status bar projection. The GUI Client MAY show toasts in a conventional GUI form that TUI geometry does not constrain. A surface that the GUI Client does not yet present SHALL be absent. It SHALL NOT be a stub or a placeholder.
 
 #### Scenario: The queue has slots
 
@@ -69,7 +69,12 @@ The GUI Client SHALL present the Queue panel, the Queue playback panel, and the 
 - **WHEN** the GUI Client window is open
 - **THEN** the Queue panel lists the slots in canonical order and marks the active slot
 - **AND** the Queue playback panel shows the active item and its progress
-- **AND** the Status bar is visible
+- **AND** the Status bar shows the prefix-armed state
+
+#### Scenario: The Status bar projection holds a toast
+
+- **WHEN** the shared Status bar projection holds a toast
+- **THEN** the GUI Client shows the toast in the Status bar or in a conventional GUI form
 
 #### Scenario: The queue is empty
 
