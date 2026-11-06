@@ -6,11 +6,11 @@ use std::sync::mpsc::{self, TryRecvError};
 use std::time::Duration;
 
 use mbv::{App, stub_app_with_prefix_and_toast, stub_app_with_queue};
-use mbv_gui::bridge::frame::GuiFrame;
 use mbv_gui::bridge::frame::queue::GuiQueueRow;
+use mbv_gui::bridge::frame::{GuiFrame, GuiWindowFrame};
 use mbv_gui::bridge::layout::{LayoutRect, LayoutRegion, LayoutReport, ListId, ListRows};
 use mbv_gui::bridge::layout::{QueuePlaybackTargetId, QueueTargetId, RegionTarget};
-use mbv_gui::core_thread::{CoreInput, CoreThread, FrameSink};
+use mbv_gui::core_thread::{CoreInput, CoreThread, FrameSink, QuitSink};
 use mbv_ui_msg::{Key, KeyEvent, KeyModifiers, PointerEvent, PointerKind, Position};
 
 /// A key press with no modifier held, as the translated `key` command
@@ -76,7 +76,7 @@ fn wheel_down_at(x: f32, y: f32) -> CoreInput {
 
 /// The sink emitted no frame: the channel is empty while the core's sink
 /// sender is still alive.
-fn assert_no_frame(frames: &mpsc::Receiver<GuiFrame>) {
+fn assert_no_frame(frames: &mpsc::Receiver<GuiWindowFrame>) {
     assert_eq!(frames.try_recv(), Err(TryRecvError::Empty));
 }
 
@@ -87,7 +87,18 @@ struct TestCore {
     core: CoreThread,
     tx: mpsc::Sender<CoreInput>,
     waker: mbv::ClientWaker,
-    frames: mpsc::Receiver<GuiFrame>,
+    frames: mpsc::Receiver<GuiWindowFrame>,
+    quits: mpsc::Receiver<()>,
+}
+
+impl TestCore {
+    /// The next emitted frame's slice, as every core-thread frame is one.
+    fn next_frame(&self) -> GuiFrame {
+        match self.frames.try_recv().expect("the core emitted a frame") {
+            GuiWindowFrame::Slice(frame) => *frame,
+            GuiWindowFrame::Attach(..) => panic!("the core thread emitted an attach state"),
+        }
+    }
 }
 
 fn test_core(slots: usize) -> TestCore {
@@ -103,7 +114,11 @@ fn test_core_with(app: App) -> TestCore {
     let sink: FrameSink = Box::new(move |frame| {
         let _ = frame_tx.send(frame);
     });
-    let mut core = CoreThread::new(app, rx, sink);
+    let (quit_tx, quit_rx) = mpsc::channel();
+    let quit: QuitSink = Box::new(move || {
+        let _ = quit_tx.send(());
+    });
+    let mut core = CoreThread::new(app, rx, sink, quit);
     core.set_idle_cadence_for_test(Duration::ZERO);
     core.install_waker(tx.clone());
     TestCore {
@@ -111,6 +126,7 @@ fn test_core_with(app: App) -> TestCore {
         tx,
         waker,
         frames: frame_rx,
+        quits: quit_rx,
     }
 }
 
@@ -122,7 +138,7 @@ fn one_input_yields_one_frame() {
     let mut test = test_core(2);
     test.tx.send(key_press()).unwrap();
     assert!(test.core.step());
-    let frame = test.frames.try_recv().unwrap();
+    let frame = test.next_frame();
     assert_eq!(frame.queue.rows.len(), 2);
     assert_no_frame(&test.frames);
     assert!(test.core.step());
@@ -135,7 +151,7 @@ fn waker_wake_yields_a_tick() {
     let mut test = test_core(2);
     test.waker.wake();
     assert!(test.core.step());
-    test.frames.try_recv().unwrap();
+    test.next_frame();
     assert_no_frame(&test.frames);
 }
 
@@ -146,7 +162,7 @@ fn layout_report_emits_a_frame_without_a_state_change() {
     let mut test = test_core(2);
     test.tx.send(layout_report()).unwrap();
     assert!(test.core.step());
-    test.frames.try_recv().unwrap();
+    test.next_frame();
     assert_no_frame(&test.frames);
 }
 
@@ -157,11 +173,11 @@ fn only_the_first_frame_carries_the_theme() {
     let mut test = test_core(2);
     test.tx.send(key_press()).unwrap();
     assert!(test.core.step());
-    let first = test.frames.try_recv().unwrap();
+    let first = test.next_frame();
     assert!(first.theme.is_some());
     test.waker.wake();
     assert!(test.core.step());
-    let second = test.frames.try_recv().unwrap();
+    let second = test.next_frame();
     assert!(second.theme.is_none());
 }
 
@@ -173,13 +189,13 @@ fn a_layout_report_after_the_first_frame_carries_the_theme_again() {
     let mut test = test_core(2);
     test.tx.send(key_press()).unwrap();
     assert!(test.core.step());
-    assert!(test.frames.try_recv().unwrap().theme.is_some());
+    assert!(test.next_frame().theme.is_some());
     test.waker.wake();
     assert!(test.core.step());
-    assert!(test.frames.try_recv().unwrap().theme.is_none());
+    assert!(test.next_frame().theme.is_none());
     test.tx.send(layout_report()).unwrap();
     assert!(test.core.step());
-    assert!(test.frames.try_recv().unwrap().theme.is_some());
+    assert!(test.next_frame().theme.is_some());
 }
 
 /// A reported capacity of 14 sets the paging stride (task row 2.4): a
@@ -191,7 +207,7 @@ fn a_reported_capacity_sets_the_paging_stride() {
     let mut test = test_core(20);
     test.tx.send(measured_layout(14, vec![])).unwrap();
     assert!(test.core.step());
-    test.frames.try_recv().unwrap();
+    test.next_frame();
 
     test.tx
         .send(CoreInput::Key(KeyEvent::new(
@@ -200,7 +216,7 @@ fn a_reported_capacity_sets_the_paging_stride() {
         )))
         .unwrap();
     assert!(test.core.step());
-    let frame = test.frames.try_recv().unwrap();
+    let frame = test.next_frame();
     assert_eq!(frame.queue.cursor, Some(14));
     assert_eq!(frame.queue.rows.len(), 14);
 }
@@ -223,16 +239,16 @@ fn a_press_resolves_against_the_last_reported_regions() {
         ))
         .unwrap();
     assert!(test.core.step());
-    test.frames.try_recv().unwrap();
+    test.next_frame();
 
     test.tx.send(press_at(50.0, 10.0)).unwrap();
     assert!(test.core.step());
-    let frame = test.frames.try_recv().unwrap();
+    let frame = test.next_frame();
     assert_eq!(frame.queue.cursor, Some(2));
 
     test.tx.send(press_at(500.0, 500.0)).unwrap();
     assert!(test.core.step());
-    let frame = test.frames.try_recv().unwrap();
+    let frame = test.next_frame();
     assert_eq!(frame.queue.cursor, Some(2));
 }
 
@@ -253,11 +269,11 @@ fn a_press_on_the_play_pause_region_dispatches_the_playback_request() {
         ))
         .unwrap();
     assert!(test.core.step());
-    test.frames.try_recv().unwrap();
+    test.next_frame();
 
     test.tx.send(press_at(20.0, 110.0)).unwrap();
     assert!(test.core.step());
-    let frame = test.frames.try_recv().unwrap();
+    let frame = test.next_frame();
     let toast = frame.status.toast.expect("the toggle flashed a toast");
     assert_eq!(toast.text, "Pause requested");
 }
@@ -279,11 +295,11 @@ fn the_wheel_over_a_reported_row_moves_the_viewport_by_the_wheel_step() {
         ))
         .unwrap();
     assert!(test.core.step());
-    test.frames.try_recv().unwrap();
+    test.next_frame();
 
     test.tx.send(wheel_down_at(50.0, 10.0)).unwrap();
     assert!(test.core.step());
-    let frame = test.frames.try_recv().unwrap();
+    let frame = test.next_frame();
     let GuiQueueRow::Item { slot, .. } = &frame.queue.rows[0] else {
         panic!("the first viewport row is an item row");
     };
@@ -303,6 +319,21 @@ fn an_untargeted_pointer_press_cancels_an_armed_prefix() {
     let mut test = test_core_with(stub_app_with_prefix_and_toast("prefix armed"));
     test.tx.send(press_at(500.0, 500.0)).unwrap();
     assert!(test.core.step());
-    let frame = test.frames.try_recv().unwrap();
+    let frame = test.next_frame();
     assert!(!frame.status.prefix_armed);
+}
+
+/// A routed quit key fires the quit edge and ends the run (design D9): the
+/// window closes through the same edge the mismatch state's Quit uses.
+#[test]
+fn a_routed_quit_key_fires_the_quit_edge_and_ends_the_run() {
+    let mut test = test_core(2);
+    test.tx
+        .send(CoreInput::Key(KeyEvent::new(
+            Key::Char('q'),
+            KeyModifiers::NONE,
+        )))
+        .unwrap();
+    assert!(!test.core.step());
+    test.quits.try_recv().expect("the quit edge fired");
 }

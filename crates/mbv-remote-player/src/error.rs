@@ -92,6 +92,24 @@ impl RemotePlayerError {
         }
     }
 
+    /// Test support: builds the shutting-down error for callers outside this
+    /// crate (the GUI Client's attach-outcome tests), gated behind the `test`
+    /// feature like the crate's other test seams.
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn owner_shutting_down_for_test() -> Self {
+        Self::owner_shutting_down()
+    }
+
+    /// Test support: builds the exclusive-owner error for callers outside
+    /// this crate (the GUI Client's attach-outcome tests), gated behind the
+    /// `test` feature like the crate's other test seams.
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
+    pub fn exclusive_owner_for_test(pid: u32) -> Self {
+        Self::exclusive_owner(pid)
+    }
+
     /// Test support: builds the mismatch error for callers outside this crate
     /// (the `mbv` binary's startup-prompt tests), gated behind the `test`
     /// feature like the crate's other test seams.

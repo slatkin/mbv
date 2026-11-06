@@ -3381,6 +3381,7 @@ dependencies = [
  "mbv",
  "mbv-config",
  "mbv-core",
+ "mbv-daemon",
  "mbv-queue",
  "mbv-remote-player",
  "mbv-surfaces",

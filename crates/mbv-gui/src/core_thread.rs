@@ -12,29 +12,27 @@
 //! Tauri runtime or tokio runs here (design D12).
 
 use std::fmt;
-use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::time::{Duration, Instant};
 
 use mbv::{
-    App, CLIENT_IDLE_CADENCE, ClientCore, ClientLifecycle, ClientTickHost, Config, GuiInput,
-    HomeEventDrain, OwnerStartOptions, OwnerState, PlayerEventDrain, TickOutcome, attach_owner,
-    declare_gui_client, find_owner, load_config, start_owner,
+    App, CLIENT_IDLE_CADENCE, ClientCore, ClientLifecycle, ClientTickHost, GuiInput,
+    HomeEventDrain, PlayerEventDrain, TickOutcome, declare_gui_client, load_config,
 };
 use mbv_config::ensure_runtime_dir;
-use mbv_remote_player::RemotePlayerError;
 use mbv_surfaces::breakpoint::{BreakpointClass, BreakpointThresholds, classify};
 use mbv_surfaces::gesture::{PointerGesture, PointerGestureState};
 use mbv_surfaces::queue::QueueSurface;
 use mbv_surfaces::queue_playback::QueuePlaybackSurface;
 use mbv_surfaces::status_bar::StatusBarSurface;
-use mbv_surfaces::{FocusStack, HitMap, HitRegion};
+use mbv_surfaces::{FocusStack, HitMap};
 use mbv_ui_model::queue_rows::queue_media_rows;
 use mbv_ui_model::settings::PanelFocus;
 use mbv_ui_msg::{ComponentId, KeyEvent, Msg, PointerEvent, Position, ServiceRequest};
 
-use crate::bridge::frame::{FrameSources, GuiFrame};
-use crate::bridge::layout::{LayoutReport, ListId, QueueTargetId, RegionTarget};
+use crate::attach::{AttachCampaign, LibraryOwnerSteps};
+use crate::bridge::frame::{FrameSources, GuiFrame, GuiWindowFrame};
+use crate::bridge::layout::{LayoutReport, ListId, QueueTargetId, RegionTarget, hit_map};
 use crate::leaves::{PlaybackLeaf, QueueLeaf, StatusBarLeaf, TransportAvailability, gesture_point};
 
 /// The viewport height before the first `report_layout` measures the window:
@@ -76,43 +74,12 @@ pub enum CoreInput {
 /// The sink every emitted frame goes through (design D3). Production wires
 /// `AppHandle::emit` as the `mbv://frame` event; the tests mock it with a
 /// channel.
-pub type FrameSink = Box<dyn Fn(GuiFrame) + Send + 'static>;
+pub type FrameSink = Box<dyn Fn(GuiWindowFrame) + Send + 'static>;
 
-/// Why the happy-path Owner attach failed (design D9). Row 2.6 owns the
-/// window state each outcome shows and the texts it names; until that row
-/// lands the core thread logs the error and ends.
-#[derive(Debug)]
-enum AttachError {
-    /// The single-instance probe itself failed.
-    Probe(std::io::Error),
-    /// A live Owner holds the lock but does not accept connections.
-    Refused,
-    /// The Owner process could not start.
-    Start(RemotePlayerError),
-    /// The attach to a running Owner failed.
-    Attach(RemotePlayerError),
-}
-
-impl fmt::Display for AttachError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Probe(error) => write!(f, "single-instance check failed: {error}"),
-            Self::Refused => write!(f, "the Owner process is not accepting connections"),
-            Self::Start(error) => write!(f, "failed to start Owner process: {error}"),
-            Self::Attach(error) => write!(f, "failed to attach to Owner process: {error}"),
-        }
-    }
-}
-
-impl std::error::Error for AttachError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            Self::Probe(error) => Some(error),
-            Self::Start(error) | Self::Attach(error) => Some(error),
-            Self::Refused => None,
-        }
-    }
-}
+/// The edge that closes the window (design D9): the mismatch state's Quit and
+/// a routed quit key's close, wired by `main` to the window's close. The tests
+/// capture it with a channel.
+pub type QuitSink = Box<dyn Fn() + Send + 'static>;
 
 /// Start the core thread (design D3): it loads the configuration, attaches
 /// to the Owner, and runs the tick loop for the life of the process. The
@@ -122,7 +89,7 @@ impl std::error::Error for AttachError {
 /// which the Tauri commands push through; they never touch the `App`
 /// (design D3).
 #[must_use]
-pub fn spawn(sink: FrameSink) -> Sender<CoreInput> {
+pub fn spawn(sink: FrameSink, quit: QuitSink) -> Sender<CoreInput> {
     let (tx, rx) = mpsc::channel();
     // The waker's clone stays inside the `App`; the returned sender goes to
     // the commands' managed state.
@@ -150,62 +117,29 @@ pub fn spawn(sink: FrameSink) -> Sender<CoreInput> {
                 return;
             }
         };
-        let app = match attach(&config) {
-            Ok(app) => app,
-            Err(error) => {
-                tracing::error!(
-                    name: "gui_core.attach_failed",
-                    target: "gui_core",
-                    error = %error,
-                    "Owner attach failed; the core thread ends"
-                );
-                return;
-            }
+        // Declare the GUI Client before the first Owner connection (design
+        // D9): the campaign's connections send a plain Hello.
+        declare_gui_client();
+        let steps = LibraryOwnerSteps::new(&config);
+        let outcome = {
+            let mut campaign = AttachCampaign::new(&rx, &sink, &quit, &steps);
+            campaign.run()
         };
-        let mut core = CoreThread::new(app, rx, sink);
-        core.install_waker(waker_tx);
-        core.run();
+        match outcome {
+            Ok(app) => {
+                let mut core = CoreThread::new(app, rx, sink, quit);
+                core.install_waker(waker_tx);
+                core.run();
+            }
+            Err(end) => tracing::info!(
+                name: "gui_core.attach_ended",
+                target: "gui_core",
+                end = ?end,
+                "the attach ended without an App"
+            ),
+        }
     });
     tx
-}
-
-/// The happy-path Owner attach (design D9): declare the GUI Client, find the
-/// Owner, start one from the `mbv` program when none runs, and attach. Row
-/// 2.6 owns the outcome classification — the window states, the wait for a
-/// shutting-down Owner, and the R/Q handling — so an error here ends the
-/// core thread until that row lands.
-fn attach(config: &Config) -> Result<App, AttachError> {
-    declare_gui_client();
-    let program = owner_program();
-    match find_owner().map_err(AttachError::Probe)? {
-        OwnerState::Start => {
-            let options = OwnerStartOptions {
-                owner_exe: Some(&program),
-                log_level: None,
-            };
-            start_owner(&options).map_err(AttachError::Start)?;
-        }
-        // A live Owner accepts connections; attach alongside it.
-        OwnerState::Attach => {}
-        OwnerState::Refuse => return Err(AttachError::Refused),
-    }
-    attach_owner(config, Some(&program)).map_err(AttachError::Attach)
-}
-
-/// The `mbv` program that becomes the Owner (design D9): the sibling of the
-/// running `mbv-gui` executable when one is installed beside it, else the
-/// `mbv` name on `PATH`. The Owner is never the GUI program.
-fn owner_program() -> PathBuf {
-    let name = format!("mbv{}", std::env::consts::EXE_SUFFIX);
-    if let Ok(exe) = std::env::current_exe()
-        && let Some(dir) = exe.parent()
-    {
-        let sibling = dir.join(&name);
-        if sibling.is_file() {
-            return sibling;
-        }
-    }
-    PathBuf::from(name)
 }
 
 /// The core thread's state (design D3): the attached `App`, the first
@@ -238,6 +172,9 @@ pub struct CoreThread {
     breakpoint: BreakpointClass,
     rx: Receiver<CoreInput>,
     sink: FrameSink,
+    /// The edge that closes the window (design D9): a routed quit key closes
+    /// the window through it, as the mismatch state's Quit does.
+    quit: QuitSink,
     /// The inputs one step's wait collected, for the tick's input phase.
     pending: Vec<CoreInput>,
     /// A `report_layout` arrived this tick: the frame emits changed or not
@@ -256,7 +193,7 @@ impl CoreThread {
     /// A core over an attached `App` (design D3): it owns the first slice's
     /// Surface state and the channel every input and wake feeds.
     #[must_use]
-    pub fn new(app: App, rx: Receiver<CoreInput>, sink: FrameSink) -> Self {
+    pub fn new(app: App, rx: Receiver<CoreInput>, sink: FrameSink, quit: QuitSink) -> Self {
         let mut focus = FocusStack::new();
         // The first slice mounts the Queue panel, the Queue playback band,
         // and the Status bar (design D4), and the Queue side holds focus.
@@ -276,8 +213,12 @@ impl CoreThread {
             breakpoint: BreakpointClass::Wide,
             rx,
             sink,
+            quit,
             pending: Vec::new(),
-            frame_requested: false,
+            // The frame the attach hands over emits on the first step, changed
+            // or not (design D9): the window must not keep the attach state it
+            // showed before the attach succeeded.
+            frame_requested: true,
             theme_pending: true,
             idle_cadence: CLIENT_IDLE_CADENCE,
         }
@@ -315,19 +256,7 @@ impl CoreThread {
                 }
             }
         }
-        let mut regions = HitMap::new();
-        for region in &report.regions {
-            regions.push(
-                HitRegion::new(
-                    region.rect.x,
-                    region.rect.y,
-                    region.rect.width,
-                    region.rect.height,
-                ),
-                region.target,
-            );
-        }
-        self.regions = regions;
+        self.regions = hit_map(&report.regions);
         self.breakpoint = classify(report.width, GUI_BREAKPOINTS);
     }
 
@@ -436,8 +365,10 @@ impl CoreThread {
                 let mut leaf = StatusBarLeaf::new(regions);
                 app.route_gui_pointer(gesture, Some(&mut leaf));
             }
-            // A point in no reported region resolves to nothing.
-            None => {}
+            // A pre-attach button region is the attach campaign's target: the
+            // attached slice resolves nothing for it, even when a stale
+            // report carried one — and so does a point in no reported region.
+            Some(RegionTarget::Attach(_)) | None => {}
         }
     }
 
@@ -463,6 +394,9 @@ impl CoreThread {
         }
         let outcome = ClientCore::tick(self, Instant::now());
         if outcome.quit_requested {
+            // The routed quit closes the window through the same edge the
+            // mismatch state's Quit uses (design D9).
+            (self.quit)();
             return false;
         }
         // A restart re-reads the landed Owner snapshot next iteration; the
@@ -506,7 +440,7 @@ impl CoreThread {
             breakpoint: self.breakpoint,
             theme_changed,
         });
-        (self.sink)(frame);
+        (self.sink)(GuiWindowFrame::Slice(Box::new(frame)));
     }
 }
 

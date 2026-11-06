@@ -26,7 +26,63 @@ use self::playback::GuiQueuePlayback;
 use self::queue::GuiQueue;
 use self::theme::GuiTheme;
 
-/// One frame (design D4), sent to the window as the `mbv://frame` event.
+/// One frame (design D4), sent to the window as the `mbv://frame` event. The
+/// front end keeps only the last frame, so each frame carries everything the
+/// window paints: the attached slice's frame, or the state a window whose
+/// Owner attach has not finished shows (design D9).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum GuiWindowFrame {
+    /// The attached slice: the focus, Queue, playback, footer, Status bar,
+    /// and breakpoint sections the window paints. The payload is boxed: the
+    /// attach state's frame is far smaller, and a frame the window never
+    /// sees while unattached should not size the whole enum for it.
+    Slice(Box<GuiFrame>),
+    /// The Owner attach's state (design D9): the window shows it while the
+    /// core thread resolves the attach, and paints no slice.
+    Attach(GuiAttachFrame),
+}
+
+/// The attach state's frame: the state the window shows, and the theme it
+/// paints it in (design D7). The theme follows the slice frame's arming rule:
+/// the first attach frame carries it, and the first frame after a
+/// `report_layout` re-arms it — the front end sends the report when it
+/// mounts, so a reload re-shows the state with its theme.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GuiAttachFrame {
+    /// The attach state the window shows.
+    pub state: GuiAttachState,
+    /// The role-to-colour map (design D7). `None` unless the theme changed
+    /// for this window.
+    pub theme: Option<GuiTheme>,
+}
+
+/// Why the window has no slice yet (design D9): one variant per Owner attach
+/// outcome, with the text `startup::run_local_instance` gives the TUI Client.
+/// The mismatch state's window paints Restart and Quit buttons and answers
+/// key R and key Q; every other state answers nothing.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "kind", content = "detail", rename_all = "camelCase")]
+pub enum GuiAttachState {
+    /// The Owner holds the lock but does not accept connections
+    /// (`OwnerState::Refuse`).
+    Refusal(String),
+    /// Stay-alive is off and another Client holds the Owner exclusively.
+    ExclusiveRefusal(String),
+    /// An Owner is shutting down; the window waits while the core thread
+    /// polls for its exit, then starts an Owner and attaches.
+    Waiting,
+    /// A build mismatch. The text names the mismatch and the restart's cost;
+    /// the window paints the Restart and Quit buttons.
+    Mismatch(String),
+    /// The attach failed with no recovery path; the text says why.
+    Failed(String),
+}
+
+/// The attached slice's frame (design D4): the focus, Queue, playback,
+/// footer, Status bar, and breakpoint sections, carried in
+/// [`GuiWindowFrame::Slice`].
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GuiFrame {

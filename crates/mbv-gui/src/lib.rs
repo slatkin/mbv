@@ -2,6 +2,7 @@
 //! of `add-tauri-gui-client`) and the bridge between the window's front end
 //! and the Rust Client core (design D4).
 
+pub mod attach;
 pub mod bridge;
 pub mod core_thread;
 mod leaves;

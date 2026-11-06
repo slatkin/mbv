@@ -7,11 +7,11 @@
 use std::ops::Deref;
 use std::sync::mpsc::Sender;
 
-use mbv_gui::bridge::frame::GuiFrame;
+use mbv_gui::bridge::frame::GuiWindowFrame;
 use mbv_gui::bridge::keys::{DomKey, neutral_key};
 use mbv_gui::bridge::layout::LayoutReport;
 use mbv_gui::bridge::pointer::{DomPointer, neutral_pointer};
-use mbv_gui::core_thread::{CoreInput, FrameSink};
+use mbv_gui::core_thread::{CoreInput, FrameSink, QuitSink};
 use mimalloc::MiMalloc;
 use tauri::{Emitter, Manager, State};
 
@@ -93,7 +93,7 @@ fn main() -> tauri::Result<()> {
             // The frames emit from the core thread, any thread, through the
             // window event loop (design D3).
             let handle = app.handle().clone();
-            let sink: FrameSink = Box::new(move |frame: GuiFrame| {
+            let sink: FrameSink = Box::new(move |frame: GuiWindowFrame| {
                 if let Err(error) = handle.emit(FRAME_EVENT, frame) {
                     tracing::warn!(
                         target: "gui_commands",
@@ -102,7 +102,23 @@ fn main() -> tauri::Result<()> {
                     );
                 }
             });
-            let channel = mbv_gui::core_thread::spawn(sink);
+            // The quit edge closes the window (design D9): the mismatch
+            // state's Quit and a routed quit key close it through here, and
+            // the app's exit drops the managed channel that ends the core
+            // thread.
+            let quit_handle = app.handle().clone();
+            let quit: QuitSink = Box::new(move || {
+                if let Some(window) = quit_handle.get_webview_window("main")
+                    && let Err(error) = window.close()
+                {
+                    tracing::warn!(
+                        target: "gui_core",
+                        error = %error,
+                        "the quit edge's window close failed"
+                    );
+                }
+            });
+            let channel = mbv_gui::core_thread::spawn(sink, quit);
             app.manage(CoreChannel(channel));
             Ok(())
         })

@@ -6,6 +6,7 @@
 //! `QueueTargetId` names `QueueHitTarget`, `QueuePlaybackTargetId` names
 //! `QueuePlaybackHitTarget`, and `StatusBarTargetId` names `StatusBarHitTarget`.
 
+use mbv_surfaces::{HitMap, HitRegion};
 use serde::Deserialize;
 
 /// One layout report (design D4). The front end sends it after each paint that
@@ -74,6 +75,42 @@ pub enum RegionTarget {
     QueuePlayback(QueuePlaybackTargetId),
     /// A Status bar region.
     StatusBar(StatusBarTargetId),
+    /// A pre-attach screen's button (design D9). The mismatch state's window
+    /// paints Restart and Quit; before attach the core thread resolves them
+    /// itself, so the press routes to the campaign, not to a surface leaf.
+    Attach(AttachTargetId),
+}
+
+/// The pre-attach screen's button targets (design D9), as the mismatch
+/// state's window paints them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum AttachTargetId {
+    /// The Restart button: the same choice key R makes.
+    Restart,
+    /// The Quit button: the same choice key Q makes.
+    Quit,
+}
+
+/// The hit map of one report's painted regions (design D4): the map a pointer
+/// press resolves against, in paint order. The core thread rebuilds it after
+/// every report, in the attached slice's step and in the attach campaign's
+/// mismatch state alike.
+#[must_use]
+pub(crate) fn hit_map(regions: &[LayoutRegion]) -> HitMap<RegionTarget> {
+    let mut map = HitMap::new();
+    for region in regions {
+        map.push(
+            HitRegion::new(
+                region.rect.x,
+                region.rect.y,
+                region.rect.width,
+                region.rect.height,
+            ),
+            region.target,
+        );
+    }
+    map
 }
 
 /// The Queue target ids, mirroring `QueueHitTarget`.
