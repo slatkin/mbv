@@ -3378,10 +3378,13 @@ dependencies = [
 name = "mbv-gui"
 version = "0.26.6"
 dependencies = [
+ "base64 0.22.1",
+ "image",
  "mbv",
  "mbv-config",
  "mbv-core",
  "mbv-daemon",
+ "mbv-images",
  "mbv-queue",
  "mbv-remote-player",
  "mbv-surfaces",

@@ -26,6 +26,7 @@ fn frame_after_tick(app: &mut App) -> GuiFrame {
         viewport_rows: VIEWPORT_ROWS,
         breakpoint: BreakpointClass::Wide,
         theme_changed: false,
+        artwork: None,
     })
 }
 

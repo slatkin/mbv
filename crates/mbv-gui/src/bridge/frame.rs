@@ -22,7 +22,7 @@ use serde::Serialize;
 
 use self::chrome::{GuiQueueFooter, GuiStatusBar};
 use self::focus::GuiFocus;
-use self::playback::GuiQueuePlayback;
+use self::playback::{GuiCardArtwork, GuiQueuePlayback};
 use self::queue::GuiQueue;
 use self::theme::GuiTheme;
 
@@ -120,6 +120,10 @@ pub struct FrameSources<'a> {
     /// Whether the window needs the theme in this frame: the first frame, and
     /// the first frame after the window reloads its content.
     pub theme_changed: bool,
+    /// The visual slot's artwork this frame arms (design D10): the prepared
+    /// value the core thread's memo built, `None` when the last frame already
+    /// carried it.
+    pub artwork: Option<GuiCardArtwork>,
 }
 
 impl GuiFrame {
@@ -129,7 +133,10 @@ impl GuiFrame {
         Self {
             focus: GuiFocus::from(sources.focus),
             queue: GuiQueue::from_surface(sources.queue, sources.viewport_rows),
-            playback: GuiQueuePlayback::from(&sources.app.queue_playback_projection()),
+            playback: GuiQueuePlayback {
+                artwork: sources.artwork.clone(),
+                ..GuiQueuePlayback::from(&sources.app.queue_playback_projection())
+            },
             footer: GuiQueueFooter::from(&sources.app.queue_footer_projection()),
             status: GuiStatusBar::from(&sources.app.status_bar_projection()),
             breakpoint: GuiBreakpoint::from(sources.breakpoint),

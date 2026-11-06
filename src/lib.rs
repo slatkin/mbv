@@ -22,10 +22,10 @@ mod startup;
 pub use self::app::{
     App, AppCommand, CLIENT_IDLE_CADENCE, ClientCore, ClientLifecycle, ClientTickHost, ClientWaker,
     Command, FooterPill, GuiInput, GuiSurfaceLeaf, HomeContent, HomeEventDrain, NavigationIntent,
-    OverlayFocus, PanelIntent, PlaybackIntent, PlayerEventDrain, QueueFooterProjection,
-    QueuePlaybackProjection, QueueSurfaceProjection, RemoteControlTarget, RouterOutcome,
-    RouterOverlayState, RouterPlaybackState, RouterSnapshot, ShellCommand, StartupWorkerDrain,
-    StatusBarProjection, TickOutcome, VisualIntent, WorkspaceRelayout,
+    OverlayFocus, PanelIntent, PlaybackIntent, PlayerEventDrain, QueueCardArtwork,
+    QueueFooterProjection, QueuePlaybackProjection, QueueSurfaceProjection, RemoteControlTarget,
+    RouterOutcome, RouterOverlayState, RouterPlaybackState, RouterSnapshot, ShellCommand,
+    StartupWorkerDrain, StatusBarProjection, TickOutcome, VisualIntent, WorkspaceRelayout,
     resolve_router_outcome_with_focused,
 };
 pub use self::config::{Config, load_config};

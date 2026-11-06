@@ -103,7 +103,18 @@ export interface GuiQueuePlayback {
 	showControls: boolean;
 	nowPlayingTitle: string | null;
 	availability: GuiTransportAvailability;
+	/** The visual slot's artwork; `null` unless the art changed for this
+	 * window (design D10) — the component keeps the last carried value. */
+	artwork: GuiCardArtwork | null;
 }
+
+/** The visual slot's artwork one frame carries (design D10). The image and
+ * placeholder payloads are `data:` URLs the core encoded from its cache. */
+export type GuiCardArtwork =
+	| { kind: 'image'; detail: string }
+	| { kind: 'placeholder'; detail: string }
+	| { kind: 'loading' }
+	| { kind: 'hidden' };
 
 export type GuiNowPlayingStatus = 'playing' | 'paused' | 'idle';
 

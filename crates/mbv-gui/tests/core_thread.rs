@@ -6,13 +6,14 @@ use std::sync::mpsc::{self, TryRecvError};
 use std::time::Duration;
 
 use mbv::{
-    App, load_config, stub_app_with_pending_settings_save, stub_app_with_prefix_and_toast,
-    stub_app_with_queue,
+    App, load_config, stub_app_with_pending_settings_save, stub_app_with_playing_queue,
+    stub_app_with_prefix_and_toast, stub_app_with_queue,
 };
 use mbv_config::{
     LaunchPanelFocus, TUI_LAUNCH_STATE_VERSION, TabIdentity, TestStateDirGuard, TuiLaunchState,
     load_tui_launch_state, save_tui_launch_state,
 };
+use mbv_gui::bridge::frame::playback::GuiCardArtwork;
 use mbv_gui::bridge::frame::queue::GuiQueueRow;
 use mbv_gui::bridge::frame::{GuiFrame, GuiWindowFrame};
 use mbv_gui::bridge::layout::{LayoutRect, LayoutRegion, LayoutReport, ListId, ListRows};
@@ -394,4 +395,30 @@ fn the_window_close_leaves_the_tui_launch_state_untouched() {
         load_tui_launch_state().map(|state| state.tab),
         Some(TabIdentity::Home)
     );
+}
+
+/// The visual slot's artwork rides the frame when the image is cached
+/// (design D10): the first frame carries the display encode as a `data:`
+/// URL, and a later frame arms it again only when the art changed.
+#[test]
+fn a_cached_artwork_rides_the_frame_once() {
+    let mut app = stub_app_with_playing_queue(1);
+    app.enable_card_images_for_test();
+    app.seed_card_image_for_test(
+        mbv_images::emby_queue_landscape_cache_key("id"),
+        image::DynamicImage::new(4, 4, image::ColorType::Rgb8),
+    );
+    let mut test = test_core_with(app);
+    assert!(test.core.step());
+    let frame = test.next_frame();
+    match frame.playback.artwork {
+        Some(GuiCardArtwork::Image(detail)) => {
+            assert!(detail.starts_with("data:image/jpeg;base64,"));
+        }
+        artwork => panic!("the frame carries the cached artwork: {artwork:?}"),
+    }
+    test.waker.wake();
+    assert!(test.core.step());
+    let second = test.next_frame();
+    assert!(second.playback.artwork.is_none());
 }

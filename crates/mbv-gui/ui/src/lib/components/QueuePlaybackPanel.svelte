@@ -36,6 +36,7 @@
 	import { reportLayout, retractLayout } from '$lib/bridge/layout';
 	import { roleProperty } from '$lib/bridge/theme';
 	import type {
+		GuiCardArtwork,
 		GuiNowPlayingStatus,
 		GuiQueuePlayback,
 		LayoutRegion,
@@ -50,6 +51,11 @@
 	/** The fixed row height in logical pixels, the queue list's row. */
 	const ROW_HEIGHT = 28;
 
+	/** The visual slot's box height in logical points (design D10): the
+	 * TUI's height-cap tiers are terminal-row geometry; the slot's box
+	 * fixes at this height and the artwork contains itself inside it. */
+	const ART_HEIGHT = 224;
+
 	/** Emby ticks in one second (`mbv_emby_model::TICKS_PER_SECOND`). */
 	const TICKS_PER_SECOND = 10_000_000;
 
@@ -61,6 +67,12 @@
 	let prevEl: HTMLElement | undefined = $state();
 	let nextEl: HTMLElement | undefined = $state();
 	let seekbarEl: HTMLElement | undefined = $state();
+	let artEl: HTMLElement | undefined = $state();
+
+	/** The visual slot's artwork the last frame carried (design D10): a
+	 * frame arms it again only when the core says the art changed, so the
+	 * slot keeps painting between frames. */
+	let art = $state<GuiCardArtwork | null>(null);
 
 	/** `fmt_duration_short`: `M:SS` under an hour, `H:MM:SS` at or over it. */
 	function fmtDurationShort(ticks: number): string {
@@ -133,8 +145,8 @@
 	}
 
 	/** The painted regions this frame's DOM reports (design D4), in the
-	 * TUI's report precedence: the transport controls, the seekbar, and the
-	 * header's playback-target indicator last. */
+	 * TUI's report precedence: the transport controls, the seekbar, the
+	 * visual slot, and the header's playback-target indicator last. */
 	function currentRegions(): LayoutRegion[] {
 		return [
 			region(playPauseEl, 'playPause'),
@@ -142,6 +154,7 @@
 			region(prevEl, 'previous'),
 			region(nextEl, 'next'),
 			region(seekbarEl, 'seekbar'),
+			region(artEl, 'visualSlot'),
 			region(targetEl, 'playbackTarget'),
 		].filter((entry) => entry !== null);
 	}
@@ -149,6 +162,11 @@
 	function report(): void {
 		reportLayout(reportKey, { lists: [], regions: currentRegions() });
 	}
+
+	/** The observer the mount and the art element's effect share; the
+	 * art element's own resizes report (design D4) — the artwork's
+	 * intrinsic size moves the transport column beside it. */
+	let artObserver: ResizeObserver | undefined;
 
 	// Each paint that moved a region reports (design D4): this effect runs
 	// after the DOM update, and the ResizeObserver reports layout-driven
@@ -158,20 +176,124 @@
 		report();
 	});
 
+	// The slot's artwork adoption (design D10): a frame's carried value
+	// replaces the last one; a frame without one keeps painting it.
+	$effect(() => {
+		if (playback.artwork) {
+			art = playback.artwork;
+		}
+	});
+
+	// The art element's resizes report: an artwork swap rebinds it, and its
+	// bitmap's load sizes it — both move the regions beside it.
+	$effect(() => {
+		const el = artEl;
+		const observer = artObserver;
+		if (!el || !observer) {
+			return;
+		}
+		observer.observe(el);
+		return () => observer.unobserve(el);
+	});
+
 	onMount(() => {
 		const observer =
 			typeof ResizeObserver === 'undefined'
 				? undefined
 				: new ResizeObserver(report);
+		artObserver = observer;
 		if (panelEl) {
 			observer?.observe(panelEl);
 		}
 		return () => {
 			observer?.disconnect();
+			artObserver = undefined;
 			retractLayout(reportKey);
 		};
 	});
 </script>
+
+{#snippet transportRows()}
+	<div
+		class="flex items-center gap-2 px-2"
+		style:height="{ROW_HEIGHT}px"
+		style:background="var(--mbv-secondary)"
+	>
+		<span
+			class="flex items-center"
+			bind:this={playPauseEl}
+			data-target="playPause"
+		>
+			{#if playback.playback.paused}
+				<Play
+					size={16}
+					fill={roleVar('accent')}
+					color={roleVar('accent')}
+				/>
+			{:else}
+				<Pause
+					size={16}
+					fill={roleVar('textFocusAccent')}
+					color={roleVar('textFocusAccent')}
+				/>
+			{/if}
+		</span>
+		<span class="flex items-center" bind:this={stopEl} data-target="stop">
+			<Square
+				size={14}
+				fill={glyphColor(playback.availability.stop, 'statusError')}
+				color={glyphColor(playback.availability.stop, 'statusError')}
+			/>
+		</span>
+		<span class="flex items-center" bind:this={prevEl} data-target="previous">
+			<SkipBack
+				size={14}
+				fill={glyphColor(playback.availability.previous, 'textStrong')}
+				color={glyphColor(playback.availability.previous, 'textStrong')}
+			/>
+		</span>
+		<span class="flex items-center" bind:this={nextEl} data-target="next">
+			<SkipForward
+				size={14}
+				fill={glyphColor(playback.availability.next, 'textStrong')}
+				color={glyphColor(playback.availability.next, 'textStrong')}
+			/>
+		</span>
+	</div>
+	<div class="flex items-center gap-1 px-2" style:height="{ROW_HEIGHT}px">
+		{#if playback.showControls}
+			<span
+				class="shrink-0 font-mono"
+				style:color={roleVar('playbackMetaFg')}
+				>{fmtDurationShort(playback.playback.positionTicks)}</span
+			>
+			<div
+				class="h-1.5 min-w-4 flex-1 overflow-hidden"
+				bind:this={seekbarEl}
+				data-target="seekbar"
+				style:background="var(--mbv-secondary)"
+			>
+				<div
+					class="h-full"
+					style:width="{seekRatio() * 100}%"
+					style:background="var(--mbv-accent)"
+				></div>
+			</div>
+			<span
+				class="shrink-0 font-mono"
+				style:color={roleVar('playbackMetaFg')}
+				>{fmtDurationShort(playback.playback.runtimeTicks)}</span
+			>
+		{:else}
+			<!-- The controls and seekbar carry no playback: the empty
+				track paints and resolves no seek. -->
+			<div
+				class="h-1.5 min-w-4 flex-1"
+				style:background="var(--mbv-progressTrack)"
+			></div>
+		{/if}
+	</div>
+{/snippet}
 
 <div class="bg-card" bind:this={panelEl}>
 	<!-- The header row: it paints in every state, idle included. -->
@@ -209,104 +331,39 @@
 	{#if playback.shown}
 		<!-- The transport band on the `QueueOnlyPlaybackPanel` fill. The
 			controls and seek rows paint only while a now-playing title rides,
-			as the TUI's `render_queue_panel` gates them; the frame carries no
-			visual-slot artwork, so no `visualSlot` region exists. -->
+			as the TUI's `render_queue_panel` gates them. While the visual
+			slot's artwork paints (design D10), the band takes the TUI's wide
+			arrangement: the artwork left, the transport beside it; without
+			one, the transport spans the band. -->
 		<div class="px-2 pb-2" style:background="var(--mbv-pillSelectedFg)">
 			{#if playback.nowPlayingTitle}
-				<div
-					class="flex items-center gap-2 px-2"
-					style:height="{ROW_HEIGHT}px"
-					style:background="var(--mbv-secondary)"
-				>
-					<span
-						class="flex items-center"
-						bind:this={playPauseEl}
-						data-target="playPause"
-					>
-						{#if playback.playback.paused}
-							<Play
-								size={16}
-								fill={roleVar('accent')}
-								color={roleVar('accent')}
-							/>
-						{:else}
-							<Pause
-								size={16}
-								fill={roleVar('textFocusAccent')}
-								color={roleVar('textFocusAccent')}
-							/>
-						{/if}
-					</span>
-					<span
-						class="flex items-center"
-						bind:this={stopEl}
-						data-target="stop"
-					>
-						<Square
-							size={14}
-							fill={glyphColor(playback.availability.stop, 'statusError')}
-							color={glyphColor(playback.availability.stop, 'statusError')}
-						/>
-					</span>
-					<span
-						class="flex items-center"
-						bind:this={prevEl}
-						data-target="previous"
-					>
-						<SkipBack
-							size={14}
-							fill={glyphColor(playback.availability.previous, 'textStrong')}
-							color={glyphColor(playback.availability.previous, 'textStrong')}
-						/>
-					</span>
-					<span
-						class="flex items-center"
-						bind:this={nextEl}
-						data-target="next"
-					>
-						<SkipForward
-							size={14}
-							fill={glyphColor(playback.availability.next, 'textStrong')}
-							color={glyphColor(playback.availability.next, 'textStrong')}
-						/>
-					</span>
-				</div>
-				<div
-					class="flex items-center gap-1 px-2"
-					style:height="{ROW_HEIGHT}px"
-				>
-					{#if playback.showControls}
-						<span
-							class="shrink-0 font-mono"
-							style:color={roleVar('playbackMetaFg')}
-							>{fmtDurationShort(playback.playback.positionTicks)}</span
-						>
-						<div
-							class="h-1.5 min-w-4 flex-1 overflow-hidden"
-							bind:this={seekbarEl}
-							data-target="seekbar"
-							style:background="var(--mbv-secondary)"
-						>
-							<div
-								class="h-full"
-								style:width="{seekRatio() * 100}%"
-								style:background="var(--mbv-accent)"
-							></div>
+				{#if art && art.kind !== 'hidden'}
+					<div class="flex" style:height="{ART_HEIGHT}px">
+						<div class="flex min-w-0 items-center justify-center">
+							{#if art.kind === 'loading'}
+								<div
+									class="aspect-square h-full"
+									bind:this={artEl}
+									data-target="visualSlot"
+									style:background="var(--mbv-textMuted)"
+								></div>
+							{:else}
+								<img
+									class="h-full max-w-full object-contain"
+									alt=""
+									bind:this={artEl}
+									data-target="visualSlot"
+									src={art.detail}
+								/>
+							{/if}
 						</div>
-						<span
-							class="shrink-0 font-mono"
-							style:color={roleVar('playbackMetaFg')}
-							>{fmtDurationShort(playback.playback.runtimeTicks)}</span
-						>
-					{:else}
-						<!-- The controls and seekbar carry no playback: the empty
-							track paints and resolves no seek. -->
-						<div
-							class="h-1.5 min-w-4 flex-1"
-							style:background="var(--mbv-progressTrack)"
-						></div>
-					{/if}
-				</div>
+						<div class="flex min-w-0 flex-1 flex-col">
+							{@render transportRows()}
+						</div>
+					</div>
+				{:else}
+					{@render transportRows()}
+				{/if}
 			{/if}
 		</div>
 	{/if}

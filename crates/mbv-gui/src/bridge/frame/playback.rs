@@ -5,7 +5,6 @@ use mbv::QueuePlaybackProjection;
 use mbv_ui_model::playback::PlaybackState;
 use mbv_ui_model::playback_target::NowPlayingStatus;
 use serde::Serialize;
-
 /// The Queue playback band's facts for one frame.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -26,6 +25,30 @@ pub struct GuiQueuePlayback {
     pub now_playing_title: Option<String>,
     /// Which transport controls are actionable.
     pub availability: GuiTransportAvailability,
+    /// The visual slot's artwork (design D10): `None` unless the slot's art
+    /// changed for this window — the theme's arming rule (design D7). The
+    /// front end keeps the last carried value and paints it until the next.
+    pub artwork: Option<GuiCardArtwork>,
+}
+
+/// The Queue playback visual slot's artwork one frame carries (design D10).
+/// The image and placeholder payloads are `data:` URLs: the artwork the
+/// window paints is the core's encoded cache bytes, never a fetch the
+/// webview makes (the CSP allows a `data:` image source for exactly this).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "kind", content = "detail", rename_all = "camelCase")]
+pub enum GuiCardArtwork {
+    /// The slot paints this image: the cached artwork's display encode, as a
+    /// `data:image/jpeg` URL.
+    Image(String),
+    /// The slot paints the bundled placeholder, as a `data:image/webp` URL.
+    Placeholder(String),
+    /// The slot paints the loading fill: a fetch is in flight or awaits its
+    /// retry.
+    Loading,
+    /// The slot paints nothing: idle, the user's hide toggle, images off, or
+    /// the visualizer owning the slot.
+    Hidden,
 }
 
 impl From<&QueuePlaybackProjection> for GuiQueuePlayback {
@@ -43,6 +66,7 @@ impl From<&QueuePlaybackProjection> for GuiQueuePlayback {
                 next: projection.availability.next,
                 previous: projection.availability.previous,
             },
+            artwork: None,
         }
     }
 }

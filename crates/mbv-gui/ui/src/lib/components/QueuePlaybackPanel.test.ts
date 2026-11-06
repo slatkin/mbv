@@ -26,6 +26,7 @@ class ResizeObserverStub {
 		ResizeObserverStub.instances.push(this);
 	}
 	observe() {}
+	unobserve() {}
 	disconnect() {}
 	fire() {
 		this.#callback([], this as unknown as ResizeObserver);
@@ -58,6 +59,7 @@ function playing(overrides: Partial<GuiQueuePlayback> = {}): GuiQueuePlayback {
 		showControls: true,
 		nowPlayingTitle: 'Track title',
 		availability: { stop: true, next: true, previous: false },
+		artwork: null,
 		...overrides,
 	};
 }
@@ -163,4 +165,34 @@ test('a paint reports the painted control regions', async () => {
 			width: 1024,
 		},
 	});
+});
+
+test('the slot paints the frame\'s artwork and keeps it between frames', async () => {
+	const art = 'data:image/jpeg;base64,AAAA';
+	const { container, rerender } = render(QueuePlaybackPanel, {
+		playback: playing({ artwork: { kind: 'image', detail: art } }),
+	});
+
+	// The carried image paints as the visual slot, in the band's wide
+	// arrangement (design D10).
+	const img = container.querySelector('img[data-target="visualSlot"]');
+	expect(img).toBeTruthy();
+	expect(img?.getAttribute('src')).toBe(art);
+
+	// The slot's paint reports its region (the TUI's VisualSlot hit
+	// target), ahead of the header's playback-target indicator.
+	await vi.waitFor(() => expect(invokeMock).toHaveBeenCalled());
+	const firstCall = invokeMock.mock.calls[0] as unknown as [
+		string,
+		{ report: { regions: { target: { id: string } }[] } },
+	];
+	const ids = firstCall[1].report.regions.map((entry) => entry.target.id);
+	expect(ids).toContain('visualSlot');
+
+	// A frame without a carried artwork keeps painting the last one: the
+	// core arms the artwork again only when the art changed (design D10).
+	await rerender({ playback: playing({ artwork: null }) });
+	expect(
+		container.querySelector('img[data-target="visualSlot"]')?.getAttribute('src'),
+	).toBe(art);
 });

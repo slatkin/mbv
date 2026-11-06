@@ -204,6 +204,7 @@ impl App {
             visualizer_window: mbv_visualizer::StereoSampleWindow::default(),
             visualizer_glyph: init.visualizer_glyph,
             queue_card_projection: mbv_ui_model::playback::QueueCardProjection::default(),
+            card_artwork_encoded: None,
             title_log_gate: crate::app::state::projection::card::TitleLogGate::default(),
             dim_backdrop_active: false,
             settings_destination: mbv_ui_model::settings::SettingsDestination::Main,

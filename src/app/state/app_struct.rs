@@ -321,6 +321,10 @@ pub struct App {
     /// the slot's image state; the painter reads this and paints. Refreshed
     /// by `Model::sync_queue`'s push while playback is active.
     pub(in crate::app) queue_card_projection: mbv_ui_model::playback::QueueCardProjection,
+    /// The display encode of the slot's cached artwork, keyed by the cache
+    /// key it encodes: the downscale-and-encode pass runs once per key so a
+    /// Client's frame reads stay encode-free between artwork changes.
+    pub(in crate::app) card_artwork_encoded: Option<(String, Vec<u8>)>,
     pub(in crate::app) title_log_gate: crate::app::state::projection::card::TitleLogGate,
     pub(in crate::app) dim_backdrop_active: bool,
     pub(in crate::app) settings_destination: SettingsDestination,

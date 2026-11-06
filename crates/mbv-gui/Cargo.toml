@@ -19,12 +19,16 @@ mbv = { path = "../.." }
 mbv-config = { path = "../mbv-config" }
 mbv-core = { path = "../mbv-core" }
 mbv-daemon = { path = "../mbv-daemon" }
+mbv-images = { path = "../mbv-images" }
 mbv-queue = { path = "../mbv-queue" }
 mbv-remote-player = { path = "../mbv-remote-player" }
 mbv-surfaces = { path = "../mbv-surfaces" }
 mbv-theme = { path = "../mbv-theme" }
 mbv-ui-model = { path = "../mbv-ui-model" }
 mbv-ui-msg = { path = "../mbv-ui-msg" }
+# The frame's artwork payloads ride as `data:` URLs (design D10): the
+# image bytes the core encodes base64 into the URL string.
+base64 = "0.22.1"
 mimalloc.workspace = true
 serde = { workspace = true, features = ["derive"] }
 tauri = "=2.12.5"
@@ -35,5 +39,7 @@ tauri-build = "=2.7.4"
 
 [dev-dependencies]
 mbv = { path = "../..", features = ["test"] }
+# The core-thread test seeds the card image cache with a decoded image.
+image = { workspace = true, features = ["png"] }
 rstest.workspace = true
 serde_json.workspace = true

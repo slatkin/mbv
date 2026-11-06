@@ -67,6 +67,7 @@ function sliceFrame(theme: GuiTheme | null): GuiWindowFrame {
 				showControls: false,
 				nowPlayingTitle: null,
 				availability: { stop: false, next: false, previous: false },
+				artwork: null,
 			},
 			footer: {
 				owner: { text: '', role: 'textPrimary', bold: false },

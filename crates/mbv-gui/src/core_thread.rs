@@ -31,6 +31,7 @@ use mbv_ui_model::queue_rows::queue_media_rows;
 use mbv_ui_model::settings::PanelFocus;
 use mbv_ui_msg::{ComponentId, KeyEvent, Msg, PointerEvent, Position, ServiceRequest};
 
+use crate::artwork::ArtworkFrames;
 use crate::attach::{AttachCampaign, LibraryOwnerSteps};
 use crate::bridge::frame::{FrameSources, GuiFrame, GuiWindowFrame};
 use crate::bridge::layout::{LayoutReport, ListId, QueueTargetId, RegionTarget, hit_map};
@@ -198,6 +199,9 @@ pub struct CoreThread {
     /// first frame, and every frame a `report_layout` triggers — the front
     /// end sends the report when it mounts, so a reload re-arms it.
     theme_pending: bool,
+    /// The frames' artwork memo (design D10): the value a frame arms, and
+    /// the encoded artwork a re-armed frame re-carries encode-free.
+    artwork: ArtworkFrames,
     /// The wait between ticks. Production keeps `CLIENT_IDLE_CADENCE`; the
     /// step test zeroes it.
     idle_cadence: Duration,
@@ -234,6 +238,7 @@ impl CoreThread {
             // showed before the attach succeeded.
             frame_requested: true,
             theme_pending: true,
+            artwork: ArtworkFrames::default(),
             idle_cadence: CLIENT_IDLE_CADENCE,
         }
     }
@@ -452,9 +457,12 @@ impl CoreThread {
 
     /// Build and emit the frame the window paints (design D4): the frame
     /// carries the theme when armed — the first frame, and every
-    /// `report_layout`-triggered frame (design D7).
+    /// `report_layout`-triggered frame (design D7) — and the visual slot's
+    /// artwork when the slot's art changed for this window (design D10).
     fn emit_frame(&mut self) {
         self.sync_queue_surface();
+        let artwork = self.app.queue_card_artwork();
+        let artwork = self.artwork.frame_value(&artwork);
         let theme_changed = std::mem::take(&mut self.theme_pending);
         let frame = GuiFrame::build(&FrameSources {
             app: &self.app,
@@ -463,6 +471,7 @@ impl CoreThread {
             viewport_rows: self.viewport_rows,
             breakpoint: self.breakpoint,
             theme_changed,
+            artwork,
         });
         (self.sink)(GuiWindowFrame::Slice(Box::new(frame)));
     }
@@ -577,9 +586,10 @@ impl ClientTickHost for CoreThread {
     }
 
     fn drain_card_image_completions(&mut self) -> bool {
-        // Only a sync pass that paints the visual slot issues card fetches;
-        // the first slice paints none, so the completion channel stays empty.
-        false
+        // The visual slot's artwork paints now (design D10): the slot's
+        // fetches resolve through this drain, so a completion's decoded
+        // image lands in the cache and the next frame carries it.
+        self.app.drain_card_image_completions()
     }
 
     fn drain_resize_responses(&mut self) -> bool {
@@ -650,6 +660,9 @@ impl ClientTickHost for CoreThread {
                     self.apply_layout(&report);
                     self.frame_requested = true;
                     self.theme_pending = true;
+                    // The reload forgets the front end's artwork too: the
+                    // next frame re-carries it, encode-free (design D10).
+                    self.artwork.rearm();
                 }
                 CoreInput::Close => {
                     // The window closed (design D9): the run ends as a quit
