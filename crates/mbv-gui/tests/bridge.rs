@@ -8,4 +8,5 @@ mod bridge {
     mod keys;
     mod layout;
     mod pointer;
+    mod theme;
 }

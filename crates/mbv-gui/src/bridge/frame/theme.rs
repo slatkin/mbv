@@ -1,26 +1,38 @@
-//! The theme section of a frame: the role-to-colour map (design D7).
+//! The theme section of a frame: the role-to-colour map and the chrome fills
+//! (design D7).
 //!
 //! `mbv-theme` keeps its role list crate-private, so the GUI mirrors the closed
 //! role set here. The two `From` conversions are exhaustive matches, so a role
 //! that is added on either side fails to compile until both sides carry it.
 //! [`GuiRole::ALL`] lists the mirror in declaration order and is the one list
 //! that the compiler does not check: a new role must be added there too.
+//!
+//! [`GuiTheme::chrome`] carries the fill values the front end's chrome
+//! variables point at (the review correction of design D7: the frame once
+//! carried foreground roles only, so the chrome could not follow the palette).
+//! It needs no mirror of its own: `mbv-theme`'s [`Surface`] set and the
+//! [`surface_colors`] resolver are public, so each chrome value resolves the
+//! named surface directly and the surface table stays the one fill authority.
 
 use std::collections::BTreeMap;
 
-use mbv_theme::{Rgb, Role};
+use mbv_theme::{Rgb, Role, Surface, surface_colors};
 use serde::Serialize;
 
-/// The active theme: one colour for every role (design D7). The front end writes
-/// each entry into a CSS custom property on `:root`.
+/// The active theme: one colour for every role (design D7) and the chrome
+/// fills the front end's shadcn-svelte variables point at. The front end
+/// writes each entry into a CSS custom property on `:root`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct GuiTheme {
     /// The colour of each role, keyed by the role's camelCase name.
     pub roles: BTreeMap<GuiRole, GuiRgb>,
+    /// The chrome fills ([`GuiChrome`]).
+    pub chrome: GuiChrome,
 }
 
 impl GuiTheme {
-    /// Resolves every role against the active theme with `Role::color`.
+    /// Resolves every role and chrome fill against the active theme: the
+    /// roles with `Role::color`, the chrome through [`surface_colors`].
     #[must_use]
     pub fn current() -> Self {
         Self {
@@ -28,8 +40,69 @@ impl GuiTheme {
                 .iter()
                 .map(|&role| (role, GuiRgb::from(Role::from(role).color())))
                 .collect(),
+            chrome: GuiChrome::current(),
         }
     }
+}
+
+/// The GUI chrome's fill values (design D7): the fills the front end's
+/// shadcn-svelte background, surface, border, and input variables point at.
+/// Each one resolves the [`Surface`] the TUI paints the same concept with,
+/// so the chrome tracks the palette with no second palette: a palette edit
+/// recolours the chrome together with the roles. Every field is a resting
+/// fill (`surface_colors(surface, false)`), because a chrome variable is not
+/// focus-reactive; the fill tiers the front end aliases are named in the
+/// field docs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct GuiChrome {
+    /// The app backdrop: `Surface::PlaybackPanel`, which the surface table
+    /// fixes at the backdrop in both focus states.
+    pub background: GuiRgb,
+    /// The content-body card: the resting fill of `Surface::MainContentBox`,
+    /// the generic pane inset. The TUI's content boxes are recesses that rest
+    /// on the backdrop tier, so this aliases `background`; the card reads
+    /// through its border and content, not a fill contrast.
+    pub card: GuiRgb,
+    /// A popup or dialog body: `Surface::PopupFrame`, the fill every TUI
+    /// popup and modal paints.
+    pub popover: GuiRgb,
+    /// A muted row or stripe: `Surface::ListStripe`, the zebra-stripe tier.
+    /// It shares `popover`'s tier today.
+    pub muted: GuiRgb,
+    /// A control row: `Surface::TransportRow`, the tier the TUI's controls
+    /// row owns (one step below the backdrop, per its 2026-10-10 colour
+    /// decision).
+    pub secondary: GuiRgb,
+    /// The sidebar body: `Surface::SidebarBody`.
+    pub sidebar: GuiRgb,
+    /// A border rule: `Surface::PopupBorder`, the tier of the modal frame's
+    /// border rule.
+    pub border: GuiRgb,
+    /// An input's border: `Surface::PopupBorder`, aliasing `border` — mbv has
+    /// one border-rule value, and an input's border is that rule.
+    pub input: GuiRgb,
+}
+
+impl GuiChrome {
+    /// Resolves every chrome fill against the active theme.
+    #[must_use]
+    pub fn current() -> Self {
+        Self {
+            background: chrome_fill(Surface::PlaybackPanel),
+            card: chrome_fill(Surface::MainContentBox),
+            popover: chrome_fill(Surface::PopupFrame),
+            muted: chrome_fill(Surface::ListStripe),
+            secondary: chrome_fill(Surface::TransportRow),
+            sidebar: chrome_fill(Surface::SidebarBody),
+            border: chrome_fill(Surface::PopupBorder),
+            input: chrome_fill(Surface::PopupBorder),
+        }
+    }
+}
+
+/// The resting fill of `surface`, as the chrome carries it.
+fn chrome_fill(surface: Surface) -> GuiRgb {
+    GuiRgb::from(surface_colors(surface, false).fill)
 }
 
 /// An 8-bit RGB colour, mirroring `mbv_theme::Rgb`.
