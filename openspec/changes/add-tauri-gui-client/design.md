@@ -15,13 +15,13 @@ The current state that shapes the approach (after `extract-client-core`, PR #984
 
 **Goals:**
 
-- A GUI Client that presents the first slice (Queue, Queue playback, Status bar) with the TUI's behaviour, through the shared Client core.
-- GUI text in the bundled SUSE face, rasterized by the webview through FreeType and fontconfig; Lucide icons.
+- A GUI Client that presents the player panel of the design canvas (D15), with the keyboard behaviour of the TUI, through the shared Client core.
+- GUI text in the bundled IBM Plex Sans and JetBrains Mono faces, rasterized by the webview through FreeType and fontconfig; Lucide icons.
 - A thin front end: it paints projections and reports input, capacity, and hit regions. It holds no interaction rules.
 
 **Non-Goals:**
 
-- Surfaces outside the slice, artwork, the visualizer, drag, column resize, `--pin`, tray, GUI-specific MPRIS work, packaging. The proposal lists them.
+- Surfaces outside the canvas, the visualizer, `--pin`, tray, GUI-specific MPRIS work, packaging. The proposal lists them.
 - Any change to ctrl, the Owner process, mpv, or the TUI.
 - A web or remote UI. The webview loads only bundled assets.
 
@@ -61,13 +61,26 @@ The core thread also emits the current frame, changed or not, after every `repor
 
 ### D4. The bridge contract
 
-Rust to front end, one event `mbv://frame` that carries a `GuiFrame`: the focus (surface and Panel), the Queue rows inside the current viewport with their stable `QueueSlotId`, cursor, marks, and the active slot; the Queue playback projection; the footer pills; the Status bar projection; the breakpoint class; and the theme (D7) when it changes. Each projection is a serde DTO in `mbv-gui/src/bridge/`, built from the library projections. The front end keeps only the last frame. The GUI Status bar shows the prefix-armed state and the toasts of the Status bar projection; it MAY show the toasts in a conventional GUI form that TUI geometry does not constrain.
+Rust to front end, one event `mbv://frame` that carries a `GuiFrame`:
+
+- the focus (surface and Panel);
+- the queue rows inside the current viewport with their stable `QueueSlotId`, cursor, marks, the active slot, watched and partial-progress state, and the right-column value of each row in both modes (length and finish clock);
+- the queue summary: remaining count, queue finish clock, the right-column mode, and the filter text;
+- the playback projection: title and parent line, season and episode badge, artwork, playback state, elapsed and remaining time and the finish clock, chapters with intro and credits marks, the trickplay source, and the transport state;
+- the playback target and the cast choices;
+- the track chips: the video stream, the audio track, and the subtitle track, each with its choices, the chosen one, and the subtitle offset;
+- the open menu or popover and its items, with key hints from the keybind registry;
+- the collapse and queue-fold toggles;
+- the footer line: the queue source, the session marker, the prefix-armed state, and the toasts;
+- the theme (D7) when it changes.
+
+Each projection is a serde DTO in `mbv-gui/src/bridge/`, built from the library projections. Where a library projection lacks a field, the change adds it to the projection first (the source-of-truth type), not to the DTO alone. The front end keeps only the last frame. The footer MAY show the toasts in a conventional GUI form that TUI geometry does not constrain.
 
 Front end to Rust, three commands:
 
 - `key(DomKey)`: the DOM `KeyboardEvent` fields (`key`, `code`, modifier flags, `repeat`). The Rust side translates them to a neutral `KeyEvent` (D6).
-- `pointer(DomPointer)`: kind (press, release, move, wheel), button, the position in logical pixels relative to the window, and the wheel delta.
-- `report_layout(LayoutReport)`: for each list, the number of whole visible rows, and the painted regions with their semantic target ids. The front end sends it after each paint that moved a region (a Svelte `$effect` after the DOM update, plus a `ResizeObserver`).
+- `pointer(DomPointer)`: kind (press, release, move, wheel), button, the position in logical pixels relative to the window, and the wheel delta. A move with a button held carries a drag, and a move over the scrubber carries the hover. The core resolves both against the hit map.
+- `report_layout(LayoutReport)`: for each list, the number of whole visible rows, the painted regions with their semantic target ids, and the container size of the panel. The front end sends it after each paint that moved a region (a Svelte `$effect` after the DOM update, plus a `ResizeObserver`).
 
 The core thread applies a `LayoutReport` to the Surface state's capacity and `HitMap`. `App::route_gui_pointer` resolves a gesture only against the leaf it receives. So the core thread first resolves the point against one combined `HitMap` of all painted slice surfaces from the last `LayoutReport`. Then it applies the focus change that the matching TUI click applies, and passes the surface that owns the region as the leaf to `App::route_gui_pointer`. A point in no region resolves to nothing (`client-interaction-core`: pointer targets resolve from a semantic hit map). A press on a transport control therefore works while the Queue panel has focus. The front end never decides what a click means.
 
@@ -76,6 +89,8 @@ The core thread applies a `LayoutReport` to the Surface state's capacity and `Hi
 ### D5. Lists paint only the viewport
 
 A GUI list is a fixed-row-height column with no native DOM scroll. The core's viewport decides which rows the frame carries. Wheel input goes to the core like any pointer event. So scroll follows the cursor through the same Surface state rules as the TUI. The front end measures the list's height and reports whole rows as capacity.
+
+Row drag follows the same path. The front end paints the insertion line and the drag ghost from the frame. The core owns the drag state (the dragged slot and the drop index) and, on release, sends one move request to the Owner process. `Alt+J` and `Alt+K` send the same request through the router.
 
 *Alternative:* native DOM scrolling with a virtual list. Rejected: the DOM would then own scroll position, which is a second scroll authority.
 
@@ -91,9 +106,9 @@ The DOM key fields are translated to `KeyEvent` in Rust, in `bridge/keys.rs`. A 
 
 ### D8. Fonts and icons
 
-The front end sets its text face to the bundled SUSE variable font (`@fontsource-variable/suse`, `font-family: 'SUSE Variable'` with `system-ui` as fallback) and keeps the system monospace font for monospace text, so WebKitGTK still renders through fontconfig and FreeType. The font's woff2 files build into `ui/dist` with the rest of the bundle, so the window fetches no font at runtime and the CSP's `default-src 'self'` covers `font-src`. Icons come from `@lucide/svelte`. The GUI paints no emoji or Nerd Font glyph. The playback-target indicator, the transport controls, and the playing-row marker are Lucide icons.
+The canvas sets the faces: IBM Plex Sans (400, 500, 600) for text, and JetBrains Mono (400, 500, 600) with tabular figures for times, key hints, chips, and counters. The front end bundles them (`@fontsource/ibm-plex-sans` and `@fontsource/jetbrains-mono`, latin subsets, woff2), with `system-ui` and `monospace` as fallbacks. WebKitGTK still renders through fontconfig and FreeType. The woff2 files build into `ui/dist` with the rest of the bundle, so the window fetches no font at runtime (the canvas loads them from Google Fonts; the build does not) and the CSP's `default-src 'self'` covers `font-src`. Icons come from `@lucide/svelte`. The GUI paints no emoji or Nerd Font glyph. The playback-target indicator, the transport controls, the grip, and the playing-row marker are Lucide icons.
 
-*Earlier choice:* the system UI font, with no font file in the bundle. Superseded on 2026-11-06: the user confirmed that GUI text uses the SUSE font.
+*Earlier choices:* the system UI font, then SUSE (2026-11-06). Both are superseded by the design canvas (D15). The implementer replaces the SUSE font package (`@fontsource-variable/suse`) with the two fontsource packages, pins them at their latest stable releases, and records the versions in D2.
 
 ### D9. Owner launch
 
@@ -111,13 +126,17 @@ Before attach there is no `App`. In these states the core thread handles R and Q
 
 The core thread does not run the TUI's post-attach service bootstrap. `spawn_startup_services`, `fetch_home_at_startup`, `init_idle_feed`, and capability registration (`src/app/shell/run/drains.rs:521`, `src/app/shell/run.rs:319-324`) belong to the TUI shell `Model`, not to `App`. The first slice presents no library surface (Non-Goals), so the core thread does not run those steps, and a configured-but-uncached provider does not bootstrap for the GUI Client. A later change that ports a library surface must first factor those steps into a shared Client step; it must not duplicate them in `mbv-gui`.
 
-### D10. Breakpoint
+### D10. Panel states
 
-The front end reports the window's inner width in logical pixels in `LayoutReport`. The core thread classifies it with the shared breakpoint classes and a GUI threshold constant in `mbv-gui`. The class's behaviour comes from the core. The classes differ only in Library and hero placement (`mbv-surfaces` `breakpoint.rs`), and the first slice presents neither. So in the first slice the class changes nothing visible. It is wired for later surfaces. The slice has no Narrow-specific layout of its own.
+The canvas switches the panel between four states (expanded, compact strip, expanded without queue, rail) on the panel's own size, through CSS container queries, not on the window size. The front end picks the layout this way. This is presentation: it holds no interaction state. The container size goes to the core in `LayoutReport` so that the hit map and the list capacity match the painted layout. The `z` (collapse) and `q` (queue fold) toggles live in the core and arrive in the frame.
+
+The shared TUI breakpoint classes (`Mini`, `Narrow`, `Wide`) are not used by the GUI slice. They differ only in Library and hero placement, and the canvas presents neither. A later change that ports a surface with Library placement decides then how it maps to the panel states.
+
+*Earlier choice:* classify the window width with the shared breakpoint classes and a GUI threshold constant. Superseded by the canvas.
 
 ### D11. Webview hardening
 
-The front end loads only the bundled assets. The CSP allows only `'self'` and Tauri's IPC origin. The Tauri capability file allows only the three mbv commands and the event listener. The webview's own context menu is turned off.
+The front end loads only the bundled assets. The CSP allows only `'self'` and Tauri's IPC origin. The Tauri capability file allows only the three mbv commands and the event listener. The webview's own context menu is turned off. Artwork and trickplay frames reach the window as bytes from the Rust side (an `img-src` of `'self' data: blob:` or a custom protocol, whichever the implementer picks), never as a remote URL, so the CSP still allows no remote origin.
 
 ### D12. tokio edge
 
@@ -127,11 +146,26 @@ The front end loads only the bundled assets. The CSP allows only `'self'` and Ta
 
 - Rust (nextest, `crates/mbv-gui/tests/`): the key translator table; `LayoutReport` applied to capacity and the hit map; a `GuiFrame` built from a stubbed `App` (the root `test` feature) for a queue with slots and for an empty queue; a core-thread step test with a mocked channel: input in, frame out, and a waker wake causes a tick; a press on the play/pause region while the Queue panel has focus dispatches the playback request (D4); and one `#[case]` table that maps each attach outcome to its window state (D9). No Tauri runtime, no webview, and no live Owner.
 - Front end (vitest with `@testing-library/svelte`, `@tauri-apps/api` mocked): a component renders a given frame, and a key or pointer event calls the right command with the right payload. These tests assert delivery and structure, not appearance.
+- Add to the Rust tests: the drag state (drop index from a pointer move, one move request on release) and the menu and popover items with their key hints. Add to the front-end tests: each panel state renders from a frame and a container size, and a press on the scrubber, a chip, a menu item, and the row-actions button calls `pointer` with the right payload.
 - Live behaviour in the real window is the user's manual check.
 
 ### D14. Build and CI
 
 `tauri::generate_context!` panics at compile time when the `frontendDist` directory does not exist (`tauri-codegen`, `src/context.rs`). Every `--workspace` build compiles `mbv-gui`, so it needs WebKitGTK 4.1 and a built `ui/`. The `build` and feature-matrix jobs in `.github/workflows/build.yml` add `webkit2gtk-4.1` and pnpm to their pacman installs, and build `ui/` before `cargo clippy --workspace` and `cargo hack check --workspace`. CI nextest runs only `default-members`, so a new GUI job runs `cargo nextest run -p mbv-gui` and the front-end check, lint, and test targets. The local `cargo clippy --workspace` gate has the same prerequisites.
+
+### D15. The design canvas is the target
+
+The target is the design canvas "mbv Svelte Player" (https://claude.ai/artifact/D8uLGS6NyCeHd6ed7PHgsr). It is a visual and structural target. Its inline-style markup is not copied. The front end builds the same layout from Svelte 5 components, shadcn-svelte parts where they fit (popover, menu, toggle group), and Tailwind, painted through the theme variables of D7.
+
+| Artboard | What it fixes | Spec requirement |
+| --- | --- | --- |
+| Queue panel — expanded | header, artwork, title, scrubber, transport, track chips, queue, footer; 30 px rows; Length / Ends at; finish clocks | player panel; scrubber; queue |
+| Collapsed states | compact strip, expanded without queue, 72 px rail; container-query switching; `z` and `q` | panel states |
+| Track popover, row menu, drag | subtitle popover with offset; row hover, grip, actions button, menu with key hints; drag ghost and insertion line; `Alt+J` / `Alt+K` | track chips; queue |
+
+Where the canvas and a TUI behaviour disagree, the canvas wins. Where the canvas is silent, keyboard behaviour follows the TUI through the one router, and a missing visual (the empty-queue state, the attach states of D9) follows the canvas's type, colour, and spacing.
+
+The canvas draws some things as static mockup: the hover preview, the open popover, the open menu, and the drag. They are states of the same components, driven by the frame (D4).
 
 ## Risks / Trade-offs
 
@@ -145,8 +179,12 @@ The front end loads only the bundled assets. The CSP allows only `'self'` and Ta
 
 ## Migration Plan
 
-There is no user data or protocol migration. `mbv-gui` is not packaged. Implementation starts after PR #984 merges. The order is: crate and front-end scaffold, the core thread and bridge, the slice components, theme and icons, then docs. Rollback is to remove `crates/mbv-gui`.
+There is no user data or protocol migration. `mbv-gui` is not packaged. Implementation starts after PR #984 merges. The order is: crate and front-end scaffold, the core thread and bridge, the slice components, theme and icons, then docs. Groups 1 to 5 of the tasks were built to the TUI-parity target. Group 6 retargets that code to the canvas. Rollback is to remove `crates/mbv-gui`.
 
 ## Open Questions
 
-- The GUI threshold constants for the breakpoint classes. The implementer picks values and records them in `mbv-gui`. They do not change the specs.
+- Where each new datum comes from (D4): the cast choices and the playback target, chapters and intro/credits marks, trickplay, the track lists and subtitle offset, and the finish clocks. Plan each from the Emby API docs and open-source clients, and from what the Owner already holds in the queue and playback state. Do not probe the user's server to decide. A datum that the Owner cannot supply today is a gap for the user to rule on before its task starts.
+- Audiobookshelf and Feed items: the canvas shows an episode. The implementer reports how the badge, the parent line, the chapters, and the track chips map for those kinds before task 6.3.
+- The meaning of the footer's right-hand marker ("woims ●" on the canvas): the session or server marker. Confirm the source before task 6.4.
+- The canvas palette is Everforest-like. Confirm that the default `mbv-theme` palette resolves to the same values, so that D7 reproduces the canvas by default.
+- The empty-queue state and the attach states are not drawn on the canvas (D15).
