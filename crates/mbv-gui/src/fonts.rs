@@ -1,5 +1,5 @@
-//! The GUI Client's embedded fonts (design D8): the SUSE typeface as the
-//! first proportional family and `JetBrains Mono` as the first monospace
+//! The GUI Client's embedded fonts (design D8): the Lexend Deca typeface as
+//! the first proportional family and `JetBrains Mono` as the first monospace
 //! family, both under the SIL Open Font License 1.1, with the license texts
 //! shipped beside the font files (`assets/fonts/`). egui's built-in fonts
 //! stay as fallbacks for glyphs these families do not have, such as emoji.
@@ -17,10 +17,10 @@ struct EmbeddedFont {
     bold: &'static [u8],
 }
 
-const SUSE: EmbeddedFont = EmbeddedFont {
-    family: "SUSE",
-    regular: include_bytes!("../assets/fonts/SUSE-Regular.ttf"),
-    bold: include_bytes!("../assets/fonts/SUSE-Bold.ttf"),
+const LEXEND_DECA: EmbeddedFont = EmbeddedFont {
+    family: "Lexend Deca",
+    regular: include_bytes!("../assets/fonts/LexendDeca-Regular.ttf"),
+    bold: include_bytes!("../assets/fonts/LexendDeca-Bold.ttf"),
 };
 
 const JETBRAINS_MONO: EmbeddedFont = EmbeddedFont {
@@ -34,7 +34,7 @@ const JETBRAINS_MONO: EmbeddedFont = EmbeddedFont {
 /// in each family behind the embedded ones as fallbacks.
 pub(crate) fn install(ctx: &egui::Context) {
     let mut fonts = egui::FontDefinitions::default();
-    for font in [&SUSE, &JETBRAINS_MONO] {
+    for font in [&LEXEND_DECA, &JETBRAINS_MONO] {
         fonts.font_data.insert(
             format!("{}-regular", font.family),
             egui::FontData::from_static(font.regular).into(),
@@ -46,7 +46,7 @@ pub(crate) fn install(ctx: &egui::Context) {
     }
     // Insert at index 0 so the embedded family leads and egui's built-ins
     // follow as fallbacks.
-    for (font, proportional) in [(&SUSE, true), (&JETBRAINS_MONO, false)] {
+    for (font, proportional) in [(&LEXEND_DECA, true), (&JETBRAINS_MONO, false)] {
         let family = if proportional {
             egui::FontFamily::Proportional
         } else {
