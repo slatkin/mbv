@@ -40,6 +40,6 @@ pub use self::startup::run;
 /// `test` feature, which no shipped build enables.
 #[cfg(feature = "test")]
 pub use self::app::{
-    stub_app_with_playing_queue, stub_app_with_prefix_and_toast, stub_app_with_queue,
-    stub_app_with_unsaved_queue,
+    stub_app_with_pending_settings_save, stub_app_with_playing_queue,
+    stub_app_with_prefix_and_toast, stub_app_with_queue, stub_app_with_unsaved_queue,
 };

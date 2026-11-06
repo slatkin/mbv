@@ -109,6 +109,25 @@ pub fn stub_app_with_prefix_and_toast(message: &str) -> App {
     app
 }
 
+/// The `App` a Client's test drives with a pending settings save armed: the
+/// config carries `consume_audio` and the save's deadline lies far in the
+/// future, so only an exit boundary's flush can persist it — the periodic
+/// maintenance the Client ticks run must not win the race the test observes.
+///
+/// # Panics
+///
+/// Panics while arming the save when the configuration lock is poisoned: a
+/// writer panicked holding it, and the cached configuration cannot be
+/// trusted.
+#[cfg(feature = "test")]
+#[must_use]
+pub fn stub_app_with_pending_settings_save() -> App {
+    let mut app = make_app_stub();
+    app.config.lock().unwrap().consume_audio = true;
+    app.settings_save_at = Some(std::time::Instant::now() + std::time::Duration::from_secs(3600));
+    app
+}
+
 /// The ordinary `App::build` construction over stub channels: no live
 /// Owner, no live Service, and the stub player whose command channel is
 /// already dropped.

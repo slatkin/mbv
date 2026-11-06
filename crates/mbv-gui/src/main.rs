@@ -6,6 +6,8 @@
 
 use std::ops::Deref;
 use std::sync::mpsc::Sender;
+use std::sync::{Arc, Mutex};
+use std::thread::JoinHandle;
 
 use mbv_gui::bridge::frame::GuiWindowFrame;
 use mbv_gui::bridge::keys::{DomKey, neutral_key};
@@ -82,7 +84,12 @@ fn main() -> tauri::Result<()> {
         Some(mbv_config::state_dir().join("mbv-gui.log")),
         &mbv_core::applog::LogSpec::default(),
     );
-    tauri::Builder::default()
+    // The core thread's join handle, set in `setup` and joined after the
+    // event loop ends: `main` holds the process until the run's exit
+    // teardown completes.
+    let core_thread: Arc<Mutex<Option<JoinHandle<()>>>> = Arc::new(Mutex::new(None));
+    let core_thread_slot = Arc::clone(&core_thread);
+    let app = tauri::Builder::default()
         // The webview's own context menu is off (design D11): the script runs
         // before the document parses on every page load, reload included, so
         // a right click reaches the `pointer` command instead of a webview
@@ -101,7 +108,7 @@ fn main() -> tauri::Result<()> {
                 push(window.app_handle().state::<CoreChannel>(), CoreInput::Close);
             }
         })
-        .setup(|app| {
+        .setup(move |app| {
             // The frames emit from the core thread, any thread, through the
             // window event loop (design D3).
             let handle = app.handle().clone();
@@ -116,8 +123,8 @@ fn main() -> tauri::Result<()> {
             });
             // The quit edge closes the window (design D9): the mismatch
             // state's Quit and a routed quit key close it through here, and
-            // the app's exit drops the managed channel that ends the core
-            // thread.
+            // the join after the event loop holds the process until the
+            // core thread's exit teardown completed.
             let quit_handle = app.handle().clone();
             let quit: QuitSink = Box::new(move || {
                 if let Some(window) = quit_handle.get_webview_window("main")
@@ -130,10 +137,23 @@ fn main() -> tauri::Result<()> {
                     );
                 }
             });
-            let channel = mbv_gui::core_thread::spawn(sink, quit);
+            let (channel, core_handle) = mbv_gui::core_thread::spawn(sink, quit);
             app.manage(CoreChannel(channel));
+            *core_thread_slot.lock().unwrap() = Some(core_handle);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![key, pointer, report_layout])
-        .run(tauri::generate_context!())
+        .build(tauri::generate_context!())?;
+    // The event loop ends on the window's destroy or the quit edge's close.
+    // The core thread's exit teardown must complete before the process exits
+    // (design D9's quit carries the shared teardown), so main joins the core
+    // thread here: the Tauri event loop would otherwise exit the process
+    // under a teardown still in flight and lose the state it persists.
+    let exit_code = app.run_return(|_, _| {});
+    if let Some(handle) = core_thread.lock().unwrap().take()
+        && let Err(panic) = handle.join()
+    {
+        tracing::error!(target: "gui_core", panic = ?panic, "the core thread panicked");
+    }
+    std::process::exit(exit_code)
 }

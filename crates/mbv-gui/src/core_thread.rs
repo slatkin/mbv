@@ -13,6 +13,7 @@
 
 use std::fmt;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
+use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use mbv::{
@@ -74,8 +75,9 @@ pub enum CoreInput {
     /// channel connected for the core thread's whole life, so a sender drop
     /// cannot carry the close, and the run ends on this input instead. The
     /// attached run answers it as a quit: the quit edge runs (a no-op on the
-    /// window that is already gone), the run ends, and the `App`'s drop
-    /// releases the Client.
+    /// window that is already gone), the run ends, and the run's exit
+    /// boundary tears the shared state down before the `App`'s drop releases
+    /// the Client.
     Close,
 }
 
@@ -90,21 +92,24 @@ pub type FrameSink = Box<dyn Fn(GuiWindowFrame) + Send + 'static>;
 pub type QuitSink = Box<dyn Fn() + Send + 'static>;
 
 /// Start the core thread (design D3): it loads the configuration, attaches
-/// to the Owner, and runs the tick loop for the life of the process. The
-/// thread is detached; nothing joins it. The run ends when the window
-/// closes — the `main` window's `Destroyed` event delivers a
-/// [`CoreInput::Close`] through the returned sender, which the Tauri
-/// commands push through; they never touch the `App` (design D3). The
-/// App's waker keeps the channel connected for the thread's whole life, so
-/// a sender drop cannot carry the close.
+/// to the Owner, and runs the tick loop for the life of the window. The
+/// thread ends when the window closes — the `main` window's `Destroyed`
+/// event delivers a [`CoreInput::Close`] through the returned sender, which
+/// the Tauri commands push through; they never touch the `App` (design D3).
+/// The App's waker keeps the channel connected for the thread's whole life,
+/// so a sender drop cannot carry the close.
+///
+/// The caller joins the returned handle after the window's event loop ends:
+/// the run's exit boundary runs the shared Client exit teardown, and the
+/// join holds the process until it completes, so a quit or a window close
+/// persists its state before the process exits.
 #[must_use]
-pub fn spawn(sink: FrameSink, quit: QuitSink) -> Sender<CoreInput> {
+pub fn spawn(sink: FrameSink, quit: QuitSink) -> (Sender<CoreInput>, JoinHandle<()>) {
     let (tx, rx) = mpsc::channel();
     // The waker's clone stays inside the `App`; the returned sender goes to
     // the commands' managed state.
     let waker_tx = tx.clone();
-    // Dropping the handle detaches the thread; nothing joins it.
-    std::thread::spawn(move || {
+    let handle = std::thread::spawn(move || {
         if let Err(error) = ensure_runtime_dir() {
             tracing::error!(
                 name: "gui_core.runtime_dir_failed",
@@ -148,7 +153,7 @@ pub fn spawn(sink: FrameSink, quit: QuitSink) -> Sender<CoreInput> {
             ),
         }
     });
-    tx
+    (tx, handle)
 }
 
 /// The core thread's state (design D3): the attached `App`, the first
@@ -385,8 +390,17 @@ impl CoreThread {
     /// then tick. The loop ends when the window closes — its close arrives
     /// as a [`CoreInput::Close`], and a routed quit key answers the same
     /// way — or when the channel itself ends.
+    ///
+    /// The run's exit boundary runs the shared Client exit teardown once,
+    /// after the loop, whichever edge ended it — a routed quit, the window's
+    /// close, or a channel end: the deferred settings save flushes, the
+    /// auto-reconnect record persists, and the daemon-lifetime policy applies
+    /// (daemon-lifecycle "Quitting a client follows Stay Alive and offers no
+    /// detach"). The join in `main` holds the process until it completes, so
+    /// the teardown survives the window's close.
     pub fn run(&mut self) {
         while self.step() {}
+        self.app.client_exit_teardown();
     }
 
     /// One step: wait for the next input, run one tick, and emit the frame a
@@ -640,8 +654,9 @@ impl ClientTickHost for CoreThread {
                 CoreInput::Close => {
                     // The window closed (design D9): the run ends as a quit
                     // does, so the same edge runs — a no-op on the window
-                    // that is already gone — and the App's drop releases
-                    // the Client.
+                    // that is already gone — and the run's exit boundary
+                    // tears the shared state down before the App's drop
+                    // releases the Client.
                     outcome.quit_requested = true;
                     break;
                 }

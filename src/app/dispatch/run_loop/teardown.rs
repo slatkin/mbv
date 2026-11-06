@@ -94,6 +94,32 @@ impl App {
         self.teardown_inner(quit_timeout, swapped_out);
     }
 
+    /// Run the exit teardown every Client shares, once, at its own exit
+    /// boundary: the deferred settings save flushes, the auto-reconnect
+    /// record persists under its setting (a clear included), and the daemon
+    /// lifetime policy applies — a coordinated shutdown request to this
+    /// machine's local daemon when Stay Alive is off, read at this boundary.
+    ///
+    /// The quit timeout is this `App`'s configured `quit_timeout_secs`. The
+    /// TUI shell reaches the same teardown through `App::teardown`, which
+    /// adds the launch snapshot the shell owns and the swapped-out exit kind,
+    /// and restores the terminal itself; a Client with no shell and no
+    /// terminal — the GUI Client — calls this directly and saves no launch
+    /// snapshot. A failed shutdown request sets the post-terminal message the
+    /// TUI prints after its terminal is restored; a terminal-less Client
+    /// drops it with the `App`, and the `daemon_shutdown` warnings carry the
+    /// failure.
+    ///
+    /// # Panics
+    ///
+    /// Panics while reading the quit timeout when the configuration lock is
+    /// poisoned: a writer panicked holding it, and the cached configuration
+    /// cannot be trusted.
+    pub fn client_exit_teardown(&mut self) {
+        let quit_timeout = Duration::from_secs(self.config.lock().unwrap().quit_timeout_secs);
+        self.teardown_inner(quit_timeout, false);
+    }
+
     fn teardown_inner(&mut self, quit_timeout: Duration, swapped_out: bool) {
         // Stop the visualizer before requesting daemon shutdown so its worker
         // can exit concurrently with the remote request.

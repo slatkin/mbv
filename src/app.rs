@@ -5,8 +5,8 @@ mod client_drains;
 mod dispatch;
 #[cfg(feature = "test")]
 pub use self::app_stub::{
-    stub_app_with_playing_queue, stub_app_with_prefix_and_toast, stub_app_with_queue,
-    stub_app_with_unsaved_queue,
+    stub_app_with_pending_settings_save, stub_app_with_playing_queue,
+    stub_app_with_prefix_and_toast, stub_app_with_queue, stub_app_with_unsaved_queue,
 };
 mod infra;
 mod input;

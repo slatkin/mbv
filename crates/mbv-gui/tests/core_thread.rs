@@ -5,7 +5,14 @@
 use std::sync::mpsc::{self, TryRecvError};
 use std::time::Duration;
 
-use mbv::{App, stub_app_with_prefix_and_toast, stub_app_with_queue};
+use mbv::{
+    App, load_config, stub_app_with_pending_settings_save, stub_app_with_prefix_and_toast,
+    stub_app_with_queue,
+};
+use mbv_config::{
+    LaunchPanelFocus, TUI_LAUNCH_STATE_VERSION, TabIdentity, TestStateDirGuard, TuiLaunchState,
+    load_tui_launch_state, save_tui_launch_state,
+};
 use mbv_gui::bridge::frame::queue::GuiQueueRow;
 use mbv_gui::bridge::frame::{GuiFrame, GuiWindowFrame};
 use mbv_gui::bridge::layout::{LayoutRect, LayoutRegion, LayoutReport, ListId, ListRows};
@@ -348,4 +355,43 @@ fn a_window_close_ends_the_run() {
     test.tx.send(CoreInput::Close).unwrap();
     assert!(!test.core.step());
     test.quits.try_recv().expect("the quit edge ran");
+}
+
+/// The run's exit boundary runs the shared Client exit teardown: a window
+/// close flushes the pending settings save at the boundary. The stub arms
+/// the save with a deadline far in the future, so only the boundary's flush
+/// can have persisted it — the periodic maintenance the ticks run must not
+/// win the race (the GUI exit persistence gap this wiring closes).
+#[test]
+fn the_window_close_flushes_the_pending_settings_save() {
+    let _guard = TestStateDirGuard::new();
+    let mut test = test_core_with(stub_app_with_pending_settings_save());
+    test.tx.send(CoreInput::Close).unwrap();
+    test.core.run();
+    test.quits.try_recv().expect("the quit edge fired");
+    assert!(load_config().unwrap().consume_audio);
+}
+
+/// The GUI's exit never writes the TUI's launch snapshot: the snapshot is
+/// the shell's alone (`tui-launch-state`), and the shared state dir makes a
+/// GUI write a clobber of the next TUI launch's restored location. The
+/// snapshot a test seeds survives the window's close.
+#[test]
+fn the_window_close_leaves_the_tui_launch_state_untouched() {
+    let _guard = TestStateDirGuard::new();
+    save_tui_launch_state(&TuiLaunchState {
+        version: TUI_LAUNCH_STATE_VERSION,
+        tab: TabIdentity::Home,
+        panel_focus: LaunchPanelFocus::Library,
+        selector: None,
+        item: None,
+    })
+    .unwrap();
+    let mut test = test_core(2);
+    test.tx.send(CoreInput::Close).unwrap();
+    test.core.run();
+    assert_eq!(
+        load_tui_launch_state().map(|state| state.tab),
+        Some(TabIdentity::Home)
+    );
 }
