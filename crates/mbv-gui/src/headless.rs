@@ -24,10 +24,16 @@ pub(crate) fn run_frame(ctx: &egui::Context, host: &mut GuiTickHost, raw_input: 
 
 /// One frame's input over a fixed window.
 pub(crate) fn frame_input(events: Vec<egui::Event>) -> egui::RawInput {
+    frame_input_at_width(480.0, events)
+}
+
+/// One frame's input over a window `width` logical points wide, at the test
+/// window's fixed height.
+pub(crate) fn frame_input_at_width(width: f32, events: Vec<egui::Event>) -> egui::RawInput {
     egui::RawInput {
         screen_rect: Some(egui::Rect::from_min_size(
             egui::Pos2::ZERO,
-            egui::vec2(480.0, 640.0),
+            egui::vec2(width, 640.0),
         )),
         events,
         ..egui::RawInput::default()

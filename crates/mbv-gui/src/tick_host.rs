@@ -17,6 +17,7 @@ use mbv::{
     App, ClientLifecycle, ClientTickHost, GuiInput, GuiSurfaceLeaf, HomeEventDrain,
     PlayerEventDrain, TickOutcome,
 };
+use mbv_surfaces::breakpoint::{BreakpointClass, BreakpointThresholds, classify};
 use mbv_surfaces::gesture::{PointerGesture, PointerGestureState};
 use mbv_ui_msg::{Msg, Position, ServiceRequest};
 
@@ -24,6 +25,15 @@ use crate::input::{WheelAccumulator, neutral_input};
 use crate::queue::{QueuePanel, split_bottom};
 use crate::queue_playback::QueuePlaybackPanel;
 use crate::status_bar::{STATUS_BAR_HEIGHT, StatusBarPanel};
+
+/// The GUI's breakpoint thresholds, in window logical points. The values are a
+/// presentation choice (design D10), not in the specs. They scale the TUI's
+/// 80-column mini view and its 120-column tuned width at about 8 points per
+/// column.
+const GUI_BREAKPOINTS: BreakpointThresholds<f32> = BreakpointThresholds {
+    mini_below: 640.0,
+    wide_from: 960.0,
+};
 
 /// The `App` the Client core drives, and the Client-owned parts of the tick.
 /// The GUI holds no interaction state here: cursor, selection, marks, and
@@ -54,6 +64,10 @@ pub(crate) struct GuiTickHost {
     /// wheel events fold into whole steps before the gesture policy sees
     /// them.
     wheel: WheelAccumulator,
+    /// The breakpoint class of the frame's window width, classified before each
+    /// paint (design D10). It starts Narrow until the first frame reports the
+    /// width, and nothing reads it for layout yet.
+    breakpoint: BreakpointClass,
 }
 
 impl GuiTickHost {
@@ -66,6 +80,7 @@ impl GuiTickHost {
             playback: QueuePlaybackPanel::new(),
             status: StatusBarPanel::new(),
             wheel: WheelAccumulator::new(),
+            breakpoint: BreakpointClass::Narrow,
         }
     }
 
@@ -84,8 +99,10 @@ impl GuiTickHost {
     /// Queue list, as the TUI's `queue_playback` placement sits above `queue`.
     /// The Queue panel holds the GUI's focus (the GUI's focus stack arrives
     /// with its later surfaces), so its appearance focus is focused. The Status
-    /// bar takes the window's bottom row, as the TUI's status row does.
+    /// bar takes the window's bottom row, as the TUI's status row does. The
+    /// frame classifies the window's width into its breakpoint class first.
     pub(crate) fn paint(&mut self, ctx: &egui::Context) {
+        self.breakpoint = classify(ctx.viewport_rect().width(), GUI_BREAKPOINTS);
         egui::CentralPanel::default()
             .frame(egui::Frame::NONE)
             .show(ctx, |ui| {
@@ -100,8 +117,10 @@ impl GuiTickHost {
 
 impl fmt::Debug for GuiTickHost {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // `App` is not `Debug`; the host adds no state of its own to print.
-        f.debug_struct("GuiTickHost").finish_non_exhaustive()
+        // `App` is not `Debug`; the host prints only its frame's breakpoint class.
+        f.debug_struct("GuiTickHost")
+            .field("breakpoint", &self.breakpoint)
+            .finish_non_exhaustive()
     }
 }
 
@@ -402,4 +421,11 @@ impl GuiTickHost {
     pub(crate) fn status_test_projection(&self) -> mbv::StatusBarProjection {
         self.status.test_projection()
     }
+
+    pub(crate) fn breakpoint_test_class(&self) -> BreakpointClass {
+        self.breakpoint
+    }
 }
+
+#[cfg(test)]
+mod tests;
