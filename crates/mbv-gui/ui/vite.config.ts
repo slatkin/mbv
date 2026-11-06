@@ -21,6 +21,6 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     include: ['src/**/*.test.ts'],
-    setupFiles: ['@testing-library/svelte/vitest'],
+    setupFiles: ['@testing-library/svelte/vitest', 'src/vitest.setup.ts'],
   },
 });
