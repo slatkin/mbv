@@ -44,6 +44,7 @@ function chrome(): GuiChrome {
 		sidebar: { r: 60, g: 61, b: 62 },
 		border: { r: 70, g: 71, b: 72 },
 		input: { r: 80, g: 81, b: 82 },
+		queueColumn: { r: 90, g: 91, b: 92 },
 	};
 }
 

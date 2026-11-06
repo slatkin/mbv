@@ -81,6 +81,10 @@ pub struct GuiChrome {
     /// An input's border: `Surface::PopupBorder`, aliasing `border` — mbv has
     /// one border-rule value, and an input's border is that rule.
     pub input: GuiRgb,
+    /// The queue column's backdrop: `Surface::QueueColumn`, the fill the TUI
+    /// paints as the queue column's gutter — the padding around the queue
+    /// column's recessed box, its playback band, and its footer band.
+    pub queue_column: GuiRgb,
 }
 
 impl GuiChrome {
@@ -96,6 +100,7 @@ impl GuiChrome {
             sidebar: chrome_fill(Surface::SidebarBody),
             border: chrome_fill(Surface::PopupBorder),
             input: chrome_fill(Surface::PopupBorder),
+            queue_column: chrome_fill(Surface::QueueColumn),
         }
     }
 }

@@ -310,8 +310,12 @@
 	</div>
 {/snippet}
 
-<div class="bg-card" bind:this={panelEl}>
-	<!-- The header row: it paints in every state, idle included. -->
+<div class="px-2 pt-1 pb-1" bind:this={panelEl}>
+	<!-- The header row: it paints in every state, idle included. The root
+		carries the queue placement's padding: the TUI's playback band sits
+		one row below the column's top edge and two columns inside it
+		(`queue_panel_inset`), and its last row is the gap row that keeps
+		the band clear of the recessed queue panel below. -->
 	<div
 		class="flex items-center gap-1 overflow-hidden px-2 whitespace-nowrap"
 		style:height="{ROW_HEIGHT}px"

@@ -22,4 +22,5 @@ fn chrome_values_resolve_their_documented_surfaces() {
     assert_eq!(chrome.sidebar, fill(Surface::SidebarBody));
     assert_eq!(chrome.border, fill(Surface::PopupBorder));
     assert_eq!(chrome.input, fill(Surface::PopupBorder));
+    assert_eq!(chrome.queue_column, fill(Surface::QueueColumn));
 }

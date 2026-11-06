@@ -131,94 +131,110 @@
 	>
 {/snippet}
 
-<div class="flex h-full flex-col bg-card" bind:this={panelEl}>
-	<div class="min-h-0 flex-1 overflow-hidden" bind:this={listEl}>
-		{#if queue.rows.length === 0}
+<!-- The TUI's queue panel arrangement (the `queue_panel_geometry`
+	structure): the placement sits two columns inside the queue column's
+	backdrop, the recessed queue-list box (`QueuePanel` fill) another two
+	columns inside the placement with its one-row top pad and bottom
+	spacer, and the footer band below the box: one gap row, the footer
+	row, one padding row — the rows the TUI's `queue_list_box`,
+	`queue_footer_row`, and `render_queue_status` place. -->
+<div class="mx-2 flex h-full flex-col" bind:this={panelEl}>
+	<div
+		class="mx-2 flex min-h-0 flex-1 flex-col py-1"
+		style:background="var(--mbv-card)"
+	>
+		<div class="min-h-0 flex-1 overflow-hidden" bind:this={listEl}>
+			{#if queue.rows.length === 0}
 			<div
 				class="flex h-full items-center justify-center font-bold"
 				style:color={roleVar('emptyQueueFg')}
 			>
 				{EMPTY_QUEUE_TEXT}
 			</div>
-		{:else}
-			{#each queue.rows as row, i (row.row === 'item' ? row.slot : `structural-${i}`)}
-				{#if row.row === 'item'}
-					{@const barred = bars(row.slot)}
-					<div
-						class="flex items-center gap-1 overflow-hidden px-2 whitespace-nowrap"
-						style:height="{ROW_HEIGHT}px"
-						style:background={barred ? 'var(--mbv-duration)' : undefined}
-						data-slot={row.slot}
-					>
-						{#if queue.active === row.slot}
-							<Play
-								size={14}
-								fill="currentColor"
-								color={barred ? 'var(--mbv-selectedRowFg)' : 'var(--mbv-accent)'}
-								class="shrink-0"
-							/>
-						{/if}
-						<span
-							class="truncate"
-							style:color={barred
-								? 'var(--mbv-selectedRowFg)'
-								: row.secondary
-									? 'var(--mbv-splitRowContextFg)'
-									: row.state.state === 'played'
-										? 'var(--mbv-textMuted)'
-										: 'var(--mbv-textEmphasis)'}>{row.primary}</span
+			{:else}
+				{#each queue.rows as row, i (row.row === 'item' ? row.slot : `structural-${i}`)}
+					{#if row.row === 'item'}
+						{@const barred = bars(row.slot)}
+						<div
+							class="flex items-center gap-1 overflow-hidden px-2 whitespace-nowrap"
+							style:height="{ROW_HEIGHT}px"
+							style:background={barred ? 'var(--mbv-duration)' : undefined}
+							data-slot={row.slot}
 						>
-						{#if row.secondary}
+							{#if queue.active === row.slot}
+								<Play
+									size={14}
+									fill="currentColor"
+									color={barred ? 'var(--mbv-selectedRowFg)' : 'var(--mbv-accent)'}
+									class="shrink-0"
+								/>
+							{/if}
 							<span
 								class="truncate"
 								style:color={barred
 									? 'var(--mbv-selectedRowFg)'
-									: row.state.state === 'played'
-										? 'var(--mbv-textMuted)'
-										: 'var(--mbv-splitRowTitleFg)'}>{row.secondary}</span
+									: row.secondary
+										? 'var(--mbv-splitRowContextFg)'
+										: row.state.state === 'played'
+											? 'var(--mbv-textMuted)'
+											: 'var(--mbv-textEmphasis)'}>{row.primary}</span
 							>
-						{/if}
-						{#if row.state.state === 'active' || row.state.state === 'nowPlaying'}
-							{#if row.state.progress !== null}
+							{#if row.secondary}
 								<span
+									class="truncate"
 									style:color={barred
-										? 'var(--mbv-selectedRowProgressFg)'
-										: 'var(--mbv-progressPercent)'}
-									>{row.state.progress}%</span
+										? 'var(--mbv-selectedRowFg)'
+										: row.state.state === 'played'
+											? 'var(--mbv-textMuted)'
+											: 'var(--mbv-splitRowTitleFg)'}>{row.secondary}</span
 								>
 							{/if}
-						{/if}
-						<span class="flex-1"></span>
-						{#if row.trailing}
-							<span
-								style:color={barred
-									? 'var(--mbv-selectedRowFg)'
-									: 'var(--mbv-statusAvailable)'}
-								>{row.trailing.gutter}</span
-							>
-						{/if}
-						{#if row.kind === 'media' && row.duration}
-							<span
-								style:color={barred
-									? 'var(--mbv-selectedRowFg)'
-									: 'var(--mbv-duration)'}>{row.duration}</span
-							>
-						{/if}
-					</div>
-				{:else if row.row === 'heading'}
-					<div
-						class="flex items-center overflow-hidden px-2 uppercase"
-						style:height="{ROW_HEIGHT}px"
-						style:color={roleVar('groupHeadingFg')}>{row.text}</div
-					>
-				{:else}
-					<div style:height="{ROW_HEIGHT}px"></div>
-				{/if}
-			{/each}
-		{/if}
+							{#if row.state.state === 'active' || row.state.state === 'nowPlaying'}
+								{#if row.state.progress !== null}
+									<span
+										style:color={barred
+											? 'var(--mbv-selectedRowProgressFg)'
+											: 'var(--mbv-progressPercent)'}
+										>{row.state.progress}%</span
+									>
+								{/if}
+							{/if}
+							<span class="flex-1"></span>
+							{#if row.trailing}
+								<span
+									style:color={barred
+										? 'var(--mbv-selectedRowFg)'
+										: 'var(--mbv-statusAvailable)'}
+									>{row.trailing.gutter}</span
+								>
+							{/if}
+							{#if row.kind === 'media' && row.duration}
+								<span
+									style:color={barred
+										? 'var(--mbv-selectedRowFg)'
+										: 'var(--mbv-duration)'}>{row.duration}</span
+								>
+							{/if}
+						</div>
+					{:else if row.row === 'heading'}
+						<div
+							class="flex items-center overflow-hidden px-2 uppercase"
+							style:height="{ROW_HEIGHT}px"
+							style:color={roleVar('groupHeadingFg')}>{row.text}</div
+						>
+					{:else}
+						<div style:height="{ROW_HEIGHT}px"></div>
+					{/if}
+				{/each}
+			{/if}
+		</div>
 	</div>
+	<!-- The gap row between the recessed box and the footer band, and the
+		placement's bottom padding row below the footer: both keep the queue
+		column's backdrop the placement sits on. -->
+	<div class="h-1"></div>
 	<div
-		class="flex items-center justify-between px-2"
+		class="mx-2 flex items-center justify-between px-2"
 		style:height="{ROW_HEIGHT}px"
 		style:background="var(--mbv-pillSelectedFg)"
 	>
@@ -235,4 +251,5 @@
 			{@render footerPill(footer.owner)}
 		</div>
 	</div>
+	<div class="h-1"></div>
 </div>

@@ -191,6 +191,10 @@ export interface GuiChrome {
 	sidebar: GuiRgb;
 	border: GuiRgb;
 	input: GuiRgb;
+	/** The queue column's backdrop: the fill the TUI paints as the queue
+	 * column's gutter around its recessed box, playback band, and footer
+	 * band. */
+	queueColumn: GuiRgb;
 }
 
 export interface GuiRgb {
