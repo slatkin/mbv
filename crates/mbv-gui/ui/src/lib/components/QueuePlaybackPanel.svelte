@@ -15,7 +15,10 @@
 	// `TransportRow`, the BgDim1 slot `--mbv-secondary` carries (design D7).
 	// Every control is a Lucide icon (design D8: no emoji or Nerd Font
 	// glyph), and the seekbar is a filled track with the elapsed and total
-	// times the TUI flanks it with.
+	// times the TUI flanks it with. The transport glyphs paint as solid
+	// shapes in their role colour — `fill` and `stroke` on the icon's own
+	// colour, the TUI's solid Nerd Font glyphs — while the indicators and
+	// every other icon keep Lucide's outline shapes.
 	//
 	// The component interprets no pointer event: it paints and reports its
 	// regions through the shared layout reporter, and the core resolves a
@@ -106,6 +109,12 @@
 	/** The `var(--mbv-<role>)` value a part paints in. */
 	function roleVar(role: string): string {
 		return `var(${roleProperty(role)})`;
+	}
+
+	/** A transport glyph's colour: its role while actionable, muted when
+	 * not — the availability gates the TUI's glyph colours carry. */
+	function glyphColor(available: boolean, role: string): string {
+		return available ? roleVar(role) : roleVar('textMuted');
 	}
 
 	/** One element's painted region, `null` while the element is absent. */
@@ -215,12 +224,16 @@
 						data-target="playPause"
 					>
 						{#if playback.playback.paused}
-							<Play size={16} fill="currentColor" color="var(--mbv-accent)" />
+							<Play
+								size={16}
+								fill={roleVar('accent')}
+								color={roleVar('accent')}
+							/>
 						{:else}
 							<Pause
 								size={16}
-								fill="currentColor"
-								color="var(--mbv-textFocusAccent)"
+								fill={roleVar('textFocusAccent')}
+								color={roleVar('textFocusAccent')}
 							/>
 						{/if}
 					</span>
@@ -231,10 +244,8 @@
 					>
 						<Square
 							size={14}
-							fill="currentColor"
-							color={playback.availability.stop
-								? 'var(--mbv-statusError)'
-								: 'var(--mbv-textMuted)'}
+							fill={glyphColor(playback.availability.stop, 'statusError')}
+							color={glyphColor(playback.availability.stop, 'statusError')}
 						/>
 					</span>
 					<span
@@ -244,10 +255,8 @@
 					>
 						<SkipBack
 							size={14}
-							fill="currentColor"
-							color={playback.availability.previous
-								? 'var(--mbv-textStrong)'
-								: 'var(--mbv-textMuted)'}
+							fill={glyphColor(playback.availability.previous, 'textStrong')}
+							color={glyphColor(playback.availability.previous, 'textStrong')}
 						/>
 					</span>
 					<span
@@ -257,10 +266,8 @@
 					>
 						<SkipForward
 							size={14}
-							fill="currentColor"
-							color={playback.availability.next
-								? 'var(--mbv-textStrong)'
-								: 'var(--mbv-textMuted)'}
+							fill={glyphColor(playback.availability.next, 'textStrong')}
+							color={glyphColor(playback.availability.next, 'textStrong')}
 						/>
 					</span>
 				</div>

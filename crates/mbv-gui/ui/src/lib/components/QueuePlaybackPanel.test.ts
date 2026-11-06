@@ -105,6 +105,28 @@ test('an idle frame renders the header alone', () => {
 	expect(container.querySelector('[data-target="seekbar"]')).toBeNull();
 });
 
+test.each([
+	[
+		'playPause',
+		'var(--mbv-textFocusAccent)',
+	],
+	['stop', 'var(--mbv-statusError)'],
+	['previous', 'var(--mbv-textMuted)'],
+	['next', 'var(--mbv-textStrong)'],
+])('%s paints as a solid shape in its role colour', (target, colour) => {
+	const { container } = render(QueuePlaybackPanel, {
+		playback: playing(),
+	});
+
+	// A playing frame paints the pause glyph, not the play one; the colour
+	// rule is fill = the glyph's own role colour, never the inherited text
+	// colour the `currentColor` fill would resolve to (the user-reported
+	// outline look).
+	const svg = container.querySelector(`[data-target="${target}"] svg`);
+	expect(svg?.getAttribute('fill')).toBe(colour);
+	expect(svg?.getAttribute('stroke')).toBe(colour);
+});
+
 test('a paint reports the painted control regions', async () => {
 	render(QueuePlaybackPanel, { playback: playing() });
 	await vi.waitFor(() => expect(invokeMock).toHaveBeenCalledTimes(1));
