@@ -4,5 +4,6 @@
 //! `tests/bridge/` (one binary per crate; no `mod.rs`).
 
 mod bridge {
+    mod frame;
     mod keys;
 }
