@@ -2,11 +2,11 @@
 	// The Queue playback panel (add-tauri-gui-client task 3.4, design D4): the
 	// queue column's transport band. The header row paints in every state —
 	// the playback-target indicator (a Lucide icon, local vs remote by its
-	// role colour), the remote host name, and the right-aligned status word;
-	// the now-playing title paints on its own row below the header. The
-	// transport band paints only while the frame's `shown` says a transport
-	// exists (idle collapses it), and its controls and seek row paint only
-	// while a now-playing title rides, the same gates the TUI's
+	// role colour), the remote host name, the now-playing title in its zone
+	// between the target and the right-aligned status word, and that status
+	// word. The transport band paints only while the frame's `shown` says a
+	// transport exists (idle collapses it), and its controls and seek row
+	// paint only while a now-playing title rides, the same gates the TUI's
 	// `render_queue_panel` applies.
 	//
 	// The paint mirrors the TUI's queue band
@@ -245,6 +245,9 @@
 				? undefined
 				: new ResizeObserver(report);
 		artObserver = observer;
+		// Seed the column's width in cells before the first paint, so a wide
+		// window never paints one stacked frame while the observer spins up.
+		columnCells = Math.floor((panelEl?.clientWidth ?? 0) / CELL_COL_PX);
 		if (panelEl) {
 			observer?.observe(panelEl);
 		}
@@ -272,8 +275,7 @@
 		style:padding-inline="var(--mbv-cell-col)"
 		style:background="var(--mbv-queuePlaybackBand)"
 	>
-		<span
-			class="flex shrink-0 items-center"
+		<span class="flex shrink-0 items-center"
 			style:gap="var(--mbv-cell-col)"
 			bind:this={targetEl}
 			data-target="playbackTarget"
@@ -294,7 +296,24 @@
 				<Cast size={CELL_COL_PX} color="var(--mbv-playbackTargetLocalFg)" />
 			{/if}
 		</span>
-		<span class="flex-1"></span>
+		<!-- The now-playing title's zone, between the target and the
+			right-aligned status word, one space clear of each: the TUI's
+			`Header` title site (`render_header_title`), which is the site the
+			GUI's own slot projection records — its slot carries the base art
+			with no composed overlay, so the title stays on the header row. The
+			zone is the row's one grower, so a short title hugs the target and a
+			long one truncates at the zone's end where the TUI's marquee scrolls
+			it (the frame carries no clock). -->
+		{#if playback.nowPlayingTitle}
+			<span
+				class="min-w-0 flex-1 truncate"
+				style:padding-inline="var(--mbv-cell-col)"
+				style:color={roleVar('playbackContextFg')}
+				>{playback.nowPlayingTitle}</span
+			>
+		{:else}
+			<span class="flex-1"></span>
+		{/if}
 		<span class="font-bold" style:color={statusColor(playback.status)}
 			>{statusWord(playback.status)}</span
 		>
@@ -404,8 +423,9 @@
 							</span>
 						{/if}
 					</div>
-					<!-- The band's blank row between the controls and the seekbar: the
-						TUI's former title row, kept blank (the title lives elsewhere). -->
+					<!-- The band's blank row between the controls and the seekbar:
+						the TUI's title row, blank because the now-playing title
+						rides the header row. -->
 					<div style:height="var(--mbv-cell-row)"></div>
 					<div
 						class="flex items-center"
@@ -422,7 +442,8 @@
 								>{fmtDurationShort(playback.playback.positionTicks)}</span
 							>
 							<div
-								class="h-full min-w-4 flex-1"
+								class="h-full flex-1"
+								style:min-width="calc(var(--mbv-cell-col) * 4)"
 								bind:this={seekbarEl}
 								data-target="seekbar"
 								style:background="var(--mbv-secondary)"
@@ -453,43 +474,26 @@
 				{:else}
 					<!-- Without a now-playing title the TUI paints the four band rows
 						as blanks on the band's own fill (`render_queue_panel`): the
-						controls, former-title, seek, and gap rows. -->
+						controls, blank, seek, and gap rows. -->
 					<div style:height="var(--mbv-cell-row)"></div>
 					<div style:height="var(--mbv-cell-row)"></div>
 					<div style:height="var(--mbv-cell-row)"></div>
 					<div style:height="var(--mbv-cell-row)"></div>
 				{/if}
 			{/snippet}
-			{#if playback.nowPlayingTitle}
-				<!-- The now-playing title's own row, below the column top and
-					inset one column each side: the TUI composites the artwork-site
-					title into the image's top text row, so the header row paints
-					only the target and the status word. The frame carries the
-					plain title in the projection's `PlaybackValueFg` role; the
-					TUI's scrolling marquee needs a clock the frame does not carry,
-					so the row truncates with the slice's ellipsis treatment. -->
-				<div
-					class="flex items-center overflow-hidden whitespace-nowrap"
-					style:height="var(--mbv-cell-row)"
-					style:padding-inline="var(--mbv-cell-col)"
-				>
-					<span
-						class="truncate"
-						style:color={roleVar('playbackValueFg')}
-						>{playback.nowPlayingTitle}</span
-					>
-				</div>
-			{/if}
 			{#if art && art.kind !== 'hidden'}
 				<!-- The visual slot: `render_card_painting` fits the image
 					within the slot region's width and the queue column's height
 					tier (`queue_card_height_cap`) — left-aligned in the wide
 					arrangement, centered when stacked. No fixed box: the image's
 					own fit sizes the rows, and the loading reservation is the
-					TUI's capped square estimate. -->
+					TUI's capped square estimate. The wide branch pins the
+					transport to the slot region's top (`queue_playback_transport_
+					area` returns `y: slot_region.y`), so the controls row aligns
+					with the artwork's top edge. -->
 				{#if wide}
 					<div
-						class="flex items-center"
+						class="flex items-start"
 						style:gap="calc(var(--mbv-cell-col) * 2)"
 					>
 						{@render artwork(art)}
