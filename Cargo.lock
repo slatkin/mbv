@@ -3378,7 +3378,10 @@ dependencies = [
 name = "mbv-gui"
 version = "0.26.6"
 dependencies = [
+ "mbv-ui-msg",
  "mimalloc",
+ "rstest",
+ "serde",
  "tauri",
  "tauri-build",
 ]
