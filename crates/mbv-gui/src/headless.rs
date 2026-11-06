@@ -24,6 +24,17 @@ pub(crate) fn run_frame(ctx: &egui::Context, host: &mut GuiTickHost, raw_input: 
     .drop_without_applying_deltas();
 }
 
+/// One logic-only pass, as eframe runs it while the window is hidden or
+/// minimized: the Client core's tick, then the surface sync, with no `Ui` and
+/// no paint (`App::logic` alone). Such a pass does not interpret the frame's
+/// input, so `ctx.input()` still holds the last shown pass's events.
+pub(crate) fn run_logic_only(ctx: &egui::Context, host: &mut GuiTickHost) {
+    let _ = ctx.run_logic(&egui::RawInput::default(), |_| {
+        ClientCore::tick(host, Instant::now());
+        host.sync_surfaces();
+    });
+}
+
 /// One frame's input over a fixed window.
 pub(crate) fn frame_input(events: Vec<egui::Event>) -> egui::RawInput {
     frame_input_at_width(480.0, events)

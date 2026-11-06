@@ -4,7 +4,7 @@
 
 use eframe::egui;
 
-use crate::headless::{frame_input, key_input, run_frame};
+use crate::headless::{frame_input, key_input, run_frame, run_logic_only};
 use crate::tick_host::GuiTickHost;
 use mbv_queue::QueueSlotId;
 use mbv_ui_model::media_list::{MediaKind, MediaListRow, MediaSemanticState};
@@ -135,42 +135,35 @@ fn visual_selection_claims_space_ahead_of_the_global_toggle() {
     let mut host = GuiTickHost::new(mbv::stub_app_with_queue(4), ctx.clone());
     run_frame(&ctx, &mut host, frame_input(Vec::new()));
 
-    // Shift+V begins Visual mode at the cursor: the press arrives as egui's
-    // caseless key with SHIFT plus its `Text` twin, the shape the
-    // translation edge maps to the neutral chord. The `Text` twin reads the
-    // frame's modifier state, which the frame's `ModifiersChanged` event sets
-    // (as winit reports it), so the fixture sends that event.
-    let mut shift_v = frame_input(vec![
-        egui::Event::Key {
-            key: egui::Key::V,
-            physical_key: None,
-            pressed: true,
-            repeat: false,
-            modifiers: egui::Modifiers::SHIFT,
-        },
-        egui::Event::Text("V".to_string()),
-    ]);
-    shift_v
-        .events
-        .push(egui::Event::ModifiersChanged(egui::Modifiers::SHIFT));
-    run_frame(&ctx, &mut host, shift_v);
+    run_frame(&ctx, &mut host, shift_v_input());
     assert_eq!(host.queue_test_mark_count(), 1);
 
-    run_frame(
-        &ctx,
-        &mut host,
-        frame_input(vec![
-            egui::Event::Key {
-                key: egui::Key::Space,
-                physical_key: None,
-                pressed: true,
-                repeat: false,
-                modifiers: egui::Modifiers::NONE,
-            },
-            egui::Event::Text(" ".to_string()),
-        ]),
-    );
+    run_frame(&ctx, &mut host, space_input());
     assert_eq!(host.queue_test_mark_count(), 0);
+}
+
+/// Review P1 on row 6.10 (W1 review): a press routes once, including across
+/// the logic-only passes after it. eframe runs `logic` with no `ui` while the
+/// window is hidden, and `ctx.input()` still holds the last shown pass's
+/// events there. The shown frame's Space goes to Visual mode, so no play/pause
+/// toast may appear afterwards; a re-routed press reaches the global toggle
+/// and flashes "Pause requested".
+#[test]
+fn a_space_press_routes_once_across_logic_only_passes() {
+    let ctx = egui::Context::default();
+    let mut host = GuiTickHost::new(mbv::stub_app_with_queue(4), ctx.clone());
+    run_frame(&ctx, &mut host, frame_input(Vec::new()));
+    run_frame(&ctx, &mut host, shift_v_input());
+    run_frame(&ctx, &mut host, space_input());
+    assert_eq!(host.queue_test_mark_count(), 0);
+    assert!(host.status_test_projection().toast.is_none());
+
+    run_logic_only(&ctx, &mut host);
+    assert_eq!(host.queue_test_mark_count(), 0);
+    assert!(host.status_test_projection().toast.is_none());
+    run_logic_only(&ctx, &mut host);
+    assert_eq!(host.queue_test_mark_count(), 0);
+    assert!(host.status_test_projection().toast.is_none());
 }
 
 /// Review finding 3 (row 6.4, EDGE): a title wider than its column paints
@@ -220,6 +213,42 @@ fn row_rect() -> egui::Rect {
 fn row_centre(row: u16) -> egui::Pos2 {
     let list_top = 3.0 * super::PANEL_PADDING + super::ROW_HEIGHT;
     egui::pos2(240.0, list_top + (f32::from(row) + 0.5) * super::ROW_HEIGHT)
+}
+
+/// Shift+V begins Visual mode at the cursor: the press arrives as egui's
+/// caseless key with SHIFT plus its `Text` twin, the shape the translation
+/// edge maps to the neutral chord. The `Text` twin reads the frame's modifier
+/// state, which the frame's `ModifiersChanged` event sets (as winit reports
+/// it), so the fixture sends that event.
+fn shift_v_input() -> egui::RawInput {
+    let mut input = frame_input(vec![
+        egui::Event::Key {
+            key: egui::Key::V,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::SHIFT,
+        },
+        egui::Event::Text("V".to_string()),
+    ]);
+    input
+        .events
+        .push(egui::Event::ModifiersChanged(egui::Modifiers::SHIFT));
+    input
+}
+
+/// One Space press: egui's `Key` event with its `Text` twin.
+fn space_input() -> egui::RawInput {
+    frame_input(vec![
+        egui::Event::Key {
+            key: egui::Key::Space,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::NONE,
+        },
+        egui::Event::Text(" ".to_string()),
+    ])
 }
 
 /// Press `key` once per frame, `times` presses in all, so each move reaches

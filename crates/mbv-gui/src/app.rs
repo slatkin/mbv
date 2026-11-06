@@ -88,7 +88,8 @@ impl eframe::App for GuiClient {
         // The shared tick runs at the start of every frame (design D7): the
         // App-side drains and expiries, then this Client's input phase inside
         // them. eframe also calls `logic` with no `ui` while the window is
-        // hidden, so the tick runs then too.
+        // hidden, so the tick runs then too. The input phase takes its events
+        // (`GuiTickHost::tick_input`), so those passes do not route them twice.
         if let Some(session) = &mut self.session {
             let outcome = ClientCore::tick(&mut session.host, Instant::now());
             if outcome.quit_requested {

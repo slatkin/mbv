@@ -271,9 +271,13 @@ impl ClientTickHost for GuiTickHost {
         // pointer state the translation reads is the frame's: egui's wheel
         // event carries no position, and its movement events carry no
         // button state, so the frame's pointer facts stand in for both.
-        let (events, frame_modifiers, primary_down, pointer_pos) = self.ctx.input(|input| {
+        // The events are taken, not copied: eframe also runs `logic` with no
+        // `ui` while the window is hidden, and on those passes `ctx.input()`
+        // still holds the last shown pass's events. A copy would route them
+        // again on each such pass.
+        let (events, frame_modifiers, primary_down, pointer_pos) = self.ctx.input_mut(|input| {
             (
-                input.events.clone(),
+                std::mem::take(&mut input.events),
                 input.modifiers,
                 input.pointer.primary_down(),
                 input.pointer.latest_pos(),
