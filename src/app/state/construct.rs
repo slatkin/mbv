@@ -75,8 +75,8 @@ impl App {
         // its path through that same lookup. Installing the guard after
         // reading prefs left tests reading (and initializing state from)
         // the real on-disk prefs.json instead of a fresh one. The `test`
-        // feature installs it too: a dependent crate's test build (mbv-gui)
-        // compiles this crate without `cfg(test)`.
+        // feature installs it too: a dependent crate's test build (a GUI
+        // Client program) compiles this crate without `cfg(test)`.
         #[cfg(any(test, feature = "test"))]
         let test_state_dir_guard = crate::config::TestStateDirGuard::new_if_unset();
         let prefs = Self::load_prefs();

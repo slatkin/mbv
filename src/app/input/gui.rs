@@ -4,7 +4,7 @@
 //!
 //! The snapshot's `App`-side facts — the player state, the panel mode and
 //! focus, the prefix bit, and the idle-feed link — are `pub(in crate::app)`,
-//! so the snapshot is built here in the library, not in `mbv-gui`. The
+//! so the snapshot is built here in the library, not in a GUI program. The
 //! GUI-side facts — the mounted surfaces and their Surface state — belong to
 //! the GUI Client, which supplies the focused one as the router's leaf
 //! ([`GuiSurfaceLeaf`]).
@@ -78,8 +78,8 @@ impl App {
     /// A `Command::Shell` is shell-owned (`TuiRealm` mounts and the shell's
     /// component-local refresh flag), so no `App` handling exists for it and
     /// this entry leaves it undelivered: a surface the GUI Client does not
-    /// yet present is absent (`specs/gui-client`, "A surface is not yet
-    /// ported"), and the GUI's own surface mounts own that arm as they land.
+    /// yet present is absent (a GUI Client presents only the
+    /// surfaces it has ported), and the GUI's own surface mounts own that arm as they land.
     pub fn route_gui_input(
         &mut self,
         input: GuiInput,
@@ -289,14 +289,14 @@ impl App {
     /// The intents whose TUI effect opens a shell surface (the clear
     /// confirmation, the save-playlist dialog) or navigates a Library panel
     /// the GUI does not present stay the documented no-ops
-    /// (`specs/gui-client`, "A surface is not yet ported").
+    /// (a GUI Client presents only the surfaces it has ported).
     fn handle_gui_queue_intent(&mut self, intent: QueueIntent) {
         match intent {
             // The four intents whose TUI effect opens or reaches a surface
             // the GUI does not present — the clear confirmation modal, the
             // TUI's queue-column resize, the save-playlist dialog, and the
             // Library-panel navigation — stay undelivered
-            // (`specs/gui-client`, "A surface is not yet ported").
+            // (a GUI Client presents only the surfaces it has ported).
             QueueIntent::Clear
             | QueueIntent::ResizeColumn(_)
             | QueueIntent::SavePlaylist
@@ -324,7 +324,7 @@ impl App {
     /// no producer on this surface, and a request that reaches one of those
     /// arms would name a surface the Client does not present, so the arm is
     /// the same documented absence
-    /// (`specs/gui-client`, "A surface is not yet ported").
+    /// (a GUI Client presents only the surfaces it has ported).
     fn handle_gui_queue_shell_request(&mut self, request: ShellRequest) {
         match request {
             ShellRequest::QueueIntent(intent) => self.handle_gui_queue_intent(intent),
@@ -342,7 +342,7 @@ impl App {
             // Both open a surface the first slice does not present: the
             // context-menu overlay and the Status bar that shows the
             // selection summary (row 6.5). The requests stay undelivered
-            // (`specs/gui-client`, "A surface is not yet ported").
+            // (a GUI Client presents only the surfaces it has ported).
             ShellRequest::RowContextMenu(..) | ShellRequest::SelectionProjection(_) => {}
             request => {
                 tracing::debug!(

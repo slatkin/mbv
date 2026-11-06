@@ -20,8 +20,8 @@ use mbv_ui_msg::{Msg, ServiceRequest};
 use super::App;
 
 /// The idle cadence every Client repaints at when no event wakes it (design
-/// D7): the TUI Client's terminal poll timeout, and the interval the GUI
-/// Client asks eframe to repaint after. Timers and worker results still land
+/// D7): the TUI Client's terminal poll timeout, and the interval a GUI
+/// Client asks its toolkit to repaint after. Timers and worker results still land
 /// on this cadence when no waker fires.
 pub const CLIENT_IDLE_CADENCE: Duration = Duration::from_millis(50);
 
@@ -163,8 +163,8 @@ impl ClientWaker {
         }
     }
 
-    /// Install the callback every clone's `wake` invokes. The GUI Client
-    /// installs `egui::Context::request_repaint`.
+    /// Install the callback every clone's `wake` invokes. A GUI Client
+    /// installs its toolkit's repaint request.
     pub fn install(&self, waker: impl Fn() + Send + Sync + 'static) {
         *self.lock_slot() = Some(Arc::new(waker));
     }
@@ -198,8 +198,8 @@ impl fmt::Debug for ClientWaker {
 
 /// The shared run-loop sequencer every Client drives once per iteration.
 /// It holds no `App` or surface state — the [`ClientTickHost`] supplies
-/// those — so the same `tick` serves the TUI Client's shell and the GUI
-/// Client's eframe `update`.
+/// those — so the same `tick` serves the TUI Client's shell and a GUI
+/// Client's frame step.
 pub struct ClientCore {
     /// The shared wake handle the `App` hands to its sender-side relays.
     /// The core shares the `App`'s handle so `install_waker` reaches every
@@ -222,8 +222,8 @@ impl ClientCore {
     }
 
     /// Install the callback the Client's waking senders invoke when new
-    /// input lands. The GUI Client installs
-    /// `egui::Context::request_repaint`; the TUI Client installs a no-op —
+    /// input lands. A GUI Client installs its
+    /// toolkit's repaint request; the TUI Client installs a no-op —
     /// its listener poll cadence already bounds input latency.
     pub fn install_waker(&self, waker: impl Fn() + Send + Sync + 'static) {
         self.waker.install(waker);

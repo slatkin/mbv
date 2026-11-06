@@ -3,7 +3,7 @@
 //! [`PointerEvent`] is the one pointer shape every Client translates its raw
 //! pointer input into before the core resolves it against a hit map.
 //! Positions are in `f32` logical units: the TUI converts cell coordinates,
-//! the GUI uses egui points, and the core never sees either unit.
+//! a GUI uses its toolkit's logical points, and the core never sees either unit.
 
 use super::key::KeyModifiers;
 

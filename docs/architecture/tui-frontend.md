@@ -15,8 +15,6 @@ Covered elsewhere, not repeated here:
 * Mouse delivery — ADR 0024, `openspec/specs/mouse-input/spec.md`.
 * Embedded canonical media lists — `openspec/specs/canonical-media-lists/spec.md`.
 * Current surface ownership — `docs/architecture/interactive-surface-ledger.md`.
-* GUI Client painters and the GUI interaction contract —
-  `docs/architecture/gui-client.md`.
 
 ## Two trees, not one
 

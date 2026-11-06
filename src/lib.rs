@@ -2,8 +2,8 @@
 //! drives, the central keyboard router, and the Client-side Owner link
 //! (design D2 and D7 of `add-gui-front-end`).
 //!
-//! The `mbv` binary is a thin `main` over [`run`], and the GUI Client
-//! (`mbv-gui`) shares the rest of this surface: the core tick, the router
+//! The `mbv` binary is a thin `main` over [`run`], and a GUI Client
+//! program shares the rest of this surface: the core tick, the router
 //! entry, and the Owner find, start, and attach steps. The library still
 //! carries the TUI Client's dependencies — `ratatui`, `crossterm`, and
 //! `TuiRealm` — so any Client that links it links them; it never carries a

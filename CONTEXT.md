@@ -128,7 +128,7 @@ The Client kind that presents the full terminal UI. It is the `mbv` program. It 
 _Avoid_: terminal client, thin client, viewer
 
 GUI Client:
-The Client kind that presents a native window. It is the `mbv-gui` program. It attaches to an out-of-process Player owner over ctrl like every Client. It never touches mpv; video plays in mpv's own window. It shares the *Client core* with the TUI Client: the same Surface state, focus stack, neutral events, Keyboard Router, and breakpoint classes. It paints with its own egui painters and translates its raw input into neutral events.
+The Client kind that presents a native window. It is a separate program. It attaches to an out-of-process Player owner over ctrl like every Client. It never touches mpv; video plays in mpv's own window. It shares the *Client core* with the TUI Client: the same Surface state, focus stack, neutral events, Keyboard Router, and breakpoint classes. It paints with its own painters and translates its raw input into neutral events.
 _Avoid_: windowed client, desktop client, GUI (bare, for the app)
 
 Client core:

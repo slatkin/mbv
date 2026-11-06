@@ -5,8 +5,8 @@ use mbv_ui_msg::Position;
 
 /// A rectangular hit region in `f32` logical units.
 ///
-/// The TUI converts its painted cell rectangles to these units and the GUI
-/// reports egui points; the core never sees either unit.
+/// The TUI converts its painted cell rectangles to these units and a GUI
+/// reports its toolkit's logical points; the core never sees either unit.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct HitRegion {
     pub x: f32,

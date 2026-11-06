@@ -5,7 +5,7 @@
 //! keeps only geometry and translation.
 //!
 //! Each Client instantiates [`PointerGestureState`] over its own coordinate
-//! space `P` — the TUI over its painted cells, the GUI over its egui points
+//! space `P` — the TUI over its painted cells, a GUI over its logical points
 //! — because the positions a gesture carries are the positions the Client's
 //! own geometry resolves against. The recognizer never converts coordinates.
 //!
