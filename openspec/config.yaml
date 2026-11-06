@@ -16,6 +16,8 @@ rules:
     - Do not require acceptance testing in tasks. Acceptance testing is post-implementation.
     - Tasks are for implementing agents. No task asks the user, waits for the user, or is done by the user.
     - A task that adds or upgrades a dependency names the version from design.md.
+    - Tasks are for implementing agents, not humans.
+    - There should never be a task calling calling for a human decision. These decisions need to be made during proposals.
   specs:
     - Specs state behavior and layout, never paint.
     - Never pin strings, glyphs, colors, spacing, alignment, truncation.
