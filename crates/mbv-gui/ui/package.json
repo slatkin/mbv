@@ -12,6 +12,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@fontsource-variable/suse": "5.3.0",
     "@internationalized/date": "3.12.4",
     "@lucide/svelte": "1.70.0",
     "@tauri-apps/api": "2.12.4",
