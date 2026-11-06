@@ -149,11 +149,25 @@ export interface GuiToast {
 export type GuiToastSeverity = 'neutral' | 'success' | 'warning' | 'error';
 
 /**
- * The theme section: one colour for every role (design D7). The core sends
- * the full map; `Partial` keeps consumers honest about the roles they read.
+ * The theme section: one colour for every role plus the chrome fills
+ * (design D7). The core sends the full role map; `Partial` keeps consumers
+ * honest about the roles they read.
  */
 export interface GuiTheme {
 	roles: Partial<Record<GuiRole, GuiRgb>>;
+	chrome: GuiChrome;
+}
+
+/** The chrome fills, mirroring `GuiChrome` in bridge/frame/theme.rs: the fills the shadcn-svelte background, surface, border, and input variables point at. */
+export interface GuiChrome {
+	background: GuiRgb;
+	card: GuiRgb;
+	popover: GuiRgb;
+	muted: GuiRgb;
+	secondary: GuiRgb;
+	sidebar: GuiRgb;
+	border: GuiRgb;
+	input: GuiRgb;
 }
 
 export interface GuiRgb {

@@ -6,7 +6,7 @@
 import { listen } from '@tauri-apps/api/event';
 import { beforeEach, expect, test, vi } from 'vitest';
 import { FRAME_EVENT, FrameStore } from './frames';
-import type { GuiTheme, GuiWindowFrame } from './types';
+import type { GuiChrome, GuiTheme, GuiWindowFrame } from './types';
 
 vi.mock('@tauri-apps/api/event', () => ({
 	listen: vi.fn(),
@@ -32,6 +32,20 @@ const attachFrame: GuiWindowFrame = {
 		theme: null,
 	},
 };
+
+/** A full chrome fixture, the serde wire shape of `GuiChrome`. */
+function chrome(): GuiChrome {
+	return {
+		background: { r: 10, g: 11, b: 12 },
+		card: { r: 20, g: 21, b: 22 },
+		popover: { r: 30, g: 31, b: 32 },
+		muted: { r: 40, g: 41, b: 42 },
+		secondary: { r: 50, g: 51, b: 52 },
+		sidebar: { r: 60, g: 61, b: 62 },
+		border: { r: 70, g: 71, b: 72 },
+		input: { r: 80, g: 81, b: 82 },
+	};
+}
 
 function sliceFrame(theme: GuiTheme | null): GuiWindowFrame {
 	return {
@@ -93,6 +107,7 @@ test("a frame's theme writes the role colours to :root properties", async () => 
 						textPrimary: { r: 1, g: 2, b: 3 },
 						accent: { r: 4, g: 5, b: 6 },
 					},
+					chrome: chrome(),
 				},
 			},
 		},
@@ -101,4 +116,25 @@ test("a frame's theme writes the role colours to :root properties", async () => 
 	const style = document.documentElement.style;
 	expect(style.getPropertyValue('--mbv-textPrimary')).toBe('rgb(1, 2, 3)');
 	expect(style.getPropertyValue('--mbv-accent')).toBe('rgb(4, 5, 6)');
+});
+
+test("a frame's theme writes the chrome fills to :root properties", async () => {
+	const store = new FrameStore();
+	await store.listen();
+
+	frameHandler()({
+		payload: {
+			attach: {
+				state: { kind: 'waiting' },
+				theme: {
+					roles: {},
+					chrome: chrome(),
+				},
+			},
+		},
+	});
+
+	const style = document.documentElement.style;
+	expect(style.getPropertyValue('--mbv-background')).toBe('rgb(10, 11, 12)');
+	expect(style.getPropertyValue('--mbv-border')).toBe('rgb(70, 71, 72)');
 });
