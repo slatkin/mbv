@@ -57,7 +57,7 @@ impl GuiClient {
                         ui.max_rect().left_top() + egui::vec2(16.0, 16.0),
                         egui::Align2::LEFT_TOP,
                         notice,
-                        egui::FontId::proportional(14.0),
+                        egui::FontId::proportional(13.0),
                         role_color(mbv_theme::Role::StatusError),
                     );
                 }

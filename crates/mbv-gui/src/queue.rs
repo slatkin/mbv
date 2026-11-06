@@ -436,7 +436,7 @@ fn paint_empty_queue(painter: &egui::Painter, list_rect: egui::Rect, text: &str)
         list_rect.center(),
         egui::Align2::CENTER_CENTER,
         text,
-        egui::FontId::proportional(14.0),
+        egui::FontId::proportional(13.0),
         role_colour(Role::EmptyQueueFg),
     );
 }
