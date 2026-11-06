@@ -392,6 +392,10 @@ impl GuiTickHost {
         self.queue.last_report().capacity.whole_items()
     }
 
+    pub(crate) fn queue_test_cursor_row_painted(&self) -> bool {
+        self.queue.test_cursor_row_painted()
+    }
+
     pub(crate) fn queue_test_report(&self) -> &mbv_surfaces::queue::QueueFrameReport {
         self.queue.last_report()
     }

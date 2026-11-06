@@ -1,4 +1,4 @@
-//! The Queue panel's headless tests (row 6.4): the egui `Context::run`
+//! The Queue panel's headless tests (rows 6.4 and 6.7): the egui `Context::run`
 //! composition with synthetic `RawInput`, asserting the core state the frame
 //! drives, never appearance (design D11).
 
@@ -74,13 +74,9 @@ fn a_click_on_a_painted_row_selects_that_slot() {
     run_frame(&ctx, &mut host, frame_input(Vec::new()));
     let before = host.queue_test_cursor();
 
-    // The row below the cursor row. The idle band's header row sits above the
-    // list: its two panel paddings and one row, then the list's own panel
-    // padding, put the first row 48 points down. One row is 24, so the third
-    // row's band is the click's target.
-    let list_top = 3.0 * super::PANEL_PADDING + super::ROW_HEIGHT;
+    // The third row, two below the cursor row, is the click's target.
     let click = frame_input(vec![egui::Event::PointerButton {
-        pos: egui::pos2(240.0, list_top + 2.5 * super::ROW_HEIGHT),
+        pos: row_centre(2),
         button: egui::PointerButton::Primary,
         pressed: true,
         modifiers: egui::Modifiers::NONE,
@@ -88,6 +84,44 @@ fn a_click_on_a_painted_row_selects_that_slot() {
     run_frame(&ctx, &mut host, click);
 
     assert_eq!(host.queue_test_cursor(), before + 2);
+}
+
+/// Hovering over a painted row with no button held leaves the queue cursor
+/// where it was (`specs/gui-client`, "Hover does not move focus"). The cursor
+/// is the only focus the GUI shows yet, so it is what the test reads. The move
+/// travels the full path: the translation edge maps it to a hover `Move`, which
+/// the gesture policy recognizes as nothing.
+#[test]
+fn hovering_a_painted_row_without_a_press_leaves_the_cursor() {
+    let ctx = egui::Context::default();
+    let mut host = GuiTickHost::new(mbv::stub_app_with_queue(40), ctx.clone());
+    run_frame(&ctx, &mut host, frame_input(Vec::new()));
+    let before = host.queue_test_cursor();
+
+    run_frame(
+        &ctx,
+        &mut host,
+        frame_input(vec![egui::Event::PointerMoved(row_centre(3))]),
+    );
+
+    assert_eq!(host.queue_test_cursor(), before);
+}
+
+/// A move past the last visible row keeps the cursor row painted
+/// (`specs/gui-client`, "Scrolling follows the cursor"). The cursor steps down
+/// one frame per press, from the first row to the row below the last fully
+/// visible one, and the frame that moves it paints it.
+#[test]
+fn a_move_past_the_last_visible_row_keeps_the_cursor_row_painted() {
+    let ctx = egui::Context::default();
+    let mut host = GuiTickHost::new(mbv::stub_app_with_queue(40), ctx.clone());
+    run_frame(&ctx, &mut host, frame_input(Vec::new()));
+    let capacity = host.queue_test_capacity();
+
+    press_once_per_frame(&ctx, &mut host, egui::Key::ArrowDown, capacity);
+
+    assert_eq!(host.queue_test_cursor(), capacity);
+    assert!(host.queue_test_cursor_row_painted());
 }
 
 /// A Visual selection's row-local `Space` claims the chord ahead of the
@@ -170,6 +204,23 @@ fn long_title_row() -> MediaListRow<QueueSlotId> {
 /// The one painted row: the window's width, one fixed row height.
 fn row_rect() -> egui::Rect {
     egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(320.0, super::ROW_HEIGHT))
+}
+
+/// The point at the vertical middle of list row `row` (the first row is `0`),
+/// over the window's middle. The idle band's header row sits above the list:
+/// its two panel paddings and one row, then the list's own panel padding, put
+/// the first row 48 points down.
+fn row_centre(row: u16) -> egui::Pos2 {
+    let list_top = 3.0 * super::PANEL_PADDING + super::ROW_HEIGHT;
+    egui::pos2(240.0, list_top + (f32::from(row) + 0.5) * super::ROW_HEIGHT)
+}
+
+/// Press `key` once per frame, `times` presses in all, so each move reaches
+/// the paint that follows it, as in a running window.
+fn press_once_per_frame(ctx: &egui::Context, host: &mut GuiTickHost, key: egui::Key, times: usize) {
+    for _ in 0..times {
+        run_frame(ctx, host, key_input(key));
+    }
 }
 
 /// The clip rect of the painted title.

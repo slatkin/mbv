@@ -132,6 +132,19 @@ impl QueuePanel {
         self.surface.cursor()
     }
 
+    /// Whether the cursor's slot is among the rows the last completed frame
+    /// painted (test evidence). The painter paints only whole rows inside the
+    /// list body, so a painted row is fully visible.
+    #[cfg(test)]
+    pub(crate) fn test_cursor_row_painted(&self) -> bool {
+        self.surface.selected_target().is_some_and(|slot| {
+            self.last_report
+                .hit_map
+                .iter()
+                .any(|(_, target)| *target == QueueHitTarget::Slot(*slot))
+        })
+    }
+
     /// The marked-target count (test evidence).
     #[cfg(test)]
     pub(crate) fn test_mark_count(&self) -> usize {
