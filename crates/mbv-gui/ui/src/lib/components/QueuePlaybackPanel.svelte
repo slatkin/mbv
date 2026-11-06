@@ -244,11 +244,6 @@
 				<Monitor size={14} color="var(--mbv-playbackTargetLocalFg)" />
 			{/if}
 		</span>
-		{#if playback.nowPlayingTitle}
-			<span class="truncate" style:color={roleVar('playbackContextFg')}
-				>{playback.nowPlayingTitle}</span
-			>
-		{/if}
 		<span class="flex-1"></span>
 		<span class="font-bold" style:color={statusColor(playback.status)}
 			>{statusWord(playback.status)}</span
@@ -264,8 +259,30 @@
 		a now-playing title rides; without one the TUI paints the four rows
 		as blanks on the band's own fill, so the GUI does too. -->
 		<div class="px-2 pb-2" style:background="var(--mbv-pillSelectedFg)">
+			{#if playback.nowPlayingTitle}
+				<!-- The now-playing title's own row, below the column top and
+					inset one column each side: the TUI composites the artwork-site
+					title into the image's top text row, so the header row paints
+					only the target and the status word. The frame carries the
+					plain title in the projection's `PlaybackValueFg` role; the
+					TUI's scrolling marquee needs a clock the frame does not carry,
+					so the row truncates with the slice's ellipsis treatment. -->
+				<div
+					class="flex items-center overflow-hidden px-1 whitespace-nowrap"
+					style:height="{ROW_HEIGHT}px"
+				>
+					<span
+						class="truncate"
+						style:color={roleVar('playbackValueFg')}
+						>{playback.nowPlayingTitle}</span
+					>
+				</div>
+			{/if}
 			{#if art && art.kind !== 'hidden'}
-				<div class="flex items-center justify-center" style:height="{ART_HEIGHT}px">
+				<div
+					class="flex items-center justify-center"
+					style:height="{ART_HEIGHT}px"
+				>
 					{#if art.kind === 'loading'}
 						<div
 							class="aspect-square h-full"
