@@ -16,7 +16,9 @@
     "@lucide/svelte": "1.70.0",
     "@tauri-apps/api": "2.12.4",
     "bits-ui": "2.20.6",
-    "svelte": "5.57.3"
+    "cn": "0.5.2",
+    "svelte": "5.57.3",
+    "tailwind-variants": "4.0.1"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
@@ -24,8 +26,7 @@
     "@tailwindcss/vite": "4.3.4",
     "@tauri-apps/cli": "2.12.4",
     "@testing-library/svelte": "5.4.2",
-    "@types/node": "24.19.2",
-    "cn": "0.5.2",
+    "@types/node": "26.6.6",
     "eslint": "10.14.0",
     "eslint-plugin-svelte": "3.24.0",
     "globals": "17.14.0",
@@ -39,5 +40,8 @@
     "typescript-eslint": "8.72.1",
     "vite": "8.3.6",
     "vitest": "5.1.0"
+  },
+  "engines": {
+    "node": ">=26"
   }
 }
