@@ -8,7 +8,17 @@ use std::time::Instant;
 use eframe::egui;
 use mbv::ClientCore;
 
+use crate::fonts;
 use crate::tick_host::GuiTickHost;
+
+/// A headless context with the embedded fonts installed, as the window's
+/// creation installs them (`GuiClient::new`). The tests paint with the same
+/// families the window paints with.
+pub(crate) fn context() -> egui::Context {
+    let ctx = egui::Context::default();
+    fonts::install(&ctx);
+    ctx
+}
 
 /// One headless frame, in the production order: the Client core's tick over
 /// the frame's raw input (the input phase reads it inside the frame, as the

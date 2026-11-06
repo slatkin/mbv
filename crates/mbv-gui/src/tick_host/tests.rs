@@ -2,10 +2,9 @@
 //! classifies each frame, through the production frame order of the headless
 //! harness (design D11).
 
-use eframe::egui;
 use mbv_surfaces::breakpoint::BreakpointClass;
 
-use crate::headless::{frame_input_at_width, run_frame};
+use crate::headless::{context, frame_input_at_width, run_frame};
 use crate::tick_host::GuiTickHost;
 
 /// The class follows the window width frame by frame. An 800-point window
@@ -13,7 +12,7 @@ use crate::tick_host::GuiTickHost;
 /// window reaches `wide_from`, so the next frame is Wide.
 #[test]
 fn the_frame_class_follows_the_window_width() {
-    let ctx = egui::Context::default();
+    let ctx = context();
     let mut host = GuiTickHost::new(mbv::stub_app_with_queue(0), ctx.clone());
 
     run_frame(&ctx, &mut host, frame_input_at_width(800.0, Vec::new()));

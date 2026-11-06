@@ -4,7 +4,7 @@
 
 use eframe::egui;
 
-use crate::headless::{frame_input, key_input, run_frame, run_logic_only};
+use crate::headless::{context, frame_input, key_input, run_frame, run_logic_only};
 use crate::tick_host::GuiTickHost;
 use mbv_queue::QueueSlotId;
 use mbv_ui_model::media_list::{MediaKind, MediaListRow, MediaSemanticState};
@@ -17,7 +17,7 @@ use mbv_ui_model::media_list::{MediaKind, MediaListRow, MediaSemanticState};
 /// Surface state's key rules.
 #[test]
 fn page_down_moves_the_cursor_by_the_painted_capacity() {
-    let ctx = egui::Context::default();
+    let ctx = context();
     let mut host = GuiTickHost::new(mbv::stub_app_with_queue(40), ctx.clone());
     run_frame(&ctx, &mut host, frame_input(Vec::new()));
 
@@ -37,7 +37,7 @@ fn page_down_moves_the_cursor_by_the_painted_capacity() {
 /// rows the list body fits, as the TUI Client's report does.
 #[test]
 fn empty_queue_paints_no_row_regions() {
-    let ctx = egui::Context::default();
+    let ctx = context();
     let mut host = GuiTickHost::new(mbv::stub_app_with_queue(0), ctx.clone());
     run_frame(&ctx, &mut host, frame_input(Vec::new()));
 
@@ -54,7 +54,7 @@ fn empty_queue_paints_no_row_regions() {
 /// footer, design D11).
 #[test]
 fn an_unsaved_queue_paints_the_dirty_pill_in_the_footer() {
-    let ctx = egui::Context::default();
+    let ctx = context();
     let mut host = GuiTickHost::new(mbv::stub_app_with_unsaved_queue(4), ctx.clone());
     run_frame(&ctx, &mut host, frame_input(Vec::new()));
 
@@ -69,7 +69,7 @@ fn an_unsaved_queue_paints_the_dirty_pill_in_the_footer() {
 /// (`specs/gui-client`, "A queue row is clicked").
 #[test]
 fn a_click_on_a_painted_row_selects_that_slot() {
-    let ctx = egui::Context::default();
+    let ctx = context();
     let mut host = GuiTickHost::new(mbv::stub_app_with_queue(40), ctx.clone());
     run_frame(&ctx, &mut host, frame_input(Vec::new()));
     let before = host.queue_test_cursor();
@@ -93,7 +93,7 @@ fn a_click_on_a_painted_row_selects_that_slot() {
 /// the gesture policy recognizes as nothing.
 #[test]
 fn hovering_a_painted_row_without_a_press_leaves_the_cursor() {
-    let ctx = egui::Context::default();
+    let ctx = context();
     let mut host = GuiTickHost::new(mbv::stub_app_with_queue(40), ctx.clone());
     run_frame(&ctx, &mut host, frame_input(Vec::new()));
     let before = host.queue_test_cursor();
@@ -113,7 +113,7 @@ fn hovering_a_painted_row_without_a_press_leaves_the_cursor() {
 /// visible one, and the frame that moves it paints it.
 #[test]
 fn a_move_past_the_last_visible_row_keeps_the_cursor_row_painted() {
-    let ctx = egui::Context::default();
+    let ctx = context();
     let mut host = GuiTickHost::new(mbv::stub_app_with_queue(40), ctx.clone());
     run_frame(&ctx, &mut host, frame_input(Vec::new()));
     let capacity = host.queue_test_capacity();
@@ -131,7 +131,7 @@ fn a_move_past_the_last_visible_row_keeps_the_cursor_row_painted() {
 /// toggle instead, the mark set would stay as Visual mode left it.
 #[test]
 fn visual_selection_claims_space_ahead_of_the_global_toggle() {
-    let ctx = egui::Context::default();
+    let ctx = context();
     let mut host = GuiTickHost::new(mbv::stub_app_with_queue(4), ctx.clone());
     run_frame(&ctx, &mut host, frame_input(Vec::new()));
 
@@ -150,7 +150,7 @@ fn visual_selection_claims_space_ahead_of_the_global_toggle() {
 /// and flashes "Pause requested".
 #[test]
 fn a_space_press_routes_once_across_logic_only_passes() {
-    let ctx = egui::Context::default();
+    let ctx = context();
     let mut host = GuiTickHost::new(mbv::stub_app_with_queue(4), ctx.clone());
     run_frame(&ctx, &mut host, frame_input(Vec::new()));
     run_frame(&ctx, &mut host, shift_v_input());
@@ -170,7 +170,7 @@ fn a_space_press_routes_once_across_logic_only_passes() {
 /// clipped at that column's edge, never over the duration.
 #[test]
 fn a_long_title_paints_no_further_right_than_its_column() {
-    let ctx = egui::Context::default();
+    let ctx = context();
     let output = ctx.run_ui(frame_input(Vec::new()), |ui| {
         let painter = ui.ctx().layer_painter(egui::LayerId::background());
         super::paint_row_text(&painter, row_rect(), &long_title_row(), false);

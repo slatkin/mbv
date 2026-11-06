@@ -7,7 +7,7 @@ use eframe::egui;
 use mbv_surfaces::queue_playback::QueuePlaybackHitTarget;
 use mbv_ui_msg::{Msg, PlaybackRequest};
 
-use crate::headless::{frame_input, run_frame};
+use crate::headless::{context, frame_input, run_frame};
 use crate::tick_host::GuiTickHost;
 
 /// The centre of the region the last frame painted for `target`.
@@ -40,7 +40,7 @@ fn press_at(at: egui::Pos2) -> egui::RawInput {
 /// the Msg the shell boundary receives.
 #[test]
 fn a_click_on_play_pause_sends_the_toggle_request() {
-    let ctx = egui::Context::default();
+    let ctx = context();
     let mut host = GuiTickHost::new(mbv::stub_app_with_playing_queue(40), ctx.clone());
     run_frame(&ctx, &mut host, frame_input(Vec::new()));
 
@@ -57,7 +57,7 @@ fn a_click_on_play_pause_sends_the_toggle_request() {
 /// a press could resolve against.
 #[test]
 fn empty_queue_paints_no_transport_band() {
-    let ctx = egui::Context::default();
+    let ctx = context();
     let mut host = GuiTickHost::new(mbv::stub_app_with_queue(0), ctx.clone());
     run_frame(&ctx, &mut host, frame_input(Vec::new()));
 
@@ -70,7 +70,7 @@ fn empty_queue_paints_no_transport_band() {
 /// (row 6.5's header).
 #[test]
 fn an_idle_band_paints_its_header_row() {
-    let ctx = egui::Context::default();
+    let ctx = context();
     let mut host = GuiTickHost::new(mbv::stub_app_with_queue(0), ctx.clone());
     run_frame(&ctx, &mut host, frame_input(Vec::new()));
 
