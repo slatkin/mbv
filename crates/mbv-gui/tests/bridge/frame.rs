@@ -2,8 +2,8 @@ use mbv::{
     App, stub_app_with_playing_items, stub_app_with_playing_queue, stub_app_with_queue,
     stub_app_with_unsaved_queue,
 };
-use mbv_emby_model::test_support::make_item;
 use mbv_emby_model::TICKS_PER_SECOND;
+use mbv_emby_model::test_support::make_item;
 use mbv_gui::bridge::frame::queue::{GuiQueueRow, GuiRightColumn, GuiSemanticState};
 use mbv_gui::bridge::frame::theme::GuiRole;
 use mbv_gui::bridge::frame::{FrameSources, GuiFrame};
@@ -104,9 +104,7 @@ fn playing_queue_frame_carries_row_states_and_finish_clocks() {
         states,
         [
             &GuiSemanticState::NowPlaying { progress: None },
-            &GuiSemanticState::Active {
-                progress: Some(30)
-            },
+            &GuiSemanticState::Active { progress: Some(30) },
             &GuiSemanticState::Played,
         ]
     );

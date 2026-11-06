@@ -56,10 +56,12 @@ fn target_choices_mark_the_attached_output() {
         .find(|choice| choice.key == SessionTargetKey::Cast("receiver-9".to_string()))
         .expect("the cast receiver is a choice");
     assert!(cast.is_active);
-    assert!(choices
-        .iter()
-        .filter(|choice| choice.key != SessionTargetKey::Cast("receiver-9".to_string()))
-        .all(|choice| !choice.is_active));
+    assert!(
+        choices
+            .iter()
+            .filter(|choice| choice.key != SessionTargetKey::Cast("receiver-9".to_string()))
+            .all(|choice| !choice.is_active)
+    );
 
     // An Emby Session output marks the session with the output's device id.
     app.playback_output = Some(mbv_ctrl::OutputState::EmbySession {
@@ -75,8 +77,10 @@ fn target_choices_mark_the_attached_output() {
         .find(|choice| choice.key == SessionTargetKey::Emby("session-2".to_string()))
         .expect("the session is a choice");
     assert!(session.is_active);
-    assert!(choices
-        .iter()
-        .filter(|choice| choice.key != SessionTargetKey::Emby("session-2".to_string()))
-        .all(|choice| !choice.is_active));
+    assert!(
+        choices
+            .iter()
+            .filter(|choice| choice.key != SessionTargetKey::Emby("session-2".to_string()))
+            .all(|choice| !choice.is_active)
+    );
 }

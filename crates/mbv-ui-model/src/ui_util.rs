@@ -218,9 +218,10 @@ pub fn fmt_wall_clock(secs: i64, offset: UtcOffset) -> String {
         return String::new();
     };
     let instant = instant.to_offset(offset);
-    let hour12 = ((u8::from(instant.hour()) + 11) % 12) + 1;
-    let period = if instant.hour() < 12 { "AM" } else { "PM" };
-    format!("{hour12}:{:02} {period}", u8::from(instant.minute()))
+    let hour = instant.hour();
+    let hour12 = ((hour + 11) % 12) + 1;
+    let period = if hour < 12 { "AM" } else { "PM" };
+    format!("{hour12}:{:02} {period}", instant.minute())
 }
 
 /// URL-stripped, trimmed overview text with no length cap. Used by the view's

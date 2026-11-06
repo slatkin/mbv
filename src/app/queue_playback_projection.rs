@@ -5,7 +5,9 @@
 //! builds its title and availability from the same helpers.
 
 use mbv_render::components::chrome_player::TransportAvailability;
-use mbv_render::components::indicators::{StatusIndicator, short_resolution_label, status_indicator_items};
+use mbv_render::components::indicators::{
+    StatusIndicator, short_resolution_label, status_indicator_items,
+};
 use mbv_ui_model::panel_targets::SessionTargetKey;
 use mbv_ui_model::playback::PlaybackState;
 use mbv_ui_model::playback_target::NowPlayingStatus;
@@ -184,7 +186,8 @@ impl App {
     /// The plain now-playing title for `state`: the active queue item's title,
     /// or the Emby Session's title for slotless output. `None` while idle.
     pub(in crate::app) fn now_playing_title_text(&self, state: PlaybackState) -> Option<String> {
-        self.now_playing_title_parts(state).map(|parts| parts.title.text)
+        self.now_playing_title_parts(state)
+            .map(|parts| parts.title.text)
     }
 
     /// The track chips (design D4): the local player's resolved video label

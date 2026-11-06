@@ -21,7 +21,7 @@ fn home_icon_title_matches_only_the_continue_tab_labels() {
 #[test]
 fn fmt_wall_clock_renders_a_twelve_hour_clock_in_the_offset() {
     // 2026-01-15 11:42:00 UTC, 2026-01-15 13:05:00 UTC, and midnight UTC.
-    let (mid_morning, early_afternoon, midnight) = (1768477320, 1768482300, 1768435200);
+    let (mid_morning, early_afternoon, midnight) = (1_768_477_320, 1_768_482_300, 1_768_435_200);
     assert_eq!(fmt_wall_clock(mid_morning, UtcOffset::UTC), "11:42 AM");
     assert_eq!(fmt_wall_clock(early_afternoon, UtcOffset::UTC), "1:05 PM");
     assert_eq!(fmt_wall_clock(midnight, UtcOffset::UTC), "12:00 AM");

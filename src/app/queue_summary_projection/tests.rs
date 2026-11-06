@@ -1,6 +1,6 @@
+use mbv_emby_model::TICKS_PER_SECOND;
 use mbv_emby_model::test_support::make_item;
 use mbv_queue::{QueueItem, QueueSlot, QueueSlotId};
-use mbv_emby_model::TICKS_PER_SECOND;
 
 use super::{finish_chain, playback_finish_epoch};
 
@@ -58,7 +58,10 @@ fn finish_chain_ends_each_pending_slot_after_the_one_before_it() {
 /// finish clock — and the chain's first entry carries it unchanged.
 #[test]
 fn finish_chain_ends_the_active_slot_at_the_anchor() {
-    let slots = [slot(1, 20 * 60 * TICKS_PER_SECOND), slot(2, 600 * TICKS_PER_SECOND)];
+    let slots = [
+        slot(1, 20 * 60 * TICKS_PER_SECOND),
+        slot(2, 600 * TICKS_PER_SECOND),
+    ];
     let (ends, finish) = finish_chain(&slots, 0, 5_000);
     assert_eq!(ends[0], (QueueSlotId::from_raw(1), 5_000));
     assert_eq!(finish, Some(5_000 + 600));

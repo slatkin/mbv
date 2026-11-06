@@ -1,7 +1,7 @@
 //! The Queue playback section of a frame: the transport band's facts (design
 //! D4). Each field mirrors one fact of `QueuePlaybackProjection`.
 
-use mbv::{PlaybackTargetChoice, QueuePlaybackProjection, TrackChips, TrackChip, TrackChoice};
+use mbv::{PlaybackTargetChoice, QueuePlaybackProjection, TrackChip, TrackChips, TrackChoice};
 use mbv_ui_model::panel_targets::SessionTargetKey;
 use mbv_ui_model::playback::PlaybackState;
 use mbv_ui_model::playback_target::NowPlayingStatus;

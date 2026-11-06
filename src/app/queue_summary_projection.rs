@@ -60,7 +60,8 @@ impl App {
                 row_finish_clocks: Vec::new(),
             };
         };
-        let anchor = playback_finish_epoch(now_unix_secs(), state.position_ticks, state.runtime_ticks);
+        let anchor =
+            playback_finish_epoch(now_unix_secs(), state.position_ticks, state.runtime_ticks);
         let Some(anchor) = anchor else {
             return QueueSummaryProjection {
                 remaining: slots.len() - index - 1,

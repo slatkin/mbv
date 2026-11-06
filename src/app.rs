@@ -43,10 +43,10 @@ pub use self::input::router::{RouterOutcome, resolve_router_outcome_with_focused
 pub use self::queue_card_artwork::QueueCardArtwork;
 pub use self::queue_footer_projection::{FooterPill, QueueFooterProjection};
 pub use self::queue_playback_projection::{
-    PlaybackTargetChoice, QueuePlaybackProjection, TrackChips, TrackChip, TrackChoice,
+    PlaybackTargetChoice, QueuePlaybackProjection, TrackChip, TrackChips, TrackChoice,
 };
-pub use self::queue_surface::QueueSurfaceProjection;
 pub use self::queue_summary_projection::QueueSummaryProjection;
+pub use self::queue_surface::QueueSurfaceProjection;
 pub use self::state::app_struct::App;
 pub use self::state::playback::HomeContent;
 pub use self::status_bar_projection::StatusBarProjection;
