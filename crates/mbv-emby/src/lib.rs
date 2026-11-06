@@ -23,6 +23,7 @@ pub use types::{
     parse_mbv_direct_tcp_port, parse_session_media_info, parse_video_info,
 };
 mod client_auth;
+mod client_item_metadata;
 mod types_parsing;
 #[doc(inline)]
 pub use client_auth::EmbyCredentialExchange;

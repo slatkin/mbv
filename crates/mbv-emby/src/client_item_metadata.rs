@@ -1,0 +1,71 @@
+//! The per-item metadata endpoints a Client's playback decoration reads
+//! (`add-tauri-gui-client` design D4a): the item DTO's `Chapters`, the
+//! `MediaSegments` plugin's detected segment bounds, and the Trickplay tile
+//! grids' source description. Each is a decoration fetch keyed on an item
+//! id; none carries a caller-visible failure mode beyond its `Err`.
+
+use super::EmbyClient;
+use mbv_emby_model::{EmbyChapter, EmbyMediaSegment, EmbyTrickplayGrid};
+use serde_json::Value;
+
+impl EmbyClient {
+    /// The item DTO's `Chapters` array (`Name`, `StartPositionTicks`),
+    /// fetched by `ItemId` through the user item view with `Fields=Chapters`.
+    /// An item with no chapters answers an empty array, as does an item the
+    /// response carries no `Chapters` member for.
+    pub fn get_item_chapters(&self, item_id: &str) -> Result<Vec<EmbyChapter>, crate::EmbyError> {
+        let resp: Value = self
+            .get(&format!(
+                "/Users/{}/Items/{}",
+                mbv_net::encode_path_segment(&self.user_id),
+                mbv_net::encode_path_segment(item_id)
+            ))
+            .query("Fields", "Chapters")
+            .call()?
+            .body_mut()
+            .read_json()?;
+        Ok(serde_json::from_value(resp["Chapters"].clone()).unwrap_or_default())
+    }
+
+    /// `GET /MediaSegments/{itemId}`: the detected Intro/Outro (and other)
+    /// segment bounds. A server without detection data — or without the
+    /// plugin — answers with no `Items`, which maps to an empty result.
+    pub fn get_media_segments(
+        &self,
+        item_id: &str,
+    ) -> Result<Vec<EmbyMediaSegment>, crate::EmbyError> {
+        let resp: Value = self
+            .get(&format!(
+                "/MediaSegments/{}",
+                mbv_net::encode_path_segment(item_id)
+            ))
+            .call()?
+            .body_mut()
+            .read_json()?;
+        Ok(serde_json::from_value(resp["Items"].clone()).unwrap_or_default())
+    }
+
+    /// `GET /Videos/{itemId}/Trickplay`: the trickplay source description —
+    /// a map keyed on each available thumbnail width whose values describe
+    /// one tile grid. The tile bytes are a separate fetch
+    /// (`add-tauri-gui-client` task 6.7). An item with no trickplay data
+    /// answers an empty map.
+    pub fn get_trickplay(&self, item_id: &str) -> Result<Vec<EmbyTrickplayGrid>, crate::EmbyError> {
+        let resp: Value = self
+            .get(&format!(
+                "/Videos/{}/Trickplay",
+                mbv_net::encode_path_segment(item_id)
+            ))
+            .call()?
+            .body_mut()
+            .read_json()?;
+        Ok(resp
+            .as_object()
+            .map(|map| {
+                map.values()
+                    .filter_map(|grid| serde_json::from_value(grid.clone()).ok())
+                    .collect()
+            })
+            .unwrap_or_default())
+    }
+}
