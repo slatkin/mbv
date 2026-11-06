@@ -9,13 +9,19 @@ use mbv_theme::Role;
 use crate::app::App;
 
 /// One footer pill's presented facts: its text (a glyph, a word, or both, per
-/// the App's Nerd Font setting) and the foreground role it paints in. The
+/// the App's Nerd Font setting), the glyph-free label behind that text, and
+/// the foreground role it paints in. The
 /// pill's background is the `StatusBarPill` surface both Clients paint behind
 /// the footer's pills.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FooterPill {
     /// The pill's text, without outer pads.
     pub text: String,
+    /// The pill's text without its glyph: the label (or word) alone, for a
+    /// Client that paints no glyph (the GUI frame; the GUI change's design
+    /// D8). Empty when the TUI text is the glyph alone (the playlist pill
+    /// with no playlist loaded).
+    pub label: String,
     /// The foreground role the text paints in.
     pub role: Role,
     /// Whether the text is emphasised (bold in the TUI).
@@ -59,8 +65,10 @@ impl App {
         } else {
             "\u{1F5A7}"
         };
+        let label = self.queue_owner_label();
         FooterPill {
-            text: format!("{icon} {}", self.queue_owner_label()),
+            text: format!("{icon} {label}"),
+            label,
             role: Role::TextFocusAccent,
             bold: false,
         }
@@ -78,11 +86,13 @@ impl App {
         match self.playback_queue().source() {
             mbv_queue::QueueSource::Playlist { name, .. } => FooterPill {
                 text: format!("{glyph}{gap}{name}"),
+                label: name.clone(),
                 role: Role::TextMetadata,
                 bold: false,
             },
             _ => FooterPill {
                 text: glyph.to_string(),
+                label: String::new(),
                 role: Role::TextMuted,
                 bold: false,
             },
@@ -106,6 +116,7 @@ impl App {
             } else {
                 "AUTOSAVE".to_string()
             },
+            label: "AUTOSAVE".to_string(),
             role: Role::Accent,
             bold: false,
         })
@@ -123,6 +134,7 @@ impl App {
             } else {
                 "UNSAVED".to_string()
             },
+            label: "UNSAVED".to_string(),
             role: Role::TextFocusAccent,
             bold: true,
         })

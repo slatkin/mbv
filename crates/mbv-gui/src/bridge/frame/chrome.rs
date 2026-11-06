@@ -35,8 +35,10 @@ impl From<&QueueFooterProjection> for GuiQueueFooter {
     }
 }
 
-/// One footer pill: its text, the foreground role it paints in, and whether the
-/// text is emphasised. Mirrors `FooterPill`.
+/// One footer pill: its glyph-free text (design D8 — no emoji or Nerd Font
+/// glyph reaches the front end, which maps each pill's slot to its Lucide
+/// icon), the foreground role it paints in, and whether the text is
+/// emphasised. Mirrors `FooterPill`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GuiFooterPill {
@@ -48,7 +50,7 @@ pub struct GuiFooterPill {
 impl From<&FooterPill> for GuiFooterPill {
     fn from(pill: &FooterPill) -> Self {
         Self {
-            text: pill.text.clone(),
+            text: pill.label.clone(),
             role: GuiRole::from(pill.role),
             bold: pill.bold,
         }

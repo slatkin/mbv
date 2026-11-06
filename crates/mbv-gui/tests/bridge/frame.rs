@@ -1,4 +1,4 @@
-use mbv::{App, stub_app_with_playing_queue, stub_app_with_queue};
+use mbv::{App, stub_app_with_playing_queue, stub_app_with_queue, stub_app_with_unsaved_queue};
 use mbv_gui::bridge::frame::{FrameSources, GuiFrame};
 use mbv_surfaces::FocusStack;
 use mbv_surfaces::breakpoint::BreakpointClass;
@@ -46,4 +46,31 @@ fn empty_queue_frame_carries_no_rows() {
     let frame = frame_after_tick(&mut app);
     assert_eq!(frame.queue.rows.len(), 0);
     assert_eq!(frame.queue.active, None);
+}
+
+/// A footer pill's text is glyph-free (design D8): no Nerd Font private-use
+/// codepoint and no emoji fallback reaches the front end. The stub's Nerd
+/// Font setting is off, so the projection's composed text carries the emoji
+/// fallbacks the frame must drop, and the unsaved queue's dirty pill carries
+/// its word.
+#[test]
+fn footer_pill_text_carries_no_glyph() {
+    let mut app = stub_app_with_unsaved_queue(1);
+    let frame = frame_after_tick(&mut app);
+    assert!(!frame.footer.owner.text.chars().any(is_glyph));
+    assert!(!frame.footer.playlist.text.chars().any(is_glyph));
+    assert_eq!(
+        frame.footer.dirty.as_ref().map(|pill| pill.text.as_str()),
+        Some("UNSAVED")
+    );
+}
+
+/// A glyph, as design D8 forbids in the GUI: a Nerd Font private-use
+/// codepoint (the BMP and the two supplementary private-use planes) or one of
+/// the projection's emoji fallbacks.
+fn is_glyph(c: char) -> bool {
+    matches!(c, '\u{1F5A7}' | '\u{1F5AD}')
+        || ('\u{E000}'..='\u{F8FF}').contains(&c)
+        || ('\u{F0000}'..='\u{FFFFD}').contains(&c)
+        || ('\u{100000}'..='\u{10FFFD}').contains(&c)
 }
