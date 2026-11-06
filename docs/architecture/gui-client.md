@@ -12,7 +12,8 @@ nextest runs skip it, while `--workspace` clippy and fmt cover it. Every
 `--workspace` build compiles it, so it needs WebKitGTK 4.1 and a built `ui/`
 (`tauri::generate_context!` fails when `frontendDist` does not exist). The
 `make ui-install`, `ui-build`, `ui-check`, `ui-lint`, and `ui-test` targets
-wrap the pnpm steps.
+wrap the pnpm steps. `make dev` builds `ui/` and starts the window with
+`cargo run -p mbv-gui`.
 
 ## Process shape: one core thread
 
