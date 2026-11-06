@@ -147,9 +147,9 @@ A pointer press or wheel step in the GUI Client SHALL resolve to the semantic ta
 
 ### Requirement: The GUI Client derives its breakpoint from its window
 
-The GUI Client SHALL map its window size to the same layout breakpoint classes as the TUI Client. It SHALL apply the same layout behaviour for each class.
+The GUI Client SHALL derive the layout breakpoint class (`Mini`, `Narrow`, `Wide`) from its own window width alone, through the shared `classify` in `mbv-surfaces`, with a GUI logical-point threshold constant. In the same class, it SHALL apply the same layout behaviour as the TUI Client. Cell and logical-point sizes of the two Clients do not match literally, so equal classes need not come from equal raw sizes.
 
 #### Scenario: The window is narrowed
 
 - **WHEN** the user narrows the window below the GUI Wide threshold
-- **THEN** the GUI Client applies the Narrow layout behaviour that the TUI Client applies below its Wide threshold
+- **THEN** the GUI Client applies the Narrow layout behaviour that the TUI Client applies in the Narrow class

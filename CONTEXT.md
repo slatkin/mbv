@@ -390,6 +390,10 @@ _Avoid_: session card, three-line card, card list, index-based card list
 
 ## Panels and surfaces
 
+Breakpoint class:
+The class a Client derives from its own width alone: `Mini`, `Narrow`, or `Wide`, through the shared `classify` in `mbv-surfaces`. Each Client uses its own thresholds: the TUI measures terminal columns, the GUI measures logical points with a GUI threshold constant. In the same class, both Clients apply the same layout behaviour. It is distinct from Panel mode, which also includes the explicit `x` toggle into Mini; that toggle stays TUI state and no GUI key reaches it.
+_Avoid_: breakpoint mode, layout mode
+
 Panel:
 A root-composed region with its own placement, surface fill, layout, and Interactive Component. Panels are Tab, Library, Library playback, Queue, Queue playback, Status bar, and the pane boundaries. Panel focus still means which of Library or Queue receives navigation keys. It is independent of Panel mode.
 _Avoid_: active panel, focused panel, pane focus
