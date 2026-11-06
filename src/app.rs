@@ -3,6 +3,7 @@ mod app_stub;
 mod client_core;
 mod client_drains;
 mod dispatch;
+mod gui_client_state;
 #[cfg(feature = "test")]
 pub use self::app_stub::{
     stub_app_with_pending_settings_save, stub_app_with_playing_items, stub_app_with_playing_queue,
@@ -27,6 +28,9 @@ pub use self::client_drains::{
 };
 pub use self::dispatch::action::{
     AppCommand, Command, NavigationIntent, PanelIntent, PlaybackIntent, ShellCommand, VisualIntent,
+};
+pub use self::gui_client_state::{
+    GuiOverlayProjection, PanelTogglesProjection, RowMenuEntryProjection, TrackPopoverChoice,
 };
 pub(in crate::app) use self::infra::paging::{PAGE_SIZE, PREFETCH_AHEAD};
 pub(in crate::app) use self::infra::signals::{

@@ -1,3 +1,5 @@
+use mbv_ctrl::player::PlayerCommand;
+
 use crate::app::App;
 use crate::app::dispatch::notify::ToastSeverity;
 
@@ -107,5 +109,21 @@ impl App {
 
     pub(in crate::app) fn cycle_sub(&mut self) {
         crate::app::LocalPlaybackTarget::cycle_sub(self);
+    }
+
+    /// Send the Owner a switch to the audio track with this mpv id (the
+    /// track popover's chosen choice, add-tauri-gui-client row 6.2). A
+    /// direct choice carries no mute dance and persists nothing, exactly as
+    /// the cycle path's switch does not.
+    pub(in crate::app) fn set_audio_track(&mut self, id: i64) {
+        let _ = self.player.send_command(PlayerCommand::SetAudio(id));
+    }
+
+    /// Send the Owner a switch to the subtitle track with this mpv id; id 0
+    /// is subtitles off. The direct choice persists the picked track, as
+    /// `cycle_sub`'s switch does.
+    pub(in crate::app) fn set_subtitle_track(&mut self, id: i64) {
+        let _ = self.player.send_command(PlayerCommand::SetSub(id));
+        self.save_prefs();
     }
 }

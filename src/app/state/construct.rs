@@ -238,6 +238,12 @@ impl App {
             library_route_cache: std::collections::HashMap::new(),
             force_clear: false,
             prefix_armed: false,
+            panel_collapsed: false,
+            queue_folded: false,
+            queue_right_column: crate::app::queue_summary_projection::QueueRightColumn::Length,
+            queue_filter: String::new(),
+            queue_filter_active: false,
+            gui_overlay: None,
             tab_scroll: 0,
             last_nav_at: Instant::now()
                 .checked_sub(Duration::from_secs(1))

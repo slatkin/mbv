@@ -18,4 +18,16 @@ pub enum PlaybackRequest {
     VolumeDelta(i64),
     CycleAudio,
     CycleSubtitle,
+    /// Open the track chip's popover (add-tauri-gui-client row 6.2): the
+    /// audio or subtitle chip's choice list over the local player's tracks.
+    /// The GUI Client's chips emit it; the TUI Client paints no track chip,
+    /// so its dispatch arm is the documented absence.
+    OpenTrackPopover(TrackChipKind),
+}
+
+/// Which track chip a popover belongs to (add-tauri-gui-client row 6.2).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TrackChipKind {
+    Audio,
+    Subtitles,
 }

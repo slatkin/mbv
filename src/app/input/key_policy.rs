@@ -103,6 +103,13 @@ pub struct RouterSnapshot {
     /// suppressed while a text entry owns focus or a blocking overlay is
     /// open (the `prefix_arm` layer's gate).
     pub prefix_armed: bool,
+    /// Whether the resolving Client is the GUI Client (add-tauri-gui-client
+    /// row 6.2): the GUI-only key context's gate reads it, so the canvas's
+    /// `z` (collapse), `q` (queue fold), and `c` (cycle subtitle) chords
+    /// route in the GUI Client and never in the TUI Client — a configured
+    /// TUI binding on those chords does not follow into the GUI, and the
+    /// TUI's default bindings stay unchanged.
+    pub gui_client: bool,
 }
 
 /// One ordered layer of the keyboard policy.
@@ -169,6 +176,24 @@ pub(in crate::app) enum KeyPolicyBinding {
     /// against `&Keybinds` in `entry_matches` because the layer is not a
     /// registry action. Always blocking: arming swallows.
     PrefixArm,
+    /// The GUI-only key context's collapse toggle (add-tauri-gui-client row
+    /// 6.2, design D4a's ruled collision): the canvas's `z`, which the TUI
+    /// binds to `cycle_subtitle`. Not a registry action — the chord is
+    /// canvas-fixed and the TUI never routes the layer, so the registry's
+    /// configurable vocabulary stays TUI-facing.
+    GuiCollapsePanel,
+    /// The GUI-only key context's queue-fold toggle: the canvas's `q`, which
+    /// the TUI binds to `quit`.
+    GuiFoldQueue,
+    /// The GUI-only key context's cycle-subtitle chord: the canvas's `c`,
+    /// which the TUI binds to `clear_queue_prompt_c`.
+    GuiCycleSubtitle,
+    /// The GUI-only key context's queue-header Length/Ends-at switch.
+    GuiRightColumnToggle,
+    /// The GUI-only key context's queue-filter opener: the canvas's `/`,
+    /// which the TUI binds to nothing (the library's inline search is a
+    /// leaf-local `/`).
+    GuiQueueFilterOpen,
 }
 
 impl KeyPolicyBinding {
@@ -188,6 +213,14 @@ impl KeyPolicyBinding {
             Self::QueueColumnWidth => {
                 matches!(chord.code, Key::Left | Key::Right) && chord.mods == KeyModifiers::SHIFT
             }
+            // The GUI-only key context's canvas chords: unmodified single
+            // keys, so a modified chord (Ctrl+Z's undo, a text entry's
+            // Shift+letter) keeps its own meaning.
+            Self::GuiCollapsePanel => chord.mods.is_empty() && chord.code == Key::Char('z'),
+            Self::GuiFoldQueue => chord.mods.is_empty() && chord.code == Key::Char('q'),
+            Self::GuiCycleSubtitle => chord.mods.is_empty() && chord.code == Key::Char('c'),
+            Self::GuiRightColumnToggle => chord.mods.is_empty() && chord.code == Key::Char('t'),
+            Self::GuiQueueFilterOpen => chord.mods.is_empty() && chord.code == Key::Char('/'),
             _ => false,
         }
     }
@@ -221,6 +254,11 @@ pub(in crate::app) enum KeyPolicyGate {
     /// while a text-entry surface owns focus or a blocking overlay is open;
     /// in those states it routes as it does without the change.
     PrefixArming,
+    /// The GUI-only key context (add-tauri-gui-client row 6.2): the canvas's
+    /// chords route only in the GUI Client, and only with no blocking
+    /// overlay open and no text entry focused, so the open row menu or the
+    /// filter's text entry keeps the chords it owns.
+    GuiClient,
 }
 
 impl KeyPolicyGate {
@@ -242,6 +280,11 @@ impl KeyPolicyGate {
                 !snapshot.overlays.focus.blocking() && !snapshot.overlays.text_entry_focused
             }
             Self::IdleFeedLink => idle_feed_link_allowed(chord, snapshot),
+            Self::GuiClient => {
+                snapshot.gui_client
+                    && !snapshot.overlays.focus.blocking()
+                    && !snapshot.overlays.text_entry_focused
+            }
         }
     }
 }
@@ -295,6 +338,50 @@ pub(in crate::app) const KEY_POLICY: &[KeyPolicyEntry] = &[
         binding: KeyPolicyBinding::PrefixArm,
         gate: KeyPolicyGate::PrefixArming,
         blocking: true,
+    },
+    // The GUI-only key context (add-tauri-gui-client row 6.2, design D4a's
+    // ruled collision): the canvas's chords bind here, ahead of the TUI
+    // actions whose defaults they collide with (`quit` on `q`,
+    // `cycle_subtitle` on `z`, `clear_queue_prompt_c` on `c`), so a TUI
+    // binding on those chords does not follow into the GUI. The TUI Client's
+    // snapshot never opens the gate, so the layers are inert there and the
+    // TUI's default bindings stay unchanged. Not registry actions: the
+    // chords are canvas-fixed and the TUI-facing registry would otherwise
+    // list chords the TUI never routes.
+    KeyPolicyEntry {
+        name: "gui_collapse_panel",
+        global: true,
+        binding: KeyPolicyBinding::GuiCollapsePanel,
+        gate: KeyPolicyGate::GuiClient,
+        blocking: false,
+    },
+    KeyPolicyEntry {
+        name: "gui_fold_queue",
+        global: true,
+        binding: KeyPolicyBinding::GuiFoldQueue,
+        gate: KeyPolicyGate::GuiClient,
+        blocking: false,
+    },
+    KeyPolicyEntry {
+        name: "gui_cycle_subtitle",
+        global: true,
+        binding: KeyPolicyBinding::GuiCycleSubtitle,
+        gate: KeyPolicyGate::GuiClient,
+        blocking: false,
+    },
+    KeyPolicyEntry {
+        name: "gui_right_column_toggle",
+        global: true,
+        binding: KeyPolicyBinding::GuiRightColumnToggle,
+        gate: KeyPolicyGate::GuiClient,
+        blocking: false,
+    },
+    KeyPolicyEntry {
+        name: "gui_queue_filter_open",
+        global: true,
+        binding: KeyPolicyBinding::GuiQueueFilterOpen,
+        gate: KeyPolicyGate::GuiClient,
+        blocking: false,
     },
     KeyPolicyEntry {
         name: "settings_open",
@@ -626,6 +713,15 @@ fn command_for_simple_binding(binding: KeyPolicyBinding) -> Option<Command> {
         KeyPolicyBinding::F5 => Some(ShellCommand::RefreshCurrentView.into()),
         KeyPolicyBinding::Visualizer => Some(VisualIntent::ToggleVisualizer.into()),
         KeyPolicyBinding::HideVisualSlot => Some(VisualIntent::ToggleVisualSlotHidden.into()),
+        // The GUI-only key context's commands (add-tauri-gui-client row 6.2):
+        // the canvas's panel and queue-header actions, applied by the App's
+        // panel dispatcher. The TUI Client never resolves them (its gate is
+        // closed), so the arms are GUI-reachable only.
+        KeyPolicyBinding::GuiCollapsePanel => Some(PanelIntent::TogglePanelCollapse.into()),
+        KeyPolicyBinding::GuiFoldQueue => Some(PanelIntent::ToggleQueueFold.into()),
+        KeyPolicyBinding::GuiCycleSubtitle => Some(PlaybackIntent::CycleOrToggleSubtitle.into()),
+        KeyPolicyBinding::GuiRightColumnToggle => Some(PanelIntent::ToggleQueueRightColumn.into()),
+        KeyPolicyBinding::GuiQueueFilterOpen => Some(PanelIntent::ActivateQueueFilter.into()),
         _ => None,
     }
 }

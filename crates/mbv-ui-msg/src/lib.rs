@@ -43,7 +43,7 @@ pub use self::intents::{
 #[doc(inline)]
 pub use self::key::{Key, KeyEvent, KeyModifiers};
 #[doc(inline)]
-pub use self::playback::PlaybackRequest;
+pub use self::playback::{PlaybackRequest, TrackChipKind};
 #[doc(inline)]
 pub use self::pointer::{PointerEvent, PointerKind, Position};
 #[doc(inline)]

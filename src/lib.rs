@@ -21,12 +21,13 @@ mod startup;
 
 pub use self::app::{
     App, AppCommand, CLIENT_IDLE_CADENCE, ClientCore, ClientLifecycle, ClientTickHost, ClientWaker,
-    Command, FooterPill, GuiInput, GuiSurfaceLeaf, HomeContent, HomeEventDrain, NavigationIntent,
-    OverlayFocus, PanelIntent, PlaybackIntent, PlaybackTargetChoice, PlayerEventDrain,
-    QueueCardArtwork, QueueFooterProjection, QueuePlaybackProjection, QueueSummaryProjection,
-    QueueSurfaceProjection, RemoteControlTarget, RouterOutcome, RouterOverlayState,
-    RouterPlaybackState, RouterSnapshot, ShellCommand, StartupWorkerDrain, StatusBarProjection,
-    TickOutcome, TrackChip, TrackChips, TrackChoice, VisualIntent, WorkspaceRelayout,
+    Command, FooterPill, GuiInput, GuiOverlayProjection, GuiSurfaceLeaf, HomeContent,
+    HomeEventDrain, NavigationIntent, OverlayFocus, PanelIntent, PanelTogglesProjection,
+    PlaybackIntent, PlaybackTargetChoice, PlayerEventDrain, QueueCardArtwork,
+    QueueFooterProjection, QueuePlaybackProjection, QueueSummaryProjection, QueueSurfaceProjection,
+    RemoteControlTarget, RouterOutcome, RouterOverlayState, RouterPlaybackState, RouterSnapshot,
+    RowMenuEntryProjection, ShellCommand, StartupWorkerDrain, StatusBarProjection, TickOutcome,
+    TrackChip, TrackChips, TrackChoice, TrackPopoverChoice, VisualIntent, WorkspaceRelayout,
     resolve_router_outcome_with_focused,
 };
 pub use self::config::{Config, load_config};
@@ -35,6 +36,7 @@ pub use self::owner_link::{
     find_owner, refusal_text, start_owner,
 };
 pub use self::startup::run;
+pub use mbv_ui_msg::TrackChipKind;
 
 /// The `App` stub construction a Client's own tests build their `App` from
 /// (`extract-client-core` design D11). Compiled only under the root package's

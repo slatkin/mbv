@@ -19,6 +19,20 @@ use time::UtcOffset;
 
 use crate::app::App;
 
+/// Which value the queue rows' right column paints (add-tauri-gui-client row
+/// 6.2, design D4): the queue header's Length / Ends-at switch. The GUI
+/// Client toggles it; the TUI Client paints the length value only, so it
+/// never reads the state.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum QueueRightColumn {
+    /// Each row paints its total runtime.
+    #[default]
+    Length,
+    /// Each row paints the clock time at which it ends, from the current
+    /// position onward.
+    EndsAt,
+}
+
 /// The Queue summary's facts for one read: the header's remaining count and
 /// finish clock, plus each pending slot's end-of-play wall clock.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -39,6 +53,17 @@ pub struct QueueSummaryProjection {
     /// before the playhead carries no clock, and the chain stops at the first
     /// pending slot whose runtime is unknown.
     pub row_finish_clocks: Vec<(QueueSlotId, String)>,
+    /// Which value the rows' right column paints: the Client-core toggle's
+    /// state (add-tauri-gui-client row 6.2).
+    pub right_column: QueueRightColumn,
+    /// The queue filter's text (design D4): the header control's content,
+    /// which narrows the projected rows locally — never the canonical queue.
+    /// Empty text filters nothing.
+    pub filter: String,
+    /// Whether the filter's text entry holds the keyboard: the fact that
+    /// suppresses the global bindings while the user types, and the caret
+    /// fact the GUI's filter control paints.
+    pub filter_active: bool,
 }
 
 impl App {
@@ -47,6 +72,9 @@ impl App {
     pub fn queue_summary_projection(&self) -> QueueSummaryProjection {
         let slots = self.playback_queue().slots();
         let state = self.displayed_playback_state();
+        let right_column = self.queue_right_column;
+        let filter = self.queue_filter.clone();
+        let filter_active = self.queue_filter_active;
         let active_index = state
             .active
             .then_some(state.active_idx)
@@ -58,6 +86,9 @@ impl App {
                 remaining: slots.len(),
                 finish_clock: None,
                 row_finish_clocks: Vec::new(),
+                right_column,
+                filter,
+                filter_active,
             };
         };
         let anchor =
@@ -67,6 +98,9 @@ impl App {
                 remaining: slots.len() - index - 1,
                 finish_clock: None,
                 row_finish_clocks: Vec::new(),
+                right_column,
+                filter,
+                filter_active,
             };
         };
         let (ends, finish) = finish_chain(slots, index, anchor);
@@ -77,6 +111,9 @@ impl App {
                 .into_iter()
                 .map(|(slot, secs)| (slot, fmt_wall_clock(secs, offset)))
                 .collect(),
+            right_column,
+            filter,
+            filter_active,
         }
     }
 }

@@ -136,6 +136,19 @@ pub enum PanelIntent {
     /// toggles queue-only and library-only.
     CyclePanelMode,
     FocusPanel(mbv_ui_model::settings::PanelFocus),
+    /// The GUI-only canvas panel's collapse toggle (add-tauri-gui-client
+    /// row 6.2, design D4a): `z` collapses the panel to the rail. The TUI
+    /// Client never routes the intent — the GUI-only key context's gate
+    /// closes there.
+    TogglePanelCollapse,
+    /// The `q` toggle: fold the expanded panel's queue to its one-line
+    /// summary. GUI-only, as the collapse toggle is.
+    ToggleQueueFold,
+    /// The queue header's switch between the rows' Length and Ends-at
+    /// values. GUI-only: the TUI's queue paints the length value only.
+    ToggleQueueRightColumn,
+    /// Focus the queue header's filter text entry (the GUI-only `/`).
+    ActivateQueueFilter,
 }
 
 impl From<ShellCommand> for Command {
@@ -346,6 +359,13 @@ impl App {
                 // shrank between image and seekbar.
             }
             PanelIntent::CyclePanelMode => self.cycle_panel_mode(),
+            // The GUI-only canvas panel's actions (add-tauri-gui-client row
+            // 6.2): only the GUI-only key context resolves them, so the TUI
+            // Client never dispatches these arms.
+            PanelIntent::TogglePanelCollapse => self.toggle_panel_collapse(),
+            PanelIntent::ToggleQueueFold => self.toggle_queue_fold(),
+            PanelIntent::ToggleQueueRightColumn => self.toggle_queue_right_column(),
+            PanelIntent::ActivateQueueFilter => self.activate_queue_filter(),
         }
     }
 

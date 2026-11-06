@@ -216,6 +216,33 @@ impl App {
         self.move_queue_item_by(from, 1);
     }
 
+    /// Move the queue item at `index` to play directly after the playhead
+    /// (add-tauri-gui-client row 6.2, the canvas row menu's "Play next").
+    /// The move is the owner's slot move, so the queue edit follows the same
+    /// request path a drag or a `Shift+Arrow` move does. A playhead-less
+    /// queue has no next position, and the playing row and the row already
+    /// next to it are no-ops.
+    pub(in crate::app) fn play_queue_item_next(&mut self, index: usize) {
+        let link = self.playing_queue_link();
+        let len = self.queue_for_link(link).total_queue_len();
+        let active = self
+            .displayed_playback_state()
+            .active_idx
+            .filter(|active| *active < len);
+        let Some(active) = active else { return };
+        if index >= len || index == active {
+            return;
+        }
+        // The owner applies `to_index` as the insert position after the
+        // removal: a row before the playhead lands right after the shifted
+        // playhead, a row after it right after the unshifted one.
+        let to = if index < active { active } else { active + 1 };
+        if index == to {
+            return;
+        }
+        self.move_queue_item_to(link, index, to);
+    }
+
     /// Moves the item at `from` by `delta` within the displayed queue's
     /// link. The target is passed explicitly (split-queue-cursor-ownership
     /// D2): the shell resolves the slot the user selected and hands it over

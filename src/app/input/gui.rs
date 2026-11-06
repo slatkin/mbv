@@ -21,11 +21,11 @@
 use mbv_surfaces::gesture::PointerGesture;
 use mbv_ui_model::playback::QueueLink;
 use mbv_ui_msg::{
-    ComponentId, KeyEvent, LeafKeyResult, Msg, PointerEvent, Position, QueueIntent, QueueRequest,
-    ShellRequest,
+    ComponentId, KeyEvent, LeafKeyResult, Msg, OverlayId, PointerEvent, Position, QueueIntent,
+    QueueRequest, ShellRequest,
 };
 
-use super::key_policy::{RouterOverlayState, RouterPlaybackState};
+use super::key_policy::{OverlayFocus, RouterOverlayState, RouterPlaybackState};
 use super::router::{RouterOutcome, RouterSnapshot, resolve_router_outcome_with_focused};
 use crate::app::dispatch::action::Command;
 use crate::app::{App, RemoteControlTarget};
@@ -112,19 +112,39 @@ impl App {
                 queue_only_idle: false,
                 idle_feed_link_available: self.idle_feed_link_available(),
             },
-            // The GUI presents no overlays in the first slice: none is
-            // mounted, none holds focus, and no text entry exists. The
-            // surfaces that mount overlays extend this snapshot when they
-            // land.
-            overlays: RouterOverlayState::default(),
+            // The GUI's one blocking overlay is the open row menu or track
+            // popover (add-tauri-gui-client row 6.2): the same focus fact the
+            // TUI's mounted context menu reports, so the global bindings
+            // close while an overlay is up and the overlay's own key rules
+            // consume the chord. No other overlay mounts in this slice.
+            overlays: RouterOverlayState {
+                focus: if self.gui_overlay.is_some() {
+                    OverlayFocus::ContextMenu
+                } else {
+                    OverlayFocus::Free
+                },
+                ..RouterOverlayState::default()
+            },
             panel_mode: self.effective_panel_mode(),
             panel_focus: self.effective_panel_focus(),
             prefix_armed: self.prefix_armed,
             visual_selection_active: leaf
                 .as_ref()
                 .is_some_and(|surface| surface.visual_selection_active()),
+            // This entry is the GUI Client's: the GUI-only key context's
+            // layers (add-tauri-gui-client row 6.2) route the canvas's `z`,
+            // `q`, and `c` here and never in the TUI Client.
+            gui_client: true,
         };
-        let focused = leaf.as_ref().map(|surface| surface.id());
+        // While the GUI's overlay is open it is the blocking overlay the
+        // router arbitrates against: the chord's focused leaf is the overlay,
+        // not the panel beneath it, so a FallThrough reaches the overlay's
+        // key rules and not the queue surface's.
+        let focused = if self.gui_overlay.is_some() {
+            Some(ComponentId::Overlay(OverlayId::ContextMenu))
+        } else {
+            leaf.as_ref().map(|surface| surface.id())
+        };
         match resolve_router_outcome_with_focused(key, &snapshot, focused.as_ref(), &keybinds) {
             RouterOutcome::Command(command) => self.apply_router_command(&command),
             RouterOutcome::PrefixArm => {
@@ -141,6 +161,21 @@ impl App {
             }
             RouterOutcome::Swallow => false,
             RouterOutcome::FallThrough => {
+                // The open overlay owns the keyboard while it is up: the
+                // router resolved no command, and the overlay — the GUI's
+                // blocking overlay — consumes or drops the chord, never the
+                // panel beneath it.
+                if self.gui_overlay.is_some() {
+                    self.apply_gui_overlay_key(key);
+                    return false;
+                }
+                // The queue filter's text entry: its key rules run here, and
+                // a chord they do not consume keeps falling through to the
+                // focused surface, so navigation keeps working while the
+                // filter is open.
+                if self.apply_gui_filter_key(key) {
+                    return false;
+                }
                 if let Some(surface) = leaf {
                     let result = surface.key(key);
                     self.handle_gui_surface_result(result);
@@ -343,7 +378,23 @@ impl App {
             // context-menu overlay and the Status bar that shows the
             // selection summary (row 6.5). The requests stay undelivered
             // (a GUI Client presents only the surfaces it has ported).
-            ShellRequest::RowContextMenu(..) | ShellRequest::SelectionProjection(_) => {}
+            // A right-click on a row — or the keyboard's context-menu key,
+            // which resolves through the same request — opens the GUI's row
+            // menu (add-tauri-gui-client row 6.2): the Client-core overlay
+            // the frame projects, whose entries carry the canvas's key hints.
+            ShellRequest::RowContextMenu(targets, _) => match targets {
+                mbv_ui_model::context_menu::ContextMenuTargets::Queue(slots) => {
+                    self.open_gui_row_menu(&slots);
+                }
+                // The GUI's queue leaf resolves only Queue targets; the other
+                // variants name rows of surfaces this Client does not present.
+                mbv_ui_model::context_menu::ContextMenuTargets::Home(_)
+                | mbv_ui_model::context_menu::ContextMenuTargets::Emby(_)
+                | mbv_ui_model::context_menu::ContextMenuTargets::Feeds(_)
+                | mbv_ui_model::context_menu::ContextMenuTargets::Audiobookshelf(_) => {}
+            },
+            // The Status bar's selection summary is row 6.5's.
+            ShellRequest::SelectionProjection(_) => {}
             request => {
                 tracing::debug!(
                     name: "gui.surface_msg.undelivered",

@@ -1,5 +1,7 @@
 use super::panel_targets::PanelTarget;
 use crate::app::QueueDeferrals;
+use crate::app::gui_client_state::GuiOverlay;
+use crate::app::queue_summary_projection::QueueRightColumn;
 use crate::app::state::events::{PendingSeriesHandoff, PendingSeriesLanding};
 use crate::app::state::playback::{PlaylistMutationState, SuspendedLocalSession, UndoEntry};
 use crate::app::state::queue_owner::QueueEpoch;
@@ -421,6 +423,26 @@ pub struct App {
     /// disarmed by an armed-dispatch outcome, and silently cleared on any
     /// mouse event. Sticky until a disarm event; no timed expiry.
     pub(in crate::app) prefix_armed: bool,
+    /// The GUI Client's Client-core presentation state (add-tauri-gui-client
+    /// row 6.2): the canvas panel's collapse (`z`) and queue-fold (`q`)
+    /// toggles. The Client core holds them, so a window-content reload keeps
+    /// them; the TUI Client never reads them.
+    pub(in crate::app) panel_collapsed: bool,
+    /// The `q` toggle: the expanded panel's queue folded to its one-line
+    /// summary.
+    pub(in crate::app) queue_folded: bool,
+    /// Which value the queue rows' right column paints: the queue header's
+    /// Length / Ends-at switch.
+    pub(in crate::app) queue_right_column: QueueRightColumn,
+    /// The queue filter's text: it narrows the projected rows locally and
+    /// never touches the canonical queue. Empty text filters nothing.
+    pub(in crate::app) queue_filter: String,
+    /// Whether the queue filter's text entry holds the keyboard: the fact
+    /// that suppresses the global bindings while the user types.
+    pub(in crate::app) queue_filter_active: bool,
+    /// The GUI Client's open overlay: the queue row's menu or a track chip's
+    /// popover (design D4a). `None` while none is open.
+    pub(in crate::app) gui_overlay: Option<GuiOverlay>,
     pub(in crate::app) force_clear: bool,
     pub(in crate::app) tab_scroll: usize,
     pub(in crate::app) ui_volume: u8,
