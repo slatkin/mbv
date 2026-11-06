@@ -17,6 +17,7 @@ workspace = true
 [dependencies]
 mbv = { path = "../.." }
 mbv-config = { path = "../mbv-config" }
+mbv-core = { path = "../mbv-core" }
 mbv-queue = { path = "../mbv-queue" }
 mbv-remote-player = { path = "../mbv-remote-player" }
 mbv-surfaces = { path = "../mbv-surfaces" }

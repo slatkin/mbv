@@ -102,8 +102,8 @@ impl std::error::Error for AttachError {
 
 /// Start the core thread (design D3): it loads the configuration, attaches
 /// to the Owner, and runs the tick loop for the life of the process. The
-/// thread is detached; it ends when the channel disconnects or a routed quit
-/// ends the run.
+/// thread is detached; in this unit nothing ends the loop — the disconnect
+/// arrives with row 2.5's command senders, and row 2.4 routes no quit yet.
 pub fn spawn() {
     let (tx, rx) = mpsc::channel();
     // Row 2.5 replaces this sink with `AppHandle::emit`; the placeholder
@@ -211,7 +211,9 @@ pub struct CoreThread {
     /// A `report_layout` arrived this tick: the frame emits changed or not
     /// (design D3).
     frame_requested: bool,
-    /// The first emitted frame carries the theme (design D7).
+    /// The frame that finds it armed carries the theme (design D7): the
+    /// first frame, and every frame a `report_layout` triggers — the front
+    /// end sends the report when it mounts, so a reload re-arms it.
     theme_pending: bool,
     /// The wait between ticks. Production keeps `CLIENT_IDLE_CADENCE`; the
     /// step test zeroes it.
@@ -264,8 +266,10 @@ impl CoreThread {
     }
 
     /// Run the loop (design D3): wait for input, wake, or the idle cadence,
-    /// then tick. Ends when the channel disconnects — the front end and its
-    /// commands are gone — or a routed quit ends the run.
+    /// then tick. In this unit the loop runs for the life of the process:
+    /// the only `Sender` lives in the installed waker, so the channel never
+    /// disconnects, and row 2.4 routes no quit. Row 2.5 adds the front end's
+    /// command senders, and their drop ends the run.
     pub fn run(&mut self) {
         while self.step() {}
     }
@@ -313,9 +317,9 @@ impl CoreThread {
         self.queue.set_link(update.link);
     }
 
-    /// Build and emit the frame the window paints (design D4): the first
-    /// emitted frame carries the theme, later frames carry it only when it
-    /// changes (design D7).
+    /// Build and emit the frame the window paints (design D4): the frame
+    /// carries the theme when armed — the first frame, and every
+    /// `report_layout`-triggered frame (design D7).
     fn emit_frame(&mut self) {
         self.sync_queue_surface();
         let theme_changed = std::mem::take(&mut self.theme_pending);
@@ -496,9 +500,13 @@ impl ClientTickHost for CoreThread {
                 }
                 CoreInput::Layout(_) => {
                     // A `report_layout` always emits the current frame,
-                    // changed or not (design D3). Row 2.4 applies the report
-                    // to the capacity and the hit map first.
+                    // changed or not (design D3), and re-arms the theme: the
+                    // front end sends the report when it mounts, so the
+                    // frame after a reload carries the theme again (design
+                    // D7). Row 2.4 applies the report to the capacity and
+                    // the hit map first.
                     self.frame_requested = true;
+                    self.theme_pending = true;
                 }
             }
         }

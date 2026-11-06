@@ -17,6 +17,16 @@ fn key_press() -> CoreInput {
     CoreInput::Key(KeyEvent::new(Key::Char('n'), KeyModifiers::NONE))
 }
 
+/// A layout report for a window the front end has not measured into regions
+/// yet, as the report on mount carries.
+fn layout_report() -> CoreInput {
+    CoreInput::Layout(LayoutReport {
+        lists: vec![],
+        regions: vec![],
+        width: 800.0,
+    })
+}
+
 /// The sink emitted no frame: the channel is empty while the core's sink
 /// sender is still alive.
 fn assert_no_frame(frames: &mpsc::Receiver<GuiFrame>) {
@@ -82,13 +92,7 @@ fn waker_wake_yields_a_tick() {
 #[test]
 fn layout_report_emits_a_frame_without_a_state_change() {
     let mut test = test_core();
-    test.tx
-        .send(CoreInput::Layout(LayoutReport {
-            lists: vec![],
-            regions: vec![],
-            width: 800.0,
-        }))
-        .unwrap();
+    test.tx.send(layout_report()).unwrap();
     assert!(test.core.step());
     test.frames.try_recv().unwrap();
     assert_no_frame(&test.frames);
@@ -107,4 +111,21 @@ fn only_the_first_frame_carries_the_theme() {
     assert!(test.core.step());
     let second = test.frames.try_recv().unwrap();
     assert!(second.theme.is_none());
+}
+
+/// A `report_layout` re-arms the theme (design D7): the front end sends the
+/// report when it mounts, so the frame after a webview reload carries the
+/// theme again.
+#[test]
+fn a_layout_report_after_the_first_frame_carries_the_theme_again() {
+    let mut test = test_core();
+    test.tx.send(key_press()).unwrap();
+    assert!(test.core.step());
+    assert!(test.frames.try_recv().unwrap().theme.is_some());
+    test.waker.wake();
+    assert!(test.core.step());
+    assert!(test.frames.try_recv().unwrap().theme.is_none());
+    test.tx.send(layout_report()).unwrap();
+    assert!(test.core.step());
+    assert!(test.frames.try_recv().unwrap().theme.is_some());
 }
