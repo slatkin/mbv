@@ -107,6 +107,8 @@ Each attach outcome gets the response that `startup::run_local_instance` gives t
 
 Before attach there is no `App`. In these states the core thread handles R and Q itself, and the two buttons resolve through the `LayoutReport` regions. The front end still interprets no key.
 
+The core thread does not run the TUI's post-attach service bootstrap. `spawn_startup_services`, `fetch_home_at_startup`, `init_idle_feed`, and capability registration (`src/app/shell/run/drains.rs:521`, `src/app/shell/run.rs:319-324`) belong to the TUI shell `Model`, not to `App`. The first slice presents no library surface (Non-Goals), so the core thread does not run those steps, and a configured-but-uncached provider does not bootstrap for the GUI Client. A later change that ports a library surface must first factor those steps into a shared Client step; it must not duplicate them in `mbv-gui`.
+
 ### D10. Breakpoint
 
 The front end reports the window's inner width in logical pixels in `LayoutReport`. The core thread classifies it with the shared breakpoint classes and a GUI threshold constant in `mbv-gui`. The class's behaviour comes from the core. The classes differ only in Library and hero placement (`mbv-surfaces` `breakpoint.rs`), and the first slice presents neither. So in the first slice the class changes nothing visible. It is wired for later surfaces. The slice has no Narrow-specific layout of its own.
