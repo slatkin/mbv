@@ -3378,6 +3378,11 @@ dependencies = [
 name = "mbv-gui"
 version = "0.26.6"
 dependencies = [
+ "mbv",
+ "mbv-queue",
+ "mbv-surfaces",
+ "mbv-theme",
+ "mbv-ui-model",
  "mbv-ui-msg",
  "mimalloc",
  "rstest",

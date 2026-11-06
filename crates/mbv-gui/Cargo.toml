@@ -15,6 +15,11 @@ workspace = true
 
 # Exact pins per openspec/changes/add-tauri-gui-client/design.md D2.
 [dependencies]
+mbv = { path = "../.." }
+mbv-queue = { path = "../mbv-queue" }
+mbv-surfaces = { path = "../mbv-surfaces" }
+mbv-theme = { path = "../mbv-theme" }
+mbv-ui-model = { path = "../mbv-ui-model" }
 mbv-ui-msg = { path = "../mbv-ui-msg" }
 mimalloc.workspace = true
 serde = { workspace = true, features = ["derive"] }
@@ -24,4 +29,5 @@ tauri = "=2.12.5"
 tauri-build = "=2.7.4"
 
 [dev-dependencies]
+mbv = { path = "../..", features = ["test"] }
 rstest.workspace = true
