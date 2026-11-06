@@ -29,6 +29,15 @@ const JETBRAINS_MONO: EmbeddedFont = EmbeddedFont {
     bold: include_bytes!("../assets/fonts/JetBrainsMono-Bold.ttf"),
 };
 
+/// The egui family of the bold Lexend Deca face. The Queue status word and the
+/// footer pills paint in it.
+const BOLD_FAMILY: &str = "Lexend Deca Bold";
+
+/// `size` logical points of the bold Lexend Deca face.
+pub(crate) fn proportional_bold(size: f32) -> egui::FontId {
+    egui::FontId::new(size, egui::FontFamily::Name(BOLD_FAMILY.into()))
+}
+
 /// Install the embedded families as the leading proportional and monospace
 /// families at egui's default sizes (design D8). egui's built-in fonts stay
 /// in each family behind the embedded ones as fallbacks.
@@ -58,5 +67,18 @@ pub(crate) fn install(ctx: &egui::Context) {
         // resolves inside the embedded family before the fallbacks.
         slots.insert(1, format!("{}-bold", font.family));
     }
+    // The bold face leads a named family of its own. egui reads a named family
+    // only from its own list, so the proportional chain follows the bold face
+    // as the fallbacks for glyphs the bold face lacks.
+    let proportional = fonts
+        .families
+        .entry(egui::FontFamily::Proportional)
+        .or_default()
+        .clone();
+    let mut bold_chain = vec![format!("{}-bold", LEXEND_DECA.family)];
+    bold_chain.extend(proportional);
+    fonts
+        .families
+        .insert(egui::FontFamily::Name(BOLD_FAMILY.into()), bold_chain);
     ctx.set_fonts(fonts);
 }

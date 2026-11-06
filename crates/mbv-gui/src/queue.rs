@@ -25,6 +25,8 @@ use mbv_ui_msg::{ComponentId, KeyEvent, LeafKeyResult, Msg, Position, QueueReque
 
 use mbv::QueueSurfaceProjection;
 
+use crate::fonts;
+
 /// The fixed row height every queue row paints at, in logical points
 /// (`specs/gui-client`: fixed row heights so capacity is a whole number of
 /// rows).
@@ -538,10 +540,9 @@ fn pill_text_width(painter: &egui::Painter, pill: &FooterPill) -> f32 {
         .x
 }
 
-/// The font the footer's pills paint in. The bold flag is not painted: the
-/// bundled families expose no bold face to select.
+/// The font the footer's pills paint in: the bold Lexend Deca face.
 fn pill_font() -> egui::FontId {
-    egui::FontId::proportional(13.0)
+    fonts::proportional_bold(13.0)
 }
 
 /// The whole rows of `row_height` that fit inside `height`, by comparison:

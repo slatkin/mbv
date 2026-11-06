@@ -27,6 +27,7 @@ use mbv_ui_model::playback_target::NowPlayingStatus;
 use mbv_ui_model::ui_util::fmt_duration_short;
 use mbv_ui_msg::{ComponentId, KeyEvent, LeafKeyResult, Msg, PlaybackRequest, Position};
 
+use crate::fonts;
 use crate::queue::{PANEL_PADDING, ROW_HEIGHT, role_colour, surface_fill, to_region};
 
 /// The header row's height: the playback-target indicator and the status word,
@@ -304,7 +305,7 @@ fn paint_header(painter: &egui::Painter, row: egui::Rect, projection: &QueuePlay
         row.right_center(),
         egui::Align2::RIGHT_CENTER,
         word,
-        egui::FontId::proportional(TEXT_SIZE),
+        fonts::proportional_bold(TEXT_SIZE),
         role_colour(status_role),
     );
     let icon_role = if projection.host_is_remote {
