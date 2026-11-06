@@ -12,8 +12,10 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@internationalized/date": "3.12.4",
     "@lucide/svelte": "1.70.0",
     "@tauri-apps/api": "2.12.4",
+    "bits-ui": "2.20.6",
     "svelte": "5.57.3"
   },
   "devDependencies": {
