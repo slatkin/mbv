@@ -59,5 +59,5 @@ fn with_meta(mut event: DomKey) -> DomKey {
 #[case::function_key(press("F5"), KeyEvent::new(Key::Function(5), KeyModifiers::NONE))]
 #[case::meta_held_is_null(with_meta(press("l")), KeyEvent::new(Key::Null, KeyModifiers::NONE))]
 fn dom_key_translates_to_neutral_key(#[case] dom: DomKey, #[case] expected: KeyEvent) {
-    assert_eq!(neutral_key(&dom), expected);
+    assert_eq!(neutral_key(dom), expected);
 }

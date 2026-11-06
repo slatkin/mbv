@@ -85,9 +85,10 @@ const DOM_PRIMARY_HELD: u16 = 1;
 /// modifiers have no bit for it — the same fact the `key` translation answers
 /// by nulling the key. The sender owns the notch sizing: one translated wheel
 /// event is one uniform wheel step, so a continuous-delta sender reports one
-/// event per notch it decides on.
+/// event per notch it decides on. The event is consumed, as the TUI's
+/// terminal edge consumes its event.
 #[must_use]
-pub fn neutral_pointer(event: &DomPointer) -> Option<PointerEvent> {
+pub fn neutral_pointer(event: DomPointer) -> Option<PointerEvent> {
     let kind = match event.kind {
         DomPointerKind::Press => match event.button {
             DOM_PRIMARY_BUTTON => PointerKind::Press,

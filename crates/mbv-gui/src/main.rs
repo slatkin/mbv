@@ -4,6 +4,7 @@
 //! channel, and the `mbv://frame` event carries its frames to the window
 //! (design D4, task row 2.5).
 
+use std::ops::Deref;
 use std::sync::mpsc::Sender;
 
 use mbv_gui::bridge::frame::GuiFrame;
@@ -30,13 +31,9 @@ struct CoreChannel(Sender<CoreInput>);
 /// with the default action prevented, this translates it to the neutral
 /// `KeyEvent` (design D6), and the translated chord pushes into the core
 /// channel.
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "the Tauri command macro fixes the by-value argument shapes (CommandArg, State); a sync command keeps input events ordered on the main thread (same class as the mpris interface signatures, issue #804)"
-)]
 #[tauri::command]
 fn key(channel: State<'_, CoreChannel>, event: DomKey) {
-    push(&channel, CoreInput::Key(neutral_key(&event)));
+    push(channel, CoreInput::Key(neutral_key(event)));
 }
 
 /// The `pointer` command (design D4): the DOM pointer event translates to
@@ -44,33 +41,28 @@ fn key(channel: State<'_, CoreChannel>, event: DomKey) {
 /// represent — the middle button, a secondary-button release, a
 /// horizontal-only scroll — drops, exactly as the TUI's terminal edge drops
 /// it.
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "the Tauri command macro fixes the by-value argument shapes (CommandArg, State); a sync command keeps input events ordered on the main thread (same class as the mpris interface signatures, issue #804)"
-)]
 #[tauri::command]
 fn pointer(channel: State<'_, CoreChannel>, event: DomPointer) {
-    if let Some(event) = neutral_pointer(&event) {
-        push(&channel, CoreInput::Pointer(event));
+    if let Some(event) = neutral_pointer(event) {
+        push(channel, CoreInput::Pointer(event));
     }
 }
 
 /// The `report_layout` command (design D4): the report pushes into the core
 /// channel, where the core applies it to the capacity and the hit map and
 /// emits the current frame, changed or not (design D3).
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "the Tauri command macro fixes the by-value argument shapes (CommandArg, State); a sync command keeps input events ordered on the main thread (same class as the mpris interface signatures, issue #804)"
-)]
 #[tauri::command]
 fn report_layout(channel: State<'_, CoreChannel>, report: LayoutReport) {
-    push(&channel, CoreInput::Layout(report));
+    push(channel, CoreInput::Layout(report));
 }
 
-/// Push one input into the core channel. A failed push means the core thread
-/// is gone — an Owner attach failure ends it, and row 2.6 owns that window
-/// state — so the input has no receiver left and logs its drop.
-fn push(channel: &CoreChannel, input: CoreInput) {
+/// Push one input into the core channel (design D3): the command hands the
+/// state guard over — the Tauri command contract passes the managed state as
+/// an owned guard, so the push takes it for the send and reads the channel
+/// through it. A failed send means the core thread is gone — an Owner attach
+/// failure ends it, and row 2.6 owns that window state — so the input logs
+/// its drop.
+fn push(channel: impl Deref<Target = CoreChannel>, input: CoreInput) {
     if channel.0.send(input).is_err() {
         tracing::warn!(
             target: "gui_commands",

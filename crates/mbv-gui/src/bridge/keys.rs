@@ -57,17 +57,26 @@ pub fn neutral_modifiers(modifiers: &DomModifiers) -> KeyModifiers {
 
 /// Translates a DOM key press into the neutral `KeyEvent`.
 ///
-/// SHIFT, CONTROL, and ALT map to the neutral modifiers. A press with Meta held
-/// becomes `Key::Null`, which matches no chord: the neutral modifiers have no
-/// Meta, so a bare-letter binding would otherwise fire for a Cmd chord. A key
-/// that the vocabulary cannot name, such as `CapsLock`, also becomes `Key::Null`.
+/// The event is consumed, as the TUI's crossterm edge consumes its event, and
+/// the translation reads only the fields it names — `code` and `repeat` are
+/// carried but unread, so the destructure leaves them behind. SHIFT, CONTROL,
+/// and ALT map to the neutral modifiers. A press with Meta held becomes
+/// `Key::Null`, which matches no chord: the neutral modifiers have no Meta, so
+/// a bare-letter binding would otherwise fire for a Cmd chord. A key that the
+/// vocabulary cannot name, such as `CapsLock`, also becomes `Key::Null`.
 #[must_use]
-pub fn neutral_key(event: &DomKey) -> KeyEvent {
-    let modifiers = neutral_modifiers(&event.modifiers);
-    let code = if event.meta_key {
+pub fn neutral_key(event: DomKey) -> KeyEvent {
+    let DomKey {
+        key,
+        meta_key,
+        modifiers,
+        ..
+    } = event;
+    let modifiers = neutral_modifiers(&modifiers);
+    let code = if meta_key {
         Key::Null
     } else {
-        logical_key(&event.key, modifiers)
+        logical_key(&key, modifiers)
     };
     KeyEvent::new(code, modifiers)
 }

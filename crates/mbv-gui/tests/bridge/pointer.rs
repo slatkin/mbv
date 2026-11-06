@@ -117,7 +117,7 @@ fn dom_pointer_translates_to_the_neutral_pointer(
     #[case] dom_event: DomPointer,
     #[case] expected: Option<PointerEvent>,
 ) {
-    assert_eq!(neutral_pointer(&dom_event), expected);
+    assert_eq!(neutral_pointer(dom_event), expected);
 }
 
 /// A Ctrl-held press keeps CONTROL: the click's selection choice reads the
@@ -132,7 +132,7 @@ fn a_modifier_held_press_keeps_its_neutral_modifier() {
         ..dom(DomPointerKind::Press, 0, 1, 0.0)
     };
     assert_eq!(
-        neutral_pointer(&event),
+        neutral_pointer(event),
         Some(PointerEvent::new(
             PointerKind::Press,
             Position { x: 10.0, y: 20.0 },
@@ -149,5 +149,5 @@ fn a_meta_held_press_loses_the_meta_flag() {
         meta_key: true,
         ..dom(DomPointerKind::Press, 0, 1, 0.0)
     };
-    assert_eq!(neutral_pointer(&event), Some(neutral(PointerKind::Press)));
+    assert_eq!(neutral_pointer(event), Some(neutral(PointerKind::Press)));
 }
