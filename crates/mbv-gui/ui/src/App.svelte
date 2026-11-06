@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { frames } from '$lib/bridge/frames';
   import { installInput } from '$lib/bridge/input';
+  import QueuePanel from '$lib/components/QueuePanel.svelte';
 
   // The webview's own context menu is turned off (add-tauri-gui-client D11).
   // Tauri has no config key for it on WebKitGTK.
@@ -23,4 +24,12 @@
 
 <svelte:document oncontextmenu={preventContextMenu} />
 
-<main class="h-dvh bg-background text-foreground"></main>
+<main class="h-dvh bg-background text-foreground">
+  {#if $frames && 'slice' in $frames}
+    <QueuePanel
+      queue={$frames.slice.queue}
+      footer={$frames.slice.footer}
+      focused={$frames.slice.focus.surface === 'queue'}
+    />
+  {/if}
+</main>
