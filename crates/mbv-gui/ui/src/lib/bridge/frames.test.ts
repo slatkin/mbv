@@ -45,6 +45,11 @@ function chrome(): GuiChrome {
 		border: { r: 70, g: 71, b: 72 },
 		input: { r: 80, g: 81, b: 82 },
 		queueColumn: { r: 90, g: 91, b: 92 },
+		queueColumnFocused: { r: 93, g: 94, b: 95 },
+		queuePanel: { r: 96, g: 97, b: 98 },
+		queuePanelFocused: { r: 99, g: 100, b: 101 },
+		queuePlaybackBand: { r: 102, g: 103, b: 104 },
+		queueFooterBand: { r: 105, g: 106, b: 107 },
 	};
 }
 

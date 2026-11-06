@@ -195,6 +195,19 @@ export interface GuiChrome {
 	 * column's gutter around its recessed box, playback band, and footer
 	 * band. */
 	queueColumn: GuiRgb;
+	/** The queue column's focused backdrop: the same surface's focused fill;
+	 * the front end picks between the pair on the frame's Panel-focus fact. */
+	queueColumnFocused: GuiRgb;
+	/** The queue panel's recessed box, the surface the TUI paints the queue
+	 * list's box with. */
+	queuePanel: GuiRgb;
+	/** The queue panel's focused box: the same surface's focused fill. */
+	queuePanelFocused: GuiRgb;
+	/** The queue column's playback band: the fixed chrome-band fill the TUI
+	 * paints the queue header row and transport band with. */
+	queuePlaybackBand: GuiRgb;
+	/** The queue footer's band, behind its status-bar pills. */
+	queueFooterBand: GuiRgb;
 }
 
 export interface GuiRgb {

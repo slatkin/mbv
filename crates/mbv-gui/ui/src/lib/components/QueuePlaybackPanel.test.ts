@@ -99,6 +99,28 @@ test('the controls row paints the status-indicator cluster the frame carries', (
 	expect(getByText('ENG')).toBeTruthy();
 });
 
+// The playback-target icon's contract (the layout-parity brief): the TUI's
+// `target_icon` paints the cast-family glyph for both states — the cast
+// glyph while local, the connected-cast glyph while remote — in the target
+// colour (yellow local, green remote), so the GUI maps both states to
+// Lucide's one `Cast`, whose shape is the connected variant, and the colour
+// plus the host label carry the distinction. Lucide renders the icon's name
+// as the svg's `lucide-cast` class.
+test.each([
+	['local', false, 'var(--mbv-playbackTargetLocalFg)'],
+	['remote', true, 'var(--mbv-playbackTargetRemoteFg)'],
+])('%s target paints the cast glyph in its target colour', (_state, remote, colour) => {
+	const { container } = render(QueuePlaybackPanel, {
+		playback: playing({ hostIsRemote: remote, host: remote ? 'poo' : '' }),
+	});
+
+	const svg = container.querySelector('[data-target="playbackTarget"] svg');
+	expect(svg?.classList.contains('lucide-cast')).toBe(true);
+	// Lucide maps the `color` prop onto the svg's stroke (the outline shape
+	// the TUI's target glyph keeps).
+	expect(svg?.getAttribute('stroke')).toBe(colour);
+});
+
 test('an idle frame renders the header alone', () => {
 	const { getByText, container } = render(QueuePlaybackPanel, {
 		playback: playing({

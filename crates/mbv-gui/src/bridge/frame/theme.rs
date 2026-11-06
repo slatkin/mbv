@@ -49,10 +49,14 @@ impl GuiTheme {
 /// shadcn-svelte background, surface, border, and input variables point at.
 /// Each one resolves the [`Surface`] the TUI paints the same concept with,
 /// so the chrome tracks the palette with no second palette: a palette edit
-/// recolours the chrome together with the roles. Every field is a resting
-/// fill (`surface_colors(surface, false)`), because a chrome variable is not
-/// focus-reactive; the fill tiers the front end aliases are named in the
-/// field docs.
+/// recolours the chrome together with the roles. Fields named without a
+/// `focused` suffix are resting fills (`surface_colors(surface, false)`);
+/// the two `focused` fields resolve the same surface's focused fill, for
+/// the surface table's focus-reactive rows the queue column paints
+/// (`QueueColumn`, `QueuePanel`) — the front end picks between the pair on
+/// the frame's Panel-focus fact, the way the TUI's
+/// `panel_appearance_focus` picks. The fill tiers the front end aliases
+/// are named in the field docs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct GuiChrome {
     /// The app backdrop: `Surface::PlaybackPanel`, which the surface table
@@ -83,8 +87,29 @@ pub struct GuiChrome {
     pub input: GuiRgb,
     /// The queue column's backdrop: `Surface::QueueColumn`, the fill the TUI
     /// paints as the queue column's gutter — the padding around the queue
-    /// column's recessed box, its playback band, and its footer band.
+    /// column's recessed box, its playback band, and its footer band. The
+    /// resting fill (`surface_colors(surface, false)`).
     pub queue_column: GuiRgb,
+    /// The queue column's focused backdrop: `Surface::QueueColumn` resolved
+    /// with the focused bit. The queue column is one of the surface table's
+    /// focus-reactive rows (resting `Bg1`, focused `Bg2`), so the front end
+    /// picks between this and `queue_column` on the frame's Panel-focus fact
+    /// the way the TUI's `panel_appearance_focus` picks.
+    pub queue_column_focused: GuiRgb,
+    /// The queue panel's recessed box: `Surface::QueuePanel`'s resting fill,
+    /// the surface the TUI paints the queue list's box with.
+    pub queue_panel: GuiRgb,
+    /// The queue panel's focused box: `Surface::QueuePanel` resolved with the
+    /// focused bit (resting `Bg0`, focused `Bg3`). The front end picks between
+    /// this and `queue_panel` on the same Panel-focus fact.
+    pub queue_panel_focused: GuiRgb,
+    /// The queue column's playback band: `Surface::QueueOnlyPlaybackPanel`,
+    /// the fixed chrome-band fill the TUI paints the queue header row and
+    /// transport band with (mode-driven, not focus-driven).
+    pub queue_playback_band: GuiRgb,
+    /// The queue footer's band: `Surface::QueuePanelBand`, the fill the TUI
+    /// paints the queue footer row with, behind its status-bar pills.
+    pub queue_footer_band: GuiRgb,
 }
 
 impl GuiChrome {
@@ -101,6 +126,11 @@ impl GuiChrome {
             border: chrome_fill(Surface::PopupBorder),
             input: chrome_fill(Surface::PopupBorder),
             queue_column: chrome_fill(Surface::QueueColumn),
+            queue_column_focused: focused_chrome_fill(Surface::QueueColumn),
+            queue_panel: chrome_fill(Surface::QueuePanel),
+            queue_panel_focused: focused_chrome_fill(Surface::QueuePanel),
+            queue_playback_band: chrome_fill(Surface::QueueOnlyPlaybackPanel),
+            queue_footer_band: chrome_fill(Surface::QueuePanelBand),
         }
     }
 }
@@ -108,6 +138,12 @@ impl GuiChrome {
 /// The resting fill of `surface`, as the chrome carries it.
 fn chrome_fill(surface: Surface) -> GuiRgb {
     GuiRgb::from(surface_colors(surface, false).fill)
+}
+
+/// The focused fill of `surface`, as the chrome carries it: the focused
+/// variant of the surface table's focus-reactive rows.
+fn focused_chrome_fill(surface: Surface) -> GuiRgb {
+    GuiRgb::from(surface_colors(surface, true).fill)
 }
 
 /// An 8-bit RGB colour, mirroring `mbv_theme::Rgb`.

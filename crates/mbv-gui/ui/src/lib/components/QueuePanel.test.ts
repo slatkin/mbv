@@ -80,6 +80,7 @@ test('a frame with slots renders its rows', () => {
 		),
 		footer,
 		focused: true,
+		panelFocused: true,
 	});
 
 	expect(getByText('First track')).toBeTruthy();
@@ -90,11 +91,45 @@ test('a frame with slots renders its rows', () => {
 	expect(getByText('woims')).toBeTruthy();
 });
 
+// The footer pill's icon contract (the layout-parity brief): the GUI maps
+// each pill's slot to its Lucide icon — the playlist source's
+// `playlist-play` glyph maps to `list-music`, the owner indicator's
+// `connection` to `cable`, the autosave `content-save-check` to
+// `save-check`, and the dirty `content-save-alert` to `save-off` — where
+// the TUI paints its Nerd Font glyphs. Lucide renders each icon's name as
+// the svg's `lucide-<name>` class.
+test('the footer pills paint their Lucide icons', () => {
+	const { container } = render(QueuePanel, {
+		queue: queue([]),
+		footer: {
+			owner: { text: 'woims', role: 'textFocusAccent', bold: false },
+			playlist: { text: 'mix', role: 'textMetadata', bold: false },
+			autosave: { text: 'AUTOSAVE', role: 'accent', bold: false },
+			dirty: { text: 'UNSAVED', role: 'textFocusAccent', bold: true },
+		},
+		focused: false,
+		panelFocused: true,
+	});
+
+	for (const icon of [
+		'lucide-list-music',
+		'lucide-cable',
+		'lucide-save-check',
+		'lucide-save-off',
+	]) {
+		expect(
+			container.querySelector(`svg.${icon}`),
+			`${icon} paints`,
+		).toBeTruthy();
+	}
+});
+
 test('an empty frame renders the empty-queue state', () => {
 	const { getByText, container } = render(QueuePanel, {
 		queue: queue([]),
 		footer,
 		focused: true,
+		panelFocused: true,
 	});
 
 	expect(getByText('¯\\_(ツ)_/¯')).toBeTruthy();
@@ -117,6 +152,7 @@ test('a layout change sends one merged report', async () => {
 		]),
 		footer,
 		focused: true,
+		panelFocused: true,
 	});
 	// The mount paint reports once; wait for that flush before the change.
 	await vi.waitFor(() => expect(invokeMock).toHaveBeenCalledTimes(1));

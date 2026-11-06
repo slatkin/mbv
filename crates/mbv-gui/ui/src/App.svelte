@@ -31,12 +31,18 @@
   {#if $frames && 'slice' in $frames}
     <!-- The first slice's queue-only arrangement (spec
       gui-client): the Queue playback band above the Queue
-      panel, the Status bar floating at the bottom. The column
-      carries the queue column's backdrop fill, the TUI's
-      `QueueColumn` gutter the panels' padding sits on. -->
+      panel, the Status bar floating over the placement's bottom
+      pad row. The column carries the queue column's backdrop
+      fill, the TUI's `QueueColumn` gutter the panels' padding
+      sits on — focus-reactive like the TUI's
+      `panel_appearance_focus` picks it, so the chrome's
+      `queueColumn` pair follows the frame's Panel-focus fact. -->
+    {@const panelFocused = $frames.slice.focus.panel === 'queue'}
     <div
-      class="flex h-full flex-col"
-      style:background="var(--mbv-queueColumn)"
+      class="relative flex h-full flex-col"
+      style:background={panelFocused
+        ? 'var(--mbv-queueColumnFocused)'
+        : 'var(--mbv-queueColumn)'}
     >
       <QueuePlaybackPanel playback={$frames.slice.playback} />
       <div class="min-h-0 flex-1">
@@ -44,6 +50,7 @@
           queue={$frames.slice.queue}
           footer={$frames.slice.footer}
           focused={$frames.slice.focus.surface === 'queue'}
+          {panelFocused}
         />
       </div>
       <StatusBar status={$frames.slice.status} />

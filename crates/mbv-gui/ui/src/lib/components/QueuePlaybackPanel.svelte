@@ -2,17 +2,20 @@
 	// The Queue playback panel (add-tauri-gui-client task 3.4, design D4): the
 	// queue column's transport band. The header row paints in every state —
 	// the playback-target indicator (a Lucide icon, local vs remote by its
-	// role colour), the remote host name, the now-playing title, and the
-	// right-aligned status word. The transport band paints only while the
-	// frame's `shown` says a transport exists (idle collapses it), and its
-	// controls and seek row paint only while a now-playing title rides, the
-	// same gates the TUI's `render_queue_panel` applies.
+	// role colour), the remote host name, and the right-aligned status word;
+	// the now-playing title paints on its own row below the header. The
+	// transport band paints only while the frame's `shown` says a transport
+	// exists (idle collapses it), and its controls and seek row paint only
+	// while a now-playing title rides, the same gates the TUI's
+	// `render_queue_panel` applies.
 	//
 	// The paint mirrors the TUI's queue band
 	// (crates/mbv-render/src/components/chrome_player/title/): the header and
-	// band sit on the `QueueOnlyPlaybackPanel` surface — the BgDim slot
-	// `--mbv-pillSelectedFg` carries — and the controls row sits on
+	// band sit on the `QueueOnlyPlaybackPanel` surface, the fill
+	// `--mbv-queuePlaybackBand` carries, and the controls row sits on
 	// `TransportRow`, the BgDim1 slot `--mbv-secondary` carries (design D7).
+	// Every offset is a `calc()` over the cell unit (`bridge/cells`): one row
+	// is `--mbv-cell-row`, one column `--mbv-cell-col`.
 	// Every control is a Lucide icon (design D8: no emoji or Nerd Font
 	// glyph), and the seekbar is a filled track with the elapsed and total
 	// times the TUI flanks it with. The transport glyphs paint as solid
@@ -26,7 +29,6 @@
 	import { onMount } from 'svelte';
 	import {
 		Cast,
-		Monitor,
 		Pause,
 		Play,
 		SkipBack,
@@ -34,6 +36,7 @@
 		Square,
 	} from '@lucide/svelte';
 	import { reportLayout, retractLayout } from '$lib/bridge/layout';
+	import { CELL_COL_PX, CELL_ROW_PX } from '$lib/bridge/cells';
 	import { roleProperty } from '$lib/bridge/theme';
 	import type {
 		GuiCardArtwork,
@@ -48,8 +51,9 @@
 	}
 	const { playback }: Props = $props();
 
-	/** The fixed row height in logical pixels, the queue list's row. */
-	const ROW_HEIGHT = 28;
+	/** The fixed row height in logical pixels, the queue list's row: the
+	 * GUI's cell unit's row (design D8's geometry basis, `bridge/cells`). */
+	const ROW_HEIGHT = CELL_ROW_PX;
 
 	/** The visual slot's height cap in rows, mirroring the TUI's
 	 * `queue_card_height_cap`: 12 rows under 40 terminal rows, 16 under 50,
@@ -234,31 +238,42 @@
 	});
 </script>
 
-<div class="px-2 pt-1 pb-1" bind:this={panelEl}>
+<div style:padding="var(--mbv-cell-row) 0" bind:this={panelEl}>
 	<!-- The header row: it paints in every state, idle included. The root
-		carries the queue placement's padding: the TUI's playback band sits
-		one row below the column's top edge and two columns inside it
-		(`queue_panel_inset`), and its last row is the gap row that keeps
-		the band clear of the recessed queue panel below. -->
+		carries the queue placement's padding in row units: the TUI's
+		playback band sits one row below the column's top edge and two
+		columns inside it (`queue_panel_inset`), and its last row is the gap
+		row that keeps the band clear of the recessed queue panel below.
+		The row paints on the `QueueOnlyPlaybackPanel` fill
+		(`--mbv-queuePlaybackBand`) with the header painter's one-cell
+		interior padding each side. -->
 	<div
-		class="flex items-center gap-1 overflow-hidden px-2 whitespace-nowrap"
-		style:height="{ROW_HEIGHT}px"
-		style:background="var(--mbv-pillSelectedFg)"
+		class="flex items-center overflow-hidden whitespace-nowrap"
+		style:height="var(--mbv-cell-row)"
+		style:margin-inline="calc(var(--mbv-cell-col) * 2)"
+		style:padding-inline="var(--mbv-cell-col)"
+		style:background="var(--mbv-queuePlaybackBand)"
 	>
 		<span
-			class="flex shrink-0 items-center gap-1"
+			class="flex shrink-0 items-center"
+			style:gap="var(--mbv-cell-col)"
 			bind:this={targetEl}
 			data-target="playbackTarget"
 		>
 			{#if playback.hostIsRemote}
-				<Cast size={14} color="var(--mbv-playbackTargetRemoteFg)" />
+				<!-- The TUI's target glyph: `target_icon` paints the connected
+					cast glyph while a remote host owns playback and the cast glyph
+					otherwise, in the target colour (yellow local, green remote);
+					Lucide's one `Cast` carries both states, so the colour and the
+					host label carry the distinction. -->
+				<Cast size={CELL_COL_PX} color="var(--mbv-playbackTargetRemoteFg)" />
 				{#if playback.host}
 					<span class="truncate" style:color={roleVar('textPrimary')}
 						>{playback.host}</span
 					>
 				{/if}
 			{:else}
-				<Monitor size={14} color="var(--mbv-playbackTargetLocalFg)" />
+				<Cast size={CELL_COL_PX} color="var(--mbv-playbackTargetLocalFg)" />
 			{/if}
 		</span>
 		<span class="flex-1"></span>
@@ -267,15 +282,21 @@
 		>
 	</div>
 	{#if playback.shown}
-		<!-- The transport band on the `QueueOnlyPlaybackPanel` fill, stacked at
-			the band's full width at every window width — the TUI's queue band
-		has no side-by-side arrangement (`render_queue_panel` paints the art
-		rows, then `queue_band_rows`' four rows: the controls with the status
-		text, a blank row, the seekbar with its flanking times, one blank
-		gap row). The controls and seek rows paint their content only while
-		a now-playing title rides; without one the TUI paints the four rows
-		as blanks on the band's own fill, so the GUI does too. -->
-		<div class="px-2 pb-2" style:background="var(--mbv-pillSelectedFg)">
+		<!-- The transport band on the `QueueOnlyPlaybackPanel` fill
+			(`--mbv-queuePlaybackBand`), stacked at the band's full width at
+			every window width — the TUI's queue band has no side-by-side
+			arrangement (`render_queue_panel` paints the art rows, then
+			`queue_band_rows`' four rows: the controls with the status text,
+			a blank row, the seekbar with its flanking times, one blank gap
+			row). The band sits two columns inside the column
+			(`queue_panel_inset`), and every row height is one cell row. The
+			controls and seek rows paint their content only while a
+			now-playing title rides; without one the TUI paints the four rows
+			as blanks on the band's own fill, so the GUI does too. -->
+		<div
+			style:margin-inline="calc(var(--mbv-cell-col) * 2)"
+			style:background="var(--mbv-queuePlaybackBand)"
+		>
 			{#if playback.nowPlayingTitle}
 				<!-- The now-playing title's own row, below the column top and
 					inset one column each side: the TUI composites the artwork-site
@@ -285,8 +306,9 @@
 					TUI's scrolling marquee needs a clock the frame does not carry,
 					so the row truncates with the slice's ellipsis treatment. -->
 				<div
-					class="flex items-center overflow-hidden px-1 whitespace-nowrap"
-					style:height="{ROW_HEIGHT}px"
+					class="flex items-center overflow-hidden whitespace-nowrap"
+					style:height="var(--mbv-cell-row)"
+					style:padding-inline="var(--mbv-cell-col)"
 				>
 					<span
 						class="truncate"
@@ -325,8 +347,10 @@
 			{/if}
 			{#if playback.nowPlayingTitle}
 				<div
-					class="flex items-center gap-2 px-2"
-					style:height="{ROW_HEIGHT}px"
+					class="flex items-center"
+					style:height="var(--mbv-cell-row)"
+					style:padding-inline="var(--mbv-cell-col)"
+					style:gap="var(--mbv-cell-col)"
 					style:background="var(--mbv-secondary)"
 				>
 					<span
@@ -374,7 +398,7 @@
 							the controls row as the TUI paints it: the uppercased labels,
 							one space apart, each in its role colour. The TUI reports no hit
 							region for the cluster, so it carries no target. -->
-						<span class="ml-auto flex items-center gap-1 font-bold">
+						<span class="ml-auto flex items-center font-bold" style:gap="var(--mbv-cell-col)">
 							{#each statusIndicators as indicator, i (i)}
 								<span style:color={roleVar(indicator.role)}>{indicator.label}</span>
 							{/each}
@@ -383,8 +407,15 @@
 				</div>
 				<!-- The band's blank row between the controls and the seekbar: the
 					TUI's former title row, kept blank (the title lives elsewhere). -->
-				<div style:height="{ROW_HEIGHT}px"></div>
-				<div class="flex items-center gap-1 px-2" style:height="{ROW_HEIGHT}px">
+				<div style:height="var(--mbv-cell-row)"></div>
+				<div
+					class="flex items-center"
+					style:height="var(--mbv-cell-row)"
+					style:padding-inline={
+						playback.showControls ? 'var(--mbv-cell-col)' : '0'
+					}
+					style:gap="var(--mbv-cell-col)"
+				>
 					{#if playback.showControls}
 						<span
 							class="shrink-0 font-mono"
@@ -419,15 +450,15 @@
 					{/if}
 				</div>
 				<!-- The band's trailing blank row, on the band's own fill. -->
-				<div style:height="{ROW_HEIGHT}px"></div>
+				<div style:height="var(--mbv-cell-row)"></div>
 			{:else}
 				<!-- Without a now-playing title the TUI paints the four band rows
 					as blanks on the band's own fill (`render_queue_panel`): the
 					controls, former-title, seek, and gap rows. -->
-				<div style:height="{ROW_HEIGHT}px"></div>
-				<div style:height="{ROW_HEIGHT}px"></div>
-				<div style:height="{ROW_HEIGHT}px"></div>
-				<div style:height="{ROW_HEIGHT}px"></div>
+				<div style:height="var(--mbv-cell-row)"></div>
+				<div style:height="var(--mbv-cell-row)"></div>
+				<div style:height="var(--mbv-cell-row)"></div>
+				<div style:height="var(--mbv-cell-row)"></div>
 			{/if}
 		</div>
 	{/if}
