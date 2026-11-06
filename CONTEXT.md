@@ -391,7 +391,7 @@ _Avoid_: session card, three-line card, card list, index-based card list
 ## Panels and surfaces
 
 Breakpoint class:
-The class a Client derives from its own width alone: `Mini`, `Narrow`, or `Wide`, through the shared `classify` in `mbv-surfaces`. Each Client uses its own thresholds: the TUI measures terminal columns, the GUI measures logical points with a GUI threshold constant. In the same class, both Clients apply the same layout behaviour. It is distinct from Panel mode, which also includes the explicit `x` toggle into Mini; that toggle stays TUI state and no GUI key reaches it.
+The class a Client derives from its own width alone: `Mini`, `Narrow`, or `Wide`, through the shared `classify` in `mbv-surfaces`. Each Client uses its own thresholds: the GUI classifies logical points through `classify` with a GUI threshold constant; the TUI keeps its own width thresholds in terminal columns and does not call `classify` yet. In the same class, both Clients apply the same layout behaviour. It is distinct from Panel mode, which also includes the explicit `x` toggle into Mini; that toggle stays TUI state and no GUI key reaches it.
 _Avoid_: breakpoint mode, layout mode
 
 Panel:

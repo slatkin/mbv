@@ -433,18 +433,11 @@ pub struct App {
     /// (mini-view "On Now", standard title row, idle feed title).
     pub(in crate::app) last_nav_at: Instant,
     pub(in crate::app) last_library_nav_at: Instant,
-    /// Tracks terminal focus and arms a grace window to swallow the
-    /// click that merely brings the window into focus.
-    ///
-    /// State transitions:
-    /// - `None`: terminal is unfocused (or never reported focus).
-    ///   All mouse button/scroll events are suppressed.
-    /// - `Some(Instant)`: terminal is focused; the Instant records
-    ///   when `FocusGained` was seen.  A click within `REFOCUS_WINDOW`
-    ///   of that Instant is the refocusing click and is suppressed;
-    ///   after the window expires the field stays `Some` so
-    ///   subsequent clicks dispatch normally until the next
-    ///   `FocusLost`.
+    /// The instant of the most recent terminal focus report, kept alongside
+    /// `window_focused` (`note_focus_gained`/`note_focus_lost`): `Some` from
+    /// the last `FocusGained`, `None` after `FocusLost`. No production code
+    /// reads it today; test stubs set it to a past instant to model an
+    /// already-focused window.
     pub(in crate::app) refocus_at: Option<Instant>,
     /// Whether the terminal window currently holds focus, per the terminal
     /// focus reports (`note_focus_gained`/`note_focus_lost`). Defaults to
