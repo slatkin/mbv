@@ -1,4 +1,5 @@
 use mbv::{App, stub_app_with_playing_queue, stub_app_with_queue, stub_app_with_unsaved_queue};
+use mbv_gui::bridge::frame::queue::GuiQueueRow;
 use mbv_gui::bridge::frame::theme::GuiRole;
 use mbv_gui::bridge::frame::{FrameSources, GuiFrame};
 use mbv_surfaces::FocusStack;
@@ -65,6 +66,29 @@ fn footer_pill_text_carries_no_glyph() {
         frame.footer.dirty.as_ref().map(|pill| pill.text.as_str()),
         Some("UNSAVED")
     );
+}
+
+/// A playing queue's frame alternates its item rows through the zebra walk
+/// the TUI's wide list paints (`media_list/wide.rs`): an ungrouped list opens
+/// on the surface fill and flips per item row, so the parity rides each row
+/// and stays stable when the viewport moves.
+#[test]
+fn playing_queue_frame_carries_the_zebra_parity() {
+    let mut app = stub_app_with_playing_queue(3);
+    let frame = frame_after_tick(&mut app);
+
+    let striped: Vec<bool> = frame
+        .queue
+        .rows
+        .iter()
+        .map(|row| match row {
+            GuiQueueRow::Item { striped, .. } => *striped,
+            GuiQueueRow::Heading { .. } | GuiQueueRow::Spacer => {
+                panic!("the stub queue has no structural rows")
+            }
+        })
+        .collect();
+    assert_eq!(striped, [false, true, false]);
 }
 
 /// A glyph, as design D8 forbids in the GUI: a Nerd Font private-use

@@ -63,6 +63,7 @@ test('a frame with slots renders its rows', () => {
 					duration: '3:12',
 					kind: 'media',
 					state: { state: 'ordinary' },
+					striped: false,
 				},
 				{ row: 'heading', text: 'album' },
 				{
@@ -74,6 +75,7 @@ test('a frame with slots renders its rows', () => {
 					duration: '4:00',
 					kind: 'media',
 					state: { state: 'nowPlaying', progress: 42 },
+					striped: false,
 				},
 			],
 			2,
@@ -148,6 +150,7 @@ test('a layout change sends one merged report', async () => {
 				duration: null,
 				kind: 'media',
 				state: { state: 'ordinary' },
+				striped: false,
 			},
 		]),
 		footer,

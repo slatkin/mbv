@@ -80,6 +80,10 @@ export type GuiQueueRow =
 			duration: string | null;
 			kind: GuiMediaKind;
 			state: GuiSemanticState;
+			/** Whether the row takes the alternating `QueueColumn` fill — the
+			 * TUI's zebra walk, carried from the core so the stripe stays stable
+			 * while the viewport moves. */
+			striped: boolean;
 	  }
 	| { row: 'heading'; text: string }
 	| { row: 'spacer' };

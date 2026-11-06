@@ -180,7 +180,13 @@
 							style:height="var(--mbv-cell-row)"
 							style:padding-inline="calc(var(--mbv-cell-col) * 2)"
 							style:gap="var(--mbv-cell-col)"
-							style:background={barred ? 'var(--mbv-duration)' : undefined}
+							style:background={barred
+								? 'var(--mbv-duration)'
+								: row.striped
+									? panelFocused
+										? 'var(--mbv-queueColumnFocused)'
+										: 'var(--mbv-queueColumn)'
+									: undefined}
 							data-slot={row.slot}
 						>
 							{#if queue.active === row.slot}
