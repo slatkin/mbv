@@ -51,7 +51,9 @@ or for a new field on an existing message.
    `crates/mbv-remote-player/src/connect.rs` and map it to a `PlayerEvent`.
    Handle the `PlayerEvent` in the shell (`src/app/dispatch/session/player_event.rs`
    or `src/app/shell/run/drains.rs`). Give it an exhaustive arm or a
-   documented no-op.
+   documented no-op. The GUI Client needs no second arm: it drains the same
+   `App`-side handling through `ClientCore::tick`
+   (`crates/mbv-gui/src/core_thread.rs`).
    *Proof:* `cargo check -p mbv`.
 7. **Packaged `mbvd` parity.** `mbvd` runs the `mbv-daemon` library, so step 5
    covers its Owner path. Also check the `CtrlEvent` decode in
@@ -100,6 +102,13 @@ Use this recipe for a new configurable keyboard action. Read
    add the id to the snapshot setup in `defaults_reproduce_todays_resolution`
    (`src/app/input/key_policy/resolution_tests.rs`).
    *Proof:* `cargo nextest run -p mbv`.
+6. **GUI key coverage.** The GUI Client resolves chords through the same
+   registry, router, and dispatch, so its only site is the DOM key
+   translation: every key the default chord uses must resolve in
+   `crates/mbv-gui/src/bridge/keys.rs`. A DOM key value the table cannot
+   name becomes `Key::Null` and never reaches the router; extend the table
+   when the chord names a key it lacks.
+   *Proof:* a `#[case]` row in `crates/mbv-gui/tests/bridge/keys.rs`.
 
 To retire an action, remove its sites in the reverse order and add its id to
 `RETIRED_ACTION_IDS` in `crates/mbv-keybinds/src/config.rs`. An old config
@@ -139,5 +148,9 @@ and `docs/invariants/06-queue-progress-application-sites.md` first.
 7. **Browse destination.** Add the destination to the exhaustive browse
    dispatch (input, rendering, refresh, help, hit testing). Do not inherit
    another destination's behavior through a default branch. Follow
-   `docs/architecture/tui-frontend.md` for the component and painter.
+   `docs/architecture/tui-frontend.md` for the component and painter. The
+   GUI Client has no site for a surface it does not present: an unported
+   surface stays absent, never a stub (the `gui-client` spec). When the
+   destination's surface is ported, `docs/architecture/gui-client.md`
+   lists its sites.
 8. **Vocabulary.** Add the new terms to `CONTEXT.md`.
