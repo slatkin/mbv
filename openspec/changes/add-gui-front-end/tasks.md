@@ -53,9 +53,9 @@
 
 ## 7. Integration checks
 
-- [ ] 7.1 Run `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run --workspace`, and verify that all pass.
+- [x] 7.1 Run `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run --workspace`, and verify that all pass.
 - [ ] 7.2 Measure the CI workspace build time with `mbv-gui`, and decide whether `mbv-gui` goes in `default-members` (design Open Questions). Verify that the decision is recorded in `design.md`.
-- [ ] 7.3 Run `make check-code-file-lines` before the push, and verify that no file exceeds 800 lines.
+- [x] 7.3 Run `make check-code-file-lines` before the push, and verify that no file exceeds 800 lines.
 
 ## Workflow follow-up
 
