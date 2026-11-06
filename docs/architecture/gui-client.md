@@ -32,6 +32,10 @@ loop. The thread waits on a `std::sync::mpsc` channel of `CoreInput` values
 channel, so Owner events and timers wake the core as they wake the TUI.
 `CoreThread` implements `ClientTickHost` over the slice's Surface state; the
 drains for surfaces the first slice does not present are documented no-ops.
+The card-image completion drain (`App::drain_card_image_completions`, the
+shell drain without the TV-workspace re-push) runs because the Queue
+playback visual slot paints: it lands the slot's artwork fetches in the
+image cache the frame encodes from.
 
 The Tauri command handlers never touch the `App`. They only translate the
 input and push it into the channel. tokio stays inside Tauri's runtime; no
@@ -59,6 +63,26 @@ projection (`GuiQueuePlayback`), the footer pills (`GuiQueueFooter`), the
 Status bar projection (`GuiStatusBar`), the breakpoint class
 (`GuiBreakpoint`, mirroring `BreakpointClass`), and the theme when it is
 armed (`GuiTheme`).
+
+`GuiQueuePlayback` carries two facts beside the transport that the TUI's
+queue band also paints. The status-indicator cluster (`statusIndicators`)
+is the resolution, audio, and subtitle labels the shared projection builds
+from the same indicator data the TUI's spans build from: the frame carries
+each uppercased label with its foreground role, the field is `None` while
+the local player is inactive, and the band paints the cluster right-aligned
+on its controls row as bold glyph-free text — the TUI's per-style
+treatments (chips, brackets, dots, pipes) stay terminal presentation. The
+visual slot's artwork (`artwork`) follows the theme's arming rule (design
+D10): `src/artwork.rs` memoizes the slot's encoded art per state — the
+cached art's display encode, the bundled placeholder, a loading fill, or
+hidden — and a frame carries the value again only when the slot's art
+changed, while a window-content reload's `report_layout` re-arms it and the
+front end keeps the last carried value between frames. The payload is a
+`data:` URL of bytes the core's image cache already holds, never a fetch
+the webview makes, so the CSP grows only `img-src 'self' data:`. The band
+paints the TUI's wide arrangement — artwork left, transport beside it —
+reports the slot's `visualSlot` region (the TUI's hit target), and the art
+element's resizes report the regions a swapped bitmap moved.
 
 Front end to Rust there are three commands, registered in
 `src/main.rs`. Each only pushes into the core channel:
@@ -132,10 +156,12 @@ The frame's `GuiTheme` (`src/bridge/frame/theme.rs`) carries two things. The
 variant for variant — `Role` stays foreground-only — and the two `From`
 conversions are exhaustive, so a new role fails the build until both sides
 carry it (`GuiRole::ALL` is the one unchecked list; add the role there too).
-The `chrome` section carries the eight fill values the shadcn-svelte chrome
+The `chrome` section carries the nine fill values the shadcn-svelte chrome
 variables point at (`background`, `card`, `popover`, `muted`, `secondary`,
-`sidebar`, `border`, `input`). Each chrome fill resolves the `Surface` the
-TUI paints the same concept with through `surface_colors(surface, false)` —
+`sidebar`, `border`, `input`, `queueColumn`). Each chrome fill resolves the
+`Surface` the TUI paints the same concept with through
+`surface_colors(surface, false)` — `queueColumn` resolves
+`Surface::QueueColumn`, the gutter fill the TUI's queue column paints —
 the `mbv-theme` surface table is the one fill authority, so a palette edit
 recolours the chrome together with the roles.
 
@@ -156,17 +182,34 @@ no font at runtime and the CSP's `default-src 'self'` covers `font-src`.
 
 The GUI paints no emoji and no Nerd Font glyph. Icons come from
 `@lucide/svelte` only: the transport controls, the playing-row marker, and
-the playback-target indicator are Lucide icons. `FooterPill.label` carries
-glyph-free text; each pill's slot maps to its Lucide icon in the component.
+the playback-target indicator are Lucide icons. The transport glyphs paint
+as solid shapes — `fill` and `stroke` both the role colour, as the TUI's
+solid transport glyphs paint — with the availability the colour already
+carried gating them. `FooterPill.label` carries glyph-free text; each
+pill's slot maps to its Lucide icon in the component.
+
+## The queue-only window
+
+The slice's one window paints the TUI's queue-column arrangement
+(`App.svelte`). The queue column's backdrop — the `queueColumn` chrome
+fill — owns the window. The Queue playback band sits one row below the
+column's top edge and two columns inside it with a gap row below; the Queue
+panel's recessed box sits another two columns inside the placement with its
+one-row top pad and bottom spacer, and the footer row paints below the box
+between gap rows. The Status bar floats at the column's bottom.
 
 ## The Status bar
 
 `GuiStatusBar` mirrors the shared `StatusBarProjection`: the prefix-armed
 state and the live toast with its severity. `StatusBar.svelte` shows the
 armed pill while prefix mode is armed, and a live toast takes over the row
-in its severity colour, as the TUI's status bar paints it. The spec permits
-the GUI to show toasts in a conventional GUI form that TUI geometry does
-not constrain, so a toast presentation outside the bar is lawful.
+in its severity colour, as the TUI's status bar paints it. The bar's fill
+paints only while it has content — prefix mode armed or a live toast; an
+idle bar keeps its height but lets the queue column's backdrop show
+through, so a toast's arrival moves no layout, as the queue-only TUI paints
+that region with no status bar. The spec permits the GUI to show toasts in
+a conventional GUI form that TUI geometry does not constrain, so a toast
+presentation outside the bar is lawful.
 
 ## The attach states
 
