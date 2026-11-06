@@ -21,7 +21,7 @@ The current state that shapes the approach (after `extract-client-core`, PR #984
 
 **Non-Goals:**
 
-- Surfaces outside the slice, artwork, the visualizer, drag, column resize, `--pin`, tray, MPRIS, packaging. The proposal lists them.
+- Surfaces outside the slice, artwork, the visualizer, drag, column resize, `--pin`, tray, GUI-specific MPRIS work, packaging. The proposal lists them.
 - Any change to ctrl, the Owner process, mpv, or the TUI.
 - A web or remote UI. The webview loads only bundled assets.
 
@@ -55,6 +55,8 @@ The Tauri main thread runs the window event loop. One dedicated, synchronous **c
 
 After each tick that changed something, the core thread builds a `GuiFrame` (D4) and emits it to the window with `AppHandle::emit`, which is safe to call from any thread. tokio stays inside Tauri. The core thread and the `mbv` library never see it.
 
+The core thread also emits the current frame, changed or not, after every `report_layout`. The front end sends `report_layout` when it mounts. So the first frame, and the frame after a reload of the window content, never wait for a state change.
+
 *Alternative:* hold the `App` in Tauri managed state behind a `Mutex` and tick from a timer. Rejected: command handlers on tokio workers would then run `App` code, and the tick would depend on an async timer.
 
 ### D4. The bridge contract
@@ -67,7 +69,7 @@ Front end to Rust, three commands:
 - `pointer(DomPointer)`: kind (press, release, move, wheel), button, the position in logical pixels relative to the window, and the wheel delta.
 - `report_layout(LayoutReport)`: for each list, the number of whole visible rows, and the painted regions with their semantic target ids. The front end sends it after each paint that moved a region (a Svelte `$effect` after the DOM update, plus a `ResizeObserver`).
 
-The core thread applies a `LayoutReport` to the Surface state's capacity and `HitMap`. It routes pointer input with `App::route_gui_pointer`, so the core resolves targets against the last reported frame (`client-interaction-core`: pointer targets resolve from a semantic hit map). The front end never decides what a click means.
+The core thread applies a `LayoutReport` to the Surface state's capacity and `HitMap`. `App::route_gui_pointer` resolves a gesture only against the leaf it receives. So the core thread first resolves the point against one combined `HitMap` of all painted slice surfaces from the last `LayoutReport`. Then it applies the focus change that the matching TUI click applies, and passes the surface that owns the region as the leaf to `App::route_gui_pointer`. A point in no region resolves to nothing (`client-interaction-core`: pointer targets resolve from a semantic hit map). A press on a transport control therefore works while the Queue panel has focus. The front end never decides what a click means.
 
 *Alternative:* the DOM resolves the clicked element and sends the target id. Rejected: it moves gesture rules (double-click window, range selection) into TypeScript, and the spec requires that the core resolve against the hit map.
 
@@ -93,11 +95,21 @@ The front end uses the system UI font through CSS (`font-family: system-ui, sans
 
 ### D9. Owner launch
 
-The core thread calls `declare_gui_client`, then `find_owner`. When no Owner runs, it starts one from the `mbv` program: first from the directory of the `mbv-gui` executable, then from `PATH`, through the `owner_exe` override of `attach_owner`. The Owner is never the GUI program. A refusal (Stay-alive disabled and a Client attached) shows the refusal text in the window and does not attach.
+The core thread calls `declare_gui_client`, then `find_owner`. When no Owner runs, it starts one from the `mbv` program: first from the directory of the `mbv-gui` executable, then from `PATH`, through the `owner_exe` override of `attach_owner`. The Owner is never the GUI program.
+
+Each attach outcome gets the response that `startup::run_local_instance` gives the TUI Client. The core thread classifies an attach error with the public `RemotePlayerError` predicates:
+
+- `OwnerState::Refuse` (the Owner holds the lock but does not accept connections): the window shows `refusal_text()`.
+- `is_exclusive_owner` (Stay-alive disabled and a Client attached): the window shows `exclusive_owner_refusal_text(&error)`.
+- `is_owner_shutting_down`: the window shows a waiting state. The core thread waits for the Owner to exit, then starts an Owner and attaches.
+- `is_owner_build_mismatch`: the window shows the mismatch text with **Restart** (key R) and **Quit** (key Q). Restart calls `mbv_daemon::signal_owner` on the owner lock path, waits for the Owner to exit, starts an Owner, and attaches. A mismatch after a requested restart waits again, as the TUI does. Quit closes the window.
+- Any other error: the window shows "failed to attach to Owner process: {error}".
+
+Before attach there is no `App`. In these states the core thread handles R and Q itself, and the two buttons resolve through the `LayoutReport` regions. The front end still interprets no key.
 
 ### D10. Breakpoint
 
-The front end reports the window's inner width in logical pixels in `LayoutReport`. The core thread classifies it with the shared breakpoint classes and a GUI threshold constant in `mbv-gui`. The class's behaviour comes from the core.
+The front end reports the window's inner width in logical pixels in `LayoutReport`. The core thread classifies it with the shared breakpoint classes and a GUI threshold constant in `mbv-gui`. The class's behaviour comes from the core. The classes differ only in Library and hero placement (`mbv-surfaces` `breakpoint.rs`), and the first slice presents neither. So in the first slice the class changes nothing visible. It is wired for later surfaces. The slice has no Narrow-specific layout of its own.
 
 ### D11. Webview hardening
 
@@ -109,9 +121,13 @@ The front end loads only the bundled assets. The CSP allows only `'self'` and Ta
 
 ### D13. Tests
 
-- Rust (nextest, `crates/mbv-gui/tests/`): the key translator table; `LayoutReport` applied to capacity and the hit map; a `GuiFrame` built from a stubbed `App` (the root `test` feature) for a queue with slots and for an empty queue; and a core-thread step test with a mocked channel: input in, frame out, and a waker wake causes a tick. No Tauri runtime, no webview, and no live Owner.
+- Rust (nextest, `crates/mbv-gui/tests/`): the key translator table; `LayoutReport` applied to capacity and the hit map; a `GuiFrame` built from a stubbed `App` (the root `test` feature) for a queue with slots and for an empty queue; a core-thread step test with a mocked channel: input in, frame out, and a waker wake causes a tick; a press on the play/pause region while the Queue panel has focus dispatches the playback request (D4); and one `#[case]` table that maps each attach outcome to its window state (D9). No Tauri runtime, no webview, and no live Owner.
 - Front end (vitest with `@testing-library/svelte`, `@tauri-apps/api` mocked): a component renders a given frame, and a key or pointer event calls the right command with the right payload. These tests assert delivery and structure, not appearance.
 - Live behaviour in the real window is the user's manual check.
+
+### D14. Build and CI
+
+`tauri::generate_context!` panics at compile time when the `frontendDist` directory does not exist (`tauri-codegen`, `src/context.rs`). Every `--workspace` build compiles `mbv-gui`, so it needs WebKitGTK 4.1 and a built `ui/`. The `build` and feature-matrix jobs in `.github/workflows/build.yml` add `webkit2gtk-4.1` and pnpm to their pacman installs, and build `ui/` before `cargo clippy --workspace` and `cargo hack check --workspace`. CI nextest runs only `default-members`, so a new GUI job runs `cargo nextest run -p mbv-gui` and the front-end check, lint, and test targets. The local `cargo clippy --workspace` gate has the same prerequisites.
 
 ## Risks / Trade-offs
 
@@ -119,7 +135,7 @@ The front end loads only the bundled assets. The CSP allows only `'self'` and Ta
 - [IPC per key and per pointer event adds latency] → Tauri IPC is local and takes well under one frame. The spec requires only next-frame response.
 - [`LayoutReport` traffic on resize] → The front end sends it only when a region moved, at most once per animation frame.
 - [TypeScript stays one major behind its latest release] → D2 records the reason (the `svelte-check` peer range) and the condition to move.
-- [Two toolchains (cargo and pnpm)] → `make` targets wrap the pnpm steps. CI adds one front-end job.
+- [Two toolchains (cargo and pnpm)] → `make` targets wrap the pnpm steps. D14 sets the CI jobs.
 - [The GUI links ratatui, crossterm, and TuiRealm through the `mbv` library] → Accepted, as in `extract-client-core` D2.
 - [The front end grows its own behaviour over time] → The `gui-client` requirement "The window content holds no interaction state" and the reload scenario make that drift a spec failure.
 

@@ -13,7 +13,7 @@ An earlier attempt used egui and was dropped. egui (and iced) rasterize text the
 - The Rust side of `mbv-gui` links the `mbv` library and runs the Client core: the shell `App`, `ClientCore::tick`, the one router, the core focus stack, and Surface state. The front end paints projections that the Rust side sends, and it sends neutral key and pointer events back. It holds no copy of interaction behaviour.
 - The first GUI slice presents the Queue panel, the Queue playback panel, and the Status bar. Other surfaces are absent from the GUI until later changes port them. The TUI keeps every surface and keeps working unchanged.
 - `mbv-gui` is a tokio edge, because Tauri requires tokio. The Client core stays synchronous.
-- Not in scope: Library, search, overlays other than those the slice needs, artwork and the visual slot, queue drag-reorder and column resize, `--pin` for the GUI, tray and MPRIS from the GUI, desktop entry, release packaging of `mbv-gui`, and removal of the TUI.
+- Not in scope: Library, search, overlays other than those the slice needs, artwork and the visual slot, queue drag-reorder and column resize, `--pin` for the GUI, tray from the GUI, GUI-specific MPRIS work (the GUI process claims MPRIS through `App` construction, as a second TUI Client does), desktop entry, release packaging of `mbv-gui`, and removal of the TUI.
 
 ## Capabilities
 
@@ -31,5 +31,5 @@ An earlier attempt used egui and was dropped. egui (and iced) rasterize text the
 - New crate: `crates/mbv-gui` (Tauri 2 binary). It is not in `default-members`, so the default build and test runs skip it.
 - New front end: `crates/mbv-gui/ui/` (Svelte 5, Vite, TypeScript, Tailwind CSS 4, shadcn-svelte, `@lucide/svelte`), managed with pnpm.
 - New system dependency for building `mbv-gui` on Linux: WebKitGTK 4.1 and its GTK3 stack.
-- CI: the Rust gates (clippy, fmt) cover `mbv-gui` through `--workspace`. The front-end gates (type check, lint, unit tests) are new pnpm steps.
+- CI: the `build` and feature-matrix jobs install `webkit2gtk-4.1` and pnpm, and build `ui/` before `cargo clippy --workspace` and `cargo hack check --workspace`, because `tauri::generate_context!` needs `frontendDist` at compile time. A new GUI job runs `cargo nextest run -p mbv-gui` and the front-end gates (type check, lint, unit tests). The local `cargo clippy --workspace` gate also needs WebKitGTK and a built `ui/`.
 - Docs: `AGENTS.md` (repository map, tokio edge list), `CONTEXT.md` (GUI Client definition), a GUI Client architecture guide, and `docs/recipes.md` where a recipe gains a GUI site.

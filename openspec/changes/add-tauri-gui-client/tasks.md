@@ -12,9 +12,10 @@ Implementation starts after `extract-client-core` (PR #984) merges.
 
 - [ ] 2.1 Add the bridge DTOs (`GuiFrame`, `DomKey`, `DomPointer`, `LayoutReport`) per D4, built from the library's slice projections. Verify with a test that builds a `GuiFrame` from a stubbed `App` with a playing queue and one from an empty queue.
 - [ ] 2.2 Add the DOM-key-to-`KeyEvent` translator per D6. Verify with one `#[case]` table test.
-- [ ] 2.3 Add the core thread per D3: it creates the `App`, attaches to the Owner per D9, installs a `ClientWaker` that feeds its channel, runs `ClientCore::tick` on input, wake, or `CLIENT_IDLE_CADENCE`, implements `ClientTickHost` over the slice's Surface state, and emits a `GuiFrame` after a tick that changed state. Verify with a step test on a mocked channel: one input yields one frame, and a waker wake yields a tick.
-- [ ] 2.4 Apply `LayoutReport` to the Surface state's capacity and `HitMap`, and route `key` and `pointer` through `App::route_gui_input` and `App::route_gui_pointer` with the focused `GuiSurfaceLeaf`. Classify the reported width with the shared breakpoint classes and a GUI threshold constant (D10). Verify with tests: a reported capacity of 14 sets the paging stride, and a press resolves against the last reported regions.
+- [ ] 2.3 Add the core thread per D3: it creates the `App`, attaches to the Owner per D9, installs a `ClientWaker` that feeds its channel, runs `ClientCore::tick` on input, wake, or `CLIENT_IDLE_CADENCE`, implements `ClientTickHost` over the slice's Surface state, and emits a `GuiFrame` after a tick that changed state and after every `report_layout` (D3). Verify with a step test on a mocked channel: one input yields one frame, and a waker wake yields a tick.
+- [ ] 2.4 Apply `LayoutReport` to the Surface state's capacity and `HitMap`, and route `key` through `App::route_gui_input` with the focused `GuiSurfaceLeaf`. Route `pointer` per D4: resolve the point against the combined slice `HitMap`, apply the TUI click's focus change, and pass the surface that owns the region as the leaf to `App::route_gui_pointer`. Classify the reported width with the shared breakpoint classes and a GUI threshold constant (D10). Verify with tests: a reported capacity of 14 sets the paging stride, a press resolves against the last reported regions, and a press on the play/pause region while the Queue panel has focus dispatches the playback request.
 - [ ] 2.5 Register the three Tauri commands and the `mbv://frame` event. The commands only push into the core channel. Verify with clippy and the existing tests.
+- [ ] 2.6 Add the attach outcomes per D9 on the core thread: the two refusal texts, the wait for an Owner that shuts down, the build mismatch with Restart (R) and Quit (Q), and the attach-failed text. Verify with one `#[case]` table: one row for each outcome and its window state.
 
 ## 3. Front end
 
@@ -22,7 +23,7 @@ Implementation starts after `extract-client-core` (PR #984) merges.
 - [ ] 3.2 Add the theme layer per D7: role colours from the frame go into CSS custom properties, and the shadcn-svelte variables point at them. Verify with a vitest test that a frame's theme sets the properties.
 - [ ] 3.3 Add the Queue panel per D5: fixed-height rows for the frame's viewport, the cursor, marks, and the active slot with a Lucide marker, the empty-queue state, and the footer pills. Report capacity and row regions through `report_layout`. Verify with vitest: a frame with slots renders its rows, an empty frame renders the empty state, and a layout change sends one report.
 - [ ] 3.4 Add the Queue playback panel (active item, progress, transport and seek controls as Lucide icons, playback-target indicator) and the Status bar (prefix-armed state, toasts), each reporting its regions. Verify with vitest: each renders a given frame, and its controls appear in the reported regions.
-- [ ] 3.5 Add the attach states: the window shows the refusal text when the Owner refuses the Client, and a waiting state before the first frame. Verify with vitest for both states.
+- [ ] 3.5 Add the attach states per D9: a waiting state before the first frame and while an Owner shuts down, the two refusal texts, the build mismatch with Restart and Quit buttons that report their regions, and the attach-failed text. Verify with vitest: each state renders, and the two buttons appear in the reported regions.
 
 ## 4. Docs
 
@@ -32,8 +33,8 @@ Implementation starts after `extract-client-core` (PR #984) merges.
 
 ## 5. Integration checks
 
-- [ ] 5.1 Run `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo nextest run --workspace`, `cargo nextest run -p mbv-gui`, and the front-end `make` check, lint, and test targets.
-- [ ] 5.2 Add one CI job that installs the WebKitGTK build dependencies and pnpm, and runs the front-end check, lint, and test targets.
+- [ ] 5.1 Build `ui/`, then run `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo nextest run --workspace`, `cargo nextest run -p mbv-gui`, and the front-end `make` check, lint, and test targets.
+- [ ] 5.2 Update CI per D14: add `webkit2gtk-4.1` and pnpm to the pacman installs of the `build` and feature-matrix jobs, and build `ui/` before their clippy and `cargo hack` steps. Add one GUI job that runs `cargo nextest run -p mbv-gui` and the front-end check, lint, and test targets.
 
 ## Workflow follow-up
 

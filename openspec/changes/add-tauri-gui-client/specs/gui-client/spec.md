@@ -42,6 +42,13 @@ The GUI Client SHALL be a Client of the Owner process under the same rules as a 
 - **WHEN** the GUI Client starts
 - **THEN** the GUI Client refuses to start with the same explanation a second TUI Client gets
 
+#### Scenario: The Owner process is from a different build
+
+- **GIVEN** a running Owner process from a different build
+- **WHEN** the GUI Client starts
+- **THEN** the window shows the mismatch and offers Restart and Quit, each on a key
+- **AND** Restart stops that Owner process, starts a new one from the `mbv` program, and attaches to it
+
 ### Requirement: The GUI Client never runs playback
 
 The GUI Client SHALL NOT start, embed, or control mpv directly. It SHALL send playback and queue requests to the Owner process over ctrl. Video SHALL play in the window of the mpv child process, as it does for a TUI Client.
@@ -139,6 +146,12 @@ A pointer press or wheel step in the GUI Client SHALL resolve to the semantic ta
 
 - **WHEN** the user scrolls the wheel over the Queue panel
 - **THEN** the queue viewport moves by the uniform wheel step and the cursor follows the TUI wheel rules
+
+#### Scenario: A control is clicked in a surface without focus
+
+- **GIVEN** the Queue panel has focus
+- **WHEN** the user clicks the play/pause control in the Queue playback panel
+- **THEN** playback toggles, as the matching click does in the TUI Client
 
 #### Scenario: A press lands on no target
 
