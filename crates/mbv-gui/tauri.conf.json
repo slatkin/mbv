@@ -3,7 +3,7 @@
   "productName": "mbv",
   "identifier": "io.github.slatkin.mbv-gui",
   "build": {
-    "frontendDist": "placeholder-dist"
+    "frontendDist": "ui/dist"
   },
   "app": {
     "windows": [

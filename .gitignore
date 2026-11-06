@@ -7,6 +7,8 @@
 .agents
 /target
 /crates/mbv-gui/gen
+/crates/mbv-gui/ui/node_modules
+/crates/mbv-gui/ui/dist
 *.jpg
 *.png
 !assets/*.png
