@@ -3389,6 +3389,7 @@ dependencies = [
  "mbv-queue",
  "mbv-remote-player",
  "mbv-surfaces",
+ "mbv-text",
  "mbv-theme",
  "mbv-ui-model",
  "mbv-ui-msg",

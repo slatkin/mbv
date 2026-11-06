@@ -160,6 +160,47 @@ pub fn stub_app_with_prefix_and_toast(message: &str) -> App {
     app
 }
 
+/// The `App` a Client's test drives with the queue built from `items` and
+/// the row menu open over its first slot, so a frame test reads the open
+/// menu's entries and their key hints (add-tauri-gui-client row 6.2). The
+/// menu is the same one `RowContextMenu`'s open path builds.
+///
+/// # Panics
+///
+/// Panics while resolving the menu's row when `items` is empty: the stub
+/// queue then has no first slot to open the menu over.
+#[cfg(feature = "test")]
+#[must_use]
+pub fn stub_app_with_open_row_menu(items: Vec<mbv_queue::QueueItem>) -> App {
+    let mut app = stub_app_with_playing_items(items);
+    let row = app
+        .displayed_queue()
+        .slot_id_at(0)
+        .expect("the stub queue has a first slot");
+    app.open_gui_row_menu(&[row]);
+    app
+}
+
+/// The `App` a Client's test drives with an active player carrying one audio
+/// and one subtitle track, and the track chip's popover open on `chip`, so a
+/// frame test reads the popover's choices with their chosen marks
+/// (add-tauri-gui-client row 6.2).
+#[cfg(feature = "test")]
+#[must_use]
+pub fn stub_app_with_track_popover(chip: mbv_ui_msg::TrackChipKind) -> App {
+    use mbv_ui_msg::PlaybackRequest;
+
+    let mut app = stub_app_with_playing_queue(1);
+    app.player.update_status(|status| {
+        status.active = true;
+        status.audio_tracks = vec![(1, "Stereo".to_string())];
+        status.audio_id = 1;
+        status.sub_tracks = vec![(2, "Forced".to_string(), true)];
+        status.sub_id = 0;
+    });
+    app.handle_playback_request(&PlaybackRequest::OpenTrackPopover(chip));
+    app
+}
 /// The `App` a Client's test drives with a pending settings save armed: the
 /// config carries `consume_audio` and the save's deadline lies far in the
 /// future, so only an exit boundary's flush can persist it — the periodic
@@ -176,6 +217,35 @@ pub fn stub_app_with_pending_settings_save() -> App {
     let mut app = make_app_stub();
     app.config.lock().unwrap().consume_audio = true;
     app.settings_save_at = Some(std::time::Instant::now() + std::time::Duration::from_secs(3600));
+    app
+}
+
+/// The `App` a Client's test drives with `quit` rebound to `chord` in the
+/// Session section of the compiled keybinds: the one router resolves the
+/// action's configured chords, so the rebound chord routes to quit in the
+/// GUI exactly as a user's `[keys]` override would (add-tauri-gui-client
+/// row 6.2: the GUI-only context captures the default `q` for the fold).
+///
+/// # Panics
+///
+/// Panics while parsing the chord when `chord` is not a chord grammar
+/// string.
+#[cfg(feature = "test")]
+#[must_use]
+pub fn stub_app_with_rebound_quit(chord: &str) -> App {
+    use mbv_keybinds::{Chord, KeySection, Keybinds, SectionBindings};
+
+    let app = stub_app_with_queue(2);
+    app.config.lock().unwrap().keybinds = Keybinds {
+        prefix: None,
+        sections: vec![(
+            KeySection::Session,
+            SectionBindings {
+                router: vec![("quit", Chord::parse(chord).expect("test chord must parse"))],
+                prefix: vec![],
+            },
+        )],
+    };
     app
 }
 

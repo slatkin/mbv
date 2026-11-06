@@ -123,6 +123,11 @@ impl App {
                 } else {
                     OverlayFocus::Free
                 },
+                // The queue filter's text entry is the GUI's one text entry:
+                // while it holds the keyboard the global bindings fall
+                // through, so its characters type instead of firing actions
+                // (add-tauri-gui-client row 6.2).
+                text_entry_focused: self.queue_filter_active,
                 ..RouterOverlayState::default()
             },
             panel_mode: self.effective_panel_mode(),

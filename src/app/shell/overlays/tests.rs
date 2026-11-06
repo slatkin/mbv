@@ -198,6 +198,7 @@ fn context_menu_click_select_executes_and_closes_the_menu() {
             entries: vec![ContextMenuEntry {
                 label: "Play",
                 action: Some(ContextAction::Play),
+                key_hint: None,
             }],
             cursor: 0,
             bounds: None,

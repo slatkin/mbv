@@ -1,6 +1,6 @@
 use mbv::{
-    App, stub_app_with_playing_items, stub_app_with_playing_queue, stub_app_with_queue,
-    stub_app_with_unsaved_queue,
+    App, stub_app_with_open_row_menu, stub_app_with_playing_queue, stub_app_with_queue,
+    stub_app_with_track_popover, stub_app_with_unsaved_queue,
 };
 use mbv_emby_model::TICKS_PER_SECOND;
 use mbv_emby_model::test_support::make_item;
@@ -38,6 +38,17 @@ fn frame_after_tick(app: &mut App) -> GuiFrame {
     })
 }
 
+/// The frame of `app` after routing `keys` through the GUI Client's routing
+/// entry with no surface leaf, as the Client core's core thread routes a
+/// chord whose action the `App` applies itself.
+fn frame_after_keys(app: &mut App, keys: &[mbv_ui_msg::Key]) -> GuiFrame {
+    for code in keys {
+        let key = mbv_ui_msg::KeyEvent::new(*code, mbv_ui_msg::KeyModifiers::NONE);
+        let _ = app.route_gui_input(mbv::GuiInput::Key(key), None);
+    }
+    frame_after_tick(app)
+}
+
 /// A playing queue's frame carries its rows and the slot under the now-playing
 /// marker. The stub numbers its slots from 1, and the first one plays.
 #[test]
@@ -50,7 +61,9 @@ fn playing_queue_frame_carries_rows_and_active_slot() {
 
 /// An empty queue's frame carries no rows and no active slot, and its
 /// summary counts no remaining slot and names no finish clock — no slot
-/// carries the playhead, so no end time is anchored.
+/// carries the playhead, so no end time is anchored — and the Client-core
+/// state the row 6.2 dispatches introduced rests at its defaults: the panel
+/// expanded and unfolded, the length column, no filter, and no overlay.
 #[test]
 fn empty_queue_frame_carries_no_rows() {
     let mut app = stub_app_with_queue(0);
@@ -60,6 +73,11 @@ fn empty_queue_frame_carries_no_rows() {
     assert_eq!(frame.summary.remaining, 0);
     assert_eq!(frame.summary.finish_clock, None);
     assert_eq!(frame.summary.right_column, GuiRightColumn::Length);
+    assert_eq!(frame.summary.filter, "");
+    assert!(!frame.summary.filter_active);
+    assert!(!frame.panel.collapsed);
+    assert!(!frame.panel.queue_folded);
+    assert_eq!(frame.overlay, None);
     assert_eq!(frame.playback.finish_clock, None);
 }
 
@@ -79,10 +97,14 @@ fn slot_item(name: &str, runtime_ticks: i64, position_ticks: i64, played: bool) 
 /// every pending row carries its "Ends at" clock, the queue's finish clock
 /// is the last pending row's, and the scrubber's finish clock is the active
 /// row's. The stub numbers its slots from 1 and the first one plays.
+///
+/// The same stub queue drives the open row menu (the task row's "open
+/// popover"), whose frame section carries the canvas's entries with their
+/// key hints while the rows keep their state.
 #[test]
-fn playing_queue_frame_carries_row_states_and_finish_clocks() {
+fn playing_queue_frame_carries_row_states_finish_clocks_and_the_open_menu() {
     let minute = 60 * TICKS_PER_SECOND;
-    let mut app = stub_app_with_playing_items(vec![
+    let mut app = stub_app_with_open_row_menu(vec![
         slot_item("Playing", 20 * minute, 0, false),
         slot_item("Partial", 10 * minute, 3 * minute, false),
         slot_item("Watched", 10 * minute, 0, true),
@@ -132,6 +154,34 @@ fn playing_queue_frame_carries_row_states_and_finish_clocks() {
 
     assert_eq!(frame.summary.remaining, 2);
     assert_eq!(frame.summary.right_column, GuiRightColumn::Length);
+
+    // The open row menu rides the same frame: the canvas's five entries,
+    // each with the key hint that selects it directly.
+    let mbv_gui::bridge::frame::overlay::GuiOverlayFrame::RowMenu { cursor, entries } =
+        frame.overlay.expect("the row menu opened")
+    else {
+        panic!("the overlay is the row menu");
+    };
+    assert_eq!(cursor, 0);
+    let labels: Vec<&str> = entries.iter().map(|entry| entry.label.as_str()).collect();
+    assert_eq!(
+        labels,
+        [
+            "Play now",
+            "Play next",
+            "Mark watched",
+            "Go to episode",
+            "Remove from queue"
+        ]
+    );
+    let hints: Vec<Option<&str>> = entries
+        .iter()
+        .map(|entry| entry.key_hint.as_deref())
+        .collect();
+    assert_eq!(
+        hints,
+        [Some("Enter"), Some("n"), Some("w"), Some("g"), Some("dd")]
+    );
 }
 
 /// A footer pill's text is glyph-free (design D8): no Nerd Font private-use
@@ -200,4 +250,101 @@ fn playing_queue_frame_carries_the_status_indicator_cluster() {
     assert_eq!(items.len(), 1, "audio-only playback collapses the cluster");
     assert_eq!(items[0].label, "--");
     assert_eq!(items[0].role, GuiRole::TextMuted);
+}
+
+/// The queue filter narrows the projected rows only (add-tauri-gui-client
+/// row 6.2): the frame's rows are the title matches under the library's one
+/// acceptance rule, the summary carries the typed text and its caret fact,
+/// and the canonical queue keeps every slot — the filter never edits it.
+#[test]
+fn queue_filter_narrows_projected_rows_only() {
+    let mut app = stub_app_with_playing_queue(3);
+    // The stub titles are "Item 0", "Item 1", "Item 2": the query matches
+    // one row.
+    let frame = frame_after_keys(
+        &mut app,
+        &[mbv_ui_msg::Key::Char('/'), mbv_ui_msg::Key::Char('1')],
+    );
+
+    assert_eq!(frame.summary.filter, "1");
+    assert!(frame.summary.filter_active);
+    let slots: Vec<u64> = frame
+        .queue
+        .rows
+        .iter()
+        .filter_map(|row| match row {
+            GuiQueueRow::Item { slot, .. } => Some(*slot),
+            GuiQueueRow::Heading { .. } | GuiQueueRow::Spacer => None,
+        })
+        .collect();
+    assert_eq!(slots, [2]);
+    // The filter's narrowing is the projection's: the summary still counts
+    // both slots after the playhead, so no Owner edit rode the typed
+    // characters — the canonical queue keeps its three slots.
+    assert_eq!(frame.summary.remaining, 2);
+}
+
+/// An open track popover's frame section carries the chip's choices with
+/// their chosen marks (add-tauri-gui-client row 6.2): the subtitle popover
+/// lists Off first and marks it while subtitles are off.
+#[test]
+fn track_popover_frame_carries_choices_with_the_chosen_mark() {
+    let mut app = stub_app_with_track_popover(mbv::TrackChipKind::Subtitles);
+    let frame = frame_after_tick(&mut app);
+
+    let mbv_gui::bridge::frame::overlay::GuiOverlayFrame::TrackPopover {
+        chip,
+        cursor,
+        choices,
+    } = frame.overlay.expect("the popover is open")
+    else {
+        panic!("the overlay is the track popover");
+    };
+    assert_eq!(
+        chip,
+        mbv_gui::bridge::frame::overlay::GuiTrackChipKind::Subtitles
+    );
+    assert_eq!(cursor, 0, "the cursor rests on the chosen entry");
+    assert_eq!(
+        choices,
+        vec![
+            mbv_gui::bridge::frame::overlay::GuiTrackPopoverChoice {
+                id: 0,
+                label: "Off".to_string(),
+                forced: false,
+                chosen: true,
+            },
+            mbv_gui::bridge::frame::overlay::GuiTrackPopoverChoice {
+                id: 2,
+                label: "Forced".to_string(),
+                forced: true,
+                chosen: false,
+            },
+        ]
+    );
+}
+
+/// The same popover over the audio chip lists the audio tracks with the
+/// playing one marked, and no Off entry — the audio chip has no off state.
+#[test]
+fn track_popover_frame_marks_the_playing_audio_track() {
+    let mut app = stub_app_with_track_popover(mbv::TrackChipKind::Audio);
+    let frame = frame_after_tick(&mut app);
+
+    let mbv_gui::bridge::frame::overlay::GuiOverlayFrame::TrackPopover {
+        choices, cursor, ..
+    } = frame.overlay.expect("the popover is open")
+    else {
+        panic!("the overlay is the track popover");
+    };
+    assert_eq!(cursor, 0);
+    assert_eq!(
+        choices,
+        vec![mbv_gui::bridge::frame::overlay::GuiTrackPopoverChoice {
+            id: 1,
+            label: "Stereo".to_string(),
+            forced: false,
+            chosen: true,
+        }]
+    );
 }

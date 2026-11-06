@@ -194,7 +194,7 @@ impl App {
     /// and track lists. `None` while the local player is inactive, as the
     /// status-indicator cluster is — the chips' source is the local player's
     /// stream, so a band whose playback rides a remote output carries none.
-    fn track_chips(&self) -> Option<TrackChips> {
+    pub(in crate::app) fn track_chips(&self) -> Option<TrackChips> {
         let status = self.player.status_snapshot();
         if !status.active {
             return None;

@@ -10,9 +10,13 @@ export type GuiWindowFrame = { slice: GuiFrame } | { attach: GuiAttachFrame };
 export interface GuiFrame {
 	focus: GuiFocus;
 	queue: GuiQueue;
-	/** The queue header's facts: the remaining count, the finish clock, and
-	 * the right column's mode. */
+	/** The queue header's facts: the remaining count, the finish clock, the
+	 * right column's mode, and the filter text with its caret fact. */
 	summary: GuiQueueSummary;
+	/** The panel toggles the front end picks the layout with (design D10). */
+	panel: GuiPanelToggles;
+	/** The open menu or popover; `null` while none is open (design D4). */
+	overlay: GuiOverlayFrame | null;
 	playback: GuiQueuePlayback;
 	footer: GuiQueueFooter;
 	status: GuiStatusBar;
@@ -62,7 +66,7 @@ export type GuiPopup = 'multiselect' | 'libraryRoutes' | 'feedManage';
 export type GuiPanel = 'queue' | 'library';
 
 /** The queue summary the header paints: the remaining count, the queue
- * finish clock, and the right column's mode. */
+ * finish clock, the right column's mode, and the filter text. */
 export interface GuiQueueSummary {
 	/** The slots after the active index; the whole queue while no slot
 	 * carries the playhead. */
@@ -72,6 +76,52 @@ export interface GuiQueueSummary {
 	finishClock: string | null;
 	/** Which value the rows' right column paints. */
 	rightColumn: GuiRightColumn;
+	/** The queue filter's text, which narrows the projected rows locally;
+	 * empty text filters nothing. */
+	filter: string;
+	/** Whether the filter's text entry holds the keyboard: the caret fact
+	 * the filter control paints. */
+	filterActive: boolean;
+}
+
+/** The canvas panel's collapse and queue-fold facts (design D10): the `z`
+ * and `q` toggles the Client core holds. */
+export interface GuiPanelToggles {
+	collapsed: boolean;
+	queueFolded: boolean;
+}
+
+/** The open menu or popover (design D4). */
+export type GuiOverlayFrame =
+	| {
+			kind: 'rowMenu';
+			cursor: number;
+			entries: GuiRowMenuEntry[];
+	  }
+	| {
+			kind: 'trackPopover';
+			chip: GuiTrackChipKind;
+			cursor: number;
+			choices: GuiTrackPopoverChoice[];
+	  };
+
+/** One row-menu entry: the label and the key hint that selects it
+ * directly, when it has one. */
+export interface GuiRowMenuEntry {
+	label: string;
+	keyHint: string | null;
+}
+
+/** Which track chip a popover belongs to. */
+export type GuiTrackChipKind = 'audio' | 'subtitles';
+
+/** One choice of an open track popover: the mpv track id a choice sends,
+ * its label, whether a subtitle track is forced, and whether it plays now. */
+export interface GuiTrackPopoverChoice {
+	id: number;
+	label: string;
+	forced: boolean;
+	chosen: boolean;
 }
 
 /** Which value the queue rows' right column paints. */

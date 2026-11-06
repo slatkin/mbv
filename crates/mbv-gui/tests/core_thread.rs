@@ -332,14 +332,18 @@ fn an_untargeted_pointer_press_cancels_an_armed_prefix() {
 }
 
 /// A routed quit key fires the quit edge and ends the run (design D9): the
-/// window closes through the same edge the mismatch state's Quit uses.
+/// window closes through the same edge the mismatch state's Quit uses. The
+/// chord is a rebound `quit` binding: the GUI-only key context captures the
+/// default `q` for the queue fold (add-tauri-gui-client row 6.2), so the
+/// quit mechanism routes on a chord the context does not claim — the same
+/// configured-`[keys]`-override path a user's rebind takes.
 #[test]
 fn a_routed_quit_key_fires_the_quit_edge_and_ends_the_run() {
-    let mut test = test_core(2);
+    let mut test = test_core_with(mbv::stub_app_with_rebound_quit("Shift+Q"));
     test.tx
         .send(CoreInput::Key(KeyEvent::new(
-            Key::Char('q'),
-            KeyModifiers::NONE,
+            Key::Char('Q'),
+            KeyModifiers::SHIFT,
         )))
         .unwrap();
     assert!(!test.core.step());

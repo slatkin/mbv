@@ -24,11 +24,11 @@ pub use self::app::{
     Command, FooterPill, GuiInput, GuiOverlayProjection, GuiSurfaceLeaf, HomeContent,
     HomeEventDrain, NavigationIntent, OverlayFocus, PanelIntent, PanelTogglesProjection,
     PlaybackIntent, PlaybackTargetChoice, PlayerEventDrain, QueueCardArtwork,
-    QueueFooterProjection, QueuePlaybackProjection, QueueSummaryProjection, QueueSurfaceProjection,
-    RemoteControlTarget, RouterOutcome, RouterOverlayState, RouterPlaybackState, RouterSnapshot,
-    RowMenuEntryProjection, ShellCommand, StartupWorkerDrain, StatusBarProjection, TickOutcome,
-    TrackChip, TrackChips, TrackChoice, TrackPopoverChoice, VisualIntent, WorkspaceRelayout,
-    resolve_router_outcome_with_focused,
+    QueueFooterProjection, QueuePlaybackProjection, QueueRightColumn, QueueSummaryProjection,
+    QueueSurfaceProjection, RemoteControlTarget, RouterOutcome, RouterOverlayState,
+    RouterPlaybackState, RouterSnapshot, RowMenuEntryProjection, ShellCommand, StartupWorkerDrain,
+    StatusBarProjection, TickOutcome, TrackChip, TrackChips, TrackChoice, TrackPopoverChoice,
+    VisualIntent, WorkspaceRelayout, resolve_router_outcome_with_focused,
 };
 pub use self::config::{Config, load_config};
 pub use self::owner_link::{
@@ -43,6 +43,7 @@ pub use mbv_ui_msg::TrackChipKind;
 /// `test` feature, which no shipped build enables.
 #[cfg(feature = "test")]
 pub use self::app::{
-    stub_app_with_pending_settings_save, stub_app_with_playing_items, stub_app_with_playing_queue,
-    stub_app_with_prefix_and_toast, stub_app_with_queue, stub_app_with_unsaved_queue,
+    stub_app_with_open_row_menu, stub_app_with_pending_settings_save, stub_app_with_playing_items,
+    stub_app_with_playing_queue, stub_app_with_prefix_and_toast, stub_app_with_queue,
+    stub_app_with_rebound_quit, stub_app_with_track_popover, stub_app_with_unsaved_queue,
 };

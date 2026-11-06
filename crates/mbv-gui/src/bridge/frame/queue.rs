@@ -1,11 +1,12 @@
 //! The Queue section of a frame: the rows inside the viewport, and the cursor,
 //! marks, and active slot (design D4). A slot id travels as its raw number, as
 //! `layout.rs` does. The summary section carries the queue header's remaining
-//! count, finish clock, and right-column mode.
+//! count, finish clock, right-column mode, and filter text.
 
 use mbv::QueueSummaryProjection;
 use mbv_queue::QueueSlotId;
 use mbv_surfaces::queue::QueueSurface;
+use mbv_text::fuzzy_match::{WordMatcher, word_match_score};
 use mbv_ui_model::media_list::{
     ActiveProgress, MediaKind, MediaListRow, MediaListTrailing, MediaSemanticState,
 };
@@ -30,7 +31,10 @@ pub struct GuiQueue {
 impl GuiQueue {
     /// Projects the Queue Surface state: the rows of a viewport `viewport_rows`
     /// tall, with the cursor, marks, active slot, zebra parity, and each row's
-    /// finish clock from `summary`.
+    /// finish clock from `summary`. The summary's filter text narrows the
+    /// projected rows locally — the library's one word-local acceptance rule
+    /// (`mbv-text`) decides what matches, and the Surface state and the
+    /// canonical queue stay whole.
     #[must_use]
     pub fn from_surface(
         queue: &QueueSurface,
@@ -38,25 +42,43 @@ impl GuiQueue {
         summary: &QueueSummaryProjection,
     ) -> Self {
         let rows = queue.rows();
-        let viewport = queue.list().resolve_viewport(viewport_rows.max(1));
+        let filter = summary.filter.as_str();
+        let matcher = (!filter.is_empty()).then(WordMatcher::new);
+        let kept: Vec<&MediaListRow<QueueSlotId>> = match &matcher {
+            // While the filter applies, only matching item rows project; a
+            // structural row with no matching children would be noise.
+            Some(matcher) => rows
+                .iter()
+                .filter(|row| row_matches_filter(matcher, row, filter))
+                .collect(),
+            None => rows.iter().collect(),
+        };
+        let viewport = if matcher.is_some() {
+            let cursor = queue.selected_target().copied();
+            filtered_viewport(&kept, cursor, viewport_rows.max(1))
+        } else {
+            let viewport = queue.list().resolve_viewport(viewport_rows.max(1));
+            (viewport.offset, viewport.height)
+        };
         // The zebra alternation the TUI's wide presentation paints
         // (`mbv-render` `media_list/wide.rs`): a grouped list alternates
         // within each group from its first member, an ungrouped list
         // alternates throughout, seeded by the viewport offset and flipped
         // per item row — headings and spacers keep the box's own fill and
         // do not flip. The parity rides the row so the stripe stays stable
-        // while the viewport moves.
-        let grouped = rows
+        // while the viewport moves; under a filter it re-seeds over the kept
+        // rows, whose list the front end paints.
+        let grouped = kept
             .iter()
             .any(|row| matches!(row, MediaListRow::Heading { .. }));
-        let mut striped = viewport.offset % 2 == 1;
-        let rows_dto = rows
+        let mut striped = viewport.0 % 2 == 1;
+        let rows_dto = kept
             .iter()
             .enumerate()
-            .skip(viewport.offset)
-            .take(viewport.height)
+            .skip(viewport.0)
+            .take(viewport.1)
             .map(|(source_row, row)| {
-                let striped = striped_state(row, source_row, grouped, rows, &mut striped);
+                let striped = striped_state(row, source_row, grouped, &kept, &mut striped);
                 let mut row = GuiQueueRow::from_painted(row, striped);
                 if let GuiQueueRow::Item { slot, ends_at, .. } = &mut row {
                     *ends_at = summary
@@ -72,9 +94,48 @@ impl GuiQueue {
             rows: rows_dto,
             cursor: queue.selected_target().map(|id| id.raw()),
             marks: queue.multi_selection().iter().map(|id| id.raw()).collect(),
+            // The now-playing marker reads the whole list, filtered view or
+            // not: it is the playback fact, not the filter's.
             active: rows.iter().find_map(active_slot),
         }
     }
+}
+
+/// Whether one row matches the queue filter: the item's title, or its
+/// secondary line when one is present, must accept the query under the
+/// library's word-local fuzzy rule. A structural row never matches.
+fn row_matches_filter(matcher: &WordMatcher, row: &MediaListRow<QueueSlotId>, query: &str) -> bool {
+    match row {
+        MediaListRow::Item {
+            primary, secondary, ..
+        } => {
+            word_match_score(matcher, primary, query).is_some()
+                || secondary
+                    .as_deref()
+                    .is_some_and(|text| word_match_score(matcher, text, query).is_some())
+        }
+        MediaListRow::Heading { .. } | MediaListRow::Spacer => false,
+    }
+}
+
+/// The viewport over the kept rows that keeps the cursor row fully visible:
+/// the window opens at the top and scrolls only far enough to hold the
+/// cursor, the filter's fresh re-anchor each frame it changes. Returns the
+/// offset and height the kept list slices with.
+fn filtered_viewport(
+    kept: &[&MediaListRow<QueueSlotId>],
+    cursor: Option<QueueSlotId>,
+    height: usize,
+) -> (usize, usize) {
+    let cursor_position = cursor.and_then(|slot| {
+        kept.iter()
+            .position(|row| matches!(row, MediaListRow::Item { target, .. } if *target == slot))
+    });
+    let offset = match cursor_position {
+        Some(position) if position >= height => position + 1 - height,
+        _ => 0,
+    };
+    (offset.min(kept.len().saturating_sub(height)), height)
 }
 
 /// One row's zebra state, mirroring the TUI's alternation walk
@@ -85,7 +146,7 @@ fn striped_state<Target>(
     row: &MediaListRow<Target>,
     source_row: usize,
     grouped: bool,
-    rows: &[MediaListRow<Target>],
+    rows: &[&MediaListRow<Target>],
     striped: &mut bool,
 ) -> bool {
     match row {
@@ -103,7 +164,7 @@ fn striped_state<Target>(
 /// fill rather than the surface fill: a group's members alternate from the
 /// secondary fill at their first member, so every second member reverts to
 /// the surface fill (`media_list/wide.rs`'s rule, mirrored for the frame).
-fn grouped_member_striped<Target>(rows: &[MediaListRow<Target>], row: usize) -> bool {
+fn grouped_member_striped<Target>(rows: &[&MediaListRow<Target>], row: usize) -> bool {
     // The group's members start at the row below its header (the list's own
     // first row when it has none above the row).
     let start = (0..=row)
@@ -155,10 +216,10 @@ pub enum GuiQueueRow {
 }
 
 /// The queue summary the header paints (design D4): the remaining count, the
-/// queue finish clock, and the right column's mode. Mirrors
-/// `QueueSummaryProjection`, whose finish arithmetic the frame reads per
-/// frame; the mode is Client-core state, so it carries its default until the
-/// toggle dispatch adds the core-side state.
+/// queue finish clock, the right column's mode, and the filter text with its
+/// caret fact. Mirrors `QueueSummaryProjection`, whose finish arithmetic the
+/// frame reads per frame; the mode, filter text, and caret fact are the
+/// Client-core state the projections carry.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GuiQueueSummary {
@@ -171,6 +232,12 @@ pub struct GuiQueueSummary {
     pub finish_clock: Option<String>,
     /// Which value the rows' right column paints.
     pub right_column: GuiRightColumn,
+    /// The queue filter's text, which narrows the projected rows locally.
+    /// Empty text filters nothing.
+    pub filter: String,
+    /// Whether the filter's text entry holds the keyboard: the caret fact
+    /// the filter control paints.
+    pub filter_active: bool,
 }
 
 impl From<&QueueSummaryProjection> for GuiQueueSummary {
@@ -178,14 +245,15 @@ impl From<&QueueSummaryProjection> for GuiQueueSummary {
         Self {
             remaining: summary.remaining,
             finish_clock: summary.finish_clock.clone(),
-            right_column: GuiRightColumn::default(),
+            right_column: GuiRightColumn::from(summary.right_column),
+            filter: summary.filter.clone(),
+            filter_active: summary.filter_active,
         }
     }
 }
 
 /// Which value the queue rows' right column paints (design D4's "Length" /
-/// "Ends at" switch). The default is the length mode; the toggle arrives
-/// with the core-side state of a later dispatch.
+/// "Ends at" switch), mirroring `QueueRightColumn` variant for variant.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum GuiRightColumn {
@@ -195,6 +263,15 @@ pub enum GuiRightColumn {
     /// Each row paints the clock time at which it ends, from the current
     /// position onward.
     EndsAt,
+}
+
+impl From<mbv::QueueRightColumn> for GuiRightColumn {
+    fn from(mode: mbv::QueueRightColumn) -> Self {
+        match mode {
+            mbv::QueueRightColumn::Length => Self::Length,
+            mbv::QueueRightColumn::EndsAt => Self::EndsAt,
+        }
+    }
 }
 
 impl GuiQueueRow {

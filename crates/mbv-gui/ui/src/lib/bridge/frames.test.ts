@@ -58,7 +58,15 @@ function sliceFrame(theme: GuiTheme | null): GuiWindowFrame {
 		slice: {
 			focus: { surface: 'queue', panel: 'queue' },
 			queue: { rows: [], cursor: null, marks: [], active: null },
-			summary: { remaining: 0, finishClock: null, rightColumn: 'length' },
+			summary: {
+				remaining: 0,
+				finishClock: null,
+				rightColumn: 'length',
+				filter: '',
+				filterActive: false,
+			},
+			panel: { collapsed: false, queueFolded: false },
+			overlay: null,
 			playback: {
 				status: 'idle',
 				host: '',

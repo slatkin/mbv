@@ -6,8 +6,9 @@ mod dispatch;
 mod gui_client_state;
 #[cfg(feature = "test")]
 pub use self::app_stub::{
-    stub_app_with_pending_settings_save, stub_app_with_playing_items, stub_app_with_playing_queue,
-    stub_app_with_prefix_and_toast, stub_app_with_queue, stub_app_with_unsaved_queue,
+    stub_app_with_open_row_menu, stub_app_with_pending_settings_save, stub_app_with_playing_items,
+    stub_app_with_playing_queue, stub_app_with_prefix_and_toast, stub_app_with_queue,
+    stub_app_with_rebound_quit, stub_app_with_track_popover, stub_app_with_unsaved_queue,
 };
 mod infra;
 mod input;
@@ -49,7 +50,7 @@ pub use self::queue_footer_projection::{FooterPill, QueueFooterProjection};
 pub use self::queue_playback_projection::{
     PlaybackTargetChoice, QueuePlaybackProjection, TrackChip, TrackChips, TrackChoice,
 };
-pub use self::queue_summary_projection::QueueSummaryProjection;
+pub use self::queue_summary_projection::{QueueRightColumn, QueueSummaryProjection};
 pub use self::queue_surface::QueueSurfaceProjection;
 pub use self::state::app_struct::App;
 pub use self::state::playback::HomeContent;

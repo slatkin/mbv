@@ -10,6 +10,7 @@
 
 pub mod chrome;
 pub mod focus;
+pub mod overlay;
 pub mod playback;
 pub mod queue;
 pub mod theme;
@@ -22,6 +23,7 @@ use serde::Serialize;
 
 use self::chrome::{GuiQueueFooter, GuiStatusBar};
 use self::focus::GuiFocus;
+use self::overlay::GuiOverlayFrame;
 use self::playback::{GuiCardArtwork, GuiQueuePlayback};
 use self::queue::{GuiQueue, GuiQueueSummary};
 use self::theme::GuiTheme;
@@ -90,9 +92,14 @@ pub struct GuiFrame {
     pub focus: GuiFocus,
     /// The Queue rows inside the viewport, with the cursor, marks, and active slot.
     pub queue: GuiQueue,
-    /// The queue summary: the remaining count, the queue finish clock, and
-    /// the right column's mode.
+    /// The queue summary: the remaining count, the queue finish clock, the
+    /// right column's mode, and the filter text with its caret fact.
     pub summary: GuiQueueSummary,
+    /// The panel toggles the front end picks the layout with (design D10):
+    /// the collapse and queue-fold states.
+    pub panel: GuiPanelToggles,
+    /// The open menu or popover (design D4). `None` while none is open.
+    pub overlay: Option<GuiOverlayFrame>,
     /// The Queue playback projection: the transport band.
     pub playback: GuiQueuePlayback,
     /// The Queue footer's status pills.
@@ -134,18 +141,49 @@ impl GuiFrame {
     #[must_use]
     pub fn build(sources: &FrameSources<'_>) -> Self {
         let summary = sources.app.queue_summary_projection();
+        // One playback projection read feeds both the playback section and
+        // the overlay's popover choices, so the two cannot disagree inside
+        // one frame.
+        let playback = sources.app.queue_playback_projection();
         Self {
             focus: GuiFocus::from(sources.focus),
             queue: GuiQueue::from_surface(sources.queue, sources.viewport_rows, &summary),
             summary: GuiQueueSummary::from(&summary),
+            panel: GuiPanelToggles::from(&sources.app.panel_toggles_projection()),
+            overlay: sources
+                .app
+                .gui_overlay_projection(&playback)
+                .as_ref()
+                .map(GuiOverlayFrame::from),
             playback: GuiQueuePlayback {
                 artwork: sources.artwork.clone(),
-                ..GuiQueuePlayback::from(&sources.app.queue_playback_projection())
+                ..GuiQueuePlayback::from(&playback)
             },
             footer: GuiQueueFooter::from(&sources.app.queue_footer_projection()),
             status: GuiStatusBar::from(&sources.app.status_bar_projection()),
             breakpoint: GuiBreakpoint::from(sources.breakpoint),
             theme: sources.theme_changed.then(GuiTheme::current),
+        }
+    }
+}
+
+/// The canvas panel's collapse and queue-fold facts (design D10), mirroring
+/// `PanelTogglesProjection`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GuiPanelToggles {
+    /// The `z` toggle: the panel collapsed to the rail.
+    pub collapsed: bool,
+    /// The `q` toggle: the expanded panel's queue folded to its one-line
+    /// summary.
+    pub queue_folded: bool,
+}
+
+impl From<&mbv::PanelTogglesProjection> for GuiPanelToggles {
+    fn from(toggles: &mbv::PanelTogglesProjection) -> Self {
+        Self {
+            collapsed: toggles.collapsed,
+            queue_folded: toggles.queue_folded,
         }
     }
 }

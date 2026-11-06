@@ -23,6 +23,7 @@ mbv-images = { path = "../mbv-images" }
 mbv-queue = { path = "../mbv-queue" }
 mbv-remote-player = { path = "../mbv-remote-player" }
 mbv-surfaces = { path = "../mbv-surfaces" }
+mbv-text = { path = "../mbv-text" }
 mbv-theme = { path = "../mbv-theme" }
 mbv-ui-model = { path = "../mbv-ui-model" }
 mbv-ui-msg = { path = "../mbv-ui-msg" }
