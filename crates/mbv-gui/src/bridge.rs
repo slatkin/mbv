@@ -2,3 +2,5 @@
 //! mirrors one message that the front end and the Rust core exchange (design D4).
 
 pub mod keys;
+pub mod layout;
+pub mod pointer;
