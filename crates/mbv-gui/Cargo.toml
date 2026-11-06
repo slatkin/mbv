@@ -39,6 +39,8 @@ tauri-build = "=2.7.4"
 
 [dev-dependencies]
 mbv = { path = "../..", features = ["test"] }
+# The frame tests build Emby items for the queue slots they project.
+mbv-emby-model = { path = "../mbv-emby-model" }
 # The core-thread test seeds the card image cache with a decoded image.
 image = { workspace = true, features = ["png"] }
 rstest.workspace = true

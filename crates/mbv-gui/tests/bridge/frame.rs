@@ -1,7 +1,13 @@
-use mbv::{App, stub_app_with_playing_queue, stub_app_with_queue, stub_app_with_unsaved_queue};
-use mbv_gui::bridge::frame::queue::GuiQueueRow;
+use mbv::{
+    App, stub_app_with_playing_items, stub_app_with_playing_queue, stub_app_with_queue,
+    stub_app_with_unsaved_queue,
+};
+use mbv_emby_model::test_support::make_item;
+use mbv_emby_model::TICKS_PER_SECOND;
+use mbv_gui::bridge::frame::queue::{GuiQueueRow, GuiRightColumn, GuiSemanticState};
 use mbv_gui::bridge::frame::theme::GuiRole;
 use mbv_gui::bridge::frame::{FrameSources, GuiFrame};
+use mbv_queue::QueueItem;
 use mbv_surfaces::FocusStack;
 use mbv_surfaces::breakpoint::BreakpointClass;
 use mbv_surfaces::queue::QueueSurface;
@@ -42,13 +48,92 @@ fn playing_queue_frame_carries_rows_and_active_slot() {
     assert_eq!(frame.queue.active, Some(1));
 }
 
-/// An empty queue's frame carries no rows and no active slot.
+/// An empty queue's frame carries no rows and no active slot, and its
+/// summary counts no remaining slot and names no finish clock — no slot
+/// carries the playhead, so no end time is anchored.
 #[test]
 fn empty_queue_frame_carries_no_rows() {
     let mut app = stub_app_with_queue(0);
     let frame = frame_after_tick(&mut app);
     assert_eq!(frame.queue.rows.len(), 0);
     assert_eq!(frame.queue.active, None);
+    assert_eq!(frame.summary.remaining, 0);
+    assert_eq!(frame.summary.finish_clock, None);
+    assert_eq!(frame.summary.right_column, GuiRightColumn::Length);
+    assert_eq!(frame.playback.finish_clock, None);
+}
+
+/// One Emby movie slot with its own stored facts: the runtime, the resume
+/// position, and the played flag a row's state and clock read.
+fn slot_item(name: &str, runtime_ticks: i64, position_ticks: i64, played: bool) -> QueueItem {
+    let mut item = make_item(name, "Movie");
+    item.runtime_ticks = runtime_ticks;
+    item.playback_position_ticks = position_ticks;
+    item.played = played;
+    QueueItem::Emby(Box::new(item))
+}
+
+/// A queue's rows carry their state and both right-column values (design
+/// D4): the active row marks now-playing, a slot with a stored resume
+/// position marks its bounded progress, a played slot marks watched — and
+/// every pending row carries its "Ends at" clock, the queue's finish clock
+/// is the last pending row's, and the scrubber's finish clock is the active
+/// row's. The stub numbers its slots from 1 and the first one plays.
+#[test]
+fn playing_queue_frame_carries_row_states_and_finish_clocks() {
+    let minute = 60 * TICKS_PER_SECOND;
+    let mut app = stub_app_with_playing_items(vec![
+        slot_item("Playing", 20 * minute, 0, false),
+        slot_item("Partial", 10 * minute, 3 * minute, false),
+        slot_item("Watched", 10 * minute, 0, true),
+    ]);
+    let frame = frame_after_tick(&mut app);
+
+    let states: Vec<&GuiSemanticState> = frame
+        .queue
+        .rows
+        .iter()
+        .map(|row| match row {
+            GuiQueueRow::Item { state, .. } => state,
+            GuiQueueRow::Heading { .. } | GuiQueueRow::Spacer => {
+                panic!("the stub queue has no structural rows")
+            }
+        })
+        .collect();
+    assert_eq!(
+        states,
+        [
+            &GuiSemanticState::NowPlaying { progress: None },
+            &GuiSemanticState::Active {
+                progress: Some(30)
+            },
+            &GuiSemanticState::Played,
+        ]
+    );
+
+    let ends_at: Vec<Option<&str>> = frame
+        .queue
+        .rows
+        .iter()
+        .map(|row| match row {
+            GuiQueueRow::Item { ends_at, .. } => ends_at.as_deref(),
+            GuiQueueRow::Heading { .. } | GuiQueueRow::Spacer => None,
+        })
+        .collect();
+    let (active_clock, partial_clock, watched_clock) = match ends_at.as_slice() {
+        [Some(active), Some(partial), Some(watched)] => (*active, *partial, *watched),
+        _ => panic!("every pending row carries its finish clock"),
+    };
+    // The queue's finish clock is the last pending row's; the scrubber's is
+    // the active row's.
+    assert_eq!(frame.summary.finish_clock.as_deref(), Some(watched_clock));
+    assert_eq!(frame.playback.finish_clock.as_deref(), Some(active_clock));
+    // The clocks chain: each pending row ends one runtime after the row
+    // before it, so the partial row's clock differs from the active row's.
+    assert_ne!(partial_clock, active_clock);
+
+    assert_eq!(frame.summary.remaining, 2);
+    assert_eq!(frame.summary.right_column, GuiRightColumn::Length);
 }
 
 /// A footer pill's text is glyph-free (design D8): no Nerd Font private-use

@@ -23,7 +23,7 @@ use serde::Serialize;
 use self::chrome::{GuiQueueFooter, GuiStatusBar};
 use self::focus::GuiFocus;
 use self::playback::{GuiCardArtwork, GuiQueuePlayback};
-use self::queue::GuiQueue;
+use self::queue::{GuiQueue, GuiQueueSummary};
 use self::theme::GuiTheme;
 
 /// One frame (design D4), sent to the window as the `mbv://frame` event. The
@@ -90,6 +90,9 @@ pub struct GuiFrame {
     pub focus: GuiFocus,
     /// The Queue rows inside the viewport, with the cursor, marks, and active slot.
     pub queue: GuiQueue,
+    /// The queue summary: the remaining count, the queue finish clock, and
+    /// the right column's mode.
+    pub summary: GuiQueueSummary,
     /// The Queue playback projection: the transport band.
     pub playback: GuiQueuePlayback,
     /// The Queue footer's status pills.
@@ -130,9 +133,11 @@ impl GuiFrame {
     /// Builds the frame from the core's current state.
     #[must_use]
     pub fn build(sources: &FrameSources<'_>) -> Self {
+        let summary = sources.app.queue_summary_projection();
         Self {
             focus: GuiFocus::from(sources.focus),
-            queue: GuiQueue::from_surface(sources.queue, sources.viewport_rows),
+            queue: GuiQueue::from_surface(sources.queue, sources.viewport_rows, &summary),
+            summary: GuiQueueSummary::from(&summary),
             playback: GuiQueuePlayback {
                 artwork: sources.artwork.clone(),
                 ..GuiQueuePlayback::from(&sources.app.queue_playback_projection())

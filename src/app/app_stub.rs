@@ -84,6 +84,57 @@ pub fn stub_app_with_playing_queue(n: usize) -> App {
     app
 }
 
+/// The `App` a Client's test drives with the queue's slots built from
+/// `items` in canonical order and the first one playing, so a frame test can
+/// name watched, partial-progress, and active rows from the items' own
+/// stored facts (add-tauri-gui-client row 6.2). The playing slot starts
+/// fresh: the status carries the first item's runtime and no position, so a
+/// queued item's stored progress is the partial-progress row's own fact.
+#[cfg(feature = "test")]
+#[must_use]
+pub fn stub_app_with_playing_items(items: Vec<mbv_queue::QueueItem>) -> App {
+    let app = stub_app_with_items(items);
+    let runtime = app
+        .playback_queue()
+        .item_at(0)
+        .map_or(0, mbv_queue::QueueItem::runtime_ticks);
+    app.player.update_status(|status| {
+        status.active = true;
+        status.current_idx = 0;
+        status.queue_len = app.playback_queue().slots().len();
+        status.runtime_ticks = runtime;
+    });
+    app
+}
+
+/// The `App` a Client's test drives with the queue's slots built from
+/// `items` in canonical order, cursor at the first, and an idle player.
+#[cfg(feature = "test")]
+#[must_use]
+fn stub_app_with_items(items: Vec<mbv_queue::QueueItem>) -> App {
+    let mut app = make_app_stub();
+    let slots: Vec<mbv_ctrl::UnifiedQueueSlot> = items
+        .into_iter()
+        .enumerate()
+        .map(|(i, item)| mbv_ctrl::UnifiedQueueSlot {
+            slot_id: u64::try_from(i).unwrap_or(u64::MAX) + 1,
+            item,
+        })
+        .collect();
+    let state = mbv_ctrl::UnifiedQueueStateData {
+        status: mbv_ctrl::player::PlayerStatus::default(),
+        active_slot: None,
+        slots,
+        revision: 1,
+        source: mbv_queue::QueueSource::Unknown,
+        lineage: mbv_queue::QueueLineage::default(),
+        in_flight_transition: None,
+        queued_latest_transition: None,
+    };
+    app.local_view = QueueView::from_snapshot(&state);
+    app
+}
+
 /// The `App` a Client's test drives with `n` projected queue slots and the
 /// queue marked unsaved, so the Queue footer carries its dirty pill
 /// (`extract-client-core` row 6.4).

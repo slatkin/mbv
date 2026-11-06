@@ -257,7 +257,7 @@ libc.workspace = true
 mimalloc.workspace = true
 nix = { workspace = true, features = ["fs", "process", "signal"] }
 tui-scrollbar.workspace = true
-time.workspace = true
+time = { workspace = true, features = ["local-offset"] }
 mbv-feed = { path = "crates/mbv-feed" }
 
 [dev-dependencies]

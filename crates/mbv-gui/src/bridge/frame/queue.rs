@@ -1,7 +1,9 @@
 //! The Queue section of a frame: the rows inside the viewport, and the cursor,
 //! marks, and active slot (design D4). A slot id travels as its raw number, as
-//! `layout.rs` does.
+//! `layout.rs` does. The summary section carries the queue header's remaining
+//! count, finish clock, and right-column mode.
 
+use mbv::QueueSummaryProjection;
 use mbv_queue::QueueSlotId;
 use mbv_surfaces::queue::QueueSurface;
 use mbv_ui_model::media_list::{
@@ -27,9 +29,14 @@ pub struct GuiQueue {
 
 impl GuiQueue {
     /// Projects the Queue Surface state: the rows of a viewport `viewport_rows`
-    /// tall, with the cursor, marks, active slot, and zebra parity.
+    /// tall, with the cursor, marks, active slot, zebra parity, and each row's
+    /// finish clock from `summary`.
     #[must_use]
-    pub fn from_surface(queue: &QueueSurface, viewport_rows: usize) -> Self {
+    pub fn from_surface(
+        queue: &QueueSurface,
+        viewport_rows: usize,
+        summary: &QueueSummaryProjection,
+    ) -> Self {
         let rows = queue.rows();
         let viewport = queue.list().resolve_viewport(viewport_rows.max(1));
         // The zebra alternation the TUI's wide presentation paints
@@ -49,10 +56,16 @@ impl GuiQueue {
             .skip(viewport.offset)
             .take(viewport.height)
             .map(|(source_row, row)| {
-                GuiQueueRow::from_painted(
-                    row,
-                    striped_state(row, source_row, grouped, rows, &mut striped),
-                )
+                let striped = striped_state(row, source_row, grouped, rows, &mut striped);
+                let mut row = GuiQueueRow::from_painted(row, striped);
+                if let GuiQueueRow::Item { slot, ends_at, .. } = &mut row {
+                    *ends_at = summary
+                        .row_finish_clocks
+                        .iter()
+                        .find(|(clock_slot, _)| clock_slot.raw() == *slot)
+                        .map(|(_, clock)| clock.clone());
+                }
+                row
             })
             .collect();
         Self {
@@ -124,6 +137,11 @@ pub enum GuiQueueRow {
         secondary: Option<String>,
         trailing: Option<GuiTrailing>,
         duration: Option<String>,
+        /// The row's wall-clock end time, the right column's "Ends at" value,
+        /// formatted in the local zone. The "Length" value is `duration`.
+        /// `None` for a slot before the playhead and for a slot whose finish
+        /// chain an unknown runtime broke.
+        ends_at: Option<String>,
         kind: GuiMediaKind,
         state: GuiSemanticState,
         /// The row's zebra parity: the TUI's alternation paints the odd
@@ -134,6 +152,49 @@ pub enum GuiQueueRow {
     Heading { text: String },
     /// A structural spacer row.
     Spacer,
+}
+
+/// The queue summary the header paints (design D4): the remaining count, the
+/// queue finish clock, and the right column's mode. Mirrors
+/// `QueueSummaryProjection`, whose finish arithmetic the frame reads per
+/// frame; the mode is Client-core state, so it carries its default until the
+/// toggle dispatch adds the core-side state.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GuiQueueSummary {
+    /// The slots after the active index: the queue's remaining play. The
+    /// whole queue's slot count while no slot carries the playhead.
+    pub remaining: usize,
+    /// The wall-clock time the shown queue finishes, formatted in the local
+    /// zone. `None` while no slot carries the playhead or a pending runtime
+    /// in the chain is unknown.
+    pub finish_clock: Option<String>,
+    /// Which value the rows' right column paints.
+    pub right_column: GuiRightColumn,
+}
+
+impl From<&QueueSummaryProjection> for GuiQueueSummary {
+    fn from(summary: &QueueSummaryProjection) -> Self {
+        Self {
+            remaining: summary.remaining,
+            finish_clock: summary.finish_clock.clone(),
+            right_column: GuiRightColumn::default(),
+        }
+    }
+}
+
+/// Which value the queue rows' right column paints (design D4's "Length" /
+/// "Ends at" switch). The default is the length mode; the toggle arrives
+/// with the core-side state of a later dispatch.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum GuiRightColumn {
+    /// Each row paints its total runtime.
+    #[default]
+    Length,
+    /// Each row paints the clock time at which it ends, from the current
+    /// position onward.
+    EndsAt,
 }
 
 impl GuiQueueRow {
@@ -156,6 +217,7 @@ impl GuiQueueRow {
                 secondary: secondary.clone(),
                 trailing: trailing.as_ref().map(GuiTrailing::from),
                 duration: duration.clone(),
+                ends_at: None,
                 kind: GuiMediaKind::from(*kind),
                 state: GuiSemanticState::from(semantic_state),
                 striped,

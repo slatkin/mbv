@@ -1,7 +1,8 @@
 use crate::ui_util::{
     continue_tab_title, fmt_duration_gutter, fmt_duration_hms, fmt_duration_short,
-    fmt_publish_date_short, is_home_icon_title,
+    fmt_publish_date_short, fmt_wall_clock, is_home_icon_title,
 };
+use time::UtcOffset;
 
 /// The predicate recognises exactly the two labels `continue_tab_title`
 /// emits, so the tab painter's Home exception can never fire on a library
@@ -12,6 +13,28 @@ fn home_icon_title_matches_only_the_continue_tab_labels() {
     assert!(is_home_icon_title(continue_tab_title(false)));
     assert!(!is_home_icon_title("alpha"));
     assert!(!is_home_icon_title(""));
+}
+
+/// `fmt_wall_clock` renders the offset's 12-hour wall clock with a padded
+/// minute and an upper-case period: the finish-clock format the design
+/// canvas paints. Midnight and noon both read 12, in their own period.
+#[test]
+fn fmt_wall_clock_renders_a_twelve_hour_clock_in_the_offset() {
+    // 2026-01-15 11:42:00 UTC, 2026-01-15 13:05:00 UTC, and midnight UTC.
+    let (mid_morning, early_afternoon, midnight) = (1768477320, 1768482300, 1768435200);
+    assert_eq!(fmt_wall_clock(mid_morning, UtcOffset::UTC), "11:42 AM");
+    assert_eq!(fmt_wall_clock(early_afternoon, UtcOffset::UTC), "1:05 PM");
+    assert_eq!(fmt_wall_clock(midnight, UtcOffset::UTC), "12:00 AM");
+    // One hour ahead of UTC, the same instants read an hour later.
+    let plus_one = UtcOffset::from_hms(1, 0, 0).expect("a +1:00:00 offset is valid");
+    assert_eq!(fmt_wall_clock(mid_morning, plus_one), "12:42 PM");
+}
+
+/// A seconds value beyond `time`'s range saturates to the empty string, as
+/// the publish-date helpers do, so a caller's `Option` gate reads no clock.
+#[test]
+fn fmt_wall_clock_saturates_out_of_range_seconds_to_empty() {
+    assert_eq!(fmt_wall_clock(i64::MAX, UtcOffset::UTC), "");
 }
 
 // ── fmt_duration_short ───────────────────────────────────────────────────

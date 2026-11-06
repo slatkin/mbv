@@ -1,7 +1,8 @@
 //! The Queue playback section of a frame: the transport band's facts (design
 //! D4). Each field mirrors one fact of `QueuePlaybackProjection`.
 
-use mbv::QueuePlaybackProjection;
+use mbv::{PlaybackTargetChoice, QueuePlaybackProjection, TrackChips, TrackChip, TrackChoice};
+use mbv_ui_model::panel_targets::SessionTargetKey;
 use mbv_ui_model::playback::PlaybackState;
 use mbv_ui_model::playback_target::NowPlayingStatus;
 use serde::Serialize;
@@ -25,6 +26,17 @@ pub struct GuiQueuePlayback {
     pub show_controls: bool,
     /// The plain now-playing title, if there is one.
     pub now_playing_title: Option<String>,
+    /// The now-playing parent line: the series of an episode, the artist of a
+    /// track, the subscription of a feed entry, the show of an
+    /// Audiobookshelf episode. `None` when the item has no container fact.
+    pub parent_line: Option<String>,
+    /// The season-and-episode badge the artwork paints ("S2 E5"). `None` for
+    /// every kind but an Emby episode with an ordinal known.
+    pub episode_badge: Option<String>,
+    /// The active item's wall-clock end time, formatted in the local zone:
+    /// the scrubber's finish clock. `None` while no item plays or the runtime
+    /// is unknown.
+    pub finish_clock: Option<String>,
     /// Which transport controls are actionable.
     pub availability: GuiTransportAvailability,
     /// The status-indicator cluster the queue band paints on its controls
@@ -36,6 +48,15 @@ pub struct GuiQueuePlayback {
     /// changed for this window — the theme's arming rule (design D7). The
     /// front end keeps the last carried value and paints it until the next.
     pub artwork: Option<GuiCardArtwork>,
+    /// The track chips the canvas paints under the transport (design D4):
+    /// the video stream's resolved label, and the audio and subtitle tracks
+    /// each with its choices and the chosen one. `None` while the local
+    /// player is inactive, as the status-indicator cluster is.
+    pub track_chips: Option<GuiTrackChips>,
+    /// The playback-target chooser's choices: the Emby sessions then the cast
+    /// receivers the Owner offers, each marked with whether it is the Owner's
+    /// attached output.
+    pub target_choices: Vec<GuiTargetChoice>,
 }
 
 /// One status indicator of the queue band's cluster, mirroring
@@ -78,6 +99,9 @@ impl From<&QueuePlaybackProjection> for GuiQueuePlayback {
             playback: GuiPlaybackState::from(projection.playback),
             show_controls: projection.show_controls,
             now_playing_title: projection.now_playing_title.clone(),
+            parent_line: projection.parent_line.clone(),
+            episode_badge: projection.episode_badge.clone(),
+            finish_clock: projection.finish_clock.clone(),
             availability: GuiTransportAvailability {
                 stop: projection.availability.stop,
                 next: projection.availability.next,
@@ -93,6 +117,114 @@ impl From<&QueuePlaybackProjection> for GuiQueuePlayback {
                     .collect()
             }),
             artwork: None,
+            track_chips: projection.track_chips.as_ref().map(GuiTrackChips::from),
+            target_choices: projection
+                .target_choices
+                .iter()
+                .map(GuiTargetChoice::from)
+                .collect(),
+        }
+    }
+}
+
+/// The track chips' facts, mirroring `TrackChips`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GuiTrackChips {
+    /// The video stream's resolved label. `None` for an audio-only item.
+    pub video: Option<String>,
+    /// The audio chip.
+    pub audio: GuiTrackChip,
+    /// The subtitle chip; a `chosen` of `None` is subtitles off.
+    pub subtitles: GuiTrackChip,
+}
+
+impl From<&TrackChips> for GuiTrackChips {
+    fn from(chips: &TrackChips) -> Self {
+        Self {
+            video: chips.video.clone(),
+            audio: GuiTrackChip::from(&chips.audio),
+            subtitles: GuiTrackChip::from(&chips.subtitles),
+        }
+    }
+}
+
+/// One chip's facts, mirroring `TrackChip`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GuiTrackChip {
+    /// The choices, in the player's track order.
+    pub choices: Vec<GuiTrackChoice>,
+    /// The chosen choice's mpv id; `None` is off or unresolved.
+    pub chosen: Option<i64>,
+}
+
+impl From<&TrackChip> for GuiTrackChip {
+    fn from(chip: &TrackChip) -> Self {
+        Self {
+            choices: chip.choices.iter().map(GuiTrackChoice::from).collect(),
+            chosen: chip.chosen,
+        }
+    }
+}
+
+/// One chip choice, mirroring `TrackChoice`: the mpv track id a switch
+/// sends, the resolved label, and whether the subtitle track is forced.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GuiTrackChoice {
+    pub id: i64,
+    pub label: String,
+    pub forced: bool,
+}
+
+impl From<&TrackChoice> for GuiTrackChoice {
+    fn from(choice: &TrackChoice) -> Self {
+        Self {
+            id: choice.id,
+            label: choice.label.clone(),
+            forced: choice.forced,
+        }
+    }
+}
+
+/// One playback-target choice of the chooser, mirroring
+/// `PlaybackTargetChoice`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GuiTargetChoice {
+    /// The stable identity a selection sends.
+    pub key: GuiTargetKey,
+    /// The label the chooser paints.
+    pub label: String,
+    /// Whether the target is the Owner's attached playback output.
+    pub is_active: bool,
+}
+
+impl From<&PlaybackTargetChoice> for GuiTargetChoice {
+    fn from(choice: &PlaybackTargetChoice) -> Self {
+        Self {
+            key: GuiTargetKey::from(&choice.key),
+            label: choice.label.clone(),
+            is_active: choice.is_active,
+        }
+    }
+}
+
+/// A playback target's stable identity, mirroring `SessionTargetKey` variant
+/// for variant: the Emby session id, or the cast receiver id.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "kind", content = "id", rename_all = "camelCase")]
+pub enum GuiTargetKey {
+    Emby(String),
+    Cast(String),
+}
+
+impl From<&SessionTargetKey> for GuiTargetKey {
+    fn from(key: &SessionTargetKey) -> Self {
+        match key {
+            SessionTargetKey::Emby(id) => Self::Emby(id.clone()),
+            SessionTargetKey::Cast(id) => Self::Cast(id.clone()),
         }
     }
 }
