@@ -10,6 +10,9 @@ export type GuiWindowFrame = { slice: GuiFrame } | { attach: GuiAttachFrame };
 export interface GuiFrame {
 	focus: GuiFocus;
 	queue: GuiQueue;
+	/** The queue header's facts: the remaining count, the finish clock, and
+	 * the right column's mode. */
+	summary: GuiQueueSummary;
 	playback: GuiQueuePlayback;
 	footer: GuiQueueFooter;
 	status: GuiStatusBar;
@@ -58,6 +61,22 @@ export type GuiModal = 'confirm' | 'daemonLost' | 'savePlaylist' | 'twitchUrl';
 export type GuiPopup = 'multiselect' | 'libraryRoutes' | 'feedManage';
 export type GuiPanel = 'queue' | 'library';
 
+/** The queue summary the header paints: the remaining count, the queue
+ * finish clock, and the right column's mode. */
+export interface GuiQueueSummary {
+	/** The slots after the active index; the whole queue while no slot
+	 * carries the playhead. */
+	remaining: number;
+	/** The wall-clock time the shown queue finishes; `null` while no slot
+	 * carries the playhead or a pending runtime in the chain is unknown. */
+	finishClock: string | null;
+	/** Which value the rows' right column paints. */
+	rightColumn: GuiRightColumn;
+}
+
+/** Which value the queue rows' right column paints. */
+export type GuiRightColumn = 'length' | 'endsAt';
+
 /** The Queue section: the viewport rows, cursor, marks, and active slot. */
 export interface GuiQueue {
 	rows: GuiQueueRow[];
@@ -77,7 +96,12 @@ export type GuiQueueRow =
 			primary: string;
 			secondary: string | null;
 			trailing: GuiTrailing | null;
+			/** The right column's "Length" value. */
 			duration: string | null;
+			/** The right column's "Ends at" value; `null` for a slot before the
+			 * playhead and for a slot whose finish chain an unknown runtime
+			 * broke. */
+			endsAt: string | null;
 			kind: GuiMediaKind;
 			state: GuiSemanticState;
 			/** Whether the row takes the alternating `QueueColumn` fill — the
@@ -106,6 +130,15 @@ export interface GuiQueuePlayback {
 	playback: GuiPlaybackState;
 	showControls: boolean;
 	nowPlayingTitle: string | null;
+	/** The now-playing parent line: the series of an episode, the artist of
+	 * a track, the subscription of a feed entry. */
+	parentLine: string | null;
+	/** The season-and-episode badge the artwork paints (`"S2 E5"`); `null`
+	 * for every kind but an Emby episode with an ordinal known. */
+	episodeBadge: string | null;
+	/** The active item's wall-clock end time; the scrubber's finish clock.
+	 * `null` while no item plays or the runtime is unknown. */
+	finishClock: string | null;
 	availability: GuiTransportAvailability;
 	/** The status-indicator cluster the queue band paints on its controls
 	 * row: `null` while the local player is inactive — the cluster's data
@@ -115,7 +148,52 @@ export interface GuiQueuePlayback {
 	/** The visual slot's artwork; `null` unless the art changed for this
 	 * window (design D10) — the component keeps the last carried value. */
 	artwork: GuiCardArtwork | null;
+	/** The track chips under the transport: the video stream's resolved
+	 * label, and the audio and subtitle tracks each with its choices and the
+	 * chosen one. `null` while the local player is inactive, as the
+	 * status-indicator cluster is. */
+	trackChips: GuiTrackChips | null;
+	/** The playback-target chooser's choices: the Emby sessions then the
+	 * cast receivers the Owner offers, each marked with whether it is the
+	 * Owner's attached output. */
+	targetChoices: GuiTargetChoice[];
 }
+
+/** The track chips' facts. */
+export interface GuiTrackChips {
+	/** The video stream's resolved label; `null` for an audio-only item. */
+	video: string | null;
+	audio: GuiTrackChip;
+	subtitles: GuiTrackChip;
+}
+
+/** One chip's facts: its choices and the chosen one. */
+export interface GuiTrackChip {
+	choices: GuiTrackChoice[];
+	/** The chosen choice's mpv id; `null` is off or unresolved. */
+	chosen: number | null;
+}
+
+/** One chip choice: the mpv track id a switch sends, the resolved label,
+ * and whether the subtitle track is forced. */
+export interface GuiTrackChoice {
+	id: number;
+	label: string;
+	forced: boolean;
+}
+
+/** One playback-target choice of the chooser. */
+export interface GuiTargetChoice {
+	/** The stable identity a selection sends. */
+	key: GuiTargetKey;
+	label: string;
+	/** Whether the target is the Owner's attached playback output. */
+	isActive: boolean;
+}
+
+/** A playback target's stable identity: the Emby session id, or the cast
+ * receiver id. */
+export type GuiTargetKey = { kind: 'emby'; id: string } | { kind: 'cast'; id: string };
 
 /** One status indicator of the queue band's cluster: the uppercased label
  * and the foreground role its text paints in. */

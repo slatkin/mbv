@@ -58,6 +58,7 @@ function sliceFrame(theme: GuiTheme | null): GuiWindowFrame {
 		slice: {
 			focus: { surface: 'queue', panel: 'queue' },
 			queue: { rows: [], cursor: null, marks: [], active: null },
+			summary: { remaining: 0, finishClock: null, rightColumn: 'length' },
 			playback: {
 				status: 'idle',
 				host: '',
@@ -72,9 +73,14 @@ function sliceFrame(theme: GuiTheme | null): GuiWindowFrame {
 				},
 				showControls: false,
 				nowPlayingTitle: null,
+				parentLine: null,
+				episodeBadge: null,
+				finishClock: null,
 				availability: { stop: false, next: false, previous: false },
 				statusIndicators: null,
 				artwork: null,
+				trackChips: null,
+				targetChoices: [],
 			},
 			footer: {
 				owner: { text: '', role: 'textPrimary', bold: false },

@@ -58,9 +58,14 @@ function playing(overrides: Partial<GuiQueuePlayback> = {}): GuiQueuePlayback {
 		},
 		showControls: true,
 		nowPlayingTitle: 'Track title',
+		parentLine: null,
+		episodeBadge: null,
+		finishClock: null,
 		availability: { stop: true, next: true, previous: false },
 		statusIndicators: null,
 		artwork: null,
+		trackChips: null,
+		targetChoices: [],
 		...overrides,
 	};
 }
