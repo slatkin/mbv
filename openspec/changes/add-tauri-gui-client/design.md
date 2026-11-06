@@ -16,7 +16,7 @@ The current state that shapes the approach (after `extract-client-core`, PR #984
 **Goals:**
 
 - A GUI Client that presents the first slice (Queue, Queue playback, Status bar) with the TUI's behaviour, through the shared Client core.
-- Text and icons that match the user's desktop, because the webview uses the system font stack.
+- GUI text in the bundled SUSE face, rasterized by the webview through FreeType and fontconfig; Lucide icons.
 - A thin front end: it paints projections and reports input, capacity, and hit regions. It holds no interaction rules.
 
 **Non-Goals:**
@@ -91,7 +91,9 @@ The DOM key fields are translated to `KeyEvent` in Rust, in `bridge/keys.rs`. A 
 
 ### D8. Fonts and icons
 
-The front end uses the system UI font through CSS (`font-family: system-ui, sans-serif`) and the system monospace font for monospace text, so WebKitGTK renders text with the user's fontconfig settings. The bundle embeds no font file. Icons come from `@lucide/svelte`. The GUI paints no emoji or Nerd Font glyph. The playback-target indicator, the transport controls, and the playing-row marker are Lucide icons.
+The front end sets its text face to the bundled SUSE variable font (`@fontsource-variable/suse`, `font-family: 'SUSE Variable'` with `system-ui` as fallback) and keeps the system monospace font for monospace text, so WebKitGTK still renders through fontconfig and FreeType. The font's woff2 files build into `ui/dist` with the rest of the bundle, so the window fetches no font at runtime and the CSP's `default-src 'self'` covers `font-src`. Icons come from `@lucide/svelte`. The GUI paints no emoji or Nerd Font glyph. The playback-target indicator, the transport controls, and the playing-row marker are Lucide icons.
+
+*Earlier choice:* the system UI font, with no font file in the bundle. Superseded on 2026-11-06: the user confirmed that GUI text uses the SUSE font.
 
 ### D9. Owner launch
 

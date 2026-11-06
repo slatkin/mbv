@@ -4,7 +4,7 @@
 
 The TUI ties mbv's keyboard-first interaction model to the character-cell grid. A native window can keep the model and drop the grid. The `extract-client-core` change (PR #984) adds the toolkit-neutral Client core that a second Client kind needs. This change adds that second Client.
 
-An earlier attempt used egui and was dropped. egui (and iced) rasterize text themselves in grayscale, and on a 1x monitor that text is visibly softer than the rest of the desktop. A webview draws text through the system font stack (FreeType and fontconfig), so the GUI's text matches the user's other applications. Tauri gives a Rust process with a system webview, and the Rust side can link the Client core directly.
+An earlier attempt used egui and was dropped. egui (and iced) rasterize text themselves in grayscale, and on a 1x monitor that text is visibly softer than the rest of the desktop. A webview draws text through the system font stack (FreeType and fontconfig), so the GUI's text is rasterized like the user's other applications. Tauri gives a Rust process with a system webview, and the Rust side can link the Client core directly.
 
 ## What Changes
 
