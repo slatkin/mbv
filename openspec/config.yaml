@@ -5,9 +5,17 @@ context: |
   Domain: multi-protocol media server client
 
 rules:
+  proposal:
+    - Surface every user decision while writing the proposal and design, and ask it then. No artifact defers a decision to implementation.
+  design:
+    - Name every new or upgraded dependency with its exact version and features. Use the latest stable release, checked when the design is written, and check peer ranges between them.
+    - A version older than the latest stable states its reason in the design.
+    - Leave no dependency, version, renderer, or backend choice open for implementation.
   tasks:
     - Keep tasks small enough for one agent without filling its compact window.
     - Do not require acceptance testing in tasks. Acceptance testing is post-implementation.
+    - Tasks are for implementing agents. No task asks the user, waits for the user, or is done by the user.
+    - A task that adds or upgrades a dependency names the version from design.md.
   specs:
     - Specs state behavior and layout, never paint.
     - Never pin strings, glyphs, colors, spacing, alignment, truncation.

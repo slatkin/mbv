@@ -4,7 +4,7 @@ Implementation starts after `extract-client-core` (PR #984) merges.
 
 ## 1. Scaffold
 
-- [ ] 1.1 Re-check every version in design D2 on crates.io and npm, and check the peer ranges between them. If a latest release does not fit, stop and ask the user. Record the checked versions and the date in design D2.
+- [ ] 1.1 Pin every dependency to the exact version in design D2 (Cargo.toml and package.json, with lockfiles committed). Verify that `pnpm install` reports no peer-dependency warning.
 - [ ] 1.2 Add `crates/mbv-gui` (Tauri 2 binary `mbv-gui`) as a workspace member outside `default-members`, with `tauri-build`, a minimal `tauri.conf.json` (one window, bundled `frontendDist`, CSP and capability file per D11), and a `main` that opens an empty window. Verify with `cargo clippy -p mbv-gui --all-targets -- -D warnings` and `cargo tree -p mbv` showing no `tauri`, `wry`, or `webkit2gtk`.
 - [ ] 1.3 Add `crates/mbv-gui/ui/` with pnpm, Vite, Svelte 5, TypeScript, Tailwind CSS 4, shadcn-svelte (init, no components yet), `@lucide/svelte`, and vitest with `@testing-library/svelte`. Add `make` targets for install, build, check (svelte-check), lint, and test. Verify with those targets.
 
@@ -37,5 +37,4 @@ Implementation starts after `extract-client-core` (PR #984) merges.
 
 ## Workflow follow-up
 
-- The user runs the live check of the GUI window on their desktop.
 - Sync and archive this change only when the user approves the PR for merge, as the last commit before the merge.

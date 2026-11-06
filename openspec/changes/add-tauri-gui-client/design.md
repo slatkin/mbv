@@ -43,7 +43,11 @@ crates/mbv-gui/            Tauri 2 binary `mbv-gui`; links the `mbv` library
 
 ### D2. Versions
 
-Every dependency starts at its latest stable release, checked on 2026-11-06: `tauri` 2.12.5 (MSRV 1.90) and `tauri-build` 2.7.4; `@tauri-apps/api` and `@tauri-apps/cli` 2.12.4; `svelte` 5.57.3; `vite` 8.3.6 with `@sveltejs/vite-plugin-svelte` 7.3.1; `tailwindcss` 4.3.4; `shadcn-svelte` 1.8.0 (on `bits-ui` 2.20.6); `@lucide/svelte` 1.70.0; `typescript` 7.0.2; `vitest` 5.1.0 with `@testing-library/svelte` 5.4.2; pnpm 12. The scaffold task re-checks each version and its peer ranges on the day it runs. When a latest release does not fit a peer range, the implementer stops and asks the user. The implementer does not silently pick an older release.
+Every dependency starts at its latest stable release, checked on 2026-11-06: `tauri` 2.12.5 (MSRV 1.90) and `tauri-build` 2.7.4; `@tauri-apps/api` and `@tauri-apps/cli` 2.12.4; `svelte` 5.57.3; `vite` 8.3.6 with `@sveltejs/vite-plugin-svelte` 7.3.1; `tailwindcss` 4.3.4; `shadcn-svelte` 1.8.0 (on `bits-ui` 2.20.6); `@lucide/svelte` 1.70.0; `vitest` 5.1.0 with `@testing-library/svelte` 5.4.2; `svelte-check` 4.7.8; pnpm 12. The peer ranges of these releases fit one another (checked 2026-11-06).
+
+One exception: `typescript` is 6.0.3, the latest 6.x, not the latest release 7.0.2. `svelte-check` 4.7.8 accepts only `typescript` `^5.0.0 || ^6.0.0`, and the type check is a gate (task 1.3). Move to 7.x when a `svelte-check` release accepts it.
+
+The scaffold uses exactly these versions. A peer conflict that appears at scaffold time is a design gap: the implementer reports it and does not pick a version.
 
 ### D3. The Client core runs on its own thread
 
@@ -114,7 +118,7 @@ The front end loads only the bundled assets. The CSP allows only `'self'` and Ta
 - [WebKitGTK on some GPU and Wayland setups shows a blank window (the DMA-BUF renderer)] → The user's live check covers their setup. The workaround, `WEBKIT_DISABLE_DMABUF_RENDERER=1`, is documented. The app does not set it by default.
 - [IPC per key and per pointer event adds latency] → Tauri IPC is local and takes well under one frame. The spec requires only next-frame response.
 - [`LayoutReport` traffic on resize] → The front end sends it only when a region moved, at most once per animation frame.
-- [The newest TypeScript or Vite release may not yet fit a Svelte, shadcn-svelte, or svelte-check peer range] → D2: stop and ask. Do not downgrade silently.
+- [TypeScript stays one major behind its latest release] → D2 records the reason (the `svelte-check` peer range) and the condition to move.
 - [Two toolchains (cargo and pnpm)] → `make` targets wrap the pnpm steps. CI adds one front-end job.
 - [The GUI links ratatui, crossterm, and TuiRealm through the `mbv` library] → Accepted, as in `extract-client-core` D2.
 - [The front end grows its own behaviour over time] → The `gui-client` requirement "The window content holds no interaction state" and the reload scenario make that drift a spec failure.
