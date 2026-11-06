@@ -223,10 +223,12 @@ The queue column's backdrop — the `queueColumn` pair, picked on the
 frame's Panel-focus fact — owns the window. The Queue playback band sits
 one row below the column's top edge and two columns inside it with a gap
 row below. Its header row paints in every state — target icon, remote
-host name, right-aligned status word — and the now-playing title paints
-on its own row below it: where the TUI composites the title into the
-artwork's top text row with a scrolling marquee, the GUI truncates it
-with CSS ellipsis. The transport band keeps the TUI's width-driven
+host name, the now-playing title in its zone between them, and the
+right-aligned status word: the TUI's `Header` title site, which is the
+site the GUI's slot projection records, because the GUI's slot carries
+the base art with no composed title overlay; the title truncates with
+CSS ellipsis where the TUI's marquee scrolls it (the frame carries no
+clock). The transport band keeps the TUI's width-driven
 arrangement (100 column cells): below it the visual slot's art centers
 above the stacked band rows, and at and over it the art sits
 left-aligned with the band rows beside it after the two-column
@@ -242,7 +244,8 @@ spacer, and the item rows zebra-stripe as the TUI's `media_list/wide.rs`
 walk paints them: the frame carries each row's parity — a grouped list
 alternates within each group from its first member, an ungrouped list
 throughout — and a striped row takes the `queueColumn` fill inside the
-box. The footer row
+box, resolved on the list's interaction focus (the TUI's palette bit),
+not on the Panel-focus fact the box and column fills use. The footer row
 paints below the box between gap rows on the `queueFooterBand` fill. The
 list paints no scrollbar column yet — the TUI reserves one only while
 the list is focused and overflows. The Status bar floats over the
