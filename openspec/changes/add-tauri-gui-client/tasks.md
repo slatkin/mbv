@@ -34,7 +34,7 @@ Implementation starts after `extract-client-core` (PR #984) merges.
 ## 5. Integration checks
 
 - [ ] 5.1 Build `ui/`, then run `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo nextest run --workspace`, `cargo nextest run -p mbv-gui`, and the front-end `make` check, lint, and test targets.
-- [ ] 5.2 Update CI per D14: add `webkit2gtk-4.1` and pnpm to the pacman installs of the `build` and feature-matrix jobs, and build `ui/` before their clippy and `cargo hack` steps. Add one GUI job that runs `cargo nextest run -p mbv-gui` and the front-end check, lint, and test targets.
+- [x] 5.2 Update CI per D14: add `webkit2gtk-4.1` and pnpm to the pacman installs of the `build` and feature-matrix jobs, and build `ui/` before their clippy and `cargo hack` steps. Add one GUI job that runs `cargo nextest run -p mbv-gui` and the front-end check, lint, and test targets.
 - [ ] 5.3 Add a `make dev` target that builds `ui/` and runs the GUI Client (`cargo run -p mbv-gui`), so a developer starts the window with one command. Document it in `docs/architecture/gui-client.md`.
 
 ## Workflow follow-up
