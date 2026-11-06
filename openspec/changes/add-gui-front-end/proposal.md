@@ -31,11 +31,11 @@ The TUI gives mbv a controlled, keyboard-first interaction model. But it ties th
 
 ## Impact
 
-- New crates: `crates/mbv-surfaces` (Surface state and focus stack, no ratatui, TuiRealm, or crossterm) and `crates/mbv-gui` (binary, eframe/egui, wgpu or glow).
+- New crates: `crates/mbv-surfaces` (Surface state and focus stack, no ratatui, TuiRealm, or crossterm) and `crates/mbv-gui` (binary, eframe 0.37, glow renderer).
 - The root `mbv` package gets a library target so `mbv-gui` can share the shell `App`, dispatch, router, and Owner launch and attach code. The `mbv` binary does not link eframe, egui, or wgpu.
 - `crates/mbv-components`: the Queue, Queue playback, and Status bar components become thin TuiRealm adapters over Surface state. The framework-free list modules (`list/cursor.rs`, `list/viewport.rs`, `list/row_flow.rs`, `list/marks.rs`) move to `mbv-surfaces`.
 - `src/app/input/`: the router and key policy move from `crossterm::event` to the neutral key type. crossterm keys are translated at the TUI edge.
 - `src/app/shell/`: the run loop splits into a Client-neutral tick (runtime drains, Owner snapshot adoption, effects) and a TUI driver. About 51 TuiRealm `active`/`mount`/`umount` call sites start to follow the core focus stack.
 - `crates/mbv-theme`: roles resolve to a neutral RGB value. ratatui colour conversion moves to the TUI edge.
 - Docs: a new ADR, `CONTEXT.md` terms (GUI Client, TUI Client, Client core, Surface state), `docs/architecture/tui-frontend.md`, and the interactive surface ledger.
-- CI build time grows by the eframe/wgpu dependency tree for the workspace build.
+- CI build time: the D8/7.2 decision keeps `mbv-gui` out of `default-members`, so the CI release build and nextest run skip it; CI clippy (`--workspace`), fmt, and the cargo-hack feature matrix cover it.
