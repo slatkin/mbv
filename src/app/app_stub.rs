@@ -27,9 +27,8 @@ fn apply_app_stub_defaults(app: &mut App) {
     app.images.set_cache_capacity_for_test(50);
     // Ignore any on-disk feed entry state; a stub starts empty.
     app.feed_entry_state = mbv_feed::FeedEntryStore::default();
-    // Default to "focused, past grace window" so existing mouse tests dispatch
-    // without arming focus explicitly. The refocus guard itself is tested
-    // directly in input_music_track_focus_tests.
+    // Default to a focused window that reported focus in the past, so
+    // existing mouse tests dispatch without arming focus explicitly.
     app.refocus_at = Some(
         std::time::Instant::now()
             .checked_sub(std::time::Duration::from_secs(5))
