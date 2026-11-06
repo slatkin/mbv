@@ -37,7 +37,7 @@ impl App {
                 // immediately (the spawned daemon reacquires it for real)
                 // before attaching as a client.
                 drop(guard);
-                crate::local_daemon::spawn_detached(&socket_path.to_string_lossy(), None)?;
+                self.start_local_daemon()?;
             }
             Ok(crate::single_instance::Resolution::Refuse) => {
                 return Err(std::io::Error::other(
@@ -56,8 +56,7 @@ impl App {
 
         let (remote, remote_rx) = RemotePlayer::connect_endpoint(
             &DaemonEndpoint::Local,
-            crate::pin::is_pinned(),
-            crate::pin::swap_token(),
+            crate::pin::pin_swap_hello().as_ref(),
         )
         .map_err(|error| {
             std::io::Error::other(format!("failed to attach to local daemon: {error}"))
@@ -77,7 +76,7 @@ impl App {
         self.playback_output = None;
         let always_play_next = self.config.lock().unwrap().always_play_next;
         self.player = PlayerProxy::from_remote(remote, always_play_next);
-        self.player_rx = remote_rx;
+        self.player_rx = self.waking_player_rx(remote_rx);
         self.suspended_local = None;
         self.rebind_mpris_to_current_player();
 

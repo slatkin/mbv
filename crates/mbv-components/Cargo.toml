@@ -17,11 +17,12 @@ workspace = true
 test = ["mbv-ui-msg/test", "mbv-render/test"]
 
 [dependencies]
+mbv-surfaces = { path = "../mbv-surfaces" }
 mbv-ui-msg = { path = "../mbv-ui-msg" }
 mbv-render = { path = "../mbv-render" }
 mbv-ui-model = { path = "../mbv-ui-model" }
 mbv-images = { path = "../mbv-images" }
-mbv-theme = { path = "../mbv-theme" }
+mbv-theme = { path = "../mbv-theme", features = ["ratatui"] }
 mbv-text = { path = "../mbv-text" }
 mbv-queue = { path = "../mbv-queue" }
 mbv-config = { path = "../mbv-config" }

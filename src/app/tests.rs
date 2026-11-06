@@ -40,6 +40,10 @@ use ratatui::backend::TestBackend;
 
 use ratatui::Terminal;
 
+// The App stub construction moved to `app_stub` so the Clients' own tests
+// can build it too; the `crate::app::tests::*` paths stay working.
+pub(crate) use super::app_stub::{make_app_stub, make_built_app};
+
 // ── test helpers ─────────────────────────────────────────────────────────
 
 /// Confirm the populated-queue replacement gate the way the shell's confirm
@@ -47,10 +51,10 @@ use ratatui::Terminal;
 pub(crate) fn confirm_replace_queue(app: &mut App) {
     app.apply_confirm_action(
         crate::app::ConfirmAction::ReplacePopulatedQueue,
-        crossterm::event::KeyEvent::new(
+        crate::app::test_seams::crossterm_key_to_neutral(crossterm::event::KeyEvent::new(
             crossterm::event::KeyCode::Enter,
             crossterm::event::KeyModifiers::NONE,
-        ),
+        )),
     );
 }
 
@@ -174,26 +178,6 @@ pub(crate) fn make_audio_items(n: usize) -> Vec<EmbyItem> {
         .collect()
 }
 
-/// Minimal App stub for logic-only tests: the ordinary `App::build`
-/// construction (`make_built_app`) plus the stub-friendly defaults below.
-pub(crate) fn make_app_stub() -> App {
-    let mut app = make_built_app();
-    apply_app_stub_defaults(&mut app);
-    app
-}
-
-fn apply_app_stub_defaults(app: &mut App) {
-    // `build` doubles the configured image cache size; the stub keeps its
-    // original (undoubled) budget so eviction behaviour is unchanged.
-    app.images.set_cache_capacity_for_test(50);
-    // Ignore any on-disk feed entry state; a stub starts empty.
-    app.feed_entry_state = mbv_feed::FeedEntryStore::default();
-    // Default to "focused, past grace window" so existing mouse tests dispatch
-    // without arming focus explicitly. The refocus guard itself is tested
-    // directly in input_music_track_focus_tests.
-    app.refocus_at = Some(Instant::now().checked_sub(Duration::from_secs(5)).unwrap());
-}
-
 /// Re-anchor a stub app onto a fresh remote stub with a live command
 /// channel, returning the receiver the test must hold so owner-bound
 /// commands report success instead of a dropped-peer disconnect. Unit 4
@@ -262,57 +246,6 @@ fn stale_emby_completion_does_not_change_runtime_or_home() {
         content.is_none(),
         "stale completion must not deliver a Home content snapshot"
     );
-}
-
-pub(crate) fn make_built_app() -> App {
-    use mbv_player::PlayerProxy;
-    use std::sync::Mutex;
-
-    let (remote, player_rx) = mbv_remote_player::RemotePlayer::stub(Vec::new(), 0);
-    remote.update_status(|status| status.volume_max = 100);
-    let (_, ws_rx) = std::sync::mpsc::channel();
-    let (_, transport_rx) = std::sync::mpsc::channel();
-    let (card_image_tx, card_image_rx) = std::sync::mpsc::channel();
-    let channels = crate::app::state::runtime_channels::RuntimeChannels::new();
-
-    let player = PlayerProxy::from_remote(remote, false);
-
-    let config = crate::config::Config::default();
-
-    App::build(AppInit {
-        config: Arc::new(Mutex::new(config)),
-        emby_runtime: crate::app::state::service_runtime::EmbyRuntime::default(),
-        audiobookshelf_runtime: crate::app::state::service_runtime::AudiobookshelfRuntime::new(
-            false,
-        ),
-        player,
-        player_rx,
-        ws_rx,
-        transport_rx,
-        ws_send_tx: None,
-        audiobookshelf_socket_rx: {
-            let (_, rx) = std::sync::mpsc::channel();
-            rx
-        },
-        audiobookshelf_socket_tx: None,
-        audiobookshelf_socket_generation: None,
-        local_view: QueueView::default(),
-        remote_view: None,
-        system_notifications: false,
-        image_protocol: None,
-        image_protocol_enabled: false,
-        hidden_libraries: Vec::new(),
-        library_routes: std::collections::BTreeMap::new(),
-        music_levels: Vec::new(),
-        use_nerd_fonts: false,
-        indicator_style: mbv_render::indicators::IndicatorStyle::default(),
-        image_cache_size: 50,
-        visualizer_glyph: crate::config::DEFAULT_VISUALIZER_GLYPH.into(),
-        card_image_tx,
-        card_image_rx,
-        channels,
-        idle_feed: None,
-    })
 }
 
 pub(crate) fn install_test_emby(app: &mut App, config: crate::config::Config) {

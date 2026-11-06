@@ -15,8 +15,9 @@ use tuirealm::state::State;
 use unicode_width::UnicodeWidthStr;
 
 use super::list::{ThreeLineFlatList, Viewported};
-use super::mouse::gesture::{MouseGesture, MouseGestureState};
+use super::mouse::gesture::MouseGestureState;
 use mbv_render::components::three_line_flat_list::{ThreeLineItem, ThreeLineRole, ThreeLineSpan};
+use mbv_surfaces::gesture::PointerGesture;
 use mbv_theme as palette;
 use mbv_ui_model::panel_targets::{SessionTargetKey, SessionTargetRow};
 use mbv_ui_msg::UserEvent;
@@ -69,7 +70,7 @@ impl SessionsComponent {
             transfer_gates: mbv_ui_model::panel_targets::SessionTransferGates::default(),
             display: SessionsDisplayContext {
                 use_nerd_fonts: false,
-                emby_color: palette::Role::TextMuted.color(),
+                emby_color: palette::Role::TextMuted.color().to_ratatui(),
             },
             requested_panel_area: None,
             painted_panel_area: None,
@@ -253,7 +254,7 @@ impl SessionsComponent {
             return None;
         }
         match self.mouse_gestures.recognize(mouse)? {
-            MouseGesture::Scroll { delta, .. } => {
+            PointerGesture::Scroll { delta, .. } => {
                 // Focus-owned wheel while the Sessions overlay is the sole
                 // eligible one (wheel-scrolls-viewport): the shared viewport
                 // scroll takes the gesture delta; selection and cursor stay.
@@ -262,7 +263,7 @@ impl SessionsComponent {
                 self.list.scroll_viewport(delta);
                 Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
             }
-            MouseGesture::Click { at, .. } | MouseGesture::DoubleClick(at) => {
+            PointerGesture::Click { at, .. } | PointerGesture::DoubleClick(at) => {
                 if !self
                     .painted_panel_area
                     .is_some_and(|area| area.contains(at))
@@ -379,7 +380,7 @@ impl SessionsComponent {
                         let (kind, kind_w) = self.kind_span(
                             "[CAST] ",
                             glyph,
-                            palette::Role::TextFocusAccent.color(),
+                            palette::Role::TextFocusAccent.color().to_ratatui(),
                         );
                         [
                             vec![

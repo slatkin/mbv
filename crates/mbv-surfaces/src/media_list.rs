@@ -1,0 +1,672 @@
+//! The canonical media-list owner: the one Surface state for one logical
+//! provider-neutral media-row flow (extract-client-core design D5).
+//!
+//! [`MediaList`] holds the rows, the cursor, the resting scroll offset, the
+//! mark set, and the viewport anchor. Presentations embed or receive this
+//! owner; they never maintain a second cursor, scroll, selectable index, or
+//! selected-target state. It depends on no terminal library, terminal UI
+//! framework, or GUI toolkit.
+
+use mbv_ui_model::media_list::{MediaListRow, MediaListTitleReveal, SelectionOrigin};
+use mbv_ui_msg::{Key, KeyEvent, KeyModifiers, SelectionSummary};
+use std::time::Instant;
+
+use crate::list::{
+    Cursored, MarkSelection, MarkSelectionState, Row, RowFlow, ViewportAnchor, Viewported,
+    scrolled_viewport_offset,
+};
+
+mod selection;
+mod types;
+
+#[doc(inline)]
+pub use self::types::{
+    MediaListDisposition, MediaListOperation, MediaListTransition, RowIntent, WideViewport,
+};
+
+/// The flat shape's fixed selectable-row page distance (design D4). Flat
+/// lists keep a fixed row count per page; the tree owns its own policy.
+const PAGE_DISTANCE: i64 = 5;
+
+/// What one neutral visual-mode key did to the mark set.
+///
+/// `marks_replaced` marks the arms that swap the whole mark set (select-all,
+/// enter Visual mode). A presentation invalidates its painted mark geometry
+/// on those arms; incremental arms keep the completed frame's facts valid.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct VisualKeyOutcome {
+    pub selected: usize,
+    pub marks_replaced: bool,
+}
+
+/// The one borrowed view of the owner's presentation facts for one frame's
+/// paint: the display rows, the mark set, the title-reveal policy, and the
+/// marquee clock the painter advances. One borrow so a presentation can read
+/// the rows while the painter advances the marquee clock in place.
+#[derive(Debug)]
+pub struct MediaListPaintBorrow<'a, Target> {
+    pub rows: &'a [MediaListRow<Target>],
+    pub multi_selection: &'a [Target],
+    pub title_reveal: MediaListTitleReveal,
+    pub marquee_text: &'a mut String,
+    pub marquee_started_at: &'a mut Instant,
+}
+
+/// The single canonical owner for one logical provider-neutral media-row flow.
+///
+/// Presentations embed or receive this owner; they never maintain a second
+/// cursor, scroll, selectable index, or selected-target state.
+#[derive(Debug)]
+pub struct MediaList<Target> {
+    /// Every display row in paint order.
+    rows: Vec<MediaListRow<Target>>,
+    /// Indices into `rows` that are selectable `Item`s, ascending. Rebuilt
+    /// only by `set_content`.
+    selectable: Vec<usize>,
+    /// Index into `selectable`; `0` when nothing is selectable.
+    cursor: usize,
+    /// Display-row index parked at the viewport top. Height-aware clamping
+    /// happens in `resolve_viewport` at paint time.
+    scroll: usize,
+    /// Stable targets selected for a bulk action, in selection order.
+    multi_selection: MarkSelectionState<Target>,
+    /// The stable target from which range selection is extended.
+    selection_anchor: Option<Target>,
+    /// Selection retained when a live range is re-anchored or extended.
+    frozen_selection: Vec<Target>,
+    /// Whether cursor movement currently recomputes the anchored range.
+    live_range: bool,
+    /// The list's title-reveal policy (see [`MediaListTitleReveal`]).
+    title_reveal: MediaListTitleReveal,
+    marquee_text: String,
+    marquee_started_at: Instant,
+    /// Whether the viewport follows the selection or was freely scrolled.
+    viewport_anchor: ViewportAnchor,
+}
+
+impl<Target> Default for MediaList<Target> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<Target> MediaList<Target> {
+    /// Creates an empty canonical owner for one logical row flow.
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            rows: Vec::new(),
+            selectable: Vec::new(),
+            cursor: 0,
+            scroll: 0,
+            multi_selection: MarkSelectionState::new(),
+            selection_anchor: None,
+            frozen_selection: Vec::new(),
+            live_range: false,
+            title_reveal: MediaListTitleReveal::Always,
+            marquee_text: String::new(),
+            marquee_started_at: Instant::now(),
+            viewport_anchor: ViewportAnchor::default(),
+        }
+    }
+
+    /// Declare how this list's rows reveal their titles.
+    pub fn set_title_reveal(&mut self, policy: MediaListTitleReveal) {
+        self.title_reveal = policy;
+    }
+
+    /// The list's declared title-reveal policy.
+    #[must_use]
+    pub const fn title_reveal(&self) -> MediaListTitleReveal {
+        self.title_reveal
+    }
+
+    pub fn marquee_state(&mut self, text: &str) -> (String, Instant) {
+        if self.marquee_text != text {
+            self.marquee_text.clear();
+            self.marquee_text.push_str(text);
+            self.marquee_started_at = Instant::now();
+        }
+        (self.marquee_text.clone(), self.marquee_started_at)
+    }
+
+    /// The marquee clock the painter advances in place.
+    #[must_use]
+    pub fn marquee_mut(&mut self) -> (&mut String, &mut Instant) {
+        (&mut self.marquee_text, &mut self.marquee_started_at)
+    }
+
+    /// The one borrowed view of the owner's presentation facts for a paint.
+    #[must_use]
+    pub fn paint_borrow(&mut self) -> MediaListPaintBorrow<'_, Target> {
+        MediaListPaintBorrow {
+            rows: &self.rows,
+            multi_selection: self.multi_selection.targets(),
+            title_reveal: self.title_reveal,
+            marquee_text: &mut self.marquee_text,
+            marquee_started_at: &mut self.marquee_started_at,
+        }
+    }
+
+    /// Every display row in paint order.
+    #[must_use]
+    pub fn rows(&self) -> &[MediaListRow<Target>] {
+        &self.rows
+    }
+
+    /// No selectable rows at all.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.selectable.is_empty()
+    }
+
+    /// The cursor as an index into the selectable rows.
+    #[must_use]
+    pub const fn cursor(&self) -> usize {
+        self.cursor
+    }
+
+    /// The display-row index the cursor currently points at.
+    #[must_use]
+    pub fn selected_display_row(&self) -> Option<usize> {
+        self.selectable.get(self.cursor).copied()
+    }
+
+    /// The stable identity under the cursor.
+    #[must_use]
+    pub fn selected_target(&self) -> Option<&Target> {
+        self.selectable
+            .get(self.cursor)
+            .and_then(|&row| self.rows[row].selectable_target())
+    }
+
+    /// The resting scroll offset (pre height-aware clamp).
+    #[must_use]
+    pub const fn scroll(&self) -> usize {
+        self.scroll
+    }
+
+    /// Store the offset a painter resolved, so the next frame resumes from it.
+    pub fn set_scroll(&mut self, offset: usize) {
+        self.scroll = offset.min(self.rows.len().saturating_sub(1));
+    }
+
+    /// Stable targets currently selected for a bulk action.
+    #[must_use]
+    pub fn multi_selection(&self) -> &[Target] {
+        self.multi_selection.targets()
+    }
+
+    /// A non-empty multi-selection is Visual mode.
+    #[must_use]
+    pub fn is_visual_mode(&self) -> bool {
+        !self.multi_selection.is_empty()
+    }
+
+    /// Whether cursor movement currently recomputes the anchored range.
+    #[must_use]
+    pub const fn live_range(&self) -> bool {
+        self.live_range
+    }
+
+    /// Move the cursor by `delta` selectable rows, clamped to the ends.
+    pub fn move_selection(&mut self, delta: i64)
+    where
+        Target: Clone + Eq,
+    {
+        let flow = self.row_flow();
+        Cursored::move_by(
+            self,
+            &flow,
+            isize::try_from(delta).unwrap_or(if delta.is_negative() {
+                isize::MIN
+            } else {
+                isize::MAX
+            }),
+        );
+    }
+
+    pub fn select_first(&mut self)
+    where
+        Target: Clone + Eq,
+    {
+        let flow = self.row_flow();
+        Cursored::first(self, &flow);
+    }
+
+    pub fn select_last(&mut self)
+    where
+        Target: Clone + Eq,
+    {
+        let flow = self.row_flow();
+        Cursored::last(self, &flow);
+    }
+
+    /// Place the cursor at selectable index `index`, clamped to the last row.
+    pub fn select_index(&mut self, index: usize)
+    where
+        Target: Clone + Eq,
+    {
+        let flow = self.row_flow();
+        Cursored::select_selectable_ordinal(self, &flow, index);
+    }
+
+    /// The display rows as the seam's ordered row flow.
+    #[must_use]
+    pub fn row_flow(&self) -> RowFlow<Target>
+    where
+        Target: Clone,
+    {
+        RowFlow::new(
+            self.rows
+                .iter()
+                .map(|row| {
+                    row.selectable_target()
+                        .cloned()
+                        .map_or_else(Row::structural, Row::selectable)
+                })
+                .collect(),
+        )
+    }
+
+    /// The clamped viewport for a painted `viewport_height`, keeping the
+    /// selected row on screen.
+    #[must_use]
+    pub fn resolve_viewport(&self, viewport_height: usize) -> WideViewport
+    where
+        Target: Clone + Eq,
+    {
+        let flow = self.row_flow();
+        let offset = Viewported::resolved_viewport_offset(
+            self,
+            &flow,
+            viewport_height,
+            self.selected_display_row(),
+        );
+        WideViewport {
+            offset,
+            height: viewport_height.max(1),
+            total_rows: self.rows.len(),
+        }
+    }
+}
+
+impl<Target: Clone + Eq> MediaList<Target> {
+    /// The neutral visual-mode key rule (moved from the destination-side
+    /// carrier, extract-client-core row 4.3): Ctrl+A selects every row, Shift+V
+    /// begins Visual mode at the cursor, and inside Visual mode an unmodified
+    /// Escape clears the marks and an unmodified Space toggles the cursor row.
+    /// The outcome reports the mark count and whether the whole set was
+    /// replaced; no other key touches the marks.
+    pub fn handle_visual_key(&mut self, key: &KeyEvent) -> Option<VisualKeyOutcome> {
+        if key.code == Key::Char('a') && key.modifiers.contains(KeyModifiers::CONTROL) {
+            self.select_all();
+            return Some(self.outcome(true));
+        }
+        if matches!(key.code, Key::Char('v' | 'V')) && key.modifiers == KeyModifiers::SHIFT {
+            self.enter_visual_mode();
+            return Some(self.outcome(true));
+        }
+        if !self.is_visual_mode() || !key.modifiers.is_empty() {
+            return None;
+        }
+        match key.code {
+            Key::Esc => {
+                self.clear_selection();
+                Some(self.outcome(false))
+            }
+            Key::Char(' ') => {
+                let target = self.selected_target()?.clone();
+                self.toggle_selection(&target);
+                Some(self.outcome(false))
+            }
+            _ => None,
+        }
+    }
+
+    fn outcome(&self, marks_replaced: bool) -> VisualKeyOutcome {
+        VisualKeyOutcome {
+            selected: self.multi_selection.len(),
+            marks_replaced,
+        }
+    }
+    /// D3: the wheel releases the viewport to free following and leaves every
+    /// selection fact — cursor, multi-selection, live range — untouched. The
+    /// caller supplies the painted viewport length; the canonical owner with
+    /// no painted geometry passes the minimal viewport guarantee, and the
+    /// presentation's resolve applies the real height on the next frame it
+    /// paints. #926: the offset arithmetic needs only the row count, so the
+    /// wheel's hot path never builds a row flow.
+    fn scroll_wheel(&mut self, delta: i64, viewport_len: usize) {
+        let offset = scrolled_viewport_offset(
+            Viewported::viewport_offset(self),
+            delta,
+            self.rows.len(),
+            viewport_len,
+        );
+        self.set_scroll(offset);
+        Viewported::set_viewport_anchor(self, ViewportAnchor::Free);
+    }
+
+    /// Restore following the selection unless the operation keeps a free
+    /// viewport. The re-anchor requirement in
+    /// `openspec/specs/shared-list-components/spec.md` and invariant 23
+    /// name the kept operations; this function only applies them.
+    fn re_anchor_selection_following(&mut self, operation: &MediaListOperation<Target>) {
+        if matches!(
+            operation,
+            MediaListOperation::Scroll(_) | MediaListOperation::Context(_)
+        ) {
+            return;
+        }
+        self.set_viewport_anchor(ViewportAnchor::FollowSelection);
+    }
+
+    /// Apply a target-resolved operation and report all independent effects.
+    /// The canonical owner has no painted geometry, so it clamps the wheel
+    /// with the minimal viewport guarantee (design D3).
+    pub fn delegate_operation(
+        &mut self,
+        operation: MediaListOperation<Target>,
+    ) -> MediaListTransition<Target> {
+        self.delegate_operation_with_viewport_len(operation, 1)
+    }
+
+    /// Sibling of [`Self::delegate_operation`] for presentations that know
+    /// their painted viewport height (design D3): `viewport_len` clamps the
+    /// `Scroll` arm's wheel offset.
+    pub fn delegate_operation_with_viewport_len(
+        &mut self,
+        operation: MediaListOperation<Target>,
+        viewport_len: usize,
+    ) -> MediaListTransition<Target> {
+        let before = self.selected_target().cloned();
+        let before_count = self.multi_selection.len();
+        let extends_range = matches!(
+            operation,
+            MediaListOperation::Move(_)
+                | MediaListOperation::Page(_)
+                | MediaListOperation::First
+                | MediaListOperation::Last
+        );
+        self.re_anchor_selection_following(&operation);
+        // D3: the wheel scrolls the viewport without touching the selection,
+        // so a scroll's disposition reports only its own offset change, not
+        // the selection-driven rule below. The offset is read here, before
+        // the match mutates the owner.
+        let scroll_before = match &operation {
+            MediaListOperation::Scroll(_) => Some(Viewported::viewport_offset(self)),
+            _ => None,
+        };
+        let external_intent = match operation {
+            MediaListOperation::Move(delta) => {
+                self.move_selection(delta);
+                None
+            }
+            MediaListOperation::Page(delta) => {
+                self.move_selection(delta.saturating_mul(PAGE_DISTANCE));
+                None
+            }
+            MediaListOperation::Scroll(delta) => {
+                self.scroll_wheel(delta, viewport_len);
+                None
+            }
+            MediaListOperation::First => {
+                self.select_first();
+                None
+            }
+            MediaListOperation::Last => {
+                self.select_last();
+                None
+            }
+            MediaListOperation::ActivateCurrent => {
+                self.selected_target().cloned().map(RowIntent::Activate)
+            }
+            MediaListOperation::ContextCurrent => self
+                .selected_target()
+                .cloned()
+                .map(|target| self.context_intent(target)),
+            MediaListOperation::Select(target) => {
+                self.clear_selection();
+                self.select_target(&target);
+                None
+            }
+            MediaListOperation::Toggle(target) => {
+                self.toggle_selection(&target);
+                self.select_target(&target);
+                None
+            }
+            MediaListOperation::Range(target) => {
+                self.extend_selection_to(&target);
+                self.select_target(&target);
+                None
+            }
+            MediaListOperation::Activate(target) => {
+                self.select_target(&target);
+                Some(RowIntent::Activate(target))
+            }
+            MediaListOperation::Context(target) => Some(self.context_intent(target)),
+        };
+        if extends_range
+            && self.live_range
+            && let Some(target) = self.selected_target().cloned()
+        {
+            self.extend_selection_to(&target);
+        }
+        let after = self.selected_target().cloned();
+        let disposition = if let Some(offset_before) = scroll_before {
+            // A scroll's disposition is its own offset change: `Unhandled` at
+            // a boundary, `Consumed` when the viewport actually moved.
+            if Viewported::viewport_offset(self) == offset_before {
+                MediaListDisposition::Unhandled
+            } else {
+                MediaListDisposition::Consumed
+            }
+        } else if before.is_some()
+            || after.is_some()
+            || external_intent.is_some()
+            || before_count != self.multi_selection.len()
+        {
+            MediaListDisposition::Consumed
+        } else {
+            MediaListDisposition::Unhandled
+        };
+        MediaListTransition {
+            disposition,
+            selected_target: (before != after).then_some(after).flatten(),
+            selection_summary: (before_count != self.multi_selection.len()).then_some(
+                SelectionSummary {
+                    count: self.multi_selection.len(),
+                    origin: SelectionOrigin::Queue,
+                },
+            ),
+            external_intent,
+        }
+    }
+}
+
+impl<Target: Clone + Eq> MediaList<Target> {
+    /// Content-preserving presentation reset (design D3): keep the projected
+    /// rows, drop transient multi-selection, and return the cursor and
+    /// resting scroll to their normal initial position. `cursor` indexes
+    /// `selectable`, so `0` is already the first selectable row for both
+    /// plain and grouped flows.
+    pub fn reset_presentation(&mut self) {
+        self.cursor = 0;
+        self.scroll = 0;
+        self.multi_selection.clear();
+        self.frozen_selection.clear();
+        self.selection_anchor = None;
+        self.live_range = false;
+    }
+
+    /// The selectable-index position of `target`, if it is present.
+    fn position_of(&self, target: &Target) -> Option<usize> {
+        self.selectable
+            .iter()
+            .position(|&row| self.rows[row].selectable_target() == Some(target))
+    }
+
+    /// Move the cursor to `target` when it is present; returns whether it was.
+    pub fn select_target(&mut self, target: &Target) -> bool {
+        match self.position_of(target) {
+            Some(index) => {
+                self.cursor = index;
+                true
+            }
+            None => false,
+        }
+    }
+}
+
+impl<Target: Clone + Eq> MediaList<Target> {
+    fn context_intent(&mut self, target: Target) -> RowIntent<Target> {
+        if self.is_visual_mode() {
+            if self
+                .multi_selection
+                .targets()
+                .iter()
+                .any(|selected| selected == &target)
+            {
+                let flow = self.row_flow();
+                let targets = MarkSelection::action_targets(self, &flow);
+                RowIntent::ContextSelection(targets)
+            } else {
+                self.clear_selection();
+                RowIntent::Context(target)
+            }
+        } else {
+            RowIntent::Context(target)
+        }
+    }
+
+    /// Begin keyboard Visual mode, anchored at the current cursor target.
+    pub fn enter_visual_mode(&mut self) {
+        if let Some(target) = self.selected_target().cloned() {
+            if self.multi_selection.is_empty() {
+                self.multi_selection.add(target.clone());
+                self.frozen_selection.clear();
+            } else {
+                self.frozen_selection = self.multi_selection.targets().to_vec();
+            }
+            self.selection_anchor = Some(target);
+            self.live_range = true;
+        }
+    }
+
+    /// Replace one existing row by stable target without rebuilding indexes or
+    /// disturbing selection/scroll. This is for live presentation patches.
+    pub fn patch_row(&mut self, target: &Target, row: MediaListRow<Target>) -> bool {
+        let Some(index) = self
+            .rows
+            .iter()
+            .position(|existing| existing.selectable_target() == Some(target))
+        else {
+            return false;
+        };
+        self.rows[index] = row;
+        true
+    }
+
+    /// Replace the display rows. The selected target is preserved when it is
+    /// still present; a vanished target resolves through the shared cursor seam
+    /// to the first selectable row, never from a carried-over numeric position
+    /// (`shared-list-components`: "Content replacement preserves selection by
+    /// stable identity"). Structural rows are filtered out of the selectable
+    /// index here so they can never become selected.
+    pub fn set_content(&mut self, rows: Vec<MediaListRow<Target>>) {
+        let previous = self.selected_target().cloned();
+        self.rows = rows;
+        self.selectable = self
+            .rows
+            .iter()
+            .enumerate()
+            .filter(|(_, row)| row.selectable_target().is_some())
+            .map(|(index, _)| index)
+            .collect();
+        if let Some(target) = previous {
+            let flow = self.row_flow();
+            Cursored::select_target(self, &flow, &target);
+        } else {
+            self.cursor = self.cursor.min(self.selectable.len().saturating_sub(1));
+        }
+        if self.selectable.is_empty() {
+            self.cursor = 0;
+        }
+        let present: Vec<Target> = self
+            .selectable
+            .iter()
+            .filter_map(|&row| self.rows[row].selectable_target().cloned())
+            .collect();
+        self.multi_selection
+            .retain(|target| present.contains(target));
+        self.frozen_selection
+            .retain(|target| present.contains(target));
+        if self
+            .selection_anchor
+            .as_ref()
+            .is_some_and(|target| !present.contains(target))
+        {
+            self.selection_anchor = self.selected_target().cloned();
+        }
+        if self.multi_selection.is_empty() {
+            self.frozen_selection.clear();
+            self.selection_anchor = None;
+            self.live_range = false;
+        }
+        let flow = self.row_flow();
+        Viewported::clamp_viewport(self, &flow, 1);
+    }
+}
+
+impl<Target: Clone + Eq> Cursored<Target> for MediaList<Target> {
+    fn selected_target(&self) -> Option<&Target> {
+        self.selected_target()
+    }
+
+    fn set_selected_target(&mut self, target: Option<&Target>) {
+        if let Some(target) = target {
+            self.select_target(target);
+        }
+    }
+}
+
+impl<Target: Clone + Eq> Viewported<Target> for MediaList<Target> {
+    fn viewport_offset(&self) -> usize {
+        self.scroll()
+    }
+
+    fn set_viewport_offset(&mut self, offset: usize) {
+        self.set_scroll(offset);
+    }
+
+    fn viewport_anchor(&self) -> ViewportAnchor {
+        self.viewport_anchor
+    }
+
+    fn set_viewport_anchor(&mut self, anchor: ViewportAnchor) {
+        self.viewport_anchor = anchor;
+    }
+
+    /// A grouped flat list keeps the selection's group heading or spacer
+    /// visible when it scrolls the selection back into view from above (#731).
+    fn raise_over_leading_structural_rows(&self) -> bool {
+        true
+    }
+}
+
+impl<Target: Clone + Eq> MarkSelection<Target> for MediaList<Target> {
+    fn mark_selection(&self) -> &MarkSelectionState<Target> {
+        &self.multi_selection
+    }
+
+    fn mark_selection_mut(&mut self) -> &mut MarkSelectionState<Target> {
+        &mut self.multi_selection
+    }
+
+    fn after_mark_mutation(&mut self) {
+        self.frozen_selection.clear();
+        self.selection_anchor = None;
+        self.live_range = false;
+    }
+}

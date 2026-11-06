@@ -5,11 +5,12 @@
 //! paint policy as geometry changes; it never swaps list presentations.
 
 use ratatui::layout::{Position, Rect};
-use tuirealm::event::{Key, KeyEvent, KeyModifiers};
+use tuirealm::event::KeyEvent;
 
-use super::{MediaListOperation, MediaListTransition, SelectionSummary, WideMediaList};
+use super::{MediaListOperation, MediaListTransition, WideMediaList};
 use mbv_render::components::media_list::{MediaListRow, MediaListTitleReveal};
 use mbv_ui_model::media_list::SelectionOrigin;
+use mbv_ui_msg::SelectionSummary;
 
 /// One logical row flow's destination-side carrier over one canonical owner.
 #[derive(Debug)]
@@ -126,30 +127,11 @@ impl<Target: Clone + Eq> MediaListCarrier<Target> {
         self.wide.enter_visual_mode();
     }
 
+    /// The neutral visual-mode key rule lives on the canonical owner
+    /// (`mbv-surfaces`, extract-client-core row 4.3); this wrapper translates
+    /// the `TuiRealm` key at the adapter edge and delegates.
     pub fn handle_visual_key(&mut self, key: &KeyEvent) -> Option<usize> {
-        if key.code == Key::Char('a') && key.modifiers.contains(KeyModifiers::CONTROL) {
-            self.select_all();
-            return Some(self.multi_selection().len());
-        }
-        if matches!(key.code, Key::Char('v' | 'V')) && key.modifiers == KeyModifiers::SHIFT {
-            self.enter_visual_mode();
-            return Some(self.multi_selection().len());
-        }
-        if !self.is_visual_mode() || !key.modifiers.is_empty() {
-            return None;
-        }
-        match key.code {
-            Key::Esc => {
-                self.clear_owner_selection();
-                Some(0)
-            }
-            Key::Char(' ') => {
-                let target = self.selected_target()?.clone();
-                self.toggle_selection(&target);
-                Some(self.multi_selection().len())
-            }
-            _ => None,
-        }
+        self.wide.handle_visual_key(&crate::root::neutral_key(*key))
     }
 
     pub fn toggle_selection(&mut self, target: &Target) {

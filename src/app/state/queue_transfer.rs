@@ -437,68 +437,80 @@ impl App {
         source_link: Option<&StagedQueueTransferLink>,
     ) {
         match direction {
-            QueueTransferDirection::HandOff => {
-                let source = match (&self.suspended_local, self.is_local_daemon()) {
-                    (Some(home), _) => &home.player,
-                    (None, true) => &self.player,
-                    (None, false) => {
-                        tracing::warn!(
-                            name: "queue_transfer.source_link_missing",
-                            target: "queue_transfer",
-                            "the local Owner link is gone; skipping the source stop"
-                        );
-                        return;
-                    }
-                };
-                source.stop();
-            }
-            QueueTransferDirection::Take => {
-                if let Some(link) = source_link {
-                    // The unconnected Take's probe link is the source (design
-                    // D1): it never became `self.player`, so the stop goes
-                    // through it. A dead probe link is nothing to stop — the
-                    // peer's playback is already gone.
-                    if link.remote.is_disconnected() {
-                        tracing::warn!(
-                            name: "queue_transfer.source_link_missing",
-                            target: "queue_transfer",
-                            "the peer probe link is gone; skipping the source stop"
-                        );
-                        return;
-                    }
-                    // Review P1 (row 8.1): the settlement closes this probe
-                    // link right after, and a `Stop` still queued on the
-                    // writer thread loses that race — wait for the owner's
-                    // correlated reply, the delivery proof, before any
-                    // socket teardown.
-                    link.remote.stop_and_await_ack(QUEUE_OP_ANSWER_BOUND);
-                } else {
-                    // The connected Take's source is the current peer
-                    // attachment, whose socket the follow-up's disconnect
-                    // tears down: the stop must be delivered first (review
-                    // P1). The Hand off arm above never closes its link, so
-                    // it needs no proof. `self.player` names the source only
-                    // while the transfer's own session holds the attachment
-                    // — the peer link's teardown reinstalled the home link,
-                    // and a connect since then can hold a different peer;
-                    // `queue_link` resolves either to `self.player` and the
-                    // stop would land on an owner the transfer never ran
-                    // against (PR #973 review).
-                    if !self.transfer_peer_attachment_is_current(target)
-                        || self.player.is_remote_disconnected()
-                    {
-                        tracing::warn!(
-                            name: "queue_transfer.source_link_missing",
-                            target: "queue_transfer",
-                            "the transfer's peer attachment is gone; skipping the source stop"
-                        );
-                        return;
-                    }
-                    let (proxy, _rx) = self.queue_link(direction.source_link());
-                    proxy.stop_and_await_ack(QUEUE_OP_ANSWER_BOUND);
-                }
-            }
+            QueueTransferDirection::HandOff => self.stop_hand_off_source(),
+            QueueTransferDirection::Take => self.stop_take_source(target, source_link),
         }
+    }
+
+    /// The Hand off arm of [`Self::stop_transfer_source`]: the source is the
+    /// local Owner link.
+    fn stop_hand_off_source(&mut self) {
+        let source = match (&self.suspended_local, self.is_local_daemon()) {
+            (Some(home), _) => &home.player,
+            (None, true) => &self.player,
+            (None, false) => {
+                tracing::warn!(
+                    name: "queue_transfer.source_link_missing",
+                    target: "queue_transfer",
+                    "the local Owner link is gone; skipping the source stop"
+                );
+                return;
+            }
+        };
+        source.stop();
+    }
+
+    /// The Take arm of [`Self::stop_transfer_source`]: a probe link stops
+    /// through itself, an attached Take through the peer attachment.
+    fn stop_take_source(
+        &mut self,
+        target: &SessionTargetKey,
+        source_link: Option<&StagedQueueTransferLink>,
+    ) {
+        let Some(link) = source_link else {
+            self.stop_attached_take_source(target);
+            return;
+        };
+        // The unconnected Take's probe link is the source (design D1): it
+        // never became `self.player`, so the stop goes through it. A dead
+        // probe link is nothing to stop — the peer's playback is already
+        // gone.
+        if link.remote.is_disconnected() {
+            tracing::warn!(
+                name: "queue_transfer.source_link_missing",
+                target: "queue_transfer",
+                "the peer probe link is gone; skipping the source stop"
+            );
+            return;
+        }
+        // Review P1 (row 8.1): the settlement closes this probe link right
+        // after, and a `Stop` still queued on the writer thread loses that
+        // race — wait for the owner's correlated reply, the delivery proof,
+        // before any socket teardown.
+        link.remote.stop_and_await_ack(QUEUE_OP_ANSWER_BOUND);
+    }
+
+    /// The connected Take's source is the current peer attachment, whose
+    /// socket the follow-up's disconnect tears down.
+    fn stop_attached_take_source(&mut self, target: &SessionTargetKey) {
+        // The stop must be delivered first (review P1). The Hand off arm
+        // never closes its link, so it needs no proof. `self.player` names the
+        // source only while the transfer's own session holds the attachment —
+        // the peer link's teardown reinstalled the home link, and a connect
+        // since then can hold a different peer; `queue_link` resolves either
+        // to `self.player` and the stop would land on an owner the transfer
+        // never ran against (PR #973 review).
+        if !self.transfer_peer_attachment_is_current(target) || self.player.is_remote_disconnected()
+        {
+            tracing::warn!(
+                name: "queue_transfer.source_link_missing",
+                target: "queue_transfer",
+                "the transfer's peer attachment is gone; skipping the source stop"
+            );
+            return;
+        }
+        let (proxy, _rx) = self.queue_link(QueueTransferDirection::Take.source_link());
+        proxy.stop_and_await_ack(QUEUE_OP_ANSWER_BOUND);
     }
 
     /// Send `Stop` to the transfer's target owner after admission removed the

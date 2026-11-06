@@ -174,6 +174,18 @@ pub struct App {
     /// whichever one currently owns playback, not whatever was live when
     /// the D-Bus service was first registered.
     pub(in crate::app) mpris: Option<mbv_desktop::mpris::MprisHandle>,
+    /// The shared wake handle (design D7 of `extract-client-core`): the
+    /// Owner-snapshot link relays clone it and call `wake` after each
+    /// forwarded event. `ClientCore` shares this handle, so a Client's
+    /// installed waker reaches every relay — including one the initial
+    /// attach already spawned.
+    pub(in crate::app) client_waker: crate::app::ClientWaker,
+    /// The `mbv` program this Client starts the Owner from (design D9 of
+    /// `extract-client-core`). `None` starts this process's own executable —
+    /// the TUI Client, which is `mbv` itself. The GUI Client records the
+    /// `mbv` program it resolved, so an Owner restart never starts the GUI
+    /// program as the Owner.
+    pub(in crate::app) owner_exe: Option<std::path::PathBuf>,
     pub(in crate::app) player_rx: mpsc::Receiver<PlayerEvent>,
     /// Player events the answer pump set aside while waiting for a queue-op
     /// answer. `drain_player_events` takes these before
@@ -234,6 +246,14 @@ pub struct App {
     pub(in crate::app) remote_queue_undo_stack: Vec<UndoEntry>,
     /// One-shot cursor re-anchor for the next queue sync.
     pub(in crate::app) pending_queue_cursor_reanchor: Option<QueueLink>,
+    /// Fingerprint of the queue projection `queue_surface_projection` last
+    /// pushed to a Client's Queue Surface state. The projection runs once per
+    /// Client tick; rebuilding the row vec (slot clone + per-row `format!`)
+    /// on a tick where nothing the projection depends on changed is pure
+    /// waste (#675). The fingerprint gates the rebuild: queue revision +
+    /// viewed link + active slot + a progress-% bucket + the pending target.
+    pub(in crate::app) last_queue_projection:
+        Option<crate::app::queue_surface::QueueProjectionFingerprint>,
     /// The at-most-one in-flight queue transfer (queue-handoff-and-take
     /// design D2): armed after the replacement is sent to the target and
     /// settled in the tick phase that adopts owner snapshots.
@@ -413,18 +433,11 @@ pub struct App {
     /// (mini-view "On Now", standard title row, idle feed title).
     pub(in crate::app) last_nav_at: Instant,
     pub(in crate::app) last_library_nav_at: Instant,
-    /// Tracks terminal focus and arms a grace window to swallow the
-    /// click that merely brings the window into focus.
-    ///
-    /// State transitions:
-    /// - `None`: terminal is unfocused (or never reported focus).
-    ///   All mouse button/scroll events are suppressed.
-    /// - `Some(Instant)`: terminal is focused; the Instant records
-    ///   when `FocusGained` was seen.  A click within `REFOCUS_WINDOW`
-    ///   of that Instant is the refocusing click and is suppressed;
-    ///   after the window expires the field stays `Some` so
-    ///   subsequent clicks dispatch normally until the next
-    ///   `FocusLost`.
+    /// The instant of the most recent terminal focus report, kept alongside
+    /// `window_focused` (`note_focus_gained`/`note_focus_lost`): `Some` from
+    /// the last `FocusGained`, `None` after `FocusLost`. No production code
+    /// reads it today; test stubs set it to a past instant to model an
+    /// already-focused window.
     pub(in crate::app) refocus_at: Option<Instant>,
     /// Whether the terminal window currently holds focus, per the terminal
     /// focus reports (`note_focus_gained`/`note_focus_lost`). Defaults to
@@ -525,11 +538,52 @@ pub struct App {
     /// The last sync pass that saw a live resize drag; starts the settle
     /// window (invariant 20). The live bit stays with the gesture components.
     pub(in crate::app) resize_drag_activity: Option<std::time::Instant>,
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test"))]
     pub(in crate::app) _test_state_dir_guard: Option<crate::config::TestStateDirGuard>,
 }
 
 impl App {
+    /// The shared wake handle this `App` hands to its Owner-snapshot relays
+    /// (design D7 of `extract-client-core`). The Client core shares it, so the
+    /// waker the Client installs reaches every relay, including one the
+    /// initial attach already spawned.
+    #[must_use]
+    pub fn client_waker(&self) -> crate::app::ClientWaker {
+        self.client_waker.clone()
+    }
+
+    /// Record the `mbv` program this Client starts the Owner from (design
+    /// D9 of `extract-client-core`). The Owner link sets it at attach time;
+    /// `None` keeps this process's own executable.
+    pub(crate) fn set_owner_exe(&mut self, owner_exe: Option<std::path::PathBuf>) {
+        self.owner_exe = owner_exe;
+    }
+
+    /// Start this machine's Owner process from the Client's `mbv` program and
+    /// wait until its control socket accepts connections. Every App-side
+    /// Owner start goes through here so a GUI Client never starts itself as
+    /// the Owner (design D9 of `extract-client-core`).
+    pub(in crate::app) fn start_local_daemon(
+        &self,
+    ) -> Result<(), mbv_remote_player::RemotePlayerError> {
+        crate::owner_link::start_owner(&crate::owner_link::OwnerStartOptions {
+            owner_exe: self.owner_exe.as_deref(),
+            log_level: None,
+        })
+    }
+
+    /// Relay one freshly attached Owner event channel through the wake
+    /// relay (design D7 of `extract-client-core`): forwarded events reach the
+    /// drain in order and each send wakes the Client. Receivers already
+    /// behind a relay — a resumed suspended home link included — must not
+    /// be re-wrapped.
+    pub(in crate::app) fn waking_player_rx(
+        &self,
+        rx: mpsc::Receiver<PlayerEvent>,
+    ) -> mpsc::Receiver<PlayerEvent> {
+        crate::app::spawn_waking_relay(rx, self.client_waker.clone())
+    }
+
     /// Whether a flash toast is still live: its expiry instant is strictly
     /// in the future. One predicate for every liveness reader (the status-row
     /// projection, the expiry cleanup, and the startup guards) so the rule
@@ -638,5 +692,14 @@ impl App {
 
     pub(in crate::app) fn dismiss_save_playlist(&mut self) {
         self.pending_overlay = Some(mbv_ui_model::overlay::OverlayRequest::DismissSavePlaylist);
+    }
+}
+
+/// `App` carries the shell's whole state machine, including live Player,
+/// protocol, and channel handles, so its `Debug` names the type and stops
+/// there instead of walking that state.
+impl std::fmt::Debug for App {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("App").finish_non_exhaustive()
     }
 }

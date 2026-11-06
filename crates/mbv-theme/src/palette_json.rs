@@ -10,9 +10,9 @@
 use std::collections::BTreeMap;
 use std::io::Write;
 
-use ratatui::style::Color;
 use serde_json::{Value, json};
 
+use super::rgb::Rgb;
 use super::slot::{Slot, active};
 use super::surface::Surface;
 use super::surface_resolve::surface_colors;
@@ -31,21 +31,14 @@ const SOURCES: [&str; 5] = [
 ];
 
 /// The `#rrggbb` spelling of a theme colour.
-fn hex(color: Color) -> String {
+fn hex(color: Rgb) -> String {
     let [r, g, b] = rgb(color);
     format!("#{r:02x}{g:02x}{b:02x}")
 }
 
 /// The `[r, g, b]` spelling of a theme colour.
-fn rgb(color: Color) -> [u8; 3] {
-    match color {
-        Color::Rgb(r, g, b) => [r, g, b],
-        // The theme's palette is closed to Rgb colours: every slot resolves
-        // through `Theme::DEFAULT`, so no other colour can reach the
-        // generator. An impossible value is an invariant violation, not a
-        // user-facing error.
-        other => unreachable!("theme colour is not an Rgb colour: {other:?}"),
-    }
+fn rgb(color: Rgb) -> [u8; 3] {
+    [color.r, color.g, color.b]
 }
 
 /// The existing `uses` prose of one array section, keyed by name.

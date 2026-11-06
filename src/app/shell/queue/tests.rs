@@ -153,9 +153,35 @@ fn unchanged_queue_revision_skips_projection_rebuild() {
     let mut model = Model::new(app);
     model.sync_queue();
 
-    let update = model.prepare_queue_projection();
+    let update = model.app.queue_surface_projection();
 
     assert!(update.slots.is_none());
+}
+
+#[test]
+fn progress_only_change_patches_one_row_without_rebuilding_slots_review_u17_1() {
+    // U17 finding 1: the patch arm sat behind the rows-changed arm, which a
+    // progress move always satisfies, so every progress tick rebuilt the row
+    // set instead of re-projecting the active row.
+    let mut app = make_app_stub();
+    app.local_view.adopt_items(make_items(2), 0);
+    app.player.update_status(|status| {
+        status.active = true;
+        status.current_idx = 0;
+        status.runtime_ticks = 1_000;
+        status.position_ticks = 100;
+    });
+    let mut model = Model::new(app);
+    model.sync_queue();
+    model
+        .app
+        .player
+        .update_status(|status| status.position_ticks = 500);
+
+    let update = model.app.queue_surface_projection();
+
+    assert!(update.slots.is_none());
+    assert!(update.patch.is_some());
 }
 
 #[test]
@@ -179,7 +205,7 @@ fn lineage_change_rebuilds_same_revision_queue_rows_review_p2_1() {
     replacement.lineage = mbv_queue::QueueLineage(1);
     model.app.local_view = crate::app::QueueView::from_snapshot(&replacement);
     assert_eq!(model.app.local_view.revision(), previous_revision);
-    let update = model.prepare_queue_projection();
+    let update = model.app.queue_surface_projection();
 
     assert!(update.slots.is_some());
 }

@@ -68,8 +68,12 @@ pub fn render_tree_browser(
         // Stripe with the browser pane's library pair, as the flat carrier's
         // Wide policy does — the Queue pair's resting values are the two
         // library fills swapped, which would invert the alternation at rest.
-        zebra: palette::surface_colors(palette::Surface::LibraryColumn, palette_focused).fill,
-        base: palette::surface_colors(palette::Surface::LibraryPanel, palette_focused).fill,
+        zebra: palette::surface_colors(palette::Surface::LibraryColumn, palette_focused)
+            .fill
+            .to_ratatui(),
+        base: palette::surface_colors(palette::Surface::LibraryPanel, palette_focused)
+            .fill
+            .to_ratatui(),
         focused,
         marquee_text,
         marquee_started_at,
@@ -96,7 +100,7 @@ pub fn render_tree_browser(
             total_rows,
             usize::from(content_rect.height),
             viewport_offset,
-            palette::Role::Scrollbar.color(),
+            palette::Role::Scrollbar.color().to_ratatui(),
         );
     }
 }
@@ -139,9 +143,9 @@ fn render_tree_browser_row(
         .map_or(0, tree_metadata_gutter_width);
     let budget = context.content_width.saturating_sub(prefix_width + gutter);
     let title_color = if full_width {
-        palette::Role::SelectedRowFg.color()
+        palette::Role::SelectedRowFg.color().to_ratatui()
     } else if row.kind == TreePaintRowKind::Heading {
-        palette::Role::TextMetadata.color()
+        palette::Role::TextMetadata.color().to_ratatui()
     } else {
         title_color(row)
     };
@@ -159,7 +163,7 @@ fn render_tree_browser_row(
     );
     let mut style = Style::default().bg(fill);
     if full_width {
-        style = style.fg(palette::Role::SelectedRowFg.color());
+        style = style.fg(palette::Role::SelectedRowFg.color().to_ratatui());
     }
     frame.render_widget(Paragraph::new(Line::from(spans)).style(style), row_area);
 }
@@ -171,7 +175,9 @@ fn tree_row_fill(
     base: ratatui::style::Color,
 ) -> ratatui::style::Color {
     if full_width {
-        palette::surface_colors(palette::Surface::SelectedRow, false).fill
+        palette::surface_colors(palette::Surface::SelectedRow, false)
+            .fill
+            .to_ratatui()
     } else {
         match row.kind {
             TreePaintRowKind::Node if row.zebra_striped => zebra,
@@ -293,9 +299,9 @@ fn tree_row_spans(
                 width = trailing.width().max(TREE_METADATA_SLOT_WIDTH)
             ),
             Style::default().fg(if full_width {
-                palette::Role::SelectedRowFg.color()
+                palette::Role::SelectedRowFg.color().to_ratatui()
             } else {
-                palette::Role::StatusAvailable.color()
+                palette::Role::StatusAvailable.color().to_ratatui()
             }),
         ));
     }
@@ -309,20 +315,20 @@ fn title_color(row: &TreePaintRow) -> ratatui::style::Color {
     // Directly marked rows paint the full-width bar and never reach this
     // role; aggregate states keep their own title roles (design D5).
     match row.aggregate_mark {
-        TreeAggregateMark::Partial => palette::Role::TextAccentMuted.color(),
-        TreeAggregateMark::Full => palette::Role::StatusAvailable.color(),
+        TreeAggregateMark::Partial => palette::Role::TextAccentMuted.color().to_ratatui(),
+        TreeAggregateMark::Full => palette::Role::StatusAvailable.color().to_ratatui(),
         TreeAggregateMark::None => match row.semantic_state {
-            MediaSemanticState::Played => palette::Role::TextMuted.color(),
+            MediaSemanticState::Played => palette::Role::TextMuted.color().to_ratatui(),
             MediaSemanticState::Active { .. } | MediaSemanticState::NowPlaying { .. } => {
-                palette::Role::TextEmphasis.color()
+                palette::Role::TextEmphasis.color().to_ratatui()
             }
             MediaSemanticState::Ordinary => match row.title_role {
-                TreeTitleRole::Heading => palette::Role::TextEmphasis.color(),
-                TreeTitleRole::Secondary => palette::Role::TextFocusAccent.color(),
+                TreeTitleRole::Heading => palette::Role::TextEmphasis.color().to_ratatui(),
+                TreeTitleRole::Secondary => palette::Role::TextFocusAccent.color().to_ratatui(),
                 TreeTitleRole::Standard => match row.depth {
-                    0 => palette::Role::TextEmphasis.color(),
-                    1 => palette::Role::TextFocusAccent.color(),
-                    _ => palette::Role::Accent.color(),
+                    0 => palette::Role::TextEmphasis.color().to_ratatui(),
+                    1 => palette::Role::TextFocusAccent.color().to_ratatui(),
+                    _ => palette::Role::Accent.color().to_ratatui(),
                 },
             },
         },

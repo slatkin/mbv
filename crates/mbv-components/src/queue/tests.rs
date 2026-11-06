@@ -66,7 +66,7 @@ fn count_bg(buf: &ratatui::buffer::Buffer, area: Rect, color: ratatui::style::Co
 fn mini_view_rows_paint_the_focused_palette_when_the_appearance_bit_is_focused() {
     let buf = draw_mini_queue(true);
 
-    let focused_zebra = surface_colors(Surface::QueueColumn, true).fill;
+    let focused_zebra = surface_colors(Surface::QueueColumn, true).fill.to_ratatui();
     let row_area = queue_list_box(Rect::new(0, 0, 60, 24));
     assert!(
         count_bg(&buf, row_area, focused_zebra) > 0,
@@ -76,7 +76,9 @@ fn mini_view_rows_paint_the_focused_palette_when_the_appearance_bit_is_focused()
         count_bg(
             &buf,
             row_area,
-            surface_colors(Surface::SelectedRow, false).fill
+            surface_colors(Surface::SelectedRow, false)
+                .fill
+                .to_ratatui()
         ) > 0,
         "the selected row bar painted"
     );
@@ -92,7 +94,7 @@ fn mini_view_rows_paint_the_focused_palette_when_the_appearance_bit_is_focused()
 fn mini_view_rows_rest_when_the_appearance_bit_is_resting() {
     let buf = draw_mini_queue(false);
 
-    let focused_zebra = surface_colors(Surface::QueueColumn, true).fill;
+    let focused_zebra = surface_colors(Surface::QueueColumn, true).fill.to_ratatui();
     let row_area = queue_list_box(Rect::new(0, 0, 60, 24));
     assert_eq!(
         count_bg(&buf, row_area, focused_zebra),
@@ -103,7 +105,9 @@ fn mini_view_rows_rest_when_the_appearance_bit_is_resting() {
         count_bg(
             &buf,
             row_area,
-            surface_colors(Surface::SelectedRow, false).fill
+            surface_colors(Surface::SelectedRow, false)
+                .fill
+                .to_ratatui()
         ) > 0,
         "the cursor bar stayed on the resting stripe"
     );
@@ -210,4 +214,83 @@ fn a_preserve_push_after_a_wheel_scroll_keeps_the_scrolled_offset() {
         "Preserve leaves the wheel-scrolled offset untouched"
     );
     assert_eq!(component.test_cursor(), 0);
+}
+
+/// The frame report (extract-client-core 4.4, design D6): the capacity is the
+/// viewport height the Surface state clamps and strides with, and a press on
+/// a painted row resolves through the hit map to that row's stable slot,
+/// while a press outside every painted row region resolves to no target.
+#[test]
+fn the_frame_report_reports_the_painted_capacity_and_resolves_painted_rows() {
+    let mut component = QueueComponent::new();
+    component.set_rows(
+        &[
+            feed_slot(1, "first"),
+            feed_slot(2, "second"),
+            feed_slot(3, "third"),
+        ],
+        PlaybackState::default(),
+    );
+    component.set_cursor(&QueueCursorUpdate::Set(0));
+
+    let placement = Rect::new(0, 0, 60, 24);
+    let mut terminal = Terminal::new(TestBackend::new(60, 24)).unwrap();
+    terminal
+        .draw(|frame| component.view(frame, placement))
+        .unwrap();
+
+    let report = component.frame_report();
+    assert_eq!(
+        report.capacity.whole_items(),
+        usize::from(queue_list_content(placement).height),
+        "the capacity is the painted list's whole-row height"
+    );
+    let slot_at = |x: f32, y: f32| {
+        report
+            .hit_map
+            .resolve(mbv_ui_msg::Position { x, y })
+            .cloned()
+    };
+    assert_eq!(
+        slot_at(10.0, 1.0),
+        Some(QueueHitTarget::Slot(QueueSlotId::from_raw(1))),
+        "the first painted row resolves to its slot"
+    );
+    assert_eq!(
+        slot_at(10.0, 3.0),
+        Some(QueueHitTarget::Slot(QueueSlotId::from_raw(3))),
+        "the third painted row resolves to its slot"
+    );
+    assert_eq!(
+        slot_at(10.0, 0.0),
+        None,
+        "the box's top pad row paints no row region"
+    );
+}
+
+/// The frame report over an empty queue: no row regions resolve, and the
+/// painted playlist pill resolves to the pill target.
+#[test]
+fn the_frame_report_of_an_empty_queue_resolves_only_the_playlist_pill() {
+    let component = painted_footer_component();
+    let hit = component.playlist_hit_for_test();
+    let report = component.frame_report();
+
+    assert!(
+        report
+            .hit_map
+            .resolve(mbv_ui_msg::Position {
+                x: f32::from(hit.x) + 1.0,
+                y: f32::from(hit.y)
+            })
+            .is_some_and(|target| matches!(target, QueueHitTarget::PlaylistPill)),
+        "the playlist pill resolves to the pill target"
+    );
+    assert!(
+        report
+            .hit_map
+            .resolve(mbv_ui_msg::Position { x: 10.0, y: 1.0 })
+            .is_none(),
+        "an empty queue paints no row region"
+    );
 }

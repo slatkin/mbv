@@ -27,7 +27,7 @@ pub use components::chrome_player::{
 };
 #[doc(inline)]
 pub use components::chrome_status_bar::{
-    StatusBarModel, StatusBarRegions, VisualModeIndicator, render_status_bar,
+    StatusBarChrome, StatusBarModel, StatusBarRegions, VisualModeIndicator, render_status_bar,
 };
 #[doc(inline)]
 pub use components::chrome_tabs::{TabBarModel, render_tab_bar};

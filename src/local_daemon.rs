@@ -17,6 +17,7 @@ use std::ffi::OsStr;
 use std::io::{self, Read};
 use std::os::unix::net::UnixStream;
 use std::os::unix::process::CommandExt;
+use std::path::Path;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
@@ -152,12 +153,18 @@ fn detach(cmd: &mut Command, stderr: Stdio) {
     };
 }
 
-pub fn spawn_detached(
+/// Fork+detach a local daemon (`mbv --__local-daemon`) and wait until its
+/// control socket is ready. `exe` is the `mbv` program that becomes the
+/// Owner; the TUI Client passes its own executable and the GUI Client passes
+/// the `mbv` program it resolved. On failure -- including the daemon exiting
+/// early because the cached token is missing/invalid -- returns the reason
+/// so the still-live launching Client can report it, rather than the daemon
+/// failing silently in the background.
+pub(crate) fn spawn_detached(
+    exe: &Path,
     socket_path: &str,
     log_level: Option<mbv_core::applog::LogSpec>,
 ) -> Result<(), mbv_remote_player::RemotePlayerError> {
-    let exe = std::env::current_exe()
-        .map_err(|e| io::Error::new(e.kind(), format!("cannot locate binary: {e}")))?;
     let mut cmd = Command::new(exe);
     cmd.args(local_daemon_args(log_level));
     if let Some(display_env) = session_display_env() {
@@ -201,10 +208,10 @@ pub fn spawn_detached(
 /// Entered via the hidden `mbv --__local-daemon` self-spawn. Never returns.
 pub fn run_local_daemon_main() -> ! {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let log_spec = match crate::parse_log_level_arg(&args) {
+    let log_spec = match crate::startup::parse_log_level_arg(&args) {
         Ok(spec) => spec.unwrap_or_default(),
         Err(error) => {
-            crate::print_usage();
+            crate::startup::print_usage();
             eprintln!("{error}");
             std::process::exit(1);
         }

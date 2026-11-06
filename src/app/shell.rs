@@ -3,8 +3,8 @@ use std::time::Duration;
 
 use super::{
     AlbumIndexState, App, BrowseLevel, ConfirmAction, ConfirmModal, IdleFeed, LibEvent, PanelFocus,
-    PanelMode, PlaybackState, QueueLink, QueueView, SavePlaylistDialog, SavePlaylistStage,
-    SidebarId, TabSelection, ToastSeverity,
+    PanelMode, QueueLink, SavePlaylistDialog, SavePlaylistStage, SidebarId, TabSelection,
+    ToastSeverity,
 };
 use super::{
     QUIT_REQUESTED, init_terminal, install_signal_handlers, restore_terminal, start_quit_watchdog,
@@ -40,6 +40,7 @@ mod emby_library;
 mod emby_library_content;
 mod feeds;
 mod feeds_manage;
+mod focus;
 mod home;
 mod home_content;
 mod inline_search;
@@ -61,7 +62,7 @@ mod tv_workspace;
 mod twitch_url;
 mod ui_state_reset;
 
-/// How often the `TuiRealm` crossterm listener worker polls the terminal for
+/// How often the ``TuiRealm`` crossterm listener worker polls the terminal for
 /// events. The listener's `poll` blocks for half of this; the worker cycle is
 /// this long. Set to 8 ms so event latency matches the legacy loop's fastest
 /// cadence (the visualizer's 8 ms poll). The main thread's per-iteration wait
@@ -125,7 +126,7 @@ pub(in crate::app) enum PendingMusicReanchor {
     FirstAlbumOfLevel,
 }
 
-/// Shell model holding the legacy `App` and the `TuiRealm` `Application`.
+/// Shell model holding the legacy `App` and the ``TuiRealm`` `Application`.
 pub struct Model {
     pub app: App,
     pub(in crate::app) application: Application<ComponentId, Msg, UserEvent>,
@@ -198,13 +199,6 @@ pub struct Model {
     /// (a direct frame, a fixture) never arms it.
     pub(in crate::app) pending_terminal_resize: bool,
     /// Terminal hyperlink support resolved once during terminal initialization.
-    /// Fingerprint of the inputs `sync_queue` last projected into the mounted
-    /// `QueueComponent`. `sync_queue` runs every run-loop tick; rebuilding the
-    /// row vec (slot clone + per-row `format!`) on a tick where nothing the
-    /// projection depends on changed is pure waste (#675). The fingerprint
-    /// gates the rebuild: queue revision + viewed link + active slot + a
-    /// progress-% bucket + paused + the title model.
-    pub(in crate::app) last_queue_projection: Option<queue::QueueProjectionFingerprint>,
     /// Shell-owned projection of the focused list's Visual selection.
     pub(in crate::app) visual_selection: Option<(mbv_ui_model::settings::PanelFocus, usize)>,
     pub(in crate::app) context_menu_origin: Option<mbv_ui_model::media_list::SelectionOrigin>,
@@ -219,13 +213,15 @@ pub struct Model {
     /// assignments. Shell-owned plain data the router reads as its
     /// `&Keybinds` parameter (Unit 3); never mirrored into components.
     pub keybinds: mbv_keybinds::Keybinds,
-    /// The focus displaced by arming prefix mode (design D6, task 6.1).
-    /// tuirealm forwards every chord to the focused component before the
-    /// router fold, so armed capture blurs focus for the armed ticks; this
-    /// records what was focused when the shell armed, and the disarm
-    /// restores it (falling back to the sync passes' canonical
-    /// re-derivation when it was unmounted meanwhile).
-    pub(in crate::app) prefix_armed_focus: Option<ComponentId>,
+    /// The core focus stack (design D3 of `extract-client-core`, capability
+    /// `client-interaction-core`): the shell-held focus authority over the
+    /// mounted surfaces, the Panel focus in effect, and the overlay stack.
+    /// Call sites request a change on the stack instead of calling `TuiRealm`
+    /// focus directly, and the sync pass's one `apply_focus_stack` step
+    /// applies the derived focus to `TuiRealm`. The stored Panel-focus record
+    /// (launch restore, the mini-view interplay) stays on `App`; the stack
+    /// holds the focus in effect for the derivation.
+    pub(in crate::app) focus_stack: mbv_surfaces::FocusStack,
     /// Shell-owned exit kind (tray-pin-swap design D6): set once the Owner
     /// sent `SwapQuit`, so `teardown` skips the launch-state save and the
     /// coordinated shutdown request. Never reset within a run.
@@ -242,7 +238,7 @@ pub struct Model {
 }
 
 impl Model {
-    /// Construct the model, starting the `TuiRealm` crossterm listener and
+    /// Construct the model, starting the ``TuiRealm`` crossterm listener and
     /// mounting the permanent root observer.
     #[cfg(test)]
     pub fn new(app: App) -> Self {
@@ -311,6 +307,14 @@ impl Model {
         // config the App was built with; later config saves never rewrite it
         // for the running session.
         let keybinds = app.config.lock().unwrap().keybinds.clone();
+        // The stack starts from the mounts this constructor performs below:
+        // `UiRoot` and the whole-session Library panel. The Queue panel mounts
+        // lazily at its first sync pass and routes its mount record to the
+        // stack there (`focus.rs`).
+        let mut focus_stack = mbv_surfaces::FocusStack::new();
+        focus_stack.mount(ComponentId::UiRoot);
+        focus_stack.mount(ComponentId::Library);
+        focus_stack.set_panel_focus(app.effective_panel_focus());
         let mut model = Self {
             app,
             application,
@@ -328,12 +332,11 @@ impl Model {
             home_context_item: None,
             handled_terminal_size: initial_terminal_size,
             pending_terminal_resize: false,
-            last_queue_projection: None,
             visual_selection: None,
             context_menu_origin: None,
             context_action_snapshot: None,
             keybinds,
-            prefix_armed_focus: None,
+            focus_stack,
             swapped_out_exit: false,
             workspace_now_playing: None,
             move_gate,
@@ -357,9 +360,11 @@ impl Model {
             .expect("activate UiRoot");
         // The Library panel is mounted for the whole session (it holds every
         // library's embedded content owners, design D2's retention rule) but
-        // never made active directly: `sync_active_destination` routes focus
-        // to it while a migrated library is active, and it paints only a
-        // migrated owner's surface (the transitional branch, task 5.9).
+        // never made active directly: the sync pass's focus step derives the
+        // focused surface from the core focus stack (design D3 of
+        // `extract-client-core`), and it routes to the panel while a migrated
+        // library is active. It paints only a migrated owner's surface (the
+        // transitional branch, task 5.9).
         // Home's and Feeds' owners are installed with the panel: both tabs
         // are always migrated, so `active_surface_id` routes them to the
         // panel from the first sync (tasks 5.11, 7.3). The other destinations

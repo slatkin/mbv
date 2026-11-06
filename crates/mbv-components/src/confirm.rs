@@ -14,9 +14,10 @@ use tuirealm::event::{Event, Key, MouseEvent, MouseEventKind};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::mouse::gesture::{MouseGesture, MouseGestureState};
+use super::mouse::gesture::MouseGestureState;
 use super::mouse::hit::HitRegions;
 use mbv_render::render_confirm_modal_content;
+use mbv_surfaces::gesture::PointerGesture;
 use mbv_ui_model::confirm::{ConfirmAction, ConfirmButton, ConfirmModal};
 use mbv_ui_msg::UserEvent;
 use mbv_ui_msg::{ConfirmIntent, LeafKeyResult, Msg, ShellRequest};
@@ -134,7 +135,7 @@ impl ConfirmComponent {
         }
         self.on_confirm.as_ref()?;
         let gesture = self.mouse_gestures.recognize(mouse)?;
-        let MouseGesture::Click { at, .. } = gesture else {
+        let PointerGesture::Click { at, .. } = gesture else {
             return None;
         };
         if let Some(&index) = self.hit_buttons.resolve(at) {

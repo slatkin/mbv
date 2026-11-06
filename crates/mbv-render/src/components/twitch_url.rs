@@ -34,7 +34,9 @@ pub fn render_twitch_url_content(
         dim_backdrop_active,
         60,
         height,
-        palette::surface_colors(palette::Surface::PopupFrame, false).fill,
+        palette::surface_colors(palette::Surface::PopupFrame, false)
+            .fill
+            .to_ratatui(),
     );
     let inner = modal.inner;
     let label = "URL: ";
@@ -55,7 +57,7 @@ pub fn render_twitch_url_content(
         Paragraph::new(Span::styled(
             title,
             Style::default()
-                .fg(palette::Role::TextHeroTitle.color())
+                .fg(palette::Role::TextHeroTitle.color().to_ratatui())
                 .add_modifier(Modifier::BOLD),
         ))
         .alignment(Alignment::Center),
@@ -69,7 +71,7 @@ pub fn render_twitch_url_content(
     f.render_widget(
         Paragraph::new(Span::styled(
             input_line,
-            Style::default().fg(palette::Role::TextStrong.color()),
+            Style::default().fg(palette::Role::TextStrong.color().to_ratatui()),
         ))
         .alignment(Alignment::Center),
         Rect {
@@ -83,7 +85,7 @@ pub fn render_twitch_url_content(
         f.render_widget(
             Paragraph::new(Span::styled(
                 refusal,
-                Style::default().fg(palette::Role::StatusError.color()),
+                Style::default().fg(palette::Role::StatusError.color().to_ratatui()),
             ))
             .alignment(Alignment::Center),
             Rect {

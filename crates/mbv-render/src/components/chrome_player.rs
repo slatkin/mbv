@@ -79,7 +79,9 @@ pub fn render_player_panel(frame: &mut Frame, mut ctx: PlaybackRenderContext<'_>
     // queue column's transport band (`QueueOnlyPlaybackPanel`) or the
     // right-column strip's own fill (`PlaybackPanel`), whose recess rects
     // share the value through this context.
-    let panel_bg = palette::surface_colors(ctx.panel, ctx.controls.panel_focused).fill;
+    let panel_bg = palette::surface_colors(ctx.panel, ctx.controls.panel_focused)
+        .fill
+        .to_ratatui();
     // The queue column's band paints the controls row first (right below
     // the visual slot), a blank row, the seekbar with its flanking times,
     // then a gap row; the Library strip keeps the seekbar on top with the
@@ -107,7 +109,7 @@ pub fn render_player_panel(frame: &mut Frame, mut ctx: PlaybackRenderContext<'_>
             frame.render_widget(
                 Paragraph::new(Span::styled(
                     bar,
-                    Style::default().fg(palette::Role::ProgressTrack.color()),
+                    Style::default().fg(palette::Role::ProgressTrack.color().to_ratatui()),
                 ))
                 .style(Style::default().bg(panel_bg)),
                 seek_area,
@@ -133,7 +135,7 @@ pub fn render_player_panel(frame: &mut Frame, mut ctx: PlaybackRenderContext<'_>
         {
             let spans = marquee_spans(
                 &mut ctx,
-                &[(title, palette::Role::IdleFeedTitleFg.color())],
+                &[(title, palette::Role::IdleFeedTitleFg.color().to_ratatui())],
                 title_area.width as usize,
             );
             frame.render_widget(
@@ -234,11 +236,11 @@ fn render_seekbar(
         Paragraph::new(Line::from(vec![
             Span::styled(
                 "\u{2594}".repeat(filled),
-                Style::default().fg(palette::Role::Accent.color()),
+                Style::default().fg(palette::Role::Accent.color().to_ratatui()),
             ),
             Span::styled(
                 "\u{2594}".repeat(width - filled),
-                Style::default().fg(palette::Role::ProgressTrack.color()),
+                Style::default().fg(palette::Role::ProgressTrack.color().to_ratatui()),
             ),
         ]))
         .style(Style::default().bg(panel_bg)),
@@ -250,8 +252,8 @@ fn render_seekbar(
 #[must_use]
 pub fn title_part_fg(role: PlaybackTitlePartRole) -> Color {
     match role {
-        PlaybackTitlePartRole::Title => palette::Role::PlaybackTitleFg.color(),
-        PlaybackTitlePartRole::Context => palette::Role::PlaybackContextFg.color(),
+        PlaybackTitlePartRole::Title => palette::Role::PlaybackTitleFg.color().to_ratatui(),
+        PlaybackTitlePartRole::Context => palette::Role::PlaybackContextFg.color().to_ratatui(),
     }
 }
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

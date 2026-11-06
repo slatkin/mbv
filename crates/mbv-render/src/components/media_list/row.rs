@@ -60,7 +60,7 @@ pub fn media_list_row<Target>(
                 Span::raw("  "),
                 Span::styled(
                     text.to_uppercase(),
-                    Style::default().fg(palette::Role::GroupHeadingFg.color()),
+                    Style::default().fg(palette::Role::GroupHeadingFg.color().to_ratatui()),
                 ),
             ],
             alternate_bg,
@@ -236,22 +236,22 @@ fn semantic_paint(semantic_state: &MediaSemanticState) -> SemanticPaint {
     // below never applies to one.
     match semantic_state {
         MediaSemanticState::Ordinary => SemanticPaint {
-            fg: palette::Role::TextEmphasis.color(),
+            fg: palette::Role::TextEmphasis.color().to_ratatui(),
             progress: None,
             live_icon: None,
         },
         MediaSemanticState::Played => SemanticPaint {
-            fg: palette::Role::TextMuted.color(),
+            fg: palette::Role::TextMuted.color().to_ratatui(),
             progress: None,
             live_icon: None,
         },
         MediaSemanticState::Active { progress } => SemanticPaint {
-            fg: palette::Role::TextEmphasis.color(),
+            fg: palette::Role::TextEmphasis.color().to_ratatui(),
             progress: progress_text(*progress),
             live_icon: None,
         },
         MediaSemanticState::NowPlaying { progress } => SemanticPaint {
-            fg: palette::Role::TextEmphasis.color(),
+            fg: palette::Role::TextEmphasis.color().to_ratatui(),
             progress: progress_text(*progress),
             live_icon: Some("▶ "),
         },
@@ -274,7 +274,10 @@ fn effective_duration(duration: Option<&str>, kind: MediaKind) -> Option<&str> {
 fn inline_trailing(progress: Option<&String>) -> Vec<(String, Color)> {
     let mut pieces = Vec::new();
     if let Some(pct) = progress {
-        pieces.push((pct.clone(), palette::Role::ProgressPercent.color()));
+        pieces.push((
+            pct.clone(),
+            palette::Role::ProgressPercent.color().to_ratatui(),
+        ));
     }
     pieces
 }
@@ -313,8 +316,8 @@ fn title_budget(inputs: &BudgetInputs) -> Budget {
 
 fn secondary_title_color(semantic_state: &MediaSemanticState) -> Color {
     match semantic_state {
-        MediaSemanticState::Played => palette::Role::TextMuted.color(),
-        _ => palette::Role::SplitRowTitleFg.color(),
+        MediaSemanticState::Played => palette::Role::TextMuted.color().to_ratatui(),
+        _ => palette::Role::SplitRowTitleFg.color().to_ratatui(),
     }
 }
 
@@ -357,8 +360,14 @@ fn title_parts(
 ) -> Vec<(String, Color)> {
     match secondary.filter(|sec| !sec.is_empty()) {
         Some(sec) => vec![
-            (primary.to_owned(), palette::Role::SplitRowContextFg.color()),
-            (" ".into(), palette::Role::SplitRowContextFg.color()),
+            (
+                primary.to_owned(),
+                palette::Role::SplitRowContextFg.color().to_ratatui(),
+            ),
+            (
+                " ".into(),
+                palette::Role::SplitRowContextFg.color().to_ratatui(),
+            ),
             (sec.to_owned(), secondary_color),
         ],
         None => vec![(primary.to_owned(), title_color)],
@@ -453,7 +462,7 @@ fn leading_spans(live_icon: Option<&'static str>, title: Vec<Span<'static>>) -> 
     if let Some(icon) = live_icon {
         spans.push(Span::styled(
             icon,
-            Style::default().fg(palette::Role::Accent.color()),
+            Style::default().fg(palette::Role::Accent.color().to_ratatui()),
         ));
     }
     spans.extend(title);
@@ -500,7 +509,7 @@ fn push_gutter_column(
             trunc_str(gutter, DATE_GUTTER_W),
             width = DATE_GUTTER_W
         ),
-        Style::default().fg(palette::Role::StatusAvailable.color()),
+        Style::default().fg(palette::Role::StatusAvailable.color().to_ratatui()),
     ));
 }
 
@@ -513,7 +522,7 @@ fn push_duration_column(spans: &mut Vec<Span<'static>>, duration: Option<&str>, 
     spans.push(Span::raw(" ".repeat(pad)));
     spans.push(Span::styled(
         dur.to_owned(),
-        Style::default().fg(palette::Role::Duration.color()),
+        Style::default().fg(palette::Role::Duration.color().to_ratatui()),
     ));
 }
 
@@ -553,7 +562,7 @@ fn recolor_selected_bar(spans: &mut [Span<'static>], progress_index: Option<usiz
     let fg = selected_row_foreground();
     for (index, span) in spans.iter_mut().enumerate() {
         span.style.fg = Some(if progress_index == Some(index) {
-            palette::Role::SelectedRowProgressFg.color()
+            palette::Role::SelectedRowProgressFg.color().to_ratatui()
         } else {
             fg
         });
@@ -564,7 +573,7 @@ fn selected_row_foreground() -> Color {
     // Every `selected_bg` is the selection bar itself, so the bar's
     // foreground is always the selected-row role; no colour comparison
     // against the fill is needed.
-    palette::Role::SelectedRowFg.color()
+    palette::Role::SelectedRowFg.color().to_ratatui()
 }
 
 /// Columns the row's right inset reserves inside `inner_width`.

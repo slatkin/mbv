@@ -1,0 +1,22 @@
+[package]
+name = "mbv-surfaces"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Front-end-neutral Surface state and the core focus stack for mbv."
+readme = "../../README.md"
+
+[lints]
+workspace = true
+
+[dependencies]
+mbv-ui-model = { path = "../mbv-ui-model" }
+mbv-ui-msg = { path = "../mbv-ui-msg" }
+mbv-queue = { path = "../mbv-queue" }
+
+[dev-dependencies]
+rstest.workspace = true

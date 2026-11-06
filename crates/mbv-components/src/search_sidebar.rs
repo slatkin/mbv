@@ -30,10 +30,11 @@ use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
 use super::inline_search::search_result_row;
-use super::mouse::gesture::{MouseGesture, MouseGestureState};
+use super::mouse::gesture::MouseGestureState;
 use super::mouse::hit::HitRegions;
 use crate::media_list::{MediaListCarrier, MediaListOperation};
 use mbv_render::components::media_list::MediaListRow;
+use mbv_surfaces::gesture::PointerGesture;
 use mbv_ui_model::search_sidebar::SearchSidebar;
 use mbv_ui_msg::UserEvent;
 use mbv_ui_msg::{LeafKeyResult, Msg, ServiceRequest, ShellRequest};
@@ -263,7 +264,7 @@ impl SearchSidebarComponent {
             return None;
         }
         match self.mouse_gestures.recognize(mouse)? {
-            MouseGesture::Click { at, .. } => {
+            PointerGesture::Click { at, .. } => {
                 if let Some(&chip) = self.hit_chips.resolve(at) {
                     if chip < self.sidebar.available_types().len() + 1
                         && chip != self.sidebar.type_filter
@@ -283,7 +284,7 @@ impl SearchSidebarComponent {
                 }
                 None
             }
-            MouseGesture::Scroll { at, delta } => {
+            PointerGesture::Scroll { at, delta } => {
                 // The shared owner scrolls the viewport one step and keeps
                 // the selection (5.4b, design D6); the wheel acts only over
                 // a painted result row.
@@ -293,7 +294,7 @@ impl SearchSidebarComponent {
                 }
                 None
             }
-            MouseGesture::DoubleClick(at) => {
+            PointerGesture::DoubleClick(at) => {
                 let Some(target) = self.resolve_gesture_row(at) else {
                     // Outside double-click: the first click already dismissed.
                     return None;

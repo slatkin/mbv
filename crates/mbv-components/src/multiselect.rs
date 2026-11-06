@@ -8,9 +8,10 @@ use tuirealm::event::{Event, Key, KeyEvent, MouseEvent, MouseEventKind};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::mouse::gesture::{MouseGesture, MouseGestureState};
+use super::mouse::gesture::MouseGestureState;
 use super::mouse::hit::HitRegions;
 use mbv_render::{MultiSelectRenderModel, render_multiselect_content};
+use mbv_surfaces::gesture::PointerGesture;
 use mbv_ui_model::context_menu::{MultiSelectItem, MultiSelectKind, MultiSelectPopup};
 use mbv_ui_msg::UserEvent;
 use mbv_ui_msg::{LeafKeyResult, Msg};
@@ -108,7 +109,7 @@ impl MultiselectComponent {
             return None;
         }
         match self.mouse_gestures.recognize(mouse)? {
-            MouseGesture::Click { at, .. } => {
+            PointerGesture::Click { at, .. } => {
                 if let Some(&index) = self.hit_rows.resolve(at) {
                     if let Some(item) = self.items.get_mut(index) {
                         item.2 = !item.2;
@@ -121,7 +122,7 @@ impl MultiselectComponent {
                 }
                 None
             }
-            MouseGesture::DoubleClick(at) => {
+            PointerGesture::DoubleClick(at) => {
                 if self.hit_rows.resolve(at).is_some() {
                     return self.commit_request();
                 }

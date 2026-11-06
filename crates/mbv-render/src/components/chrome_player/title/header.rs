@@ -76,7 +76,9 @@ pub fn render_header_title(
     if row.width == 0 || row.height == 0 {
         return;
     }
-    let panel_bg = palette::surface_colors(header.panel, false).fill;
+    let panel_bg = palette::surface_colors(header.panel, false)
+        .fill
+        .to_ratatui();
     let total = row.width as usize;
     // One cell of interior padding each side; the target indicator starts on
     // the first content cell.
@@ -135,9 +137,9 @@ pub fn render_header_title(
 /// owns playback one space and the host name in ordinary text.
 fn target_spans(header: &HeaderTitle<'_>, panel_bg: Color) -> Vec<Span<'static>> {
     let icon_fg = if header.host_is_remote {
-        palette::Role::PlaybackTargetRemoteFg.color()
+        palette::Role::PlaybackTargetRemoteFg.color().to_ratatui()
     } else {
-        palette::Role::PlaybackTargetLocalFg.color()
+        palette::Role::PlaybackTargetLocalFg.color().to_ratatui()
     };
     let mut spans = vec![Span::styled(
         header.icon.to_string(),
@@ -147,7 +149,7 @@ fn target_spans(header: &HeaderTitle<'_>, panel_bg: Color) -> Vec<Span<'static>>
         spans.push(Span::styled(
             format!(" {}", header.host),
             Style::default()
-                .fg(palette::Role::TextPrimary.color())
+                .fg(palette::Role::TextPrimary.color().to_ratatui())
                 .bg(panel_bg),
         ));
     }
@@ -191,7 +193,10 @@ fn title_spans(
         spans
     } else {
         marquee_spans_at(
-            &[(title_text, palette::Role::PlaybackContextFg.color())],
+            &[(
+                title_text,
+                palette::Role::PlaybackContextFg.color().to_ratatui(),
+            )],
             zone,
             header.marquee_text,
             header.marquee_started_at,

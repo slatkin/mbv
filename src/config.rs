@@ -1,8 +1,10 @@
+#[cfg(test)]
+pub use mbv_config::LastRemoteConnection;
+#[cfg(any(test, feature = "test"))]
+pub use mbv_config::TestStateDirGuard;
 pub use mbv_config::{
     Config, is_system_instance, load_library_position_state, migrate_legacy_emby_token, prefs_path,
 };
-#[cfg(test)]
-pub use mbv_config::{LastRemoteConnection, TestStateDirGuard};
 #[cfg(test)]
 pub use mbv_config::{load_last_remote_connection, save_last_remote_connection};
 

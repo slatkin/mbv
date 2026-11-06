@@ -40,9 +40,15 @@ fn draw_mini_panel(frame_focused: bool) -> (ratatui::buffer::Buffer, ratatui::la
 fn mini_view_rows_paint_the_focused_palette_when_the_appearance_bit_is_focused() {
     let (buf, list_panel) = draw_mini_panel(true);
 
-    let focused_zebra = surface_colors(Surface::LibraryColumn, true).fill;
-    let focused_box = surface_colors(Surface::LibraryPanel, true).fill;
-    let resting_zebra = surface_colors(Surface::LibraryColumn, false).fill;
+    let focused_zebra = surface_colors(Surface::LibraryColumn, true)
+        .fill
+        .to_ratatui();
+    let focused_box = surface_colors(Surface::LibraryPanel, true)
+        .fill
+        .to_ratatui();
+    let resting_zebra = surface_colors(Surface::LibraryColumn, false)
+        .fill
+        .to_ratatui();
     let mut zebra = 0;
     let mut box_fill = 0;
     let mut resting = 0;
@@ -67,9 +73,15 @@ fn mini_view_rows_paint_the_focused_palette_when_the_appearance_bit_is_focused()
 fn mini_view_rows_rest_when_the_appearance_bit_is_resting() {
     let (buf, list_panel) = draw_mini_panel(false);
 
-    let focused_zebra = surface_colors(Surface::LibraryColumn, true).fill;
-    let focused_box = surface_colors(Surface::LibraryPanel, true).fill;
-    let resting_zebra = surface_colors(Surface::LibraryColumn, false).fill;
+    let focused_zebra = surface_colors(Surface::LibraryColumn, true)
+        .fill
+        .to_ratatui();
+    let focused_box = surface_colors(Surface::LibraryPanel, true)
+        .fill
+        .to_ratatui();
+    let resting_zebra = surface_colors(Surface::LibraryColumn, false)
+        .fill
+        .to_ratatui();
     let mut zebra = 0;
     let mut focused = 0;
     for y in list_panel.y..list_panel.bottom() {

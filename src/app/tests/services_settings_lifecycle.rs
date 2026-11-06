@@ -88,7 +88,13 @@ fn replacement_candidate_is_not_persisted_and_escape_drops_it() {
         Some(mbv_ui_model::overlay::OverlayRequest::Confirm(modal)) => modal.on_confirm.clone(),
         _ => panic!("confirmation request missing"),
     };
-    app.apply_confirm_action(action, KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    app.apply_confirm_action(
+        action,
+        crate::app::test_seams::crossterm_key_to_neutral(KeyEvent::new(
+            KeyCode::Esc,
+            KeyModifiers::NONE,
+        )),
+    );
     app.dismiss_confirm();
     assert!(app.setup.pending_emby_replacement.is_none());
     assert_eq!(app.emby_runtime.state, ServiceState::Ready);

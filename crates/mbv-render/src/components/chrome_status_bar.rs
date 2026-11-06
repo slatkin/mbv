@@ -43,12 +43,20 @@ pub struct StatusBarModel {
     pub right: Vec<Span<'static>>,
     /// Visual-mode count indicator, when selected items exist.
     pub visual_mode: Option<VisualModeIndicator>,
+}
+/// The status chrome the Status bar's Surface state owns and the adapter
+/// paints (extract-client-core row 4.6): the prefix-armed pill and the live
+/// toast, built from the Surface state at paint time instead of projected
+/// as shell content.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct StatusBarChrome {
     /// Prefix-armed pill spans (absent when not armed).
     pub prefix_armed: Option<Vec<Span<'static>>>,
-    /// Severity-styled toast spans, projected by the shell while a toast is
-    /// live (`None` otherwise, spec `toast-notification-semantics`). A live
-    /// toast takes over the entire status row, so the pills drop for the
-    /// toast's severity-derived duration and their regions stay `None`.
+    /// Severity-styled toast spans, built from the Surface state while a
+    /// toast is presented (`None` otherwise, spec
+    /// `toast-notification-semantics`). A live toast takes over the entire
+    /// status row, so the pills drop for the toast's severity-derived
+    /// duration and their regions stay `None`.
     pub toast: Option<Vec<Span<'static>>>,
 }
 /// The status row's pointer regions, retained by the mounted
@@ -132,10 +140,14 @@ fn status_bar_fit(widths: &StatusBarWidths, available: u16) -> StatusBarFit {
     }
 }
 
-fn status_bar_left_segments(model: &StatusBarModel, available: u16) -> StatusBarLeftSegments {
+fn status_bar_left_segments(
+    model: &StatusBarModel,
+    chrome: &StatusBarChrome,
+    available: u16,
+) -> StatusBarLeftSegments {
     let mute = model.mute.clone();
     let volume = model.volume.clone();
-    let armed = model.prefix_armed.clone();
+    let armed = chrome.prefix_armed.clone();
 
     // Preserve the existing left-segment overflow order: mute drops
     // first, then the volume pill. The armed pill sits with
@@ -146,8 +158,12 @@ fn status_bar_left_segments(model: &StatusBarModel, available: u16) -> StatusBar
         vec![Span::styled(
             format!("-- VISUAL ({}) --", indicator.count),
             Style::default()
-                .fg(palette::Role::TextFocusAccent.color())
-                .bg(palette::surface_colors(palette::Surface::StatusBarPill, false).fill),
+                .fg(palette::Role::TextFocusAccent.color().to_ratatui())
+                .bg(
+                    palette::surface_colors(palette::Surface::StatusBarPill, false)
+                        .fill
+                        .to_ratatui(),
+                ),
         )]
     });
     let visual_width = visual.as_ref().map_or(0, |spans| status_width(spans));
@@ -287,10 +303,17 @@ fn render_status_bar_right(
     }
 }
 
-pub fn render_status_bar(f: &mut Frame, area: Rect, model: &StatusBarModel) -> StatusBarRegions {
+pub fn render_status_bar(
+    f: &mut Frame,
+    area: Rect,
+    model: &StatusBarModel,
+    chrome: &StatusBarChrome,
+) -> StatusBarRegions {
     // Keep the row itself darker so the pills read as segments sitting on top of it.
     let bar_style =
-        Style::default().bg(palette::surface_colors(palette::Surface::StatusBar, false).fill);
+        Style::default().bg(palette::surface_colors(palette::Surface::StatusBar, false)
+            .fill
+            .to_ratatui());
     // `Clear` blanks every cell's symbol first (task 12.2): a bare
     // `Block::style` only recolors a cell, it never overwrites a stale
     // glyph left by whatever painted this placement before the status bar
@@ -302,7 +325,7 @@ pub fn render_status_bar(f: &mut Frame, area: Rect, model: &StatusBarModel) -> S
     // surface, previously the render-path overlay). The pills are not
     // painted while the toast is live and their regions stay `None`, so
     // pointer events are never resolved against hidden pills.
-    if let Some(toast) = model.toast.as_ref().filter(|spans| !spans.is_empty()) {
+    if let Some(toast) = chrome.toast.as_ref().filter(|spans| !spans.is_empty()) {
         f.render_widget(
             Paragraph::new(Line::from(toast.clone()))
                 .alignment(Alignment::Center)
@@ -312,7 +335,7 @@ pub fn render_status_bar(f: &mut Frame, area: Rect, model: &StatusBarModel) -> S
         return StatusBarRegions::default();
     }
 
-    let segments = status_bar_left_segments(model, area.width);
+    let segments = status_bar_left_segments(model, chrome, area.width);
     let (regions, left_content_width) = render_status_bar_left(f, area, bar_style, segments);
     render_status_bar_right(f, area, bar_style, left_content_width, &model.right);
     regions

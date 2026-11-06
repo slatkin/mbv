@@ -9,14 +9,14 @@ use crate::app::dispatch::action::{
     AppCommand, Command, IdleFeedLinkContext, NavigationIntent, PanelIntent, PlaybackIntent,
     ShellCommand, VisualIntent, idle_feed_command_for_key,
 };
-use crossterm::event::{KeyCode, KeyModifiers};
 use mbv_keybinds::{Keybinds, action_by_id};
 use mbv_ui_model::playback::VOLUME_STEP;
 use mbv_ui_model::settings::{PanelFocus, PanelMode};
+use mbv_ui_msg::{Key, KeyModifiers};
 
 /// Which remote-control target currently owns transport shortcuts.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub(in crate::app) enum RemoteControlTarget {
+pub enum RemoteControlTarget {
     #[default]
     None,
     DirectRemote,
@@ -24,7 +24,7 @@ pub(in crate::app) enum RemoteControlTarget {
 
 /// Playback facts read by the central keyboard policy.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub(in crate::app) struct RouterPlaybackState {
+pub struct RouterPlaybackState {
     pub player_active: bool,
     pub remote_target: RemoteControlTarget,
     pub queue_only_idle: bool,
@@ -40,7 +40,7 @@ pub(in crate::app) struct RouterPlaybackState {
 /// settable bools. `help`/`sessions_sidebar`/`text_entry_focused` stay
 /// independent and live on `RouterOverlayState`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub(in crate::app) enum OverlayFocus {
+pub enum OverlayFocus {
     /// No overlay holds `TuiRealm` focus; the panels own the keyboard.
     #[default]
     Free,
@@ -72,7 +72,7 @@ impl OverlayFocus {
 
 /// Overlay facts read by the central keyboard policy.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub(in crate::app) struct RouterOverlayState {
+pub struct RouterOverlayState {
     /// Which overlay-focus situation the keyboard sees.
     pub focus: OverlayFocus,
     /// Whether the (non-blocking) Help overlay is mounted.
@@ -88,7 +88,7 @@ pub(in crate::app) struct RouterOverlayState {
 
 /// Plain-data state read by the central keyboard policy.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub(in crate::app) struct RouterSnapshot {
+pub struct RouterSnapshot {
     pub playback: RouterPlaybackState,
     pub overlays: RouterOverlayState,
     pub panel_mode: PanelMode,
@@ -180,14 +180,13 @@ impl KeyPolicyBinding {
     /// including the swallow guard that blocks rather than commands.
     fn matches(self, chord: KeyChord) -> bool {
         match self {
-            Self::SessionsDismiss => chord.code == KeyCode::Esc,
+            Self::SessionsDismiss => chord.code == Key::Esc,
             Self::SessionsSidebarTransfer => {
-                chord.mods.is_empty() && matches!(chord.code, KeyCode::Char('h' | 't'))
+                chord.mods.is_empty() && matches!(chord.code, Key::Char('h' | 't'))
             }
             Self::AltSwallow => chord.mods.contains(KeyModifiers::ALT),
             Self::QueueColumnWidth => {
-                matches!(chord.code, KeyCode::Left | KeyCode::Right)
-                    && chord.mods == KeyModifiers::SHIFT
+                matches!(chord.code, Key::Left | Key::Right) && chord.mods == KeyModifiers::SHIFT
             }
             _ => false,
         }
@@ -640,7 +639,7 @@ fn command_for_navigation_binding(binding: KeyPolicyBinding, key: KeyChord) -> O
             Some(NavigationIntent::PreviousLibraryTab.into())
         }
         KeyPolicyBinding::LibraryTabJump => match key.code {
-            KeyCode::Char(c @ '1'..='9') => {
+            Key::Char(c @ '1'..='9') => {
                 Some(NavigationIntent::SetLibraryTab((c as usize) - '1' as usize).into())
             }
             _ => None,

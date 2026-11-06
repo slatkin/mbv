@@ -13,21 +13,23 @@ use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::{App, PanelFocus, QueueLink, RemoteSlotState};
 use mbv_render::components::widgets::service_state_color;
 use mbv_render::indicators;
+use mbv_ui_model::toast::StatusToast;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Span;
 
 impl App {
-    /// Build the live toast's spans for the status row, or `None` when no
+    /// The live toast's presentation for the status row, or `None` when no
     /// toast should render in-app (spec `toast-notification-semantics`).
     /// Restores the in-app toast surface dropped during the `TuiRealm`
     /// migration (commit `e9f3ab957`): Neutral toasts always render in-app;
     /// Success/Warning/Error toasts render in-app only when system
     /// notifications are disabled or the desktop notification failed
     /// (`notif_failed`), because a delivered desktop notification hides the
-    /// in-app row. Severity colors ride on the status-bar surface: the span
-    /// carries only the severity foreground, the row background comes from
-    /// the painter's `bar_style`.
-    pub(in crate::app) fn toast_status_spans(&self) -> Option<Vec<Span<'static>>> {
+    /// in-app row. The presentation is neutral (extract-client-core row 4.6):
+    /// the Severity's colour is the painters' choice, and the presented
+    /// facts — the text and the severity — ride the Status bar's Surface
+    /// state.
+    pub(in crate::app) fn toast_presentation(&self) -> Option<StatusToast> {
         if self.status.is_empty() || !self.status_toast_live() {
             return None;
         }
@@ -37,17 +39,10 @@ impl App {
         if delivered_offscreen {
             return None;
         }
-        let fg = match self.status_severity {
-            ToastSeverity::Neutral => mbv_theme::Role::TextPrimary,
-            ToastSeverity::Success => mbv_theme::Role::StatusAvailable,
-            ToastSeverity::Warning => mbv_theme::Role::TextFocusAccent,
-            ToastSeverity::Error => mbv_theme::Role::StatusError,
-        }
-        .color();
-        Some(vec![Span::styled(
-            self.status.clone(),
-            Style::default().fg(fg),
-        )])
+        Some(StatusToast {
+            text: self.status.clone(),
+            severity: self.status_severity,
+        })
     }
 
     /// Build the playback status indicator items (res/codec, audio lang, CC), space-separated.
@@ -169,97 +164,6 @@ impl App {
         }
     }
 
-    /// The queue footer's owner indicator content, without outer pads (design
-    /// D7): always shown, naming the Player owner whose queue the panel
-    /// shows. The painter adds the pads and gives it no hit region — it is
-    /// informational only.
-    pub(in crate::app) fn queue_owner_status_spans(&self) -> Vec<Span<'static>> {
-        let style = Style::default()
-            .fg(mbv_theme::Role::TextFocusAccent.color())
-            .bg(mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false).fill);
-        let icon = if self.use_nerd_fonts {
-            "\u{f1616}"
-        } else {
-            "\u{1F5A7}"
-        };
-        vec![
-            Span::styled(icon.to_string(), style),
-            Span::styled(format!(" {}", self.queue_owner_label()), style),
-        ]
-    }
-
-    /// The playlist source pill content (glyph plus name), without outer pads.
-    /// The painter adds the leading/trailing pads and the autosave delimiter.
-    /// Empty when no playlist is loaded: the glyph alone, grey. Loaded: blue.
-    pub(in crate::app) fn playlist_status_spans(&self) -> Vec<Span<'static>> {
-        let gap = if self.use_nerd_fonts { " " } else { "  " };
-        let (label, loaded) = match self.playback_queue().source() {
-            mbv_queue::QueueSource::Playlist { name, .. } => (format!("{gap}{name}"), true),
-            _ => (String::new(), false),
-        };
-        let fg = if loaded {
-            mbv_theme::Role::TextMetadata.color()
-        } else {
-            mbv_theme::Role::TextMuted.color()
-        };
-        let style = Style::default()
-            .bg(mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false).fill)
-            .fg(fg);
-        let glyph = if self.use_nerd_fonts {
-            "\u{f0411}"
-        } else {
-            "\u{1F5AD}"
-        };
-        if label.is_empty() {
-            vec![Span::styled(glyph, style)]
-        } else {
-            vec![Span::styled(glyph, style), Span::styled(label, style)]
-        }
-    }
-
-    /// The autosave indicator content, without outer pads. Present only while
-    /// save-on-consume is on for a saved playlist. Independent of the dirty
-    /// flag: both can show at one time. The painter puts it left of the
-    /// playlist pill with one space delimiter.
-    pub(in crate::app) fn autosave_status_spans(&self) -> Option<Vec<Span<'static>>> {
-        let autosave_on = self.queue_is_saved_playlist() && {
-            let config = self.config.lock().unwrap();
-            let cfg = &*config;
-            cfg.save_playlist_on_consume || cfg.save_playlist_on_consume_audio
-        };
-        if !autosave_on {
-            return None;
-        }
-        let pill_bg = mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false).fill;
-        let style = Style::default()
-            .fg(mbv_theme::Role::Accent.color())
-            .bg(pill_bg);
-        Some(if self.use_nerd_fonts {
-            vec![Span::styled("\u{f18ea}", style)]
-        } else {
-            vec![Span::styled("AUTOSAVE", style)]
-        })
-    }
-
-    /// The dirty indicator content, without outer pads. Present only while
-    /// the queue differs from its saved playlist. Independent of autosave.
-    /// The painter puts it right-anchored.
-    pub(in crate::app) fn dirty_status_spans(&self) -> Option<Vec<Span<'static>>> {
-        if !self.queue_dirty {
-            return None;
-        }
-        let pill_bg = mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false).fill;
-        let style = Style::default()
-            .fg(mbv_theme::Role::TextFocusAccent.color())
-            .add_modifier(Modifier::BOLD)
-            .bg(pill_bg);
-        Some(if self.use_nerd_fonts {
-            vec![Span::styled("\u{f0f42}", style)]
-        } else {
-            vec![Span::styled("UNSAVED", style)]
-        })
-    }
-
     pub(in crate::app) fn mute_status_spans(&self) -> Option<Vec<Span<'static>>> {
         crate::app::LocalPlaybackTarget::displayed_mute(self).then(|| {
             vec![
@@ -269,15 +173,17 @@ impl App {
                         mbv_theme::Surface::StatusBarPill,
                         false,
                     )
-                    .fill),
+                    .fill
+                    .to_ratatui()),
                 ),
                 Span::styled(
                     "muted",
                     Style::default()
-                        .fg(mbv_theme::Role::StatusError.color())
+                        .fg(mbv_theme::Role::StatusError.color().to_ratatui())
                         .bg(
                             mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false)
-                                .fill,
+                                .fill
+                                .to_ratatui(),
                         )
                         .add_modifier(Modifier::BOLD),
                 ),
@@ -287,44 +193,8 @@ impl App {
                         mbv_theme::Surface::StatusBarPill,
                         false,
                     )
-                    .fill),
-                ),
-            ]
-        })
-    }
-
-    /// The prefix-armed pill (design D7, task 7.3): present only while
-    /// prefix mode is armed, styled like the other left-segment pills.
-    /// Non-interactive: any mouse event already disarms prefix mode
-    /// silently, so the pill carries no hit region.
-    pub(in crate::app) fn prefix_armed_status_spans(&self) -> Option<Vec<Span<'static>>> {
-        self.prefix_armed.then(|| {
-            vec![
-                Span::styled(
-                    " ",
-                    Style::default().bg(mbv_theme::surface_colors(
-                        mbv_theme::Surface::StatusBarPill,
-                        false,
-                    )
-                    .fill),
-                ),
-                Span::styled(
-                    " PREFIX ",
-                    Style::default()
-                        .fg(mbv_theme::Role::Accent.color())
-                        .bg(
-                            mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false)
-                                .fill,
-                        )
-                        .add_modifier(Modifier::BOLD),
-                ),
-                Span::styled(
-                    " ",
-                    Style::default().bg(mbv_theme::surface_colors(
-                        mbv_theme::Surface::StatusBarPill,
-                        false,
-                    )
-                    .fill),
+                    .fill
+                    .to_ratatui()),
                 ),
             ]
         })
@@ -349,19 +219,28 @@ impl App {
                     mbv_theme::Surface::StatusBarPill,
                     false,
                 )
-                .fill),
+                .fill
+                .to_ratatui()),
             ),
             Span::styled(
                 icon,
                 Style::default()
-                    .fg(mbv_theme::Role::PlaybackMetaFg.color())
-                    .bg(mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false).fill),
+                    .fg(mbv_theme::Role::PlaybackMetaFg.color().to_ratatui())
+                    .bg(
+                        mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false)
+                            .fill
+                            .to_ratatui(),
+                    ),
             ),
             Span::styled(
                 format!(" {volume}"),
                 Style::default()
-                    .fg(mbv_theme::Role::Accent.color())
-                    .bg(mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false).fill)
+                    .fg(mbv_theme::Role::Accent.color().to_ratatui())
+                    .bg(
+                        mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false)
+                            .fill
+                            .to_ratatui(),
+                    )
                     .add_modifier(Modifier::BOLD),
             ),
         ]
@@ -383,11 +262,11 @@ impl App {
         // current player target: a stay-alive client that routes playback to
         // another daemon is still in stay-alive mode.
         let alive_color = if !stay_alive {
-            mbv_theme::Role::TextMuted.color()
+            mbv_theme::Role::TextMuted.color().to_ratatui()
         } else if self.player.is_remote_disconnected() {
-            mbv_theme::Role::TextFocusAccent.color()
+            mbv_theme::Role::TextFocusAccent.color().to_ratatui()
         } else {
-            mbv_theme::Role::StatusError.color()
+            mbv_theme::Role::StatusError.color().to_ratatui()
         };
         let mut right_spans: Vec<Span> = Vec::new();
         let source_label = queue_source_status_label(
@@ -409,7 +288,8 @@ impl App {
                         mbv_theme::Surface::StatusBarPill,
                         false,
                     )
-                    .fill),
+                    .fill
+                    .to_ratatui()),
                 ),
             );
         }
@@ -420,14 +300,22 @@ impl App {
             right_spans.push(Span::styled(
                 " 🯅",
                 Style::default()
-                    .fg(mbv_theme::Role::TextMetadata.color())
-                    .bg(mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false).fill),
+                    .fg(mbv_theme::Role::TextMetadata.color().to_ratatui())
+                    .bg(
+                        mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false)
+                            .fill
+                            .to_ratatui(),
+                    ),
             ));
             right_spans.push(Span::styled(
                 format!(" {username} "),
                 Style::default()
-                    .fg(mbv_theme::Role::PlaybackMetaFg.color())
-                    .bg(mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false).fill),
+                    .fg(mbv_theme::Role::PlaybackMetaFg.color().to_ratatui())
+                    .bg(
+                        mbv_theme::surface_colors(mbv_theme::Surface::StatusBarPill, false)
+                            .fill
+                            .to_ratatui(),
+                    ),
             ));
         }
         // Service-state indicators — Emby and Audiobookshelf coloured by
@@ -448,7 +336,7 @@ impl App {
                 },
                 Style::default().fg(service_state_color(
                     self.emby_runtime.state,
-                    mbv_theme::Role::Accent.color(),
+                    mbv_theme::Role::Accent.color().to_ratatui(),
                 )),
             ),
             Span::raw(" "),
@@ -460,7 +348,7 @@ impl App {
                 },
                 Style::default().fg(service_state_color(
                     self.audiobookshelf_runtime.state,
-                    mbv_theme::Role::AccentAudiobookshelf.color(),
+                    mbv_theme::Role::AccentAudiobookshelf.color().to_ratatui(),
                 )),
             ),
             Span::raw(" "),
@@ -499,7 +387,7 @@ fn queue_source_status_label(
             return None;
         }
     };
-    Some((label, mbv_theme::Role::TextMuted.color()))
+    Some((label, mbv_theme::Role::TextMuted.color().to_ratatui()))
 }
 
 #[cfg(test)]
@@ -612,7 +500,10 @@ mod tests {
         let mut app = make_app_stub();
         app.audiobookshelf_runtime.state = state;
 
-        let expected = service_state_color(state, mbv_theme::Role::AccentAudiobookshelf.color());
+        let expected = service_state_color(
+            state,
+            mbv_theme::Role::AccentAudiobookshelf.color().to_ratatui(),
+        );
 
         let spans = app.status_bar_right_spans();
         let abs = spans
@@ -662,8 +553,8 @@ mod tests {
         app.status_expires = Some(toast_expiry(expiry));
 
         assert_eq!(
-            app.toast_status_spans()
-                .is_some_and(|spans| spans.iter().any(|span| span.content.contains("Scanning"))),
+            app.toast_presentation()
+                .is_some_and(|toast| toast.text.contains("Scanning")),
             projected,
         );
     }

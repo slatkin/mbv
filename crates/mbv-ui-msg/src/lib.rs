@@ -11,13 +11,15 @@
 //! `crate::TypeName` import path used throughout the
 //! codebase; nothing else had to change.
 
-use tuirealm::event::KeyEvent as TuiKeyEvent;
+use crate::key::KeyEvent as NeutralKeyEvent;
 
 mod component_id;
 mod hit_regions;
 mod home;
 mod intents;
+mod key;
 mod playback;
+mod pointer;
 mod queue;
 mod selection;
 mod service;
@@ -39,7 +41,11 @@ pub use self::intents::{
     SettingsIntent, TwitchUrlIntent,
 };
 #[doc(inline)]
+pub use self::key::{Key, KeyEvent, KeyModifiers};
+#[doc(inline)]
 pub use self::playback::PlaybackRequest;
+#[doc(inline)]
+pub use self::pointer::{PointerEvent, PointerKind, Position};
 #[doc(inline)]
 pub use self::queue::{QueueColumnResize, QueueIntent, QueueMove, QueueRequest};
 #[doc(inline)]
@@ -116,7 +122,7 @@ pub enum Msg {
 /// by `sync_mouse_subscriptions` before delivery (ADR 0024).
 #[derive(Debug, Clone, PartialEq)]
 pub enum TerminalObserverEvent {
-    Key(TuiKeyEvent),
+    Key(NeutralKeyEvent),
     Resize {
         width: u16,
         height: u16,

@@ -257,7 +257,9 @@ impl App {
         );
         // The row is fixed (it paints the playback panel's band), so the
         // focus bit is not read; the literal keeps that visible at the site.
-        let bg = mbv_theme::surface_colors(mbv_theme::Surface::QueueCardVisualizer, false).fill;
+        let bg = mbv_theme::surface_colors(mbv_theme::Surface::QueueCardVisualizer, false)
+            .fill
+            .to_ratatui();
         self.render_visualizer(f, rect, bg);
         (rect.height, rect.width, false)
     }

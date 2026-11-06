@@ -6,12 +6,13 @@ use tuirealm::event::{Event, Key, KeyEvent, MouseEvent, MouseEventKind};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::mouse::gesture::{MouseGesture, MouseGestureState};
+use super::mouse::gesture::MouseGestureState;
 use super::mouse::hit::HitRegions;
 use crate::media_list::{MediaListCarrier, MediaListOperation};
 use mbv_emby_model::EmbyItem;
 use mbv_render::components::media_list::{MediaKind, MediaListRow, MediaSemanticState};
 use mbv_render::{PlaylistsRenderGeometry, PlaylistsViewState, render_playlists_content};
+use mbv_surfaces::gesture::PointerGesture;
 use mbv_ui_msg::UserEvent;
 use mbv_ui_msg::{
     LeafKeyResult, Msg, MusicTreeAction, PlaylistsTarget, ShellRequest, TerminalObserverEvent,
@@ -338,17 +339,17 @@ impl PlaylistsComponent {
             // shared owner's `Scroll` (design D6): selection unchanged, the
             // anchor goes Free. The overlay stays the focus-owned sole
             // claimant, also at a boundary.
-            MouseGesture::Scroll { delta, .. } => {
+            PointerGesture::Scroll { delta, .. } => {
                 self.active_list_mut()
                     .delegate_operation(MediaListOperation::Scroll(delta));
                 Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
             }
-            MouseGesture::RightClick(_) if self.open.is_some() => {
+            PointerGesture::RightClick(_) if self.open.is_some() => {
                 self.open = None;
                 self.open_items.clear();
                 Some(Msg::Shell(Box::new(ShellRequest::PlaylistsBack)))
             }
-            gesture @ (MouseGesture::Click { at, .. } | MouseGesture::DoubleClick(at)) => {
+            gesture @ (PointerGesture::Click { at, .. } | PointerGesture::DoubleClick(at)) => {
                 if !self.geometry.panel_area.contains(at) {
                     return Some(Msg::Shell(Box::new(ShellRequest::DismissPlaylists)));
                 }
@@ -371,7 +372,7 @@ impl PlaylistsComponent {
                 } else {
                     PlaylistsTarget::Playlist(index)
                 };
-                matches!(gesture, MouseGesture::DoubleClick(_)).then_some(Msg::Shell(Box::new(
+                matches!(gesture, PointerGesture::DoubleClick(_)).then_some(Msg::Shell(Box::new(
                     ShellRequest::PlaylistsAction {
                         target: playlists_target,
                         action: MusicTreeAction::Play,

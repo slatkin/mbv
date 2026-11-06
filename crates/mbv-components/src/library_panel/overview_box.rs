@@ -96,8 +96,11 @@ pub fn paint_overview_box(
     // the pane the content is painted into, so it repaints that pane's own
     // surface: the Wide Hero pane's fill, or the Library Hero overlay's sheet.
     f.render_widget(
-        Block::default()
-            .style(Style::default().bg(palette::surface_colors(pane_surface, false).fill)),
+        Block::default().style(
+            Style::default().bg(palette::surface_colors(pane_surface, false)
+                .fill
+                .to_ratatui()),
+        ),
         Rect {
             y: next_row,
             height: 1.min(area.bottom().saturating_sub(next_row)),
@@ -111,8 +114,11 @@ pub fn paint_overview_box(
     };
     f.render_widget(
         Block::default().style(
-            Style::default()
-                .bg(palette::surface_colors(palette::Surface::MainContentBox, false).fill),
+            Style::default().bg(
+                palette::surface_colors(palette::Surface::MainContentBox, false)
+                    .fill
+                    .to_ratatui(),
+            ),
         ),
         panel,
     );
@@ -135,7 +141,7 @@ pub fn paint_overview_box(
             inner_rows,
             viewport,
             offset,
-            palette::Role::Scrollbar.color(),
+            palette::Role::Scrollbar.color().to_ratatui(),
         );
     }
     Some(OverviewPaint {
@@ -197,7 +203,7 @@ fn paint_overview_flow(
         f.render_widget(
             Paragraph::new(Line::from(Span::styled(
                 title,
-                Style::default().fg(palette::Role::TextHeroTitle.color()),
+                Style::default().fg(palette::Role::TextHeroTitle.color().to_ratatui()),
             ))),
             Rect {
                 x: inner.x,
@@ -249,7 +255,7 @@ fn paint_overview_text(
         f.render_widget(
             Paragraph::new(Line::from(Span::styled(
                 line.as_ref(),
-                Style::default().fg(palette::Role::TextEmphasis.color()),
+                Style::default().fg(palette::Role::TextEmphasis.color().to_ratatui()),
             ))),
             Rect {
                 x: inner.x,
@@ -313,7 +319,8 @@ fn paint_credits_from(f: &mut Frame, area: Rect, credits: &[HeroCredit], row_off
                         palette::Surface::CreditsStripe,
                         false,
                     )
-                    .fill),
+                    .fill
+                    .to_ratatui()),
                 ),
                 Rect {
                     x: area.x,
@@ -326,7 +333,7 @@ fn paint_credits_from(f: &mut Frame, area: Rect, credits: &[HeroCredit], row_off
         let name_width = role_start.saturating_sub(area.x).saturating_sub(2);
         f.render_widget(
             Paragraph::new(credit.name.as_str())
-                .style(Style::default().fg(palette::Role::HeroCreditsName.color())),
+                .style(Style::default().fg(palette::Role::HeroCreditsName.color().to_ratatui())),
             Rect {
                 x: area.x,
                 y,
@@ -342,7 +349,7 @@ fn paint_credits_from(f: &mut Frame, area: Rect, credits: &[HeroCredit], row_off
             let role_x = area.right().saturating_sub(rendered_role_width);
             f.render_widget(
                 Paragraph::new(role)
-                    .style(Style::default().fg(palette::Role::TextEmphasis.color())),
+                    .style(Style::default().fg(palette::Role::TextEmphasis.color().to_ratatui())),
                 Rect {
                     x: role_x,
                     y,
@@ -381,7 +388,7 @@ fn underline_link_cells(f: &mut Frame, cell: Rect, offset: usize, label_width: u
         };
         cell.set_style(
             cell.style()
-                .fg(palette::Role::TextMetadata.color())
+                .fg(palette::Role::TextMetadata.color().to_ratatui())
                 .add_modifier(ratatui::style::Modifier::UNDERLINED),
         );
     }

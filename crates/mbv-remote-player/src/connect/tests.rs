@@ -98,8 +98,12 @@ fn connected_pair_for_disconnect_test() -> (RemotePlayer, mpsc::Receiver<PlayerE
         writeln!(writer, "{}", serde_json::to_string(&state).unwrap()).unwrap();
         daemon_tx.send(writer).unwrap();
     });
-    let (remote, events) =
-        connect_stream(SocketStream::Unix(client), PeerBuild::Any, false, None).unwrap();
+    let (remote, events) = connect_stream(
+        SocketStream::Unix(client),
+        PeerBuild::Any,
+        Some(&crate::PinSwapHello::default()),
+    )
+    .unwrap();
     let daemon = daemon_rx.recv().unwrap();
     peer.join().unwrap();
     (remote, events, daemon)
@@ -383,8 +387,7 @@ fn local_handshake_rejects_a_mismatched_owner_build_before_client_hello(
         || Ok("unused".to_string()),
         HandshakeRole::Client,
         PeerBuild::MustMatch,
-        false,
-        None,
+        Some(&crate::PinSwapHello::default()),
     )
     .unwrap_err();
 
@@ -439,8 +442,7 @@ fn local_handshake_accepts_identical_owner_build() {
         || Ok("unused".to_string()),
         HandshakeRole::Client,
         PeerBuild::MustMatch,
-        false,
-        None,
+        Some(&crate::PinSwapHello::default()),
     )
     .unwrap();
     peer.join().unwrap();
@@ -585,8 +587,12 @@ fn connect_with_advertised_hello(
             }
         }
     });
-    let (player, event_rx) =
-        connect_stream(SocketStream::Unix(client), PeerBuild::Any, false, None).unwrap();
+    let (player, event_rx) = connect_stream(
+        SocketStream::Unix(client),
+        PeerBuild::Any,
+        Some(&crate::PinSwapHello::default()),
+    )
+    .unwrap();
     (player, event_rx, peer)
 }
 
@@ -740,8 +746,7 @@ fn a_late_partial_seed_line_is_never_consumed() {
     let (player, event_rx) = connect_stream_with_seed_timeout(
         SocketStream::Unix(client),
         PeerBuild::Any,
-        false,
-        None,
+        Some(&crate::PinSwapHello::default()),
         Duration::from_millis(200),
     )
     .unwrap();
@@ -772,4 +777,5 @@ fn a_late_partial_seed_line_is_never_consumed() {
 }
 
 mod daemon_endpoint;
+mod hello;
 mod queue;

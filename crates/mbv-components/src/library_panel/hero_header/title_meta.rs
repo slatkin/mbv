@@ -102,7 +102,7 @@ pub fn paint_hero_pane_content(
 }
 
 /// The one title/meta painter for all three arms: the title in
-/// `palette::Role::TextHeroTitle.color()`, then each meta row in
+/// `palette::Role::TextHeroTitle.color().to_ratatui()`, then each meta row in
 /// `HERO_META_ROLES[cycle % 3]` — except the duration row
 /// (`HeroFacts::duration_row`) and the resume-percentage row
 /// (`HeroFacts::progress_row`), painted the `Role::Duration` and
@@ -122,16 +122,19 @@ fn paint_title_and_meta(
     let mut lines: Vec<WrappedHeroLine<'_>> = Vec::with_capacity(1 + facts.meta_rows.len());
     lines.push(WrappedHeroLine {
         text: &facts.title,
-        style: ratatui::style::Style::default().fg(palette::Role::TextHeroTitle.color()),
+        style: ratatui::style::Style::default()
+            .fg(palette::Role::TextHeroTitle.color().to_ratatui()),
     });
     let mut cycle = 0usize;
     for (index, row) in facts.meta_rows.iter().enumerate() {
         let fg = if facts.duration_row == Some(index) {
-            palette::Role::Duration.color()
+            palette::Role::Duration.color().to_ratatui()
         } else if facts.progress_row == Some(index) {
-            palette::Role::ProgressPercent.color()
+            palette::Role::ProgressPercent.color().to_ratatui()
         } else {
-            let fg = HERO_META_ROLES[cycle % HERO_META_ROLES.len()].color();
+            let fg = HERO_META_ROLES[cycle % HERO_META_ROLES.len()]
+                .color()
+                .to_ratatui();
             cycle += 1;
             fg
         };

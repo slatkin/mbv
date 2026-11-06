@@ -6,10 +6,11 @@ use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseEvent, MouseEvent
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::mouse::gesture::{MouseGesture, MouseGestureState};
+use super::mouse::gesture::MouseGestureState;
 use super::mouse::hit::HitRegions;
 use mbv_render::components::settings_component::{ServiceRow, SettingsRow, SetupDraft};
 use mbv_render::{SettingsRenderGeometry, SettingsRenderModel, render_settings_content};
+use mbv_surfaces::gesture::PointerGesture;
 use mbv_ui_model::settings::{SettingValueKind, SettingsDestination};
 use mbv_ui_msg::UserEvent;
 use mbv_ui_msg::{
@@ -386,7 +387,7 @@ impl SettingsComponent {
             return None;
         }
         match self.mouse_gestures.recognize(mouse)? {
-            MouseGesture::Click { at, .. } | MouseGesture::DoubleClick(at) => {
+            PointerGesture::Click { at, .. } | PointerGesture::DoubleClick(at) => {
                 if !self.geometry.panel_area.contains(at) {
                     return Some(Msg::Shell(Box::new(ShellRequest::DismissSettings)));
                 }
@@ -406,7 +407,7 @@ impl SettingsComponent {
                     SettingsIntent::Activate(cursor),
                 ))))
             }
-            MouseGesture::Scroll { delta, .. } => {
+            PointerGesture::Scroll { delta, .. } => {
                 let max_scroll = self.max_scroll();
                 self.scroll = self
                     .scroll

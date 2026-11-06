@@ -1,20 +1,19 @@
 use super::Model;
-use crossterm::event::{KeyCode, KeyEvent};
 use mbv_components::{ConfirmComponent, DaemonLostComponent, SavePlaylistComponent};
 use mbv_ui_model::confirm::ConfirmAction;
-use mbv_ui_msg::{ComponentId, ModalId};
+use mbv_ui_msg::{ComponentId, Key, KeyEvent, ModalId};
 use mbv_ui_msg::{ConfirmIntent, DaemonLostIntent, SavePlaylistIntent};
 
 impl Model {
     pub(in crate::app) fn handle_confirm_intent(&mut self, intent: ConfirmIntent) {
         let code = match intent {
-            ConfirmIntent::Accept => KeyCode::Enter,
-            ConfirmIntent::Cancel => KeyCode::Esc,
-            ConfirmIntent::Save => KeyCode::Char('s'),
-            ConfirmIntent::Discard => KeyCode::Char('d'),
-            ConfirmIntent::Dismiss => KeyCode::Char('x'),
+            ConfirmIntent::Accept => Key::Enter,
+            ConfirmIntent::Cancel => Key::Esc,
+            ConfirmIntent::Save => Key::Char('s'),
+            ConfirmIntent::Discard => Key::Char('d'),
+            ConfirmIntent::Dismiss => Key::Char('x'),
         };
-        self.handle_confirm_key(KeyEvent::new(code, crossterm::event::KeyModifiers::NONE));
+        self.handle_confirm_key(KeyEvent::new(code, mbv_ui_msg::KeyModifiers::NONE));
     }
 
     pub(in crate::app) fn handle_confirm_key(&mut self, key: KeyEvent) {
@@ -129,11 +128,11 @@ impl Model {
 /// Whether answering `action` with `key` should also close the modal. Only
 /// the keys an action actually answers on dismiss it; any other key is a
 /// no-op that leaves the modal open.
-fn confirm_key_dismisses(action: &ConfirmAction, key: KeyCode) -> bool {
+fn confirm_key_dismisses(action: &ConfirmAction, key: Key) -> bool {
     match action {
         ConfirmAction::DiscardOrSaveDirtyPlaylist => {
-            matches!(key, KeyCode::Char('s' | 'S' | 'd' | 'D') | KeyCode::Esc)
+            matches!(key, Key::Char('s' | 'S' | 'd' | 'D') | Key::Esc)
         }
-        _ => matches!(key, KeyCode::Enter | KeyCode::Esc),
+        _ => matches!(key, Key::Enter | Key::Esc),
     }
 }

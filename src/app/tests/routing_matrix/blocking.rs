@@ -147,8 +147,7 @@ fn fallthrough_with_no_leaf_message_fires_no_global_effect() {
 /// the shell-owned mount command when no overlay blocks it.
 #[test]
 fn twitch_url_open_resolves_to_its_shell_command_on_the_default_chord() {
-    let key =
-        crossterm::event::KeyEvent::new(KeyCode::Char('T'), crossterm::event::KeyModifiers::SHIFT);
+    let key = key_mod(KeyCode::Char('T'), crossterm::event::KeyModifiers::SHIFT);
     assert_eq!(
         resolve_router_outcome_with_focused(key, &idle_snapshot(), None, &default_keybinds()),
         RouterOutcome::Command(ShellCommand::OpenTwitchUrl.into())
@@ -159,8 +158,7 @@ fn twitch_url_open_resolves_to_its_shell_command_on_the_default_chord() {
 /// mounted the chord is swallowed and the prompt does not open.
 #[test]
 fn twitch_url_open_is_swallowed_under_a_blocking_overlay() {
-    let key =
-        crossterm::event::KeyEvent::new(KeyCode::Char('T'), crossterm::event::KeyModifiers::SHIFT);
+    let key = key_mod(KeyCode::Char('T'), crossterm::event::KeyModifiers::SHIFT);
     let snapshot = RouterSnapshot {
         overlays: crate::app::input::RouterOverlayState {
             focus: crate::app::input::OverlayFocus::Blocking,
@@ -180,10 +178,7 @@ fn rebound_global_respects_blocking_overlays() {
     // overlay the rebound chord must not fire — the overlay routing rules
     // hold for configured chords exactly as for declared defaults.
     let keybinds = keybinds_with_override("help_open", "Ctrl+h");
-    let rebound_key = crossterm::event::KeyEvent::new(
-        KeyCode::Char('h'),
-        crossterm::event::KeyModifiers::CONTROL,
-    );
+    let rebound_key = key_mod(KeyCode::Char('h'), crossterm::event::KeyModifiers::CONTROL);
     let snapshot = RouterSnapshot {
         overlays: crate::app::input::RouterOverlayState {
             focus: crate::app::input::OverlayFocus::Blocking,

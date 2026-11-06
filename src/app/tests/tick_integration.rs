@@ -511,6 +511,38 @@ fn esc_closes_a_sidebar_in_mini_view() {
     assert!(!harness.model().application.mounted(&id));
 }
 
+/// Task 3.7 (design D3 of `extract-client-core`, spec
+/// `client-interaction-core`): ``TuiRealm`` focus follows the core focus stack.
+/// A surface the shell pushes onto the stack is the focused ``TuiRealm``
+/// component after the sync pass, and the dismissal that drops it from the
+/// stack hands focus back to the derived Panel-focus surface — the stack is
+/// the authority, the pass only applies its derivation.
+#[test]
+fn tui_realm_focus_follows_the_core_stack() {
+    let mut harness = TickHarness::new(make_app_stub());
+    let sessions = ComponentId::Overlay(OverlayId::Sessions);
+
+    // The routed push records the overlay on the stack; the sync pass applies
+    // the stack's derived focus.
+    harness.model_mut().mount_sidebar(SidebarId::Sessions);
+    harness.model_mut().sync_mounted_surfaces();
+    assert_eq!(
+        harness.model().application.focus(),
+        Some(&sessions),
+        "the pushed overlay is the focused component after the sync pass"
+    );
+
+    // The routed dismissal drops the overlay; the derivation returns to the
+    // Panel-focus surface.
+    harness.model_mut().dismiss_sidebar(SidebarId::Sessions);
+    harness.model_mut().sync_mounted_surfaces();
+    assert_eq!(
+        harness.model().application.focus(),
+        Some(&ComponentId::Library),
+        "the dismissal returns focus to the derived Panel-focus surface"
+    );
+}
+
 #[test]
 fn blocking_confirm_overlay_keeps_focus_and_receives_input() {
     let mut app = make_app_stub();

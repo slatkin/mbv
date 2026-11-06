@@ -1,4 +1,4 @@
-use mbv_ui_msg::SelectionSummary;
+use mbv_surfaces::media_list::MediaListOperation;
 use ratatui::layout::Position;
 
 /// Pointer surface input resolved by a mounted presentation. Convert this to
@@ -19,66 +19,24 @@ pub enum MediaListSurfaceInput {
     Wheel { at: Position, delta: i64 },
 }
 
-/// Target-resolved operation accepted by the canonical media-list owner.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum MediaListOperation<Target> {
-    Move(i64),
-    Page(i64),
-    /// A wheel scroll of the viewport by `delta` flow rows. The viewport is
-    /// released to a free anchor; the selection, multi-selection, and live
-    /// range stay untouched.
-    Scroll(i64),
-    First,
-    Last,
-    ActivateCurrent,
-    ContextCurrent,
-    Select(Target),
-    Toggle(Target),
-    Range(Target),
-    Activate(Target),
-    Context(Target),
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum MediaListDisposition {
-    Unhandled,
-    Consumed,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct MediaListTransition<Target> {
-    pub disposition: MediaListDisposition,
-    pub selected_target: Option<Target>,
-    pub selection_summary: Option<SelectionSummary>,
-    pub external_intent: Option<RowIntent<Target>>,
-}
-
-impl<Target> MediaListTransition<Target> {
-    #[must_use]
-    pub fn unhandled() -> Self {
-        Self {
-            disposition: MediaListDisposition::Unhandled,
-            selected_target: None,
-            selection_summary: None,
-            external_intent: None,
-        }
+impl MediaListSurfaceInput {
+    pub fn into_operation<Target>(
+        self,
+        target: Option<Target>,
+    ) -> Option<MediaListOperation<Target>> {
+        Some(match self {
+            Self::Move(delta) => MediaListOperation::Move(delta),
+            Self::Wheel { delta, .. } => MediaListOperation::Scroll(delta),
+            Self::Page(delta) => MediaListOperation::Page(delta),
+            Self::First => MediaListOperation::First,
+            Self::Last => MediaListOperation::Last,
+            Self::Activate => MediaListOperation::ActivateCurrent,
+            Self::Context => MediaListOperation::ContextCurrent,
+            Self::Click(_) => MediaListOperation::Select(target?),
+            Self::ToggleClick(_) => MediaListOperation::Toggle(target?),
+            Self::RangeClick(_) => MediaListOperation::Range(target?),
+            Self::DoubleClick(_) => MediaListOperation::Activate(target?),
+            Self::ContextClick(_) => MediaListOperation::Context(target?),
+        })
     }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum RowIntent<Target> {
-    Activate(Target),
-    Context(Target),
-    ContextSelection(Vec<Target>),
-}
-
-/// The clamped one-column viewport of a [`MediaList`] for a given painted
-/// height: `offset` is the display-row index at the viewport top, so display
-/// row `i` paints at screen row `i - offset`. `total_rows` counts every
-/// display row (items, headings, spacers alike).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct WideViewport {
-    pub offset: usize,
-    pub height: usize,
-    pub total_rows: usize,
 }

@@ -33,6 +33,7 @@ impl App {
             // drained every tick (`drain_suspended_home_events`), so route
             // switching must not stop it, whatever Stay-alive is set to
             // (stay-alive-is-lifetime-only, design D1).
+            let remote_rx = self.waking_player_rx(remote_rx);
             self.suspended_local = Some(SuspendedLocalSession {
                 player: std::mem::replace(
                     &mut self.player,
@@ -46,7 +47,7 @@ impl App {
             // observes the shutdown and exits instead of leaking.
             self.player.disconnect_remote();
             self.player = PlayerProxy::from_remote(remote, always_play_next);
-            self.player_rx = remote_rx;
+            self.player_rx = self.waking_player_rx(remote_rx);
         }
         self.sync_subtitle_prefs_to_player();
         self.rebind_mpris_to_current_player();
@@ -150,7 +151,7 @@ impl App {
             match crate::single_instance::resolve(&socket_path, &lock_path)? {
                 crate::single_instance::Resolution::Fresh(guard) => {
                     drop(guard);
-                    crate::local_daemon::spawn_detached(&socket_path.to_string_lossy(), None)?;
+                    self.start_local_daemon()?;
                 }
                 crate::single_instance::Resolution::Attach => {}
                 crate::single_instance::Resolution::Refuse => {
@@ -168,7 +169,7 @@ impl App {
         let always_play_next = self.config.lock().unwrap().always_play_next;
         Ok(Some(SuspendedLocalSession {
             player: PlayerProxy::from_remote(remote, always_play_next),
-            player_rx,
+            player_rx: self.waking_player_rx(player_rx),
         }))
     }
 
@@ -325,7 +326,7 @@ impl App {
                     let initial_tab = replacement_view(initial_unified_state.as_ref());
                     let always_play_next = self.config.lock().unwrap().always_play_next;
                     self.player = PlayerProxy::from_remote(remote, always_play_next);
-                    self.player_rx = remote_rx;
+                    self.player_rx = self.waking_player_rx(remote_rx);
                     self.player_endpoint = Some(mbv_remote_player::DaemonEndpoint::Local);
                     self.sync_subtitle_prefs_to_player();
                     reconnected_local_daemon = Some(initial_tab);

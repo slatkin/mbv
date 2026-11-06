@@ -19,11 +19,13 @@ mbv is a Rust terminal media client for Emby, Audiobookshelf, and Feeds. It embe
 
 ## Repository map
 
+* `src/lib.rs`: the root package's library target. It exposes the shell `App`, the Client core tick, the keyboard router, and the Client-side Owner find, start, and attach steps that every Client shares; the `mbv` binary is a thin `main` over `run`.
 * `src/app/shell/`: interactive shell and TuiRealm `Model`. It holds `App`, mount and focus, runtime lifecycle, projections, dispatch, effects, and the single tick and draw path (`shell/run.rs`, `shell/draw.rs`).
-* `crates/mbv-components/`: TuiRealm Interactive Components. It holds local interaction state, embedded list controls, and pointer primitives (`Msg`s live in `mbv-ui-msg`).
+* `crates/mbv-surfaces/`: Surface state (cursor, selection, marks, viewport), the core `FocusStack`, `HitMap`, and per-list capacity. No ratatui, TuiRealm, crossterm, or GUI toolkit.
+* `crates/mbv-components/`: TuiRealm Interactive Components. A component over a shared surface (Queue, Queue playback, Status bar) is an adapter over its Surface state: it forwards neutral events, paints from that state, and reports geometry. Other components still own their local interaction state. Both kinds send typed `Msg`s (`Msg`s live in `mbv-ui-msg`).
 * `crates/mbv-render/`: `screens/` prepare content, `arrangements/` place it, `components/` paint it, and `layout.rs` composes layouts.
 * `src/app/input/`: the only keyboard routing site (`router.rs` precedence, `key_policy.rs` order, `resolver.rs` chords). Never add another.
-* `src/local_daemon.rs`: Local-daemon bootstrap. The rest of `src/` is the TUI binary.
+* `src/local_daemon.rs`: Local-daemon bootstrap. The rest of `src/` is the shared `mbv` library and the thin `mbv` binary over it.
 * `crates/mbv-audiobookshelf/`: Audiobookshelf provider client.
 * `crates/mbv-cast/`: Google Cast client, discovery, per-provider dispatch.
 * `crates/mbv-emby/`: Emby provider client.

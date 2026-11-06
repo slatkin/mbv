@@ -2,6 +2,7 @@ use crate::app::state::context_menu_capabilities::ItemCapabilities;
 use crate::app::{App, ContextAction, ContextMenuAnchor, ContextMenuEntry, PanelFocus};
 use mbv_emby_model::EmbyItem;
 use mbv_queue::QueueItem;
+use mbv_render::layout::rect_to_presentation;
 use mbv_ui_model::context_menu::AudiobookshelfMenuTarget;
 use mbv_ui_model::context_menu::BulkRemoveTarget;
 use mbv_ui_model::context_menu::ContextMenu;
@@ -670,7 +671,9 @@ impl App {
         Self::push_context_action(&mut entries, "Hide", ContextAction::HideVisualSlot);
         let bounds = {
             let area = self.layout.left_area;
-            (area.width > 0 && area.height > 0).then_some(area)
+            // Neutral presentation `Rect` (`extract-client-core` task 1.2); the
+            // render layout converts at the edge.
+            (area.width > 0 && area.height > 0).then(|| rect_to_presentation(area))
         };
         self.pending_overlay = Some(OverlayRequest::ContextMenu(ContextMenu {
             anchor: ContextMenuAnchor::Pointer { x, y },

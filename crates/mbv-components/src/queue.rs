@@ -7,46 +7,40 @@ use tuirealm::event::Event;
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::media_list::{MediaListCarrier, MediaListSurfaceInput, MediaListTransition};
+use super::media_list::{
+    MediaListSurfaceInput, MediaListTransition, WidePresentationState, hit_region,
+};
 use super::mouse::gesture::MouseGestureState;
 use mbv_queue::{QueueSlot, QueueSlotId};
 use mbv_render::arrangements::queue::{queue_footer_row, queue_list_content};
-use mbv_render::components::media_list::MediaListRow;
 #[cfg(any(test, feature = "test"))]
 use mbv_render::components::media_list::MediaSemanticState;
-use mbv_render::components::media_list::WideMediaListPaintPolicy;
+use mbv_render::components::media_list::{MediaListRow, WideMediaListPaintPolicy};
 use mbv_render::components::queue::{render_empty_queue, render_queue_status};
 use mbv_render::components::widgets::render_queue_panel_frame;
+use mbv_surfaces::queue::{QueueCursorUpdate, QueueFrameReport, QueueHitTarget, QueueSurface};
+use mbv_surfaces::{HitMap, ListCapacity};
 use mbv_theme::Surface;
 use mbv_ui_model::playback::{PlaybackState, QueueLink};
+use mbv_ui_msg::Msg;
 use mbv_ui_msg::UserEvent;
-use mbv_ui_msg::{Msg, QueueRequest};
 
-mod keys;
 mod pointer;
-mod rows;
 
 #[doc(inline)]
-pub use self::rows::{queue_media_row, queue_media_rows};
-
-/// Why the shell is pushing a cursor. `Preserve` keeps the user's selection
-/// pinned to its slot across a content refresh; `Set` is an authoritative
-/// move (follow-the-playhead, jump-to-now-playing, wheel scroll, link switch)
-/// that must win over slot-identity reconciliation.
-#[derive(Debug)]
-pub enum QueueCursorUpdate {
-    Preserve,
-    Set(usize),
-}
+pub use mbv_ui_model::{queue_media_row, queue_media_rows};
 
 #[derive(Debug)]
 pub struct QueueComponent {
-    /// The one shared canonical owner of the Queue rows, carried by the Wide
-    /// presentation in every panel mode (design.md D1/D2). It owns the local
-    /// cursor, the resting scroll offset, and viewport/scrollbar geometry; the
-    /// parent keeps only the prepared projection and shell-owned chrome below.
-    carrier: MediaListCarrier<QueueSlotId>,
-    link: QueueLink,
+    /// The Queue's Surface state (extract-client-core design D5): the canonical
+    /// owner over the queue's stable slot identities plus the queue's cursor,
+    /// mark, selection, viewport, and key rules. The adapter paints from it
+    /// and forwards neutral input; it holds no copy of a state value.
+    surface: QueueSurface,
+    /// The Wide presentation's TUI-side half: the paint policy, the configured
+    /// rectangles, and the retained painted geometry. The canonical state it
+    /// paints lives in `surface`.
+    wide: WidePresentationState<QueueSlotId>,
     focused: bool,
     /// The panel surface's focused bit, projected per frame from the shell's
     /// panel-focus fact (the same value the legacy base frame used for the
@@ -75,34 +69,35 @@ pub struct QueueComponent {
     playlist_hit: Rect,
     pending_slot: Option<QueueSlotId>,
     drag_grab: Option<QueueSlotId>,
-    /// Private per-parent gesture recognition (ADR 0024, design.md D3): owns
-    /// the double-click window and wheel throttle.
+    /// Private per-parent gesture recognition state (ADR 0024, design.md D3).
+    /// The gesture policy itself lives in `mbv_surfaces::gesture`.
     mouse_gestures: MouseGestureState,
 }
 
 impl QueueComponent {
     pub fn clear_selection(&mut self) {
-        self.carrier.clear_owner_selection();
+        self.surface.clear_selection();
     }
 
     /// Reset the Queue's local presentation (cursor, marks, scroll) without
     /// replacing its rows, link or playback projection. A transient reorder
     /// grab is dropped so no pointer gesture survives the reset.
     pub fn reset_presentation(&mut self) {
-        self.carrier.reset_presentation();
+        self.surface.reset_presentation();
+        self.wide.invalidate_paint();
         self.drag_grab = None;
     }
 
     #[must_use]
     pub fn selected_row_rect(&self) -> Option<Rect> {
-        self.carrier.wide().current_selected_row_rect()
+        self.wide.current_selected_row_rect()
     }
 
     #[must_use]
     pub fn new() -> Self {
         Self {
-            carrier: MediaListCarrier::new(),
-            link: QueueLink::Local,
+            surface: QueueSurface::new(),
+            wide: WidePresentationState::new(),
             focused: false,
             frame_focused: false,
             mini_view: false,
@@ -122,8 +117,10 @@ impl QueueComponent {
 
     /// Replace projected rows while preserving the canonical list's selection.
     pub fn set_rows(&mut self, slots: &[QueueSlot], playback: PlaybackState) {
-        self.carrier
+        self.surface
+            .list_mut()
             .set_content(queue_media_rows(slots, playback, self.pending_slot));
+        self.wide.invalidate_paint();
     }
 
     /// The semantic states of the projected rows, in row order (tick-test
@@ -131,8 +128,7 @@ impl QueueComponent {
     #[cfg(any(test, feature = "test"))]
     #[must_use]
     pub fn projected_row_states(&self) -> Vec<MediaSemanticState> {
-        self.carrier
-            .wide()
+        self.surface
             .rows()
             .iter()
             .filter_map(|row| match row {
@@ -144,32 +140,26 @@ impl QueueComponent {
 
     /// Patch one projected row by stable target without rebuilding the list.
     pub fn set_row_patch(&mut self, target: QueueSlotId, row: MediaListRow<QueueSlotId>) -> bool {
-        self.carrier.patch_row(&target, row)
+        let patched = self.surface.list_mut().patch_row(&target, row);
+        self.wide.invalidate_paint();
+        patched
     }
 
-    /// Deliver an authoritative cursor command independently of row delivery.
-    /// This is the adjudicated Queue shell-push seam (design.md D5): the shell
-    /// owns the Queue cursor command, so this one numeric re-anchor is
-    /// sanctioned rather than delegated. The resting scroll-to-cursor clamp
-    /// runs only inside the `Set` arm; `Preserve` leaves a freely scrolled
-    /// viewport where the wheel left it.
+    /// Deliver an authoritative cursor command independently of row delivery
+    /// through the Queue Surface state's shell-push seam (design.md D5). The
+    /// resting scroll-to-cursor clamp runs only inside the `Set` arm;
+    /// `Preserve` leaves a freely scrolled viewport where the wheel left it.
     pub fn set_cursor(&mut self, cursor: &QueueCursorUpdate) {
-        if let QueueCursorUpdate::Set(idx) = cursor {
-            self.carrier.select_index(*idx);
-            let scroll = self.carrier.scroll();
-            let clamped = scroll.min(self.carrier.cursor());
-            if clamped != scroll {
-                self.carrier.set_scroll(clamped);
-            }
+        if self.surface.set_cursor(cursor) {
+            self.wide.invalidate_paint();
         }
     }
 
     /// Deliver the current link independently of row delivery.
     pub fn set_link(&mut self, link: QueueLink) {
-        if link != self.link {
-            self.carrier.set_scroll(0);
+        if self.surface.set_link(link) {
+            self.wide.invalidate_paint();
         }
-        self.link = link;
         self.empty_text = if link == QueueLink::Local {
             "¯\\_(ツ)_/¯".into()
         } else {
@@ -228,60 +218,72 @@ impl QueueComponent {
         self.content_area
     }
 
-    fn cursor_message(&self) -> Option<Msg> {
-        self.carrier.selected_target().map(|&slot_id| {
-            Msg::Queue(QueueRequest::Cursor {
-                link: self.link,
-                slot_id,
-            })
-        })
-    }
-
     /// The one seam through which Queue offers an already-normalized row-local
-    /// key or pointer gesture to the shared owner. The owner applies the local
-    /// state transition and returns the closed provider-neutral outcome; Queue
-    /// translates external row intents into its typed Msgs (design.md D3).
+    /// pointer gesture to the Surface state. The state applies the local
+    /// transition and returns the closed provider-neutral outcome; the
+    /// adapter's key rules live in the Surface state, and pointer targets
+    /// resolve here until the hit-map seam lands (row 4.4).
     fn delegate_row_local_input(
         &mut self,
         input: MediaListSurfaceInput,
         pointer_target: Option<QueueSlotId>,
     ) -> MediaListTransition<QueueSlotId> {
-        self.carrier.delegate_operation(
-            input
-                .into_operation(pointer_target)
-                .expect("resolved media-list pointer target"),
-        )
+        let operation = input
+            .into_operation(pointer_target)
+            .expect("resolved media-list pointer target");
+        let viewport_len = self.wide.painted_viewport_len();
+        self.surface
+            .delegate_operation_with_viewport_len(operation, viewport_len)
     }
 
-    /// The link/slot pair for Queue's current selection.
-    fn selected_slot(&self) -> Option<(QueueLink, QueueSlotId)> {
-        self.carrier
-            .selected_target()
-            .map(|&slot_id| (self.link, slot_id))
-    }
-
-    /// Clamp the shared owner's fixed-row viewport to the queue's content
+    /// Clamp the Surface state's fixed-row viewport to the queue's content
     /// area. Queue keeps the Wide presentation in every panel mode (spec).
-    fn ensure_carrier(&mut self) {
-        self.carrier
-            .clamp_viewport(self.content_area.height.max(1) as usize);
+    fn ensure_surface_viewport(&mut self) {
+        if self
+            .surface
+            .set_viewport_height(self.content_area.height.max(1) as usize)
+        {
+            self.wide.invalidate_paint();
+        }
     }
 
     #[must_use]
     pub fn selection_summary(&self) -> mbv_ui_msg::SelectionSummary {
-        self.carrier.selection_summary()
+        self.surface.selection_summary()
+    }
+
+    /// The current frame's interaction report (design D6): the capacity the
+    /// painted list reports and the hit map over the painted geometry. The
+    /// regions are the last completed paint's rows plus the playlist pill,
+    /// resolved in the same retained geometry `queue/pointer.rs` resolves
+    /// against; the capacity is the viewport height the Surface state clamps
+    /// and strides with. The shell and the Client core read this report;
+    /// neither recomputes the geometry.
+    #[must_use]
+    pub fn frame_report(&self) -> QueueFrameReport {
+        let mut hit_map = HitMap::new();
+        for (region, target) in self.wide.frame_hit_map().iter() {
+            hit_map.push(*region, QueueHitTarget::Slot(*target));
+        }
+        if self.playlist_hit.width > 0 {
+            hit_map.push(hit_region(self.playlist_hit), QueueHitTarget::PlaylistPill);
+        }
+        QueueFrameReport {
+            capacity: ListCapacity::new(self.surface.viewport_height()),
+            hit_map,
+        }
     }
 
     #[cfg(any(test, feature = "test"))]
     #[must_use]
     pub fn test_cursor(&self) -> usize {
-        self.carrier.cursor()
+        self.surface.cursor()
     }
 
     #[cfg(any(test, feature = "test"))]
     #[must_use]
     pub fn test_scroll(&self) -> usize {
-        self.carrier.scroll()
+        self.surface.scroll()
     }
 }
 
@@ -328,11 +330,10 @@ impl Component for QueueComponent {
         } else {
             self.playlist_hit = Rect::default();
         }
-        self.ensure_carrier();
-        let list = self.carrier.wide_mut();
+        self.ensure_surface_viewport();
         // The cursor follows interaction focus; the palette follows the
         // appearance decision in mini view (`frame_focused`).
-        list.set_paint_policy(
+        self.wide.set_paint_policy(
             WideMediaListPaintPolicy::for_queue(self.focused)
                 .with_palette_focus(
                     self.focused
@@ -340,11 +341,16 @@ impl Component for QueueComponent {
                 )
                 .with_zebra(Surface::QueueColumn),
         );
-        Component::view(list, frame, content_area);
+        super::media_list::render_wide_media_list(
+            self.surface.list_mut(),
+            &mut self.wide,
+            frame,
+            content_area,
+        );
         if content_area.height < 1 {
             return;
         }
-        if self.carrier.is_empty() {
+        if self.surface.is_empty() {
             render_empty_queue(frame, content_area, &self.empty_text);
         }
         // The persistent canonical child is the sole Queue body painter and
@@ -369,11 +375,14 @@ impl Component for QueueComponent {
 
 impl AppComponent<Msg, UserEvent> for QueueComponent {
     fn on(&mut self, ev: &Event<UserEvent>) -> Option<Msg> {
-        // Keep the shared owner in the presentation the fixed Queue contract
+        // Keep the Surface state in the presentation the fixed Queue contract
         // selects before any row-local input touches it (design.md D1).
-        self.ensure_carrier();
+        self.ensure_surface_viewport();
         match ev {
-            Event::Keyboard(key) => self.handle_key_result(key).into_option(),
+            Event::Keyboard(key) => self
+                .surface
+                .key(crate::root::neutral_key(*key))
+                .into_option(),
             Event::Mouse(mouse) => self.handle_mouse(*mouse),
             _ => None,
         }

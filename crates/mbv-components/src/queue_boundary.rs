@@ -1,5 +1,6 @@
-use crate::mouse::gesture::{MouseGesture, MouseGestureState};
+use crate::mouse::gesture::MouseGestureState;
 use mbv_render::arrangements::queue::normalize_queue_column_width;
+use mbv_surfaces::gesture::PointerGesture;
 use mbv_ui_msg::UserEvent;
 use mbv_ui_msg::{Msg, QueueRequest};
 use ratatui::Frame;
@@ -84,11 +85,11 @@ impl QueueBoundaryComponent {
         }
         let gesture = self.gestures.recognize(event)?;
         match gesture {
-            MouseGesture::Click { .. } if self.inside(at) => {
+            PointerGesture::Click { .. } if self.inside(at) => {
                 self.changed = false;
                 None
             }
-            MouseGesture::Drag { to, .. }
+            PointerGesture::Drag { to, .. }
                 if self.changed || self.inside(to) || self.area.width == 1 =>
             {
                 let width = self.resolve(to);
@@ -99,11 +100,11 @@ impl QueueBoundaryComponent {
                 self.changed = true;
                 Some(Msg::Queue(QueueRequest::ResizeColumnLive(width)))
             }
-            MouseGesture::DragEnd if self.changed => {
+            PointerGesture::DragEnd if self.changed => {
                 self.changed = false;
                 Some(Msg::Queue(QueueRequest::ResizeColumnEnd(self.width)))
             }
-            MouseGesture::DragEnd => {
+            PointerGesture::DragEnd => {
                 self.changed = false;
                 None
             }

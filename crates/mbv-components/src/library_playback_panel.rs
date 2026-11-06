@@ -25,13 +25,14 @@ use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEven
 use tuirealm::props::{AttrValue, Attribute, Props, QueryResult};
 use tuirealm::state::State;
 
-use crate::mouse::gesture::{MouseGesture, MouseGestureState};
+use crate::mouse::gesture::MouseGestureState;
 use crate::mouse::seekbar::{scrub_fraction, seek_fraction};
 use mbv_queue::PlaybackTitleParts;
 use mbv_render::PlaybackStripAreas;
 use mbv_render::arrangements::chrome::PLAYER_BOX_HEIGHT;
 use mbv_render::components::chrome_player::TransportAvailability;
 use mbv_render::{PlaybackRenderContext, render_player_panel};
+use mbv_surfaces::gesture::PointerGesture;
 use mbv_theme as palette;
 use mbv_ui_model::playback::{NowPlayingTitleSite, PlaybackState};
 use mbv_ui_msg::UserEvent;
@@ -201,7 +202,7 @@ impl LibraryPlaybackPanel {
             MouseEventKind::Down(MouseButton::Left)
                 if self.seekbar_area.width > 0
                     && self.seekbar_area.contains(point)
-                    && matches!(gesture, Some(MouseGesture::DoubleClick(_))) =>
+                    && matches!(gesture, Some(PointerGesture::DoubleClick(_))) =>
             {
                 self.seek_intent(event.column)
             }
@@ -221,7 +222,7 @@ impl LibraryPlaybackPanel {
     /// anchored inside the bar span and the pointer must still be over it —
     /// a drag that merely crossed the bar is not a scrub of this bar.
     /// Admitted at most once per `SEEKBAR_SCRUB_INTERVAL`.
-    fn scrub(&mut self, gesture: Option<MouseGesture>) -> Option<Msg> {
+    fn scrub(&mut self, gesture: Option<PointerGesture<ratatui::layout::Position>>) -> Option<Msg> {
         scrub_fraction(self.seekbar_area, &mut self.scrub_at, gesture)
             .map(|fraction| Msg::Playback(PlaybackRequest::SeekTo(fraction)))
     }
@@ -331,7 +332,10 @@ mod tests {
             show_controls: true,
             panel: palette::Surface::PlaybackPanel,
             panel_focused: false,
-            now_playing_title: Some(("Example".into(), palette::Role::PlaybackValueFg.color())),
+            now_playing_title: Some((
+                "Example".into(),
+                palette::Role::PlaybackValueFg.color().to_ratatui(),
+            )),
             title_parts: None,
             title_site: NowPlayingTitleSite::Header,
             status_indicators: None,
@@ -375,7 +379,10 @@ mod tests {
             panel_focused: false,
             // The painter paints the typed parts only over an attached
             // target's plain title; the parts replace it when present.
-            now_playing_title: Some(("Fallback".into(), palette::Role::PlaybackValueFg.color())),
+            now_playing_title: Some((
+                "Fallback".into(),
+                palette::Role::PlaybackValueFg.color().to_ratatui(),
+            )),
             title_parts: Some(parts),
             title_site: NowPlayingTitleSite::Header,
             status_indicators: None,
@@ -437,7 +444,7 @@ mod tests {
             &text,
             &fgs,
             title,
-            palette::Role::PlaybackTitleFg.color(),
+            palette::Role::PlaybackTitleFg.color().to_ratatui(),
             "the title part",
         );
         if let Some(context) = context {
@@ -465,7 +472,7 @@ mod tests {
             for i in 0..=context.chars().count() {
                 assert_eq!(
                     fgs[start + i],
-                    palette::Role::PlaybackContextFg.color(),
+                    palette::Role::PlaybackContextFg.color().to_ratatui(),
                     "the context part and the space paint in the context role: {text:?}"
                 );
             }
@@ -477,14 +484,14 @@ mod tests {
             if title_start > 0 {
                 assert_ne!(
                     fgs[title_start - 1],
-                    palette::Role::PlaybackContextFg.color(),
+                    palette::Role::PlaybackContextFg.color().to_ratatui(),
                     "no context part before the title: {text:?}"
                 );
             }
             let after = title_start + title.chars().count();
             assert_ne!(
                 fgs[after],
-                palette::Role::PlaybackContextFg.color(),
+                palette::Role::PlaybackContextFg.color().to_ratatui(),
                 "no context part after the title: {text:?}"
             );
         }

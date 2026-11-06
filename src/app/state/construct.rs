@@ -1,6 +1,6 @@
 use crate::app::state::app_struct::LaunchRestore;
 use crate::app::state::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
-use crate::app::{App, AppInit, spawn_resize_worker};
+use crate::app::{App, AppInit, spawn_resize_worker, spawn_waking_relay};
 use indexmap::IndexMap;
 use mbv_render::layout;
 use mbv_render::layout::LEFT_WIDTH_DEFAULT;
@@ -74,16 +74,22 @@ impl App {
         // `state_dir()` to an isolated tmpdir, and `load_prefs()` resolves
         // its path through that same lookup. Installing the guard after
         // reading prefs left tests reading (and initializing state from)
-        // the real on-disk prefs.json instead of a fresh one.
-        #[cfg(test)]
+        // the real on-disk prefs.json instead of a fresh one. The `test`
+        // feature installs it too: a dependent crate's test build (a GUI
+        // Client program) compiles this crate without `cfg(test)`.
+        #[cfg(any(test, feature = "test"))]
         let test_state_dir_guard = crate::config::TestStateDirGuard::new_if_unset();
         let prefs = Self::load_prefs();
         let launch_restore =
             mbv_config::load_tui_launch_state().map_or(LaunchRestore::Done, LaunchRestore::Pending);
         let (resize_register_tx, resize_response_rx) = spawn_resize_worker();
         let setup = crate::app::state::service_setup::ServiceSetup::new();
+        // The Owner-snapshot link relays share this wake handle (design D7
+        // of `extract-client-core`); `ClientCore` adopts it so a Client's
+        // installed waker reaches every relay, including the one below.
+        let client_waker = crate::app::ClientWaker::new();
         let mut app = App {
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test"))]
             _test_state_dir_guard: test_state_dir_guard,
             config: init.config,
             emby_runtime: init.emby_runtime,
@@ -99,7 +105,9 @@ impl App {
             audiobookshelf_book_browse: Vec::new(),
             player: init.player,
             mpris: None,
-            player_rx: init.player_rx,
+            client_waker: client_waker.clone(),
+            owner_exe: None,
+            player_rx: spawn_waking_relay(init.player_rx, client_waker),
             deferred_player_events: std::collections::VecDeque::new(),
             deferred_home_events: std::collections::VecDeque::new(),
             ws_rx: init.ws_rx,
@@ -150,6 +158,7 @@ impl App {
             queue_undo_stack: Vec::new(),
             remote_queue_undo_stack: Vec::new(),
             pending_queue_cursor_reanchor: None,
+            last_queue_projection: None,
             pending_queue_transfer: None,
             staged_queue_transfer: None,
             next_up_item: None,

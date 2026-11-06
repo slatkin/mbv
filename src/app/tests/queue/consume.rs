@@ -1,3 +1,4 @@
+use crate::app::test_seams::crossterm_key_to_neutral;
 use crate::app::tests::*;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
@@ -29,7 +30,10 @@ fn confirmed_delete_waits_for_owner_snapshot_after_stopped_removal_op() {
 
     let mut model = Model::new(app);
     model.sync_modal_requests();
-    model.handle_confirm_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    model.handle_confirm_key(crossterm_key_to_neutral(KeyEvent::new(
+        KeyCode::Enter,
+        KeyModifiers::NONE,
+    )));
     let app = &mut model.app;
 
     assert_eq!(
@@ -82,7 +86,10 @@ fn confirmed_delete_with_stale_position_does_not_mark_a_pending_delete() {
 
     let mut model = Model::new(app);
     model.sync_modal_requests();
-    model.handle_confirm_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    model.handle_confirm_key(crossterm_key_to_neutral(KeyEvent::new(
+        KeyCode::Enter,
+        KeyModifiers::NONE,
+    )));
     let app = &mut model.app;
 
     assert_eq!(app.local_view.emby_items().len(), 1);
@@ -465,7 +472,7 @@ fn confirmed_multi_delete_with_active_removes_all_slots_in_one_owner_edit() {
             link: QueueLink::Local,
             slot_ids: slot_ids.clone(),
         },
-        KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+        crossterm_key_to_neutral(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
     );
     assert_eq!(
         app.local_view.emby_items().len(),
@@ -532,7 +539,7 @@ fn cancelled_multi_delete_with_active_removes_nothing() {
             link: QueueLink::Local,
             slot_ids,
         },
-        KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE),
+        crossterm_key_to_neutral(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
     );
     assert_eq!(app.local_view.emby_items().len(), 3);
     assert!(app.pending_delete_slot.is_none());

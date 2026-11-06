@@ -107,7 +107,7 @@ pub fn paint_pill_row_gap(f: &mut Frame, area: Rect, body: palette::Surface, foc
     if area.height == 0 || area.width == 0 {
         return;
     }
-    let background = palette::surface_colors(body, focused).fill;
+    let background = palette::surface_colors(body, focused).fill.to_ratatui();
     f.render_widget(
         Paragraph::new(" ".repeat(area.width as usize)).style(Style::default().bg(background)),
         area,

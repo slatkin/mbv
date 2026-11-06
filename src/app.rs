@@ -1,15 +1,50 @@
+#[cfg(any(test, feature = "test"))]
+mod app_stub;
+mod client_core;
+mod client_drains;
 mod dispatch;
+#[cfg(feature = "test")]
+pub use self::app_stub::{
+    stub_app_with_playing_queue, stub_app_with_prefix_and_toast, stub_app_with_queue,
+    stub_app_with_unsaved_queue,
+};
 mod infra;
 mod input;
-pub(crate) mod state;
+mod queue_footer_projection;
+mod queue_playback_projection;
+mod queue_surface;
+pub mod state;
+mod status_bar_projection;
+mod waking_relay;
 
+pub use self::client_core::{
+    CLIENT_IDLE_CADENCE, ClientCore, ClientTickHost, ClientWaker, TickOutcome, WorkspaceRelayout,
+};
+pub use self::client_drains::{
+    ClientLifecycle, HomeEventDrain, PlayerEventDrain, StartupWorkerDrain,
+};
+pub use self::dispatch::action::{
+    AppCommand, Command, NavigationIntent, PanelIntent, PlaybackIntent, ShellCommand, VisualIntent,
+};
 pub(in crate::app) use self::infra::paging::{PAGE_SIZE, PREFETCH_AHEAD};
 pub(in crate::app) use self::infra::signals::{
     QUIT_REQUESTED, install_signal_handlers, start_quit_watchdog,
 };
 pub(crate) use self::infra::terminal::set_mouse_capture;
 pub(in crate::app) use self::infra::terminal::{init_terminal, open_url, restore_terminal};
+pub use self::input::gui::GuiInput;
+pub use self::input::gui::GuiSurfaceLeaf;
+pub use self::input::key_policy::{
+    OverlayFocus, RemoteControlTarget, RouterOverlayState, RouterPlaybackState, RouterSnapshot,
+};
+pub use self::input::router::{RouterOutcome, resolve_router_outcome_with_focused};
+pub use self::queue_footer_projection::{FooterPill, QueueFooterProjection};
+pub use self::queue_playback_projection::QueuePlaybackProjection;
+pub use self::queue_surface::QueueSurfaceProjection;
 pub use self::state::app_struct::App;
+pub use self::state::playback::HomeContent;
+pub use self::status_bar_projection::StatusBarProjection;
+pub(in crate::app) use self::waking_relay::spawn_waking_relay;
 #[cfg(test)]
 mod test_seams;
 #[cfg(test)]
@@ -55,7 +90,7 @@ use mbv_ui_model::feed::{
 };
 use mbv_ui_model::library_tab::LibraryTab;
 pub(in crate::app) use mbv_ui_model::overlay::SidebarId;
-use mbv_ui_model::playback::{PlaybackState, QueueLink};
+use mbv_ui_model::playback::QueueLink;
 #[cfg(test)]
 use mbv_ui_model::settings::SettingKey;
 use mbv_ui_model::settings::{PanelFocus, PanelMode};

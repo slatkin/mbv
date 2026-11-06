@@ -1,73 +1,51 @@
-//! [`MouseGestureState`] — per-mounted-parent gesture recognition (ADR 0024,
-//! design.md D3).
+//! The TUI's gesture-translation edge over the Client core's pointer gesture
+//! policy (`extract-client-core` row 4.8). The recognition rules — the
+//! double-click window, the uniform wheel step, the drag anchor, and the
+//! Ctrl/Shift selection choice — live once in `mbv_surfaces::gesture`; this
+//! module only translates: `neutral_pointer` fills the neutral kind and
+//! modifiers, the Client core recognizes the gesture over the TUI's painted
+//! cells, and the adapter resolves it against its own geometry.
 //!
-//! Each mounted destination parent owns one `MouseGestureState`. It consumes
-//! raw `tuirealm` [`MouseEvent`]s and emits recognized [`MouseGesture`]s. It is
+//! Each mounted destination parent owns one [`MouseGestureState`]. It is
 //! keyed by nothing but that parent's own recent events — it is **not** a
 //! shared clock, and reintroduces neither the global completed-frame hit map
-//! nor the position-keyed cross-surface clock that D16 forbade (design.md D3,
-//! "Reconciling with D16").
-//!
-//! Recognition covers `Click`/`DoubleClick`/`RightClick`, wheel `Scroll`, and
-//! left-button drag gestures. Hover-move spam is dropped by the consuming
-//! component's first `on()` arm (`MouseEventKind::Moved => return None`),
-//! never by this module (design.md D7).
-//!
-//! ## Chosen intervals
-//!
-//! * **Double-click window: 400 ms**, exact-position match (legacy standard).
-//! * **Wheel step: 3 rows, no throttle.** Every vertical wheel event the parent
-//!   forwards is recognized and emitted as `Scroll { delta: ±WHEEL_STEP }`;
-//!   none is dropped or coalesced. The uniform step is the policy (design.md
-//!   D1): consumers receive the movement already scaled, and no per-component
-//!   wheel step may exist. A terminal would need to coalesce at most one
-//!   `ScrollUp`/`ScrollDown` per physical notch for the step to behave
-//!   uniformly across terminals; the run loop delivers one event per poll
-//!   tick, so successive notches arrive as successive gestures.
+//! nor the position-keyed cross-surface clock that ADR 0024's design D16
+//! forbade.
 
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use ratatui::layout::Position;
-use tuirealm::event::{MouseButton, MouseEvent, MouseEventKind};
+use tuirealm::event::MouseEvent;
 
-/// Double-click recognition window. See module docs.
-const DOUBLE_CLICK_WINDOW: Duration = Duration::from_millis(400);
-/// Uniform wheel scroll step, in rows, per wheel event. See module docs.
-const WHEEL_STEP: i64 = 3;
+use mbv_surfaces::gesture::{PointerGesture, PointerGestureState, SamePlace};
 
-/// A recognized pointer gesture.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ClickModifier {
-    None,
-    Ctrl,
-    Shift,
+use crate::root::neutral_pointer;
+
+/// The TUI's painted-cell coordinate for gesture recognition: one cell is
+/// one logical unit (design D6), and two cells name the same place for the
+/// double-click rule only when they are equal. The wrapper exists so the
+/// TUI can implement the core's [`SamePlace`] for its own type: the trait's
+/// `f32` logical-point rule is the GUI's, and this crate cannot implement a
+/// foreign trait for ratatui's position.
+#[derive(Clone, Copy, Debug)]
+struct CellPoint(Position);
+
+impl SamePlace for CellPoint {
+    fn same_place(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum MouseGesture {
-    Click {
-        at: Position,
-        modifier: ClickModifier,
-    },
-    DoubleClick(Position),
-    RightClick(Position),
-    /// Vertical wheel step: `delta` is `-WHEEL_STEP` up, `WHEEL_STEP` down.
-    Scroll {
-        at: Position,
-        delta: i64,
-    },
-    Drag {
-        from: Position,
-        to: Position,
-    },
-    DragEnd,
-}
-
-/// Per-parent gesture recognition state. One per mounted parent.
+/// The TUI's gesture recognition state: the Client core's
+/// [`PointerGestureState`] over the TUI's painted cells, fed by
+/// [`MouseGestureState::recognize`].
+///
+/// The TUI's logical units are whole cells (one cell is one logical unit,
+/// design D6), so the core recognizes over the same numbers the adapters'
+/// geometry resolves against; no coordinate conversion happens on this path.
 #[derive(Debug, Default)]
 pub struct MouseGestureState {
-    last_click: Option<(Instant, Position)>,
-    drag_anchor: Option<Position>,
+    core: PointerGestureState<CellPoint>,
 }
 
 impl MouseGestureState {
@@ -76,63 +54,39 @@ impl MouseGestureState {
         Self::default()
     }
 
-    /// Feed one raw mouse event; return the gesture it completes, if any.
-    ///
-    /// `Moved` and horizontal wheel events are accepted and produce `None`
-    /// (they must not panic — design.md D7). A left-button drag reports motion
-    /// from its press anchor and ends on release.
-    pub fn recognize(&mut self, event: MouseEvent) -> Option<MouseGesture> {
-        self.recognize_at(event, Instant::now())
-    }
-
-    fn recognize_at(&mut self, event: MouseEvent, now: Instant) -> Option<MouseGesture> {
-        let at = Position {
+    /// Feed one raw terminal mouse event; return the gesture it completes, if
+    /// any. The translation edge drops the kinds the neutral vocabulary
+    /// cannot represent (the middle button, a right-button drag or release,
+    /// horizontal wheel) — the events the core's recognizer would decline
+    /// without touching state.
+    #[must_use]
+    pub fn recognize(&mut self, event: MouseEvent) -> Option<PointerGesture<Position>> {
+        let pointer = neutral_pointer(event)?;
+        let at = CellPoint(Position {
             x: event.column,
             y: event.row,
-        };
-        match event.kind {
-            MouseEventKind::Down(MouseButton::Left) => {
-                let modifier = if event
-                    .modifiers
-                    .contains(tuirealm::event::KeyModifiers::CONTROL)
-                {
-                    ClickModifier::Ctrl
-                } else if event
-                    .modifiers
-                    .contains(tuirealm::event::KeyModifiers::SHIFT)
-                {
-                    ClickModifier::Shift
-                } else {
-                    ClickModifier::None
-                };
-                let is_double = modifier == ClickModifier::None
-                    && self.last_click.is_some_and(|(t, p)| {
-                        now.duration_since(t) < DOUBLE_CLICK_WINDOW && p == at
-                    });
-                self.last_click = (modifier == ClickModifier::None).then_some((now, at));
-                self.drag_anchor = (modifier == ClickModifier::None).then_some(at);
-                Some(if is_double {
-                    MouseGesture::DoubleClick(at)
-                } else {
-                    MouseGesture::Click { at, modifier }
-                })
-            }
-            MouseEventKind::Down(MouseButton::Right) => Some(MouseGesture::RightClick(at)),
-            MouseEventKind::Drag(MouseButton::Left) => self
-                .drag_anchor
-                .map(|from| MouseGesture::Drag { from, to: at }),
-            MouseEventKind::Up(MouseButton::Left) => {
-                self.drag_anchor.take().map(|_| MouseGesture::DragEnd)
-            }
-            MouseEventKind::ScrollUp | MouseEventKind::ScrollDown => {
-                let delta = if matches!(event.kind, MouseEventKind::ScrollUp) {
-                    -WHEEL_STEP
-                } else {
-                    WHEEL_STEP
-                };
-                Some(MouseGesture::Scroll { at, delta })
-            }
-            _ => None,
+        });
+        self.core
+            .recognize(pointer.kind, pointer.modifiers, at, Instant::now())
+            .map(Self::to_cells)
+    }
+
+    /// The recognized gesture in the core's cell coordinate: the positions
+    /// unwrap to the painted cells the adapters resolve against.
+    fn to_cells(gesture: PointerGesture<CellPoint>) -> PointerGesture<Position> {
+        match gesture {
+            PointerGesture::Click { at, selection } => PointerGesture::Click {
+                at: at.0,
+                selection,
+            },
+            PointerGesture::DoubleClick(at) => PointerGesture::DoubleClick(at.0),
+            PointerGesture::RightClick(at) => PointerGesture::RightClick(at.0),
+            PointerGesture::Scroll { at, delta } => PointerGesture::Scroll { at: at.0, delta },
+            PointerGesture::Drag { from, to } => PointerGesture::Drag {
+                from: from.0,
+                to: to.0,
+            },
+            PointerGesture::DragEnd => PointerGesture::DragEnd,
         }
     }
 }
@@ -143,97 +97,5 @@ impl MouseGestureState {
     /// a double-click.
     pub fn reset_for_test(&mut self) {
         *self = Self::default();
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn ev(kind: MouseEventKind, x: u16, y: u16) -> MouseEvent {
-        MouseEvent {
-            kind,
-            modifiers: tuirealm::event::KeyModifiers::NONE,
-            column: x,
-            row: y,
-        }
-    }
-
-    #[test]
-    fn two_clicks_inside_window_and_position_are_a_double_click() {
-        let mut s = MouseGestureState::new();
-        let t0 = Instant::now();
-        assert_eq!(
-            s.recognize_at(ev(MouseEventKind::Down(MouseButton::Left), 3, 4), t0),
-            Some(MouseGesture::Click {
-                at: Position { x: 3, y: 4 },
-                modifier: ClickModifier::None
-            })
-        );
-        assert_eq!(
-            s.recognize_at(
-                ev(MouseEventKind::Down(MouseButton::Left), 3, 4),
-                t0 + Duration::from_millis(100)
-            ),
-            Some(MouseGesture::DoubleClick(Position { x: 3, y: 4 }))
-        );
-    }
-
-    #[test]
-    fn back_to_back_wheel_events_at_the_same_instant_all_recognize() {
-        // mouse-input "Rapid wheel events are all recognized": no throttle,
-        // every event in a burst emits a `Scroll` with the uniform step.
-        let mut s = MouseGestureState::new();
-        let t0 = Instant::now();
-        assert_eq!(
-            s.recognize_at(ev(MouseEventKind::ScrollDown, 1, 1), t0),
-            Some(MouseGesture::Scroll {
-                at: Position { x: 1, y: 1 },
-                delta: 3
-            })
-        );
-        assert_eq!(
-            s.recognize_at(
-                ev(MouseEventKind::ScrollDown, 1, 1),
-                t0 + Duration::from_millis(5)
-            ),
-            Some(MouseGesture::Scroll {
-                at: Position { x: 1, y: 1 },
-                delta: 3
-            })
-        );
-        assert_eq!(
-            s.recognize_at(
-                ev(MouseEventKind::ScrollUp, 1, 1),
-                t0 + Duration::from_millis(10)
-            ),
-            Some(MouseGesture::Scroll {
-                at: Position { x: 1, y: 1 },
-                delta: -3
-            })
-        );
-    }
-
-    #[test]
-    fn press_drag_and_release_reports_the_full_gesture() {
-        let mut s = MouseGestureState::new();
-        assert_eq!(
-            s.recognize(ev(MouseEventKind::Down(MouseButton::Left), 1, 2)),
-            Some(MouseGesture::Click {
-                at: Position { x: 1, y: 2 },
-                modifier: ClickModifier::None
-            })
-        );
-        assert_eq!(
-            s.recognize(ev(MouseEventKind::Drag(MouseButton::Left), 4, 5)),
-            Some(MouseGesture::Drag {
-                from: Position { x: 1, y: 2 },
-                to: Position { x: 4, y: 5 }
-            })
-        );
-        assert_eq!(
-            s.recognize(ev(MouseEventKind::Up(MouseButton::Left), 4, 5)),
-            Some(MouseGesture::DragEnd)
-        );
     }
 }

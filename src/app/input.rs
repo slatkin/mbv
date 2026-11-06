@@ -1,6 +1,7 @@
 mod browse_dispatch;
 mod confirm_keys;
-mod key_policy;
+pub(in crate::app) mod gui;
+pub(in crate::app) mod key_policy;
 pub(in crate::app) use key_policy::{
     OverlayFocus, RemoteControlTarget, RouterOverlayState, RouterPlaybackState,
 };

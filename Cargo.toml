@@ -1,6 +1,6 @@
 [workspace]
-members = ["crates/mbv-core", "crates/mbv-ids", "crates/mbv-keybinds", "crates/mbv-net", "crates/mbv-ws", "crates/mbv-text", "crates/mbv-theme", "crates/mbv-images", "crates/mbv-ui-model", "crates/mbv-ui-msg", "crates/mbv-render", "crates/mbv-components", "crates/mbv-emby-model", "crates/mbv-queue", "crates/mbv-ctrl", "crates/mbv-config", "crates/mbv-feed", "crates/mbv-audiobookshelf", "crates/mbv-cast", "crates/mbv-emby", "crates/mbv-remote-player", "crates/mbv-player", "crates/mbv-daemon", "crates/mbv-visualizer", "crates/mbv-desktop", "crates/mbvd"]
-default-members = [".", "crates/mbv-core", "crates/mbv-ids", "crates/mbv-keybinds", "crates/mbv-net", "crates/mbv-ws", "crates/mbv-text", "crates/mbv-theme", "crates/mbv-images", "crates/mbv-ui-model", "crates/mbv-ui-msg", "crates/mbv-render", "crates/mbv-components", "crates/mbv-emby-model", "crates/mbv-queue", "crates/mbv-ctrl", "crates/mbv-config", "crates/mbv-feed", "crates/mbv-audiobookshelf", "crates/mbv-cast", "crates/mbv-emby", "crates/mbv-remote-player", "crates/mbv-player", "crates/mbv-daemon", "crates/mbv-visualizer", "crates/mbv-desktop", "crates/mbvd"]
+members = ["crates/mbv-core", "crates/mbv-ids", "crates/mbv-keybinds", "crates/mbv-net", "crates/mbv-ws", "crates/mbv-text", "crates/mbv-theme", "crates/mbv-images", "crates/mbv-ui-model", "crates/mbv-ui-msg", "crates/mbv-surfaces", "crates/mbv-render", "crates/mbv-components", "crates/mbv-emby-model", "crates/mbv-queue", "crates/mbv-ctrl", "crates/mbv-config", "crates/mbv-feed", "crates/mbv-audiobookshelf", "crates/mbv-cast", "crates/mbv-emby", "crates/mbv-remote-player", "crates/mbv-player", "crates/mbv-daemon", "crates/mbv-visualizer", "crates/mbv-desktop", "crates/mbvd"]
+default-members = [".", "crates/mbv-core", "crates/mbv-ids", "crates/mbv-keybinds", "crates/mbv-net", "crates/mbv-ws", "crates/mbv-text", "crates/mbv-theme", "crates/mbv-images", "crates/mbv-ui-model", "crates/mbv-ui-msg", "crates/mbv-surfaces", "crates/mbv-render", "crates/mbv-components", "crates/mbv-emby-model", "crates/mbv-queue", "crates/mbv-ctrl", "crates/mbv-config", "crates/mbv-feed", "crates/mbv-audiobookshelf", "crates/mbv-cast", "crates/mbv-emby", "crates/mbv-remote-player", "crates/mbv-player", "crates/mbv-daemon", "crates/mbv-visualizer", "crates/mbv-desktop", "crates/mbvd"]
 
 [workspace.package]
 version = "0.26.6"
@@ -206,6 +206,12 @@ unused_lifetimes = "warn"
 name = "mbv"
 path = "src/main.rs"
 
+# Exposes the `App` stub construction (`app_stub`) to dependent crates'
+# tests; the shipped builds never enable it. The stub reaches the test
+# support surfaces of the crates it builds from.
+[features]
+test = ["mbv-config/test", "mbv-emby-model/test", "mbv-images/test", "mbv-remote-player/test"]
+
 [dependencies]
 mbv-core = { path = "crates/mbv-core" }
 mbv-emby = { path = "crates/mbv-emby" }
@@ -221,10 +227,11 @@ mbv-keybinds = { path = "crates/mbv-keybinds" }
 mbv-net = { path = "crates/mbv-net" }
 mbv-ws = { path = "crates/mbv-ws" }
 mbv-text = { path = "crates/mbv-text" }
-mbv-theme = { path = "crates/mbv-theme" }
+mbv-theme = { path = "crates/mbv-theme", features = ["ratatui"] }
 mbv-images = { path = "crates/mbv-images" }
 mbv-ui-model = { path = "crates/mbv-ui-model" }
 mbv-ui-msg = { path = "crates/mbv-ui-msg" }
+mbv-surfaces = { path = "crates/mbv-surfaces" }
 mbv-render = { path = "crates/mbv-render" }
 mbv-components = { path = "crates/mbv-components" }
 mbv-emby-model = { path = "crates/mbv-emby-model" }

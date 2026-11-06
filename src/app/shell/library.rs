@@ -1,43 +1,17 @@
 use super::Model;
-use super::{PanelFocus, PanelMode};
+use super::PanelMode;
 use mbv_ui_msg::ComponentId;
 
 impl Model {
-    /// Route `TuiRealm`'s native LIFO focus to the active destination's child
-    /// component, or back to `UiRoot` when the destination has no mounted
-    /// surface component (e.g. a narrow non-wide grouped-Music Emby
-    /// library). Idempotent: `active()` on the already-active component is a
-    /// no-op. The destination child is derived directly from `App.tab` via
-    /// `library_child_id`; there is no Library-parent component or routing
-    /// mirror.
-    ///
-    /// Short-circuits when Queue owns panel focus (and no blocking overlay
-    /// is up): `sync_queue` already activated `ComponentId::Queue` a few
-    /// lines earlier in the same tick, and we must not stomp it by
-    /// re-activating the Library child or `UiRoot` on top. Without this
-    /// guard Queue falls back to legacy key routing (issue #610, blocks
-    /// the #607 acceptance gate). Mirrors the exact condition
-    /// `sync_queue` uses to claim focus.
+    /// The sync pass's focus step (design D3 of `extract-client-core`): the
+    /// core focus stack derives the active destination from the Panel focus
+    /// in effect and the overlay stack, and [`Model::apply_focus_stack`]
+    /// applies it to `TuiRealm`. The pass calls the step here — after every
+    /// mount/projection step above has settled the mounted set, and before
+    /// the mouse-eligibility pass below derives off the same active
+    /// destination.
     pub(in crate::app) fn sync_active_destination(&mut self) {
-        // Prefix-armed capture (design D6, task 6.1) holds focus off while
-        // armed — the arm blurred it and the disarm restores it — so the
-        // pass must not re-activate a destination mid-capture.
-        if self.overlay_holds_focus() || self.app.prefix_armed {
-            return;
-        }
-        let queue_owns_focus = matches!(self.app.effective_panel_focus(), PanelFocus::Queue)
-            && !self.blocking_overlay_active();
-        if queue_owns_focus {
-            return;
-        }
-        let target = Some(ComponentId::Library)
-            .filter(|child| self.application.mounted(child))
-            .unwrap_or(ComponentId::UiRoot);
-        if self.application.mounted(&target) {
-            self.application
-                .active(&target)
-                .expect("activate Library child");
-        }
+        self.apply_focus_stack();
     }
 
     /// The active library surface is always the mounted Library panel.
@@ -214,28 +188,14 @@ impl Model {
         }
     }
 
-    /// Whether any sidebar, modal, or popup overlay is mounted. Every
-    /// focus-management sync pass (`sync_active_destination`, `sync_queue`)
-    /// consults this before re-activating its own surface, so a mounted
-    /// overlay that just took focus is never stolen back on the next tick.
+    /// Whether any sidebar, modal, or popup overlay is mounted. The
+    /// focus-relevant guards consult this so a mounted overlay that just took
+    /// focus is never treated as absent; the overlay identities come from the
+    /// focus seam's one list (`focus::overlay_surface_ids`).
     pub(in crate::app) fn overlay_holds_focus(&self) -> bool {
-        [
-            ComponentId::Overlay(mbv_ui_msg::OverlayId::Search),
-            ComponentId::Overlay(mbv_ui_msg::OverlayId::Settings),
-            ComponentId::Overlay(mbv_ui_msg::OverlayId::Sessions),
-            ComponentId::Overlay(mbv_ui_msg::OverlayId::Playlists),
-            ComponentId::Overlay(mbv_ui_msg::OverlayId::Help),
-            ComponentId::Overlay(mbv_ui_msg::OverlayId::ContextMenu),
-            ComponentId::Modal(mbv_ui_msg::ModalId::Confirm),
-            ComponentId::Modal(mbv_ui_msg::ModalId::DaemonLost),
-            ComponentId::Modal(mbv_ui_msg::ModalId::SavePlaylist),
-            ComponentId::Modal(mbv_ui_msg::ModalId::TwitchUrl),
-            ComponentId::Popup(mbv_ui_msg::PopupId::Multiselect),
-            ComponentId::Popup(mbv_ui_msg::PopupId::LibraryRoutes),
-            ComponentId::Popup(mbv_ui_msg::PopupId::FeedManage),
-        ]
-        .iter()
-        .any(|id| self.application.mounted(id))
+        super::focus::overlay_surface_ids()
+            .iter()
+            .any(|id| self.application.mounted(id))
     }
 }
 

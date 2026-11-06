@@ -181,9 +181,14 @@ pub fn render_card_painting(
         // reservation -- painting it unclamped would overwrite the Queue
         // panel below. The paint is bounded; the recorded size is not.
         f.render_widget(
-            Block::default().style(Style::default().bg(
-                palette::surface_colors(palette::Surface::ArtworkLoadingPlaceholder, false).fill,
-            )),
+            Block::default().style(
+                Style::default().bg(palette::surface_colors(
+                    palette::Surface::ArtworkLoadingPlaceholder,
+                    false,
+                )
+                .fill
+                .to_ratatui()),
+            ),
             Rect {
                 height: reservation.height.min(area.height),
                 ..reservation

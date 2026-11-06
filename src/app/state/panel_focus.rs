@@ -98,17 +98,14 @@ impl App {
         panel_appearance_focus_decision(presentation, self.effective_panel_focus(), panel)
     }
 
-    /// Record that the terminal just regained focus, arming the
-    /// refocus-click suppression window (see `handle_mouse`) and marking
-    /// the window focused.
+    /// Record that the terminal just regained focus: stamp `refocus_at` and
+    /// mark the window focused.
     pub(in crate::app) fn note_focus_gained(&mut self) {
         self.refocus_at = Some(Instant::now());
         self.window_focused = true;
     }
 
-    /// Clear any pending refocus suppression -- the window shouldn't
-    /// outlive the focus session that armed it -- and mark the window
-    /// unfocused.
+    /// Clear `refocus_at` and mark the window unfocused.
     pub(in crate::app) fn note_focus_lost(&mut self) {
         self.refocus_at = None;
         self.window_focused = false;

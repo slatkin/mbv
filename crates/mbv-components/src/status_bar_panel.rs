@@ -5,22 +5,32 @@
 //! the volume) and the mute pill (click toggles mute). The
 //! pill/right-segment spans are shell-produced content (`chrome_status.rs`),
 //! projected one-way by `Model::sync_status_bar_panel`; the component owns
-//! the overflow drop-order, pill geometry and event resolution.
+//! the overflow drop-order, pill geometry and event resolution. The
+//! prefix-armed display and the toast presentation are the Status bar's
+//! Surface state (extract-client-core row 4.6): the shell projects the armed
+//! flag and the live toast into it, and this adapter builds the painted
+//! chrome from the state at paint time.
 //!
 //! The Local/Peer queue-link pills are queue concern and live in the
 //! `QueueColumn` footer (`QueueComponent`), never here.
 
 use ratatui::Frame;
 use ratatui::layout::{Position, Rect};
+use ratatui::style::{Modifier, Style};
+use ratatui::text::Span;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
 use tuirealm::event::{Event, MouseButton, MouseEventKind};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use mbv_render::{StatusBarModel, StatusBarRegions, render_status_bar};
+use mbv_render::{StatusBarChrome, StatusBarModel, StatusBarRegions, render_status_bar};
+use mbv_surfaces::HitMap;
+use mbv_surfaces::status_bar::{StatusBarFrameReport, StatusBarHitTarget, StatusBarSurface};
+use mbv_theme as palette;
 use mbv_ui_model::media_list::SelectionOrigin;
 use mbv_ui_model::playback::VOLUME_STEP;
+use mbv_ui_model::toast::{StatusToast, ToastSeverity};
 use mbv_ui_msg::UserEvent;
 use mbv_ui_msg::{Msg, PlaybackRequest, ShellRequest};
 
@@ -28,6 +38,10 @@ use mbv_ui_msg::{Msg, PlaybackRequest, ShellRequest};
 /// and retains its volume/mute pill regions.
 #[derive(Debug)]
 pub struct StatusBarPanel {
+    /// The Status bar's Surface state (extract-client-core row 4.6): the
+    /// prefix-armed display state and the toast presentation. The adapter
+    /// paints from it and holds no copy of a state value.
+    surface: StatusBarSurface,
     model: StatusBarModel,
     regions: StatusBarRegions,
     visual_origin: SelectionOrigin,
@@ -37,6 +51,7 @@ impl StatusBarPanel {
     #[must_use]
     pub fn new() -> Self {
         Self {
+            surface: StatusBarSurface::new(),
             model: StatusBarModel::default(),
             regions: StatusBarRegions::default(),
             visual_origin: SelectionOrigin::Queue,
@@ -48,6 +63,17 @@ impl StatusBarPanel {
         self.model = model;
     }
 
+    /// Project the prefix-armed display state (extract-client-core row 4.6).
+    pub fn set_prefix_armed(&mut self, armed: bool) {
+        self.surface.set_prefix_armed(armed);
+    }
+
+    /// Project the live toast presentation (extract-client-core row 4.6);
+    /// `None` presents no toast.
+    pub fn set_toast(&mut self, toast: Option<StatusToast>) {
+        self.surface.set_toast(toast);
+    }
+
     /// The pill regions retained from the last paint (test accessor).
     #[cfg(any(test, feature = "test"))]
     #[must_use]
@@ -57,6 +83,74 @@ impl StatusBarPanel {
 
     pub fn set_visual_origin(&mut self, origin: SelectionOrigin) {
         self.visual_origin = origin;
+    }
+
+    /// The current frame's interaction report (design D6): the hit map over
+    /// the bar's painted pill regions, resolved in the same retained
+    /// geometry the pointer path resolves against. The shell and the Client
+    /// core read this report; neither recomputes the geometry.
+    #[must_use]
+    pub fn frame_report(&self) -> StatusBarFrameReport {
+        let mut hit_map = HitMap::new();
+        for (region, target) in [
+            (self.regions.volume, StatusBarHitTarget::VolumePill),
+            (self.regions.mute, StatusBarHitTarget::MutePill),
+            (self.regions.visual_clear, StatusBarHitTarget::VisualClear),
+        ] {
+            if let Some(rect) = region {
+                hit_map.push(crate::media_list::hit_region(rect), target);
+            }
+        }
+        StatusBarFrameReport { hit_map }
+    }
+
+    /// The status chrome built from the Surface state at paint time (row
+    /// 4.6): the armed pill, present only while prefix mode is armed, and
+    /// the live toast's severity-styled spans. The pill is non-interactive:
+    /// any mouse event already disarms prefix mode silently, so it carries
+    /// no hit region. The toast span carries only the severity foreground;
+    /// the row background comes from the painter's `bar_style`.
+    fn chrome(&self) -> StatusBarChrome {
+        StatusBarChrome {
+            prefix_armed: self.surface.prefix_armed().then(Self::prefix_armed_pill),
+            toast: self.surface.toast().map(toast_spans),
+        }
+    }
+
+    /// The prefix-armed pill (design D7, task 7.3): styled like the other
+    /// left-segment pills.
+    fn prefix_armed_pill() -> Vec<Span<'static>> {
+        vec![
+            Span::styled(
+                " ",
+                Style::default().bg(palette::surface_colors(
+                    palette::Surface::StatusBarPill,
+                    false,
+                )
+                .fill
+                .to_ratatui()),
+            ),
+            Span::styled(
+                " PREFIX ",
+                Style::default()
+                    .fg(palette::Role::Accent.color().to_ratatui())
+                    .bg(
+                        palette::surface_colors(palette::Surface::StatusBarPill, false)
+                            .fill
+                            .to_ratatui(),
+                    )
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                " ",
+                Style::default().bg(palette::surface_colors(
+                    palette::Surface::StatusBarPill,
+                    false,
+                )
+                .fill
+                .to_ratatui()),
+            ),
+        ]
     }
 
     fn handle_mouse(&mut self, event: tuirealm::event::MouseEvent) -> Option<Msg> {
@@ -92,6 +186,22 @@ impl StatusBarPanel {
     }
 }
 
+/// The live toast's severity-styled spans: the severity foreground on the
+/// status-bar surface, the row background from the painter's `bar_style`
+/// (the projection the shell used to build, moved to the adapter with the
+/// Surface state in row 4.6).
+fn toast_spans(toast: &StatusToast) -> Vec<Span<'static>> {
+    let fg = match toast.severity {
+        ToastSeverity::Neutral => palette::Role::TextPrimary,
+        ToastSeverity::Success => palette::Role::StatusAvailable,
+        ToastSeverity::Warning => palette::Role::TextFocusAccent,
+        ToastSeverity::Error => palette::Role::StatusError,
+    }
+    .color()
+    .to_ratatui();
+    vec![Span::styled(toast.text.clone(), Style::default().fg(fg))]
+}
+
 impl Default for StatusBarPanel {
     fn default() -> Self {
         Self::new()
@@ -100,7 +210,8 @@ impl Default for StatusBarPanel {
 
 impl Component for StatusBarPanel {
     fn view(&mut self, frame: &mut Frame, area: Rect) {
-        self.regions = render_status_bar(frame, area, &self.model);
+        let chrome = self.chrome();
+        self.regions = render_status_bar(frame, area, &self.model, &chrome);
     }
     fn query(&self, _attr: Attribute) -> Option<QueryResult<'_>> {
         None
@@ -129,13 +240,14 @@ mod tests {
     use super::*;
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
-    use ratatui::style::{Color, Style};
-    use ratatui::text::Span;
+    use ratatui::style::Color;
 
     use mbv_theme as palette;
 
     fn pill(text: impl Into<String>, fg: Color) -> Vec<Span<'static>> {
-        let fill = palette::surface_colors(palette::Surface::StatusBarPill, false).fill;
+        let fill = palette::surface_colors(palette::Surface::StatusBarPill, false)
+            .fill
+            .to_ratatui();
         vec![
             Span::styled(" ", Style::default().bg(fill)),
             Span::styled(text.into(), Style::default().fg(fg).bg(fill)),
@@ -149,8 +261,6 @@ mod tests {
             volume,
             right: pill("R", Color::White),
             visual_mode: None,
-            prefix_armed: None,
-            toast: None,
         }
     }
 
@@ -160,13 +270,16 @@ mod tests {
     /// `toast-notification-semantics`; restored in-app toast surface).
     #[test]
     fn a_live_toast_takes_over_the_status_row() {
-        let mut model = model(pill(" 60", palette::Role::Accent.color()), None);
-        model.toast = Some(vec![Span::styled(
-            "Scanning 'Movies'...",
-            Style::default().fg(Color::White),
-        )]);
+        let model = model(
+            pill(" 60", palette::Role::Accent.color().to_ratatui()),
+            None,
+        );
         let mut panel = StatusBarPanel::new();
         panel.set_model(model);
+        panel.set_toast(Some(StatusToast {
+            text: "Scanning 'Movies'...".into(),
+            severity: ToastSeverity::Neutral,
+        }));
         let mut terminal = Terminal::new(TestBackend::new(60, 1)).unwrap();
         terminal
             .draw(|f| panel.view(f, Rect::new(0, 0, 60, 1)))
@@ -208,7 +321,11 @@ mod tests {
     /// anywhere else on the row does not.
     #[test]
     fn scroll_on_the_volume_pill_emits_the_volume_intent() {
-        let (mut panel, _) = drawn_panel(60, pill(" 60", palette::Role::Accent.color()), None);
+        let (mut panel, _) = drawn_panel(
+            60,
+            pill(" 60", palette::Role::Accent.color().to_ratatui()),
+            None,
+        );
         let vol = panel.regions().volume.expect("volume region");
         let mouse = |kind, column, row| {
             Event::Mouse(tuirealm::event::MouseEvent {
@@ -240,8 +357,11 @@ mod tests {
     fn click_on_the_mute_pill_emits_the_mute_intent() {
         let (mut panel, _) = drawn_panel(
             60,
-            pill(" 60", palette::Role::Accent.color()),
-            Some(pill("muted", palette::Role::StatusError.color())),
+            pill(" 60", palette::Role::Accent.color().to_ratatui()),
+            Some(pill(
+                "muted",
+                palette::Role::StatusError.color().to_ratatui(),
+            )),
         );
         let mute = panel.regions().mute.expect("mute region");
         let mouse = Event::Mouse(tuirealm::event::MouseEvent {
@@ -265,5 +385,55 @@ mod tests {
             None,
             "click outside any pill is a no-op"
         );
+    }
+
+    /// The frame report resolves the painted pill regions to their semantic
+    /// targets (design D6; the control hit maps row 6.5 paints from), while
+    /// a live toast's row — no painted pills — reports none.
+    #[test]
+    fn frame_report_resolves_the_painted_pill_regions() {
+        let (panel, _) = drawn_panel(
+            60,
+            pill(" 60", palette::Role::Accent.color().to_ratatui()),
+            Some(pill(
+                "muted",
+                palette::Role::StatusError.color().to_ratatui(),
+            )),
+        );
+        let at = |x: u16, y: u16| mbv_ui_msg::Position {
+            x: f32::from(x),
+            y: f32::from(y),
+        };
+        let resolve = |panel: &StatusBarPanel, x: u16, y: u16| {
+            panel.frame_report().hit_map.resolve(at(x, y)).copied()
+        };
+        let volume = panel.regions().volume.expect("volume region");
+        let mute = panel.regions().mute.expect("mute region");
+        assert_eq!(
+            resolve(&panel, volume.x + 1, volume.y),
+            Some(StatusBarHitTarget::VolumePill),
+        );
+        assert_eq!(
+            resolve(&panel, mute.x + 1, mute.y),
+            Some(StatusBarHitTarget::MutePill),
+        );
+        assert_eq!(resolve(&panel, 59, 0), None, "no pill painted there");
+
+        // A live toast takes the whole row: the pills drop and their
+        // regions resolve nothing.
+        let mut panel = StatusBarPanel::new();
+        panel.set_model(model(
+            pill(" 60", palette::Role::Accent.color().to_ratatui()),
+            None,
+        ));
+        panel.set_toast(Some(StatusToast {
+            text: "Scanning 'Movies'...".into(),
+            severity: ToastSeverity::Neutral,
+        }));
+        let mut terminal = Terminal::new(TestBackend::new(60, 1)).unwrap();
+        terminal
+            .draw(|f| panel.view(f, Rect::new(0, 0, 60, 1)))
+            .unwrap();
+        assert!(panel.frame_report().hit_map.is_empty());
     }
 }

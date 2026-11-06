@@ -2,6 +2,7 @@ use super::*;
 use crate::app::tests::QueueViewTestExt;
 use crate::app::tests::render_fixtures::make_movie_app;
 use mbv_components::library_panel::LibraryPanel;
+use mbv_ui_model::settings::PanelFocus;
 use mbv_ui_model::tab_selection::TabSelection;
 use mbv_ui_msg::OverlayId;
 

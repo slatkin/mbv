@@ -128,7 +128,7 @@ fn render_query_row(f: &mut Frame, area: Rect, sidebar: &SearchSidebar) {
     f.render_widget(
         Paragraph::new(Span::styled(
             line,
-            Style::default().fg(palette::Role::TextEmphasis.color()),
+            Style::default().fg(palette::Role::TextEmphasis.color().to_ratatui()),
         )),
         area,
     );
@@ -166,11 +166,15 @@ fn render_type_chips(f: &mut Frame, area: Rect, sidebar: &SearchSidebar) -> Vec<
         next_x += width;
         let style = if *selected {
             Style::default()
-                .fg(palette::Role::PillSelectedFg.color())
-                .bg(palette::surface_colors(palette::Surface::PillChipSelected, false).fill)
+                .fg(palette::Role::PillSelectedFg.color().to_ratatui())
+                .bg(
+                    palette::surface_colors(palette::Surface::PillChipSelected, false)
+                        .fill
+                        .to_ratatui(),
+                )
                 .add_modifier(Modifier::BOLD)
         } else {
-            Style::default().fg(palette::Role::TextMuted.color())
+            Style::default().fg(palette::Role::TextMuted.color().to_ratatui())
         };
         spans.push(Span::styled(format!(" {label} "), style));
     }
@@ -201,9 +205,9 @@ fn render_results(
         let abs_idx = scroll + vi;
         let is_selected = abs_idx == selected;
         let fg = if is_selected {
-            palette::Role::AccentActive.color()
+            palette::Role::AccentActive.color().to_ratatui()
         } else {
-            palette::Role::TextPrimary.color()
+            palette::Role::TextPrimary.color().to_ratatui()
         };
         let badge = badge_for(&item.item_type);
         let badge_str = format!("{badge:<10} ");
@@ -220,9 +224,9 @@ fn render_results(
                 Span::styled(
                     badge_str,
                     Style::default().fg(if is_selected {
-                        palette::Role::PillSelectedFg.color()
+                        palette::Role::PillSelectedFg.color().to_ratatui()
                     } else {
-                        palette::Role::Accent.color()
+                        palette::Role::Accent.color().to_ratatui()
                     }),
                 ),
                 Span::styled(
@@ -253,17 +257,17 @@ fn render_empty_state(f: &mut Frame, area: Rect, sidebar: &SearchSidebar) {
     let (text, fg) = if let Some(err) = &sidebar.last_drain_error {
         (
             format!("Search failed: {err}"),
-            palette::Role::StatusError.color(),
+            palette::Role::StatusError.color().to_ratatui(),
         )
     } else if !sidebar.query.is_empty() {
         (
             "No matches on the server".to_string(),
-            palette::Role::TextSecondary.color(),
+            palette::Role::TextSecondary.color().to_ratatui(),
         )
     } else {
         (
             "Type to search".to_string(),
-            palette::Role::TextSecondary.color(),
+            palette::Role::TextSecondary.color().to_ratatui(),
         )
     };
     f.render_widget(

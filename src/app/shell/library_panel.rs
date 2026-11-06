@@ -393,6 +393,9 @@ impl Model {
             self.application
                 .mount(id.clone(), Box::new(LibraryPanel::new()), vec![])
                 .expect("mount LibraryPanel");
+            // The mount routes through the core focus stack (design D3 of
+            // `extract-client-core`): the record joins the mounted set.
+            self.focus_stack.mount(id.clone());
         }
         // Embedded owners are installed/projected after the panel is mounted
         // so the first painted frame has a current owner and geometry, and
@@ -482,7 +485,9 @@ impl Model {
     /// 80+ columns ignores window focus (`panel_appearance_focus`).
     pub(in crate::app) fn library_body_fill(&self) -> ratatui::style::Color {
         let focused = self.app.panel_appearance_focus(super::PanelFocus::Library);
-        mbv_theme::surface_colors(mbv_theme::Surface::LibraryColumn, focused).fill
+        mbv_theme::surface_colors(mbv_theme::Surface::LibraryColumn, focused)
+            .fill
+            .to_ratatui()
     }
 
     /// The transitional draw step: give the library rect to the mounted

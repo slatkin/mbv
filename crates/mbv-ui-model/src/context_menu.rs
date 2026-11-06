@@ -6,7 +6,7 @@ pub enum BulkRemoveTarget {
     ContinueWatching(Box<EmbyItem>),
     Queue(QueueSlotId),
 }
-use ratatui::layout::Rect;
+use crate::geom::Rect;
 
 use crate::media_list::SelectionOrigin;
 use crate::targets::HomeItemTarget;

@@ -1,6 +1,6 @@
 # mbv
 
-mbv is a terminal client for Emby, Audiobookshelf, and Feeds. It browses catalogs and plays media. Every local launch attaches to the per-user Owner process. That process is the only local Player-owner host. Stay-alive controls whether that process outlives its Clients.
+mbv is a media client for Emby, Audiobookshelf, and Feeds. It browses catalogs and plays media through a TUI Client or a GUI Client. Every local launch attaches to the per-user Owner process. That process is the only local Player-owner host. Stay-alive controls whether that process outlives its Clients.
 
 ## Services
 
@@ -120,8 +120,24 @@ The separately packaged headless server daemon. It runs as a system service, a s
 _Avoid_: system daemon, the daemon
 
 Client:
-A terminal UI attached to an out-of-process Player owner over ctrl. Local Clients attach to the Owner process. Attachment establishes no Service identity. Any number can attach when Stay-alive is enabled. With it disabled, admission is exclusive.
+A TUI Client or a GUI Client attached to an out-of-process Player owner over ctrl. Local Clients attach to the Owner process. Attachment establishes no Service identity. Any number can attach when Stay-alive is enabled. With it disabled, admission is exclusive.
 _Avoid_: thin client, terminal client, viewer, attachment
+
+TUI Client:
+The Client kind that presents the full terminal UI. It is the `mbv` program. It attaches to an out-of-process Player owner over ctrl like every Client. It hosts the TuiRealm Interactive Components, translates its raw key and pointer events into neutral events, and paints with ratatui. It presents the focus that the *Client core* derives.
+_Avoid_: terminal client, thin client, viewer
+
+GUI Client:
+The Client kind that presents a native window. It is a separate program. It attaches to an out-of-process Player owner over ctrl like every Client. It never touches mpv; video plays in mpv's own window. It shares the *Client core* with the TUI Client: the same Surface state, focus stack, neutral events, Keyboard Router, and breakpoint classes. It paints with its own painters and translates its raw input into neutral events.
+_Avoid_: windowed client, desktop client, GUI (bare, for the app)
+
+Client core:
+The layer of interaction behaviour that the TUI Client and the GUI Client share. It holds each interaction rule one time: Surface state, the focus stack, neutral key and pointer events, the one Keyboard Router, list capacity, and the semantic hit map. A Client owns only three things: painting, its own geometry, and the translation of raw input into neutral events. It never reimplements an interaction rule.
+_Avoid_: core (bare), shared UI layer, interaction layer (bare)
+
+Surface state:
+The interaction state of one interactive surface, held one time where both Clients share it. Cursor, selection, marks, viewport counted in items, local focus, and drafts are examples. It depends on no terminal library, no terminal UI framework, and no GUI toolkit. A Client's adapter forwards neutral events to it and paints from it. The adapter holds no copy of its values.
+_Avoid_: widget state, UI state (bare), duplicate state
 
 Local process:
 Any mbv process on the user machine. It is a Client or the Owner process. Control of mbvd or another device from F3 happens inside an already running Local process. Its Owner process and Tray keep running. Desktop features belong to Local processes and never to mbvd. The Tray and the pinned panel are examples.
@@ -254,7 +270,7 @@ The shared provider-neutral owner for one logical media-row flow. It owns rows, 
 _Avoid_: generic list, generic media list, two-column list
 
 Row flow:
-The one ordered row sequence that a list presents, in paint order. Row position, viewport offset, and point resolution all address this same sequence. List order is the order in which its rows paint. The shared `crates/mbv-components/src/list/` seam owns it. Cursor movement, viewport resolution, retained paint geometry, and multi-selection each have one shared implementation over it.
+The one ordered row sequence that a list presents, in paint order. Row position, viewport offset, and point resolution all address this same sequence. List order is the order in which its rows paint. The shared list seam owns it: `crates/mbv-surfaces/src/list/` holds cursor, viewport, row flow, and marks, and `crates/mbv-components/src/list/` holds retained paint geometry. Cursor movement, viewport resolution, retained paint geometry, and multi-selection each have one shared implementation over it.
 _Avoid_: item list, row list, flat list
 
 Viewport anchor:
@@ -373,6 +389,10 @@ The reusable embedded flat presentation over the shared ordered Row flow. It pai
 _Avoid_: session card, three-line card, card list, index-based card list
 
 ## Panels and surfaces
+
+Breakpoint class:
+The class a Client derives from its own width alone: `Mini`, `Narrow`, or `Wide`, through the shared `classify` in `mbv-surfaces`. Each Client uses its own thresholds: the GUI classifies logical points through `classify` with a GUI threshold constant; the TUI keeps its own width thresholds in terminal columns and does not call `classify` yet. In the same class, both Clients apply the same layout behaviour. It is distinct from Panel mode, which also includes the explicit `x` toggle into Mini; that toggle stays TUI state and no GUI key reaches it.
+_Avoid_: breakpoint mode, layout mode
 
 Panel:
 A root-composed region with its own placement, surface fill, layout, and Interactive Component. Panels are Tab, Library, Library playback, Queue, Queue playback, Status bar, and the pane boundaries. Panel focus still means which of Library or Queue receives navigation keys. It is independent of Panel mode.

@@ -60,13 +60,15 @@ fn render_feeds_manage_list(
         dim_backdrop_active,
         width,
         height,
-        palette::surface_colors(palette::Surface::PopupFrame, false).fill,
+        palette::surface_colors(palette::Surface::PopupFrame, false)
+            .fill
+            .to_ratatui(),
     );
 
     f.render_widget(
         Paragraph::new(Span::styled(
             hint,
-            Style::default().fg(palette::Role::TextMuted.color()),
+            Style::default().fg(palette::Role::TextMuted.color().to_ratatui()),
         )),
         Rect {
             x: inner.x,
@@ -87,7 +89,7 @@ fn render_feeds_manage_list(
         f.render_widget(
             Paragraph::new(Span::styled(
                 "No feed subscriptions yet -- press a to add",
-                Style::default().fg(palette::Role::TextSecondary.color()),
+                Style::default().fg(palette::Role::TextSecondary.color().to_ratatui()),
             )),
             list_area,
         );
@@ -134,10 +136,10 @@ fn feed_row_lines(feeds: &[FeedSubscription], cursor: usize, list_width: u16) ->
             let arrow = if focused { "▸ " } else { "  " };
             let name_style = if focused {
                 Style::default()
-                    .fg(palette::Role::TextPrimary.color())
+                    .fg(palette::Role::TextPrimary.color().to_ratatui())
                     .add_modifier(Modifier::BOLD)
             } else {
-                Style::default().fg(palette::Role::TextSecondary.color())
+                Style::default().fg(palette::Role::TextSecondary.color().to_ratatui())
             };
             let kind_label = match sub.kind {
                 FeedKind::Audio => "[audio]",
@@ -151,12 +153,12 @@ fn feed_row_lines(feeds: &[FeedSubscription], cursor: usize, list_width: u16) ->
                 Span::raw(" "),
                 Span::styled(
                     kind_label,
-                    Style::default().fg(palette::Role::Accent.color()),
+                    Style::default().fg(palette::Role::Accent.color().to_ratatui()),
                 ),
                 Span::raw(" "),
                 Span::styled(
                     trunc_str(&sub.url, url_max),
-                    Style::default().fg(palette::Role::TextMuted.color()),
+                    Style::default().fg(palette::Role::TextMuted.color().to_ratatui()),
                 ),
             ])
         })
@@ -179,14 +181,16 @@ fn render_feeds_manage_form(
         dim_backdrop_active,
         width,
         height,
-        palette::surface_colors(palette::Surface::PopupFrame, false).fill,
+        palette::surface_colors(palette::Surface::PopupFrame, false)
+            .fill
+            .to_ratatui(),
     );
 
     let field_style = |focused: bool| {
         if focused {
-            Style::default().fg(palette::Role::TextStrong.color())
+            Style::default().fg(palette::Role::TextStrong.color().to_ratatui())
         } else {
-            Style::default().fg(palette::Role::TextSecondary.color())
+            Style::default().fg(palette::Role::TextSecondary.color().to_ratatui())
         }
     };
     let cursor_glyph = "▏";
@@ -258,7 +262,7 @@ fn render_feeds_manage_form(
     f.render_widget(
         Paragraph::new(Span::styled(
             status,
-            Style::default().fg(palette::Role::TextMuted.color()),
+            Style::default().fg(palette::Role::TextMuted.color().to_ratatui()),
         )),
         Rect {
             x: inner.x + 1,

@@ -7,170 +7,88 @@ use super::super::{
 };
 use super::pin_swap::PinSwapLink;
 use super::{Duration, IdleFeed, Instant, PollStrategy};
-use crate::app::dispatch::session::player_event::PlayerEventFlow;
-use crate::app::{BrowseEvent, LibEvent, ModelContentEvent, MusicEvent, SeriesEvent};
-
-/// Outcome of one `drain_worker` step.
-enum WorkerDrain {
-    Completed,
-    Empty,
-    Disconnected,
-}
+use crate::app::{
+    BrowseEvent, ClientLifecycle, HomeEventDrain, LibEvent, ModelContentEvent, MusicEvent,
+    PlayerEventDrain, SeriesEvent,
+};
 
 impl Model {
-    /// One `take/try_recv/match` step shared by the startup-worker channels:
-    /// a completion runs `on_completion`, `Empty` leaves the receiver for the
-    /// caller to put back into its slot, and a disconnected channel runs
-    /// `on_disconnect` (slot stays empty).
-    fn drain_worker<R>(
-        &mut self,
-        rx: &mut std::sync::mpsc::Receiver<R>,
-        on_completion: impl FnOnce(&mut Self, R),
-        on_disconnect: impl FnOnce(&mut Self),
-    ) -> WorkerDrain {
-        match rx.try_recv() {
-            Ok(completion) => {
-                on_completion(self, completion);
-                WorkerDrain::Completed
-            }
-            Err(std::sync::mpsc::TryRecvError::Empty) => WorkerDrain::Empty,
-            Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                on_disconnect(self);
-                WorkerDrain::Disconnected
-            }
-        }
-    }
-
-    /// Drain the Emby startup and Emby setup worker channels. Returns whether
-    /// any event was drained.
+    /// Drain the Emby startup and Emby setup worker channels through the
+    /// Client core's drain and project the Home content a completion rebuilt.
+    /// Returns whether any event was drained.
     pub(super) fn drain_startup_workers(&mut self) -> bool {
-        let mut had_events = false;
-        if let Some(mut worker) = self.app.setup.emby_startup_rx.take() {
-            let generation = worker.generation;
-            match self.drain_worker(
-                &mut worker.rx,
-                // Emby bootstrap wrote Home content; assign + re-project
-                // (5.3d); stale/error return None.
-                super::super::Model::apply_emby_completion_drain,
-                |model| model.app.handle_emby_startup_worker_disconnect(generation),
-            ) {
-                WorkerDrain::Completed | WorkerDrain::Disconnected => had_events = true,
-                WorkerDrain::Empty => self.app.setup.emby_startup_rx = Some(worker),
-            }
+        let drain = self.app.drain_startup_workers();
+        if let Some(content) = drain.home {
+            self.assign_home_content(content);
         }
-        if let Some(mut rx) = self.app.setup.emby_setup_rx.take() {
-            match self.drain_worker(
-                &mut rx,
-                // Emby setup drain re-bootstraps Home content; assign +
-                // re-project (5.3d); stale/decline return None.
-                super::super::Model::apply_emby_setup_completion_drain,
-                |model| model.app.handle_emby_setup_worker_disconnect(),
-            ) {
-                WorkerDrain::Completed | WorkerDrain::Disconnected => had_events = true,
-                WorkerDrain::Empty => self.app.setup.emby_setup_rx = Some(rx),
-            }
-        }
-        had_events
+        drain.events
     }
 
     /// Drain queued events from the suspended home link. It has no tick of its
-    /// own, so consume every pending event before returning.
+    /// own, so consume every pending event before returning. The core's drain
+    /// owns the event semantics; the pin-swap handshake is this Client's.
     pub(in crate::app) fn drain_suspended_home_events(&mut self) -> bool {
         let mut had_events = false;
         loop {
-            let event = if self.app.suspended_local.is_some() {
-                self.app.deferred_home_events.pop_front().or_else(|| {
-                    self.app
-                        .queue_link(crate::app::QueueLink::Local)
-                        .1
-                        .try_recv()
-                        .ok()
-                })
-            } else {
-                None
-            };
-            let Some(event) = event else {
-                return had_events;
-            };
-            had_events = true;
-            match event {
-                mbv_ctrl::player::PlayerEvent::UnifiedQueueUpdated(snapshot) => {
-                    self.app.adopt_home_snapshot(&snapshot);
+            match self.app.drain_home_event() {
+                HomeEventDrain::Empty => return had_events,
+                HomeEventDrain::Consumed => had_events = true,
+                HomeEventDrain::Client(lifecycle) => {
+                    had_events = true;
+                    self.apply_home_link_lifecycle(lifecycle);
                 }
-                mbv_ctrl::player::PlayerEvent::QueueOpResult {
-                    outcome: mbv_ctrl::QueueOpOutcome::Applied(snapshot),
-                    ..
-                } => self.app.adopt_home_snapshot(&snapshot),
-                mbv_ctrl::player::PlayerEvent::RemoteDisconnected(_) => {
-                    self.app.suspended_local = None;
-                    self.app.drop_staged_queue_transfer_on_teardown();
-                    self.app.raise_daemon_lost_modal();
-                }
-                mbv_ctrl::player::PlayerEvent::DaemonShutdownAnnounced => {
-                    self.app.handle_daemon_shutdown_announced(true);
-                }
-                // Pin-swap lifecycle is shell-owned (tray-pin-swap 4.4); the
-                // reply travels on this same home link.
-                mbv_ctrl::player::PlayerEvent::SwapPrepare => {
-                    self.prepare_pin_swap(&PinSwapLink::Home);
-                }
-                mbv_ctrl::player::PlayerEvent::SwapQuit => self.quit_swapped_out(),
-                // The suspended home link is not the active owner; its output
-                // state must never drive `App::playback_output`, which
-                // mirrors the active owner's last `CtrlEvent::PlaybackOutput`
-                // (cast-owner-output design D13). The active link's dispatch
-                // arm in `handle_player_event` owns that state.
-                mbv_ctrl::player::PlayerEvent::PlaybackOutput(_) => {
-                    tracing::debug!(name: "home_link.playback_output.ignored", target: "shell", "ignoring playback-output event from the suspended home link");
-                }
-                _ => {}
             }
         }
     }
 
-    /// Drain one player event. Returns whether playback requested a restart
-    /// (the caller `continue`s the run loop).
-    pub(super) fn drain_player_events(&mut self, had_events: &mut bool) -> bool {
-        // The answer pump defers non-answer events here; replay them before
-        // the live receiver so tick-level handling stays ordered (row 5.1).
-        let ev = self
-            .app
-            .deferred_player_events
-            .pop_front()
-            .or_else(|| self.app.player_rx.try_recv().ok());
-        let Some(ev) = ev else {
-            return false;
-        };
-        *had_events = true;
-        // Pin-swap lifecycle is shell-owned (tray-pin-swap 4.4): the launch
-        // snapshot is a shell query and the exit kind lives on the shell, so
-        // both events are handled here and never reach `App` dispatch.
-        match ev {
-            mbv_ctrl::player::PlayerEvent::SwapPrepare => {
-                self.prepare_pin_swap(&PinSwapLink::Active);
-                return false;
-            }
-            mbv_ctrl::player::PlayerEvent::SwapQuit => {
-                self.quit_swapped_out();
-                return false;
-            }
-            _ => {}
+    /// Apply a Client-owned lifecycle event from the suspended home link:
+    /// the reply travels on this same home link (tray-pin-swap 4.4).
+    fn apply_home_link_lifecycle(&mut self, lifecycle: ClientLifecycle) {
+        match lifecycle {
+            ClientLifecycle::SwapPrepare => self.prepare_pin_swap(&PinSwapLink::Home),
+            ClientLifecycle::SwapQuit => self.quit_swapped_out(),
         }
-        let flow = self.app.handle_player_event(ev);
-        // Playback completion refetches Home; re-project (task 5.3d, sync_home
-        // mirror deletion).
-        self.push_home_content();
-        // Emby browser content may have changed (5.3d.15/M2).
-        self.push_active_emby_library_owner_content();
-        // Player events can reconcile ABS podcast progress; re-project (5.3d.11 U6).
-        self.push_audiobookshelf_podcast_content();
-        // Player events can reconcile ABS book progress; re-project (5.3d).
-        self.push_audiobookshelf_book_content();
-        self.push_music_workspace_content();
-        flow == PlayerEventFlow::RestartLoop
+    }
+
+    /// Drain one player event through the Client core's drain and project what
+    /// it changed. Returns whether playback requested a restart (the caller
+    /// `continue`s the run loop).
+    pub(super) fn drain_player_events(&mut self, had_events: &mut bool) -> bool {
+        match self.app.drain_player_event() {
+            PlayerEventDrain::Empty => false,
+            // Pin-swap lifecycle is this Client's (tray-pin-swap 4.4): the
+            // launch snapshot is a TUI query and the exit kind lives on the
+            // shell, so it never reaches `App` dispatch.
+            PlayerEventDrain::Client(lifecycle) => {
+                *had_events = true;
+                match lifecycle {
+                    ClientLifecycle::SwapPrepare => self.prepare_pin_swap(&PinSwapLink::Active),
+                    ClientLifecycle::SwapQuit => self.quit_swapped_out(),
+                }
+                false
+            }
+            PlayerEventDrain::Handled { restart } => {
+                *had_events = true;
+                // Playback completion refetches Home; re-project (task 5.3d,
+                // sync_home mirror deletion).
+                self.push_home_content();
+                // Emby browser content may have changed (5.3d.15/M2).
+                self.push_active_emby_library_owner_content();
+                // Player events can reconcile ABS podcast progress; re-project
+                // (5.3d.11 U6).
+                self.push_audiobookshelf_podcast_content();
+                // Player events can reconcile ABS book progress; re-project.
+                self.push_audiobookshelf_book_content();
+                self.push_music_workspace_content();
+                restart
+            }
+        }
     }
 
     /// Drain pending library events. Returns whether any event was drained.
+    ///
+    /// This Client joins its own per-event work to the core's App-side
+    /// handler, because it keeps the library content state the GUI does not.
     pub(super) fn drain_lib_events(&mut self) -> bool {
         let mut had_events = false;
         let mut fetched_recently_added = false;
@@ -357,23 +275,10 @@ impl Model {
         self.push_tv_workspace_content();
     }
 
-    /// Drain idle-feed items and trigger the 30-minute refetch.
+    /// Drain idle-feed items and trigger the 30-minute refetch through the
+    /// Client core's drain.
     pub(super) fn drain_idle_feed(&mut self) -> bool {
-        let Some(ref mut idle_feed) = self.app.idle_feed else {
-            return false;
-        };
-        let mut had_events = false;
-        while let Ok(items) = idle_feed.items_rx.try_recv() {
-            had_events = true;
-            idle_feed.items = items;
-            idle_feed.current_index = 0;
-        }
-        // Re-fetch every 30 minutes
-        if idle_feed.last_fetch.elapsed() >= Duration::from_mins(30) {
-            idle_feed.last_fetch = Instant::now();
-            self.app.spawn_idle_feed_fetch();
-        }
-        had_events
+        self.app.drain_idle_feed()
     }
 
     /// Drain resized-image worker responses into the matching protocol of
@@ -417,37 +322,18 @@ impl Model {
         had_events
     }
 
+    /// Drain ctrl transport commands through the Client core's drain.
     pub(crate) fn drain_transport_events(&mut self) -> bool {
-        let mut had_events = false;
-        while let Ok(transport) = self.app.transport_rx.try_recv() {
-            had_events = true;
-            match transport {
-                mbv_ctrl::TransportCommand::Step(direction) => {
-                    let _ = self.app.request_relative_step(direction);
-                }
-                mbv_ctrl::TransportCommand::Player(command) => {
-                    let _ = self.app.player.send_command(command);
-                }
-                mbv_ctrl::TransportCommand::Stop => {
-                    self.app.player.stop();
-                }
-                // Owner actions are resolved inside the Owner process
-                // (tray-pin-swap task 3.5), and the pinned panel belongs to
-                // that process too, which runs the toggle request itself.
-                // The shell never receives either one.
-                mbv_ctrl::TransportCommand::OwnerAction(_)
-                | mbv_ctrl::TransportCommand::TogglePanel => {}
-            }
-        }
-        had_events
+        self.app.drain_transport_events()
     }
 
-    /// Drain Emby websocket events. Returns whether any event was drained.
+    /// Drain Emby websocket events through the Client core's drain, projecting
+    /// the content each event can change. Returns whether any event was
+    /// drained.
     pub(super) fn drain_ws_events(&mut self) -> bool {
         let mut had_events = false;
-        while let Ok(ev) = self.app.ws_rx.try_recv() {
+        while self.app.drain_ws_event() {
             had_events = true;
-            self.app.handle_ws_event(ev);
             // Emby browser content may have changed (5.3d.15/M2).
             self.push_active_emby_library_owner_content();
             self.push_music_workspace_content();
@@ -460,13 +346,13 @@ impl Model {
         had_events
     }
 
-    /// Drain Audiobookshelf socket events. Returns whether any event was
-    /// drained.
+    /// Drain Audiobookshelf socket events through the Client core's drain,
+    /// projecting the content each event can change. Returns whether any event
+    /// was drained.
     pub(super) fn drain_audiobookshelf_socket_events(&mut self) -> bool {
         let mut had_events = false;
-        while let Ok(ev) = self.app.audiobookshelf_socket_rx.try_recv() {
+        while self.app.drain_audiobookshelf_socket_event() {
             had_events = true;
-            self.app.handle_audiobookshelf_socket_event(ev);
             // Socket events reconcile ABS podcast episode progress;
             // re-project (5.3d.11 U6).
             self.push_audiobookshelf_podcast_content();
@@ -477,32 +363,9 @@ impl Model {
         had_events
     }
 
-    /// Periodic maintenance between ticks: delayed settings save, session
-    /// polls, websocket keepalive, capability refresh.
+    /// Periodic maintenance between ticks, run by the Client core.
     pub(super) fn run_periodic_maintenance(&mut self) {
-        if let Some(at) = self.app.settings_save_at
-            && Instant::now() >= at
-        {
-            let cfg = self.app.config.lock().unwrap().clone();
-            crate::config::save_config_with_ui(&cfg, &self.app.ui_config_snapshot());
-            self.app.settings_save_at = None;
-        }
-
-        // Keep this session visible to other Emby clients
-        if let Some(ref tx) = self.app.ws_send_tx
-            && self.app.last_keepalive.elapsed() >= Duration::from_secs(30)
-        {
-            let _ = tx.send_text("{\"MessageType\":\"KeepAlive\"}".to_string());
-            self.app.last_keepalive = Instant::now();
-        }
-        if self.app.ws_send_tx.is_some()
-            && self.app.last_capabilities.elapsed() >= Duration::from_secs(600)
-        {
-            if let Some(client) = self.app.emby_snapshot() {
-                std::thread::spawn(move || client.register_capabilities());
-            }
-            self.app.last_capabilities = Instant::now();
-        }
+        self.app.run_periodic_maintenance();
     }
 
     /// Poll the terminal, arbitrate the keyboard router, and dispatch the
@@ -527,7 +390,7 @@ impl Model {
         let poll_timeout = if self.app.visualizer.is_some() {
             Duration::from_millis(8)
         } else {
-            Duration::from_millis(50)
+            crate::app::CLIENT_IDLE_CADENCE
         };
         let tick_started = Instant::now();
         let ticked = self.application.tick(PollStrategy::Once(poll_timeout));

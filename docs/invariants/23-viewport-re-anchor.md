@@ -1,6 +1,6 @@
 # Invariant 23 — A freely scrolled viewport re-anchors only through the origin-carrying operation vocabulary
 
-**Scope:** the shared `ViewportAnchor` seam (`crates/mbv-components/src/list/viewport.rs`)
+**Scope:** the shared `ViewportAnchor` seam (`crates/mbv-surfaces/src/list/viewport.rs`)
 and its two owners, `MediaList` and the shared `TreeBrowser`.
 
 Umbrella: #927.

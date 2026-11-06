@@ -15,6 +15,9 @@ instances, focus, subscriptions, event delivery, and component rendering. Flat
 component IDs are registry addresses; mbv derives parent, visibility, render
 order, and focus relationships from typed IDs and parent state.
 
+> **Superseded for focus by ADR 0035.** The Client core's
+> `mbv_surfaces::FocusStack` is the focus authority; TuiRealm follows it.
+
 An Interactive Component owns its private presentation state, event
 interpretation, local updates, rendering, viewport, and render-derived hit
 geometry. It emits a `Msg` only for work crossing its authority boundary. Runtime

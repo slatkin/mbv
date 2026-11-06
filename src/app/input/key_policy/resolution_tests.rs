@@ -1,6 +1,8 @@
 //! Unarmed policy resolution: precedence, gates, rebinds, and registry parity.
 use super::test_support::*;
 use super::*;
+use crate::app::test_seams::crossterm_key_to_neutral;
+use crossterm::event::{KeyCode, KeyModifiers};
 use mbv_keybinds::{Chord, KEYBIND_ACTIONS};
 
 #[test]
@@ -19,7 +21,10 @@ fn policy_entries_have_unique_ordered_names() {
 
 #[test]
 fn panel_mode_cycle_falls_through_during_text_entry() {
-    let key = crossterm::event::KeyEvent::new(KeyCode::Char('x'), KeyModifiers::NONE);
+    let key = crossterm_key_to_neutral(crossterm::event::KeyEvent::new(
+        KeyCode::Char('x'),
+        KeyModifiers::NONE,
+    ));
     let mut text_entry = snapshot();
     text_entry.overlays.text_entry_focused = true;
     assert_eq!(
@@ -46,7 +51,10 @@ fn panel_mode_cycle_falls_through_during_text_entry() {
 
 #[test]
 fn hide_visual_slot_routes_to_command_without_overlay() {
-    let key = crossterm::event::KeyEvent::new(KeyCode::Char('h'), KeyModifiers::NONE);
+    let key = crossterm_key_to_neutral(crossterm::event::KeyEvent::new(
+        KeyCode::Char('h'),
+        KeyModifiers::NONE,
+    ));
     assert_eq!(
         crate::app::input::router::resolve_router_outcome_with_focused(
             key,
@@ -78,7 +86,10 @@ fn sessions_transfer_keys_fall_through_to_the_sidebar_leaf() {
         );
         assert_eq!(
             crate::app::input::router::resolve_router_outcome_with_focused(
-                crossterm::event::KeyEvent::new(code, crossterm::event::KeyModifiers::NONE),
+                crossterm_key_to_neutral(crossterm::event::KeyEvent::new(
+                    code,
+                    crossterm::event::KeyModifiers::NONE,
+                )),
                 &sessions,
                 None,
                 &keybinds()
@@ -250,7 +261,10 @@ fn alt_swallow_stays_outside_the_registry_and_still_swallows() {
     );
     assert_eq!(
         crate::app::input::router::resolve_router_outcome_with_focused(
-            crossterm::event::KeyEvent::new(KeyCode::Char('k'), KeyModifiers::ALT),
+            crossterm_key_to_neutral(crossterm::event::KeyEvent::new(
+                KeyCode::Char('k'),
+                KeyModifiers::ALT,
+            )),
             &snapshot(),
             None,
             &keybinds()

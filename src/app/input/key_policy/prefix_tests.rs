@@ -6,7 +6,7 @@ mod prefix_mode {
     use super::super::test_support::*;
     use super::super::*;
     use crate::app::input::router::RouterOutcome;
-    use crossterm::event::KeyEvent;
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
     fn prefix_keybinds(assignments: &[(&str, &str)]) -> Keybinds {
         let mut sections: Vec<(String, mbv_keybinds::RawSection)> = Vec::new();
@@ -45,7 +45,10 @@ mod prefix_mode {
 
     fn resolve(key: KeyEvent, snapshot: &RouterSnapshot, keybinds: &Keybinds) -> RouterOutcome {
         crate::app::input::router::resolve_router_outcome_with_focused(
-            key, snapshot, None, keybinds,
+            crate::app::test_seams::crossterm_key_to_neutral(key),
+            snapshot,
+            None,
+            keybinds,
         )
     }
 
@@ -86,7 +89,10 @@ mod prefix_mode {
         let focused = mbv_ui_msg::ComponentId::Modal(mbv_ui_msg::ModalId::Confirm);
         assert_eq!(
             crate::app::input::router::resolve_router_outcome_with_focused(
-                crossterm::event::KeyEvent::new(KeyCode::Char('b'), KeyModifiers::CONTROL),
+                crate::app::test_seams::crossterm_key_to_neutral(crossterm::event::KeyEvent::new(
+                    KeyCode::Char('b'),
+                    KeyModifiers::CONTROL
+                ),),
                 &blocked,
                 Some(&focused),
                 &keybinds

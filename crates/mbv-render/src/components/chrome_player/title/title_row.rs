@@ -40,7 +40,7 @@ pub fn render_title_row(
         0,
         Span::styled(
             pos_str,
-            Style::default().fg(palette::Role::PlaybackMetaFg.color()),
+            Style::default().fg(palette::Role::PlaybackMetaFg.color().to_ratatui()),
         ),
     );
     let right_w: u16 = right
@@ -95,8 +95,11 @@ pub fn render_title_row(
     left.extend(right);
     frame.render_widget(
         Paragraph::new(Line::from(left)).style(
-            Style::default()
-                .bg(palette::surface_colors(ctx.panel, ctx.controls.panel_focused).fill),
+            Style::default().bg(
+                palette::surface_colors(ctx.panel, ctx.controls.panel_focused)
+                    .fill
+                    .to_ratatui(),
+            ),
         ),
         area,
     );

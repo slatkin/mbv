@@ -65,23 +65,23 @@ pub struct IndicatorData {
 impl IndicatorData {
     fn res_color(&self) -> Color {
         if self.flags.res_dim {
-            palette::Role::TextMuted.color()
+            palette::Role::TextMuted.color().to_ratatui()
         } else {
-            palette::Role::IndicatorResolutionFg.color()
+            palette::Role::IndicatorResolutionFg.color().to_ratatui()
         }
     }
     fn audio_color(&self) -> Color {
         if self.flags.audio_dim {
-            palette::Role::TextMuted.color()
+            palette::Role::TextMuted.color().to_ratatui()
         } else {
-            palette::Role::IndicatorAudioFg.color()
+            palette::Role::IndicatorAudioFg.color().to_ratatui()
         }
     }
     fn sub_color(&self) -> Color {
         if self.flags.sub_on {
-            palette::Role::TextMetadata.color()
+            palette::Role::TextMetadata.color().to_ratatui()
         } else {
-            palette::Role::TextMuted.color()
+            palette::Role::TextMuted.color().to_ratatui()
         }
     }
 }
@@ -140,7 +140,7 @@ fn chip(label: &str, bg: Color) -> Span<'static> {
         format!(" {label} "),
         Style::default()
             .bg(bg)
-            .fg(palette::Role::TextOnAccent.color())
+            .fg(palette::Role::TextOnAccent.color().to_ratatui())
             .add_modifier(Modifier::BOLD),
     )
 }
@@ -157,7 +157,7 @@ fn chips(d: &IndicatorData) -> Vec<Span<'static>> {
             // Off: hollow/dim — no fill, dim text.
             out.push(Span::styled(
                 format!(" {} ", d.sub_label),
-                bold(palette::Role::TextMuted.color()),
+                bold(palette::Role::TextMuted.color().to_ratatui()),
             ));
         }
     }
@@ -166,7 +166,7 @@ fn chips(d: &IndicatorData) -> Vec<Span<'static>> {
 
 // --- Legacy brackets: [FHD] [en] [CC] -----------------------------------
 fn bracket_group(label: &str, color: Color, out: &mut Vec<Span<'static>>) {
-    let b = bold(palette::Role::TextStrong.color());
+    let b = bold(palette::Role::TextStrong.color().to_ratatui());
     out.push(Span::styled("[", b));
     out.push(Span::styled(label.to_string(), bold(color)));
     out.push(Span::styled("]", b));
@@ -209,7 +209,7 @@ fn dot_group(dot: &str, color: Color, label: &str, out: &mut Vec<Span<'static>>)
     out.push(Span::styled(dot.to_string(), Style::default().fg(color)));
     out.push(Span::styled(
         format!(" {label}"),
-        Style::default().fg(palette::Role::TextSecondary.color()),
+        Style::default().fg(palette::Role::TextSecondary.color().to_ratatui()),
     ));
 }
 
@@ -235,7 +235,7 @@ fn pipes(d: &IndicatorData) -> Vec<Span<'static>> {
     let sep = || {
         Span::styled(
             " \u{2502} ",
-            Style::default().fg(palette::Role::TextMuted.color()),
+            Style::default().fg(palette::Role::TextMuted.color().to_ratatui()),
         )
     };
     let mut out = vec![Span::styled(
@@ -268,12 +268,12 @@ fn keyvalue(d: &IndicatorData) -> Vec<Span<'static>> {
     if !d.flags.audio_only {
         out.push(Span::styled(
             " ⧸ ",
-            Style::default().fg(palette::Role::TextMuted.color()),
+            Style::default().fg(palette::Role::TextMuted.color().to_ratatui()),
         ));
         out.push(Span::styled(d.audio_label.clone(), bold(d.audio_color())));
         out.push(Span::styled(
             " ⧸ ",
-            Style::default().fg(palette::Role::TextMuted.color()),
+            Style::default().fg(palette::Role::TextMuted.color().to_ratatui()),
         ));
         out.push(Span::styled(d.sub_label.clone(), bold(d.sub_color())));
     }
@@ -294,7 +294,7 @@ fn powerline(d: &IndicatorData) -> Vec<Span<'static>> {
             format!(" {label} "),
             Style::default()
                 .bg(color)
-                .fg(palette::Role::TextOnAccent.color())
+                .fg(palette::Role::TextOnAccent.color().to_ratatui())
                 .add_modifier(Modifier::BOLD),
         ));
         // Arrow: foreground = this segment's color, background = next segment's (or none).

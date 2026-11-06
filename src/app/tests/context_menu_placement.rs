@@ -13,6 +13,13 @@ use mbv_components::library_panel::LibraryPanel;
 use mbv_ui_msg::{ComponentId, Msg, OverlayId};
 use ratatui::layout::Rect;
 
+/// Convert a render-layer rectangle to the neutral presentation `Rect`
+/// (`extract-client-core` task 1.2): the tests read painted geometry as
+/// `ratatui::Rect` and resolve placement against the neutral shape.
+fn neutral(rect: Rect) -> mbv_ui_model::geom::Rect {
+    mbv_ui_model::geom::Rect::new(rect.x, rect.y, rect.width, rect.height)
+}
+
 fn library_app() -> App {
     let mut app = make_app_stub();
     add_emby_movie_library(&mut app);
@@ -159,7 +166,8 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout() {
         anchor,
         ContextMenuAnchor::SelectedItem(PanelFocus::Library)
     ));
-    let (ex, ey) = ContextMenu::place(panel, size, selected.as_ref(), None);
+    let selected = selected.map(neutral);
+    let (ex, ey) = ContextMenu::place(neutral(panel), size, selected.as_ref(), None);
     let expected = Rect::new(ex, ey, size.0, size.1);
     assert_eq!(
         rect, expected,
@@ -170,7 +178,7 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout() {
     // longer carries a `selected_item_rect` to poison at all) would land the
     // menu at the panel's bottom-right corner instead of the component's
     // placement.
-    let (px, py) = ContextMenu::place(Rect::new(0, 0, 200, 200), size, None, None);
+    let (px, py) = ContextMenu::place(neutral(Rect::new(0, 0, 200, 200)), size, None, None);
     assert_ne!(
         (rect.x, rect.y),
         (px, py),
@@ -278,7 +286,8 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout_narrow()
         anchor,
         ContextMenuAnchor::SelectedItem(PanelFocus::Library)
     ));
-    let (ex, ey) = ContextMenu::place(panel, size, selected.as_ref(), None);
+    let selected = selected.map(neutral);
+    let (ex, ey) = ContextMenu::place(neutral(panel), size, selected.as_ref(), None);
     let expected = Rect::new(ex, ey, size.0, size.1);
     assert_eq!(
         rect, expected,
@@ -289,7 +298,7 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout_narrow()
     // longer carries a `selected_item_rect` to poison at all) would land the
     // menu at the panel's bottom-right corner instead of the component's
     // placement.
-    let (px, py) = ContextMenu::place(Rect::new(0, 0, 200, 200), size, None, None);
+    let (px, py) = ContextMenu::place(neutral(Rect::new(0, 0, 200, 200)), size, None, None);
     assert_ne!(
         (rect.x, rect.y),
         (px, py),

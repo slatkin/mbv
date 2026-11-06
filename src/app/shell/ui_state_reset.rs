@@ -63,9 +63,10 @@ impl Model {
         self.app.pending_queue_cursor_reanchor = None;
         self.app.pending_overlay = None;
         self.app.confirm_logout = false;
-        // Prefix capture and the resolved-focus hand-off it displaced.
+        // Prefix capture: the armed bit and the core focus stack's hold lift
+        // together, and the next focus step re-derives the focus.
         self.app.prefix_armed = false;
-        self.prefix_armed_focus = None;
+        self.focus_stack.release_focus();
         // Shell-owned transient UI intent (selection summaries, context menu,
         // cross-surface selection hand-offs, inline-search/track focus).
         self.visual_selection = None;

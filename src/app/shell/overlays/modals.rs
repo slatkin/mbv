@@ -72,7 +72,9 @@ impl Model {
         self.application
             .mount(id.clone(), Box::new(ConfirmComponent::new()), vec![])
             .expect("mount Confirm");
-        self.application.active(&id).expect("activate Confirm");
+        // Focus routes through the core focus stack (design D3): the sync
+        // pass's focus step activates the pushed overlay.
+        self.push_focus_overlay(&id);
         if let Some(comp) = self.application.get_component_mut(&id) {
             comp.as_any_mut()
                 .downcast_mut::<ConfirmComponent>()
@@ -87,7 +89,7 @@ impl Model {
         self.application
             .mount(id.clone(), Box::new(DaemonLostComponent::new()), vec![])
             .expect("mount DaemonLost");
-        self.application.active(&id).expect("activate DaemonLost");
+        self.push_focus_overlay(&id);
         if let Some(comp) = self.application.get_component_mut(&id) {
             comp.as_any_mut()
                 .downcast_mut::<DaemonLostComponent>()
@@ -106,7 +108,7 @@ impl Model {
         self.application
             .mount(id.clone(), Box::new(SavePlaylistComponent::new()), vec![])
             .expect("mount SavePlaylist");
-        self.application.active(&id).expect("activate SavePlaylist");
+        self.push_focus_overlay(&id);
         if let Some(comp) = self.application.get_component_mut(&id) {
             comp.as_any_mut()
                 .downcast_mut::<SavePlaylistComponent>()
@@ -124,7 +126,7 @@ impl Model {
             self.application
                 .mount(id.clone(), Box::new(ContextMenuComponent::new()), vec![])
                 .expect("mount ContextMenu");
-            self.application.active(&id).expect("activate ContextMenu");
+            self.push_focus_overlay(&id);
         }
         if let Some(comp) = self.application.get_component_mut(&id)
             && let Some(context_menu) = comp.as_any_mut().downcast_mut::<ContextMenuComponent>()
@@ -144,9 +146,11 @@ impl Model {
     }
 
     pub(in crate::app) fn dismiss_modal(&mut self, id: &ComponentId) {
-        if self.application.mounted(id) {
-            let _ = self.application.umount(id);
-        }
+        // Dismissal routes through the core focus stack (design D3): the
+        // stack drops the overlay so the derived focus returns to the surface
+        // beneath it, and TuiRealm's own LIFO focus restore moves the focus
+        // at the umount.
+        self.dismiss_focus_overlay(id);
     }
 
     pub(in crate::app) fn dismiss_blocking_modals(&mut self) {

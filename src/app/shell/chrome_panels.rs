@@ -247,8 +247,6 @@ impl Model {
             visual_mode: self
                 .visual_selection
                 .map(|(_, count)| VisualModeIndicator { count }),
-            prefix_armed: self.app.prefix_armed_status_spans(),
-            toast: self.app.toast_status_spans(),
         };
         if let Some(comp) = self.application.get_component_mut(&id)
             && let Some(panel) = comp.as_any_mut().downcast_mut::<StatusBarPanel>()
@@ -259,6 +257,12 @@ impl Model {
                 panel.set_visual_origin(origin);
             }
             panel.set_model(model);
+            // The prefix-armed display and the live toast ride the Status
+            // bar's Surface state (extract-client-core row 4.6); the adapter
+            // builds the painted chrome from it.
+            let status = self.app.status_bar_projection();
+            panel.set_prefix_armed(status.prefix_armed);
+            panel.set_toast(status.toast);
         }
     }
 
@@ -311,6 +315,10 @@ impl Model {
             // included — so the label resolution (its config lock and two
             // allocations) runs on every sync pass.
             let (host, host_is_remote) = self.app.playback_host_label_and_remote();
+            // The transport band's focus presentation rides the Surface
+            // state (extract-client-core row 4.5): the queue column forces
+            // the band unfocused, and both Clients paint that fact.
+            panel.set_transport_focused(transport.panel_focused);
             panel.set_header(status, host, host_is_remote);
             panel.set_transport(transport);
             panel.set_transport_area(transport_area);
@@ -354,9 +362,14 @@ impl Model {
         // when its content is hidden. Idle placements have a zero-height
         // slot region, so this remains a no-op while idle.
         frame.render_widget(
-            ratatui::widgets::Block::default().style(ratatui::style::Style::default().bg(
-                mbv_theme::surface_colors(mbv_theme::Surface::QueueOnlyPlaybackPanel, false).fill,
-            )),
+            ratatui::widgets::Block::default().style(
+                ratatui::style::Style::default().bg(mbv_theme::surface_colors(
+                    mbv_theme::Surface::QueueOnlyPlaybackPanel,
+                    false,
+                )
+                .fill
+                .to_ratatui()),
+            ),
             slot_region,
         );
         if self.app.visual_slot_shown() {

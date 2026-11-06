@@ -6,8 +6,8 @@
 //! `Swallow` (run nothing, discard the leaf's message), or `FallThrough` (the
 //! leaf's own typed request stands).
 
-use crossterm::event::{KeyCode, KeyEvent};
 use mbv_keybinds::Keybinds;
+use mbv_ui_msg::{Key, KeyEvent};
 
 use super::key_policy::{KeyPolicyBinding, command_for_policy, resolve_policy};
 use super::resolver::KeyChord;
@@ -20,7 +20,7 @@ pub(in crate::app) use super::key_policy::RouterSnapshot;
 /// focused component's message before subscribers'; the router's outcome
 /// selects between running the leaf's request and discarding it.
 #[derive(Debug, Clone, PartialEq)]
-pub(in crate::app) enum RouterOutcome {
+pub enum RouterOutcome {
     /// Run this semantic command and discard the leaf's message for this tick.
     Command(Command),
     /// Run nothing and discard the leaf's message for this tick.
@@ -66,7 +66,7 @@ pub(in crate::app) enum RouterOutcome {
 ///
 /// The `blocking_overlay_open` catch-all rules stay: they still discard the
 /// focused leaf's message when no overlay is mounted.
-pub(in crate::app) fn resolve_router_outcome_with_focused(
+pub fn resolve_router_outcome_with_focused(
     key: KeyEvent,
     snapshot: &RouterSnapshot,
     focused: Option<&ComponentId>,
@@ -108,7 +108,7 @@ pub(in crate::app) fn resolve_router_outcome_with_focused(
                     RouterOutcome::Deferred(cmd)
                 }
                 Some(cmd @ Command::App(AppCommand::Playback(PlaybackIntent::Stop)))
-                    if chord.code == KeyCode::Esc =>
+                    if chord.code == Key::Esc =>
                 {
                     RouterOutcome::Deferred(cmd)
                 }

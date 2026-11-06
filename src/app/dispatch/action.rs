@@ -22,7 +22,6 @@ use crate::app::App;
 use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::dispatch::queue::QueueOpEdit;
 use crate::app::input::resolver::KeyChord;
-use crossterm::event::KeyCode;
 use mbv_ctrl::Direction;
 use mbv_ctrl::player::PlayerCommand;
 use mbv_queue::QueueSlotId;
@@ -35,7 +34,7 @@ use mbv_queue::QueueSlotId;
 /// commands by domain, so each sub-dispatcher matches one typed intent
 /// instead of re-grouping a flat variant list.
 #[derive(Debug, Clone, PartialEq)]
-pub(in crate::app) enum Command {
+pub enum Command {
     /// Commands only the shell `Model` handles.
     Shell(ShellCommand),
     /// Commands the `App` dispatches to its own state transitions.
@@ -45,7 +44,7 @@ pub(in crate::app) enum Command {
 /// The commands the shell `Model` handles before the `App` sees them. The
 /// `App` cannot receive one, so it needs no arm for it.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub(in crate::app) enum ShellCommand {
+pub enum ShellCommand {
     /// Model-owned because mounting Help belongs to the `TuiRealm` shell.
     OpenHelp,
     /// Model-owned because mounting the Twitch URL prompt belongs to the
@@ -62,7 +61,7 @@ pub(in crate::app) enum ShellCommand {
 /// domain grouping is the type: each arm of `App::dispatch` names one
 /// domain, and each sub-dispatcher matches one typed intent.
 #[derive(Debug, Clone, PartialEq)]
-pub(in crate::app) enum AppCommand {
+pub enum AppCommand {
     Visual(VisualIntent),
     Playback(PlaybackIntent),
     Navigation(NavigationIntent),
@@ -87,7 +86,7 @@ pub(in crate::app) enum AppCommand {
 /// The visual (non-playback) intents: the idle-feed link and the visualizer
 /// slot.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub(in crate::app) enum VisualIntent {
+pub enum VisualIntent {
     OpenIdleFeedLink,
     ToggleVisualizer,
     ToggleVisualSlotHidden,
@@ -95,7 +94,7 @@ pub(in crate::app) enum VisualIntent {
 
 /// The playback intents.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub(in crate::app) enum PlaybackIntent {
+pub enum PlaybackIntent {
     TogglePlayPause,
     Stop,
     /// Relative seek in seconds; negative rewinds, positive fast-forwards.
@@ -116,7 +115,7 @@ pub(in crate::app) enum PlaybackIntent {
 
 /// The destination-independent routing intents.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub(in crate::app) enum NavigationIntent {
+pub enum NavigationIntent {
     NextLibraryTab,
     PreviousLibraryTab,
     SetLibraryTab(usize),
@@ -131,7 +130,7 @@ pub(in crate::app) enum NavigationIntent {
 
 /// The panel intents.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub(in crate::app) enum PanelIntent {
+pub enum PanelIntent {
     /// `x`: cycle the Power View layout through both, queue-only, and
     /// library-only (see `PanelMode`); below the mini-view threshold it
     /// toggles queue-only and library-only.
@@ -197,7 +196,7 @@ pub(in crate::app) fn idle_feed_command_for_key(
     context: &IdleFeedLinkContext,
 ) -> Option<Command> {
     match chord.code {
-        KeyCode::Char('o')
+        mbv_ui_msg::Key::Char('o')
             if chord.mods.is_empty()
                 && !context.player_active
                 && !context.playback_panel_present_idle

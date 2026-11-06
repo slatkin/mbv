@@ -39,3 +39,16 @@ pub(in crate::app) static DAEMON_ROUTE_CONNECT_TEST_LOCK: Mutex<()> = Mutex::new
 pub(in crate::app) type SessionsLoadFn =
     fn(&mbv_emby::EmbyClient) -> Result<Vec<mbv_emby::SessionInfo>, mbv_emby::EmbyError>;
 pub(in crate::app) static SESSIONS_LOAD_OVERRIDE: Mutex<Option<SessionsLoadFn>> = Mutex::new(None);
+
+/// Convert a crossterm `KeyEvent` to the neutral `KeyEvent` the router
+/// resolves (`extract-client-core` design D4, task 2.2). Test-only: production
+/// input enters through the `TuiRealm` listener and is translated at the
+/// `UiRoot` observer edge (`mbv_components::root::neutral_key`); the
+/// routing-matrix and shell tests drive the seam with crossterm keys, so
+/// they convert through the same production translation rather than a
+/// private copy.
+pub(in crate::app) fn crossterm_key_to_neutral(
+    key: crossterm::event::KeyEvent,
+) -> mbv_ui_msg::KeyEvent {
+    mbv_components::root::neutral_key(tuirealm::event::KeyEvent::from(key))
+}

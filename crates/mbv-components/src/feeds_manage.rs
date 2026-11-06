@@ -8,11 +8,12 @@ use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseEvent, MouseEvent
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::mouse::gesture::{MouseGesture, MouseGestureState};
+use super::mouse::gesture::MouseGestureState;
 use super::mouse::hit::HitRegions;
 use mbv_config::FeedSubscription;
 use mbv_queue::FeedKind;
 use mbv_render::{FeedsManageRenderModel, render_feeds_manage_content};
+use mbv_surfaces::gesture::PointerGesture;
 use mbv_ui_model::feeds_manage::{FeedForm, FeedFormField, FeedsManageStage};
 use mbv_ui_msg::UserEvent;
 use mbv_ui_msg::{FeedsManageIntent, LeafKeyResult, Msg, ShellRequest};
@@ -162,7 +163,7 @@ impl FeedsManageComponent {
         }
         let stage = self.stage.clone()?;
         match self.mouse_gestures.recognize(mouse)? {
-            MouseGesture::Click { at, .. } => match &stage {
+            PointerGesture::Click { at, .. } => match &stage {
                 FeedsManageStage::List => {
                     if let Some(&index) = self.hit_rows.resolve(at) {
                         self.cursor = index;
@@ -178,7 +179,7 @@ impl FeedsManageComponent {
                     self.dismiss_outside(at, &stage)
                 }
             },
-            MouseGesture::DoubleClick(at) => {
+            PointerGesture::DoubleClick(at) => {
                 if let FeedsManageStage::List = &stage
                     && let Some(&index) = self.hit_rows.resolve(at)
                 {

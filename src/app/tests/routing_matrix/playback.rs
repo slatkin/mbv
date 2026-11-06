@@ -5,7 +5,7 @@ use crate::app::dispatch::action::{PlaybackIntent, VisualIntent};
 use crate::app::input::router::{
     RouterOutcome, RouterSnapshot, resolve_router_outcome_with_focused,
 };
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::KeyCode;
 use mbv_ui_msg::{ComponentId, Msg, ShellRequest};
 
 #[test]
@@ -66,7 +66,7 @@ fn playback_gating_esc_falls_through_with_default_bindings() {
 fn playback_gating_default_stop_chord_commands_a_stop_when_the_gate_is_open() {
     assert_eq!(
         resolve_router_outcome_with_focused(
-            KeyEvent::new(KeyCode::Char('S'), KeyModifiers::SHIFT),
+            key_mod(KeyCode::Char('S'), crossterm::event::KeyModifiers::SHIFT),
             &active_snapshot(),
             None,
             &default_keybinds()
@@ -80,7 +80,7 @@ fn playback_gating_default_stop_chord_falls_through_during_text_entry() {
     snapshot.overlays.text_entry_focused = true;
     assert_eq!(
         resolve_router_outcome_with_focused(
-            KeyEvent::new(KeyCode::Char('S'), KeyModifiers::SHIFT),
+            key_mod(KeyCode::Char('S'), crossterm::event::KeyModifiers::SHIFT),
             &snapshot,
             None,
             &default_keybinds()

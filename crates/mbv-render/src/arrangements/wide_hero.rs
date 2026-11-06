@@ -200,7 +200,9 @@ pub fn wide_hero_hero_pane(
     let WideHeroPanes {
         left: hero_panel, ..
     } = wide_hero_presentation(content_area, override_width);
-    let background = palette::surface_colors(palette::Surface::HeroPane, focused).fill;
+    let background = palette::surface_colors(palette::Surface::HeroPane, focused)
+        .fill
+        .to_ratatui();
     f.render_widget(
         Block::default().style(Style::default().bg(background)),
         hero_panel,

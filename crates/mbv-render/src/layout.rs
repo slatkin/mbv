@@ -119,3 +119,16 @@ pub struct AppLayout {
     /// mount/rect source).
     pub root_frame: RootFrame,
 }
+
+/// Convert a render-layer cell rectangle to the neutral presentation `Rect`
+/// (`extract-client-core` task 1.2): `mbv-ui-model` names no toolkit type, so
+/// the TUI edge converts where a render layout meets a presentation model.
+#[must_use]
+pub fn rect_to_presentation(rect: Rect) -> mbv_ui_model::geom::Rect {
+    mbv_ui_model::geom::Rect {
+        x: rect.x,
+        y: rect.y,
+        width: rect.width,
+        height: rect.height,
+    }
+}

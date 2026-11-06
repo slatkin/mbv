@@ -6,9 +6,10 @@ use tuirealm::event::{Event, Key, KeyEvent, MouseEvent, MouseEventKind};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::mouse::gesture::{MouseGesture, MouseGestureState};
+use super::mouse::gesture::MouseGestureState;
 use super::mouse::hit::HitRegions;
 use mbv_render::render_twitch_url_content;
+use mbv_surfaces::gesture::PointerGesture;
 use mbv_ui_msg::UserEvent;
 use mbv_ui_msg::{LeafKeyResult, Msg, ShellRequest, TwitchUrlIntent};
 
@@ -105,7 +106,7 @@ impl TwitchUrlComponent {
             return None;
         }
         let gesture = self.mouse_gestures.recognize(mouse)?;
-        let MouseGesture::Click { at, .. } = gesture else {
+        let PointerGesture::Click { at, .. } = gesture else {
             return None;
         };
         match self.hit_buttons.resolve(at) {

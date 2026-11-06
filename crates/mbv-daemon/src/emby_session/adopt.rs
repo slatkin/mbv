@@ -95,26 +95,77 @@ pub(crate) fn handle_lookup(
     item_id: &str,
     result: Result<Box<EmbyItem>, String>,
 ) -> bool {
-    let (pending, still_tracking, still_presented) = {
-        let PlaybackOutput::EmbySession(output) = &mut daemon.owner.output else {
-            return false;
-        };
-        let pending = matches!(
+    let Some(state) = lookup_state(daemon, item_id) else {
+        return false;
+    };
+    let Some(item) = lookup_item(daemon, item_id, result, state.pending) else {
+        return false;
+    };
+    if not_adoptable(daemon, item_id, state) {
+        return false;
+    }
+    let candidate = QueueItem::Emby(item);
+    match admission_verdict(daemon, &candidate) {
+        AdmissionVerdict::Admit => commit_adoption(daemon, item_id, candidate),
+        AdmissionVerdict::Reject(reason) => {
+            clear_continuation(daemon);
+            tracing::info!(
+                name: "daemon.emby_session_adopt.not_admitted",
+                target: "daemon",
+                item = %item_id,
+                reason = %reason,
+                "the queue-end item is not admitted; it stays presented and not adopted"
+            );
+            false
+        }
+        AdmissionVerdict::NoSession => false,
+    }
+}
+
+/// What the Emby Session output showed when the lookup result arrived.
+#[derive(Clone, Copy)]
+struct LookupState {
+    /// The output still waits on this item's lookup.
+    pending: bool,
+    /// The output still tracks a loaded item.
+    still_tracking: bool,
+    /// The device still presents the item the lookup continued.
+    still_presented: bool,
+}
+
+/// Read the continuation state the lookup result is judged against, or `None`
+/// when the output is no longer an Emby Session.
+fn lookup_state(daemon: &DaemonLoop, item_id: &str) -> Option<LookupState> {
+    let PlaybackOutput::EmbySession(output) = &daemon.owner.output else {
+        return None;
+    };
+    Some(LookupState {
+        pending: matches!(
             &output.continuation,
             Some(ContinuationWatch::Lookup { item_id: pending }) if pending == item_id
-        );
+        ),
         // The adoption re-establishes the tracked item, so the output must
         // still track one: a user stop cleared it, and a stopped output
-        // advances nothing (emby-session-owner-output design D9). The
-        // pending continuation names the looked-up item, not the ended one,
-        // so `loaded.is_some()` is the available check; `still_presented`
-        // covers a device that moved on to other content.
-        let still_tracking = output.loaded.is_some();
-        let still_presented = presents_item(output.last_observation.as_ref(), item_id);
-        (pending, still_tracking, still_presented)
-    };
-    let item = match result {
-        Ok(item) => item,
+        // advances nothing (emby-session-owner-output design D9). The pending
+        // continuation names the looked-up item, not the ended one, so
+        // `loaded.is_some()` is the available check; `still_presented` covers
+        // a device that moved on to other content.
+        still_tracking: output.loaded.is_some(),
+        still_presented: presents_item(output.last_observation.as_ref(), item_id),
+    })
+}
+
+/// The looked-up item, or `None` when the worker's lookup failed — the item
+/// stays presented and not adopted, and a still-pending continuation is
+/// cleared so it cannot adopt a later result.
+fn lookup_item(
+    daemon: &mut DaemonLoop,
+    item_id: &str,
+    result: Result<Box<EmbyItem>, String>,
+    pending: bool,
+) -> Option<Box<EmbyItem>> {
+    match result {
+        Ok(item) => Some(item),
         Err(error) => {
             if pending {
                 clear_continuation(daemon);
@@ -126,19 +177,25 @@ pub(crate) fn handle_lookup(
                 error = %error,
                 "the queue-end item's lookup failed; it stays presented and not adopted"
             );
-            return false;
+            None
         }
-    };
-    if !pending {
+    }
+}
+
+/// Whether the result is too stale to adopt: no continuation waits on it, the
+/// output stopped tracking, or the device moved on. Each refusal that still
+/// owns the continuation clears it and logs.
+fn not_adoptable(daemon: &mut DaemonLoop, item_id: &str, state: LookupState) -> bool {
+    if !state.pending {
         tracing::debug!(
             name: "daemon.emby_session_adopt.stale_result",
             target: "daemon",
             item = %item_id,
             "the lookup's result names no pending queue-end continuation; nothing was adopted"
         );
-        return false;
+        return true;
     }
-    if !still_tracking {
+    if !state.still_tracking {
         clear_continuation(daemon);
         tracing::info!(
             name: "daemon.emby_session_adopt.not_tracking",
@@ -146,9 +203,9 @@ pub(crate) fn handle_lookup(
             item = %item_id,
             "the output no longer tracks the ended item the lookup continued; nothing was adopted"
         );
-        return false;
+        return true;
     }
-    if !still_presented {
+    if !state.still_presented {
         clear_continuation(daemon);
         tracing::info!(
             name: "daemon.emby_session_adopt.moved_on",
@@ -156,44 +213,43 @@ pub(crate) fn handle_lookup(
             item = %item_id,
             "the device moved on before the queue-end item's lookup returned; it stays presented and not adopted"
         );
-        return false;
+        return true;
     }
-    // Owner admission is the capability boundary every queue-entry path runs,
-    // the adoption included: the owner must admit the item (media kind and
-    // Service availability, `daemon_admits`), and the Session's own
-    // playable-media list judges whether the device can play it — the same
-    // rule the queue's load path applies (emby-session-owner-output design
-    // D7). An item that fails either check stays presented.
-    let candidate = QueueItem::Emby(item);
-    let rejection = {
-        let PlaybackOutput::EmbySession(output) = &daemon.owner.output else {
-            return false;
-        };
-        if crate::control_queue::daemon_admits(
-            &candidate,
-            daemon.audio_only,
-            crate::control::has_emby(&daemon.client),
-            daemon.audiobookshelf_runtime.is_some(),
-        ) {
-            super::load::admit(&candidate, &output.playable_media_types)
-                .err()
-                .map(|admission| admission.reason)
-        } else {
-            Some("the owner does not admit the item".to_string())
-        }
+    false
+}
+
+/// The admission result for one adopted candidate.
+enum AdmissionVerdict {
+    /// Both the owner and the Session admit it.
+    Admit,
+    /// Admission refused it, with the reason to log.
+    Reject(String),
+    /// The output is no longer an Emby Session.
+    NoSession,
+}
+
+/// Owner admission is the capability boundary every queue-entry path runs,
+/// the adoption included: the owner must admit the item (media kind and
+/// Service availability, `daemon_admits`), and the Session's own
+/// playable-media list judges whether the device can play it — the same rule
+/// the queue's load path applies (emby-session-owner-output design D7).
+fn admission_verdict(daemon: &DaemonLoop, candidate: &QueueItem) -> AdmissionVerdict {
+    let PlaybackOutput::EmbySession(output) = &daemon.owner.output else {
+        return AdmissionVerdict::NoSession;
     };
-    if let Some(reason) = rejection {
-        clear_continuation(daemon);
-        tracing::info!(
-            name: "daemon.emby_session_adopt.not_admitted",
-            target: "daemon",
-            item = %item_id,
-            reason = %reason,
-            "the queue-end item is not admitted; it stays presented and not adopted"
-        );
-        return false;
+    let admitted = crate::control_queue::daemon_admits(
+        candidate,
+        daemon.audio_only,
+        crate::control::has_emby(&daemon.client),
+        daemon.audiobookshelf_runtime.is_some(),
+    );
+    if !admitted {
+        return AdmissionVerdict::Reject("the owner does not admit the item".to_string());
     }
-    commit_adoption(daemon, item_id, candidate)
+    match super::load::admit(candidate, &output.playable_media_types) {
+        Ok(_) => AdmissionVerdict::Admit,
+        Err(admission) => AdmissionVerdict::Reject(admission.reason),
+    }
 }
 
 /// Commits the queue-end adoption (design D4): the item is appended at the

@@ -27,6 +27,32 @@ Keyboard precedence remains in the single Keyboard Router (ADR 0023); the
 router's outcome and the focused leaf's disposition are combined by the one
 central arbitration fold (same ADR), which is not a second router.
 
+## Surface state and adapters
+
+A surface that both Clients share keeps its interaction state one time, in
+`crates/mbv-surfaces`, as front-end-neutral Surface state (the Client core).
+The pointer gesture policy lives there too (`mbv_surfaces::gesture`): the
+double-click window with the `SamePlace` rule and `DOUBLE_CLICK_SLOP`, the
+uniform wheel step, the drag anchor, and the Ctrl/Shift choice of toggle or
+range selection. `FocusStack` owns the mounted set, Panel focus, and the
+overlay stack. `HitMap<Target>` resolves a neutral pointer event against the
+last painted frame's regions, and `ListCapacity` carries how many whole items
+of a shared list a Client painted fully visible — the one source of paging
+stride and viewport clamping.
+
+The mounted TuiRealm component of a surface with Surface state is an adapter.
+It forwards neutral events into the state, paints from the state, and reports
+each frame's capacity and `HitMap` from its own painted geometry. It keeps
+only geometry and translation: the paint policy, the painted rectangles, the
+retained hit geometry, and the raw-input translation. It holds no copy of a
+value the Surface state owns.
+
+Behaviour lives once: each interaction rule exists in the Client core one
+time, and each Client only translates input and paints. A rule change in the
+core reaches both Clients with no change to either Client's code. A row below
+names its Surface state where one exists; a surface whose state is still
+component-private keeps it until its migration moves it.
+
 ## Panel ledger
 
 | Root Panel | Owned surface and state | Painter / content source | Placement and input | Verification |
@@ -34,9 +60,9 @@ central arbitration fold (same ADR), which is not a second router.
 | Tab panel | Tab selection and overflow state; local hovered tab identity | `TabPanel` | Library column only; owns tab hit regions and local hover painting | Local hover: `tab_panel::tests::moved_over_unselected_tab_sets_hover_without_selection_or_msg`; live delivery: `tick_integration::mouse::tick_mouse_hover_delivery_updates_only_the_pointed_surface_in_narrow_and_wide_modes` |
 | Library panel | Library focus, destination owner map, selector/list/hero/workspace slots; local main Selector-row hovered pill identity | `LibraryPanel`; Home, Emby, TV, Music, Audiobookshelf and Feeds owners supply typed content | Wide or Narrow skeleton; owns all library geometry, slot hits, and main Selector-row hover painting | Local hover: `library_panel::panel_tests::selector_move_updates_only_private_hover_identity_and_returns_no_message`; live delivery: `tick_integration::mouse::tick_mouse_hover_delivery_updates_only_the_pointed_surface_in_narrow_and_wide_modes` (Narrow + Wide) |
 | Library playback panel | Library-column playback transport state | `LibraryPlaybackPanel` | Queue column hidden; owns transport geometry | playback component and tick tests |
-| Queue panel | Queue cursor, scroll, scope, and row-local state | `QueuePanel` / embedded canonical queue owner | Queue column visible; owns queue frame and row hits | queue component and tick tests |
-| Queue playback panel | Queue-column status header, visual slot, and transport state | `QueuePlaybackPanel` | Queue column visible, including idle header; owns transport and visual geometry | queue playback buffer and tick tests |
-| Status bar panel | Volume, mute, and remote controls | `StatusBarPanel` | Library column only; owns control hits | status component and tick tests |
+| Queue panel | `QueueSurface` (`mbv_surfaces::queue`): the `MediaList<QueueSlotId>` owner's rows, cursor, marks, selection, and viewport, the queue link, and the reported viewport height | `QueueComponent`, the TuiRealm adapter over `QueueSurface`; `mbv-render` paints it | Queue column visible; owns queue frame and row hits | queue component and tick tests |
+| Queue playback panel | `QueuePlaybackSurface` (`mbv_surfaces::queue_playback`): the transport band's focus presentation and the seek target's throttle state | `QueuePlaybackPanel`, the TuiRealm adapter over `QueuePlaybackSurface` | Queue column visible, including idle header; owns transport and visual geometry | queue playback buffer and tick tests |
+| Status bar panel | `StatusBarSurface` (`mbv_surfaces::status_bar`): the prefix-armed display and the toast presentation | `StatusBarPanel`, the TuiRealm adapter over `StatusBarSurface` | Library column only; owns control hits | status component and tick tests |
 | Pane boundaries | Live split gesture state | boundary Interactive Components | Root-placed only where the corresponding split is painted | resize tick tests |
 | Overlay stack | Overlay presence, focus and z-order | `UiRootComponent` plus mounted overlay Components | Root-composed above Panels; each overlay owns its surface | overlay tick tests |
 
@@ -96,8 +122,8 @@ and `media_list::tests::refreshed_content_keeps_a_freely_scrolled_viewport` own
 the free resolve across a repaint and a content refresh;
 `media_list::tests::a_key_after_a_free_scroll_bring_the_selection_back_into_view`
 owns the re-anchor on a keyboard move;
-`mouse::gesture::tests::back_to_back_wheel_events_at_the_same_instant_all_recognize`
-owns the no-drop recognizer rule;
+`gesture::tests::back_to_back_wheel_events_at_the_same_instant_all_recognize`
+(the `mbv-surfaces` public-API test) owns the no-drop recognizer rule;
 `library_panel::panel::tests::surface::overview_wheel_steps_inside_the_painted_box_and_not_outside`
 owns the Wide hero overview's prose step and its inside-box claim;
 `library_viewport_reach_tests::viewport_reach_within_prefetch_ahead_arms_the_next_page_fetch`

@@ -59,7 +59,6 @@ where
         load_control_token,
         HandshakeRole::Client,
         PeerBuild::Any,
-        false,
         None,
     )
 }
@@ -79,7 +78,6 @@ where
         // applies: no Control credential reaches a stale Owner (invariant
         // 15).
         PeerBuild::MustMatch,
-        false,
         None,
     )
 }
@@ -89,8 +87,7 @@ pub(super) fn perform_handshake_with_role<F>(
     load_control_token: F,
     role: HandshakeRole,
     peer_build: PeerBuild,
-    pinned: bool,
-    swap_token: Option<String>,
+    pin_swap: Option<&crate::PinSwapHello>,
 ) -> Result<(BufReader<SocketStream>, CtrlEvent, CtrlCompatibility), crate::RemotePlayerError>
 where
     F: FnOnce() -> Result<String, crate::RemotePlayerError>,
@@ -102,8 +99,7 @@ where
         &ctrl_compatibility,
         load_control_token,
         role,
-        pinned,
-        swap_token,
+        pin_swap,
     )?;
     let state_event = read_initial_state(&mut reader)?;
 
@@ -171,8 +167,7 @@ pub(super) fn send_client_hello<F>(
     compatibility: &CtrlCompatibility,
     load_control_token: F,
     role: HandshakeRole,
-    pinned: bool,
-    swap_token: Option<String>,
+    pin_swap: Option<&crate::PinSwapHello>,
 ) -> Result<(), crate::RemotePlayerError>
 where
     F: FnOnce() -> Result<String, crate::RemotePlayerError>,
@@ -182,7 +177,10 @@ where
         .then(load_control_token)
         .transpose()?;
     // The Pin-swap capabilities and token belong to a Client connection only
-    // (tray-pin-swap D2/D6); the restricted-role handshakes stay plain.
+    // (tray-pin-swap D2/D6); the restricted-role handshakes stay plain. A
+    // Client that takes no part in Pin swap sends a plain Hello too, so the
+    // Owner never picks it as a swap target (the GUI Client, design D9 of
+    // `extract-client-core`).
     let mut client_hello = match role {
         HandshakeRole::ServiceSetupAdmin => CtrlHello::current_service_setup_admin(control_token),
         HandshakeRole::OwnerAction => {
@@ -193,10 +191,13 @@ where
             })?)
         }
         HandshakeRole::Client => {
-            if let Some(control_token) = control_token {
-                CtrlHello::current_control_client(control_token).with_pin_swap(pinned, swap_token)
-            } else {
-                CtrlHello::current().with_pin_swap(pinned, swap_token)
+            let hello = match control_token {
+                Some(control_token) => CtrlHello::current_control_client(control_token),
+                None => CtrlHello::current(),
+            };
+            match pin_swap {
+                Some(pin_swap) => hello.with_pin_swap(pin_swap.pinned, pin_swap.swap_token.clone()),
+                None => hello,
             }
         }
     };
