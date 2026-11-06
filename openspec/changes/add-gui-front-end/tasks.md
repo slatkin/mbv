@@ -49,7 +49,7 @@
 - [x] 6.5 Paint the Queue playback panel (active item, progress, transport and seek controls) and the Status bar (prefix-armed state, toasts) from their Surface state, with hit maps for the controls. Verify with a headless test: a click on the play/pause region sends the transport request.
 - [x] 6.6 Create the shared `BreakpointClass` (`Mini`, `Narrow`, `Wide`) with `classify` and the core Wide-hero rule in `mbv-surfaces`. The GUI classifies its window width with a GUI logical-point threshold constant and keeps the class on its frame state. Verify with one headless test at two widths that asserts the class, not the geometry. Applying the class to the Queue playback arrangement waits for the visual-slot row. No TUI threshold moves in this change.
 - [x] 6.7 Enforce the interaction contract: hover never moves focus or cursor, scroll follows the cursor after every key move, and no animation delays a key. Verify with headless tests: hover with no press leaves the cursor unchanged, and a move past the last visible row keeps the cursor row fully visible.
-- [ ] 6.8 Add a GUI section to `docs/architecture/tui-frontend.md` (or a sibling `gui-client.md` that it links): where GUI painters live, the interaction contract, and the rule that GUI code holds no interaction rule. Verify that the doc names each contract rule from `specs/gui-client`.
+- [x] 6.8 Add a GUI section to `docs/architecture/tui-frontend.md` (or a sibling `gui-client.md` that it links): where GUI painters live, the interaction contract, and the rule that GUI code holds no interaction rule. Verify that the doc names each contract rule from `specs/gui-client`.
 
 ## 7. Integration checks
 
