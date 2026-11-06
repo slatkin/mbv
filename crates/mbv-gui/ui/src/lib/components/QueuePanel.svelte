@@ -132,13 +132,15 @@
 {/snippet}
 
 <!-- The TUI's queue panel arrangement (the `queue_panel_geometry`
-	structure): the placement sits two columns inside the queue column's
-	backdrop, the recessed queue-list box (`QueuePanel` fill) another two
-	columns inside the placement with its one-row top pad and bottom
-	spacer, and the footer band below the box: one gap row, the footer
-	row, one padding row — the rows the TUI's `queue_list_box`,
-	`queue_footer_row`, and `render_queue_status` place. -->
-<div class="mx-2 flex h-full flex-col" bind:this={panelEl}>
+	structure): the placement spans the full queue column, and both the
+	recessed queue-list box (`QueuePanel` fill, with its one-row top pad
+	and bottom spacer) and the footer row below it sit two columns inside
+	it — `queue_list_box` and `queue_footer_row` both inset from
+	`placement.x + 2`, the same +2 columns the playback band's
+	`queue_panel_inset` sits at, so every band edge aligns. The footer
+	band's gap row and the placement's bottom padding row keep the queue
+	column's backdrop. -->
+<div class="flex h-full flex-col" bind:this={panelEl}>
 	<div
 		class="mx-2 flex min-h-0 flex-1 flex-col py-1"
 		style:background="var(--mbv-card)"
