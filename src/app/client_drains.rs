@@ -119,6 +119,23 @@ impl App {
                 }
             }
         }
+        // The GUI Client's minimal Emby client fill (add-tauri-gui-client
+        // design D9's ruled exception) lands on the same drain; the TUI
+        // never arms its receiver.
+        if let Some(worker) = self.setup.emby_client_fill_rx.take() {
+            let generation = worker.generation;
+            match worker.rx.try_recv() {
+                Ok(completion) => {
+                    drain.events = true;
+                    self.apply_emby_client_fill(completion);
+                }
+                Err(TryRecvError::Empty) => self.setup.emby_client_fill_rx = Some(worker),
+                Err(TryRecvError::Disconnected) => {
+                    drain.events = true;
+                    self.handle_emby_startup_worker_disconnect(generation);
+                }
+            }
+        }
         drain
     }
 

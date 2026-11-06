@@ -11,6 +11,7 @@ mod context_actions;
 mod context_menu_entries;
 mod context_menu_placement;
 mod daemon_bootstrap;
+mod emby_client_fill;
 mod feeds;
 mod home_latest;
 mod library_navigate_reveal;

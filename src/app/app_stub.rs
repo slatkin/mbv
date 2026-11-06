@@ -249,6 +249,23 @@ pub fn stub_app_with_rebound_quit(chord: &str) -> App {
     app
 }
 
+/// The `App` a GUI Client's test drives with the Emby startup request
+/// armed, as `initialize_service_startup` arms it for an attached session
+/// whose Emby is configured without a client, so the test reads the
+/// minimal client fill the core starts (add-tauri-gui-client design D9's
+/// ruled exception). The request's worker resolves against the isolated
+/// state dir, where no credential exists.
+#[cfg(feature = "test")]
+#[must_use]
+pub fn stub_app_with_armed_emby_fill() -> App {
+    let mut app = make_app_stub();
+    app.setup.emby_startup_request = Some(crate::app::state::service_setup::StartupRequest {
+        config: crate::config::Config::default(),
+        generation: app.emby_runtime.generation(),
+    });
+    app
+}
+
 /// The ordinary `App::build` construction over stub channels: no live
 /// Owner, no live Service, and the stub player whose command channel is
 /// already dropped.

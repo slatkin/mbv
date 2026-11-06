@@ -219,6 +219,13 @@ impl CoreThread {
         focus.mount(ComponentId::QueuePlaybackPanel);
         focus.mount(ComponentId::StatusBarPanel);
         focus.set_panel_focus(PanelFocus::Queue);
+        let mut app = app;
+        // The minimal Emby client fill (design D9's ruled exception): the
+        // armed startup request becomes an authentication-only worker — no
+        // library bootstrap — whose completion installs the client the
+        // session list, cast discovery, artwork, and item-metadata fetches
+        // read. Its drain is the tick's `drain_startup_workers` phase.
+        app.start_emby_client_fill();
         Self {
             app,
             focus,
