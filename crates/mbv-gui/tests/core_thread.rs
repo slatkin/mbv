@@ -5,7 +5,7 @@
 use std::sync::mpsc::{self, TryRecvError};
 use std::time::Duration;
 
-use mbv::stub_app_with_queue;
+use mbv::{App, stub_app_with_prefix_and_toast, stub_app_with_queue};
 use mbv_gui::bridge::frame::GuiFrame;
 use mbv_gui::bridge::frame::queue::GuiQueueRow;
 use mbv_gui::bridge::layout::{LayoutRect, LayoutRegion, LayoutReport, ListId, ListRows};
@@ -91,7 +91,12 @@ struct TestCore {
 }
 
 fn test_core(slots: usize) -> TestCore {
-    let app = stub_app_with_queue(slots);
+    test_core_with(stub_app_with_queue(slots))
+}
+
+/// A core thread over a caller-built `App`, for the stubs the queue stub
+/// does not cover.
+fn test_core_with(app: App) -> TestCore {
     let waker = app.client_waker();
     let (tx, rx) = mpsc::channel();
     let (frame_tx, frame_rx) = mpsc::channel();
@@ -286,4 +291,18 @@ fn the_wheel_over_a_reported_row_moves_the_viewport_by_the_wheel_step() {
     // row moves from slot 1 to slot 4.
     assert_eq!(*slot, 4);
     assert_eq!(frame.queue.cursor, Some(1));
+}
+
+/// Any pointer event cancels an armed prefix, even one that resolves to no
+/// gesture or no reported region — the shared contract `App::route_gui_input`'s
+/// pointer arm carries, the same silent disarm every terminal mouse event
+/// applies in the TUI (regression for the 9104ddaa5 review: the resolution
+/// drop ran before the disarm, so an untargeted press left the prefix armed).
+#[test]
+fn an_untargeted_pointer_press_cancels_an_armed_prefix() {
+    let mut test = test_core_with(stub_app_with_prefix_and_toast("prefix armed"));
+    test.tx.send(press_at(500.0, 500.0)).unwrap();
+    assert!(test.core.step());
+    let frame = test.frames.try_recv().unwrap();
+    assert!(!frame.status.prefix_armed);
 }

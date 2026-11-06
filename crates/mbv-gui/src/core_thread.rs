@@ -343,16 +343,24 @@ impl CoreThread {
         app.route_gui_input(GuiInput::Key(key), Some(&mut leaf))
     }
 
-    /// Route one translated pointer event (design D4, task row 2.4):
-    /// recognize the gesture over the window's logical points, resolve the
-    /// gesture's point against the combined hit map of the last
-    /// `LayoutReport`, apply the focus change the matching TUI click applies,
-    /// and hand the surface that owns the region to
+    /// Route one translated pointer event (design D4, task row 2.4): disarm
+    /// prefix mode first, recognize the gesture over the window's logical
+    /// points, resolve the gesture's point against the combined hit map of
+    /// the last `LayoutReport`, apply the focus change the matching TUI click
+    /// applies, and hand the surface that owns the region to
     /// [`App::route_gui_pointer`]. A gesture whose point resolves to no
     /// reported region — and a `DragEnd`, which carries no point — resolves
     /// to nothing (`client-interaction-core`: pointer targets resolve from a
-    /// semantic hit map).
+    /// semantic hit map); the disarm precedes all of it, so every pointer
+    /// event cancels an armed prefix even when nothing resolves.
     fn route_pointer(&mut self, event: PointerEvent) {
+        // Any pointer event disarms prefix mode first — the shared contract
+        // `App::route_gui_input`'s pointer arm carries, the same silent
+        // disarm every terminal mouse event applies in the TUI. The call
+        // runs before the gesture and region resolution, so a hover move, a
+        // drag end, or a press on no reported region still cancels an armed
+        // prefix; the pointer arm itself delivers nothing else.
+        self.app.route_gui_input(GuiInput::Pointer(event), None);
         let now = Instant::now();
         let Some(gesture) =
             self.gestures
