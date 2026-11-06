@@ -1,7 +1,12 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Permissions for the main window. The bridge commands and the frame event are granted when the bridge lands.",
+  "description": "The main window's grants (design D11): the three bridge commands and the frame event listener, nothing else.",
   "windows": ["main"],
-  "permissions": []
+  "permissions": [
+    "allow-key",
+    "allow-pointer",
+    "allow-report-layout",
+    "core:event:allow-listen"
+  ]
 }

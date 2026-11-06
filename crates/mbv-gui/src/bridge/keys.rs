@@ -26,14 +26,33 @@ pub struct DomKey {
     pub modifiers: DomModifiers,
 }
 
-/// The DOM modifier flags that the neutral `KeyModifiers` can carry. Meta is
-/// not here because the neutral set has no bit for it; see [`DomKey::meta_key`].
+/// The neutral modifiers the DOM modifier flags carry: SHIFT, CONTROL, and
+/// ALT. Meta is not here because the neutral set has no bit for it; see
+/// [`DomKey::meta_key`].
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DomModifiers {
     pub shift_key: bool,
     pub ctrl_key: bool,
     pub alt_key: bool,
+}
+
+/// The neutral modifiers a DOM modifier-flag object carries (design D6):
+/// SHIFT, CONTROL, and ALT map onto their neutral bits, and Meta drops
+/// because the neutral set has no bit for it.
+#[must_use]
+pub fn neutral_modifiers(modifiers: &DomModifiers) -> KeyModifiers {
+    let mut mapped = KeyModifiers::NONE;
+    if modifiers.shift_key {
+        mapped = mapped.union(KeyModifiers::SHIFT);
+    }
+    if modifiers.ctrl_key {
+        mapped = mapped.union(KeyModifiers::CONTROL);
+    }
+    if modifiers.alt_key {
+        mapped = mapped.union(KeyModifiers::ALT);
+    }
+    mapped
 }
 
 /// Translates a DOM key press into the neutral `KeyEvent`.
@@ -44,16 +63,7 @@ pub struct DomModifiers {
 /// that the vocabulary cannot name, such as `CapsLock`, also becomes `Key::Null`.
 #[must_use]
 pub fn neutral_key(event: &DomKey) -> KeyEvent {
-    let mut modifiers = KeyModifiers::NONE;
-    if event.modifiers.shift_key {
-        modifiers = modifiers.union(KeyModifiers::SHIFT);
-    }
-    if event.modifiers.ctrl_key {
-        modifiers = modifiers.union(KeyModifiers::CONTROL);
-    }
-    if event.modifiers.alt_key {
-        modifiers = modifiers.union(KeyModifiers::ALT);
-    }
+    let modifiers = neutral_modifiers(&event.modifiers);
     let code = if event.meta_key {
         Key::Null
     } else {

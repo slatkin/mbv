@@ -7,8 +7,9 @@
 //! a timeout of `CLIENT_IDLE_CADENCE`, so an input, a `ClientWaker` wake, or
 //! the idle cadence each produce one tick. Every tick that changed state, and
 //! every `report_layout` changed or not, emits one `GuiFrame` through the
-//! frame sink. Row 2.5 wires the sink to `AppHandle::emit`; the tests mock
-//! it, so no Tauri runtime or tokio runs here (design D12).
+//! frame sink. `main` wires that sink to `AppHandle::emit`, the `mbv://frame`
+//! event, and the commands push into the channel; the tests mock both, so no
+//! Tauri runtime or tokio runs here (design D12).
 
 use std::fmt;
 use std::path::PathBuf;
@@ -73,7 +74,8 @@ pub enum CoreInput {
 }
 
 /// The sink every emitted frame goes through (design D3). Production wires
-/// `AppHandle::emit` (row 2.5); the tests mock it with a channel.
+/// `AppHandle::emit` as the `mbv://frame` event; the tests mock it with a
+/// channel.
 pub type FrameSink = Box<dyn Fn(GuiFrame) + Send + 'static>;
 
 /// Why the happy-path Owner attach failed (design D9). Row 2.6 owns the
@@ -114,13 +116,17 @@ impl std::error::Error for AttachError {
 
 /// Start the core thread (design D3): it loads the configuration, attaches
 /// to the Owner, and runs the tick loop for the life of the process. The
-/// thread is detached; a routed quit key ends the run, and row 2.5's
-/// command senders end it when the front end drops.
-pub fn spawn() {
+/// thread is detached; a routed quit key ends the run, and the senders'
+/// drop ends it too — the waker's sender dies with the `App`, the returned
+/// one with the commands' managed state at app exit. Returns that sender,
+/// which the Tauri commands push through; they never touch the `App`
+/// (design D3).
+#[must_use]
+pub fn spawn(sink: FrameSink) -> Sender<CoreInput> {
     let (tx, rx) = mpsc::channel();
-    // Row 2.5 replaces this sink with `AppHandle::emit`; the placeholder
-    // keeps the thread startable before the commands exist.
-    let sink: FrameSink = Box::new(|_| {});
+    // The waker's clone stays inside the `App`; the returned sender goes to
+    // the commands' managed state.
+    let waker_tx = tx.clone();
     // Dropping the handle detaches the thread; nothing joins it.
     std::thread::spawn(move || {
         if let Err(error) = ensure_runtime_dir() {
@@ -157,9 +163,10 @@ pub fn spawn() {
             }
         };
         let mut core = CoreThread::new(app, rx, sink);
-        core.install_waker(tx);
+        core.install_waker(waker_tx);
         core.run();
     });
+    tx
 }
 
 /// The happy-path Owner attach (design D9): declare the GUI Client, find the
@@ -436,8 +443,8 @@ impl CoreThread {
 
     /// Run the loop (design D3): wait for input, wake, or the idle cadence,
     /// then tick. The loop ends when a routed key quit or the channel
-    /// disconnects: row 2.5 adds the front end's command senders, and their
-    /// drop ends the run.
+    /// disconnects: the commands' managed sender and the waker's both drop
+    /// when the app exits.
     pub fn run(&mut self) {
         while self.step() {}
     }
