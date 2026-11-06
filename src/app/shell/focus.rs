@@ -128,3 +128,6 @@ impl Model {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;
