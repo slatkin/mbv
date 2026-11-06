@@ -51,10 +51,26 @@
 	/** The fixed row height in logical pixels, the queue list's row. */
 	const ROW_HEIGHT = 28;
 
-	/** The visual slot's box height in logical points (design D10): the
-	 * TUI's height-cap tiers are terminal-row geometry; the slot's box
-	 * fixes at this height and the artwork contains itself inside it. */
-	const ART_HEIGHT = 224;
+	/** The visual slot's height cap in rows, mirroring the TUI's
+	 * `queue_card_height_cap`: 12 rows under 40 terminal rows, 16 under 50,
+	 * 24 otherwise — kept small enough that the queue list below keeps its
+	 * separator and a few rows. The terminal-row count reads off the
+	 * window's own height in row units. */
+	function cardHeightCapRows(windowHeight: number): number {
+		const rows = Math.floor(windowHeight / ROW_HEIGHT);
+		if (rows < 40) {
+			return 12;
+		}
+		return rows < 50 ? 16 : 24;
+	}
+
+	/** The window's height in logical pixels, refreshed by the layout
+	 * observer, so the cap tracks a window resize like the TUI's per-paint
+	 * tier reads the terminal height. */
+	let windowHeight = $state(window.innerHeight);
+
+	/** The visual slot's height cap in logical pixels. */
+	const artCapPx = $derived(cardHeightCapRows(windowHeight) * ROW_HEIGHT);
 
 	/** Emby ticks in one second (`mbv_emby_model::TICKS_PER_SECOND`). */
 	const TICKS_PER_SECOND = 10_000_000;
@@ -164,6 +180,7 @@
 	}
 
 	function report(): void {
+		windowHeight = window.innerHeight;
 		reportLayout(reportKey, { lists: [], regions: currentRegions() });
 	}
 
@@ -279,24 +296,29 @@
 				</div>
 			{/if}
 			{#if art && art.kind !== 'hidden'}
-				<div
-					class="flex items-center justify-center"
-					style:height="{ART_HEIGHT}px"
-				>
+				<!-- The visual slot: the artwork spans the band's full inner
+					width — the TUI's slot region is the column inset two columns
+					each side, and `render_card_painting` fits the image within its
+					width and the queue column's height tier (`queue_card_height_cap`),
+					centered. No fixed box: the image's own fit sizes the rows, and
+					the loading reservation is the TUI's capped square estimate. -->
+				<div class="flex items-center justify-center">
 					{#if art.kind === 'loading'}
 						<div
-							class="aspect-square h-full"
+							class="aspect-square"
 							bind:this={artEl}
 							data-target="visualSlot"
+							style:width="min(100%, {artCapPx}px)"
 							style:background="var(--mbv-textMuted)"
 						></div>
 					{:else}
 						<img
-							class="h-full max-w-full object-contain"
+							class="max-w-full object-contain"
 							alt=""
 							bind:this={artEl}
 							data-target="visualSlot"
 							src={art.detail}
+							style:max-height="{artCapPx}px"
 						/>
 					{/if}
 				</div>
