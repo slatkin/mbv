@@ -1,0 +1,67 @@
+{
+  "v": 3,
+  "attachments": {},
+  "boards": {
+    "Collapsed.dc.html": {
+      "h": 560,
+      "radius": 10,
+      "title": "Collapsed states",
+      "w": 400,
+      "x": 480,
+      "y": 0
+    },
+    "Main.dc.html": {
+      "h": 1800,
+      "is_interactive": true,
+      "radius": 10,
+      "title": "Queue panel — expanded",
+      "w": 400,
+      "x": 0,
+      "y": 0
+    },
+    "Menus.dc.html": {
+      "h": 880,
+      "radius": 10,
+      "title": "Track popover, row menu, drag",
+      "w": 400,
+      "x": 960,
+      "y": 0
+    }
+  },
+  "createdOnFiles": {
+    "at": "2026-11-06T21:30:00Z",
+    "v": 1
+  },
+  "designSystems": [],
+  "launch": {
+    "view": "canvas"
+  },
+  "noteOrder": [
+    "t",
+    "n1"
+  ],
+  "notes": {
+    "n1": {
+      "fill": "teal",
+      "text": "Kept from the TUI: density (30px rows, ~38 visible), monospace tabular times, keyboard-first. Added: scrubber with chapters + hover preview, interactive track chips, finish-at clock, one consistent watched/progress encoding, drag/context menu, collapse states.",
+      "w": 300,
+      "x": 1440,
+      "y": 0
+    },
+    "t": {
+      "kind": "title1",
+      "maxW": 1360,
+      "text": "mbv — Svelte queue panel",
+      "w": 240,
+      "x": 0,
+      "y": -260
+    }
+  },
+  "order": [
+    "Main.dc.html",
+    "Collapsed.dc.html",
+    "Menus.dc.html"
+  ],
+  "pages": [],
+  "title": "mbv Svelte Player"
+}
