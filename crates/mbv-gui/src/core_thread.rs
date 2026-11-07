@@ -171,6 +171,11 @@ pub struct CoreThread {
     /// the whole slice. An empty map resolves nothing until the first report
     /// arrives.
     regions: HitMap<RegionTarget>,
+    /// Where the pointer last rested, from the last non-cancel pointer event;
+    /// `None` after a cancel or before any event. A layout report re-resolves
+    /// the queue row hover against the rebuilt regions at this point, so the
+    /// report the hover chrome's own regions cause does not clear the hover.
+    pointer_at: Option<Position>,
     /// The whole Queue rows the viewport fits. Row 2.4 sets it from the
     /// `LayoutReport`; until then the frame carries every row.
     viewport_rows: usize,
@@ -237,6 +242,7 @@ impl CoreThread {
             status_bar: StatusBarSurface::new(),
             gestures: PointerGestureState::new(),
             regions: HitMap::new(),
+            pointer_at: None,
             viewport_rows: INITIAL_VIEWPORT_ROWS,
             container_size: LayoutSize::default(),
             rx,
@@ -293,10 +299,15 @@ impl CoreThread {
         self.container_size = report.container_size;
         // The regions the hover resolves against just rebuilt: a hover over
         // a moved or unpainted bar is stale, so it clears and the next move
-        // over a painted bar re-arms it. The queue row's hover follows the
-        // same rule (add-tauri-gui-client row 6.5).
+        // over a painted bar re-arms it.
         self.playback.set_scrubber_hover(None);
-        self.queue.set_hover(None);
+        // The queue row's hover re-resolves at the pointer's last place
+        // instead of clearing: the hovered row paints its grip and actions
+        // button as regions of their own, so the hover itself causes a report,
+        // and a clear here would drop the chrome the report just measured and
+        // flicker it on every move (add-tauri-gui-client row 6.5).
+        let row_hover = self.pointer_at.and_then(|at| self.queue_row_at(at));
+        self.queue.set_hover(row_hover);
     }
 
     /// The Queue row the pointer rests on: the row's own region or the chrome
@@ -371,12 +382,14 @@ impl CoreThread {
         // drag state without a move (add-tauri-gui-client row 6.5, finding
         // P1-2): the release that would have ended the drag never arrives.
         if event.kind == PointerKind::Cancel {
+            self.pointer_at = None;
             self.gestures.cancel();
             self.queue.cancel_row_drag();
             self.queue.set_hover(None);
             self.playback.set_scrubber_hover(None);
             return;
         }
+        self.pointer_at = Some(event.position);
         // A new press while a row drag is armed discards the stale drag
         // first: a release the window never saw cannot make the next click's
         // DragEnd move the old slot.

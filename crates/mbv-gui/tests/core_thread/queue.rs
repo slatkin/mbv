@@ -88,6 +88,13 @@ fn the_frame_carries_the_hovered_row() {
     assert!(test.core.step());
     assert_eq!(test.next_frame().queue.hover, Some(2));
 
+    // The report the hovered row's own chrome regions cause keeps the hover:
+    // clearing it dropped the chrome the report measured, so it flickered on
+    // every move.
+    test.tx.send(rows_with_first_grip()).unwrap();
+    assert!(test.core.step());
+    assert_eq!(test.next_frame().queue.hover, Some(2));
+
     // A move onto the first row's grip keeps that row hovered.
     test.tx.send(move_at(10.0, 6.0)).unwrap();
     assert!(test.core.step());
