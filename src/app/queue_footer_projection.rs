@@ -1,9 +1,11 @@
 //! The Queue footer projection every Client consumes (`extract-client-core`
 //! design D5, row 6.4's footer): the status pills the queue panel's footer
-//! paints, computed once from the `App` as plain text and theme roles so both
-//! Clients read the same owner, playlist, autosave, and dirty rules. The TUI
-//! shell builds its footer spans from this projection at its painter edge.
+//! paints and the canvas's library-context line, computed once from the `App`
+//! as plain text and theme roles so both Clients read the same owner, playlist,
+//! autosave, and dirty rules. The TUI shell builds its footer spans from this
+//! projection at its painter edge.
 
+use mbv_queue::QueueItem;
 use mbv_theme::Role;
 
 use crate::app::App;
@@ -28,7 +30,8 @@ pub struct FooterPill {
     pub bold: bool,
 }
 
-/// The Queue footer's status pills for one tick.
+/// The Queue footer's facts for one tick: its status pills and the canvas's
+/// library-context line.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct QueueFooterProjection {
     /// The owner indicator, always present: the Player owner whose queue the
@@ -40,8 +43,14 @@ pub struct QueueFooterProjection {
     /// Owner).
     pub owner_live: bool,
     /// The playlist source pill: the glyph, and the playlist name while one is
-    /// loaded.
+    /// loaded. The front end paints it as the fallback when the queue names
+    /// no library context.
     pub playlist: FooterPill,
+    /// The canvas footer's library context: the active series and the season
+    /// range of its queued episodes, e.g. `Peep Show · Series 1–6`
+    /// (audit/main.md 27, design DR6). `None` when the queue's items carry no
+    /// seasons — music, feeds, and queues of movies.
+    pub library_context: Option<String>,
     /// The autosave indicator, present only while save-on-consume is on for a
     /// saved playlist. Independent of the dirty marker.
     pub autosave: Option<FooterPill>,
@@ -59,9 +68,51 @@ impl App {
             owner: self.owner_footer_pill(),
             owner_live: !self.shown_queue_owner_player().is_remote_disconnected(),
             playlist: self.playlist_footer_pill(),
+            library_context: self.queue_library_context(),
             autosave: self.autosave_footer_pill(),
             dirty: self.dirty_footer_pill(),
         }
+    }
+
+    /// The library context line the canvas footer paints: the active series
+    /// and the season range of its queued episodes. The active slot's series
+    /// wins in a mixed queue; a queue with no playhead takes the first series
+    /// its slots name. The season range covers only that series' episodes
+    /// with a known season, so specials and foreign series do not widen it.
+    fn queue_library_context(&self) -> Option<String> {
+        let queue = self.playback_queue();
+        let slots = queue.slots();
+        let series = queue
+            .active_slot_id()
+            .and_then(|slot_id| queue.slot_index(slot_id))
+            .and_then(|index| queue.emby_item_at(index))
+            .map(|item| item.series_name.as_str())
+            .filter(|name| !name.is_empty())
+            .or_else(|| {
+                slots.iter().find_map(|slot| match &slot.item {
+                    QueueItem::Emby(item) if !item.series_name.is_empty() => {
+                        Some(item.series_name.as_str())
+                    }
+                    _ => None,
+                })
+            })?;
+        let mut seasons: Vec<i64> = slots
+            .iter()
+            .filter_map(|slot| match &slot.item {
+                QueueItem::Emby(item) if item.series_name == series => {
+                    (item.parent_index_number > 0).then_some(item.parent_index_number)
+                }
+                _ => None,
+            })
+            .collect();
+        seasons.sort_unstable();
+        seasons.dedup();
+        let (&first, &last) = (seasons.first()?, seasons.last()?);
+        Some(if first == last {
+            format!("{series} \u{00b7} Series {first}")
+        } else {
+            format!("{series} \u{00b7} Series {first}\u{2013}{last}")
+        })
     }
 
     /// The owner indicator: the icon, a space, and the shown owner's label.

@@ -70,14 +70,17 @@ impl GuiQueueDrag {
     /// when the rows no longer hold the dragged slot (a content refresh can
     /// drop it).
     fn from_surface(
-        rows: &[MediaListRow<QueueSlotId>],
+        queue: &QueueSurface,
         drag: QueueRowDrag,
         summary: &QueueSummaryProjection,
     ) -> Option<Self> {
-        let row = rows.iter().find(
+        let row = queue.rows().iter().find(
             |row| matches!(row, MediaListRow::Item { target, .. } if *target == drag.slot_id),
         )?;
-        let mut ghost = GuiQueueRow::from_painted(row, false);
+        let ordinal = queue
+            .item_index_of(drag.slot_id)
+            .map_or(0, |index| index + 1);
+        let mut ghost = GuiQueueRow::from_painted(row, false, ordinal);
         apply_ends_at(&mut ghost, summary);
         Some(Self {
             slot: drag.slot_id.raw(),
@@ -146,7 +149,14 @@ impl GuiQueue {
             .take(viewport.1)
             .map(|(source_row, row)| {
                 let striped = striped_state(row, source_row, grouped, &kept, &mut striped);
-                let mut row = GuiQueueRow::from_painted(row, striped);
+                // The canvas's row number is the slot's canonical queue
+                // position, not its index in the painted viewport: the
+                // filter keeps the number a row carried before it.
+                let ordinal = row
+                    .selectable_target()
+                    .and_then(|target| queue.item_index_of(*target))
+                    .map_or(0, |index| index + 1);
+                let mut row = GuiQueueRow::from_painted(row, striped, ordinal);
                 apply_ends_at(&mut row, summary);
                 row
             })
@@ -161,7 +171,7 @@ impl GuiQueue {
             hover: queue.hover().map(QueueSlotId::raw),
             drag: queue
                 .row_drag()
-                .and_then(|drag| GuiQueueDrag::from_surface(rows, drag, summary)),
+                .and_then(|drag| GuiQueueDrag::from_surface(queue, drag, summary)),
         }
     }
 }
@@ -272,6 +282,11 @@ pub enum GuiQueueRow {
     Item {
         /// The stable slot (`QueueSlotId::raw`).
         slot: u64,
+        /// The row's 1-based position in the queue: the canvas's `01`-style
+        /// row number, read from the canonical queue order rather than the
+        /// painted viewport, so a scrolled or filtered viewport still numbers
+        /// rows by their queue positions.
+        ordinal: usize,
         primary: String,
         secondary: Option<String>,
         trailing: Option<GuiTrailing>,
@@ -360,10 +375,11 @@ impl From<mbv::QueueRightColumn> for GuiRightColumn {
 }
 
 impl GuiQueueRow {
-    /// Builds one display row from a `MediaListRow` and its painted zebra
-    /// state.
+    /// Builds one display row from a `MediaListRow`, its painted zebra state,
+    /// and its 1-based canonical queue position (`ordinal`; structural rows
+    /// ignore it).
     #[must_use]
-    pub fn from_painted(row: &MediaListRow<QueueSlotId>, striped: bool) -> Self {
+    pub fn from_painted(row: &MediaListRow<QueueSlotId>, striped: bool, ordinal: usize) -> Self {
         match row {
             MediaListRow::Item {
                 target,
@@ -375,6 +391,7 @@ impl GuiQueueRow {
                 semantic_state,
             } => Self::Item {
                 slot: target.raw(),
+                ordinal,
                 primary: primary.clone(),
                 secondary: secondary.clone(),
                 trailing: trailing.as_ref().map(GuiTrailing::from),

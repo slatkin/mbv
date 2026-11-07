@@ -75,6 +75,7 @@ function item(slot: number, rest: Partial<Extract<GuiQueueRow, { row: 'item' }>>
 	const row: Extract<GuiQueueRow, { row: 'item' }> = {
 		row: 'item',
 		slot,
+		ordinal: slot,
 		primary: `Track ${slot}`,
 		secondary: null,
 		trailing: null,

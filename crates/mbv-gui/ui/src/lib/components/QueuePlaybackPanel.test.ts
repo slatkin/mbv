@@ -60,6 +60,7 @@ function playing(overrides: Partial<GuiQueuePlayback> = {}): GuiQueuePlayback {
 			positionTicks: 60 * SECOND,
 			runtimeTicks: 200 * SECOND,
 			paused: false,
+			remainingMinutes: 2,
 		},
 		// The frame carries the two clocks formatted (the TUI's shared
 		// duration formatter): 1:00 elapsed, 2:20 left of 3:20.
@@ -157,6 +158,7 @@ function queue(): GuiQueue {
 			{
 				row: 'item',
 				slot: 1,
+				ordinal: 1,
 				primary: 'First track',
 				secondary: null,
 				trailing: null,
@@ -179,6 +181,7 @@ const footer: GuiQueueFooter = {
 	owner: { text: 'woims', role: 'textFocusAccent', bold: false },
 	ownerLive: true,
 	playlist: { text: 'mix', role: 'textMetadata', bold: false },
+	libraryContext: null,
 	autosave: null,
 	dirty: null,
 };

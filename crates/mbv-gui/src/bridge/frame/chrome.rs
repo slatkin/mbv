@@ -8,7 +8,8 @@ use serde::Serialize;
 
 use super::theme::GuiRole;
 
-/// The Queue footer's status pills, mirroring `QueueFooterProjection`.
+/// The Queue footer's facts, mirroring `QueueFooterProjection`: its status
+/// pills and the canvas's library-context line.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GuiQueueFooter {
@@ -17,8 +18,13 @@ pub struct GuiQueueFooter {
     /// Whether the shown queue's Player owner is live. The session marker
     /// paints its dot only while this holds (design D4a).
     pub owner_live: bool,
-    /// The playlist source pill.
+    /// The playlist source pill. It is the painted fallback when the queue
+    /// names no library context.
     pub playlist: GuiFooterPill,
+    /// The canvas footer's library context: the active series and its season
+    /// range (`Peep Show · Series 1–6`). `None` when the queue's items carry
+    /// no seasons.
+    pub library_context: Option<String>,
     /// The autosave indicator. Present only while save-on-consume is on for a
     /// saved playlist.
     pub autosave: Option<GuiFooterPill>,
@@ -33,6 +39,7 @@ impl From<&QueueFooterProjection> for GuiQueueFooter {
             owner: GuiFooterPill::from(&projection.owner),
             owner_live: projection.owner_live,
             playlist: GuiFooterPill::from(&projection.playlist),
+            library_context: projection.library_context.clone(),
             autosave: projection.autosave.as_ref().map(GuiFooterPill::from),
             dirty: projection.dirty.as_ref().map(GuiFooterPill::from),
         }

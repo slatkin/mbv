@@ -43,6 +43,7 @@ function item(slot: number, primary: string): GuiQueueRow {
 	return {
 		row: 'item',
 		slot,
+		ordinal: slot,
 		primary,
 		secondary: null,
 		trailing: null,
@@ -98,6 +99,7 @@ function frame(
 				positionTicks: 60 * SECOND,
 				runtimeTicks: 200 * SECOND,
 				paused: false,
+				remainingMinutes: 2,
 			},
 			elapsedClock: '1:00',
 			remainingClock: '2:20',
@@ -121,6 +123,7 @@ function frame(
 			owner: { text: 'woims', role: 'textFocusAccent', bold: false },
 			ownerLive: true,
 			playlist: { text: 'mix', role: 'textMetadata', bold: false },
+			libraryContext: null,
 			autosave: null,
 			dirty: null,
 		},

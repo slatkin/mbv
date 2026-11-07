@@ -180,6 +180,11 @@ export type GuiQueueRow =
 			row: 'item';
 			/** The stable slot (`QueueSlotId::raw`). */
 			slot: number;
+			/** The row's 1-based position in the queue: the canvas's `01`-style
+			 * row number, read from the canonical queue order rather than the
+			 * painted viewport, so a scrolled or filtered viewport still numbers
+			 * rows by their queue positions. */
+			ordinal: number;
 			primary: string;
 			secondary: string | null;
 			trailing: GuiTrailing | null;
@@ -414,6 +419,10 @@ export interface GuiPlaybackState {
 	positionTicks: number;
 	runtimeTicks: number;
 	paused: boolean;
+	/** The remaining whole minutes the rail paints (`−22m`): the remaining
+	 * runtime floored to whole minutes and clamped at zero. `null` while the
+	 * runtime is unknown, which is distinct from a known zero. */
+	remainingMinutes: number | null;
 }
 
 export interface GuiTransportAvailability {
@@ -422,13 +431,18 @@ export interface GuiTransportAvailability {
 	previous: boolean;
 }
 
-/** The Queue footer's status pills. */
+/** The Queue footer's facts: its status pills and the canvas's
+ * library-context line. */
 export interface GuiQueueFooter {
 	owner: GuiFooterPill;
 	/** Whether the shown queue's Player owner is live. The session marker
 	 * paints its dot only while this holds (design D4a). */
 	ownerLive: boolean;
 	playlist: GuiFooterPill;
+	/** The canvas footer's library context: the active series and its season
+	 * range (`Peep Show · Series 1–6`). `null` when the queue's items carry no
+	 * seasons; the playlist pill is the painted fallback. */
+	libraryContext: string | null;
 	autosave: GuiFooterPill | null;
 	dirty: GuiFooterPill | null;
 }
