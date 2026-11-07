@@ -198,6 +198,13 @@ pub struct CoreThread {
     /// A `report_layout` arrived this tick: the frame emits changed or not
     /// (design D3).
     frame_requested: bool,
+    /// When the last frame emitted. A timeout tick with no input repaints
+    /// once the shared render cadence's interval elapsed (design D3's
+    /// changed-state rule): the Owner broadcasts the playhead's progress as
+    /// a status apply the drains never see as an event, so the cadence is
+    /// what keeps the frame moving while the window takes no input — the
+    /// TUI's `wants_terminal_render` rule on the same shared interval.
+    last_frame: Instant,
     /// The frame that finds it armed carries the theme (design D7): the
     /// first frame, and every frame a `report_layout` triggers — the front
     /// end sends the report when it mounts, so a reload re-arms it.
@@ -255,6 +262,7 @@ impl CoreThread {
             // or not (design D9): the window must not keep the attach state it
             // showed before the attach succeeded.
             frame_requested: true,
+            last_frame: Instant::now(),
             theme_pending: true,
             artwork: ArtworkFrames::default(),
             trickplay: crate::trickplay::TrickplayFrames::default(),
@@ -277,6 +285,14 @@ impl CoreThread {
     /// non-blocking.
     pub fn set_idle_cadence_for_test(&mut self, cadence: Duration) {
         self.idle_cadence = cadence;
+    }
+
+    /// Backdate the last frame's stamp a test pins, so a step's cadence
+    /// check observes an elapsed interval with no real wait — inject the
+    /// outcome, not the delay.
+    #[doc(hidden)]
+    pub fn set_last_frame_for_test(&mut self, stamp: Instant) {
+        self.last_frame = stamp;
     }
 
     /// Apply one `LayoutReport` to the Surface state's capacity and the hit
@@ -557,10 +573,15 @@ impl CoreThread {
             return false;
         }
         // A restart re-reads the landed Owner snapshot next iteration; the
-        // frame waits for it, as the TUI's run loop does.
-        if !outcome.restart_requested && (outcome.input_received || self.frame_requested) {
+        // frame waits for it, as the TUI's run loop does. An input tick, a
+        // report, or a cadence-due repaint emits.
+        let due = self.frame_requested
+            || outcome.input_received
+            || self.app.frame_cadence_due(self.last_frame);
+        if !outcome.restart_requested && due {
             self.frame_requested = false;
             self.emit_frame();
+            self.last_frame = Instant::now();
         }
         true
     }

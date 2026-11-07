@@ -8,7 +8,7 @@
 //! resolve under `tests/core_thread/` (one binary per crate; no `mod.rs`).
 
 use std::sync::mpsc::{self, TryRecvError};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use mbv::{
     App, ClientTickHost, load_config, stub_app_with_armed_emby_fill,
@@ -187,6 +187,27 @@ fn one_input_yields_one_frame() {
     assert_eq!(frame.queue.rows.len(), 2);
     assert_no_frame(&test.frames);
     assert!(test.core.step());
+    assert_no_frame(&test.frames);
+}
+
+/// A timeout tick whose render cadence elapsed emits the frame (design D3's
+/// changed-state rule): the Owner applies the playhead's progress without an
+/// event the core's drains see, so the shared cadence is what keeps the panel
+/// moving while the window takes no input. Regression for the user report of
+/// 2026-11-07: the now-playing panel froze until the window had focus, the
+/// pointer moves being the only inputs a frame followed.
+#[test]
+fn a_cadence_due_timeout_tick_emits_the_frame() {
+    let mut test = test_core(2);
+    assert!(test.core.step());
+    test.next_frame();
+
+    // The cadence interval (1 s idle) elapsed since the last frame; the step
+    // takes no input — the recv timeout only.
+    test.core
+        .set_last_frame_for_test(Instant::now().checked_sub(Duration::from_secs(2)).unwrap());
+    assert!(test.core.step());
+    test.next_frame();
     assert_no_frame(&test.frames);
 }
 
