@@ -216,16 +216,18 @@ In the GUI Client a collection pill SHALL toggle on and off. A list SHALL show t
 - **WHEN** the user presses Space
 - **THEN** Space keeps its existing effect and no pill changes
 
-#### Scenario: The keyboard moves the pill focus without selecting
+#### Scenario: The keyboard moves the focused pill without selecting
 
 - **GIVEN** the Hip-Hop pill is selected and focused
 - **WHEN** the user presses `}` and then Space
-- **THEN** the pill focus moves to the next pill and that pill joins the selection, and Hip-Hop stays selected
+- **THEN** the focused pill moves to the next pill and the selector keeps pill focus
+- **THEN** Space adds that pill to the selection, and Hip-Hop stays selected
 
 #### Scenario: The TUI pill keys keep their effect
 
 - **WHEN** the user presses `]` in the GUI Client
-- **THEN** the pill focus moves to the next pill and only that pill is selected, as in the TUI Client
+- **THEN** the focused pill moves to the next pill and only that pill is selected, as in the TUI Client
+- **THEN** the selector does not hold pill focus, so a following Space keeps its existing effect
 
 #### Scenario: The selection is cleared
 
