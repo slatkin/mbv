@@ -321,6 +321,10 @@ test('the open row menu paints the canvas chrome, hints, and destructive entry',
 	);
 
 	const menu = container.querySelector('[data-row-menu]') as HTMLElement;
+	// The canvas's menu semantics (Menus.dc.html: the `role="menu"
+	// aria-label="Row actions"` card whose entries are `menuitem`s).
+	expect(menu.getAttribute('role')).toBe('menu');
+	expect(menu.getAttribute('aria-label')).toBe('Row actions');
 	expect(menu.style.width).toBe('230px');
 	expect(menu.style.padding).toBe('6px');
 	expect(menu.style.gap).toBe('2px');
@@ -331,6 +335,7 @@ test('the open row menu paints the canvas chrome, hints, and destructive entry',
 
 	const entries = container.querySelectorAll('[data-menu-entry]');
 	expect(entries).toHaveLength(5);
+	expect([...entries].every((entry) => entry.getAttribute('role') === 'menuitem')).toBe(true);
 	expect(entries[0].textContent).toContain('Play now');
 	// The core's raw `Enter` hint chord paints as the canvas's return glyph.
 	expect(entries[0].textContent).toContain('⏎');

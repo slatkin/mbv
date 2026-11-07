@@ -159,11 +159,30 @@ test('the subtitle popover paints the canvas dialog below its chip and marks the
 	expect(rows[1].querySelector('svg.lucide-check')).toBeNull();
 
 	// The dialog chrome (menus G4) and its placement below the chip row,
-	// right-aligned (design DR8).
+	// right-aligned (design DR8), with the canvas's dialog semantics naming
+	// the chip's track kind (Menus.dc.html: `role="dialog"
+	// aria-label="Subtitles"`; the audio popover is "Audio").
 	const dialog = rows[0].parentElement as HTMLElement;
 	expect(dialog.className).toContain('top-full');
 	expect(dialog.className).toContain('right-0');
+	expect(dialog.getAttribute('role')).toBe('dialog');
+	expect(dialog.getAttribute('aria-label')).toBe('Subtitles');
 	expect(dialog.className).not.toContain('bottom-full');
+
+	// The audio popover is the same dialog naming its own chip's kind.
+	const audioPopoverChip = renderChips(chips(), {
+		kind: 'trackPopover',
+		chip: 'audio',
+		cursor: 0,
+		choices: [
+			{ id: 1, label: 'English', forced: false, chosen: true },
+			{ id: 2, label: 'Japanese', forced: false, chosen: false },
+		],
+	});
+	const audioDialog = audioPopoverChip.container.querySelector(
+		'[data-popover-row]',
+	) as HTMLElement;
+	expect(audioDialog.parentElement?.getAttribute('aria-label')).toBe('Audio');
 	expect(dialog.style.width).toBe('260px');
 	expect(dialog.style.padding).toBe('6px');
 	expect(dialog.style.gap).toBe('2px');

@@ -170,6 +170,8 @@
 		text highlighted. -->
 	<div
 		class="absolute top-full right-0 z-20 mt-1 flex flex-col"
+		role="dialog"
+		aria-label={pop.chip === 'audio' ? 'Audio' : 'Subtitles'}
 		style:width="260px"
 		style:padding="6px"
 		style:gap="2px"

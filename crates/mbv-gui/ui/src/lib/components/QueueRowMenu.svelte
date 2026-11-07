@@ -51,6 +51,8 @@
 
 <div
 	class="absolute z-20 flex flex-col"
+	role="menu"
+	aria-label="Row actions"
 	style:top
 	style:right="var(--mbv-cell-col)"
 	style:width="230px"
@@ -75,6 +77,7 @@
 		<button
 			type="button"
 			class="flex items-center justify-between text-left"
+			role="menuitem"
 			style:height="34px"
 			style:padding="0 10px"
 			style:border-radius="4px"
