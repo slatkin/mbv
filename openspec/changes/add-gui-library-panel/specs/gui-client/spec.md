@@ -71,27 +71,27 @@ The GUI Client SHALL present the Library panel and the Queue panel in one window
 
 ### Requirement: The window arrangement follows the shared breakpoint classes
 
-The GUI Client SHALL classify the window width into the shared breakpoint classes Mini, Narrow, and Wide, and SHALL give each class the TUI Client's layout behaviour. The width thresholds SHALL come from the canvas sizes. The Queue panel SHALL keep its own four states inside each class.
+The GUI Client SHALL classify the Library column width (the window width minus the Queue panel's current width) into the shared breakpoint classes Mini, Narrow, and Wide, and SHALL give each class the TUI Client's layout behaviour. The width thresholds SHALL come from the canvas sizes. The Queue panel SHALL keep its own four states inside each class.
 
 #### Scenario: The window is Mini
 
-- **WHEN** the window width is below the Narrow threshold
+- **WHEN** the Library column width is below the Narrow threshold
 - **THEN** only the panel with Panel focus shows
 
 #### Scenario: The window is Narrow
 
-- **WHEN** the window width is Narrow
+- **WHEN** the Library column width is Narrow
 - **THEN** both panels show, the Library panel shows its browser pane without a Hero pane, and the Hero opens as the Library Hero overlay on demand, as in the TUI Client
 
 #### Scenario: The window is Wide
 
-- **WHEN** the window width is Wide and the height guard holds
+- **WHEN** the Library column width is Wide and the height guard holds
 - **THEN** both panels show and the Hero pane sits beside the browser pane
 
 #### Scenario: The window is resized across a threshold
 
 - **GIVEN** the Library cursor is on an item
-- **WHEN** the window width crosses a breakpoint threshold
+- **WHEN** the Library column width crosses a breakpoint threshold
 - **THEN** the arrangement changes and the Library cursor, selection, and pill choice do not change
 
 ### Requirement: Every destination paints the Library slots
@@ -130,7 +130,7 @@ The Library panel SHALL paint the same slots for every destination: a selector r
 
 ### Requirement: Hero actions match the TUI Client
 
-Every action that the Hero shows SHALL run the TUI Client's action for the same item, and SHALL show the default key chord of that action.
+Every action that the Hero shows SHALL run the TUI Client's action for the same item, and SHALL show the chord that runs that action in the GUI Client: the configured chord for an action that `[keys]` binds, and the fixed key otherwise.
 
 #### Scenario: Play next from the Hero
 
@@ -241,19 +241,19 @@ Each destination SHALL keep its own pill selection while the GUI Client runs. Ac
 
 ### Requirement: The Library Status bar shows hints and the location
 
-While the Library panel shows, the Status bar under the Library column SHALL show the key hints of the focused Library surface's main actions, each with its configured chord, and the location: the destination, the selected pills, and the selected item. While prefix mode is armed or a toast is active, the prefix state or the toast SHALL replace the key hints.
+While the Library panel shows, the Status bar under the Library column SHALL show the key hints of the focused Library surface's main actions, each with the chord that runs it in the GUI Client (the configured chord for an action that `[keys]` binds, the fixed key otherwise), and the location: the destination, the selected pills, and the selected item. While prefix mode is armed or a toast is active, the prefix state or the toast SHALL replace the key hints.
 
 #### Scenario: Music has an album selected
 
 - **GIVEN** Music is active with Hip-Hop selected and an album selected
 - **WHEN** the Library Status bar paints
-- **THEN** it shows the filter, play, play-next, add-to-queue, Panel-focus, and tab hints with their configured chords, and the location Music, Hip-Hop, and the album
+- **THEN** it shows the filter, play, play-next, add-to-queue, Panel-focus, and tab hints with their chords, and the location Music, Hip-Hop, and the album
 
 #### Scenario: A chord is rebound
 
-- **GIVEN** the user rebinds play-next in `[keys]`
+- **GIVEN** the user rebinds the Panel-focus action in `[keys]`
 - **WHEN** the Library Status bar paints
-- **THEN** the play-next hint shows the new chord
+- **THEN** the Panel-focus hint shows the new chord
 
 #### Scenario: A toast arrives
 

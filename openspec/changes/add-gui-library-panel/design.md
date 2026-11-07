@@ -10,7 +10,7 @@ What the code holds today:
 - The interaction state of the Library is in the TUI components: `LibraryPanel`, the seven owners (`music_content`, `tv_content`, `emby_library_content`, `home_content`, `book_content`, `podcast_content`, `feeds_content`), `tab_panel`, `inline_search`, and `search_sidebar`. `mbv-surfaces` holds only queue, queue playback, status bar, list, media list, seekbar, gesture, hit map, focus stack, capacity, and breakpoint.
 - `mbv_surfaces::breakpoint` defines `Mini | Narrow | Wide`, `classify`, and `hero_side_by_side`. No Client calls them yet.
 - The GUI core thread owns an `App`, emits `GuiFrame`, and applies `LayoutReport` (`docs/architecture/gui-client.md`). The guide's surface order (*Adding a surface to the GUI*) applies to every surface in this change.
-- The launch state is `TuiLaunchState` (`crates/mbv-config/src/launch_state.rs`). The `App` loads it at construction and saves it at exit, so the GUI and the TUI already share one file. The selector is one `SelectorIdentity` for the active destination.
+- The launch state is `TuiLaunchState` (`crates/mbv-config/src/launch_state.rs`). The `App` loads it at construction for both Clients, but only the TUI saves it: `Model::teardown` builds the snapshot from the mounted TuiRealm `LibraryPanel` (`Model::launch_state_snapshot`), and the GUI's `App::client_exit_teardown` saves nothing by design. The selector is one `SelectorIdentity` for the active destination.
 
 ## Goals / Non-Goals
 
@@ -47,7 +47,7 @@ The core thread builds `GuiLibraryFrame` (`crates/mbv-gui/src/bridge/frame/libra
 
 ### D4. The breakpoint is classified on the Library column width
 
-The front end measures the window and the Queue panel's current width (400 px expanded, 72 px rail). The Library column width is the window width minus the Queue panel width. Thresholds, from the canvas sizes: `mini_below = 480` (the 320 px list plus the pill row's minimum) and `wide_from = 880` (the 320 px list plus a 560 px Hero: 300 px art, 64 px padding, and the text column). The height guard for `hero_side_by_side` is 600 px. In Mini, the panel with Panel focus takes the whole window. The front end reports the class with the container size in `LayoutReport`; the core stores it for the frame and for the Hero overlay rule, and does not classify.
+The front end measures the window and the Queue panel's current width (400 px expanded, 72 px rail). The Library column width is the window width minus the Queue panel width. Thresholds, from the canvas sizes: `mini_below = 480` (the 320 px list plus the pill row's minimum) and `wide_from = 880` (the 320 px list plus a 560 px Hero: 300 px art, 64 px padding, and the text column). The height guard for `hero_side_by_side` is 600 px. In Mini, the panel with Panel focus takes the whole window. Mini focus is ephemeral, as in the TUI: the reported class feeds the `App`'s Mini check in place of the terminal-width test (`src/app/state/panel_focus.rs`), so a focus move in Mini writes `mini_view_focus`, not the stored Panel focus, and does not survive a widening. The front end reports the class with the container size in `LayoutReport`; the core stores it for the frame and for the Hero overlay rule, and does not classify.
 
 *Alternative:* classify on the window width. Rejected: the `z` rail frees 328 px, and the Library should use it.
 
@@ -69,13 +69,13 @@ A pill names a collection when it narrows the list to one content set the Servic
 
 The `tui-launch-state` main spec persists one pill scope and bans multi-selection, so this change amends it (delta `specs/tui-launch-state/spec.md`). Only a Grouped Music library persists a live collection choice today (its selected group); every other destination with a Latest pill restores Latest. So only Music's extra groups persist: `TuiLaunchState` gains `#[serde(default, skip_serializing_if = "Vec::is_empty")] extra_music_groups: Vec<String>` (the group content ids after the first, in pill order). `selector` keeps the first selected group.
 
-The save path is the shared `launch_state_snapshot`: it writes the extra groups from the Music `SelectorSurface` set, which the TUI never grows past one, so a TUI snapshot carries none. The restore stays split: the shared `reanchor_launch_state` path keeps restoring `selector` only, unchanged, for both Clients; the GUI core thread applies `extra_music_groups` to the Music `SelectorSurface` in its own startup adoption, after the shared restore resolved the first group. The TUI has no apply site, so it restores the first group only. In the session, each destination keeps its set because owners stay mounted.
+The user chose one shared file: the GUI Client writes the same snapshot at its orderly exit, and the last completed exit of either Client sets the next launch of both (the existing two-TUI rule; delta `tui-launch-state` "Launch state is written only at orderly TUI exit"). After the port, one snapshot builder reads `LibrarySurface` (tab, the selector set with its stable `SelectorIdentity` values) and the `FocusStack` (Panel focus); `Model::launch_state_snapshot` calls it in place of reading the component, so the TUI's snapshot stays byte-identical, and the GUI core thread calls it at its exit boundary and saves through `mbv_config::save_tui_launch_state` before `client_exit_teardown`. The GUI saves only at orderly exit, never while open. The builder writes the extra groups from the Music `SelectorSurface` set, which the TUI never grows past one, so a TUI snapshot carries none. The restore stays split: the shared `reanchor_launch_state` path keeps restoring `selector` only, unchanged, for both Clients; the GUI core thread applies `extra_music_groups` to the Music `SelectorSurface` in its own startup adoption, after the shared restore resolved the first group. The TUI has no apply site, so it restores the first group only. A saved extra group that the library no longer has is dropped, not replaced: the first-guaranteed-pill fallback applies only to the first group. In the session, each destination keeps its set because owners stay mounted.
 
 The main spec's "SHALL NOT record the selected library item" already disagrees with the struct's `item` field; that drift predates this change and the delta does not touch it.
 
 ### D7. The letter rail reads the list's sort names
 
-The frame carries the letters that have rows. A press emits a jump `Msg`; the core moves the cursor to the first row whose sort name starts with the letter (the sort-name rule the destination already sorts with) and re-anchors the viewport. Rails show on Music artists, Shows series, Emby library lists, and Audiobook books; not on Home, Feeds, or Podcast episodes.
+The frame carries the letters that have rows. A press emits a jump `Msg`; the core moves the cursor to the first row whose sort name starts with the letter (the sort-name rule the destination already sorts with) and re-anchors the viewport. The rail follows the list's current sort, not the destination: it shows only while the list is sorted by name (Music artists, Shows series, Audiobook books, and an Emby library while its sort is by name) and never on a Latest view or a date-sorted list (Home, Feeds, Podcast episodes, an Emby library sorted by date).
 
 ### D8. `Ctrl+K` binds Search in the GUI-only key context
 
@@ -87,7 +87,7 @@ The shared Status bar projection carries the prefix state and the toast (`mbv_su
 
 The Library Status bar adds two GUI-only items that the canvas Library artboard shows (`canvas/Library.dc.html`, the bottom bar) and no Status bar carries today:
 
-- **Key hints** (left): the main actions of the focused Library surface (filter, play, play next, add to queue, Panel focus, tab jump). The frame carries each hint as an action id plus the chord resolved from the configured `[keys]` bindings, so a rebind shows. Prefix or toast replaces the hints while active.
+- **Key hints** (left): the main actions of the focused Library surface (filter, play, play next, add to queue, Panel focus, tab jump). The frame carries each hint as an action id plus the chord that runs it in the GUI: the configured chord for a registry action that `[keys]` binds (Panel focus, tab jump, search), and the component's fixed key for the rest (`/`, Enter, `n`, `a` are fixed `Key::Char` matches in the owners, not registry actions). The Hero action hints follow the same rule. Prefix or toast replaces the hints while active.
 - **Location** (right): the destination name, the selected pill names, and the selected item title, each a fact the Library frame already carries. The front end joins them.
 
 The TUI Status bar's other items (volume and mute pills, the Visual-mode indicator, the queue-source link, username, and Service glyphs) do not paint in the GUI: the canvas shows none of them, and the Queue footer already paints the queue source and the owner marker.
@@ -107,7 +107,7 @@ The Library paints the canvas values through the GUI-local `--canvas-*` tokens i
 
 One change, two phases with an acceptance gate:
 
-1. **Phase 1 — Music from end to end.** The Library Surface state and the Music port, the frame section, regions, leaf, and core wiring, the window arrangement (breakpoints, Panel focus, Hero overlay), the top bar tabs, the Status bar move, the Music slot painters, multi-select pills with persistence, and the letter rail.
+1. **Phase 1 — Music from end to end.** The Library Surface state and the Music port, the frame section, regions, leaf, and core wiring, the window arrangement (breakpoints, Panel focus, Hero overlay), the top bar tabs (only the destinations the frame can project; the other tabs are absent until their unit lands, under the no-stub rule), the Status bar move, the Music slot painters, multi-select pills with persistence, and the letter rail.
 2. **Gate.** A `/code-review` round over Phase 1 and a user live-test round. Phase 2 starts only after the user accepts Phase 1. The gate is not a task.
 3. **Phase 2 — the other destinations and Search.** Shows, Movies and other Emby libraries, Home, Audiobooks, Podcasts, Feeds, then global Search. Each destination is one port plus its slot content; the painters from Phase 1 do not change except for slot variants that Music does not use (landscape and portrait art, the Workspace selector, no Hero).
 

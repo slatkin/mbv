@@ -25,7 +25,7 @@ None.
 ### Modified Capabilities
 
 - `gui-client`: the GUI presents the Library panel, its slots, the destinations, the responsive arrangement with the Queue panel, Panel focus, multi-select collection pills, the letter rail, the tab bar, global Search, and the Library Status bar.
-- `tui-launch-state`: the snapshot also carries the GUI Client's extra selected Grouped Music groups; the TUI restores only the first.
+- `tui-launch-state`: the GUI Client also writes the shared snapshot at its orderly exit (the last exit of either Client wins), and the snapshot carries the GUI Client's extra selected Grouped Music groups; the TUI restores only the first.
 
 ## Impact
 
