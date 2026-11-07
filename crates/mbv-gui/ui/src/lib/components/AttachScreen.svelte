@@ -85,8 +85,16 @@
 	});
 </script>
 
+<!-- The canvas draws none of these states (design D15), so they paint in
+	the canvas's type, colour, and spacing: `text-sm` body type with the
+	canvas's relaxed leading, the cell unit for the column's gap and gutter,
+	and the mismatch buttons as the canvas's pill controls — `secondary`
+	fill, `border` outline, small medium-weight labels, and the key hints in
+	the mono face's muted colour. -->
 <div
-	class="flex h-full flex-col items-center justify-center gap-4 px-8"
+	class="flex h-full flex-col items-center justify-center"
+	style:gap="var(--mbv-cell-col)"
+	style:padding-inline="calc(var(--mbv-cell-col) * 2)"
 	bind:this={screenEl}
 >
 	{#if attach === null || attach.kind === 'waiting'}
@@ -97,12 +105,12 @@
 			class="animate-spin"
 			color={roleVar('textMuted')}
 		/>
-		<span style:color={roleVar('textSecondary')}
+		<span class="text-sm font-medium" style:color={roleVar('textSecondary')}
 			>Attaching to the Owner process…</span
 		>
 	{:else}
 		<span
-			class="max-w-prose text-center whitespace-pre-line"
+			class="max-w-prose text-center text-sm leading-relaxed whitespace-pre-line"
 			style:color={roleVar(
 				attach.kind === 'refusal' || attach.kind === 'exclusiveRefusal'
 					? 'statusError'
@@ -110,30 +118,38 @@
 			)}>{attach.detail}</span
 		>
 		{#if attach.kind === 'mismatch'}
-			<div class="flex items-center gap-2">
+			<div class="flex items-center" style:gap="calc(var(--mbv-cell-col) / 2)">
 				<button
 					type="button"
-					class="flex items-center gap-1.5 rounded-md px-3 py-1.5"
+					class="flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium"
 					style:background={roleVar('secondary')}
+					style:border-color="var(--mbv-border)"
 					style:color={roleVar('textPrimary')}
 					bind:this={restartEl}
 					data-target="restart"
 				>
 					<RotateCcw size={14} color={roleVar('accent')} />
 					Restart
-					<span class="font-mono" style:color={roleVar('textMuted')}>[R]</span>
+					<span
+						class="font-mono text-xs tabular-nums"
+						style:color={roleVar('textMuted')}>[R]</span
+					>
 				</button>
 				<button
 					type="button"
-					class="flex items-center gap-1.5 rounded-md px-3 py-1.5"
+					class="flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium"
 					style:background={roleVar('secondary')}
+					style:border-color="var(--mbv-border)"
 					style:color={roleVar('textPrimary')}
 					bind:this={quitEl}
 					data-target="quit"
 				>
 					<X size={14} color={roleVar('statusError')} />
 					Quit
-					<span class="font-mono" style:color={roleVar('textMuted')}>[Q]</span>
+					<span
+						class="font-mono text-xs tabular-nums"
+						style:color={roleVar('textMuted')}>[Q]</span
+					>
 				</button>
 			</div>
 		{/if}

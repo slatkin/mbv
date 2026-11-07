@@ -105,7 +105,10 @@
 
 	/** The empty-queue text, as the TUI's local queue shows it. The frame
 	 * carries no queue link, so the remote-queue text cannot be selected;
-	 * the first slice attaches only to a local Owner (design D9). */
+	 * the first slice attaches only to a local Owner (design D9). The
+	 * canvas draws no empty-queue state (design D15), so the placeholder
+	 * paints in the canvas's type — a display-sized medium weight in the
+	 * `emptyQueueFg` role — as a missing visual does. */
 	const EMPTY_QUEUE_TEXT = '¯\\_(ツ)_/¯';
 
 	const reportKey = Symbol('queue-panel');
@@ -419,11 +422,15 @@
 		<QueueHeader {summary} />
 		<div class="relative min-h-0 flex-1 overflow-hidden" bind:this={listEl}>
 			{#if queue.rows.length === 0}
-				<div
-					class="flex h-full items-center justify-center font-bold"
-					style:color={roleVar('emptyQueueFg')}
-				>
-					{EMPTY_QUEUE_TEXT}
+				<!-- The empty-queue placeholder (design D15's missing-visual
+					rule): the TUI's shrug set as the canvas's display type —
+					display-sized, medium weight, wide tracking — in the
+					`emptyQueueFg` role, centred in the list box. -->
+				<div class="flex h-full items-center justify-center">
+					<span
+						class="text-2xl font-medium tracking-widest"
+						style:color={roleVar('emptyQueueFg')}>{EMPTY_QUEUE_TEXT}</span
+					>
 				</div>
 			{:else}
 				{#each queue.rows as row, i (row.row === 'item' ? row.slot : `structural-${i}`)}
