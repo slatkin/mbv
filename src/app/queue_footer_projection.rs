@@ -34,6 +34,11 @@ pub struct QueueFooterProjection {
     /// The owner indicator, always present: the Player owner whose queue the
     /// panel shows (design D7).
     pub owner: FooterPill,
+    /// Whether the shown queue's Player owner is live: the Client's link to
+    /// it is up. The GUI paints its session marker's dot only while this
+    /// holds (`add-tauri-gui-client` design D4a: the dot marks the live
+    /// Owner).
+    pub owner_live: bool,
     /// The playlist source pill: the glyph, and the playlist name while one is
     /// loaded.
     pub playlist: FooterPill,
@@ -52,6 +57,7 @@ impl App {
     pub fn queue_footer_projection(&self) -> QueueFooterProjection {
         QueueFooterProjection {
             owner: self.owner_footer_pill(),
+            owner_live: !self.shown_queue_owner_player().is_remote_disconnected(),
             playlist: self.playlist_footer_pill(),
             autosave: self.autosave_footer_pill(),
             dirty: self.dirty_footer_pill(),
@@ -140,3 +146,6 @@ impl App {
         })
     }
 }
+
+#[cfg(test)]
+mod tests;

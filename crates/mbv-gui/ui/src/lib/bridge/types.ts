@@ -418,6 +418,9 @@ export interface GuiTransportAvailability {
 /** The Queue footer's status pills. */
 export interface GuiQueueFooter {
 	owner: GuiFooterPill;
+	/** Whether the shown queue's Player owner is live: the session marker
+	 * paints its dot only while this holds (design D4a). */
+	ownerLive: boolean;
 	playlist: GuiFooterPill;
 	autosave: GuiFooterPill | null;
 	dirty: GuiFooterPill | null;

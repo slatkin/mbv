@@ -34,6 +34,18 @@ impl App {
             .map_or(&self.player, |home| &home.player)
     }
 
+    /// The `PlayerProxy` whose link the shown queue's Player owner answers on:
+    /// the Local queue's link (the suspended home link while a peer
+    /// attachment is shown), else the peer attachment. The shown queue and
+    /// the player resolve to one link (ADR 0034), so the owner's liveness is
+    /// the same link's connection state.
+    pub(in crate::app) fn shown_queue_owner_player(&self) -> &mbv_player::PlayerProxy {
+        match self.playing_queue_link() {
+            QueueLink::Local => self.local_queue_player(),
+            QueueLink::Peer => &self.player,
+        }
+    }
+
     pub(in crate::app) fn queue_for_link(&self, link: QueueLink) -> &QueueView {
         match link {
             QueueLink::Local => &self.local_view,

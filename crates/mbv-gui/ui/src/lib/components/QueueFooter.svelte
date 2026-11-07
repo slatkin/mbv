@@ -11,9 +11,9 @@
 	// reported under the queue surface, as the Queue panel's pill was). The
 	// right group is the dirty indicator (while the queue differs from its
 	// saved playlist), then the session marker: the footer owner pill's
-	// label — the Player-owner label (`woims` on the canvas) — with NO
-	// liveness dot: the frame carries no liveness field (the D4a answer
-	// names the dot but the wire does not send it), so none is painted.
+	// label — the Player-owner label (`woims` on the canvas) — followed by
+	// its liveness dot, painted only while the shown Owner's link is up
+	// (`ownerLive`, design D4a: the dot marks the live Owner).
 	//
 	// The prefix-armed state paints the same `PREFIX` badge the TUI's
 	// status row paints while prefix mode is armed, and it drops while a
@@ -168,8 +168,8 @@
 	</span>
 	<!-- The right group: the dirty pill (when present) wrapped in
 		one-column pads on the pill fill, then the session marker — the
-		footer owner pill's label — flush at the row's right edge, with no
-		liveness dot (the frame carries no liveness field). -->
+		footer owner pill's label and its liveness dot while the shown
+		Owner's link is up — flush at the row's right edge. -->
 	<div class="flex items-center">
 		{#if footer.dirty}
 			<span
@@ -191,6 +191,16 @@
 		>
 			<Cable size={14} color={roleVar(footer.owner.role)} class="shrink-0" />
 			<span style:color={roleVar(footer.owner.role)}>{footer.owner.text}</span>
+			{#if footer.ownerLive}
+				<!-- The live-Owner dot (design D4a): the shown queue's Player
+					owner answers on a live link. -->
+				<span
+					style:color="var(--mbv-statusAvailable)"
+					data-owner-live
+					title="Owner live"
+					aria-label="Owner live">●</span
+				>
+			{/if}
 		</span>
 	</div>
 </div>

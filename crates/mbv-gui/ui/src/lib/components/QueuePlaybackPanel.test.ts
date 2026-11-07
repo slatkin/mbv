@@ -173,6 +173,7 @@ function queue(): GuiQueue {
 
 const footer: GuiQueueFooter = {
 	owner: { text: 'woims', role: 'textFocusAccent', bold: false },
+	ownerLive: true,
 	playlist: { text: 'mix', role: 'textMetadata', bold: false },
 	autosave: null,
 	dirty: null,

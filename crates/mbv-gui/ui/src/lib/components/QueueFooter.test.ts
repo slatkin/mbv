@@ -1,9 +1,9 @@
 // add-tauri-gui-client task 6.4: the canvas footer line paints the queue
-// source pills, the session marker (the footer owner pill's label, with no
-// liveness dot — the frame carries no liveness field), the prefix-armed
-// state, and the toast inline in the line in its severity colour. It
-// reports the playlist pill's region through `report_layout` (design D4).
-// The Tauri IPC is mocked; the asserted payload is the serde wire shape of
+// source pills, the session marker (the footer owner pill's label and, while
+// the shown Owner's link is up, its liveness dot), the prefix-armed state,
+// and the toast inline in the line in its severity colour. It reports the
+// playlist pill's region through `report_layout` (design D4). The Tauri IPC
+// is mocked; the asserted payload is the serde wire shape of
 // bridge/layout.rs.
 
 import { invoke } from '@tauri-apps/api/core';
@@ -33,6 +33,7 @@ beforeEach(() => {
 
 const footer: GuiQueueFooter = {
 	owner: { text: 'woims', role: 'textFocusAccent', bold: false },
+	ownerLive: true,
 	playlist: { text: 'mix', role: 'textMetadata', bold: false },
 	autosave: null,
 	dirty: null,
@@ -52,9 +53,16 @@ test('the footer renders the queue source and the session marker', () => {
 
 	expect(getByText('mix')).toBeTruthy();
 	expect(getByText('woims')).toBeTruthy();
-	// The session marker is the owner pill's label only: the frame carries
-	// no liveness field, so no liveness dot may paint.
-	expect(container.textContent).not.toContain('●');
+	// The session marker's dot marks the live Owner (design D4a).
+	expect(container.querySelector('[data-owner-live]')?.textContent).toBe('●');
+});
+
+// The session marker's dot is the live-Owner mark: an owner whose link is
+// down paints none (design D4a: "the dot marks the live Owner").
+test('an owner whose link is down paints no liveness dot', () => {
+	const { container } = renderFooter({ ...footer, ownerLive: false });
+
+	expect(container.querySelector('[data-owner-live]')).toBeNull();
 });
 
 // The footer pill's icon contract (the layout-parity brief): the GUI maps
@@ -67,6 +75,7 @@ test('the footer renders the queue source and the session marker', () => {
 test('the footer pills paint their Lucide icons', () => {
 	const { container } = renderFooter({
 		owner: { text: 'woims', role: 'textFocusAccent', bold: false },
+		ownerLive: true,
 		playlist: { text: 'mix', role: 'textMetadata', bold: false },
 		autosave: { text: 'AUTOSAVE', role: 'accent', bold: false },
 		dirty: { text: 'UNSAVED', role: 'textFocusAccent', bold: true },

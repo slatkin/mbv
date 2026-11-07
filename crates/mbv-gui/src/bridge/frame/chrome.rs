@@ -14,6 +14,9 @@ use super::theme::GuiRole;
 pub struct GuiQueueFooter {
     /// The owner indicator, always present.
     pub owner: GuiFooterPill,
+    /// Whether the shown queue's Player owner is live. The session marker
+    /// paints its dot only while this holds (design D4a).
+    pub owner_live: bool,
     /// The playlist source pill.
     pub playlist: GuiFooterPill,
     /// The autosave indicator. Present only while save-on-consume is on for a
@@ -28,6 +31,7 @@ impl From<&QueueFooterProjection> for GuiQueueFooter {
     fn from(projection: &QueueFooterProjection) -> Self {
         Self {
             owner: GuiFooterPill::from(&projection.owner),
+            owner_live: projection.owner_live,
             playlist: GuiFooterPill::from(&projection.playlist),
             autosave: projection.autosave.as_ref().map(GuiFooterPill::from),
             dirty: projection.dirty.as_ref().map(GuiFooterPill::from),

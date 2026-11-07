@@ -98,6 +98,7 @@ function sliceFrame(theme: GuiTheme | null): GuiWindowFrame {
 			},
 			footer: {
 				owner: { text: '', role: 'textPrimary', bold: false },
+				ownerLive: false,
 				playlist: { text: '', role: 'textPrimary', bold: false },
 				autosave: null,
 				dirty: null,
