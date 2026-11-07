@@ -49,7 +49,7 @@
    `mbv-theme`'s slot table and the TUI's palette stay unchanged. */
 :root {
 	--canvas-border: #3d484d; /* the footer's top border */
-	--canvas-selected: #3d484d; /* the picked row's fill */
+	--canvas-selected: #3d484d; /* the picked and hovered row's fill */
 	--canvas-well: #232a2e; /* the right-column switch's recessed track */
 	--canvas-ink: #232a2e; /* the active row's dark text and progress fill */
 	--canvas-segment-active: #475258; /* the switch's active segment */
@@ -59,12 +59,18 @@
 	--canvas-track-current: #7d9460; /* the active row's progress track */
 	--canvas-muted: #9da9a0; /* the second header line, inactive segments, watched text, Length values */
 	--canvas-text: #d3c6aa; /* the row title */
-	--canvas-heading: #e9e1cc; /* the header's heading and active segment */
+	--canvas-heading: #e9e1cc; /* the header's heading, active segment, hovered row text, and drag ghost text */
 	--canvas-accent: #a7c080; /* the active row's fill and the Ends-at values */
 	--canvas-partial: #e69875; /* the partial-progress fill */
 	--canvas-menu: #343f44; /* the row menu's fill */
 	--canvas-menu-border: #475258; /* the row menu's border and its divider */
 	--canvas-menu-shadow: 0 12px 32px rgba(0, 0, 0, 0.45); /* the row menu's lift */
+	--canvas-popover: #343f44; /* the track popover's fill */
+	--canvas-popover-border: #475258; /* the track popover's border */
+	--canvas-popover-shadow: 0 12px 32px rgba(0, 0, 0, 0.45); /* the track popover's lift */
+	--canvas-action: #475258; /* the hover actions button and the open chip's fill */
+	--canvas-open-border: #e69875; /* the open track chip's border */
+	--canvas-ghost-shadow: 0 8px 20px rgba(0, 0, 0, 0.5); /* the drag ghost's lift */
 	--canvas-destructive: #e67e80; /* the row menu's remove entry */
 	--canvas-source: #7fbbb3; /* the footer's queue source text */
 	--canvas-owner: #dbbc7f; /* the footer's owner marker */

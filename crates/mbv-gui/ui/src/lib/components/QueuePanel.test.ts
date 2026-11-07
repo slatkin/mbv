@@ -268,14 +268,42 @@ test('the cursor row paints the canvas picked fill, and the active row wins over
 	);
 });
 
-test('the hovered row alone paints the grip and the actions button', () => {
-	const { container } = renderPanel(queue([item(1), item(2), item(3)], null, { hover: 2 }));
+// The Menus artboard's hovered row (B.3): the six-dot grip replaces the
+// ordinal in the leading slot, the 30 px actions button replaces the
+// right-column value in the trailing slot, and the row fills with the hover
+// colour in the hover text.
+test('the hovered row alone paints the grip and the actions button in place of its ordinal and value', () => {
+	const { getByText, container } = renderPanel(
+		queue([item(1), item(2), item(3)], null, { hover: 2 }),
+	);
 
 	expect(container.querySelectorAll('[data-grip]')).toHaveLength(1);
 	expect(container.querySelectorAll('[data-actions]')).toHaveLength(1);
 	const hovered = container.querySelector('[data-row="2"]') as HTMLElement;
-	expect(hovered.querySelector('[data-grip]')).toBeTruthy();
-	expect(hovered.querySelector('[data-actions]')).toBeTruthy();
+	const row = hovered.querySelector('[data-slot="2"]') as HTMLElement;
+
+	// The grip replaces the ordinal: six dots in the leading slot, and the
+	// right-column value gives way to the actions button.
+	expect(hovered.querySelectorAll('[data-grip] svg circle')).toHaveLength(6);
+	expect(row.querySelector('[data-ordinal]')).toBeNull();
+	expect(row.querySelector('[data-right-value]')).toBeNull();
+	expect(container.querySelector('[data-row="1"] [data-ordinal]')).toBeTruthy();
+
+	// The actions button is the canvas's 30 px box in its fill and radius.
+	const actions = hovered.querySelector('[data-actions]') as HTMLElement;
+	expect(actions.getAttribute('aria-label')).toBe('Row actions');
+	expect(actions.style.width).toBe('30px');
+	expect(actions.style.height).toBe('30px');
+	expect(actions.style.borderRadius).toBe('4px');
+	expect(actions.style.background).toBe('var(--canvas-action)');
+
+	// The row fills with the hover colour, its title ellipsises in the hover
+	// text.
+	expect(row.style.background).toBe('var(--canvas-selected)');
+	expect(row.style.borderRadius).toBe('4px');
+	const title = getByText('Track 2');
+	expect(title.className).toContain('truncate');
+	expect(title.style.color).toBe('var(--canvas-heading)');
 });
 
 // The Menus artboard's row menu (B.2): a 230 px card in the canvas chrome,
@@ -325,12 +353,18 @@ test('the open row menu paints the canvas chrome, hints, and destructive entry',
 	expect(divider.style.background).toBe('var(--canvas-menu-border)');
 });
 
-test('a drag paints the ghost and the insertion line on the anchored row', () => {
+// The Menus artboard's drag section (B.5): the ghost carries the title and
+// the dragged row's percent only, the insertion line is inset 8 px with its
+// radius, and the dragged row no longer dims in place.
+test('a drag paints the ghost without an ordinal, its percent, and the inset insertion line', () => {
 	const { getByText, container } = renderPanel(
 		queue([item(1), item(2), item(3)], null, {
 			drag: {
 				slot: 1,
-				ghost: item(1, { primary: 'Dragged track' }),
+				ghost: item(1, {
+					primary: 'Dragged track',
+					state: { state: 'active', progress: 5 },
+				}),
 				dropIndex: 2,
 				insertion: { at: 'after', slot: 2 },
 			},
@@ -339,14 +373,42 @@ test('a drag paints the ghost and the insertion line on the anchored row', () =>
 	);
 
 	const ghost = container.querySelector('[data-ghost]') as HTMLElement;
+	const card = ghost.firstElementChild as HTMLElement;
 	expect(ghost.textContent).toContain('Dragged track');
-	// The ghost paints the same right column as the row it lifts.
-	expect(ghost.textContent).toContain('21:40');
-	expect(ghost.textContent).not.toContain('3:12');
+	// The ghost paints no ordinal and no right-column value: the percent
+	// replaces the row's ends-at fact.
+	expect(ghost.querySelector('[data-ordinal]')).toBeNull();
+	expect(ghost.querySelector('[data-ghost-percent]')?.textContent).toBe('5%');
+	expect(ghost.textContent).not.toContain('21:40');
+	expect(card.style.boxShadow).toBe('var(--canvas-ghost-shadow)');
+	expect(getByText('Dragged track').style.color).toBe('var(--canvas-heading)');
+
+	// The insertion line is inset 8 px on both sides and rounded 1 px.
 	const line = container.querySelector('[data-insertion]') as HTMLElement;
 	expect(line.dataset.insertion).toBe('after');
+	expect(line.style.margin).toBe('0px 8px');
+	expect(line.style.borderRadius).toBe('1px');
 	expect(container.querySelector('[data-row="2"]')?.contains(line)).toBe(true);
-	expect(getByText('Track 1')).toBeTruthy();
+
+	// The dragged row stays lit: the canvas paints no in-place dim.
+	const dragged = container.querySelector('[data-slot="1"]') as HTMLElement;
+	expect(dragged.className).not.toContain('opacity-40');
+});
+
+test('the drag ghost paints no percent when the dragged row has no progress', () => {
+	const { container } = renderPanel(
+		queue([item(1), item(2)], null, {
+			drag: {
+				slot: 1,
+				ghost: item(1, { primary: 'Dragged track' }),
+				dropIndex: 1,
+				insertion: { at: 'before', slot: 2 },
+			},
+		}),
+	);
+
+	expect(container.querySelector('[data-ghost]')).toBeTruthy();
+	expect(container.querySelector('[data-ghost-percent]')).toBeNull();
 });
 
 test('the regions carry the header, slot, grip, actions, and menu-entry ids, menu last', async () => {

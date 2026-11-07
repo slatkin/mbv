@@ -742,10 +742,10 @@
 				</button>
 			</div>
 			<!-- The track chips row under the transport: the video label and
-				the audio and subtitle chips with the open popover anchored above
-				its chip. `trackChips` is `null` while the local player is
-				inactive, so the row is absent then, as the status-indicator
-				cluster is. -->
+				the audio and subtitle chips with the open popover anchored below
+				its chip, right-aligned. `trackChips` is `null` while the local
+				player is inactive, so the row is absent then, as the
+				status-indicator cluster is. -->
 			<TrackChips chips={playback.trackChips} {overlay} />
 		{/if}
 	{/if}

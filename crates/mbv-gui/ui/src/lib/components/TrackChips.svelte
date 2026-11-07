@@ -10,13 +10,14 @@
 	//
 	// The popover paints from the frame's `trackPopover` overlay — the
 	// same projection the chips read, so its rows and the chips cannot
-	// disagree — anchored above the chip it belongs to, the chosen choice
-	// marked and the core's cursor row highlighted. The window holds no
-	// open, cursor, or hover state; Esc and a press elsewhere close the
-	// popover through the core's key and pointer paths. The subtitle
-	// popover's Off row comes first in the frame's choice order; the front
-	// end paints the order it is given. There is no subtitle-offset
-	// control and no video popover (the D4a rulings).
+	// disagree — anchored below the chip it belongs to and right-aligned
+	// (design DR8), the chosen choice filled and checked and the core's
+	// cursor row highlighted. The dialog paints the Menus artboard's chrome
+	// (B.4). The window holds no open, cursor, or hover state; Esc and a
+	// press elsewhere close the popover through the core's key and pointer
+	// paths. The subtitle popover's Off row comes first in the frame's
+	// choice order; the front end paints the order it is given. There is
+	// no subtitle-offset control and no video popover (the D4a rulings).
 	//
 	// The audio chip reports `audioChip` and the subtitle chip
 	// `subtitleChip`; the video chip is label-only (the D4a ruling) and
@@ -74,6 +75,12 @@
 	/** The `var(--mbv-<role>)` value a part paints in. */
 	function roleVar(role: string): string {
 		return `var(${roleProperty(role)})`;
+	}
+
+	/** The `var(--canvas-<name>)` value a part paints in: the queue's canvas
+	 * hexes that name no theme slot (design DR9). */
+	function canvasVar(name: string): string {
+		return `var(--canvas-${name})`;
 	}
 
 	/** One element's painted region, `null` while the element is absent. */
@@ -157,35 +164,53 @@
 </script>
 
 {#snippet popoverList(pop: TrackPopover)}
-	<!-- The track popover: the core's live choice list, the chosen choice
-		marked with a check and the cursor row highlighted — the same row
-		presentation the header's target chooser paints. -->
+	<!-- The track popover (the Menus artboard): the core's live choice list
+		in the canvas dialog below the chip, right-aligned, the chosen choice
+		filled and checked at the row's trailing edge, and the cursor row's
+		text highlighted. -->
 	<div
-		class="absolute bottom-full left-0 z-20 mb-1 flex min-w-48 flex-col rounded-md border py-1 shadow-md"
-		style:background="var(--mbv-popover)"
-		style:border-color="var(--mbv-border)"
+		class="absolute top-full right-0 z-20 mt-1 flex flex-col"
+		style:width="260px"
+		style:padding="6px"
+		style:gap="2px"
+		style:background={canvasVar('popover')}
+		style:border="1px solid var(--canvas-popover-border)"
+		style:border-radius="8px"
+		style:box-shadow={canvasVar('popover-shadow')}
 	>
 		{#each pop.choices as choice, index (index)}
 			<button
 				type="button"
-				class="flex items-center text-left"
-				style:padding="calc(var(--mbv-cell-row) / 4) calc(var(--mbv-cell-col) * 1)"
-				style:gap="var(--mbv-cell-col)"
-				style:color={index === pop.cursor
-					? roleVar('textFocusAccent')
-					: roleVar('textPrimary')}
+				class="flex items-center justify-between text-left"
+				style:height="36px"
+				style:padding="0 10px"
+				style:border-radius="4px"
+				style:font-size="13px"
+				style:background={choice.chosen ? canvasVar('selected') : 'none'}
+				style:color={choice.chosen
+					? canvasVar('heading')
+					: index === pop.cursor
+						? roleVar('textFocusAccent')
+						: canvasVar('text')}
 				data-popover-row={index}
 			>
-				<span class="flex w-4 shrink-0 justify-center">
-					{#if choice.chosen}
-						<Check size={14} color={roleVar('accent')} />
+				<span class="flex min-w-0 flex-1 items-center">
+					<span class="truncate">{choice.label}</span>
+					{#if choice.forced}
+						<span
+							class="shrink-0 font-mono"
+							style:margin-left="6px"
+							style:font-size="11px"
+							style:color={canvasVar('muted')}>forced</span
+						>
 					{/if}
 				</span>
-				<span class="truncate">{choice.label}</span>
-				{#if choice.forced}
-					<span class="shrink-0 text-xs" style:color={roleVar('textMuted')}
-						>forced</span
-					>
+				{#if choice.chosen}
+					<Check
+						size={14}
+						strokeWidth={2.5}
+						color={canvasVar('accent')}
+					/>
 				{/if}
 			</button>
 		{/each}
@@ -221,9 +246,14 @@
 				type="button"
 				class="flex items-center rounded-full border px-2 py-0.5"
 				style:gap="calc(var(--mbv-cell-col) / 2)"
-				style:border-color="var(--mbv-border)"
-				style:background="var(--mbv-secondary)"
+				style:border-color={popover?.chip === 'audio'
+					? canvasVar('open-border')
+					: 'var(--mbv-border)'}
+				style:background={popover?.chip === 'audio'
+					? canvasVar('action')
+					: 'var(--mbv-secondary)'}
 				style:color={roleVar('textPrimary')}
+				aria-expanded={popover?.chip === 'audio'}
 				data-chip="audio"
 				bind:this={audioChipEl}
 			>
@@ -239,9 +269,14 @@
 				type="button"
 				class="flex items-center rounded-full border px-2 py-0.5"
 				style:gap="calc(var(--mbv-cell-col) / 2)"
-				style:border-color="var(--mbv-border)"
-				style:background="var(--mbv-secondary)"
+				style:border-color={popover?.chip === 'subtitles'
+					? canvasVar('open-border')
+					: 'var(--mbv-border)'}
+				style:background={popover?.chip === 'subtitles'
+					? canvasVar('action')
+					: 'var(--mbv-secondary)'}
 				style:color={roleVar('textPrimary')}
+				aria-expanded={popover?.chip === 'subtitles'}
 				data-chip="subtitles"
 				bind:this={subtitleChipEl}
 			>

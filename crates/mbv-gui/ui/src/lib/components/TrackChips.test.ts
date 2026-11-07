@@ -145,7 +145,10 @@ test('a press on a chip forwards a pointer press with its position', async () =>
 	);
 });
 
-test('the subtitle popover lists Off first and marks the chosen row', () => {
+// The Menus artboard's popover (B.4): the 260 px dialog below the chip row,
+// right-aligned, 36 px rows with the chosen row filled and checked, and the
+// open chip's expanded state.
+test('the subtitle popover paints the canvas dialog below its chip and marks the chosen row', () => {
 	const { container } = renderChips(chips(), subtitlePopover());
 	const rows = container.querySelectorAll('[data-popover-row]');
 
@@ -154,6 +157,45 @@ test('the subtitle popover lists Off first and marks the chosen row', () => {
 	expect(rows[0].querySelector('svg.lucide-check')).toBeTruthy();
 	expect(rows[1].textContent).toContain('English');
 	expect(rows[1].querySelector('svg.lucide-check')).toBeNull();
+
+	// The dialog chrome (menus G4) and its placement below the chip row,
+	// right-aligned (design DR8).
+	const dialog = rows[0].parentElement as HTMLElement;
+	expect(dialog.className).toContain('top-full');
+	expect(dialog.className).toContain('right-0');
+	expect(dialog.className).not.toContain('bottom-full');
+	expect(dialog.style.width).toBe('260px');
+	expect(dialog.style.padding).toBe('6px');
+	expect(dialog.style.gap).toBe('2px');
+	expect(dialog.style.background).toBe('var(--canvas-popover)');
+	expect(dialog.style.border).toBe('1px solid var(--canvas-popover-border)');
+	expect(dialog.style.borderRadius).toBe('8px');
+	expect(dialog.style.boxShadow).toBe('var(--canvas-popover-shadow)');
+
+	// 36 px rows: the chosen row filled and checked in the canvas's check,
+	// the unchosen row in the canvas's row text.
+	const chosen = rows[0] as HTMLElement;
+	const unchosen = rows[1] as HTMLElement;
+	expect(chosen.style.height).toBe('36px');
+	expect(chosen.style.padding).toBe('0px 10px');
+	expect(chosen.style.fontSize).toBe('13px');
+	expect(chosen.style.borderRadius).toBe('4px');
+	expect(chosen.style.background).toBe('var(--canvas-selected)');
+	expect(chosen.style.color).toBe('var(--canvas-heading)');
+	expect(unchosen.style.background).toBe('none');
+	expect(unchosen.style.color).toBe('var(--canvas-text)');
+	const check = chosen.querySelector('svg.lucide-check') as SVGElement;
+	expect(check.getAttribute('width')).toBe('14');
+	expect(check.getAttribute('stroke-width')).toBe('2.5');
+
+	// The open chip paints the expanded state (menus G3) and nothing else.
+	const subtitleChip = container.querySelector('[data-chip="subtitles"]') as HTMLElement;
+	expect(subtitleChip.getAttribute('aria-expanded')).toBe('true');
+	expect(subtitleChip.style.background).toBe('var(--canvas-action)');
+	expect(subtitleChip.style.borderColor).toBe('var(--canvas-open-border)');
+	const audioChip = container.querySelector('[data-chip="audio"]') as HTMLElement;
+	expect(audioChip.getAttribute('aria-expanded')).toBe('false');
+	expect(audioChip.style.background).toBe('var(--mbv-secondary)');
 });
 
 test('an open popover reports one trackPopoverChoice region per row, last', async () => {

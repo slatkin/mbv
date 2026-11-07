@@ -20,12 +20,16 @@
 	//
 	// The row hover and the drag paint from the frame too — the window
 	// holds neither (the `gui-client` spec): `queue.hover` names the row
-	// that shows the grip and the actions button, and `queue.drag` carries
-	// the drag ghost's content and the insertion line's stable-slot
-	// anchor. The ghost floats at the line the drop would insert at; the
-	// dragged row dims in place. Every pointer press, move, and release
-	// forwards through the shared input installer — the core owns the
-	// gesture, the drop index, and the move request.
+	// that shows the six-dot grip in its ordinal's slot and the canvas's
+	// 30 px actions button in its right value's slot — the two chrome
+	// pieces stay siblings of the row's one button, over slots the row
+	// reserves, so no control nests in it — and `queue.drag` carries the
+	// drag ghost's content and the insertion line's stable-slot anchor.
+	// The ghost floats at the line the drop would insert at, with no
+	// ordinal and the dragged row's percent when it has one; the dragged
+	// row no longer dims in place (the canvas keeps it lit). Every pointer
+	// press, move, and release forwards through the shared input installer
+	// — the core owns the gesture, the drop index, and the move request.
 	//
 	// The regions report in paint order: the header's Length / Ends-at
 	// switch and filter resolve to their `rightColumn` and `filter`
@@ -64,6 +68,11 @@
 	import QueueRowMenu from './QueueRowMenu.svelte';
 
 	type ItemRow = Extract<GuiQueueRow, { row: 'item' }>;
+
+	/** Which cells a row paints: the list row, the hovered row (the chrome
+	 * replaces the ordinal and the right value), or the drag ghost (the
+	 * title and the percent only). */
+	type RowChrome = 'row' | 'hover' | 'ghost';
 
 	interface Props {
 		queue: GuiQueue;
@@ -200,12 +209,13 @@
 	}
 
 	/** The row's painted background, in the canvas's precedence: the filled
-	 * active row wins, then the picked row's fill, then the zebra stripe. */
+	 * active row wins, then the hovered or picked row's fill, then the zebra
+	 * stripe. */
 	function rowBackground(row: ItemRow): string | undefined {
 		if (row.state.state === 'nowPlaying') {
 			return canvasVar('accent');
 		}
-		if (bars(row.slot)) {
+		if (queue.hover === row.slot || bars(row.slot)) {
 			return canvasVar('selected');
 		}
 		if (row.striped) {
@@ -215,9 +225,10 @@
 	}
 
 	/** The colour set one row's cells paint in (the canvas's row states): the
-	 * filled active row reads the dark ink, the watched row the muted text
-	 * with a strike, and every other row the canvas's row text. The right
-	 * value is green in "Ends at" and muted in "Length". */
+	 * filled active row reads the dark ink, the hovered row the canvas's
+	 * hover text, the watched row the muted text with a strike, and every
+	 * other row the canvas's row text. The right value is green in "Ends at"
+	 * and muted in "Length". */
 	interface RowTone {
 		title: string;
 		weight: number;
@@ -241,12 +252,15 @@
 			};
 		}
 		const watched = row.state.state === 'played';
+		const hovered = queue.hover === row.slot;
 		return {
-			title: watched ? canvasVar('muted') : canvasVar('text'),
+			title: hovered ? canvasVar('heading') : watched ? canvasVar('muted') : canvasVar('text'),
 			weight: 400,
 			strike: canvasVar('strike'),
-			ordinal: canvasVar('ordinal'),
-			right: canvasVar(summary.rightColumn === 'endsAt' ? 'accent' : 'muted'),
+			ordinal: hovered ? canvasVar('heading') : canvasVar('ordinal'),
+			right: hovered
+				? canvasVar('heading')
+				: canvasVar(summary.rightColumn === 'endsAt' ? 'accent' : 'muted'),
 			track: canvasVar('track'),
 			fill: canvasVar('partial'),
 		};
@@ -356,19 +370,25 @@
 	});
 </script>
 
-{#snippet rowCells(row: ItemRow, cellTone: RowTone)}
+{#snippet rowCells(row: ItemRow, cellTone: RowTone, chrome: RowChrome)}
 	<!-- The item row's canvas cells: the padded queue ordinal, the one title
-		line over its progress track, and the right-column value. The list
-		rows and the drag ghost paint the same cells. -->
+		line over its progress track, and the right-column value. The hovered
+		row reserves the leading and trailing slots its sibling chrome covers,
+		and the drag ghost paints the title and the percent only. -->
 	{@const progress = rowProgress(row)}
-	{@const right = rightValue(row)}
-	<span
-		class="shrink-0 font-mono tabular-nums"
-		style:width="18px"
-		style:font-size="11px"
-		style:color={cellTone.ordinal}
-		data-ordinal>{String(row.ordinal).padStart(2, '0')}</span
-	>
+	{@const right = chrome === 'row' ? rightValue(row) : null}
+	{#if chrome === 'row'}
+		<span
+			class="shrink-0 font-mono tabular-nums"
+			style:width="18px"
+			style:font-size="11px"
+			style:color={cellTone.ordinal}
+			data-ordinal>{String(row.ordinal).padStart(2, '0')}</span
+		>
+	{:else if chrome === 'hover'}
+		<!-- The grip's slot: the six-dot grip replaces the ordinal. -->
+		<span class="shrink-0" style:width="14px" aria-hidden="true"></span>
+	{/if}
 	<span class="flex min-w-0 flex-1 flex-col justify-center" style:gap="3px">
 		<span
 			class="truncate"
@@ -376,9 +396,10 @@
 			style:font-weight={cellTone.weight}
 			style:text-decoration-color={cellTone.strike}
 			class:line-through={row.state.state === 'played'}
-			style:color={cellTone.title}>{row.primary}</span
+			style:color={chrome === 'ghost' ? canvasVar('heading') : cellTone.title}
+			>{row.primary}</span
 		>
-		{#if progress !== null}
+		{#if progress !== null && chrome !== 'ghost'}
 			<span
 				class="block shrink-0"
 				style:height="2px"
@@ -401,6 +422,16 @@
 			class="shrink-0 font-mono text-xs tabular-nums"
 			style:color={cellTone.right} data-right-value>{right}</span
 		>
+	{:else if chrome === 'ghost' && progress !== null}
+		<span
+			class="shrink-0 font-mono tabular-nums"
+			style:font-size="12px"
+			style:color={canvasVar('partial')}
+			data-ghost-percent>{progress}%</span
+		>
+	{:else if chrome === 'hover'}
+		<!-- The actions button's slot: it replaces the right-column value. -->
+		<span class="shrink-0" style:width="30px" aria-hidden="true"></span>
 	{/if}
 {/snippet}
 
@@ -448,49 +479,67 @@
 							<button
 								type="button"
 								class="flex w-full items-center overflow-hidden text-left whitespace-nowrap"
-								class:opacity-40={queue.drag?.slot === row.slot}
 								style:height="{ROW_HEIGHT}px"
-								style:padding-inline="8px"
+								style:padding-inline={queue.hover === row.slot ? '4px 2px' : '8px'}
 								style:gap="10px"
 								style:border-radius="4px"
 								style:background={rowBackground(row)}
 								data-slot={row.slot}
 							>
-								{@render rowCells(row, tone(row))}
+								{@render rowCells(
+									row,
+									tone(row),
+									queue.hover === row.slot ? 'hover' : 'row',
+								)}
 							</button>
 							{#if insertion?.slot === row.slot}
 								<!-- The drag's insertion line, anchored on this row's
-									top edge (`before`) or bottom edge (`after`). -->
+									top edge (`before`) or bottom edge (`after`), inset
+									from the row's edges as the canvas draws it. -->
 								<span
 									class="pointer-events-none absolute right-0 left-0 z-10"
 									style:height="2px"
 									style:top={insertion.at === 'before' ? '0' : undefined}
 									style:bottom={insertion.at === 'after' ? '0' : undefined}
+									style:margin="0 8px"
+									style:border-radius="1px"
 									style:background="var(--mbv-accent)"
 									data-insertion={insertion.at}
 								></span>
 							{/if}
 							{#if queue.hover === row.slot}
-								<!-- The hover chrome: the drag grip at the leading edge
-									and the actions button at the trailing edge. Each is its
-									own region, pushed after the row's `slot` region so the
-									press resolves to the chrome. -->
+								<!-- The hover chrome (the Menus artboard): the six-dot grip
+									over the leading slot the row reserves in place of its
+									ordinal, and the 30 px actions button over the trailing
+									slot in place of its right value. Each is its own
+									region, pushed after the row's `slot` region so the
+									press resolves to the chrome. They stay siblings of the
+									row's button, so no control nests in it. -->
 								<span
-									class="absolute top-1/2 -translate-y-1/2"
-									style:left="2px"
+									class="absolute top-1/2 flex -translate-y-1/2 items-center"
+									style:left="4px"
+									style:width="14px"
 									data-grip={row.slot}
 								>
-									<GripVertical size={14} color={roleVar('textMuted')} />
+									<GripVertical size={14} color={canvasVar('muted')} />
 								</span>
 								<button
 									type="button"
-									class="absolute top-1/2 -translate-y-1/2 rounded-sm p-0.5"
+									class="absolute flex items-center justify-center"
+									style:top="0"
 									style:right="2px"
-									style:background="var(--mbv-secondary)"
+									style:width="30px"
+									style:height="30px"
+									style:border-radius="4px"
+									style:background={canvasVar('action')}
 									data-actions={row.slot}
 									aria-label="Row actions"
 								>
-									<Ellipsis size={14} color={roleVar('textMuted')} />
+									<Ellipsis
+										size={14}
+										fill={canvasVar('heading')}
+										color={canvasVar('heading')}
+									/>
 								</button>
 							{/if}
 						</div>
@@ -506,12 +555,12 @@
 					{/if}
 				{/each}
 				{#if insertion && ghost}
-					<!-- The drag ghost: the dragged row's own cells in a
+					<!-- The drag ghost: the dragged row's title and its percent in a
 						floating card at the insertion line, `pointer-events-none`
 						so the pointer keeps resolving the regions beneath it. The
 						card keeps the row's own insets, so its cells line up with
-						the row beneath. The core owns the drag; the release's move
-						request is its. -->
+						the row beneath, and paints no ordinal. The core owns the
+						drag; the release's move request is its. -->
 					<div
 						class="pointer-events-none absolute right-0 left-0 z-20"
 						style:top="{ghostTop}px"
@@ -519,14 +568,15 @@
 						data-ghost
 					>
 						<div
-							class="relative flex items-center overflow-hidden rounded-md border whitespace-nowrap shadow-lg"
+							class="relative flex items-center overflow-hidden rounded-md border whitespace-nowrap"
 							style:height="{ROW_HEIGHT}px"
 							style:padding-inline="8px"
 							style:gap="10px"
 							style:background="var(--mbv-popover)"
 							style:border-color="var(--mbv-accent)"
+							style:box-shadow="var(--canvas-ghost-shadow)"
 						>
-							{@render rowCells(ghost, tone(ghost))}
+							{@render rowCells(ghost, tone(ghost), 'ghost')}
 						</div>
 					</div>
 				{/if}
