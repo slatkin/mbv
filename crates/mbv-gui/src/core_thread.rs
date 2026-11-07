@@ -18,7 +18,7 @@ use std::time::{Duration, Instant};
 
 use mbv::{
     App, CLIENT_IDLE_CADENCE, ClientCore, ClientLifecycle, ClientTickHost, GuiInput,
-    GuiSurfaceLeaf, HomeEventDrain, PlayerEventDrain, TickOutcome, declare_gui_client, load_config,
+    HomeEventDrain, PlayerEventDrain, TickOutcome, declare_gui_client, load_config,
 };
 use mbv_config::ensure_runtime_dir;
 use mbv_queue::QueueSlotId;
@@ -400,23 +400,11 @@ impl CoreThread {
         // previews the drop, and the release emits the one move request. A
         // drag the row drag does not own keeps the generic path (the
         // seekbar's scrub is a drag too).
-        if matches!(gesture, PointerGesture::Drag { .. }) && self.queue.row_drag().is_some() {
-            let Self { queue, regions, .. } = self;
-            let mut leaf = QueueLeaf::new(queue, regions);
-            let _ = leaf.pointer(gesture);
-            return;
-        }
-        if matches!(gesture, PointerGesture::DragEnd) {
-            if self.queue.row_drag().is_some() {
-                let Self {
-                    app,
-                    queue,
-                    regions,
-                    ..
-                } = self;
-                let mut leaf = QueueLeaf::new(queue, regions);
-                app.route_gui_pointer(gesture, Some(&mut leaf));
-            }
+        if matches!(
+            gesture,
+            PointerGesture::Drag { .. } | PointerGesture::DragEnd
+        ) && self.route_row_drag_gesture(gesture)
+        {
             return;
         }
         let Some(point) = gesture_point(&gesture) else {
@@ -495,6 +483,26 @@ impl CoreThread {
             // report carried one — and so does a point in no reported region.
             Some(RegionTarget::Attach(_)) | None => {}
         }
+    }
+
+    /// Deliver a gesture the row drag owns to the Queue leaf: motion previews
+    /// the drop and the release sends the move request, both through the leaf
+    /// entry so a message the drag arm returns is dispatched, never dropped.
+    /// Returns whether the drag owned the gesture; `false` leaves it to the
+    /// generic region path (a drag that started off a grip is no row drag).
+    fn route_row_drag_gesture(&mut self, gesture: PointerGesture<Position>) -> bool {
+        if self.queue.row_drag().is_none() {
+            return false;
+        }
+        let Self {
+            app,
+            queue,
+            regions,
+            ..
+        } = self;
+        let mut leaf = QueueLeaf::new(queue, regions);
+        app.route_gui_pointer(gesture, Some(&mut leaf));
+        true
     }
 
     /// Run the loop (design D3): wait for input, wake, or the idle cadence,

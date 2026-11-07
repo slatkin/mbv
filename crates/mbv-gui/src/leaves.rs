@@ -70,17 +70,25 @@ impl<'a> QueueLeaf<'a> {
         Self { surface, regions }
     }
 
-    /// The row a queue region resolves to, if one does: a row's own region or
-    /// the chrome painted over it (the grip and the actions button).
-    fn row_at(&self, at: Position) -> Option<QueueSlotId> {
-        match self.regions.resolve(at) {
-            Some(RegionTarget::Queue(
+    /// The slot a queue region names, if it names a row: the row's own region
+    /// or the chrome painted over it (the grip and the actions button).
+    fn row_region_target(target: &RegionTarget) -> Option<QueueSlotId> {
+        match target {
+            RegionTarget::Queue(
                 QueueTargetId::Slot(raw)
                 | QueueTargetId::RowGrip(raw)
                 | QueueTargetId::RowActions(raw),
-            )) => Some(QueueSlotId::from_raw(*raw)),
-            _ => None,
+            ) => Some(QueueSlotId::from_raw(*raw)),
+            RegionTarget::Queue(_)
+            | RegionTarget::QueuePlayback(_)
+            | RegionTarget::StatusBar(_)
+            | RegionTarget::Attach(_) => None,
         }
+    }
+
+    /// The row a queue region resolves to, if one does.
+    fn row_at(&self, at: Position) -> Option<QueueSlotId> {
+        self.regions.resolve(at).and_then(Self::row_region_target)
     }
 
     /// The row region under `at`, with its slot: the last painted row region
@@ -89,25 +97,11 @@ impl<'a> QueueLeaf<'a> {
     fn row_region_at(&self, at: Position) -> Option<(HitRegion, QueueSlotId)> {
         self.regions
             .iter()
-            .filter(|(region, target)| {
-                matches!(
-                    target,
-                    RegionTarget::Queue(
-                        QueueTargetId::Slot(_)
-                            | QueueTargetId::RowGrip(_)
-                            | QueueTargetId::RowActions(_)
-                    )
-                ) && region.contains(at)
+            .filter_map(|(region, target)| {
+                Self::row_region_target(target).map(|slot| (*region, slot))
             })
+            .filter(|(region, _)| region.contains(at))
             .last()
-            .and_then(|(region, target)| match target {
-                RegionTarget::Queue(
-                    QueueTargetId::Slot(raw)
-                    | QueueTargetId::RowGrip(raw)
-                    | QueueTargetId::RowActions(raw),
-                ) => Some((*region, QueueSlotId::from_raw(*raw))),
-                _ => None,
-            })
     }
 
     /// The viewport length the row-local delegation clamps its wheel with:
