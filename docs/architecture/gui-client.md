@@ -271,6 +271,14 @@ sheet above the state branches, because a frame re-carries each only when it
 changed: a state that mounts on a later frame paints the value the expanded
 artboard already adopted.
 
+`tauri.conf.json` declares a 400×200 minimum window size, so a floating
+window cannot shrink past a usable state. The width is the canvas
+artboard's authored 400 px; the height sits under the 520 px strip
+threshold, so the floor leaves every state reachable — the rail through
+`z`, the strip by size, the expanded artboard above it. A tiling manager
+may impose its own larger floor; that floor is the compositor's, not the
+window's.
+
 ## The player panel and the queue
 
 The slice's one window paints the design canvas's player panel on the queue
