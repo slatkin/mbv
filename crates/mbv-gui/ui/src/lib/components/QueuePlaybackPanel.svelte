@@ -1,19 +1,20 @@
 <script lang="ts">
-	// The player panel's top block (add-tauri-gui-client task 6.4, design
-	// D15): the expanded canvas artboard's header, artwork with its episode
-	// badge, title and parent line, scrubber, and transport. The canvas, not
-	// the TUI band, is the reference; the paint uses the theme's roles and
-	// chrome fills through `--mbv-<name>` properties only (design D7).
+	// The player panel's top block: the expanded canvas artboard's header,
+	// artwork with its episode badge, title and parent line, scrubber, and
+	// transport (`align-gui-with-design-canvas` U3). The canvas, not the TUI
+	// band, is the reference; the paint uses the theme's roles and chrome
+	// fills through `--mbv-<name>` properties only (design D7).
 	//
-	// The scrubber paints the played fraction, the chapter boundaries, the
-	// intro and credits mark segments, the thumb, and the elapsed, remaining,
-	// and finish-clock texts. Its hover preview paints from the frame's
-	// `hover` datum (the core resolves the pointer move against the painted
-	// bar), so the component holds no hover state; the trickplay tile stays a
-	// placeholder until task 6.7 fetches its bytes. A press on the bar
-	// forwards like every other pointer event: the component interprets no
-	// gesture, it reports its regions and the core resolves the press against
-	// the hit map (design D4).
+	// The scrubber paints the canvas geometry: a 6 px track, the intro and
+	// credits blocks, the played fill, 2×14 chapter ticks, a 16 px thumb, the
+	// hover position line, and the elapsed and `−remaining · ends HH:MM`
+	// labels. Its hover preview paints from the frame's `hover` datum (the
+	// core resolves the pointer move against the painted bar), so the
+	// component holds no hover state; the trickplay tile stays a `[trickplay]`
+	// box until a sheet is cached. A press on the bar forwards like every
+	// other pointer event: the component interprets no gesture, it reports its
+	// regions and the core resolves the press against the hit map (design
+	// D4).
 	//
 	// The header's playback target reports `playbackTarget`; its press opens
 	// the core's chooser, whose popover paints under the header from the
@@ -24,30 +25,27 @@
 	// so its own key lands before their regions in the merged report, and
 	// only a key inserted after them puts the rows last — the hit map's last
 	// push wins where a row paints over a queue row beneath it. The header's
-	// collapse and queue-fold controls report the ids the core's `z`/`q`
-	// toggles run from. The window holds no open, cursor, or hover state; Esc
-	// and a press elsewhere close the popover through the core's key and
-	// pointer paths. The track chips row and its popover live in `TrackChips`
-	// below the transport.
+	// collapse control reports the id the core's `z` toggle runs from. The
+	// canvas paints no queue-fold control in the header (`main` audit 4); `q`
+	// stays a chord and the folded line owns the expand control. The window
+	// holds no open, cursor, or hover state; Esc and a press elsewhere close
+	// the popover through the core's key and pointer paths. The track chips
+	// row and its popover live in `TrackChips` below the transport.
 	import { onMount } from 'svelte';
 	import {
 		Cast,
 		Check,
 		ChevronDown,
-		ChevronUp,
-		Film,
-		ListCollapse,
+		Maximize2,
 		Pause,
 		Play,
-		RotateCcw,
-		RotateCw,
 		SkipBack,
 		SkipForward,
 	} from '@lucide/svelte';
 	import { reportLayout, retractLayout } from '$lib/bridge/layout';
 	import TrackChips from './TrackChips.svelte';
-	import { CELL_COL_PX } from '$lib/bridge/cells';
 	import { roleProperty } from '$lib/bridge/theme';
+	import { minus } from '$lib/bridge/time';
 	import type {
 		GuiCardArtwork,
 		GuiChapter,
@@ -76,9 +74,7 @@
 		 * hovered sheet changes, so the preview repaints the latched image while
 		 * the tile names its key. `null` in a bare render. */
 		carriedSheet?: GuiTrickplaySheet | null;
-		/** Whether the queue is folded (the `q` toggle, design D10): the
-		 * header's fold control paints the expand direction then, so the
-		 * control names the toggle's next effect in both directions. */
+		/** Whether the queue is folded (the `q` toggle, design D10). */
 		queueFolded?: boolean;
 	}
 	const {
@@ -86,7 +82,6 @@
 		overlay,
 		carried = null,
 		carriedSheet = null,
-		queueFolded = false,
 	}: Props = $props();
 
 	const reportKey = Symbol('queue-playback-panel');
@@ -101,7 +96,6 @@
 	let seekbarEl: HTMLElement | undefined = $state();
 	let artEl: HTMLElement | undefined = $state();
 	let collapseEl: HTMLElement | undefined = $state();
-	let queueFoldEl: HTMLElement | undefined = $state();
 	let chooserEl: HTMLElement | undefined = $state();
 
 	/** The art the panel paints: this frame's carried value when it has one,
@@ -122,8 +116,9 @@
 		),
 	);
 
-	/** The chapter boundaries the bar paints, skipping the first tick (the
-	 * bar's own left edge) and any boundary outside the runtime. */
+	/** The chapter boundaries the bar paints as 2×14 ticks, skipping the first
+	 * boundary (the bar's own left edge) and any outside the runtime, in bar
+	 * fractions. */
 	const chapterTicks = $derived(
 		visibleChapters(
 			playback.chapters,
@@ -131,12 +126,13 @@
 		),
 	);
 
-	/** The intro and credits marks the bar paints, in bar fractions. */
-	const marks = $derived(
-		[
-			markSpan(playback.introMark, playback.playback.runtimeTicks),
-			markSpan(playback.creditsMark, playback.playback.runtimeTicks),
-		].filter((mark) => mark !== null),
+	/** The intro and credits marks' starts in bar fractions (`main` audit 10);
+	 * `null` while a mark is unknown. */
+	const introLeft = $derived(
+		markLeft(playback.introMark, playback.playback.runtimeTicks),
+	);
+	const creditsLeft = $derived(
+		markLeft(playback.creditsMark, playback.playback.runtimeTicks),
 	);
 
 	/** The scrubber's hover preview, painted from the frame: the pointer's
@@ -183,30 +179,26 @@
 	function visibleChapters(
 		chapters: GuiChapter[],
 		runtime: number,
-	): { name: string; ratio: number }[] {
+	): number[] {
 		return chapters
 			.filter(
 				(chapter) =>
 					chapter.startTicks > 0 &&
 					chapter.startTicks < runtime,
 			)
-			.map((chapter) => ({
-				name: chapter.name,
-				ratio: clampRatio(chapter.startTicks, runtime),
-			}));
+			.map((chapter) => clampRatio(chapter.startTicks, runtime));
 	}
 
-	/** One mark's span in bar fractions, `null` outside the runtime. */
-	function markSpan(
+	/** One mark's start in bar fractions, `null` while unknown or outside the
+	 * runtime. */
+	function markLeft(
 		mark: GuiSegmentMark | null,
 		runtime: number,
-	): { left: number; width: number } | null {
+	): number | null {
 		if (!mark || runtime <= 0) {
 			return null;
 		}
-		const left = clampRatio(mark.startTicks, runtime);
-		const right = clampRatio(mark.endTicks, runtime);
-		return right > left ? { left, width: right - left } : null;
+		return clampRatio(mark.startTicks, runtime);
 	}
 
 	/** The header's status word (`header_status_word`). */
@@ -271,10 +263,10 @@
 	}
 
 	/** The painted regions this frame's DOM reports (design D4): the transport
-	 * controls, the seekbar, the visual slot, the header's collapse and
-	 * queue-fold controls, and the playback-target indicator. The open
-	 * chooser's rows report under the chooser's own key (the header comment
-	 * names why they report last). */
+	 * controls, the seekbar, the visual slot, the header's collapse control,
+	 * and the playback-target indicator. The open chooser's rows report under
+	 * the chooser's own key (the header comment names why they report last).
+	 */
 	function currentRegions(): LayoutRegion[] {
 		return [
 			region(playPauseEl, 'playPause'),
@@ -285,7 +277,6 @@
 			region(seekbarEl, 'seekbar'),
 			region(artEl, 'visualSlot'),
 			region(collapseEl, 'collapse'),
-			region(queueFoldEl, 'queueFold'),
 			region(targetEl, 'playbackTarget'),
 		].filter((entry) => entry !== null);
 	}
@@ -346,72 +337,68 @@
 	});
 </script>
 
-<!-- The player panel block on the queue column's backdrop: the header row,
-	then the artwork, the title and parent line, the scrubber, and the
-	transport. Every gap and pad is a cell-unit multiple, the geometry basis
-	the queue column already paints with (`bridge/cells`). -->
-<div
-	class="flex flex-col"
-	style:padding="var(--mbv-cell-row) calc(var(--mbv-cell-col) * 2)"
-	style:gap="var(--mbv-cell-row)"
-	bind:this={panelEl}
->
-	<!-- The header row: the playback target at the left, then the state word,
-		the collapse control, and the queue-fold control at the right. The
-		target span is the `playbackTarget` region; its press opens the core's
-		chooser, whose popover paints below it from the frame's
-		`targetChooser` overlay. Each chooser row is its own `targetChoice`
-		region; Esc and an outside press close the popover in the core. -->
+<!-- The player panel block on the canvas's backdrop: the header row, then
+	the fixed still slot, the title and parent line, the scrubber, and the
+	transport (`align-gui-with-design-canvas` U3; `Main.dc.html` is the
+	reference). The canvas paints no outer pad and no gutter between these
+	blocks: the header and the still slot are full-bleed, and the title,
+	scrubber, and transport carry their own 16 px insets. -->
+<div class="flex flex-col" bind:this={panelEl}>
+	<!-- The header row: the playback target at the left, then the state
+		label and the collapse control at the right. The target button is the
+		`playbackTarget` region; its press opens the core's chooser, whose
+		popover paints below it from the frame's `targetChooser` overlay. Each
+		chooser row is its own `targetChoice` region; Esc and an outside press
+		close the popover in the core. The canvas paints no queue-fold control
+		here (`main` audit 4): `q` stays a chord. -->
 	<div
-		class="relative flex items-center whitespace-nowrap"
-		style:height="var(--mbv-cell-row)"
-		style:gap="var(--mbv-cell-col)"
+		class="relative flex items-center justify-between whitespace-nowrap"
+		style:height="44px"
+		style:padding="0 8px 0 4px"
+		style:border-bottom="1px solid var(--mbv-border)"
 	>
-		<span
-			class="flex min-w-0 shrink items-center"
-			style:gap="var(--mbv-cell-col)"
+		<button
+			type="button"
+			class="flex min-w-0 items-center"
+			style:height="44px"
+			style:padding="0 10px"
+			style:gap="8px"
+			style:font-size="13px"
+			style:color={playback.hostIsRemote
+				? roleVar('playbackTargetRemoteFg')
+				: roleVar('playbackTargetLocalFg')}
 			bind:this={targetEl}
 			data-target="playbackTarget"
+			aria-label="Cast to device"
 		>
-			<Cast
-				size={CELL_COL_PX}
-				color={playback.hostIsRemote
-					? 'var(--mbv-playbackTargetRemoteFg)'
-					: 'var(--mbv-playbackTargetLocalFg)'}
-			/>
+			<Cast size={18} strokeWidth={1.8} color="currentColor" />
 			{#if playback.host}
-				<span class="truncate" style:color={roleVar('textPrimary')}>{playback.host}</span>
+				<span class="truncate">{playback.host}</span>
 			{/if}
-		</span>
-		<span class="flex-1"></span>
-		<span
-			class="font-bold tracking-wide"
-			style:color={statusColor(playback.status)}>{statusWord(playback.status)}</span
-		>
-		<button
-			type="button"
-			class="flex items-center rounded-sm p-1"
-			bind:this={collapseEl}
-			data-target="collapse"
-			aria-label="Collapse panel"
-			title="Collapse panel (z)"
-		>
-			<ChevronUp size={16} color={roleVar('textMuted')} />
+			<ChevronDown size={12} strokeWidth={2} color="currentColor" />
 		</button>
-		<button
-			type="button"
-			class="flex items-center rounded-sm p-1"
-			bind:this={queueFoldEl}
-			data-target="queueFold"
-			aria-label={queueFolded ? 'Expand queue' : 'Fold queue'}
-			title={queueFolded ? 'Expand queue (q)' : 'Fold queue (q)'}
-		>
-			{#if queueFolded}
-				<ChevronDown size={16} color={roleVar('textMuted')} />
-			{:else}
-				<ListCollapse size={16} color={roleVar('textMuted')} />
-			{/if}
-		</button>
+		<div class="flex items-center" style:gap="4px">
+			<span
+				class="font-mono"
+				style:font-size="11px"
+				style:letter-spacing="0.08em"
+				style:padding="0 8px"
+				style:color={statusColor(playback.status)}
+				>{`\u25CF ${statusWord(playback.status)}`}</span
+			>
+			<button
+				type="button"
+				class="flex items-center justify-center"
+				style:width="44px"
+				style:height="44px"
+				bind:this={collapseEl}
+				data-target="collapse"
+				aria-label="Collapse panel"
+				title="Collapse panel (z)"
+			>
+				<Maximize2 size={18} strokeWidth={1.8} color={roleVar('textMuted')} />
+			</button>
+		</div>
 		{#if chooser}
 			<!-- The playback-target chooser: the core's live choice list, the
 				attached output marked with a check. The rows report their
@@ -446,247 +433,322 @@
 		{/if}
 	</div>
 	{#if playback.nowPlayingTitle}
-		<!-- The artwork with the season-and-episode badge; the badge is an
-			Emby-episode datum, so a non-episode item paints none. The wrapper
-			is the visual slot's painted region. -->
+		<!-- The still slot (`main` audit 6): a fixed 225 px box on the raised
+			control fill, the artwork inside it, and the canvas caption while no
+			image lands. The wrapper is the visual slot's painted region. The
+			season-and-episode badge is the canvas chip at the box's bottom
+			left (`main` audit 7); a non-episode item paints none. -->
 		{#if art && art.kind !== 'hidden'}
 			<div
-				class="relative flex justify-center"
+				class="relative flex items-center justify-center overflow-hidden"
+				style:height="225px"
+				style:background="var(--mbv-secondary)"
 				bind:this={artEl}
 				data-target="visualSlot"
 			>
-				{#if art.kind === 'loading'}
-					<div
-						class="aspect-square"
-						style:width="min(100%, calc(var(--mbv-cell-row) * 24))"
-						style:background="var(--mbv-textMuted)"
-					></div>
-				{:else}
+				{#if art.kind === 'image' || art.kind === 'placeholder'}
 					<img
-						class="max-w-full rounded-md object-contain"
+						class="h-full w-full object-contain"
 						alt=""
 						src={art.detail}
-						style:max-height="calc(var(--mbv-cell-row) * 24)"
 					/>
+				{:else}
+					<span
+						class="font-mono"
+						style:font-size="12px"
+						style:color={roleVar('textMuted')}
+						>{playback.episodeBadge
+							? '[Episode still · Emby Primary / Thumb]'
+							: '[still]'}</span
+					>
 				{/if}
 				{#if playback.episodeBadge}
 					<span
-						class="absolute top-0 right-0 rounded-md px-2 py-0.5 font-mono text-xs font-semibold"
-						style:background="var(--mbv-popover)"
-						style:color={roleVar('playbackMetaFg')}
+						class="absolute font-mono"
+						style:left="12px"
+						style:bottom="10px"
+						style:font-size="11px"
+						style:padding="3px 6px"
+						style:border-radius="4px"
+						style:background="var(--mbv-background)"
+						style:color={roleVar('textPrimary')}
 						>{playback.episodeBadge}</span
 					>
 				{/if}
 			</div>
 		{/if}
-		<!-- The title and its parent line: the title in the playback-title
-			role, the parent line muted below it. -->
-		<div class="flex min-w-0 flex-col">
+		<!-- The title at the canvas's 18 px/600 and its parent line in the
+			canvas link style at 13 px (`main` audit 8). The canvas draws the
+			parent line as an `<a href="#">`, but the GUI presents no surface to
+			go to: the static line carries no region and the press is a no-op. -->
+		<div class="flex min-w-0 flex-col" style:padding="14px 16px 6px" style:gap="2px">
 			<span
-				class="truncate font-semibold"
+				class="truncate"
+				style:font-size="18px"
+				style:font-weight="600"
 				style:color={roleVar('playbackTitleFg')}>{playback.nowPlayingTitle}</span
 			>
 			{#if playback.parentLine}
-				<span class="truncate" style:color={roleVar('playbackContextFg')}
-					>{playback.parentLine}</span
+				<span
+					class="truncate"
+					style:font-size="13px"
+					style:color={roleVar('playbackContextFg')}>{playback.parentLine}</span
 				>
 			{/if}
 		</div>
 		{#if playback.showControls}
-			<!-- The scrubber: elapsed at the left, the bar, then the remaining
-				time and the finish clock at the right. The bar carries the
-				played fill, the intro and credits mark segments, the chapter
-				ticks, and the thumb. Its own rect is the `seekbar` region; a
-				press resolves there in the core. -->
-			<div class="flex items-center" style:gap="var(--mbv-cell-col)">
-				<span
-					class="shrink-0 font-mono text-xs tabular-nums"
-					style:color={roleVar('playbackMetaFg')}
-					>{playback.elapsedClock}</span
-				>
+			<!-- The scrubber (`main` audits 9–12): the 60 px block with the
+				track at 22 px, the intro and credits blocks, the played fill,
+				the chapter ticks, the pointer's position line, the thumb, and
+				the elapsed and `−remaining · ends HH:MM` labels at 42 px. The
+				block's own rect is the `seekbar` region; a press resolves there
+				in the core. -->
+			<div style:padding="10px 16px 4px">
 				<div
-					class="relative min-w-4 flex-1"
+					class="relative"
 					role="slider"
 					tabindex="0"
 					aria-label="Seek"
 					aria-valuemin={0}
 					aria-valuemax={100}
 					aria-valuenow={Math.round(progress * 100)}
-					style:height="var(--mbv-cell-row)"
+					style:height="60px"
 					bind:this={seekbarEl}
 					data-target="seekbar"
 				>
-					<div
-						class="absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 overflow-hidden rounded-full"
-						style:background="var(--mbv-progressTrack)"
-					>
-						{#each marks as mark, i (i)}
-							<div
-								class="absolute inset-y-0 opacity-40"
-								style:left="{mark.left * 100}%"
-								style:width="{mark.width * 100}%"
-								style:background="var(--mbv-accent)"
-							></div>
-						{/each}
-						<div
-							class="absolute inset-y-0 left-0"
-							style:width="{progress * 100}%"
-							style:background="var(--mbv-accent)"
-						></div>
-						{#each chapterTicks as chapter, i (i)}
-							<div
-								class="absolute inset-y-0 w-px"
-								style:left="{chapter.ratio * 100}%"
-								style:background="var(--mbv-textMuted)"
-							></div>
-						{/each}
-					</div>
-					<div
-						class="absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2"
-						style:left="{progress * 100}%"
-						style:background="var(--mbv-accent)"
-						style:border-color="var(--mbv-background)"
-					></div>
 					{#if hover}
-						<!-- The hover preview: the trickplay frame (task 6.7 — the
-							thumbnail cropped from the sheet the core's cache
-							encoded, else the placeholder while no sheet is cached),
-							the time at the pointer, and the chapter that covers it,
-							all from the frame's `hover` datum. -->
+						<!-- The hover preview (`main` audit 12): the 128×72
+							trickplay tile stacked over the label chip, which reads
+							the time and the covering chapter's number, not its
+							name. The tile paints the cached sheet when one is
+							latched and the canvas `[trickplay]` box otherwise. -->
 						<div
-							class="pointer-events-none absolute bottom-full z-10 mb-1 -translate-x-1/2 rounded-md border p-1 whitespace-nowrap"
+							class="pointer-events-none absolute z-10 flex -translate-x-1/2 flex-col items-center"
 							style:left="{hover.fraction * 100}%"
-							style:background="var(--mbv-popover)"
-							style:border-color="var(--mbv-border)"
+							style:top="-84px"
+							style:width="128px"
+							style:gap="4px"
 						>
 							{#if tileCrop}
 								<div
-									class="mb-1 overflow-hidden rounded-sm bg-no-repeat"
+									class="overflow-hidden bg-no-repeat"
 									style:width={tileCrop.width}
 									style:height={tileCrop.height}
+									style:border="1px solid var(--mbv-border)"
+									style:border-radius="4px"
 									style:background-image={tileCrop.backgroundImage}
 									style:background-size={tileCrop.backgroundSize}
 									style:background-position={tileCrop.backgroundPosition}
 								></div>
-							{:else if playback.trickplay}
+							{:else}
 								<div
-									class="mb-1 flex aspect-video w-32 items-center justify-center rounded-sm"
+									class="flex items-center justify-center font-mono"
+									style:width="128px"
+									style:height="72px"
+									style:font-size="10px"
 									style:background="var(--mbv-secondary)"
+									style:border="1px solid var(--mbv-border)"
+									style:border-radius="4px"
+									style:color={roleVar('textSecondary')}
+									>[trickplay]</div
 								>
-									<Film size={16} color={roleVar('textMuted')} />
-								</div>
 							{/if}
-							<div class="flex items-center" style:gap="var(--mbv-cell-col)">
-								<span
-									class="font-mono text-xs tabular-nums"
-									style:color={roleVar('textPrimary')}
-									>{hover.timeLabel}</span
-								>
-								{#if hover.chapter}
-									<span class="text-xs" style:color={roleVar('playbackContextFg')}
-										>{hover.chapter}</span
-									>
-								{/if}
-							</div>
+							<div
+								class="font-mono"
+								style:font-size="11px"
+								style:padding="2px 6px"
+								style:border-radius="3px"
+								style:background="var(--mbv-background)"
+								style:color={roleVar('playbackTitleFg')}
+								>{hover.timeLabel}{hover.chapterNumber !== null
+									? ` · Ch. ${hover.chapterNumber}`
+									: ''}</div
+							>
 						</div>
 					{/if}
-				</div>
-				<span
-					class="shrink-0 font-mono text-xs tabular-nums"
-					style:color={roleVar('playbackMetaFg')}
-					>-{playback.remainingClock}</span
-				>
-				{#if playback.finishClock}
-					<span
-						class="shrink-0 font-mono text-xs tabular-nums"
-						style:color={roleVar('playbackMetaFg')}>{playback.finishClock}</span
+					<div
+						class="absolute inset-x-0"
+						data-track
+						style:top="22px"
+						style:height="6px"
+						style:background="var(--mbv-progressTrack)"
+						style:border-radius="3px"
+					></div>
+					{#if introLeft !== null}
+						<div
+							class="absolute"
+							style:left="{introLeft * 100}%"
+							style:top="22px"
+							style:width="6px"
+							style:height="6px"
+							style:background="var(--mbv-progressPercent)"
+							style:border-radius="3px 0 0 3px"
+							title="Intro"
+						></div>
+					{/if}
+					<div
+						class="absolute left-0"
+						data-played
+						style:top="22px"
+						style:width="{progress * 100}%"
+						style:height="6px"
+						style:background="var(--mbv-accent)"
+						style:border-radius="3px"
+					></div>
+					{#each chapterTicks as ratio, i (i)}
+						<div
+							class="absolute"
+							style:left="{ratio * 100}%"
+							style:top="18px"
+							style:width="2px"
+							style:height="14px"
+							style:background={roleVar('textMuted')}
+						></div>
+					{/each}
+					{#if creditsLeft !== null}
+						<div
+							class="absolute"
+							style:left="{creditsLeft * 100}%"
+							style:top="22px"
+							style:width="4px"
+							style:height="6px"
+							style:background="var(--mbv-progressPercent)"
+							title="Credits"
+						></div>
+					{/if}
+					{#if hover}
+						<div
+							class="pointer-events-none absolute"
+							data-hover-line
+							style:left="{hover.fraction * 100}%"
+							style:top="14px"
+							style:width="1px"
+							style:height="22px"
+							style:background={roleVar('playbackTitleFg')}
+						></div>
+					{/if}
+					<div
+						class="absolute -translate-x-1/2 rounded-full"
+						data-thumb
+						style:left="{progress * 100}%"
+						style:top="17px"
+						style:width="16px"
+						style:height="16px"
+						style:background={roleVar('playbackTitleFg')}
+						style:box-shadow="0 0 0 3px var(--mbv-queuePlaybackBand)"
+					></div>
+					<div
+						class="absolute inset-x-0 flex justify-between font-mono tabular-nums"
+						style:top="42px"
+						style:font-size="12px"
 					>
-				{/if}
+						<span style:color="var(--mbv-accent)">{playback.elapsedClock}</span>
+						<span style:color={roleVar('textMuted')}
+							>{minus(playback.remainingClock)}{playback.finishClock
+								? ` · ends ${playback.finishClock}`
+								: ''}</span
+						>
+					</div>
+				</div>
 			</div>
+			<!-- The transport (`main` audits 13–14): previous, `−10`, the 56 px
+				round play/pause control, `+30`, and next, on the canvas gap and
+				insets. The spec's list carries no stop control, so the canvas
+				panel paints none. -->
+			<div
+				class="flex items-center justify-center"
+				style:gap="4px"
+				style:padding="0 16px 6px"
+			>
+				<button
+					type="button"
+					class="flex items-center justify-center"
+					style:width="44px"
+					style:height="44px"
+					bind:this={prevEl}
+					data-target="previous"
+					aria-label="Previous"
+				>
+					<SkipBack
+						size={20}
+						fill={glyphColor(playback.availability.previous, 'textPrimary')}
+						color={glyphColor(playback.availability.previous, 'textPrimary')}
+					/>
+				</button>
+				<button
+					type="button"
+					class="flex items-center justify-center font-mono"
+					style:width="44px"
+					style:height="44px"
+					style:font-size="11px"
+					style:color={roleVar('textPrimary')}
+					bind:this={seekBackEl}
+					data-target="seekBack"
+					aria-label="Back 10 seconds"
+					title="Back 10 s"
+				>
+					−10
+				</button>
+				<button
+					type="button"
+					class="flex items-center justify-center rounded-full"
+					style:width="56px"
+					style:height="56px"
+					style:background="var(--mbv-accent)"
+					bind:this={playPauseEl}
+					data-target="playPause"
+					aria-label={playback.playback.paused ? 'Play' : 'Pause'}
+				>
+					{#if playback.playback.paused}
+						<Play
+							size={22}
+							fill={roleVar('textOnAccent')}
+							color={roleVar('textOnAccent')}
+						/>
+					{:else}
+						<Pause
+							size={22}
+							fill={roleVar('textOnAccent')}
+							color={roleVar('textOnAccent')}
+						/>
+					{/if}
+				</button>
+				<button
+					type="button"
+					class="flex items-center justify-center font-mono"
+					style:width="44px"
+					style:height="44px"
+					style:font-size="11px"
+					style:color={roleVar('textPrimary')}
+					bind:this={seekForwardEl}
+					data-target="seekForward"
+					aria-label="Forward 30 seconds"
+					title="Forward 30 s"
+				>
+					+30
+				</button>
+				<button
+					type="button"
+					class="flex items-center justify-center"
+					style:width="44px"
+					style:height="44px"
+					bind:this={nextEl}
+					data-target="next"
+					aria-label="Next"
+				>
+					<SkipForward
+						size={20}
+						fill={glyphColor(playback.availability.next, 'textPrimary')}
+						color={glyphColor(playback.availability.next, 'textPrimary')}
+					/>
+				</button>
+			</div>
+			<!-- The track chips row under the transport: the video label and
+				the audio and subtitle chips with the open popover anchored above
+				its chip. `trackChips` is `null` while the local player is
+				inactive, so the row is absent then, as the status-indicator
+				cluster is. -->
+			<TrackChips chips={playback.trackChips} {overlay} />
 		{/if}
-		<!-- The transport controls (the canvas's row): previous, back 10 s,
-			play/pause, forward 30 s, and next. The spec's list carries no stop
-			control, so the canvas panel paints none. -->
-		<div
-			class="flex items-center justify-center"
-			style:height="var(--mbv-cell-row)"
-			style:gap="calc(var(--mbv-cell-col) * 2)"
-		>
-			<button
-				type="button"
-				class="flex items-center"
-				bind:this={prevEl}
-				data-target="previous"
-				aria-label="Previous"
-			>
-				<SkipBack
-					size={18}
-					fill={glyphColor(playback.availability.previous, 'textStrong')}
-					color={glyphColor(playback.availability.previous, 'textStrong')}
-				/>
-			</button>
-			<button
-				type="button"
-				class="relative flex items-center justify-center"
-				bind:this={seekBackEl}
-				data-target="seekBack"
-				aria-label="Back 10 seconds"
-				title="Back 10 s"
-			>
-				<RotateCcw size={18} color={roleVar('textStrong')} />
-				<span
-					class="absolute font-mono font-semibold"
-					style:font-size="8px"
-					style:color={roleVar('textStrong')}>10</span
-				>
-			</button>
-			<button
-				type="button"
-				class="flex items-center rounded-full p-1"
-				bind:this={playPauseEl}
-				data-target="playPause"
-				aria-label={playback.playback.paused ? 'Play' : 'Pause'}
-				style:background="var(--mbv-secondary)"
-			>
-				{#if playback.playback.paused}
-					<Play size={18} fill={roleVar('accent')} color={roleVar('accent')} />
-				{:else}
-					<Pause size={18} fill={roleVar('textFocusAccent')} color={roleVar('textFocusAccent')} />
-				{/if}
-			</button>
-			<button
-				type="button"
-				class="relative flex items-center justify-center"
-				bind:this={seekForwardEl}
-				data-target="seekForward"
-				aria-label="Forward 30 seconds"
-				title="Forward 30 s"
-			>
-				<RotateCw size={18} color={roleVar('textStrong')} />
-				<span
-					class="absolute font-mono font-semibold"
-					style:font-size="8px"
-					style:color={roleVar('textStrong')}>30</span
-				>
-			</button>
-			<button
-				type="button"
-				class="flex items-center"
-				bind:this={nextEl}
-				data-target="next"
-				aria-label="Next"
-			>
-				<SkipForward
-					size={18}
-					fill={glyphColor(playback.availability.next, 'textStrong')}
-					color={glyphColor(playback.availability.next, 'textStrong')}
-				/>
-			</button>
-		</div>
-		<!-- The track chips row under the transport: the video label and the
-			audio and subtitle chips with the open popover anchored above its
-			chip. `trackChips` is `null` while the local player is inactive, so
-			the row is absent then, as the status-indicator cluster is. -->
-		<TrackChips chips={playback.trackChips} {overlay} />
 	{/if}
 </div>

@@ -104,7 +104,6 @@
 			overlay={frame.overlay}
 			carried={carriedArt}
 			carriedSheet={carriedSheet}
-			queueFolded={frame.panel.queueFolded}
 		/>
 		<div class="min-h-0 flex-1">
 			{#if layout === 'expandedWithoutQueue'}

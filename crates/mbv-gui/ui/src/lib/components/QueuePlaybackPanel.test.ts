@@ -69,7 +69,7 @@ function playing(overrides: Partial<GuiQueuePlayback> = {}): GuiQueuePlayback {
 		showControls: true,
 		nowPlayingTitle: 'Track title',
 		parentLine: 'The Show',
-		episodeBadge: 'S2 E5',
+		episodeBadge: 'S2 · E5',
 		finishClock: '21:00',
 		availability: { stop: true, next: true, previous: false },
 		statusIndicators: null,
@@ -225,15 +225,48 @@ test('a playing frame renders the header, artwork badge, title, and clocks', () 
 		playing({ artwork: { kind: 'image', detail: 'data:image/jpeg;base64,AAAA' } }),
 	);
 
-	expect(getByText('PLAYING')).toBeTruthy();
-	expect(getByText('poo')).toBeTruthy();
-	expect(getByText('Track title')).toBeTruthy();
-	expect(getByText('The Show')).toBeTruthy();
-	expect(getByText('S2 E5')).toBeTruthy();
+	// The canvas header (`main` audits 1–5): the cast target carries the
+	// green host text with the chevron, the state label the leading dot, and
+	// the collapse control its own aria name at a 44 px hit area.
+	const cast = control(container, 'playbackTarget');
+	expect(cast.getAttribute('aria-label')).toBe('Cast to device');
+	expect(cast.textContent).toContain('poo');
+	expect(getByText('● PLAYING')).toBeTruthy();
+	expect(getByText('● PLAYING').style.fontSize).toBe('11px');
+	expect(getByText('● PLAYING').style.letterSpacing).toBe('0.08em');
+	const collapse = control(container, 'collapse');
+	expect(collapse.getAttribute('aria-label')).toBe('Collapse panel');
+	expect(collapse.style.width).toBe('44px');
+	expect(collapse.style.height).toBe('44px');
+
+	// The still slot is the canvas's fixed 225 px box with the episode badge
+	// at its bottom left (`main` audits 6–7); the title block paints its
+	// 18 px title and 13 px parent link colour (`main` audit 8).
+	expect(control(container, 'visualSlot').style.height).toBe('225px');
+	const badge = getByText('S2 · E5');
+	expect(badge.style.left).toBe('12px');
+	expect(badge.style.bottom).toBe('10px');
+	expect(badge.style.background).toBe('var(--mbv-background)');
+	const title = getByText('Track title');
+	expect(title.style.fontSize).toBe('18px');
+	expect(title.style.fontWeight).toBe('600');
+	const parent = getByText('The Show');
+	expect(parent.style.fontSize).toBe('13px');
+	expect(parent.style.color).toBe('var(--mbv-playbackContextFg)');
+
+	// The scrubber's one right-hand line joins the remaining time and the
+	// finish clock behind the canvas minus (`main` audit 9).
 	expect(getByText('1:00')).toBeTruthy();
-	expect(getByText('-2:20')).toBeTruthy();
-	expect(getByText('21:00')).toBeTruthy();
+	expect(getByText('−2:20 · ends 21:00')).toBeTruthy();
 	expect(container.querySelector('[data-target="visualSlot"] img')).toBeTruthy();
+});
+
+// The canvas still slot paints its source caption while no image lands
+// (`main` audit 6); the episode's caption names the Emby still chain.
+test('the still slot paints the canvas caption while no image lands', () => {
+	const { getByText } = renderPanel(playing({ artwork: { kind: 'loading' } }));
+
+	expect(getByText('[Episode still · Emby Primary / Thumb]')).toBeTruthy();
 });
 
 test('a paint reports the transport, seek, header, seekbar, and target regions', async () => {
@@ -249,7 +282,6 @@ test('a paint reports the transport, seek, header, seekbar, and target regions',
 		'seekbar',
 		'visualSlot',
 		'collapse',
-		'queueFold',
 		'playbackTarget',
 	]);
 });
@@ -285,19 +317,32 @@ test('a press on the scrubber forwards a pointer press with its position', async
 });
 
 test('the scrubber paints the hover preview from the frame', () => {
-	const { getByText } = renderPanel(
+	const { container, getByText } = renderPanel(
 		playing({
 			hover: {
 				fraction: 0.75,
 				timeLabel: '2:30',
 				chapter: 'Chapter Two',
+				chapterNumber: 2,
 				tile: null,
 			},
 		}),
 	);
 
-	expect(getByText('2:30')).toBeTruthy();
-	expect(getByText('Chapter Two')).toBeTruthy();
+	// The preview label reads the canvas's `12:31 · Ch. 2` form: the time and
+	// the chapter's number, not its full name (`main` audit 12).
+	expect(getByText('2:30 · Ch. 2')).toBeTruthy();
+
+	// The bar's hover chrome (`main` audits 10–11): the canvas's 6 px track,
+	// the played fill at its fraction, the 16 px thumb, and the 1 px pointer
+	// position line at the hover's fraction.
+	expect(container.querySelector<HTMLElement>('[data-track]')?.style.height).toBe('6px');
+	expect(container.querySelector<HTMLElement>('[data-played]')?.style.width).toBe('30%');
+	expect(container.querySelector<HTMLElement>('[data-thumb]')?.style.width).toBe('16px');
+	const line = container.querySelector<HTMLElement>('[data-hover-line]');
+	expect(line?.style.width).toBe('1px');
+	expect(line?.style.height).toBe('22px');
+	expect(line?.style.left).toBe('75%');
 });
 
 // Task 6.7: the preview paints the trickplay thumbnail the frame's tile names,
@@ -307,7 +352,7 @@ test('the hover preview paints the trickplay tile the frame carries', () => {
 	const { container } = renderPanel(
 		playing({
 			trickplay: [trickplayGrid()],
-			hover: { fraction: 0.5, timeLabel: '1:40', chapter: null, tile: tile(SHEET) },
+			hover: { fraction: 0.5, timeLabel: '1:40', chapter: null, chapterNumber: null, tile: tile(SHEET) },
 		}),
 	);
 
@@ -323,7 +368,7 @@ test('the hover preview repaints the latched sheet, else the placeholder', () =>
 	const latched = renderPanel(
 		playing({
 			trickplay: [trickplayGrid()],
-			hover: { fraction: 0.5, timeLabel: '1:40', chapter: null, tile: tile(null) },
+			hover: { fraction: 0.5, timeLabel: '1:40', chapter: null, chapterNumber: null, tile: tile(null) },
 		}),
 		null,
 		{ key: 'item:320:0', image: SHEET },
@@ -335,7 +380,7 @@ test('the hover preview repaints the latched sheet, else the placeholder', () =>
 	const bare = renderPanel(
 		playing({
 			trickplay: [trickplayGrid()],
-			hover: { fraction: 0.5, timeLabel: '1:40', chapter: null, tile: tile(null) },
+			hover: { fraction: 0.5, timeLabel: '1:40', chapter: null, chapterNumber: null, tile: tile(null) },
 		}),
 	);
 	expect(tileElement(bare.container)).toBeNull();
@@ -429,6 +474,15 @@ test('a press on a chooser row forwards a pointer press with its position', asyn
 test('a press on the back-10 and forward-30 controls forwards a pointer press', () => {
 	const { container } = renderPanel();
 	const detach = installInput();
+	// The transport paints the canvas's text seek buttons and the 56 px round
+	// green play control (`main` audits 13–14).
+	expect(control(container, 'seekBack').textContent?.trim()).toBe('−10');
+	expect(control(container, 'seekBack').style.width).toBe('44px');
+	expect(control(container, 'seekForward').textContent?.trim()).toBe('+30');
+	const play = control(container, 'playPause');
+	expect(play.style.width).toBe('56px');
+	expect(play.style.height).toBe('56px');
+	expect(play.style.background).toBe('var(--mbv-accent)');
 	fireEvent.pointerDown(control(container, 'seekBack'), {
 		clientX: 31,
 		clientY: 5,
