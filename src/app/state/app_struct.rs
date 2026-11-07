@@ -520,7 +520,8 @@ pub struct App {
     /// The sheet key whose last fetch failed in transport (add-tauri-gui-client
     /// task 6.7): the sheet may exist, so it is not cached as absent. The hold
     /// keeps the idle cadence from re-asking the same hovered sheet; the hover
-    /// naming a different sheet retires it, so a return re-asks.
+    /// naming a different sheet retires it, as does the hover ending, so a
+    /// return re-asks.
     pub(in crate::app) trickplay_sheet_failed:
         Option<crate::app::playback_trickplay::TrickplaySheetKey>,
     /// Fallback artist per-album track fetches waiting for a bounded slot.

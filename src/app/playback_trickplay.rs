@@ -11,7 +11,7 @@
 //! [`App::drain_trickplay_sheet_events`]. A `404` records a sheet the server
 //! does not hold, so a hover does not retry it every frame. Any other failure
 //! records nothing — the sheet may exist — and holds that key out of the
-//! retry path until the hover names a different sheet.
+//! retry path until the hover names a different sheet or the hover ends.
 
 use std::sync::Arc;
 
