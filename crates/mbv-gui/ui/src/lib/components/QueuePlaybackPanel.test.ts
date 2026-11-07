@@ -331,6 +331,11 @@ test('the scrubber paints the hover preview from the frame', () => {
 	// the chapter's number, not its full name (`main` audit 12).
 	expect(getByText('2:30 · Ch. 2')).toBeTruthy();
 
+	// A position the active item offers no tile for paints the label chip
+	// alone (the spec's no-trickplay scenario): no tile box of either form.
+	expect(tileElement(container)).toBeNull();
+	expect(container.textContent).not.toContain('[trickplay]');
+
 	// The bar's hover chrome (`main` audits 10–11): the canvas's 6 px track,
 	// the played fill at its fraction, the 16 px thumb, and the 1 px pointer
 	// position line at the hover's fraction.
@@ -362,7 +367,7 @@ test('the hover preview paints the trickplay tile the frame carries', () => {
 // The frame re-carries the sheet's image only when the hovered sheet changes,
 // so the preview repaints the sheet the panel latched; with none latched, it
 // keeps the placeholder.
-test('the hover preview repaints the latched sheet, else the placeholder', () => {
+test('the hover preview repaints the latched sheet, else the in-flight box', () => {
 	const latched = renderPanel(
 		playing({
 			trickplay: [trickplayGrid()],
@@ -375,6 +380,9 @@ test('the hover preview repaints the latched sheet, else the placeholder', () =>
 		SHEET,
 	);
 
+	// A hovered tile whose sheet is not yet latched is the canvas's
+	// `[trickplay]` box while the fetch is in flight — the placeholder paints
+	// only while the frame carries the tile fact.
 	const bare = renderPanel(
 		playing({
 			trickplay: [trickplayGrid()],
@@ -382,6 +390,7 @@ test('the hover preview repaints the latched sheet, else the placeholder', () =>
 		}),
 	);
 	expect(tileElement(bare.container)).toBeNull();
+	expect(bare.getByText('[trickplay]')).toBeTruthy();
 });
 
 test('an open target chooser renders its choices', () => {

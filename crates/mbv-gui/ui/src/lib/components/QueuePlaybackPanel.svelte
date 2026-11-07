@@ -135,7 +135,10 @@
 
 	/** The scrubber's hover preview, painted from the frame: the pointer's
 	 * fraction, the time it names, the chapter covering it, and the trickplay
-	 * tile (task 6.7). `null` while the pointer is away from the bar. */
+	 * tile (task 6.7). The tile is present while the item offers one — the
+	 * preview paints it cropped or as the in-flight box — and `null` for a
+	 * position without trickplay, where the preview paints the label chip
+	 * alone. `null` while the pointer is away from the bar. */
 	const hover = $derived(playback.hover);
 
 	/** The preview thumbnail's painted width: the canvas's `w-32` box. */
@@ -518,8 +521,11 @@
 						<!-- The hover preview (`main` audit 12): the 128×72
 							trickplay tile stacked over the label chip, which reads
 							the time and the covering chapter's number, not its
-							name. The tile paints the cached sheet when one is
-							latched and the canvas `[trickplay]` box otherwise. -->
+							name. A hovered tile paints the cached sheet when one
+							is latched and the canvas `[trickplay]` box while the
+							sheet's fetch is still in flight; a position the item
+							offers no tile for paints the label chip alone (the
+							spec's no-trickplay scenario). -->
 						<div
 							class="pointer-events-none absolute z-10 flex -translate-x-1/2 flex-col items-center"
 							style:left="{hover.fraction * 100}%"
@@ -527,29 +533,31 @@
 							style:width="128px"
 							style:gap="4px"
 						>
-							{#if tileCrop}
-								<div
-									class="overflow-hidden bg-no-repeat"
-									style:width={tileCrop.width}
-									style:height={tileCrop.height}
-									style:border="1px solid var(--mbv-border)"
-									style:border-radius="4px"
-									style:background-image={tileCrop.backgroundImage}
-									style:background-size={tileCrop.backgroundSize}
-									style:background-position={tileCrop.backgroundPosition}
-								></div>
-							{:else}
-								<div
-									class="flex items-center justify-center font-mono"
-									style:width="128px"
-									style:height="72px"
-									style:font-size="10px"
-									style:background="var(--mbv-secondary)"
-									style:border="1px solid var(--mbv-border)"
-									style:border-radius="4px"
-									style:color={roleVar('textSecondary')}
-									>[trickplay]</div
-								>
+							{#if hover.tile}
+								{#if tileCrop}
+									<div
+										class="overflow-hidden bg-no-repeat"
+										style:width={tileCrop.width}
+										style:height={tileCrop.height}
+										style:border="1px solid var(--mbv-border)"
+										style:border-radius="4px"
+										style:background-image={tileCrop.backgroundImage}
+										style:background-size={tileCrop.backgroundSize}
+										style:background-position={tileCrop.backgroundPosition}
+									></div>
+								{:else}
+									<div
+										class="flex items-center justify-center font-mono"
+										style:width="128px"
+										style:height="72px"
+										style:font-size="10px"
+										style:background="var(--mbv-secondary)"
+										style:border="1px solid var(--mbv-border)"
+										style:border-radius="4px"
+										style:color={roleVar('textSecondary')}
+										>[trickplay]</div
+									>
+								{/if}
 							{/if}
 							<div
 								class="font-mono"
