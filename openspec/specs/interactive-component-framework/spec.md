@@ -93,6 +93,12 @@ discovered receivers or connectable endpoints.
 - **THEN** its cursor, marks, and viewport live in its Surface state
 - **AND** its TuiRealm adapter holds no copy of them
 
+#### Scenario: A shared surface has one state owner
+
+- **WHEN** the Queue panel is mounted in the TUI Client
+- **THEN** its cursor, marks, and viewport live in its Surface state
+- **AND** its TuiRealm adapter holds no copy of them
+
 ### Requirement: Interactive components own only presentation authority
 
 An Interactive Component SHALL own its cursor, scroll, local focus, selection, filters, form drafts, local loading/error/result presentation state, local event interpretation and update rules, rendering, viewport, and render-derived hit geometry. It SHALL emit a `Msg` only for work that crosses its authority boundary — navigation, playback, Service access, persistence, mounting or dismissing another component, or changing focus.
