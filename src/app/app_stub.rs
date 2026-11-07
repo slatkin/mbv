@@ -249,6 +249,41 @@ pub fn stub_app_with_rebound_quit(chord: &str) -> App {
     app
 }
 
+/// The `App` a GUI Client's test drives with a cast receiver the Owner
+/// offers as a playback target and a ten-minute item playing
+/// (add-tauri-gui-client row 6.4): the `panel_targets` merge holds the
+/// receiver, the player's Owner advertises the `playback-output`
+/// capability the cast row's presence is gated on, and the command channel
+/// records what a chooser selection or a transport request sends to the
+/// Owner. The receiver's id is `receiver-1`.
+#[cfg(feature = "test")]
+#[must_use]
+pub fn stub_app_with_cast_target() -> (App, std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
+    let (mut remote, player_rx, cmd_rx) =
+        mbv_remote_player::RemotePlayer::stub_with_command_rx(Vec::new(), 0);
+    let mut compatibility = mbv_ctrl::CtrlCompatibility::current();
+    compatibility.supports_playback_output = true;
+    remote.set_ctrl_compatibility_for_test(compatibility);
+    remote.update_status(|status| {
+        status.active = true;
+        status.runtime_ticks = 10 * 60 * mbv_emby_model::TICKS_PER_SECOND;
+    });
+    let player = mbv_player::PlayerProxy::from_remote(remote, false);
+    let mut app = built_app(player, player_rx);
+    apply_app_stub_defaults(&mut app);
+    app.cast_receivers = vec![mbv_cast::discovery::CastReceiver {
+        id: "receiver-1".to_string(),
+        friendly_name: "Living Room".to_string(),
+        host: "192.168.0.5".to_string(),
+        port: 8009,
+    }];
+    app.rebuild_panel_targets();
+    // The construction's preference sync lands on the channel before the
+    // test starts; drain it so the test sees only commands its actions send.
+    while cmd_rx.try_recv().is_ok() {}
+    (app, cmd_rx)
+}
+
 /// The `App` a GUI Client's test drives with the Emby startup request
 /// armed, as `initialize_service_startup` arms it for an attached session
 /// whose Emby is configured without a client, so the test reads the
@@ -275,12 +310,20 @@ pub fn make_built_app() -> App {
 
     let (remote, player_rx) = mbv_remote_player::RemotePlayer::stub(Vec::new(), 0);
     remote.update_status(|status| status.volume_max = 100);
+    built_app(PlayerProxy::from_remote(remote, false), player_rx)
+}
+
+/// The `App::build` construction over `player` and its event channel, the
+/// shared half of every stub that needs its own player wiring (a command
+/// channel of its own, say).
+fn built_app(
+    player: mbv_player::PlayerProxy,
+    player_rx: std::sync::mpsc::Receiver<mbv_ctrl::player::PlayerEvent>,
+) -> App {
     let (_, ws_rx) = std::sync::mpsc::channel();
     let (_, transport_rx) = std::sync::mpsc::channel();
     let (card_image_tx, card_image_rx) = std::sync::mpsc::channel();
     let channels = crate::app::state::runtime_channels::RuntimeChannels::new();
-
-    let player = PlayerProxy::from_remote(remote, false);
 
     let config = crate::config::Config::default();
 

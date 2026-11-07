@@ -15,15 +15,16 @@ pub mod playback;
 pub mod queue;
 pub mod theme;
 
-use mbv::App;
+use mbv::{App, QueuePlaybackProjection};
 use mbv_surfaces::FocusStack;
 use mbv_surfaces::queue::QueueSurface;
+use mbv_surfaces::queue_playback::QueuePlaybackSurface;
 use serde::Serialize;
 
 use self::chrome::{GuiQueueFooter, GuiStatusBar};
 use self::focus::GuiFocus;
 use self::overlay::GuiOverlayFrame;
-use self::playback::{GuiCardArtwork, GuiQueuePlayback};
+use self::playback::{GuiCardArtwork, GuiQueuePlayback, GuiScrubberHover};
 use self::queue::{GuiQueue, GuiQueueSummary};
 use self::theme::GuiTheme;
 
@@ -120,6 +121,9 @@ pub struct FrameSources<'a> {
     pub focus: &'a FocusStack,
     /// The Queue Surface state that adopts the Queue projection each tick.
     pub queue: &'a QueueSurface,
+    /// The Queue playback Surface state: the scrubber hover the last
+    /// pointer move resolved (design D4).
+    pub playback: &'a QueuePlaybackSurface,
     /// The whole Queue rows that the viewport fits (`ListRows::whole_rows`).
     pub viewport_rows: usize,
     /// Whether the window needs the theme in this frame: the first frame, and
@@ -152,6 +156,7 @@ impl GuiFrame {
                 .map(GuiOverlayFrame::from),
             playback: GuiQueuePlayback {
                 artwork: sources.artwork.clone(),
+                hover: scrubber_hover(sources.playback, &playback),
                 ..GuiQueuePlayback::from(&playback)
             },
             footer: GuiQueueFooter::from(&sources.app.queue_footer_projection()),
@@ -159,6 +164,33 @@ impl GuiFrame {
             theme: sources.theme_changed.then(GuiTheme::current),
         }
     }
+}
+
+/// The scrubber's hover preview one frame carries (design D4): the
+/// Surface state's hover fraction resolved to the time and chapter it
+/// names against the same playback projection the frame reads. `None`
+/// while the pointer is away from the bar.
+fn scrubber_hover(
+    surface: &QueuePlaybackSurface,
+    playback: &QueuePlaybackProjection,
+) -> Option<GuiScrubberHover> {
+    let fraction = surface.scrubber_hover()?;
+    let ticks = mbv_emby_model::seconds_to_ticks(
+        fraction * mbv_emby_model::ticks_to_seconds(playback.playback.runtime_ticks),
+    );
+    // The chapter that covers the position is the last boundary at or
+    // before it, the covering rule the TUI's chapter lookups share.
+    let chapter = playback
+        .chapters
+        .iter()
+        .rev()
+        .find(|chapter| chapter.start_ticks <= ticks)
+        .map(|chapter| chapter.name.clone());
+    Some(GuiScrubberHover {
+        fraction,
+        ticks,
+        chapter,
+    })
 }
 
 /// The canvas panel's collapse and queue-fold facts (design D10), mirroring

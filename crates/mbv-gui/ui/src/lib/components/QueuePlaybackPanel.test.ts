@@ -66,6 +66,7 @@ function playing(overrides: Partial<GuiQueuePlayback> = {}): GuiQueuePlayback {
 		trickplay: null,
 		trackChips: null,
 		targetChoices: [],
+		hover: null,
 		...overrides,
 	};
 }

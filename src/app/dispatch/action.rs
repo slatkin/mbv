@@ -149,6 +149,11 @@ pub enum PanelIntent {
     ToggleQueueRightColumn,
     /// Focus the queue header's filter text entry (the GUI-only `/`).
     ActivateQueueFilter,
+    /// The playback-target chooser (add-tauri-gui-client row 6.4): the GUI-
+    /// only `r` chord's open/close of the Client-core overlay the header's
+    /// target press also toggles. GUI-only: the TUI's counterpart is the
+    /// Sessions sidebar, not a dispatch intent.
+    ToggleTargetChooser,
 }
 
 impl From<ShellCommand> for Command {
@@ -366,6 +371,7 @@ impl App {
             PanelIntent::ToggleQueueFold => self.toggle_queue_fold(),
             PanelIntent::ToggleQueueRightColumn => self.toggle_queue_right_column(),
             PanelIntent::ActivateQueueFilter => self.activate_queue_filter(),
+            PanelIntent::ToggleTargetChooser => self.toggle_gui_target_chooser(),
         }
     }
 

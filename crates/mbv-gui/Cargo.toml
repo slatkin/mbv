@@ -19,6 +19,9 @@ mbv = { path = "../.." }
 mbv-config = { path = "../mbv-config" }
 mbv-core = { path = "../mbv-core" }
 mbv-daemon = { path = "../mbv-daemon" }
+# The scrubber hover preview resolves the pointer fraction to the Emby
+# tick position it names (the `ticks_to_seconds`/`seconds_to_ticks` pair).
+mbv-emby-model = { path = "../mbv-emby-model" }
 mbv-images = { path = "../mbv-images" }
 mbv-queue = { path = "../mbv-queue" }
 mbv-remote-player = { path = "../mbv-remote-player" }
@@ -40,8 +43,9 @@ tauri-build = "=2.7.4"
 
 [dev-dependencies]
 mbv = { path = "../..", features = ["test"] }
-# The frame tests build Emby items for the queue slots they project.
-mbv-emby-model = { path = "../mbv-emby-model" }
+# The core-thread tests assert the ctrl commands a selection or transport
+# request records on the stub player's command channel.
+mbv-ctrl = { path = "../mbv-ctrl" }
 # The core-thread test seeds the card image cache with a decoded image.
 image = { workspace = true, features = ["png"] }
 rstest.workspace = true

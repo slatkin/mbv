@@ -11,10 +11,34 @@ use mbv_gui::bridge::frame::{FrameSources, GuiFrame};
 use mbv_queue::QueueItem;
 use mbv_surfaces::FocusStack;
 use mbv_surfaces::queue::QueueSurface;
+use mbv_surfaces::queue_playback::QueuePlaybackSurface;
 use mbv_ui_model::queue_rows::queue_media_rows;
 
 /// The Queue viewport height, in rows, that the frame tests paint with.
 const VIEWPORT_ROWS: usize = 10;
+
+/// The frame of `app` after one tick, with `playback` as the Queue
+/// playback Surface state — the variant `frame_after_tick` uses when the
+/// scrubber hover matters.
+fn frame_with_playback_surface(app: &mut App, playback: &QueuePlaybackSurface) -> GuiFrame {
+    let projection = app.queue_surface_projection();
+    let mut queue = QueueSurface::new();
+    queue.list_mut().set_content(queue_media_rows(
+        projection.slots.as_deref().unwrap_or_default(),
+        projection.playback,
+        projection.pending_slot,
+    ));
+    queue.set_cursor(&projection.cursor);
+    GuiFrame::build(&FrameSources {
+        app,
+        focus: &FocusStack::new(),
+        queue: &queue,
+        playback,
+        viewport_rows: VIEWPORT_ROWS,
+        theme_changed: false,
+        artwork: None,
+    })
+}
 
 /// The frame of `app` after one tick. The Queue Surface state adopts the
 /// projection's rows and cursor, as the TUI's Queue component does.
@@ -31,6 +55,7 @@ fn frame_after_tick(app: &mut App) -> GuiFrame {
         app,
         focus: &FocusStack::new(),
         queue: &queue,
+        playback: &QueuePlaybackSurface::new(),
         viewport_rows: VIEWPORT_ROWS,
         theme_changed: false,
         artwork: None,
@@ -422,4 +447,39 @@ fn playing_queue_frame_carries_the_items_decorations() {
             media_source_id: "ms1".to_string(),
         }])
     );
+}
+
+/// The scrubber's hover preview rides the frame (add-tauri-gui-client row
+/// 6.4, design D4): the Surface state's hover fraction projects with the
+/// time and the covering chapter's name at the position.
+#[test]
+fn the_scrubber_hover_projects_its_time_and_chapter() {
+    let item = slot_item("Playing", 20 * 60 * TICKS_PER_SECOND, 0, false);
+    let key = item.content_id();
+    let mut app = stub_app_with_playing_items(vec![item]);
+    app.seed_playback_metadata_for_test(
+        key,
+        PlaybackDecorations {
+            chapters: vec![
+                PlaybackChapter {
+                    name: "Opening".to_string(),
+                    start_ticks: 0,
+                },
+                PlaybackChapter {
+                    name: "Middle".to_string(),
+                    start_ticks: 10 * 60 * TICKS_PER_SECOND,
+                },
+            ],
+            ..PlaybackDecorations::default()
+        },
+    );
+    let mut playback = QueuePlaybackSurface::new();
+    playback.set_scrubber_hover(Some(0.25));
+
+    let frame = frame_with_playback_surface(&mut app, &playback);
+
+    let hover = frame.playback.hover.expect("the frame carries the hover");
+    assert_eq!(hover.fraction, 0.25);
+    assert_eq!(hover.ticks, 5 * 60 * TICKS_PER_SECOND);
+    assert_eq!(hover.chapter.as_deref(), Some("Opening"));
 }

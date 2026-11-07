@@ -13,7 +13,7 @@
 //! its grabbed row from the anchor position each motion event, exactly as the
 //! TUI's retained grab resolves to.
 
-use mbv::GuiSurfaceLeaf;
+use mbv::{GuiSurfaceLeaf, PlaybackTargetChoice};
 use mbv_queue::QueueSlotId;
 use mbv_surfaces::gesture::{ClickSelection, PointerGesture};
 use mbv_surfaces::media_list::{MediaListOperation, RowIntent};
@@ -214,20 +214,26 @@ pub(crate) struct TransportAvailability {
 }
 
 /// The Queue playback panel's leaf: the Queue playback Surface state, the
-/// reported regions, and the transport availability.
+/// reported regions, the transport availability, and the playback-target
+/// chooser's live choice list.
 ///
 /// The arms mirror the TUI Queue playback panel's pointer path: the transport
 /// glyphs act on a left press — the second press of a double-click pair
-/// included, so a double-click on a glyph toggles twice and nets out — the
-/// seekbar seeks on a double-click and scrubs on a left-drag anchored inside
-/// its bar, and a single press on the bar resolves nothing. The
-/// playback-target indicator's sessions sidebar and the visual slot's chrome
-/// menu are surfaces the first slice does not present, so those presses
-/// resolve to nothing here.
+/// included, so a double-click on a glyph toggles twice and nets out — and
+/// the seekbar seeks on a press (the `gui-client` spec's single-press seek)
+/// and scrubs on a left-drag anchored inside its bar. The header's target
+/// indicator opens the chooser the Sessions sidebar is in the TUI, a
+/// chooser row selects its output through the same `SelectSession` request,
+/// and the header's collapse and queue-fold controls run the `z`/`q`
+/// toggles' dispatches. The visual slot's chrome menu is a surface the
+/// first slice does not present, so a right-click resolves to nothing here.
 pub(crate) struct PlaybackLeaf<'a> {
     surface: &'a mut QueuePlaybackSurface,
     regions: &'a HitMap<RegionTarget>,
     availability: TransportAvailability,
+    /// The playback-target chooser's live choices: a `TargetChoice` region's
+    /// index resolves against this list, the same list the frame carries.
+    choices: &'a [PlaybackTargetChoice],
 }
 
 impl<'a> PlaybackLeaf<'a> {
@@ -235,11 +241,13 @@ impl<'a> PlaybackLeaf<'a> {
         surface: &'a mut QueuePlaybackSurface,
         regions: &'a HitMap<RegionTarget>,
         availability: TransportAvailability,
+        choices: &'a [PlaybackTargetChoice],
     ) -> Self {
         Self {
             surface,
             regions,
             availability,
+            choices,
         }
     }
 
@@ -260,7 +268,10 @@ impl<'a> PlaybackLeaf<'a> {
     }
 
     /// The action a press over the transport band takes. The glyph arms run
-    /// on every left press, exactly as the TUI's `Down` arms do.
+    /// on every left press, exactly as the TUI's `Down` arms do, and the
+    /// seekbar seeks to the pressed position (the `gui-client` spec's "a
+    /// press on the bar SHALL seek"), through the same fraction rule the
+    /// double-click seek used.
     fn press(&self, at: Position) -> Option<Msg> {
         match self.regions.resolve(at) {
             Some(RegionTarget::QueuePlayback(QueuePlaybackTargetId::PlayPause)) => {
@@ -281,12 +292,44 @@ impl<'a> PlaybackLeaf<'a> {
             {
                 Some(Msg::Playback(PlaybackRequest::Next))
             }
+            // The back and forward controls send the deltas the `seek_back`
+            // and `seek_forward` chords carry, so the buttons and the
+            // chords dispatch the same command (the `gui-client` spec).
+            Some(RegionTarget::QueuePlayback(QueuePlaybackTargetId::SeekBack)) => {
+                Some(Msg::Playback(PlaybackRequest::SeekRelative(-5.0)))
+            }
+            Some(RegionTarget::QueuePlayback(QueuePlaybackTargetId::SeekForward)) => {
+                Some(Msg::Playback(PlaybackRequest::SeekRelative(5.0)))
+            }
+            // The header's target press emits the same opener the TUI's
+            // indicator sends the Sessions sidebar; the GUI's counterpart
+            // is the Client-core chooser overlay.
+            Some(RegionTarget::QueuePlayback(QueuePlaybackTargetId::PlaybackTarget)) => {
+                Some(Msg::Shell(Box::new(ShellRequest::OpenSessions)))
+            }
+            // A chooser row resolves its choice by index against the live
+            // list and selects the output through the request the TUI's
+            // Sessions sidebar sends for its selected row.
+            Some(RegionTarget::QueuePlayback(QueuePlaybackTargetId::TargetChoice(index))) => {
+                self.choices.get(*index).map(|choice| {
+                    Msg::Shell(Box::new(ShellRequest::SelectSession(choice.key.clone())))
+                })
+            }
+            // The header's collapse and queue-fold controls run the `z`/`q`
+            // toggles' own dispatch.
+            Some(RegionTarget::QueuePlayback(QueuePlaybackTargetId::Collapse)) => {
+                Some(Msg::Playback(PlaybackRequest::TogglePanelCollapse))
+            }
+            Some(RegionTarget::QueuePlayback(QueuePlaybackTargetId::QueueFold)) => {
+                Some(Msg::Playback(PlaybackRequest::ToggleQueueFold))
+            }
+            Some(RegionTarget::QueuePlayback(QueuePlaybackTargetId::Seekbar)) => self.seek(at),
             _ => None,
         }
     }
 
-    /// The seek a double-click press on the bar seeks to: the press column's
-    /// fraction of the painted bar span.
+    /// The seek a press on the bar seeks to: the press column's fraction
+    /// of the painted bar span.
     fn seek(&self, at: Position) -> Option<Msg> {
         let bar = self.seekbar_at(at)?;
         self.surface
@@ -313,11 +356,13 @@ impl GuiSurfaceLeaf for PlaybackLeaf<'_> {
 
     fn pointer(&mut self, gesture: PointerGesture<Position>) -> Option<Msg> {
         match gesture {
-            // A single press on the bar resolves nothing; only the second
-            // press of a pair is a seek, so a stray click cannot jump the
-            // position.
-            PointerGesture::Click { at, .. } => self.press(at),
-            PointerGesture::DoubleClick(at) => self.press(at).or_else(|| self.seek(at)),
+            // A press seeks or activates what it lands on: the seekbar
+            // seeks to the pressed position (the `gui-client` spec), the
+            // transport and header targets act. The second press of a pair
+            // resolves through the same arms, so a double-click on the bar
+            // seeks twice to the same position — the kept double-click
+            // behaviour.
+            PointerGesture::Click { at, .. } | PointerGesture::DoubleClick(at) => self.press(at),
             // A right-click on the visual slot opens the TUI's chrome menu,
             // which the first slice does not present; the wheel scrolls
             // nothing on the transport band; and the scrub's grab re-derives

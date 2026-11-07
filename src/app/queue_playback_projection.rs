@@ -302,7 +302,7 @@ impl App {
     /// capability — each marked with whether it is the Owner's attached
     /// output: a Cast receiver by its receiver id, an Emby Session by the
     /// output's device id.
-    fn playback_target_choices(&self) -> Vec<PlaybackTargetChoice> {
+    pub(in crate::app) fn playback_target_choices(&self) -> Vec<PlaybackTargetChoice> {
         let attached = self.playback_output.as_ref();
         self.panel_targets
             .iter()

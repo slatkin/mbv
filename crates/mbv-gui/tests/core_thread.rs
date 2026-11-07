@@ -6,7 +6,7 @@ use std::sync::mpsc::{self, TryRecvError};
 use std::time::Duration;
 
 use mbv::{
-    App, ClientTickHost, load_config, stub_app_with_armed_emby_fill,
+    App, ClientTickHost, load_config, stub_app_with_armed_emby_fill, stub_app_with_cast_target,
     stub_app_with_pending_settings_save, stub_app_with_playing_queue,
     stub_app_with_prefix_and_toast, stub_app_with_queue,
 };
@@ -14,6 +14,7 @@ use mbv_config::{
     LaunchPanelFocus, TUI_LAUNCH_STATE_VERSION, TabIdentity, TestStateDirGuard, TuiLaunchState,
     load_tui_launch_state, save_tui_launch_state,
 };
+use mbv_gui::bridge::frame::overlay::GuiOverlayFrame;
 use mbv_gui::bridge::frame::playback::GuiCardArtwork;
 use mbv_gui::bridge::frame::queue::GuiQueueRow;
 use mbv_gui::bridge::frame::{GuiFrame, GuiWindowFrame};
@@ -84,6 +85,16 @@ fn press_at(x: f32, y: f32) -> CoreInput {
 fn wheel_down_at(x: f32, y: f32) -> CoreInput {
     CoreInput::Pointer(PointerEvent::new(
         PointerKind::ScrollDown,
+        Position { x, y },
+        KeyModifiers::NONE,
+    ))
+}
+
+/// A pointer move with no button held, as the translated `pointer` command
+/// carries it.
+fn move_at(x: f32, y: f32) -> CoreInput {
+    CoreInput::Pointer(PointerEvent::new(
+        PointerKind::Move,
         Position { x, y },
         KeyModifiers::NONE,
     ))
@@ -503,4 +514,189 @@ fn a_cached_artwork_rides_the_frame_once() {
     assert!(test.core.step());
     let second = test.next_frame();
     assert!(second.playback.artwork.is_none());
+}
+
+/// The header's playback-target press opens the chooser, and a chooser
+/// row's press selects that output (add-tauri-gui-client row 6.4): the
+/// press resolves the choice's index against the live target list and the
+/// selection reaches the Owner as the `SelectPlaybackOutput` the TUI's F3
+/// selection sends.
+#[test]
+fn the_target_press_opens_the_chooser_and_a_choice_selects_it() {
+    let (app, cmd_rx) = stub_app_with_cast_target();
+    let mut test = test_core_with(app);
+    test.tx
+        .send(measured_layout(
+            3,
+            vec![region_at(
+                0.0,
+                0.0,
+                RegionTarget::QueuePlayback(QueuePlaybackTargetId::PlaybackTarget),
+            )],
+        ))
+        .unwrap();
+    assert!(test.core.step());
+    test.next_frame();
+
+    test.tx.send(press_at(10.0, 10.0)).unwrap();
+    assert!(test.core.step());
+    let frame = test.next_frame();
+    let Some(GuiOverlayFrame::TargetChooser { cursor, choices }) = &frame.overlay else {
+        panic!("the target press opened the chooser: {:?}", frame.overlay);
+    };
+    assert_eq!(*cursor, 0);
+    assert_eq!(choices.len(), 1);
+    assert_eq!(choices[0].label, "Living Room");
+
+    // The chooser's paint reports its row: the choice region joins the
+    // next report's hit map.
+    test.tx
+        .send(measured_layout(
+            3,
+            vec![region_at(
+                0.0,
+                50.0,
+                RegionTarget::QueuePlayback(QueuePlaybackTargetId::TargetChoice(0)),
+            )],
+        ))
+        .unwrap();
+    assert!(test.core.step());
+    test.next_frame();
+
+    test.tx.send(press_at(10.0, 60.0)).unwrap();
+    assert!(test.core.step());
+    let frame = test.next_frame();
+    assert!(frame.overlay.is_none(), "the selection closed the chooser");
+    let selections: Vec<_> = cmd_rx
+        .try_iter()
+        .filter(|cmd| matches!(cmd, mbv_ctrl::CtrlCmd::SelectPlaybackOutput(_)))
+        .collect();
+    assert_eq!(selections.len(), 1);
+    assert!(matches!(
+        selections[0],
+        mbv_ctrl::CtrlCmd::SelectPlaybackOutput(mbv_ctrl::OutputSelection::Cast {
+            ref receiver_id,
+            ..
+        }) if receiver_id == "receiver-1"
+    ));
+}
+
+/// The back and forward controls press the same command the `seek_back`
+/// and `seek_forward` chords send (the `gui-client` spec: the buttons and
+/// the chords do the same work).
+#[test]
+fn the_seek_back_and_forward_presses_send_the_chords_seeks() {
+    let (app, cmd_rx) = stub_app_with_cast_target();
+    let mut test = test_core_with(app);
+    test.tx
+        .send(measured_layout(
+            3,
+            vec![
+                region_at(
+                    0.0,
+                    0.0,
+                    RegionTarget::QueuePlayback(QueuePlaybackTargetId::SeekBack),
+                ),
+                region_at(
+                    0.0,
+                    30.0,
+                    RegionTarget::QueuePlayback(QueuePlaybackTargetId::SeekForward),
+                ),
+            ],
+        ))
+        .unwrap();
+    assert!(test.core.step());
+    test.next_frame();
+
+    // One step per input: the seek-back press, the seek-forward press, and
+    // the two chords each land their own command.
+    for input in [
+        press_at(10.0, 10.0),
+        press_at(10.0, 40.0),
+        CoreInput::Key(KeyEvent::new(Key::Char('<'), KeyModifiers::NONE)),
+        CoreInput::Key(KeyEvent::new(Key::Char('>'), KeyModifiers::NONE)),
+    ] {
+        test.tx.send(input).unwrap();
+        assert!(test.core.step());
+        test.next_frame();
+    }
+
+    let seeks: Vec<f64> = cmd_rx
+        .try_iter()
+        .filter_map(|cmd| match cmd {
+            mbv_ctrl::CtrlCmd::PlayerCmd(mbv_ctrl::WireCommand::Seek(secs)) => Some(secs),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(seeks, vec![-5.0, 5.0, -5.0, 5.0]);
+}
+
+/// A single press on the seekbar seeks to the pressed position (the
+/// `gui-client` spec's "a press on the bar SHALL seek"): the press
+/// column's fraction of the painted bar span resolves through the shared
+/// seek rule, here the midpoint of the ten-minute stub.
+#[test]
+fn a_single_seekbar_press_seeks_to_the_pressed_position() {
+    let (app, cmd_rx) = stub_app_with_cast_target();
+    let mut test = test_core_with(app);
+    test.tx
+        .send(measured_layout(
+            3,
+            vec![region_at(
+                0.0,
+                0.0,
+                RegionTarget::QueuePlayback(QueuePlaybackTargetId::Seekbar),
+            )],
+        ))
+        .unwrap();
+    assert!(test.core.step());
+    test.next_frame();
+
+    test.tx.send(press_at(50.0, 10.0)).unwrap();
+    assert!(test.core.step());
+    test.next_frame();
+
+    let seeks: Vec<f64> = cmd_rx
+        .try_iter()
+        .filter_map(|cmd| match cmd {
+            mbv_ctrl::CtrlCmd::PlayerCmd(mbv_ctrl::WireCommand::SeekAbsolute(secs)) => Some(secs),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(seeks, vec![300.0]);
+}
+
+/// A move over the seekbar carries the hover to the frame, and a move away
+/// clears it (design D4): the frame's preview facts are the pointer's
+/// fraction of the painted bar and the time it names.
+#[test]
+fn a_move_over_the_seekbar_carries_the_hover_to_the_frame() {
+    let (app, _cmd_rx) = stub_app_with_cast_target();
+    let mut test = test_core_with(app);
+    test.tx
+        .send(measured_layout(
+            3,
+            vec![region_at(
+                0.0,
+                0.0,
+                RegionTarget::QueuePlayback(QueuePlaybackTargetId::Seekbar),
+            )],
+        ))
+        .unwrap();
+    assert!(test.core.step());
+    test.next_frame();
+
+    test.tx.send(move_at(50.0, 10.0)).unwrap();
+    assert!(test.core.step());
+    let frame = test.next_frame();
+    let hover = frame.playback.hover.expect("the move set the hover");
+    assert_eq!(hover.fraction, 0.5);
+    assert_eq!(hover.ticks, 5 * 60 * mbv_emby_model::TICKS_PER_SECOND);
+    // No queue item carries the playhead, so no chapter covers the point.
+    assert_eq!(hover.chapter, None);
+
+    test.tx.send(move_at(500.0, 500.0)).unwrap();
+    assert!(test.core.step());
+    let frame = test.next_frame();
+    assert_eq!(frame.playback.hover, None);
 }

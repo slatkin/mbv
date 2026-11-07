@@ -25,7 +25,7 @@ use mbv_surfaces::gesture::{PointerGesture, PointerGestureState};
 use mbv_surfaces::queue::QueueSurface;
 use mbv_surfaces::queue_playback::QueuePlaybackSurface;
 use mbv_surfaces::status_bar::StatusBarSurface;
-use mbv_surfaces::{FocusStack, HitMap};
+use mbv_surfaces::{FocusStack, HitMap, HitRegion};
 use mbv_ui_model::queue_rows::queue_media_rows;
 use mbv_ui_model::settings::PanelFocus;
 use mbv_ui_msg::{ComponentId, KeyEvent, Msg, PointerEvent, Position, ServiceRequest};
@@ -34,7 +34,7 @@ use crate::artwork::ArtworkFrames;
 use crate::attach::{AttachCampaign, LibraryOwnerSteps};
 use crate::bridge::frame::{FrameSources, GuiFrame, GuiWindowFrame};
 use crate::bridge::layout::{
-    LayoutReport, LayoutSize, ListId, QueueTargetId, RegionTarget, hit_map,
+    LayoutReport, LayoutSize, ListId, QueuePlaybackTargetId, QueueTargetId, RegionTarget, hit_map,
 };
 use crate::leaves::{PlaybackLeaf, QueueLeaf, StatusBarLeaf, TransportAvailability, gesture_point};
 
@@ -278,6 +278,26 @@ impl CoreThread {
         }
         self.regions = hit_map(&report.regions);
         self.container_size = report.container_size;
+        // The regions the hover resolves against just rebuilt: a hover over
+        // a moved or unpainted bar is stale, so it clears and the next move
+        // over a painted bar re-arms it.
+        self.playback.set_scrubber_hover(None);
+    }
+
+    /// The last painted seekbar region holding `at`, the resolution
+    /// precedence the hit map gives the last push; `None` when the pointer
+    /// is away from the bar.
+    fn seekbar_region_at(&self, at: Position) -> Option<HitRegion> {
+        self.regions
+            .iter()
+            .filter(|(region, target)| {
+                matches!(
+                    target,
+                    RegionTarget::QueuePlayback(QueuePlaybackTargetId::Seekbar)
+                ) && region.contains(at)
+            })
+            .last()
+            .map(|(region, _)| *region)
     }
 
     /// Route one translated key chord through the shared router with the
@@ -317,6 +337,14 @@ impl CoreThread {
         // drag end, or a press on no reported region still cancels an armed
         // prefix; the pointer arm itself delivers nothing else.
         self.app.route_gui_input(GuiInput::Pointer(event), None);
+        // The scrubber's hover preview (design D4: "a move over the
+        // scrubber carries the hover"): the event's position resolves
+        // against the painted bar through the same fraction rule a seek
+        // uses, and a position away from the bar clears it.
+        let hover = self
+            .seekbar_region_at(event.position)
+            .and_then(|bar| self.playback.seek_target(bar, event.position.x));
+        self.playback.set_scrubber_hover(hover);
         let now = Instant::now();
         let Some(gesture) =
             self.gestures
@@ -360,8 +388,11 @@ impl CoreThread {
             Some(RegionTarget::QueuePlayback(_)) => {
                 // The TUI's playback-panel click applies no focus change, so
                 // the core applies none: the press works while the Queue
-                // panel holds focus (design D4).
-                let availability = self.app.queue_playback_projection().availability;
+                // panel holds focus (design D4). One projection read feeds
+                // the availability and the chooser's live choice list the
+                // leaf resolves a `TargetChoice` region against.
+                let projection = self.app.queue_playback_projection();
+                let availability = projection.availability;
                 let Self {
                     app,
                     playback,
@@ -376,6 +407,7 @@ impl CoreThread {
                         previous: availability.previous,
                         next: availability.next,
                     },
+                    &projection.target_choices,
                 );
                 app.route_gui_pointer(gesture, Some(&mut leaf));
             }
@@ -473,6 +505,7 @@ impl CoreThread {
             app: &self.app,
             focus: &self.focus,
             queue: &self.queue,
+            playback: &self.playback,
             viewport_rows: self.viewport_rows,
             theme_changed,
             artwork,

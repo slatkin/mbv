@@ -154,6 +154,18 @@ pub enum QueuePlaybackTargetId {
     PlaybackTarget,
     /// The visual slot's image rectangle.
     VisualSlot,
+    /// The back-10 s control: the `seek_back` chord's pointer target
+    /// (add-tauri-gui-client row 6.4).
+    SeekBack,
+    /// The forward-30 s control: the `seek_forward` chord's pointer target.
+    SeekForward,
+    /// The header's collapse control: the `z` toggle's pointer target.
+    Collapse,
+    /// The header's queue-fold control: the `q` toggle's pointer target.
+    QueueFold,
+    /// One row of the open playback-target chooser: the choice's index in
+    /// the frame's `targetChoices` list.
+    TargetChoice(usize),
 }
 
 /// The Status bar target ids, mirroring `StatusBarHitTarget`.

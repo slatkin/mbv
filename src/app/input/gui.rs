@@ -118,11 +118,12 @@ impl App {
                 queue_only_idle: false,
                 idle_feed_link_available: self.idle_feed_link_available(),
             },
-            // The GUI's one blocking overlay is the open row menu or track
-            // popover (add-tauri-gui-client row 6.2): the same focus fact the
-            // TUI's mounted context menu reports, so the global bindings
-            // close while an overlay is up and the overlay's own key rules
-            // consume the chord. No other overlay mounts in this slice.
+            // The GUI's one blocking overlay is the open row menu, track
+            // popover, or playback-target chooser (add-tauri-gui-client rows
+            // 6.2 and 6.4): the same focus fact the TUI's mounted context
+            // menu reports, so the global bindings close while an overlay is
+            // up and the overlay's own key rules consume the chord. No other
+            // overlay mounts in this slice.
             overlays: RouterOverlayState {
                 focus: if self.gui_overlay.is_some() {
                     OverlayFocus::ContextMenu
@@ -406,6 +407,26 @@ impl App {
             },
             // The Status bar's selection summary is row 6.5's.
             ShellRequest::SelectionProjection(_) => {}
+            // The header's playback-target press emits the same opener the
+            // TUI's indicator sends the Sessions sidebar (add-tauri-gui-
+            // client row 6.4); the GUI's counterpart is the Client-core
+            // chooser overlay, and the press toggles it as F3 toggles the
+            // sidebar.
+            ShellRequest::OpenSessions => self.toggle_gui_target_chooser(),
+            // A chooser row's press selects its output through the same
+            // dispatch the TUI's Sessions sidebar applies on its selected
+            // row: resolve the stable key against the current target
+            // snapshot, do nothing when the target is gone, and close the
+            // chooser on the selection the sidebar's dismiss carries.
+            ShellRequest::SelectSession(key) => {
+                if let Some(target) = crate::app::state::panel_targets::resolve_session_target(
+                    &self.panel_targets,
+                    &key,
+                ) {
+                    self.select_panel_target(target);
+                    self.gui_overlay = None;
+                }
+            }
             request => {
                 tracing::debug!(
                     name: "gui.surface_msg.undelivered",

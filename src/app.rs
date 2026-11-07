@@ -6,7 +6,7 @@ mod dispatch;
 mod gui_client_state;
 #[cfg(feature = "test")]
 pub use self::app_stub::{
-    stub_app_with_armed_emby_fill, stub_app_with_open_row_menu,
+    stub_app_with_armed_emby_fill, stub_app_with_cast_target, stub_app_with_open_row_menu,
     stub_app_with_pending_settings_save, stub_app_with_playing_items, stub_app_with_playing_queue,
     stub_app_with_prefix_and_toast, stub_app_with_queue, stub_app_with_rebound_quit,
     stub_app_with_track_popover, stub_app_with_unsaved_queue,

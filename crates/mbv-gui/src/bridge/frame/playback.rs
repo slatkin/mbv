@@ -12,7 +12,7 @@ use serde::Serialize;
 
 use super::theme::GuiRole;
 /// The Queue playback band's facts for one frame.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GuiQueuePlayback {
     /// The now-playing status that the header row shows.
@@ -74,6 +74,26 @@ pub struct GuiQueuePlayback {
     /// receivers the Owner offers, each marked with whether it is the Owner's
     /// attached output.
     pub target_choices: Vec<GuiTargetChoice>,
+    /// The scrubber's hover preview (add-tauri-gui-client row 6.4): the
+    /// pointer's fraction along the bar and the time and chapter it names.
+    /// `None` while the pointer is away from the bar.
+    pub hover: Option<GuiScrubberHover>,
+}
+
+/// The scrubber's hover preview (design D4): the position a move over the
+/// painted bar carried, resolved to the time and chapter it names. The
+/// trickplay tile bytes are task 6.7's fetch; the preview's frame is not
+/// part of this datum.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GuiScrubberHover {
+    /// The pointer's fraction along the painted bar.
+    pub fraction: f64,
+    /// The time at the pointer's position, in Emby ticks.
+    pub ticks: i64,
+    /// The chapter covering the pointer's position, when the active item's
+    /// chapters cover it.
+    pub chapter: Option<String>,
 }
 
 /// One status indicator of the queue band's cluster, mirroring
@@ -147,6 +167,7 @@ impl From<&QueuePlaybackProjection> for GuiQueuePlayback {
                 .iter()
                 .map(GuiTargetChoice::from)
                 .collect(),
+            hover: None,
         }
     }
 }

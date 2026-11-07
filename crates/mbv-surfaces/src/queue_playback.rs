@@ -30,6 +30,24 @@ pub enum QueuePlaybackHitTarget {
     /// The visual slot's image rectangle: a press there anchors the slot's
     /// context menu.
     VisualSlot,
+    /// The back control (add-tauri-gui-client row 6.4): a press does the
+    /// `seek_back` chord's work. The GUI's canvas transport paints it; the
+    /// TUI band has no such control and never pushes it.
+    SeekBack,
+    /// The forward control: a press does the `seek_forward` chord's work.
+    /// GUI-painted only, as `SeekBack` is.
+    SeekForward,
+    /// The header's collapse control (the GUI canvas's `z` toggle). GUI-
+    /// painted only: the TUI's panel has no collapse.
+    Collapse,
+    /// The header's queue-fold control (the GUI canvas's `q` toggle).
+    /// GUI-painted only, as `Collapse` is.
+    QueueFold,
+    /// One row of the open playback-target chooser (add-tauri-gui-client
+    /// row 6.4): the choice's index in the chooser's painted list.
+    /// GUI-painted only: the TUI's counterpart is the Sessions sidebar,
+    /// not a region of this band.
+    TargetChoice(usize),
 }
 
 /// One frame's Queue playback interaction report (design D6): the painted
@@ -63,6 +81,11 @@ pub struct QueuePlaybackFrameReport {
 pub struct QueuePlaybackSurface {
     transport_focused: bool,
     last_scrub: Option<Instant>,
+    /// The pointer's hover fraction over the seekbar (add-tauri-gui-client
+    /// row 6.4): the scrubber preview's position, `None` while the pointer
+    /// is away from the bar. A move over the painted bar sets it, a move
+    /// away clears it.
+    scrubber_hover: Option<f64>,
 }
 
 impl QueuePlaybackSurface {
@@ -88,6 +111,20 @@ impl QueuePlaybackSurface {
     #[must_use]
     pub fn seek_target(&self, bar: HitRegion, column: f32) -> Option<f64> {
         seek_fraction(bar, column)
+    }
+
+    /// Record the pointer's hover fraction over the seekbar; `None` clears
+    /// it (the pointer left the bar, or the painted regions changed under
+    /// it).
+    pub fn set_scrubber_hover(&mut self, hover: Option<f64>) {
+        self.scrubber_hover = hover;
+    }
+
+    /// The pointer's hover fraction over the seekbar, `None` while the
+    /// pointer is away from the bar.
+    #[must_use]
+    pub const fn scrubber_hover(&self) -> Option<f64> {
+        self.scrubber_hover
     }
 
     /// Admit one scrub of the painted bar for a left-drag from `from` to

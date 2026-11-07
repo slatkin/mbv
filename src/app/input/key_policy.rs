@@ -194,6 +194,11 @@ pub(in crate::app) enum KeyPolicyBinding {
     /// which the TUI binds to nothing (the library's inline search is a
     /// leaf-local `/`).
     GuiQueueFilterOpen,
+    /// The GUI-only key context's playback-target chooser (add-tauri-gui-
+    /// client row 6.4): `r` opens and closes the canvas's chooser, the GUI
+    /// counterpart of the TUI's F3 Sessions sidebar. No TUI default binds
+    /// `r`, so the chord collides with nothing there.
+    GuiOpenTargetChooser,
 }
 
 impl KeyPolicyBinding {
@@ -221,6 +226,7 @@ impl KeyPolicyBinding {
             Self::GuiCycleSubtitle => chord.mods.is_empty() && chord.code == Key::Char('c'),
             Self::GuiRightColumnToggle => chord.mods.is_empty() && chord.code == Key::Char('t'),
             Self::GuiQueueFilterOpen => chord.mods.is_empty() && chord.code == Key::Char('/'),
+            Self::GuiOpenTargetChooser => chord.mods.is_empty() && chord.code == Key::Char('r'),
             _ => false,
         }
     }
@@ -422,6 +428,13 @@ pub(in crate::app) const KEY_POLICY: &[KeyPolicyEntry] = &[
         name: "gui_queue_filter_open",
         global: true,
         binding: KeyPolicyBinding::GuiQueueFilterOpen,
+        gate: KeyPolicyGate::GuiClient,
+        blocking: false,
+    },
+    KeyPolicyEntry {
+        name: "gui_open_target_chooser",
+        global: true,
+        binding: KeyPolicyBinding::GuiOpenTargetChooser,
         gate: KeyPolicyGate::GuiClient,
         blocking: false,
     },
@@ -722,6 +735,7 @@ fn command_for_simple_binding(binding: KeyPolicyBinding) -> Option<Command> {
         KeyPolicyBinding::GuiCycleSubtitle => Some(PlaybackIntent::CycleOrToggleSubtitle.into()),
         KeyPolicyBinding::GuiRightColumnToggle => Some(PanelIntent::ToggleQueueRightColumn.into()),
         KeyPolicyBinding::GuiQueueFilterOpen => Some(PanelIntent::ActivateQueueFilter.into()),
+        KeyPolicyBinding::GuiOpenTargetChooser => Some(PanelIntent::ToggleTargetChooser.into()),
         _ => None,
     }
 }

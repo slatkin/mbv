@@ -52,6 +52,13 @@ impl crate::app::App {
                 self.dispatch_playback(&AppCommand::Playback(PlaybackIntent::NextTrack));
             }
             PlaybackRequest::SeekTo(fraction) => self.seek_to_fraction(*fraction),
+            // The canvas's back and forward controls emit the deltas the
+            // `seek_back`/`seek_forward` chords carry, so the request
+            // dispatches the same intent the chord resolves to
+            // (add-tauri-gui-client row 6.4).
+            PlaybackRequest::SeekRelative(delta) => {
+                self.dispatch_playback(&AppCommand::Playback(PlaybackIntent::SeekRelative(*delta)));
+            }
             PlaybackRequest::ToggleMute => {
                 self.dispatch_playback(&AppCommand::Playback(PlaybackIntent::ToggleMute));
             }
@@ -71,6 +78,13 @@ impl crate::app::App {
             // chip, so no TUI leaf produces the request; the arm is here for
             // the shared dispatch's exhaustiveness.
             PlaybackRequest::OpenTrackPopover(chip) => self.open_gui_track_popover(*chip),
+            // The canvas header's collapse and queue-fold controls: the GUI
+            // Client's header emits them (add-tauri-gui-client row 6.4) and
+            // they run the `z`/`q` toggles' own effects. The TUI paints no
+            // such control; the arms are here for the shared dispatch's
+            // exhaustiveness.
+            PlaybackRequest::TogglePanelCollapse => self.toggle_panel_collapse(),
+            PlaybackRequest::ToggleQueueFold => self.toggle_queue_fold(),
         }
     }
 

@@ -100,6 +100,14 @@ export type GuiOverlayFrame =
 			chip: GuiTrackChipKind;
 			cursor: number;
 			choices: GuiTrackPopoverChoice[];
+	  }
+	| {
+			/** The playback-target chooser (row 6.4): the cursor and the
+			 * cast/session choices — the same list `playback.targetChoices`
+			 * carries. */
+			kind: 'targetChooser';
+			cursor: number;
+			choices: GuiTargetChoice[];
 	  };
 
 /** One row-menu entry: the label and the key hint that selects it
@@ -218,6 +226,24 @@ export interface GuiQueuePlayback {
 	 * cast receivers the Owner offers, each marked with whether it is the
 	 * Owner's attached output. */
 	targetChoices: GuiTargetChoice[];
+	/** The scrubber's hover preview (row 6.4): the pointer's fraction along
+	 * the bar and the time and chapter it names. `null` while the pointer
+	 * is away from the bar. */
+	hover: GuiScrubberHover | null;
+}
+
+/** The scrubber's hover preview (design D4): the position a move over the
+ * painted bar carried, resolved to the time and chapter it names. The
+ * trickplay tile bytes are task 6.7's fetch; the preview's frame is not
+ * part of this datum. */
+export interface GuiScrubberHover {
+	/** The pointer's fraction along the painted bar. */
+	fraction: number;
+	/** The time at the pointer's position, in Emby ticks. */
+	ticks: number;
+	/** The chapter covering the pointer's position, when the active item's
+	 * chapters cover it. */
+	chapter: string | null;
 }
 
 /** One chapter boundary of the active item: the scrubber's boundary tick
@@ -521,6 +547,11 @@ export type QueuePlaybackTargetId =
 	| 'next'
 	| 'seekbar'
 	| 'playbackTarget'
-	| 'visualSlot';
+	| 'visualSlot'
+	| 'seekBack'
+	| 'seekForward'
+	| 'collapse'
+	| 'queueFold'
+	| { targetChoice: number };
 
 export type StatusBarTargetId = 'volumePill' | 'mutePill' | 'visualClear';

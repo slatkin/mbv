@@ -3383,6 +3383,7 @@ dependencies = [
  "mbv",
  "mbv-config",
  "mbv-core",
+ "mbv-ctrl",
  "mbv-daemon",
  "mbv-emby-model",
  "mbv-images",

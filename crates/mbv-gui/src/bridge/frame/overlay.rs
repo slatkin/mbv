@@ -1,13 +1,16 @@
-//! The open overlay's frame section (add-tauri-gui-client row 6.2, design
-//! D4): the row menu with its key hints, or a track chip's popover with its
-//! choices. Each field mirrors one fact of the library's
-//! `GuiOverlayProjection`, built from the same playback projection read the
-//! frame carries, so the popover's choices and the track chips cannot
-//! disagree inside one frame.
+//! The open overlay's frame section (add-tauri-gui-client rows 6.2 and
+//! 6.4, design D4): the row menu with its key hints, a track chip's popover
+//! with its choices, or the playback-target chooser with its choices. Each
+//! field mirrors one fact of the library's `GuiOverlayProjection`, built
+//! from the same playback projection read the frame carries, so the
+//! popover's choices and the track chips, and the chooser's choices and the
+//! header's target fact, cannot disagree inside one frame.
 
 use mbv::{GuiOverlayProjection, RowMenuEntryProjection, TrackPopoverChoice};
 use mbv_ui_msg::TrackChipKind;
 use serde::Serialize;
+
+use super::playback::GuiTargetChoice;
 
 /// The open menu or popover the window paints. `None` in the frame while no
 /// overlay is open.
@@ -27,6 +30,13 @@ pub enum GuiOverlayFrame {
         cursor: usize,
         choices: Vec<GuiTrackPopoverChoice>,
     },
+    /// The playback-target chooser (add-tauri-gui-client row 6.4): the
+    /// cursor and the cast/session choices — the same list the playback
+    /// section's `targetChoices` carries.
+    TargetChooser {
+        cursor: usize,
+        choices: Vec<GuiTargetChoice>,
+    },
 }
 
 impl From<&GuiOverlayProjection> for GuiOverlayFrame {
@@ -44,6 +54,10 @@ impl From<&GuiOverlayProjection> for GuiOverlayFrame {
                 chip: GuiTrackChipKind::from(*chip),
                 cursor: *cursor,
                 choices: choices.iter().map(GuiTrackPopoverChoice::from).collect(),
+            },
+            GuiOverlayProjection::TargetChooser { cursor, choices } => Self::TargetChooser {
+                cursor: *cursor,
+                choices: choices.iter().map(GuiTargetChoice::from).collect(),
             },
         }
     }

@@ -93,6 +93,7 @@ function sliceFrame(theme: GuiTheme | null): GuiWindowFrame {
 				trickplay: null,
 				trackChips: null,
 				targetChoices: [],
+				hover: null,
 			},
 			footer: {
 				owner: { text: '', role: 'textPrimary', bold: false },

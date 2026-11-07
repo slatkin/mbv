@@ -17,8 +17,11 @@ use mbv_ui_model::context_menu::{ContextAction, ContextMenuEntry};
 use mbv_ui_msg::{Key, KeyEvent, KeyModifiers, TrackChipKind};
 
 use crate::app::App;
-use crate::app::queue_playback_projection::{QueuePlaybackProjection, TrackChip, TrackChips};
+use crate::app::queue_playback_projection::{
+    PlaybackTargetChoice, QueuePlaybackProjection, TrackChip, TrackChips,
+};
 use crate::app::queue_summary_projection::QueueRightColumn;
+use crate::app::state::panel_targets::resolve_session_target;
 
 /// The canvas panel's collapse and queue-fold facts (design D10): the front
 /// end picks the panel layout from its container size plus these two
@@ -69,6 +72,13 @@ pub enum GuiOverlayProjection {
         cursor: usize,
         choices: Vec<TrackPopoverChoice>,
     },
+    /// The playback-target chooser (add-tauri-gui-client row 6.4): the
+    /// cursor and the cast/session choices, the same list the playback
+    /// section's `target_choices` carries.
+    TargetChooser {
+        cursor: usize,
+        choices: Vec<PlaybackTargetChoice>,
+    },
 }
 
 /// The open queue row's menu, held by the Client core while it is up. The
@@ -92,11 +102,21 @@ pub(in crate::app) struct TrackPopoverState {
     pub(in crate::app) cursor: usize,
 }
 
-/// The GUI Client's open overlay (design D4a): the row menu, or a track
-/// chip's popover. `App::gui_overlay` holds the open one.
+/// The open playback-target chooser (add-tauri-gui-client row 6.4): the
+/// cursor over its choices. The choice list is the projection's live
+/// `target_choices` — the state carries no copy, so a target arriving or
+/// leaving is visible on the next frame and the cursor clamps at use time.
+pub(in crate::app) struct TargetChooserState {
+    pub(in crate::app) cursor: usize,
+}
+
+/// The GUI Client's open overlay (design D4a): the row menu, a track chip's
+/// popover, or the playback-target chooser. `App::gui_overlay` holds the
+/// open one.
 pub(in crate::app) enum GuiOverlay {
     RowMenu(GuiRowMenu),
     TrackPopover(TrackPopoverState),
+    TargetChooser(TargetChooserState),
 }
 
 /// One key's outcome over the open overlay: consumed with nothing to run,
@@ -179,43 +199,57 @@ impl GuiRowMenu {
     }
 }
 
+/// One chooser-style overlay list's key rules: unmodified Up/Down move the
+/// wrapping cursor over `choices`, Enter chooses the cursor choice, Esc
+/// dismisses, and every other chord is dropped — the overlay owns the
+/// keyboard while it is open, exactly as the TUI's mounted blocking overlay
+/// does. Returns the choice index to execute.
+fn apply_overlay_list_key(cursor: &mut usize, key: KeyEvent, choices: usize) -> OverlayKeyOutcome {
+    match key.code {
+        Key::Up if key.modifiers.is_empty() => {
+            move_overlay_cursor(cursor, false, choices);
+            OverlayKeyOutcome::Consumed
+        }
+        Key::Down if key.modifiers.is_empty() => {
+            move_overlay_cursor(cursor, true, choices);
+            OverlayKeyOutcome::Consumed
+        }
+        Key::Enter if key.modifiers.is_empty() => OverlayKeyOutcome::Execute(*cursor),
+        Key::Esc if key.modifiers.is_empty() => OverlayKeyOutcome::Dismiss,
+        _ => OverlayKeyOutcome::Consumed,
+    }
+}
+
+/// Move the wrapping cursor one choice within a list of `choices`.
+fn move_overlay_cursor(cursor: &mut usize, down: bool, choices: usize) {
+    if choices == 0 {
+        return;
+    }
+    let last = choices - 1;
+    *cursor = if down {
+        if *cursor >= last { 0 } else { *cursor + 1 }
+    } else if *cursor == 0 {
+        last
+    } else {
+        *cursor - 1
+    };
+}
+
 impl TrackPopoverState {
     /// The popover's key rules: unmodified Up/Down move the wrapping cursor
     /// over `choices`, Enter chooses the cursor choice, Esc dismisses, and
     /// every other chord is dropped. Returns the choice index to execute.
     fn apply_key(&mut self, key: KeyEvent, choices: usize) -> OverlayKeyOutcome {
-        match key.code {
-            Key::Up if key.modifiers.is_empty() => {
-                self.move_cursor(false, choices);
-                OverlayKeyOutcome::Consumed
-            }
-            Key::Down if key.modifiers.is_empty() => {
-                self.move_cursor(true, choices);
-                OverlayKeyOutcome::Consumed
-            }
-            Key::Enter if key.modifiers.is_empty() => OverlayKeyOutcome::Execute(self.cursor),
-            Key::Esc if key.modifiers.is_empty() => OverlayKeyOutcome::Dismiss,
-            _ => OverlayKeyOutcome::Consumed,
-        }
+        apply_overlay_list_key(&mut self.cursor, key, choices)
     }
+}
 
-    /// Move the wrapping cursor one choice within a list of `choices`.
-    fn move_cursor(&mut self, down: bool, choices: usize) {
-        if choices == 0 {
-            return;
-        }
-        let last = choices - 1;
-        self.cursor = if down {
-            if self.cursor >= last {
-                0
-            } else {
-                self.cursor + 1
-            }
-        } else if self.cursor == 0 {
-            last
-        } else {
-            self.cursor - 1
-        };
+impl TargetChooserState {
+    /// The chooser's key rules: the shared chooser-list rules, Enter
+    /// selecting the cursor choice's output. Returns the choice index to
+    /// execute.
+    fn apply_key(&mut self, key: KeyEvent, choices: usize) -> OverlayKeyOutcome {
+        apply_overlay_list_key(&mut self.cursor, key, choices)
     }
 }
 
@@ -259,6 +293,13 @@ impl App {
                     choices: track_popover_choices(popover.chip, chips),
                 })
             }
+            // The chooser's choices are the same `target_choices` the
+            // playback section carries, so the chooser and the header's
+            // target fact cannot disagree inside one frame.
+            Some(GuiOverlay::TargetChooser(chooser)) => Some(GuiOverlayProjection::TargetChooser {
+                cursor: chooser.cursor,
+                choices: playback.target_choices.clone(),
+            }),
             None => None,
         }
     }
@@ -339,6 +380,26 @@ impl App {
         self.gui_overlay = Some(GuiOverlay::TrackPopover(TrackPopoverState { chip, cursor }));
     }
 
+    /// Toggle the playback-target chooser (add-tauri-gui-client row 6.4):
+    /// the canvas header's target press and the GUI-only `r` chord both
+    /// open it, the same gesture closes it — the toggle the TUI's F3
+    /// Sessions sidebar applies (`request_sidebar_toggle`). The chooser
+    /// opens even with no remote targets to list, as the sidebar does. The
+    /// cursor starts on the Owner's attached output, as the popover's
+    /// starts on the chosen track.
+    pub(in crate::app) fn toggle_gui_target_chooser(&mut self) {
+        self.gui_overlay = if let Some(GuiOverlay::TargetChooser(_)) = &self.gui_overlay {
+            None
+        } else {
+            let cursor = self
+                .playback_target_choices()
+                .iter()
+                .position(|choice| choice.is_active)
+                .unwrap_or(0);
+            Some(GuiOverlay::TargetChooser(TargetChooserState { cursor }))
+        };
+    }
+
     /// Drop a track popover whose chip source is gone: the popover's
     /// choices are the local player's stream, so once the player goes
     /// inactive the frame projects no overlay for it
@@ -367,9 +428,17 @@ impl App {
         let popover_choices = popover_chip
             .and_then(|chip| self.track_popover_choices(chip))
             .map_or(0, |choices| choices.len());
+        // The chooser's cursor clamps against the same live list the frame
+        // projects, read before the overlay borrow as the popover's is.
+        let chooser_choices = if matches!(self.gui_overlay, Some(GuiOverlay::TargetChooser(_))) {
+            self.playback_target_choices().len()
+        } else {
+            0
+        };
         let outcome = match &mut self.gui_overlay {
             Some(GuiOverlay::RowMenu(menu)) => menu.apply_key(key),
             Some(GuiOverlay::TrackPopover(popover)) => popover.apply_key(key, popover_choices),
+            Some(GuiOverlay::TargetChooser(chooser)) => chooser.apply_key(key, chooser_choices),
             None => return false,
         };
         match outcome {
@@ -411,6 +480,19 @@ impl App {
                 match popover.chip {
                     TrackChipKind::Audio => self.set_audio_track(choice.id),
                     TrackChipKind::Subtitles => self.set_subtitle_track(choice.id),
+                }
+            }
+            // A chooser Enter selects the cursor choice's output: the same
+            // dispatch the TUI's Sessions sidebar applies on its selected
+            // row — resolve the choice's stable key against the current
+            // target snapshot, and do nothing when the target is gone
+            // (design D6's shell-side resolution, applied Client-side).
+            GuiOverlay::TargetChooser(_) => {
+                let Some(choice) = self.playback_target_choices().get(index).cloned() else {
+                    return;
+                };
+                if let Some(target) = resolve_session_target(&self.panel_targets, &choice.key) {
+                    self.select_panel_target(target);
                 }
             }
         }
