@@ -68,6 +68,11 @@ export interface GuiQueueSummary {
 	/** The slots after the active index; the whole queue while no slot
 	 * carries the playhead. */
 	remaining: number;
+	/** The title of the first slot after the playhead (review of row 6.6,
+	 * finding P2): the compact strip's next-item line. It comes from the
+	 * queue, not from the painted rows, because the strip paints no Queue
+	 * list. `null` while no slot follows the playhead. */
+	nextTitle: string | null;
 	/** The wall-clock time the shown queue finishes; `null` while no slot
 	 * carries the playhead or a pending runtime in the chain is unknown. */
 	finishClock: string | null;

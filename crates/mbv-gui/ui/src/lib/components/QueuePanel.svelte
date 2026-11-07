@@ -84,6 +84,7 @@
 	 * facts. `App.svelte` always carries the frame's real section. */
 	const EMPTY_SUMMARY: GuiQueueSummary = {
 		remaining: 0,
+		nextTitle: null,
 		finishClock: null,
 		rightColumn: 'length',
 		filter: '',

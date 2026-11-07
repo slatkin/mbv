@@ -60,6 +60,7 @@ function sliceFrame(theme: GuiTheme | null): GuiWindowFrame {
 			queue: { rows: [], cursor: null, marks: [], active: null, hover: null, drag: null },
 			summary: {
 				remaining: 0,
+				nextTitle: null,
 				finishClock: null,
 				rightColumn: 'length',
 				filter: '',

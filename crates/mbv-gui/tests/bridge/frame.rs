@@ -95,6 +95,7 @@ fn empty_queue_frame_carries_no_rows() {
     assert_eq!(frame.queue.rows.len(), 0);
     assert_eq!(frame.queue.active, None);
     assert_eq!(frame.summary.remaining, 0);
+    assert_eq!(frame.summary.next_title, None);
     assert_eq!(frame.summary.finish_clock, None);
     assert_eq!(frame.summary.right_column, GuiRightColumn::Length);
     assert_eq!(frame.summary.filter, "");
@@ -107,6 +108,23 @@ fn empty_queue_frame_carries_no_rows() {
     assert_eq!(frame.playback.intro_mark, None);
     assert_eq!(frame.playback.credits_mark, None);
     assert_eq!(frame.playback.trickplay, None);
+}
+
+/// The summary names the slot after the playhead's title (review of
+/// add-tauri-gui-client row 6.6, finding P2): the compact strip paints no
+/// Queue list, so its next-item line cannot read `GuiQueue::rows` — the
+/// datum comes from the queue itself. A playhead on the last slot has no
+/// successor and names none. The stub numbers its slots from 1 and names
+/// each item `Item <index>`, the first one playing.
+#[test]
+fn the_summary_names_the_slot_after_the_playhead_review_u66_p2() {
+    let mut app = stub_app_with_playing_queue(3);
+    let frame = frame_after_tick(&mut app);
+    assert_eq!(frame.summary.next_title.as_deref(), Some("Item 1"));
+
+    let mut app = stub_app_with_playing_queue(1);
+    let frame = frame_after_tick(&mut app);
+    assert_eq!(frame.summary.next_title, None);
 }
 
 /// One Emby movie slot with its own stored facts: the runtime, the resume

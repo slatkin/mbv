@@ -34,7 +34,8 @@ pub enum QueueRightColumn {
 }
 
 /// The Queue summary's facts for one read: the header's remaining count and
-/// finish clock, plus each pending slot's end-of-play wall clock.
+/// finish clock, the next item's title, plus each pending slot's end-of-play
+/// wall clock.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct QueueSummaryProjection {
     /// The slots after the active index: the queue's remaining play. The
@@ -42,6 +43,12 @@ pub struct QueueSummaryProjection {
     /// playback, slotless output, or a playhead the shown queue does not
     /// know yet.
     pub remaining: usize,
+    /// The title of the first slot after the playhead (review of
+    /// add-tauri-gui-client row 6.6, finding P2): the compact strip's
+    /// next-item line, read from the queue rather than from the frame's
+    /// viewport rows, which need not hold the playhead. `None` while no slot
+    /// carries the playhead or none follows it.
+    pub next_title: Option<String>,
     /// The wall-clock time the shown queue finishes, formatted in the local
     /// zone: the active slot's remaining time plus every pending slot's
     /// runtime after it. `None` while no slot carries the playhead or a
@@ -84,6 +91,7 @@ impl App {
         let Some(index) = active_index else {
             return QueueSummaryProjection {
                 remaining: slots.len(),
+                next_title: None,
                 finish_clock: None,
                 row_finish_clocks: Vec::new(),
                 right_column,
@@ -91,11 +99,13 @@ impl App {
                 filter_active,
             };
         };
+        let next_title = self.next_slot_title(slots, index);
         let anchor =
             playback_finish_epoch(now_unix_secs(), state.position_ticks, state.runtime_ticks);
         let Some(anchor) = anchor else {
             return QueueSummaryProjection {
                 remaining: slots.len() - index - 1,
+                next_title,
                 finish_clock: None,
                 row_finish_clocks: Vec::new(),
                 right_column,
@@ -106,6 +116,7 @@ impl App {
         let (ends, finish) = finish_chain(slots, index, anchor);
         QueueSummaryProjection {
             remaining: slots.len() - index - 1,
+            next_title,
             finish_clock: finish.map(|secs| fmt_wall_clock(secs, offset)),
             row_finish_clocks: ends
                 .into_iter()
@@ -115,6 +126,15 @@ impl App {
             filter,
             filter_active,
         }
+    }
+
+    /// The title of the slot after the playhead: the compact strip's
+    /// next-item line (review of add-tauri-gui-client row 6.6, finding P2).
+    /// `None` while no slot follows the playhead.
+    fn next_slot_title(&self, slots: &[QueueSlot], active_index: usize) -> Option<String> {
+        slots
+            .get(active_index + 1)
+            .map(|slot| self.playback_title_parts(&slot.item).title.text)
     }
 }
 

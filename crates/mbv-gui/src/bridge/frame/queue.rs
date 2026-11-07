@@ -304,6 +304,12 @@ pub struct GuiQueueSummary {
     /// The slots after the active index: the queue's remaining play. The
     /// whole queue's slot count while no slot carries the playhead.
     pub remaining: usize,
+    /// The title of the first slot after the playhead (review of
+    /// add-tauri-gui-client row 6.6, finding P2): the compact strip's
+    /// next-item line. It comes from the queue, not from `GuiQueue::rows`,
+    /// because the strip paints no Queue list and its viewport need not hold
+    /// the playhead row. `None` while no slot follows the playhead.
+    pub next_title: Option<String>,
     /// The wall-clock time the shown queue finishes, formatted in the local
     /// zone. `None` while no slot carries the playhead or a pending runtime
     /// in the chain is unknown.
@@ -322,6 +328,7 @@ impl From<&QueueSummaryProjection> for GuiQueueSummary {
     fn from(summary: &QueueSummaryProjection) -> Self {
         Self {
             remaining: summary.remaining,
+            next_title: summary.next_title.clone(),
             finish_clock: summary.finish_clock.clone(),
             right_column: GuiRightColumn::from(summary.right_column),
             filter: summary.filter.clone(),

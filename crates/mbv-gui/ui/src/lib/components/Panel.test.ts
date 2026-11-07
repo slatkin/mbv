@@ -68,13 +68,18 @@ function queue(): GuiQueue {
 
 /** The attached slice's frame: a playing item with carried artwork, the two
  * slot queue, and the footer line. A case overrides the toggles the state
- * under test reads. */
-function frame(panel: GuiPanelToggles): GuiFrame {
+ * under test reads, and the queue the strip's next-item line must not depend
+ * on (review of row 6.6, finding P2). */
+function frame(
+	panel: GuiPanelToggles,
+	overrides: { queue?: GuiQueue; nextTitle?: string | null } = {},
+): GuiFrame {
 	return {
 		focus: { surface: 'queue', panel: 'queue' },
-		queue: queue(),
+		queue: overrides.queue ?? queue(),
 		summary: {
 			remaining: 1,
+			nextTitle: overrides.nextTitle === undefined ? 'Second track' : overrides.nextTitle,
 			finishClock: '21:43',
 			rightColumn: 'length',
 			filter: '',
@@ -143,20 +148,37 @@ test('a tall container renders the expanded artboard', () => {
 });
 
 test('a container shorter than 520 px renders the compact strip', async () => {
+	// The playhead row (slot 1) is outside the viewport the frame carries, the
+	// state the review found (row 6.6, finding P2): with no Queue list painted,
+	// the old viewport reading named no next item. The summary carries it, so
+	// the strip still paints it.
 	const { container, getByText, queryByText } = render(Panel, {
-		frame: frame({ collapsed: false, queueFolded: false }),
+		frame: frame(
+			{ collapsed: false, queueFolded: false },
+			{ queue: { ...queue(), rows: [item(2, 'Second track')], active: 1 } },
+		),
 		container: SHORT,
 	});
 
 	expect(container.querySelector('[data-panel-state="compactStrip"]')).toBeTruthy();
 	expect(getByText('The Show · Next: Second track')).toBeTruthy();
 	expect(container.querySelector('[data-panel-state="compactStrip"] img')).toBeTruthy();
-	// The strip paints no queue: the next item names the row the queue would
-	// paint, not a painted row of its own.
+	// The strip paints no queue: the next item is a summary datum, not a
+	// painted row of its own.
 	expect(queryByText('Second track')).toBeNull();
 
 	await vi.waitFor(() => expect(lastReportedRegionIds()).toContain('playPause'));
 	expect(lastReportedRegionIds()).toEqual(['visualSlot', 'playPause', 'next']);
+});
+
+test('the strip paints the parent line alone while no slot follows the playhead', () => {
+	const { getByText, queryByText } = render(Panel, {
+		frame: frame({ collapsed: false, queueFolded: false }, { nextTitle: null }),
+		container: SHORT,
+	});
+
+	expect(getByText('The Show')).toBeTruthy();
+	expect(queryByText(/Next:/)).toBeNull();
 });
 
 test('the queue-fold toggle replaces the rows with one summary line', async () => {

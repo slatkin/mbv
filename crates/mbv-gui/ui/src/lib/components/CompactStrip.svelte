@@ -22,8 +22,8 @@
 
 	interface Props {
 		playback: GuiQueuePlayback;
-		/** The next item's title (`nextItemTitle`), `null` while the frame
-		 * cannot name it. */
+		/** The next item's title (`GuiQueueSummary.nextTitle`, review of this
+		 * row's finding P2), `null` while no slot follows the playhead. */
 		next: string | null;
 		/** The artwork the window carries for the active item (design D10). */
 		art: GuiCardArtwork | null;

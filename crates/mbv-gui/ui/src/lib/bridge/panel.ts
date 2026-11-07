@@ -11,7 +11,7 @@
 // (the spec: "The layout that the container size picks is not interaction
 // state"): the size is a measurement and the toggles are the core's.
 
-import type { GuiPanelToggles, GuiQueue, LayoutSize } from './types';
+import type { GuiPanelToggles, LayoutSize } from './types';
 
 /** One of the panel's four canvas states (design D10). */
 export type GuiPanelState =
@@ -48,29 +48,4 @@ export function panelState(container: LayoutSize, panel: GuiPanelToggles): GuiPa
 		return 'expandedWithoutQueue';
 	}
 	return 'expanded';
-}
-
-/**
- * The compact strip's next-item title: the first item row after the active
- * slot, or the first item row while no slot carries the playhead. `null` while
- * the active slot is outside the painted viewport — the frame carries the
- * viewport's rows, so a row the window cannot see cannot name the next item.
- */
-export function nextItemTitle(queue: GuiQueue): string | null {
-	let rest = queue.rows;
-	if (queue.active !== null) {
-		const index = queue.rows.findIndex(
-			(row) => row.row === 'item' && row.slot === queue.active,
-		);
-		if (index < 0) {
-			return null;
-		}
-		rest = queue.rows.slice(index + 1);
-	}
-	for (const row of rest) {
-		if (row.row === 'item') {
-			return row.primary;
-		}
-	}
-	return null;
 }

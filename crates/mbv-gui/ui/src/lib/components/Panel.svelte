@@ -16,7 +16,7 @@
 	// mounts on a later frame (the rail after `z`, the strip after a resize)
 	// paints the value the expanded artboard already adopted instead of an
 	// empty slot.
-	import { nextItemTitle, panelState } from '$lib/bridge/panel';
+	import { panelState } from '$lib/bridge/panel';
 	import type { GuiCardArtwork, GuiFrame, LayoutSize } from '$lib/bridge/types';
 	import CollapsedRail from './CollapsedRail.svelte';
 	import CompactStrip from './CompactStrip.svelte';
@@ -47,9 +47,11 @@
 	 * focused fills of the focus-reactive queue surfaces. */
 	const panelFocused = $derived(frame.focus.panel === 'queue');
 
-	/** The compact strip's next-item title, read from the frame's viewport
-	 * rows (`nextItemTitle`). */
-	const next = $derived(nextItemTitle(frame.queue));
+	/** The compact strip's next-item title: the core's summary names the
+	 * slot after the playhead independently of the painted viewport (review
+	 * of this row, finding P2) — the strip paints no Queue list, so its own
+	 * rows cannot name it. */
+	const next = $derived(frame.summary.nextTitle);
 
 	// The artwork adoption (design D10): a frame's carried value replaces the
 	// last one; a frame without one keeps painting it.

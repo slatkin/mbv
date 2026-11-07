@@ -62,6 +62,7 @@ function queue(
 function summary(overrides: Partial<GuiQueueSummary> = {}): GuiQueueSummary {
 	return {
 		remaining: 2,
+		nextTitle: null,
 		finishClock: '21:43',
 		rightColumn: 'length',
 		filter: '',
