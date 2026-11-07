@@ -2,18 +2,16 @@
 
 ## Why
 
-The GUI Client landed close to the design canvas but not on it. Gap audits of the three artboards against the built Svelte UI record about 60 divergences (missing elements, wrong painted values, wrong behaviour, and data the wire does not carry). The parent change's ruling stands: where the canvas disagrees with the current GUI UI, the canvas wins (`.handoffs/add-tauri-gui-client-artifacts/proposal.md`, "What Changes"). The user's campaign ruling adds the constraint this change works under: the TUI does not change — the canvas governs the GUI panel only. This makes the canvas the governing spec for the GUI panel and plans the alignment as small units.
+The GUI Client landed close to the design canvas but not on it. Gap audits of the artboards against the built Svelte UI record the divergences (missing elements, wrong painted values, wrong behaviour). Two rulings now govern this change, both from the user (2026-11-07, binding): **ONLY the QUEUE in the GUI is brought in line with the Claude design canvas**, and **no new functionality lands** — no new player commands, data derivations, resize, or keys; the canvas sample text is mock content. The earlier ruling stands too: where the canvas disagrees with the current GUI UI, the canvas wins, and **the TUI does not change**. The canvas stays the governing spec for the queue paint.
 
 ## What Changes
 
-- **The TUI does not change.** No row touches TUI code or output; every row that adds a shared or additive type states its TUI check, verified from the caller graph (design DR2).
-- Make the design canvas the committed, normative reference for the GUI Svelte UI (`crates/mbv-gui/ui`). The four canvas source files and the three gap audits ship inside this change and every task row cites their element names and gap IDs.
-- Align every painted value with the canvas: header, artwork slot, title, scrubber (position line and trickplay preview), transport, track chips, queue header, queue rows, footer, the three collapsed states, and the popover, row-menu, and drag visuals.
-- Carry the canvas forms through the projections and formatters the frame reads: zero-padded 24-hour clocks, the `+1d` overflow suffix on the queue finish clock, the remaining count as the canvas counts it, a 1-based row ordinal, the footer's library-context line, and a compact-minutes remaining fact for the rail. The caller graph shows the TUI reads none of these sites; the TUI's paint is untouched.
-- Add the `destructive` flag to the context-menu entry type and paint the row menu's Remove-from-queue entry in the canvas's destructive tone.
-- Resize the window with the toggles, per the user's ruling: `z` collapse shrinks the window to the collapsed state's natural size and expanding restores the remembered pre-collapse size (mini-player behavior); `q` fold shrinks the window by the queue section's height and unfolding restores.
-- Build the canvas's subtitle Offset stepper end to end: a core state, a player command and status fact, the wire fact, the popover paint, and the hint's `[` and `]` segments acting on the offset while the popover is open (the seek chords are unchanged outside it).
-- Derive and paint the canvas's chip and track-list label suffixes, and resolve the GUI's colours in its theme section to the canvas palette's hexes; `mbv-theme` and the TUI's palette stay untouched.
+- **The TUI does not change.** No row touches TUI code or output; the TUI's keybinds, palette, and paint are untouched.
+- **Scope: the queue paint only.** The narrowed change paints the expanded queue panel's queue section — header, rows, footer — and the row-menu, popover, and drag visuals, in `crates/mbv-gui/ui`, plus the queue-local canvas tokens they need. No core, Owner-side, wire, or keybind change; the one Rust edit is the GUI-only destructive flag (design DR6).
+- **Rows already merged stay landed:** the shared formatters (U1: 24-hour clocks, remaining count, `+1d` suffix, U+2212 minus), the row ordinal (U2.1), and the player top half (U3.1–U3.5: header, still slot, title, scrubber, transport) remain in the branch and out of this change's new rows.
+- **R0 reverts the two cut data units** the Svelte paint never reads: the footer `library_context` field (U2.2) and the rail `remaining_minutes` field (U2.3). Nothing in Svelte paints them.
+- **Out of scope:** collapsed states, the player top half beyond the merged rows, the subtitle Offset stepper, chip and track-list suffixes, the window resize on `z` and `q`, the library-context footer line, and the rail minutes.
+- The four canvas source files and the three gap audits stay committed inside this change; every task row cites canvas element names and gap IDs.
 
 ## Capabilities
 
@@ -23,11 +21,11 @@ None.
 
 ### Modified Capabilities
 
-- `gui-client`: the panel states get a precedence rule with the window-resize ruling; the player panel, the queue, the track chips, the scrubber, and the typography gain canvas conformance clauses (clock format, minus sign, row ordinals, header wording, destructive menu tone, footer library-context line, offset row, suffix labels, GUI-local palette).
+- `gui-client`: the queue, row menu, popover, and drag visuals gain canvas paint clauses (header wording, one-line rows with ordinals, destructive tone, popover chrome and placement, hover chrome, GUI-local canvas tokens). The window-resize and Offset-row requirements, the panel-state-size requirement, the footer library-context scenario, the chip chevron and suffix clauses, and the theme-section palette clause are deleted from this delta; the base `gui-client` spec already requires the prefix, toast, and status projection they carried.
 
 ## Impact
 
-- `crates/mbv-ui-model` (clock formatter), `src/app/queue_summary_projection.rs` and `src/app/queue_playback_projection.rs` (clock, remaining count, overflow suffix, compact minutes), `crates/mbv-ui-model/src/context_menu.rs` and the row-menu builder (destructive flag, hint glyphs), `crates/mbv-gui/src/bridge/` (new frame fields), most `crates/mbv-gui/ui/src/lib/components/` files, and, for the Offset stepper, the owner-side player path (one `PlayerCommand` variant and one status fact).
-- `crates/mbv-gui/capabilities/default.json`: a new window-size permission for the resize command path.
-- The TUI's code and paint are unchanged. The clock, count, suffix, and badge values land in sites the caller graph shows have no TUI reader (design DR2), the context-menu flag is additive with no TUI painter (design DR8), and the Offset command and status fact have no TUI caller, binding, or paint.
-- No Tauri, ctrl (beyond the Offset command's one variant), Owner lifecycle, or crash-affecting change: the front end stays a painter and the core keeps every interaction state.
+- `crates/mbv-gui/ui`: `src/app.css` (queue-local `--canvas-*` tokens), `QueueHeader.svelte`, `QueuePanel.svelte`, `QueueFooter.svelte`, `QueueRowMenu.svelte`, `TrackChips.svelte`, and their `*.test.ts` files; `src/lib/bridge/types.ts` for the destructive flag.
+- `src/app/gui_client_state.rs` (`RowMenuEntryProjection`), `crates/mbv-gui/src/bridge/frame/overlay.rs` (`GuiRowMenuEntry`), and `src/app/queue_footer_projection.rs` / `crates/mbv-gui/src/bridge/frame/playback.rs` only for the R0 revert — no new projection or wire field anywhere.
+- `docs/architecture/gui-client.md`: the narrowed scope, the tokens, the GUI-only flag, and the paint-time hint glyph.
+- The TUI's code and paint are unchanged: the shared type surfaces this change touches are the GUI-only menu projection, the reverted fields the TUI never painted, and the front end's own CSS. No Tauri, ctrl, Owner lifecycle, stored-state, or crash-affecting change: the front end stays a painter and the core keeps every interaction state.

@@ -42,76 +42,21 @@ The GUI Client SHALL present one player panel whose content, arrangement, and st
 - **WHEN** the expanded panel paints the artwork of the active item
 - **THEN** the artwork paints in the canvas's fixed still slot with a caption that names the image source, and the season and episode badge sits at the bottom left as the canvas places it
 
-#### Scenario: The footer shows the library context
+#### Scenario: The footer paints the queue's source text
 
-- **GIVEN** the queue's items carry a series with seasons
 - **WHEN** the expanded panel paints the footer line
-- **THEN** the footer's left line shows the series name and its season range as the canvas paints it
-- **AND** while the queue carries no series context, the footer's left line shows the queue's source text instead
-
-### Requirement: The panel changes state with its own size
-
-The panel SHALL pick one of four states from its own size plus the Client core's toggles: expanded, compact strip, expanded without queue, or rail. The `z` key SHALL toggle the collapse and the `q` key SHALL toggle the queue fold. The collapse toggle SHALL rank above the queue-fold toggle, and both SHALL rank above the container measurement, so no measurement that a window resize of these rules produced can replace the state the toggle set. The front end SHALL pick the layout from the measured size of the panel container, the same measurement that it reports to the Client core in `LayoutReport`, so the painted layout, the list capacity, and the hit map follow one size. The Client core SHALL hold the two toggles.
-
-#### Scenario: The container is shorter than 520 px
-
-- **GIVEN** neither toggle is set
-- **WHEN** the panel container is shorter than 520 px
-- **THEN** the panel shows the compact strip: a 96×54 still, the title, the parent line with the next item, play/pause, next, and a thin progress line
-
-#### Scenario: The queue is folded
-
-- **WHEN** the user presses `q` in the expanded panel
-- **THEN** the queue rows are replaced by one line with the remaining count, the queue finish clock with its next-day suffix, and a control that expands the queue
-
-#### Scenario: The panel is collapsed to the rail
-
-- **WHEN** the user presses `z`
-- **THEN** the panel shows the 72 px rail: a progress ring around the artwork, play/pause, next, the remaining time in compact minutes, and a control that expands the panel
-- **AND** pressing `z` again restores the previous state
-
-#### Scenario: A toggle survives a short container
-
-- **GIVEN** the user pressed `q` and a window resize of this requirement shrank the container below 520 px
-- **WHEN** the front end measures the container
-- **THEN** the panel still paints the folded line, never the compact strip
-
-### Requirement: The scrubber seeks and previews
-
-The scrubber SHALL show the progress, the chapter boundaries, the intro and credits marks, and a thumb, with the elapsed time and one right-hand line that joins the remaining time and the finish clock. A press on the bar SHALL seek to that position. The back 10 s and forward 30 s chords SHALL do the same work as the transport buttons.
-
-#### Scenario: The bar shows the canvas segments
-
-- **GIVEN** the active item carries chapters and intro and credits marks
-- **WHEN** the scrubber paints
-- **THEN** the bar shows the intro and credits marks, the chapter ticks, the played fill, and the thumb whose ring the canvas paints
-
-#### Scenario: The pointer hovers the bar
-
-- **WHEN** the pointer is over the scrubber bar
-- **THEN** a position line marks the pointer's position on the bar and a preview shows the trickplay frame, the time at the pointer, and the chapter name
-- **AND** focus and playback do not change
-
-#### Scenario: The bar is pressed
-
-- **WHEN** the user presses the bar at a position
-- **THEN** the Owner process seeks to that position
-
-#### Scenario: No trickplay frames exist
-
-- **GIVEN** the active item has no trickplay data
-- **WHEN** the pointer is over the scrubber bar
-- **THEN** the preview shows the time and the chapter without a frame
+- **THEN** the left line shows the queue's existing source text — the playlist text the frame carries — without a leading icon, the owner marker paints the label then the dot, and the line uses the canvas footer's type and border
+- **AND** the prefix, toast, autosave, and dirty states still paint when they are active
 
 ### Requirement: Track chips open popovers
 
-The panel SHALL show one chip each for the video stream, the audio track, and the subtitle track of the active item, painted as the canvas's chips. Each chip SHALL carry the canvas's chevron. The audio and subtitle chips SHALL each open a popover that lists the choices and marks the chosen one, and the open chip SHALL show the canvas's open state. The video chip's press SHALL change nothing: the video chip shows the resolved stream label only and SHALL NOT open a popover. The chosen track SHALL be sent to the Owner process. The `c` key SHALL cycle the subtitle track.
+The panel SHALL show one chip each for the video stream, the audio track, and the subtitle track of the active item. The audio and subtitle chips SHALL each open a popover that lists the choices and marks the chosen one, and the open chip SHALL show the canvas's open state. The video chip's press SHALL change nothing: the video chip shows the resolved stream label only and SHALL NOT open a popover. The chosen track SHALL be sent to the Owner process. The `c` key SHALL cycle the subtitle track.
 
 #### Scenario: A subtitle track is chosen
 
 - **WHEN** the user opens the subtitle popover and chooses a track
 - **THEN** the Owner process switches to that track and the popover marks it
-- **AND** the popover lists Off and each subtitle track with its format
+- **AND** the popover lists Off and each subtitle track
 
 #### Scenario: The open chip shows its state
 
@@ -122,11 +67,6 @@ The panel SHALL show one chip each for the video stream, the audio track, and th
 
 - **WHEN** the user presses the video chip
 - **THEN** no popover opens and no request leaves the Client
-
-#### Scenario: The chips and choices carry the canvas labels
-
-- **WHEN** the panel paints the three chips or an open popover's choice rows
-- **THEN** each label carries the canvas's suffix form for that stream (`menus` audit G10)
 
 ### Requirement: The queue shows finish times, a row menu, and drag reorder
 
@@ -149,11 +89,15 @@ The queue header SHALL show the remaining count as the canvas forms it (`Up next
 - **WHEN** the queue header paints
 - **THEN** the remaining count covers those rows too, as the canvas's sample script increments for every non-current row
 
+#### Scenario: A row is hovered
+
+- **WHEN** the pointer is over a queue row
+- **THEN** the row paints the canvas's hovered row: the grip replaces the row's ordinal and the row-actions button replaces the right-column value
+
 #### Scenario: The row menu opens
 
-- **WHEN** the pointer is over a row
-- **THEN** the row shows a grip and a row-actions button
-- **AND** the button opens a menu with Play now (`⏎`), Play next (`n`), Mark watched (`w`), Go to episode (`g`), and Remove from queue (`dd`)
+- **WHEN** the row-actions button is pressed
+- **THEN** the menu opens with Play now (`⏎`), Play next (`n`), Mark watched (`w`), Go to episode (`g`), and Remove from queue (`dd`)
 
 #### Scenario: The destructive entry is distinct
 
@@ -178,7 +122,7 @@ The queue header SHALL show the remaining count as the canvas forms it (`Up next
 
 ### Requirement: The GUI Client uses the typography and colours of the canvas
 
-Text SHALL use IBM Plex Sans. Times, key hints, chips, and counters SHALL use JetBrains Mono with tabular figures. Both faces SHALL ship with the front end, and the window SHALL fetch no font at runtime. Every clock the panel paints SHALL use the canvas's zero-padded 24-hour `HH:MM` form, and every minus sign in a time SHALL be U+2212. Colours SHALL resolve in the GUI's theme section to the canvas palette's hexes (`canvas/canvas.json`), and the TUI's palette SHALL NOT change.
+Text SHALL use IBM Plex Sans. Times, key hints, chips, and counters SHALL use JetBrains Mono with tabular figures. Both faces SHALL ship with the front end, and the window SHALL fetch no font at runtime. Every clock the panel paints SHALL use the canvas's zero-padded 24-hour `HH:MM` form, and every minus sign in a time SHALL be U+2212. The queue, row menu, popover, and drag visuals SHALL paint the canvas hexes that name no `mbv-theme` slot through GUI-local `--canvas-*` tokens in the front end's `app.css`, and the TUI's palette SHALL NOT change.
 
 #### Scenario: Fonts load with no network
 
@@ -192,62 +136,8 @@ Text SHALL use IBM Plex Sans. Times, key hints, chips, and counters SHALL use Je
 - **WHEN** the panel paints a finish clock
 - **THEN** the time shows as zero-padded 24-hour `HH:MM`, and the queue finish clock carries the canvas's next-day suffix
 
-#### Scenario: The GUI palette resolves locally
+#### Scenario: Queue canvas colours resolve locally
 
-- **WHEN** the GUI resolves a role's colour in its theme section
-- **THEN** the value is the canvas palette's hex
-- **AND** the TUI's palette stays `mbv-theme`'s default
-
-## ADDED Requirements
-
-### Requirement: The window resizes with the panel toggles
-
-The `z` collapse SHALL shrink the window to the collapsed state's natural size, and expanding SHALL restore the remembered pre-collapse size, as a mini-player does. The `q` fold SHALL shrink the window by the queue section's height, and unfolding SHALL restore. The Client core SHALL keep the two toggles as the only authority for user intent, and a window resize SHALL NOT change the painted panel state.
-
-#### Scenario: The panel collapses
-
-- **WHEN** the user presses `z` and the panel paints the rail
-- **THEN** the window shrinks to the rail's natural size
-
-#### Scenario: The panel expands again
-
-- **WHEN** the user presses `z` again on a collapsed panel
-- **THEN** the window restores the size it held before the collapse
-
-#### Scenario: The queue folds
-
-- **WHEN** the user presses `q` in the expanded panel
-- **THEN** the window shrinks by the height of the queue section that the fold removes
-
-#### Scenario: The queue unfolds
-
-- **WHEN** the user presses `q` again on a folded queue
-- **THEN** the window restores the size it held before the fold
-
-#### Scenario: A resize never repicks the state
-
-- **GIVEN** a toggle is set
-- **WHEN** the window resizes and the front end re-measures the container
-- **THEN** the painted panel state is still the toggle's state
-
-### Requirement: The subtitle popover carries the canvas Offset row
-
-The open subtitle popover SHALL paint the canvas Offset row and the popover footer hint (menus audit G1, G5). While the popover is open, the hint's `[` and `]` segments SHALL act on the subtitle offset, as the hint paints. Outside the popover, the `[` and `]` seek chords SHALL stay unchanged. The Owner process SHALL hold the offset.
-
-#### Scenario: The popover paints the offset row
-
-- **WHEN** the subtitle popover is open
-- **THEN** it paints the canvas Offset row — the `−` and `+` steppers and the offset value — and the footer hint's `c · cycle` and `[ ] · offset` segments
-
-#### Scenario: The hint's brackets act while the popover is open
-
-- **GIVEN** the subtitle popover is open
-- **WHEN** the user presses `[` or `]`
-- **THEN** the offset steps, as the hint paints
-- **AND** nothing seeks
-
-#### Scenario: The popover is closed
-
-- **WHEN** the popover is closed
-- **THEN** `[` and `]` run the seek chords the `gui-client` keybinds bind, exactly as before this change
-- **AND** the TUI's `[` and `]` seek chords are unchanged
+- **WHEN** the queue, row menu, popover, or drag visuals paint a colour that names no `mbv-theme` slot
+- **THEN** the value is the canvas hex, read from the queue-local `--canvas-*` tokens of the front end's `app.css`
+- **AND** `mbv-theme`'s slot table and the TUI's palette stay unchanged

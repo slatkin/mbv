@@ -2,106 +2,84 @@
 
 ## Context
 
-The GUI Client was built to TUI parity (`.handoffs/add-tauri-gui-client-artifacts/tasks.md`, groups 3 and 6) and then restyled, but the gap audits against the canvas artboards (`audit/{main,collapsed,menus}.md`, copied into this change) still list about 60 divergences. The canvas files (`canvas/*.dc.html`, `canvas/canvas.json`) are the spec: their inline CSS values, strings, and ordering are normative.
+The GUI Client was built to TUI parity and then restyled, but the gap audits against the canvas artboards (`audit/{main,collapsed,menus}.md`, copied into this change) still list divergences. The canvas files (`canvas/*.dc.html`, `canvas/canvas.json`) are the spec: their inline CSS values, strings, and ordering are normative.
+
+The user's binding rulings (2026-11-07) narrow this change: **only the QUEUE is brought in line with the canvas, and no new functionality lands** — no new player commands, data derivations, resize, or keys; the canvas sample text is mock content. The rows already merged (U1 shared formatters, U2.1 row ordinal, U3.1–U3.5 player top half) stay landed. The two data units the narrowing cuts (U2.2 footer library context, U2.3 rail compact minutes) are reverted by R0. Collapsed states, the Offset stepper, the chip suffixes, and the window resize are out of scope.
 
 What the code holds today:
 
-- The front end paints from the frame's role map and chrome fills (`frame/theme.rs`, `theme.ts`); no literal hex reaches a component. The theme is `mbv-theme`'s `Theme::DEFAULT`, a closed slot table.
-- Clocks are preformatted strings from `fmt_wall_clock` (`mbv-ui-model/src/ui_util.rs:216`), 12-hour with an AM/PM marker. The queue finish clock is a projection value (`queue_summary_projection.rs`), as are per-row ends and the scrubber's finish value.
-- The panel state is picked in `bridge/panel.ts` from the measured container size plus the core's two toggles; the collapse toggle ranks first, then the short-container check, then the queue fold.
-- The frame's queue rows carry no ordinal, the footer carries the playlist pill rather than a library-context line, and the rail's remaining time paints the scrubber-format clock.
-- Row-menu entries carry `label` + `key_hint` (`gui_client_state.rs`, the GUI-only builder); no destructive flag exists anywhere.
-- The Tauri capability file (`capabilities/default.json`) allows `key`, `pointer`, `report_layout`, and the event listener. No window-size grant exists.
+- The front end paints from the frame's role map and chrome fills (`frame/theme.rs`, `theme.ts`); no literal hex reaches a component, and several canvas hexes have no `mbv-theme` slot.
+- The merged rows already paint the top half and carry the queue ordinal on the frame.
+- The queue header, rows, and footer still paint divergences from the canvas (main audit 16–25, 27–29).
+- Row-menu entries carry `label` + `key_hint` (`gui_client_state.rs`, the GUI-only builder); no destructive flag exists; `direct_select` (`gui_client_state.rs:181`) matches the raw hint string.
+- The popover opens `bottom-full`, its chrome diverges from the Menus artboard, the open chip carries no expanded state, and the drag ghost, insertion line, and hover chrome diverge (menus G3, G4, G6, G8, G9, G11).
 
 ## Goals / Non-Goals
 
 **Goals:**
 
-- The GUI panel paints the canvas values exactly: geometry, glyphs, type sizes, colours (through roles the canvas values resolve to), strings, and aria labels.
-- The shared types carry the data the canvas paints (ordinals, footer context, compact minutes, overflow suffix, destructive tone).
-- The window follows the user's resize ruling for `z` and `q`.
+- The GUI queue paints the canvas values exactly: geometry, glyphs, type sizes, colours, strings, and aria labels.
+- The row menu, popover, and drag visuals paint the Menus artboard, and the destructive entry is tone-distinct.
+- No new functionality: the change paints only what the projections already carry.
 
 **Non-Goals:**
 
+- The TUI does not change — not its surfaces, bindings, key output, palette, or paint (user ruling). Every row states the check; no row touches a file the TUI paints from.
+- No collapsed states, no player-top-half work beyond the merged rows, no window resize, no Offset stepper, no chip suffixes, no footer library context, no rail minutes.
 - No redesign of the interaction authority: the core keeps every toggle, cursor, menu, drag, and filter; the front end stays a painter.
-- No change to the TUI — not its surfaces, bindings, key output, palette, or paint (the user's ruling: "THE TUI WILL NOT CHANGE FOR THIS"). Every row that adds a shared or additive type states its TUI check; the Offset row's `PlayerCommand` addition is the one owner-side addition, and the TUI has no caller or painter for it.
 
 ## Decisions
 
 ### DR1. The canvas files are the committed reference
 
-`canvas/` holds the four source files verbatim and `audit/` the three gap lists verbatim. Task rows cite gap IDs (for example, main G19) and canvas element names, so one row plus those two directories is the whole brief an implementer needs. The archive of this change keeps both directories, so the reference survives.
+`canvas/` holds the four source files verbatim and `audit/` the three gap lists verbatim. Task rows cite gap IDs (for example, main 17) and canvas element names, so one row plus those two directories is the whole brief an implementer needs. The archive of this change keeps both directories, so the reference survives.
 
-### DR2. Shared types change first, and no TUI path reads them
+### DR2. The shared-type changes are the merged rows, and no TUI path reads them
 
-The canvas forms carry through the types the frame reads. The caller graph (checked against the code for this change) shows that the TUI reads none of them:
+The canvas forms that needed shared types already landed. The caller graph (checked against the code) shows the TUI reads none of these sites:
 
 | Change | Typed at | TUI path, verified from the caller graph |
 | --- | --- | --- |
 | Zero-padded 24-hour `HH:MM` wall clock | `fmt_wall_clock` (`mbv-ui-model`) | Its only callers are the two queue projections (`src/app/queue_summary_projection.rs`, `src/app/queue_playback_projection.rs`) |
-| Remaining count = every non-active row | `QueueSummaryProjection.remaining` | `queue_summary_projection()` is called only by the GUI frame (`crates/mbv-gui/src/bridge/frame.rs`) |
+| Remaining count = every row without the playhead | `QueueSummaryProjection.remaining` | `queue_summary_projection()` is called only by the GUI frame (`crates/mbv-gui/src/bridge/frame.rs`) |
+| Row ordinal, 1-based queue position | `GuiQueueRow::Item.ordinal` (`crates/mbv-gui/src/bridge/frame/queue.rs`) | The bridge lives in the GUI-only crate |
 | Episode badge separator `S4 · E1` | `episode_badge` (`queue_playback_projection.rs`) | `queue_playback_projection()` is called only by the GUI core thread (`crates/mbv-gui/src/core_thread.rs`) |
-| Row-menu hint glyph `Enter` → `⏎` | `gui_client_state.rs` (GUI-only builder) | None: the builder is GUI-only |
 
-The TUI paints no wall clock, no remaining count, no Ends-at value, and no episode badge from these sites today, so the changes reach no TUI output: the campaign constraint "The TUI does not change" holds. If a later change gives the TUI a reader for one of these types, that change isolates the GUI's form then.
+If a later change gives the TUI a reader for one of these types, that change isolates the GUI's form then. No new shared-type change is ahead: the destructive flag stays GUI-only (DR6) and the cut fields are reverted (DR4).
 
 ### DR3. The `+1d` overflow suffix is computed at the projection and carried on the one value the canvas suffixes
 
-The canvas script appends `' +1d'` to the queue finish clock only (`Main.dc.html` `renderVals`, `queueEnds`); row ends, the scrubber's end value, and the current-row end carry no suffix. The projections compute the suffix from the finish epoch against local midnight (the finish epoch belongs to the next day), and `QueueSummaryProjection` carries the suffixed string. The front end paints no arithmetic.
+The canvas script appends `' +1d'` to the queue finish clock only (`Main.dc.html` `renderVals`, `queueEnds`); row ends, the scrubber's end value, and the current-row end carry no suffix. The projections compute the suffix from the finish epoch against local midnight, and `QueueSummaryProjection` carries the suffixed string. The front end paints no arithmetic. (Landed with U1.4.)
 
-### DR4. The panel-state precedence puts the toggles above the container measurement
+### DR4. Unit A paints with no new data and the cut fields are reverted
 
-Today the short-container check outranks the queue fold (`panel.ts:panelState`). The resize ruling of DR5 breaks that order: a `q` fold can shrink the window below the 520 px strip threshold, and a measured strip must not then replace the fold the user asked for. New precedence, one line each: the collapse toggle, then the queue-fold toggle, then the container measurement. The canvas is silent on overlap (`audit/collapsed.md` G0), so the ruling's mechanics pick the order. This kills both feedback loops: neither toggle's own window shrink can override the state the toggle set, and no measurement ever drives a state change.
+The queue header, rows, and footer paint from facts the frame already carries: the merged ordinal, the remaining-count projection, the playlist/source text, and the finish clock. No new projection, wire field, or derivation. The U2.2 `library_context` and U2.3 `remaining_minutes` fields painted nothing in Svelte (nothing reads them), so R0 reverts them to the pre-`5f3f36546` shape instead of carrying dead wire data. `docs/architecture/gui-client.md` keeps listing them nowhere: the doc line for this change records the narrowed scope.
 
-### DR5. The window resizes on a toggle transition; the core stays the intent authority; the front end measures and applies
+### DR5. The footer paints the queue's existing source text
 
-User ruling (quoted): "z collapse -> yes, shrink the window to the collapsed state's natural size; expanding restores the remembered pre-collapse size (mini-player behavior)." and "q queue fold -> yes, shrink by the queue section's height; unfold restores."
+The canvas footer's left line is `Peep Show · Series 1–6` (main audit 27) — a library-context line the narrowing does not build. Unit A paints the footer's canvas chrome (40 px height, `0 16px` padding, `1px solid #3d484d` border-top, mono 12 px) around the footer's existing content: the left line is the playlist/source text the frame already carries, without its leading icon, and the owner marker paints label then dot, also without its icon (main audit 28). The prefix, toast, autosave, and dirty states keep painting when they are active — the base `gui-client` spec requires them — in the canvas footer's type and spacing.
 
-- The core keeps its authority: `z` and `q` set the two toggles only, as today. No window knowledge reaches the core, and no core field changes.
-- The front end compares the previous frame's toggles with the new frame's and issues a window resize only on a transition, never from a container measurement. A transition to collapsed or folded shrinks; a transition out restores the remembered size.
-- The remembered size is the last container measurement the front end observed while the panel painted the fully expanded state. It is a layout measurement, not interaction state (the spec already separates them), and the front end already measures and reports that size in `LayoutReport`.
-- The natural sizes are DOM measurements: the rail's band, and the queue-section height for the fold. The rail paints first at the old window size (the toggle outranks the measurement, DR4), its natural size is measured, then the window resizes.
-- Mechanics: the capability file gains `core:window:allow-set-size`, and the front end calls `getCurrentWindow().setSize(new LogicalSize(...))`. No new Rust command and no new core field. *Alternative:* a dedicated `resize_window` Tauri command. Rejected: the command's only work would be `window.set_size`, for one more permission plus one more registered command.
-- A reload while collapsed loses the remembered size (the measurement lives in the front end). Restoring then falls back to the collapsed state's own natural size. Risk section records it; persisting a window size is a later change's work.
+### DR6. The row menu's destructive flag is GUI-only and derives from the action
 
-### DR6. The footer gains the canvas's library-context line and keeps its projection extras
+The canvas paints `Remove from queue` in `#e67e80` under a divider (menus G2). The flag lands on the GUI's own projection types: `RowMenuEntryProjection` (`src/app/gui_client_state.rs:42`) and `GuiRowMenuEntry` (`crates/mbv-gui/src/bridge/frame/overlay.rs:79`) each gain one `destructive: bool`, derived in the GUI overlay projection from `matches!(action, Some(ContextAction::RemoveFromQueue(_)))` — from the entry's action, not from a label or a position. `ContextMenuEntry` (`crates/mbv-ui-model/src/context_menu.rs`) is untouched, the TUI's construction sites and menu painter are untouched, and `crates/mbv-render` reads nothing new: no TUI output changes (the campaign constraint). No keyed painter exists; the tone and the divider always follow the projected flag.
 
-The canvas footer's left line is the queue's library context: `Peep Show · Series 1–6` (`main` audit 27). The frame's footer gains a `library_context` field built in `QueueFooterProjection` from the queued items of the active series: the series name and the season range joined with an en dash; `None` when the queue's items carry no seasons (music, feeds, mixed queues). The playlist pill paints in that line's slot as the fallback, and the autosave, dirty, prefix, and toast facts keep painting when they are active, in the canvas footer's type and spacing — the canvas artboard paints a quiet footer, and the spec's footer-line clause (prefix armed, toasts) stays in force. The right marker keeps its status text and dot and loses its leading icon (`main` audit 28).
+### DR7. The row menu's `⏎` hint maps at paint time only
 
-### DR7. The video chip paints the canvas chevron and still opens nothing
+The canvas hints `⏎` where the core sends `Enter` (menus G5). The map lives in `QueueRowMenu.svelte` at paint time. The GUI row-menu builder and `direct_select` (`gui_client_state.rs:181`) keep matching the raw `Enter` hint string, so menu key routing follows the configured bindings unchanged; no key route changes, and the TUI's keybinds are untouched.
 
-The canvas paints a chevron on all three chips (`main` audit 15). The parent change's ruling D4a (the video chip shows the resolved label only and opens no popover) made it label-only; the canvas wins on the painted glyph, the ruling stands on the press, so the chip paints the chevron and its press is a documented no-op.
+### DR8. The popover opens below the chip row and carries no divider
 
-### DR8. The row menu's destructive entry is flagged at the type
+The popover opens below the chip row, right-aligned (Menus artboard), replacing today's `bottom-full` open-up. The open chip paints the expanded state of menus G3 and nothing else — no restyle, no dividers: the canvas's only popover divider separates the Offset row, which is out of scope.
 
-The canvas paints `Remove from queue` in `#e67e80` under a divider (`menus` audit G2). `ContextMenuEntry` (`crates/mbv-ui-model/src/context_menu.rs`) gains a `destructive: bool`, the row-menu builder sets it for the remove action, `RowMenuEntryProjection` and `GuiRowMenuEntry` thread it, and the front end paints the tone and the divider. The flag is additive: the TUI's construction sites set it `false` and its menu painter reads nothing new, so no TUI output changes (the campaign constraint: the TUI does not change).
+### DR9. Canvas hexes with no `mbv-theme` slot resolve through GUI-local `app.css` tokens
 
-### DR9. Tests name a contract or do not exist
-
-Each unit's rows name the contract and its layer. Visual claims are asserted as values in vitest (the front end's tests already assert painted structure); projection claims are asserted in the owning crate's tests. No test inflation: a paint row reuses the component's existing render test unless the row adds a new state.
-
-## The canvas decisions (user ruling, 2026-11-07)
-
-The user's ruling (quoted): "there ARE [...] DESIGN SPECS, EVERYTHING SHOULD BE IN THERE." The canvas is the design artifact; every design question reads its answer in `canvas/`, so no decision of this change stands open. Three former open decisions are resolved by it:
-
-### (a) The subtitle Offset stepper: built end to end, as the canvas shows it
-
-The canvas paints the full Offset row and the popover's footer hint (`menus` audit G1, G5): the `−` and `+` steppers, the offset value, and the hint `c · cycle   [ ] · offset`, painted inside the open popover only. The unit builds the whole path: the core state, the player command and status fact, the wire fact, the paint, and the hint's `[` and `]` segments, which act on the offset while the popover is open and leave the seek chords unchanged everywhere else. Nothing of it paints or routes outside the open popover.
-
-### (b) The chip and track-list suffixes: derived and painted
-
-The canvas labels the chips and the popover rows with their stream suffixes (`menus` audit G10). The unit derives the facts the canvas labels assert and paints the canvas label forms.
-
-### (d) Two palettes: the GUI's theme section resolves the canvas hexes; the TUI's palette stays
-
-The GUI's theme section (`crates/mbv-gui/src/bridge/frame/theme.rs`, `GuiTheme::current`) resolves the roles to the canvas hexes; `mbv-theme`'s slot table and `Theme::DEFAULT` stay untouched as the TUI's palette. This amends the parent change's D7 ("mbv-theme's surface table is the one fill authority"; "shadcn-svelte components therefore paint in the mbv palette with no second palette") for the GUI Client only: the GUI's fill and role authority is the canvas palette, carried in the GUI's theme section.
+The queue, row menu, popover, and drag visuals paint the canvas hexes through queue-local `--canvas-*` custom properties in `crates/mbv-gui/ui/src/app.css`: `#3d484d #475258 #7f897d #56635f #414b50 #7d9460` (main audit 17, 19–25) plus the menu, popover, and drag-ghost chrome they consume (menus G2, G4, G6, G8). No `theme.rs` global remap — that former decision (d) narrows to the token file — and `mbv-theme`'s slot table and the TUI's palette stay untouched, still amending the parent change's D7 for the GUI Client only. No paint row hardcodes a hex; every paint row references a token.
 
 ## Risks / Trade-offs
 
-- [The front end's resize measurement can thrash if a browser reports subpixel sizes] → The remembered size is snapshotted only on a transition, and resizes run only from transitions.
-- [A reload while collapsed restores the collapsed state's own natural size instead of the remembered one] → Accepted for this change; persisting the window size is later work.
-- [Some canvas colours name no theme slot today (chapter ticks, the segment oranges)] → The resolved palette decision (d) carries the colour layer in the GUI's theme section; no paint row hardcodes a hex, and `mbv-theme`'s slot table stays the TUI's palette.
+- [The panel background stays on the theme role, `#272e33`, while the canvas paints `#2d353b`] → Accepted as the open risk of the tokens decision: the panel background keeps its `mbv-theme` slot. The user live-checks after Unit A.
+- [Some canvas colours name no theme slot today (the segment fills, muted ordinals, menu and ghost chrome)] → Carried by the GUI-local tokens (DR9); no paint row hardcodes a hex, and `mbv-theme` stays the TUI's palette.
 
 ## Migration Plan
 
-Units land in order: shared types (U1, U2), the expanded artboard (U3, U4), the collapsed states (U5), menus and drag (U6, U7), the window resize (U8), docs (U9), then the canvas decisions' units: the Offset stepper (U10, U11), the chip and track-list suffixes (U12), and the GUI-local palette (U13). Rollback is to revert the units; U10 is the one owner-side addition (one `PlayerCommand` variant and one status fact), and no stored state changes.
+Units land in order: R0 (revert the cut fields), Unit A (queue header, rows, footer paint plus the `app.css` tokens), Unit B (destructive flag, row menu, hover, popover, drag, and the one doc line). Rollback is per-unit revert; no core, Owner-side, or stored-state change exists in any unit.
