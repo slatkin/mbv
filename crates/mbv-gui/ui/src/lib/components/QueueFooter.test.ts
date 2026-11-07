@@ -107,19 +107,16 @@ test('a live toast paints inline in the line and drops the prefix badge', () => 
 	expect(queryByText('PREFIX'), 'the prefix badge drops while a toast is live').toBeNull();
 });
 
-test('the line reports the playlist pill region', async () => {
+test('the line reports no region: its pills are informational', async () => {
 	renderFooter();
 
 	await vi.waitFor(() => expect(invokeMock).toHaveBeenCalledTimes(1));
+	// A reported target whose press can never fire would lie in the layout
+	// report, so the line reports its contribution empty.
 	expect(invokeMock).toHaveBeenCalledWith('report_layout', {
 		report: {
 			lists: [],
-			regions: [
-				{
-					rect: { x: 0, y: 0, width: 0, height: 0 },
-					target: { surface: 'queue', id: 'playlistPill' },
-				},
-			],
+			regions: [],
 			containerSize: { width: 0, height: 0 },
 		},
 	});

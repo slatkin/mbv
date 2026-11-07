@@ -6,9 +6,11 @@
 	// and the toasts.
 	//
 	// The left group is the queue source: the autosave indicator (while
-	// save-on-consume is on for a saved playlist), then the playlist pill —
-	// the pill's icon-plus-name span is its hit region (`playlistPill`,
-	// reported under the queue surface, as the Queue panel's pill was). The
+	// save-on-consume is on for a saved playlist), then the playlist pill.
+	// The pill paints the source; it reports no hit region — the GUI
+	// presents no playlists surface, so a press on it would have nowhere to
+	// go, and a reported target that can never fire is a lie in the layout
+	// report. (The TUI's pill opens its Playlists overlay.) The
 	// right group is the dirty indicator (while the queue differs from its
 	// saved playlist), then the session marker: the footer owner pill's
 	// label — the Player-owner label (`woims` on the canvas) — followed by
@@ -35,9 +37,9 @@
 	//
 	// The slice's `GuiStatusBar` carries no volume, mute, or visual-mode
 	// content, so the line paints no interactive status pill and reports no
-	// statusBar-surface region — a point on the line resolves to nothing
-	// but the playlist pill. It still reports through the shared layout
-	// reporter so the merged report accounts for the mounted surface.
+	// region at all — a point on the line resolves to nothing. It still
+	// reports through the shared layout reporter so the merged report
+	// accounts for the mounted surface.
 	import { onMount } from 'svelte';
 	import { Cable, ListMusic, SaveCheck, SaveOff } from '@lucide/svelte';
 	import { reportLayout, retractLayout } from '$lib/bridge/layout';
@@ -58,7 +60,6 @@
 
 	const reportKey = Symbol('queue-footer');
 	let lineEl: HTMLElement | undefined = $state();
-	let pillEl: HTMLElement | undefined = $state();
 
 	/** The `var(--mbv-<role>)` value a part paints in. */
 	function roleVar(role: GuiRole): string {
@@ -80,19 +81,11 @@
 		}
 	}
 
-	/** The painted regions this frame's DOM reports (design D4): the
-	 * playlist pill, the line's only interactive target. */
+	/** The painted regions this frame's DOM reports (design D4): none. The
+	 * line's pills are informational, so a point on it resolves to no
+	 * target. */
 	function currentRegions(): LayoutRegion[] {
-		if (!pillEl) {
-			return [];
-		}
-		const rect = pillEl.getBoundingClientRect();
-		return [
-			{
-				rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
-				target: { surface: 'queue', id: 'playlistPill' },
-			},
-		];
+		return [];
 	}
 
 	function report(): void {
@@ -151,7 +144,7 @@
 		{#if footer.autosave}
 			<SaveCheck size={14} color={roleVar(footer.autosave.role)} class="shrink-0" />
 		{/if}
-		<span bind:this={pillEl} class="flex items-center" style:gap="var(--mbv-cell-col)">
+		<span class="flex items-center" style:gap="var(--mbv-cell-col)">
 			<ListMusic size={14} color={roleVar(footer.playlist.role)} class="shrink-0" />
 			{#if footer.playlist.text}
 				<span style:color={roleVar(footer.playlist.role)}>{footer.playlist.text}</span>

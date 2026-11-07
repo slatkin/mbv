@@ -170,6 +170,10 @@ impl<'a> QueueLeaf<'a> {
             RegionTarget::Queue(QueueTargetId::Filter) => {
                 Some(Msg::Playback(PlaybackRequest::ActivateQueueFilter))
             }
+            // The footer's playlist pill is informational in the GUI (its
+            // layout report carries no `playlistPill` region — the GUI
+            // presents no playlists surface, so no press resolves here).
+            // The TUI's pill opens the Playlists overlay.
             RegionTarget::Queue(QueueTargetId::PlaylistPill)
             | RegionTarget::QueuePlayback(_)
             | RegionTarget::StatusBar(_)
