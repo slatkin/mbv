@@ -11,6 +11,7 @@ use mbv::{
     ClientTickHost, set_cast_receivers_for_test, set_subtitle_tracks_for_test,
     stub_app_with_cast_target, stub_app_with_track_choices,
 };
+use mbv_config::TestStateDirGuard;
 use mbv_gui::bridge::layout::{QueuePlaybackTargetId, QueueTargetId, RegionTarget};
 use rstest::rstest;
 
@@ -234,9 +235,11 @@ fn a_chooser_press_selects_nothing_when_the_painted_choice_is_gone() {
 
 /// A subtitle popover row's press switches to the track the last emitted
 /// frame painted, not the track a fresh list read would put at that index
-/// (regression for the row 6.4 review's neighbour selection).
+/// (regression for the row 6.4 review's neighbour selection). The chosen
+/// track persists, so the state dir is the isolated one.
 #[test]
 fn a_popover_press_selects_the_painted_track_after_the_list_grows() {
+    let _state_dir = TestStateDirGuard::new();
     let (mut app, cmd_rx) = stub_app_with_track_choices();
     set_subtitle_tracks_for_test(&mut app, vec![(7, "Old".to_string(), false)]);
     let mut test = test_core_with(app);

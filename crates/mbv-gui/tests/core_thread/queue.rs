@@ -179,12 +179,12 @@ fn a_cancelled_drag_sends_no_move_request() {
     assert_eq!(slot_moves(&cmd_rx), vec![]);
 }
 
-/// The hovered row's actions button opens the row menu over that row, and a
-/// menu entry's press executes it through the Client core: Remove from queue
-/// sends the Owner the pressed row's slot removal (add-tauri-gui-client row
-/// 6.5's row menu).
+/// A row-menu entry's press executes the painted entry through the Client
+/// core: the menu the actions button opened, Remove from queue, sends the
+/// Owner the pressed row's slot removal (add-tauri-gui-client row 6.5's row
+/// menu). The menu's entries and its anchor are the frame test's contract.
 #[test]
-fn the_actions_button_opens_the_row_menu_and_an_entry_removes_its_row() {
+fn a_row_menu_entry_press_removes_its_row() {
     let (app, cmd_rx) = stub_app_with_queue_and_cmd_rx(4);
     let mut test = test_core_with(app);
     test.tx
@@ -202,15 +202,7 @@ fn the_actions_button_opens_the_row_menu_and_an_entry_removes_its_row() {
 
     test.tx.send(press_at(90.0, 30.0)).unwrap();
     assert!(test.core.step());
-    let frame = test.next_frame();
-    let Some(GuiOverlayFrame::RowMenu { entries, .. }) = &frame.overlay else {
-        panic!(
-            "the actions button opened the row menu: {:?}",
-            frame.overlay
-        );
-    };
-    assert_eq!(entries.len(), 5, "the canvas's five entries");
-    assert_eq!(entries[4].label, "Remove from queue");
+    assert!(test.next_frame().overlay.is_some());
 
     // The menu's paint reports its rows; the remove entry is the fifth.
     test.tx
