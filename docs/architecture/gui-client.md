@@ -329,9 +329,9 @@ state and the live toast with its severity. The canvas has no separate
 status bar: `QueueFooter.svelte` paints both facts in the footer line. The
 badge drops while a toast is live — the TUI's pill-drop rule — and the
 toast moves no layout, because the line is always painted and the toast
-only fills its centre span. The line reports no `statusBar` region: its only
-interactive target is the playlist pill, and a point elsewhere on the line
-resolves to nothing. The spec permits the GUI to show toasts in a
+only fills its centre span. The line reports no regions: the playlist pill
+paints but is no press target (the slice presents no playlists surface), and
+a point anywhere on the line resolves to nothing. The spec permits the GUI to show toasts in a
 conventional GUI form that TUI geometry does not constrain, so a toast
 presentation outside the line is lawful.
 
