@@ -130,14 +130,14 @@ impl GuiQueue {
             let viewport = queue.list().resolve_viewport(viewport_rows.max(1));
             (viewport.offset, viewport.height)
         };
-        // The zebra alternation the TUI's wide presentation paints
-        // (`mbv-render` `media_list/wide.rs`): a grouped list alternates
-        // within each group from its first member, an ungrouped list
-        // alternates throughout, seeded by the viewport offset and flipped
-        // per item row — headings and spacers keep the box's own fill and
-        // do not flip. The parity rides the row so the stripe stays stable
-        // while the viewport moves; under a filter it re-seeds over the kept
-        // rows, whose list the front end paints.
+        // The zebra alternation the one shared rule paints
+        // (`mbv-ui-model` `media_list::zebra_striped`): a grouped list
+        // alternates within each group from its first member, an ungrouped
+        // list alternates throughout, seeded by the viewport offset and
+        // flipped per item row — headings and spacers keep the box's own
+        // fill and do not flip. The parity rides the row so the stripe stays
+        // stable while the viewport moves; under a filter it re-seeds over
+        // the kept rows, whose list the front end paints.
         let grouped = kept
             .iter()
             .any(|row| matches!(row, MediaListRow::Heading { .. }));
@@ -148,7 +148,13 @@ impl GuiQueue {
             .skip(viewport.0)
             .take(viewport.1)
             .map(|(source_row, row)| {
-                let striped = striped_state(row, source_row, grouped, &kept, &mut striped);
+                let striped = mbv_ui_model::media_list::zebra_striped(
+                    row,
+                    source_row,
+                    |index| kept[index],
+                    grouped,
+                    &mut striped,
+                );
                 // The canvas's row number is the slot's canonical queue
                 // position, not its index in the painted viewport: the
                 // filter keeps the number a row carried before it.
@@ -224,42 +230,6 @@ fn filtered_viewport(
         _ => 0,
     };
     (offset.min(kept.len().saturating_sub(height)), height)
-}
-
-/// One row's zebra state, mirroring the TUI's alternation walk
-/// (`media_list/wide.rs`): headings and spacers never stripe and never
-/// flip; an ungrouped item takes the running state and flips it; a grouped
-/// item alternates within its group from the group's first member.
-fn striped_state<Target>(
-    row: &MediaListRow<Target>,
-    source_row: usize,
-    grouped: bool,
-    rows: &[&MediaListRow<Target>],
-    striped: &mut bool,
-) -> bool {
-    match row {
-        MediaListRow::Heading { .. } | MediaListRow::Spacer => false,
-        MediaListRow::Item { .. } if grouped => grouped_member_striped(rows, source_row),
-        MediaListRow::Item { .. } => {
-            let state = *striped;
-            *striped = !*striped;
-            state
-        }
-    }
-}
-
-/// Whether one content row of a grouped list takes the secondary zebra
-/// fill rather than the surface fill: a group's members alternate from the
-/// secondary fill at their first member, so every second member reverts to
-/// the surface fill (`media_list/wide.rs`'s rule, mirrored for the frame).
-fn grouped_member_striped<Target>(rows: &[&MediaListRow<Target>], row: usize) -> bool {
-    // The group's members start at the row below its header (the list's own
-    // first row when it has none above the row).
-    let start = (0..=row)
-        .rev()
-        .find(|&index| matches!(rows[index], MediaListRow::Heading { .. }))
-        .map_or(0, |header| header + 1);
-    (row - start).is_multiple_of(2)
 }
 
 /// The slot of a row that carries the now-playing marker.

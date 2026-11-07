@@ -84,14 +84,15 @@ pub fn render_wide_media_list_with_zebra<Target: Clone + Eq>(
                 // separator above it sits outside the fill too: both keep the
                 // fill the list box already painted.
                 MediaListRow::Heading { .. } | MediaListRow::Spacer => None,
-                MediaListRow::Item { .. } if grouped => {
-                    zebra_bg.filter(|_| grouped_member_striped(rows, source_row))
-                }
-                MediaListRow::Item { .. } => {
-                    let alternate_bg = zebra_bg.filter(|_| striped);
-                    striped = !striped;
-                    alternate_bg
-                }
+                MediaListRow::Item { .. } => zebra_bg.filter(|_| {
+                    mbv_ui_model::media_list::zebra_striped(
+                        &rows[source_row],
+                        source_row,
+                        |index| &rows[index],
+                        grouped,
+                        &mut striped,
+                    )
+                }),
             };
             media_list_row(
                 &rows[source_row],
@@ -143,21 +144,6 @@ fn row_paint_area(paint_area: Rect, content_area: Rect) -> Rect {
         height: content_area.height,
         ..paint_area
     }
-}
-
-/// Whether one content row of a grouped list takes the secondary zebra fill
-/// rather than the surface fill: a group's members alternate from the secondary
-/// fill at their first member, so every second member reverts to the surface
-/// fill. `row` is a content row's source index; the grouping rows are never
-/// asked.
-fn grouped_member_striped<Target>(rows: &[MediaListRow<Target>], row: usize) -> bool {
-    // The group's members start at the row below its header (the list's own
-    // first row when it has none above the row).
-    let start = (0..=row)
-        .rev()
-        .find(|&index| matches!(rows[index], MediaListRow::Heading { .. }))
-        .map_or(0, |header| header + 1);
-    (row - start).is_multiple_of(2)
 }
 
 fn selected_row_surface_color(_surface: SelectedRowSurface, _focused: bool) -> Color {

@@ -183,6 +183,61 @@ impl<Target> MediaListRow<Target> {
     }
 }
 
+/// Whether the media-list row at `row_index` paints the zebra fill. The one
+/// alternation rule both Clients' painters share (`mbv-render`'s wide media
+/// list and the GUI queue frame): headings and spacers never stripe and
+/// never flip the running fill; an ungrouped list's item takes the running
+/// `striped` state and flips it; a grouped list's member alternates within
+/// its group from the group's first member — the row below its heading, the
+/// list's first row when it has none above the row. `grouped` is whether the
+/// list carries any heading row; `rows` reaches the list's source rows by
+/// index, `stop_row` inclusive; callers seed `striped` from their viewport
+/// offset, so the parity stays stable while the viewport moves.
+#[must_use]
+pub fn zebra_striped<'a, Target: 'a>(
+    row: &'a MediaListRow<Target>,
+    row_index: usize,
+    rows: impl Fn(usize) -> &'a MediaListRow<Target>,
+    grouped: bool,
+    striped: &mut bool,
+) -> bool {
+    match row {
+        MediaListRow::Heading { .. } | MediaListRow::Spacer => false,
+        MediaListRow::Item { .. } if grouped => {
+            zebra_group_member_striped(row_index, zebra_group_start(&rows, row_index))
+        }
+        MediaListRow::Item { .. } => {
+            let state = *striped;
+            *striped = !*striped;
+            state
+        }
+    }
+}
+
+/// Whether one item row of a grouped list takes the zebra fill: the group's
+/// members alternate from the fill at their first member, so every second
+/// member reverts to the surface fill.
+#[must_use]
+pub fn zebra_group_member_striped(row_index: usize, group_start: usize) -> bool {
+    (row_index - group_start).is_multiple_of(2)
+}
+
+/// One item row's group start in its list's source rows: the index of the
+/// row below the group's heading — the list's first row when no heading sits
+/// above the row. `rows` reaches the source rows up to and including
+/// `row_index` (exclusive uses above are harmless: only a heading row marks
+/// the start, and the wanted row is an item).
+#[must_use]
+pub fn zebra_group_start<'a, Target: 'a>(
+    rows: &impl Fn(usize) -> &'a MediaListRow<Target>,
+    row_index: usize,
+) -> usize {
+    (0..=row_index)
+        .rev()
+        .find(|&index| matches!(rows(index), MediaListRow::Heading { .. }))
+        .map_or(0, |header| header + 1)
+}
+
 /// Stable coordination identity for a `MediaList` selection. This identifies
 /// the list that produced a projection or delayed action; it never carries
 /// selection membership.
