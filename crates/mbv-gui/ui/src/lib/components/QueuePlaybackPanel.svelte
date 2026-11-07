@@ -22,7 +22,8 @@
 	// the frame carries — and the header's collapse and queue-fold controls
 	// report the ids the core's `z`/`q` toggles run from. The window holds no
 	// open, cursor, or hover state; Esc and a press elsewhere close the popover
-	// through the core's key and pointer paths.
+	// through the core's key and pointer paths. The track chips row and its
+	// popover live in `TrackChips` below the transport.
 	import { onMount } from 'svelte';
 	import {
 		Cast,
@@ -38,6 +39,7 @@
 		SkipForward,
 	} from '@lucide/svelte';
 	import { reportLayout, retractLayout } from '$lib/bridge/layout';
+	import TrackChips from './TrackChips.svelte';
 	import { CELL_COL_PX } from '$lib/bridge/cells';
 	import { roleProperty } from '$lib/bridge/theme';
 	import type {
@@ -641,5 +643,10 @@
 				/>
 			</button>
 		</div>
+		<!-- The track chips row under the transport: the video label and the
+			audio and subtitle chips with the open popover anchored above its
+			chip. `trackChips` is `null` while the local player is inactive, so
+			the row is absent then, as the status-indicator cluster is. -->
+		<TrackChips chips={playback.trackChips} {overlay} />
 	{/if}
 </div>
