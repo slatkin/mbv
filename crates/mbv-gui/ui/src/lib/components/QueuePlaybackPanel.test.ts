@@ -12,7 +12,15 @@ import { invoke } from '@tauri-apps/api/core';
 import { fireEvent, render } from '@testing-library/svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
 import { installInput } from '$lib/bridge/input';
-import type { GuiOverlayFrame, GuiQueuePlayback } from '$lib/bridge/types';
+import type {
+	GuiOverlayFrame,
+	GuiQueue,
+	GuiQueueFooter,
+	GuiQueuePlayback,
+	GuiStatusBar,
+} from '$lib/bridge/types';
+import QueueFooter from './QueueFooter.svelte';
+import QueuePanel from './QueuePanel.svelte';
 import QueuePlaybackPanel from './QueuePlaybackPanel.svelte';
 
 vi.mock('@tauri-apps/api/core', () => ({
@@ -99,6 +107,40 @@ function renderPanel(
 	return render(QueuePlaybackPanel, { playback, overlay });
 }
 
+/** A one-item queue, so the panel reports one `queue` slot region. */
+function queue(): GuiQueue {
+	return {
+		rows: [
+			{
+				row: 'item',
+				slot: 1,
+				primary: 'First track',
+				secondary: null,
+				trailing: null,
+				duration: '3:12',
+				endsAt: null,
+				kind: 'media',
+				state: { state: 'ordinary' },
+				striped: false,
+			},
+		],
+		cursor: null,
+		marks: [],
+		active: null,
+		hover: null,
+		drag: null,
+	};
+}
+
+const footer: GuiQueueFooter = {
+	owner: { text: 'woims', role: 'textFocusAccent', bold: false },
+	playlist: { text: 'mix', role: 'textMetadata', bold: false },
+	autosave: null,
+	dirty: null,
+};
+
+const idle: GuiStatusBar = { prefixArmed: false, toast: null };
+
 /** One painted region element, by its target id. */
 function control(container: HTMLElement, id: string): HTMLElement {
 	const el = container.querySelector<HTMLElement>(`[data-target="${id}"]`);
@@ -112,11 +154,23 @@ interface ReportedReport {
 	report: { regions: { target: { id: unknown } }[] };
 }
 
-/** The region target ids of the component's layout report. */
+/** The region target ids of the first layout report the mocks saw. */
 function reportedRegionIds(): unknown[] {
 	const call = invokeMock.mock.calls.find((entry) => entry[0] === 'report_layout');
 	const report = call?.[1] as ReportedReport | undefined;
 	return report?.report.regions.map((entry) => entry.target.id) ?? [];
+}
+
+/** The region target ids of the last merged layout report. */
+function lastReportedRegionIds(): unknown[] {
+	const calls = invokeMock.mock.calls.filter((entry) => entry[0] === 'report_layout');
+	const report = calls.at(-1)?.[1] as ReportedReport | undefined;
+	return report?.report.regions.map((entry) => entry.target.id) ?? [];
+}
+
+/** Whether a region id is a chooser row's `targetChoice`. */
+function isChoice(id: unknown): boolean {
+	return typeof id === 'object' && id !== null && 'targetChoice' in id;
 }
 
 test('a playing frame renders the header, artwork badge, title, and clocks', () => {
@@ -209,6 +263,44 @@ test('an open target chooser reports one region per row', async () => {
 		{ targetChoice: 0 },
 		{ targetChoice: 1 },
 	]);
+});
+
+// The hit map resolves a painted-over point to the LAST region reported
+// under it, and `report_layout` merges contributions in Map insertion order:
+// this panel mounts before the queue panel and footer, so the chooser's rows
+// report under a second key first inserted when the chooser opens — after
+// every other surface's key.
+test('an open chooser reports its rows after the queue and footer regions', async () => {
+	const { rerender } = renderPanel();
+	render(QueuePanel, { queue: queue(), focused: false, panelFocused: false });
+	render(QueueFooter, { footer, status: idle });
+
+	await rerender({ playback: playing(), overlay: chooserOverlay() });
+
+	await vi.waitFor(() =>
+		expect(lastReportedRegionIds()).toContainEqual({ targetChoice: 1 }),
+	);
+	const ids = lastReportedRegionIds();
+	const firstChoice = ids.findIndex(isChoice);
+	expect(ids.slice(0, firstChoice)).toEqual(
+		expect.arrayContaining([{ slot: 1 }, 'playlistPill']),
+	);
+	expect(ids.slice(firstChoice)).toEqual([{ targetChoice: 0 }, { targetChoice: 1 }]);
+});
+
+test('closing the chooser retracts its row regions', async () => {
+	const { rerender } = renderPanel(playing(), chooserOverlay());
+	await vi.waitFor(() =>
+		expect(lastReportedRegionIds()).toContainEqual({ targetChoice: 0 }),
+	);
+
+	await rerender({ playback: playing(), overlay: null });
+
+	await vi.waitFor(() => {
+		const ids = lastReportedRegionIds();
+		expect(ids).toContain('playbackTarget');
+		expect(ids.some(isChoice)).toBe(false);
+	});
 });
 
 test('a press on a chooser row forwards a pointer press with its position', async () => {

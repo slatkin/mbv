@@ -19,11 +19,16 @@
 	// the core's chooser, whose popover paints under the header from the
 	// frame's `targetChooser` overlay. Each row reports its `targetChoice`
 	// index — the core resolves a row press against the same live choice list
-	// the frame carries — and the header's collapse and queue-fold controls
-	// report the ids the core's `z`/`q` toggles run from. The window holds no
-	// open, cursor, or hover state; Esc and a press elsewhere close the popover
-	// through the core's key and pointer paths. The track chips row and its
-	// popover live in `TrackChips` below the transport.
+	// the frame carries — under a second report key, first inserted when the
+	// chooser opens: this component mounts before the queue panel and footer,
+	// so its own key lands before their regions in the merged report, and
+	// only a key inserted after them puts the rows last — the hit map's last
+	// push wins where a row paints over a queue row beneath it. The header's
+	// collapse and queue-fold controls report the ids the core's `z`/`q`
+	// toggles run from. The window holds no open, cursor, or hover state; Esc
+	// and a press elsewhere close the popover through the core's key and
+	// pointer paths. The track chips row and its popover live in `TrackChips`
+	// below the transport.
 	import { onMount } from 'svelte';
 	import {
 		Cast,
@@ -66,6 +71,7 @@
 	const TICKS_PER_SECOND = 10_000_000;
 
 	const reportKey = Symbol('queue-playback-panel');
+	const chooserKey = Symbol('target-chooser');
 	let panelEl: HTMLElement | undefined = $state();
 	let targetEl: HTMLElement | undefined = $state();
 	let playPauseEl: HTMLElement | undefined = $state();
@@ -245,9 +251,9 @@
 
 	/** The painted regions this frame's DOM reports (design D4): the transport
 	 * controls, the seekbar, the visual slot, the header's collapse and
-	 * queue-fold controls, the playback-target indicator, and the open
-	 * chooser's rows last — the hit map's last push wins where a row paints
-	 * over a region beneath it. */
+	 * queue-fold controls, and the playback-target indicator. The open
+	 * chooser's rows report under the chooser's own key (the header comment
+	 * names why they report last). */
 	function currentRegions(): LayoutRegion[] {
 		return [
 			region(playPauseEl, 'playPause'),
@@ -260,12 +266,14 @@
 			region(collapseEl, 'collapse'),
 			region(queueFoldEl, 'queueFold'),
 			region(targetEl, 'playbackTarget'),
-			...chooserRegions(),
 		].filter((entry) => entry !== null);
 	}
 
 	function report(): void {
 		reportLayout(reportKey, { lists: [], regions: currentRegions() });
+		if (chooser) {
+			reportLayout(chooserKey, { lists: [], regions: chooserRegions() });
+		}
 	}
 
 	/** The observer the mount and the art element's effect share; the
@@ -276,12 +284,15 @@
 	// Each paint that moved a region reports (design D4): this effect runs
 	// after the DOM update, and the ResizeObserver reports layout-driven
 	// moves. Reading the overlay registers the chooser's rows, which appear
-	// and disappear with that frame section. The reporter dedupes an
-	// unchanged contribution.
+	// and disappear with that frame section; the chooser's key retracts while
+	// none is open. The reporter dedupes an unchanged contribution.
 	$effect(() => {
 		void playback;
 		void overlay;
 		report();
+		if (!chooser) {
+			retractLayout(chooserKey);
+		}
 	});
 
 	// The slot's artwork adoption (design D10): a frame's carried value
@@ -317,6 +328,7 @@
 			observer?.disconnect();
 			artObserver = undefined;
 			retractLayout(reportKey);
+			retractLayout(chooserKey);
 		};
 	});
 </script>
@@ -386,7 +398,8 @@
 		{#if chooser}
 			<!-- The playback-target chooser: the core's live choice list, the
 				attached output marked with a check. The rows report their
-				`targetChoice` indices last, over every region beneath them. -->
+				`targetChoice` indices under the chooser's own key, last over
+				every region beneath them (the header comment names why). -->
 			<div
 				class="absolute top-full left-0 z-20 mt-1 flex min-w-56 flex-col rounded-md border py-1 shadow-md"
 				bind:this={chooserEl}
