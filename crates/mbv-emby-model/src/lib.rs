@@ -6,6 +6,9 @@ pub mod test_support;
 pub const TICKS_PER_SECOND: i64 = 10_000_000;
 // Keep this equal to TICKS_PER_SECOND; the f64 form avoids repeated integer casts.
 pub const TICKS_PER_SECOND_F64: f64 = 10_000_000.0;
+/// Ticks in one millisecond. The trickplay tile grids state their interval in
+/// milliseconds, so the tile a position names divides by this first.
+pub const TICKS_PER_MILLISECOND: i64 = 10_000;
 
 /// Convert ticks to seconds. The i64-to-f64 conversion is exact for |ticks| < 2^53
 /// (about 28.5 years of media at 100 ns per tick).
@@ -384,6 +387,74 @@ impl UpcomingPremiere {
             self.series_name,
         )
     }
+}
+
+/// One entry of an item DTO's `Chapters` array: the chapter's display name
+/// and its start position in Emby ticks. A chapter's end is the next
+/// chapter's start, or the item's runtime for the last one.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct EmbyChapter {
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub start_position_ticks: i64,
+}
+
+/// One entry of `GET /MediaSegments/{itemId}`'s `Items` array: a detected
+/// segment's kind and its tick bounds (the `MediaSegments` plugin's
+/// `MediaSegmentDto`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize)]
+pub struct EmbyMediaSegment {
+    #[serde(rename = "Type", default)]
+    pub segment_type: EmbyMediaSegmentType,
+    #[serde(rename = "StartTicks", default)]
+    pub start_ticks: i64,
+    #[serde(rename = "EndTicks", default)]
+    pub end_ticks: i64,
+}
+
+/// The `Type` value of an [`EmbyMediaSegment`].
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Deserialize)]
+pub enum EmbyMediaSegmentType {
+    Intro,
+    Outro,
+    Commercial,
+    Preview,
+    Recap,
+    /// A segment kind this build does not name.
+    #[serde(other)]
+    #[default]
+    Other,
+}
+
+/// One tile grid of `GET /Videos/{itemId}/Trickplay` (`TrickplayInfoDto`):
+/// the response is a map keyed on each available thumbnail width whose
+/// values describe one tiled image series.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct EmbyTrickplayGrid {
+    /// The thumbnail pixel width this grid answers (the map's key).
+    #[serde(default)]
+    pub width: u32,
+    /// The thumbnail pixel height.
+    #[serde(default)]
+    pub height: u32,
+    /// Thumbnails per row of one tile sheet.
+    #[serde(default)]
+    pub tile_width: u32,
+    /// Thumbnail rows of one tile sheet.
+    #[serde(default)]
+    pub tile_height: u32,
+    /// The total thumbnails the grid holds.
+    #[serde(default)]
+    pub thumbnail_count: u32,
+    /// Milliseconds between consecutive thumbnails.
+    #[serde(default)]
+    pub interval: u64,
+    /// The media source the tile URLs qualify with.
+    #[serde(default)]
+    pub media_source_id: String,
 }
 
 #[cfg(test)]

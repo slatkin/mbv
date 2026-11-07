@@ -176,7 +176,22 @@ impl<P: Copy + SamePlace> PointerGestureState<P> {
                 at,
                 delta: WHEEL_STEP,
             }),
+            // A cancelled gesture drops the press anchor and the click pair:
+            // the release that never comes cannot leave a drag armed, and a
+            // later release recognizes nothing.
+            PointerKind::Cancel => {
+                self.cancel();
+                None
+            }
             PointerKind::Move => None,
         }
+    }
+
+    /// Drop the armed press anchor and the double-click pair without a
+    /// gesture: a cancelled pointer leaves no drag to end (row 6.5 of
+    /// add-tauri-gui-client, finding P1-2).
+    pub fn cancel(&mut self) {
+        self.last_click = None;
+        self.drag_anchor = None;
     }
 }

@@ -5,12 +5,8 @@
 //! precedence belongs to the router, not to distributed component mirrors.
 
 use super::resolver::KeyChord;
-use crate::app::dispatch::action::{
-    AppCommand, Command, IdleFeedLinkContext, NavigationIntent, PanelIntent, PlaybackIntent,
-    ShellCommand, VisualIntent, idle_feed_command_for_key,
-};
+use crate::app::dispatch::action::{IdleFeedLinkContext, idle_feed_command_for_key};
 use mbv_keybinds::{Keybinds, action_by_id};
-use mbv_ui_model::playback::VOLUME_STEP;
 use mbv_ui_model::settings::{PanelFocus, PanelMode};
 use mbv_ui_msg::{Key, KeyModifiers};
 
@@ -103,6 +99,13 @@ pub struct RouterSnapshot {
     /// suppressed while a text entry owns focus or a blocking overlay is
     /// open (the `prefix_arm` layer's gate).
     pub prefix_armed: bool,
+    /// Whether the resolving Client is the GUI Client (add-tauri-gui-client
+    /// row 6.2): the GUI-only key context's gate reads it, so the canvas's
+    /// `z` (collapse), `q` (queue fold), and `c` (cycle subtitle) chords
+    /// route in the GUI Client and never in the TUI Client — a configured
+    /// TUI binding on those chords does not follow into the GUI, and the
+    /// TUI's default bindings stay unchanged.
+    pub gui_client: bool,
 }
 
 /// One ordered layer of the keyboard policy.
@@ -169,6 +172,49 @@ pub(in crate::app) enum KeyPolicyBinding {
     /// against `&Keybinds` in `entry_matches` because the layer is not a
     /// registry action. Always blocking: arming swallows.
     PrefixArm,
+    /// The GUI-only key context's collapse toggle (add-tauri-gui-client row
+    /// 6.2, design D4a's ruled collision): the canvas's `z`, which the TUI
+    /// binds to `cycle_subtitle`. Not a registry action — the chord is
+    /// canvas-fixed and the TUI never routes the layer, so the registry's
+    /// configurable vocabulary stays TUI-facing.
+    GuiCollapsePanel,
+    /// The GUI-only key context's queue-fold toggle: the canvas's `q`, which
+    /// the TUI binds to `quit`.
+    GuiFoldQueue,
+    /// The GUI-only key context's cycle-subtitle chord: the canvas's `c`,
+    /// which the TUI binds to `clear_queue_prompt_c`.
+    GuiCycleSubtitle,
+    /// The GUI-only key context's queue-header Length/Ends-at switch.
+    GuiRightColumnToggle,
+    /// The GUI-only key context's queue-filter opener: the canvas's `/`,
+    /// which the TUI binds to nothing (the library's inline search is a
+    /// leaf-local `/`).
+    GuiQueueFilterOpen,
+    /// The GUI-only key context's playback-target chooser (add-tauri-gui-
+    /// client row 6.4): `r` opens and closes the canvas's chooser, the GUI
+    /// counterpart of the TUI's F3 Sessions sidebar. No TUI default binds
+    /// `r`, so the chord collides with nothing there.
+    GuiOpenTargetChooser,
+    /// The canvas queue's row-move actions (add-tauri-gui-client row 6.5,
+    /// the "a row is moved by key" spec): declared actions — rebindable —
+    /// whose `GuiClient` gate keeps even a rebound chord out of the TUI,
+    /// which moves a row with the Queue surface's `Shift+Up`/`Shift+Down`.
+    QueueMoveDown,
+    QueueMoveUp,
+    /// The canvas transport's seek-back-10 action (add-tauri-gui-client
+    /// row 6.4, the "back 10 s" spec): a registry action — rebindable —
+    /// whose `GuiClient` gate keeps its chords out of the TUI.
+    SeekBack10,
+    /// The canvas transport's seek-forward-30 action (the "forward 30 s"
+    /// spec), gated as `SeekBack10` is.
+    SeekForward30,
+    /// The audio chip's popover action (add-tauri-gui-client row 6.4, the
+    /// "every action is reachable from the keyboard" spec): a registry
+    /// action — rebindable — whose `GuiClient` gate keeps its chords out
+    /// of the TUI, which paints no track chip.
+    OpenAudioPopover,
+    /// The subtitle chip's popover action, gated as `OpenAudioPopover` is.
+    OpenSubtitlePopover,
 }
 
 impl KeyPolicyBinding {
@@ -188,6 +234,15 @@ impl KeyPolicyBinding {
             Self::QueueColumnWidth => {
                 matches!(chord.code, Key::Left | Key::Right) && chord.mods == KeyModifiers::SHIFT
             }
+            // The GUI-only key context's canvas chords: unmodified single
+            // keys, so a modified chord (Ctrl+Z's undo, a text entry's
+            // Shift+letter) keeps its own meaning.
+            Self::GuiCollapsePanel => chord.mods.is_empty() && chord.code == Key::Char('z'),
+            Self::GuiFoldQueue => chord.mods.is_empty() && chord.code == Key::Char('q'),
+            Self::GuiCycleSubtitle => chord.mods.is_empty() && chord.code == Key::Char('c'),
+            Self::GuiRightColumnToggle => chord.mods.is_empty() && chord.code == Key::Char('t'),
+            Self::GuiQueueFilterOpen => chord.mods.is_empty() && chord.code == Key::Char('/'),
+            Self::GuiOpenTargetChooser => chord.mods.is_empty() && chord.code == Key::Char('r'),
             _ => false,
         }
     }
@@ -221,6 +276,11 @@ pub(in crate::app) enum KeyPolicyGate {
     /// while a text-entry surface owns focus or a blocking overlay is open;
     /// in those states it routes as it does without the change.
     PrefixArming,
+    /// The GUI-only key context (add-tauri-gui-client row 6.2): the canvas's
+    /// chords route only in the GUI Client, and only with no blocking
+    /// overlay open and no text entry focused, so the open row menu or the
+    /// filter's text entry keeps the chords it owns.
+    GuiClient,
 }
 
 impl KeyPolicyGate {
@@ -242,6 +302,11 @@ impl KeyPolicyGate {
                 !snapshot.overlays.focus.blocking() && !snapshot.overlays.text_entry_focused
             }
             Self::IdleFeedLink => idle_feed_link_allowed(chord, snapshot),
+            Self::GuiClient => {
+                snapshot.gui_client
+                    && !snapshot.overlays.focus.blocking()
+                    && !snapshot.overlays.text_entry_focused
+            }
         }
     }
 }
@@ -336,6 +401,111 @@ pub(in crate::app) const KEY_POLICY: &[KeyPolicyEntry] = &[
         global: true,
         binding: KeyPolicyBinding::HelpOpen,
         gate: KeyPolicyGate::NoBlockingOverlayAndHelpClosed,
+        blocking: false,
+    },
+    // The GUI-only key context (add-tauri-gui-client row 6.2, design D4a's
+    // ruled collision): the canvas's chords bind here, ahead of the TUI
+    // actions whose defaults they collide with (`quit` on `q`,
+    // `cycle_subtitle` on `z`, `clear_queue_prompt_c` on `c`), so a TUI
+    // binding on those chords does not follow into the GUI. The TUI Client's
+    // snapshot never opens the gate, so the layers are inert there and the
+    // TUI's default bindings stay unchanged. Not registry actions: the
+    // chords are canvas-fixed and the TUI-facing registry would otherwise
+    // list chords the TUI never routes.
+    KeyPolicyEntry {
+        name: "gui_collapse_panel",
+        global: true,
+        binding: KeyPolicyBinding::GuiCollapsePanel,
+        gate: KeyPolicyGate::GuiClient,
+        blocking: false,
+    },
+    KeyPolicyEntry {
+        name: "gui_fold_queue",
+        global: true,
+        binding: KeyPolicyBinding::GuiFoldQueue,
+        gate: KeyPolicyGate::GuiClient,
+        blocking: false,
+    },
+    KeyPolicyEntry {
+        name: "gui_cycle_subtitle",
+        global: true,
+        binding: KeyPolicyBinding::GuiCycleSubtitle,
+        gate: KeyPolicyGate::GuiClient,
+        blocking: false,
+    },
+    KeyPolicyEntry {
+        name: "gui_right_column_toggle",
+        global: true,
+        binding: KeyPolicyBinding::GuiRightColumnToggle,
+        gate: KeyPolicyGate::GuiClient,
+        blocking: false,
+    },
+    KeyPolicyEntry {
+        name: "gui_queue_filter_open",
+        global: true,
+        binding: KeyPolicyBinding::GuiQueueFilterOpen,
+        gate: KeyPolicyGate::GuiClient,
+        blocking: false,
+    },
+    KeyPolicyEntry {
+        name: "gui_open_target_chooser",
+        global: true,
+        binding: KeyPolicyBinding::GuiOpenTargetChooser,
+        gate: KeyPolicyGate::GuiClient,
+        blocking: false,
+    },
+    // The canvas queue's row moves (add-tauri-gui-client row 6.5): declared
+    // actions like the deep seeks below — a user may rebind them — whose
+    // `GuiClient` gate keeps even a rebound chord out of the TUI.
+    KeyPolicyEntry {
+        name: "queue_move_down",
+        global: true,
+        binding: KeyPolicyBinding::QueueMoveDown,
+        gate: KeyPolicyGate::GuiClient,
+        blocking: false,
+    },
+    KeyPolicyEntry {
+        name: "queue_move_up",
+        global: true,
+        binding: KeyPolicyBinding::QueueMoveUp,
+        gate: KeyPolicyGate::GuiClient,
+        blocking: false,
+    },
+    // The canvas transport's registry actions (add-tauri-gui-client row
+    // 6.4): unlike the canvas-fixed literals above, these are declared
+    // actions — a user may rebind them — so `entry_matches` resolves their
+    // chords from `&Keybinds`. The `GuiClient` gate keeps even a rebound
+    // chord out of the TUI, where `<`/`>` at ±5 s stay the only seeks.
+    KeyPolicyEntry {
+        name: "seek_back_10",
+        global: true,
+        binding: KeyPolicyBinding::SeekBack10,
+        gate: KeyPolicyGate::GuiClient,
+        blocking: false,
+    },
+    KeyPolicyEntry {
+        name: "seek_forward_30",
+        global: true,
+        binding: KeyPolicyBinding::SeekForward30,
+        gate: KeyPolicyGate::GuiClient,
+        blocking: false,
+    },
+    // The track chips' popover openers (the "every action is reachable
+    // from the keyboard" spec): declared actions like the deep seeks
+    // above — a user may rebind them — whose `GuiClient` gate keeps even
+    // a rebound chord out of the TUI, which paints no track chip to open.
+    KeyPolicyEntry {
+        name: "open_audio_popover",
+        global: true,
+        binding: KeyPolicyBinding::OpenAudioPopover,
+        gate: KeyPolicyGate::GuiClient,
+        blocking: false,
+    },
+    KeyPolicyEntry {
+        name: "open_subtitle_popover",
+        global: true,
+        binding: KeyPolicyBinding::OpenSubtitlePopover,
+        gate: KeyPolicyGate::GuiClient,
         blocking: false,
     },
     KeyPolicyEntry {
@@ -594,79 +764,9 @@ fn entry_matches(entry: &KeyPolicyEntry, key: KeyChord, keybinds: &Keybinds) -> 
     }
 }
 
-/// Translate a matched router binding into the semantic command it owns.
-/// The transport split binds each payload-carrying variant to its
-/// fixed call-site value here — the single site the old
-/// `playback_command_for_key` table bound them — so the eligibility gate and
-/// registry chord matching in `resolve_policy` fully decide whether a
-/// command dispatches.
-pub(in crate::app) fn command_for_policy(
-    binding: KeyPolicyBinding,
-    key: KeyChord,
-) -> Option<Command> {
-    command_for_simple_binding(binding)
-        .or_else(|| command_for_navigation_binding(binding, key))
-        .or_else(|| command_for_transport_binding(binding))
-}
+pub(in crate::app) use commands::command_for_policy;
+mod commands;
 
-fn command_for_simple_binding(binding: KeyPolicyBinding) -> Option<Command> {
-    match binding {
-        KeyPolicyBinding::SettingsOpen => Some(NavigationIntent::ToggleSettings.into()),
-        KeyPolicyBinding::SessionsOpen => Some(NavigationIntent::OpenSessions.into()),
-        KeyPolicyBinding::PlaylistsOpen => Some(NavigationIntent::OpenPlaylists.into()),
-        KeyPolicyBinding::SearchOpen => Some(NavigationIntent::OpenSearch.into()),
-        KeyPolicyBinding::TwitchUrlOpen => Some(ShellCommand::OpenTwitchUrl.into()),
-        KeyPolicyBinding::HelpOpen => Some(ShellCommand::OpenHelp.into()),
-        KeyPolicyBinding::Quit => Some(AppCommand::Quit.into()),
-        KeyPolicyBinding::PanelRight => Some(PanelIntent::FocusPanel(PanelFocus::Library).into()),
-        KeyPolicyBinding::PanelLeft => Some(PanelIntent::FocusPanel(PanelFocus::Queue).into()),
-        KeyPolicyBinding::PanelModeCycle => Some(PanelIntent::CyclePanelMode.into()),
-        KeyPolicyBinding::CtrlL => Some(NavigationIntent::ForceClear.into()),
-        KeyPolicyBinding::ClearQueue => Some(NavigationIntent::RequestClearQueue.into()),
-        KeyPolicyBinding::F5 => Some(ShellCommand::RefreshCurrentView.into()),
-        KeyPolicyBinding::Visualizer => Some(VisualIntent::ToggleVisualizer.into()),
-        KeyPolicyBinding::HideVisualSlot => Some(VisualIntent::ToggleVisualSlotHidden.into()),
-        _ => None,
-    }
-}
-
-fn command_for_navigation_binding(binding: KeyPolicyBinding, key: KeyChord) -> Option<Command> {
-    match binding {
-        KeyPolicyBinding::NextLibraryTab | KeyPolicyBinding::AltNextLibraryTab => {
-            Some(NavigationIntent::NextLibraryTab.into())
-        }
-        KeyPolicyBinding::PreviousLibraryTab | KeyPolicyBinding::AltPreviousLibraryTab => {
-            Some(NavigationIntent::PreviousLibraryTab.into())
-        }
-        KeyPolicyBinding::LibraryTabJump => match key.code {
-            Key::Char(c @ '1'..='9') => {
-                Some(NavigationIntent::SetLibraryTab((c as usize) - '1' as usize).into())
-            }
-            _ => None,
-        },
-        _ => None,
-    }
-}
-
-fn command_for_transport_binding(binding: KeyPolicyBinding) -> Option<Command> {
-    // The split transport set: each action binds the fixed payload its key's
-    // call site carried before the bucket split.
-    match binding {
-        KeyPolicyBinding::TogglePlayPause => Some(PlaybackIntent::TogglePlayPause.into()),
-        KeyPolicyBinding::Stop => Some(PlaybackIntent::Stop.into()),
-        KeyPolicyBinding::SeekBack => Some(PlaybackIntent::SeekRelative(-5.0).into()),
-        KeyPolicyBinding::SeekForward => Some(PlaybackIntent::SeekRelative(5.0).into()),
-        KeyPolicyBinding::NextTrack => Some(PlaybackIntent::NextTrack.into()),
-        KeyPolicyBinding::PreviousTrack => Some(PlaybackIntent::PreviousTrack.into()),
-        KeyPolicyBinding::VolumeDown => Some(PlaybackIntent::AdjustVolume(-VOLUME_STEP).into()),
-        KeyPolicyBinding::VolumeUp => Some(PlaybackIntent::AdjustVolume(VOLUME_STEP).into()),
-        KeyPolicyBinding::ToggleMute => Some(PlaybackIntent::ToggleMute.into()),
-        KeyPolicyBinding::CycleAudio => Some(PlaybackIntent::CycleAudio.into()),
-        KeyPolicyBinding::CycleSubtitle => Some(PlaybackIntent::CycleOrToggleSubtitle.into()),
-        KeyPolicyBinding::OpenIdleFeedLink => Some(VisualIntent::OpenIdleFeedLink.into()),
-        _ => None,
-    }
-}
 // ---------------------------------------------------------------------------
 // Mouse subscription pattern
 // ---------------------------------------------------------------------------

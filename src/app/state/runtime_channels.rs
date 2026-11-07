@@ -1,6 +1,9 @@
+use crate::app::playback_metadata::PlaybackDecorations;
+use crate::app::playback_trickplay::{TrickplaySheetFetch, TrickplaySheetKey};
 use crate::app::state::events::{LibEvent, SessionEvent};
 use crate::app::state::types::cast::CastEvent;
 use mbv_emby_model::EmbyItem;
+use mbv_queue::QueueItemContentId;
 use std::sync::mpsc;
 
 pub(in crate::app) struct RuntimeChannels {
@@ -20,6 +23,16 @@ pub(in crate::app) struct RuntimeChannels {
     /// the shell and applied through the pinned view/settings handlers.
     pub(in crate::app) pinned_tx: mpsc::Sender<Result<(), String>>,
     pub(in crate::app) pinned_rx: mpsc::Receiver<Result<(), String>>,
+    /// Landed item-metadata fetches (add-tauri-gui-client design D4a): the
+    /// item identity and its decorations, one send per spawned worker.
+    pub(in crate::app) metadata_tx: mpsc::Sender<(QueueItemContentId, PlaybackDecorations)>,
+    pub(in crate::app) metadata_rx: mpsc::Receiver<(QueueItemContentId, PlaybackDecorations)>,
+    /// Landed trickplay tile sheets (add-tauri-gui-client task 6.7): the
+    /// sheet's key and what its fetch produced — the bytes, the server's
+    /// definitive absence, or a transient failure the cache does not record.
+    /// One send per spawned worker.
+    pub(in crate::app) trickplay_tx: mpsc::Sender<(TrickplaySheetKey, TrickplaySheetFetch)>,
+    pub(in crate::app) trickplay_rx: mpsc::Receiver<(TrickplaySheetKey, TrickplaySheetFetch)>,
 }
 
 impl RuntimeChannels {
@@ -30,6 +43,8 @@ impl RuntimeChannels {
         let (cast_tx, cast_rx) = mpsc::channel();
         let (notif_action_tx, notif_action_rx) = mpsc::channel();
         let (pinned_tx, pinned_rx) = mpsc::channel();
+        let (metadata_tx, metadata_rx) = mpsc::channel();
+        let (trickplay_tx, trickplay_rx) = mpsc::channel();
         Self {
             lib_tx,
             lib_rx,
@@ -43,6 +58,10 @@ impl RuntimeChannels {
             notif_action_rx,
             pinned_tx,
             pinned_rx,
+            metadata_tx,
+            metadata_rx,
+            trickplay_tx,
+            trickplay_rx,
         }
     }
 }

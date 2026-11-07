@@ -5,6 +5,7 @@
 mod prefix_mode {
     use super::super::test_support::*;
     use super::super::*;
+    use crate::app::dispatch::action::{NavigationIntent, VisualIntent};
     use crate::app::input::router::RouterOutcome;
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 

@@ -5,6 +5,7 @@
 //! audio = blue (FOAM), subtitles = yellow (YELLOW) when on / dim when off.
 
 use mbv_theme as palette;
+use mbv_theme::Role;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Span;
 
@@ -63,26 +64,43 @@ pub struct IndicatorData {
 }
 
 impl IndicatorData {
-    fn res_color(&self) -> Color {
+    /// The role the resolution label paints in: muted while unresolved.
+    fn res_role(&self) -> Role {
         if self.flags.res_dim {
-            palette::Role::TextMuted.color().to_ratatui()
+            Role::TextMuted
         } else {
-            palette::Role::IndicatorResolutionFg.color().to_ratatui()
+            Role::IndicatorResolutionFg
         }
     }
-    fn audio_color(&self) -> Color {
+
+    fn res_color(&self) -> Color {
+        self.res_role().color().to_ratatui()
+    }
+
+    /// The role the audio label paints in: muted while unresolved.
+    fn audio_role(&self) -> Role {
         if self.flags.audio_dim {
-            palette::Role::TextMuted.color().to_ratatui()
+            Role::TextMuted
         } else {
-            palette::Role::IndicatorAudioFg.color().to_ratatui()
+            Role::IndicatorAudioFg
         }
     }
-    fn sub_color(&self) -> Color {
+
+    fn audio_color(&self) -> Color {
+        self.audio_role().color().to_ratatui()
+    }
+
+    /// The role the subtitle label paints in: muted while subtitles are off.
+    fn sub_role(&self) -> Role {
         if self.flags.sub_on {
-            palette::Role::TextMetadata.color().to_ratatui()
+            Role::TextMetadata
         } else {
-            palette::Role::TextMuted.color().to_ratatui()
+            Role::TextMuted
         }
+    }
+
+    fn sub_color(&self) -> Color {
+        self.sub_role().color().to_ratatui()
     }
 }
 
@@ -101,6 +119,41 @@ pub fn short_resolution_label(height: u64) -> &'static str {
     } else {
         "SD"
     }
+}
+
+/// One status indicator of the queue band's plain text cluster: its
+/// uppercased label and the foreground role its text paints in.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StatusIndicator {
+    pub label: String,
+    pub role: Role,
+}
+
+/// The queue band's status-indicator cluster for `d`: the resolution, audio,
+/// and subtitle labels the queue playback panel paints as plain text on its
+/// controls row, uppercased, each in the role its state resolves — a dimmed
+/// fact in `TextMuted`, the live subtitle label in `TextMetadata`. Audio-only
+/// playback paints the resolution alone. The TUI's per-style treatments
+/// (chips, brackets, dots, pipes) are terminal presentation the Clients share
+/// through their own painters; the labels and their colour roles are the
+/// content every Client paints from.
+#[must_use]
+pub fn status_indicator_items(d: &IndicatorData) -> Vec<StatusIndicator> {
+    let mut items = vec![StatusIndicator {
+        label: d.res_label.to_uppercase(),
+        role: d.res_role(),
+    }];
+    if !d.flags.audio_only {
+        items.push(StatusIndicator {
+            label: d.audio_label.to_uppercase(),
+            role: d.audio_role(),
+        });
+        items.push(StatusIndicator {
+            label: d.sub_label.to_uppercase(),
+            role: d.sub_role(),
+        });
+    }
+    items
 }
 
 /// Build the fully-styled indicator spans for the chosen treatment.

@@ -577,6 +577,7 @@ fn tick_context_menu_wheel_does_not_mutate_the_obscured_queue() {
         entries: vec![ContextMenuEntry {
             label: "Play",
             action: Some(ContextAction::Play),
+            key_hint: None,
         }],
         cursor: 0,
         bounds: None,

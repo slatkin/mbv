@@ -39,28 +39,69 @@ impl App {
         match result {
             Ok(startup) => Some(self.apply_emby_startup(startup)),
             Err(error) => {
-                use crate::app::dispatch::notify::ToastSeverity;
-                let state =
-                    crate::app::dispatch::session::service_startup::classify_failure(&error);
-                self.fail_emby_service(state);
-                if state == mbv_core::service_runtime::ServiceState::NeedsAuthentication {
-                    self.emby_runtime.client = None;
-                    self.ws_send_tx = None;
-                    let deletion = delete_secret(mbv_queue::ServiceKind::Emby);
-                    let message = match deletion {
-                        Ok(()) => format!(
-                            "Emby rejected its saved credential: {error}; set up Emby again"
-                        ),
-                        Err(delete_error) => format!(
-                            "Emby rejected its saved credential: {error}; could not remove the saved secret ({delete_error}); set up Emby again"
-                        ),
-                    };
-                    self.flash(message, ToastSeverity::Warning);
-                } else {
-                    self.flash(format!("Emby unavailable: {error}"), ToastSeverity::Warning);
-                }
-                tracing::warn!(name: "startup.emby.failed", target: "startup", state = ?state, error = %error, "Emby startup failed");
+                self.reject_emby_fill(&error, delete_secret);
                 None
+            }
+        }
+    }
+
+    /// The failure half of an Emby startup attempt's completion: classify
+    /// the failure into the runtime state, clear the saved credential when
+    /// Emby rejected it, and flash the result. The full startup and the GUI
+    /// Client's minimal client fill share it (add-tauri-gui-client design
+    /// D9's ruled exception).
+    fn reject_emby_fill(
+        &mut self,
+        error: &mbv_emby::EmbyFailure,
+        delete_secret: impl FnOnce(mbv_queue::ServiceKind) -> Result<(), mbv_config::ConfigError>,
+    ) {
+        use crate::app::dispatch::notify::ToastSeverity;
+        let state = crate::app::dispatch::session::service_startup::classify_failure(error);
+        self.fail_emby_service(state);
+        if state == mbv_core::service_runtime::ServiceState::NeedsAuthentication {
+            self.emby_runtime.client = None;
+            self.ws_send_tx = None;
+            let deletion = delete_secret(mbv_queue::ServiceKind::Emby);
+            let message = match deletion {
+                Ok(()) => {
+                    format!("Emby rejected its saved credential: {error}; set up Emby again")
+                }
+                Err(delete_error) => format!(
+                    "Emby rejected its saved credential: {error}; could not remove the saved secret ({delete_error}); set up Emby again"
+                ),
+            };
+            self.flash(message, ToastSeverity::Warning);
+        } else {
+            self.flash(format!("Emby unavailable: {error}"), ToastSeverity::Warning);
+        }
+        tracing::warn!(name: "startup.emby.failed", target: "startup", state = ?state, error = %error, "Emby startup failed");
+    }
+
+    /// Apply the GUI Client's minimal Emby fill (add-tauri-gui-client
+    /// design D9's ruled exception): install the authenticated client and
+    /// run the session and cast discovery it feeds — none of the TUI
+    /// startup's bootstrap, websocket, or capability work.
+    pub(in crate::app) fn apply_emby_client_fill(
+        &mut self,
+        completion: crate::app::dispatch::session::service_startup::ClientFillCompletion,
+    ) {
+        if !self.emby_runtime.accepts(completion.generation) {
+            tracing::debug!(name: "startup.emby.stale_fill_completion_ignored", target: "startup", "ignored stale Emby client-fill completion");
+            return;
+        }
+        match completion.result {
+            Ok(client) => {
+                self.emby_runtime.client = Some(Arc::new(Mutex::new(client)));
+                self.emby_runtime.state = mbv_core::service_runtime::ServiceState::Ready;
+                // The fill feeds the playback-target choices (design D4a):
+                // the same `/Sessions` fetch and cast browse the TUI
+                // spawns for its session panel.
+                self.spawn_sessions_load();
+                self.spawn_cast_discovery();
+                tracing::info!(name: "startup.emby.fill_completed", target: "startup", "Emby client fill completed");
+            }
+            Err(error) => {
+                self.reject_emby_fill(&error, mbv_config::clear_service_secret_result);
             }
         }
     }

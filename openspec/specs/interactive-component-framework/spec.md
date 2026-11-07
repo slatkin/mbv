@@ -84,8 +84,14 @@ discovered receivers or connectable endpoints.
 
 - **WHEN** a source file in the Player, protocol, Emby, websocket,
   remote-player, cast or daemon crate changes
-- **THEN** none of `mbv-ui-model`, `mbv-ui-msg`, `mbv-render` or
-  `mbv-components` is rebuilt
+- **THEN** none of `mbv-ui-model`, `mbv-ui-msg`, `mbv-surfaces`, `mbv-render`
+  or `mbv-components` is rebuilt
+
+#### Scenario: A shared surface has one state owner
+
+- **WHEN** the Queue panel is mounted in the TUI Client
+- **THEN** its cursor, marks, and viewport live in its Surface state
+- **AND** its TuiRealm adapter holds no copy of them
 
 #### Scenario: A shared surface has one state owner
 

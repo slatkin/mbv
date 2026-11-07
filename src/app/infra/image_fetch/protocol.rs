@@ -1,4 +1,5 @@
-use super::super::super::App;
+use super::super::super::{App, MusicEvent};
+use super::CardImageDrain;
 use mbv_images::{
     ImageFetchOutcome, ImageFetchReq, ImageSource, QUEUE_CARD_PLACEHOLDER_BYTES,
     QUEUE_CARD_PLACEHOLDER_KEY, RENDER_FILTER, cover_fill_hero_box,
@@ -481,6 +482,61 @@ impl App {
         while let Some(req) = self.images.take_pending_fetch(super::MAX_IMAGE_FETCHES) {
             self.spawn_image_fetch(req);
         }
+    }
+
+    /// Drain card-image completions into the image cache (design D10): the
+    /// decoded source lands in the cache under its key — the pickers a Client
+    /// whose `App` never initializes build no protocol entry — an interrupted
+    /// fetch stays open to its retry, and a resolved artist-artwork request
+    /// emits its typed event into the lib channel. The one loop both Clients
+    /// run; the result reports whether a Series-family key completed, which
+    /// only the TUI Client answers by re-pushing its TV workspace content
+    /// (`Model::drain_card_image_completions`).
+    pub fn drain_card_image_completions(&mut self) -> CardImageDrain {
+        let mut drained = CardImageDrain::default();
+        while let Ok((cache_key, outcome)) = self.images.try_recv_card_image() {
+            drained.drained = true;
+            // The infix is the only Series-family marker, so both live chains
+            // (Wide's Thumb-first, narrow's `Primary`) gate without a suffix
+            // list that can drift from the key the painter builds.
+            drained.series_key_changed |=
+                cache_key.contains(mbv_images::SERIES_IMAGE_CACHE_KEY_INFIX);
+            let interrupted = matches!(outcome, ImageFetchOutcome::Interrupted);
+            let img_opt = match outcome {
+                ImageFetchOutcome::Image(img) => Some(img),
+                ImageFetchOutcome::Empty | ImageFetchOutcome::Interrupted => None,
+            };
+            let entry =
+                self.images
+                    .build_cached_image(&cache_key, img_opt, self.current_protocol_suffix());
+            // Artist artwork: a fetch reserved through the typed artist
+            // request identity completes as its own typed event; the generic
+            // image cache stays provider/generic.
+            let artist_completion =
+                self.artist_artwork_requests
+                    .remove(&cache_key)
+                    .map(|identity| {
+                        crate::app::LibEvent::Music(MusicEvent::ArtistArtworkFetched {
+                            destination: identity.destination,
+                            generation: mbv_core::service_runtime::SetupGeneration::new(
+                                identity.generation,
+                            ),
+                            artist_id: identity.artist_id,
+                            revision: identity.revision,
+                            cache_key: cache_key.clone(),
+                            available: entry.img.is_some(),
+                        })
+                    });
+            if interrupted && artist_completion.is_none() {
+                self.images.fetch_interrupted(cache_key);
+            } else {
+                self.images.complete_fetch(cache_key, entry);
+            }
+            if let Some(event) = artist_completion {
+                let _ = self.channels.lib_tx.send(event);
+            }
+        }
+        drained
     }
 
     pub(super) fn spawn_image_fetch(&mut self, req: ImageFetchReq) {

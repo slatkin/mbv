@@ -62,7 +62,9 @@ jobs:
           # changes only when that pin is bumped deliberately. clang stays a
           # system package (native build-script tooling, not a cache-keyed
           # compiler).
-          pacman_retry pacman -S --noconfirm --needed rustup clang nasm mpv pipewire openssl dpkg github-cli git openssh zig wayland libxkbcommon fontconfig ast-grep
+          pacman_retry pacman -S --noconfirm --needed \
+            rustup clang nasm mpv pipewire openssl dpkg github-cli git openssh \
+            zig wayland libxkbcommon fontconfig ast-grep webkit2gtk-4.1 pnpm
 
       - uses: actions/checkout@v7
 
@@ -116,6 +118,13 @@ jobs:
 
       - name: Check formatting
         run: cargo fmt --all -- --check
+
+      - name: Build GUI front end
+        # `--workspace` clippy compiles `mbv-gui`, and
+        # `tauri::generate_context!` panics at compile time when the
+        # `frontendDist` directory (ui/dist) does not exist, so the bundle
+        # must be built first (design D14).
+        run: make ui-build
 
       - name: Lint
         run: cargo clippy --workspace --all-targets -- -D warnings
@@ -297,7 +306,9 @@ jobs:
             "$@"
           }
           pacman_retry pacman -Syu --noconfirm
-          pacman_retry pacman -S --noconfirm --needed rustup clang nasm mpv pipewire openssl dpkg github-cli git openssh zig wayland libxkbcommon fontconfig
+          pacman_retry pacman -S --noconfirm --needed \
+            rustup clang nasm mpv pipewire openssl dpkg github-cli git openssh \
+            zig wayland libxkbcommon fontconfig webkit2gtk-4.1 pnpm
 
       - uses: actions/checkout@v7
 
@@ -324,6 +335,11 @@ jobs:
       - name: Install cargo-hack
         uses: taiki-e/install-action@cargo-hack
 
+      - name: Build GUI front end
+        # Same prerequisite as `build`'s clippy: `--workspace` check compiles
+        # `mbv-gui`, which needs ui/dist to exist (design D14).
+        run: make ui-build
+
       - name: Check feature matrix
         # `--each-feature`, not `--feature-powerset`: the 12+ `test` features
         # are additive shims and a powerset over them is combinatorial and
@@ -332,6 +348,85 @@ jobs:
         # dev-dependency-enabled `test` features, so without it the gate would
         # skip the configuration the workspace actually builds.
         run: cargo hack check --each-feature --workspace --all-targets
+
+  gui:
+    # mbv-gui gate (design D14, change `add-tauri-gui-client`). A separate
+    # job because `mbv-gui` sits outside `default-members`: the workspace
+    # nextest, clippy, and `cargo build --all-targets` runs in `build` never
+    # compile it, so its tests and the front-end targets get no coverage
+    # there. Needs the same container: building `mbv-gui` links WebKitGTK 4.1
+    # and compiles `mbv`'s native build scripts.
+    runs-on: ubuntu-latest
+    # Same pinned builder image as `build` (keep the literal in sync with the
+    # containers and cache keys above).
+    container: archlinux/archlinux:base-devel-20260818.0.575430
+    permissions:
+      contents: read
+
+    steps:
+      # Same makedeps as `build` (pkg-config probes for mpv/pipewire/openssl,
+      # webkit2gtk-4.1 for the Tauri link, pnpm for the `ui/` targets), and
+      # checkout needs git for a real clone.
+      - name: Update system and install makedeps
+        run: |
+          pacman_retry() {
+            for attempt in 1 2 3; do
+              "$@" && return 0
+              pacman -Syy --noconfirm
+              sleep $((attempt * 10))
+            done
+            "$@"
+          }
+          pacman_retry pacman -Syu --noconfirm
+          pacman_retry pacman -S --noconfirm --needed \
+            rustup clang nasm mpv pipewire openssl dpkg github-cli git openssh \
+            zig wayland libxkbcommon fontconfig webkit2gtk-4.1 pnpm
+
+      - uses: actions/checkout@v7
+
+      - name: Cache Rust build
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ~/.cargo/bin
+            ~/.cargo/advisory-db
+            ~/.rustup/toolchains
+            target
+          # Own key family (`gui-`, deliberately not under `build`'s `cargo-`
+          # or feature-matrix's `hack-` restore-keys prefixes): whichever job
+          # saves last would otherwise win a shared key and the wrong
+          # warmness. Same hashFiles inputs as `build`; the base-devel
+          # literal must match the `container:` image above.
+          key: >-
+            ${{ runner.os }}-gui-base-devel-20260818.0.575430-${{ hashFiles(
+            'rust-toolchain.toml', '**/Cargo.lock', '**/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-gui-
+
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@nextest
+
+      - name: Build GUI front end
+        # Compiling the `mbv-gui` test harness runs `tauri::generate_context!`,
+        # which panics when `frontendDist` (ui/dist) does not exist (design
+        # D14). The front-end steps below reuse the installed dependencies.
+        run: make ui-build
+
+      - name: Test mbv-gui
+        # Same release + throttled invocation as `build`'s nextest step (see
+        # its fd-budget comment), scoped to the crate the workspace run skips.
+        run: cargo nextest run --release --test-threads=4 -p mbv-gui
+
+      - name: Check front end
+        run: make ui-check
+
+      - name: Lint front end
+        run: make ui-lint
+
+      - name: Test front end
+        run: make ui-test
 
 # Miri scope audit (issue #888, change `static-verification-gates`, task 2.1).
 #

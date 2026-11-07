@@ -30,6 +30,15 @@ const GLOBAL_ACTION_IDS: &[&str] = &[
     "alt_previous_library_tab",
     "alt_next_library_tab",
     "library_tab_jump",
+    // The GUI-only key context's registry actions (add-tauri-gui-client row
+    // 6.4): global-gated entries whose chords resolve only in the GUI
+    // Client.
+    "seek_back_10",
+    "seek_forward_30",
+    // The track chips' popover openers (add-tauri-gui-client row 6.4):
+    // global-gated entries whose chords resolve only in the GUI Client.
+    "open_audio_popover",
+    "open_subtitle_popover",
 ];
 
 /// The split transport actions (the `playback` bucket).
@@ -282,12 +291,18 @@ const EXPECTED_DEFAULTS: &[(&str, &[&str])] = &[
     ("alt_previous_library_tab", &["Alt+Up"]),
     ("playlists_open", &["F4"]),
     ("clear_queue_prompt_c", &["c"]),
+    ("queue_move_down", &["Alt+j"]),
+    ("queue_move_up", &["Alt+k"]),
     ("visualizer", &["v"]),
     ("hide_visual_slot", &["h"]),
     ("toggle_play_pause", &["Space"]),
     ("stop", &["Shift+S"]),
     ("seek_back", &["<"]),
     ("seek_forward", &[">"]),
+    ("seek_back_10", &["["]),
+    ("seek_forward_30", &["]"]),
+    ("open_audio_popover", &["a"]),
+    ("open_subtitle_popover", &["s"]),
     ("next_track", &["Shift+N"]),
     ("previous_track", &["Shift+P"]),
     ("volume_down", &["-"]),

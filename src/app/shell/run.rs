@@ -1,4 +1,4 @@
-use crate::app::{BrowseEvent, MusicEvent};
+use crate::app::BrowseEvent;
 use crate::app::{ClientCore, TickOutcome};
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
@@ -10,7 +10,6 @@ use super::{
 // The run-loop tests reach `App` through this module's scope.
 #[cfg(test)]
 use super::App;
-use mbv_images::SERIES_IMAGE_CACHE_KEY_INFIX;
 
 /// Issue #940: a run-loop phase that takes at least this long gets a WARN
 /// naming the phase that consumed it, so a stalled input window names its
@@ -181,66 +180,19 @@ impl Model {
         self.render_overlay_stack(f);
     }
 
-    /// Drain completed card-image fetches into the render cache. Returns whether
-    /// any completion arrived.
-    ///
-    /// A completion under a Series (`:ser:` family) key re-projects TV workspace
-    /// content: the Wide push reserved its painted key and painted the
-    /// placeholder, and the cached entry only reaches the screen through that
-    /// re-push. The infix is the only Series-family marker, so both live chains
-    /// (Wide's Thumb-first, narrow's `Primary`) gate without a suffix list that
-    /// can drift from the key the painter builds.
+    /// Drain completed card-image fetches into the render cache, and re-project
+    /// TV workspace content when a Series (`:ser:` family) key completed: the
+    /// Wide push reserved its painted key and painted the placeholder, and the
+    /// cached entry only reaches the screen through that re-push. The drain
+    /// loop lives on the `App`, so both Clients run it once; the TUI is the
+    /// Client that paints that workspace. Returns whether any completion
+    /// arrived.
     pub(in crate::app) fn drain_card_image_completions(&mut self) -> bool {
-        let mut series_image_changed = false;
-        let mut drained = false;
-        while let Ok((cache_key, outcome)) = self.app.images.try_recv_card_image() {
-            drained = true;
-            series_image_changed |= cache_key.contains(SERIES_IMAGE_CACHE_KEY_INFIX);
-            let interrupted = matches!(outcome, mbv_images::ImageFetchOutcome::Interrupted);
-            let img_opt = match outcome {
-                mbv_images::ImageFetchOutcome::Image(img) => Some(img),
-                mbv_images::ImageFetchOutcome::Empty
-                | mbv_images::ImageFetchOutcome::Interrupted => None,
-            };
-            let entry = self.app.images.build_cached_image(
-                &cache_key,
-                img_opt,
-                self.app.current_protocol_suffix(),
-            );
-            // Artist artwork: a fetch reserved through
-            // the typed artist request identity completes as its own typed
-            // event; the generic image cache stays provider/generic.
-            let artist_completion =
-                self.app
-                    .artist_artwork_requests
-                    .remove(&cache_key)
-                    .map(|identity| {
-                        crate::app::LibEvent::Music(MusicEvent::ArtistArtworkFetched {
-                            destination: identity.destination,
-                            generation: mbv_core::service_runtime::SetupGeneration::new(
-                                identity.generation,
-                            ),
-                            artist_id: identity.artist_id,
-                            revision: identity.revision,
-                            cache_key: cache_key.clone(),
-                            available: entry.img.is_some(),
-                        })
-                    });
-            // The artist flow's only completion is the event above, so its
-            // keys stay final; every other surface asks again on its next sync.
-            if interrupted && artist_completion.is_none() {
-                self.app.images.fetch_interrupted(cache_key);
-            } else {
-                self.app.images.complete_fetch(cache_key, entry);
-            }
-            if let Some(event) = artist_completion {
-                let _ = self.app.channels.lib_tx.send(event);
-            }
-        }
-        if series_image_changed {
+        let drain = self.app.drain_card_image_completions();
+        if drain.series_key_changed {
             self.push_tv_workspace_content();
         }
-        drained
+        drain.drained
     }
 
     pub(in crate::app) fn handle_restored_library_position_event(

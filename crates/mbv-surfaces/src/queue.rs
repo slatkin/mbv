@@ -34,6 +34,16 @@ pub enum QueueHitTarget {
     PlaylistPill,
 }
 
+/// The side of a row an insertion line paints on (add-tauri-gui-client row
+/// 6.5): the pointer's half of the painted row decides it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum QueueRowInsertionSide {
+    /// The line paints above the row.
+    Before,
+    /// The line paints below the row.
+    After,
+}
+
 /// One frame's Queue interaction report (design D6): how many whole queue
 /// rows the painted list fits, and the painted regions a pointer press
 /// resolves against. A Client derives it from its own painted geometry and
@@ -50,9 +60,52 @@ pub struct QueueFrameReport {
     pub hit_map: HitMap<QueueHitTarget>,
 }
 
+/// One row drag's insertion line (add-tauri-gui-client row 6.5, design D5):
+/// the row the line anchors on and the side it paints. The anchor is a stable
+/// slot, so the line keeps its place when the rows above it move.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum QueueRowInsertion {
+    /// The line paints above this row's slot.
+    Before(QueueSlotId),
+    /// The line paints below this row's slot.
+    After(QueueSlotId),
+}
+
+impl QueueRowInsertion {
+    /// The row the line anchors on.
+    #[must_use]
+    pub const fn anchor(self) -> QueueSlotId {
+        match self {
+            Self::Before(slot_id) | Self::After(slot_id) => slot_id,
+        }
+    }
+}
+
+/// One row drag the Client core owns (add-tauri-gui-client row 6.5, design
+/// D5): the grabbed slot, its current index, the final index the drop
+/// previews, and the insertion line the frame paints. Motion only previews;
+/// the release sends the one move request. Both indexes resolve against the
+/// live rows each time the drag moves or settles, so a queue mutation under
+/// the drag cannot leave a stale index in the request.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct QueueRowDrag {
+    /// The grabbed slot's stable identity.
+    pub slot_id: QueueSlotId,
+    /// The slot's index among the list's item rows as the list stands now.
+    pub from_index: usize,
+    /// The slot's final index once the drop applies: the row index counted
+    /// after the dragged slot is removed, the index the Owner's slot move
+    /// takes as its insert position.
+    pub drop_index: usize,
+    /// The insertion line the frame paints.
+    pub insertion: QueueRowInsertion,
+}
+
 /// The Queue's Surface state: the canonical media-list owner over the queue's
-/// stable slot identities, the queue link the key rules address, and the
-/// painted viewport height the Client reports each frame.
+/// stable slot identities, the queue link the key rules address, the painted
+/// viewport height the Client reports each frame, and the GUI canvas's row
+/// hover and row drag (add-tauri-gui-client row 6.5). The TUI Client paints
+/// neither hover nor a row drag, so the two stay empty there.
 #[derive(Debug)]
 pub struct QueueSurface {
     list: MediaList<QueueSlotId>,
@@ -60,6 +113,11 @@ pub struct QueueSurface {
     /// The painted viewport height the Client reports; the page stride's
     /// source and the resting scroll clamp's bound.
     viewport_height: usize,
+    /// The row the pointer rests on (the canvas row hover): the row the
+    /// frame paints the grip and the actions button on.
+    hover: Option<QueueSlotId>,
+    /// The row drag in progress, if any.
+    row_drag: Option<QueueRowDrag>,
 }
 
 impl Default for QueueSurface {
@@ -75,6 +133,8 @@ impl QueueSurface {
             list: MediaList::new(),
             link: QueueLink::Local,
             viewport_height: 0,
+            hover: None,
+            row_drag: None,
         }
     }
 
@@ -103,6 +163,9 @@ impl QueueSurface {
         let changed = link != self.link;
         if changed {
             self.list.set_scroll(0);
+            // A drag addresses the link it started in: a link switch mid-drag
+            // makes the move request's slot address the other queue.
+            self.row_drag = None;
         }
         self.link = link;
         changed
@@ -152,6 +215,116 @@ impl QueueSurface {
     ) -> MediaListTransition<QueueSlotId> {
         self.list
             .delegate_operation_with_viewport_len(operation, viewport_len)
+    }
+
+    /// The row the pointer rests on (the canvas row hover): the frame paints
+    /// that row's grip and actions button.
+    #[must_use]
+    pub const fn hover(&self) -> Option<QueueSlotId> {
+        self.hover
+    }
+
+    /// Deliver the pointer's row: `None` while it rests on no row.
+    pub fn set_hover(&mut self, hover: Option<QueueSlotId>) {
+        self.hover = hover;
+    }
+
+    /// The row drag in progress, if any. A frame projects it as the drag
+    /// ghost and insertion line; the Client core finalizes it on release.
+    #[must_use]
+    pub const fn row_drag(&self) -> Option<QueueRowDrag> {
+        self.row_drag
+    }
+
+    /// Start dragging `slot_id` (the grip's press): a drag starts only on a
+    /// row the list holds, with its insertion line under the grabbed row and
+    /// its drop at the row's own index (a release without motion moves
+    /// nothing). Returns whether a drag started.
+    pub fn begin_row_drag(&mut self, slot_id: QueueSlotId) -> bool {
+        let Some(from_index) = self.item_index_of(slot_id) else {
+            return false;
+        };
+        self.row_drag = Some(QueueRowDrag {
+            slot_id,
+            from_index,
+            drop_index: from_index,
+            insertion: QueueRowInsertion::After(slot_id),
+        });
+        true
+    }
+
+    /// Preview a drop over `anchor` on `side`: the resolved insertion point
+    /// counted before `anchor`, then the dragged slot's final index once the
+    /// insertion point applies (the row's own final index when it moves
+    /// down). Both indexes resolve against the rows as they stand now, so a
+    /// queue mutation mid-drag re-anchors the preview instead of poisoning
+    /// it with the start index. A motion with no drag in progress, or over a
+    /// row the list no longer holds, changes nothing; a drag whose slot or
+    /// insertion anchor vanished is dropped.
+    pub fn preview_row_drag_drop(&mut self, anchor: QueueSlotId, side: QueueRowInsertionSide) {
+        let Some(drag) = self.row_drag else {
+            return;
+        };
+        if self.item_index_of(anchor).is_none() {
+            return;
+        }
+        let insertion = match side {
+            QueueRowInsertionSide::Before => QueueRowInsertion::Before(anchor),
+            QueueRowInsertionSide::After => QueueRowInsertion::After(anchor),
+        };
+        self.row_drag = self.resolve_row_drag(QueueRowDrag { insertion, ..drag });
+    }
+
+    /// End the drag, resolving its final state against the rows as they stand
+    /// now. `None` when no drag is in progress, or when the rows no longer
+    /// hold the dragged slot or its insertion anchor (a content refresh can
+    /// drop either): the release then sends no move.
+    pub fn take_row_drag(&mut self) -> Option<QueueRowDrag> {
+        let drag = self.row_drag.take()?;
+        self.resolve_row_drag(drag)
+    }
+
+    /// Resolve a drag's source and drop indexes against the live rows: the
+    /// insert point counts in the pre-move list, and the move's index counts
+    /// in the list with the dragged row removed, so every point below the
+    /// dragged row shifts one place. `None` when the dragged slot or its
+    /// insertion anchor left the rows.
+    fn resolve_row_drag(&self, drag: QueueRowDrag) -> Option<QueueRowDrag> {
+        let source = self.item_index_of(drag.slot_id)?;
+        let anchor_index = self.item_index_of(drag.insertion.anchor())?;
+        let insertion_point = match drag.insertion {
+            QueueRowInsertion::Before(_) => anchor_index,
+            QueueRowInsertion::After(_) => anchor_index + 1,
+        };
+        let drop_index = if source < insertion_point {
+            insertion_point - 1
+        } else {
+            insertion_point
+        };
+        Some(QueueRowDrag {
+            slot_id: drag.slot_id,
+            from_index: source,
+            drop_index,
+            insertion: drag.insertion,
+        })
+    }
+
+    /// Drop the drag without a move request (a cancelled gesture).
+    pub fn cancel_row_drag(&mut self) {
+        self.row_drag = None;
+    }
+
+    /// The slot's index among the list's item rows: the canonical queue
+    /// index, which structural headings and spacers do not count.
+    #[must_use]
+    pub fn item_index_of(&self, slot_id: QueueSlotId) -> Option<usize> {
+        self.rows()
+            .iter()
+            .filter_map(|row| match row {
+                MediaListRow::Item { target, .. } => Some(*target),
+                MediaListRow::Heading { .. } | MediaListRow::Spacer => None,
+            })
+            .position(|target| target == slot_id)
     }
 
     /// The Queue's selection summary: the mark count under the Queue origin.
@@ -217,12 +390,37 @@ impl QueueSurface {
         self.viewport_height
     }
 
+    /// The move request for the selected row in `direction`: the same
+    /// `QueueRequest::Move` the `Shift+Up`/`Shift+Down` rules emit, addressed
+    /// by the selected slot's stable identity. A GUI leaf sends it for a
+    /// queue-move chord the Surface state does not see as a key, so the chord
+    /// and the key rule name the one selection the client paints
+    /// (add-tauri-gui-client row 6.5). `None` while no row is selected.
+    #[must_use]
+    pub fn selected_move_request(&self, direction: QueueMove) -> Option<Msg> {
+        self.selected_slot().map(|(link, slot_id)| {
+            Msg::Queue(QueueRequest::Move {
+                link,
+                slot_id,
+                direction,
+            })
+        })
+    }
+
     /// The Queue's key rules over the neutral `KeyEvent` (moved from the TUI
     /// adapter's `queue/keys.rs`, extract-client-core row 4.3). The neutral
     /// vocabulary folds a Shift+uppercase press into its lowercase letter
     /// with SHIFT held; the SHIFT guards below keep the match set the
     /// `TuiRealm` rules had, where only the literal lowercase char matched.
     pub fn key(&mut self, key: KeyEvent) -> LeafKeyResult {
+        // A drag in progress owns Esc: the gesture cancels and sends no move
+        // request (add-tauri-gui-client row 6.5, design D5's "cancel sends
+        // none"). The arm runs only while a drag holds, so the TUI's Esc
+        // (a playback stop elsewhere) keeps its meaning everywhere else.
+        if key.code == Key::Esc && key.modifiers.is_empty() && self.row_drag.is_some() {
+            self.cancel_row_drag();
+            return LeafKeyResult::Consumed(None);
+        }
         match self.handle_key(key) {
             Some(message) => LeafKeyResult::Consumed(Some(Box::new(message))),
             None if Self::consumes_without_action(&key) => LeafKeyResult::Consumed(None),
@@ -327,13 +525,7 @@ impl QueueSurface {
             } else {
                 QueueMove::Down
             };
-            return self.selected_slot().map(|(link, slot_id)| {
-                Msg::Queue(QueueRequest::Move {
-                    link,
-                    slot_id,
-                    direction,
-                })
-            });
+            return self.selected_move_request(direction);
         }
         None
     }

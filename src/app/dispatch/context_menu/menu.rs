@@ -31,6 +31,7 @@ impl App {
         entries.push(ContextMenuEntry {
             label,
             action: Some(action),
+            key_hint: None,
         });
     }
 

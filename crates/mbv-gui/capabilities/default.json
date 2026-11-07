@@ -1,0 +1,12 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "The main window's grants (design D11): the three bridge commands and the frame event listener, nothing else.",
+  "windows": ["main"],
+  "permissions": [
+    "allow-key",
+    "allow-pointer",
+    "allow-report-layout",
+    "core:event:allow-listen"
+  ]
+}

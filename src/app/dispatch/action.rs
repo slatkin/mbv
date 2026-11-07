@@ -25,6 +25,7 @@ use crate::app::input::resolver::KeyChord;
 use mbv_ctrl::Direction;
 use mbv_ctrl::player::PlayerCommand;
 use mbv_queue::QueueSlotId;
+use mbv_ui_msg::{QueueMove, TrackChipKind};
 
 /// A UI command: the seam between key-event translation (`input.rs`) and
 /// effects (`actions.rs`, `player.rs`).
@@ -111,6 +112,14 @@ pub enum PlaybackIntent {
     ToggleMute,
     /// The `#` key: cycles the audio track.
     CycleAudio,
+    /// The audio or subtitle track popover's open/close (add-tauri-gui-
+    /// client row 6.4, the "every action is reachable from the keyboard"
+    /// spec): the GUI-only `open_audio_popover`/`open_subtitle_popover`
+    /// chords dispatch it, and the chips' `OpenTrackPopover` press routes
+    /// through the same arm, as the seek requests route through
+    /// `SeekRelative`. GUI-only: the TUI Client paints no track chip, so
+    /// no TUI binding resolves it.
+    ToggleTrackPopover(TrackChipKind),
 }
 
 /// The destination-independent routing intents.
@@ -136,6 +145,30 @@ pub enum PanelIntent {
     /// toggles queue-only and library-only.
     CyclePanelMode,
     FocusPanel(mbv_ui_model::settings::PanelFocus),
+    /// The GUI-only canvas panel's collapse toggle (add-tauri-gui-client
+    /// row 6.2, design D4a): `z` collapses the panel to the rail. The TUI
+    /// Client never routes the intent — the GUI-only key context's gate
+    /// closes there.
+    TogglePanelCollapse,
+    /// The `q` toggle: fold the expanded panel's queue to its one-line
+    /// summary. GUI-only, as the collapse toggle is.
+    ToggleQueueFold,
+    /// The queue header's switch between the rows' Length and Ends-at
+    /// values. GUI-only: the TUI's queue paints the length value only.
+    ToggleQueueRightColumn,
+    /// Focus the queue header's filter text entry (the GUI-only `/`).
+    ActivateQueueFilter,
+    /// The playback-target chooser (add-tauri-gui-client row 6.4): the GUI-
+    /// only `r` chord's open/close of the Client-core overlay the header's
+    /// target press also toggles. GUI-only: the TUI's counterpart is the
+    /// Sessions sidebar, not a dispatch intent.
+    ToggleTargetChooser,
+    /// Move the queue's selected row one place (add-tauri-gui-client row
+    /// 6.5): the `queue_move_down`/`queue_move_up` actions' effect, the same
+    /// Owner slot move the surface's `Shift+Up`/`Shift+Down` request sends.
+    /// GUI-only: the TUI moves a row by that surface chord, and no TUI chord
+    /// resolves these actions.
+    MoveQueueRow(QueueMove),
 }
 
 impl From<ShellCommand> for Command {
@@ -307,6 +340,12 @@ impl App {
                 crate::app::LocalPlaybackTarget::toggle_command_mute(self);
             }
             PlaybackIntent::CycleAudio => self.cycle_audio(),
+            // The track chips' popover toggle (add-tauri-gui-client row
+            // 6.4): only the GUI-only popover actions and the GUI Client's
+            // chip press reach this arm; the TUI paints no track chip.
+            PlaybackIntent::ToggleTrackPopover(chip) => {
+                self.toggle_gui_track_popover(chip);
+            }
         }
     }
 
@@ -346,6 +385,18 @@ impl App {
                 // shrank between image and seekbar.
             }
             PanelIntent::CyclePanelMode => self.cycle_panel_mode(),
+            // The GUI-only canvas panel's actions (add-tauri-gui-client row
+            // 6.2): only the GUI-only key context resolves them, so the TUI
+            // Client never dispatches these arms.
+            PanelIntent::TogglePanelCollapse => self.toggle_panel_collapse(),
+            PanelIntent::ToggleQueueFold => self.toggle_queue_fold(),
+            PanelIntent::ToggleQueueRightColumn => self.toggle_queue_right_column(),
+            PanelIntent::ActivateQueueFilter => self.activate_queue_filter(),
+            PanelIntent::ToggleTargetChooser => self.toggle_gui_target_chooser(),
+            // The GUI router delivers the row move to the focused Queue leaf
+            // (`input/gui.rs`), which addresses the selection its surface
+            // paints; the App holds no cursor-free selection to move here.
+            PanelIntent::MoveQueueRow(_) => {}
         }
     }
 

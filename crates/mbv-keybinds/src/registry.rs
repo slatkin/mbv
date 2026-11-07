@@ -37,6 +37,12 @@ pub enum KeyGate {
     ClearQueuePrompt,
     SessionsSidebarOpen,
     Playback,
+    /// Routing only ever opens while the resolving Client is the GUI
+    /// Client (add-tauri-gui-client row 6.4): a GUI-only action's default
+    /// chord is canvas-scoped, so the TUI-facing help and routing treat the
+    /// action as theirs by section alone but its chord never resolves in a
+    /// TUI Client.
+    GuiClient,
 }
 
 /// The settings UI's section vocabulary plus `Global`, in `SETTING_SECTIONS`
@@ -286,6 +292,31 @@ pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
         rebindable: true,
         prefix_addressable: true,
     },
+    // The canvas queue's row move (add-tauri-gui-client row 6.5, the
+    // "a row is moved by key" spec): `Alt+J`/`Alt+K` move the selected row
+    // one place, the same Owner slot move a row drag sends. GUI-only by
+    // gate — the TUI moves a row with the Queue surface's
+    // `Shift+Up`/`Shift+Down`, and its defaults stay unchanged — while
+    // staying in the rebindable registry so a user can assign their own
+    // chord for the GUI Client.
+    KeybindAction {
+        id: "queue_move_down",
+        section: KeySection::Queue,
+        default_chords: &["Alt+j"],
+        gate: KeyGate::GuiClient,
+        policy: "queue_move_down",
+        rebindable: true,
+        prefix_addressable: true,
+    },
+    KeybindAction {
+        id: "queue_move_up",
+        section: KeySection::Queue,
+        default_chords: &["Alt+k"],
+        gate: KeyGate::GuiClient,
+        policy: "queue_move_up",
+        rebindable: true,
+        prefix_addressable: true,
+    },
     // ── Playback ────────────────────────────────────────────────────────
     KeybindAction {
         id: "visualizer",
@@ -341,6 +372,54 @@ pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
         default_chords: &[">"],
         gate: KeyGate::Playback,
         policy: "playback",
+        rebindable: true,
+        prefix_addressable: true,
+    },
+    // The canvas transport's deeper steps (add-tauri-gui-client row 6.4,
+    // the "back 10 s, forward 30 s" spec): the GUI Client's `seekBack`/
+    // `seekForward` regions press the same commands their chords carry.
+    // GUI-only by gate — the TUI keeps `<`/`>` at ±5 s and its defaults
+    // unchanged — while staying in the rebindable registry so a user can
+    // assign a chord of their own for the GUI Client.
+    KeybindAction {
+        id: "seek_back_10",
+        section: KeySection::Playback,
+        default_chords: &["["],
+        gate: KeyGate::GuiClient,
+        policy: "seek_back_10",
+        rebindable: true,
+        prefix_addressable: true,
+    },
+    KeybindAction {
+        id: "seek_forward_30",
+        section: KeySection::Playback,
+        default_chords: &["]"],
+        gate: KeyGate::GuiClient,
+        policy: "seek_forward_30",
+        rebindable: true,
+        prefix_addressable: true,
+    },
+    // The track chips' popover openers (add-tauri-gui-client row 6.4, the
+    // "every action is reachable from the keyboard" spec): the GUI
+    // Client's audio and subtitle chips press the same popover toggle
+    // their chords dispatch. GUI-only by gate — the TUI paints no track
+    // chip — while staying in the rebindable registry so a user can
+    // assign a chord of their own for the GUI Client.
+    KeybindAction {
+        id: "open_audio_popover",
+        section: KeySection::Playback,
+        default_chords: &["a"],
+        gate: KeyGate::GuiClient,
+        policy: "open_audio_popover",
+        rebindable: true,
+        prefix_addressable: true,
+    },
+    KeybindAction {
+        id: "open_subtitle_popover",
+        section: KeySection::Playback,
+        default_chords: &["s"],
+        gate: KeyGate::GuiClient,
+        policy: "open_subtitle_popover",
         rebindable: true,
         prefix_addressable: true,
     },

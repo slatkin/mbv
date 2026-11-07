@@ -1,6 +1,7 @@
 use std::fmt::Write as _;
 
 use mbv_emby_model::EmbyItem;
+use time::{OffsetDateTime, UtcOffset};
 use unicode_width::UnicodeWidthStr;
 
 /// Tab-bar label for the Continue tab: Nerd Font's house glyph (\u{f015})
@@ -202,6 +203,25 @@ pub fn fmt_duration_hms(s: i64) -> String {
     } else {
         format!("{:02}:{:02}", s / 60, s % 60)
     }
+}
+
+/// Format a unix-seconds instant as `offset`'s 12-hour wall clock:
+/// `"11:42 AM"`, `"9:05 PM"` — the finish-clock format the design canvas
+/// paints (the right column's "Ends at" mode, the queue and scrubber finish
+/// clocks). The caller resolves the offset once per projection pass, so a
+/// frame formats every clock against one zone. A seconds value beyond
+/// `time`'s range renders as the empty string rather than panicking (the
+/// same saturation the publish-date helpers use).
+#[must_use]
+pub fn fmt_wall_clock(secs: i64, offset: UtcOffset) -> String {
+    let Ok(instant) = OffsetDateTime::from_unix_timestamp(secs) else {
+        return String::new();
+    };
+    let instant = instant.to_offset(offset);
+    let hour = instant.hour();
+    let hour12 = ((hour + 11) % 12) + 1;
+    let period = if hour < 12 { "AM" } else { "PM" };
+    format!("{hour12}:{:02} {period}", instant.minute())
 }
 
 /// URL-stripped, trimmed overview text with no length cap. Used by the view's

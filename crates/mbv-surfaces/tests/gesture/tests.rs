@@ -169,3 +169,31 @@ fn the_held_modifiers_choose_the_click_selection(
         })
     );
 }
+
+/// A cancelled gesture drops its press anchor (review of
+/// add-tauri-gui-client row 6.5, finding P1-2): the release that arrives
+/// after a pointer cancel recognizes no drag end, and the next press starts
+/// a fresh gesture.
+#[test]
+fn a_cancel_drops_the_press_anchor_so_no_drag_end_follows() {
+    let mut state = PointerGestureState::new();
+    let t0 = Instant::now();
+    assert!(matches!(
+        recognize(&mut state, bare(1.0, 2.0), t0),
+        Some(PointerGesture::Click { .. })
+    ));
+    assert!(matches!(
+        recognize(&mut state, wheel(PointerKind::Drag, 4.0, 5.0), t0),
+        Some(PointerGesture::Drag { .. })
+    ));
+
+    assert_eq!(
+        recognize(&mut state, wheel(PointerKind::Cancel, 4.0, 5.0), t0),
+        None
+    );
+    assert_eq!(
+        recognize(&mut state, wheel(PointerKind::Release, 4.0, 5.0), t0),
+        None,
+        "no live press means no drag end"
+    );
+}

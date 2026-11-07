@@ -52,6 +52,13 @@ impl crate::app::App {
                 self.dispatch_playback(&AppCommand::Playback(PlaybackIntent::NextTrack));
             }
             PlaybackRequest::SeekTo(fraction) => self.seek_to_fraction(*fraction),
+            // The canvas's back and forward controls emit the deltas the
+            // `seek_back`/`seek_forward` chords carry, so the request
+            // dispatches the same intent the chord resolves to
+            // (add-tauri-gui-client row 6.4).
+            PlaybackRequest::SeekRelative(delta) => {
+                self.dispatch_playback(&AppCommand::Playback(PlaybackIntent::SeekRelative(*delta)));
+            }
             PlaybackRequest::ToggleMute => {
                 self.dispatch_playback(&AppCommand::Playback(PlaybackIntent::ToggleMute));
             }
@@ -66,6 +73,37 @@ impl crate::app::App {
                     PlaybackIntent::CycleOrToggleSubtitle,
                 ));
             }
+            // The track chips' popover opener: the GUI Client's chips emit it
+            // (add-tauri-gui-client row 6.2). It dispatches the same intent
+            // the `open_audio_popover`/`open_subtitle_popover` chords resolve
+            // to (row 6.4), so the chip press and the chord run one dispatch.
+            // The TUI Client paints no track chip, so no TUI leaf produces
+            // the request.
+            PlaybackRequest::OpenTrackPopover(chip) => {
+                self.dispatch_playback(&AppCommand::Playback(PlaybackIntent::ToggleTrackPopover(
+                    *chip,
+                )));
+            }
+            // A track popover row's press (add-tauri-gui-client rows 6.4 and
+            // 6.5): the GUI Client's popover rows emit it with the track id
+            // the frame painted, and the App runs the same track switch the
+            // popover's Enter execution applies. No TUI leaf produces it
+            // either.
+            PlaybackRequest::TrackPopoverSelect(track_id) => {
+                self.select_gui_track_popover_track(*track_id);
+            }
+            // The canvas header's collapse and queue-fold controls: the GUI
+            // Client's header emits them (add-tauri-gui-client row 6.4) and
+            // they run the `z`/`q` toggles' own effects. The TUI paints no
+            // such control; the arms are here for the shared dispatch's
+            // exhaustiveness.
+            PlaybackRequest::TogglePanelCollapse => self.toggle_panel_collapse(),
+            PlaybackRequest::ToggleQueueFold => self.toggle_queue_fold(),
+            // The canvas queue header's switch and filter controls (row
+            // 6.5): the same effects the `t` and `/` chords dispatch, so the
+            // header control and the chord run one path.
+            PlaybackRequest::ToggleQueueRightColumn => self.toggle_queue_right_column(),
+            PlaybackRequest::ActivateQueueFilter => self.activate_queue_filter(),
         }
     }
 

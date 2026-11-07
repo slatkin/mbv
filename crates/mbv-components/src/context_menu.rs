@@ -272,10 +272,12 @@ mod tests {
                 ContextMenuEntry {
                     label: "a",
                     action: Some(ContextAction::Play),
+                    key_hint: None,
                 },
                 ContextMenuEntry {
                     label: "sep",
                     action: None,
+                    key_hint: None,
                 },
             ],
             0,

@@ -20,12 +20,16 @@ mod single_instance;
 mod startup;
 
 pub use self::app::{
-    App, AppCommand, CLIENT_IDLE_CADENCE, ClientCore, ClientLifecycle, ClientTickHost, ClientWaker,
-    Command, FooterPill, GuiInput, GuiSurfaceLeaf, HomeContent, HomeEventDrain, NavigationIntent,
-    OverlayFocus, PanelIntent, PlaybackIntent, PlayerEventDrain, QueueFooterProjection,
-    QueuePlaybackProjection, QueueSurfaceProjection, RemoteControlTarget, RouterOutcome,
-    RouterOverlayState, RouterPlaybackState, RouterSnapshot, ShellCommand, StartupWorkerDrain,
-    StatusBarProjection, TickOutcome, VisualIntent, WorkspaceRelayout,
+    App, AppCommand, CLIENT_IDLE_CADENCE, CardImageDrain, ClientCore, ClientLifecycle,
+    ClientTickHost, ClientWaker, Command, FooterPill, GuiInput, GuiOverlayProjection,
+    GuiSurfaceLeaf, HomeContent, HomeEventDrain, NavigationIntent, OverlayFocus, PanelIntent,
+    PanelTogglesProjection, PlaybackChapter, PlaybackDecorations, PlaybackIntent,
+    PlaybackTargetChoice, PlayerEventDrain, QueueCardArtwork, QueueFooterProjection,
+    QueuePlaybackProjection, QueueRightColumn, QueueSummaryProjection, QueueSurfaceProjection,
+    RemoteControlTarget, RouterOutcome, RouterOverlayState, RouterPlaybackState, RouterSnapshot,
+    RowMenuEntryProjection, SegmentMark, ShellCommand, StartupWorkerDrain, StatusBarProjection,
+    TickOutcome, TrackChip, TrackChips, TrackChoice, TrackPopoverChoice, TrickplayGrid,
+    TrickplayPreviewTile, TrickplaySheetKey, TrickplayTile, VisualIntent, WorkspaceRelayout,
     resolve_router_outcome_with_focused,
 };
 pub use self::config::{Config, load_config};
@@ -34,12 +38,16 @@ pub use self::owner_link::{
     find_owner, refusal_text, start_owner,
 };
 pub use self::startup::run;
+pub use mbv_ui_msg::TrackChipKind;
 
 /// The `App` stub construction a Client's own tests build their `App` from
 /// (`extract-client-core` design D11). Compiled only under the root package's
 /// `test` feature, which no shipped build enables.
 #[cfg(feature = "test")]
 pub use self::app::{
-    stub_app_with_playing_queue, stub_app_with_prefix_and_toast, stub_app_with_queue,
-    stub_app_with_unsaved_queue,
+    set_cast_receivers_for_test, set_subtitle_tracks_for_test, stub_app_with_armed_emby_fill,
+    stub_app_with_cast_target, stub_app_with_open_row_menu, stub_app_with_pending_settings_save,
+    stub_app_with_playing_items, stub_app_with_playing_queue, stub_app_with_prefix_and_toast,
+    stub_app_with_queue, stub_app_with_queue_and_cmd_rx, stub_app_with_rebound_quit,
+    stub_app_with_track_choices, stub_app_with_track_popover, stub_app_with_unsaved_queue,
 };

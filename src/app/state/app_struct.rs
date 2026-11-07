@@ -1,5 +1,7 @@
 use super::panel_targets::PanelTarget;
 use crate::app::QueueDeferrals;
+use crate::app::gui_client_state::GuiOverlay;
+use crate::app::queue_summary_projection::QueueRightColumn;
 use crate::app::state::events::{PendingSeriesHandoff, PendingSeriesLanding};
 use crate::app::state::playback::{PlaylistMutationState, SuspendedLocalSession, UndoEntry};
 use crate::app::state::queue_owner::QueueEpoch;
@@ -321,6 +323,10 @@ pub struct App {
     /// the slot's image state; the painter reads this and paints. Refreshed
     /// by `Model::sync_queue`'s push while playback is active.
     pub(in crate::app) queue_card_projection: mbv_ui_model::playback::QueueCardProjection,
+    /// The display encode of the slot's cached artwork, keyed by the cache
+    /// key it encodes: the downscale-and-encode pass runs once per key so a
+    /// Client's frame reads stay encode-free between artwork changes.
+    pub(in crate::app) card_artwork_encoded: Option<(String, Vec<u8>)>,
     pub(in crate::app) title_log_gate: crate::app::state::projection::card::TitleLogGate,
     pub(in crate::app) dim_backdrop_active: bool,
     pub(in crate::app) settings_destination: SettingsDestination,
@@ -417,6 +423,26 @@ pub struct App {
     /// disarmed by an armed-dispatch outcome, and silently cleared on any
     /// mouse event. Sticky until a disarm event; no timed expiry.
     pub(in crate::app) prefix_armed: bool,
+    /// The GUI Client's Client-core presentation state (add-tauri-gui-client
+    /// row 6.2): the canvas panel's collapse (`z`) and queue-fold (`q`)
+    /// toggles. The Client core holds them, so a window-content reload keeps
+    /// them; the TUI Client never reads them.
+    pub(in crate::app) panel_collapsed: bool,
+    /// The `q` toggle: the expanded panel's queue folded to its one-line
+    /// summary.
+    pub(in crate::app) queue_folded: bool,
+    /// Which value the queue rows' right column paints: the queue header's
+    /// Length / Ends-at switch.
+    pub(in crate::app) queue_right_column: QueueRightColumn,
+    /// The queue filter's text: it narrows the projected rows locally and
+    /// never touches the canonical queue. Empty text filters nothing.
+    pub(in crate::app) queue_filter: String,
+    /// Whether the queue filter's text entry holds the keyboard: the fact
+    /// that suppresses the global bindings while the user types.
+    pub(in crate::app) queue_filter_active: bool,
+    /// The GUI Client's open overlay: the queue row's menu or a track chip's
+    /// popover (design D4a). `None` while none is open.
+    pub(in crate::app) gui_overlay: Option<GuiOverlay>,
     pub(in crate::app) force_clear: bool,
     pub(in crate::app) tab_scroll: usize,
     pub(in crate::app) ui_volume: u8,
@@ -469,6 +495,35 @@ pub struct App {
     /// session cannot keep every fetched list reachable.
     pub(in crate::app) album_tracks_cache: IndexMap<String, Vec<EmbyItem>>,
     pub(in crate::app) album_tracks_loading: std::collections::HashSet<String>,
+    /// The active queue item's fetched metadata decoration
+    /// (add-tauri-gui-client design D4a): chapters, segment marks, and the
+    /// trickplay source, keyed by the item's `QueueItemContentId` — cached
+    /// like artwork, decoration only, never queue or playback authority.
+    pub(in crate::app) playback_metadata_cache: std::collections::HashMap<
+        mbv_queue::QueueItemContentId,
+        crate::app::playback_metadata::PlaybackDecorations,
+    >,
+    /// The item identities whose metadata fetches are in flight.
+    pub(in crate::app) playback_metadata_loading:
+        std::collections::HashSet<mbv_queue::QueueItemContentId>,
+    /// The scrubber preview's fetched trickplay tile sheets
+    /// (add-tauri-gui-client task 6.7): the item, thumbnail width, and sheet
+    /// ordinal each sheet answers, bounded at
+    /// `playback_trickplay::TRICKPLAY_SHEET_CACHE_BOUND`. An entry's `None`
+    /// records a sheet the server does not hold, so a hover does not retry
+    /// it; decoration only, never playback authority.
+    pub(in crate::app) trickplay_sheets:
+        IndexMap<crate::app::playback_trickplay::TrickplaySheetKey, Option<std::sync::Arc<[u8]>>>,
+    /// The sheet keys whose tile fetches are in flight.
+    pub(in crate::app) trickplay_sheets_loading:
+        std::collections::HashSet<crate::app::playback_trickplay::TrickplaySheetKey>,
+    /// The sheet key whose last fetch failed in transport (add-tauri-gui-client
+    /// task 6.7): the sheet may exist, so it is not cached as absent. The hold
+    /// keeps the idle cadence from re-asking the same hovered sheet; the hover
+    /// naming a different sheet retires it, as does the hover ending, so a
+    /// return re-asks.
+    pub(in crate::app) trickplay_sheet_failed:
+        Option<crate::app::playback_trickplay::TrickplaySheetKey>,
     /// Fallback artist per-album track fetches waiting for a bounded slot.
     /// A fallback root's scope can be the whole
     /// settled catalog, so `enqueue_artist_album_tracks` arms at most

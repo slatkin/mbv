@@ -1,5 +1,8 @@
 use super::*;
-use crate::app::tests::{QueueViewTestExt, live_owner_channel, make_app_stub, make_items};
+use crate::app::tests::{
+    QueueViewTestExt, live_owner_channel, make_app_stub, make_items,
+    make_remote_app_stub_with_cmd_rx,
+};
 use mbv_emby_model::test_support::make_item;
 use mbv_ui_msg::Msg;
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
@@ -389,5 +392,48 @@ fn remote_undo_falls_back_to_local_when_no_direct_remote_queue() {
     assert!(
         model.app.queue_undo_stack.is_empty(),
         "the Local undo entry was consumed"
+    );
+}
+
+// `unified-playback-queue`: undo history belongs to the Client that made the
+// edits and the inverse edit goes to the Player owner whose queue is shown,
+// so a peer queue's undo is lawful for the same reason a local one is. The
+// two Clients had diverged here (the TUI refused it with a toast, the GUI ran
+// it silently); the one `App` dispatch is the behaviour both now share.
+#[test]
+fn a_peer_undo_sends_the_inverse_edit_to_the_peer_owner() {
+    use crate::app::state::playback::UndoEntry;
+    let (app, cmd_rx) = make_remote_app_stub_with_cmd_rx(make_items(1), make_items(2));
+    assert_eq!(app.playing_queue_link(), QueueLink::Peer);
+    let mut app = app;
+    app.remote_queue_undo_stack.push(UndoEntry::Move {
+        slot_id: mbv_queue::QueueSlotId::from_raw(2),
+        from: 0,
+    });
+    let mut model = Model::new(app);
+
+    model.handle_queue_request(QueueRequest::Undo {
+        link: QueueLink::Peer,
+    });
+
+    assert!(
+        model.app.remote_queue_undo_stack.is_empty(),
+        "the peer undo entry was consumed"
+    );
+    assert_ne!(
+        model.app.status_severity,
+        ToastSeverity::Error,
+        "a lawful peer undo reports no error"
+    );
+    assert!(
+        cmd_rx.try_iter().any(|cmd| matches!(
+            cmd,
+            mbv_ctrl::CtrlCmd::UnifiedQueueMoveSlot {
+                slot_id: 2,
+                to_index: 0,
+                ..
+            }
+        )),
+        "the inverse move went to the peer owner"
     );
 }
