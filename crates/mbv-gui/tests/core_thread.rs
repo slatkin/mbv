@@ -8,13 +8,13 @@ use std::time::Duration;
 use mbv::{
     App, ClientTickHost, load_config, stub_app_with_armed_emby_fill, stub_app_with_cast_target,
     stub_app_with_pending_settings_save, stub_app_with_playing_queue,
-    stub_app_with_prefix_and_toast, stub_app_with_queue,
+    stub_app_with_prefix_and_toast, stub_app_with_queue, stub_app_with_track_choices,
 };
 use mbv_config::{
     LaunchPanelFocus, TUI_LAUNCH_STATE_VERSION, TabIdentity, TestStateDirGuard, TuiLaunchState,
     load_tui_launch_state, save_tui_launch_state,
 };
-use mbv_gui::bridge::frame::overlay::GuiOverlayFrame;
+use mbv_gui::bridge::frame::overlay::{GuiOverlayFrame, GuiTrackChipKind};
 use mbv_gui::bridge::frame::playback::GuiCardArtwork;
 use mbv_gui::bridge::frame::queue::GuiQueueRow;
 use mbv_gui::bridge::frame::{GuiFrame, GuiWindowFrame};
@@ -700,4 +700,112 @@ fn a_move_over_the_seekbar_carries_the_hover_to_the_frame() {
     assert!(test.core.step());
     let frame = test.next_frame();
     assert_eq!(frame.playback.hover, None);
+}
+
+/// A chip press opens its track popover (the `gui-client` spec's "the
+/// audio and subtitle chips SHALL each open a popover"), and the same
+/// press on the open popover's chip closes it, as the playback-target
+/// press toggles the chooser (add-tauri-gui-client row 6.4).
+#[test]
+fn a_chip_press_opens_its_popover_and_the_same_press_closes() {
+    let (app, _cmd_rx) = stub_app_with_track_choices();
+    let mut test = test_core_with(app);
+    test.tx
+        .send(measured_layout(
+            3,
+            vec![region_at(
+                0.0,
+                0.0,
+                RegionTarget::QueuePlayback(QueuePlaybackTargetId::AudioChip),
+            )],
+        ))
+        .unwrap();
+    assert!(test.core.step());
+    test.next_frame();
+
+    test.tx.send(press_at(10.0, 10.0)).unwrap();
+    assert!(test.core.step());
+    let frame = test.next_frame();
+    let Some(GuiOverlayFrame::TrackPopover { chip, choices, .. }) = &frame.overlay else {
+        panic!("the chip press opened its popover: {:?}", frame.overlay);
+    };
+    assert_eq!(*chip, GuiTrackChipKind::Audio);
+    assert_eq!(
+        choices
+            .iter()
+            .map(|choice| (choice.id, choice.chosen))
+            .collect::<Vec<_>>(),
+        vec![(1, true)]
+    );
+
+    test.tx.send(press_at(10.0, 10.0)).unwrap();
+    assert!(test.core.step());
+    let frame = test.next_frame();
+    assert!(frame.overlay.is_none(), "the same press closed the popover");
+}
+
+/// A track popover row's press selects that choice through the popover's
+/// Enter execution (add-tauri-gui-client row 6.4, the `gui-client` spec's
+/// "the chosen track SHALL be sent to the Owner process"): the subtitle
+/// popover's track row sends the `SetSub` the keyboard's Enter sends, and
+/// the selection closes the popover.
+#[test]
+fn a_popover_row_press_sends_the_track_switch() {
+    // The subtitle choice persists the picked track, so the state dir is
+    // the isolated one.
+    let _state_dir = TestStateDirGuard::new();
+    let (app, cmd_rx) = stub_app_with_track_choices();
+    let mut test = test_core_with(app);
+    test.tx
+        .send(measured_layout(
+            3,
+            vec![region_at(
+                0.0,
+                0.0,
+                RegionTarget::QueuePlayback(QueuePlaybackTargetId::SubtitleChip),
+            )],
+        ))
+        .unwrap();
+    assert!(test.core.step());
+    test.next_frame();
+
+    test.tx.send(press_at(10.0, 10.0)).unwrap();
+    assert!(test.core.step());
+    let frame = test.next_frame();
+    let Some(GuiOverlayFrame::TrackPopover { chip, choices, .. }) = &frame.overlay else {
+        panic!(
+            "the chip press opened the subtitle popover: {:?}",
+            frame.overlay
+        );
+    };
+    assert_eq!(*chip, GuiTrackChipKind::Subtitles);
+    assert_eq!(choices.len(), 2, "Off and the one subtitle track");
+
+    // The popover's paint reports its rows: the track row's region joins
+    // the next report's hit map.
+    test.tx
+        .send(measured_layout(
+            3,
+            vec![region_at(
+                0.0,
+                50.0,
+                RegionTarget::QueuePlayback(QueuePlaybackTargetId::TrackPopoverChoice(1)),
+            )],
+        ))
+        .unwrap();
+    assert!(test.core.step());
+    test.next_frame();
+
+    test.tx.send(press_at(10.0, 60.0)).unwrap();
+    assert!(test.core.step());
+    let frame = test.next_frame();
+    assert!(frame.overlay.is_none(), "the selection closed the popover");
+    let switches: Vec<i64> = cmd_rx
+        .try_iter()
+        .filter_map(|cmd| match cmd {
+            mbv_ctrl::CtrlCmd::PlayerCmd(mbv_ctrl::WireCommand::SetSub(id)) => Some(id),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(switches, vec![2]);
 }

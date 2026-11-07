@@ -284,6 +284,33 @@ pub fn stub_app_with_cast_target() -> (App, std::sync::mpsc::Receiver<mbv_ctrl::
     (app, cmd_rx)
 }
 
+/// The `App` a GUI Client's test drives with an active local player
+/// carrying one audio track (id 1, chosen) and one forced subtitle track
+/// (id 2; id 0, Off, is chosen), so a chip press opens its popover and a
+/// choice records on the command channel (add-tauri-gui-client row 6.4):
+/// the same shape `stub_app_with_track_popover` arms, over a remote stub
+/// that exposes what a track switch sends the Owner.
+#[cfg(feature = "test")]
+#[must_use]
+pub fn stub_app_with_track_choices() -> (App, std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
+    let (remote, player_rx, cmd_rx) =
+        mbv_remote_player::RemotePlayer::stub_with_command_rx(Vec::new(), 0);
+    remote.update_status(|status| {
+        status.active = true;
+        status.audio_tracks = vec![(1, "Stereo".to_string())];
+        status.audio_id = 1;
+        status.sub_tracks = vec![(2, "Forced".to_string(), true)];
+        status.sub_id = 0;
+    });
+    let player = mbv_player::PlayerProxy::from_remote(remote, false);
+    let mut app = built_app(player, player_rx);
+    apply_app_stub_defaults(&mut app);
+    // The construction's preference sync lands on the channel before the
+    // test starts; drain it so the test sees only commands its actions send.
+    while cmd_rx.try_recv().is_ok() {}
+    (app, cmd_rx)
+}
+
 /// The `App` a GUI Client's test drives with the Emby startup request
 /// armed, as `initialize_service_startup` arms it for an attached session
 /// whose Emby is configured without a client, so the test reads the
