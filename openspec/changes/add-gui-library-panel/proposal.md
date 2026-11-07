@@ -31,7 +31,8 @@ None.
 
 - `crates/mbv-surfaces`: new Library Surface state (selector, list, tree, Workspace, filter, Search) used by both Clients.
 - `crates/mbv-components`: the seven destination owners, `library_panel`, `tab_panel`, `inline_search`, and `search_sidebar` become adapters over the Surface state. Paint and key output are unchanged.
-- `src/app` and `src/lib.rs`: the shell projection that builds the GUI Library frame; the GUI-only key context gains `Ctrl+K`.
+- `crates/mbv-ui-model`: a plain `LibrarySlotContent` model of the Library slots.
+- `src/app` and `src/lib.rs`: one public slot-content projection per destination, built from the `App`'s Service data and the Surface state, which both the TUI owners and the GUI frame read; the shared launch-snapshot builder; the GUI-only key context gains `{`, `}`, Space and Alt+Space under pill focus, and `Ctrl+K`; the Library item context menu routes in the GUI.
 - `crates/mbv-config`: `TuiLaunchState` gains an additive field for the extra selected Music groups; only the GUI applies it.
 - `crates/mbv-gui`: frame DTOs, region ids, `ListId`s, leaves, core-thread wiring, and the Svelte Library components.
 - `docs/architecture/gui-client.md`, `docs/architecture/interactive-surface-ledger.md`: the new surfaces and owners.

@@ -2,7 +2,7 @@
 
 ### Requirement: The first GUI slice presents the player panel of the design canvas
 
-The GUI Client SHALL present one player panel whose content, arrangement, and states follow the design canvas. The TUI layout SHALL NOT be the reference. The footer line SHALL show the prefix-armed state and the toasts of the shared Status bar projection while the Library panel does not show; while the Library panel shows, the Library Status bar shows them. A surface that the GUI Client does not yet present SHALL be absent, with no stub and no placeholder.
+The GUI Client SHALL present one player panel whose content, arrangement, and states follow the design canvas. The TUI layout SHALL NOT be the reference. The footer line SHALL show the prefix-armed state and the toasts of the shared Status bar projection while the Library panel does not show; while the Library panel shows, the Library Status bar shows them. A surface, or a Library destination, that the GUI Client does not yet present SHALL be absent, with no stub and no placeholder: the tab bar carries only the destinations the GUI Client presents, and the top bar carries the Search field only once global Search is presented.
 
 #### Scenario: The queue has slots
 
@@ -34,6 +34,12 @@ The GUI Client SHALL present one player panel whose content, arrangement, and st
 
 - **WHEN** the user presses a key bound to a surface that the GUI Client does not present
 - **THEN** no surface opens and no placeholder appears
+
+#### Scenario: A destination is not yet presented
+
+- **GIVEN** the GUI Client presents only the Music destination
+- **WHEN** the top bar paints
+- **THEN** the tab bar shows no tab for another destination, and a tab-jump key for one opens nothing
 
 #### Scenario: The artwork has a still slot
 
@@ -137,6 +143,11 @@ Every action that the Hero shows SHALL run the TUI Client's action for the same 
 - **WHEN** the user presses the Hero's play-next control
 - **THEN** the selected item is admitted after the active slot, as the TUI Client's play-next key does
 
+#### Scenario: More actions opens the item menu
+
+- **WHEN** the user presses the Hero's more-actions control, or the TUI Client's context-menu chord on the selected item
+- **THEN** the Library item context menu of the TUI Client opens for that item, and each entry runs the TUI Client's action
+
 #### Scenario: A row action appears on hover
 
 - **WHEN** the pointer is over a Workspace row and the row's play-next and add controls appear
@@ -160,6 +171,12 @@ The Library panel's interaction state (Panel focus, held by the core focus stack
 ### Requirement: Library lists keep the cursor visible
 
 Every Library list SHALL keep the cursor row fully visible after every keyboard movement and SHALL use fixed row heights so that capacity is a whole number of rows.
+
+#### Scenario: A list has letter headings
+
+- **GIVEN** the Music artist list shows letter headings
+- **WHEN** the list paints
+- **THEN** every heading and every row has the same fixed height, the capacity counts headings and rows together, and the cursor never rests on a heading
 
 #### Scenario: The cursor moves past the last visible Library row
 
@@ -192,6 +209,12 @@ In the GUI Client a collection pill SHALL toggle on and off. A list SHALL show t
 
 - **WHEN** the user presses Space on the focused collection pill
 - **THEN** the pill toggles as a press does
+
+#### Scenario: Space outside the pill row keeps play/pause
+
+- **GIVEN** the selector does not hold pill focus, or the Queue panel has Panel focus
+- **WHEN** the user presses Space
+- **THEN** Space keeps its existing effect and no pill changes
 
 #### Scenario: The keyboard moves the pill focus without selecting
 
