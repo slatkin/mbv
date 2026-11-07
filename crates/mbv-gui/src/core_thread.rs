@@ -633,7 +633,13 @@ impl CoreThread {
     /// pointer is away from the bar, while no sheet is cached yet, and for an
     /// item with no trickplay source.
     fn hover_tile(&mut self, playback: &mbv::QueuePlaybackProjection) -> Option<GuiScrubberTile> {
-        let fraction = self.playback.scrubber_hover()?;
+        let Some(fraction) = self.playback.scrubber_hover() else {
+            // Leaving the bar ends the hover episode: a transient sheet
+            // failure's hold must not outlive the hover that met it
+            // (task 6.7 fix), or a single-sheet item never retries.
+            self.app.trickplay_hover_ended();
+            return None;
+        };
         let ticks = scrubber_ticks(playback, fraction);
         let preview = self.app.trickplay_preview_tile(ticks);
         self.trickplay.frame_value(preview.as_ref())

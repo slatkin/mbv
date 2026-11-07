@@ -123,6 +123,14 @@ impl App {
         None
     }
 
+    /// End the hover episode: the pointer left the scrubber bar. A transient
+    /// failure's hold belongs to one hover, so the next hover of the same
+    /// sheet asks again (task 6.7 fix). The frame path calls this every frame
+    /// the pointer is away, so it does nothing when no hold is set.
+    pub fn trickplay_hover_ended(&mut self) {
+        self.trickplay_sheet_failed = None;
+    }
+
     /// The active Emby item's grid that holds a tile for `ticks`, with the
     /// item's id: the smallest thumbnail width that answers, since the
     /// preview paints a thumbnail-sized box and the sheet is the preview's

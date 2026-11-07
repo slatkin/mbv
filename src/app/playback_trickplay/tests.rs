@@ -195,6 +195,35 @@ fn a_transport_failure_is_held_out_of_the_cache_until_the_hover_moves() {
     );
 }
 
+/// Leaving the bar ends the hover episode (task 6.7 fix): a transport
+/// failure's hold lasts one hover, so the next hover over the same sheet asks
+/// again instead of leaving a short item's only sheet without a preview.
+#[test]
+fn a_new_hover_over_the_failed_sheet_asks_again() {
+    let http = MockHttp::new();
+    http.fail(std::io::ErrorKind::UnexpectedEof);
+    http.respond(200, "jpeg");
+    let mut app = playing_app_with_grids(vec![grid(320, 10_000, 250)]);
+    install_mock_emby(&mut app, &http);
+    let sheet0 = sheet_key(320, 0);
+
+    fetch_and_drain(&mut app, &sheet0);
+    assert_eq!(app.trickplay_preview_tile(0), None);
+    assert_eq!(http.request_count(), 1, "the held hover asks nothing");
+
+    app.trickplay_hover_ended();
+
+    assert_eq!(app.trickplay_preview_tile(0), None);
+    assert!(
+        app.trickplay_sheets_loading.contains(&sheet0),
+        "the new hover asks the sheet again"
+    );
+    assert!(
+        http.wait_for_requests(2, std::time::Duration::from_secs(1)),
+        "the retry reached the server"
+    );
+}
+
 /// The cache keeps at most `TRICKPLAY_SHEET_CACHE_BOUND` sheets: the first
 /// landed sheet is evicted once a later one lands past the bound.
 #[test]
