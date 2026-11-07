@@ -37,7 +37,7 @@ impl PaintedChoices {
             Some(GuiOverlayFrame::TargetChooser { choices, .. }) => {
                 self.target_keys = choices
                     .iter()
-                    .map(|choice| SessionTargetKey::from(&choice.key))
+                    .map(|choice| painted_target_key(&choice.key))
                     .collect();
             }
             Some(GuiOverlayFrame::TrackPopover { choices, .. }) => {
@@ -66,12 +66,11 @@ impl PaintedChoices {
 
 /// The reverse of the frame's `GuiTargetKey` projection: the stable identity
 /// a painted chooser row names, back in the shared vocabulary the selection
-/// request carries.
-impl From<&GuiTargetKey> for SessionTargetKey {
-    fn from(key: &GuiTargetKey) -> Self {
-        match key {
-            GuiTargetKey::Emby(id) => Self::Emby(id.clone()),
-            GuiTargetKey::Cast(id) => Self::Cast(id.clone()),
-        }
+/// request carries. A function, not a `From` impl: the conversion is this
+/// bridge's, and an impl on the shared key type would spread it crate-wide.
+fn painted_target_key(key: &GuiTargetKey) -> SessionTargetKey {
+    match key {
+        GuiTargetKey::Emby(id) => SessionTargetKey::Emby(id.clone()),
+        GuiTargetKey::Cast(id) => SessionTargetKey::Cast(id.clone()),
     }
 }
