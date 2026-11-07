@@ -16,10 +16,7 @@ use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-use mbv::{
-    App, CLIENT_IDLE_CADENCE, ClientCore, ClientLifecycle, ClientTickHost, GuiInput,
-    HomeEventDrain, PlayerEventDrain, TickOutcome, declare_gui_client, load_config,
-};
+use mbv::{App, CLIENT_IDLE_CADENCE, ClientCore, GuiInput, declare_gui_client, load_config};
 use mbv_config::ensure_runtime_dir;
 use mbv_queue::QueueSlotId;
 use mbv_surfaces::gesture::{PointerGesture, PointerGestureState};
@@ -29,7 +26,7 @@ use mbv_surfaces::status_bar::StatusBarSurface;
 use mbv_surfaces::{FocusStack, HitMap, HitRegion};
 use mbv_ui_model::queue_rows::queue_media_rows;
 use mbv_ui_model::settings::PanelFocus;
-use mbv_ui_msg::{ComponentId, KeyEvent, Msg, PointerEvent, PointerKind, Position, ServiceRequest};
+use mbv_ui_msg::{ComponentId, KeyEvent, PointerEvent, PointerKind, Position};
 
 use crate::artwork::ArtworkFrames;
 use crate::attach::{AttachCampaign, LibraryOwnerSteps};
@@ -39,6 +36,8 @@ use crate::bridge::layout::{
 };
 use crate::leaves::{PlaybackLeaf, QueueLeaf, StatusBarLeaf, TransportAvailability, gesture_point};
 use crate::painted_choices::PaintedChoices;
+
+mod tick_host;
 
 /// The viewport height before the first `report_layout` measures the window:
 /// the frame carries every row the queue holds. The front end reports the
@@ -615,187 +614,5 @@ impl fmt::Debug for CoreThread {
             .field("painted", &self.painted)
             .field("idle_cadence", &self.idle_cadence)
             .finish_non_exhaustive()
-    }
-}
-
-impl ClientTickHost for CoreThread {
-    fn app_mut(&mut self) -> &mut App {
-        &mut self.app
-    }
-
-    fn drain_startup_workers(&mut self) -> bool {
-        // The GUI presents no Home panel; a completion's rebuilt Home content
-        // drops here — the App-side handlers already applied the semantics.
-        self.app.drain_startup_workers().events
-    }
-
-    fn reproject_audiobookshelf_content(&mut self) {
-        // The first slice presents no Audiobookshelf surface; the App-side
-        // drain already applied the event's semantics.
-    }
-
-    fn drain_suspended_home_events(&mut self) -> bool {
-        let mut had_events = false;
-        loop {
-            match self.app.drain_home_event() {
-                HomeEventDrain::Empty => return had_events,
-                // The GUI Client never joins the Pin swap —
-                // `declare_gui_client` sends a plain Hello — so the
-                // lifecycle arms consume their event with no action.
-                HomeEventDrain::Consumed
-                | HomeEventDrain::Client(
-                    ClientLifecycle::SwapPrepare | ClientLifecycle::SwapQuit,
-                ) => had_events = true,
-            }
-        }
-    }
-
-    fn drain_player_events(&mut self, input_received: &mut bool) -> bool {
-        match self.app.drain_player_event() {
-            PlayerEventDrain::Empty => false,
-            // The GUI Client never joins the Pin swap (see the home drain).
-            PlayerEventDrain::Client(ClientLifecycle::SwapPrepare | ClientLifecycle::SwapQuit) => {
-                *input_received = true;
-                false
-            }
-            PlayerEventDrain::Handled { restart } => {
-                // The snapshot adoption ran App-side; the next frame's Queue
-                // sync re-projects the adopted state (design D5).
-                *input_received = true;
-                restart
-            }
-        }
-    }
-
-    fn drain_lib_events(&mut self) -> bool {
-        // The App-owned half applies; the GUI keeps no library content state,
-        // so no surface re-projection joins the drain.
-        let mut had_events = false;
-        while self.app.drain_lib_event() {
-            had_events = true;
-        }
-        had_events
-    }
-
-    fn drain_search_results(&mut self) -> bool {
-        // The GUI mounts no search surface, so nothing sends on the search
-        // channel for this Client.
-        false
-    }
-
-    fn tick_search_clock(&mut self, _now: Instant) -> Option<Msg> {
-        // No search control holds a debounce deadline in the first slice.
-        None
-    }
-
-    fn handle_service_request(&mut self, _request: ServiceRequest) {
-        // Unreachable while `tick_search_clock` emits nothing: the search
-        // debounce is the only Service request the core routes.
-    }
-
-    fn tick_inline_search_clock(&mut self, _now: Instant) -> bool {
-        // The first slice presents no Inline Search control.
-        false
-    }
-
-    fn reproject_feed_content(&mut self) {
-        // The first slice presents no feed surface.
-    }
-
-    fn drain_feed_add_results(&mut self) -> bool {
-        // The GUI opens no feed-add flow, so nothing sends on its channel.
-        false
-    }
-
-    fn drain_card_image_completions(&mut self) -> bool {
-        // The visual slot's artwork paints now (design D10): the slot's
-        // fetches resolve through this drain, so a completion's decoded
-        // image lands in the cache and the next frame carries it.
-        self.app.drain_card_image_completions()
-    }
-
-    fn drain_resize_responses(&mut self) -> bool {
-        // The GUI issues no image resize request (the TUI's resize drag owns
-        // them), so the response channel stays empty.
-        false
-    }
-
-    fn drain_transport_events(&mut self) -> bool {
-        self.app.drain_transport_events()
-    }
-
-    fn drain_ws_events(&mut self) -> bool {
-        let mut had_events = false;
-        while self.app.drain_ws_event() {
-            had_events = true;
-        }
-        had_events
-    }
-
-    fn drain_audiobookshelf_socket_events(&mut self) -> bool {
-        let mut had_events = false;
-        while self.app.drain_audiobookshelf_socket_event() {
-            had_events = true;
-        }
-        had_events
-    }
-
-    fn drain_idle_feed(&mut self) -> bool {
-        // The GUI never initializes the idle feed; the App-side drain is a
-        // no-op without one.
-        self.app.drain_idle_feed()
-    }
-
-    fn run_periodic_maintenance(&mut self) {
-        self.app.run_periodic_maintenance();
-    }
-
-    fn tick_input(&mut self, outcome: &mut TickOutcome) {
-        // Take the collected inputs out first: the routing borrows the
-        // whole `self`, which the drain's field borrow would conflict with.
-        for input in std::mem::take(&mut self.pending) {
-            match input {
-                CoreInput::Wake => outcome.input_received = true,
-                CoreInput::Key(key) => {
-                    // The chord routes through `App::route_gui_input` with
-                    // the focused surface as the leaf (design D4); a routed
-                    // quit ends the run.
-                    outcome.input_received = true;
-                    if self.route_key(key) {
-                        outcome.quit_requested = true;
-                    }
-                }
-                CoreInput::Pointer(event) => {
-                    // The gesture resolves against the slice hit map and
-                    // routes through `App::route_gui_pointer` with the
-                    // surface that owns the region (design D4).
-                    outcome.input_received = true;
-                    self.route_pointer(event);
-                }
-                CoreInput::Layout(report) => {
-                    // A `report_layout` always emits the current frame,
-                    // changed or not (design D3), and re-arms the theme: the
-                    // front end sends the report when it mounts, so the
-                    // frame after a reload carries the theme again (design
-                    // D7). The report applies to the capacity and the hit
-                    // map first.
-                    self.apply_layout(&report);
-                    self.frame_requested = true;
-                    self.theme_pending = true;
-                    // The reload forgets the front end's artwork too: the
-                    // next frame re-carries it, encode-free (design D10).
-                    self.artwork.rearm();
-                }
-                CoreInput::Close => {
-                    // The window closed (design D9): the run ends as a quit
-                    // does, so the same edge runs — a no-op on the window
-                    // that is already gone — and the run's exit boundary
-                    // tears the shared state down before the App's drop
-                    // releases the Client.
-                    outcome.quit_requested = true;
-                    break;
-                }
-            }
-        }
     }
 }
