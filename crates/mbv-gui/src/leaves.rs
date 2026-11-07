@@ -24,7 +24,7 @@ use mbv_ui_model::context_menu::ContextMenuTargets;
 use mbv_ui_model::playback::VOLUME_STEP;
 use mbv_ui_msg::{
     ComponentId, KeyEvent, LeafKeyResult, Msg, PlaybackRequest, Position, QueueRequest,
-    ShellRequest,
+    ShellRequest, TrackChipKind,
 };
 
 use crate::bridge::layout::{
@@ -225,7 +225,10 @@ pub(crate) struct TransportAvailability {
 /// indicator opens the chooser the Sessions sidebar is in the TUI, a
 /// chooser row selects its output through the same `SelectSession` request,
 /// and the header's collapse and queue-fold controls run the `z`/`q`
-/// toggles' dispatches. The visual slot's chrome menu is a surface the
+/// toggles' dispatches. The audio and subtitle chips toggle their track
+/// popover through the `OpenTrackPopover` request's open path, and a
+/// popover row selects its choice through the popover's Enter execution.
+/// The visual slot's chrome menu is a surface the
 /// first slice does not present, so a right-click resolves to nothing here.
 pub(crate) struct PlaybackLeaf<'a> {
     surface: &'a mut QueuePlaybackSurface,
@@ -318,6 +321,22 @@ impl<'a> PlaybackLeaf<'a> {
                 self.choices.get(*index).map(|choice| {
                     Msg::Shell(Box::new(ShellRequest::SelectSession(choice.key.clone())))
                 })
+            }
+            // The audio and subtitle chips emit the popover's opener: the
+            // press toggles the open popover as the target press toggles
+            // the chooser. The video chip is label-only (design D4a's
+            // ruling), so it reports no region.
+            Some(RegionTarget::QueuePlayback(QueuePlaybackTargetId::AudioChip)) => Some(
+                Msg::Playback(PlaybackRequest::OpenTrackPopover(TrackChipKind::Audio)),
+            ),
+            Some(RegionTarget::QueuePlayback(QueuePlaybackTargetId::SubtitleChip)) => Some(
+                Msg::Playback(PlaybackRequest::OpenTrackPopover(TrackChipKind::Subtitles)),
+            ),
+            // A track popover row carries the choice's index in the
+            // popover's painted list; the App runs the same execution the
+            // popover's Enter applies.
+            Some(RegionTarget::QueuePlayback(QueuePlaybackTargetId::TrackPopoverChoice(index))) => {
+                Some(Msg::Playback(PlaybackRequest::TrackPopoverSelect(*index)))
             }
             // The header's collapse and queue-fold controls run the `z`/`q`
             // toggles' own dispatch.

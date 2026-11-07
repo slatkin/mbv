@@ -28,6 +28,12 @@ pub enum PlaybackRequest {
     /// The GUI Client's chips emit it; the TUI Client paints no track chip,
     /// so its dispatch arm is the documented absence.
     OpenTrackPopover(TrackChipKind),
+    /// Activate the open track popover's entry at this index in its painted
+    /// choice list (add-tauri-gui-client row 6.4): a popover row's press
+    /// runs the same execution the popover's Enter applies. The GUI
+    /// Client's popover rows emit it; the TUI Client paints no track chip,
+    /// so its dispatch arm is the documented absence.
+    TrackPopoverSelect(usize),
     /// The canvas header's collapse control (add-tauri-gui-client row 6.4):
     /// the `z` toggle's pointer dispatch. The GUI Client's header emits it;
     /// the TUI's panel has no collapse control.

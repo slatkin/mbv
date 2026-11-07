@@ -166,6 +166,14 @@ pub enum QueuePlaybackTargetId {
     /// One row of the open playback-target chooser: the choice's index in
     /// the frame's `targetChoices` list.
     TargetChoice(usize),
+    /// The audio chip: a press toggles its track popover.
+    AudioChip,
+    /// The subtitle chip: a press toggles its track popover. The video
+    /// chip is label-only (design D4a's ruling) and reports no target.
+    SubtitleChip,
+    /// One row of the open track popover: the choice's index in the
+    /// popover's `choices` list.
+    TrackPopoverChoice(usize),
 }
 
 /// The Status bar target ids, mirroring `StatusBarHitTarget`.

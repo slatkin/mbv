@@ -48,6 +48,16 @@ pub enum QueuePlaybackHitTarget {
     /// GUI-painted only: the TUI's counterpart is the Sessions sidebar,
     /// not a region of this band.
     TargetChoice(usize),
+    /// The audio chip (add-tauri-gui-client row 6.4): a press toggles its
+    /// track popover. GUI-painted only: the TUI band has no track chips.
+    AudioChip,
+    /// The subtitle chip: a press toggles its track popover. GUI-painted
+    /// only, as `AudioChip` is. The video chip is label-only (design
+    /// D4a's ruling), so it reports no target.
+    SubtitleChip,
+    /// One row of the open track popover: the choice's index in the
+    /// popover's painted list. GUI-painted only, as `AudioChip` is.
+    TrackPopoverChoice(usize),
 }
 
 /// One frame's Queue playback interaction report (design D6): the painted

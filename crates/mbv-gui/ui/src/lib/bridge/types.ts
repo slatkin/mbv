@@ -552,6 +552,9 @@ export type QueuePlaybackTargetId =
 	| 'seekForward'
 	| 'collapse'
 	| 'queueFold'
-	| { targetChoice: number };
+	| { targetChoice: number }
+	| 'audioChip'
+	| 'subtitleChip'
+	| { trackPopoverChoice: number };
 
 export type StatusBarTargetId = 'volumePill' | 'mutePill' | 'visualClear';

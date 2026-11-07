@@ -77,7 +77,13 @@ impl crate::app::App {
             // (add-tauri-gui-client row 6.2). The TUI Client paints no track
             // chip, so no TUI leaf produces the request; the arm is here for
             // the shared dispatch's exhaustiveness.
-            PlaybackRequest::OpenTrackPopover(chip) => self.open_gui_track_popover(*chip),
+            PlaybackRequest::OpenTrackPopover(chip) => self.toggle_gui_track_popover(*chip),
+            // A track popover row's press (add-tauri-gui-client row 6.4):
+            // the GUI Client's popover rows emit it and the App runs the
+            // popover's Enter execution. No TUI leaf produces it either.
+            PlaybackRequest::TrackPopoverSelect(index) => {
+                self.select_gui_track_popover_entry(*index);
+            }
             // The canvas header's collapse and queue-fold controls: the GUI
             // Client's header emits them (add-tauri-gui-client row 6.4) and
             // they run the `z`/`q` toggles' own effects. The TUI paints no

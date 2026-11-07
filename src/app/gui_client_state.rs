@@ -367,17 +367,37 @@ impl App {
         }));
     }
 
-    /// Open a track chip's popover (the `OpenTrackPopover` request's App-side
-    /// effect). The popover opens only over real choices: the chips' source
-    /// is the local player's stream, so an inactive player or a remote
-    /// output has nothing to list. The cursor starts on the chosen choice.
-    pub(in crate::app) fn open_gui_track_popover(&mut self, chip: TrackChipKind) {
+    /// Toggle a track chip's popover (the `OpenTrackPopover` request's
+    /// App-side effect): the chip's press opens its popover, and the same
+    /// press on the open popover's chip closes it, as the target chooser's
+    /// press toggles (add-tauri-gui-client row 6.4). The popover opens only
+    /// over real choices: the chips' source is the local player's stream,
+    /// so an inactive player or a remote output has nothing to list. The
+    /// cursor starts on the chosen choice.
+    pub(in crate::app) fn toggle_gui_track_popover(&mut self, chip: TrackChipKind) {
+        if matches!(&self.gui_overlay, Some(GuiOverlay::TrackPopover(popover)) if popover.chip == chip)
+        {
+            self.gui_overlay = None;
+            return;
+        }
         let Some(chips) = self.track_chips() else {
             return;
         };
         let choices = track_popover_choices(chip, &chips);
         let cursor = choices.iter().position(|choice| choice.chosen).unwrap_or(0);
         self.gui_overlay = Some(GuiOverlay::TrackPopover(TrackPopoverState { chip, cursor }));
+    }
+
+    /// Activate the open track popover's entry at `index` (the
+    /// `TrackPopoverSelect` request's App-side effect, add-tauri-gui-client
+    /// row 6.4): the same execution the popover's Enter applies
+    /// (`execute_gui_overlay_entry`), gated on the open overlay being a
+    /// track popover — a stale row press while another overlay or none
+    /// holds the slot executes nothing.
+    pub(in crate::app) fn select_gui_track_popover_entry(&mut self, index: usize) {
+        if matches!(self.gui_overlay, Some(GuiOverlay::TrackPopover(_))) {
+            self.execute_gui_overlay_entry(index);
+        }
     }
 
     /// Toggle the playback-target chooser (add-tauri-gui-client row 6.4):
