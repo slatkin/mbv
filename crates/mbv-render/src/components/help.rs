@@ -121,6 +121,10 @@ fn playback_label(action_id: &str) -> Cow<'static, str> {
         // them — the labels stand for a future gate change.
         "seek_back_10" => "Seek back 10 seconds".into(),
         "seek_forward_30" => "Seek forward 30 seconds".into(),
+        // The track chips' popover openers (add-tauri-gui-client row 6.4):
+        // gated `GuiClient`, as the deep seeks are.
+        "open_audio_popover" => "Open audio track popover".into(),
+        "open_subtitle_popover" => "Open subtitle track popover".into(),
         "next_track" => "Next track".into(),
         "previous_track" => "Previous track".into(),
         "volume_down" => "Volume down".into(),

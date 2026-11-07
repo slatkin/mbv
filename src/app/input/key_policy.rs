@@ -202,6 +202,13 @@ pub(in crate::app) enum KeyPolicyBinding {
     /// The canvas transport's seek-forward-30 action (the "forward 30 s"
     /// spec), gated as `SeekBack10` is.
     SeekForward30,
+    /// The audio chip's popover action (add-tauri-gui-client row 6.4, the
+    /// "every action is reachable from the keyboard" spec): a registry
+    /// action — rebindable — whose `GuiClient` gate keeps its chords out
+    /// of the TUI, which paints no track chip.
+    OpenAudioPopover,
+    /// The subtitle chip's popover action, gated as `OpenAudioPopover` is.
+    OpenSubtitlePopover,
 }
 
 impl KeyPolicyBinding {
@@ -457,6 +464,24 @@ pub(in crate::app) const KEY_POLICY: &[KeyPolicyEntry] = &[
         name: "seek_forward_30",
         global: true,
         binding: KeyPolicyBinding::SeekForward30,
+        gate: KeyPolicyGate::GuiClient,
+        blocking: false,
+    },
+    // The track chips' popover openers (the "every action is reachable
+    // from the keyboard" spec): declared actions like the deep seeks
+    // above — a user may rebind them — whose `GuiClient` gate keeps even
+    // a rebound chord out of the TUI, which paints no track chip to open.
+    KeyPolicyEntry {
+        name: "open_audio_popover",
+        global: true,
+        binding: KeyPolicyBinding::OpenAudioPopover,
+        gate: KeyPolicyGate::GuiClient,
+        blocking: false,
+    },
+    KeyPolicyEntry {
+        name: "open_subtitle_popover",
+        global: true,
+        binding: KeyPolicyBinding::OpenSubtitlePopover,
         gate: KeyPolicyGate::GuiClient,
         blocking: false,
     },

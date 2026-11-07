@@ -374,6 +374,30 @@ pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
         rebindable: true,
         prefix_addressable: true,
     },
+    // The track chips' popover openers (add-tauri-gui-client row 6.4, the
+    // "every action is reachable from the keyboard" spec): the GUI
+    // Client's audio and subtitle chips press the same popover toggle
+    // their chords dispatch. GUI-only by gate — the TUI paints no track
+    // chip — while staying in the rebindable registry so a user can
+    // assign a chord of their own for the GUI Client.
+    KeybindAction {
+        id: "open_audio_popover",
+        section: KeySection::Playback,
+        default_chords: &["a"],
+        gate: KeyGate::GuiClient,
+        policy: "open_audio_popover",
+        rebindable: true,
+        prefix_addressable: true,
+    },
+    KeybindAction {
+        id: "open_subtitle_popover",
+        section: KeySection::Playback,
+        default_chords: &["s"],
+        gate: KeyGate::GuiClient,
+        policy: "open_subtitle_popover",
+        rebindable: true,
+        prefix_addressable: true,
+    },
     KeybindAction {
         id: "next_track",
         section: KeySection::Playback,

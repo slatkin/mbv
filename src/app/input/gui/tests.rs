@@ -512,3 +512,38 @@ fn seek_relative_request_matches_the_seek_chords() {
 
     assert_eq!(seek_commands(&cmd_rx), vec![-10.0, 30.0, -10.0, 30.0]);
 }
+
+// The track chips' popover chords (add-tauri-gui-client row 6.4, the
+// "every action is reachable from the keyboard" spec): `a` toggles the
+// audio popover and `s` the subtitle popover — the same dispatch the
+// chips' `OpenTrackPopover` press routes — and Esc, the overlay's own
+// key rule, closes. While a popover is open it owns the keyboard, as the
+// chooser's open state does.
+#[test]
+fn gui_context_popover_chords_toggle_the_matching_popover() {
+    let mut app = make_app_stub();
+    app.player.update_status(|status| {
+        status.active = true;
+        status.audio_tracks = vec![(1, "Stereo".to_string())];
+        status.audio_id = 1;
+        status.sub_tracks = vec![(2, "Forced".to_string(), true)];
+        status.sub_id = 0;
+    });
+    let key = |c: char| GuiInput::Key(KeyEvent::new(Key::Char(c), KeyModifiers::NONE));
+    let open_chip = |app: &App| match &app.gui_overlay {
+        Some(GuiOverlay::TrackPopover(popover)) => Some(popover.chip),
+        _ => None,
+    };
+
+    app.route_gui_input(key('a'), None);
+    assert_eq!(open_chip(&app), Some(TrackChipKind::Audio));
+
+    app.route_gui_input(
+        GuiInput::Key(KeyEvent::new(Key::Esc, KeyModifiers::NONE)),
+        None,
+    );
+    assert!(app.gui_overlay.is_none());
+
+    app.route_gui_input(key('s'), None);
+    assert_eq!(open_chip(&app), Some(TrackChipKind::Subtitles));
+}

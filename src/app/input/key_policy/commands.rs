@@ -12,7 +12,7 @@ use crate::app::dispatch::action::{
 };
 use mbv_ui_model::playback::VOLUME_STEP;
 use mbv_ui_model::settings::PanelFocus;
-use mbv_ui_msg::Key;
+use mbv_ui_msg::{Key, TrackChipKind};
 
 pub(in crate::app) fn command_for_policy(
     binding: KeyPolicyBinding,
@@ -85,6 +85,16 @@ fn command_for_transport_binding(binding: KeyPolicyBinding) -> Option<Command> {
         // `seekBack`/`seekForward` regions press the same commands.
         KeyPolicyBinding::SeekBack10 => Some(PlaybackIntent::SeekRelative(-10.0).into()),
         KeyPolicyBinding::SeekForward30 => Some(PlaybackIntent::SeekRelative(30.0).into()),
+        // The track chips' popover openers (the "every action is
+        // reachable from the keyboard" spec): GUI-only actions whose
+        // chords dispatch the same toggle the chips' `OpenTrackPopover`
+        // press routes.
+        KeyPolicyBinding::OpenAudioPopover => {
+            Some(PlaybackIntent::ToggleTrackPopover(TrackChipKind::Audio).into())
+        }
+        KeyPolicyBinding::OpenSubtitlePopover => {
+            Some(PlaybackIntent::ToggleTrackPopover(TrackChipKind::Subtitles).into())
+        }
         KeyPolicyBinding::NextTrack => Some(PlaybackIntent::NextTrack.into()),
         KeyPolicyBinding::PreviousTrack => Some(PlaybackIntent::PreviousTrack.into()),
         KeyPolicyBinding::VolumeDown => Some(PlaybackIntent::AdjustVolume(-VOLUME_STEP).into()),

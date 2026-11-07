@@ -25,6 +25,7 @@ use crate::app::input::resolver::KeyChord;
 use mbv_ctrl::Direction;
 use mbv_ctrl::player::PlayerCommand;
 use mbv_queue::QueueSlotId;
+use mbv_ui_msg::TrackChipKind;
 
 /// A UI command: the seam between key-event translation (`input.rs`) and
 /// effects (`actions.rs`, `player.rs`).
@@ -111,6 +112,14 @@ pub enum PlaybackIntent {
     ToggleMute,
     /// The `#` key: cycles the audio track.
     CycleAudio,
+    /// The audio or subtitle track popover's open/close (add-tauri-gui-
+    /// client row 6.4, the "every action is reachable from the keyboard"
+    /// spec): the GUI-only `open_audio_popover`/`open_subtitle_popover`
+    /// chords dispatch it, and the chips' `OpenTrackPopover` press routes
+    /// through the same arm, as the seek requests route through
+    /// `SeekRelative`. GUI-only: the TUI Client paints no track chip, so
+    /// no TUI binding resolves it.
+    ToggleTrackPopover(TrackChipKind),
 }
 
 /// The destination-independent routing intents.
@@ -325,6 +334,12 @@ impl App {
                 crate::app::LocalPlaybackTarget::toggle_command_mute(self);
             }
             PlaybackIntent::CycleAudio => self.cycle_audio(),
+            // The track chips' popover toggle (add-tauri-gui-client row
+            // 6.4): only the GUI-only popover actions and the GUI Client's
+            // chip press reach this arm; the TUI paints no track chip.
+            PlaybackIntent::ToggleTrackPopover(chip) => {
+                self.toggle_gui_track_popover(chip);
+            }
         }
     }
 

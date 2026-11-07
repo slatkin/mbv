@@ -347,7 +347,10 @@ fn defaults_reproduce_todays_resolution() {
                 // The canvas transport's registry actions are gated on the
                 // GUI Client context (add-tauri-gui-client row 6.4): their
                 // default chords resolve only once `gui_client` opens.
-                "seek_back_10" | "seek_forward_30" => snap.gui_client = true,
+                "seek_back_10"
+                | "seek_forward_30"
+                | "open_audio_popover"
+                | "open_subtitle_popover" => snap.gui_client = true,
                 _ => {}
             }
             assert_eq!(

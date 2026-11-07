@@ -74,10 +74,16 @@ impl crate::app::App {
                 ));
             }
             // The track chips' popover opener: the GUI Client's chips emit it
-            // (add-tauri-gui-client row 6.2). The TUI Client paints no track
-            // chip, so no TUI leaf produces the request; the arm is here for
-            // the shared dispatch's exhaustiveness.
-            PlaybackRequest::OpenTrackPopover(chip) => self.toggle_gui_track_popover(*chip),
+            // (add-tauri-gui-client row 6.2). It dispatches the same intent
+            // the `open_audio_popover`/`open_subtitle_popover` chords resolve
+            // to (row 6.4), so the chip press and the chord run one dispatch.
+            // The TUI Client paints no track chip, so no TUI leaf produces
+            // the request.
+            PlaybackRequest::OpenTrackPopover(chip) => {
+                self.dispatch_playback(&AppCommand::Playback(PlaybackIntent::ToggleTrackPopover(
+                    *chip,
+                )));
+            }
             // A track popover row's press (add-tauri-gui-client row 6.4):
             // the GUI Client's popover rows emit it and the App runs the
             // popover's Enter execution. No TUI leaf produces it either.

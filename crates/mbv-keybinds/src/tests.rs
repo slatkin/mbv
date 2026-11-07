@@ -35,6 +35,10 @@ const GLOBAL_ACTION_IDS: &[&str] = &[
     // Client.
     "seek_back_10",
     "seek_forward_30",
+    // The track chips' popover openers (add-tauri-gui-client row 6.4):
+    // global-gated entries whose chords resolve only in the GUI Client.
+    "open_audio_popover",
+    "open_subtitle_popover",
 ];
 
 /// The split transport actions (the `playback` bucket).
@@ -295,6 +299,8 @@ const EXPECTED_DEFAULTS: &[(&str, &[&str])] = &[
     ("seek_forward", &[">"]),
     ("seek_back_10", &["["]),
     ("seek_forward_30", &["]"]),
+    ("open_audio_popover", &["a"]),
+    ("open_subtitle_popover", &["s"]),
     ("next_track", &["Shift+N"]),
     ("previous_track", &["Shift+P"]),
     ("volume_down", &["-"]),

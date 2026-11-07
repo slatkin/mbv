@@ -6,7 +6,7 @@ use crate::app::input::router::{
     RouterOutcome, RouterSnapshot, resolve_router_outcome_with_focused,
 };
 use crossterm::event::KeyCode;
-use mbv_ui_msg::{ComponentId, Msg, ShellRequest};
+use mbv_ui_msg::{ComponentId, Msg, ShellRequest, TrackChipKind};
 
 #[test]
 fn playback_gating_esc_falls_through_to_consumed_leaf() {
@@ -300,6 +300,55 @@ fn gui_context_seek_brackets_command_only_in_the_gui_client() {
     assert_eq!(
         resolve_router_outcome_with_focused(
             key(KeyCode::Char('[')),
+            &active_snapshot(),
+            None,
+            &default_keybinds()
+        ),
+        RouterOutcome::FallThrough
+    );
+}
+
+/// The track chips' popover actions (add-tauri-gui-client row 6.4, the
+/// "every action is reachable from the keyboard" spec): `a`/`s` command
+/// the popover toggles in the GUI Client — the same dispatch the chips'
+/// `OpenTrackPopover` press routes — and fall through in the TUI, whose
+/// gate stays closed and which paints no track chip.
+#[test]
+fn gui_context_popover_chords_command_only_in_the_gui_client() {
+    let gui = RouterSnapshot {
+        gui_client: true,
+        ..active_snapshot()
+    };
+    assert_eq!(
+        resolve_router_outcome_with_focused(
+            key(KeyCode::Char('a')),
+            &gui,
+            None,
+            &default_keybinds()
+        ),
+        RouterOutcome::Command(PlaybackIntent::ToggleTrackPopover(TrackChipKind::Audio).into())
+    );
+    assert_eq!(
+        resolve_router_outcome_with_focused(
+            key(KeyCode::Char('s')),
+            &gui,
+            None,
+            &default_keybinds()
+        ),
+        RouterOutcome::Command(PlaybackIntent::ToggleTrackPopover(TrackChipKind::Subtitles).into())
+    );
+    assert_eq!(
+        resolve_router_outcome_with_focused(
+            key(KeyCode::Char('a')),
+            &active_snapshot(),
+            None,
+            &default_keybinds()
+        ),
+        RouterOutcome::FallThrough
+    );
+    assert_eq!(
+        resolve_router_outcome_with_focused(
+            key(KeyCode::Char('s')),
             &active_snapshot(),
             None,
             &default_keybinds()

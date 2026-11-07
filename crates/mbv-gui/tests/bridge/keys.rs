@@ -63,6 +63,11 @@ fn with_meta(mut event: DomKey) -> DomKey {
 // single-character rule.
 #[case::seek_back_10_bracket(press("["), KeyEvent::new(Key::Char('['), KeyModifiers::NONE))]
 #[case::seek_forward_30_bracket(press("]"), KeyEvent::new(Key::Char(']'), KeyModifiers::NONE))]
+// The `open_audio_popover`/`open_subtitle_popover` default chords
+// (add-tauri-gui-client row 6.4): the track chips' popover keys resolve
+// through the single-character rule.
+#[case::open_audio_popover_a(press("a"), KeyEvent::new(Key::Char('a'), KeyModifiers::NONE))]
+#[case::open_subtitle_popover_s(press("s"), KeyEvent::new(Key::Char('s'), KeyModifiers::NONE))]
 fn dom_key_translates_to_neutral_key(#[case] dom: DomKey, #[case] expected: KeyEvent) {
     assert_eq!(neutral_key(dom), expected);
 }
