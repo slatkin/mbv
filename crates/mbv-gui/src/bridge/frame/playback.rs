@@ -25,6 +25,12 @@ pub struct GuiQueuePlayback {
     pub shown: bool,
     /// The displayed playback state: the seek row's position, runtime, and paused flag.
     pub playback: GuiPlaybackState,
+    /// The seek row's left clock, formatted by the TUI's shared duration
+    /// formatter. The front end paints the text verbatim.
+    pub elapsed_clock: String,
+    /// The seek row's right clock (the time left in the active item), in the
+    /// same format. The front end paints the minus sign before it.
+    pub remaining_clock: String,
     /// Whether the controls and seekbar carry playback.
     pub show_controls: bool,
     /// The plain now-playing title, if there is one.
@@ -88,8 +94,9 @@ pub struct GuiQueuePlayback {
 pub struct GuiScrubberHover {
     /// The pointer's fraction along the painted bar.
     pub fraction: f64,
-    /// The time at the pointer's position, in Emby ticks.
-    pub ticks: i64,
+    /// The time at the pointer's position, formatted by the TUI's shared
+    /// duration formatter. The front end paints the text verbatim.
+    pub time_label: String,
     /// The chapter covering the pointer's position, when the active item's
     /// chapters cover it.
     pub chapter: Option<String>,
@@ -165,6 +172,8 @@ impl From<&QueuePlaybackProjection> for GuiQueuePlayback {
             host_is_remote: projection.host_is_remote,
             shown: projection.shown,
             playback: GuiPlaybackState::from(projection.playback),
+            elapsed_clock: projection.elapsed_clock.clone(),
+            remaining_clock: projection.remaining_clock.clone(),
             show_controls: projection.show_controls,
             now_playing_title: projection.now_playing_title.clone(),
             parent_line: projection.parent_line.clone(),

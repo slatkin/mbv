@@ -215,6 +215,12 @@ export interface GuiQueuePlayback {
 	hostIsRemote: boolean;
 	shown: boolean;
 	playback: GuiPlaybackState;
+	/** The seek row's left clock (the playhead's elapsed time), formatted by
+	 * the TUI's shared duration formatter. */
+	elapsedClock: string;
+	/** The seek row's right clock (the time left in the active item), in the
+	 * same format. The window paints the minus sign before it. */
+	remainingClock: string;
 	showControls: boolean;
 	nowPlayingTitle: string | null;
 	/** The now-playing parent line: the series of an episode, the artist of
@@ -270,8 +276,9 @@ export interface GuiQueuePlayback {
 export interface GuiScrubberHover {
 	/** The pointer's fraction along the painted bar. */
 	fraction: number;
-	/** The time at the pointer's position, in Emby ticks. */
-	ticks: number;
+	/** The time at the pointer's position, formatted by the TUI's shared
+	 * duration formatter. The window paints the text verbatim. */
+	timeLabel: string;
 	/** The chapter covering the pointer's position, when the active item's
 	 * chapters cover it. */
 	chapter: string | null;
@@ -418,7 +425,7 @@ export interface GuiTransportAvailability {
 /** The Queue footer's status pills. */
 export interface GuiQueueFooter {
 	owner: GuiFooterPill;
-	/** Whether the shown queue's Player owner is live: the session marker
+	/** Whether the shown queue's Player owner is live. The session marker
 	 * paints its dot only while this holds (design D4a). */
 	ownerLive: boolean;
 	playlist: GuiFooterPill;

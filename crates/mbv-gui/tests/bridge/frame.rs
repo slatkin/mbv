@@ -511,7 +511,9 @@ fn the_scrubber_hover_projects_its_time_and_chapter() {
 
     let hover = frame.playback.hover.expect("the frame carries the hover");
     assert_eq!(hover.fraction, 0.25);
-    assert_eq!(hover.ticks, 5 * 60 * TICKS_PER_SECOND);
+    // The frame carries the hover's time formatted by the TUI's shared
+    // duration formatter, not the raw ticks.
+    assert_eq!(hover.time_label, "5:00");
     assert_eq!(hover.chapter.as_deref(), Some("Opening"));
 }
 

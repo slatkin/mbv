@@ -61,6 +61,10 @@ function playing(overrides: Partial<GuiQueuePlayback> = {}): GuiQueuePlayback {
 			runtimeTicks: 200 * SECOND,
 			paused: false,
 		},
+		// The frame carries the two clocks formatted (the TUI's shared
+		// duration formatter): 1:00 elapsed, 2:20 left of 3:20.
+		elapsedClock: '1:00',
+		remainingClock: '2:20',
 		showControls: true,
 		nowPlayingTitle: 'Track title',
 		parentLine: 'The Show',
@@ -282,7 +286,7 @@ test('the scrubber paints the hover preview from the frame', () => {
 		playing({
 			hover: {
 				fraction: 0.75,
-				ticks: 150 * SECOND,
+				timeLabel: '2:30',
 				chapter: 'Chapter Two',
 				tile: null,
 			},
@@ -300,7 +304,7 @@ test('the hover preview paints the trickplay tile the frame carries', () => {
 	const { container } = renderPanel(
 		playing({
 			trickplay: [trickplayGrid()],
-			hover: { fraction: 0.5, ticks: 100 * SECOND, chapter: null, tile: tile(SHEET) },
+			hover: { fraction: 0.5, timeLabel: '1:40', chapter: null, tile: tile(SHEET) },
 		}),
 	);
 
@@ -316,7 +320,7 @@ test('the hover preview repaints the latched sheet, else the placeholder', () =>
 	const latched = renderPanel(
 		playing({
 			trickplay: [trickplayGrid()],
-			hover: { fraction: 0.5, ticks: 100 * SECOND, chapter: null, tile: tile(null) },
+			hover: { fraction: 0.5, timeLabel: '1:40', chapter: null, tile: tile(null) },
 		}),
 		null,
 		{ key: 'item:320:0', image: SHEET },
@@ -328,7 +332,7 @@ test('the hover preview repaints the latched sheet, else the placeholder', () =>
 	const bare = renderPanel(
 		playing({
 			trickplay: [trickplayGrid()],
-			hover: { fraction: 0.5, ticks: 100 * SECOND, chapter: null, tile: tile(null) },
+			hover: { fraction: 0.5, timeLabel: '1:40', chapter: null, tile: tile(null) },
 		}),
 	);
 	expect(tileElement(bare.container)).toBeNull();
@@ -369,7 +373,7 @@ test('an open chooser reports its rows after the queue and footer regions', asyn
 	const ids = lastReportedRegionIds();
 	const firstChoice = ids.findIndex(isChoice);
 	expect(ids.slice(0, firstChoice)).toEqual(
-		expect.arrayContaining([{ slot: 1 }, 'playlistPill']),
+		expect.arrayContaining([{ slot: 1 }, 'rightColumn', 'filter']),
 	);
 	expect(ids.slice(firstChoice)).toEqual([{ targetChoice: 0 }, { targetChoice: 1 }]);
 });

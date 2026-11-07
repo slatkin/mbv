@@ -4,6 +4,7 @@
 //! availability, and idle-collapse rules. The TUI shell's `PlaybackProjection`
 //! builds its title and availability from the same helpers.
 
+use mbv_emby_model::TICKS_PER_SECOND;
 use mbv_render::components::chrome_player::TransportAvailability;
 use mbv_render::components::indicators::{
     StatusIndicator, short_resolution_label, status_indicator_items,
@@ -11,7 +12,7 @@ use mbv_render::components::indicators::{
 use mbv_ui_model::panel_targets::SessionTargetKey;
 use mbv_ui_model::playback::PlaybackState;
 use mbv_ui_model::playback_target::NowPlayingStatus;
-use mbv_ui_model::ui_util::fmt_wall_clock;
+use mbv_ui_model::ui_util::{fmt_duration_short, fmt_wall_clock};
 use time::UtcOffset;
 
 use crate::app::state::panel_targets::PanelTarget;
@@ -171,6 +172,13 @@ pub struct QueuePlaybackProjection {
     /// The displayed playback state: the seek row's position, runtime, and
     /// paused flag.
     pub playback: PlaybackState,
+    /// The seek row's left clock: the playhead's elapsed time, formatted by
+    /// the TUI's shared duration formatter (`M:SS`, `H:MM:SS` at an hour).
+    pub elapsed_clock: String,
+    /// The seek row's right clock: the time left in the active item in the
+    /// same format, `0:00` when the runtime is unknown. The painter adds the
+    /// minus sign.
+    pub remaining_clock: String,
     /// Whether the controls and seekbar carry playback
     /// (`PlaybackProjection::show_controls`). Without it the seekbar paints an
     /// empty track and resolves no seek.
@@ -254,6 +262,10 @@ impl App {
             host_is_remote,
             shown: status != NowPlayingStatus::Idle,
             playback,
+            elapsed_clock: fmt_duration_short(playback.position_ticks / TICKS_PER_SECOND),
+            remaining_clock: fmt_duration_short(
+                (playback.runtime_ticks - playback.position_ticks).max(0) / TICKS_PER_SECOND,
+            ),
             show_controls: playback.active || self.output_is_cast(),
             now_playing_title: parts.as_ref().map(|parts| parts.title.text.clone()),
             parent_line: parts

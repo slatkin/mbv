@@ -193,7 +193,9 @@ fn scrubber_hover(
     let ticks = scrubber_ticks(playback, fraction);
     Some(GuiScrubberHover {
         fraction,
-        ticks,
+        time_label: mbv_ui_model::ui_util::fmt_duration_short(
+            ticks / mbv_emby_model::TICKS_PER_SECOND,
+        ),
         chapter: covering_chapter(playback, ticks),
         tile,
     })

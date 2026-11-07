@@ -47,7 +47,6 @@
 	import { reportLayout, retractLayout } from '$lib/bridge/layout';
 	import TrackChips from './TrackChips.svelte';
 	import { CELL_COL_PX } from '$lib/bridge/cells';
-	import { fmtDurationShort } from '$lib/bridge/format';
 	import { roleProperty } from '$lib/bridge/theme';
 	import type {
 		GuiCardArtwork,
@@ -120,14 +119,6 @@
 		clampRatio(
 			playback.playback.positionTicks,
 			playback.playback.runtimeTicks,
-		),
-	);
-
-	/** The ticks left in the active item. */
-	const remainingTicks = $derived(
-		Math.max(
-			0,
-			playback.playback.runtimeTicks - playback.playback.positionTicks,
 		),
 	);
 
@@ -511,7 +502,7 @@
 				<span
 					class="shrink-0 font-mono text-xs tabular-nums"
 					style:color={roleVar('playbackMetaFg')}
-					>{fmtDurationShort(playback.playback.positionTicks)}</span
+					>{playback.elapsedClock}</span
 				>
 				<div
 					class="relative min-w-4 flex-1"
@@ -589,7 +580,7 @@
 								<span
 									class="font-mono text-xs tabular-nums"
 									style:color={roleVar('textPrimary')}
-									>{fmtDurationShort(hover.ticks)}</span
+									>{hover.timeLabel}</span
 								>
 								{#if hover.chapter}
 									<span class="text-xs" style:color={roleVar('playbackContextFg')}
@@ -603,7 +594,7 @@
 				<span
 					class="shrink-0 font-mono text-xs tabular-nums"
 					style:color={roleVar('playbackMetaFg')}
-					>-{fmtDurationShort(remainingTicks)}</span
+					>-{playback.remainingClock}</span
 				>
 				{#if playback.finishClock}
 					<span

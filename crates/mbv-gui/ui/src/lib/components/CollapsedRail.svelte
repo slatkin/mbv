@@ -14,7 +14,6 @@
 	// holds no interaction state).
 	import { onMount } from 'svelte';
 	import { ChevronsRight, Pause, Play, SkipForward } from '@lucide/svelte';
-	import { fmtDurationShort } from '$lib/bridge/format';
 	import { reportLayout, retractLayout } from '$lib/bridge/layout';
 	import { roleProperty } from '$lib/bridge/theme';
 	import type {
@@ -52,11 +51,6 @@
 
 	/** The played fraction the ring paints, clamped to `[0, 1]`. */
 	const progress = $derived(clampRatio(playback.playback.positionTicks, playback.playback.runtimeTicks));
-
-	/** The ticks left in the active item. */
-	const remainingTicks = $derived(
-		Math.max(0, playback.playback.runtimeTicks - playback.playback.positionTicks),
-	);
 
 	/** The artwork's bitmap, `null` while the item has none (a placeholder,
 	 * loading, or hidden slot paints the empty ring). */
@@ -240,7 +234,7 @@
 		<span
 			class="font-mono text-xs tabular-nums"
 			style:color={roleVar('playbackMetaFg')}
-			data-remaining>-{fmtDurationShort(remainingTicks)}</span
+			data-remaining>-{playback.remainingClock}</span
 		>
 	{/if}
 	<span class="flex-1"></span>

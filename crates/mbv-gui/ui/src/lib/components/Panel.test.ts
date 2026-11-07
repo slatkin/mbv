@@ -99,6 +99,8 @@ function frame(
 				runtimeTicks: 200 * SECOND,
 				paused: false,
 			},
+			elapsedClock: '1:00',
+			remainingClock: '2:20',
 			showControls: true,
 			nowPlayingTitle: 'Track One',
 			parentLine: 'The Show',

@@ -80,6 +80,8 @@ function sliceFrame(theme: GuiTheme | null): GuiWindowFrame {
 					runtimeTicks: 0,
 					paused: false,
 				},
+				elapsedClock: '0:00',
+				remainingClock: '0:00',
 				showControls: false,
 				nowPlayingTitle: null,
 				parentLine: null,
