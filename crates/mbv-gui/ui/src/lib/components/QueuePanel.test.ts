@@ -3,8 +3,8 @@
 // active, and partial-progress states), the canvas header's summary, the
 // empty-queue state, the hovered row's grip and actions button, the open
 // row menu's entries and key hints, and the drag's ghost and insertion
-// line; it reports capacity and the slot, grip, actions, and menu-entry
-// regions through `report_layout` (designs D4/D5). Presses forward
+// line; it reports capacity and the header, slot, grip, actions, and
+// menu-entry regions through `report_layout` (designs D4/D5). Presses forward
 // through the shared input installer as `pointer` events and the core
 // resolves them against the hit map. The Tauri IPC is mocked; the
 // asserted payloads are the serde wire shapes of bridge/layout.rs and
@@ -260,7 +260,7 @@ test('a drag paints the ghost and the insertion line on the anchored row', () =>
 	expect(getByText('Track 1')).toBeTruthy();
 });
 
-test('the regions carry the slot, grip, actions, and menu-entry ids, menu last', async () => {
+test('the regions carry the header, slot, grip, actions, and menu-entry ids, menu last', async () => {
 	renderPanel(
 		queue([item(1), item(2)], null, { hover: 2 }),
 		summary(),
@@ -269,6 +269,8 @@ test('the regions carry the slot, grip, actions, and menu-entry ids, menu last',
 
 	await vi.waitFor(() => expect(invokeMock).toHaveBeenCalled());
 	expect(reportedRegionIds()).toEqual([
+		'rightColumn',
+		'filter',
 		{ slot: 1 },
 		{ slot: 2 },
 		{ rowGrip: 2 },
@@ -279,6 +281,76 @@ test('the regions carry the slot, grip, actions, and menu-entry ids, menu last',
 		{ rowMenuEntry: 3 },
 		{ rowMenuEntry: 4 },
 	]);
+});
+
+test('a press on the right-column switch forwards a pointer press', async () => {
+	const { container } = renderPanel(queue([item(1)]));
+	const control = container.querySelector('[data-right-column-switch]') as HTMLElement;
+	const detach = installInput();
+	fireEvent.pointerDown(control, { clientX: 11, clientY: 4, button: 0, buttons: 1 });
+	detach();
+
+	await vi.waitFor(() =>
+		expect(pointerCalls()).toEqual([
+			{
+				event: {
+					kind: 'press',
+					button: 0,
+					buttons: 1,
+					x: 11,
+					y: 4,
+					metaKey: false,
+					shiftKey: false,
+					ctrlKey: false,
+					altKey: false,
+					deltaX: 0,
+					deltaY: 0,
+				},
+			},
+		]),
+	);
+});
+
+test('a press on the filter forwards a pointer press', async () => {
+	const { container } = renderPanel(queue([item(1)]));
+	const control = container.querySelector('[data-filter]') as HTMLElement;
+	const detach = installInput();
+	fireEvent.pointerDown(control, { clientX: 13, clientY: 6, button: 0, buttons: 1 });
+	detach();
+
+	await vi.waitFor(() =>
+		expect(pointerCalls()).toEqual([
+			{
+				event: {
+					kind: 'press',
+					button: 0,
+					buttons: 1,
+					x: 13,
+					y: 6,
+					metaKey: false,
+					shiftKey: false,
+					ctrlKey: false,
+					altKey: false,
+					deltaX: 0,
+					deltaY: 0,
+				},
+			},
+		]),
+	);
+});
+
+test('the open menu anchors under the row its anchorSlot names', () => {
+	// The anchor (slot 2, the second painted row) places the menu under
+	// its bottom edge — not the hovered row's (slot 3) and not the
+	// cursor row's (slot 1).
+	const { container } = renderPanel(
+		queue([item(1), item(2), item(3)], null, { hover: 3, cursor: 1 }),
+		summary(),
+		rowMenu(),
+	);
+
+	const menuEl = container.querySelector('[data-row-menu]') as HTMLElement;
+	expect(menuEl.style.top).toBe('calc(var(--mbv-cell-row) + 60px)');
 });
 
 test('a press on the grip forwards a pointer press', async () => {
@@ -383,6 +455,14 @@ test('a layout change sends one merged report', async () => {
 		report: {
 			lists: [{ list: 'queue', wholeRows: 2 }],
 			regions: [
+				{
+					rect: { x: 0, y: 0, width: 0, height: 0 },
+					target: { surface: 'queue', id: 'rightColumn' },
+				},
+				{
+					rect: { x: 0, y: 0, width: 0, height: 0 },
+					target: { surface: 'queue', id: 'filter' },
+				},
 				{
 					rect: { x: 0, y: 0, width: 0, height: 0 },
 					target: { surface: 'queue', id: { slot: 7 } },

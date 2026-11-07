@@ -6,10 +6,11 @@
 	// mode, the filter's text, and the caret fact are Client-core state
 	// (design D4a), so the header holds none.
 	//
-	// The switch and the filter have no pointer targets in the wire: no
-	// `QueueTargetId` names them, so a press on them resolves to nothing.
-	// Their actions run from the GUI-only `t` and `/` chords the titles
-	// name.
+	// The switch and the filter each carry a pointer target: the marked
+	// elements report the `rightColumn` and `filter` regions through
+	// `QueuePanel`'s own report key, so a press resolves in the core to
+	// the `t` and `/` chords' requests — the control and the chord run
+	// one path.
 	import { ListFilter } from '@lucide/svelte';
 	import { roleProperty } from '$lib/bridge/theme';
 	import type { GuiQueueSummary, GuiRightColumn } from '$lib/bridge/types';
@@ -56,8 +57,8 @@
 		>
 	{/if}
 	<!-- The "Length / Ends at" switch: the frame's mode pills the active
-		segment. The GUI-only `t` chord toggles it in the core; the segments
-		report no pointer region (the header comment names the wire gap). -->
+		segment, and a press on it runs the `t` chord's toggle in the core
+		through the `rightColumn` region the mark reports. -->
 	<div
 		class="flex items-center rounded-full border text-xs"
 		style:border-color="var(--mbv-border)"
@@ -77,7 +78,8 @@
 	</div>
 	<!-- The filter control: the icon, the filter text (or the muted
 		placeholder), and the block caret while the entry holds the keyboard
-		(`filterActive`). The GUI-only `/` chord opens it in the core. -->
+		(`filterActive`). A press on it runs the `/` chord's text entry in
+		the core through the `filter` region the mark reports. -->
 	<span
 		class="flex items-center rounded-full border px-2 py-0.5 text-xs"
 		style:gap="calc(var(--mbv-cell-col) / 2)"

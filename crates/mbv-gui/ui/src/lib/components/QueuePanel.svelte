@@ -24,10 +24,12 @@
 	// forwards through the shared input installer — the core owns the
 	// gesture, the drop index, and the move request.
 	//
-	// The regions report in paint order: the rows resolve to their stable
-	// slots, then the hovered row's `rowGrip` and `rowActions` — pushed
-	// after the row's `slot` region so the chrome wins where it paints
-	// over the row (the hit map's last push wins). The open row menu's
+	// The regions report in paint order: the header's Length / Ends-at
+	// switch and filter resolve to their `rightColumn` and `filter`
+	// targets, the rows resolve to their stable slots, then the hovered
+	// row's `rowGrip` and `rowActions` — pushed after the row's `slot`
+	// region so the chrome wins where it paints over the row (the hit
+	// map's last push wins). The open row menu's
 	// entries (`QueueRowMenu`, presentation-only) report their
 	// `rowMenuEntry` indices under a second report key this component
 	// inserts when the menu opens — the same technique `TrackChips` uses
@@ -145,13 +147,13 @@
 	);
 
 	/** The row-menu's top edge: the header row's height plus the bottom
-	 * edge of the row the menu opens on — the hovered row (the actions
-	 * button's press) or, from the keyboard, the cursor row. The overlay
-	 * carries no anchor slot, so the two frame facts are the anchor. */
+	 * edge of the row the menu opened on — the overlay's `anchorSlot`,
+	 * which the core names (hover and cursor can move while the menu is
+	 * up). A `0` fallback holds the menu at the header while the anchor
+	 * is not a painted row. */
 	const menuTop = $derived.by(() => {
-		const anchor = queue.hover ?? queue.cursor;
 		const index = queue.rows.findIndex(
-			(row) => row.row === 'item' && row.slot === anchor,
+			(row) => row.row === 'item' && row.slot === menu?.anchorSlot,
 		);
 		const below = (index >= 0 ? index + 1 : 0) * ROW_HEIGHT;
 		return `calc(var(--mbv-cell-row) + ${below}px)`;
@@ -273,12 +275,22 @@
 		);
 	}
 
-	/** The painted regions this frame's DOM reports (design D4): the item
+	/** The painted regions this frame's DOM reports (design D4): the
+	 * header's switch and filter resolve to their own targets, the item
 	 * rows resolve to their stable slots, then the hovered row's grip and
 	 * actions button — pushed after the row regions so the chrome wins
 	 * where it paints over its row. */
 	function currentRegions(): LayoutRegion[] {
 		const regions: LayoutRegion[] = [];
+		if (!panelEl) {
+			return regions;
+		}
+		for (const el of panelEl.querySelectorAll<HTMLElement>('[data-right-column-switch]')) {
+			regions.push(region(el, 'rightColumn'));
+		}
+		for (const el of panelEl.querySelectorAll<HTMLElement>('[data-filter]')) {
+			regions.push(region(el, 'filter'));
+		}
 		if (!listEl) {
 			return regions;
 		}
