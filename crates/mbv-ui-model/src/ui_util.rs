@@ -205,8 +205,8 @@ pub fn fmt_duration_hms(s: i64) -> String {
     }
 }
 
-/// Format a unix-seconds instant as `offset`'s 12-hour wall clock:
-/// `"11:42 AM"`, `"9:05 PM"` — the finish-clock format the design canvas
+/// Format a unix-seconds instant as `offset`'s zero-padded 24-hour wall
+/// clock: `"11:42"`, `"09:05"` — the finish-clock format the design canvas
 /// paints (the right column's "Ends at" mode, the queue and scrubber finish
 /// clocks). The caller resolves the offset once per projection pass, so a
 /// frame formats every clock against one zone. A seconds value beyond
@@ -218,10 +218,7 @@ pub fn fmt_wall_clock(secs: i64, offset: UtcOffset) -> String {
         return String::new();
     };
     let instant = instant.to_offset(offset);
-    let hour = instant.hour();
-    let hour12 = ((hour + 11) % 12) + 1;
-    let period = if hour < 12 { "AM" } else { "PM" };
-    format!("{hour12}:{:02} {period}", instant.minute())
+    format!("{:02}:{:02}", instant.hour(), instant.minute())
 }
 
 /// URL-stripped, trimmed overview text with no length cap. Used by the view's

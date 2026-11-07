@@ -15,7 +15,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use mbv_emby_model::TICKS_PER_SECOND;
 use mbv_queue::{QueueSlot, QueueSlotId};
 use mbv_ui_model::ui_util::fmt_wall_clock;
-use time::UtcOffset;
+use time::{OffsetDateTime, UtcOffset};
 
 use crate::app::App;
 
@@ -38,10 +38,11 @@ pub enum QueueRightColumn {
 /// wall clock.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct QueueSummaryProjection {
-    /// The slots after the active index: the queue's remaining play. The
-    /// whole queue's slot count while no slot carries the playhead — idle
-    /// playback, slotless output, or a playhead the shown queue does not
-    /// know yet.
+    /// The slots that do not carry the playhead: the canvas's remaining
+    /// count counts every non-current row, rows before the playhead
+    /// included. The whole queue's slot count while no slot carries the
+    /// playhead — idle playback, slotless output, or a playhead the shown
+    /// queue does not know yet.
     pub remaining: usize,
     /// The title of the first slot after the playhead (review of
     /// add-tauri-gui-client row 6.6, finding P2): the compact strip's
@@ -100,11 +101,11 @@ impl App {
             };
         };
         let next_title = self.next_slot_title(slots, index);
-        let anchor =
-            playback_finish_epoch(now_unix_secs(), state.position_ticks, state.runtime_ticks);
+        let now = now_unix_secs();
+        let anchor = playback_finish_epoch(now, state.position_ticks, state.runtime_ticks);
         let Some(anchor) = anchor else {
             return QueueSummaryProjection {
-                remaining: slots.len() - index - 1,
+                remaining: slots.len() - 1,
                 next_title,
                 finish_clock: None,
                 row_finish_clocks: Vec::new(),
@@ -115,9 +116,9 @@ impl App {
         };
         let (ends, finish) = finish_chain(slots, index, anchor);
         QueueSummaryProjection {
-            remaining: slots.len() - index - 1,
+            remaining: slots.len() - 1,
             next_title,
-            finish_clock: finish.map(|secs| fmt_wall_clock(secs, offset)),
+            finish_clock: finish.map(|secs| queue_finish_clock(secs, now, offset)),
             row_finish_clocks: ends
                 .into_iter()
                 .map(|(slot, secs)| (slot, fmt_wall_clock(secs, offset)))
@@ -152,6 +153,29 @@ pub(in crate::app) fn playback_finish_epoch(
         let remaining_ticks = runtime_ticks - position_ticks.clamp(0, runtime_ticks);
         now_secs + remaining_ticks / TICKS_PER_SECOND
     })
+}
+
+/// The queue's finish clock with the canvas's next-day suffix: the
+/// zero-padded wall clock, plus ` +1d` when the finish epoch lies past the
+/// local day `now_secs` falls on. Only the queue finish carries the suffix;
+/// row ends and the scrubber's finish clock paint the bare clock.
+#[must_use]
+fn queue_finish_clock(finish_secs: i64, now_secs: i64, offset: UtcOffset) -> String {
+    let clock = fmt_wall_clock(finish_secs, offset);
+    if clock.is_empty() {
+        return clock;
+    }
+    let after_midnight = OffsetDateTime::from_unix_timestamp(finish_secs)
+        .ok()
+        .zip(OffsetDateTime::from_unix_timestamp(now_secs).ok())
+        .is_some_and(|(finish, now)| {
+            finish.to_offset(offset).date() > now.to_offset(offset).date()
+        });
+    if after_midnight {
+        format!("{clock} +1d")
+    } else {
+        clock
+    }
 }
 
 /// The pending slots' wall-clock end epochs from one anchor: the anchor ends

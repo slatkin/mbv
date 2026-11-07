@@ -1,8 +1,93 @@
 use mbv_emby_model::TICKS_PER_SECOND;
 use mbv_emby_model::test_support::make_item;
 use mbv_queue::{QueueItem, QueueSlot, QueueSlotId};
+use time::UtcOffset;
 
-use super::{finish_chain, playback_finish_epoch};
+use super::{finish_chain, playback_finish_epoch, queue_finish_clock};
+use crate::app::QueueView;
+use crate::app::tests::make_app_stub;
+
+/// One Emby item with the stored facts the projection reads.
+fn item(name: &str, runtime_ticks: i64, played: bool) -> QueueItem {
+    let mut item = make_item(name, "Movie");
+    item.runtime_ticks = runtime_ticks;
+    item.played = played;
+    QueueItem::Emby(Box::new(item))
+}
+
+/// One app whose queue holds `items` in canonical order, with `active_idx`
+/// carrying the playhead.
+fn app_with_queue(items: Vec<QueueItem>, active_idx: usize) -> crate::app::App {
+    let mut app = make_app_stub();
+    let slots = items
+        .into_iter()
+        .enumerate()
+        .map(|(i, item)| mbv_ctrl::UnifiedQueueSlot {
+            slot_id: u64::try_from(i).unwrap_or(u64::MAX) + 1,
+            item,
+        })
+        .collect();
+    let state = mbv_ctrl::UnifiedQueueStateData {
+        status: mbv_ctrl::player::PlayerStatus::default(),
+        active_slot: None,
+        slots,
+        revision: 1,
+        source: mbv_queue::QueueSource::Unknown,
+        lineage: mbv_queue::QueueLineage::default(),
+        in_flight_transition: None,
+        queued_latest_transition: None,
+    };
+    app.local_view = QueueView::from_snapshot(&state);
+    let runtime = app
+        .playback_queue()
+        .item_at(active_idx)
+        .map_or(0, QueueItem::runtime_ticks);
+    let queue_len = app.playback_queue().slots().len();
+    app.player.update_status(|status| {
+        status.active = true;
+        status.current_idx = active_idx;
+        status.queue_len = queue_len;
+        status.runtime_ticks = runtime;
+    });
+    app
+}
+
+/// The remaining count is the canvas's `remainingCount++` rule: every row
+/// that does not carry the playhead counts, a watched row before the playhead
+/// included (audit/main.md 32). A playhead on the second of three slots
+/// leaves the watched row before it and the row after it.
+#[test]
+fn remaining_counts_a_watched_row_before_the_playhead() {
+    let minute = 60 * TICKS_PER_SECOND;
+    let app = app_with_queue(
+        vec![
+            item("Watched", 10 * minute, true),
+            item("Playing", 20 * minute, false),
+            item("Later", 10 * minute, false),
+        ],
+        1,
+    );
+    assert_eq!(app.queue_summary_projection().remaining, 2);
+}
+
+/// The queue finish clock carries the canvas's ` +1d` suffix only when the
+/// finish epoch lies past the local day of the projection's clock: a finish
+/// later the same day keeps the bare zero-padded clock (audit/main.md 31,
+/// audit/collapsed.md G2).
+#[test]
+fn queue_finish_clock_suffixes_only_a_next_day_finish() {
+    // 2026-01-15 23:30 UTC.
+    let now = 1_768_519_800;
+    // 2026-01-15 23:50 UTC and 2026-01-16 00:10 UTC.
+    assert_eq!(
+        queue_finish_clock(1_768_521_000, now, UtcOffset::UTC),
+        "23:50"
+    );
+    assert_eq!(
+        queue_finish_clock(1_768_522_200, now, UtcOffset::UTC),
+        "00:10 +1d"
+    );
+}
 
 /// One Emby movie slot with the stored runtime the chain reads.
 fn slot(n: u64, runtime_ticks: i64) -> QueueSlot {

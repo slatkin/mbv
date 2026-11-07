@@ -15,19 +15,19 @@ fn home_icon_title_matches_only_the_continue_tab_labels() {
     assert!(!is_home_icon_title(""));
 }
 
-/// `fmt_wall_clock` renders the offset's 12-hour wall clock with a padded
-/// minute and an upper-case period: the finish-clock format the design
-/// canvas paints. Midnight and noon both read 12, in their own period.
+/// `fmt_wall_clock` renders the offset's zero-padded 24-hour wall clock
+/// with a padded hour and minute: the finish-clock format the design canvas
+/// paints. Midnight reads `00:00` and the afternoon keeps its own hour.
 #[test]
-fn fmt_wall_clock_renders_a_twelve_hour_clock_in_the_offset() {
+fn fmt_wall_clock_renders_a_zero_padded_twenty_four_hour_clock_in_the_offset() {
     // 2026-01-15 11:42:00 UTC, 2026-01-15 13:05:00 UTC, and midnight UTC.
     let (mid_morning, early_afternoon, midnight) = (1_768_477_320, 1_768_482_300, 1_768_435_200);
-    assert_eq!(fmt_wall_clock(mid_morning, UtcOffset::UTC), "11:42 AM");
-    assert_eq!(fmt_wall_clock(early_afternoon, UtcOffset::UTC), "1:05 PM");
-    assert_eq!(fmt_wall_clock(midnight, UtcOffset::UTC), "12:00 AM");
+    assert_eq!(fmt_wall_clock(mid_morning, UtcOffset::UTC), "11:42");
+    assert_eq!(fmt_wall_clock(early_afternoon, UtcOffset::UTC), "13:05");
+    assert_eq!(fmt_wall_clock(midnight, UtcOffset::UTC), "00:00");
     // One hour ahead of UTC, the same instants read an hour later.
     let plus_one = UtcOffset::from_hms(1, 0, 0).expect("a +1:00:00 offset is valid");
-    assert_eq!(fmt_wall_clock(mid_morning, plus_one), "12:42 PM");
+    assert_eq!(fmt_wall_clock(mid_morning, plus_one), "12:42");
 }
 
 /// A seconds value beyond `time`'s range saturates to the empty string, as
