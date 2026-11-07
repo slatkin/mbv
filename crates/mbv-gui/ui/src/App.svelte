@@ -74,6 +74,8 @@
       <div class="min-h-0 flex-1">
         <QueuePanel
           queue={$frames.slice.queue}
+          summary={$frames.slice.summary}
+          overlay={$frames.slice.overlay}
           focused={$frames.slice.focus.surface === 'queue'}
           {panelFocused}
         />
