@@ -92,6 +92,9 @@ export interface GuiPanelToggles {
 export type GuiOverlayFrame =
 	| {
 			kind: 'rowMenu';
+			/** The row the menu opened on (`QueueSlotId::raw`): the window
+			 * anchors the menu there instead of guessing from hover/cursor. */
+			anchorSlot: number;
 			cursor: number;
 			entries: GuiRowMenuEntry[];
 	  }

@@ -183,13 +183,20 @@ fn playing_queue_frame_carries_row_states_finish_clocks_and_the_open_menu() {
     assert_eq!(frame.summary.remaining, 2);
     assert_eq!(frame.summary.right_column, GuiRightColumn::Length);
 
-    // The open row menu rides the same frame: the canvas's five entries,
-    // each with the key hint that selects it directly.
-    let mbv_gui::bridge::frame::overlay::GuiOverlayFrame::RowMenu { cursor, entries } =
-        frame.overlay.expect("the row menu opened")
+    // The open row menu rides the same frame: the row it opened on, and the
+    // canvas's five entries, each with the key hint that selects it
+    // directly.
+    let mbv_gui::bridge::frame::overlay::GuiOverlayFrame::RowMenu {
+        anchor_slot,
+        cursor,
+        entries,
+    } = frame.overlay.expect("the row menu opened")
     else {
         panic!("the overlay is the row menu");
     };
+    // The stub's queue is numbered from 1 and the menu opened over its first
+    // row.
+    assert_eq!(anchor_slot, 1);
     assert_eq!(cursor, 0);
     let labels: Vec<&str> = entries.iter().map(|entry| entry.label.as_str()).collect();
     assert_eq!(

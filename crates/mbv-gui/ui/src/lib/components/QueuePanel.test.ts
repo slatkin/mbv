@@ -90,6 +90,7 @@ function item(slot: number, rest: Partial<Extract<GuiQueueRow, { row: 'item' }>>
 function rowMenu(): GuiOverlayFrame {
 	return {
 		kind: 'rowMenu',
+		anchorSlot: 2,
 		cursor: 1,
 		entries: [
 			{ label: 'Play now', keyHint: 'Enter' },

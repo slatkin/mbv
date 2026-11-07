@@ -17,9 +17,13 @@ use super::playback::GuiTargetChoice;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum GuiOverlayFrame {
-    /// The queue row's menu: the menu cursor and the entries, each with the
-    /// key hint that selects it directly (the canvas's hints).
+    /// The queue row's menu: the anchor row, the menu cursor, and the
+    /// entries, each with the key hint that selects it directly (the
+    /// canvas's hints).
     RowMenu {
+        /// The row the menu opened on (`QueueSlotId::raw`): the window anchors
+        /// the menu there instead of guessing from the hover or the cursor.
+        anchor_slot: u64,
         cursor: usize,
         entries: Vec<GuiRowMenuEntry>,
     },
@@ -42,7 +46,12 @@ pub enum GuiOverlayFrame {
 impl From<&GuiOverlayProjection> for GuiOverlayFrame {
     fn from(overlay: &GuiOverlayProjection) -> Self {
         match overlay {
-            GuiOverlayProjection::RowMenu { cursor, entries } => Self::RowMenu {
+            GuiOverlayProjection::RowMenu {
+                anchor_slot,
+                cursor,
+                entries,
+            } => Self::RowMenu {
+                anchor_slot: anchor_slot.raw(),
                 cursor: *cursor,
                 entries: entries.iter().map(GuiRowMenuEntry::from).collect(),
             },

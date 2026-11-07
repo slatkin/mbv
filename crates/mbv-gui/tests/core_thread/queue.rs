@@ -308,3 +308,56 @@ fn a_filter_press_focuses_the_filter_text_entry() {
     assert!(test.core.step());
     assert!(test.next_frame().summary.filter_active);
 }
+
+/// The row menu's frame names the row it opened on (add-tauri-gui-client row
+/// 6.5): the context-menu chord opens it over the cursor row, and the
+/// hovered row's actions button opens it over that row, so the window never
+/// guesses the anchor.
+#[test]
+fn the_row_menu_frame_carries_the_row_it_opened_on() {
+    let mut test = test_core(4);
+    test.tx
+        .send(measured_layout(
+            4,
+            vec![region_at(
+                80.0,
+                48.0,
+                RegionTarget::Queue(QueueTargetId::RowActions(3)),
+            )],
+        ))
+        .unwrap();
+    assert!(test.core.step());
+    test.next_frame();
+
+    // The context-menu chord opens the menu over the cursor row, slot 1.
+    test.tx
+        .send(CoreInput::Key(KeyEvent::new(
+            Key::Char('.'),
+            KeyModifiers::NONE,
+        )))
+        .unwrap();
+    assert!(test.core.step());
+    let frame = test.next_frame();
+    let Some(GuiOverlayFrame::RowMenu { anchor_slot, .. }) = frame.overlay else {
+        panic!("the chord opened the row menu: {:?}", frame.overlay);
+    };
+    assert_eq!(anchor_slot, 1);
+
+    // Esc dismisses it; the actions button then opens it over its own row.
+    test.tx
+        .send(CoreInput::Key(KeyEvent::new(Key::Esc, KeyModifiers::NONE)))
+        .unwrap();
+    assert!(test.core.step());
+    assert!(test.next_frame().overlay.is_none());
+
+    test.tx.send(press_at(90.0, 60.0)).unwrap();
+    assert!(test.core.step());
+    let frame = test.next_frame();
+    let Some(GuiOverlayFrame::RowMenu { anchor_slot, .. }) = frame.overlay else {
+        panic!(
+            "the actions button opened the row menu: {:?}",
+            frame.overlay
+        );
+    };
+    assert_eq!(anchor_slot, 3);
+}

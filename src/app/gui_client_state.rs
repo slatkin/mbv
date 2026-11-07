@@ -58,9 +58,12 @@ pub struct TrackPopoverChoice {
 /// The GUI Client's open overlay, as the frame carries it (design D4).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum GuiOverlayProjection {
-    /// The queue row's menu: the menu cursor and the entries, each with its
-    /// key hint.
+    /// The queue row's menu: the anchor row, the menu cursor, and the
+    /// entries, each with its key hint.
     RowMenu {
+        /// The row the menu opened on (`QueueSlotId`), so the window anchors
+        /// the menu on it instead of guessing from hover or cursor.
+        anchor_slot: QueueSlotId,
         cursor: usize,
         entries: Vec<RowMenuEntryProjection>,
     },
@@ -86,6 +89,9 @@ pub enum GuiOverlayProjection {
 /// so a follow update to the queue cursor cannot redirect an execution, and
 /// each entry's key hint.
 pub(in crate::app) struct GuiRowMenu {
+    /// The row the menu opened on: the pointer's actions button, or the row
+    /// the context-menu chord resolved.
+    pub(in crate::app) anchor_slot: QueueSlotId,
     pub(in crate::app) cursor: usize,
     /// The first stroke of the canvas's two-stroke `dd` remove hint: the
     /// second stroke within the menu selects the remove entry.
@@ -275,6 +281,7 @@ impl App {
     ) -> Option<GuiOverlayProjection> {
         match &self.gui_overlay {
             Some(GuiOverlay::RowMenu(menu)) => Some(GuiOverlayProjection::RowMenu {
+                anchor_slot: menu.anchor_slot,
                 cursor: menu.cursor,
                 entries: menu
                     .entries
@@ -361,6 +368,7 @@ impl App {
             key_hint: Some("dd"),
         });
         self.gui_overlay = Some(GuiOverlay::RowMenu(GuiRowMenu {
+            anchor_slot: slot,
             cursor: 0,
             pending_delete: false,
             entries,
