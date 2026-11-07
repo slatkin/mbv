@@ -29,11 +29,14 @@ fn frame_with_playback_surface(app: &mut App, playback: &QueuePlaybackSurface) -
         projection.pending_slot,
     ));
     queue.set_cursor(&projection.cursor);
+    let playback_projection = app.queue_playback_projection();
     GuiFrame::build(&FrameSources {
         app,
         focus: &FocusStack::new(),
         queue: &queue,
         playback,
+        playback_projection: &playback_projection,
+        hover_tile: None,
         viewport_rows: VIEWPORT_ROWS,
         theme_changed: false,
         artwork: None,
@@ -51,11 +54,14 @@ fn frame_after_tick(app: &mut App) -> GuiFrame {
         projection.pending_slot,
     ));
     queue.set_cursor(&projection.cursor);
+    let playback_projection = app.queue_playback_projection();
     GuiFrame::build(&FrameSources {
         app,
         focus: &FocusStack::new(),
         queue: &queue,
         playback: &QueuePlaybackSurface::new(),
+        playback_projection: &playback_projection,
+        hover_tile: None,
         viewport_rows: VIEWPORT_ROWS,
         theme_changed: false,
         artwork: None,
@@ -558,4 +564,65 @@ fn a_drag_ghost_carries_its_rows_ends_at_clock_review_u65_p2_3() {
         GuiQueueRow::Heading { .. } | GuiQueueRow::Spacer => panic!("a drag holds an item row"),
     };
     assert_eq!(ghost_ends, row_ends);
+}
+
+/// The hover preview carries the trickplay tile the core resolved (task 6.7):
+/// the tile travels inside the hover datum, so a frame whose pointer leaves the
+/// bar carries no tile at all — no second "now empty" flag is needed.
+#[test]
+fn the_scrubber_hover_carries_the_cores_trickplay_tile() {
+    use mbv_gui::bridge::frame::playback::GuiScrubberTile;
+
+    let item = slot_item("Playing", 20 * 60 * TICKS_PER_SECOND, 0, false);
+    let mut app = stub_app_with_playing_items(vec![item]);
+    let mut playback = QueuePlaybackSurface::new();
+    playback.set_scrubber_hover(Some(0.25));
+    let tile = GuiScrubberTile {
+        sheet_key: "item:320:0".to_string(),
+        width: 320,
+        height: 180,
+        columns: 10,
+        column: 2,
+        row: 1,
+        sheet: Some("data:image/jpeg;base64,anBlZw==".to_string()),
+    };
+    let queue_projection = app.queue_surface_projection();
+    let mut queue = QueueSurface::new();
+    queue.list_mut().set_content(queue_media_rows(
+        queue_projection.slots.as_deref().unwrap_or_default(),
+        queue_projection.playback,
+        queue_projection.pending_slot,
+    ));
+    queue.set_cursor(&queue_projection.cursor);
+    let playback_projection = app.queue_playback_projection();
+    let frame = GuiFrame::build(&FrameSources {
+        app: &app,
+        focus: &FocusStack::new(),
+        queue: &queue,
+        playback: &playback,
+        playback_projection: &playback_projection,
+        hover_tile: Some(tile.clone()),
+        viewport_rows: VIEWPORT_ROWS,
+        theme_changed: false,
+        artwork: None,
+    });
+
+    let hover = frame.playback.hover.expect("the frame carries the hover");
+    assert_eq!(hover.tile, Some(tile));
+
+    // The pointer leaves the bar: the hover, and its tile, go together.
+    let mut away = QueuePlaybackSurface::new();
+    away.set_scrubber_hover(None);
+    let frame = GuiFrame::build(&FrameSources {
+        app: &app,
+        focus: &FocusStack::new(),
+        queue: &queue,
+        playback: &away,
+        playback_projection: &playback_projection,
+        hover_tile: None,
+        viewport_rows: VIEWPORT_ROWS,
+        theme_changed: false,
+        artwork: None,
+    });
+    assert!(frame.playback.hover.is_none());
 }

@@ -30,7 +30,8 @@ use mbv_ui_msg::{ComponentId, KeyEvent, PointerEvent, PointerKind, Position};
 
 use crate::artwork::ArtworkFrames;
 use crate::attach::{AttachCampaign, LibraryOwnerSteps};
-use crate::bridge::frame::{FrameSources, GuiFrame, GuiWindowFrame};
+use crate::bridge::frame::playback::GuiScrubberTile;
+use crate::bridge::frame::{FrameSources, GuiFrame, GuiWindowFrame, scrubber_ticks};
 use crate::bridge::layout::{
     LayoutReport, LayoutSize, ListId, QueuePlaybackTargetId, QueueTargetId, RegionTarget, hit_map,
 };
@@ -195,6 +196,9 @@ pub struct CoreThread {
     /// The frames' artwork memo (design D10): the value a frame arms, and
     /// the encoded artwork a re-armed frame re-carries encode-free.
     artwork: ArtworkFrames,
+    /// The frames' trickplay memo (task 6.7): the hovered sheet's encoded
+    /// image, re-carried only when the hovered sheet changes.
+    trickplay: crate::trickplay::TrickplayFrames,
     /// The open overlay's choice lists as the last emitted frame painted them
     /// (add-tauri-gui-client row 6.5): a chooser or popover row's press
     /// resolves its painted index against these, so a list change between the
@@ -244,6 +248,7 @@ impl CoreThread {
             frame_requested: true,
             theme_pending: true,
             artwork: ArtworkFrames::default(),
+            trickplay: crate::trickplay::TrickplayFrames::default(),
             painted: PaintedChoices::default(),
             idle_cadence: CLIENT_IDLE_CADENCE,
         }
@@ -587,14 +592,20 @@ impl CoreThread {
 
     /// Build and emit the frame the window paints (design D4): the frame
     /// carries the theme when armed — the first frame, and every
-    /// `report_layout`-triggered frame (design D7) — and the visual slot's
-    /// artwork when the slot's art changed for this window (design D10).
+    /// `report_layout`-triggered frame (design D7) — the visual slot's
+    /// artwork when the slot's art changed for this window (design D10), and
+    /// the scrubber hover's trickplay tile (task 6.7).
     fn emit_frame(&mut self) {
         self.sync_queue_surface();
         // The active item's metadata fetch (design D4a) issues from the
         // frame path, deduped on its own loading set; a landed completion
         // rides the next frame.
         self.app.fetch_playback_metadata();
+        // One playback projection read feeds the frame's playback section,
+        // its overlay, and the hover's tick resolution, so they cannot
+        // disagree inside one frame.
+        let playback = self.app.queue_playback_projection();
+        let hover_tile = self.hover_tile(&playback);
         let artwork = self.app.queue_card_artwork();
         let artwork = self.artwork.frame_value(&artwork);
         let theme_changed = std::mem::take(&mut self.theme_pending);
@@ -603,6 +614,8 @@ impl CoreThread {
             focus: &self.focus,
             queue: &self.queue,
             playback: &self.playback,
+            playback_projection: &playback,
+            hover_tile,
             viewport_rows: self.viewport_rows,
             theme_changed,
             artwork,
@@ -611,6 +624,18 @@ impl CoreThread {
         // pointer press resolves against (add-tauri-gui-client row 6.5).
         self.painted.adopt(frame.overlay.as_ref());
         (self.sink)(GuiWindowFrame::Slice(Box::new(frame)));
+    }
+
+    /// The trickplay tile the hover preview paints (task 6.7): the hovered
+    /// position resolved against the active item's grid, with the sheet's
+    /// fetch issued from here as the metadata fetch is. `None` while the
+    /// pointer is away from the bar, while no sheet is cached yet, and for an
+    /// item with no trickplay source.
+    fn hover_tile(&mut self, playback: &mbv::QueuePlaybackProjection) -> Option<GuiScrubberTile> {
+        let fraction = self.playback.scrubber_hover()?;
+        let ticks = scrubber_ticks(playback, fraction);
+        let preview = self.app.trickplay_preview_tile(ticks);
+        self.trickplay.frame_value(preview.as_ref())
     }
 }
 
@@ -629,7 +654,6 @@ impl fmt::Debug for CoreThread {
             .field("frame_requested", &self.frame_requested)
             .field("theme_pending", &self.theme_pending)
             .field("painted", &self.painted)
-            .field("idle_cadence", &self.idle_cadence)
             .finish_non_exhaustive()
     }
 }

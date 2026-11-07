@@ -17,7 +17,10 @@ import type {
 	GuiQueue,
 	GuiQueueFooter,
 	GuiQueuePlayback,
+	GuiScrubberTile,
 	GuiStatusBar,
+	GuiTrickplayGrid,
+	GuiTrickplaySheet,
 } from '$lib/bridge/types';
 import QueueFooter from './QueueFooter.svelte';
 import QueuePanel from './QueuePanel.svelte';
@@ -103,8 +106,44 @@ function chooserOverlay(): GuiOverlayFrame {
 function renderPanel(
 	playback: GuiQueuePlayback = playing(),
 	overlay: GuiOverlayFrame | null = null,
+	carriedSheet: GuiTrickplaySheet | null = null,
 ) {
-	return render(QueuePlaybackPanel, { playback, overlay });
+	return render(QueuePlaybackPanel, { playback, overlay, carriedSheet });
+}
+
+/** One trickplay grid the preview reads: a 320-wide thumbnail series whose
+ * sheets hold ten by ten thumbnails. */
+function trickplayGrid(): GuiTrickplayGrid {
+	return {
+		width: 320,
+		height: 180,
+		tileWidth: 10,
+		tileHeight: 10,
+		thumbnailCount: 200,
+		intervalMs: 10_000,
+		mediaSourceId: 'ms1',
+	};
+}
+
+/** One hovered trickplay tile: column two, row one of the sheet `sheet`
+ * carries the image of (`null` when the frame does not re-carry it). */
+function tile(sheet: string | null): GuiScrubberTile {
+	return {
+		sheetKey: 'item:320:0',
+		width: 320,
+		height: 180,
+		columns: 10,
+		column: 2,
+		row: 1,
+		sheet,
+	};
+}
+
+const SHEET = 'data:image/jpeg;base64,anBlZw==';
+
+/** The preview's painted thumbnail: the only element that crops a sprite. */
+function tileElement(container: HTMLElement): HTMLElement | null {
+	return container.querySelector<HTMLElement>('[style*="background-size"]');
 }
 
 /** A one-item queue, so the panel reports one `queue` slot region. */
@@ -240,12 +279,58 @@ test('a press on the scrubber forwards a pointer press with its position', async
 test('the scrubber paints the hover preview from the frame', () => {
 	const { getByText } = renderPanel(
 		playing({
-			hover: { fraction: 0.75, ticks: 150 * SECOND, chapter: 'Chapter Two' },
+			hover: {
+				fraction: 0.75,
+				ticks: 150 * SECOND,
+				chapter: 'Chapter Two',
+				tile: null,
+			},
 		}),
 	);
 
 	expect(getByText('2:30')).toBeTruthy();
 	expect(getByText('Chapter Two')).toBeTruthy();
+});
+
+// Task 6.7: the preview paints the trickplay thumbnail the frame's tile names,
+// cropped from the sheet's sprite grid — bytes the core delivered, so the
+// window fetches nothing.
+test('the hover preview paints the trickplay tile the frame carries', () => {
+	const { container } = renderPanel(
+		playing({
+			trickplay: [trickplayGrid()],
+			hover: { fraction: 0.5, ticks: 100 * SECOND, chapter: null, tile: tile(SHEET) },
+		}),
+	);
+
+	const thumb = tileElement(container);
+	expect(thumb?.style.backgroundImage).toContain(SHEET);
+	expect(thumb?.style.backgroundPosition).toBe('-256px -72px');
+});
+
+// The frame re-carries the sheet's image only when the hovered sheet changes,
+// so the preview repaints the sheet the panel latched; with none latched, it
+// keeps the placeholder.
+test('the hover preview repaints the latched sheet, else the placeholder', () => {
+	const latched = renderPanel(
+		playing({
+			trickplay: [trickplayGrid()],
+			hover: { fraction: 0.5, ticks: 100 * SECOND, chapter: null, tile: tile(null) },
+		}),
+		null,
+		{ key: 'item:320:0', image: SHEET },
+	);
+	expect(tileElement(latched.container)?.style.backgroundImage).toContain(
+		SHEET,
+	);
+
+	const bare = renderPanel(
+		playing({
+			trickplay: [trickplayGrid()],
+			hover: { fraction: 0.5, ticks: 100 * SECOND, chapter: null, tile: tile(null) },
+		}),
+	);
+	expect(tileElement(bare.container)).toBeNull();
 });
 
 test('an open target chooser renders its choices', () => {

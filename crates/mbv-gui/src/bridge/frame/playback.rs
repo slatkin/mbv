@@ -51,8 +51,8 @@ pub struct GuiQueuePlayback {
     /// while unknown.
     pub credits_mark: Option<GuiSegmentMark>,
     /// The trickplay source description (design D4a): one tile grid per
-    /// available width. `None` while unknown; the tile bytes are task 6.7's
-    /// fetch.
+    /// available width. `None` while unknown; the preview's tile bytes ride
+    /// the hover datum from the core's cache (task 6.7).
     pub trickplay: Option<Vec<GuiTrickplayGrid>>,
     /// Which transport controls are actionable.
     pub availability: GuiTransportAvailability,
@@ -81,9 +81,8 @@ pub struct GuiQueuePlayback {
 }
 
 /// The scrubber's hover preview (design D4): the position a move over the
-/// painted bar carried, resolved to the time and chapter it names. The
-/// trickplay tile bytes are task 6.7's fetch; the preview's frame is not
-/// part of this datum.
+/// painted bar carried, resolved to the time and chapter it names, and the
+/// trickplay tile the preview paints (task 6.7).
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GuiScrubberHover {
@@ -94,6 +93,38 @@ pub struct GuiScrubberHover {
     /// The chapter covering the pointer's position, when the active item's
     /// chapters cover it.
     pub chapter: Option<String>,
+    /// The trickplay tile at the pointer's position: `None` while the active
+    /// item offers none, its sheet is not yet cached, or the server does not
+    /// hold it — the preview paints its placeholder then.
+    pub tile: Option<GuiScrubberTile>,
+}
+
+/// The hovered trickplay tile the preview paints (task 6.7): the thumbnail's
+/// place in its sheet, the thumbnail's pixel size, and the sheet's bytes as
+/// the `data:image/jpeg` URL the window paints. The webview fetches nothing:
+/// the bytes are the core's cache, so the CSP keeps its `data:` image source
+/// and admits no remote origin (design D11).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GuiScrubberTile {
+    /// The sheet's opaque identity (the item, the thumbnail width, and the
+    /// sheet's ordinal). The window repaints the sheet it latched for this
+    /// key while `sheet` is `None`.
+    pub sheet_key: String,
+    /// The thumbnail's pixel width within the sheet.
+    pub width: u32,
+    /// The thumbnail's pixel height within the sheet.
+    pub height: u32,
+    /// The sheet's thumbnail columns.
+    pub columns: u32,
+    /// The thumbnail's column in the sheet.
+    pub column: u32,
+    /// The thumbnail's row in the sheet.
+    pub row: u32,
+    /// The sheet image as a `data:image/jpeg` URL. `None` when the frame does
+    /// not re-carry it — the hovered sheet is the one the window already
+    /// holds — as the artwork's arming rule works (design D10).
+    pub sheet: Option<String>,
 }
 
 /// One status indicator of the queue band's cluster, mirroring
@@ -311,8 +342,7 @@ impl From<SegmentMark> for GuiSegmentMark {
 }
 
 /// One trickplay tile grid of the active item, mirroring `TrickplayGrid`:
-/// the source description the scrubber preview's tile fetch (task 6.7)
-/// reads.
+/// the source description the preview's tile fetch reads.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GuiTrickplayGrid {

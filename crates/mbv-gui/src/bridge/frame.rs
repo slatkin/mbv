@@ -24,7 +24,7 @@ use serde::Serialize;
 use self::chrome::{GuiQueueFooter, GuiStatusBar};
 use self::focus::GuiFocus;
 use self::overlay::GuiOverlayFrame;
-use self::playback::{GuiCardArtwork, GuiQueuePlayback, GuiScrubberHover};
+use self::playback::{GuiCardArtwork, GuiQueuePlayback, GuiScrubberHover, GuiScrubberTile};
 use self::queue::{GuiQueue, GuiQueueSummary};
 use self::theme::GuiTheme;
 
@@ -124,6 +124,15 @@ pub struct FrameSources<'a> {
     /// The Queue playback Surface state: the scrubber hover the last
     /// pointer move resolved (design D4).
     pub playback: &'a QueuePlaybackSurface,
+    /// The playback projection read once for this frame
+    /// (`App::queue_playback_projection`): the playback section, the overlay,
+    /// and the hover preview all resolve against this one read, so they
+    /// cannot disagree inside one frame.
+    pub playback_projection: &'a QueuePlaybackProjection,
+    /// The hovered trickplay tile this frame carries (task 6.7): the tile the
+    /// core thread's memo resolved and encoded, `None` while the pointer is
+    /// away from the bar or the item's sheet is not cached.
+    pub hover_tile: Option<GuiScrubberTile>,
     /// The whole Queue rows that the viewport fits (`ListRows::whole_rows`).
     pub viewport_rows: usize,
     /// Whether the window needs the theme in this frame: the first frame, and
@@ -143,7 +152,7 @@ impl GuiFrame {
         // One playback projection read feeds both the playback section and
         // the overlay's popover choices, so the two cannot disagree inside
         // one frame.
-        let playback = sources.app.queue_playback_projection();
+        let playback = sources.playback_projection;
         Self {
             focus: GuiFocus::from(sources.focus),
             queue: GuiQueue::from_surface(sources.queue, sources.viewport_rows, &summary),
@@ -151,13 +160,17 @@ impl GuiFrame {
             panel: GuiPanelToggles::from(&sources.app.panel_toggles_projection()),
             overlay: sources
                 .app
-                .gui_overlay_projection(&playback)
+                .gui_overlay_projection(playback)
                 .as_ref()
                 .map(GuiOverlayFrame::from),
             playback: GuiQueuePlayback {
                 artwork: sources.artwork.clone(),
-                hover: scrubber_hover(sources.playback, &playback),
-                ..GuiQueuePlayback::from(&playback)
+                hover: scrubber_hover(
+                    sources.playback.scrubber_hover(),
+                    playback,
+                    sources.hover_tile.clone(),
+                ),
+                ..GuiQueuePlayback::from(playback)
             },
             footer: GuiQueueFooter::from(&sources.app.queue_footer_projection()),
             status: GuiStatusBar::from(&sources.app.status_bar_projection()),
@@ -166,31 +179,45 @@ impl GuiFrame {
     }
 }
 
-/// The scrubber's hover preview one frame carries (design D4): the
-/// Surface state's hover fraction resolved to the time and chapter it
-/// names against the same playback projection the frame reads. `None`
-/// while the pointer is away from the bar.
+/// The scrubber's hover preview one frame carries (design D4; task 6.7 for
+/// the tile): the Surface state's hover fraction resolved to the time and
+/// chapter it names against the playback projection the frame reads, plus
+/// the tile the core thread resolved for the same position. `None` while the
+/// pointer is away from the bar.
 fn scrubber_hover(
-    surface: &QueuePlaybackSurface,
+    fraction: Option<f64>,
     playback: &QueuePlaybackProjection,
+    tile: Option<GuiScrubberTile>,
 ) -> Option<GuiScrubberHover> {
-    let fraction = surface.scrubber_hover()?;
-    let ticks = mbv_emby_model::seconds_to_ticks(
+    let fraction = fraction?;
+    let ticks = scrubber_ticks(playback, fraction);
+    Some(GuiScrubberHover {
+        fraction,
+        ticks,
+        chapter: covering_chapter(playback, ticks),
+        tile,
+    })
+}
+
+/// The tick the pointer's `fraction` along the painted bar names. The core
+/// thread resolves the same tick to pick the preview's trickplay tile, so
+/// both read this one conversion.
+#[must_use]
+pub fn scrubber_ticks(playback: &QueuePlaybackProjection, fraction: f64) -> i64 {
+    mbv_emby_model::seconds_to_ticks(
         fraction * mbv_emby_model::ticks_to_seconds(playback.playback.runtime_ticks),
-    );
-    // The chapter that covers the position is the last boundary at or
-    // before it, the covering rule the TUI's chapter lookups share.
-    let chapter = playback
+    )
+}
+
+/// The chapter that covers `ticks`: the last boundary at or before it, the
+/// covering rule the TUI's chapter lookups share.
+fn covering_chapter(playback: &QueuePlaybackProjection, ticks: i64) -> Option<String> {
+    playback
         .chapters
         .iter()
         .rev()
         .find(|chapter| chapter.start_ticks <= ticks)
-        .map(|chapter| chapter.name.clone());
-    Some(GuiScrubberHover {
-        fraction,
-        ticks,
-        chapter,
-    })
+        .map(|chapter| chapter.name.clone())
 }
 
 /// The canvas panel's collapse and queue-fold facts (design D10), mirroring

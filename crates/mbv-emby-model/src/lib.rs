@@ -6,6 +6,9 @@ pub mod test_support;
 pub const TICKS_PER_SECOND: i64 = 10_000_000;
 // Keep this equal to TICKS_PER_SECOND; the f64 form avoids repeated integer casts.
 pub const TICKS_PER_SECOND_F64: f64 = 10_000_000.0;
+/// Ticks in one millisecond. The trickplay tile grids state their interval in
+/// milliseconds, so the tile a position names divides by this first.
+pub const TICKS_PER_MILLISECOND: i64 = 10_000;
 
 /// Convert ticks to seconds. The i64-to-f64 conversion is exact for |ticks| < 2^53
 /// (about 28.5 years of media at 100 ns per tick).

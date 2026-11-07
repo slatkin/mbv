@@ -177,6 +177,9 @@ impl ClientTickHost for CoreThread {
                     // The reload forgets the front end's artwork too: the
                     // next frame re-carries it, encode-free (design D10).
                     self.artwork.rearm();
+                    // The reloaded window holds no trickplay sheet either
+                    // (task 6.7): the next frame re-carries the hovered one.
+                    self.trickplay.rearm();
                 }
                 CoreInput::Close => {
                     // The window closed (design D9): the run ends as a quit

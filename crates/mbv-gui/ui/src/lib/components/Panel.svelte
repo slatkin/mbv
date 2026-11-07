@@ -15,9 +15,16 @@
 	// frame arms `playback.artwork` only when the art changed, so a state that
 	// mounts on a later frame (the rail after `z`, the strip after a resize)
 	// paints the value the expanded artboard already adopted instead of an
-	// empty slot.
+	// empty slot. The hover preview's trickplay sheet is carried the same way
+	// (task 6.7): a frame re-carries the sheet's image only when the hovered
+	// sheet changes.
 	import { panelState } from '$lib/bridge/panel';
-	import type { GuiCardArtwork, GuiFrame, LayoutSize } from '$lib/bridge/types';
+	import type {
+		GuiCardArtwork,
+		GuiFrame,
+		GuiTrickplaySheet,
+		LayoutSize,
+	} from '$lib/bridge/types';
 	import CollapsedRail from './CollapsedRail.svelte';
 	import CompactStrip from './CompactStrip.svelte';
 	import FoldedQueue from './FoldedQueue.svelte';
@@ -37,6 +44,11 @@
 
 	/** The artwork the window carries for the active item (design D10). */
 	let carriedArt = $state<GuiCardArtwork | null>(null);
+
+	/** The trickplay sheet the window carries for the expanded panel's hover
+	 * preview (task 6.7): the image last carried, keyed by the sheet the tile
+	 * names. The hover preview reuses it while the frame names the same key. */
+	let carriedSheet = $state<GuiTrickplaySheet | null>(null);
 
 	/** The state the panel paints: the toggles and the container size (design
 	 * D10). */
@@ -60,6 +72,16 @@
 			carriedArt = frame.playback.artwork;
 		}
 	});
+
+	// The trickplay sheet adoption (task 6.7): a frame carries the sheet's
+	// image only when the hovered sheet changed, so the last one stays until
+	// another key arrives.
+	$effect(() => {
+		const tile = frame.playback.hover?.tile;
+		if (tile?.sheet) {
+			carriedSheet = { key: tile.sheetKey, image: tile.sheet };
+		}
+	});
 </script>
 
 {#if layout === 'rail'}
@@ -81,6 +103,7 @@
 			playback={frame.playback}
 			overlay={frame.overlay}
 			carried={carriedArt}
+			carriedSheet={carriedSheet}
 			queueFolded={frame.panel.queueFolded}
 		/>
 		<div class="min-h-0 flex-1">

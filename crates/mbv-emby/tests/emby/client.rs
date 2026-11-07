@@ -549,3 +549,31 @@ fn get_playback_info_for_cast_failed_request_is_an_error() {
         .get_playback_info_for_cast("item123", false, &profile)
         .unwrap_err();
 }
+
+/// The trickplay tile fetch (add-tauri-gui-client task 6.7): the request names
+/// the item, the thumbnail width, the sheet ordinal, and the media source the
+/// grid belongs to, and the sheet's own bytes come back — no JSON parse stands
+/// between the response and the caller.
+#[test]
+fn get_trickplay_tile_requests_the_sheet_and_returns_its_bytes() {
+    let (client, http) = mock_client(TEST_URL);
+    http.respond(200, "jpeg-bytes");
+
+    let bytes = client
+        .get_trickplay_tile("item123", 320, 3, "msid1")
+        .unwrap();
+
+    assert_eq!(bytes, b"jpeg-bytes");
+    let request = http
+        .requests()
+        .pop()
+        .expect("the mock recorded the request");
+    assert!(
+        request.starts_with("GET /Videos/item123/Trickplay/320/3.jpg?"),
+        "the request names the width and the sheet ordinal: {request}"
+    );
+    assert!(
+        request.contains("MediaSourceId=msid1"),
+        "the request carries the grid's media source: {request}"
+    );
+}

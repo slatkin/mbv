@@ -108,6 +108,50 @@ pub struct TrickplayGrid {
     pub media_source_id: String,
 }
 
+/// Where one position lands inside a trickplay grid (design D4a): the tile
+/// sheet the thumbnail lives in and the thumbnail's place in that sheet —
+/// the crop the scrubber preview paints.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TrickplayTile {
+    /// The sheet's ordinal in the grid's sheet series (the tile fetch's
+    /// `index`).
+    pub sheet: u32,
+    /// The thumbnail's column in the sheet.
+    pub column: u32,
+    /// The thumbnail's row in the sheet.
+    pub row: u32,
+}
+
+impl TrickplayGrid {
+    /// The tile `ticks` names, `None` when the grid carries no usable
+    /// geometry (a zero interval, tile width, tile height, or thumbnail
+    /// count).
+    ///
+    /// The thumbnail the position names is `ticks / interval_ms`, clamped to
+    /// the grid's last thumbnail, so a position at or past the runtime's end
+    /// paints the last frame instead of nothing. The sheet is that
+    /// thumbnail's ordinal divided by the sheet's capacity
+    /// (`tile_width × tile_height`), and the tile within the sheet is the
+    /// remainder — the arithmetic the Emby web client's preview uses.
+    #[must_use]
+    pub fn tile_at(&self, ticks: i64) -> Option<TrickplayTile> {
+        let per_sheet = u64::from(self.tile_width).checked_mul(u64::from(self.tile_height))?;
+        if per_sheet == 0 || self.interval_ms == 0 || self.thumbnail_count == 0 {
+            return None;
+        }
+        let interval_ms = i64::try_from(self.interval_ms).ok()?;
+        let milliseconds = ticks.max(0) / mbv_emby_model::TICKS_PER_MILLISECOND;
+        let thumbnail = u64::try_from(milliseconds / interval_ms).ok()?;
+        let thumbnail = thumbnail.min(u64::from(self.thumbnail_count) - 1);
+        let within = thumbnail % per_sheet;
+        Some(TrickplayTile {
+            sheet: u32::try_from(thumbnail / per_sheet).ok()?,
+            column: u32::try_from(within % u64::from(self.tile_width)).ok()?,
+            row: u32::try_from(within / u64::from(self.tile_width)).ok()?,
+        })
+    }
+}
+
 /// The Queue playback band's facts for one tick. The header row paints in
 /// every state, idle included. The transport section collapses while idle
 /// (task 3.6): `shown` is false, and the section reserves no rows and reports

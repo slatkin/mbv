@@ -263,6 +263,10 @@ impl ClientCore {
             outcome.input_received |= host.app_mut().drain_session_events();
             outcome.input_received |= host.app_mut().drain_cast_events();
             outcome.input_received |= host.app_mut().drain_playback_metadata_events();
+            // The scrubber preview's tile sheets land like the metadata they
+            // decorate (add-tauri-gui-client task 6.7): a landed sheet frames
+            // the hovered tile.
+            outcome.input_received |= host.app_mut().drain_trickplay_sheet_events();
             outcome.input_received |= host.app_mut().drain_pinned_requests();
             if host.app_mut().drain_feed_tab_results() {
                 outcome.input_received = true;

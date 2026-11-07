@@ -506,6 +506,17 @@ pub struct App {
     /// The item identities whose metadata fetches are in flight.
     pub(in crate::app) playback_metadata_loading:
         std::collections::HashSet<mbv_queue::QueueItemContentId>,
+    /// The scrubber preview's fetched trickplay tile sheets
+    /// (add-tauri-gui-client task 6.7): the item, thumbnail width, and sheet
+    /// ordinal each sheet answers, bounded at
+    /// `playback_trickplay::TRICKPLAY_SHEET_CACHE_BOUND`. An entry's `None`
+    /// records a sheet the server does not hold, so a hover does not retry
+    /// it; decoration only, never playback authority.
+    pub(in crate::app) trickplay_sheets:
+        IndexMap<crate::app::playback_trickplay::TrickplaySheetKey, Option<std::sync::Arc<[u8]>>>,
+    /// The sheet keys whose tile fetches are in flight.
+    pub(in crate::app) trickplay_sheets_loading:
+        std::collections::HashSet<crate::app::playback_trickplay::TrickplaySheetKey>,
     /// Fallback artist per-album track fetches waiting for a bounded slot.
     /// A fallback root's scope can be the whole
     /// settled catalog, so `enqueue_artist_album_tracks` arms at most

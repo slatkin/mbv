@@ -56,6 +56,7 @@
 		GuiOverlayFrame,
 		GuiQueuePlayback,
 		GuiSegmentMark,
+		GuiTrickplaySheet,
 		LayoutRegion,
 		QueuePlaybackTargetId,
 	} from '$lib/bridge/types';
@@ -71,12 +72,23 @@
 		 * it too. `null` in a bare render, where the frame's own `artwork` is
 		 * the only source. */
 		carried?: GuiCardArtwork | null;
+		/** The trickplay sheet the window carried (task 6.7), held by the panel
+		 * above this one: a frame re-carries the sheet's image only when the
+		 * hovered sheet changes, so the preview repaints the latched image while
+		 * the tile names its key. `null` in a bare render. */
+		carriedSheet?: GuiTrickplaySheet | null;
 		/** Whether the queue is folded (the `q` toggle, design D10): the
 		 * header's fold control paints the expand direction then, so the
 		 * control names the toggle's next effect in both directions. */
 		queueFolded?: boolean;
 	}
-	const { playback, overlay, carried = null, queueFolded = false }: Props = $props();
+	const {
+		playback,
+		overlay,
+		carried = null,
+		carriedSheet = null,
+		queueFolded = false,
+	}: Props = $props();
 
 	const reportKey = Symbol('queue-playback-panel');
 	const chooserKey = Symbol('target-chooser');
@@ -137,9 +149,35 @@
 	);
 
 	/** The scrubber's hover preview, painted from the frame: the pointer's
-	 * fraction, the time it names, and the chapter covering it. `null` while
-	 * the pointer is away from the bar. */
+	 * fraction, the time it names, the chapter covering it, and the trickplay
+	 * tile (task 6.7). `null` while the pointer is away from the bar. */
 	const hover = $derived(playback.hover);
+
+	/** The preview thumbnail's painted width: the canvas's `w-32` box. */
+	const TILE_WIDTH_PX = 128;
+
+	/** The hover preview's tile crop (task 6.7): the thumbnail's place in its
+	 * sheet, scaled to the preview box, as the CSS sprite the browser paints.
+	 * `null` while no sheet is latched for the hovered tile, so the preview
+	 * falls back to the placeholder. */
+	const tileCrop = $derived.by(() => {
+		const tile = hover?.tile;
+		const image = tile
+			? (tile.sheet ??
+				(carriedSheet?.key === tile.sheetKey ? carriedSheet.image : null))
+			: null;
+		if (!tile || !image || tile.width <= 0) {
+			return null;
+		}
+		const scale = TILE_WIDTH_PX / tile.width;
+		return {
+			width: `${TILE_WIDTH_PX}px`,
+			height: `${tile.height * scale}px`,
+			backgroundImage: `url('${image}')`,
+			backgroundSize: `${tile.columns * TILE_WIDTH_PX}px auto`,
+			backgroundPosition: `-${tile.column * TILE_WIDTH_PX}px -${tile.row * tile.height * scale}px`,
+		};
+	});
 
 	/** A fraction `ticks / runtime`, clamped to `[0, 1]`; zero runtime is
 	 * zero. */
@@ -519,17 +557,27 @@
 						style:border-color="var(--mbv-background)"
 					></div>
 					{#if hover}
-						<!-- The hover preview: the trickplay frame's placeholder (the
-							tile bytes are task 6.7), the time at the pointer, and the
-							chapter that covers it, all from the frame's `hover`
-							datum. -->
+						<!-- The hover preview: the trickplay frame (task 6.7 — the
+							thumbnail cropped from the sheet the core's cache
+							encoded, else the placeholder while no sheet is cached),
+							the time at the pointer, and the chapter that covers it,
+							all from the frame's `hover` datum. -->
 						<div
 							class="pointer-events-none absolute bottom-full z-10 mb-1 -translate-x-1/2 rounded-md border p-1 whitespace-nowrap"
 							style:left="{hover.fraction * 100}%"
 							style:background="var(--mbv-popover)"
 							style:border-color="var(--mbv-border)"
 						>
-							{#if playback.trickplay}
+							{#if tileCrop}
+								<div
+									class="mb-1 overflow-hidden rounded-sm bg-no-repeat"
+									style:width={tileCrop.width}
+									style:height={tileCrop.height}
+									style:background-image={tileCrop.backgroundImage}
+									style:background-size={tileCrop.backgroundSize}
+									style:background-position={tileCrop.backgroundPosition}
+								></div>
+							{:else if playback.trickplay}
 								<div
 									class="mb-1 flex aspect-video w-32 items-center justify-center rounded-sm"
 									style:background="var(--mbv-secondary)"

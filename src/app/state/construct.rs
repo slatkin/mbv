@@ -261,6 +261,8 @@ impl App {
             album_tracks_loading: std::collections::HashSet::new(),
             playback_metadata_cache: std::collections::HashMap::new(),
             playback_metadata_loading: std::collections::HashSet::new(),
+            trickplay_sheets: IndexMap::new(),
+            trickplay_sheets_loading: std::collections::HashSet::new(),
             pending_artist_album_track_fetches: std::collections::VecDeque::new(),
             artist_album_track_fetches_in_flight: std::collections::HashSet::new(),
             artist_detail_cache: std::collections::HashMap::new(),

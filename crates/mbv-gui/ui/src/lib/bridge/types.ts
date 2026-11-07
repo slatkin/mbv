@@ -265,9 +265,8 @@ export interface GuiQueuePlayback {
 }
 
 /** The scrubber's hover preview (design D4): the position a move over the
- * painted bar carried, resolved to the time and chapter it names. The
- * trickplay tile bytes are task 6.7's fetch; the preview's frame is not
- * part of this datum. */
+ * painted bar carried, resolved to the time and chapter it names, and the
+ * trickplay tile the preview paints (task 6.7). */
 export interface GuiScrubberHover {
 	/** The pointer's fraction along the painted bar. */
 	fraction: number;
@@ -276,6 +275,44 @@ export interface GuiScrubberHover {
 	/** The chapter covering the pointer's position, when the active item's
 	 * chapters cover it. */
 	chapter: string | null;
+	/** The trickplay tile at the pointer's position; `null` while the item
+	 * offers none, its sheet is not cached yet, or the server does not hold
+	 * it. */
+	tile: GuiScrubberTile | null;
+}
+
+/** The hovered trickplay tile (task 6.7): the thumbnail's place in its sheet,
+ * the thumbnail's pixel size, and the sheet's bytes as a `data:image/jpeg`
+ * URL. The window fetches nothing — the core's cache supplies the bytes, so
+ * the CSP keeps its `data:` image source (design D11). */
+export interface GuiScrubberTile {
+	/** The sheet's opaque identity: the window repaints the sheet it latched
+	 * for this key while `sheet` is `null`. */
+	sheetKey: string;
+	/** The thumbnail's pixel width within the sheet. */
+	width: number;
+	/** The thumbnail's pixel height within the sheet. */
+	height: number;
+	/** The sheet's thumbnail columns. */
+	columns: number;
+	/** The thumbnail's column in the sheet. */
+	column: number;
+	/** The thumbnail's row in the sheet. */
+	row: number;
+	/** The sheet image as a `data:image/jpeg` URL; `null` when the frame does
+	 * not re-carry it — the hovered sheet is the one already latched. */
+	sheet: string | null;
+}
+
+/** The trickplay sheet the window latches for the hover preview (task 6.7):
+ * the image last carried and the sheet key it belongs to. A frame re-carries
+ * the image only when the hovered sheet changes, so the preview repaints the
+ * latched one while the tile names the same key. */
+export interface GuiTrickplaySheet {
+	/** The sheet's opaque identity, as the tile's `sheetKey` names it. */
+	key: string;
+	/** The sheet image as a `data:image/jpeg` URL. */
+	image: string;
 }
 
 /** One chapter boundary of the active item: the scrubber's boundary tick
