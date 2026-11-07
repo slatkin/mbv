@@ -58,20 +58,25 @@ pre-attach state. The front end keeps only the last frame
 (`ui/src/lib/bridge/frames.ts`), so each frame carries everything the window
 paints: the focused surface and Panel (`GuiFocus`, mirroring `ComponentId`
 and `PanelFocus`), the Queue viewport rows with their stable `QueueSlotId`
-raw numbers, cursor, marks, active slot, and each item row's zebra parity
-(`GuiQueue`), the Queue playback projection (`GuiQueuePlayback`), the
-footer pills (`GuiQueueFooter`), the Status bar projection
-(`GuiStatusBar`), the breakpoint class (`GuiBreakpoint`, mirroring
-`BreakpointClass`), and the theme when it is armed (`GuiTheme`).
+raw numbers, cursor, marks, active slot, row hover, row drag, and each item
+row's zebra parity (`GuiQueue`), the queue header's remaining count, next
+item title, finish clock, right-column mode, and filter text with its caret
+fact (`GuiQueueSummary`), the collapse and queue-fold toggles the Client
+core holds (`GuiPanelToggles`), the open menu or popover (`GuiOverlayFrame`:
+the row menu with its entries and key hints, the track popover, and the
+playback-target chooser), the Queue playback projection
+(`GuiQueuePlayback`), the footer pills (`GuiQueueFooter`), the Status bar
+projection (`GuiStatusBar`), and the theme when it is armed (`GuiTheme`).
+The window picks the panel state from the frame's toggles and its own
+measurement of the panel container; the frame carries no breakpoint class
+(design D10).
 
-`GuiQueuePlayback` carries two facts beside the transport that the TUI's
-queue band also paints. The status-indicator cluster (`statusIndicators`)
-is the resolution, audio, and subtitle labels the shared projection builds
-from the same indicator data the TUI's spans build from: the frame carries
-each uppercased label with its foreground role, the field is `None` while
-the local player is inactive, and the band paints the cluster right-aligned
-on its controls row as bold glyph-free text — the TUI's per-style
-treatments (chips, brackets, dots, pipes) stay terminal presentation. The
+`GuiQueuePlayback` carries the player panel's facts. The status-indicator
+cluster (`statusIndicators`) is the resolution, audio, and subtitle labels
+the shared projection builds from the same indicator data the TUI's spans
+build from: the frame carries each uppercased label with its foreground
+role, and the field is `None` while the local player is inactive. The canvas
+player panel paints no cluster, so the field travels unused in the slice. The
 visual slot's artwork (`artwork`) follows the theme's arming rule (design
 D10): `src/artwork.rs` memoizes the slot's encoded art per state — the
 cached art's display encode, the bundled placeholder, a loading fill, or
@@ -79,15 +84,22 @@ hidden — and a frame carries the value again only when the slot's art
 changed, while a window-content reload's `report_layout` re-arms it and the
 front end keeps the last carried value between frames. The payload is a
 `data:` URL of bytes the core's image cache already holds, never a fetch
-the webview makes, so the CSP grows only `img-src 'self' data:`. The band
-keeps the TUI's width-driven arrangement
-(`queue_playback_transport_area` over `queue_playback_column_wide`):
-below 100 column cells the art centers above the stacked transport rows,
-and at 100 and over the art sits left-aligned with the transport beside
-it after the two-column `SLOT_TRANSPORT_GAP`, the taller of the two
-governing the band's height. The band reports the slot's `visualSlot`
-region (the TUI's hit target), and the art element's resizes report the
-regions a swapped bitmap moved.
+the webview makes, so the CSP grows only `img-src 'self' data:`. The panel
+reports the slot's `visualSlot` region (the TUI's hit target), and the art
+element's resizes report the regions a swapped bitmap moved.
+
+The scrubber's hover preview (`hover`) carries the pointer's fraction along
+the painted bar, the time it names, the covering chapter, and the trickplay
+tile at that position. The tile (`GuiScrubberTile`) names the thumbnail's
+place in its sheet — the sheet key, the thumbnail's pixel width and height,
+the sheet's columns, and the thumbnail's column and row — plus the sheet as
+a `data:image/jpeg` URL. `src/trickplay.rs` holds the sheet's encoded URL
+per key and a frame re-carries the image only when the hovered sheet
+changes; the front end latches the last image per key, so the preview paints
+the tile by cropping the sheet as a CSS sprite and the window fetches no
+image. A move away from the bar carries no hover. An item with no
+trickplay, a sheet not yet cached, or a tile the server does not hold paints
+the time and the chapter without a tile.
 
 Front end to Rust there are three commands, registered in
 `src/main.rs`. Each only pushes into the core channel:
@@ -97,21 +109,26 @@ Front end to Rust there are three commands, registered in
   edge: SHIFT folds an uppercase letter to lowercase, Shift+Tab is `BackTab`,
   Meta produces `Key::Null` (the neutral modifiers have no Meta bit), and a
   key the vocabulary cannot name is `Key::Null` too.
-- `pointer(DomPointer)`: kind (press, release, move, wheel), button, held
-  buttons, position in logical pixels, and wheel deltas.
+- `pointer(DomPointer)`: kind (press, release, move, wheel, cancel), button,
+  held buttons, position in logical pixels, and wheel deltas.
   `src/bridge/pointer.rs` translates to `Option<PointerEvent>`, mirroring the
   TUI's `neutral_pointer`: a move with the primary button held is the neutral
   drag, the vertical delta's sign picks the wheel direction, and an event the
-  neutral vocabulary cannot represent drops.
+  neutral vocabulary cannot represent drops. A `cancel` is the one kind no
+  button or position decides: the front end sends it when the webview loses
+  the gesture — a `pointercancel`, a `pointerleave` with a button held, or the
+  window's blur — and the core drops the drag state and sends no move.
 - `report_layout(LayoutReport)`: whole visible rows per list, the painted
-  regions with their semantic target ids, and the window's inner width in
-  logical pixels (`src/bridge/layout.rs`).
+  regions with their semantic target ids, and the panel container's painted
+  size in logical pixels (`src/bridge/layout.rs`).
 
 The front end interprets no input. `ui/src/lib/bridge/input.ts` prevents the
 default action of every keydown (no webview default such as reload, find,
 zoom, or back navigation runs) and forwards pointerdown, pointerup,
 pointermove, and wheel events; it converts a wheel delta in lines or pages to
-logical pixels before it sends. The core's `PointerGestureState` recognizes
+logical pixels before it sends. A lost gesture — a `pointercancel`, a
+`pointerleave` with a button held, or the window's blur — forwards the
+`cancel` kind. The core's `PointerGestureState` recognizes
 the gesture; a recognized gesture's point resolves against the combined hit
 map of the last `LayoutReport`; the core applies the focus change the
 matching TUI click applies; and `App::route_gui_pointer` receives the
@@ -139,10 +156,11 @@ The core's `apply_layout` (`src/core_thread.rs`) does three things: a list's
 `whole_rows` becomes the surface's viewport height (the paging stride and
 resting-scroll clamp — `QueueSurface::set_viewport_height`); the reported
 regions rebuild the combined `HitMap<RegionTarget>` (`hit_map` in
-`src/bridge/layout.rs`, in paint order); and the reported width classifies
-through the shared `mbv-surfaces` breakpoint `classify` with the GUI's own
-thresholds (`GUI_BREAKPOINTS`: Mini below 720, Wide from 1200 logical
-points). The `RegionTarget` ids mirror the surface hit-target enums variant
+`src/bridge/layout.rs`, in paint order); and the reported container size is
+stored for the frame. The core does not classify the size. The front end
+picks the panel state from the same measurement, and the reported capacity
+and regions already measure the layout that size painted (design D10). The
+`RegionTarget` ids mirror the surface hit-target enums variant
 for variant — `QueueTargetId` names `QueueHitTarget`,
 `QueuePlaybackTargetId` names `QueuePlaybackHitTarget`,
 `StatusBarTargetId` names `StatusBarHitTarget` — plus `AttachTargetId` for
@@ -151,8 +169,12 @@ the pre-attach buttons.
 A GUI list paints only the viewport: fixed-height rows, no native DOM
 scroll. The core's viewport decides which rows the frame carries; wheel
 input goes to the core like any pointer event, so scroll follows the cursor
-through the same Surface state rules as the TUI. The front end measures the
-list's height and reports whole rows as capacity.
+through the same Surface state rules as the TUI. The list's rows are 30
+logical pixels tall (`QueuePanel.svelte`), and the front end measures the
+list's height and reports whole rows as capacity. `App.svelte` measures the
+panel container with a `ResizeObserver` and reports that size through the
+same reporter (`reportContainerSize`), so the state it paints and the
+capacity the core applies come from one measurement.
 
 ## Theme mapping
 
@@ -168,8 +190,8 @@ surfaces: `queueColumn` and `queueColumnFocused`
 (`Surface::QueueColumn`'s resting and focused fills, the gutter the
 column paints), `queuePanel` and `queuePanelFocused`
 (`Surface::QueuePanel`, the recessed box), `queuePlaybackBand`
-(`Surface::QueueOnlyPlaybackPanel`, the fixed fill of the header row and
-transport band), and `queueFooterBand` (`Surface::QueuePanelBand`, behind
+(`Surface::QueueOnlyPlaybackPanel`, the fill of the compact strip and the
+collapsed rail), and `queueFooterBand` (`Surface::QueuePanelBand`, behind
 the footer pills). Each chrome fill resolves the `Surface` the TUI paints
 the same concept with through `surface_colors` — the focus-reactive
 pairs carry both slots, and the front end picks between them on the
@@ -186,11 +208,15 @@ properties. There is one palette and no light or dark variant.
 
 ## Text and icons
 
-The front end sets its text face to the bundled SUSE variable font
-(`@fontsource-variable/suse`; `font-family: 'SUSE Variable'` with
-`system-ui` as fallback, in `app.css`) and keeps `ui-monospace` for
-monospace text. The woff2 files build into `ui/dist`, so the window fetches
-no font at runtime and the CSP's `default-src 'self'` covers `font-src`.
+The front end bundles the two canvas faces (design D8): IBM Plex Sans at
+weights 400, 500, and 600 for text, and JetBrains Mono at the same weights
+for times, key hints, chips, and counters, with tabular figures. `main.ts`
+imports the latin woff2 subsets from `@fontsource/ibm-plex-sans` and
+`@fontsource/jetbrains-mono`, and `app.css` sets `--font-sans` to
+`'IBM Plex Sans', system-ui, sans-serif` and `--font-mono` to
+`'JetBrains Mono', monospace`. The woff2 files build into `ui/dist`, so the
+window fetches no font at runtime and the CSP's `default-src 'self'` covers
+`font-src`.
 
 The GUI paints no emoji and no Nerd Font glyph. Icons come from
 `@lucide/svelte` only: the transport controls, the playing-row marker, and
@@ -206,63 +232,108 @@ text; each pill's slot maps to its Lucide icon in the component —
 `SaveCheck` for autosave, `SaveOff` for the dirty pill — with the label
 beside the icon where the frame carries one.
 
-## The queue-only window
+## The panel's four states
 
-The slice's one window paints the TUI's queue-column arrangement
-(`App.svelte`) in cell units: `ui/src/lib/bridge/cells.ts` fixes one TUI
-text row at 28 logical pixels (the Queue list's row height) and one text
-column at 14 (the terminal cell's 1:2 aspect at that height), writes them
-to the `--mbv-cell-row` and `--mbv-cell-col` properties, and every
-queue-column offset a component paints — the bands' two-column insets,
-the one-row pads and gaps, the rows' two-column indent, the six-column
-date gutter — is a `calc()` over the two, mapped from
-`crates/mbv-render/src/arrangements/chrome.rs`, `arrangements/queue.rs`,
-and `components/media_list/row.rs`.
+`ui/src/lib/bridge/panel.ts` picks one of four states (design D10):
+expanded, compact strip, expanded without queue, and rail. The state comes
+from the measured size of the panel container plus the frame's two toggles.
+It never comes from the window size, and the window holds no interaction
+state: the size is a measurement and the toggles are the Client core's.
+`App.svelte` measures the container with a `ResizeObserver` and reports the
+size through `reportContainerSize` — the same measurement
+`LayoutReport.containerSize` carries to the core — so the painted state, the
+list capacity, and the hit map follow one size.
 
-The queue column's backdrop — the `queueColumn` pair, picked on the
-frame's Panel-focus fact — owns the window. The Queue playback band sits
-one row below the column's top edge and two columns inside it with a gap
-row below. Its header row paints in every state — target icon, remote
-host name, right-aligned status word — and the now-playing title paints
-on its own row below it: where the TUI composites the title into the
-artwork's top text row with a scrolling marquee, the GUI truncates it
-with CSS ellipsis. The transport band keeps the TUI's width-driven
-arrangement (100 column cells): below it the visual slot's art centers
-above the stacked band rows, and at and over it the art sits
-left-aligned with the band rows beside it after the two-column
-`SLOT_TRANSPORT_GAP`, the taller of the two governing the band's
-height. The art has no fixed pixel box: the slot sizes from the TUI's
-`queue_card_height_cap` tiers — 12 rows under 40 terminal rows of window
-height, 16 under 50, 24 otherwise — read off the window's own height in
-row units.
+The `z` toggle (`GuiPanelToggles.collapsed`) wins over every size and paints
+the 72 px rail: a progress ring around the artwork, play/pause, next, the
+remaining time, and a control that expands the panel again. A measured
+height below 520 px paints the compact strip: the 96×54 still, the title,
+the parent line, play/pause, next, and a thin progress line. Its next-item
+line reads `GuiQueueSummary.nextTitle`, which the core resolves from the
+queue rather than from the painted rows, because the strip paints no queue
+list. The `q` toggle (`GuiPanelToggles.queueFolded`) paints the expanded
+artboard with the queue replaced by its one-line summary. A height of zero
+reads as "not measured yet" and paints the expanded artboard, so a reload
+does not flash a strip. `Panel.svelte` holds the artwork and the trickplay
+sheet above the state branches, because a frame re-carries each only when it
+changed: a state that mounts on a later frame paints the value the expanded
+artboard already adopted.
 
-The Queue panel's recessed box sits another two columns inside the
-placement on the `queuePanel` pair, with its one-row top pad and bottom
-spacer, and the item rows zebra-stripe as the TUI's `media_list/wide.rs`
-walk paints them: the frame carries each row's parity — a grouped list
-alternates within each group from its first member, an ungrouped list
-throughout — and a striped row takes the `queueColumn` fill inside the
-box. The footer row
-paints below the box between gap rows on the `queueFooterBand` fill. The
-list paints no scrollbar column yet — the TUI reserves one only while
-the list is focused and overflows. The Status bar floats over the
-placement's bottom pad row instead of reserving a band.
+## The player panel and the queue
 
-## The Status bar
+The slice's one window paints the design canvas's player panel on the queue
+column's backdrop (`App.svelte`, `Panel.svelte`).
+`ui/src/lib/bridge/cells.ts` fixes one TUI text row at 28 logical pixels and
+one text column at 14 (the terminal cell's 1:2 aspect at that height), and
+every panel offset — the paddings, the gaps, the queue box's inset, the
+six-column date gutter — is a `calc()` over the `--mbv-cell-row` and
+`--mbv-cell-col` properties.
+
+The queue column's backdrop — the `queueColumn` pair, picked on the frame's
+Panel-focus fact — owns the window. The player header row paints the
+playback target (its icon, the host label, and the collapse and queue-fold
+controls) and the right-aligned status word. A press on the target opens the
+`targetChooser` overlay, whose rows carry the choices with the attached
+output marked; Esc or a press elsewhere closes it in the core. The artwork
+follows the header with the season-and-episode badge, and the title and
+parent line sit below it: where the TUI composites the title into the
+artwork's top text row with a scrolling marquee, the GUI truncates it with
+CSS ellipsis. The art has no fixed pixel box: the slot sizes at most 24 row
+units of the cell grid.
+
+The scrubber paints the played fraction, the chapter boundaries, the intro
+and credits mark segments, the thumb, and the elapsed, remaining, and finish
+clock texts. A press on the bar seeks through the core. The transport row
+below it paints previous, back 10 s, play/pause, forward 30 s, and next as
+solid Lucide shapes, with the availability that the colour carries. The
+track chips row sits under the transport: the video stream's resolved label,
+and the audio and subtitle chips, each opening its `trackPopover` overlay
+with the choices and the chosen one marked. Both rows are absent while the
+local player is inactive.
+
+The Queue panel's recessed box sits below the player block on the
+`queuePanel` pair, with its header row, its rows, and its bottom spacer. The
+header paints the remaining count, the queue finish clock, the Length /
+Ends-at switch, and the filter control; the switch, the filter, and each row
+report their own region. The item rows zebra-stripe as the TUI's
+`media_list/wide.rs` walk paints them: the frame carries each row's parity —
+a grouped list alternates within each group from its first member, an
+ungrouped list throughout — and a striped row takes the `queueColumn` fill
+inside the box. The rows paint at the canvas's fixed 30 logical pixel
+height. The list paints no scrollbar column yet — the TUI reserves one only
+while the list is focused and overflows.
+
+The row hover and the drag paint from the frame, and the window holds
+neither. `GuiQueue.hover` names the row the pointer rests on: that row shows
+the grip and the row-actions button. The button opens the `rowMenu` overlay,
+whose entries — Play now, Play next, Mark watched, Go to episode, and Remove
+from queue — carry their key hints, and the menu anchors on the row it
+opened on (`anchorSlot`). `GuiQueue.drag` carries the dragged row's content
+as the ghost, the final index the drop leaves it at, and the insertion
+line's stable-slot anchor; the ghost floats at the line and the dragged row
+dims in place. The core owns the gesture and the drop index, and it sends
+one move request to the Owner on release. `Alt+J` and `Alt+K` ask the core
+for the same move on the keyboard-selected row. A `cancel` pointer kind
+drops the drag, the row hover, and the scrubber hover without a move.
+
+The footer line paints below the box between gap rows on the
+`queueFooterBand` fill. Its left group carries the `PREFIX` badge while
+prefix mode is armed, the autosave indicator, and the playlist pill; its
+right group carries the dirty indicator and the session marker; and a live
+toast paints inline at its centre in the severity colour.
+
+## The Status bar in the footer line
 
 `GuiStatusBar` mirrors the shared `StatusBarProjection`: the prefix-armed
-state and the live toast with its severity. `StatusBar.svelte` shows the
-armed pill while prefix mode is armed, and a live toast takes over the row
-in its severity colour, as the TUI's status bar paints it. The bar
-reserves no band: it floats over the queue placement's bottom pad row —
-the TUI's queue-only mode paints no status bar there — so the queue
-footer keeps its one-row clearance and a toast's arrival moves no
-layout. Its fill (the `StatusBar` surface's slot, carried on
-`--mbv-pillSelectedFg`, inset two columns each side like the TUI's
-`status_bar_row`) paints only while the bar has content; an idle bar
-paints nothing. The spec permits the GUI to show toasts in
-a conventional GUI form that TUI geometry does not constrain, so a toast
-presentation outside the bar is lawful.
+state and the live toast with its severity. The canvas has no separate
+status bar: `QueueFooter.svelte` paints both facts in the footer line. The
+badge drops while a toast is live — the TUI's pill-drop rule — and the
+toast moves no layout, because the line is always painted and the toast
+only fills its centre span. The line reports no `statusBar` region: its only
+interactive target is the playlist pill, and a point elsewhere on the line
+resolves to nothing. The spec permits the GUI to show toasts in a
+conventional GUI form that TUI geometry does not constrain, so a toast
+presentation outside the line is lawful.
 
 ## The attach states
 

@@ -103,12 +103,19 @@ Use this recipe for a new configurable keyboard action. Read
    (`src/app/input/key_policy/resolution_tests.rs`).
    *Proof:* `cargo nextest run -p mbv`.
 6. **GUI key coverage.** The GUI Client resolves chords through the same
-   registry, router, and dispatch, so its only site is the DOM key
-   translation: every key the default chord uses must resolve in
+   registry, router, and dispatch, so a shared action has one more site: the
+   DOM key translation. Every key the default chord uses must resolve in
    `crates/mbv-gui/src/bridge/keys.rs`. A DOM key value the table cannot
    name becomes `Key::Null` and never reaches the router; extend the table
-   when the chord names a key it lacks.
-   *Proof:* a `#[case]` row in `crates/mbv-gui/tests/bridge/keys.rs`.
+   when the chord names a key it lacks. A **GUI-only** action — one whose
+   chord is canvas-scoped and must not resolve in the TUI Client — also
+   needs the `KeyGate::GuiClient` gate in the registry, a `KeyPolicyBinding`
+   variant with a `KeyPolicyEntry` whose `name` equals the registry `id`, an
+   arm in `command_for_policy` (`src/app/input/key_policy/commands.rs`), and
+   the router snapshot's GUI fact (`gui_client: true` in
+   `src/app/input/gui.rs`).
+   *Proof:* a `#[case]` row in `crates/mbv-gui/tests/bridge/keys.rs`, and a
+   routing case in `src/app/input/gui/tests.rs` for a GUI-only action.
 
 To retire an action, remove its sites in the reverse order and add its id to
 `RETIRED_ACTION_IDS` in `crates/mbv-keybinds/src/config.rs`. An old config
