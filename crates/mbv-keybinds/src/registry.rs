@@ -37,6 +37,12 @@ pub enum KeyGate {
     ClearQueuePrompt,
     SessionsSidebarOpen,
     Playback,
+    /// Routing only ever opens while the resolving Client is the GUI
+    /// Client (add-tauri-gui-client row 6.4): a GUI-only action's default
+    /// chord is canvas-scoped, so the TUI-facing help and routing treat the
+    /// action as theirs by section alone but its chord never resolves in a
+    /// TUI Client.
+    GuiClient,
 }
 
 /// The settings UI's section vocabulary plus `Global`, in `SETTING_SECTIONS`
@@ -341,6 +347,30 @@ pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
         default_chords: &[">"],
         gate: KeyGate::Playback,
         policy: "playback",
+        rebindable: true,
+        prefix_addressable: true,
+    },
+    // The canvas transport's deeper steps (add-tauri-gui-client row 6.4,
+    // the "back 10 s, forward 30 s" spec): the GUI Client's `seekBack`/
+    // `seekForward` regions press the same commands their chords carry.
+    // GUI-only by gate — the TUI keeps `<`/`>` at ±5 s and its defaults
+    // unchanged — while staying in the rebindable registry so a user can
+    // assign a chord of their own for the GUI Client.
+    KeybindAction {
+        id: "seek_back_10",
+        section: KeySection::Playback,
+        default_chords: &["["],
+        gate: KeyGate::GuiClient,
+        policy: "seek_back_10",
+        rebindable: true,
+        prefix_addressable: true,
+    },
+    KeybindAction {
+        id: "seek_forward_30",
+        section: KeySection::Playback,
+        default_chords: &["]"],
+        gate: KeyGate::GuiClient,
+        policy: "seek_forward_30",
         rebindable: true,
         prefix_addressable: true,
     },

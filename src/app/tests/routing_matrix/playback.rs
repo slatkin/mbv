@@ -269,3 +269,41 @@ fn idle_feed_path_uses_connected_session_not_broad_playback_route() {
         RouterOutcome::Command(VisualIntent::OpenIdleFeedLink.into())
     );
 }
+
+/// The canvas transport's registry actions (add-tauri-gui-client row 6.4,
+/// the "back 10 s, forward 30 s" spec): `[`/`]` command the deep seeks in
+/// the GUI Client and fall through in the TUI, whose gate stays closed.
+#[test]
+fn gui_context_seek_brackets_command_only_in_the_gui_client() {
+    let gui = RouterSnapshot {
+        gui_client: true,
+        ..active_snapshot()
+    };
+    assert_eq!(
+        resolve_router_outcome_with_focused(
+            key(KeyCode::Char('[')),
+            &gui,
+            None,
+            &default_keybinds()
+        ),
+        RouterOutcome::Command(PlaybackIntent::SeekRelative(-10.0).into())
+    );
+    assert_eq!(
+        resolve_router_outcome_with_focused(
+            key(KeyCode::Char(']')),
+            &gui,
+            None,
+            &default_keybinds()
+        ),
+        RouterOutcome::Command(PlaybackIntent::SeekRelative(30.0).into())
+    );
+    assert_eq!(
+        resolve_router_outcome_with_focused(
+            key(KeyCode::Char('[')),
+            &active_snapshot(),
+            None,
+            &default_keybinds()
+        ),
+        RouterOutcome::FallThrough
+    );
+}

@@ -581,9 +581,10 @@ fn the_target_press_opens_the_chooser_and_a_choice_selects_it() {
     ));
 }
 
-/// The back and forward controls press the same command the `seek_back`
-/// and `seek_forward` chords send (the `gui-client` spec: the buttons and
-/// the chords do the same work).
+/// The back and forward controls press the same command the
+/// `seek_back_10` and `seek_forward_30` chords send (the `gui-client`
+/// spec's "back 10 s, forward 30 s": the buttons and the chords do the
+/// same work).
 #[test]
 fn the_seek_back_and_forward_presses_send_the_chords_seeks() {
     let (app, cmd_rx) = stub_app_with_cast_target();
@@ -613,8 +614,8 @@ fn the_seek_back_and_forward_presses_send_the_chords_seeks() {
     for input in [
         press_at(10.0, 10.0),
         press_at(10.0, 40.0),
-        CoreInput::Key(KeyEvent::new(Key::Char('<'), KeyModifiers::NONE)),
-        CoreInput::Key(KeyEvent::new(Key::Char('>'), KeyModifiers::NONE)),
+        CoreInput::Key(KeyEvent::new(Key::Char('['), KeyModifiers::NONE)),
+        CoreInput::Key(KeyEvent::new(Key::Char(']'), KeyModifiers::NONE)),
     ] {
         test.tx.send(input).unwrap();
         assert!(test.core.step());
@@ -628,7 +629,7 @@ fn the_seek_back_and_forward_presses_send_the_chords_seeks() {
             _ => None,
         })
         .collect();
-    assert_eq!(seeks, vec![-5.0, 5.0, -5.0, 5.0]);
+    assert_eq!(seeks, vec![-10.0, 30.0, -10.0, 30.0]);
 }
 
 /// A single press on the seekbar seeks to the pressed position (the

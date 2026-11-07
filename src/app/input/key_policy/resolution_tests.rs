@@ -1,9 +1,11 @@
 //! Unarmed policy resolution: precedence, gates, rebinds, and registry parity.
 use super::test_support::*;
 use super::*;
+use crate::app::dispatch::action::{PanelIntent, PlaybackIntent, VisualIntent};
 use crate::app::test_seams::crossterm_key_to_neutral;
 use crossterm::event::{KeyCode, KeyModifiers};
 use mbv_keybinds::{Chord, KEYBIND_ACTIONS};
+use mbv_ui_model::playback::VOLUME_STEP;
 
 #[test]
 fn policy_entries_have_unique_ordered_names() {
@@ -342,6 +344,10 @@ fn defaults_reproduce_todays_resolution() {
                     snap.playback.player_active = true;
                 }
                 "open_idle_feed_link" => snap.playback.idle_feed_link_available = true,
+                // The canvas transport's registry actions are gated on the
+                // GUI Client context (add-tauri-gui-client row 6.4): their
+                // default chords resolve only once `gui_client` opens.
+                "seek_back_10" | "seek_forward_30" => snap.gui_client = true,
                 _ => {}
             }
             assert_eq!(

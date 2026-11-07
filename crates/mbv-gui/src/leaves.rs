@@ -295,11 +295,15 @@ impl<'a> PlaybackLeaf<'a> {
             // The back and forward controls send the deltas the `seek_back`
             // and `seek_forward` chords carry, so the buttons and the
             // chords dispatch the same command (the `gui-client` spec).
+            // The canvas transport's deeper steps (add-tauri-gui-client row
+            // 6.4, the "back 10 s, forward 30 s" spec): the buttons press
+            // the same commands the `seek_back_10`/`seek_forward_30` chords
+            // dispatch.
             Some(RegionTarget::QueuePlayback(QueuePlaybackTargetId::SeekBack)) => {
-                Some(Msg::Playback(PlaybackRequest::SeekRelative(-5.0)))
+                Some(Msg::Playback(PlaybackRequest::SeekRelative(-10.0)))
             }
             Some(RegionTarget::QueuePlayback(QueuePlaybackTargetId::SeekForward)) => {
-                Some(Msg::Playback(PlaybackRequest::SeekRelative(5.0)))
+                Some(Msg::Playback(PlaybackRequest::SeekRelative(30.0)))
             }
             // The header's target press emits the same opener the TUI's
             // indicator sends the Sessions sidebar; the GUI's counterpart

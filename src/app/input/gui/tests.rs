@@ -490,23 +490,25 @@ fn select_session_request_selects_the_output_and_closes() {
     assert!(app.gui_overlay.is_none());
 }
 
-// The canvas's back and forward controls emit the deltas the `seek_back`
-// and `seek_forward` chords carry (add-tauri-gui-client row 6.4): the
-// request's dispatch and the chord's dispatch send the same command.
+// The canvas's back and forward controls emit the deltas the
+// `seek_back_10` and `seek_forward_30` chords carry (add-tauri-gui-client
+// row 6.4, the "back 10 s, forward 30 s" spec): the request's dispatch
+// and the chords' dispatch send the same command. The TUI's `<`/`>` keep
+// their ±5 s.
 #[test]
 fn seek_relative_request_matches_the_seek_chords() {
     let (mut app, cmd_rx) = make_remote_app_stub_with_cmd_rx(Vec::new(), Vec::new());
 
-    app.handle_playback_request(&PlaybackRequest::SeekRelative(-5.0));
-    app.handle_playback_request(&PlaybackRequest::SeekRelative(5.0));
+    app.handle_playback_request(&PlaybackRequest::SeekRelative(-10.0));
+    app.handle_playback_request(&PlaybackRequest::SeekRelative(30.0));
     app.route_gui_input(
-        GuiInput::Key(KeyEvent::new(Key::Char('<'), KeyModifiers::NONE)),
+        GuiInput::Key(KeyEvent::new(Key::Char('['), KeyModifiers::NONE)),
         None,
     );
     app.route_gui_input(
-        GuiInput::Key(KeyEvent::new(Key::Char('>'), KeyModifiers::NONE)),
+        GuiInput::Key(KeyEvent::new(Key::Char(']'), KeyModifiers::NONE)),
         None,
     );
 
-    assert_eq!(seek_commands(&cmd_rx), vec![-5.0, 5.0, -5.0, 5.0]);
+    assert_eq!(seek_commands(&cmd_rx), vec![-10.0, 30.0, -10.0, 30.0]);
 }
