@@ -286,8 +286,10 @@ pub enum GuiQueueRow {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GuiQueueSummary {
-    /// The slots after the active index: the queue's remaining play. The
-    /// whole queue's slot count while no slot carries the playhead.
+    /// The rows that do not carry the playhead: the canvas's remaining count
+    /// counts every non-playhead row, rows before the playhead included —
+    /// the whole queue's slot count while no slot carries the playhead
+    /// (align U1.3; the projection's `QueueSummaryProjection::remaining`).
     pub remaining: usize,
     /// The title of the first slot after the playhead (review of
     /// add-tauri-gui-client row 6.6, finding P2): the compact strip's

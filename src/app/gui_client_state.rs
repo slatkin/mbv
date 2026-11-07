@@ -192,21 +192,7 @@ impl GuiRowMenu {
 
     /// Move the wrapping cursor one entry, as the TUI menu's cursor moves.
     fn move_cursor(&mut self, down: bool) {
-        if self.entries.is_empty() {
-            return;
-        }
-        let last = self.entries.len() - 1;
-        self.cursor = if down {
-            if self.cursor == last {
-                0
-            } else {
-                self.cursor + 1
-            }
-        } else if self.cursor == 0 {
-            last
-        } else {
-            self.cursor - 1
-        };
+        move_overlay_cursor(&mut self.cursor, down, self.entries.len());
     }
 }
 
