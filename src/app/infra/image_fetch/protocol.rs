@@ -1,4 +1,5 @@
 use super::super::super::{App, MusicEvent};
+use super::CardImageDrain;
 use mbv_images::{
     ImageFetchOutcome, ImageFetchReq, ImageSource, QUEUE_CARD_PLACEHOLDER_BYTES,
     QUEUE_CARD_PLACEHOLDER_KEY, RENDER_FILTER, cover_fill_hero_box,
@@ -483,19 +484,23 @@ impl App {
         }
     }
 
-    /// Drain card-image completions into the image cache for a Client whose
-    /// paint builds no terminal protocols and presents no shell surfaces
-    /// (design D10): the decoded source lands in the cache under its key —
-    /// the pickers a Client's `App` never initializes build no protocol
-    /// entry — an interrupted fetch stays open to its retry, and a resolved
-    /// artist-artwork request emits its typed event into the lib channel.
-    /// The TUI shell's drain (`Model::drain_card_image_completions`) is the
-    /// enriched variant: the same loop plus the series keys' TV-workspace
-    /// re-push.
-    pub fn drain_card_image_completions(&mut self) -> bool {
-        let mut drained = false;
+    /// Drain card-image completions into the image cache (design D10): the
+    /// decoded source lands in the cache under its key — the pickers a Client
+    /// whose `App` never initializes build no protocol entry — an interrupted
+    /// fetch stays open to its retry, and a resolved artist-artwork request
+    /// emits its typed event into the lib channel. The one loop both Clients
+    /// run; the result reports whether a Series-family key completed, which
+    /// only the TUI Client answers by re-pushing its TV workspace content
+    /// (`Model::drain_card_image_completions`).
+    pub fn drain_card_image_completions(&mut self) -> CardImageDrain {
+        let mut drained = CardImageDrain::default();
         while let Ok((cache_key, outcome)) = self.images.try_recv_card_image() {
-            drained = true;
+            drained.drained = true;
+            // The infix is the only Series-family marker, so both live chains
+            // (Wide's Thumb-first, narrow's `Primary`) gate without a suffix
+            // list that can drift from the key the painter builds.
+            drained.series_key_changed |=
+                cache_key.contains(mbv_images::SERIES_IMAGE_CACHE_KEY_INFIX);
             let interrupted = matches!(outcome, ImageFetchOutcome::Interrupted);
             let img_opt = match outcome {
                 ImageFetchOutcome::Image(img) => Some(img),

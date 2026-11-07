@@ -7,6 +7,22 @@ use std::time::{Duration, Instant};
 pub(in crate::app) const NAV_IDLE_DELAY: Duration = Duration::from_millis(150);
 const MAX_IMAGE_FETCHES: usize = 6;
 
+/// What one card-image completion drain changed (design D10): whether any
+/// completion arrived, and whether one landed under a Series-family key. Only
+/// a Series completion moves the TV workspace content — its painted key was
+/// reserved when the placeholder painted, so a re-push is the only way the
+/// cached image reaches the screen — and only the TUI Client paints that
+/// workspace.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct CardImageDrain {
+    /// Whether any card-image completion arrived.
+    pub drained: bool,
+    /// Whether a completion's key is a Series-family key
+    /// (`mbv_images::SERIES_IMAGE_CACHE_KEY_INFIX`): the TUI Client re-pushes
+    /// its TV workspace content then.
+    pub series_key_changed: bool,
+}
+
 fn wide_landscape_hero_eligible(
     artwork: &mbv_components::library_panel::HeroArtwork,
     panel_area: ratatui::layout::Rect,

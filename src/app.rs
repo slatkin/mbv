@@ -37,6 +37,7 @@ pub use self::dispatch::action::{
 pub use self::gui_client_state::{
     GuiOverlayProjection, PanelTogglesProjection, RowMenuEntryProjection, TrackPopoverChoice,
 };
+pub use self::infra::image_fetch::CardImageDrain;
 pub(in crate::app) use self::infra::paging::{PAGE_SIZE, PREFETCH_AHEAD};
 pub(in crate::app) use self::infra::signals::{
     QUIT_REQUESTED, install_signal_handlers, start_quit_watchdog,

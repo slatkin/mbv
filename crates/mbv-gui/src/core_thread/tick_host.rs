@@ -102,8 +102,9 @@ impl ClientTickHost for CoreThread {
     fn drain_card_image_completions(&mut self) -> bool {
         // The visual slot's artwork paints now (design D10): the slot's
         // fetches resolve through this drain, so a completion's decoded
-        // image lands in the cache and the next frame carries it.
-        self.app.drain_card_image_completions()
+        // image lands in the cache and the next frame carries it. The GUI
+        // paints no TV workspace, so a Series key's re-push is the TUI's.
+        self.app.drain_card_image_completions().drained
     }
 
     fn drain_resize_responses(&mut self) -> bool {
