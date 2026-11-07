@@ -16,8 +16,18 @@ use mbv_gui::core_thread::CoreInput;
 use mbv_ui_msg::{Key, KeyEvent, KeyModifiers};
 
 use crate::{
-    measured_layout, move_at, press_at, region_at, test_core, test_core_with, wheel_down_at,
+    TestCore, measured_layout, move_at, press_at, region_at, test_core, test_core_with,
+    wheel_down_at,
 };
+
+/// Send one input, run one core step, and take the frame it emitted: the
+/// core's one-input-one-frame contract, stated once for the tests that send a
+/// short sequence.
+fn step_input(test: &mut TestCore, input: CoreInput) {
+    test.tx.send(input).unwrap();
+    assert!(test.core.step());
+    test.next_frame();
+}
 
 /// A report that carries a new container size re-binds the capacity and the
 /// regions (task row 6.3, design D10): the front end's container resize
@@ -275,16 +285,16 @@ fn the_seek_back_and_forward_presses_send_the_chords_seeks() {
 
     // One step per input: the seek-back press, the seek-forward press, and
     // the two chords each land their own command.
-    for input in [
-        press_at(10.0, 10.0),
-        press_at(10.0, 40.0),
+    step_input(&mut test, press_at(10.0, 10.0));
+    step_input(&mut test, press_at(10.0, 40.0));
+    step_input(
+        &mut test,
         CoreInput::Key(KeyEvent::new(Key::Char('['), KeyModifiers::NONE)),
+    );
+    step_input(
+        &mut test,
         CoreInput::Key(KeyEvent::new(Key::Char(']'), KeyModifiers::NONE)),
-    ] {
-        test.tx.send(input).unwrap();
-        assert!(test.core.step());
-        test.next_frame();
-    }
+    );
 
     let seeks: Vec<f64> = cmd_rx
         .try_iter()

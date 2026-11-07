@@ -161,9 +161,6 @@ impl<'a> QueueLeaf<'a> {
             // The queue header's switch and filter controls (row 6.5): each
             // press emits the request whose App-side effect the `t` and `/`
             // chords dispatch, so the control and the chord run one path.
-            // The queue header's switch and filter controls (row 6.5): each
-            // press emits the request whose App-side effect the `t` and `/`
-            // chords dispatch, so the control and the chord run one path.
             RegionTarget::Queue(QueueTargetId::RightColumn) => {
                 Some(Msg::Playback(PlaybackRequest::ToggleQueueRightColumn))
             }
@@ -398,13 +395,11 @@ impl<'a> PlaybackLeaf<'a> {
             {
                 Some(Msg::Playback(PlaybackRequest::Next))
             }
-            // The back and forward controls send the deltas the `seek_back`
-            // and `seek_forward` chords carry, so the buttons and the
-            // chords dispatch the same command (the `gui-client` spec).
-            // The canvas transport's deeper steps (add-tauri-gui-client row
-            // 6.4, the "back 10 s, forward 30 s" spec): the buttons press
-            // the same commands the `seek_back_10`/`seek_forward_30` chords
-            // dispatch.
+            // The back and forward controls press the canvas transport's
+            // deeper steps (add-tauri-gui-client row 6.4, the "back 10 s,
+            // forward 30 s" spec): the same commands the `seek_back_10` and
+            // `seek_forward_30` chords dispatch, never the TUI's ±5 s
+            // `seek_back`/`seek_forward`.
             Some(RegionTarget::QueuePlayback(QueuePlaybackTargetId::SeekBack)) => {
                 Some(Msg::Playback(PlaybackRequest::SeekRelative(-10.0)))
             }
@@ -590,6 +585,7 @@ mod tests {
     use mbv_surfaces::{HitMap, HitRegion};
     use mbv_ui_model::media_list::{MediaKind, MediaListRow, MediaSemanticState};
     use mbv_ui_msg::Position;
+    use rstest::rstest;
 
     /// A queue holding one item row for slot 1.
     fn one_row_queue() -> QueueSurface {
@@ -610,20 +606,22 @@ mod tests {
     /// plays nothing (review of add-tauri-gui-client row 6.5, finding P2-2):
     /// the chrome regions swallow the gesture, so a fast second press on the
     /// control never activates the row beneath it.
-    #[test]
-    fn a_double_click_on_the_row_chrome_plays_nothing_review_u65_p2_2() {
-        for target in [QueueTargetId::RowGrip(1), QueueTargetId::RowActions(1)] {
-            let mut queue = one_row_queue();
-            let mut regions = HitMap::new();
-            regions.push(
-                HitRegion::new(0.0, 0.0, 100.0, 30.0),
-                RegionTarget::Queue(target),
-            );
-            let mut leaf = QueueLeaf::new(&mut queue, &regions);
-            assert_eq!(
-                leaf.pointer(PointerGesture::DoubleClick(Position { x: 10.0, y: 10.0 })),
-                None
-            );
-        }
+    #[rstest]
+    #[case(QueueTargetId::RowGrip(1))]
+    #[case(QueueTargetId::RowActions(1))]
+    fn a_double_click_on_the_row_chrome_plays_nothing_review_u65_p2_2(
+        #[case] target: QueueTargetId,
+    ) {
+        let mut queue = one_row_queue();
+        let mut regions = HitMap::new();
+        regions.push(
+            HitRegion::new(0.0, 0.0, 100.0, 30.0),
+            RegionTarget::Queue(target),
+        );
+        let mut leaf = QueueLeaf::new(&mut queue, &regions);
+        assert_eq!(
+            leaf.pointer(PointerGesture::DoubleClick(Position { x: 10.0, y: 10.0 })),
+            None
+        );
     }
 }
