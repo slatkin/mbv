@@ -167,6 +167,15 @@ impl<'a> QueueLeaf<'a> {
             // The queue header's switch and filter controls (row 6.5): each
             // press emits the request whose App-side effect the `t` and `/`
             // chords dispatch, so the control and the chord run one path.
+            // The queue header's switch and filter controls (row 6.5): each
+            // press emits the request whose App-side effect the `t` and `/`
+            // chords dispatch, so the control and the chord run one path.
+            RegionTarget::Queue(QueueTargetId::RightColumn) => {
+                Some(Msg::Playback(PlaybackRequest::ToggleQueueRightColumn))
+            }
+            RegionTarget::Queue(QueueTargetId::Filter) => {
+                Some(Msg::Playback(PlaybackRequest::ActivateQueueFilter))
+            }
             RegionTarget::Queue(QueueTargetId::PlaylistPill)
             | RegionTarget::QueuePlayback(_)
             | RegionTarget::StatusBar(_)

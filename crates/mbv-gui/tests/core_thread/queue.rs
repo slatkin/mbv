@@ -258,3 +258,53 @@ impl GhostPrimary for mbv_gui::bridge::frame::queue::GuiQueueDrag {
         }
     }
 }
+
+/// A press on the header's Length / Ends-at switch runs the `t` chord's
+/// toggle (add-tauri-gui-client row 6.5): the next frame's right column is
+/// the end clock.
+#[test]
+fn a_right_column_press_switches_the_rows_right_column() {
+    let mut test = test_core(3);
+    test.tx
+        .send(measured_layout(
+            3,
+            vec![region_at(
+                0.0,
+                0.0,
+                RegionTarget::Queue(QueueTargetId::RightColumn),
+            )],
+        ))
+        .unwrap();
+    assert!(test.core.step());
+    test.next_frame();
+
+    test.tx.send(press_at(10.0, 10.0)).unwrap();
+    assert!(test.core.step());
+    assert_eq!(
+        test.next_frame().summary.right_column,
+        mbv_gui::bridge::frame::queue::GuiRightColumn::EndsAt
+    );
+}
+
+/// A press on the header's filter control runs the `/` chord's text entry
+/// (add-tauri-gui-client row 6.5): the next frame reports the caret fact.
+#[test]
+fn a_filter_press_focuses_the_filter_text_entry() {
+    let mut test = test_core(3);
+    test.tx
+        .send(measured_layout(
+            3,
+            vec![region_at(
+                0.0,
+                0.0,
+                RegionTarget::Queue(QueueTargetId::Filter),
+            )],
+        ))
+        .unwrap();
+    assert!(test.core.step());
+    test.next_frame();
+
+    test.tx.send(press_at(10.0, 10.0)).unwrap();
+    assert!(test.core.step());
+    assert!(test.next_frame().summary.filter_active);
+}

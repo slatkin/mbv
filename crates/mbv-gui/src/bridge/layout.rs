@@ -170,6 +170,12 @@ pub enum QueueTargetId {
     /// One entry of the open row menu: the entry's index in the frame's
     /// overlay `entries` list. A press executes the entry.
     RowMenuEntry(usize),
+    /// The queue header's Length / Ends-at switch: a press runs the `t`
+    /// chord's toggle (add-tauri-gui-client row 6.5).
+    RightColumn,
+    /// The queue header's filter control: a press runs the `/` chord's text
+    /// entry (add-tauri-gui-client row 6.5).
+    Filter,
 }
 
 /// The Queue playback target ids, mirroring `QueuePlaybackHitTarget`.

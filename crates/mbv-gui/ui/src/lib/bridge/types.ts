@@ -570,7 +570,11 @@ export type QueueTargetId =
 	/** The hovered row's actions button: a press opens the row menu. */
 	| { rowActions: number }
 	/** One entry of the open row menu, by index in the overlay's `entries`. */
-	| { rowMenuEntry: number };
+	| { rowMenuEntry: number }
+	/** The header's Length / Ends-at switch: the `t` chord's toggle. */
+	| 'rightColumn'
+	/** The header's filter control: the `/` chord's text entry. */
+	| 'filter';
 
 export type QueuePlaybackTargetId =
 	| 'playPause'
