@@ -33,6 +33,7 @@
 	import {
 		Cast,
 		Check,
+		ChevronDown,
 		ChevronUp,
 		Film,
 		ListCollapse,
@@ -46,6 +47,7 @@
 	import { reportLayout, retractLayout } from '$lib/bridge/layout';
 	import TrackChips from './TrackChips.svelte';
 	import { CELL_COL_PX } from '$lib/bridge/cells';
+	import { fmtDurationShort } from '$lib/bridge/format';
 	import { roleProperty } from '$lib/bridge/theme';
 	import type {
 		GuiCardArtwork,
@@ -64,11 +66,17 @@
 		 * paints under the header while it is the open overlay. `null` while
 		 * none is open. */
 		overlay: GuiOverlayFrame | null;
+		/** The artwork the window carried for the active item (design D10),
+		 * held by the panel above this one so a state that mounts later paints
+		 * it too. `null` in a bare render, where the frame's own `artwork` is
+		 * the only source. */
+		carried?: GuiCardArtwork | null;
+		/** Whether the queue is folded (the `q` toggle, design D10): the
+		 * header's fold control paints the expand direction then, so the
+		 * control names the toggle's next effect in both directions. */
+		queueFolded?: boolean;
 	}
-	const { playback, overlay }: Props = $props();
-
-	/** Emby ticks in one second (`mbv_emby_model::TICKS_PER_SECOND`). */
-	const TICKS_PER_SECOND = 10_000_000;
+	const { playback, overlay, carried = null, queueFolded = false }: Props = $props();
 
 	const reportKey = Symbol('queue-playback-panel');
 	const chooserKey = Symbol('target-chooser');
@@ -85,14 +93,9 @@
 	let queueFoldEl: HTMLElement | undefined = $state();
 	let chooserEl: HTMLElement | undefined = $state();
 
-	/** The visual slot's artwork the last frame carried (design D10): a
-	 * frame arms it again only when the core says the art changed, so the
-	 * slot keeps painting between frames. */
-	let carriedArt = $state<GuiCardArtwork | null>(null);
-
 	/** The art the panel paints: this frame's carried value when it has one,
-	 * else the last one it adopted (design D10). */
-	const art = $derived(playback.artwork ?? carriedArt);
+	 * else the value the panel above carried for the window (design D10). */
+	const art = $derived(playback.artwork ?? carried);
 
 	/** The open playback-target chooser, or `null` while another overlay (or
 	 * none) is up. The rows paint the core's live choice list; a row's press
@@ -175,17 +178,6 @@
 		const left = clampRatio(mark.startTicks, runtime);
 		const right = clampRatio(mark.endTicks, runtime);
 		return right > left ? { left, width: right - left } : null;
-	}
-
-	/** `fmt_duration_short`: `M:SS` under an hour, `H:MM:SS` at or over it. */
-	function fmtDurationShort(ticks: number): string {
-		const s = Math.trunc(ticks / TICKS_PER_SECOND);
-		if (s >= 3600) {
-			const mm = String(Math.trunc((s % 3600) / 60)).padStart(2, '0');
-			const ss = String(s % 60).padStart(2, '0');
-			return `${Math.trunc(s / 3600)}:${mm}:${ss}`;
-		}
-		return `${Math.trunc(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 	}
 
 	/** The header's status word (`header_status_word`). */
@@ -295,14 +287,6 @@
 		}
 	});
 
-	// The slot's artwork adoption (design D10): a frame's carried value
-	// replaces the last one; a frame without one keeps painting it.
-	$effect(() => {
-		if (playback.artwork) {
-			carriedArt = playback.artwork;
-		}
-	});
-
 	// The art element's resizes report: an artwork swap rebinds it, and its
 	// bitmap's load sizes it — both move the regions beside it.
 	$effect(() => {
@@ -390,10 +374,14 @@
 			class="flex items-center rounded-sm p-1"
 			bind:this={queueFoldEl}
 			data-target="queueFold"
-			aria-label="Fold queue"
-			title="Fold queue (q)"
+			aria-label={queueFolded ? 'Expand queue' : 'Fold queue'}
+			title={queueFolded ? 'Expand queue (q)' : 'Fold queue (q)'}
 		>
-			<ListCollapse size={16} color={roleVar('textMuted')} />
+			{#if queueFolded}
+				<ChevronDown size={16} color={roleVar('textMuted')} />
+			{:else}
+				<ListCollapse size={16} color={roleVar('textMuted')} />
+			{/if}
 		</button>
 		{#if chooser}
 			<!-- The playback-target chooser: the core's live choice list, the
