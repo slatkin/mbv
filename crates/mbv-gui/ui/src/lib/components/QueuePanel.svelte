@@ -537,9 +537,10 @@
 		<div style:height="var(--mbv-cell-row)"></div>
 		{#if menu}
 			<!-- The open row menu (design D15): the frame's entries and key
-				hints, dropped under the row the menu opened on. Its entries
-				report their own regions under the component's key, last over
-				the rows beneath (the component's header comment names why). -->
+				hints, dropped over the bottom edge of the row the menu opened
+				on, as the canvas places it. Its entries report their own regions
+				under the component's key, last over the rows beneath (the
+				component's header comment names why). -->
 			<QueueRowMenu cursor={menu.cursor} entries={menu.entries} top={menuTop} />
 		{/if}
 	</div>
