@@ -8,8 +8,10 @@
 //! The fetch issues from a Client's frame path, exactly as the artwork and
 //! item-metadata fetches do: one worker per key, deduped on
 //! `trickplay_sheets_loading`, landing in `trickplay_sheets` through
-//! [`App::drain_trickplay_sheet_events`]. A landed `None` records a sheet the
-//! server does not hold, so a hover does not retry it every frame.
+//! [`App::drain_trickplay_sheet_events`]. A `404` records a sheet the server
+//! does not hold, so a hover does not retry it every frame. Any other failure
+//! records nothing — the sheet may exist — and holds that key out of the
+//! retry path until the hover names a different sheet.
 
 use std::sync::Arc;
 
@@ -68,6 +70,23 @@ pub struct TrickplayPreviewTile {
     pub jpeg: Arc<[u8]>,
 }
 
+/// What one tile-sheet fetch produced (task 6.7): the sheet's bytes, the
+/// server's definitive absence, or a failure that says nothing about whether
+/// the sheet exists.
+#[derive(Debug)]
+pub(in crate::app) enum TrickplaySheetFetch {
+    /// The server answered with the sheet's JPEG bytes.
+    Loaded(Vec<u8>),
+    /// The server answered `404`: it holds no such sheet, so the absence is
+    /// cached and a hover never re-asks.
+    Absent,
+    /// The fetch failed in transport — a timeout, a dropped connection, a
+    /// `5xx`, a body read error: the sheet may exist, so nothing is cached and
+    /// the key waits for the hover to name a different sheet before it is
+    /// asked again.
+    Failed,
+}
+
 impl App {
     /// The active item's trickplay tile at `ticks` (task 6.7): the smallest
     /// offered grid that has a tile for the position, the tile's place in
@@ -87,6 +106,15 @@ impl App {
             width: grid.grid.width,
             sheet: tile.sheet,
         };
+        // The hover naming a different sheet retires a transient failure's
+        // hold, so a return to the failed sheet asks again (task 6.7 fix).
+        if self
+            .trickplay_sheet_failed
+            .as_ref()
+            .is_some_and(|failed| failed != &key)
+        {
+            self.trickplay_sheet_failed = None;
+        }
         let cached = self.trickplay_sheets.get(&key).cloned();
         if let Some(jpeg) = cached {
             return jpeg.map(|jpeg| preview(&grid.grid, &key, tile, jpeg));
@@ -119,11 +147,14 @@ impl App {
         })
     }
 
-    /// Issue the sheet's fetch when the cache lacks it and none is in flight
-    /// (task 6.7). A no-op while the Emby client fill is absent, so the next
-    /// frame retries a transient absence instead of caching it.
+    /// Issue the sheet's fetch when the cache lacks it, none is in flight,
+    /// and its last fetch did not fail in transport (task 6.7). A no-op while
+    /// the Emby client fill is absent, so the next frame retries a transient
+    /// absence instead of caching it.
     fn issue_trickplay_sheet_fetch(&mut self, key: &TrickplaySheetKey, media_source_id: String) {
-        if self.trickplay_sheets_loading.contains(key) {
+        if self.trickplay_sheets_loading.contains(key)
+            || self.trickplay_sheet_failed.as_ref() == Some(key)
+        {
             return;
         }
         let Some(client) = self.emby_snapshot() else {
@@ -133,41 +164,82 @@ impl App {
         let tx = self.channels.trickplay_tx.clone();
         let key = key.clone();
         std::thread::spawn(move || {
-            let jpeg = client
-                .get_trickplay_tile(&key.item_id, key.width, key.sheet, &media_source_id)
-                .map_or_else(
-                    |error| {
-                        tracing::debug!(
-                            name: "playback_trickplay.sheet_failed",
-                            target: "playback_trickplay",
-                            item = %key.item_id,
-                            width = key.width,
-                            sheet = key.sheet,
-                            error = %error,
-                            "trickplay sheet fetch failed; the preview paints no frame"
-                        );
-                        None
-                    },
-                    Some,
-                );
-            let _ = tx.send((key, jpeg));
+            let fetch = fetch_trickplay_sheet(&client, &key, &media_source_id);
+            let _ = tx.send((key, fetch));
         });
     }
 
     /// Drain landed tile sheets into the cache, evicting the oldest entry
-    /// past [`TRICKPLAY_SHEET_CACHE_BOUND`]. Returns whether anything landed,
-    /// so a Client's tick frames the new tile.
+    /// past [`TRICKPLAY_SHEET_CACHE_BOUND`]. A definitive absence is cached;
+    /// a transient failure is held out of the retry path instead, so it is
+    /// never mistaken for a sheet the server does not hold. Returns whether
+    /// anything landed, so a Client's tick frames the cache's new state.
     pub(in crate::app) fn drain_trickplay_sheet_events(&mut self) -> bool {
         let mut produced = false;
-        while let Ok((key, jpeg)) = self.channels.trickplay_rx.try_recv() {
+        while let Ok((key, fetch)) = self.channels.trickplay_rx.try_recv() {
             produced = true;
             self.trickplay_sheets_loading.remove(&key);
-            self.trickplay_sheets.insert(key, jpeg.map(Arc::from));
-            if self.trickplay_sheets.len() > TRICKPLAY_SHEET_CACHE_BOUND {
-                self.trickplay_sheets.shift_remove_index(0);
+            match fetch {
+                TrickplaySheetFetch::Loaded(jpeg) => {
+                    self.release_trickplay_sheet_failure(&key);
+                    self.cache_trickplay_sheet(key, Some(Arc::from(jpeg)));
+                }
+                TrickplaySheetFetch::Absent => {
+                    self.release_trickplay_sheet_failure(&key);
+                    self.cache_trickplay_sheet(key, None);
+                }
+                TrickplaySheetFetch::Failed => self.trickplay_sheet_failed = Some(key),
             }
         }
         produced
+    }
+
+    /// Cache one landed sheet, evicting the oldest insertion past
+    /// [`TRICKPLAY_SHEET_CACHE_BOUND`].
+    fn cache_trickplay_sheet(&mut self, key: TrickplaySheetKey, jpeg: Option<Arc<[u8]>>) {
+        self.trickplay_sheets.insert(key, jpeg);
+        if self.trickplay_sheets.len() > TRICKPLAY_SHEET_CACHE_BOUND {
+            self.trickplay_sheets.shift_remove_index(0);
+        }
+    }
+
+    /// Release the transient-failure hold on `key`: it answered, so the cache
+    /// carries its outcome and the hold has nothing left to withhold.
+    fn release_trickplay_sheet_failure(&mut self, key: &TrickplaySheetKey) {
+        if self.trickplay_sheet_failed.as_ref() == Some(key) {
+            self.trickplay_sheet_failed = None;
+        }
+    }
+}
+
+/// One sheet's fetch, classified for the cache (task 6.7): the bytes, the
+/// server's definitive absence, or a transient failure the next hover over
+/// the sheet may retry.
+fn fetch_trickplay_sheet(
+    client: &mbv_emby::EmbyClient,
+    key: &TrickplaySheetKey,
+    media_source_id: &str,
+) -> TrickplaySheetFetch {
+    match client.get_trickplay_tile(&key.item_id, key.width, key.sheet, media_source_id) {
+        Ok(jpeg) => TrickplaySheetFetch::Loaded(jpeg),
+        Err(error) => {
+            let absent = error.is_not_found();
+            tracing::debug!(
+                name: "playback_trickplay.sheet_failed",
+                target: "playback_trickplay",
+                item = %key.item_id,
+                width = key.width,
+                sheet = key.sheet,
+                absent,
+                error = %error,
+                "trickplay sheet fetch failed; the preview paints no frame"
+            );
+            if absent {
+                TrickplaySheetFetch::Absent
+            } else {
+                TrickplaySheetFetch::Failed
+            }
+        }
     }
 }
 

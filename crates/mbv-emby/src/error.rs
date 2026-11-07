@@ -115,6 +115,22 @@ impl EmbyError {
     pub fn is_bounded_timeout(&self) -> bool {
         matches!(self.kind, EmbyErrorKind::BoundedTimeout)
     }
+
+    /// Whether the server answered `404 Not Found`: the requested resource
+    /// does not exist, so asking again yields the same answer, and a caller
+    /// may record its absence. A transport failure — a timeout, a dropped
+    /// connection, a 5xx — leaves the resource's existence open and is not
+    /// this.
+    ///
+    /// The status rides in the [`ureq::Error`] an HTTP failure converts from;
+    /// an error assembled from a message alone carries no status.
+    #[must_use]
+    pub fn is_not_found(&self) -> bool {
+        self.source
+            .as_deref()
+            .and_then(|source| source.downcast_ref::<ureq::Error>())
+            .is_some_and(|error| matches!(error, ureq::Error::StatusCode(404)))
+    }
 }
 
 impl fmt::Display for EmbyError {

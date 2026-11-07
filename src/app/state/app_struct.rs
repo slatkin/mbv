@@ -517,6 +517,12 @@ pub struct App {
     /// The sheet keys whose tile fetches are in flight.
     pub(in crate::app) trickplay_sheets_loading:
         std::collections::HashSet<crate::app::playback_trickplay::TrickplaySheetKey>,
+    /// The sheet key whose last fetch failed in transport (add-tauri-gui-client
+    /// task 6.7): the sheet may exist, so it is not cached as absent. The hold
+    /// keeps the idle cadence from re-asking the same hovered sheet; the hover
+    /// naming a different sheet retires it, so a return re-asks.
+    pub(in crate::app) trickplay_sheet_failed:
+        Option<crate::app::playback_trickplay::TrickplaySheetKey>,
     /// Fallback artist per-album track fetches waiting for a bounded slot.
     /// A fallback root's scope can be the whole
     /// settled catalog, so `enqueue_artist_album_tracks` arms at most
