@@ -19,7 +19,7 @@ pub struct LayoutReport {
     /// The painted regions, each with the semantic target a press on it resolves to.
     pub regions: Vec<LayoutRegion>,
     /// The panel container's painted size in logical pixels (design D10):
-    /// the size the front end's container queries pick the panel state from.
+    /// the measured size the front end picks the panel state from.
     /// The core stores it so the capacity and the hit map the same report
     /// carries stay matched to the layout the front end painted; the
     /// panel-state decision itself stays in the front end. A front end that

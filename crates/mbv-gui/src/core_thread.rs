@@ -175,9 +175,10 @@ pub struct CoreThread {
     /// `LayoutReport`; until then the frame carries every row.
     viewport_rows: usize,
     /// The panel container's painted size from the last `LayoutReport`
-    /// (design D10). The front end's container queries pick the panel state
-    /// from it, so the core stores it without classifying it: the reported
-    /// capacity and regions already measure the layout that size painted.
+    /// (design D10). The front end picks the panel state from the panel
+    /// container's measured size, the same measurement this report carries,
+    /// so the core stores it without classifying it: the reported capacity
+    /// and regions already measure the layout that size painted.
     container_size: LayoutSize,
     rx: Receiver<CoreInput>,
     sink: FrameSink,

@@ -571,7 +571,7 @@ export interface LayoutReport {
 	lists: ListRows[];
 	regions: LayoutRegion[];
 	/** The panel container's painted size in logical pixels (design D10):
-	 * the size the container queries pick the panel state from. */
+	 * the measured size the front end picks the panel state from. */
 	containerSize: LayoutSize;
 }
 

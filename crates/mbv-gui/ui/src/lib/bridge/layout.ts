@@ -18,9 +18,9 @@ export interface LayoutContribution {
 
 const contributions = new Map<symbol, LayoutContribution>();
 
-/** The panel container's last reported painted size (design D10): the size
- * the container queries pick the panel state from. Zero while no container
- * has reported — the pre-attach states paint no panel. */
+/** The panel container's last reported painted size (design D10): the
+ * measured size the front end picks the panel state from. Zero while no
+ * container has reported — the pre-attach states paint no panel. */
 let containerSize: LayoutSize = { width: 0, height: 0 };
 
 let scheduled = false;
