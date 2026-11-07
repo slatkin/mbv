@@ -503,7 +503,7 @@
 									style:bottom={insertion.at === 'after' ? '0' : undefined}
 									style:margin="0 8px"
 									style:border-radius="1px"
-									style:background="var(--mbv-accent)"
+									style:background={canvasVar('insertion')}
 									data-insertion={insertion.at}
 								></span>
 							{/if}
@@ -554,34 +554,38 @@
 						<div style:height="{ROW_HEIGHT}px"></div>
 					{/if}
 				{/each}
-				{#if insertion && ghost}
-					<!-- The drag ghost: the dragged row's title and its percent in a
-						floating card at the insertion line, `pointer-events-none`
-						so the pointer keeps resolving the regions beneath it. The
-						card keeps the row's own insets, so its cells line up with
-						the row beneath, and paints no ordinal. The core owns the
-						drag; the release's move request is its. -->
-					<div
-						class="pointer-events-none absolute right-0 left-0 z-20"
-						style:top="{ghostTop}px"
-						style:margin-inline="8px"
-						data-ghost
-					>
-						<div
-							class="relative flex items-center overflow-hidden rounded-md border whitespace-nowrap"
-							style:height="{ROW_HEIGHT}px"
-							style:padding-inline="8px"
-							style:gap="10px"
-							style:background="var(--mbv-popover)"
-							style:border-color="var(--mbv-accent)"
-							style:box-shadow="var(--canvas-ghost-shadow)"
-						>
-							{@render rowCells(ghost, tone(ghost), 'ghost')}
-						</div>
-					</div>
-				{/if}
 			{/if}
 		</div>
+		{#if insertion && ghost}
+			<!-- The drag ghost (the Menus artboard): the dragged row's title
+				and its percent in a floating card at the insertion line,
+				`pointer-events-none` so the pointer keeps resolving the regions
+				beneath it. It sits outside the clipped list so its canvas
+				overhang past the row's right edge paints, keeps the row's own
+				insets so its cells line up with the row beneath, and paints no
+				ordinal. The core owns the drag; the release's move request is
+				its. -->
+			<div
+				class="pointer-events-none absolute z-20"
+				style:top="calc(var(--canvas-queue-header-height) + {ghostTop}px)"
+				style:left="28px"
+				style:right="-6px"
+				data-ghost
+			>
+				<div
+					class="flex items-center overflow-hidden whitespace-nowrap"
+					style:height="{ROW_HEIGHT}px"
+					style:padding-inline="8px"
+					style:gap="10px"
+					style:background={canvasVar('ghost')}
+					style:border-radius="4px"
+					style:box-shadow="var(--canvas-ghost-shadow)"
+					style:transform="rotate(-1deg)"
+				>
+					{@render rowCells(ghost, tone(ghost), 'ghost')}
+				</div>
+			</div>
+		{/if}
 		<!-- The recessed box's one-row bottom spacer: its own fill, so the
 			rows never touch the box's edges. -->
 		<div style:height="var(--mbv-cell-row)"></div>

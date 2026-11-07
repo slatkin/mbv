@@ -70,7 +70,9 @@
 	--canvas-popover-shadow: 0 12px 32px rgba(0, 0, 0, 0.45); /* the track popover's lift */
 	--canvas-action: #475258; /* the hover actions button and the open chip's fill */
 	--canvas-open-border: #e69875; /* the open track chip's border */
+	--canvas-ghost: #475258; /* the drag ghost's fill */
 	--canvas-ghost-shadow: 0 8px 20px rgba(0, 0, 0, 0.5); /* the drag ghost's lift */
+	--canvas-insertion: #83c092; /* the drag's insertion line */
 	--canvas-destructive: #e67e80; /* the row menu's remove entry */
 	--canvas-source: #7fbbb3; /* the footer's queue source text */
 	--canvas-owner: #dbbc7f; /* the footer's owner marker */

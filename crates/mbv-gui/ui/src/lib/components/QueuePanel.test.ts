@@ -380,14 +380,21 @@ test('a drag paints the ghost without an ordinal, its percent, and the inset ins
 	expect(ghost.querySelector('[data-ordinal]')).toBeNull();
 	expect(ghost.querySelector('[data-ghost-percent]')?.textContent).toBe('5%');
 	expect(ghost.textContent).not.toContain('21:40');
+	// The canvas ghost's offset, overhang, fill, radius, tilt, and lift.
+	expect(ghost.style.left).toBe('28px');
+	expect(ghost.style.right).toBe('-6px');
+	expect(card.style.background).toBe('var(--canvas-ghost)');
+	expect(card.style.borderRadius).toBe('4px');
+	expect(card.style.transform).toBe('rotate(-1deg)');
 	expect(card.style.boxShadow).toBe('var(--canvas-ghost-shadow)');
 	expect(getByText('Dragged track').style.color).toBe('var(--canvas-heading)');
 
-	// The insertion line is inset 8 px on both sides and rounded 1 px.
+	// The insertion line is inset 8 px and rounded 1 px in the canvas colour.
 	const line = container.querySelector('[data-insertion]') as HTMLElement;
 	expect(line.dataset.insertion).toBe('after');
 	expect(line.style.margin).toBe('0px 8px');
 	expect(line.style.borderRadius).toBe('1px');
+	expect(line.style.background).toBe('var(--canvas-insertion)');
 	expect(container.querySelector('[data-row="2"]')?.contains(line)).toBe(true);
 
 	// The dragged row stays lit: the canvas paints no in-place dim.
