@@ -454,14 +454,18 @@
 						src={art.detail}
 					/>
 				{:else}
-					<span
-						class="font-mono"
-						style:font-size="12px"
-						style:color={roleVar('textMuted')}
-						>{playback.episodeBadge
-							? '[Episode still · Emby Primary / Thumb]'
-							: '[still]'}</span
-					>
+					<!-- The canvas's source caption while no image lands
+						(design D4a's still slot): the frame's still-caption
+						fact, one `[...]` line per item kind; an item with no
+						image source paints no caption. -->
+					{#if playback.stillCaption}
+						<span
+							class="font-mono"
+							style:font-size="12px"
+							style:color={roleVar('textMuted')}
+							>{`[${playback.stillCaption}]`}</span
+						>
+					{/if}
 				{/if}
 				{#if playback.episodeBadge}
 					<span

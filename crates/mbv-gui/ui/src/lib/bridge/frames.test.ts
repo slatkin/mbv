@@ -86,6 +86,7 @@ function sliceFrame(theme: GuiTheme | null): GuiWindowFrame {
 				nowPlayingTitle: null,
 				parentLine: null,
 				episodeBadge: null,
+				stillCaption: null,
 				finishClock: null,
 				availability: { stop: false, next: false, previous: false },
 				statusIndicators: null,

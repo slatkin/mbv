@@ -143,8 +143,8 @@ fn tile_at_needs_an_interval_a_tile_size_and_a_thumbnail() {
     );
 }
 
-/// The artwork badge joins the season and episode with the canvas's middle
-/// dot (`main` audit 7): `S4 · E1`, never a space.
+/// The still slot's caption joins the season and episode with the canvas's
+/// middle dot (`main` audit 7): `S4 · E1`, never a space.
 #[test]
 fn episode_badge_separates_season_and_episode_with_the_canvas_dot() {
     let mut item = make_item("Nether Zone", "Episode");
@@ -152,6 +152,71 @@ fn episode_badge_separates_season_and_episode_with_the_canvas_dot() {
     item.index_number = 1;
 
     assert_eq!(episode_badge(&item).as_deref(), Some("S4 · E1"));
+}
+
+/// One item of each queue kind the still slot captions: the fetch's source
+/// name rides the item kind — the episode still chain, the other Emby kinds'
+/// single Primary source, Audiobookshelf's and feeds' covers — and a kind
+/// with no image source captions nothing.
+#[test]
+fn still_caption_names_the_image_source_for_the_item_kind() {
+    let mut episode = make_item("Nether Zone", "Episode");
+    episode.parent_index_number = 0;
+    let feed = mbv_queue::FeedEntry {
+        guid: "feed-1".to_owned(),
+        title: "Feed entry".to_owned(),
+        enclosure_url: None,
+        link: None,
+        mime_type: None,
+        duration_ticks: None,
+        pub_date_secs: None,
+        feed_kind: None,
+        feed_id: None,
+        position_ticks: 0,
+        played: false,
+    };
+    let abs = mbv_queue::AudiobookshelfQueueItem {
+        library_item_id: "lib-1".to_owned(),
+        episode_id: "ep-1".to_owned(),
+        title: "Episode".to_owned(),
+        show_title: None,
+        author: None,
+        description: None,
+        duration_ticks: None,
+        position_ticks: 0,
+        played: false,
+        pub_date_secs: None,
+        is_finished: false,
+        cover_path: None,
+    };
+
+    assert_eq!(
+        still_caption(&mbv_queue::QueueItem::Emby(Box::new(episode))),
+        Some("Episode still · Emby Primary / Thumb".to_owned())
+    );
+    assert_eq!(
+        still_caption(&mbv_queue::QueueItem::Emby(Box::new(make_item(
+            "The Film", "Movie"
+        )))),
+        Some("Movie still · Emby Primary".to_owned())
+    );
+    assert_eq!(
+        still_caption(&mbv_queue::QueueItem::Audiobookshelf(
+            mbv_queue::AudiobookshelfItem::Episode(abs)
+        )),
+        Some("Cover · Audiobookshelf".to_owned())
+    );
+    assert_eq!(
+        still_caption(&mbv_queue::QueueItem::Feed(feed)),
+        Some("Cover · feed".to_owned())
+    );
+    assert_eq!(
+        still_caption(&mbv_queue::QueueItem::Twitch(mbv_queue::TwitchItem {
+            url: "https://twitch.tv/wooms".to_owned(),
+            title: "Stream".to_owned(),
+        })),
+        None
+    );
 }
 
 /// One usable grid: a 320-wide thumbnail series of 10x10 sheets.

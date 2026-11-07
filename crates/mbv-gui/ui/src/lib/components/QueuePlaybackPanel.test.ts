@@ -69,6 +69,7 @@ function playing(overrides: Partial<GuiQueuePlayback> = {}): GuiQueuePlayback {
 		nowPlayingTitle: 'Track title',
 		parentLine: 'The Show',
 		episodeBadge: 'S2 · E5',
+		stillCaption: 'Episode still · Emby Primary / Thumb',
 		finishClock: '21:00',
 		availability: { stop: true, next: true, previous: false },
 		statusIndicators: null,
@@ -260,11 +261,25 @@ test('a playing frame renders the header, artwork badge, title, and clocks', () 
 });
 
 // The canvas still slot paints its source caption while no image lands
-// (`main` audit 6); the episode's caption names the Emby still chain.
+// (`main` audit 6): the frame's still-caption fact, one `[]` line per item
+// kind; a factless frame paints none.
 test('the still slot paints the canvas caption while no image lands', () => {
 	const { getByText } = renderPanel(playing({ artwork: { kind: 'loading' } }));
 
 	expect(getByText('[Episode still · Emby Primary / Thumb]')).toBeTruthy();
+
+	// The caption is the frame's fact verbatim, brackets included; an item
+	// kind with no image source paints no caption at all.
+	const cover = renderPanel(
+		playing({
+			artwork: { kind: 'loading' },
+			stillCaption: 'Cover · Audiobookshelf',
+		}),
+	);
+	expect(cover.getByText('[Cover · Audiobookshelf]')).toBeTruthy();
+
+	const none = renderPanel(playing({ artwork: { kind: 'loading' }, stillCaption: null }));
+	expect(none.container.textContent).not.toContain('[still]');
 });
 
 test('a paint reports the transport, seek, header, seekbar, and target regions', async () => {

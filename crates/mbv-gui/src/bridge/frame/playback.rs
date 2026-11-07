@@ -42,6 +42,11 @@ pub struct GuiQueuePlayback {
     /// The season-and-episode badge the artwork paints ("S2 · E5"). `None`
     /// for every kind but an Emby episode with an ordinal known.
     pub episode_badge: Option<String>,
+    /// The still slot's caption while the artwork has no image (design
+    /// D4a's still slot): the image source the card-image fetch names for
+    /// the active item's kind. `None` while nothing to caption — idle, a
+    /// slotless output, or a kind with no image source.
+    pub still_caption: Option<String>,
     /// The active item's wall-clock end time, formatted in the local zone:
     /// the scrubber's finish clock. `None` while no item plays or the runtime
     /// is unknown.
@@ -181,6 +186,7 @@ impl From<&QueuePlaybackProjection> for GuiQueuePlayback {
             now_playing_title: projection.now_playing_title.clone(),
             parent_line: projection.parent_line.clone(),
             episode_badge: projection.episode_badge.clone(),
+            still_caption: projection.still_caption.clone(),
             finish_clock: projection.finish_clock.clone(),
             chapters: projection.chapters.iter().map(GuiChapter::from).collect(),
             intro_mark: projection.intro_mark.map(GuiSegmentMark::from),

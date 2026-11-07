@@ -236,6 +236,11 @@ export interface GuiQueuePlayback {
 	/** The season-and-episode badge the artwork paints (`"S2 · E5"`); `null`
 	 * for every kind but an Emby episode with an ordinal known. */
 	episodeBadge: string | null;
+	/** The still slot's caption while the artwork has no image (design
+	 * D4a's still slot): the image source the card-image fetch names for the
+	 * active item's kind. `null` while nothing to caption — idle, a
+	 * slotless output, or an item kind with no image source. */
+	stillCaption: string | null;
 	/** The active item's wall-clock end time; the scrubber's finish clock.
 	 * `null` while no item plays or the runtime is unknown. */
 	finishClock: string | null;

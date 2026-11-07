@@ -106,6 +106,7 @@ function frame(
 			nowPlayingTitle: 'Track One',
 			parentLine: 'The Show',
 			episodeBadge: null,
+			stillCaption: null,
 			finishClock: '21:00',
 			chapters: [],
 			introMark: null,

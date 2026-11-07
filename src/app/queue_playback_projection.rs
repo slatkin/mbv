@@ -214,6 +214,14 @@ pub struct QueuePlaybackProjection {
     /// (`main` audit 7). `None` for every other kind, and for an episode with
     /// neither ordinal known.
     pub episode_badge: Option<String>,
+    /// The still slot's caption while the artwork has no image (design
+    /// D4a's `align-gui-with-design-canvas` "The artwork has a still slot"):
+    /// the image source the card-image fetch names for the active item's
+    /// kind — an Emby kind's still chain, an Audiobookshelf cover, a feed's
+    /// cover. `None` while there is nothing to caption: no active item (idle
+    /// or a slotless output), or a kind with no image source the fetch
+    /// covers (Twitch).
+    pub still_caption: Option<String>,
     /// The active item's wall-clock end time (design D4a's scrubber finish
     /// clock), formatted in the local zone: the displayed playback state's
     /// remaining runtime added to the clock. `None` while no item plays or
@@ -251,6 +259,7 @@ impl App {
             mbv_queue::QueueItem::Emby(item) => episode_badge(item),
             _ => None,
         });
+        let still_caption = active_item.and_then(still_caption);
         // The scrubber's decoration (design D4a): the cached metadata the
         // active item's Client-side fetch landed, if any. The projection
         // only reads the cache; a Client's frame path issues the fetch.
@@ -273,6 +282,7 @@ impl App {
                 .as_ref()
                 .and_then(|parts| parts.context.as_ref().map(|part| part.text.clone())),
             episode_badge,
+            still_caption,
             finish_clock: playback_finish_clock(playback),
             chapters: decorations.map_or_else(Vec::new, |d| d.chapters.clone()),
             intro_mark: decorations.and_then(|d| d.intro),
@@ -440,6 +450,28 @@ fn episode_badge(item: &mbv_emby_model::EmbyItem) -> Option<String> {
         (Some(season), Some(episode)) => Some(format!("{season} · {episode}")),
         (Some(season), None) | (None, Some(season)) => Some(season),
         (None, None) => None,
+    }
+}
+
+/// The still slot's caption while no artwork lands (design D4a's
+/// `align-gui-with-design-canvas` "The artwork has a still slot"): the image
+/// source the card-image fetch names for the item's kind, in the canvas's
+/// `[Episode still · Emby Primary / Thumb]` form for the episode still, its
+/// `<kind>`-named single source for the other Emby kinds, and the cover
+/// chain for Audiobookshelf and feed items. A kind the fetch never covers —
+/// a Twitch item, held with no image source — captions nothing, so an empty
+/// slot stays empty.
+fn still_caption(item: &mbv_queue::QueueItem) -> Option<String> {
+    match item {
+        mbv_queue::QueueItem::Emby(item) if item.item_type == "Episode" => {
+            Some("Episode still · Emby Primary / Thumb".to_owned())
+        }
+        mbv_queue::QueueItem::Emby(item) => {
+            Some(format!("{} still · Emby Primary", item.item_type))
+        }
+        mbv_queue::QueueItem::Audiobookshelf(_) => Some("Cover · Audiobookshelf".to_owned()),
+        mbv_queue::QueueItem::Feed(_) => Some("Cover · feed".to_owned()),
+        mbv_queue::QueueItem::Twitch(_) => None,
     }
 }
 
