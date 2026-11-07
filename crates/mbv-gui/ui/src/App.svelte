@@ -4,9 +4,9 @@
   import { installInput } from '$lib/bridge/input';
   import { reportContainerSize } from '$lib/bridge/layout';
   import AttachScreen from '$lib/components/AttachScreen.svelte';
+  import QueueFooter from '$lib/components/QueueFooter.svelte';
   import QueuePanel from '$lib/components/QueuePanel.svelte';
   import QueuePlaybackPanel from '$lib/components/QueuePlaybackPanel.svelte';
-  import StatusBar from '$lib/components/StatusBar.svelte';
 
   // The webview's own context menu is turned off (add-tauri-gui-client D11).
   // Tauri has no config key for it on WebKitGTK.
@@ -53,12 +53,12 @@
   {#if $frames && 'slice' in $frames}
     <!-- The first slice's queue-only arrangement (spec
       gui-client): the Queue playback band above the Queue
-      panel, the Status bar floating over the placement's bottom
-      pad row. The column carries the queue column's backdrop
-      fill, the TUI's `QueueColumn` gutter the panels' padding
-      sits on — focus-reactive like the TUI's
-      `panel_appearance_focus` picks it, so the chrome's
-      `queueColumn` pair follows the frame's Panel-focus fact. -->
+      panel, the canvas footer line below it. The column
+      carries the queue column's backdrop fill, the TUI's
+      `QueueColumn` gutter the panels' padding sits on —
+      focus-reactive like the TUI's `panel_appearance_focus`
+      picks it, so the chrome's `queueColumn` pair follows the
+      frame's Panel-focus fact. -->
     {@const panelFocused = $frames.slice.focus.panel === 'queue'}
     <div
       bind:this={containerEl}
@@ -74,12 +74,11 @@
       <div class="min-h-0 flex-1">
         <QueuePanel
           queue={$frames.slice.queue}
-          footer={$frames.slice.footer}
           focused={$frames.slice.focus.surface === 'queue'}
           {panelFocused}
         />
       </div>
-      <StatusBar status={$frames.slice.status} />
+      <QueueFooter footer={$frames.slice.footer} status={$frames.slice.status} />
     </div>
   {:else}
     <!-- The pre-attach states (design D9): the wait before the first

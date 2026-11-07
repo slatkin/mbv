@@ -1,13 +1,13 @@
 // add-tauri-gui-client task 3.3: the Queue panel paints the frame's
-// viewport rows, the empty-queue state, and the footer pills, and reports
-// capacity and regions through `report_layout` (designs D4/D5). The Tauri
-// IPC is mocked; the asserted payload is the serde wire shape of
-// bridge/layout.rs.
+// viewport rows and the empty-queue state, and reports capacity and
+// regions through `report_layout` (designs D4/D5). The footer pills moved
+// to `QueueFooter` in row 6.4. The Tauri IPC is mocked; the asserted
+// payload is the serde wire shape of bridge/layout.rs.
 
 import { invoke } from '@tauri-apps/api/core';
 import { render } from '@testing-library/svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
-import type { GuiQueue, GuiQueueFooter } from '$lib/bridge/types';
+import type { GuiQueue } from '$lib/bridge/types';
 import QueuePanel from './QueuePanel.svelte';
 
 vi.mock('@tauri-apps/api/core', () => ({
@@ -43,13 +43,6 @@ function queue(rows: GuiQueue['rows'], active: GuiQueue['active'] = null): GuiQu
 	return { rows, cursor: null, marks: [], active };
 }
 
-const footer: GuiQueueFooter = {
-	owner: { text: 'woims', role: 'textFocusAccent', bold: false },
-	playlist: { text: 'mix', role: 'textMetadata', bold: false },
-	autosave: null,
-	dirty: null,
-};
-
 test('a frame with slots renders its rows', () => {
 	const { getByText, container } = render(QueuePanel, {
 		queue: queue(
@@ -82,7 +75,6 @@ test('a frame with slots renders its rows', () => {
 			],
 			2,
 		),
-		footer,
 		focused: true,
 		panelFocused: true,
 	});
@@ -91,47 +83,11 @@ test('a frame with slots renders its rows', () => {
 	expect(getByText('album')).toBeTruthy();
 	expect(getByText('Second track')).toBeTruthy();
 	expect(container.querySelectorAll('[data-slot]')).toHaveLength(2);
-	expect(getByText('mix')).toBeTruthy();
-	expect(getByText('woims')).toBeTruthy();
-});
-
-// The footer pill's icon contract (the layout-parity brief): the GUI maps
-// each pill's slot to its Lucide icon — the playlist source's
-// `playlist-play` glyph maps to `list-music`, the owner indicator's
-// `connection` to `cable`, the autosave `content-save-check` to
-// `save-check`, and the dirty `content-save-alert` to `save-off` — where
-// the TUI paints its Nerd Font glyphs. Lucide renders each icon's name as
-// the svg's `lucide-<name>` class.
-test('the footer pills paint their Lucide icons', () => {
-	const { container } = render(QueuePanel, {
-		queue: queue([]),
-		footer: {
-			owner: { text: 'woims', role: 'textFocusAccent', bold: false },
-			playlist: { text: 'mix', role: 'textMetadata', bold: false },
-			autosave: { text: 'AUTOSAVE', role: 'accent', bold: false },
-			dirty: { text: 'UNSAVED', role: 'textFocusAccent', bold: true },
-		},
-		focused: false,
-		panelFocused: true,
-	});
-
-	for (const icon of [
-		'lucide-list-music',
-		'lucide-cable',
-		'lucide-save-check',
-		'lucide-save-off',
-	]) {
-		expect(
-			container.querySelector(`svg.${icon}`),
-			`${icon} paints`,
-		).toBeTruthy();
-	}
 });
 
 test('an empty frame renders the empty-queue state', () => {
 	const { getByText, container } = render(QueuePanel, {
 		queue: queue([]),
-		footer,
 		focused: true,
 		panelFocused: true,
 	});
@@ -156,7 +112,6 @@ test('a layout change sends one merged report', async () => {
 				striped: false,
 			},
 		]),
-		footer,
 		focused: true,
 		panelFocused: true,
 	});
@@ -179,10 +134,6 @@ test('a layout change sends one merged report', async () => {
 				{
 					rect: { x: 0, y: 0, width: 0, height: 0 },
 					target: { surface: 'queue', id: { slot: 7 } },
-				},
-				{
-					rect: { x: 0, y: 0, width: 0, height: 0 },
-					target: { surface: 'queue', id: 'playlistPill' },
 				},
 			],
 			containerSize: { width: 0, height: 0 },
