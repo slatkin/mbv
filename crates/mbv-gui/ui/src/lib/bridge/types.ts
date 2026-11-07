@@ -118,11 +118,13 @@ export type GuiOverlayFrame =
 			choices: GuiTargetChoice[];
 	  };
 
-/** One row-menu entry: the label and the key hint that selects it
- * directly, when it has one. */
+/** One row-menu entry: the label, the key hint that selects it directly
+ * when it has one, and whether the entry is destructive (the canvas paints
+ * it in the destructive tone under a divider). */
 export interface GuiRowMenuEntry {
 	label: string;
 	keyHint: string | null;
+	destructive: boolean;
 }
 
 /** Which track chip a popover belongs to. */

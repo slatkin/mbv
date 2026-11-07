@@ -32,7 +32,9 @@
 	//
 	// The band paints the canvas's type and border (mono 12 px, a 1 px top
 	// border in the queue-local `--canvas-border` token) on the frame's
-	// `queueFooterBand` fill. The slice's `GuiStatusBar` carries no volume,
+	// `queueFooterBand` fill, with the canvas's source-text teal
+	// (`--canvas-source`) and owner-marker sand (`--canvas-owner`) in place of
+	// the pills' theme roles. The slice's `GuiStatusBar` carries no volume,
 	// mute, or visual-mode content, so the line paints no interactive status
 	// pill and reports no region at all — a point on the line resolves to
 	// nothing. It still reports through the shared layout reporter so the
@@ -139,7 +141,9 @@
 			<SaveCheck size={14} color={roleVar(footer.autosave.role)} class="shrink-0" />
 		{/if}
 		{#if footer.playlist.text}
-			<span style:color={roleVar(footer.playlist.role)} data-footer-source
+			<!-- The canvas paints the source line in its teal token; the
+				front end paints no role here. -->
+			<span style:color="var(--canvas-source)" data-footer-source
 				>{footer.playlist.text}</span
 			>
 		{/if}
@@ -164,7 +168,9 @@
 				>
 			</span>
 		{/if}
-		<span class="flex items-center" style:gap="6px" style:color={roleVar(footer.owner.role)}>
+		<!-- The owner marker, label then dot: the canvas paints the label in
+			its sand token while the dot keeps the liveness mark's own colour. -->
+		<span class="flex items-center" style:gap="6px" style:color="var(--canvas-owner)">
 			<span data-owner-label>{footer.owner.text}</span>
 			{#if footer.ownerLive}
 				<!-- The live-Owner dot (design D4a): the shown queue's Player

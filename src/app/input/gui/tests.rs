@@ -5,7 +5,7 @@ use mbv_ui_model::settings::PanelFocus;
 use mbv_ui_msg::{Key, KeyEvent, KeyModifiers, Msg, PlaybackRequest, ShellRequest, TrackChipKind};
 
 use crate::app::App;
-use crate::app::gui_client_state::GuiOverlay;
+use crate::app::gui_client_state::{GuiOverlay, GuiOverlayProjection};
 use crate::app::input::gui::GuiInput;
 use crate::app::tests::{
     QueueViewTestExt, make_app_stub, make_items, make_local_daemon_app_stub_with_cmd_rx_and_compat,
@@ -236,6 +236,32 @@ fn row_context_menu_request_opens_the_row_menu_with_hints() {
             "Remove from queue"
         ]
     );
+}
+
+// The destructive flag is GUI-only and derives from the entry's action
+// (design DR6): the row menu projects its remove entry destructive and no
+// other entry, so the front end paints the canvas's tone from the flag and
+// never from a label or a position.
+#[test]
+fn the_row_menu_projects_only_the_remove_entry_as_destructive() {
+    let mut app = make_app_stub();
+    app.playback_queue_mut().adopt_items(make_items(2), 0);
+    let row = app
+        .displayed_queue()
+        .slot_id_at(0)
+        .expect("row 0 has a slot");
+    app.handle_gui_surface_msg(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
+        mbv_ui_model::context_menu::ContextMenuTargets::Queue(vec![row]),
+        None,
+    ))));
+
+    let playback = app.queue_playback_projection();
+    let Some(GuiOverlayProjection::RowMenu { entries, .. }) = app.gui_overlay_projection(&playback)
+    else {
+        panic!("the row menu projects");
+    };
+    let destructive: Vec<bool> = entries.iter().map(|entry| entry.destructive).collect();
+    assert_eq!(destructive, [false, false, false, false, true]);
 }
 
 // Enter on the open row menu executes the cursor entry and closes the menu:

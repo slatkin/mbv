@@ -157,13 +157,15 @@
 	/** The row-menu's top edge: the header row's height plus the bottom
 	 * edge of the row the menu opened on — the overlay's `anchorSlot`,
 	 * which the core names (hover and cursor can move while the menu is
-	 * up). A `0` fallback holds the menu at the header while the anchor
-	 * is not a painted row. */
+	 * up) — less the canvas's 6 px overlap into that row (`Menus.dc.html`
+	 * sits the 230 px menu over its anchor row's bottom edge, not under it).
+	 * A `0` fallback holds the menu at the header while the anchor is not a
+	 * painted row. */
 	const menuTop = $derived.by(() => {
 		const index = queue.rows.findIndex(
 			(row) => row.row === 'item' && row.slot === menu?.anchorSlot,
 		);
-		const below = (index >= 0 ? index + 1 : 0) * ROW_HEIGHT;
+		const below = index >= 0 ? (index + 1) * ROW_HEIGHT - 6 : 0;
 		return `calc(var(--canvas-queue-header-height) + ${below}px)`;
 	});
 

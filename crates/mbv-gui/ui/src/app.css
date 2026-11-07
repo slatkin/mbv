@@ -62,6 +62,12 @@
 	--canvas-heading: #e9e1cc; /* the header's heading and active segment */
 	--canvas-accent: #a7c080; /* the active row's fill and the Ends-at values */
 	--canvas-partial: #e69875; /* the partial-progress fill */
+	--canvas-menu: #343f44; /* the row menu's fill */
+	--canvas-menu-border: #475258; /* the row menu's border and its divider */
+	--canvas-menu-shadow: 0 12px 32px rgba(0, 0, 0, 0.45); /* the row menu's lift */
+	--canvas-destructive: #e67e80; /* the row menu's remove entry */
+	--canvas-source: #7fbbb3; /* the footer's queue source text */
+	--canvas-owner: #dbbc7f; /* the footer's owner marker */
 	/* The canvas header's two lines over the 44 px filter control, between
 	   12 px and 8 px of padding. */
 	--canvas-queue-header-height: 64px;

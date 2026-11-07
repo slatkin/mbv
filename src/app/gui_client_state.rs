@@ -35,13 +35,18 @@ pub struct PanelTogglesProjection {
     pub queue_folded: bool,
 }
 
-/// One row of the open row menu as the frame carries it: the label and the
-/// key chord that selects the entry directly (the canvas's key hint), when
-/// the entry has one.
+/// One row of the open row menu as the frame carries it: the label, the key
+/// chord that selects the entry directly (the canvas's key hint) when the
+/// entry has one, and whether the entry is destructive.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RowMenuEntryProjection {
     pub label: String,
     pub key_hint: Option<String>,
+    /// The canvas paints the entry in its destructive tone under a divider
+    /// (design DR6). The flag is GUI-only and derives from the entry's
+    /// action, so no shared `ContextMenuEntry` change and no TUI paint
+    /// changes with it.
+    pub destructive: bool,
 }
 
 /// One choice of an open track popover, as the frame carries it: the mpv
@@ -289,6 +294,13 @@ impl App {
                     .map(|entry| RowMenuEntryProjection {
                         label: entry.label.to_string(),
                         key_hint: entry.key_hint.map(str::to_string),
+                        // From the action, not the label or the position: the
+                        // menu's remove entry is always last today, and the
+                        // paint must not depend on that.
+                        destructive: matches!(
+                            entry.action.as_ref(),
+                            Some(ContextAction::RemoveFromQueue(_))
+                        ),
                     })
                     .collect(),
             }),

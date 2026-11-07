@@ -72,13 +72,18 @@ impl From<&GuiOverlayProjection> for GuiOverlayFrame {
     }
 }
 
-/// One row-menu entry as the frame carries it: the label and the key chord
-/// that selects the entry directly, when it has one.
+/// One row-menu entry as the frame carries it: the label, the key chord that
+/// selects the entry directly when it has one, and whether it is
+/// destructive.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GuiRowMenuEntry {
     pub label: String,
     pub key_hint: Option<String>,
+    /// The row menu paints the entry in the canvas's destructive tone under
+    /// a divider (design DR6); the flag derives from the entry's action in
+    /// the library's projection.
+    pub destructive: bool,
 }
 
 impl From<&RowMenuEntryProjection> for GuiRowMenuEntry {
@@ -86,6 +91,7 @@ impl From<&RowMenuEntryProjection> for GuiRowMenuEntry {
         Self {
             label: entry.label.clone(),
             key_hint: entry.key_hint.clone(),
+            destructive: entry.destructive,
         }
     }
 }

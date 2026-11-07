@@ -95,11 +95,11 @@ function rowMenu(): GuiOverlayFrame {
 		anchorSlot: 2,
 		cursor: 1,
 		entries: [
-			{ label: 'Play now', keyHint: 'Enter' },
-			{ label: 'Play next', keyHint: 'n' },
-			{ label: 'Mark watched', keyHint: 'w' },
-			{ label: 'Go to episode', keyHint: 'g' },
-			{ label: 'Remove from queue', keyHint: 'dd' },
+			{ label: 'Play now', keyHint: 'Enter', destructive: false },
+			{ label: 'Play next', keyHint: 'n', destructive: false },
+			{ label: 'Mark watched', keyHint: 'w', destructive: false },
+			{ label: 'Go to episode', keyHint: 'g', destructive: false },
+			{ label: 'Remove from queue', keyHint: 'dd', destructive: true },
 		],
 	};
 }
@@ -278,18 +278,51 @@ test('the hovered row alone paints the grip and the actions button', () => {
 	expect(hovered.querySelector('[data-actions]')).toBeTruthy();
 });
 
-test('the open row menu lists its entries with their key hints', () => {
+// The Menus artboard's row menu (B.2): a 230 px card in the canvas chrome,
+// 34 px entries at 13 px, the muted mono hints with the paint-time `⏎`
+// glyph, and the projected destructive entry in its tone under a divider
+// (B.1).
+test('the open row menu paints the canvas chrome, hints, and destructive entry', () => {
 	const { getByText, container } = renderPanel(
 		queue([item(1)], null, { hover: 1 }),
 		summary(),
 		rowMenu(),
 	);
 
+	const menu = container.querySelector('[data-row-menu]') as HTMLElement;
+	expect(menu.style.width).toBe('230px');
+	expect(menu.style.padding).toBe('6px');
+	expect(menu.style.gap).toBe('2px');
+	expect(menu.style.background).toBe('var(--canvas-menu)');
+	expect(menu.style.border).toBe('1px solid var(--canvas-menu-border)');
+	expect(menu.style.borderRadius).toBe('8px');
+	expect(menu.style.boxShadow).toBe('var(--canvas-menu-shadow)');
+
 	const entries = container.querySelectorAll('[data-menu-entry]');
 	expect(entries).toHaveLength(5);
 	expect(entries[0].textContent).toContain('Play now');
-	expect(entries[0].textContent).toContain('Enter');
+	// The core's raw `Enter` hint chord paints as the canvas's return glyph.
+	expect(entries[0].textContent).toContain('⏎');
+	expect(entries[0].textContent).not.toContain('Enter');
 	expect(getByText('dd')).toBeTruthy();
+
+	const first = entries[0] as HTMLElement;
+	expect(first.style.height).toBe('34px');
+	expect(first.style.padding).toBe('0px 10px');
+	expect(first.style.fontSize).toBe('13px');
+	const hint = first.querySelector('span:last-child') as HTMLElement;
+	expect(hint.style.fontSize).toBe('11px');
+	expect(hint.style.color).toBe('var(--canvas-muted)');
+
+	// The core's cursor row fills with the canvas's selected colour.
+	expect((entries[1] as HTMLElement).style.background).toBe('var(--canvas-selected)');
+	// The projected destructive flag paints the tone, not the cursor or the
+	// label; the divider sits directly above that entry.
+	const remove = entries[4] as HTMLElement;
+	expect(remove.style.color).toBe('var(--canvas-destructive)');
+	const divider = container.querySelector('[data-menu-divider]') as HTMLElement;
+	expect(divider.nextElementSibling).toBe(remove);
+	expect(divider.style.background).toBe('var(--canvas-menu-border)');
 });
 
 test('a drag paints the ghost and the insertion line on the anchored row', () => {
@@ -405,8 +438,11 @@ test('a press on the filter forwards a pointer press', async () => {
 	);
 });
 
-test('the open menu anchors under the row its anchorSlot names', () => {
-	// The anchor (slot 2, the second painted row) places the menu under
+// The menu's top edge sits 6 px inside the bottom edge of the row its
+// `anchorSlot` names — the canvas's overlap of the 230 px menu over its
+// anchor row — not under it.
+test('the open menu overlaps the bottom edge of the row its anchorSlot names', () => {
+	// The anchor (slot 2, the second painted row) places the menu over
 	// its bottom edge — not the hovered row's (slot 3) and not the
 	// cursor row's (slot 1).
 	const { container } = renderPanel(
@@ -416,7 +452,7 @@ test('the open menu anchors under the row its anchorSlot names', () => {
 	);
 
 	const menuEl = container.querySelector('[data-row-menu]') as HTMLElement;
-	expect(menuEl.style.top).toBe('calc(var(--canvas-queue-header-height) + 60px)');
+	expect(menuEl.style.top).toBe('calc(var(--canvas-queue-header-height) + 54px)');
 });
 
 test('a press on the grip forwards a pointer press', async () => {
