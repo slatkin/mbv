@@ -62,6 +62,10 @@ pub enum DomPointerKind {
     Move,
     /// The wheel scrolled.
     Wheel,
+    /// The gesture was cancelled before a release: a `pointercancel`, a
+    /// `pointerleave` with a button held, or the window's blur. The core
+    /// clears its drag state and sends no move.
+    Cancel,
 }
 
 /// The DOM `button` value of the primary (left) button.
@@ -90,6 +94,10 @@ const DOM_PRIMARY_HELD: u16 = 1;
 #[must_use]
 pub fn neutral_pointer(event: DomPointer) -> Option<PointerEvent> {
     let kind = match event.kind {
+        // The cancel is the one kind no button or position decides: the
+        // front end sends it when the webview loses the gesture, and the core
+        // drops the drag it names.
+        DomPointerKind::Cancel => PointerKind::Cancel,
         DomPointerKind::Press => match event.button {
             DOM_PRIMARY_BUTTON => PointerKind::Press,
             DOM_SECONDARY_BUTTON => PointerKind::RightPress,

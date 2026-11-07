@@ -360,6 +360,23 @@ impl CoreThread {
         // drag end, or a press on no reported region still cancels an armed
         // prefix; the pointer arm itself delivers nothing else.
         self.app.route_gui_input(GuiInput::Pointer(event), None);
+        // A cancelled gesture (the webview lost the pointer, the pointer left
+        // the window with a button held, or the window lost focus) drops the
+        // drag state without a move (add-tauri-gui-client row 6.5, finding
+        // P1-2): the release that would have ended the drag never arrives.
+        if event.kind == PointerKind::Cancel {
+            self.gestures.cancel();
+            self.queue.cancel_row_drag();
+            self.queue.set_hover(None);
+            self.playback.set_scrubber_hover(None);
+            return;
+        }
+        // A new press while a row drag is armed discards the stale drag
+        // first: a release the window never saw cannot make the next click's
+        // DragEnd move the old slot.
+        if matches!(event.kind, PointerKind::Press | PointerKind::RightPress) {
+            self.queue.cancel_row_drag();
+        }
         // The scrubber's hover preview (design D4: "a move over the
         // scrubber carries the hover"): the event's position resolves
         // against the painted bar through the same fraction rule a seek

@@ -33,6 +33,11 @@ pub enum PointerKind {
     ScrollUp,
     /// The secondary (right) button was pressed.
     RightPress,
+    /// The gesture was cancelled before its release arrived: the toolkit lost
+    /// the pointer (a pointer capture cancel, the pointer left the window, or
+    /// the window lost focus). The core clears its drag state and sends no
+    /// move. No terminal input produces it.
+    Cancel,
 }
 
 /// A neutral pointer event: the kind, where it happened, and the modifiers

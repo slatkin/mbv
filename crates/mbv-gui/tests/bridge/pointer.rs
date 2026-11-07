@@ -86,6 +86,10 @@ fn pointer_payload_without_the_newer_fields_reads_their_defaults() {
     Some(neutral(PointerKind::Release))
 )]
 #[case::secondary_release_drops(dom(DomPointerKind::Release, 2, 0, 0.0), None)]
+#[case::cancel_is_the_neutral_cancel(
+    dom(DomPointerKind::Cancel, -1, 1, 0.0),
+    Some(neutral(PointerKind::Cancel))
+)]
 #[case::plain_move(
     dom(DomPointerKind::Move, -1, 0, 0.0),
     Some(neutral(PointerKind::Move))

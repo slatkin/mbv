@@ -522,7 +522,7 @@ export interface DomPointer {
 	deltaY: number;
 }
 
-export type DomPointerKind = 'press' | 'release' | 'move' | 'wheel';
+export type DomPointerKind = 'press' | 'release' | 'move' | 'wheel' | 'cancel';
 
 /** The layout report the front end sends after each paint that moved a region (design D4). */
 export interface LayoutReport {

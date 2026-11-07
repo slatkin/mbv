@@ -23,6 +23,17 @@ fn drag_to(x: f32, y: f32) -> CoreInput {
     ))
 }
 
+/// A cancelled gesture, as the front end sends it when the webview loses the
+/// pointer (add-tauri-gui-client row 6.5, finding P1-2). The position is the
+/// neutral placeholder the bridge sends for a window blur.
+fn cancel_pointer() -> CoreInput {
+    CoreInput::Pointer(PointerEvent::new(
+        PointerKind::Cancel,
+        Position { x: 0.0, y: 0.0 },
+        KeyModifiers::NONE,
+    ))
+}
+
 /// The primary button's release, as the translated `pointer` command carries
 /// it.
 fn release_at(x: f32, y: f32) -> CoreInput {
@@ -390,4 +401,105 @@ fn a_row_move_chord_moves_the_keyboard_selected_row_review_u65_p1_1() {
         vec![(2, 2)],
         "the move names the painted selection's slot"
     );
+}
+
+/// A lost release leaves no live drag (review of add-tauri-gui-client row
+/// 6.5, finding P1-2): the cancel clears the armed drag, and the click that
+/// follows sends no move for the stale slot.
+#[test]
+fn a_cancelled_drag_then_click_sends_no_move_review_u65_p1_2() {
+    let (app, cmd_rx) = stub_app_with_queue_and_cmd_rx(4);
+    let mut test = test_core_with(app);
+    test.tx.send(rows_with_first_grip()).unwrap();
+    assert!(test.core.step());
+    test.next_frame();
+
+    test.tx.send(press_at(10.0, 6.0)).unwrap();
+    assert!(test.core.step());
+    test.next_frame();
+    test.tx.send(drag_to(10.0, 66.0)).unwrap();
+    assert!(test.core.step());
+    assert_eq!(
+        test.next_frame()
+            .queue
+            .drag
+            .expect("the drag holds")
+            .drop_index,
+        2
+    );
+
+    test.tx.send(cancel_pointer()).unwrap();
+    assert!(test.core.step());
+    assert!(
+        test.next_frame().queue.drag.is_none(),
+        "the cancel clears the drag"
+    );
+
+    // The next click is a fresh gesture and moves nothing.
+    test.tx.send(press_at(10.0, 30.0)).unwrap();
+    assert!(test.core.step());
+    test.next_frame();
+    test.tx.send(release_at(10.0, 30.0)).unwrap();
+    assert!(test.core.step());
+    test.next_frame();
+    assert_eq!(slot_moves(&cmd_rx), vec![]);
+}
+
+/// A cancel sends no move (review of add-tauri-gui-client row 6.5, finding
+/// P1-2): the release that follows the cancel has no live press, so it
+/// reaches no move request.
+#[test]
+fn a_pointer_cancel_sends_no_move_review_u65_p1_2() {
+    let (app, cmd_rx) = stub_app_with_queue_and_cmd_rx(4);
+    let mut test = test_core_with(app);
+    test.tx.send(rows_with_first_grip()).unwrap();
+    assert!(test.core.step());
+    test.next_frame();
+
+    test.tx.send(press_at(10.0, 6.0)).unwrap();
+    assert!(test.core.step());
+    test.next_frame();
+    test.tx.send(drag_to(10.0, 66.0)).unwrap();
+    assert!(test.core.step());
+    test.next_frame();
+
+    test.tx.send(cancel_pointer()).unwrap();
+    assert!(test.core.step());
+    test.next_frame();
+    test.tx.send(release_at(10.0, 66.0)).unwrap();
+    assert!(test.core.step());
+    test.next_frame();
+    assert_eq!(slot_moves(&cmd_rx), vec![]);
+}
+
+/// A new press discards a stale armed drag (review of add-tauri-gui-client
+/// row 6.5, finding P1-2): after a lost release, the next click's `DragEnd`
+/// sends no move for the slot the old drag grabbed.
+#[test]
+fn a_new_press_discards_the_stale_drag_review_u65_p1_2() {
+    let (app, cmd_rx) = stub_app_with_queue_and_cmd_rx(4);
+    let mut test = test_core_with(app);
+    test.tx.send(rows_with_first_grip()).unwrap();
+    assert!(test.core.step());
+    test.next_frame();
+
+    test.tx.send(press_at(10.0, 6.0)).unwrap();
+    assert!(test.core.step());
+    test.next_frame();
+    test.tx.send(drag_to(10.0, 66.0)).unwrap();
+    assert!(test.core.step());
+    test.next_frame();
+
+    // The lost release never arrives: the next press starts a new gesture
+    // and the stale drag must be gone before its release resolves.
+    test.tx.send(press_at(10.0, 30.0)).unwrap();
+    assert!(test.core.step());
+    assert!(
+        test.next_frame().queue.drag.is_none(),
+        "the new press discarded the stale drag"
+    );
+    test.tx.send(release_at(10.0, 30.0)).unwrap();
+    assert!(test.core.step());
+    test.next_frame();
+    assert_eq!(slot_moves(&cmd_rx), vec![]);
 }

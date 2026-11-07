@@ -87,6 +87,29 @@ export function domWheel(event: WheelEvent): DomPointer {
 	return pointer;
 }
 
+/**
+ * A cancelled gesture as a `DomPointer`: a `pointercancel`, a `pointerleave`
+ * with a button held, or the window's blur. The webview lost the gesture, so
+ * its release never arrives; the core drops the drag state and sends no
+ * move. A blur carries no pointer fields, so the position and button fall to
+ * neutral placeholders.
+ */
+export function domCancel(event?: PointerEvent): DomPointer {
+	return {
+		kind: 'cancel',
+		button: event?.button ?? -1,
+		buttons: event?.buttons ?? 0,
+		x: event?.clientX ?? 0,
+		y: event?.clientY ?? 0,
+		metaKey: event?.metaKey ?? false,
+		shiftKey: event?.shiftKey ?? false,
+		ctrlKey: event?.ctrlKey ?? false,
+		altKey: event?.altKey ?? false,
+		deltaX: 0,
+		deltaY: 0,
+	};
+}
+
 /** Sends a `DomKey` through the `key` command (design D4). */
 export function sendKey(key: DomKey): Promise<unknown> {
 	return invoke('key', { event: key });
@@ -110,8 +133,10 @@ export function sendLayoutReport(report: LayoutReport): Promise<unknown> {
  * Installs the window's input forwarding: every keydown goes to `key` with
  * its default action prevented (design D6 — no webview default such as
  * reload, find, zoom, or back navigation runs), and pointer press, release,
- * move, and wheel events go to `pointer` (design D4). Returns the cleanup
- * that removes every listener.
+ * move, and wheel events go to `pointer` (design D4). A `pointercancel`, a
+ * `pointerleave` with a button held, and the window's blur forward the
+ * neutral cancel, so a gesture the webview loses never leaves a drag armed
+ * (row 6.5). Returns the cleanup that removes every listener.
  */
 export function installInput(target: Window = window): () => void {
 	const onKeydown = (event: KeyboardEvent) => {
@@ -130,12 +155,28 @@ export function installInput(target: Window = window): () => void {
 	const onWheel = (event: WheelEvent) => {
 		void sendPointer(domWheel(event));
 	};
+	const onPointerCancel = (event: PointerEvent) => {
+		void sendPointer(domCancel(event));
+	};
+	const onPointerLeave = (event: PointerEvent) => {
+		// A leave with no button held owes no release; only a gesture in
+		// flight needs the cancel.
+		if (event.buttons !== 0) {
+			void sendPointer(domCancel(event));
+		}
+	};
+	const onBlur = () => {
+		void sendPointer(domCancel());
+	};
 
 	target.addEventListener('keydown', onKeydown);
 	target.addEventListener('pointerdown', onPointerDown);
 	target.addEventListener('pointerup', onPointerUp);
 	target.addEventListener('pointermove', onPointerMove);
 	target.addEventListener('wheel', onWheel);
+	target.addEventListener('pointercancel', onPointerCancel);
+	target.addEventListener('pointerleave', onPointerLeave);
+	target.addEventListener('blur', onBlur);
 
 	return () => {
 		target.removeEventListener('keydown', onKeydown);
@@ -143,5 +184,8 @@ export function installInput(target: Window = window): () => void {
 		target.removeEventListener('pointerup', onPointerUp);
 		target.removeEventListener('pointermove', onPointerMove);
 		target.removeEventListener('wheel', onWheel);
+		target.removeEventListener('pointercancel', onPointerCancel);
+		target.removeEventListener('pointerleave', onPointerLeave);
+		target.removeEventListener('blur', onBlur);
 	};
 }
