@@ -5,10 +5,10 @@ use mbv::{
 };
 use mbv_emby_model::TICKS_PER_SECOND;
 use mbv_emby_model::test_support::make_item;
-use mbv_gui::bridge::frame::queue::{GuiQueueRow, GuiRightColumn, GuiSemanticState};
+use mbv_gui::bridge::frame::queue::{GuiQueue, GuiQueueRow, GuiRightColumn, GuiSemanticState};
 use mbv_gui::bridge::frame::theme::GuiRole;
 use mbv_gui::bridge::frame::{FrameSources, GuiFrame};
-use mbv_queue::QueueItem;
+use mbv_queue::{QueueItem, QueueSlotId};
 use mbv_surfaces::FocusStack;
 use mbv_surfaces::queue::QueueSurface;
 use mbv_surfaces::queue_playback::QueuePlaybackSurface;
@@ -489,4 +489,55 @@ fn the_scrubber_hover_projects_its_time_and_chapter() {
     assert_eq!(hover.fraction, 0.25);
     assert_eq!(hover.ticks, 5 * 60 * TICKS_PER_SECOND);
     assert_eq!(hover.chapter.as_deref(), Some("Opening"));
+}
+
+/// The drag ghost carries the dragged row's Ends-at value (review of
+/// add-tauri-gui-client row 6.5, finding P2-3): in Ends-at mode the ghost
+/// paints the same right column as the row it lifts.
+#[test]
+fn a_drag_ghost_carries_its_rows_ends_at_clock_review_u65_p2_3() {
+    let minute = 60 * TICKS_PER_SECOND;
+    let mut app = stub_app_with_playing_items(vec![
+        slot_item("Playing", 20 * minute, 0, false),
+        slot_item("Pending", 10 * minute, 0, false),
+        slot_item("Later", 10 * minute, 0, false),
+    ]);
+    let _ = app.route_gui_input(
+        mbv::GuiInput::Key(mbv_ui_msg::KeyEvent::new(
+            mbv_ui_msg::Key::Char('t'),
+            mbv_ui_msg::KeyModifiers::NONE,
+        )),
+        None,
+    );
+
+    let projection = app.queue_surface_projection();
+    let mut queue = QueueSurface::new();
+    queue.list_mut().set_content(queue_media_rows(
+        projection.slots.as_deref().unwrap_or_default(),
+        projection.playback,
+        projection.pending_slot,
+    ));
+    queue.set_cursor(&projection.cursor);
+    assert!(queue.begin_row_drag(QueueSlotId::from_raw(2)));
+
+    let summary = app.queue_summary_projection();
+    assert_eq!(
+        GuiRightColumn::from(summary.right_column),
+        GuiRightColumn::EndsAt,
+        "the frame paints the Ends-at column"
+    );
+    let frame = GuiQueue::from_surface(&queue, VIEWPORT_ROWS, &summary);
+    let row_ends = frame.rows.iter().find_map(|row| match row {
+        GuiQueueRow::Item {
+            slot: 2, ends_at, ..
+        } => ends_at.clone(),
+        _ => None,
+    });
+    assert!(row_ends.is_some(), "the pending row carries its end clock");
+    let drag = frame.drag.expect("the frame carries the drag");
+    let ghost_ends = match drag.ghost {
+        GuiQueueRow::Item { ends_at, .. } => ends_at,
+        GuiQueueRow::Heading { .. } | GuiQueueRow::Spacer => panic!("a drag holds an item row"),
+    };
+    assert_eq!(ghost_ends, row_ends);
 }

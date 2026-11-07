@@ -64,16 +64,24 @@ pub enum GuiQueueInsertion {
 
 impl GuiQueueDrag {
     /// Projects the Surface state's drag over the list's rows: the ghost is
-    /// the dragged row's own content, so a drag of a row outside the painted
-    /// viewport still paints what it moves. `None` when the rows no longer
-    /// hold the dragged slot (a content refresh can drop it).
-    fn from_surface(rows: &[MediaListRow<QueueSlotId>], drag: QueueRowDrag) -> Option<Self> {
+    /// the dragged row's own content — its Ends-at value included, so the
+    /// ghost paints the same right column as the row it lifts — so a drag of
+    /// a row outside the painted viewport still paints what it moves. `None`
+    /// when the rows no longer hold the dragged slot (a content refresh can
+    /// drop it).
+    fn from_surface(
+        rows: &[MediaListRow<QueueSlotId>],
+        drag: QueueRowDrag,
+        summary: &QueueSummaryProjection,
+    ) -> Option<Self> {
         let row = rows.iter().find(
             |row| matches!(row, MediaListRow::Item { target, .. } if *target == drag.slot_id),
         )?;
+        let mut ghost = GuiQueueRow::from_painted(row, false);
+        apply_ends_at(&mut ghost, summary);
         Some(Self {
             slot: drag.slot_id.raw(),
-            ghost: GuiQueueRow::from_painted(row, false),
+            ghost,
             drop_index: drag.drop_index,
             insertion: match drag.insertion {
                 QueueRowInsertion::Before(slot_id) => GuiQueueInsertion::Before {
@@ -139,13 +147,7 @@ impl GuiQueue {
             .map(|(source_row, row)| {
                 let striped = striped_state(row, source_row, grouped, &kept, &mut striped);
                 let mut row = GuiQueueRow::from_painted(row, striped);
-                if let GuiQueueRow::Item { slot, ends_at, .. } = &mut row {
-                    *ends_at = summary
-                        .row_finish_clocks
-                        .iter()
-                        .find(|(clock_slot, _)| clock_slot.raw() == *slot)
-                        .map(|(_, clock)| clock.clone());
-                }
+                apply_ends_at(&mut row, summary);
                 row
             })
             .collect();
@@ -159,8 +161,21 @@ impl GuiQueue {
             hover: queue.hover().map(QueueSlotId::raw),
             drag: queue
                 .row_drag()
-                .and_then(|drag| GuiQueueDrag::from_surface(rows, drag)),
+                .and_then(|drag| GuiQueueDrag::from_surface(rows, drag, summary)),
         }
+    }
+}
+
+/// Fill a row's Ends-at value from the summary's per-slot finish clocks (the
+/// right column's "Ends at" datum). Shared by the painted rows and the drag
+/// ghost, so the ghost paints the same right column as its row.
+fn apply_ends_at(row: &mut GuiQueueRow, summary: &QueueSummaryProjection) {
+    if let GuiQueueRow::Item { slot, ends_at, .. } = row {
+        *ends_at = summary
+            .row_finish_clocks
+            .iter()
+            .find(|(clock_slot, _)| clock_slot.raw() == *slot)
+            .map(|(_, clock)| clock.clone());
     }
 }
 

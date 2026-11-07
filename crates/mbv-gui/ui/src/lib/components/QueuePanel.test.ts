@@ -250,10 +250,14 @@ test('a drag paints the ghost and the insertion line on the anchored row', () =>
 				insertion: { at: 'after', slot: 2 },
 			},
 		}),
+		summary({ rightColumn: 'endsAt' }),
 	);
 
 	const ghost = container.querySelector('[data-ghost]') as HTMLElement;
 	expect(ghost.textContent).toContain('Dragged track');
+	// The ghost paints the same right column as the row it lifts.
+	expect(ghost.textContent).toContain('21:40');
+	expect(ghost.textContent).not.toContain('3:12');
 	const line = container.querySelector('[data-insertion]') as HTMLElement;
 	expect(line.dataset.insertion).toBe('after');
 	expect(container.querySelector('[data-slot="2"]')?.contains(line)).toBe(true);
