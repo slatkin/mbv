@@ -5,7 +5,6 @@ use mbv::{
 };
 use mbv_emby_model::TICKS_PER_SECOND;
 use mbv_emby_model::test_support::make_item;
-use mbv_gui::bridge::frame::playback::GuiPlaybackState;
 use mbv_gui::bridge::frame::queue::{GuiQueue, GuiQueueRow, GuiRightColumn, GuiSemanticState};
 use mbv_gui::bridge::frame::theme::GuiRole;
 use mbv_gui::bridge::frame::{FrameSources, GuiFrame};
@@ -13,7 +12,6 @@ use mbv_queue::{QueueItem, QueueSlotId};
 use mbv_surfaces::FocusStack;
 use mbv_surfaces::queue::{QueueCursorUpdate, QueueSurface};
 use mbv_surfaces::queue_playback::QueuePlaybackSurface;
-use mbv_ui_model::playback::PlaybackState;
 use mbv_ui_model::queue_rows::queue_media_rows;
 
 /// The Queue viewport height, in rows, that the frame tests paint with.
@@ -122,28 +120,6 @@ fn a_scrolled_viewport_numbers_rows_by_queue_position() {
         })
         .collect();
     assert_eq!(painted, [("Item 1", 2), ("Item 2", 3)]);
-}
-
-/// The rail's compact remaining time (audit/collapsed.md G12) is whole
-/// minutes floored from the playhead's position and the item's runtime, and
-/// no value at all while the runtime is unknown.
-#[test]
-fn the_frame_carries_the_rails_remaining_whole_minutes() {
-    let minute = 60 * TICKS_PER_SECOND;
-    let playing = PlaybackState {
-        active: true,
-        active_idx: Some(0),
-        position_ticks: 8 * minute,
-        runtime_ticks: 30 * minute,
-        paused: false,
-    };
-    assert_eq!(GuiPlaybackState::from(playing).remaining_minutes, Some(22));
-
-    let unknown = PlaybackState {
-        runtime_ticks: 0,
-        ..playing
-    };
-    assert_eq!(GuiPlaybackState::from(unknown).remaining_minutes, None);
 }
 
 /// An empty queue's frame carries no rows and no active slot, and its

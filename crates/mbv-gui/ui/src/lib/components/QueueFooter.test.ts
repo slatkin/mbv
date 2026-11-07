@@ -35,7 +35,6 @@ const footer: GuiQueueFooter = {
 	owner: { text: 'woims', role: 'textFocusAccent', bold: false },
 	ownerLive: true,
 	playlist: { text: 'mix', role: 'textMetadata', bold: false },
-	libraryContext: null,
 	autosave: null,
 	dirty: null,
 };
@@ -78,7 +77,6 @@ test('the footer pills paint their Lucide icons', () => {
 		owner: { text: 'woims', role: 'textFocusAccent', bold: false },
 		ownerLive: true,
 		playlist: { text: 'mix', role: 'textMetadata', bold: false },
-		libraryContext: null,
 		autosave: { text: 'AUTOSAVE', role: 'accent', bold: false },
 		dirty: { text: 'UNSAVED', role: 'textFocusAccent', bold: true },
 	});

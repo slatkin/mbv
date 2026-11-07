@@ -5,7 +5,6 @@ use mbv::{
     PlaybackChapter, PlaybackTargetChoice, QueuePlaybackProjection, SegmentMark, TrackChip,
     TrackChips, TrackChoice, TrickplayGrid,
 };
-use mbv_emby_model::TICKS_PER_SECOND;
 use mbv_ui_model::panel_targets::SessionTargetKey;
 use mbv_ui_model::playback::PlaybackState;
 use mbv_ui_model::playback_target::NowPlayingStatus;
@@ -419,11 +418,6 @@ pub struct GuiPlaybackState {
     pub position_ticks: i64,
     pub runtime_ticks: i64,
     pub paused: bool,
-    /// The remaining whole minutes the rail paints as `−22m`
-    /// (audit/collapsed.md G12): the item's remaining runtime floored to
-    /// whole minutes and clamped at zero. `None` while the runtime is unknown
-    /// (`runtime_ticks <= 0`), which is distinct from a known zero.
-    pub remaining_minutes: Option<u64>,
 }
 
 impl From<PlaybackState> for GuiPlaybackState {
@@ -434,21 +428,8 @@ impl From<PlaybackState> for GuiPlaybackState {
             position_ticks: state.position_ticks,
             runtime_ticks: state.runtime_ticks,
             paused: state.paused,
-            remaining_minutes: remaining_whole_minutes(state.position_ticks, state.runtime_ticks),
         }
     }
-}
-
-/// The whole minutes left in an item with a known runtime: the position clamps
-/// into the runtime, so an overshot playhead leaves zero, and the division
-/// floors the seconds away. `None` while the runtime is unknown.
-fn remaining_whole_minutes(position_ticks: i64, runtime_ticks: i64) -> Option<u64> {
-    if runtime_ticks <= 0 {
-        return None;
-    }
-    let remaining_ticks = runtime_ticks - position_ticks.clamp(0, runtime_ticks);
-    let minutes = remaining_ticks / (60 * TICKS_PER_SECOND);
-    Some(u64::try_from(minutes).unwrap_or(0))
 }
 
 /// Which transport controls are actionable. The fields mirror the Queue
