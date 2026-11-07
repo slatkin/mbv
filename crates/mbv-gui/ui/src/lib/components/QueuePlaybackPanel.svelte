@@ -74,8 +74,6 @@
 		 * hovered sheet changes, so the preview repaints the latched image while
 		 * the tile names its key. `null` in a bare render. */
 		carriedSheet?: GuiTrickplaySheet | null;
-		/** Whether the queue is folded (the `q` toggle, design D10). */
-		queueFolded?: boolean;
 	}
 	const {
 		playback,

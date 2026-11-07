@@ -4,9 +4,9 @@
 	// queue's rows with one line — the remaining count, the queue finish
 	// clock, and the control that expands the queue again.
 	//
-	// The expand control reports the `queueFold` target, the same target the
-	// expanded header's fold control reports, so both directions run the one
-	// `q` toggle in the core. The line keeps the queue box's fill and its
+	// The expand control reports the `queueFold` target, the id the core's
+	// one `q` toggle runs from (the canvas paints no header fold control;
+	// `q` folds the queue). The line keeps the queue box's fill and its
 	// two-column inset, so the fold does not move the neighbouring bands'
 	// edges.
 	import { onMount } from 'svelte';

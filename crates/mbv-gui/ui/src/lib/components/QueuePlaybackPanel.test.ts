@@ -1,8 +1,8 @@
-// add-tauri-gui-client task 6.4: the player panel's top block paints the
-// canvas artboard from a frame — header with the playback target, its
-// chooser and the collapse and queue-fold controls, artwork with the episode
-// badge, title and parent line, the scrubber with its clocks and hover
-// preview, and the transport. It reports the painted regions through
+// add-tauri-gui-client task 6.4, aligned to the design canvas U3: the player
+// panel's top block paints the artboard from a frame — header with the
+// playback target, its chooser and the collapse control, artwork with the
+// episode badge, title and parent line, the scrubber with its clocks and
+// hover preview, and the transport. It reports the painted regions through
 // `report_layout` and forwards pointer presses through `pointer`; the core
 // resolves gestures against the hit map. The Tauri IPC is mocked, and the
 // asserted payloads are the serde wire shapes of bridge/layout.rs and
