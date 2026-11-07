@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>mbv library — Music</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#232a2e}
+a{color:#83c092}a:hover{color:#a7c080}
+button{font:inherit}
+input{font:inherit}
+</style>
+</helmet>
+<div style="width: 1240px; height: 1800px; box-sizing: border-box; background: #272e33; color: #d3c6aa; font-family: 'IBM Plex Sans', system-ui, sans-serif; display: flex; flex-direction: column">
+
+  <!-- Top bar: media types + search -->
+  <div style="height: 56px; flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; padding: 0 12px 0 8px; border-bottom: 1px solid #3d484d; background: #2d353b">
+    <nav aria-label="Libraries" style="display: flex; align-items: center; gap: 2px; height: 56px">
+      <a href="#" aria-label="Home" style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; color: #9da9a0"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M3 11 12 4l9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg></a>
+      <a href="#" style="height: 56px; display: flex; align-items: center; padding: 0 12px; font-size: 13px; font-weight: 500; color: #9da9a0; text-decoration: none; text-transform: uppercase; letter-spacing: 0.06em">Movies</a>
+      <a href="#" aria-current="page" style="height: 56px; display: flex; align-items: center; padding: 0 12px; text-decoration: none"><span style="display: block; padding: 3px 1px 2px; border-top: 2px solid #d699b6; border-bottom: 2px solid #d699b6; font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; line-height: 1; color: #e9e1cc">Music</span></a>
+      <a href="#" style="height: 56px; display: flex; align-items: center; padding: 0 12px; font-size: 13px; font-weight: 500; color: #9da9a0; text-decoration: none; text-transform: uppercase; letter-spacing: 0.06em">Shows</a>
+      <a href="#" style="height: 56px; display: flex; align-items: center; padding: 0 12px; font-size: 13px; font-weight: 500; color: #9da9a0; text-decoration: none; text-transform: uppercase; letter-spacing: 0.06em">YouTube</a>
+      <a href="#" style="height: 56px; display: flex; align-items: center; padding: 0 12px; font-size: 13px; font-weight: 500; color: #9da9a0; text-decoration: none; text-transform: uppercase; letter-spacing: 0.06em">Podcasts</a>
+      <a href="#" style="height: 56px; display: flex; align-items: center; padding: 0 12px; font-size: 13px; font-weight: 500; color: #9da9a0; text-decoration: none; text-transform: uppercase; letter-spacing: 0.06em">Audiobooks</a>
+      <a href="#" style="height: 56px; display: flex; align-items: center; padding: 0 12px; font-size: 13px; font-weight: 500; color: #9da9a0; text-decoration: none; text-transform: uppercase; letter-spacing: 0.06em">Feeds</a>
+    </nav>
+    <label style="display: flex; align-items: center; gap: 8px; width: 300px; height: 36px; box-sizing: border-box; padding: 0 10px; background: #232a2e; border: 1px solid #3d484d; border-radius: 6px; color: #9da9a0">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Search all libraries</span>
+      <input type="search" placeholder="Search everything" style="flex: 1 1 auto; min-width: 0; background: none; border: 0; outline: none; color: #e9e1cc; font-size: 13px">
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #9da9a0; border: 1px solid #475258; border-radius: 4px; padding: 1px 5px">Ctrl K</span>
+    </label>
+  </div>
+
+  <!-- Collections row -->
+  <div style="height: 52px; flex: 0 0 auto; display: flex; align-items: center; gap: 6px; padding: 0 16px; border-bottom: 1px solid #3d484d; overflow: hidden">
+    <button aria-label="Collection options" style="width: 32px; height: 32px; flex: 0 0 auto; display: flex; align-items: center; justify-content: center; background: none; border: 0; color: #7fbbb3; cursor: pointer"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4"/></svg></button>
+    <sc-for list="{{collections}}" as="c" hint-placeholder-count="14">
+      <button aria-pressed="{{c.pressed}}" onClick="{{c.toggle}}" style="{{c.style}}"><sc-if value="{{c.on}}" hint-placeholder-val="{{ false }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg></sc-if>{{c.name}}</button>
+    </sc-for>
+    <sc-if value="{{multi}}" hint-placeholder-val="{{ false }}">
+      <button onClick="{{clear}}" style="height: 32px; flex: 0 0 auto; padding: 0 10px; margin-left: 4px; background: none; border: 0; border-left: 1px solid #3d484d; color: #9da9a0; font-family: 'JetBrains Mono', monospace; font-size: 11px; cursor: pointer; white-space: nowrap">{{selCount}} · clear</button>
+    </sc-if>
+  </div>
+
+  <!-- Body -->
+  <div style="flex: 1 1 auto; min-height: 0; display: flex">
+
+    <!-- Artist index -->
+    <div style="width: 320px; flex: 0 0 auto; order: 2; display: flex; flex-direction: column; border-left: 1px solid #3d484d; background: #2d353b">
+      <div style="padding: 14px 16px 10px; display: flex; flex-direction: column; gap: 10px">
+        <div style="display: flex; align-items: baseline; justify-content: space-between">
+          <span style="font-size: 13px; font-weight: 600; color: #e9e1cc">Artists</span>
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #9da9a0">{{selLabel}}</span>
+        </div>
+        <label style="display: flex; align-items: center; gap: 8px; height: 32px; box-sizing: border-box; padding: 0 10px; background: #232a2e; border: 1px solid #3d484d; border-radius: 6px; color: #9da9a0">
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #7fbbb3">/</span>
+          <input type="text" placeholder="Filter Hip-Hop" aria-label="Filter artists" style="flex: 1 1 auto; min-width: 0; background: none; border: 0; outline: none; color: #e9e1cc; font-size: 13px">
+        </label>
+      </div>
+      <div style="flex: 1 1 auto; display: flex; min-height: 0; overflow: hidden">
+        <ol style="list-style: none; margin: 0; padding: 0 0 0 8px; flex: 1 1 auto; display: flex; flex-direction: column">
+          <sc-for list="{{artists}}" as="a" hint-placeholder-count="20">
+            <li>
+              <sc-if value="{{a.showLetter}}" hint-placeholder-val="{{ false }}">
+                <div style="height: 24px; display: flex; align-items: flex-end; padding: 0 8px 2px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #7fbbb3">{{a.letter}}</div>
+              </sc-if>
+              <button onClick="{{a.toggle}}" style="{{a.style}}"><span style="{{a.leadStyle}}"><sc-if value="{{a.hasChev}}" hint-placeholder-val="{{ true }}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="{{a.chevStyle}}"><path d="m9 5 7 7-7 7"/></svg></sc-if><sc-if value="{{a.hasNum}}" hint-placeholder-val="{{ false }}">{{a.num}}</sc-if></span><span style="{{a.nameStyle}}">{{a.name}}</span><span style="{{a.yearStyle}}">{{a.year}}</span></button>
+            </li>
+          </sc-for>
+        </ol>
+        <nav aria-label="Jump to letter" style="width: 28px; flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; padding-top: 4px">
+          <sc-for list="{{letters}}" as="l" hint-placeholder-count="26">
+            <button style="{{l.style}}">{{l.ch}}</button>
+          </sc-for>
+        </nav>
+      </div>
+    </div>
+
+    <!-- Detail -->
+    <div style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; padding: 28px 32px; gap: 28px">
+
+      <!-- Artist header -->
+      <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; padding-bottom: 20px; border-bottom: 1px solid #3d484d">
+        <div style="display: flex; flex-direction: column; gap: 6px">
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.08em; color: #9da9a0">ARTIST · HIP-HOP</span>
+          <h1 style="margin: 0; font-size: 32px; font-weight: 600; color: #e9e1cc; letter-spacing: -0.01em">Beastie Boys</h1>
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #9da9a0">1 album · 13 tracks · 44:25</span>
+        </div>
+        <div style="display: flex; gap: 8px">
+          <button style="height: 40px; padding: 0 14px; display: flex; align-items: center; gap: 8px; background: none; border: 1px solid #475258; border-radius: 6px; color: #d3c6aa; font-size: 13px; cursor: pointer"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>Shuffle artist</button>
+        </div>
+      </div>
+
+      <!-- Album block -->
+      <section aria-label="Licensed to Ill" style="display: flex; gap: 32px; align-items: flex-start">
+        <div style="width: 300px; height: 300px; flex: 0 0 auto; background: #343f44; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #9da9a0">[Album art · Emby Primary]</div>
+        <div style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 18px; padding-top: 8px">
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.08em; color: #9da9a0">1986</span>
+            <h2 style="margin: 0; font-size: 24px; font-weight: 600; color: #e9e1cc">Licensed to Ill</h2>
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #9da9a0">13 tracks · 44:25</span>
+          </div>
+          <div style="display: flex; flex-wrap: wrap; gap: 8px">
+            <button style="height: 44px; padding: 0 18px 0 14px; display: flex; align-items: center; gap: 8px; background: #a7c080; border: 0; border-radius: 22px; color: #232a2e; font-size: 14px; font-weight: 600; cursor: pointer"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15l12-7.5z"/></svg>Play</button>
+            <button style="height: 44px; padding: 0 14px; display: flex; align-items: center; gap: 8px; background: #343f44; border: 1px solid #475258; border-radius: 22px; color: #d3c6aa; font-size: 13px; cursor: pointer">Play next<span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #9da9a0">n</span></button>
+            <button style="height: 44px; padding: 0 14px; display: flex; align-items: center; gap: 8px; background: #343f44; border: 1px solid #475258; border-radius: 22px; color: #d3c6aa; font-size: 13px; cursor: pointer">Add to queue<span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #9da9a0">a</span></button>
+            <button aria-label="More album actions" style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; background: none; border: 0; color: #9da9a0; cursor: pointer"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tracklist -->
+      <section aria-label="Tracklist" style="display: flex; flex-direction: column">
+        <div style="height: 32px; display: grid; grid-template-columns: 40px minmax(0, 1fr) 88px 64px; align-items: center; padding: 0 8px; border-bottom: 1px solid #3d484d; font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.08em; color: #9da9a0">
+          <span>#</span><span>TITLE</span><span></span><span style="text-align: right">TIME</span>
+        </div>
+        <ol style="list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column">
+          <sc-for list="{{tracks}}" as="t" hint-placeholder-count="13">
+            <li style="{{t.rowStyle}}">
+              <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #7f897d; font-variant-numeric: tabular-nums">
+                <sc-if value="{{t.hover}}" hint-placeholder-val="{{ false }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="#a7c080" aria-hidden="true"><path d="M7 4.5v15l12-7.5z"/></svg></sc-if>
+                <sc-if value="{{t.notHover}}" hint-placeholder-val="{{ true }}">{{t.num}}</sc-if>
+              </span>
+              <span style="{{t.titleStyle}}">{{t.title}}</span>
+              <span style="display: flex; justify-content: flex-end; gap: 2px">
+                <sc-if value="{{t.hover}}" hint-placeholder-val="{{ false }}">
+                  <button aria-label="Play next" style="width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; background: none; border: 0; border-radius: 4px; color: #d3c6aa; cursor: pointer"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 6h10M4 12h10M4 18h6M16 15l4 3-4 3z"/></svg></button>
+                  <button aria-label="Add to queue" style="width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; background: none; border: 0; border-radius: 4px; color: #d3c6aa; cursor: pointer"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+                </sc-if>
+              </span>
+              <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #9da9a0; text-align: right; font-variant-numeric: tabular-nums">{{t.dur}}</span>
+            </li>
+          </sc-for>
+        </ol>
+      </section>
+    </div>
+  </div>
+
+  <!-- Status bar -->
+  <div style="height: 40px; flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; border-top: 1px solid #3d484d; background: #2d353b; font-family: 'JetBrains Mono', monospace; font-size: 12px">
+    <span style="color: #9da9a0"><span style="color: #7fbbb3">/</span> filter  <span style="color: #7fbbb3">⏎</span> play  <span style="color: #7fbbb3">n</span> next  <span style="color: #7fbbb3">a</span> queue  <span style="color: #7fbbb3">tab</span> pane  <span style="color: #7fbbb3">1–7</span> library</span>
+    <span style="color: #9da9a0">Music › Hip-Hop › Beastie Boys</span>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1240,"height":1800}}'>
+class Component extends DCLogic {
+  constructor(p){ super(p); this.state = { sel: ['Hip-Hop'], open: { 'Beastie Boys': true, 'Beastie Boys/Licensed To Ill': true, 'Brand Nubian': true, 'Brand Nubian/One For All': true }, picked: 'Beastie Boys/Licensed To Ill' }; }
+  renderVals() {
+    const cols = ['Africa','America','Antipode','Classical','Comps','Europe','Hip-Hop','Jamaica','Jazz','Mixes','North America','Soul','Staging','WIP'];
+    const sel = this.state.sel;
+    const collections = cols.map((name) => {
+      const on = sel.includes(name);
+      const toggle = (e) => {
+        if (e && e.altKey) return this.setState({ sel: [name] });
+        const next = on ? sel.filter((s) => s !== name) : sel.concat(name);
+        this.setState({ sel: next.length ? next : [name] });
+      };
+      return { name, on, toggle, pressed: on ? 'true' : 'false', style: `height: 32px; flex: 0 0 auto; display: flex; align-items: center; gap: 5px; padding: 0 12px 0 ${on ? 9 : 12}px; border-radius: 16px; cursor: pointer; font-size: 13px; white-space: nowrap; border: 1px solid ${on ? '#7fbbb3' : '#3d484d'}; background: ${on ? '#7fbbb3' : 'transparent'}; color: ${on ? '#232a2e' : '#d3c6aa'}; font-weight: ${on ? 600 : 400};` };
+    });
+    const ordered = cols.filter((c) => sel.includes(c));
+    const multi = ordered.length > 1;
+    const selLabel = multi ? ordered.join(' + ') : ordered[0] + ' · sort name';
+    const clear = () => this.setState({ sel: [ordered[0]] });
+    const names = ['Beastie Boys','Big L','Black Moon','Brand Nubian','Capone-N-Noreaga','Cypress Hill','Da Beatminerz','De La Soul','Dr. Octagon','EPMD','Fatlip','Ice Cube','Juggaknots','King Geedorah','KMD','Kool G Rap & DJ Polo','Lootpack','Masta Ace','Masta Ace Incorporated','Masters at Work','Masters of Ceremony','MF DOOM','MF Grimm','Organized Konfusion','Paris','Pharoahe Monch','Prince Paul','Quasimoto','Sadat X','Scarface','Tim Dog','A Tribe Called Quest','Various Artists','Viktor Vaughn'];
+    const sortKey = (n) => n.replace(/^(The|A) /, '');
+    const albums = {
+      'Beastie Boys': [['Licensed To Ill', 1986, ['Rhymin & Stealin','The New Style',"She's Crafty",'Posse In Effect','Slow Ride','Girls','Fight For Your Right','No Sleep Till Brooklyn','Paul Revere','Hold It Now, Hit It','Brass Monkey','Slow And Low','Time To Get Ill']]],
+      'Brand Nubian': [['One For All', 1990, ['All For One','Feels So Good','Concerto In X Minor','Ragtime','To The Right','Dance To My Ministry','Drop The Bomb','Wake Up (Stimulated Dummies Mix)','Step To The Rear','Slow Down','Try To Do Me','Who Can Get Busy Like This Man...','Grand Puba, Positive And L.G.','Brand Nubian','Wake Up (Reprise In The Sunshine)','Dedication']], ['Punks Jump Up to Get Beat Down', 1992, []]]
+    };
+    const open = this.state.open, picked = this.state.picked;
+    const toggleKey = (k) => this.setState({ open: Object.assign({}, open, { [k]: !open[k] }), picked: k });
+    const colors = ['#d3c6aa', '#dbbc7f', '#83c092'];
+    const node = (key, label, depth, year, onClick, num) => {
+      const on = picked === key;
+      const isOpen = !!open[key];
+      const guides = depth === 0 ? [] : (depth === 1 ? ['13px'] : ['13px', '31px']);
+      const guideCss = guides.length && !on
+        ? `background-image: ${guides.map(() => 'linear-gradient(#3d484d, #3d484d)').join(', ')}; background-position: ${guides.map((x) => x + ' 0').join(', ')}; background-size: ${guides.map(() => '1px 100%').join(', ')}; background-repeat: no-repeat;`
+        : '';
+      const fg = on ? '#232a2e' : ['#e9e1cc', '#d3c6aa', '#9da9a0'][depth];
+      return {
+        name: label, year: year ? String(year) : '', toggle: onClick, showLetter: false,
+        hasChev: depth < 2, hasNum: depth === 2, num: num ? String(num) : '',
+        style: `width: 100%; height: ${depth === 2 ? 28 : 30}px; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 ${[4, 22, 40][depth]}px; border: 0; border-radius: ${on ? 4 : 0}px; text-align: left; cursor: pointer; font-size: ${depth === 2 ? 13 : 13.5}px; background-color: ${on ? '#a7c080' : 'transparent'}; ${guideCss}`,
+        leadStyle: `width: 18px; flex: 0 0 auto; display: flex; align-items: center; justify-content: ${depth === 2 ? 'flex-end' : 'center'}; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-variant-numeric: tabular-nums; color: ${on ? '#232a2e' : '#7f897d'};`,
+        chevStyle: `transform: rotate(${isOpen ? 90 : 0}deg); transition: transform 120ms ease; color: ${on ? '#232a2e' : '#9da9a0'};`,
+        nameStyle: `flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: ${fg}; font-weight: ${on || depth === 0 ? 600 : 400};`,
+        yearStyle: `flex: 0 0 auto; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: ${on ? '#232a2e' : '#9da9a0'};`
+      };
+    };
+    let prev = '';
+    const present = new Set();
+    const artists = [];
+    names.forEach((name) => {
+      const letter = sortKey(name)[0].toUpperCase();
+      present.add(letter);
+      const row = node(name, name, 0, null, () => toggleKey(name));
+      row.letter = letter; row.showLetter = letter !== prev; prev = letter;
+      artists.push(row);
+      if (!open[name]) return;
+      (albums[name] || []).forEach(([album, year, trks]) => {
+        const ak = name + '/' + album;
+        artists.push(node(ak, album, 1, year, () => toggleKey(ak)));
+        if (!open[ak]) return;
+        trks.forEach((t, i) => {
+          const tk = ak + '/' + i;
+          artists.push(node(tk, t, 2, null, () => this.setState({ picked: tk }), i + 1));
+        });
+      });
+    });
+    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map((ch) => {
+      const has = present.has(ch), on = ch === 'B';
+      return { ch, style: `width: 24px; height: 22px; padding: 0; border: 0; border-radius: 3px; cursor: ${has ? 'pointer' : 'default'}; font-family: 'JetBrains Mono', monospace; font-size: 10px; background: ${on ? '#3d484d' : 'transparent'}; color: ${on ? '#a7c080' : (has ? '#9da9a0' : '#4f5b58')};` };
+    });
+    const tl = [['Rhymin & Stealin','4:08'],['The New Style','4:35'],["She's Crafty",'3:35'],['Posse In Effect','2:26'],['Slow Ride','2:56'],['Girls','2:14'],['Fight For Your Right','3:27'],['No Sleep Till Brooklyn','4:06'],['Paul Revere','3:40'],['Hold It Now, Hit It','3:26'],['Brass Monkey','2:37'],['Slow And Low','3:38'],['Time To Get Ill','3:37']];
+    const tracks = tl.map(([title, dur], i) => {
+      const hover = i === 7;
+      return {
+        num: String(i + 1), title, dur, hover, notHover: !hover,
+        rowStyle: `height: 34px; display: grid; grid-template-columns: 40px minmax(0, 1fr) 88px 64px; align-items: center; padding: 0 8px; border-radius: 4px; background: ${hover ? '#343f44' : 'transparent'};`,
+        titleStyle: `font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: ${hover ? '#e9e1cc' : '#d3c6aa'};`
+      };
+    });
+    return { collections, artists, letters, tracks, multi, clear, selLabel, selCount: ordered.length + ' selected' };
+  }
+}
+</script>
+</body>
+</html>

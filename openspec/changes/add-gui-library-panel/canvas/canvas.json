@@ -1,0 +1,85 @@
+{
+  "v": 3,
+  "attachments": {},
+  "boards": {
+    "Collapsed.dc.html": {
+      "h": 560,
+      "radius": 10,
+      "title": "Collapsed states",
+      "w": 400,
+      "x": 1800,
+      "y": 0
+    },
+    "Library.dc.html": {
+      "h": 1800,
+      "is_interactive": true,
+      "radius": 10,
+      "title": "Library — Music › Hip-Hop",
+      "w": 1240,
+      "x": 480,
+      "y": 0
+    },
+    "Main.dc.html": {
+      "h": 1800,
+      "is_interactive": true,
+      "radius": 10,
+      "title": "Queue panel — expanded",
+      "w": 400,
+      "x": 0,
+      "y": 0
+    },
+    "Menus.dc.html": {
+      "h": 880,
+      "radius": 10,
+      "title": "Track popover, row menu, drag",
+      "w": 400,
+      "x": 2280,
+      "y": 0
+    }
+  },
+  "createdOnFiles": {
+    "at": "2026-11-06T21:30:00Z",
+    "v": 1
+  },
+  "designSystems": [],
+  "launch": {
+    "view": "canvas"
+  },
+  "noteOrder": [
+    "t",
+    "n1",
+    "n2"
+  ],
+  "notes": {
+    "n2": {
+      "fill": "blue",
+      "text": "SPEC — collection pills are multi-select.\n• Click toggles a pill on/off; selected pills show a check (aria-pressed).\n• Alt-click = solo that collection.\n• At least one stays selected; turning off the last one is ignored.\n• Artist list = UNION of selected collections, de-duplicated, re-sorted by sort name; letter rail recomputed.\n• An artist in 2+ selected collections shows once.\n• 2+ selected → 'N selected · clear' appears (clear keeps the first in pill order); header reads 'Hip-Hop + Soul'.\n• Keys: Space toggles focused pill, Alt+Space solos.\n• Selection persists per media type (Music, Shows…).",
+      "w": 340,
+      "x": 2760,
+      "y": 480
+    },
+    "n1": {
+      "fill": "teal",
+      "text": "Kept from the TUI: density (30px rows, ~38 visible), monospace tabular times, keyboard-first. Added: scrubber with chapters + hover preview, interactive track chips, one consistent watched/progress encoding, drag/context menu, collapse states.",
+      "w": 300,
+      "x": 2760,
+      "y": 0
+    },
+    "t": {
+      "kind": "title1",
+      "maxW": 3060,
+      "text": "mbv — Svelte player: queue + library",
+      "w": 240,
+      "x": 0,
+      "y": -260
+    }
+  },
+  "order": [
+    "Main.dc.html",
+    "Library.dc.html",
+    "Collapsed.dc.html",
+    "Menus.dc.html"
+  ],
+  "pages": [],
+  "title": "mbv Svelte Player"
+}
