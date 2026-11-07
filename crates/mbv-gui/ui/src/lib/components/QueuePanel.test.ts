@@ -136,6 +136,11 @@ function pointerCalls(): { event: { x: number; y: number } }[] {
 		.map((call) => call[1] as { event: { x: number; y: number } });
 }
 
+/** The painted progress fill of one row's track. */
+function progressBar(container: HTMLElement, slot: number): HTMLElement {
+	return container.querySelector(`[data-slot="${slot}"] [data-progress] span`) as HTMLElement;
+}
+
 test('a frame with slots renders its rows', () => {
 	const { getByText, container } = renderPanel(
 		queue(
@@ -161,15 +166,17 @@ test('an empty frame renders the empty-queue state', () => {
 	expect(container.querySelectorAll('[data-slot]')).toHaveLength(0);
 });
 
-test('the header paints the count, the finish clock, the switch, and the filter', () => {
+test('the header paints the canvas heading, the finish clock, the switch, and the filter', () => {
 	const { getByText, container } = renderPanel(queue([]));
 
-	expect(getByText('Queue')).toBeTruthy();
-	expect(container.querySelector('[data-remaining]')?.textContent).toBe('2');
-	expect(container.querySelector('[data-finish-clock]')?.textContent).toBe('21:43');
+	expect(container.querySelector('[data-queue-heading]')?.textContent).toBe('Up next · 2');
+	expect(container.querySelector('[data-finish-clock]')?.textContent).toBe('queue ends 21:43');
 	expect(getByText('Length')).toBeTruthy();
 	expect(getByText('Ends at')).toBeTruthy();
-	expect(getByText('Filter')).toBeTruthy();
+	// The filter is the canvas's icon-only magnifier button at rest.
+	expect(container.querySelector('[data-filter]')?.getAttribute('aria-label')).toBe(
+		'Filter queue',
+	);
 });
 
 test('the active filter paints its text and the caret', () => {
@@ -182,14 +189,16 @@ test('the active filter paints its text and the caret', () => {
 	expect(container.querySelector('[data-caret]')).toBeTruthy();
 });
 
-test('the right column paints the ends-at clock in the ends-at mode', () => {
-	const { getByText, queryByText } = renderPanel(
-		queue([item(1)]),
-		summary({ rightColumn: 'endsAt' }),
-	);
+test('the right column paints the mode\'s value in the canvas colour', () => {
+	// "Ends at" reads green, "Length" muted (the canvas's right-column rule).
+	const ends = renderPanel(queue([item(1)]), summary({ rightColumn: 'endsAt' }));
 
-	expect(getByText('21:40')).toBeTruthy();
-	expect(queryByText('3:12')).toBeNull();
+	expect(ends.getByText('21:40').style.color).toBe('var(--canvas-accent)');
+	expect(ends.queryByText('3:12')).toBeNull();
+
+	const length = renderPanel(queue([item(1)]), summary({ rightColumn: 'length' }));
+
+	expect(length.getByText('3:12').style.color).toBe('var(--canvas-muted)');
 });
 
 test('the rows paint the watched, active, and partial-progress states', () => {
@@ -202,20 +211,61 @@ test('the rows paint the watched, active, and partial-progress states', () => {
 					state: { state: 'nowPlaying', progress: 12 },
 				}),
 				item(3, { primary: 'Partial', state: { state: 'active', progress: 42 } }),
+				item(4, { primary: 'Started', state: { state: 'active', progress: 1 } }),
 			],
 			2,
 		),
 	);
 
-	// The watched row strikes its title through.
-	expect(getByText('Watched').className).toContain('line-through');
-	// The active row fills with the accent.
+	// The watched row strikes its title through in the canvas's strike colour.
+	const watched = getByText('Watched');
+	expect(watched.className).toContain('line-through');
+	expect(watched.style.textDecorationColor).toBe('var(--canvas-strike)');
+	// The active row fills with the canvas's green and weights its title 600.
 	const playingRow = container.querySelector('[data-slot="2"]') as HTMLElement;
-	expect(playingRow.style.background).toBe('var(--mbv-accent)');
-	// The partial row paints a thin progress bar under its title.
-	const partialRow = container.querySelector('[data-slot="3"]') as HTMLElement;
-	const bar = partialRow.querySelector('[data-progress] span') as HTMLElement;
-	expect(bar.style.width).toBe('42%');
+	expect(playingRow.style.background).toBe('var(--canvas-accent)');
+	expect(getByText('Playing').style.fontWeight).toBe('600');
+	// The track under the title fills to max(percent, 3)%.
+	expect(progressBar(container, 3).style.width).toBe('42%');
+	expect(progressBar(container, 4).style.width).toBe('3%');
+});
+
+test('the row paints the canvas one-liner: its ordinal, one title line, and the value', () => {
+	const { getByText, queryByText, container } = renderPanel(
+		queue([
+			item(1, {
+				primary: 'Nether Zone',
+				secondary: 'Peep Show',
+				trailing: { gutter: 'mon 08' },
+			}),
+		]),
+	);
+
+	const row = container.querySelector('[data-slot="1"]') as HTMLElement;
+	expect(row.tagName).toBe('BUTTON');
+	expect(row.querySelector('[data-ordinal]')?.textContent).toBe('01');
+	expect(getByText('Nether Zone')).toBeTruthy();
+	// The canvas row has no second line, no date gutter, and no play marker.
+	expect(queryByText('Peep Show')).toBeNull();
+	expect(queryByText('mon 08')).toBeNull();
+	expect(row.querySelector('svg')).toBeNull();
+});
+
+test('the cursor row paints the canvas picked fill, and the active row wins over it', () => {
+	const { container } = renderPanel(
+		queue(
+			[item(1), item(2, { state: { state: 'nowPlaying', progress: null } })],
+			2,
+			{ cursor: 1, marks: [2] },
+		),
+	);
+
+	expect((container.querySelector('[data-slot="1"]') as HTMLElement).style.background).toBe(
+		'var(--canvas-selected)',
+	);
+	expect((container.querySelector('[data-slot="2"]') as HTMLElement).style.background).toBe(
+		'var(--canvas-accent)',
+	);
 });
 
 test('the hovered row alone paints the grip and the actions button', () => {
@@ -223,7 +273,7 @@ test('the hovered row alone paints the grip and the actions button', () => {
 
 	expect(container.querySelectorAll('[data-grip]')).toHaveLength(1);
 	expect(container.querySelectorAll('[data-actions]')).toHaveLength(1);
-	const hovered = container.querySelector('[data-slot="2"]') as HTMLElement;
+	const hovered = container.querySelector('[data-row="2"]') as HTMLElement;
 	expect(hovered.querySelector('[data-grip]')).toBeTruthy();
 	expect(hovered.querySelector('[data-actions]')).toBeTruthy();
 });
@@ -262,7 +312,7 @@ test('a drag paints the ghost and the insertion line on the anchored row', () =>
 	expect(ghost.textContent).not.toContain('3:12');
 	const line = container.querySelector('[data-insertion]') as HTMLElement;
 	expect(line.dataset.insertion).toBe('after');
-	expect(container.querySelector('[data-slot="2"]')?.contains(line)).toBe(true);
+	expect(container.querySelector('[data-row="2"]')?.contains(line)).toBe(true);
 	expect(getByText('Track 1')).toBeTruthy();
 });
 
@@ -366,7 +416,7 @@ test('the open menu anchors under the row its anchorSlot names', () => {
 	);
 
 	const menuEl = container.querySelector('[data-row-menu]') as HTMLElement;
-	expect(menuEl.style.top).toBe('calc(var(--mbv-cell-row) + 60px)');
+	expect(menuEl.style.top).toBe('calc(var(--canvas-queue-header-height) + 60px)');
 });
 
 test('a press on the grip forwards a pointer press', async () => {
@@ -461,7 +511,7 @@ test('a layout change sends one merged report', async () => {
 
 	// jsdom has no layout: the change is the list gaining height, so the
 	// reported capacity moves. Two whole 30px rows fit in 60px.
-	const listEl = container.querySelector('[data-slot]')?.parentElement;
+	const listEl = container.querySelector('[data-queue-list]');
 	expect(listEl).toBeTruthy();
 	Object.defineProperty(listEl, 'clientHeight', { value: 60, configurable: true });
 	ResizeObserverStub.instances[0]?.fire();

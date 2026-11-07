@@ -8,12 +8,15 @@
 	//
 	// The rows paint the canvas's states from the frame's per-row
 	// `GuiSemanticState`: a watched (`played`) row strikes its text
-	// through, the now-playing row fills with the accent and leads with a
-	// Lucide play marker, and a partial-progress row (and the playing row)
-	// draws a thin progress bar under its title. The cursor row and the
-	// marked rows keep the selection bar — the TUI's `focused ||
-	// multi_selected` rule. The right column paints the value the
-	// summary's mode names: "Length" or "Ends at".
+	// through, the now-playing row fills with the canvas's green in its
+	// dark ink, and a partial-progress row (and the playing row) draws a
+	// thin progress track on the title's line. Every row leads with its
+	// padded queue ordinal and carries one title line and the
+	// right-column value — no second line and no date gutter, as the
+	// canvas's row draws. The cursor row and the marked rows paint the
+	// canvas's picked fill (the TUI's `focused || multi_selected` rule),
+	// and the active row's fill wins over it. The right column paints the
+	// value the summary's mode names: "Length" or "Ends at".
 	//
 	// The row hover and the drag paint from the frame too — the window
 	// holds neither (the `gui-client` spec): `queue.hover` names the row
@@ -37,14 +40,15 @@
 	// reports and win the hit map where the menu paints over a row
 	// beneath it.
 	//
-	// Two fills alias role values because the frame carries roles and the
-	// chrome fills, not surface fills (design D7): the recessed box paints
-	// the chrome's `queuePanel` pair — `Surface::QueuePanel`, focus-reactive
-	// like the TUI's `queue_row_background(focused)` — and the selection bar
-	// resolves `Surface::SelectedRow`, which the surface table fixes at the
-	// Green slot — the value `--mbv-duration` carries.
+	// The row paint is the canvas's (U4.2): its hexes come through the
+	// queue-local `--canvas-*` tokens, so no theme slot or TUI palette value
+	// moves (U13). Two fills still alias role values because the frame
+	// carries roles and the chrome fills, not surface fills (design D7): the
+	// recessed box paints the chrome's `queuePanel` pair — `Surface::QueuePanel`,
+	// focus-reactive like the TUI's `queue_row_background(focused)` — and the
+	// zebra stripe paints the `queueColumn` pair.
 	import { onMount } from 'svelte';
-	import { Ellipsis, GripVertical, Play } from '@lucide/svelte';
+	import { Ellipsis, GripVertical } from '@lucide/svelte';
 	import { reportLayout, retractLayout } from '$lib/bridge/layout';
 	import { roleProperty } from '$lib/bridge/theme';
 	import type {
@@ -160,7 +164,7 @@
 			(row) => row.row === 'item' && row.slot === menu?.anchorSlot,
 		);
 		const below = (index >= 0 ? index + 1 : 0) * ROW_HEIGHT;
-		return `calc(var(--mbv-cell-row) + ${below}px)`;
+		return `calc(var(--canvas-queue-header-height) + ${below}px)`;
 	});
 
 	/** Whether one item row paints the selection bar: a marked row bars
@@ -187,15 +191,20 @@
 		return row.kind === 'media' ? row.duration : null;
 	}
 
-	/** The row's painted background: the selection bar wins (it is the
-	 * interaction state), then the canvas's filled active row, then the
-	 * zebra stripe. */
+	/** The `var(--canvas-<name>)` value a part paints in: the queue's canvas
+	 * hexes that name no theme slot (U13). */
+	function canvasVar(name: string): string {
+		return `var(--canvas-${name})`;
+	}
+
+	/** The row's painted background, in the canvas's precedence: the filled
+	 * active row wins, then the picked row's fill, then the zebra stripe. */
 	function rowBackground(row: ItemRow): string | undefined {
-		if (bars(row.slot)) {
-			return 'var(--mbv-duration)';
-		}
 		if (row.state.state === 'nowPlaying') {
-			return 'var(--mbv-accent)';
+			return canvasVar('accent');
+		}
+		if (bars(row.slot)) {
+			return canvasVar('selected');
 		}
 		if (row.striped) {
 			return panelFocused ? 'var(--mbv-queueColumnFocused)' : 'var(--mbv-queueColumn)';
@@ -203,51 +212,41 @@
 		return undefined;
 	}
 
-	/** The colour set one row's cells paint in. The barred row reads from
-	 * the selection roles, the filled active row from the on-accent role,
-	 * the watched row muted, and the plain row from the media-list roles. */
+	/** The colour set one row's cells paint in (the canvas's row states): the
+	 * filled active row reads the dark ink, the watched row the muted text
+	 * with a strike, and every other row the canvas's row text. The right
+	 * value is green in "Ends at" and muted in "Length". */
 	interface RowTone {
-		primary: string;
-		secondary: string;
-		meta: string;
+		title: string;
+		weight: number;
+		strike: string;
+		ordinal: string;
 		right: string;
-		progress: string;
+		track: string;
+		fill: string;
 	}
 
-	function tone(row: ItemRow, barred: boolean): RowTone {
-		if (barred) {
-			return {
-				primary: 'var(--mbv-selectedRowFg)',
-				secondary: 'var(--mbv-selectedRowFg)',
-				meta: 'var(--mbv-selectedRowFg)',
-				right: 'var(--mbv-selectedRowFg)',
-				progress: 'var(--mbv-selectedRowProgressFg)',
-			};
-		}
+	function tone(row: ItemRow): RowTone {
 		if (row.state.state === 'nowPlaying') {
 			return {
-				primary: 'var(--mbv-textOnAccent)',
-				secondary: 'var(--mbv-textOnAccent)',
-				meta: 'var(--mbv-textOnAccent)',
-				right: 'var(--mbv-textOnAccent)',
-				progress: 'var(--mbv-textOnAccent)',
+				title: canvasVar('ink'),
+				weight: 600,
+				strike: canvasVar('strike'),
+				ordinal: canvasVar('ink'),
+				right: canvasVar('ink'),
+				track: canvasVar('track-current'),
+				fill: canvasVar('ink'),
 			};
 		}
-		if (row.state.state === 'played') {
-			return {
-				primary: 'var(--mbv-textMuted)',
-				secondary: 'var(--mbv-textMuted)',
-				meta: 'var(--mbv-textMuted)',
-				right: 'var(--mbv-textMuted)',
-				progress: 'var(--mbv-accent)',
-			};
-		}
+		const watched = row.state.state === 'played';
 		return {
-			primary: row.secondary ? 'var(--mbv-splitRowContextFg)' : 'var(--mbv-textEmphasis)',
-			secondary: 'var(--mbv-splitRowTitleFg)',
-			meta: 'var(--mbv-statusAvailable)',
-			right: 'var(--mbv-duration)',
-			progress: 'var(--mbv-accent)',
+			title: watched ? canvasVar('muted') : canvasVar('text'),
+			weight: 400,
+			strike: canvasVar('strike'),
+			ordinal: canvasVar('ordinal'),
+			right: canvasVar(summary.rightColumn === 'endsAt' ? 'accent' : 'muted'),
+			track: canvasVar('track'),
+			fill: canvasVar('partial'),
 		};
 	}
 
@@ -356,52 +355,50 @@
 </script>
 
 {#snippet rowCells(row: ItemRow, cellTone: RowTone)}
-	<!-- The item row's shared cells: the playing marker, the title pair,
-		the thin progress bar under the title, the date gutter, and the
-		right column. The list rows and the drag ghost paint the same cells
-		— the ghost's tone just reads the unbarred roles. -->
-	{#if queue.active === row.slot}
-		<Play size={14} fill="currentColor" color={cellTone.primary} class="shrink-0" />
-	{/if}
+	<!-- The item row's canvas cells: the padded queue ordinal, the one title
+		line over its progress track, and the right-column value. The list
+		rows and the drag ghost paint the same cells. -->
+	{@const progress = rowProgress(row)}
+	{@const right = rightValue(row)}
 	<span
-		class="truncate"
-		class:line-through={row.state.state === 'played'}
-		style:color={cellTone.primary}>{row.primary}</span
+		class="shrink-0 font-mono tabular-nums"
+		style:width="18px"
+		style:font-size="11px"
+		style:color={cellTone.ordinal}
+		data-ordinal>{String(row.ordinal).padStart(2, '0')}</span
 	>
-	{#if row.secondary}
+	<span class="flex min-w-0 flex-1 flex-col justify-center" style:gap="3px">
 		<span
 			class="truncate"
+			style:font-size="13.5px"
+			style:font-weight={cellTone.weight}
+			style:text-decoration-color={cellTone.strike}
 			class:line-through={row.state.state === 'played'}
-			style:color={cellTone.secondary}>{row.secondary}</span
+			style:color={cellTone.title}>{row.primary}</span
 		>
-	{/if}
-	{@const progress = rowProgress(row)}
-	{#if progress !== null}
-		<span
-			class="pointer-events-none absolute right-0 bottom-0 left-0"
-			style:height="2px"
-			style:padding-inline="calc(var(--mbv-cell-col) * 2)"
-			data-progress
-		>
+		{#if progress !== null}
 			<span
-				class="block h-full rounded-full"
-				style:width="{progress}%"
-				style:background={cellTone.progress}
-			></span>
-		</span>
-	{/if}
-	<span class="flex-1"></span>
-	{#if row.trailing}
-		<span
-			class="overflow-hidden text-right whitespace-nowrap"
-			style:min-width="calc(var(--mbv-cell-col) * 6)"
-			style:max-width="calc(var(--mbv-cell-col) * 6)"
-			style:color={cellTone.meta}>{row.trailing.gutter}</span
-		>
-	{/if}
-	{@const right = rightValue(row)}
+				class="block shrink-0"
+				style:height="2px"
+				style:border-radius="1px"
+				style:background={cellTone.track}
+				data-progress
+			>
+				<span
+					class="block"
+					style:height="2px"
+					style:border-radius="1px"
+					style:width="{Math.max(progress, 3)}%"
+					style:background={cellTone.fill}
+				></span>
+			</span>
+		{/if}
+	</span>
 	{#if right}
-		<span class="font-mono text-xs tabular-nums" style:color={cellTone.right}>{right}</span>
+		<span
+			class="shrink-0 font-mono text-xs tabular-nums"
+			style:color={cellTone.right} data-right-value>{right}</span
+		>
 	{/if}
 {/snippet}
 
@@ -422,7 +419,12 @@
 			: 'var(--mbv-queuePanel)'}
 	>
 		<QueueHeader {summary} />
-		<div class="relative min-h-0 flex-1 overflow-hidden" bind:this={listEl}>
+		<div
+			class="relative min-h-0 flex-1 overflow-hidden"
+			style:padding-inline="8px"
+			data-queue-list
+			bind:this={listEl}
+		>
 			{#if queue.rows.length === 0}
 				<!-- The empty-queue placeholder (design D15's missing-visual
 					rule): the TUI's shrug set as the canvas's display type —
@@ -437,16 +439,23 @@
 			{:else}
 				{#each queue.rows as row, i (row.row === 'item' ? row.slot : `structural-${i}`)}
 					{#if row.row === 'item'}
-						{@const barred = bars(row.slot)}
-						<div
-							class="relative flex items-center overflow-hidden whitespace-nowrap"
-							class:opacity-40={queue.drag?.slot === row.slot}
-							style:height="{ROW_HEIGHT}px"
-							style:padding-inline="calc(var(--mbv-cell-col) * 2)"
-							style:gap="var(--mbv-cell-col)"
-							style:background={rowBackground(row)}
-							data-slot={row.slot}
-						>
+						<!-- The row is one button; its hover chrome and the drag's
+							insertion line are siblings inside the positioning box, so
+							no control nests in the row's own button. -->
+						<div class="relative" data-row={row.slot}>
+							<button
+								type="button"
+								class="flex w-full items-center overflow-hidden text-left whitespace-nowrap"
+								class:opacity-40={queue.drag?.slot === row.slot}
+								style:height="{ROW_HEIGHT}px"
+								style:padding-inline="8px"
+								style:gap="10px"
+								style:border-radius="4px"
+								style:background={rowBackground(row)}
+								data-slot={row.slot}
+							>
+								{@render rowCells(row, tone(row))}
+							</button>
 							{#if insertion?.slot === row.slot}
 								<!-- The drag's insertion line, anchored on this row's
 									top edge (`before`) or bottom edge (`after`). -->
@@ -459,7 +468,6 @@
 									data-insertion={insertion.at}
 								></span>
 							{/if}
-							{@render rowCells(row, tone(row, barred))}
 							{#if queue.hover === row.slot}
 								<!-- The hover chrome: the drag grip at the leading edge
 									and the actions button at the trailing edge. Each is its
@@ -499,21 +507,24 @@
 					<!-- The drag ghost: the dragged row's own cells in a
 						floating card at the insertion line, `pointer-events-none`
 						so the pointer keeps resolving the regions beneath it. The
-						core owns the drag; the release's move request is its. -->
+						card keeps the row's own insets, so its cells line up with
+						the row beneath. The core owns the drag; the release's move
+						request is its. -->
 					<div
 						class="pointer-events-none absolute right-0 left-0 z-20"
 						style:top="{ghostTop}px"
+						style:margin-inline="8px"
 						data-ghost
 					>
 						<div
 							class="relative flex items-center overflow-hidden rounded-md border whitespace-nowrap shadow-lg"
 							style:height="{ROW_HEIGHT}px"
-							style:padding-inline="calc(var(--mbv-cell-col) * 2)"
-							style:gap="var(--mbv-cell-col)"
+							style:padding-inline="8px"
+							style:gap="10px"
 							style:background="var(--mbv-popover)"
 							style:border-color="var(--mbv-accent)"
 						>
-							{@render rowCells(ghost, tone(ghost, false))}
+							{@render rowCells(ghost, tone(ghost))}
 						</div>
 					</div>
 				{/if}

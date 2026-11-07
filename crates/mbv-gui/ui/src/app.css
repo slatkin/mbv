@@ -43,6 +43,30 @@
 	--sidebar-ring: var(--mbv-textFocusAccent, oklch(0.556 0 0));
 }
 
+/* The queue's canvas hexes (design D7/U13): the values `Main.dc.html`
+   paints that name no `mbv-theme` slot. They are GUI-local tokens, so the
+   queue, the row menu, the popovers, and the drag paint the canvas while
+   `mbv-theme`'s slot table and the TUI's palette stay unchanged. */
+:root {
+	--canvas-border: #3d484d; /* the footer's top border */
+	--canvas-selected: #3d484d; /* the picked row's fill */
+	--canvas-well: #232a2e; /* the right-column switch's recessed track */
+	--canvas-ink: #232a2e; /* the active row's dark text and progress fill */
+	--canvas-segment-active: #475258; /* the switch's active segment */
+	--canvas-ordinal: #7f897d; /* the row ordinal */
+	--canvas-strike: #56635f; /* the watched row's strike-through */
+	--canvas-track: #414b50; /* the progress track */
+	--canvas-track-current: #7d9460; /* the active row's progress track */
+	--canvas-muted: #9da9a0; /* the second header line, inactive segments, watched text, Length values */
+	--canvas-text: #d3c6aa; /* the row title */
+	--canvas-heading: #e9e1cc; /* the header's heading and active segment */
+	--canvas-accent: #a7c080; /* the active row's fill and the Ends-at values */
+	--canvas-partial: #e69875; /* the partial-progress fill */
+	/* The canvas header's two lines over the 44 px filter control, between
+	   12 px and 8 px of padding. */
+	--canvas-queue-header-height: 64px;
+}
+
 @theme inline {
 	--font-sans: 'IBM Plex Sans', system-ui, sans-serif;
 	--font-mono: 'JetBrains Mono', monospace;

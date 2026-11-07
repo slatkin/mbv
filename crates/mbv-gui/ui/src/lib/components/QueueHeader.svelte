@@ -1,10 +1,14 @@
 <script lang="ts">
-	// The queue's canvas header (add-tauri-gui-client row 6.5, design D15):
-	// the remaining count and the queue finish clock at the left, the
-	// "Length / Ends at" right-column switch and the filter control at the
-	// right. All of it paints the frame's `summary` section — the switch's
-	// mode, the filter's text, and the caret fact are Client-core state
-	// (design D4a), so the header holds none.
+	// The queue's canvas header (align-gui-with-design-canvas U4.1, design
+	// D15): the `Up next · N` heading over the `queue ends HH:MM` line at the
+	// left, the "Length / Ends at" right-column switch and the filter control
+	// at the right. All of it paints the frame's `summary` section — the
+	// switch's mode, the filter's text, and the caret fact are Client-core
+	// state (design D4a), so the header holds none.
+	//
+	// The header paints the canvas's own hexes through the queue-local
+	// `--canvas-*` tokens (U13): the canvas names no `mbv-theme` slot for
+	// them, and the TUI's palette stays untouched.
 	//
 	// The switch and the filter each carry a pointer target: the switch's
 	// inactive segment and the filter report the `rightColumn` and `filter`
@@ -13,7 +17,6 @@
 	// chord run one path. The active segment reports no target: pressing it
 	// would toggle away from the mode it already shows.
 	import { ListFilter } from '@lucide/svelte';
-	import { roleProperty } from '$lib/bridge/theme';
 	import type { GuiQueueSummary, GuiRightColumn } from '$lib/bridge/types';
 
 	interface Props {
@@ -21,9 +24,10 @@
 	}
 	const { summary }: Props = $props();
 
-	/** The `var(--mbv-<role>)` value a part paints in. */
-	function roleVar(role: string): string {
-		return `var(${roleProperty(role)})`;
+	/** The `var(--canvas-<name>)` value a part paints in: the queue's canvas
+	 * hexes that name no theme slot (U13). */
+	function canvasVar(name: string): string {
+		return `var(--canvas-${name})`;
 	}
 
 	/** The right-column switch's two modes in paint order. */
@@ -34,72 +38,101 @@
 </script>
 
 <div
-	class="flex items-center whitespace-nowrap"
-	style:height="var(--mbv-cell-row)"
-	style:padding-inline="calc(var(--mbv-cell-col) * 2)"
-	style:gap="var(--mbv-cell-col)"
+	class="flex items-center justify-between overflow-hidden whitespace-nowrap"
+	style:height="var(--canvas-queue-header-height)"
+	style:padding="12px 8px 8px 16px"
 	data-queue-header
 >
-	<span
-		class="text-xs font-semibold tracking-widest uppercase"
-		style:color={roleVar('textMuted')}>Queue</span
-	>
-	<span
-		class="font-mono text-xs tabular-nums"
-		style:color={roleVar('textSecondary')}
-		data-remaining>{summary.remaining}</span
-	>
-	<span class="flex-1"></span>
-	{#if summary.finishClock}
+	<!-- The canvas's two heading lines, 2 px apart: the count over the
+		queue's finish clock. -->
+	<div class="flex flex-col" style:gap="2px">
 		<span
-			class="font-mono text-xs tabular-nums"
-			style:color={roleVar('textMuted')}
-			data-finish-clock>{summary.finishClock}</span
+			style:font-size="13px"
+			style:line-height="18px"
+			style:font-weight="600"
+			style:color={canvasVar('heading')}
+			data-queue-heading>Up next · {summary.remaining}</span
 		>
-	{/if}
-	<!-- The "Length / Ends at" switch: the frame's mode pills the active
-		segment, and a press on the inactive one runs the `t` chord's toggle
-		in the core through the `rightColumn` region the segment reports. -->
-	<div
-		class="flex items-center rounded-full border text-xs"
-		style:border-color="var(--mbv-border)"
-		title="Right column (t)"
-		data-right-column-switch
-	>
-		{#each MODES as { mode, label } (mode)}
-			{@const active = summary.rightColumn === mode}
+		{#if summary.finishClock}
 			<span
-				class="rounded-full px-2 py-0.5"
-				style:background={active ? 'var(--mbv-secondary)' : undefined}
-				style:color={active ? roleVar('textPrimary') : roleVar('textMuted')}
-				data-mode={mode}
-				data-active={active || undefined}
-				data-right-column-segment={active ? undefined : mode}>{label}</span
+				class="font-mono"
+				style:font-size="11px"
+				style:line-height="16px"
+				style:color={canvasVar('muted')}
+				data-finish-clock>queue ends {summary.finishClock}</span
 			>
-		{/each}
-	</div>
-	<!-- The filter control: the icon, the filter text (or the muted
-		placeholder), and the block caret while the entry holds the keyboard
-		(`filterActive`). A press on it runs the `/` chord's text entry in
-		the core through the `filter` region the mark reports. -->
-	<span
-		class="flex items-center rounded-full border px-2 py-0.5 text-xs"
-		style:gap="calc(var(--mbv-cell-col) / 2)"
-		style:border-color="var(--mbv-border)"
-		title="Filter (/)"
-		data-filter
-	>
-		<ListFilter size={12} color={roleVar('textMuted')} />
-		<span style:color={summary.filter ? roleVar('textPrimary') : roleVar('textMuted')}
-			>{summary.filter || 'Filter'}</span
-		>
-		{#if summary.filterActive}
-			<span
-				class="inline-block w-px"
-				style:height="12px"
-				style:background={roleVar('textPrimary')}
-				data-caret
-			></span>
 		{/if}
-	</span>
+	</div>
+	<div class="flex items-center" style:gap="4px">
+		<!-- The "Length / Ends at" switch: a recessed track the active segment
+			fills, and a press on the inactive one runs the `t` chord's toggle
+			in the core through the `rightColumn` region the segment reports. -->
+		<div
+			class="flex items-center"
+			style:background={canvasVar('well')}
+			style:border-radius="6px"
+			style:padding="2px"
+			title="Right column (t)"
+			data-right-column-switch
+		>
+			{#each MODES as { mode, label } (mode)}
+				{@const active = summary.rightColumn === mode}
+				<span
+					class="flex items-center"
+					style:height="28px"
+					style:padding-inline="10px"
+					style:border-radius="4px"
+					style:font-size="12px"
+					style:background={active ? canvasVar('segment-active') : 'transparent'}
+					style:color={active ? canvasVar('heading') : canvasVar('muted')}
+					data-mode={mode}
+					data-active={active || undefined}
+					data-right-column-segment={active ? undefined : mode}>{label}</span
+				>
+			{/each}
+		</div>
+		<!-- The filter control: a magnifier button at rest, and the text entry
+			with the block caret while the entry holds the keyboard
+			(`filterActive`) or a filter narrows the rows. A press on it runs
+			the `/` chord's text entry in the core through the `filter` region
+			the mark reports. -->
+		{#if summary.filterActive || summary.filter}
+			<span
+				class="flex items-center"
+				style:height="28px"
+				style:padding-inline="10px"
+				style:border-radius="4px"
+				style:gap="6px"
+				style:font-size="12px"
+				title="Filter (/)"
+				data-filter
+			>
+				<ListFilter size={14} color={canvasVar('muted')} />
+				<span style:color={summary.filter ? canvasVar('heading') : canvasVar('muted')}
+					>{summary.filter || 'Filter'}</span
+				>
+				{#if summary.filterActive}
+					<span
+						class="inline-block w-px"
+						style:height="12px"
+						style:background={canvasVar('heading')}
+						data-caret
+					></span>
+				{/if}
+			</span>
+		{:else}
+			<button
+				type="button"
+				class="flex items-center justify-center"
+				style:width="44px"
+				style:height="44px"
+				style:color={canvasVar('muted')}
+				title="Filter (/)"
+				aria-label="Filter queue"
+				data-filter
+			>
+				<ListFilter size={17} color={canvasVar('muted')} />
+			</button>
+		{/if}
+	</div>
 </div>

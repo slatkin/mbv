@@ -53,8 +53,10 @@ test('the footer renders the queue source and the session marker', () => {
 
 	expect(getByText('mix')).toBeTruthy();
 	expect(getByText('woims')).toBeTruthy();
-	// The session marker's dot marks the live Owner (design D4a).
-	expect(container.querySelector('[data-owner-live]')?.textContent).toBe('●');
+	// The session marker's dot marks the live Owner (design D4a) and follows
+	// the label, as the canvas paints the marker.
+	const ownerGroup = container.querySelector('[data-owner-label]')?.parentElement as HTMLElement;
+	expect(ownerGroup.lastElementChild?.textContent).toBe('●');
 });
 
 // The session marker's dot is the live-Owner mark: an owner whose link is
@@ -65,14 +67,36 @@ test('an owner whose link is down paints no liveness dot', () => {
 	expect(container.querySelector('[data-owner-live]')).toBeNull();
 });
 
-// The footer pill's icon contract (the layout-parity brief): the GUI maps
-// each pill's slot to its Lucide icon — the playlist source's
-// `playlist-play` glyph maps to `list-music`, the owner indicator's
-// `connection` to `cable`, the autosave `content-save-check` to
-// `save-check`, and the dirty `content-save-alert` to `save-off` — where
-// the TUI paints its Nerd Font glyphs. Lucide renders each icon's name as
-// the svg's `lucide-<name>` class.
-test('the footer pills paint their Lucide icons', () => {
+// The footer's canvas form (U4.3): a 40 px band, 16 px side padding, the
+// canvas's mono type, and a 1 px top border from the queue's `--canvas-*`
+// tokens.
+test('the line paints the canvas footer band', () => {
+	const { container } = renderFooter();
+	const line = container.querySelector('[data-footer-line]') as HTMLElement;
+
+	expect(line.style.height).toBe('40px');
+	expect(line.style.paddingInline).toBe('16px');
+	expect(line.style.fontSize).toBe('12px');
+	expect(line.style.borderTop).toBe('1px solid var(--canvas-border)');
+});
+
+// The canvas footer paints the queue source and the owner marker as plain
+// text: no leading icon on either.
+test('the source text and the owner marker paint with no leading icon', () => {
+	const { container } = renderFooter();
+	const source = container.querySelector('[data-footer-source]') as HTMLElement;
+	const ownerGroup = container.querySelector('[data-owner-label]')?.parentElement as HTMLElement;
+
+	expect(source.parentElement?.querySelector('svg')).toBeNull();
+	expect(ownerGroup.querySelector('svg')).toBeNull();
+});
+
+// The remaining footer pills map each active state's slot to its Lucide icon
+// — the autosave `content-save-check` glyph to `save-check` and the dirty
+// `content-save-alert` to `save-off` (the canvas paints neither, so only
+// these two icons remain). Lucide renders each icon's name as the svg's
+// `lucide-<name>` class.
+test('the active footer states paint their Lucide icons', () => {
 	const { container } = renderFooter({
 		owner: { text: 'woims', role: 'textFocusAccent', bold: false },
 		ownerLive: true,
@@ -81,12 +105,7 @@ test('the footer pills paint their Lucide icons', () => {
 		dirty: { text: 'UNSAVED', role: 'textFocusAccent', bold: true },
 	});
 
-	for (const icon of [
-		'lucide-list-music',
-		'lucide-cable',
-		'lucide-save-check',
-		'lucide-save-off',
-	]) {
+	for (const icon of ['lucide-save-check', 'lucide-save-off']) {
 		expect(container.querySelector(`svg.${icon}`), `${icon} paints`).toBeTruthy();
 	}
 });
