@@ -3,9 +3,8 @@ use super::{PanelFocus, QueueLink};
 use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::{FooterPill, QueueSurfaceProjection};
 use mbv_components::QueueComponent;
-use mbv_queue::QueueSlotId;
 use mbv_ui_model::playback_target::NowPlayingStatus;
-use mbv_ui_msg::{ComponentId, QueueColumnResize, QueueIntent, QueueMove, QueueRequest};
+use mbv_ui_msg::{ComponentId, QueueColumnResize, QueueIntent, QueueRequest};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::Span;
 
@@ -129,118 +128,9 @@ impl Model {
     }
 
     pub(in crate::app) fn handle_queue_request(&mut self, request: QueueRequest) {
-        match request {
-            QueueRequest::Cursor { link, slot_id } => {
-                // Plain navigation: select_queue_slot applies the link/focus/
-                // hold-window side effects; there is no effect to drive with
-                // the resolved index (D2), so it is discarded.
-                let _ = self.select_queue_slot(link, slot_id);
-            }
-            QueueRequest::Play { link, slot_id } => {
-                if let Some(index) = self.select_queue_slot(link, slot_id) {
-                    self.app
-                        .dispatch(&crate::app::dispatch::action::AppCommand::QueuePlayCursor(
-                            index,
-                        ));
-                }
-            }
-            QueueRequest::Remove { link, slot_id } => {
-                if let Some(index) = self.select_queue_slot(link, slot_id) {
-                    self.app.remove_from_queue(index);
-                }
-            }
-            QueueRequest::RemoveSelection { link, slot_ids } => {
-                // One batch edit: the owner applies the whole range before
-                // publishing a queue snapshot, so the list does not shrink one
-                // row per removal.
-                self.app.remove_slots_from_queue(link, &slot_ids);
-            }
-            QueueRequest::Move {
-                link,
-                slot_id,
-                direction,
-            } => {
-                self.handle_queue_move(link, slot_id, direction);
-            }
-            QueueRequest::MoveTo {
-                link,
-                slot_id,
-                onto,
-            } => {
-                self.handle_queue_move_to(link, slot_id, onto);
-            }
-            // The row drag's resolved drop (add-tauri-gui-client row 6.5):
-            // the GUI Client's row drag emits it on the release. The TUI
-            // paints no row drag, so no TUI leaf produces it; the arm keeps
-            // the shared dispatch exhaustive and applies the same Owner slot
-            // move.
-            QueueRequest::MoveToIndex {
-                link,
-                slot_id,
-                to_index,
-            } => {
-                let Some(from) = self.select_queue_slot(link, slot_id) else {
-                    return;
-                };
-                if from != to_index {
-                    self.app.move_queue_item_to(link, from, to_index);
-                }
-            }
-            QueueRequest::ResizeColumnLive(width) => {
-                self.app.queue_column_width = width;
-            }
-            // The boundary only emits End after a Live move, so persist
-            // unconditionally rather than tracking the drag's start width.
-            QueueRequest::ResizeColumnEnd(width) => {
-                self.app.queue_column_width = width;
-                self.app.save_prefs();
-            }
-            QueueRequest::Undo { link } => {
-                self.handle_queue_undo(link);
-            }
-        }
-    }
-
-    fn handle_queue_move(&mut self, link: QueueLink, slot_id: QueueSlotId, direction: QueueMove) {
-        if let Some(index) = self.select_queue_slot(link, slot_id) {
-            match direction {
-                QueueMove::Up => self.app.move_queue_item_up(index),
-                QueueMove::Down => self.app.move_queue_item_down(index),
-            }
-        }
-    }
-
-    fn handle_queue_move_to(&mut self, link: QueueLink, slot_id: QueueSlotId, onto: QueueSlotId) {
-        let Some(from) = self.select_queue_slot(link, slot_id) else {
-            return;
-        };
-        let Some(to) = self.slot_index(link, onto) else {
-            return;
-        };
-        if from != to {
-            self.app.move_queue_item_to(link, from, to);
-        }
-    }
-
-    fn handle_queue_undo(&mut self, link: QueueLink) {
-        // The component can still be showing (and emit for) `Peer`
-        // for a frame after a remote disconnect, before the projection
-        // refresh flips it back. Once no direct remote queue exists the
-        // visible queue is the Local one, so treat the undo as
-        // targeting Local rather than flashing a spurious error.
-        let link = if link == QueueLink::Peer && !self.app.has_direct_remote_queue() {
-            QueueLink::Local
-        } else {
-            link
-        };
-        if link == QueueLink::Peer {
-            self.app.flash(
-                "Undo is not supported for remote queue edits".into(),
-                ToastSeverity::Error,
-            );
-        } else {
-            self.app.undo_last_queue_edit(link);
-        }
+        // The dispatch lives on the `App` (extract-client-core design D5), so
+        // both Clients run one set of arms; the shell adds nothing to it.
+        self.app.handle_queue_request(request);
     }
 
     pub(in crate::app) fn handle_queue_intent(&mut self, intent: QueueIntent) {
@@ -314,23 +204,7 @@ impl Model {
         link: QueueLink,
         slot_id: mbv_queue::QueueSlotId,
     ) -> Option<usize> {
-        if link == QueueLink::Peer && !self.app.has_direct_remote_queue() {
-            return None;
-        }
-        let index = self.slot_index(link, slot_id)?;
-        self.app.set_panel_focus(PanelFocus::Queue);
-        self.app.mark_queue_cursor_user_active();
-        Some(index)
-    }
-
-    /// Position of `slot_id` in `link`'s queue, if present. Pure lookup with
-    /// none of `select_queue_slot`'s link/focus/hold-window side effects.
-    pub(crate) fn slot_index(
-        &self,
-        link: QueueLink,
-        slot_id: mbv_queue::QueueSlotId,
-    ) -> Option<usize> {
-        self.app.slot_index(link, slot_id)
+        self.app.select_queue_slot(link, slot_id)
     }
 }
 

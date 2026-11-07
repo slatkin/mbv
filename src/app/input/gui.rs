@@ -15,14 +15,13 @@
 //! its message stands; `Deferred` delivers to the leaf first and fires only
 //! when the surface did not consume the chord; `Swallow` runs nothing. The
 //! messages a Surface state emits dispatch through
-//! [`App::handle_gui_surface_msg`], whose Queue arms are the same App-side
-//! effects the TUI shell's queue handlers run.
+//! [`App::handle_gui_surface_msg`], whose Queue arm runs the one
+//! [`App::handle_queue_request`] the TUI shell delegates to as well.
 
 use mbv_surfaces::gesture::PointerGesture;
-use mbv_ui_model::playback::QueueLink;
 use mbv_ui_msg::{
     ComponentId, KeyEvent, LeafKeyResult, Msg, OverlayId, PointerEvent, Position, QueueIntent,
-    QueueMove, QueueRequest, ShellRequest,
+    QueueMove, ShellRequest,
 };
 
 use super::key_policy::{OverlayFocus, RouterOverlayState, RouterPlaybackState};
@@ -256,102 +255,10 @@ impl App {
     /// first slice does not present, so their arms stay the documented no-ops.
     pub(crate) fn handle_gui_surface_msg(&mut self, msg: Msg) {
         match msg {
-            Msg::Queue(request) => self.handle_gui_queue_request(request),
+            Msg::Queue(request) => self.handle_queue_request(request),
             Msg::Shell(request) => self.handle_gui_queue_shell_request(*request),
             Msg::Playback(request) => self.handle_playback_request(&request),
             Msg::Service(_) | Msg::TerminalEvent(_) => {}
-        }
-    }
-
-    /// The `QueueRequest` dispatch for the GUI Client's Queue Surface state:
-    /// the same App-side effects the TUI shell's `handle_queue_request` runs,
-    /// minus the `TuiRealm`-owned refresh flags. Slot resolution and the
-    /// link/focus/hold-window side effects mirror `select_queue_slot`.
-    fn handle_gui_queue_request(&mut self, request: QueueRequest) {
-        match request {
-            QueueRequest::Cursor { link, slot_id } => {
-                // Plain navigation: select_queue_slot applies the link/focus/
-                // hold-window side effects; there is no effect to drive with
-                // the resolved index (D2), so it is discarded.
-                let _ = self.gui_select_queue_slot(link, slot_id);
-            }
-            QueueRequest::Play { link, slot_id } => {
-                if let Some(index) = self.gui_select_queue_slot(link, slot_id) {
-                    self.dispatch(&crate::app::dispatch::action::AppCommand::QueuePlayCursor(
-                        index,
-                    ));
-                }
-            }
-            QueueRequest::Remove { link, slot_id } => {
-                if let Some(index) = self.gui_select_queue_slot(link, slot_id) {
-                    self.remove_from_queue(index);
-                }
-            }
-            QueueRequest::RemoveSelection { link, slot_ids } => {
-                // One batch edit: the owner applies the whole range before
-                // publishing a queue snapshot, so the list does not shrink one
-                // row per removal.
-                self.remove_slots_from_queue(link, &slot_ids);
-            }
-            QueueRequest::Move {
-                link,
-                slot_id,
-                direction,
-            } => {
-                if let Some(index) = self.gui_select_queue_slot(link, slot_id) {
-                    match direction {
-                        mbv_ui_msg::QueueMove::Up => self.move_queue_item_up(index),
-                        mbv_ui_msg::QueueMove::Down => self.move_queue_item_down(index),
-                    }
-                }
-            }
-            QueueRequest::MoveTo {
-                link,
-                slot_id,
-                onto,
-            } => {
-                let Some(from) = self.gui_select_queue_slot(link, slot_id) else {
-                    return;
-                };
-                let Some(to) = self.slot_index(link, onto) else {
-                    return;
-                };
-                if from != to {
-                    self.move_queue_item_to(link, from, to);
-                }
-            }
-            // The row drag's drop (add-tauri-gui-client row 6.5): the slot's
-            // final queue index, so the move lands where the insertion line
-            // was painted. One request per drag: the core emits it on the
-            // release, and motion only previews the drop.
-            QueueRequest::MoveToIndex {
-                link,
-                slot_id,
-                to_index,
-            } => {
-                let Some(from) = self.gui_select_queue_slot(link, slot_id) else {
-                    return;
-                };
-                if from != to_index {
-                    self.move_queue_item_to(link, from, to_index);
-                }
-            }
-            QueueRequest::ResizeColumnLive(_) | QueueRequest::ResizeColumnEnd(_) => {
-                // The TUI-only queue-column resize surface has no GUI
-                // counterpart; the GUI's arrangement is row 6.6's.
-            }
-            QueueRequest::Undo { link } => {
-                // The surface can still show `Peer` for a frame after a
-                // remote disconnect, before the projection refresh flips it
-                // back; treat the undo as Local then, exactly as the TUI's
-                // handler does. A peer-targeted undo has no GUI surface that
-                // presents a remote-edit history, so it stays a no-op.
-                if link == QueueLink::Peer && !self.has_direct_remote_queue() {
-                    self.undo_last_queue_edit(QueueLink::Local);
-                } else if link == QueueLink::Local {
-                    self.undo_last_queue_edit(link);
-                }
-            }
         }
     }
 
@@ -463,26 +370,6 @@ impl App {
                 );
             }
         }
-    }
-
-    /// Resolve `slot_id` to its index in `link`'s queue and apply the
-    /// link/focus/hold-window side effects, returning the resolved index —
-    /// the GUI Client's `select_queue_slot`. The index is the operand for the
-    /// shell-owned effect the caller is about to run (D2). The surface's own
-    /// cursor is authoritative for selection; the App's queue cursor is not
-    /// written here (task 3.1: the mirror is gone).
-    fn gui_select_queue_slot(
-        &mut self,
-        link: QueueLink,
-        slot_id: mbv_queue::QueueSlotId,
-    ) -> Option<usize> {
-        if link == QueueLink::Peer && !self.has_direct_remote_queue() {
-            return None;
-        }
-        let index = self.slot_index(link, slot_id)?;
-        self.set_panel_focus(mbv_ui_model::settings::PanelFocus::Queue);
-        self.mark_queue_cursor_user_active();
-        Some(index)
     }
 
     /// Apply one router `Command` to this `App`, except the queue-move
