@@ -141,7 +141,31 @@ export interface GuiQueue {
 	marks: number[];
 	/** The slot that carries the now-playing marker, if any. */
 	active: number | null;
+	/** The row the pointer rests on; the front end paints that row's grip and
+	 * actions button. `null` while the pointer rests on no row. */
+	hover: number | null;
+	/** The row drag in progress (the ghost and insertion line); `null` while
+	 * none runs. */
+	drag: GuiQueueDrag | null;
 }
+
+/** The row drag one frame paints: the dragged row's content as the ghost, the
+ * final index the drop would leave it at, and the insertion line's anchor. */
+export interface GuiQueueDrag {
+	/** The dragged slot (`QueueSlotId::raw`). */
+	slot: number;
+	/** The dragged row's content, painted as the drag ghost. */
+	ghost: GuiQueueRow;
+	/** The slot's final queue index if the drop applied now. */
+	dropIndex: number;
+	/** The insertion line's anchor. */
+	insertion: GuiQueueInsertion;
+}
+
+/** The insertion line: the stable slot it anchors on and the side it paints. */
+export type GuiQueueInsertion =
+	| { at: 'before'; slot: number }
+	| { at: 'after'; slot: number };
 
 export type GuiQueueRow =
 	| {
@@ -538,7 +562,15 @@ export type RegionTarget =
 /** The pre-attach screen's button targets (design D9). */
 export type AttachTargetId = 'restart' | 'quit';
 
-export type QueueTargetId = { slot: number } | 'playlistPill';
+export type QueueTargetId =
+	| { slot: number }
+	| 'playlistPill'
+	/** The hovered row's drag grip: a press starts the row drag. */
+	| { rowGrip: number }
+	/** The hovered row's actions button: a press opens the row menu. */
+	| { rowActions: number }
+	/** One entry of the open row menu, by index in the overlay's `entries`. */
+	| { rowMenuEntry: number };
 
 export type QueuePlaybackTargetId =
 	| 'playPause'

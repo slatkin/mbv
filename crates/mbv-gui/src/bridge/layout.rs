@@ -126,7 +126,9 @@ pub(crate) fn hit_map(regions: &[LayoutRegion]) -> HitMap<RegionTarget> {
     map
 }
 
-/// The Queue target ids, mirroring `QueueHitTarget`.
+/// The Queue target ids, mirroring `QueueHitTarget` variant for variant, plus
+/// the canvas queue's own row chrome (add-tauri-gui-client row 6.5), which the
+/// TUI paints no counterpart of.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum QueueTargetId {
@@ -134,6 +136,15 @@ pub enum QueueTargetId {
     Slot(u64),
     /// The playlist pill in the queue footer.
     PlaylistPill,
+    /// The row's drag grip, which the frame paints on the hovered row. A
+    /// press starts the row drag; the number is the row's `QueueSlotId::raw`.
+    RowGrip(u64),
+    /// The row's actions button, which the frame paints on the hovered row.
+    /// A press opens the row menu for that slot.
+    RowActions(u64),
+    /// One entry of the open row menu: the entry's index in the frame's
+    /// overlay `entries` list. A press executes the entry.
+    RowMenuEntry(usize),
 }
 
 /// The Queue playback target ids, mirroring `QueuePlaybackHitTarget`.

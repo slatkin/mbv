@@ -5,7 +5,7 @@
 
 use mbv::QueueSummaryProjection;
 use mbv_queue::QueueSlotId;
-use mbv_surfaces::queue::QueueSurface;
+use mbv_surfaces::queue::{QueueRowDrag, QueueRowInsertion, QueueSurface};
 use mbv_text::fuzzy_match::{WordMatcher, word_match_score};
 use mbv_ui_model::media_list::{
     ActiveProgress, MediaKind, MediaListRow, MediaListTrailing, MediaSemanticState,
@@ -26,6 +26,65 @@ pub struct GuiQueue {
     /// pending selection while the owner confirms it. It can lie outside the
     /// viewport, so it is read from every row, not from `rows`.
     pub active: Option<u64>,
+    /// The row the pointer rests on (the canvas row hover,
+    /// add-tauri-gui-client row 6.5): the front end paints that row's grip and
+    /// actions button. `None` while the pointer rests on no row.
+    pub hover: Option<u64>,
+    /// The row drag in progress, if any: the drag ghost and insertion line.
+    pub drag: Option<GuiQueueDrag>,
+}
+
+/// The row drag one frame paints (add-tauri-gui-client row 6.5, design D5):
+/// the dragged row's content as the ghost, the final index the drop would
+/// leave it at, and the insertion line's anchor. `None` while no drag runs.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GuiQueueDrag {
+    /// The dragged slot (`QueueSlotId::raw`).
+    pub slot: u64,
+    /// The dragged row's content, painted as the drag ghost.
+    pub ghost: GuiQueueRow,
+    /// The slot's final queue index if the drop applied now.
+    pub drop_index: usize,
+    /// The insertion line's anchor.
+    pub insertion: GuiQueueInsertion,
+}
+
+/// One frame's insertion line (add-tauri-gui-client row 6.5): the row it
+/// anchors on and the side it paints. A stable slot anchors it, so the line
+/// keeps its place while the rows above it move.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(tag = "at", rename_all = "camelCase")]
+pub enum GuiQueueInsertion {
+    /// The line paints above this slot's row.
+    Before { slot: u64 },
+    /// The line paints below this slot's row.
+    After { slot: u64 },
+}
+
+impl GuiQueueDrag {
+    /// Projects the Surface state's drag over the list's rows: the ghost is
+    /// the dragged row's own content, so a drag of a row outside the painted
+    /// viewport still paints what it moves. `None` when the rows no longer
+    /// hold the dragged slot (a content refresh can drop it).
+    fn from_surface(rows: &[MediaListRow<QueueSlotId>], drag: QueueRowDrag) -> Option<Self> {
+        let row = rows.iter().find(
+            |row| matches!(row, MediaListRow::Item { target, .. } if *target == drag.slot_id),
+        )?;
+        Some(Self {
+            slot: drag.slot_id.raw(),
+            ghost: GuiQueueRow::from_painted(row, false),
+            drop_index: drag.drop_index,
+            insertion: match drag.insertion {
+                QueueRowInsertion::Before(slot_id) => GuiQueueInsertion::Before {
+                    slot: slot_id.raw(),
+                },
+                QueueRowInsertion::After(slot_id) => GuiQueueInsertion::After {
+                    slot: slot_id.raw(),
+                },
+            },
+        })
+    }
 }
 
 impl GuiQueue {
@@ -97,6 +156,10 @@ impl GuiQueue {
             // The now-playing marker reads the whole list, filtered view or
             // not: it is the playback fact, not the filter's.
             active: rows.iter().find_map(active_slot),
+            hover: queue.hover().map(|slot_id| slot_id.raw()),
+            drag: queue
+                .row_drag()
+                .and_then(|drag| GuiQueueDrag::from_surface(&rows, drag)),
         }
     }
 }
