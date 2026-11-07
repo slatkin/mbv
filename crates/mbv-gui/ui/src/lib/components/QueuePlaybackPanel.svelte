@@ -1,34 +1,29 @@
 <script lang="ts">
-	// The Queue playback panel (add-tauri-gui-client task 3.4, design D4): the
-	// queue column's transport band. The header row paints in every state —
-	// the playback-target indicator (a Lucide icon, local vs remote by its
-	// role colour), the remote host name, and the right-aligned status word;
-	// the now-playing title paints on its own row below the header. The
-	// transport band paints only while the frame's `shown` says a transport
-	// exists (idle collapses it), and its controls and seek row paint only
-	// while a now-playing title rides, the same gates the TUI's
-	// `render_queue_panel` applies.
+	// The player panel's top block (add-tauri-gui-client task 6.4, design
+	// D15): the expanded canvas artboard's header, artwork with its episode
+	// badge, title and parent line, scrubber, and transport. The canvas, not
+	// the TUI band, is the reference; the paint uses the theme's roles and
+	// chrome fills through `--mbv-<name>` properties only (design D7).
 	//
-	// The paint mirrors the TUI's queue band
-	// (crates/mbv-render/src/components/chrome_player/title/): the header and
-	// band sit on the `QueueOnlyPlaybackPanel` surface, the fill
-	// `--mbv-queuePlaybackBand` carries, and the controls row sits on
-	// `TransportRow`, the BgDim1 slot `--mbv-secondary` carries (design D7).
-	// Every offset is a `calc()` over the cell unit (`bridge/cells`): one row
-	// is `--mbv-cell-row`, one column `--mbv-cell-col`.
-	// Every control is a Lucide icon (design D8: no emoji or Nerd Font
-	// glyph), and the seekbar is a filled track with the elapsed and total
-	// times the TUI flanks it with. The transport glyphs paint as solid
-	// shapes in their role colour — `fill` and `stroke` on the icon's own
-	// colour, the TUI's solid Nerd Font glyphs — while the indicators and
-	// every other icon keep Lucide's outline shapes.
+	// The scrubber paints the played fraction, the chapter boundaries, the
+	// intro and credits mark segments, the thumb, and the elapsed, remaining,
+	// and finish-clock texts. A pointer move over the bar paints a preview
+	// from the frame's chapters and the pointer's position; the frame carries
+	// no hover datum yet, so the position itself is presentation state and
+	// the chapter name comes from the frame. A press on the bar forwards like
+	// every other pointer event: the component interprets no gesture, it
+	// reports its regions and the core resolves the press against the hit map
+	// (design D4).
 	//
-	// The component interprets no pointer event: it paints and reports its
-	// regions through the shared layout reporter, and the core resolves a
-	// press against them.
+	// The playback-target chooser's menu is not built here: the frame carries
+	// the target choices, but no overlay variant opens the chooser and no
+	// semantic target id selects a choice (`crates/mbv-gui/src/bridge`). The
+	// header paints the target and reports its existing `playbackTarget`
+	// region; a chooser needs a Rust-side target first.
 	import { onMount } from 'svelte';
 	import {
 		Cast,
+		Film,
 		Pause,
 		Play,
 		SkipBack,
@@ -36,12 +31,14 @@
 		Square,
 	} from '@lucide/svelte';
 	import { reportLayout, retractLayout } from '$lib/bridge/layout';
-	import { CELL_COL_PX, CELL_ROW_PX } from '$lib/bridge/cells';
+	import { CELL_COL_PX } from '$lib/bridge/cells';
 	import { roleProperty } from '$lib/bridge/theme';
 	import type {
 		GuiCardArtwork,
+		GuiChapter,
 		GuiNowPlayingStatus,
 		GuiQueuePlayback,
+		GuiSegmentMark,
 		LayoutRegion,
 		QueuePlaybackTargetId,
 	} from '$lib/bridge/types';
@@ -50,48 +47,6 @@
 		playback: GuiQueuePlayback;
 	}
 	const { playback }: Props = $props();
-
-	/** The fixed row height in logical pixels, the queue list's row: the
-	 * GUI's cell unit's row (design D8's geometry basis, `bridge/cells`). */
-	const ROW_HEIGHT = CELL_ROW_PX;
-
-	/** The visual slot's height cap in rows, mirroring the TUI's
-	 * `queue_card_height_cap`: 12 rows under 40 terminal rows, 16 under 50,
-	 * 24 otherwise — kept small enough that the queue list below keeps its
-	 * separator and a few rows. The terminal-row count reads off the
-	 * window's own height in row units. */
-	function cardHeightCapRows(windowHeight: number): number {
-		const rows = Math.floor(windowHeight / ROW_HEIGHT);
-		if (rows < 40) {
-			return 12;
-		}
-		return rows < 50 ? 16 : 24;
-	}
-
-	/** The window's height in logical pixels, refreshed by the layout
-	 * observer, so the cap tracks a window resize like the TUI's per-paint
-	 * tier reads the terminal height. */
-	let windowHeight = $state(window.innerHeight);
-
-	/** The visual slot's height cap in logical pixels. */
-	const artCapPx = $derived(cardHeightCapRows(windowHeight) * ROW_HEIGHT);
-
-	/** The column width at which the queue column's visual slot and
-	 * transport render side by side rather than stacked: the TUI's
-	 * `queue_playback_column_wide` breakpoint, 100 columns
-	 * (`QUEUE_PLAYBACK_WIDE_COLUMNS` in `arrangements/chrome.rs`), carried
-	 * in cell units — no pixel threshold of the GUI's own. */
-	const WIDE_COLUMNS = 100;
-
-	/** The queue column's width in column cells, refreshed by the layout
-	 * observer with the window height. */
-	let columnCells = $state(0);
-
-	/** Whether the band takes the TUI's wide arrangement: art left-aligned
-	 * with the transport beside it after the two-column gap
-	 * (`queue_playback_transport_area`'s wide branch), stacked below it
-	 * otherwise. */
-	const wide = $derived(columnCells >= WIDE_COLUMNS);
 
 	/** Emby ticks in one second (`mbv_emby_model::TICKS_PER_SECOND`). */
 	const TICKS_PER_SECOND = 10_000_000;
@@ -109,11 +64,123 @@
 	/** The visual slot's artwork the last frame carried (design D10): a
 	 * frame arms it again only when the core says the art changed, so the
 	 * slot keeps painting between frames. */
-	let art = $state<GuiCardArtwork | null>(null);
+	let carriedArt = $state<GuiCardArtwork | null>(null);
 
-	/** The queue band's status-indicator cluster; empty while the frame
-	 * carries none. */
-	const statusIndicators = $derived(playback.statusIndicators ?? []);
+	/** The art the panel paints: this frame's carried value when it has one,
+	 * else the last one it adopted (design D10). */
+	const art = $derived(playback.artwork ?? carriedArt);
+
+	/** The pointer's fraction along the bar while it hovers, or `null`. The
+	 * frame carries no hover datum yet (design D4a's trickplay fetch lands
+	 * in task 6.7), so this is presentation state only: it paints the time
+	 * and chapter preview and never changes focus or playback. */
+	let hoverRatio = $state<number | null>(null);
+
+	/** The played fraction of the scrubber, clamped to `[0, 1]`. */
+	const progress = $derived(
+		clampRatio(
+			playback.playback.positionTicks,
+			playback.playback.runtimeTicks,
+		),
+	);
+
+	/** The ticks left in the active item. */
+	const remainingTicks = $derived(
+		Math.max(
+			0,
+			playback.playback.runtimeTicks - playback.playback.positionTicks,
+		),
+	);
+
+	/** The chapter boundaries the bar paints, skipping the first tick (the
+	 * bar's own left edge) and any boundary outside the runtime. */
+	const chapterTicks = $derived(
+		visibleChapters(
+			playback.chapters,
+			playback.playback.runtimeTicks,
+		),
+	);
+
+	/** The intro and credits marks the bar paints, in bar fractions. */
+	const marks = $derived(
+		[
+			markSpan(playback.introMark, playback.playback.runtimeTicks),
+			markSpan(playback.creditsMark, playback.playback.runtimeTicks),
+		].filter((mark) => mark !== null),
+	);
+
+	/** The hover preview's position and the chapter that covers it; `null`
+	 * while the pointer is away from the bar. */
+	const hover = $derived(hoverPreview(hoverRatio, playback));
+
+	/** A fraction `ticks / runtime`, clamped to `[0, 1]`; zero runtime is
+	 * zero. */
+	function clampRatio(ticks: number, runtime: number): number {
+		if (runtime <= 0) {
+			return 0;
+		}
+		return Math.min(1, Math.max(0, ticks / runtime));
+	}
+
+	/** The chapter boundaries inside the runtime, with their bar fractions. */
+	function visibleChapters(
+		chapters: GuiChapter[],
+		runtime: number,
+	): { name: string; ratio: number }[] {
+		return chapters
+			.filter(
+				(chapter) =>
+					chapter.startTicks > 0 &&
+					chapter.startTicks < runtime,
+			)
+			.map((chapter) => ({
+				name: chapter.name,
+				ratio: clampRatio(chapter.startTicks, runtime),
+			}));
+	}
+
+	/** One mark's span in bar fractions, `null` outside the runtime. */
+	function markSpan(
+		mark: GuiSegmentMark | null,
+		runtime: number,
+	): { left: number; width: number } | null {
+		if (!mark || runtime <= 0) {
+			return null;
+		}
+		const left = clampRatio(mark.startTicks, runtime);
+		const right = clampRatio(mark.endTicks, runtime);
+		return right > left ? { left, width: right - left } : null;
+	}
+
+	/** The chapter that covers `ticks`: the last boundary at or before it. */
+	function chapterAt(
+		chapters: GuiChapter[],
+		ticks: number,
+	): GuiChapter | null {
+		let covering: GuiChapter | null = null;
+		for (const chapter of chapters) {
+			if (chapter.startTicks <= ticks) {
+				covering = chapter;
+			}
+		}
+		return covering;
+	}
+
+	/** The hover state's preview: its bar fraction, time, and chapter. */
+	function hoverPreview(
+		ratio: number | null,
+		state: GuiQueuePlayback,
+	): { ratio: number; ticks: number; chapter: GuiChapter | null } | null {
+		if (ratio === null) {
+			return null;
+		}
+		const ticks = Math.round(ratio * state.playback.runtimeTicks);
+		return {
+			ratio,
+			ticks,
+			chapter: chapterAt(state.chapters, ticks),
+		};
+	}
 
 	/** `fmt_duration_short`: `M:SS` under an hour, `H:MM:SS` at or over it. */
 	function fmtDurationShort(ticks: number): string {
@@ -124,15 +191,6 @@
 			return `${Math.trunc(s / 3600)}:${mm}:${ss}`;
 		}
 		return `${Math.trunc(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-	}
-
-	/** The played fraction of the seekbar, clamped to `[0, 1]`. */
-	function seekRatio(): number {
-		const { positionTicks, runtimeTicks } = playback.playback;
-		if (runtimeTicks <= 0) {
-			return 0;
-		}
-		return Math.min(1, Math.max(0, positionTicks / runtimeTicks));
 	}
 
 	/** The header's status word (`header_status_word`). */
@@ -170,6 +228,18 @@
 		return available ? roleVar(role) : roleVar('textMuted');
 	}
 
+	/** The pointer's fraction along the seekbar's painted span. */
+	function ratioAt(event: PointerEvent): number {
+		if (!seekbarEl) {
+			return 0;
+		}
+		const rect = seekbarEl.getBoundingClientRect();
+		if (rect.width <= 0) {
+			return 0;
+		}
+		return Math.min(1, Math.max(0, (event.clientX - rect.x) / rect.width));
+	}
+
 	/** One element's painted region, `null` while the element is absent. */
 	function region(
 		el: HTMLElement | undefined,
@@ -201,14 +271,12 @@
 	}
 
 	function report(): void {
-		windowHeight = window.innerHeight;
-		columnCells = Math.floor((panelEl?.clientWidth ?? 0) / CELL_COL_PX);
 		reportLayout(reportKey, { lists: [], regions: currentRegions() });
 	}
 
 	/** The observer the mount and the art element's effect share; the
 	 * art element's own resizes report (design D4) — the artwork's
-	 * intrinsic size moves the transport column beside it. */
+	 * intrinsic size moves the rows below it. */
 	let artObserver: ResizeObserver | undefined;
 
 	// Each paint that moved a region reports (design D4): this effect runs
@@ -223,7 +291,7 @@
 	// replaces the last one; a frame without one keeps painting it.
 	$effect(() => {
 		if (playback.artwork) {
-			art = playback.artwork;
+			carriedArt = playback.artwork;
 		}
 	});
 
@@ -256,21 +324,23 @@
 	});
 </script>
 
-<div style:padding="var(--mbv-cell-row) 0" bind:this={panelEl}>
-	<!-- The header row: it paints in every state, idle included. The root
-		carries the queue placement's padding in row units: the TUI's
-		playback band sits one row below the column's top edge and two
-		columns inside it (`queue_panel_inset`), and its last row is the gap
-		row that keeps the band clear of the recessed queue panel below.
-		The row paints on the `QueueOnlyPlaybackPanel` fill
-		(`--mbv-queuePlaybackBand`) with the header painter's one-cell
-		interior padding each side. -->
+<!-- The player panel block on the queue column's backdrop: the header row,
+	then the artwork, the title and parent line, the scrubber, and the
+	transport. Every gap and pad is a cell-unit multiple, the geometry basis
+	the queue column already paints with (`bridge/cells`). -->
+<div
+	class="flex flex-col"
+	style:padding="var(--mbv-cell-row) calc(var(--mbv-cell-col) * 2)"
+	style:gap="var(--mbv-cell-row)"
+	bind:this={panelEl}
+>
+	<!-- The header row: the playback target at the left and the state word at
+		the right. The target span is the `playbackTarget` region; its press
+		opens the chooser once the Rust side carries a chooser target. -->
 	<div
 		class="flex items-center overflow-hidden whitespace-nowrap"
 		style:height="var(--mbv-cell-row)"
-		style:margin-inline="calc(var(--mbv-cell-col) * 2)"
-		style:padding-inline="var(--mbv-cell-col)"
-		style:background="var(--mbv-queuePlaybackBand)"
+		style:gap="var(--mbv-cell-col)"
 	>
 		<span
 			class="flex shrink-0 items-center"
@@ -278,234 +348,214 @@
 			bind:this={targetEl}
 			data-target="playbackTarget"
 		>
-			{#if playback.hostIsRemote}
-				<!-- The TUI's target glyph: `target_icon` paints the connected
-					cast glyph while a remote host owns playback and the cast glyph
-					otherwise, in the target colour (yellow local, green remote);
-					Lucide's one `Cast` carries both states, so the colour and the
-					host label carry the distinction. -->
-				<Cast size={CELL_COL_PX} color="var(--mbv-playbackTargetRemoteFg)" />
-				{#if playback.host}
-					<span class="truncate" style:color={roleVar('textPrimary')}
-						>{playback.host}</span
-					>
-				{/if}
-			{:else}
-				<Cast size={CELL_COL_PX} color="var(--mbv-playbackTargetLocalFg)" />
+			<Cast
+				size={CELL_COL_PX}
+				color={playback.hostIsRemote
+					? 'var(--mbv-playbackTargetRemoteFg)'
+					: 'var(--mbv-playbackTargetLocalFg)'}
+			/>
+			{#if playback.host}
+				<span class="truncate" style:color={roleVar('textPrimary')}>{playback.host}</span>
 			{/if}
 		</span>
 		<span class="flex-1"></span>
-		<span class="font-bold" style:color={statusColor(playback.status)}
-			>{statusWord(playback.status)}</span
+		<span
+			class="font-bold tracking-wide"
+			style:color={statusColor(playback.status)}>{statusWord(playback.status)}</span
 		>
 	</div>
-	{#if playback.shown}
-		<!-- The transport band on the `QueueOnlyPlaybackPanel` fill
-			(`--mbv-queuePlaybackBand`). The band sits two columns inside the
-			column (`queue_panel_inset`), and every row height is one cell
-			row. The arrangement is the TUI's width-driven one
-			(`queue_playback_transport_area`): at 100 column cells and wider
-			the artwork sits left-aligned with the transport beside it after
-			the two-column gap (`SLOT_TRANSPORT_GAP`) and the taller of the
-			two governs the band's height; below that the artwork centers and
-			the transport's four rows stack below it at the band's full
-			width. The four rows are the controls with the status text, a
-			blank row, the seekbar with its flanking times, one blank gap row
-			(`queue_band_rows`). The controls and seek rows paint their
-			content only while a now-playing title rides; without one the TUI
-			paints the four rows as blanks on the band's own fill, so the GUI
-			does too. -->
-		<div
-			style:margin-inline="calc(var(--mbv-cell-col) * 2)"
-			style:background="var(--mbv-queuePlaybackBand)"
-		>
-			{#snippet artwork(artwork: Exclude<GuiCardArtwork, { kind: 'hidden' }>)}
-				{#if artwork.kind === 'loading'}
+	{#if playback.nowPlayingTitle}
+		<!-- The artwork with the season-and-episode badge; the badge is an
+			Emby-episode datum, so a non-episode item paints none. The wrapper
+			is the visual slot's painted region. -->
+		{#if art && art.kind !== 'hidden'}
+			<div
+				class="relative flex justify-center"
+				bind:this={artEl}
+				data-target="visualSlot"
+			>
+				{#if art.kind === 'loading'}
 					<div
 						class="aspect-square"
-						bind:this={artEl}
-						data-target="visualSlot"
-						style:width="min(100%, {artCapPx}px)"
+						style:width="min(100%, calc(var(--mbv-cell-row) * 24))"
 						style:background="var(--mbv-textMuted)"
 					></div>
 				{:else}
 					<img
-						class="max-w-full object-contain"
+						class="max-w-full rounded-md object-contain"
 						alt=""
-						bind:this={artEl}
-						data-target="visualSlot"
-						src={artwork.detail}
-						style:max-height="{artCapPx}px"
+						src={art.detail}
+						style:max-height="calc(var(--mbv-cell-row) * 24)"
 					/>
 				{/if}
-			{/snippet}
-			{#snippet bandRows()}
-				{#if playback.nowPlayingTitle}
-					<div
-						class="flex items-center"
-						style:height="var(--mbv-cell-row)"
-						style:padding-inline="var(--mbv-cell-col)"
-						style:gap="var(--mbv-cell-col)"
-						style:background="var(--mbv-secondary)"
-					>
-						<span
-							class="flex items-center"
-							bind:this={playPauseEl}
-							data-target="playPause"
-						>
-							{#if playback.playback.paused}
-								<Play
-									size={16}
-									fill={roleVar('accent')}
-									color={roleVar('accent')}
-								/>
-							{:else}
-								<Pause
-									size={16}
-									fill={roleVar('textFocusAccent')}
-									color={roleVar('textFocusAccent')}
-								/>
-							{/if}
-						</span>
-						<span class="flex items-center" bind:this={stopEl} data-target="stop">
-							<Square
-								size={14}
-								fill={glyphColor(playback.availability.stop, 'statusError')}
-								color={glyphColor(playback.availability.stop, 'statusError')}
-							/>
-						</span>
-						<span class="flex items-center" bind:this={prevEl} data-target="previous">
-							<SkipBack
-								size={14}
-								fill={glyphColor(playback.availability.previous, 'textStrong')}
-								color={glyphColor(playback.availability.previous, 'textStrong')}
-							/>
-						</span>
-						<span class="flex items-center" bind:this={nextEl} data-target="next">
-							<SkipForward
-								size={14}
-								fill={glyphColor(playback.availability.next, 'textStrong')}
-								color={glyphColor(playback.availability.next, 'textStrong')}
-							/>
-						</span>
-						{#if statusIndicators.length > 0}
-							<!-- The queue band's status-indicator cluster, right-aligned on
-								the controls row in both arrangements as the TUI paints it:
-								the uppercased labels, one space apart, each in its role
-								colour. The TUI reports no hit region for the cluster, so it
-								carries no target. -->
-							<span
-								class="ml-auto flex items-center font-bold"
-								style:gap="var(--mbv-cell-col)"
-							>
-								{#each statusIndicators as indicator, i (i)}
-									<span style:color={roleVar(indicator.role)}>{indicator.label}</span>
-								{/each}
-							</span>
-						{/if}
-					</div>
-					<!-- The band's blank row between the controls and the seekbar: the
-						TUI's former title row, kept blank (the title lives elsewhere). -->
-					<div style:height="var(--mbv-cell-row)"></div>
-					<div
-						class="flex items-center"
-						style:height="var(--mbv-cell-row)"
-						style:padding-inline={
-							playback.showControls ? 'var(--mbv-cell-col)' : '0'
-						}
-						style:gap="var(--mbv-cell-col)"
-					>
-						{#if playback.showControls}
-							<span
-								class="shrink-0 font-mono"
-								style:color={roleVar('playbackMetaFg')}
-								>{fmtDurationShort(playback.playback.positionTicks)}</span
-							>
-							<div
-								class="h-full min-w-4 flex-1"
-								bind:this={seekbarEl}
-								data-target="seekbar"
-								style:background="var(--mbv-secondary)"
-							>
-								<div
-									class="h-full"
-									style:width="{seekRatio() * 100}%"
-									style:background="var(--mbv-accent)"
-								></div>
-							</div>
-							<span
-								class="shrink-0 font-mono"
-								style:color={roleVar('playbackMetaFg')}
-								>{fmtDurationShort(playback.playback.runtimeTicks)}</span
-							>
-						{:else}
-							<!-- The controls and seekbar carry no playback: the TUI paints
-								the track indicator across the row's full width with no inset
-								and no times, and it resolves no seek. -->
-							<div
-								class="h-full flex-1"
-								style:background="var(--mbv-progressTrack)"
-							></div>
-						{/if}
-					</div>
-					<!-- The band's trailing blank row, on the band's own fill. -->
-					<div style:height="var(--mbv-cell-row)"></div>
-				{:else}
-					<!-- Without a now-playing title the TUI paints the four band rows
-						as blanks on the band's own fill (`render_queue_panel`): the
-						controls, former-title, seek, and gap rows. -->
-					<div style:height="var(--mbv-cell-row)"></div>
-					<div style:height="var(--mbv-cell-row)"></div>
-					<div style:height="var(--mbv-cell-row)"></div>
-					<div style:height="var(--mbv-cell-row)"></div>
-				{/if}
-			{/snippet}
-			{#if playback.nowPlayingTitle}
-				<!-- The now-playing title's own row, below the column top and
-					inset one column each side: the TUI composites the artwork-site
-					title into the image's top text row, so the header row paints
-					only the target and the status word. The frame carries the
-					plain title in the projection's `PlaybackValueFg` role; the
-					TUI's scrolling marquee needs a clock the frame does not carry,
-					so the row truncates with the slice's ellipsis treatment. -->
-				<div
-					class="flex items-center overflow-hidden whitespace-nowrap"
-					style:height="var(--mbv-cell-row)"
-					style:padding-inline="var(--mbv-cell-col)"
-				>
+				{#if playback.episodeBadge}
 					<span
-						class="truncate"
-						style:color={roleVar('playbackValueFg')}
-						>{playback.nowPlayingTitle}</span
+						class="absolute top-0 right-0 rounded-md px-2 py-0.5 font-mono text-xs font-semibold"
+						style:background="var(--mbv-popover)"
+						style:color={roleVar('playbackMetaFg')}
+						>{playback.episodeBadge}</span
 					>
-				</div>
-			{/if}
-			{#if art && art.kind !== 'hidden'}
-				<!-- The visual slot: `render_card_painting` fits the image
-					within the slot region's width and the queue column's height
-					tier (`queue_card_height_cap`) — left-aligned in the wide
-					arrangement, centered when stacked. No fixed box: the image's
-					own fit sizes the rows, and the loading reservation is the
-					TUI's capped square estimate. -->
-				{#if wide}
-					<div
-						class="flex items-center"
-						style:gap="calc(var(--mbv-cell-col) * 2)"
-					>
-						{@render artwork(art)}
-						<div class="flex min-w-0 flex-1 flex-col">
-							{@render bandRows()}
-						</div>
-					</div>
-				{:else}
-					<div class="flex items-center justify-center">
-						{@render artwork(art)}
-					</div>
-					{@render bandRows()}
 				{/if}
-			{:else}
-				{@render bandRows()}
+			</div>
+		{/if}
+		<!-- The title and its parent line: the title in the playback-title
+			role, the parent line muted below it. -->
+		<div class="flex min-w-0 flex-col">
+			<span
+				class="truncate font-semibold"
+				style:color={roleVar('playbackTitleFg')}>{playback.nowPlayingTitle}</span
+			>
+			{#if playback.parentLine}
+				<span class="truncate" style:color={roleVar('playbackContextFg')}
+					>{playback.parentLine}</span
+				>
 			{/if}
+		</div>
+		{#if playback.showControls}
+			<!-- The scrubber: elapsed at the left, the bar, then the remaining
+				time and the finish clock at the right. The bar carries the
+				played fill, the intro and credits mark segments, the chapter
+				ticks, and the thumb. Its own rect is the `seekbar` region; a
+				press resolves there in the core. -->
+			<div class="flex items-center" style:gap="var(--mbv-cell-col)">
+				<span
+					class="shrink-0 font-mono text-xs tabular-nums"
+					style:color={roleVar('playbackMetaFg')}
+					>{fmtDurationShort(playback.playback.positionTicks)}</span
+				>
+				<div
+					class="relative min-w-4 flex-1"
+					role="slider"
+					tabindex="0"
+					aria-label="Seek"
+					aria-valuemin={0}
+					aria-valuemax={100}
+					aria-valuenow={Math.round(progress * 100)}
+					style:height="var(--mbv-cell-row)"
+					bind:this={seekbarEl}
+					data-target="seekbar"
+					onpointermove={(event) => (hoverRatio = ratioAt(event))}
+					onpointerleave={() => (hoverRatio = null)}
+				>
+					<div
+						class="absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 overflow-hidden rounded-full"
+						style:background="var(--mbv-progressTrack)"
+					>
+						{#each marks as mark, i (i)}
+							<div
+								class="absolute inset-y-0 opacity-40"
+								style:left="{mark.left * 100}%"
+								style:width="{mark.width * 100}%"
+								style:background="var(--mbv-accent)"
+							></div>
+						{/each}
+						<div
+							class="absolute inset-y-0 left-0"
+							style:width="{progress * 100}%"
+							style:background="var(--mbv-accent)"
+						></div>
+						{#each chapterTicks as chapter, i (i)}
+							<div
+								class="absolute inset-y-0 w-px"
+								style:left="{chapter.ratio * 100}%"
+								style:background="var(--mbv-textMuted)"
+							></div>
+						{/each}
+					</div>
+					<div
+						class="absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2"
+						style:left="{progress * 100}%"
+						style:background="var(--mbv-accent)"
+						style:border-color="var(--mbv-background)"
+					></div>
+					{#if hover}
+						<!-- The hover preview: the trickplay frame's placeholder
+							(the tile bytes are task 6.7), the time at the pointer,
+							and the chapter that covers it. No frame datum exists,
+							so the placeholder stands for the tile. -->
+						<div
+							class="pointer-events-none absolute bottom-full z-10 mb-1 -translate-x-1/2 rounded-md border p-1 whitespace-nowrap"
+							style:left="{hover.ratio * 100}%"
+							style:background="var(--mbv-popover)"
+							style:border-color="var(--mbv-border)"
+						>
+							{#if playback.trickplay}
+								<div
+									class="mb-1 flex aspect-video w-32 items-center justify-center rounded-sm"
+									style:background="var(--mbv-secondary)"
+								>
+									<Film size={16} color={roleVar('textMuted')} />
+								</div>
+							{/if}
+							<div class="flex items-center" style:gap="var(--mbv-cell-col)">
+								<span
+									class="font-mono text-xs tabular-nums"
+									style:color={roleVar('textPrimary')}
+									>{fmtDurationShort(hover.ticks)}</span
+								>
+								{#if hover.chapter}
+									<span class="text-xs" style:color={roleVar('playbackContextFg')}
+										>{hover.chapter.name}</span
+									>
+								{/if}
+							</div>
+						</div>
+					{/if}
+				</div>
+				<span
+					class="shrink-0 font-mono text-xs tabular-nums"
+					style:color={roleVar('playbackMetaFg')}
+					>-{fmtDurationShort(remainingTicks)}</span
+				>
+				{#if playback.finishClock}
+					<span
+						class="shrink-0 font-mono text-xs tabular-nums"
+						style:color={roleVar('playbackMetaFg')}>{playback.finishClock}</span
+					>
+				{/if}
+			</div>
+		{/if}
+		<!-- The transport controls: previous, stop, play/pause, next. The
+			canvas's back-10 s and forward-30 s controls have no semantic
+			target id on the Rust side, so no region can report them yet. -->
+		<div
+			class="flex items-center justify-center"
+			style:height="var(--mbv-cell-row)"
+			style:gap="calc(var(--mbv-cell-col) * 2)"
+		>
+			<span class="flex items-center" bind:this={prevEl} data-target="previous">
+				<SkipBack
+					size={18}
+					fill={glyphColor(playback.availability.previous, 'textStrong')}
+					color={glyphColor(playback.availability.previous, 'textStrong')}
+				/>
+			</span>
+			<span class="flex items-center" bind:this={stopEl} data-target="stop">
+				<Square
+					size={14}
+					fill={glyphColor(playback.availability.stop, 'statusError')}
+					color={glyphColor(playback.availability.stop, 'statusError')}
+				/>
+			</span>
+			<span
+				class="flex items-center rounded-full p-1"
+				bind:this={playPauseEl}
+				data-target="playPause"
+				style:background="var(--mbv-secondary)"
+			>
+				{#if playback.playback.paused}
+					<Play size={18} fill={roleVar('accent')} color={roleVar('accent')} />
+				{:else}
+					<Pause size={18} fill={roleVar('textFocusAccent')} color={roleVar('textFocusAccent')} />
+				{/if}
+			</span>
+			<span class="flex items-center" bind:this={nextEl} data-target="next">
+				<SkipForward
+					size={18}
+					fill={glyphColor(playback.availability.next, 'textStrong')}
+					color={glyphColor(playback.availability.next, 'textStrong')}
+				/>
+			</span>
 		</div>
 	{/if}
 </div>
