@@ -136,15 +136,35 @@ test('a pointercancel calls pointer with the neutral cancel', () => {
 	);
 });
 
-test('a pointerleave cancels only while a button is held', () => {
+test('a pointerleave always clears the hover and any drag', () => {
 	const detach = installInput(window);
-	window.dispatchEvent(new PointerEvent('pointerleave', { buttons: 0 }));
-	expect(invokeMock).not.toHaveBeenCalled();
+	// An unbuttoned leave arms no release, but the pointer is gone: the core
+	// must clear the row and scrubber hovers it still holds.
+	window.dispatchEvent(
+		new PointerEvent('pointerleave', { button: -1, buttons: 0, clientX: 7, clientY: 9 }),
+	);
 
+	// A held button's leave loses a gesture in flight: the same cancel.
 	window.dispatchEvent(new PointerEvent('pointerleave', { buttons: 1 }));
 	detach();
 
-	expect(invokeMock).toHaveBeenCalledWith(
+	expect(invokeMock).toHaveBeenNthCalledWith(1, 'pointer', {
+		event: {
+			kind: 'cancel',
+			button: -1,
+			buttons: 0,
+			x: 7,
+			y: 9,
+			metaKey: false,
+			shiftKey: false,
+			ctrlKey: false,
+			altKey: false,
+			deltaX: 0,
+			deltaY: 0,
+		},
+	});
+	expect(invokeMock).toHaveBeenNthCalledWith(
+		2,
 		'pointer',
 		expect.objectContaining({
 			event: expect.objectContaining({ kind: 'cancel', buttons: 1 }),

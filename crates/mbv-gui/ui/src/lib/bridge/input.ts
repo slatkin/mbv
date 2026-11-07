@@ -89,10 +89,10 @@ export function domWheel(event: WheelEvent): DomPointer {
 
 /**
  * A cancelled gesture as a `DomPointer`: a `pointercancel`, a `pointerleave`
- * with a button held, or the window's blur. The webview lost the gesture, so
- * its release never arrives; the core drops the drag state and sends no
- * move. A blur carries no pointer fields, so the position and button fall to
- * neutral placeholders.
+ * (with or without a button held), or the window's blur. The webview lost the
+ * pointer, so a release may never arrive: the core drops the drag state, clears
+ * its hover state, and sends no move. A blur carries no pointer fields, so the
+ * position and button fall to neutral placeholders.
  */
 export function domCancel(event?: PointerEvent): DomPointer {
 	return {
@@ -133,10 +133,11 @@ export function sendLayoutReport(report: LayoutReport): Promise<unknown> {
  * Installs the window's input forwarding: every keydown goes to `key` with
  * its default action prevented (design D6 — no webview default such as
  * reload, find, zoom, or back navigation runs), and pointer press, release,
- * move, and wheel events go to `pointer` (design D4). A `pointercancel`, a
- * `pointerleave` with a button held, and the window's blur forward the
- * neutral cancel, so a gesture the webview loses never leaves a drag armed
- * (row 6.5). Returns the cleanup that removes every listener.
+ * move, and wheel events go to `pointer` (design D4). A `pointercancel`, any
+ * `pointerleave` — with or without a button held — and the window's blur
+ * forward the neutral cancel, so a gesture the webview loses never leaves a
+ * drag armed and a pointer that left the window never leaves a hover armed
+ * (rows 6.4 and 6.5). Returns the cleanup that removes every listener.
  */
 export function installInput(target: Window = window): () => void {
 	const onKeydown = (event: KeyboardEvent) => {
@@ -159,11 +160,10 @@ export function installInput(target: Window = window): () => void {
 		void sendPointer(domCancel(event));
 	};
 	const onPointerLeave = (event: PointerEvent) => {
-		// A leave with no button held owes no release; only a gesture in
-		// flight needs the cancel.
-		if (event.buttons !== 0) {
-			void sendPointer(domCancel(event));
-		}
+		// The pointer left the window: the webview lost it, so the drag it was
+		// carrying (if any) and every hover it armed drop. An unbuttoned leave
+		// arms no release either, but the hover would stay set without this.
+		void sendPointer(domCancel(event));
 	};
 	const onBlur = () => {
 		void sendPointer(domCancel());

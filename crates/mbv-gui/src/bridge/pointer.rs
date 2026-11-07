@@ -63,8 +63,9 @@ pub enum DomPointerKind {
     /// The wheel scrolled.
     Wheel,
     /// The gesture was cancelled before a release: a `pointercancel`, a
-    /// `pointerleave` with a button held, or the window's blur. The core
-    /// clears its drag state and sends no move.
+    /// `pointerleave` (with or without a button held), or the window's blur.
+    /// The core drops the drag state, clears its hover state, and sends no
+    /// move.
     Cancel,
 }
 
