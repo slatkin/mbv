@@ -40,7 +40,7 @@ beforeEach(() => {
 });
 
 function queue(rows: GuiQueue['rows'], active: GuiQueue['active'] = null): GuiQueue {
-	return { rows, cursor: null, marks: [], active };
+	return { rows, cursor: null, marks: [], active, hover: null, drag: null };
 }
 
 test('a frame with slots renders its rows', () => {
