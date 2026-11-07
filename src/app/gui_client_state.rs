@@ -14,6 +14,7 @@
 
 use mbv_queue::QueueSlotId;
 use mbv_ui_model::context_menu::{ContextAction, ContextMenuEntry};
+use mbv_ui_model::panel_targets::SessionTargetKey;
 use mbv_ui_msg::{Key, KeyEvent, KeyModifiers, TrackChipKind};
 
 use crate::app::App;
@@ -232,24 +233,6 @@ fn move_overlay_cursor(cursor: &mut usize, down: bool, choices: usize) {
     };
 }
 
-impl TrackPopoverState {
-    /// The popover's key rules: unmodified Up/Down move the wrapping cursor
-    /// over `choices`, Enter chooses the cursor choice, Esc dismisses, and
-    /// every other chord is dropped. Returns the choice index to execute.
-    fn apply_key(&mut self, key: KeyEvent, choices: usize) -> OverlayKeyOutcome {
-        apply_overlay_list_key(&mut self.cursor, key, choices)
-    }
-}
-
-impl TargetChooserState {
-    /// The chooser's key rules: the shared chooser-list rules, Enter
-    /// selecting the cursor choice's output. Returns the choice index to
-    /// execute.
-    fn apply_key(&mut self, key: KeyEvent, choices: usize) -> OverlayKeyOutcome {
-        apply_overlay_list_key(&mut self.cursor, key, choices)
-    }
-}
-
 impl App {
     /// The canvas panel's collapse and queue-fold facts (design D10).
     #[must_use]
@@ -426,11 +409,17 @@ impl App {
         if !choices.iter().any(|choice| choice.id == track_id) {
             return;
         }
+        self.apply_track_choice(chip, track_id);
+        self.gui_overlay = None;
+    }
+
+    /// Switch the chip's track to `track_id`: the one switch a track popover's
+    /// Enter and a painted row's press both run.
+    fn apply_track_choice(&mut self, chip: TrackChipKind, track_id: i64) {
         match chip {
             TrackChipKind::Audio => self.set_audio_track(track_id),
             TrackChipKind::Subtitles => self.set_subtitle_track(track_id),
         }
-        self.gui_overlay = None;
     }
 
     /// Whether an overlay holds the GUI Client's keyboard (the row menu, a
@@ -505,8 +494,12 @@ impl App {
         };
         let outcome = match &mut self.gui_overlay {
             Some(GuiOverlay::RowMenu(menu)) => menu.apply_key(key),
-            Some(GuiOverlay::TrackPopover(popover)) => popover.apply_key(key, popover_choices),
-            Some(GuiOverlay::TargetChooser(chooser)) => chooser.apply_key(key, chooser_choices),
+            Some(GuiOverlay::TrackPopover(popover)) => {
+                apply_overlay_list_key(&mut popover.cursor, key, popover_choices)
+            }
+            Some(GuiOverlay::TargetChooser(chooser)) => {
+                apply_overlay_list_key(&mut chooser.cursor, key, chooser_choices)
+            }
             None => return false,
         };
         match outcome {
@@ -545,10 +538,7 @@ impl App {
                 let Some(choice) = choices.get(index) else {
                     return;
                 };
-                match popover.chip {
-                    TrackChipKind::Audio => self.set_audio_track(choice.id),
-                    TrackChipKind::Subtitles => self.set_subtitle_track(choice.id),
-                }
+                self.apply_track_choice(popover.chip, choice.id);
             }
             // A chooser Enter selects the cursor choice's output: the same
             // dispatch the TUI's Sessions sidebar applies on its selected
@@ -559,10 +549,22 @@ impl App {
                 let Some(choice) = self.playback_target_choices().get(index).cloned() else {
                     return;
                 };
-                if let Some(target) = resolve_session_target(&self.panel_targets, &choice.key) {
-                    self.select_panel_target(target);
-                }
+                self.select_target_for_key(&choice.key);
             }
+        }
+    }
+
+    /// Select the playback target a stable `SessionTargetKey` names,
+    /// resolved against the current target snapshot: the dispatch a
+    /// chooser's Enter and a chooser row's press share. A target the
+    /// snapshot no longer holds selects nothing. Returns whether one did.
+    pub(in crate::app) fn select_target_for_key(&mut self, key: &SessionTargetKey) -> bool {
+        match resolve_session_target(&self.panel_targets, key) {
+            Some(target) => {
+                self.select_panel_target(target);
+                true
+            }
+            None => false,
         }
     }
 

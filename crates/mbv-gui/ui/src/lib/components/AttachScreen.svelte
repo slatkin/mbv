@@ -17,8 +17,12 @@
 	// reports, and the core resolves a press or chord.
 	import { onMount } from 'svelte';
 	import { LoaderCircle, RotateCcw, X } from '@lucide/svelte';
-	import { reportLayout, retractLayout } from '$lib/bridge/layout';
-	import { roleProperty } from '$lib/bridge/theme';
+	import {
+		elementRegion,
+		observeLayout,
+		reportLayout
+	} from '$lib/bridge/layout';
+	import { roleVar } from '$lib/bridge/theme';
 	import type { AttachTargetId, GuiAttachState, LayoutRegion } from '$lib/bridge/types';
 
 	interface Props {
@@ -32,25 +36,9 @@
 	let restartEl: HTMLElement | undefined = $state();
 	let quitEl: HTMLElement | undefined = $state();
 
-	/** The `var(--mbv-<role>)` value a part paints in. */
-	function roleVar(role: string): string {
-		return `var(${roleProperty(role)})`;
-	}
-
 	/** One button's painted region, `null` while the button is absent. */
-	function region(
-		el: HTMLElement | undefined,
-		id: AttachTargetId,
-	): LayoutRegion | null {
-		if (!el) {
-			return null;
-		}
-		const rect = el.getBoundingClientRect();
-		return {
-			rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
-			target: { surface: 'attach', id },
-		};
-	}
+	const region = (el: HTMLElement | undefined, id: AttachTargetId): LayoutRegion | null =>
+		elementRegion(el, { surface: 'attach', id });
 
 	function report(): void {
 		reportLayout(reportKey, {
@@ -70,19 +58,7 @@
 		report();
 	});
 
-	onMount(() => {
-		const observer =
-			typeof ResizeObserver === 'undefined'
-				? undefined
-				: new ResizeObserver(report);
-		if (screenEl) {
-			observer?.observe(screenEl);
-		}
-		return () => {
-			observer?.disconnect();
-			retractLayout(reportKey);
-		};
-	});
+	onMount(() => observeLayout(reportKey, screenEl, report));
 </script>
 
 <!-- The canvas draws none of these states (design D15), so they paint in

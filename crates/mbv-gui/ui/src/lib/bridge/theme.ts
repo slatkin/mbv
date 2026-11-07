@@ -15,6 +15,22 @@ export function roleProperty(role: string): string {
 }
 
 /**
+ * The `var(--mbv-<role>)` value a part paints in: the custom property a role
+ * colour reads from, as every component's inline styles name it.
+ */
+export function roleVar(role: string): string {
+	return `var(${roleProperty(role)})`;
+}
+
+/**
+ * A transport glyph's colour: its role while actionable, the muted role when
+ * not — the availability gate the TUI's glyph colours carry.
+ */
+export function glyphColor(available: boolean, role: string): string {
+	return available ? roleVar(role) : roleVar('textMuted');
+}
+
+/**
  * Writes a frame's theme into CSS custom properties on `:root` (design D7).
  * Only the roles the frame carries are set; a role the frame omits keeps its
  * last value, so a theme application is a replace, not a reset. The chrome

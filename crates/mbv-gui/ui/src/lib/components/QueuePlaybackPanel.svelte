@@ -40,12 +40,12 @@
 		Pause,
 		Play,
 		SkipBack,
-		SkipForward,
+		SkipForward
 	} from '@lucide/svelte';
-	import { reportLayout, retractLayout } from '$lib/bridge/layout';
+	import { elementRegion, reportLayout, retractLayout } from '$lib/bridge/layout';
 	import TrackChips from './TrackChips.svelte';
-	import { roleProperty } from '$lib/bridge/theme';
-	import { minus } from '$lib/bridge/time';
+	import { glyphColor, roleVar } from '$lib/bridge/theme';
+	import { clampRatio, minus } from '$lib/bridge/time';
 	import type {
 		GuiCardArtwork,
 		GuiChapter,
@@ -55,7 +55,7 @@
 		GuiSegmentMark,
 		GuiTrickplaySheet,
 		LayoutRegion,
-		QueuePlaybackTargetId,
+		QueuePlaybackTargetId
 	} from '$lib/bridge/types';
 
 	interface Props {
@@ -167,14 +167,12 @@
 		};
 	});
 
-	/** A fraction `ticks / runtime`, clamped to `[0, 1]`; zero runtime is
-	 * zero. */
-	function clampRatio(ticks: number, runtime: number): number {
-		if (runtime <= 0) {
-			return 0;
-		}
-		return Math.min(1, Math.max(0, ticks / runtime));
-	}
+	/** One element's painted region for a QueuePlayback target, `null` while
+	 * the element is absent. */
+	const region = (
+		el: HTMLElement | undefined,
+		id: QueuePlaybackTargetId
+	): LayoutRegion | null => elementRegion(el, { surface: 'queuePlayback', id });
 
 	/** The chapter boundaries inside the runtime, with their bar fractions. */
 	function visibleChapters(
@@ -224,32 +222,6 @@
 			case 'idle':
 				return 'var(--mbv-textMuted)';
 		}
-	}
-
-	/** The `var(--mbv-<role>)` value a part paints in. */
-	function roleVar(role: string): string {
-		return `var(${roleProperty(role)})`;
-	}
-
-	/** A transport glyph's colour: its role while actionable, muted when
-	 * not — the availability gates the TUI's glyph colours carry. */
-	function glyphColor(available: boolean, role: string): string {
-		return available ? roleVar(role) : roleVar('textMuted');
-	}
-
-	/** One element's painted region, `null` while the element is absent. */
-	function region(
-		el: HTMLElement | undefined,
-		id: QueuePlaybackTargetId,
-	): LayoutRegion | null {
-		if (!el) {
-			return null;
-		}
-		const rect = el.getBoundingClientRect();
-		return {
-			rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
-			target: { surface: 'queuePlayback', id },
-		};
 	}
 
 	/** The open chooser's painted rows, each resolved to its choice index in

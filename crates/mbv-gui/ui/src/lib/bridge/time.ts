@@ -11,3 +11,13 @@
 export function minus(value: string): string {
 	return `\u2212${value}`;
 }
+
+/** A fraction `ticks / runtime`, clamped to `[0, 1]`; zero runtime is zero.
+ * The progress shapes the panels paint (the played fill, the ring's arc, the
+ * chapter and mark positions) all read the one rule. */
+export function clampRatio(ticks: number, runtime: number): number {
+	if (runtime <= 0) {
+		return 0;
+	}
+	return Math.min(1, Math.max(0, ticks / runtime));
+}

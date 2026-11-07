@@ -41,14 +41,13 @@
 	// merged report accounts for the mounted surface.
 	import { onMount } from 'svelte';
 	import { SaveCheck, SaveOff } from '@lucide/svelte';
-	import { reportLayout, retractLayout } from '$lib/bridge/layout';
-	import { roleProperty } from '$lib/bridge/theme';
+	import { observeLayout, reportLayout } from '$lib/bridge/layout';
+	import { roleVar } from '$lib/bridge/theme';
 	import type {
 		GuiQueueFooter,
-		GuiRole,
 		GuiStatusBar,
 		GuiToastSeverity,
-		LayoutRegion,
+		LayoutRegion
 	} from '$lib/bridge/types';
 
 	interface Props {
@@ -59,11 +58,6 @@
 
 	const reportKey = Symbol('queue-footer');
 	let lineEl: HTMLElement | undefined = $state();
-
-	/** The `var(--mbv-<role>)` value a part paints in. */
-	function roleVar(role: GuiRole): string {
-		return `var(${roleProperty(role)})`;
-	}
 
 	/** The toast text's severity foreground (`toast_spans` in the TUI's
 	 * status bar panel). */
@@ -100,19 +94,7 @@
 		report();
 	});
 
-	onMount(() => {
-		const observer =
-			typeof ResizeObserver === 'undefined'
-				? undefined
-				: new ResizeObserver(report);
-		if (lineEl) {
-			observer?.observe(lineEl);
-		}
-		return () => {
-			observer?.disconnect();
-			retractLayout(reportKey);
-		};
-	});
+	onMount(() => observeLayout(reportKey, lineEl, report));
 </script>
 
 <!-- The canvas footer band: 40 px, 16 px side padding, the canvas's 1 px

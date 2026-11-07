@@ -32,14 +32,14 @@
 	// core resolves it against the hit map.
 	import { onMount } from 'svelte';
 	import { AudioLines, Captions, Check, MonitorPlay } from '@lucide/svelte';
-	import { reportLayout, retractLayout } from '$lib/bridge/layout';
-	import { roleProperty } from '$lib/bridge/theme';
+	import { elementRegion, reportLayout, retractLayout } from '$lib/bridge/layout';
+	import { roleVar } from '$lib/bridge/theme';
 	import type {
 		GuiOverlayFrame,
 		GuiTrackChip,
 		GuiTrackChips,
 		LayoutRegion,
-		QueuePlaybackTargetId,
+		QueuePlaybackTargetId
 	} from '$lib/bridge/types';
 
 	type TrackPopover = Extract<GuiOverlayFrame, { kind: 'trackPopover' }>;
@@ -72,31 +72,18 @@
 		return chosen?.label ?? (kind === 'subtitles' ? 'Off' : 'Audio');
 	}
 
-	/** The `var(--mbv-<role>)` value a part paints in. */
-	function roleVar(role: string): string {
-		return `var(${roleProperty(role)})`;
-	}
-
 	/** The `var(--canvas-<name>)` value a part paints in: the queue's canvas
 	 * hexes that name no theme slot (design DR9). */
 	function canvasVar(name: string): string {
 		return `var(--canvas-${name})`;
 	}
 
-	/** One element's painted region, `null` while the element is absent. */
-	function region(
+	/** One element's painted region for a QueuePlayback target, `null` while
+	 * the element is absent. */
+	const region = (
 		el: HTMLElement | undefined,
-		id: QueuePlaybackTargetId,
-	): LayoutRegion | null {
-		if (!el) {
-			return null;
-		}
-		const rect = el.getBoundingClientRect();
-		return {
-			rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
-			target: { surface: 'queuePlayback', id },
-		};
-	}
+		id: QueuePlaybackTargetId
+	): LayoutRegion | null => elementRegion(el, { surface: 'queuePlayback', id });
 
 	/** The open popover's painted rows, each resolved to its choice index in
 	 * the frame's `choices` list. */

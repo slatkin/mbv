@@ -163,6 +163,18 @@ impl App {
         self.queue_for_link(self.playing_queue_link())
     }
 
+    /// The queue item the playhead names in the playback queue, from a
+    /// displayed playback state the caller already read. `None` while idle
+    /// or past the shown queue's end.
+    pub(in crate::app) fn queue_item_at_playhead(
+        &self,
+        state: mbv_ui_model::playback::PlaybackState,
+    ) -> Option<&mbv_queue::QueueItem> {
+        state
+            .active_idx
+            .and_then(|idx| self.playback_queue().item_at(idx))
+    }
+
     pub(in crate::app) fn playback_queue_mut(&mut self) -> &mut QueueView {
         self.queue_for_link_mut(self.playing_queue_link())
     }

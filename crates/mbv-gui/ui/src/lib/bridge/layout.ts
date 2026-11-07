@@ -8,7 +8,7 @@
 // each paint that moved a region, no more).
 
 import { sendLayoutReport } from './input';
-import type { LayoutRegion, LayoutSize, ListRows } from './types';
+import type { LayoutRegion, LayoutSize, ListRows, RegionTarget } from './types';
 
 /** One surface's share of the merged report: its list capacities and regions. */
 export interface LayoutContribution {
@@ -80,4 +80,46 @@ export function retractLayout(key: symbol): void {
 	if (contributions.delete(key)) {
 		schedule();
 	}
+}
+
+/**
+ * One element's painted region, `null` while the element is absent (its bind
+ * has not landed yet in this paint). The rect is the element's bounding box
+ * in window coordinates; `target` is the semantic target a press on the
+ * region resolves to.
+ */
+export function elementRegion(
+	el: HTMLElement | undefined,
+	target: RegionTarget,
+): LayoutRegion | null {
+	if (!el) {
+		return null;
+	}
+	const rect = el.getBoundingClientRect();
+	return {
+		rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+		target,
+	};
+}
+
+/**
+ * Observes `el`'s size with `report` and returns the unmount cleanup: the
+ * observer disconnects and the surface's contribution retracts. jsdom has no
+ * `ResizeObserver`, so the observer is skipped when the global is absent —
+ * the frame effect still reports there.
+ */
+export function observeLayout(
+	key: symbol,
+	el: HTMLElement | undefined,
+	report: () => void,
+): () => void {
+	const observer =
+		typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(report);
+	if (el) {
+		observer?.observe(el);
+	}
+	return () => {
+		observer?.disconnect();
+		retractLayout(key);
+	};
 }

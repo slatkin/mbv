@@ -23,7 +23,7 @@ use mbv_surfaces::gesture::{PointerGesture, PointerGestureState};
 use mbv_surfaces::queue::QueueSurface;
 use mbv_surfaces::queue_playback::QueuePlaybackSurface;
 use mbv_surfaces::status_bar::StatusBarSurface;
-use mbv_surfaces::{FocusStack, HitMap, HitRegion};
+use mbv_surfaces::{FocusStack, HitMap};
 use mbv_ui_model::queue_rows::queue_media_rows;
 use mbv_ui_model::settings::PanelFocus;
 use mbv_ui_msg::{ComponentId, KeyEvent, PointerEvent, PointerKind, Position};
@@ -33,9 +33,12 @@ use crate::attach::{AttachCampaign, LibraryOwnerSteps};
 use crate::bridge::frame::playback::GuiScrubberTile;
 use crate::bridge::frame::{FrameSources, GuiFrame, GuiWindowFrame, scrubber_ticks};
 use crate::bridge::layout::{
-    LayoutReport, LayoutSize, ListId, QueuePlaybackTargetId, QueueTargetId, RegionTarget, hit_map,
+    LayoutReport, LayoutSize, ListId, QueueTargetId, RegionTarget, hit_map,
 };
-use crate::leaves::{PlaybackLeaf, QueueLeaf, StatusBarLeaf, TransportAvailability, gesture_point};
+use crate::leaves::{
+    PlaybackLeaf, QueueLeaf, StatusBarLeaf, TransportAvailability, gesture_point, row_slot_at,
+    seekbar_region,
+};
 use crate::painted_choices::PaintedChoices;
 
 mod tick_host;
@@ -219,7 +222,7 @@ impl CoreThread {
     /// A core over an attached `App` (design D3): it owns the first slice's
     /// Surface state and the channel every input and wake feeds.
     #[must_use]
-    pub fn new(app: App, rx: Receiver<CoreInput>, sink: FrameSink, quit: QuitSink) -> Self {
+    pub fn new(mut app: App, rx: Receiver<CoreInput>, sink: FrameSink, quit: QuitSink) -> Self {
         let mut focus = FocusStack::new();
         // The first slice mounts the Queue panel, the Queue playback band,
         // and the Status bar (design D4), and the Queue side holds focus.
@@ -227,7 +230,6 @@ impl CoreThread {
         focus.mount(ComponentId::QueuePlaybackPanel);
         focus.mount(ComponentId::StatusBarPanel);
         focus.set_panel_focus(PanelFocus::Queue);
-        let mut app = app;
         // The minimal Emby client fill (design D9's ruled exception): the
         // armed startup request becomes an authentication-only worker — no
         // library bootstrap — whose completion installs the client the
@@ -310,34 +312,12 @@ impl CoreThread {
         self.queue.set_hover(row_hover);
     }
 
-    /// The Queue row the pointer rests on: the row's own region or the chrome
+    /// The Queue row the pointer rests on, the shared region rule the leaf's
+    /// click path resolves with too: the row's own region or the chrome
     /// painted over it (its grip and actions button), so moving onto the
     /// chrome keeps the row hovered.
     fn queue_row_at(&self, at: Position) -> Option<QueueSlotId> {
-        match self.regions.resolve(at) {
-            Some(RegionTarget::Queue(
-                QueueTargetId::Slot(raw)
-                | QueueTargetId::RowGrip(raw)
-                | QueueTargetId::RowActions(raw),
-            )) => Some(QueueSlotId::from_raw(*raw)),
-            _ => None,
-        }
-    }
-
-    /// The last painted seekbar region holding `at`, the resolution
-    /// precedence the hit map gives the last push; `None` when the pointer
-    /// is away from the bar.
-    fn seekbar_region_at(&self, at: Position) -> Option<HitRegion> {
-        self.regions
-            .iter()
-            .filter(|(region, target)| {
-                matches!(
-                    target,
-                    RegionTarget::QueuePlayback(QueuePlaybackTargetId::Seekbar)
-                ) && region.contains(at)
-            })
-            .last()
-            .map(|(region, _)| *region)
+        row_slot_at(&self.regions, at)
     }
 
     /// Route one translated key chord through the shared router with the
@@ -400,8 +380,7 @@ impl CoreThread {
         // scrubber carries the hover"): the event's position resolves
         // against the painted bar through the same fraction rule a seek
         // uses, and a position away from the bar clears it.
-        let hover = self
-            .seekbar_region_at(event.position)
+        let hover = seekbar_region(&self.regions, event.position)
             .and_then(|bar| self.playback.seek_target(bar, event.position.x));
         self.playback.set_scrubber_hover(hover);
         // The canvas queue's row hover (add-tauri-gui-client row 6.5): the row

@@ -11,8 +11,8 @@
 	// edges.
 	import { onMount } from 'svelte';
 	import { ChevronDown } from '@lucide/svelte';
-	import { reportLayout, retractLayout } from '$lib/bridge/layout';
-	import { roleProperty } from '$lib/bridge/theme';
+	import { elementRegion, observeLayout, reportLayout } from '$lib/bridge/layout';
+	import { roleVar } from '$lib/bridge/theme';
 	import type { GuiQueueSummary, LayoutRegion } from '$lib/bridge/types';
 
 	interface Props {
@@ -24,24 +24,14 @@
 	let lineEl: HTMLElement | undefined = $state();
 	let expandEl: HTMLElement | undefined = $state();
 
-	/** The `var(--mbv-<role>)` value a part paints in. */
-	function roleVar(role: string): string {
-		return `var(${roleProperty(role)})`;
-	}
-
 	/** The painted regions (design D4): the expand control, the line's one
 	 * interactive target. */
 	function currentRegions(): LayoutRegion[] {
-		if (!expandEl) {
-			return [];
-		}
-		const rect = expandEl.getBoundingClientRect();
-		return [
-			{
-				rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
-				target: { surface: 'queuePlayback', id: 'queueFold' },
-			},
-		];
+		const region = elementRegion(expandEl, {
+			surface: 'queuePlayback',
+			id: 'queueFold'
+		});
+		return region === null ? [] : [region];
 	}
 
 	function report(): void {
@@ -56,19 +46,7 @@
 		report();
 	});
 
-	onMount(() => {
-		const observer =
-			typeof ResizeObserver === 'undefined'
-				? undefined
-				: new ResizeObserver(report);
-		if (lineEl) {
-			observer?.observe(lineEl);
-		}
-		return () => {
-			observer?.disconnect();
-			retractLayout(reportKey);
-		};
-	});
+	onMount(() => observeLayout(reportKey, lineEl, report));
 </script>
 
 <!-- The folded queue's one line, on the queue box's fill and its

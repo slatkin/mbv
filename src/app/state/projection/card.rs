@@ -437,9 +437,7 @@ impl App {
     ) -> bool {
         let slotless_active = playback.active && playback.active_idx.is_none();
         let raw_item = if playback.active {
-            playback
-                .active_idx
-                .and_then(|idx| self.playback_queue().item_at(idx).cloned())
+            self.queue_item_at_playhead(playback).cloned()
         } else {
             None
         }

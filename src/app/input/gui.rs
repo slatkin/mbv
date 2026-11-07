@@ -353,11 +353,7 @@ impl App {
             // snapshot, do nothing when the target is gone, and close the
             // chooser on the selection the sidebar's dismiss carries.
             ShellRequest::SelectSession(key) => {
-                if let Some(target) = crate::app::state::panel_targets::resolve_session_target(
-                    &self.panel_targets,
-                    &key,
-                ) {
-                    self.select_panel_target(target);
+                if self.select_target_for_key(&key) {
                     self.gui_overlay = None;
                 }
             }

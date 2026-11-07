@@ -11,13 +11,18 @@
 	// arms as the expanded header's controls.
 	import { onMount } from 'svelte';
 	import { Pause, Play, SkipForward } from '@lucide/svelte';
-	import { reportLayout, retractLayout } from '$lib/bridge/layout';
-	import { roleProperty } from '$lib/bridge/theme';
+	import {
+		elementRegion,
+		observeLayout,
+		reportLayout
+	} from '$lib/bridge/layout';
+	import { clampRatio } from '$lib/bridge/time';
+	import { glyphColor, roleVar } from '$lib/bridge/theme';
 	import type {
 		GuiCardArtwork,
 		GuiQueuePlayback,
 		LayoutRegion,
-		QueuePlaybackTargetId,
+		QueuePlaybackTargetId
 	} from '$lib/bridge/types';
 
 	interface Props {
@@ -56,39 +61,12 @@
 			.join(' · '),
 	);
 
-	/** A fraction `ticks / runtime`, clamped to `[0, 1]`; zero runtime is
-	 * zero. */
-	function clampRatio(ticks: number, runtime: number): number {
-		if (runtime <= 0) {
-			return 0;
-		}
-		return Math.min(1, Math.max(0, ticks / runtime));
-	}
-
-	/** The `var(--mbv-<role>)` value a part paints in. */
-	function roleVar(role: string): string {
-		return `var(${roleProperty(role)})`;
-	}
-
-	/** A transport glyph's colour: its role while actionable, muted when not. */
-	function glyphColor(available: boolean, role: string): string {
-		return available ? roleVar(role) : roleVar('textMuted');
-	}
-
-	/** One element's painted region, `null` while the element is absent. */
-	function region(
+	/** One element's painted region for a QueuePlayback target, `null` while
+	 * the element is absent. */
+	const region = (
 		el: HTMLElement | undefined,
-		id: QueuePlaybackTargetId,
-	): LayoutRegion | null {
-		if (!el) {
-			return null;
-		}
-		const rect = el.getBoundingClientRect();
-		return {
-			rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
-			target: { surface: 'queuePlayback', id },
-		};
-	}
+		id: QueuePlaybackTargetId
+	): LayoutRegion | null => elementRegion(el, { surface: 'queuePlayback', id });
 
 	/** The painted regions (design D4): the still's slot, the transport's two
 	 * controls. */
@@ -114,19 +92,7 @@
 		report();
 	});
 
-	onMount(() => {
-		const observer =
-			typeof ResizeObserver === 'undefined'
-				? undefined
-				: new ResizeObserver(report);
-		if (stripEl) {
-			observer?.observe(stripEl);
-		}
-		return () => {
-			observer?.disconnect();
-			retractLayout(reportKey);
-		};
-	});
+	onMount(() => observeLayout(reportKey, stripEl, report));
 </script>
 
 <!-- The strip: one row across the column's top, the still at the leading

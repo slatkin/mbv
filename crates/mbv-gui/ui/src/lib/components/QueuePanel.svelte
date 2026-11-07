@@ -54,13 +54,12 @@
 	import { onMount } from 'svelte';
 	import { Ellipsis, GripVertical } from '@lucide/svelte';
 	import { reportLayout, retractLayout } from '$lib/bridge/layout';
-	import { roleProperty } from '$lib/bridge/theme';
+	import { roleVar } from '$lib/bridge/theme';
 	import type {
 		GuiOverlayFrame,
 		GuiQueue,
 		GuiQueueRow,
 		GuiQueueSummary,
-		GuiRole,
 		LayoutRegion,
 		QueueTargetId,
 	} from '$lib/bridge/types';
@@ -266,12 +265,10 @@
 		};
 	}
 
-	/** The `var(--mbv-<role>)` value a part paints in. */
-	function roleVar(role: GuiRole): string {
-		return `var(${roleProperty(role)})`;
-	}
-
-	/** One element's painted region, resolved to its Queue target id. */
+	/** One element's painted region, resolved to its Queue target id. Its
+	 * elements come from a live `querySelectorAll` over attached DOM, so the
+	 * rect is always measurable — the nullable shape the other reporters use
+	 * has no counterpart here. */
 	function region(el: HTMLElement, id: QueueTargetId): LayoutRegion {
 		const rect = el.getBoundingClientRect();
 		return {

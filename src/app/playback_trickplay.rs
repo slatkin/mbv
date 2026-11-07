@@ -137,9 +137,7 @@ impl App {
     /// largest payload.
     fn trickplay_grid_for(&self, ticks: i64) -> Option<TrickplayGridChoice> {
         let key = self
-            .displayed_playback_state()
-            .active_idx
-            .and_then(|idx| self.playback_queue().item_at(idx))
+            .queue_item_at_playhead(self.displayed_playback_state())
             .map(mbv_queue::QueueItem::content_id)?;
         let QueueItemContentId::Emby(item_id) = &key else {
             return None;

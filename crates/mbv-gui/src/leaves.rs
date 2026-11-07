@@ -49,6 +49,43 @@ pub(crate) fn gesture_point(gesture: &PointerGesture<Position>) -> Option<Positi
     }
 }
 
+/// The queue row a region names, if it names a row: the row's own region or
+/// the chrome painted over it (its grip and actions button), so moving onto
+/// the chrome keeps the row hovered.
+pub(crate) fn row_region_target(target: &RegionTarget) -> Option<QueueSlotId> {
+    match target {
+        RegionTarget::Queue(
+            QueueTargetId::Slot(raw) | QueueTargetId::RowGrip(raw) | QueueTargetId::RowActions(raw),
+        ) => Some(QueueSlotId::from_raw(*raw)),
+        RegionTarget::Queue(_)
+        | RegionTarget::QueuePlayback(_)
+        | RegionTarget::StatusBar(_)
+        | RegionTarget::Attach(_) => None,
+    }
+}
+
+/// The queue row the point lands on, resolved against the reported regions:
+/// the row's own region or the chrome painted over it.
+pub(crate) fn row_slot_at(regions: &HitMap<RegionTarget>, at: Position) -> Option<QueueSlotId> {
+    regions.resolve(at).and_then(row_region_target)
+}
+
+/// The last painted seekbar region holding `at`, the resolution precedence
+/// the hit map gives the last push; `None` when the pointer is away from the
+/// bar.
+pub(crate) fn seekbar_region(regions: &HitMap<RegionTarget>, at: Position) -> Option<HitRegion> {
+    regions
+        .iter()
+        .filter(|(region, target)| {
+            matches!(
+                target,
+                RegionTarget::QueuePlayback(QueuePlaybackTargetId::Seekbar)
+            ) && region.contains(at)
+        })
+        .last()
+        .map(|(region, _)| *region)
+}
+
 /// The Queue panel's leaf: the Queue Surface state and the reported regions.
 ///
 /// The click, double-click, right-click, wheel, and drag arms mirror the
@@ -70,25 +107,9 @@ impl<'a> QueueLeaf<'a> {
         Self { surface, regions }
     }
 
-    /// The slot a queue region names, if it names a row: the row's own region
-    /// or the chrome painted over it (the grip and the actions button).
-    fn row_region_target(target: &RegionTarget) -> Option<QueueSlotId> {
-        match target {
-            RegionTarget::Queue(
-                QueueTargetId::Slot(raw)
-                | QueueTargetId::RowGrip(raw)
-                | QueueTargetId::RowActions(raw),
-            ) => Some(QueueSlotId::from_raw(*raw)),
-            RegionTarget::Queue(_)
-            | RegionTarget::QueuePlayback(_)
-            | RegionTarget::StatusBar(_)
-            | RegionTarget::Attach(_) => None,
-        }
-    }
-
     /// The row a queue region resolves to, if one does.
     fn row_at(&self, at: Position) -> Option<QueueSlotId> {
-        self.regions.resolve(at).and_then(Self::row_region_target)
+        row_slot_at(self.regions, at)
     }
 
     /// The row region under `at`, with its slot: the last painted row region
@@ -97,9 +118,7 @@ impl<'a> QueueLeaf<'a> {
     fn row_region_at(&self, at: Position) -> Option<(HitRegion, QueueSlotId)> {
         self.regions
             .iter()
-            .filter_map(|(region, target)| {
-                Self::row_region_target(target).map(|slot| (*region, slot))
-            })
+            .filter_map(|(region, target)| row_region_target(target).map(|slot| (*region, slot)))
             .filter(|(region, _)| region.contains(at))
             .last()
     }
@@ -354,20 +373,10 @@ impl<'a> PlaybackLeaf<'a> {
         }
     }
 
-    /// The seekbar's painted region, when one contains `at`: the last
-    /// painted seekbar region holding the point, the resolution precedence
-    /// the hit map gives the last push.
+    /// The seekbar's painted region holding `at`, the core thread's hover
+    /// resolution's shared rule.
     fn seekbar_at(&self, at: Position) -> Option<HitRegion> {
-        self.regions
-            .iter()
-            .filter(|(region, target)| {
-                matches!(
-                    target,
-                    RegionTarget::QueuePlayback(QueuePlaybackTargetId::Seekbar)
-                ) && region.contains(at)
-            })
-            .last()
-            .map(|(region, _)| *region)
+        seekbar_region(self.regions, at)
     }
 
     /// The action a press over the transport band takes. The glyph arms run

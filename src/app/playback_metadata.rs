@@ -215,9 +215,7 @@ impl App {
     /// absence instead of caching it.
     pub fn fetch_playback_metadata(&mut self) {
         let Some(key) = self
-            .displayed_playback_state()
-            .active_idx
-            .and_then(|idx| self.playback_queue().item_at(idx))
+            .queue_item_at_playhead(self.displayed_playback_state())
             .map(mbv_queue::QueueItem::content_id)
         else {
             return;

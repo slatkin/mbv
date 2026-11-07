@@ -252,9 +252,7 @@ impl App {
         let status = self.now_playing_status();
         let (host, host_is_remote) = self.playback_host_label_and_remote();
         let parts = self.now_playing_title_parts(playback);
-        let active_item = playback
-            .active_idx
-            .and_then(|idx| self.playback_queue().item_at(idx));
+        let active_item = self.queue_item_at_playhead(playback);
         let episode_badge = active_item.and_then(|item| match item {
             mbv_queue::QueueItem::Emby(item) => episode_badge(item),
             _ => None,
@@ -305,9 +303,7 @@ impl App {
         if !state.active {
             return None;
         }
-        state
-            .active_idx
-            .and_then(|idx| self.playback_queue().item_at(idx))
+        self.queue_item_at_playhead(state)
             .map(|item| self.playback_title_parts(item))
             .or_else(|| self.slotless_playback_title_parts())
     }
