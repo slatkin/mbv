@@ -16,8 +16,8 @@ Cut by the narrowing: U3.6 (chip chevron), U5.\* (collapsed states), U6.5 (popov
 
 Not painted by Svelte; reverted by R0:
 
-- [ ] U2.2 Footer library context (audit/main.md 27) — reverted by R0; nothing in Svelte paints it.
-- [ ] U2.3 Rail compact minutes (audit/collapsed.md G12) — reverted by R0; nothing in Svelte paints it.
+- [x] U2.2 Footer library context (audit/main.md 27) — reverted by R0; nothing in Svelte paints it.
+- [x] U2.3 Rail compact minutes (audit/collapsed.md G12) — reverted by R0; nothing in Svelte paints it.
 
 ## R0. Revert the cut data fields
 
