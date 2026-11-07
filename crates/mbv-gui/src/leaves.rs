@@ -179,8 +179,14 @@ impl<'a> QueueLeaf<'a> {
 
     fn double_click(&mut self, at: Position) -> Option<Msg> {
         // The TUI's double click re-selects the row (the first press already
-        // did) and lets the dispatched activation play it.
-        let target = self.row_at(at)?;
+        // did) and lets the dispatched activation play it. Only the row's own
+        // region plays: the hover chrome's grip and actions button swallow a
+        // double click (review of row 6.5, finding P2-2), so a fast second
+        // press on either control never opens playback.
+        let Some(RegionTarget::Queue(QueueTargetId::Slot(raw))) = self.regions.resolve(at) else {
+            return None;
+        };
+        let target = QueueSlotId::from_raw(*raw);
         self.surface.delegate_operation_with_viewport_len(
             MediaListOperation::Select(target),
             self.viewport_len(),
@@ -569,5 +575,51 @@ impl GuiSurfaceLeaf for StatusBarLeaf<'_> {
         // The Status bar paints no queue rows, so it holds no selection for
         // the GUI-only row move to address.
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{QueueLeaf, QueueSlotId, QueueSurface, QueueTargetId, RegionTarget};
+    use mbv::GuiSurfaceLeaf;
+    use mbv_surfaces::gesture::PointerGesture;
+    use mbv_surfaces::{HitMap, HitRegion};
+    use mbv_ui_model::media_list::{MediaKind, MediaListRow, MediaSemanticState};
+    use mbv_ui_msg::Position;
+
+    /// A queue holding one item row for slot 1.
+    fn one_row_queue() -> QueueSurface {
+        let mut queue = QueueSurface::new();
+        queue.list_mut().set_content(vec![MediaListRow::Item {
+            target: QueueSlotId::from_raw(1),
+            primary: "Item 1".to_string(),
+            secondary: None,
+            trailing: None,
+            duration: None,
+            kind: MediaKind::Media,
+            semantic_state: MediaSemanticState::Ordinary,
+        }]);
+        queue
+    }
+
+    /// A double click on the row chrome — the grip or the actions button —
+    /// plays nothing (review of add-tauri-gui-client row 6.5, finding P2-2):
+    /// the chrome regions swallow the gesture, so a fast second press on the
+    /// control never activates the row beneath it.
+    #[test]
+    fn a_double_click_on_the_row_chrome_plays_nothing_review_u65_p2_2() {
+        for target in [QueueTargetId::RowGrip(1), QueueTargetId::RowActions(1)] {
+            let mut queue = one_row_queue();
+            let mut regions = HitMap::new();
+            regions.push(
+                HitRegion::new(0.0, 0.0, 100.0, 30.0),
+                RegionTarget::Queue(target),
+            );
+            let mut leaf = QueueLeaf::new(&mut queue, &regions);
+            assert_eq!(
+                leaf.pointer(PointerGesture::DoubleClick(Position { x: 10.0, y: 10.0 })),
+                None
+            );
+        }
     }
 }
