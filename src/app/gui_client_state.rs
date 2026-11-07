@@ -339,6 +339,21 @@ impl App {
         self.gui_overlay = Some(GuiOverlay::TrackPopover(TrackPopoverState { chip, cursor }));
     }
 
+    /// Drop a track popover whose chip source is gone: the popover's
+    /// choices are the local player's stream, so once the player goes
+    /// inactive the frame projects no overlay for it
+    /// (`gui_overlay_projection`'s `None`) and the held state must match —
+    /// otherwise the snapshot still reports the overlay focus and the
+    /// overlay's key rules keep consuming input the window does not paint.
+    /// The GUI input entry reconciles before it builds the snapshot.
+    pub(in crate::app) fn close_orphaned_track_popover(&mut self) {
+        if matches!(self.gui_overlay, Some(GuiOverlay::TrackPopover(_)))
+            && self.track_chips().is_none()
+        {
+            self.gui_overlay = None;
+        }
+    }
+
     /// The open overlay's key rules: the overlay owns the keyboard while it
     /// is open — a key it binds runs its action, any other key is dropped,
     /// and no surface sees a chord. Returns whether an overlay was open.

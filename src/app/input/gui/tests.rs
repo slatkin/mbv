@@ -330,3 +330,35 @@ fn track_popover_choose_sends_the_track_switch() {
     assert_eq!(switched, vec![2]);
     assert!(app.gui_overlay.is_none());
 }
+
+// Unit 6.2 review finding (P2): a track popover left open when the local
+// player goes inactive has no chip source, so the frame projects no overlay
+// for it. The held state drops with its source before the snapshot reads
+// the overlay focus — otherwise the global gates stay closed and the
+// overlay's key rules swallow input the window does not paint.
+#[test]
+fn track_popover_drops_when_its_chips_disappear_review_u62_p2() {
+    let mut app = make_app_stub();
+    app.player.update_status(|status| {
+        status.active = true;
+        status.sub_tracks = vec![(2, "Forced".to_string(), true)];
+        status.sub_id = 0;
+    });
+    app.handle_playback_request(&PlaybackRequest::OpenTrackPopover(TrackChipKind::Subtitles));
+    assert!(app.gui_overlay.is_some());
+
+    // Playback ends while the popover is up (the queue exhausts, or the
+    // Owner stops from another client): the chips' source is gone.
+    app.player.update_status(|status| status.active = false);
+
+    // The next chord reconciles the orphaned popover before the snapshot,
+    // so it routes to its binding instead of being consumed by the open
+    // overlay's key rules.
+    app.route_gui_input(
+        GuiInput::Key(KeyEvent::new(Key::Char('z'), KeyModifiers::NONE)),
+        None,
+    );
+
+    assert!(app.gui_overlay.is_none());
+    assert!(app.panel_collapsed, "the chord routed to its binding");
+}

@@ -92,6 +92,12 @@ impl App {
             self.prefix_armed = false;
             return false;
         };
+        // A track popover left open when the local player went inactive has
+        // no chip source: the frame already projects no overlay for it, so
+        // the held state drops before the snapshot reads it — otherwise the
+        // overlay focus would keep the global gates closed and the overlay's
+        // key rules would swallow input the window does not paint.
+        self.close_orphaned_track_popover();
         let keybinds = self
             .config
             .lock()
