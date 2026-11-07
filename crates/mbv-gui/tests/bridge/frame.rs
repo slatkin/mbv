@@ -539,7 +539,8 @@ fn playing_queue_frame_carries_the_items_decorations() {
 
 /// The scrubber's hover preview rides the frame (add-tauri-gui-client row
 /// 6.4, design D4): the Surface state's hover fraction projects with the
-/// time and the covering chapter's name at the position.
+/// time and the covering chapter's name and ordinal at the position — the
+/// canvas preview label's `Ch. 2` form (`main` audit 12).
 #[test]
 fn the_scrubber_hover_projects_its_time_and_chapter() {
     let item = slot_item("Playing", 20 * 60 * TICKS_PER_SECOND, 0, false);
@@ -562,16 +563,17 @@ fn the_scrubber_hover_projects_its_time_and_chapter() {
         },
     );
     let mut playback = QueuePlaybackSurface::new();
-    playback.set_scrubber_hover(Some(0.25));
+    playback.set_scrubber_hover(Some(0.75));
 
     let frame = frame_with_playback_surface(&mut app, &playback);
 
     let hover = frame.playback.hover.expect("the frame carries the hover");
-    assert_eq!(hover.fraction, 0.25);
+    assert_eq!(hover.fraction, 0.75);
     // The frame carries the hover's time formatted by the TUI's shared
     // duration formatter, not the raw ticks.
-    assert_eq!(hover.time_label, "5:00");
-    assert_eq!(hover.chapter.as_deref(), Some("Opening"));
+    assert_eq!(hover.time_label, "15:00");
+    assert_eq!(hover.chapter.as_deref(), Some("Middle"));
+    assert_eq!(hover.chapter_number, Some(2));
 }
 
 /// The drag ghost carries the dragged row's Ends-at value (review of

@@ -40,8 +40,8 @@ pub struct GuiQueuePlayback {
     /// track, the subscription of a feed entry, the show of an
     /// Audiobookshelf episode. `None` when the item has no container fact.
     pub parent_line: Option<String>,
-    /// The season-and-episode badge the artwork paints ("S2 E5"). `None` for
-    /// every kind but an Emby episode with an ordinal known.
+    /// The season-and-episode badge the artwork paints ("S2 · E5"). `None`
+    /// for every kind but an Emby episode with an ordinal known.
     pub episode_badge: Option<String>,
     /// The active item's wall-clock end time, formatted in the local zone:
     /// the scrubber's finish clock. `None` while no item plays or the runtime
@@ -101,6 +101,9 @@ pub struct GuiScrubberHover {
     /// The chapter covering the pointer's position, when the active item's
     /// chapters cover it.
     pub chapter: Option<String>,
+    /// The covering chapter's 1-based ordinal in the active item's chapter
+    /// list: the canvas preview label's `Ch. 2` form (`main` audit 12).
+    pub chapter_number: Option<usize>,
     /// The trickplay tile at the pointer's position: `None` while the active
     /// item offers none, its sheet is not yet cached, or the server does not
     /// hold it — the preview paints its placeholder then.

@@ -1,5 +1,6 @@
 use mbv_emby::test_support::make_session;
 use mbv_emby_model::TICKS_PER_SECOND;
+use mbv_emby_model::test_support::make_item;
 
 use super::*;
 use crate::app::tests::make_app_stub;
@@ -140,6 +141,17 @@ fn tile_at_needs_an_interval_a_tile_size_and_a_thumbnail() {
         .tile_at(TICKS_PER_SECOND),
         None
     );
+}
+
+/// The artwork badge joins the season and episode with the canvas's middle
+/// dot (`main` audit 7): `S4 · E1`, never a space.
+#[test]
+fn episode_badge_separates_season_and_episode_with_the_canvas_dot() {
+    let mut item = make_item("Nether Zone", "Episode");
+    item.parent_index_number = 4;
+    item.index_number = 1;
+
+    assert_eq!(episode_badge(&item).as_deref(), Some("S4 · E1"));
 }
 
 /// One usable grid: a 320-wide thumbnail series of 10x10 sheets.

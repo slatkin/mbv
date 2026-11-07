@@ -15,7 +15,7 @@ pub mod playback;
 pub mod queue;
 pub mod theme;
 
-use mbv::{App, QueuePlaybackProjection};
+use mbv::{App, PlaybackChapter, QueuePlaybackProjection};
 use mbv_surfaces::FocusStack;
 use mbv_surfaces::queue::QueueSurface;
 use mbv_surfaces::queue_playback::QueuePlaybackSurface;
@@ -191,12 +191,14 @@ fn scrubber_hover(
 ) -> Option<GuiScrubberHover> {
     let fraction = fraction?;
     let ticks = scrubber_ticks(playback, fraction);
+    let chapter = covering_chapter(playback, ticks);
     Some(GuiScrubberHover {
         fraction,
         time_label: mbv_ui_model::ui_util::fmt_duration_short(
             ticks / mbv_emby_model::TICKS_PER_SECOND,
         ),
-        chapter: covering_chapter(playback, ticks),
+        chapter: chapter.map(|(_, chapter)| chapter.name.clone()),
+        chapter_number: chapter.map(|(index, _)| index + 1),
         tile,
     })
 }
@@ -211,15 +213,19 @@ pub fn scrubber_ticks(playback: &QueuePlaybackProjection, fraction: f64) -> i64 
     )
 }
 
-/// The chapter that covers `ticks`: the last boundary at or before it, the
-/// covering rule the TUI's chapter lookups share.
-fn covering_chapter(playback: &QueuePlaybackProjection, ticks: i64) -> Option<String> {
+/// The chapter that covers `ticks`, with its 1-based ordinal: the last
+/// boundary at or before it, the covering rule the TUI's chapter lookups
+/// share. The ordinal is the canvas preview's `Ch. 2` form.
+fn covering_chapter(
+    playback: &QueuePlaybackProjection,
+    ticks: i64,
+) -> Option<(usize, &PlaybackChapter)> {
     playback
         .chapters
         .iter()
+        .enumerate()
         .rev()
-        .find(|chapter| chapter.start_ticks <= ticks)
-        .map(|chapter| chapter.name.clone())
+        .find(|(_, chapter)| chapter.start_ticks <= ticks)
 }
 
 /// The canvas panel's collapse and queue-fold facts (design D10), mirroring

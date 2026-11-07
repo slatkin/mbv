@@ -210,8 +210,9 @@ pub struct QueuePlaybackProjection {
     /// feed entry, the show of an Audiobookshelf episode.
     pub parent_line: Option<String>,
     /// The season-and-episode badge the artwork paints (design D4a): an Emby
-    /// episode's ordinals, `"S2 E5"`. `None` for every other kind, and for an
-    /// episode with neither ordinal known.
+    /// episode's ordinals, `"S2 · E5"` — the canvas's middle-dot separator
+    /// (`main` audit 7). `None` for every other kind, and for an episode with
+    /// neither ordinal known.
     pub episode_badge: Option<String>,
     /// The active item's wall-clock end time (design D4a's scrubber finish
     /// clock), formatted in the local zone: the displayed playback state's
@@ -425,9 +426,10 @@ fn playback_finish_clock(state: PlaybackState) -> Option<String> {
 }
 
 /// The season-and-episode badge the artwork paints: an Emby episode's
-/// ordinals, `"S2 E5"` — the season dropped when unknown, `None` when neither
-/// is known and for every non-episode kind (design D4a, "Non-Emby kinds":
-/// Audiobookshelf, Feed, and Twitch items carry no ordinal).
+/// ordinals, `"S2 · E5"` — the canvas's middle-dot separator, the season
+/// dropped when unknown, `None` when neither is known and for every
+/// non-episode kind (design D4a, "Non-Emby kinds": Audiobookshelf, Feed, and
+/// Twitch items carry no ordinal).
 fn episode_badge(item: &mbv_emby_model::EmbyItem) -> Option<String> {
     if item.item_type != "Episode" {
         return None;
@@ -435,7 +437,7 @@ fn episode_badge(item: &mbv_emby_model::EmbyItem) -> Option<String> {
     let season = (item.parent_index_number > 0).then(|| format!("S{}", item.parent_index_number));
     let episode = (item.index_number > 0).then(|| format!("E{}", item.index_number));
     match (season, episode) {
-        (Some(season), Some(episode)) => Some(format!("{season} {episode}")),
+        (Some(season), Some(episode)) => Some(format!("{season} · {episode}")),
         (Some(season), None) | (None, Some(season)) => Some(season),
         (None, None) => None,
     }

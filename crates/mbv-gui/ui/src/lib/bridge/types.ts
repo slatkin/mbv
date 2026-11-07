@@ -231,7 +231,7 @@ export interface GuiQueuePlayback {
 	/** The now-playing parent line: the series of an episode, the artist of
 	 * a track, the subscription of a feed entry. */
 	parentLine: string | null;
-	/** The season-and-episode badge the artwork paints (`"S2 E5"`); `null`
+	/** The season-and-episode badge the artwork paints (`"S2 · E5"`); `null`
 	 * for every kind but an Emby episode with an ordinal known. */
 	episodeBadge: string | null;
 	/** The active item's wall-clock end time; the scrubber's finish clock.
@@ -287,6 +287,10 @@ export interface GuiScrubberHover {
 	/** The chapter covering the pointer's position, when the active item's
 	 * chapters cover it. */
 	chapter: string | null;
+	/** The covering chapter's 1-based ordinal in the active item's chapter
+	 * list: the canvas preview label's `Ch. 2` form. `null` while no chapter
+	 * covers the pointer. */
+	chapterNumber: number | null;
 	/** The trickplay tile at the pointer's position; `null` while the item
 	 * offers none, its sheet is not cached yet, or the server does not hold
 	 * it. */
