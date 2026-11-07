@@ -134,6 +134,16 @@ The Library panel SHALL paint the same slots for every destination: a selector r
 - **WHEN** the active list is loading or empty
 - **THEN** the list paints the loading state or the empty text that the TUI Client shows
 
+#### Scenario: The inline filter opens, filters, and closes
+
+- **GIVEN** the Library panel has Panel focus on a list that has the inline filter, such as the Music artist list
+- **WHEN** the user presses `/` and types `bo`
+- **THEN** the filter bar paints under the selector row with the query `bo`, and the list shows only the rows that the TUI Client's filter accepts for `bo`
+- **WHEN** the user then presses Esc, or Backspace with an empty query
+- **THEN** the filter bar closes and the list shows all its rows, as in the TUI Client
+- **WHEN** the user instead presses Enter
+- **THEN** the filter bar closes and the cursor stays on the accepted row, as in the TUI Client
+
 ### Requirement: Hero actions match the TUI Client
 
 Every action that the Hero shows SHALL run the TUI Client's action for the same item, and SHALL show the chord that runs that action in the GUI Client: the configured chord for an action that `[keys]` binds, and the fixed key otherwise.
@@ -232,7 +242,7 @@ In the GUI Client a collection pill SHALL toggle on and off. A list SHALL show t
 #### Scenario: The selection is cleared
 
 - **GIVEN** two or more collection pills are selected
-- **WHEN** the user presses the clear control
+- **WHEN** the user presses the clear control, or presses Backspace while the selector holds pill focus
 - **THEN** only the first selected pill in pill order stays selected
 
 #### Scenario: A non-collection pill is selected
@@ -298,7 +308,7 @@ While the Library panel shows, the Status bar under the Library column SHALL sho
 
 ### Requirement: The letter rail jumps a name-sorted list
 
-A Library list sorted by name SHALL show a letter rail. A press on a letter SHALL move the cursor to the first row whose sort name starts with that letter. A letter with no row SHALL do nothing. The rail is a pointer shortcut: its keyboard path SHALL be the list's existing filter. A list sorted by date SHALL show no rail.
+A Library list that is sorted by name and has the inline filter SHALL show a letter rail. A list without the inline filter SHALL show no rail. A press on a letter SHALL move the cursor to the first row whose sort name starts with that letter. A letter with no row SHALL do nothing. The rail is a pointer shortcut: its keyboard path SHALL be the list's existing filter. A list sorted by date SHALL show no rail.
 
 #### Scenario: A letter is pressed
 
@@ -309,6 +319,11 @@ A Library list sorted by name SHALL show a letter rail. A press on a letter SHAL
 
 - **WHEN** the user presses a letter that no row starts with
 - **THEN** the cursor and the list do not change
+
+#### Scenario: The list has no inline filter
+
+- **WHEN** the Audiobooks destination is active
+- **THEN** its book list shows no letter rail
 
 #### Scenario: The list is sorted by date
 
