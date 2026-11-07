@@ -199,6 +199,16 @@ frame's Panel-focus fact — so the `mbv-theme` surface table stays the
 one fill authority and a palette edit recolours the chrome together with
 the roles.
 
+The queue's canvas paint also uses colours that name no `mbv-theme` slot.
+`app.css` carries them as GUI-local `--canvas-*` custom properties — the
+header, rows, footer, hover, row menu, popover, and drag chrome — and every
+component references a token, never a literal hex. No `theme.rs` remap rides
+along: `mbv-theme` stays the TUI's palette (`align-gui-with-design-canvas`
+decision DR9). One canvas value stays deliberately off the tokens: the
+panel background keeps its `mbv-theme` role (`#272e33`) while the canvas
+paints `#2d353b` — the change's accepted open risk, left for the user's
+live check.
+
 The theme rides a frame only when armed: the first frame, and the first
 frame after each `report_layout`, carry it — a window-content reload
 re-arms it through the mount-time report. `ui/src/lib/bridge/theme.ts`
@@ -219,18 +229,20 @@ window fetches no font at runtime and the CSP's `default-src 'self'` covers
 `font-src`.
 
 The GUI paints no emoji and no Nerd Font glyph. Icons come from
-`@lucide/svelte` only: the transport controls, the playing-row marker, and
-the playback-target indicator are Lucide icons. The transport glyphs paint
+`@lucide/svelte` only: the transport controls and the playback-target
+indicator are Lucide icons. The item rows paint no playing marker: the
+active row's canvas green fill with dark ink marks it (the `GuiQueue`
+frame still names `active`). The transport glyphs paint
 as solid shapes — `fill` and `stroke` both the role colour, as the TUI's
 solid transport glyphs paint — with the availability the colour already
 carried gating them. The header's playback-target indicator maps both of
 `target_icon`'s states to the one Lucide `Cast` — the TUI paints the
 cast family for local and remote alike — so the role colour and the
 host label carry the distinction. `GuiFooterPill.text` carries glyph-free
-text; each pill's slot maps to its Lucide icon in the component —
-`ListMusic` for the playlist, `Cable` for the owner indicator,
-`SaveCheck` for autosave, `SaveOff` for the dirty pill — with the label
-beside the icon where the frame carries one.
+text. The autosave and dirty pills map to their Lucide icons in the
+component (`SaveCheck` and `SaveOff`); the playlist pill and the session
+marker paint plain label text — the marker adds its liveness dot — with
+no leading icon, as the canvas draws them.
 
 ## The panel's four states
 
@@ -265,9 +277,17 @@ The slice's one window paints the design canvas's player panel on the queue
 column's backdrop (`App.svelte`, `Panel.svelte`).
 `ui/src/lib/bridge/cells.ts` fixes one TUI text row at 28 logical pixels and
 one text column at 14 (the terminal cell's 1:2 aspect at that height), and
-every panel offset — the paddings, the gaps, the queue box's inset, the
-six-column date gutter — is a `calc()` over the `--mbv-cell-row` and
-`--mbv-cell-col` properties.
+every panel offset — the paddings, the gaps, the queue box's inset — is a
+`calc()` over the `--mbv-cell-row` and `--mbv-cell-col` properties.
+
+The `align-gui-with-design-canvas` change aligned the queue's paint with the
+canvas and nothing else: a paint-only restyle of the queue's four bands
+with no new command, derivation, key, or contract, and the rest of the
+window keeps TUI parity. The artboards (`Main.dc.html`, `Menus.dc.html`)
+and the change's gap audits, copied into that change's directory under
+`openspec/changes/align-gui-with-design-canvas/`, are the reference for
+the exact values; this file records what the paint changed, not every
+canvas value.
 
 The queue column's backdrop — the `queueColumn` pair, picked on the frame's
 Panel-focus fact — owns the window. The player header row paints the
@@ -299,19 +319,31 @@ report their own region. The item rows zebra-stripe as the TUI's
 `media_list/wide.rs` walk paints them: the frame carries each row's parity —
 a grouped list alternates within each group from its first member, an
 ungrouped list throughout — and a striped row takes the `queueColumn` fill
-inside the box. The rows paint at the canvas's fixed 30 logical pixel
-height. The list paints no scrollbar column yet — the TUI reserves one only
+inside the box. Each row paints the canvas row: its padded mono ordinal in
+place of the date gutter, one title line over a 2 px progress track, and
+the right-column value — no second text line. The rows paint at the
+canvas's fixed 30 logical pixel height. The list paints no scrollbar column
+yet — the TUI reserves one only
 while the list is focused and overflows.
 
 The row hover and the drag paint from the frame, and the window holds
 neither. `GuiQueue.hover` names the row the pointer rests on: that row shows
 the grip and the row-actions button. The button opens the `rowMenu` overlay,
 whose entries — Play now, Play next, Mark watched, Go to episode, and Remove
-from queue — carry their key hints, and the menu anchors on the row it
-opened on (`anchorSlot`). `GuiQueue.drag` carries the dragged row's content
-as the ghost, the final index the drop leaves it at, and the insertion
-line's stable-slot anchor; the ghost floats at the line and the dragged row
-dims in place. The core owns the gesture and the drop index, and it sends
+from queue — carry their key hints; the menu paints the canvas's return
+glyph `⏎` where the core's hint chord is `Enter`, at paint time only, so
+`direct_select` and the key routes keep matching the raw chord.
+`Remove from queue` is the destructive entry: it paints in the canvas's
+destructive tone under a divider on a GUI-only `destructive` flag that
+`RowMenuEntryProjection` and `GuiRowMenuEntry` carry, derived from the
+entry's `ContextAction::RemoveFromQueue` action; the shared
+`ContextMenuEntry` and every TUI paint site stay untouched. The menu
+anchors on the row it opened on (`anchorSlot`). `GuiQueue.drag` carries the
+dragged row's content as the ghost, the final index the drop leaves it at,
+and the insertion line's stable-slot anchor; the ghost floats at that line
+— with no ordinal, and the dragged row's painted percent — and the dragged
+row keeps its in-place paint (the canvas keeps it lit). The core owns the
+gesture and the drop index, and it sends
 one move request to the Owner on release. `Alt+J` and `Alt+K` ask the core
 for the same move on the keyboard-selected row. A `cancel` pointer kind
 drops the drag, the row hover, and the scrubber hover without a move.
