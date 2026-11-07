@@ -16,7 +16,7 @@
 	// the core to the `t` and `/` chords' requests — the control and the
 	// chord run one path. The active segment reports no target: pressing it
 	// would toggle away from the mode it already shows.
-	import { ListFilter } from '@lucide/svelte';
+	import { Search } from '@lucide/svelte';
 	import type { GuiQueueSummary, GuiRightColumn } from '$lib/bridge/types';
 
 	interface Props {
@@ -107,7 +107,7 @@
 				title="Filter (/)"
 				data-filter
 			>
-				<ListFilter size={14} color={canvasVar('muted')} />
+				<Search size={14} color={canvasVar('muted')} />
 				<span style:color={summary.filter ? canvasVar('heading') : canvasVar('muted')}
 					>{summary.filter || 'Filter'}</span
 				>
@@ -131,7 +131,7 @@
 				aria-label="Filter queue"
 				data-filter
 			>
-				<ListFilter size={17} color={canvasVar('muted')} />
+				<Search size={17} color={canvasVar('muted')} />
 			</button>
 		{/if}
 	</div>

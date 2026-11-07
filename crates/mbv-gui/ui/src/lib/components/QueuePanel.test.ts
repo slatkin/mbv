@@ -173,10 +173,13 @@ test('the header paints the canvas heading, the finish clock, the switch, and th
 	expect(container.querySelector('[data-finish-clock]')?.textContent).toBe('queue ends 21:43');
 	expect(getByText('Length')).toBeTruthy();
 	expect(getByText('Ends at')).toBeTruthy();
-	// The filter is the canvas's icon-only magnifier button at rest.
+	// The filter is the canvas's icon-only magnifier button at rest
+	// (tasks.md A.2: a magnifier icon, not the funnel).
 	expect(container.querySelector('[data-filter]')?.getAttribute('aria-label')).toBe(
 		'Filter queue',
 	);
+	const filterIcon = container.querySelector('[data-filter] svg');
+	expect(filterIcon?.classList).toContain('lucide-search');
 });
 
 test('the active filter paints its text and the caret', () => {
