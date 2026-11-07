@@ -2,10 +2,13 @@
 // stream's label-only chip and the audio and subtitle chips from the
 // frame's `trackChips` datum, and the track popover paints the frame's
 // `trackPopover` overlay — the subtitle list's Off row first, the chosen
-// choice marked — anchored above its chip. Presses forward through the
-// shared input installer as `pointer` events; the core resolves them
-// against the reported regions. The Tauri IPC is mocked, and the asserted
-// payloads are the serde wire shapes of bridge/pointer.rs.
+// choice marked — anchored above its chip. The chips report `audioChip`
+// and `subtitleChip` regions (the video chip is label-only and reports
+// none) and the popover's rows report their `trackPopoverChoice` indices;
+// presses forward through the shared input installer as `pointer` events
+// and the core resolves them against the hit map. The Tauri IPC is
+// mocked, and the asserted payloads are the serde wire shapes of
+// bridge/layout.rs and bridge/pointer.rs.
 
 import { invoke } from '@tauri-apps/api/core';
 import { fireEvent, render } from '@testing-library/svelte';
@@ -96,6 +99,24 @@ test('no chips paint while the local player is inactive', () => {
 	expect(container.querySelector('[data-chip]')).toBeNull();
 });
 
+interface ReportedReport {
+	report: { regions: { target: { id: unknown } }[] };
+}
+
+/** The region target ids of the component's last layout report. */
+function reportedRegionIds(): unknown[] {
+	const calls = invokeMock.mock.calls.filter((entry) => entry[0] === 'report_layout');
+	const report = calls.at(-1)?.[1] as ReportedReport | undefined;
+	return report?.report.regions.map((entry) => entry.target.id) ?? [];
+}
+
+test('the chips report their region ids, the video chip none', async () => {
+	renderChips();
+
+	await vi.waitFor(() => expect(invokeMock).toHaveBeenCalled());
+	expect(reportedRegionIds()).toEqual(['audioChip', 'subtitleChip']);
+});
+
 test('a press on a chip forwards a pointer press with its position', async () => {
 	const { container } = renderChips();
 	const chip = container.querySelector('[data-chip="audio"]') as HTMLElement;
@@ -133,6 +154,18 @@ test('the subtitle popover lists Off first and marks the chosen row', () => {
 	expect(rows[0].querySelector('svg.lucide-check')).toBeTruthy();
 	expect(rows[1].textContent).toContain('English');
 	expect(rows[1].querySelector('svg.lucide-check')).toBeNull();
+});
+
+test('an open popover reports one trackPopoverChoice region per row, last', async () => {
+	renderChips(chips(), subtitlePopover());
+
+	await vi.waitFor(() => expect(invokeMock).toHaveBeenCalled());
+	expect(reportedRegionIds()).toEqual([
+		'audioChip',
+		'subtitleChip',
+		{ trackPopoverChoice: 0 },
+		{ trackPopoverChoice: 1 },
+	]);
 });
 
 test('a press on a popover row forwards a pointer press with its position', async () => {

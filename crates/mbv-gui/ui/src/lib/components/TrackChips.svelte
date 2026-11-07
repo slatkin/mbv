@@ -18,14 +18,17 @@
 	// end paints the order it is given. There is no subtitle-offset
 	// control and no video popover (the D4a rulings).
 	//
-	// Region gap (dispatch 3): the wire's `QueuePlaybackTargetId` has no
-	// chip or popover-row variant and the leaf has no arm resolving one
-	// yet, so the chips and the popover rows report no region — a press
-	// still forwards `pointer`, which resolves to nothing in the core (the
-	// documented no-op the playlist pill's press already is). Reporting an
-	// id the wire does not know would fail the whole `LayoutReport`, so
-	// none is sent. Once the Rust ids land this row reports them through
-	// the same region path the panel's other controls use.
+	// The audio chip reports `audioChip` and the subtitle chip
+	// `subtitleChip`; the video chip is label-only (the D4a ruling) and
+	// reports no region. The open popover's rows report their
+	// `trackPopoverChoice` indices under a second report key, first
+	// inserted when the popover opens: a child component's mount effect
+	// runs before the panel's, so the chips' key lands before the
+	// transport's regions in the merged report, and only a key inserted
+	// after them puts the rows last — the hit map's last push wins where
+	// a row paints over the transport band beneath it. A press on a chip
+	// or a row forwards `pointer` like every other pointer event; the
+	// core resolves it against the hit map.
 	import { onMount } from 'svelte';
 	import { AudioLines, Captions, Check, MonitorPlay } from '@lucide/svelte';
 	import { reportLayout, retractLayout } from '$lib/bridge/layout';
@@ -34,6 +37,8 @@
 		GuiOverlayFrame,
 		GuiTrackChip,
 		GuiTrackChips,
+		LayoutRegion,
+		QueuePlaybackTargetId,
 	} from '$lib/bridge/types';
 
 	type TrackPopover = Extract<GuiOverlayFrame, { kind: 'trackPopover' }>;
@@ -48,6 +53,10 @@
 	const { chips, overlay }: Props = $props();
 
 	const reportKey = Symbol('track-chips');
+	const popoverKey = Symbol('track-popover');
+	let rowEl: HTMLElement | undefined = $state();
+	let audioChipEl: HTMLElement | undefined = $state();
+	let subtitleChipEl: HTMLElement | undefined = $state();
 
 	/** The open track popover, or `null` while another overlay (or none) is
 	 * up. Its `chip` fact picks the chip it anchors to. */
@@ -67,16 +76,84 @@
 		return `var(${roleProperty(role)})`;
 	}
 
-	// The row reports no regions of its own (the gap the header comment
-	// records): the mount-time report still registers the mounted surface's
-	// empty contribution so the merged report accounts for it.
+	/** One element's painted region, `null` while the element is absent. */
+	function region(
+		el: HTMLElement | undefined,
+		id: QueuePlaybackTargetId,
+	): LayoutRegion | null {
+		if (!el) {
+			return null;
+		}
+		const rect = el.getBoundingClientRect();
+		return {
+			rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+			target: { surface: 'queuePlayback', id },
+		};
+	}
+
+	/** The open popover's painted rows, each resolved to its choice index in
+	 * the frame's `choices` list. */
+	function popoverRegions(): LayoutRegion[] {
+		if (!rowEl) {
+			return [];
+		}
+		return [...rowEl.querySelectorAll<HTMLElement>('[data-popover-row]')]
+			.map((el) =>
+				region(el, { trackPopoverChoice: Number(el.dataset.popoverRow) }),
+			)
+			.filter((entry) => entry !== null);
+	}
+
+	/** The painted regions this frame's DOM reports (design D4): the audio
+	 * and subtitle chips — the video chip is label-only and reports none —
+	 * and the open popover's rows under the popover's own key (the header
+	 * comment names why they report last). */
+	function currentRegions(): LayoutRegion[] {
+		return [region(audioChipEl, 'audioChip'), region(subtitleChipEl, 'subtitleChip')].filter(
+			(entry) => entry !== null,
+		);
+	}
+
+	function report(): void {
+		reportLayout(reportKey, { lists: [], regions: currentRegions() });
+		if (popover) {
+			reportLayout(popoverKey, { lists: [], regions: popoverRegions() });
+		}
+	}
+
+	// Each paint that moved a region reports (design D4): this effect runs
+	// after the DOM update, and the ResizeObserver reports layout-driven
+	// moves. Reading the overlay registers the popover's rows, which appear
+	// and disappear with that frame section; the popover's key retracts
+	// while none is open. The reporter dedupes an unchanged contribution.
 	$effect(() => {
 		void chips;
 		void overlay;
-		reportLayout(reportKey, { lists: [], regions: [] });
+		report();
+		if (!popover) {
+			retractLayout(popoverKey);
+		}
 	});
 
-	onMount(() => () => retractLayout(reportKey));
+	// The row element's resizes report (design D4): the chips row appears
+	// when the first frame carries `trackChips`, so the observer binds
+	// through an effect — a new one per row bind, disconnected on cleanup.
+	$effect(() => {
+		const el = rowEl;
+		if (!el || typeof ResizeObserver === 'undefined') {
+			return;
+		}
+		const observer = new ResizeObserver(report);
+		observer.observe(el);
+		return () => observer.disconnect();
+	});
+
+	onMount(
+		() => () => {
+			retractLayout(reportKey);
+			retractLayout(popoverKey);
+		},
+	);
 </script>
 
 {#snippet popoverList(pop: TrackPopover)}
@@ -122,6 +199,7 @@
 	<div
 		class="flex items-center justify-center font-mono text-xs tabular-nums"
 		style:gap="calc(var(--mbv-cell-col) * 2)"
+		bind:this={rowEl}
 	>
 		{#if chips.video}
 			<!-- The video chip: the resolved stream label only — the D4a
@@ -147,6 +225,7 @@
 				style:background="var(--mbv-secondary)"
 				style:color={roleVar('textPrimary')}
 				data-chip="audio"
+				bind:this={audioChipEl}
 			>
 				<AudioLines size={12} color={roleVar('indicatorAudioFg')} />
 				<span>{chipLabel(chips.audio, 'audio')}</span>
@@ -164,6 +243,7 @@
 				style:background="var(--mbv-secondary)"
 				style:color={roleVar('textPrimary')}
 				data-chip="subtitles"
+				bind:this={subtitleChipEl}
 			>
 				<Captions size={12} color={roleVar('textMuted')} />
 				<span>{chipLabel(chips.subtitles, 'subtitles')}</span>
