@@ -7,28 +7,35 @@
 	//
 	// The scrubber paints the played fraction, the chapter boundaries, the
 	// intro and credits mark segments, the thumb, and the elapsed, remaining,
-	// and finish-clock texts. A pointer move over the bar paints a preview
-	// from the frame's chapters and the pointer's position; the frame carries
-	// no hover datum yet, so the position itself is presentation state and
-	// the chapter name comes from the frame. A press on the bar forwards like
-	// every other pointer event: the component interprets no gesture, it
-	// reports its regions and the core resolves the press against the hit map
-	// (design D4).
+	// and finish-clock texts. Its hover preview paints from the frame's
+	// `hover` datum (the core resolves the pointer move against the painted
+	// bar), so the component holds no hover state; the trickplay tile stays a
+	// placeholder until task 6.7 fetches its bytes. A press on the bar
+	// forwards like every other pointer event: the component interprets no
+	// gesture, it reports its regions and the core resolves the press against
+	// the hit map (design D4).
 	//
-	// The playback-target chooser's menu is not built here: the frame carries
-	// the target choices, but no overlay variant opens the chooser and no
-	// semantic target id selects a choice (`crates/mbv-gui/src/bridge`). The
-	// header paints the target and reports its existing `playbackTarget`
-	// region; a chooser needs a Rust-side target first.
+	// The header's playback target reports `playbackTarget`; its press opens
+	// the core's chooser, whose popover paints under the header from the
+	// frame's `targetChooser` overlay. Each row reports its `targetChoice`
+	// index — the core resolves a row press against the same live choice list
+	// the frame carries — and the header's collapse and queue-fold controls
+	// report the ids the core's `z`/`q` toggles run from. The window holds no
+	// open, cursor, or hover state; Esc and a press elsewhere close the popover
+	// through the core's key and pointer paths.
 	import { onMount } from 'svelte';
 	import {
 		Cast,
+		Check,
+		ChevronUp,
 		Film,
+		ListCollapse,
 		Pause,
 		Play,
+		RotateCcw,
+		RotateCw,
 		SkipBack,
 		SkipForward,
-		Square,
 	} from '@lucide/svelte';
 	import { reportLayout, retractLayout } from '$lib/bridge/layout';
 	import { CELL_COL_PX } from '$lib/bridge/cells';
@@ -37,6 +44,7 @@
 		GuiCardArtwork,
 		GuiChapter,
 		GuiNowPlayingStatus,
+		GuiOverlayFrame,
 		GuiQueuePlayback,
 		GuiSegmentMark,
 		LayoutRegion,
@@ -45,8 +53,12 @@
 
 	interface Props {
 		playback: GuiQueuePlayback;
+		/** The open menu or popover (design D4): the playback-target chooser
+		 * paints under the header while it is the open overlay. `null` while
+		 * none is open. */
+		overlay: GuiOverlayFrame | null;
 	}
-	const { playback }: Props = $props();
+	const { playback, overlay }: Props = $props();
 
 	/** Emby ticks in one second (`mbv_emby_model::TICKS_PER_SECOND`). */
 	const TICKS_PER_SECOND = 10_000_000;
@@ -55,11 +67,15 @@
 	let panelEl: HTMLElement | undefined = $state();
 	let targetEl: HTMLElement | undefined = $state();
 	let playPauseEl: HTMLElement | undefined = $state();
-	let stopEl: HTMLElement | undefined = $state();
 	let prevEl: HTMLElement | undefined = $state();
 	let nextEl: HTMLElement | undefined = $state();
+	let seekBackEl: HTMLElement | undefined = $state();
+	let seekForwardEl: HTMLElement | undefined = $state();
 	let seekbarEl: HTMLElement | undefined = $state();
 	let artEl: HTMLElement | undefined = $state();
+	let collapseEl: HTMLElement | undefined = $state();
+	let queueFoldEl: HTMLElement | undefined = $state();
+	let chooserEl: HTMLElement | undefined = $state();
 
 	/** The visual slot's artwork the last frame carried (design D10): a
 	 * frame arms it again only when the core says the art changed, so the
@@ -70,11 +86,11 @@
 	 * else the last one it adopted (design D10). */
 	const art = $derived(playback.artwork ?? carriedArt);
 
-	/** The pointer's fraction along the bar while it hovers, or `null`. The
-	 * frame carries no hover datum yet (design D4a's trickplay fetch lands
-	 * in task 6.7), so this is presentation state only: it paints the time
-	 * and chapter preview and never changes focus or playback. */
-	let hoverRatio = $state<number | null>(null);
+	/** The open playback-target chooser, or `null` while another overlay (or
+	 * none) is up. The rows paint the core's live choice list; a row's press
+	 * resolves against its reported `targetChoice` index, so no cursor or
+	 * open state lives here. */
+	const chooser = $derived(overlay?.kind === 'targetChooser' ? overlay : null);
 
 	/** The played fraction of the scrubber, clamped to `[0, 1]`. */
 	const progress = $derived(
@@ -109,9 +125,10 @@
 		].filter((mark) => mark !== null),
 	);
 
-	/** The hover preview's position and the chapter that covers it; `null`
-	 * while the pointer is away from the bar. */
-	const hover = $derived(hoverPreview(hoverRatio, playback));
+	/** The scrubber's hover preview, painted from the frame: the pointer's
+	 * fraction, the time it names, and the chapter covering it. `null` while
+	 * the pointer is away from the bar. */
+	const hover = $derived(playback.hover);
 
 	/** A fraction `ticks / runtime`, clamped to `[0, 1]`; zero runtime is
 	 * zero. */
@@ -150,36 +167,6 @@
 		const left = clampRatio(mark.startTicks, runtime);
 		const right = clampRatio(mark.endTicks, runtime);
 		return right > left ? { left, width: right - left } : null;
-	}
-
-	/** The chapter that covers `ticks`: the last boundary at or before it. */
-	function chapterAt(
-		chapters: GuiChapter[],
-		ticks: number,
-	): GuiChapter | null {
-		let covering: GuiChapter | null = null;
-		for (const chapter of chapters) {
-			if (chapter.startTicks <= ticks) {
-				covering = chapter;
-			}
-		}
-		return covering;
-	}
-
-	/** The hover state's preview: its bar fraction, time, and chapter. */
-	function hoverPreview(
-		ratio: number | null,
-		state: GuiQueuePlayback,
-	): { ratio: number; ticks: number; chapter: GuiChapter | null } | null {
-		if (ratio === null) {
-			return null;
-		}
-		const ticks = Math.round(ratio * state.playback.runtimeTicks);
-		return {
-			ratio,
-			ticks,
-			chapter: chapterAt(state.chapters, ticks),
-		};
 	}
 
 	/** `fmt_duration_short`: `M:SS` under an hour, `H:MM:SS` at or over it. */
@@ -228,18 +215,6 @@
 		return available ? roleVar(role) : roleVar('textMuted');
 	}
 
-	/** The pointer's fraction along the seekbar's painted span. */
-	function ratioAt(event: PointerEvent): number {
-		if (!seekbarEl) {
-			return 0;
-		}
-		const rect = seekbarEl.getBoundingClientRect();
-		if (rect.width <= 0) {
-			return 0;
-		}
-		return Math.min(1, Math.max(0, (event.clientX - rect.x) / rect.width));
-	}
-
 	/** One element's painted region, `null` while the element is absent. */
 	function region(
 		el: HTMLElement | undefined,
@@ -255,18 +230,35 @@
 		};
 	}
 
-	/** The painted regions this frame's DOM reports (design D4), in the
-	 * TUI's report precedence: the transport controls, the seekbar, the
-	 * visual slot, and the header's playback-target indicator last. */
+	/** The open chooser's painted rows, each resolved to its choice index in
+	 * the frame's `targetChoices` list. */
+	function chooserRegions(): LayoutRegion[] {
+		if (!chooser || !chooserEl) {
+			return [];
+		}
+		return [...chooserEl.querySelectorAll<HTMLElement>('[data-choice]')]
+			.map((el) => region(el, { targetChoice: Number(el.dataset.choice) }))
+			.filter((entry) => entry !== null);
+	}
+
+	/** The painted regions this frame's DOM reports (design D4): the transport
+	 * controls, the seekbar, the visual slot, the header's collapse and
+	 * queue-fold controls, the playback-target indicator, and the open
+	 * chooser's rows last — the hit map's last push wins where a row paints
+	 * over a region beneath it. */
 	function currentRegions(): LayoutRegion[] {
 		return [
 			region(playPauseEl, 'playPause'),
-			region(stopEl, 'stop'),
 			region(prevEl, 'previous'),
+			region(seekBackEl, 'seekBack'),
+			region(seekForwardEl, 'seekForward'),
 			region(nextEl, 'next'),
 			region(seekbarEl, 'seekbar'),
 			region(artEl, 'visualSlot'),
+			region(collapseEl, 'collapse'),
+			region(queueFoldEl, 'queueFold'),
 			region(targetEl, 'playbackTarget'),
+			...chooserRegions(),
 		].filter((entry) => entry !== null);
 	}
 
@@ -281,9 +273,12 @@
 
 	// Each paint that moved a region reports (design D4): this effect runs
 	// after the DOM update, and the ResizeObserver reports layout-driven
-	// moves. The reporter dedupes an unchanged contribution.
+	// moves. Reading the overlay registers the chooser's rows, which appear
+	// and disappear with that frame section. The reporter dedupes an
+	// unchanged contribution.
 	$effect(() => {
 		void playback;
+		void overlay;
 		report();
 	});
 
@@ -334,16 +329,19 @@
 	style:gap="var(--mbv-cell-row)"
 	bind:this={panelEl}
 >
-	<!-- The header row: the playback target at the left and the state word at
-		the right. The target span is the `playbackTarget` region; its press
-		opens the chooser once the Rust side carries a chooser target. -->
+	<!-- The header row: the playback target at the left, then the state word,
+		the collapse control, and the queue-fold control at the right. The
+		target span is the `playbackTarget` region; its press opens the core's
+		chooser, whose popover paints below it from the frame's
+		`targetChooser` overlay. Each chooser row is its own `targetChoice`
+		region; Esc and an outside press close the popover in the core. -->
 	<div
-		class="flex items-center overflow-hidden whitespace-nowrap"
+		class="relative flex items-center whitespace-nowrap"
 		style:height="var(--mbv-cell-row)"
 		style:gap="var(--mbv-cell-col)"
 	>
 		<span
-			class="flex shrink-0 items-center"
+			class="flex min-w-0 shrink items-center"
 			style:gap="var(--mbv-cell-col)"
 			bind:this={targetEl}
 			data-target="playbackTarget"
@@ -363,6 +361,57 @@
 			class="font-bold tracking-wide"
 			style:color={statusColor(playback.status)}>{statusWord(playback.status)}</span
 		>
+		<button
+			type="button"
+			class="flex items-center rounded-sm p-1"
+			bind:this={collapseEl}
+			data-target="collapse"
+			aria-label="Collapse panel"
+			title="Collapse panel (z)"
+		>
+			<ChevronUp size={16} color={roleVar('textMuted')} />
+		</button>
+		<button
+			type="button"
+			class="flex items-center rounded-sm p-1"
+			bind:this={queueFoldEl}
+			data-target="queueFold"
+			aria-label="Fold queue"
+			title="Fold queue (q)"
+		>
+			<ListCollapse size={16} color={roleVar('textMuted')} />
+		</button>
+		{#if chooser}
+			<!-- The playback-target chooser: the core's live choice list, the
+				attached output marked with a check. The rows report their
+				`targetChoice` indices last, over every region beneath them. -->
+			<div
+				class="absolute top-full left-0 z-20 mt-1 flex min-w-56 flex-col rounded-md border py-1 shadow-md"
+				bind:this={chooserEl}
+				style:background="var(--mbv-popover)"
+				style:border-color="var(--mbv-border)"
+			>
+				{#each chooser.choices as choice, index (index)}
+					<button
+						type="button"
+						class="flex items-center text-left"
+						style:padding="calc(var(--mbv-cell-row) / 4) calc(var(--mbv-cell-col) * 1)"
+						style:gap="var(--mbv-cell-col)"
+						style:color={index === chooser.cursor
+							? roleVar('textFocusAccent')
+							: roleVar('textPrimary')}
+						data-choice={index}
+					>
+						<span class="flex w-4 shrink-0 justify-center">
+							{#if choice.isActive}
+								<Check size={14} color={roleVar('accent')} />
+							{/if}
+						</span>
+						<span class="truncate">{choice.label}</span>
+					</button>
+				{/each}
+			</div>
+		{/if}
 	</div>
 	{#if playback.nowPlayingTitle}
 		<!-- The artwork with the season-and-episode badge; the badge is an
@@ -434,8 +483,6 @@
 					style:height="var(--mbv-cell-row)"
 					bind:this={seekbarEl}
 					data-target="seekbar"
-					onpointermove={(event) => (hoverRatio = ratioAt(event))}
-					onpointerleave={() => (hoverRatio = null)}
 				>
 					<div
 						class="absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 overflow-hidden rounded-full"
@@ -469,13 +516,13 @@
 						style:border-color="var(--mbv-background)"
 					></div>
 					{#if hover}
-						<!-- The hover preview: the trickplay frame's placeholder
-							(the tile bytes are task 6.7), the time at the pointer,
-							and the chapter that covers it. No frame datum exists,
-							so the placeholder stands for the tile. -->
+						<!-- The hover preview: the trickplay frame's placeholder (the
+							tile bytes are task 6.7), the time at the pointer, and the
+							chapter that covers it, all from the frame's `hover`
+							datum. -->
 						<div
 							class="pointer-events-none absolute bottom-full z-10 mb-1 -translate-x-1/2 rounded-md border p-1 whitespace-nowrap"
-							style:left="{hover.ratio * 100}%"
+							style:left="{hover.fraction * 100}%"
 							style:background="var(--mbv-popover)"
 							style:border-color="var(--mbv-border)"
 						>
@@ -495,7 +542,7 @@
 								>
 								{#if hover.chapter}
 									<span class="text-xs" style:color={roleVar('playbackContextFg')}
-										>{hover.chapter.name}</span
+										>{hover.chapter}</span
 									>
 								{/if}
 							</div>
@@ -515,32 +562,48 @@
 				{/if}
 			</div>
 		{/if}
-		<!-- The transport controls: previous, stop, play/pause, next. The
-			canvas's back-10 s and forward-30 s controls have no semantic
-			target id on the Rust side, so no region can report them yet. -->
+		<!-- The transport controls (the canvas's row): previous, back 10 s,
+			play/pause, forward 30 s, and next. The spec's list carries no stop
+			control, so the canvas panel paints none. -->
 		<div
 			class="flex items-center justify-center"
 			style:height="var(--mbv-cell-row)"
 			style:gap="calc(var(--mbv-cell-col) * 2)"
 		>
-			<span class="flex items-center" bind:this={prevEl} data-target="previous">
+			<button
+				type="button"
+				class="flex items-center"
+				bind:this={prevEl}
+				data-target="previous"
+				aria-label="Previous"
+			>
 				<SkipBack
 					size={18}
 					fill={glyphColor(playback.availability.previous, 'textStrong')}
 					color={glyphColor(playback.availability.previous, 'textStrong')}
 				/>
-			</span>
-			<span class="flex items-center" bind:this={stopEl} data-target="stop">
-				<Square
-					size={14}
-					fill={glyphColor(playback.availability.stop, 'statusError')}
-					color={glyphColor(playback.availability.stop, 'statusError')}
-				/>
-			</span>
-			<span
+			</button>
+			<button
+				type="button"
+				class="relative flex items-center justify-center"
+				bind:this={seekBackEl}
+				data-target="seekBack"
+				aria-label="Back 10 seconds"
+				title="Back 10 s"
+			>
+				<RotateCcw size={18} color={roleVar('textStrong')} />
+				<span
+					class="absolute font-mono font-semibold"
+					style:font-size="8px"
+					style:color={roleVar('textStrong')}>10</span
+				>
+			</button>
+			<button
+				type="button"
 				class="flex items-center rounded-full p-1"
 				bind:this={playPauseEl}
 				data-target="playPause"
+				aria-label={playback.playback.paused ? 'Play' : 'Pause'}
 				style:background="var(--mbv-secondary)"
 			>
 				{#if playback.playback.paused}
@@ -548,14 +611,35 @@
 				{:else}
 					<Pause size={18} fill={roleVar('textFocusAccent')} color={roleVar('textFocusAccent')} />
 				{/if}
-			</span>
-			<span class="flex items-center" bind:this={nextEl} data-target="next">
+			</button>
+			<button
+				type="button"
+				class="relative flex items-center justify-center"
+				bind:this={seekForwardEl}
+				data-target="seekForward"
+				aria-label="Forward 30 seconds"
+				title="Forward 30 s"
+			>
+				<RotateCw size={18} color={roleVar('textStrong')} />
+				<span
+					class="absolute font-mono font-semibold"
+					style:font-size="8px"
+					style:color={roleVar('textStrong')}>30</span
+				>
+			</button>
+			<button
+				type="button"
+				class="flex items-center"
+				bind:this={nextEl}
+				data-target="next"
+				aria-label="Next"
+			>
 				<SkipForward
 					size={18}
 					fill={glyphColor(playback.availability.next, 'textStrong')}
 					color={glyphColor(playback.availability.next, 'textStrong')}
 				/>
-			</span>
+			</button>
 		</div>
 	{/if}
 </div>

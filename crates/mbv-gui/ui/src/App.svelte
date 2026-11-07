@@ -67,7 +67,10 @@
         ? 'var(--mbv-queueColumnFocused)'
         : 'var(--mbv-queueColumn)'}
     >
-      <QueuePlaybackPanel playback={$frames.slice.playback} />
+      <QueuePlaybackPanel
+        playback={$frames.slice.playback}
+        overlay={$frames.slice.overlay}
+      />
       <div class="min-h-0 flex-1">
         <QueuePanel
           queue={$frames.slice.queue}
