@@ -21,6 +21,9 @@ mod media_list {
     mod helpers;
     mod tests;
 }
+mod queue {
+    mod tests;
+}
 mod queue_playback {
     mod tests;
 }

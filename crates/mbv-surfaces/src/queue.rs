@@ -82,14 +82,16 @@ impl QueueRowInsertion {
 }
 
 /// One row drag the Client core owns (add-tauri-gui-client row 6.5, design
-/// D5): the grabbed slot, its index when the drag started, the final index
-/// the drop previews, and the insertion line the frame paints. Motion only
-/// previews; the release sends the one move request.
+/// D5): the grabbed slot, its current index, the final index the drop
+/// previews, and the insertion line the frame paints. Motion only previews;
+/// the release sends the one move request. Both indexes resolve against the
+/// live rows each time the drag moves or settles, so a queue mutation under
+/// the drag cannot leave a stale index in the request.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct QueueRowDrag {
     /// The grabbed slot's stable identity.
     pub slot_id: QueueSlotId,
-    /// The slot's index among the list's item rows when the drag started.
+    /// The slot's index among the list's item rows as the list stands now.
     pub from_index: usize,
     /// The slot's final index once the drop applies: the row index counted
     /// after the dragged slot is removed, the index the Owner's slot move
@@ -254,38 +256,57 @@ impl QueueSurface {
     /// Preview a drop over `anchor` on `side`: the resolved insertion point
     /// counted before `anchor`, then the dragged slot's final index once the
     /// insertion point applies (the row's own final index when it moves
-    /// down). A motion with no drag in progress, or over a row the list no
-    /// longer holds, changes nothing.
+    /// down). Both indexes resolve against the rows as they stand now, so a
+    /// queue mutation mid-drag re-anchors the preview instead of poisoning
+    /// it with the start index. A motion with no drag in progress, or over a
+    /// row the list no longer holds, changes nothing; a drag whose slot or
+    /// insertion anchor vanished is dropped.
     pub fn preview_row_drag_drop(&mut self, anchor: QueueSlotId, side: QueueRowInsertionSide) {
-        let Some(mut drag) = self.row_drag else {
+        let Some(drag) = self.row_drag else {
             return;
         };
-        let Some(anchor_index) = self.item_index_of(anchor) else {
+        if self.item_index_of(anchor).is_none() {
             return;
+        }
+        let insertion = match side {
+            QueueRowInsertionSide::Before => QueueRowInsertion::Before(anchor),
+            QueueRowInsertionSide::After => QueueRowInsertion::After(anchor),
         };
-        let insertion_point = match side {
-            QueueRowInsertionSide::Before => anchor_index,
-            QueueRowInsertionSide::After => anchor_index + 1,
+        self.row_drag = self.resolve_row_drag(QueueRowDrag { insertion, ..drag });
+    }
+
+    /// End the drag, resolving its final state against the rows as they stand
+    /// now. `None` when no drag is in progress, or when the rows no longer
+    /// hold the dragged slot or its insertion anchor (a content refresh can
+    /// drop either): the release then sends no move.
+    pub fn take_row_drag(&mut self) -> Option<QueueRowDrag> {
+        let drag = self.row_drag.take()?;
+        self.resolve_row_drag(drag)
+    }
+
+    /// Resolve a drag's source and drop indexes against the live rows: the
+    /// insert point counts in the pre-move list, and the move's index counts
+    /// in the list with the dragged row removed, so every point below the
+    /// dragged row shifts one place. `None` when the dragged slot or its
+    /// insertion anchor left the rows.
+    fn resolve_row_drag(&self, drag: QueueRowDrag) -> Option<QueueRowDrag> {
+        let source = self.item_index_of(drag.slot_id)?;
+        let anchor_index = self.item_index_of(drag.insertion.anchor())?;
+        let insertion_point = match drag.insertion {
+            QueueRowInsertion::Before(_) => anchor_index,
+            QueueRowInsertion::After(_) => anchor_index + 1,
         };
-        // The insert point counts in the pre-move list; the move's index
-        // counts in the list with the dragged row removed, so every point
-        // below the dragged row shifts one place.
-        drag.drop_index = if drag.from_index < insertion_point {
+        let drop_index = if source < insertion_point {
             insertion_point - 1
         } else {
             insertion_point
         };
-        drag.insertion = match side {
-            QueueRowInsertionSide::Before => QueueRowInsertion::Before(anchor),
-            QueueRowInsertionSide::After => QueueRowInsertion::After(anchor),
-        };
-        self.row_drag = Some(drag);
-    }
-
-    /// End the drag, handing its final state to the release path. `None` when
-    /// no drag is in progress.
-    pub fn take_row_drag(&mut self) -> Option<QueueRowDrag> {
-        self.row_drag.take()
+        Some(QueueRowDrag {
+            slot_id: drag.slot_id,
+            from_index: source,
+            drop_index,
+            insertion: drag.insertion,
+        })
     }
 
     /// Drop the drag without a move request (a cancelled gesture).
