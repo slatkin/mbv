@@ -81,6 +81,8 @@ The frame carries the letters that have rows. A press emits a jump `Msg`; the co
 
 `Ctrl+K` binds `search_open` in the GUI-only key context that already holds `z`, `q`, and `c`. The TUI's defaults do not change. The Search results paint in the Music list-row look.
 
+The same GUI-only context binds `{` and `}` to move the focused pill back and forward without changing the selection, and Space and Alt+Space to toggle and solo the focused pill (design D5). `[` and `]` keep the TUI effect in both Clients: they move the focused pill and select it alone. The focused pill is `SelectorSurface` state; the TUI adapter keeps it equal to the selected pill.
+
 ### D9. The Status bar moves to the Library column
 
 The shared Status bar projection carries the prefix state and the toast (`mbv_surfaces::status_bar`, `GuiStatusBar`). When the Library panel shows, those two paint in a Library Status bar under the Library column; when only the Queue panel shows, the Queue footer paints them as today.
