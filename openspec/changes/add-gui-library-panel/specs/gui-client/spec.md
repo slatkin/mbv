@@ -144,7 +144,7 @@ Every action that the Hero shows SHALL run the TUI Client's action for the same 
 
 ### Requirement: Library interaction state lives in the shared Client core
 
-The Library panel's interaction state (Panel focus, cursor, selection, viewport, tree open state, pill choice, Workspace focus, filter and Search drafts) SHALL live in the Client core that both Clients share. The TUI Client's Library behaviour, key output, and paint SHALL NOT change.
+The Library panel's interaction state (Panel focus, held by the core focus stack; cursor, selection, viewport, tree open state, pill choice, Workspace focus, filter and Search drafts) SHALL live in the Client core that both Clients share. The TUI Client's Library behaviour, key output, and paint SHALL NOT change.
 
 #### Scenario: The window content reloads on a Library item
 
@@ -205,9 +205,15 @@ In the GUI Client a collection pill SHALL toggle on and off. A list SHALL show t
 - **WHEN** the user selects the Latest pill
 - **THEN** only the Latest pill is selected
 
+#### Scenario: Collection pills per destination
+
+- **WHEN** a destination paints its selector row
+- **THEN** the collection pills are the Music group pills, the Podcast show pills, the Feeds subscription pills, and the group pills of an Emby library in feed-group mode
+- **AND** every other pill, including every Shows, Movies, Home, and Audiobooks pill, is single-select
+
 ### Requirement: The pill selection persists per destination
 
-Each destination SHALL keep its own pill selection while the GUI Client runs. The launch state SHALL restore the selected pills of the active destination at the next GUI start. The TUI Client SHALL restore only the first selected pill.
+Each destination SHALL keep its own pill selection while the GUI Client runs. Across a restart, the GUI Client SHALL restore the persisted pill scope of the `tui-launch-state` capability; for a Grouped Music library that scope SHALL include every selected group. The TUI Client SHALL restore only the first selected group.
 
 #### Scenario: The user changes destination and returns
 
@@ -226,6 +232,33 @@ Each destination SHALL keep its own pill selection while the GUI Client runs. Th
 - **GIVEN** the GUI Client quit with Hip-Hop and Soul selected in Music
 - **WHEN** the TUI Client starts
 - **THEN** Music opens with Hip-Hop selected
+
+#### Scenario: A destination with a Latest pill starts again
+
+- **GIVEN** the GUI Client quit with two Podcast show pills selected
+- **WHEN** the GUI Client starts again
+- **THEN** Podcasts opens on its Latest pill, as the launch-state rule requires
+
+### Requirement: The Library Status bar shows hints and the location
+
+While the Library panel shows, the Status bar under the Library column SHALL show the key hints of the focused Library surface's main actions, each with its configured chord, and the location: the destination, the selected pills, and the selected item. While prefix mode is armed or a toast is active, the prefix state or the toast SHALL replace the key hints.
+
+#### Scenario: Music has an album selected
+
+- **GIVEN** Music is active with Hip-Hop selected and an album selected
+- **WHEN** the Library Status bar paints
+- **THEN** it shows the filter, play, play-next, add-to-queue, Panel-focus, and tab hints with their configured chords, and the location Music, Hip-Hop, and the album
+
+#### Scenario: A chord is rebound
+
+- **GIVEN** the user rebinds play-next in `[keys]`
+- **WHEN** the Library Status bar paints
+- **THEN** the play-next hint shows the new chord
+
+#### Scenario: A toast arrives
+
+- **WHEN** the shared Status bar projection holds a toast while the Library panel shows
+- **THEN** the toast replaces the key hints until it ends, and the location stays
 
 ### Requirement: The letter rail jumps a name-sorted list
 

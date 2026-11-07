@@ -31,7 +31,7 @@ What the code holds today:
 
 ### D1. Port each owner's state into one Library Surface state in `mbv-surfaces`
 
-A new `mbv_surfaces::library` module holds `LibrarySurface`: Panel focus between Library and Queue, the active destination, and one `DestinationSurface` per mounted destination. A `DestinationSurface` holds a `SelectorSurface` (pills, selected set, focused pill), the browser list state (the existing `list`/`media_list` Surface types, and the tree state for Music and Shows), the Workspace list and selector state, the Workspace focus bit, and the filter draft. `SearchSurface` holds the Search sidebar's query, type filter, and result list.
+A new `mbv_surfaces::library` module holds `LibrarySurface`: the tab selection (active destination) and one `DestinationSurface` per mounted destination. Panel focus between Library and Queue stays in the core `FocusStack`, its one authority (`client-interaction-core` "The core focus stack is the one focus authority"); `LibrarySurface` holds no copy of it, and `LibraryPanel`'s `panel_focused` stays a paint input read from the focus stack. The focus between the browser pane and the Workspace inside a destination is that destination's Workspace focus bit in `DestinationSurface`. A `DestinationSurface` holds a `SelectorSurface` (pills, selected set, focused pill), the browser list state (the existing `list`/`media_list` Surface types, and the tree state for Music and Shows), the Workspace list and selector state, the Workspace focus bit, and the filter draft. `SearchSurface` holds the Search sidebar's query, type filter, and result list.
 
 The TUI components become adapters over this state (the ledger rule in `docs/architecture/interactive-surface-ledger.md`). They keep geometry, paint policy, and raw-input translation. Each port is behaviour-preserving: the existing TUI component and tick tests are the proof and stay green unchanged.
 
@@ -53,11 +53,25 @@ The front end measures the window and the Queue panel's current width (400 px ex
 
 ### D5. Multi-select is a selector kind rule in the core
 
-`SelectorSurface` marks each pill as a collection pill or a single pill. A collection pill toggles; a single pill (Latest, filters, letter buckets) clears the set and selects alone. The core keeps at least one pill selected and gives the clear control the first selected pill in pill order. The owner loads each selected collection with its existing per-collection fetch, keyed by the collection's stable id, and the core derives the list as the union de-duplicated by item id, in the destination's existing sort. The TUI adapter never toggles; it selects one pill as today, so its set always has one member.
+`SelectorSurface` marks each pill as a collection pill or a single pill. The owner sets the kind when it builds the pill row:
+
+| Destination | Collection pills | Single pills |
+| --- | --- | --- |
+| Music (grouped) | every group pill | none |
+| Podcasts | every show pill | New, the played-state filters |
+| Feeds | every subscription pill (`FeedGroupKey::Feed`) | Latest, the filters, All |
+| Emby library in feed-group mode | every feed-group pill | New, All |
+| Shows, Movies and other Emby libraries, Home, Audiobooks | none | every pill |
+
+A pill names a collection when it narrows the list to one content set the Service holds (a group folder, a show, a subscription); Latest, filters, and letter or surname buckets are views, not sets. A collection pill toggles; a single pill (Latest, filters, letter buckets) clears the set and selects alone. The core keeps at least one pill selected and gives the clear control the first selected pill in pill order. The owner loads each selected collection with its existing per-collection fetch, keyed by the collection's stable id, and the core derives the list as the union de-duplicated by item id, in the destination's existing sort. The TUI adapter never toggles; it selects one pill as today, so its set always has one member.
 
 ### D6. The extra pills persist in an additive launch-state field
 
-`TuiLaunchState` gains `#[serde(default)] extra_selectors: Vec<SelectorIdentity>`: the selected pills after the first, for the active destination. `selector` keeps the first selected pill, so the TUI restores it unchanged and ignores the new field. In the session, each destination keeps its set because owners stay mounted.
+The `tui-launch-state` main spec persists one pill scope and bans multi-selection, so this change amends it (delta `specs/tui-launch-state/spec.md`). Only a Grouped Music library persists a live collection choice today (its selected group); every other destination with a Latest pill restores Latest. So only Music's extra groups persist: `TuiLaunchState` gains `#[serde(default, skip_serializing_if = "Vec::is_empty")] extra_music_groups: Vec<String>` (the group content ids after the first, in pill order). `selector` keeps the first selected group.
+
+The save path is the shared `launch_state_snapshot`: it writes the extra groups from the Music `SelectorSurface` set, which the TUI never grows past one, so a TUI snapshot carries none. The restore stays split: the shared `reanchor_launch_state` path keeps restoring `selector` only, unchanged, for both Clients; the GUI core thread applies `extra_music_groups` to the Music `SelectorSurface` in its own startup adoption, after the shared restore resolved the first group. The TUI has no apply site, so it restores the first group only. In the session, each destination keeps its set because owners stay mounted.
+
+The main spec's "SHALL NOT record the selected library item" already disagrees with the struct's `item` field; that drift predates this change and the delta does not touch it.
 
 ### D7. The letter rail reads the list's sort names
 
@@ -69,7 +83,14 @@ The frame carries the letters that have rows. A press emits a jump `Msg`; the co
 
 ### D9. The Status bar moves to the Library column
 
-When the Library panel shows, the Status bar (key hints, breadcrumb, prefix, toasts) paints under the Library column. The breadcrumb joins the destination, the selected pill names, and the selected item title from frame facts. When only the Queue panel shows, the Queue footer paints the Status bar states as today.
+The shared Status bar projection carries the prefix state and the toast (`mbv_surfaces::status_bar`, `GuiStatusBar`). When the Library panel shows, those two paint in a Library Status bar under the Library column; when only the Queue panel shows, the Queue footer paints them as today.
+
+The Library Status bar adds two GUI-only items that the canvas Library artboard shows (`canvas/Library.dc.html`, the bottom bar) and no Status bar carries today:
+
+- **Key hints** (left): the main actions of the focused Library surface (filter, play, play next, add to queue, Panel focus, tab jump). The frame carries each hint as an action id plus the chord resolved from the configured `[keys]` bindings, so a rebind shows. Prefix or toast replaces the hints while active.
+- **Location** (right): the destination name, the selected pill names, and the selected item title, each a fact the Library frame already carries. The front end joins them.
+
+The TUI Status bar's other items (volume and mute pills, the Visual-mode indicator, the queue-source link, username, and Service glyphs) do not paint in the GUI: the canvas shows none of them, and the Queue footer already paints the queue source and the owner marker.
 
 ### D10. The canvas look comes through GUI-local tokens
 
@@ -79,7 +100,7 @@ The Library paints the canvas values through the GUI-local `--canvas-*` tokens i
 
 - [The seven owner ports are large and touch TUI code] → Each port is behaviour-preserving and its proof is the existing TUI test suite, unchanged. Music lands first, so the port pattern is reviewed before it repeats.
 - [A union of collections makes one fetch per selected collection] → The owner reuses the existing fetch and cache per collection; a selected collection that fails to load keeps the others and shows the TUI's failure text for that collection.
-- [An older `mbv` binary may read a launch state with `extra_selectors`] → `TuiLaunchState` has no `deny_unknown_fields`, so serde ignores the field and the older binary restores the first pill.
+- [An older `mbv` binary may read a launch state with `extra_music_groups`] → `TuiLaunchState` has no `deny_unknown_fields`, so serde ignores the field and the older binary restores the first pill.
 - [The breakpoint thresholds may feel wrong live] → They are constants beside the front end's panel-state constants; the Music gate's live test checks them.
 
 ## Migration Plan

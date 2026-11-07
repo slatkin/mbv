@@ -6,14 +6,15 @@ Phase 1 (groups 1–7) delivers Music from end to end. Phase 2 (groups 8–14) s
 
 ## 1. Library Surface state and the Music port
 
-- [ ] 1.1 Add `mbv_surfaces::library` with `LibrarySurface` (Panel focus, active destination, per-destination `DestinationSurface`) and `SelectorSurface` (pills, pill kinds, selected set, focused pill), per design D1 and D5. Verify: `crates/mbv-surfaces/tests/library/` covers toggle, solo, last-pill-stays, clear-keeps-first-in-pill-order, and single-pill-clears-set; `cargo nextest run -p mbv-surfaces`.
+- [ ] 1.1 Add `mbv_surfaces::library` with `LibrarySurface` (tab selection and per-destination `DestinationSurface`; no Panel focus — the core `FocusStack` keeps it, design D1) and `SelectorSurface` (pills, pill kinds, selected set, focused pill), per design D1 and D5. Verify: `crates/mbv-surfaces/tests/library/` covers toggle, solo, last-pill-stays, clear-keeps-first-in-pill-order, and single-pill-clears-set; `cargo nextest run -p mbv-surfaces`.
 - [ ] 1.2 Move Music's browser tree state (cursor, viewport, open nodes) and Workspace state (track list, Workspace focus, filter draft) from `music_content` into `DestinationSurface`; `MusicWorkspaceComponent` becomes an adapter. Verify: `cargo nextest run -p mbv-components` and the `tick_integration` Music tests pass unedited.
-- [ ] 1.3 Move Library Panel focus and the tab selection from `LibraryPanel` and `tab_panel` into `LibrarySurface`; both components become adapters. Verify: the existing `library_panel` and `tab_panel` tests pass unedited; `docs/architecture/interactive-surface-ledger.md` names the new Surface state for the Library, Tab, and Music rows.
+- [ ] 1.3 Move the tab selection from `tab_panel` into `LibrarySurface`; `tab_panel` becomes an adapter, and `LibraryPanel` keeps reading Panel focus from the `FocusStack` as its `panel_focused` paint input. Verify: the existing `library_panel` and `tab_panel` tests pass unedited; `docs/architecture/interactive-surface-ledger.md` names the new Surface state for the Library, Tab, and Music rows.
 
 ## 2. Multi-select collection pills and persistence (Music)
 
 - [ ] 2.1 Load each selected Music collection with its existing per-collection fetch and derive the artist list as the union de-duplicated by item id, sorted by sort name (design D5). Verify: a hermetic owner test with two mocked collections that share one artist yields that artist once, in sort order.
-- [ ] 2.2 Add `extra_selectors` to `TuiLaunchState` with `#[serde(default)]`; save and restore the selected set of the active destination (design D6). Verify: `crates/mbv-config` tests round-trip a two-pill state and load a file without the field; a TUI launch test restores only the first pill.
+- [ ] 2.2 Add `extra_music_groups` to `TuiLaunchState` (`#[serde(default, skip_serializing_if = "Vec::is_empty")]`) and write it from the Music `SelectorSurface` set in the shared `launch_state_snapshot` (design D6). Verify: `crates/mbv-config` tests round-trip a two-group state and load a file without the field; a shared snapshot test writes no extra groups for a one-group set.
+- [ ] 2.3 Apply `extra_music_groups` in the GUI core thread's startup adoption, after the shared `reanchor_launch_state` restores the first group; the shared restore path stays unchanged (design D6). Verify: a `crates/mbv-gui/tests/` nextest restores Hip-Hop and Soul from a two-group snapshot; a TUI launch test restores Hip-Hop only from the same snapshot.
 
 ## 3. Frame, regions, and leaf
 
@@ -32,7 +33,7 @@ Phase 1 (groups 1–7) delivers Music from end to end. Phase 2 (groups 8–14) s
 
 - [ ] 5.1 Add `LibraryPanel.svelte` and the window arrangement in `App.svelte`: Mini shows the focused panel, Narrow shows the browser pane plus the Queue panel, Wide adds the Hero pane; regions and capacities report through `reportLayout` and retract on unmount. Verify: vitest asserts the mounted panels per class and the reported contribution.
 - [ ] 5.2 Add the top bar (Home icon and destination tabs) in the canvas look, with GUI-local `--canvas-*` tokens for Library-only values (design D10). Verify: vitest asserts one tab per frame tab, the current tab marked `aria-current`, and a tab press sending its region.
-- [ ] 5.3 Move the Status bar under the Library column while the Library shows (key hints, breadcrumb, prefix, toasts); the Queue footer keeps them when only the Queue shows (design D9). Verify: vitest for both placements with the prefix armed.
+- [ ] 5.3 Paint the Library Status bar under the Library column while the Library shows: the shared prefix and toast, the GUI-only key hints (action id plus the configured chord, carried on the frame), and the location (destination, selected pills, selected item); prefix or toast replaces the hints; the Queue footer keeps prefix and toast when only the Queue shows (design D9). Verify: a nextest that a rebound chord reaches the frame hint; vitest for both placements with the prefix armed and for the toast replacing the hints.
 
 ## 6. Music slot painters
 
@@ -53,12 +54,12 @@ Phase 1 (groups 1–7) delivers Music from end to end. Phase 2 (groups 8–14) s
 
 - [ ] 8.1 Port `tv_content` state (series tree, flat Latest carrier, season cursor, episode Workspace, Workspace focus) into `DestinationSurface`; the component becomes an adapter. Verify: the TV tests pass unedited.
 - [ ] 8.2 Project Shows into `GuiLibraryFrame`: landscape or portrait art, the season-pill Workspace selector, no Workspace in flat mode, and no Hero for Upcoming. Verify: nextest projections for the three modes.
-- [ ] 8.3 Paint the Workspace selector and the landscape and portrait art arms; collection pills multi-select and the letter rail on series. Verify: vitest for the Workspace selector and each art arm; a union test for two Shows collections.
+- [ ] 8.3 Paint the Workspace selector and the landscape and portrait art arms; Shows pills stay single-select (design D5) and series get the letter rail. Verify: vitest for the Workspace selector and each art arm; a core test that a Shows pill press replaces the selection.
 
 ## 9. Movies and other Emby libraries
 
 - [ ] 9.1 Port `emby_library_content` state into `DestinationSurface`; adapter. Verify: its tests pass unedited.
-- [ ] 9.2 Project and paint: the Hero without a Workspace, the artwork arm from the artwork policy, letter and group pills, and the letter rail. Verify: nextest projection and vitest for a Hero without Workspace.
+- [ ] 9.2 Project and paint: the Hero without a Workspace, the artwork arm from the artwork policy, letter pills single-select, feed-group pills as collection pills in feed-group mode (design D5), and the letter rail. Verify: nextest projection; vitest for a Hero without Workspace; a union test for two feed groups.
 
 ## 10. Home
 
@@ -73,12 +74,12 @@ Phase 1 (groups 1–7) delivers Music from end to end. Phase 2 (groups 8–14) s
 ## 12. Podcasts
 
 - [ ] 12.1 Port `podcast_content` state into `DestinationSurface`; adapter. Verify: its tests pass unedited.
-- [ ] 12.2 Project and paint the episode list and Hero, show pills, and no letter rail. Verify: nextest projection.
+- [ ] 12.2 Project and paint the episode list and Hero, show pills as collection pills (design D5), and no letter rail. Verify: nextest projection; a union test for two shows in episode date order.
 
 ## 13. Feeds
 
 - [ ] 13.1 Port `feeds_content` state into `DestinationSurface`; adapter. Verify: its tests pass unedited.
-- [ ] 13.2 Project and paint Feeds, Feed group pills as collection pills, and no letter rail. Verify: nextest projection; a union test for two Feed groups.
+- [ ] 13.2 Project and paint Feeds, subscription pills as collection pills (design D5), and no letter rail. Verify: nextest projection; a union test for two subscriptions.
 
 ## 14. Global Search and Inline Search
 
