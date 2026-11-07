@@ -23,12 +23,13 @@ pub use self::app::{
     App, AppCommand, CLIENT_IDLE_CADENCE, ClientCore, ClientLifecycle, ClientTickHost, ClientWaker,
     Command, FooterPill, GuiInput, GuiOverlayProjection, GuiSurfaceLeaf, HomeContent,
     HomeEventDrain, NavigationIntent, OverlayFocus, PanelIntent, PanelTogglesProjection,
-    PlaybackIntent, PlaybackTargetChoice, PlayerEventDrain, QueueCardArtwork,
-    QueueFooterProjection, QueuePlaybackProjection, QueueRightColumn, QueueSummaryProjection,
-    QueueSurfaceProjection, RemoteControlTarget, RouterOutcome, RouterOverlayState,
-    RouterPlaybackState, RouterSnapshot, RowMenuEntryProjection, ShellCommand, StartupWorkerDrain,
-    StatusBarProjection, TickOutcome, TrackChip, TrackChips, TrackChoice, TrackPopoverChoice,
-    VisualIntent, WorkspaceRelayout, resolve_router_outcome_with_focused,
+    PlaybackChapter, PlaybackDecorations, PlaybackIntent, PlaybackTargetChoice, PlayerEventDrain,
+    QueueCardArtwork, QueueFooterProjection, QueuePlaybackProjection, QueueRightColumn,
+    QueueSummaryProjection, QueueSurfaceProjection, RemoteControlTarget, RouterOutcome,
+    RouterOverlayState, RouterPlaybackState, RouterSnapshot, RowMenuEntryProjection, SegmentMark,
+    ShellCommand, StartupWorkerDrain, StatusBarProjection, TickOutcome, TrackChip, TrackChips,
+    TrackChoice, TrackPopoverChoice, TrickplayGrid, VisualIntent, WorkspaceRelayout,
+    resolve_router_outcome_with_focused,
 };
 pub use self::config::{Config, load_config};
 pub use self::owner_link::{

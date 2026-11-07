@@ -262,6 +262,7 @@ impl ClientCore {
             outcome.input_received |= host.tick_inline_search_clock(now);
             outcome.input_received |= host.app_mut().drain_session_events();
             outcome.input_received |= host.app_mut().drain_cast_events();
+            outcome.input_received |= host.app_mut().drain_playback_metadata_events();
             outcome.input_received |= host.app_mut().drain_pinned_requests();
             if host.app_mut().drain_feed_tab_results() {
                 outcome.input_received = true;

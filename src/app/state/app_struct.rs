@@ -495,6 +495,17 @@ pub struct App {
     /// session cannot keep every fetched list reachable.
     pub(in crate::app) album_tracks_cache: IndexMap<String, Vec<EmbyItem>>,
     pub(in crate::app) album_tracks_loading: std::collections::HashSet<String>,
+    /// The active queue item's fetched metadata decoration
+    /// (add-tauri-gui-client design D4a): chapters, segment marks, and the
+    /// trickplay source, keyed by the item's `QueueItemContentId` — cached
+    /// like artwork, decoration only, never queue or playback authority.
+    pub(in crate::app) playback_metadata_cache: std::collections::HashMap<
+        mbv_queue::QueueItemContentId,
+        crate::app::playback_metadata::PlaybackDecorations,
+    >,
+    /// The item identities whose metadata fetches are in flight.
+    pub(in crate::app) playback_metadata_loading:
+        std::collections::HashSet<mbv_queue::QueueItemContentId>,
     /// Fallback artist per-album track fetches waiting for a bounded slot.
     /// A fallback root's scope can be the whole
     /// settled catalog, so `enqueue_artist_album_tracks` arms at most

@@ -259,6 +259,8 @@ impl App {
             level_artist_warmups_in_flight: std::collections::HashSet::new(),
             album_tracks_cache: IndexMap::new(),
             album_tracks_loading: std::collections::HashSet::new(),
+            playback_metadata_cache: std::collections::HashMap::new(),
+            playback_metadata_loading: std::collections::HashSet::new(),
             pending_artist_album_track_fetches: std::collections::VecDeque::new(),
             artist_album_track_fetches_in_flight: std::collections::HashSet::new(),
             artist_detail_cache: std::collections::HashMap::new(),
