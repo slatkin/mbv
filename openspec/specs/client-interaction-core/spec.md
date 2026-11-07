@@ -75,9 +75,15 @@ Each Client SHALL report, for each frame, the regions it painted and the semanti
 
 ### Requirement: Clients map their size to shared breakpoint classes
 
-Each Client SHALL map its own size to a layout breakpoint class. The Client core SHALL decide the layout behaviour of each class (for example, whether the hero opens as an overlay), so that both Clients behave the same in the same class.
+A Client that presents a surface whose placement varies by breakpoint class (Library or hero placement) SHALL map its own size to a shared breakpoint class, and the Client core SHALL decide the layout behaviour of each class, so that such Clients behave the same in the same class. A Client that presents no such surface derives no breakpoint class.
 
 #### Scenario: Two Clients in the Narrow class
 
-- **WHEN** the TUI Client and the GUI Client are both in the Narrow class
+- **WHEN** the TUI Client and a Client that presents Library placement are both in the Narrow class
 - **THEN** both apply the same Narrow layout behaviour
+
+#### Scenario: The GUI Client presents only the canvas panel
+
+- **WHEN** the GUI Client presents only the canvas panel
+- **THEN** it picks its panel state from the container size it reports in `LayoutReport`
+- **AND** it derives no breakpoint class
