@@ -6,11 +6,12 @@
 	// mode, the filter's text, and the caret fact are Client-core state
 	// (design D4a), so the header holds none.
 	//
-	// The switch and the filter each carry a pointer target: the marked
-	// elements report the `rightColumn` and `filter` regions through
-	// `QueuePanel`'s own report key, so a press resolves in the core to
-	// the `t` and `/` chords' requests — the control and the chord run
-	// one path.
+	// The switch and the filter each carry a pointer target: the switch's
+	// inactive segment and the filter report the `rightColumn` and `filter`
+	// regions through `QueuePanel`'s own report key, so a press resolves in
+	// the core to the `t` and `/` chords' requests — the control and the
+	// chord run one path. The active segment reports no target: pressing it
+	// would toggle away from the mode it already shows.
 	import { ListFilter } from '@lucide/svelte';
 	import { roleProperty } from '$lib/bridge/theme';
 	import type { GuiQueueSummary, GuiRightColumn } from '$lib/bridge/types';
@@ -57,8 +58,8 @@
 		>
 	{/if}
 	<!-- The "Length / Ends at" switch: the frame's mode pills the active
-		segment, and a press on it runs the `t` chord's toggle in the core
-		through the `rightColumn` region the mark reports. -->
+		segment, and a press on the inactive one runs the `t` chord's toggle
+		in the core through the `rightColumn` region the segment reports. -->
 	<div
 		class="flex items-center rounded-full border text-xs"
 		style:border-color="var(--mbv-border)"
@@ -72,7 +73,8 @@
 				style:background={active ? 'var(--mbv-secondary)' : undefined}
 				style:color={active ? roleVar('textPrimary') : roleVar('textMuted')}
 				data-mode={mode}
-				data-active={active || undefined}>{label}</span
+				data-active={active || undefined}
+				data-right-column-segment={active ? undefined : mode}>{label}</span
 			>
 		{/each}
 	</div>

@@ -288,6 +288,16 @@ test('the regions carry the header, slot, grip, actions, and menu-entry ids, men
 	]);
 });
 
+test('only the inactive right-column segment reports a press target', async () => {
+	const { container } = renderPanel(queue([]), summary({ rightColumn: 'length' }));
+
+	await vi.waitFor(() => expect(invokeMock).toHaveBeenCalled());
+	// A press on the active segment would flip away from the mode it shows,
+	// so the segment reports no region and only the other one does.
+	const segments = [...container.querySelectorAll('[data-right-column-segment]')];
+	expect(segments.map((el) => el.textContent?.trim())).toEqual(['Ends at']);
+});
+
 test('a press on the right-column switch forwards a pointer press', async () => {
 	const { container } = renderPanel(queue([item(1)]));
 	const control = container.querySelector('[data-right-column-switch]') as HTMLElement;

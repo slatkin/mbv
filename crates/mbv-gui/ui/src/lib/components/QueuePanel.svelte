@@ -289,7 +289,9 @@
 		if (!panelEl) {
 			return regions;
 		}
-		for (const el of panelEl.querySelectorAll<HTMLElement>('[data-right-column-switch]')) {
+		for (const el of panelEl.querySelectorAll<HTMLElement>(
+			'[data-right-column-segment]',
+		)) {
 			regions.push(region(el, 'rightColumn'));
 		}
 		for (const el of panelEl.querySelectorAll<HTMLElement>('[data-filter]')) {
