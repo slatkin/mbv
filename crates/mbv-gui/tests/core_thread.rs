@@ -17,7 +17,9 @@ use mbv_config::{
 use mbv_gui::bridge::frame::playback::GuiCardArtwork;
 use mbv_gui::bridge::frame::queue::GuiQueueRow;
 use mbv_gui::bridge::frame::{GuiFrame, GuiWindowFrame};
-use mbv_gui::bridge::layout::{LayoutRect, LayoutRegion, LayoutReport, ListId, ListRows};
+use mbv_gui::bridge::layout::{
+    LayoutRect, LayoutRegion, LayoutReport, LayoutSize, ListId, ListRows,
+};
 use mbv_gui::bridge::layout::{QueuePlaybackTargetId, QueueTargetId, RegionTarget};
 use mbv_gui::core_thread::{CoreInput, CoreThread, FrameSink, QuitSink};
 use mbv_ui_msg::{Key, KeyEvent, KeyModifiers, PointerEvent, PointerKind, Position};
@@ -34,12 +36,13 @@ fn layout_report() -> CoreInput {
     CoreInput::Layout(LayoutReport {
         lists: vec![],
         regions: vec![],
-        width: 800.0,
+        container_size: LayoutSize::default(),
     })
 }
 
-/// A layout report the front end measured: `capacity` whole queue rows and
-/// one painted region, as a report carries for a measured window.
+/// A layout report the front end measured: `capacity` whole queue rows, one
+/// painted region, and the panel container's size, as a report carries for a
+/// measured window.
 fn measured_layout(capacity: usize, regions: Vec<LayoutRegion>) -> CoreInput {
     CoreInput::Layout(LayoutReport {
         lists: vec![ListRows {
@@ -47,7 +50,10 @@ fn measured_layout(capacity: usize, regions: Vec<LayoutRegion>) -> CoreInput {
             whole_rows: capacity,
         }],
         regions,
-        width: 800.0,
+        container_size: LayoutSize {
+            width: 800.0,
+            height: 600.0,
+        },
     })
 }
 
@@ -240,6 +246,65 @@ fn a_reported_capacity_sets_the_paging_stride() {
     let frame = test.next_frame();
     assert_eq!(frame.queue.cursor, Some(14));
     assert_eq!(frame.queue.rows.len(), 14);
+}
+
+/// A report that carries a new container size re-binds the capacity and the
+/// regions (task row 6.3, design D10): the front end's container resize
+/// painted a new layout, so the report's whole rows replace the Queue
+/// viewport's height and its regions rebuild the hit map — a press resolves
+/// against the newest report's regions, and the first report's region
+/// resolves to nothing.
+#[test]
+fn a_reported_container_size_rebinds_capacity_and_regions() {
+    let mut test = test_core(20);
+    test.tx
+        .send(measured_layout(
+            14,
+            vec![region_at(
+                0.0,
+                0.0,
+                RegionTarget::Queue(QueueTargetId::Slot(2)),
+            )],
+        ))
+        .unwrap();
+    assert!(test.core.step());
+    test.next_frame();
+    test.tx.send(press_at(50.0, 10.0)).unwrap();
+    assert!(test.core.step());
+    assert_eq!(test.next_frame().queue.cursor, Some(2));
+
+    // The container resize painted a shorter list and moved the row
+    // region: the next report carries the new layout.
+    test.tx
+        .send(CoreInput::Layout(LayoutReport {
+            lists: vec![ListRows {
+                list: ListId::Queue,
+                whole_rows: 3,
+            }],
+            regions: vec![region_at(
+                200.0,
+                100.0,
+                RegionTarget::Queue(QueueTargetId::Slot(1)),
+            )],
+            container_size: LayoutSize {
+                width: 300.0,
+                height: 200.0,
+            },
+        }))
+        .unwrap();
+    assert!(test.core.step());
+    assert_eq!(test.next_frame().queue.rows.len(), 3);
+
+    // The first report's region is gone: the press there resolves to
+    // nothing, so the cursor stays put.
+    test.tx.send(press_at(50.0, 10.0)).unwrap();
+    assert!(test.core.step());
+    assert_eq!(test.next_frame().queue.cursor, Some(2));
+
+    // The resized layout's region resolves its slot.
+    test.tx.send(press_at(250.0, 110.0)).unwrap();
+    assert!(test.core.step());
+    assert_eq!(test.next_frame().queue.cursor, Some(1));
 }
 
 /// A press resolves against the last reported regions (task row 2.4): the

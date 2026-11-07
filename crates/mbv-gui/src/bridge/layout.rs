@@ -18,11 +18,24 @@ pub struct LayoutReport {
     pub lists: Vec<ListRows>,
     /// The painted regions, each with the semantic target a press on it resolves to.
     pub regions: Vec<LayoutRegion>,
-    /// The window's inner width in logical pixels (design D10). The core
-    /// thread classifies it with the shared breakpoint classes. A front end
-    /// that omits it reads as 0.0.
+    /// The panel container's painted size in logical pixels (design D10):
+    /// the size the front end's container queries pick the panel state from.
+    /// The core stores it so the capacity and the hit map the same report
+    /// carries stay matched to the layout the front end painted; the
+    /// panel-state decision itself stays in the front end. A front end that
+    /// omits it reads as the zero size.
     #[serde(default)]
+    pub container_size: LayoutSize,
+}
+
+/// A size in logical pixels, as the front end measures the panel container.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LayoutSize {
+    /// The painted width in logical pixels.
     pub width: f32,
+    /// The painted height in logical pixels.
+    pub height: f32,
 }
 
 /// The whole visible rows of one list.

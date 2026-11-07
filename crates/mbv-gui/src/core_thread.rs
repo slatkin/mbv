@@ -21,7 +21,6 @@ use mbv::{
     HomeEventDrain, PlayerEventDrain, TickOutcome, declare_gui_client, load_config,
 };
 use mbv_config::ensure_runtime_dir;
-use mbv_surfaces::breakpoint::{BreakpointClass, BreakpointThresholds, classify};
 use mbv_surfaces::gesture::{PointerGesture, PointerGestureState};
 use mbv_surfaces::queue::QueueSurface;
 use mbv_surfaces::queue_playback::QueuePlaybackSurface;
@@ -34,7 +33,9 @@ use mbv_ui_msg::{ComponentId, KeyEvent, Msg, PointerEvent, Position, ServiceRequ
 use crate::artwork::ArtworkFrames;
 use crate::attach::{AttachCampaign, LibraryOwnerSteps};
 use crate::bridge::frame::{FrameSources, GuiFrame, GuiWindowFrame};
-use crate::bridge::layout::{LayoutReport, ListId, QueueTargetId, RegionTarget, hit_map};
+use crate::bridge::layout::{
+    LayoutReport, LayoutSize, ListId, QueueTargetId, RegionTarget, hit_map,
+};
 use crate::leaves::{PlaybackLeaf, QueueLeaf, StatusBarLeaf, TransportAvailability, gesture_point};
 
 /// The viewport height before the first `report_layout` measures the window:
@@ -42,16 +43,6 @@ use crate::leaves::{PlaybackLeaf, QueueLeaf, StatusBarLeaf, TransportAvailabilit
 /// real capacity when it mounts (design D5), so the placeholder never
 /// survives the first report.
 const INITIAL_VIEWPORT_ROWS: usize = usize::MAX;
-
-/// The GUI Client's breakpoint thresholds, in window logical points (design
-/// D10). The implementer picks the values (the design's open question); they
-/// change no spec. `mini_below` mirrors the TUI's 80-column mini threshold at
-/// roughly nine points per column, and `wide_from` is the width a desktop
-/// window needs before the later hero surfaces sit side by side.
-const GUI_BREAKPOINTS: BreakpointThresholds<f32> = BreakpointThresholds {
-    mini_below: 720.0,
-    wide_from: 1200.0,
-};
 
 /// One message the core thread's channel carries (design D3): the front
 /// end's translated input, a layout report, the wake value the installed
@@ -181,10 +172,11 @@ pub struct CoreThread {
     /// The whole Queue rows the viewport fits. Row 2.4 sets it from the
     /// `LayoutReport`; until then the frame carries every row.
     viewport_rows: usize,
-    /// The window's breakpoint class. Row 2.4 classifies it from the reported
-    /// width (design D10); the first slice presents neither Library nor hero,
-    /// so `Wide` changes nothing visible until then.
-    breakpoint: BreakpointClass,
+    /// The panel container's painted size from the last `LayoutReport`
+    /// (design D10). The front end's container queries pick the panel state
+    /// from it, so the core stores it without classifying it: the reported
+    /// capacity and regions already measure the layout that size painted.
+    container_size: LayoutSize,
     rx: Receiver<CoreInput>,
     sink: FrameSink,
     /// The edge that closes the window (design D9): a routed quit key closes
@@ -235,7 +227,7 @@ impl CoreThread {
             gestures: PointerGestureState::new(),
             regions: HitMap::new(),
             viewport_rows: INITIAL_VIEWPORT_ROWS,
-            breakpoint: BreakpointClass::Wide,
+            container_size: LayoutSize::default(),
             rx,
             sink,
             quit,
@@ -271,8 +263,10 @@ impl CoreThread {
     /// Queue viewport's height — the paging stride's source and the resting
     /// scroll's clamp — and the reported regions rebuild the combined slice
     /// hit map, the last painted regions a press resolves against. The
-    /// reported width classifies into the shared breakpoint classes through
-    /// the GUI's own thresholds (design D10).
+    /// reported container size is stored as painted (design D10): the
+    /// panel-state decision it feeds stays in the front end's container
+    /// queries, and the capacity and regions the same report carries
+    /// already measure the layout that size painted.
     fn apply_layout(&mut self, report: &LayoutReport) {
         for list in &report.lists {
             match list.list {
@@ -283,7 +277,7 @@ impl CoreThread {
             }
         }
         self.regions = hit_map(&report.regions);
-        self.breakpoint = classify(report.width, GUI_BREAKPOINTS);
+        self.container_size = report.container_size;
     }
 
     /// Route one translated key chord through the shared router with the
@@ -480,7 +474,6 @@ impl CoreThread {
             focus: &self.focus,
             queue: &self.queue,
             viewport_rows: self.viewport_rows,
-            breakpoint: self.breakpoint,
             theme_changed,
             artwork,
         });
@@ -498,7 +491,7 @@ impl fmt::Debug for CoreThread {
             .field("status_bar", &self.status_bar)
             .field("regions", &self.regions.len())
             .field("viewport_rows", &self.viewport_rows)
-            .field("breakpoint", &self.breakpoint)
+            .field("container_size", &self.container_size)
             .field("pending", &self.pending.len())
             .field("frame_requested", &self.frame_requested)
             .field("theme_pending", &self.theme_pending)

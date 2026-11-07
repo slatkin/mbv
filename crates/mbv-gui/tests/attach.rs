@@ -16,7 +16,7 @@ use mbv_daemon::SignalOwnerError;
 use mbv_gui::attach::{AttachCampaign, CampaignEnd, OwnerSteps, OwnerWait};
 use mbv_gui::bridge::frame::{GuiAttachState, GuiWindowFrame};
 use mbv_gui::bridge::layout::{
-    AttachTargetId, LayoutRect, LayoutRegion, LayoutReport, RegionTarget,
+    AttachTargetId, LayoutRect, LayoutRegion, LayoutReport, LayoutSize, RegionTarget,
 };
 use mbv_gui::core_thread::{CoreInput, FrameSink, QuitSink};
 use mbv_remote_player::RemotePlayerError;
@@ -297,7 +297,10 @@ fn layout_with(regions: Vec<LayoutRegion>) -> CoreInput {
     CoreInput::Layout(LayoutReport {
         lists: vec![],
         regions,
-        width: 800.0,
+        container_size: LayoutSize {
+            width: 800.0,
+            height: 600.0,
+        },
     })
 }
 

@@ -10,7 +10,6 @@ use mbv_gui::bridge::frame::theme::GuiRole;
 use mbv_gui::bridge::frame::{FrameSources, GuiFrame};
 use mbv_queue::QueueItem;
 use mbv_surfaces::FocusStack;
-use mbv_surfaces::breakpoint::BreakpointClass;
 use mbv_surfaces::queue::QueueSurface;
 use mbv_ui_model::queue_rows::queue_media_rows;
 
@@ -33,7 +32,6 @@ fn frame_after_tick(app: &mut App) -> GuiFrame {
         focus: &FocusStack::new(),
         queue: &queue,
         viewport_rows: VIEWPORT_ROWS,
-        breakpoint: BreakpointClass::Wide,
         theme_changed: false,
         artwork: None,
     })

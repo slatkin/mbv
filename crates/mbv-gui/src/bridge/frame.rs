@@ -17,7 +17,6 @@ pub mod theme;
 
 use mbv::App;
 use mbv_surfaces::FocusStack;
-use mbv_surfaces::breakpoint::BreakpointClass;
 use mbv_surfaces::queue::QueueSurface;
 use serde::Serialize;
 
@@ -35,8 +34,8 @@ use self::theme::GuiTheme;
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum GuiWindowFrame {
-    /// The attached slice: the focus, Queue, playback, footer, Status bar,
-    /// and breakpoint sections the window paints. The payload is boxed: the
+    /// The attached slice: the focus, Queue, playback, footer, and Status
+    /// bar sections the window paints. The payload is boxed: the
     /// attach state's frame is far smaller, and a frame the window never
     /// sees while unattached should not size the whole enum for it.
     Slice(Box<GuiFrame>),
@@ -83,7 +82,7 @@ pub enum GuiAttachState {
 }
 
 /// The attached slice's frame (design D4): the focus, Queue, playback,
-/// footer, Status bar, and breakpoint sections, carried in
+/// footer, and Status bar sections, carried in
 /// [`GuiWindowFrame::Slice`].
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -106,8 +105,6 @@ pub struct GuiFrame {
     pub footer: GuiQueueFooter,
     /// The Status bar projection.
     pub status: GuiStatusBar,
-    /// The breakpoint class of the window's width.
-    pub breakpoint: GuiBreakpoint,
     /// The role-to-colour map (design D7). `None` unless the theme changed for
     /// this window.
     pub theme: Option<GuiTheme>,
@@ -125,8 +122,6 @@ pub struct FrameSources<'a> {
     pub queue: &'a QueueSurface,
     /// The whole Queue rows that the viewport fits (`ListRows::whole_rows`).
     pub viewport_rows: usize,
-    /// The breakpoint class of the window's width (design D10).
-    pub breakpoint: BreakpointClass,
     /// Whether the window needs the theme in this frame: the first frame, and
     /// the first frame after the window reloads its content.
     pub theme_changed: bool,
@@ -161,7 +156,6 @@ impl GuiFrame {
             },
             footer: GuiQueueFooter::from(&sources.app.queue_footer_projection()),
             status: GuiStatusBar::from(&sources.app.status_bar_projection()),
-            breakpoint: GuiBreakpoint::from(sources.breakpoint),
             theme: sources.theme_changed.then(GuiTheme::current),
         }
     }
@@ -184,29 +178,6 @@ impl From<&mbv::PanelTogglesProjection> for GuiPanelToggles {
         Self {
             collapsed: toggles.collapsed,
             queue_folded: toggles.queue_folded,
-        }
-    }
-}
-
-/// The layout breakpoint class of the window (design D10), mirroring
-/// `BreakpointClass` variant for variant.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub enum GuiBreakpoint {
-    /// Only one of Library or Queue shows.
-    Mini,
-    /// Both panels show. The hero opens as an overlay on demand.
-    Narrow,
-    /// Both panels show. The hero may sit beside its browser.
-    Wide,
-}
-
-impl From<BreakpointClass> for GuiBreakpoint {
-    fn from(class: BreakpointClass) -> Self {
-        match class {
-            BreakpointClass::Mini => Self::Mini,
-            BreakpointClass::Narrow => Self::Narrow,
-            BreakpointClass::Wide => Self::Wide,
         }
     }
 }
