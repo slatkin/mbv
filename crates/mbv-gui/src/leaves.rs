@@ -9,15 +9,18 @@
 //! The adapters are constructed per routing call over the core thread's own
 //! fields; they hold no state of their own. The seekbar's scrub throttle
 //! lives in the [`QueuePlaybackSurface`] (shared Surface state), and the
-//! queue's drag anchor lives in the gesture recognizer, so a drag re-derives
-//! its grabbed row from the anchor position each motion event, exactly as the
-//! TUI's retained grab resolves to.
+//! queue's row drag lives in the [`QueueSurface`]: a grip's press starts it,
+//! motion previews the drop, and the release emits the one move request
+//! (add-tauri-gui-client row 6.5). The chooser and popover presses resolve
+//! their painted row indexes against [`PaintedChoices`], the lists the last
+//! emitted frame painted, so a change between paint and press selects the
+//! painted choice or nothing.
 
-use mbv::{GuiSurfaceLeaf, PlaybackTargetChoice};
+use mbv::GuiSurfaceLeaf;
 use mbv_queue::QueueSlotId;
 use mbv_surfaces::gesture::{ClickSelection, PointerGesture};
 use mbv_surfaces::media_list::{MediaListOperation, RowIntent};
-use mbv_surfaces::queue::QueueSurface;
+use mbv_surfaces::queue::{QueueRowInsertionSide, QueueSurface};
 use mbv_surfaces::queue_playback::QueuePlaybackSurface;
 use mbv_surfaces::{HitMap, HitRegion};
 use mbv_ui_model::context_menu::ContextMenuTargets;
@@ -30,6 +33,7 @@ use mbv_ui_msg::{
 use crate::bridge::layout::{
     QueuePlaybackTargetId, QueueTargetId, RegionTarget, StatusBarTargetId,
 };
+use crate::painted_choices::PaintedChoices;
 
 /// The point a gesture resolves against: its own position, or the leading
 /// edge of a drag (the row the pointer reached). A `DragEnd` carries no
@@ -49,11 +53,13 @@ pub(crate) fn gesture_point(gesture: &PointerGesture<Position>) -> Option<Positi
 ///
 /// The click, double-click, right-click, wheel, and drag arms mirror the
 /// TUI Queue component's pointer path (`mbv-components` `queue/pointer.rs`)
-/// with the reported regions in place of its retained paint geometry. The
-/// playlist pill's click opens the TUI's playlists overlay, which the first
-/// slice does not present, so it resolves to nothing here — the same
-/// documented absence the GUI dispatch records for the surfaces it has not
-/// ported.
+/// with the reported regions in place of its retained paint geometry, plus
+/// the canvas queue's row chrome (add-tauri-gui-client row 6.5): the hovered
+/// row's grip starts the drag, its actions button opens the row menu, and an
+/// open menu's entry executes. The playlist pill's click opens the TUI's
+/// playlists overlay, which the first slice does not present, so it resolves
+/// to nothing here — the same documented absence the GUI dispatch records for
+/// the surfaces it has not ported.
 pub(crate) struct QueueLeaf<'a> {
     surface: &'a mut QueueSurface,
     regions: &'a HitMap<RegionTarget>,
@@ -64,14 +70,44 @@ impl<'a> QueueLeaf<'a> {
         Self { surface, regions }
     }
 
-    /// The row a queue region resolves to, if one does.
+    /// The row a queue region resolves to, if one does: a row's own region or
+    /// the chrome painted over it (the grip and the actions button).
     fn row_at(&self, at: Position) -> Option<QueueSlotId> {
         match self.regions.resolve(at) {
-            Some(RegionTarget::Queue(QueueTargetId::Slot(raw))) => {
-                Some(QueueSlotId::from_raw(*raw))
-            }
+            Some(RegionTarget::Queue(
+                QueueTargetId::Slot(raw)
+                | QueueTargetId::RowGrip(raw)
+                | QueueTargetId::RowActions(raw),
+            )) => Some(QueueSlotId::from_raw(*raw)),
             _ => None,
         }
+    }
+
+    /// The row region under `at`, with its slot: the last painted row region
+    /// holding the point. A row drag reads the pointer's half of the region
+    /// it names, so the insertion side follows the painted row's height.
+    fn row_region_at(&self, at: Position) -> Option<(HitRegion, QueueSlotId)> {
+        self.regions
+            .iter()
+            .filter(|(region, target)| {
+                matches!(
+                    target,
+                    RegionTarget::Queue(
+                        QueueTargetId::Slot(_)
+                            | QueueTargetId::RowGrip(_)
+                            | QueueTargetId::RowActions(_)
+                    )
+                ) && region.contains(at)
+            })
+            .last()
+            .and_then(|(region, target)| match target {
+                RegionTarget::Queue(
+                    QueueTargetId::Slot(raw)
+                    | QueueTargetId::RowGrip(raw)
+                    | QueueTargetId::RowActions(raw),
+                ) => Some((*region, QueueSlotId::from_raw(*raw))),
+                _ => None,
+            })
     }
 
     /// The viewport length the row-local delegation clamps its wheel with:
@@ -80,16 +116,8 @@ impl<'a> QueueLeaf<'a> {
         self.surface.viewport_height().max(1)
     }
 
-    fn click(&mut self, at: Position, selection: ClickSelection) -> Option<Msg> {
-        // The playlist pill's click opens the TUI's playlists overlay, which
-        // the first slice does not present, so it resolves to nothing here —
-        // the same documented absence the GUI dispatch records for the
-        // surfaces it has not ported. A point in no queue region resolves to
-        // nothing too.
-        let Some(RegionTarget::Queue(QueueTargetId::Slot(raw))) = self.regions.resolve(at) else {
-            return None;
-        };
-        let target = QueueSlotId::from_raw(*raw);
+    /// Select a row and emit the TUI single click's App effects.
+    fn select_row(&mut self, target: QueueSlotId, selection: ClickSelection) -> Msg {
         let operation = match selection {
             ClickSelection::Plain => MediaListOperation::Select(target),
             ClickSelection::Toggle => MediaListOperation::Toggle(target),
@@ -97,9 +125,53 @@ impl<'a> QueueLeaf<'a> {
         };
         self.surface
             .delegate_operation_with_viewport_len(operation, self.viewport_len());
-        Some(Msg::Shell(Box::new(ShellRequest::QueueRowClick {
+        Msg::Shell(Box::new(ShellRequest::QueueRowClick {
             slot_id: self.surface.selected_target().copied(),
-        })))
+        }))
+    }
+
+    fn click(&mut self, at: Position, selection: ClickSelection) -> Option<Msg> {
+        // The playlist pill's click opens the TUI's playlists overlay, which
+        // the first slice does not present, so it resolves to nothing here —
+        // the same documented absence the GUI dispatch records for the
+        // surfaces it has not ported. A point in no queue region resolves to
+        // nothing too.
+        let region_target = self.regions.resolve(at)?;
+        match region_target {
+            RegionTarget::Queue(QueueTargetId::Slot(raw)) => {
+                Some(self.select_row(QueueSlotId::from_raw(*raw), selection))
+            }
+            // The open row menu's entry: the Client core executes the entry
+            // the index names in the menu it opened. The menu carries its
+            // entries' resolved queue targets, so the press addresses the
+            // row painted for them.
+            RegionTarget::Queue(QueueTargetId::RowMenuEntry(index)) => Some(Msg::Shell(Box::new(
+                ShellRequest::ContextMenuSelect(*index),
+            ))),
+            // The hovered row's actions button opens the row menu over that
+            // row (the canvas row menu).
+            RegionTarget::Queue(QueueTargetId::RowActions(raw)) => {
+                Some(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
+                    ContextMenuTargets::Queue(vec![QueueSlotId::from_raw(*raw)]),
+                    None,
+                ))))
+            }
+            // The hovered row's grip starts the drag and selects the row, as
+            // a press on the row does; motion previews the drop and the
+            // release sends the one move request.
+            RegionTarget::Queue(QueueTargetId::RowGrip(raw)) => {
+                let target = QueueSlotId::from_raw(*raw);
+                self.surface.begin_row_drag(target);
+                Some(self.select_row(target, selection))
+            }
+            // The queue header's switch and filter controls (row 6.5): each
+            // press emits the request whose App-side effect the `t` and `/`
+            // chords dispatch, so the control and the chord run one path.
+            RegionTarget::Queue(QueueTargetId::PlaylistPill)
+            | RegionTarget::QueuePlayback(_)
+            | RegionTarget::StatusBar(_)
+            | RegionTarget::Attach(_) => None,
+        }
     }
 
     fn double_click(&mut self, at: Position) -> Option<Msg> {
@@ -151,24 +223,37 @@ impl<'a> QueueLeaf<'a> {
         None
     }
 
-    fn drag(&mut self, from: Position, to: Position) -> Option<Msg> {
-        // The grabbed row is the one the press anchored on; the target is the
-        // row the pointer reached. The TUI pins the grab at press time and
-        // the anchor is that press's position, so resolving it here resolves
-        // to the same row.
-        let grabbed = self.row_at(from)?;
-        let onto = self.row_at(to)?;
-        if grabbed == onto {
+    fn drag(&mut self, to: Position) -> Option<Msg> {
+        // Motion only previews the drop: the row drag's request is the
+        // release's, and a motion the drag does not own (a press that did not
+        // start on a grip) changes nothing.
+        self.surface.row_drag()?;
+        let Some((region, anchor)) = self.row_region_at(to) else {
+            // Off the rows: the drag keeps its last preview.
+            return None;
+        };
+        let side = if to.y < region.y + region.height / 2.0 {
+            QueueRowInsertionSide::Before
+        } else {
+            QueueRowInsertionSide::After
+        };
+        self.surface.preview_row_drag_drop(anchor, side);
+        None
+    }
+
+    /// End the drag: one move request when the drop changes the slot's place,
+    /// and none when the release lands it where it started or the rows no
+    /// longer hold the dragged slot (a content refresh can drop it).
+    fn finish_drag(&mut self) -> Option<Msg> {
+        let drag = self.surface.take_row_drag()?;
+        if drag.drop_index == drag.from_index {
             return None;
         }
-        self.surface.delegate_operation_with_viewport_len(
-            MediaListOperation::Select(grabbed),
-            self.viewport_len(),
-        );
-        Some(Msg::Queue(QueueRequest::MoveTo {
+        self.surface.item_index_of(drag.slot_id)?;
+        Some(Msg::Queue(QueueRequest::MoveToIndex {
             link: self.surface.link(),
-            slot_id: grabbed,
-            onto,
+            slot_id: drag.slot_id,
+            to_index: drag.drop_index,
         }))
     }
 }
@@ -194,10 +279,9 @@ impl GuiSurfaceLeaf for QueueLeaf<'_> {
             PointerGesture::DoubleClick(at) => self.double_click(at),
             PointerGesture::RightClick(at) => self.right_click(at),
             PointerGesture::Scroll { at, delta } => self.scroll(at, delta),
-            PointerGesture::Drag { from, to } => self.drag(from, to),
-            // The drag's grab re-derives from the anchor every motion, so the
-            // end carries no state to clear.
-            PointerGesture::DragEnd => None,
+            PointerGesture::Drag { to, .. } => self.drag(to),
+            // The release finalizes the row drag: one move request, or none.
+            PointerGesture::DragEnd => self.finish_drag(),
         }
     }
 }
@@ -214,8 +298,8 @@ pub(crate) struct TransportAvailability {
 }
 
 /// The Queue playback panel's leaf: the Queue playback Surface state, the
-/// reported regions, the transport availability, and the playback-target
-/// chooser's live choice list.
+/// reported regions, the transport availability, and the choice lists the
+/// last emitted frame painted.
 ///
 /// The arms mirror the TUI Queue playback panel's pointer path: the transport
 /// glyphs act on a left press — the second press of a double-click pair
@@ -223,20 +307,22 @@ pub(crate) struct TransportAvailability {
 /// the seekbar seeks on a press (the `gui-client` spec's single-press seek)
 /// and scrubs on a left-drag anchored inside its bar. The header's target
 /// indicator opens the chooser the Sessions sidebar is in the TUI, a
-/// chooser row selects its output through the same `SelectSession` request,
-/// and the header's collapse and queue-fold controls run the `z`/`q`
+/// chooser row selects its painted output through the same `SelectSession`
+/// request, and the header's collapse and queue-fold controls run the `z`/`q`
 /// toggles' dispatches. The audio and subtitle chips toggle their track
 /// popover through the `OpenTrackPopover` request's open path, and a
-/// popover row selects its choice through the popover's Enter execution.
+/// popover row selects the track its painted row named (row 6.5's review of
+/// row 6.4: the index addresses the list the window painted).
 /// The visual slot's chrome menu is a surface the
 /// first slice does not present, so a right-click resolves to nothing here.
 pub(crate) struct PlaybackLeaf<'a> {
     surface: &'a mut QueuePlaybackSurface,
     regions: &'a HitMap<RegionTarget>,
     availability: TransportAvailability,
-    /// The playback-target chooser's live choices: a `TargetChoice` region's
-    /// index resolves against this list, the same list the frame carries.
-    choices: &'a [PlaybackTargetChoice],
+    /// The choice lists the last emitted frame painted: a chooser or popover
+    /// row's index resolves against what the window shows, not a fresh
+    /// projection that may have shifted under it.
+    painted: &'a PaintedChoices,
 }
 
 impl<'a> PlaybackLeaf<'a> {
@@ -244,13 +330,13 @@ impl<'a> PlaybackLeaf<'a> {
         surface: &'a mut QueuePlaybackSurface,
         regions: &'a HitMap<RegionTarget>,
         availability: TransportAvailability,
-        choices: &'a [PlaybackTargetChoice],
+        painted: &'a PaintedChoices,
     ) -> Self {
         Self {
             surface,
             regions,
             availability,
-            choices,
+            painted,
         }
     }
 
@@ -314,14 +400,13 @@ impl<'a> PlaybackLeaf<'a> {
             Some(RegionTarget::QueuePlayback(QueuePlaybackTargetId::PlaybackTarget)) => {
                 Some(Msg::Shell(Box::new(ShellRequest::OpenSessions)))
             }
-            // A chooser row resolves its choice by index against the live
-            // list and selects the output through the request the TUI's
+            // A chooser row resolves its painted index to the stable target
+            // key and selects the output through the request the TUI's
             // Sessions sidebar sends for its selected row.
-            Some(RegionTarget::QueuePlayback(QueuePlaybackTargetId::TargetChoice(index))) => {
-                self.choices.get(*index).map(|choice| {
-                    Msg::Shell(Box::new(ShellRequest::SelectSession(choice.key.clone())))
-                })
-            }
+            Some(RegionTarget::QueuePlayback(QueuePlaybackTargetId::TargetChoice(index))) => self
+                .painted
+                .target_key(*index)
+                .map(|key| Msg::Shell(Box::new(ShellRequest::SelectSession(key.clone())))),
             // The audio and subtitle chips emit the popover's opener: the
             // press toggles the open popover as the target press toggles
             // the chooser. The video chip is label-only (design D4a's
@@ -332,11 +417,14 @@ impl<'a> PlaybackLeaf<'a> {
             Some(RegionTarget::QueuePlayback(QueuePlaybackTargetId::SubtitleChip)) => Some(
                 Msg::Playback(PlaybackRequest::OpenTrackPopover(TrackChipKind::Subtitles)),
             ),
-            // A track popover row carries the choice's index in the
-            // popover's painted list; the App runs the same execution the
-            // popover's Enter applies.
+            // A track popover row resolves its painted index to the track id
+            // the frame painted, so a list change between paint and press
+            // switches that track or none, never the neighbour; the App runs
+            // the same execution the popover's Enter applies.
             Some(RegionTarget::QueuePlayback(QueuePlaybackTargetId::TrackPopoverChoice(index))) => {
-                Some(Msg::Playback(PlaybackRequest::TrackPopoverSelect(*index)))
+                self.painted
+                    .popover_track_id(*index)
+                    .map(|track_id| Msg::Playback(PlaybackRequest::TrackPopoverSelect(track_id)))
             }
             // The header's collapse and queue-fold controls run the `z`/`q`
             // toggles' own dispatch.

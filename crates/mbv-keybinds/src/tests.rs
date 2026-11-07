@@ -291,6 +291,8 @@ const EXPECTED_DEFAULTS: &[(&str, &[&str])] = &[
     ("alt_previous_library_tab", &["Alt+Up"]),
     ("playlists_open", &["F4"]),
     ("clear_queue_prompt_c", &["c"]),
+    ("queue_move_down", &["Alt+j"]),
+    ("queue_move_up", &["Alt+k"]),
     ("visualizer", &["v"]),
     ("hide_visual_slot", &["h"]),
     ("toggle_play_pause", &["Space"]),

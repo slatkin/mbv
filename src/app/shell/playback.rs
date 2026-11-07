@@ -84,11 +84,13 @@ impl crate::app::App {
                     *chip,
                 )));
             }
-            // A track popover row's press (add-tauri-gui-client row 6.4):
-            // the GUI Client's popover rows emit it and the App runs the
-            // popover's Enter execution. No TUI leaf produces it either.
-            PlaybackRequest::TrackPopoverSelect(index) => {
-                self.select_gui_track_popover_entry(*index);
+            // A track popover row's press (add-tauri-gui-client rows 6.4 and
+            // 6.5): the GUI Client's popover rows emit it with the track id
+            // the frame painted, and the App runs the same track switch the
+            // popover's Enter execution applies. No TUI leaf produces it
+            // either.
+            PlaybackRequest::TrackPopoverSelect(track_id) => {
+                self.select_gui_track_popover_track(*track_id);
             }
             // The canvas header's collapse and queue-fold controls: the GUI
             // Client's header emits them (add-tauri-gui-client row 6.4) and

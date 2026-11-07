@@ -25,7 +25,7 @@ use crate::app::input::resolver::KeyChord;
 use mbv_ctrl::Direction;
 use mbv_ctrl::player::PlayerCommand;
 use mbv_queue::QueueSlotId;
-use mbv_ui_msg::TrackChipKind;
+use mbv_ui_msg::{QueueMove, TrackChipKind};
 
 /// A UI command: the seam between key-event translation (`input.rs`) and
 /// effects (`actions.rs`, `player.rs`).
@@ -163,6 +163,12 @@ pub enum PanelIntent {
     /// target press also toggles. GUI-only: the TUI's counterpart is the
     /// Sessions sidebar, not a dispatch intent.
     ToggleTargetChooser,
+    /// Move the queue's selected row one place (add-tauri-gui-client row
+    /// 6.5): the `queue_move_down`/`queue_move_up` actions' effect, the same
+    /// Owner slot move the surface's `Shift+Up`/`Shift+Down` request sends.
+    /// GUI-only: the TUI moves a row by that surface chord, and no TUI chord
+    /// resolves these actions.
+    MoveQueueRow(QueueMove),
 }
 
 impl From<ShellCommand> for Command {
@@ -387,6 +393,7 @@ impl App {
             PanelIntent::ToggleQueueRightColumn => self.toggle_queue_right_column(),
             PanelIntent::ActivateQueueFilter => self.activate_queue_filter(),
             PanelIntent::ToggleTargetChooser => self.toggle_gui_target_chooser(),
+            PanelIntent::MoveQueueRow(direction) => self.move_selected_queue_row(direction),
         }
     }
 

@@ -169,6 +169,23 @@ impl Model {
             } => {
                 self.handle_queue_move_to(link, slot_id, onto);
             }
+            // The row drag's resolved drop (add-tauri-gui-client row 6.5):
+            // the GUI Client's row drag emits it on the release. The TUI
+            // paints no row drag, so no TUI leaf produces it; the arm keeps
+            // the shared dispatch exhaustive and applies the same Owner slot
+            // move.
+            QueueRequest::MoveToIndex {
+                link,
+                slot_id,
+                to_index,
+            } => {
+                let Some(from) = self.select_queue_slot(link, slot_id) else {
+                    return;
+                };
+                if from != to_index {
+                    self.app.move_queue_item_to(link, from, to_index);
+                }
+            }
             QueueRequest::ResizeColumnLive(width) => {
                 self.app.queue_column_width = width;
             }

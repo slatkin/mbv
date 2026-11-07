@@ -350,7 +350,9 @@ fn defaults_reproduce_todays_resolution() {
                 "seek_back_10"
                 | "seek_forward_30"
                 | "open_audio_popover"
-                | "open_subtitle_popover" => snap.gui_client = true,
+                | "open_subtitle_popover"
+                | "queue_move_down"
+                | "queue_move_up" => snap.gui_client = true,
                 _ => {}
             }
             assert_eq!(

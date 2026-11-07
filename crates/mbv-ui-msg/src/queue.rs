@@ -40,6 +40,18 @@ pub enum QueueRequest {
         slot_id: QueueSlotId,
         onto: QueueSlotId,
     },
+    /// Move the slot to a resolved index: the row drag's drop
+    /// (add-tauri-gui-client row 6.5). `to_index` is the slot's final queue
+    /// index once the move applies, counted in the list with the slot
+    /// removed — the index the Owner's slot move takes as its insert
+    /// position. The slot is addressed by identity, so a queue reorder
+    /// between the pointer's release and the dispatch cannot move a
+    /// neighbour; the index is the drop the window painted.
+    MoveToIndex {
+        link: mbv_ui_model::playback::QueueLink,
+        slot_id: QueueSlotId,
+        to_index: usize,
+    },
     Undo {
         link: mbv_ui_model::playback::QueueLink,
     },

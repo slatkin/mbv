@@ -27,7 +27,9 @@ use mbv_gui::core_thread::{CoreInput, CoreThread, FrameSink, QuitSink};
 use mbv_ui_msg::{Key, KeyEvent, KeyModifiers, PointerEvent, PointerKind, Position};
 
 mod core_thread {
+    mod overlay;
     mod pointer;
+    mod queue;
 }
 
 /// A key press with no modifier held, as the translated `key` command

@@ -94,6 +94,31 @@ pub enum RegionTarget {
     Attach(AttachTargetId),
 }
 
+impl RegionTarget {
+    /// Whether a press on this region lands on an open overlay's own target
+    /// (add-tauri-gui-client row 6.5): the overlay's rows, or a control that
+    /// swaps or closes it. Every other region is "outside", and a press
+    /// there dismisses the open overlay instead of reaching the surface
+    /// beneath.
+    #[must_use]
+    pub(crate) fn owns_gui_overlay(&self) -> bool {
+        match self {
+            // A chooser, popover, or row-menu row; the row menu's opener; and
+            // the chips and header target whose presses toggle their overlay
+            // (a sibling chip's press swaps the open popover).
+            Self::QueuePlayback(
+                QueuePlaybackTargetId::TargetChoice(_)
+                | QueuePlaybackTargetId::TrackPopoverChoice(_)
+                | QueuePlaybackTargetId::AudioChip
+                | QueuePlaybackTargetId::SubtitleChip
+                | QueuePlaybackTargetId::PlaybackTarget,
+            )
+            | Self::Queue(QueueTargetId::RowMenuEntry(_) | QueueTargetId::RowActions(_)) => true,
+            Self::Queue(_) | Self::QueuePlayback(_) | Self::StatusBar(_) | Self::Attach(_) => false,
+        }
+    }
+}
+
 /// The pre-attach screen's button targets (design D9), as the mismatch
 /// state's window paints them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]

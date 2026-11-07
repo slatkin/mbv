@@ -195,6 +195,12 @@ pub(in crate::app) enum KeyPolicyBinding {
     /// counterpart of the TUI's F3 Sessions sidebar. No TUI default binds
     /// `r`, so the chord collides with nothing there.
     GuiOpenTargetChooser,
+    /// The canvas queue's row-move actions (add-tauri-gui-client row 6.5,
+    /// the "a row is moved by key" spec): declared actions — rebindable —
+    /// whose `GuiClient` gate keeps even a rebound chord out of the TUI,
+    /// which moves a row with the Queue surface's `Shift+Up`/`Shift+Down`.
+    QueueMoveDown,
+    QueueMoveUp,
     /// The canvas transport's seek-back-10 action (add-tauri-gui-client
     /// row 6.4, the "back 10 s" spec): a registry action — rebindable —
     /// whose `GuiClient` gate keeps its chords out of the TUI.
@@ -445,6 +451,23 @@ pub(in crate::app) const KEY_POLICY: &[KeyPolicyEntry] = &[
         name: "gui_open_target_chooser",
         global: true,
         binding: KeyPolicyBinding::GuiOpenTargetChooser,
+        gate: KeyPolicyGate::GuiClient,
+        blocking: false,
+    },
+    // The canvas queue's row moves (add-tauri-gui-client row 6.5): declared
+    // actions like the deep seeks below — a user may rebind them — whose
+    // `GuiClient` gate keeps even a rebound chord out of the TUI.
+    KeyPolicyEntry {
+        name: "queue_move_down",
+        global: true,
+        binding: KeyPolicyBinding::QueueMoveDown,
+        gate: KeyPolicyGate::GuiClient,
+        blocking: false,
+    },
+    KeyPolicyEntry {
+        name: "queue_move_up",
+        global: true,
+        binding: KeyPolicyBinding::QueueMoveUp,
         gate: KeyPolicyGate::GuiClient,
         blocking: false,
     },

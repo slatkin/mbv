@@ -292,6 +292,31 @@ pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
         rebindable: true,
         prefix_addressable: true,
     },
+    // The canvas queue's row move (add-tauri-gui-client row 6.5, the
+    // "a row is moved by key" spec): `Alt+J`/`Alt+K` move the selected row
+    // one place, the same Owner slot move a row drag sends. GUI-only by
+    // gate — the TUI moves a row with the Queue surface's
+    // `Shift+Up`/`Shift+Down`, and its defaults stay unchanged — while
+    // staying in the rebindable registry so a user can assign their own
+    // chord for the GUI Client.
+    KeybindAction {
+        id: "queue_move_down",
+        section: KeySection::Queue,
+        default_chords: &["Alt+j"],
+        gate: KeyGate::GuiClient,
+        policy: "queue_move_down",
+        rebindable: true,
+        prefix_addressable: true,
+    },
+    KeybindAction {
+        id: "queue_move_up",
+        section: KeySection::Queue,
+        default_chords: &["Alt+k"],
+        gate: KeyGate::GuiClient,
+        policy: "queue_move_up",
+        rebindable: true,
+        prefix_addressable: true,
+    },
     // ── Playback ────────────────────────────────────────────────────────
     KeybindAction {
         id: "visualizer",

@@ -18,9 +18,10 @@ use std::time::{Duration, Instant};
 
 use mbv::{
     App, CLIENT_IDLE_CADENCE, ClientCore, ClientLifecycle, ClientTickHost, GuiInput,
-    HomeEventDrain, PlayerEventDrain, TickOutcome, declare_gui_client, load_config,
+    GuiSurfaceLeaf, HomeEventDrain, PlayerEventDrain, TickOutcome, declare_gui_client, load_config,
 };
 use mbv_config::ensure_runtime_dir;
+use mbv_queue::QueueSlotId;
 use mbv_surfaces::gesture::{PointerGesture, PointerGestureState};
 use mbv_surfaces::queue::QueueSurface;
 use mbv_surfaces::queue_playback::QueuePlaybackSurface;
@@ -28,7 +29,7 @@ use mbv_surfaces::status_bar::StatusBarSurface;
 use mbv_surfaces::{FocusStack, HitMap, HitRegion};
 use mbv_ui_model::queue_rows::queue_media_rows;
 use mbv_ui_model::settings::PanelFocus;
-use mbv_ui_msg::{ComponentId, KeyEvent, Msg, PointerEvent, Position, ServiceRequest};
+use mbv_ui_msg::{ComponentId, KeyEvent, Msg, PointerEvent, PointerKind, Position, ServiceRequest};
 
 use crate::artwork::ArtworkFrames;
 use crate::attach::{AttachCampaign, LibraryOwnerSteps};
@@ -37,6 +38,7 @@ use crate::bridge::layout::{
     LayoutReport, LayoutSize, ListId, QueuePlaybackTargetId, QueueTargetId, RegionTarget, hit_map,
 };
 use crate::leaves::{PlaybackLeaf, QueueLeaf, StatusBarLeaf, TransportAvailability, gesture_point};
+use crate::painted_choices::PaintedChoices;
 
 /// The viewport height before the first `report_layout` measures the window:
 /// the frame carries every row the queue holds. The front end reports the
@@ -194,6 +196,11 @@ pub struct CoreThread {
     /// The frames' artwork memo (design D10): the value a frame arms, and
     /// the encoded artwork a re-armed frame re-carries encode-free.
     artwork: ArtworkFrames,
+    /// The open overlay's choice lists as the last emitted frame painted them
+    /// (add-tauri-gui-client row 6.5): a chooser or popover row's press
+    /// resolves its painted index against these, so a list change between the
+    /// paint and the press selects the painted choice or nothing.
+    painted: PaintedChoices,
     /// The wait between ticks. Production keeps `CLIENT_IDLE_CADENCE`; the
     /// step test zeroes it.
     idle_cadence: Duration,
@@ -238,6 +245,7 @@ impl CoreThread {
             frame_requested: true,
             theme_pending: true,
             artwork: ArtworkFrames::default(),
+            painted: PaintedChoices::default(),
             idle_cadence: CLIENT_IDLE_CADENCE,
         }
     }
@@ -280,8 +288,24 @@ impl CoreThread {
         self.container_size = report.container_size;
         // The regions the hover resolves against just rebuilt: a hover over
         // a moved or unpainted bar is stale, so it clears and the next move
-        // over a painted bar re-arms it.
+        // over a painted bar re-arms it. The queue row's hover follows the
+        // same rule (add-tauri-gui-client row 6.5).
         self.playback.set_scrubber_hover(None);
+        self.queue.set_hover(None);
+    }
+
+    /// The Queue row the pointer rests on: the row's own region or the chrome
+    /// painted over it (its grip and actions button), so moving onto the
+    /// chrome keeps the row hovered.
+    fn queue_row_at(&self, at: Position) -> Option<QueueSlotId> {
+        match self.regions.resolve(at) {
+            Some(RegionTarget::Queue(
+                QueueTargetId::Slot(raw)
+                | QueueTargetId::RowGrip(raw)
+                | QueueTargetId::RowActions(raw),
+            )) => Some(QueueSlotId::from_raw(*raw)),
+            _ => None,
+        }
     }
 
     /// The last painted seekbar region holding `at`, the resolution
@@ -345,6 +369,25 @@ impl CoreThread {
             .seekbar_region_at(event.position)
             .and_then(|bar| self.playback.seek_target(bar, event.position.x));
         self.playback.set_scrubber_hover(hover);
+        // The canvas queue's row hover (add-tauri-gui-client row 6.5): the row
+        // the pointer rests on, its chrome regions included. A frame paints
+        // the hovered row's grip and actions button.
+        let row_hover = self.queue_row_at(event.position);
+        self.queue.set_hover(row_hover);
+        // An open overlay owns the keyboard and the window's presses: a press
+        // outside its own targets dismisses it and does not reach what is
+        // painted beneath (the canvas's outside press; the TUI's blocking
+        // context menu dismisses the same way).
+        if matches!(event.kind, PointerKind::Press | PointerKind::RightPress)
+            && self.app.gui_overlay_is_open()
+            && !self
+                .regions
+                .resolve(event.position)
+                .is_some_and(RegionTarget::owns_gui_overlay)
+        {
+            self.app.dismiss_open_gui_overlay();
+            return;
+        }
         let now = Instant::now();
         let Some(gesture) =
             self.gestures
@@ -352,6 +395,30 @@ impl CoreThread {
         else {
             return;
         };
+        // The row drag's motion and release address the Queue Surface state
+        // directly (add-tauri-gui-client row 6.5, design D5): motion only
+        // previews the drop, and the release emits the one move request. A
+        // drag the row drag does not own keeps the generic path (the
+        // seekbar's scrub is a drag too).
+        if matches!(gesture, PointerGesture::Drag { .. }) && self.queue.row_drag().is_some() {
+            let Self { queue, regions, .. } = self;
+            let mut leaf = QueueLeaf::new(queue, regions);
+            let _ = leaf.pointer(gesture);
+            return;
+        }
+        if matches!(gesture, PointerGesture::DragEnd) {
+            if self.queue.row_drag().is_some() {
+                let Self {
+                    app,
+                    queue,
+                    regions,
+                    ..
+                } = self;
+                let mut leaf = QueueLeaf::new(queue, regions);
+                app.route_gui_pointer(gesture, Some(&mut leaf));
+            }
+            return;
+        }
         let Some(point) = gesture_point(&gesture) else {
             return;
         };
@@ -372,8 +439,12 @@ impl CoreThread {
                     PointerGesture::Click { .. }
                         | PointerGesture::DoubleClick(_)
                         | PointerGesture::RightClick(_)
-                ) && matches!(target, QueueTargetId::Slot(_))
-                {
+                ) && matches!(
+                    target,
+                    QueueTargetId::Slot(_)
+                        | QueueTargetId::RowGrip(_)
+                        | QueueTargetId::RowActions(_)
+                ) {
                     self.focus.set_panel_focus(PanelFocus::Queue);
                 }
                 let Self {
@@ -388,15 +459,17 @@ impl CoreThread {
             Some(RegionTarget::QueuePlayback(_)) => {
                 // The TUI's playback-panel click applies no focus change, so
                 // the core applies none: the press works while the Queue
-                // panel holds focus (design D4). One projection read feeds
-                // the availability and the chooser's live choice list the
-                // leaf resolves a `TargetChoice` region against.
+                // panel holds focus (design D4). The projection's
+                // availability gates the transport; the chooser and popover
+                // rows resolve their painted indexes against the last
+                // emitted frame's choice lists, not this read.
                 let projection = self.app.queue_playback_projection();
                 let availability = projection.availability;
                 let Self {
                     app,
                     playback,
                     regions,
+                    painted,
                     ..
                 } = self;
                 let mut leaf = PlaybackLeaf::new(
@@ -407,7 +480,7 @@ impl CoreThread {
                         previous: availability.previous,
                         next: availability.next,
                     },
-                    &projection.target_choices,
+                    painted,
                 );
                 app.route_gui_pointer(gesture, Some(&mut leaf));
             }
@@ -510,6 +583,9 @@ impl CoreThread {
             theme_changed,
             artwork,
         });
+        // The frame the window is about to paint becomes the choice lists a
+        // pointer press resolves against (add-tauri-gui-client row 6.5).
+        self.painted.adopt(frame.overlay.as_ref());
         (self.sink)(GuiWindowFrame::Slice(Box::new(frame)));
     }
 }
@@ -528,6 +604,7 @@ impl fmt::Debug for CoreThread {
             .field("pending", &self.pending.len())
             .field("frame_requested", &self.frame_requested)
             .field("theme_pending", &self.theme_pending)
+            .field("painted", &self.painted)
             .field("idle_cadence", &self.idle_cadence)
             .finish_non_exhaustive()
     }

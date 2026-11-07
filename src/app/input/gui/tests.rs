@@ -138,6 +138,40 @@ fn gui_context_q_toggles_the_queue_fold() {
     assert!(app.queue_folded);
 }
 
+// The canvas queue's row move (add-tauri-gui-client row 6.5): `Alt+J` and
+// `Alt+K` move the selected row one place through the Owner's slot move,
+// addressed by the row's stable slot id.
+#[test]
+fn gui_context_alt_j_and_alt_k_move_the_selected_queue_row() {
+    let mut compat = mbv_ctrl::CtrlCompatibility::current();
+    compat.supports_answered_queue_ops = false;
+    let (mut app, cmd_rx) = make_local_daemon_app_stub_with_cmd_rx_and_compat(Vec::new(), compat);
+    app.playback_queue_mut().adopt_items(make_items(3), 0);
+
+    assert!(!app.route_gui_input(
+        GuiInput::Key(KeyEvent::new(Key::Char('j'), KeyModifiers::ALT)),
+        None
+    ));
+    // The stub Owner sends without an answer, so the App cursor stays where
+    // the test put it; the next chord acts on the row it names.
+    app.playback_queue_mut().set_cursor(1);
+    assert!(!app.route_gui_input(
+        GuiInput::Key(KeyEvent::new(Key::Char('k'), KeyModifiers::ALT)),
+        None
+    ));
+
+    let moves: Vec<(u64, usize)> = cmd_rx
+        .try_iter()
+        .filter_map(|cmd| match cmd {
+            CtrlCmd::UnifiedQueueMoveSlot {
+                slot_id, to_index, ..
+            } => Some((slot_id, to_index)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(moves, vec![(1, 1), (2, 0)]);
+}
+
 // The GUI-only key context's `c` cycles the subtitle track, the chord the
 // TUI binds to the clear-queue prompt. With the stub's idle player the
 // dispatch lands in the subtitle-mode cycle, so the config value is the

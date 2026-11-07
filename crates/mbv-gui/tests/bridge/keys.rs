@@ -24,6 +24,11 @@ fn ctrl_alt(mut event: DomKey) -> DomKey {
     event
 }
 
+fn alt(mut event: DomKey) -> DomKey {
+    event.modifiers.alt_key = true;
+    event
+}
+
 fn with_meta(mut event: DomKey) -> DomKey {
     event.meta_key = true;
     event
@@ -68,6 +73,11 @@ fn with_meta(mut event: DomKey) -> DomKey {
 // through the single-character rule.
 #[case::open_audio_popover_a(press("a"), KeyEvent::new(Key::Char('a'), KeyModifiers::NONE))]
 #[case::open_subtitle_popover_s(press("s"), KeyEvent::new(Key::Char('s'), KeyModifiers::NONE))]
+// The `queue_move_down`/`queue_move_up` default chords
+// (add-tauri-gui-client row 6.5): the canvas queue's row-move keys resolve
+// through the single-character rule with ALT held.
+#[case::queue_move_down_alt_j(alt(press("j")), KeyEvent::new(Key::Char('j'), KeyModifiers::ALT))]
+#[case::queue_move_up_alt_k(alt(press("k")), KeyEvent::new(Key::Char('k'), KeyModifiers::ALT))]
 fn dom_key_translates_to_neutral_key(#[case] dom: DomKey, #[case] expected: KeyEvent) {
     assert_eq!(neutral_key(dom), expected);
 }

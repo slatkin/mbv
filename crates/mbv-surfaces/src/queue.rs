@@ -375,6 +375,14 @@ impl QueueSurface {
     /// with SHIFT held; the SHIFT guards below keep the match set the
     /// `TuiRealm` rules had, where only the literal lowercase char matched.
     pub fn key(&mut self, key: KeyEvent) -> LeafKeyResult {
+        // A drag in progress owns Esc: the gesture cancels and sends no move
+        // request (add-tauri-gui-client row 6.5, design D5's "cancel sends
+        // none"). The arm runs only while a drag holds, so the TUI's Esc
+        // (a playback stop elsewhere) keeps its meaning everywhere else.
+        if key.code == Key::Esc && key.modifiers.is_empty() && self.row_drag.is_some() {
+            self.cancel_row_drag();
+            return LeafKeyResult::Consumed(None);
+        }
         match self.handle_key(key) {
             Some(message) => LeafKeyResult::Consumed(Some(Box::new(message))),
             None if Self::consumes_without_action(&key) => LeafKeyResult::Consumed(None),

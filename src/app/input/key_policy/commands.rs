@@ -12,7 +12,7 @@ use crate::app::dispatch::action::{
 };
 use mbv_ui_model::playback::VOLUME_STEP;
 use mbv_ui_model::settings::PanelFocus;
-use mbv_ui_msg::{Key, TrackChipKind};
+use mbv_ui_msg::{Key, QueueMove, TrackChipKind};
 
 pub(in crate::app) fn command_for_policy(
     binding: KeyPolicyBinding,
@@ -50,6 +50,11 @@ fn command_for_simple_binding(binding: KeyPolicyBinding) -> Option<Command> {
         KeyPolicyBinding::GuiRightColumnToggle => Some(PanelIntent::ToggleQueueRightColumn.into()),
         KeyPolicyBinding::GuiQueueFilterOpen => Some(PanelIntent::ActivateQueueFilter.into()),
         KeyPolicyBinding::GuiOpenTargetChooser => Some(PanelIntent::ToggleTargetChooser.into()),
+        // The canvas queue's row moves (add-tauri-gui-client row 6.5): the
+        // same jump the direction names, applied by the App's panel
+        // dispatcher to the selected row through the Owner slot move.
+        KeyPolicyBinding::QueueMoveDown => Some(PanelIntent::MoveQueueRow(QueueMove::Down).into()),
+        KeyPolicyBinding::QueueMoveUp => Some(PanelIntent::MoveQueueRow(QueueMove::Up).into()),
         _ => None,
     }
 }

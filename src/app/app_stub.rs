@@ -43,6 +43,43 @@ fn apply_app_stub_defaults(app: &mut App) {
 #[must_use]
 pub fn stub_app_with_queue(n: usize) -> App {
     let mut app = make_app_stub();
+    app.local_view = queue_view(n);
+    // The stub player is idle, so the Queue playback band collapses and the
+    // list keeps the whole window (task 3.6).
+    app.player.update_status(|status| status.active = false);
+    app
+}
+
+/// The `App` a GUI Client's test drives with `n` queue slots over a player
+/// whose command channel records what the actions send (add-tauri-gui-client
+/// row 6.5): a drag's release or a key move lands one slot move the test
+/// reads. The stub owner advertises no `answered-queue-ops`, so a queue edit
+/// sends without waiting for an answer.
+#[cfg(feature = "test")]
+#[must_use]
+pub fn stub_app_with_queue_and_cmd_rx(
+    n: usize,
+) -> (App, std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
+    let (mut remote, player_rx, cmd_rx) =
+        mbv_remote_player::RemotePlayer::stub_with_command_rx(Vec::new(), 0);
+    let mut compatibility = mbv_ctrl::CtrlCompatibility::current();
+    compatibility.supports_answered_queue_ops = false;
+    remote.set_ctrl_compatibility_for_test(compatibility);
+    let player = mbv_player::PlayerProxy::from_remote(remote, false);
+    let mut app = built_app(player, player_rx);
+    apply_app_stub_defaults(&mut app);
+    app.local_view = queue_view(n);
+    app.player.update_status(|status| status.active = false);
+    // The construction's preference sync lands on the channel before the
+    // test starts; drain it so the test sees only commands its actions send.
+    while cmd_rx.try_recv().is_ok() {}
+    (app, cmd_rx)
+}
+
+/// The projected queue view the queue stubs share: `n` Emby movie slots in
+/// canonical order, numbered from 1.
+#[cfg(feature = "test")]
+fn queue_view(n: usize) -> QueueView {
     let slots: Vec<mbv_ctrl::UnifiedQueueSlot> = (0..n)
         .map(|i| mbv_ctrl::UnifiedQueueSlot {
             slot_id: u64::try_from(i).unwrap_or(u64::MAX) + 1,
@@ -62,11 +99,7 @@ pub fn stub_app_with_queue(n: usize) -> App {
         in_flight_transition: None,
         queued_latest_transition: None,
     };
-    app.local_view = QueueView::from_snapshot(&state);
-    // The stub player is idle, so the Queue playback band collapses and the
-    // list keeps the whole window (task 3.6).
-    app.player.update_status(|status| status.active = false);
-    app
+    QueueView::from_snapshot(&state)
 }
 
 /// The `App` a Client's test drives with `n` projected queue slots and the
@@ -201,6 +234,33 @@ pub fn stub_app_with_track_popover(chip: mbv_ui_msg::TrackChipKind) -> App {
     app.handle_playback_request(&PlaybackRequest::OpenTrackPopover(chip));
     app
 }
+/// The `App` a GUI Client's test drives with the cast receivers replaced by
+/// `receivers` (add-tauri-gui-client row 6.5's paint/press regression): the
+/// target list the last emitted frame painted can then differ from the list
+/// a press would read, so a press must address the painted choice.
+#[cfg(feature = "test")]
+pub fn set_cast_receivers_for_test(app: &mut App, receivers: Vec<(&str, &str)>) {
+    app.cast_receivers = receivers
+        .into_iter()
+        .map(|(id, name)| mbv_cast::discovery::CastReceiver {
+            id: id.to_string(),
+            friendly_name: name.to_string(),
+            host: "192.168.0.5".to_string(),
+            port: 8009,
+        })
+        .collect();
+    app.rebuild_panel_targets();
+}
+
+/// Replace the local player's subtitle track list (add-tauri-gui-client row
+/// 6.5's paint/press regression): the popover's painted rows then name a
+/// list that changed before the press.
+#[cfg(feature = "test")]
+pub fn set_subtitle_tracks_for_test(app: &mut App, tracks: Vec<(i64, String, bool)>) {
+    app.player
+        .update_status(|status| status.sub_tracks = tracks);
+}
+
 /// The `App` a Client's test drives with a pending settings save armed: the
 /// config carries `consume_audio` and the save's deadline lies far in the
 /// future, so only an exit boundary's flush can persist it — the periodic

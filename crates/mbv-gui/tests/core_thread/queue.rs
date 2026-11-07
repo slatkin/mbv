@@ -1,0 +1,260 @@
+//! The canvas queue's row contracts (add-tauri-gui-client row 6.5, design
+//! D5): the hover that paints the row chrome, the grip's drag (the drop index
+//! from a pointer move, the ghost and insertion line, one move request on
+//! release, none on a cancel), and the row menu (its actions button, and an
+//! entry press executing through the Client core).
+
+use mbv::stub_app_with_queue_and_cmd_rx;
+use mbv_gui::bridge::frame::overlay::GuiOverlayFrame;
+use mbv_gui::bridge::frame::queue::{GuiQueueInsertion, GuiQueueRow};
+use mbv_gui::bridge::layout::{QueueTargetId, RegionTarget};
+use mbv_gui::core_thread::CoreInput;
+use mbv_ui_msg::{Key, KeyEvent, KeyModifiers, PointerEvent, PointerKind, Position};
+
+use crate::{measured_layout, move_at, press_at, region_at, test_core, test_core_with};
+
+/// A pointer move with the primary button held (the neutral drag), as the
+/// translated `pointer` command carries it.
+fn drag_to(x: f32, y: f32) -> CoreInput {
+    CoreInput::Pointer(PointerEvent::new(
+        PointerKind::Drag,
+        Position { x, y },
+        KeyModifiers::NONE,
+    ))
+}
+
+/// The primary button's release, as the translated `pointer` command carries
+/// it.
+fn release_at(x: f32, y: f32) -> CoreInput {
+    CoreInput::Pointer(PointerEvent::new(
+        PointerKind::Release,
+        Position { x, y },
+        KeyModifiers::NONE,
+    ))
+}
+
+/// A layout report with four queue rows, the first row's grip painted over
+/// it: the canvas's hovered row reports its chrome as its own regions.
+fn rows_with_first_grip() -> CoreInput {
+    measured_layout(
+        4,
+        vec![
+            region_at(0.0, 0.0, RegionTarget::Queue(QueueTargetId::Slot(1))),
+            region_at(0.0, 24.0, RegionTarget::Queue(QueueTargetId::Slot(2))),
+            region_at(0.0, 48.0, RegionTarget::Queue(QueueTargetId::Slot(3))),
+            region_at(0.0, 72.0, RegionTarget::Queue(QueueTargetId::Slot(4))),
+            region_at(0.0, 0.0, RegionTarget::Queue(QueueTargetId::RowGrip(1))),
+        ],
+    )
+}
+
+/// The slot moves the Owner received, as `(slot_id, to_index)`.
+fn slot_moves(cmd_rx: &std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) -> Vec<(u64, usize)> {
+    cmd_rx
+        .try_iter()
+        .filter_map(|cmd| match cmd {
+            mbv_ctrl::CtrlCmd::UnifiedQueueMoveSlot {
+                slot_id, to_index, ..
+            } => Some((slot_id, to_index)),
+            _ => None,
+        })
+        .collect()
+}
+
+/// The row hover the frame carries: the row under the pointer, its chrome
+/// region included, and `None` when the pointer leaves the rows (add-tauri-
+/// gui-client row 6.5: the frame paints the hovered row's grip and actions
+/// button).
+#[test]
+fn the_frame_carries_the_hovered_row() {
+    let mut test = test_core(3);
+    test.tx.send(rows_with_first_grip()).unwrap();
+    assert!(test.core.step());
+    test.next_frame();
+
+    // A move over the second row's region.
+    test.tx.send(move_at(10.0, 30.0)).unwrap();
+    assert!(test.core.step());
+    assert_eq!(test.next_frame().queue.hover, Some(2));
+
+    // A move onto the first row's grip keeps that row hovered.
+    test.tx.send(move_at(10.0, 6.0)).unwrap();
+    assert!(test.core.step());
+    assert_eq!(test.next_frame().queue.hover, Some(1));
+
+    // A move away from every row clears it.
+    test.tx.send(move_at(500.0, 500.0)).unwrap();
+    assert!(test.core.step());
+    assert_eq!(test.next_frame().queue.hover, None);
+}
+
+/// A drag's motion previews the drop index and the frame's ghost and
+/// insertion line: the grip's press starts the drag at the row's own place,
+/// and a move over the third row's lower half inserts the row after it, so
+/// the slot's final index is the row it would become (the list with the
+/// dragged row removed).
+#[test]
+fn a_drag_move_previews_the_drop_index_and_the_ghost() {
+    let mut test = test_core(4);
+    test.tx.send(rows_with_first_grip()).unwrap();
+    assert!(test.core.step());
+    test.next_frame();
+
+    test.tx.send(press_at(10.0, 6.0)).unwrap();
+    assert!(test.core.step());
+    let started = test.next_frame();
+    let drag = started
+        .queue
+        .drag
+        .expect("the grip's press starts the drag");
+    assert_eq!(drag.slot, 1);
+    assert_eq!(drag.drop_index, 0);
+    assert_eq!(drag.ghost_primary(), "Item 0");
+
+    // The third row runs from y=48 to y=72; its lower half is the "after"
+    // side.
+    test.tx.send(drag_to(10.0, 66.0)).unwrap();
+    assert!(test.core.step());
+    let frame = test.next_frame();
+    let drag = frame.queue.drag.expect("the drag keeps running");
+    assert_eq!(drag.slot, 1);
+    assert_eq!(drag.drop_index, 2);
+    assert_eq!(drag.insertion, GuiQueueInsertion::After { slot: 3 });
+    assert_eq!(drag.ghost_primary(), "Item 0");
+}
+
+/// A release after a drag sends exactly one move request, addressed by the
+/// dragged slot's stable identity and the drop index; the press and the
+/// motion send none (add-tauri-gui-client row 6.5, design D5).
+#[test]
+fn a_drag_release_sends_one_move_request() {
+    let (app, cmd_rx) = stub_app_with_queue_and_cmd_rx(4);
+    let mut test = test_core_with(app);
+    test.tx.send(rows_with_first_grip()).unwrap();
+    assert!(test.core.step());
+    test.next_frame();
+
+    test.tx.send(press_at(10.0, 6.0)).unwrap();
+    assert!(test.core.step());
+    test.next_frame();
+    assert_eq!(slot_moves(&cmd_rx), vec![], "a press sends no request");
+
+    test.tx.send(drag_to(10.0, 66.0)).unwrap();
+    assert!(test.core.step());
+    test.next_frame();
+    assert_eq!(slot_moves(&cmd_rx), vec![], "motion sends no request");
+
+    test.tx.send(release_at(10.0, 66.0)).unwrap();
+    assert!(test.core.step());
+    assert!(test.next_frame().queue.drag.is_none(), "the drag ended");
+    assert_eq!(slot_moves(&cmd_rx), vec![(1, 2)]);
+}
+
+/// Esc cancels a drag in progress: the release sends no move request and the
+/// frame paints no drag (add-tauri-gui-client row 6.5's "cancel sends none").
+#[test]
+fn a_cancelled_drag_sends_no_move_request() {
+    let (app, cmd_rx) = stub_app_with_queue_and_cmd_rx(4);
+    let mut test = test_core_with(app);
+    test.tx.send(rows_with_first_grip()).unwrap();
+    assert!(test.core.step());
+    test.next_frame();
+
+    test.tx.send(press_at(10.0, 6.0)).unwrap();
+    assert!(test.core.step());
+    test.next_frame();
+    test.tx.send(drag_to(10.0, 66.0)).unwrap();
+    assert!(test.core.step());
+    test.next_frame();
+
+    test.tx
+        .send(CoreInput::Key(KeyEvent::new(Key::Esc, KeyModifiers::NONE)))
+        .unwrap();
+    assert!(test.core.step());
+    assert!(test.next_frame().queue.drag.is_none());
+
+    test.tx.send(release_at(10.0, 66.0)).unwrap();
+    assert!(test.core.step());
+    test.next_frame();
+    assert_eq!(slot_moves(&cmd_rx), vec![]);
+}
+
+/// The hovered row's actions button opens the row menu over that row, and a
+/// menu entry's press executes it through the Client core: Remove from queue
+/// sends the Owner the pressed row's slot removal (add-tauri-gui-client row
+/// 6.5's row menu).
+#[test]
+fn the_actions_button_opens_the_row_menu_and_an_entry_removes_its_row() {
+    let (app, cmd_rx) = stub_app_with_queue_and_cmd_rx(4);
+    let mut test = test_core_with(app);
+    test.tx
+        .send(measured_layout(
+            4,
+            vec![region_at(
+                80.0,
+                24.0,
+                RegionTarget::Queue(QueueTargetId::RowActions(2)),
+            )],
+        ))
+        .unwrap();
+    assert!(test.core.step());
+    test.next_frame();
+
+    test.tx.send(press_at(90.0, 30.0)).unwrap();
+    assert!(test.core.step());
+    let frame = test.next_frame();
+    let Some(GuiOverlayFrame::RowMenu { entries, .. }) = &frame.overlay else {
+        panic!(
+            "the actions button opened the row menu: {:?}",
+            frame.overlay
+        );
+    };
+    assert_eq!(entries.len(), 5, "the canvas's five entries");
+    assert_eq!(entries[4].label, "Remove from queue");
+
+    // The menu's paint reports its rows; the remove entry is the fifth.
+    test.tx
+        .send(measured_layout(
+            4,
+            vec![region_at(
+                0.0,
+                200.0,
+                RegionTarget::Queue(QueueTargetId::RowMenuEntry(4)),
+            )],
+        ))
+        .unwrap();
+    assert!(test.core.step());
+    test.next_frame();
+
+    test.tx.send(press_at(10.0, 210.0)).unwrap();
+    assert!(test.core.step());
+    let frame = test.next_frame();
+    assert!(
+        frame.overlay.is_none(),
+        "the executed entry closed the menu"
+    );
+    let removed: Vec<u64> = cmd_rx
+        .try_iter()
+        .filter_map(|cmd| match cmd {
+            mbv_ctrl::CtrlCmd::UnifiedQueueRemoveSlot { slot_id, .. } => Some(slot_id),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(removed, vec![2]);
+}
+
+/// The dragged row's primary line, for the ghost assertions.
+trait GhostPrimary {
+    fn ghost_primary(&self) -> String;
+}
+
+impl GhostPrimary for mbv_gui::bridge::frame::queue::GuiQueueDrag {
+    fn ghost_primary(&self) -> String {
+        match &self.ghost {
+            GuiQueueRow::Item { primary, .. } => primary.clone(),
+            GuiQueueRow::Heading { .. } | GuiQueueRow::Spacer => {
+                panic!("a drag holds an item row")
+            }
+        }
+    }
+}

@@ -156,10 +156,10 @@ impl GuiQueue {
             // The now-playing marker reads the whole list, filtered view or
             // not: it is the playback fact, not the filter's.
             active: rows.iter().find_map(active_slot),
-            hover: queue.hover().map(|slot_id| slot_id.raw()),
+            hover: queue.hover().map(QueueSlotId::raw),
             drag: queue
                 .row_drag()
-                .and_then(|drag| GuiQueueDrag::from_surface(&rows, drag)),
+                .and_then(|drag| GuiQueueDrag::from_surface(rows, drag)),
         }
     }
 }

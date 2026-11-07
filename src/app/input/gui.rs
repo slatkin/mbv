@@ -313,6 +313,22 @@ impl App {
                     self.move_queue_item_to(link, from, to);
                 }
             }
+            // The row drag's drop (add-tauri-gui-client row 6.5): the slot's
+            // final queue index, so the move lands where the insertion line
+            // was painted. One request per drag: the core emits it on the
+            // release, and motion only previews the drop.
+            QueueRequest::MoveToIndex {
+                link,
+                slot_id,
+                to_index,
+            } => {
+                let Some(from) = self.gui_select_queue_slot(link, slot_id) else {
+                    return;
+                };
+                if from != to_index {
+                    self.move_queue_item_to(link, from, to_index);
+                }
+            }
             QueueRequest::ResizeColumnLive(_) | QueueRequest::ResizeColumnEnd(_) => {
                 // The TUI-only queue-column resize surface has no GUI
                 // counterpart; the GUI's arrangement is row 6.6's.
@@ -405,6 +421,10 @@ impl App {
                 | mbv_ui_model::context_menu::ContextMenuTargets::Feeds(_)
                 | mbv_ui_model::context_menu::ContextMenuTargets::Audiobookshelf(_) => {}
             },
+            // The open row menu's entry press (add-tauri-gui-client row 6.5):
+            // the Client-core menu executes the entry the index names, the
+            // same execution its Enter applies.
+            ShellRequest::ContextMenuSelect(index) => self.select_gui_row_menu_entry(index),
             // The Status bar's selection summary is row 6.5's.
             ShellRequest::SelectionProjection(_) => {}
             // The header's playback-target press emits the same opener the
