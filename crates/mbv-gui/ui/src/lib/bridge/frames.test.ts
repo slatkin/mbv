@@ -101,7 +101,6 @@ function sliceFrame(theme: GuiTheme | null): GuiWindowFrame {
 				dirty: null,
 			},
 			status: { prefixArmed: false, toast: null },
-			breakpoint: 'wide',
 			theme,
 		},
 	};

@@ -50,6 +50,6 @@ test('the bar reports its empty region set', async () => {
 	await vi.waitFor(() => expect(invokeMock).toHaveBeenCalledTimes(1));
 
 	expect(invokeMock).toHaveBeenCalledWith('report_layout', {
-		report: { lists: [], regions: [], width: 1024 },
+		report: { lists: [], regions: [], containerSize: { width: 0, height: 0 } },
 	});
 });

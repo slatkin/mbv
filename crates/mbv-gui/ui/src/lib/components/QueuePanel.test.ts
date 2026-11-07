@@ -185,7 +185,7 @@ test('a layout change sends one merged report', async () => {
 					target: { surface: 'queue', id: 'playlistPill' },
 				},
 			],
-			width: 1024,
+			containerSize: { width: 0, height: 0 },
 		},
 	});
 });

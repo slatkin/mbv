@@ -107,7 +107,7 @@ test('the mismatch buttons appear in the reported regions', async () => {
 					target: { surface: 'attach', id: 'quit' },
 				},
 			],
-			width: 1024,
+			containerSize: { width: 0, height: 0 },
 		},
 	});
 });

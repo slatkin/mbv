@@ -8,7 +8,7 @@
 // each paint that moved a region, no more).
 
 import { sendLayoutReport } from './input';
-import type { LayoutRegion, ListRows } from './types';
+import type { LayoutRegion, LayoutSize, ListRows } from './types';
 
 /** One surface's share of the merged report: its list capacities and regions. */
 export interface LayoutContribution {
@@ -17,6 +17,12 @@ export interface LayoutContribution {
 }
 
 const contributions = new Map<symbol, LayoutContribution>();
+
+/** The panel container's last reported painted size (design D10): the size
+ * the container queries pick the panel state from. Zero while no container
+ * has reported — the pre-attach states paint no panel. */
+let containerSize: LayoutSize = { width: 0, height: 0 };
+
 let scheduled = false;
 
 function schedule(): void {
@@ -32,8 +38,22 @@ function schedule(): void {
 			lists.push(...contribution.lists);
 			regions.push(...contribution.regions);
 		}
-		void sendLayoutReport({ lists, regions, width: window.innerWidth });
+		void sendLayoutReport({ lists, regions, containerSize });
 	});
+}
+
+/**
+ * Records the panel container's painted size and schedules the merged
+ * report (design D10): the container's own ResizeObserver calls this, and
+ * the report carries the size so the capacity and regions it merges stay
+ * matched to the layout the size painted. An unchanged size is a no-op.
+ */
+export function reportContainerSize(size: LayoutSize): void {
+	if (size.width === containerSize.width && size.height === containerSize.height) {
+		return;
+	}
+	containerSize = size;
+	schedule();
 }
 
 /**

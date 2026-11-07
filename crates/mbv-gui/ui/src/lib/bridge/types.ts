@@ -20,7 +20,6 @@ export interface GuiFrame {
 	playback: GuiQueuePlayback;
 	footer: GuiQueueFooter;
 	status: GuiStatusBar;
-	breakpoint: GuiBreakpoint;
 	/** `null` unless the theme changed for this window (design D7). */
 	theme: GuiTheme | null;
 }
@@ -38,8 +37,6 @@ export type GuiAttachState =
 	| { kind: 'waiting' }
 	| { kind: 'mismatch'; detail: string }
 	| { kind: 'failed'; detail: string };
-
-export type GuiBreakpoint = 'mini' | 'narrow' | 'wide';
 
 /** The focused surface and the Panel that holds focus. */
 export interface GuiFocus {
@@ -478,8 +475,15 @@ export type DomPointerKind = 'press' | 'release' | 'move' | 'wheel';
 export interface LayoutReport {
 	lists: ListRows[];
 	regions: LayoutRegion[];
-	/** The window's inner width in logical pixels (design D10). */
+	/** The panel container's painted size in logical pixels (design D10):
+	 * the size the container queries pick the panel state from. */
+	containerSize: LayoutSize;
+}
+
+/** A size in logical pixels, as a ResizeObserver measures the panel container. */
+export interface LayoutSize {
 	width: number;
+	height: number;
 }
 
 export interface ListRows {

@@ -210,7 +210,7 @@ test('a paint reports the painted control regions', async () => {
 					target: { surface: 'queuePlayback', id: 'playbackTarget' },
 				},
 			],
-			width: 1024,
+			containerSize: { width: 0, height: 0 },
 		},
 	});
 });
