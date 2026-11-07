@@ -123,6 +123,11 @@ The panel SHALL show one chip each for the video stream, the audio track, and th
 - **WHEN** the user presses the video chip
 - **THEN** no popover opens and no request leaves the Client
 
+#### Scenario: The chips and choices carry the canvas labels
+
+- **WHEN** the panel paints the three chips or an open popover's choice rows
+- **THEN** each label carries the canvas's suffix form for that stream (`menus` audit G10)
+
 ### Requirement: The queue shows finish times, a row menu, and drag reorder
 
 The queue header SHALL show the remaining count as the canvas forms it (`Up next · N`), the queue finish clock as the canvas forms it, a switch between "Length" and "Ends at" for the right column, and a filter control. The remaining count SHALL cover every row that does not carry the playhead. Rows SHALL have a fixed height of 30 px and SHALL carry the canvas's one-line row: its queue ordinal, its title line, its progress where the state has one, and its right-column value. Every queue edit SHALL be a request to the Owner process. The window content SHALL NOT change the canonical queue.
@@ -173,7 +178,7 @@ The queue header SHALL show the remaining count as the canvas forms it (`Up next
 
 ### Requirement: The GUI Client uses the typography and colours of the canvas
 
-Text SHALL use IBM Plex Sans. Times, key hints, chips, and counters SHALL use JetBrains Mono with tabular figures. Both faces SHALL ship with the front end, and the window SHALL fetch no font at runtime. Every clock the panel paints SHALL use the canvas's zero-padded 24-hour `HH:MM` form, and every minus sign in a time SHALL be U+2212. Colours SHALL come from the theme that the Client core sends.
+Text SHALL use IBM Plex Sans. Times, key hints, chips, and counters SHALL use JetBrains Mono with tabular figures. Both faces SHALL ship with the front end, and the window SHALL fetch no font at runtime. Every clock the panel paints SHALL use the canvas's zero-padded 24-hour `HH:MM` form, and every minus sign in a time SHALL be U+2212. Colours SHALL resolve in the GUI's theme section to the canvas palette's hexes (`canvas/canvas.json`), and the TUI's palette SHALL NOT change.
 
 #### Scenario: Fonts load with no network
 
@@ -186,6 +191,12 @@ Text SHALL use IBM Plex Sans. Times, key hints, chips, and counters SHALL use Je
 - **GIVEN** the queue's finish time falls on the next day
 - **WHEN** the panel paints a finish clock
 - **THEN** the time shows as zero-padded 24-hour `HH:MM`, and the queue finish clock carries the canvas's next-day suffix
+
+#### Scenario: The GUI palette resolves locally
+
+- **WHEN** the GUI resolves a role's colour in its theme section
+- **THEN** the value is the canvas palette's hex
+- **AND** the TUI's palette stays `mbv-theme`'s default
 
 ## ADDED Requirements
 
@@ -218,3 +229,25 @@ The `z` collapse SHALL shrink the window to the collapsed state's natural size, 
 - **GIVEN** a toggle is set
 - **WHEN** the window resizes and the front end re-measures the container
 - **THEN** the painted panel state is still the toggle's state
+
+### Requirement: The subtitle popover carries the canvas Offset row
+
+The open subtitle popover SHALL paint the canvas Offset row and the popover footer hint (menus audit G1, G5). While the popover is open, the hint's `[` and `]` segments SHALL act on the subtitle offset, as the hint paints. Outside the popover, the `[` and `]` seek chords SHALL stay unchanged. The Owner process SHALL hold the offset.
+
+#### Scenario: The popover paints the offset row
+
+- **WHEN** the subtitle popover is open
+- **THEN** it paints the canvas Offset row — the `−` and `+` steppers and the offset value — and the footer hint's `c · cycle` and `[ ] · offset` segments
+
+#### Scenario: The hint's brackets act while the popover is open
+
+- **GIVEN** the subtitle popover is open
+- **WHEN** the user presses `[` or `]`
+- **THEN** the offset steps, as the hint paints
+- **AND** nothing seeks
+
+#### Scenario: The popover is closed
+
+- **WHEN** the popover is closed
+- **THEN** `[` and `]` run the seek chords the `gui-client` keybinds bind, exactly as before this change
+- **AND** the TUI's `[` and `]` seek chords are unchanged

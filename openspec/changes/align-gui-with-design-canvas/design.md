@@ -24,8 +24,7 @@ What the code holds today:
 **Non-Goals:**
 
 - No redesign of the interaction authority: the core keeps every toggle, cursor, menu, drag, and filter; the front end stays a painter.
-- No change to ctrl, the Owner, mpv, or the TUI's surfaces.
-- No subtitle Offset stepper and no track-label suffixes while their decisions (below) stand.
+- No change to the TUI — not its surfaces, bindings, key output, palette, or paint (the user's ruling: "THE TUI WILL NOT CHANGE FOR THIS"). Every row that adds a shared or additive type states its TUI check; the Offset row's `PlayerCommand` addition is the one owner-side addition, and the TUI has no caller or painter for it.
 
 ## Decisions
 
@@ -33,17 +32,18 @@ What the code holds today:
 
 `canvas/` holds the four source files verbatim and `audit/` the three gap lists verbatim. Task rows cite gap IDs (for example, main G19) and canvas element names, so one row plus those two directories is the whole brief an implementer needs. The archive of this change keeps both directories, so the reference survives.
 
-### DR2. Shared types change first, and the TUI-visible consequences are recorded
+### DR2. Shared types change first, and no TUI path reads them
 
-Three canvas values arrive through types the TUI also reads:
+The canvas forms carry through the types the frame reads. The caller graph (checked against the code for this change) shows that the TUI reads none of them:
 
-| Change | Typed at | TUI-visible consequence |
+| Change | Typed at | TUI path, verified from the caller graph |
 | --- | --- | --- |
-| Zero-padded 24-hour `HH:MM` wall clock | `fmt_wall_clock` (`mbv-ui-model`) | The TUI's finish clocks lose the AM/PM marker |
-| Remaining count = every non-active row | `QueueSummaryProjection.remaining` | The TUI's remaining count rows become the same count |
+| Zero-padded 24-hour `HH:MM` wall clock | `fmt_wall_clock` (`mbv-ui-model`) | Its only callers are the two queue projections (`src/app/queue_summary_projection.rs`, `src/app/queue_playback_projection.rs`) |
+| Remaining count = every non-active row | `QueueSummaryProjection.remaining` | `queue_summary_projection()` is called only by the GUI frame (`crates/mbv-gui/src/bridge/frame.rs`) |
+| Episode badge separator `S4 · E1` | `episode_badge` (`queue_playback_projection.rs`) | `queue_playback_projection()` is called only by the GUI core thread (`crates/mbv-gui/src/core_thread.rs`) |
 | Row-menu hint glyph `Enter` → `⏎` | `gui_client_state.rs` (GUI-only builder) | None: the builder is GUI-only |
 
-*Alternative:* a GUI-only formatting or counting layer. Rejected: it puts a second format for one concept in one codebase, and the frame's contract is "each field mirrors one fact of the library's projection". One formatter and one count stay, the canvas's form wins, and the TUI prints shorter clocks. If the user rejects a TUI-visible clock change, the fallback is the alternative and the delta scenario wording holds for both.
+The TUI paints no wall clock, no remaining count, no Ends-at value, and no episode badge from these sites today, so the changes reach no TUI output: the campaign constraint "The TUI does not change" holds. If a later change gives the TUI a reader for one of these types, that change isolates the GUI's form then.
 
 ### DR3. The `+1d` overflow suffix is computed at the projection and carried on the one value the canvas suffixes
 
@@ -74,35 +74,34 @@ The canvas paints a chevron on all three chips (`main` audit 15). The parent cha
 
 ### DR8. The row menu's destructive entry is flagged at the type
 
-The canvas paints `Remove from queue` in `#e67e80` under a divider (`menus` audit G2). `ContextMenuEntry` (`crates/mbv-ui-model/src/context_menu.rs`) gains a `destructive: bool`, the row-menu builder sets it for the remove action, `RowMenuEntryProjection` and `GuiRowMenuEntry` thread it, and the front end paints the tone and the divider. The TUI can adopt the flag later; nothing forces it to.
+The canvas paints `Remove from queue` in `#e67e80` under a divider (`menus` audit G2). `ContextMenuEntry` (`crates/mbv-ui-model/src/context_menu.rs`) gains a `destructive: bool`, the row-menu builder sets it for the remove action, `RowMenuEntryProjection` and `GuiRowMenuEntry` thread it, and the front end paints the tone and the divider. The flag is additive: the TUI's construction sites set it `false` and its menu painter reads nothing new, so no TUI output changes (the campaign constraint: the TUI does not change).
 
 ### DR9. Tests name a contract or do not exist
 
 Each unit's rows name the contract and its layer. Visual claims are asserted as values in vitest (the front end's tests already assert painted structure); projection claims are asserted in the owning crate's tests. No test inflation: a paint row reuses the component's existing render test unless the row adds a new state.
 
+## The canvas decisions (user ruling, 2026-11-07)
+
+The user's ruling (quoted): "there ARE [...] DESIGN SPECS, EVERYTHING SHOULD BE IN THERE." The canvas is the design artifact; every design question reads its answer in `canvas/`, so no decision of this change stands open. Three former open decisions are resolved by it:
+
+### (a) The subtitle Offset stepper: built end to end, as the canvas shows it
+
+The canvas paints the full Offset row and the popover's footer hint (`menus` audit G1, G5): the `−` and `+` steppers, the offset value, and the hint `c · cycle   [ ] · offset`, painted inside the open popover only. The unit builds the whole path: the core state, the player command and status fact, the wire fact, the paint, and the hint's `[` and `]` segments, which act on the offset while the popover is open and leave the seek chords unchanged everywhere else. Nothing of it paints or routes outside the open popover.
+
+### (b) The chip and track-list suffixes: derived and painted
+
+The canvas labels the chips and the popover rows with their stream suffixes (`menus` audit G10). The unit derives the facts the canvas labels assert and paints the canvas label forms.
+
+### (d) Two palettes: the GUI's theme section resolves the canvas hexes; the TUI's palette stays
+
+The GUI's theme section (`crates/mbv-gui/src/bridge/frame/theme.rs`, `GuiTheme::current`) resolves the roles to the canvas hexes; `mbv-theme`'s slot table and `Theme::DEFAULT` stay untouched as the TUI's palette. This amends the parent change's D7 ("mbv-theme's surface table is the one fill authority"; "shadcn-svelte components therefore paint in the mbv palette with no second palette") for the GUI Client only: the GUI's fill and role authority is the canvas palette, carried in the GUI's theme section.
+
 ## Risks / Trade-offs
 
-- [The TUI recolours and reformats where the shared types change (DR2)] → Recorded per change with a fallback; the user reviews this change before implementation.
 - [The front end's resize measurement can thrash if a browser reports subpixel sizes] → The remembered size is snapshotted only on a transition, and resizes run only from transitions.
 - [A reload while collapsed restores the collapsed state's own natural size instead of the remembered one] → Accepted for this change; persisting the window size is later work.
-- [Some canvas colours name no theme slot today (chapter ticks, the segment oranges)] → The palette decision (below) resolves the whole colour layer before any paint row pins a literal; no paint row hardcodes a hex.
+- [Some canvas colours name no theme slot today (chapter ticks, the segment oranges)] → The resolved palette decision (d) carries the colour layer in the GUI's theme section; no paint row hardcodes a hex, and `mbv-theme`'s slot table stays the TUI's palette.
 
 ## Migration Plan
 
-Units land in order: shared types (U1, U2), the expanded artboard (U3, U4), the collapsed states (U5), menus and drag (U6, U7), the window resize (U8), docs (U9). The blocked units follow their decisions. Rollback is to revert the units; no stored state or protocol changes.
-
-## Open decisions
-
-Each is a Yes/No question. None is decided here.
-
-### (a) The subtitle Offset stepper — yes or no?
-
-The canvas paints an Offset row with a `−/+0.25s` stepper and the hint `c · cycle   [ ] · offset` (`menus` audit G1, G5). Facts: no subtitle-delay state exists in the core, the player, or the wire (the gap audit searched `src/` and `crates/mbv-player`); the building plan needs a new core state, a new player command and status field, and popover-only key routing; and the canvas's `[` / `]` chords are today's seek chords (-10 s / -30 s), so the open popover would have to shadow or rebind them (`menus` audit G12). Answer yes: the blocked unit builds the whole stepper, including that key decision. Answer no: the popover paints choices only, the hint paints `c · cycle`, and the canvas's offset row is recorded as a declined ruling.
-
-### (b) The track-chip and track-list suffixes — yes or no?
-
-The canvas labels chips `FHD · direct`, `EN 2.0`, `CC EN` and popover rows `English · SRT`, `English SDH · embedded` (`menus` audit G10). Facts: nothing in the wire carries a source-medium, channel-count, or subtitle-format fact; mpv's track labels may or may not yield the suffixes, which only a live player shows, and the live test is the user's (with their approval). Answer yes: the unit adds derived facts (Emby `MediaSourceInfo.media_streams`, mpv `track-list` fields the status does not yet project) and paints the canvas labels. Answer no: labels stay today's names and the gap is recorded as declined.
-
-### (d) The canvas palette values — the theme's default palette or GUI-local values?
-
-The canvas's 19 distinct hexes share 3 with the theme's `docs/palette.json` (`#232a2e`, `#a7c080`, `#dbbc7f`); the rest differ (checked this change's naming: `#e59875` vs the canvas `#e69875`, `#e57e80` vs `#e67e80`, `#2b3238` vs `#2d353b`, and similar). Answer yes (edit `Theme::DEFAULT` and the slot table to the canvas values): one palette, D7's one-fill-authority stands, and the TUI recolours to the canvas palette. Answer no: the GUI's theme section (`GuiTheme`) resolves the roles to the canvas's hexes and the TUI's palette stays, which amends D7 to two palettes. The blocked unit lands the choice wherever it goes.
+Units land in order: shared types (U1, U2), the expanded artboard (U3, U4), the collapsed states (U5), menus and drag (U6, U7), the window resize (U8), docs (U9), then the canvas decisions' units: the Offset stepper (U10, U11), the chip and track-list suffixes (U12), and the GUI-local palette (U13). Rollback is to revert the units; U10 is the one owner-side addition (one `PlayerCommand` variant and one status fact), and no stored state changes.
