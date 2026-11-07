@@ -468,6 +468,10 @@ impl CoreThread {
     /// artwork when the slot's art changed for this window (design D10).
     fn emit_frame(&mut self) {
         self.sync_queue_surface();
+        // The active item's metadata fetch (design D4a) issues from the
+        // frame path, deduped on its own loading set; a landed completion
+        // rides the next frame.
+        self.app.fetch_playback_metadata();
         let artwork = self.app.queue_card_artwork();
         let artwork = self.artwork.frame_value(&artwork);
         let theme_changed = std::mem::take(&mut self.theme_pending);

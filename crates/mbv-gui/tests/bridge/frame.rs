@@ -1,6 +1,7 @@
 use mbv::{
-    App, stub_app_with_open_row_menu, stub_app_with_playing_queue, stub_app_with_queue,
-    stub_app_with_track_popover, stub_app_with_unsaved_queue,
+    App, PlaybackChapter, PlaybackDecorations, SegmentMark, TrickplayGrid,
+    stub_app_with_open_row_menu, stub_app_with_playing_items, stub_app_with_playing_queue,
+    stub_app_with_queue, stub_app_with_track_popover, stub_app_with_unsaved_queue,
 };
 use mbv_emby_model::TICKS_PER_SECOND;
 use mbv_emby_model::test_support::make_item;
@@ -79,6 +80,10 @@ fn empty_queue_frame_carries_no_rows() {
     assert!(!frame.panel.queue_folded);
     assert_eq!(frame.overlay, None);
     assert_eq!(frame.playback.finish_clock, None);
+    assert_eq!(frame.playback.chapters, Vec::new());
+    assert_eq!(frame.playback.intro_mark, None);
+    assert_eq!(frame.playback.credits_mark, None);
+    assert_eq!(frame.playback.trickplay, None);
 }
 
 /// One Emby movie slot with its own stored facts: the runtime, the resume
@@ -346,5 +351,77 @@ fn track_popover_frame_marks_the_playing_audio_track() {
             forced: false,
             chosen: true,
         }]
+    );
+}
+
+/// The active item's metadata decoration reaches the frame (design D4a): a
+/// seeded cache entry's chapters, intro and credits marks, and trickplay
+/// source land in the playback section the scrubber reads.
+#[test]
+fn playing_queue_frame_carries_the_items_decorations() {
+    let item = slot_item("Playing", 20 * 60 * TICKS_PER_SECOND, 0, false);
+    let key = item.content_id();
+    let mut app = stub_app_with_playing_items(vec![item]);
+    app.seed_playback_metadata_for_test(
+        key,
+        PlaybackDecorations {
+            chapters: vec![PlaybackChapter {
+                name: "Opening".to_string(),
+                start_ticks: 0,
+            }],
+            intro: Some(SegmentMark {
+                start_ticks: 100,
+                end_ticks: 200,
+            }),
+            credits: Some(SegmentMark {
+                start_ticks: 300,
+                end_ticks: 400,
+            }),
+            trickplay: Some(vec![TrickplayGrid {
+                width: 854,
+                height: 480,
+                tile_width: 10,
+                tile_height: 10,
+                thumbnail_count: 100,
+                interval_ms: 10_000,
+                media_source_id: "ms1".to_string(),
+            }]),
+        },
+    );
+
+    let frame = frame_after_tick(&mut app);
+
+    assert_eq!(
+        frame.playback.chapters,
+        vec![mbv_gui::bridge::frame::playback::GuiChapter {
+            name: "Opening".to_string(),
+            start_ticks: 0,
+        }]
+    );
+    assert_eq!(
+        frame.playback.intro_mark,
+        Some(mbv_gui::bridge::frame::playback::GuiSegmentMark {
+            start_ticks: 100,
+            end_ticks: 200,
+        })
+    );
+    assert_eq!(
+        frame.playback.credits_mark,
+        Some(mbv_gui::bridge::frame::playback::GuiSegmentMark {
+            start_ticks: 300,
+            end_ticks: 400,
+        })
+    );
+    assert_eq!(
+        frame.playback.trickplay,
+        Some(vec![mbv_gui::bridge::frame::playback::GuiTrickplayGrid {
+            width: 854,
+            height: 480,
+            tile_width: 10,
+            tile_height: 10,
+            thumbnail_count: 100,
+            interval_ms: 10_000,
+            media_source_id: "ms1".to_string(),
+        }])
     );
 }

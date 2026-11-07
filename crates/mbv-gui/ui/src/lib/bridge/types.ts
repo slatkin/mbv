@@ -189,6 +189,20 @@ export interface GuiQueuePlayback {
 	/** The active item's wall-clock end time; the scrubber's finish clock.
 	 * `null` while no item plays or the runtime is unknown. */
 	finishClock: string | null;
+	/** The active item's chapter boundaries with their names (design D4a):
+	 * the scrubber's boundary ticks and the hover preview's chapter name.
+	 * Empty while the item's fetch has not landed or carries none. */
+	chapters: GuiChapter[];
+	/** The intro mark's tick bounds (the MediaSegments `Intro`); `null`
+	 * while unknown. */
+	introMark: GuiSegmentMark | null;
+	/** The credits mark's tick bounds (the MediaSegments `Outro`); `null`
+	 * while unknown. */
+	creditsMark: GuiSegmentMark | null;
+	/** The trickplay source description (design D4a): one tile grid per
+	 * available width. `null` while unknown; the tile bytes are task 6.7's
+	 * fetch. */
+	trickplay: GuiTrickplayGrid[] | null;
 	availability: GuiTransportAvailability;
 	/** The status-indicator cluster the queue band paints on its controls
 	 * row: `null` while the local player is inactive — the cluster's data
@@ -207,6 +221,39 @@ export interface GuiQueuePlayback {
 	 * cast receivers the Owner offers, each marked with whether it is the
 	 * Owner's attached output. */
 	targetChoices: GuiTargetChoice[];
+}
+
+/** One chapter boundary of the active item: the scrubber's boundary tick
+ * and the hover preview's chapter name. */
+export interface GuiChapter {
+	name: string;
+	startTicks: number;
+}
+
+/** One intro or credits mark of the active item: the tick bounds the
+ * scrubber paints. */
+export interface GuiSegmentMark {
+	startTicks: number;
+	endTicks: number;
+}
+
+/** One trickplay tile grid of the active item: the source description the
+ * scrubber preview's tile fetch (task 6.7) reads. */
+export interface GuiTrickplayGrid {
+	/** The thumbnail pixel width this grid answers. */
+	width: number;
+	/** The thumbnail pixel height. */
+	height: number;
+	/** Thumbnails per row of one tile sheet. */
+	tileWidth: number;
+	/** Thumbnail rows of one tile sheet. */
+	tileHeight: number;
+	/** The total thumbnails the grid holds. */
+	thumbnailCount: number;
+	/** Milliseconds between consecutive thumbnails. */
+	intervalMs: number;
+	/** The media source the tile URLs qualify with. */
+	mediaSourceId: string;
 }
 
 /** The track chips' facts. */
