@@ -353,3 +353,41 @@ fn the_row_menu_frame_carries_the_row_it_opened_on() {
     };
     assert_eq!(anchor_slot, 3);
 }
+
+/// The GUI-only ``Alt+J``/``Alt+K`` row move addresses the row the window
+/// paints selected, not the App's follow cursor (review of row 6.5, finding
+/// P1-1): a keyboard move of the surface selection, then the chord, names
+/// the moved selection's stable slot.
+#[test]
+fn a_row_move_chord_moves_the_keyboard_selected_row_review_u65_p1_1() {
+    let (app, cmd_rx) = stub_app_with_queue_and_cmd_rx(3);
+    let mut test = test_core_with(app);
+    test.tx.send(measured_layout(3, vec![])).unwrap();
+    assert!(test.core.step());
+    test.next_frame();
+
+    test.tx
+        .send(CoreInput::Key(KeyEvent::new(Key::Down, KeyModifiers::NONE)))
+        .unwrap();
+    assert!(test.core.step());
+    assert_eq!(
+        test.next_frame().queue.cursor,
+        Some(2),
+        "the key moved the painted cursor to the second slot"
+    );
+
+    test.tx
+        .send(CoreInput::Key(KeyEvent::new(
+            Key::Char('j'),
+            KeyModifiers::ALT,
+        )))
+        .unwrap();
+    assert!(test.core.step());
+    test.next_frame();
+
+    assert_eq!(
+        slot_moves(&cmd_rx),
+        vec![(2, 2)],
+        "the move names the painted selection's slot"
+    );
+}

@@ -26,7 +26,7 @@ use mbv_surfaces::{HitMap, HitRegion};
 use mbv_ui_model::context_menu::ContextMenuTargets;
 use mbv_ui_model::playback::VOLUME_STEP;
 use mbv_ui_msg::{
-    ComponentId, KeyEvent, LeafKeyResult, Msg, PlaybackRequest, Position, QueueRequest,
+    ComponentId, KeyEvent, LeafKeyResult, Msg, PlaybackRequest, Position, QueueMove, QueueRequest,
     ShellRequest, TrackChipKind,
 };
 
@@ -287,6 +287,10 @@ impl GuiSurfaceLeaf for QueueLeaf<'_> {
             PointerGesture::DragEnd => self.finish_drag(),
         }
     }
+
+    fn move_selected_row(&mut self, direction: QueueMove) -> Option<Msg> {
+        self.surface.selected_move_request(direction)
+    }
 }
 
 /// Which transport controls are actionable: the Queue playback projection's
@@ -495,6 +499,12 @@ impl GuiSurfaceLeaf for PlaybackLeaf<'_> {
             }
         }
     }
+
+    fn move_selected_row(&mut self, _direction: QueueMove) -> Option<Msg> {
+        // The transport band paints no queue rows, so it holds no selection
+        // for the GUI-only row move to address.
+        None
+    }
 }
 
 /// The Status bar's leaf over the reported pill regions.
@@ -553,5 +563,11 @@ impl GuiSurfaceLeaf for StatusBarLeaf<'_> {
             }
             _ => None,
         }
+    }
+
+    fn move_selected_row(&mut self, _direction: QueueMove) -> Option<Msg> {
+        // The Status bar paints no queue rows, so it holds no selection for
+        // the GUI-only row move to address.
+        None
     }
 }

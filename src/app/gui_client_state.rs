@@ -14,7 +14,7 @@
 
 use mbv_queue::QueueSlotId;
 use mbv_ui_model::context_menu::{ContextAction, ContextMenuEntry};
-use mbv_ui_msg::{Key, KeyEvent, KeyModifiers, QueueMove, TrackChipKind};
+use mbv_ui_msg::{Key, KeyEvent, KeyModifiers, TrackChipKind};
 
 use crate::app::App;
 use crate::app::queue_playback_projection::{
@@ -433,29 +433,6 @@ impl App {
             TrackChipKind::Subtitles => self.set_subtitle_track(track_id),
         }
         self.gui_overlay = None;
-    }
-
-    /// Move the queue's selected row one place, the `queue_move_up` and
-    /// `queue_move_down` actions' effect (add-tauri-gui-client row 6.5). The
-    /// move is the Owner's slot move: the same request the surface's
-    /// `Shift+Up`/`Shift+Down` and a row drag send, addressed by the selected
-    /// slot's stable identity. GUI-only by the actions' gate; no TUI chord
-    /// resolves the actions.
-    pub(in crate::app) fn move_selected_queue_row(&mut self, direction: QueueMove) {
-        let link = self.playing_queue_link();
-        let cursor = self.displayed_queue().cursor();
-        let Some(slot_id) = self.displayed_queue().slot_id_at(cursor) else {
-            return;
-        };
-        let Some(index) = self.slot_index(link, slot_id) else {
-            return;
-        };
-        self.set_panel_focus(mbv_ui_model::settings::PanelFocus::Queue);
-        self.mark_queue_cursor_user_active();
-        match direction {
-            QueueMove::Up => self.move_queue_item_up(index),
-            QueueMove::Down => self.move_queue_item_down(index),
-        }
     }
 
     /// Whether an overlay holds the GUI Client's keyboard (the row menu, a

@@ -369,6 +369,23 @@ impl QueueSurface {
         self.viewport_height
     }
 
+    /// The move request for the selected row in `direction`: the same
+    /// `QueueRequest::Move` the `Shift+Up`/`Shift+Down` rules emit, addressed
+    /// by the selected slot's stable identity. A GUI leaf sends it for a
+    /// queue-move chord the Surface state does not see as a key, so the chord
+    /// and the key rule name the one selection the client paints
+    /// (add-tauri-gui-client row 6.5). `None` while no row is selected.
+    #[must_use]
+    pub fn selected_move_request(&self, direction: QueueMove) -> Option<Msg> {
+        self.selected_slot().map(|(link, slot_id)| {
+            Msg::Queue(QueueRequest::Move {
+                link,
+                slot_id,
+                direction,
+            })
+        })
+    }
+
     /// The Queue's key rules over the neutral `KeyEvent` (moved from the TUI
     /// adapter's `queue/keys.rs`, extract-client-core row 4.3). The neutral
     /// vocabulary folds a Shift+uppercase press into its lowercase letter
@@ -487,13 +504,7 @@ impl QueueSurface {
             } else {
                 QueueMove::Down
             };
-            return self.selected_slot().map(|(link, slot_id)| {
-                Msg::Queue(QueueRequest::Move {
-                    link,
-                    slot_id,
-                    direction,
-                })
-            });
+            return self.selected_move_request(direction);
         }
         None
     }

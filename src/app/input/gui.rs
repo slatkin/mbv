@@ -22,12 +22,12 @@ use mbv_surfaces::gesture::PointerGesture;
 use mbv_ui_model::playback::QueueLink;
 use mbv_ui_msg::{
     ComponentId, KeyEvent, LeafKeyResult, Msg, OverlayId, PointerEvent, Position, QueueIntent,
-    QueueRequest, ShellRequest,
+    QueueMove, QueueRequest, ShellRequest,
 };
 
 use super::key_policy::{OverlayFocus, RouterOverlayState, RouterPlaybackState};
 use super::router::{RouterOutcome, RouterSnapshot, resolve_router_outcome_with_focused};
-use crate::app::dispatch::action::Command;
+use crate::app::dispatch::action::{AppCommand, Command, PanelIntent};
 use crate::app::{App, RemoteControlTarget};
 
 /// One translated GUI Client input event: the neutral shape the shared
@@ -64,6 +64,13 @@ pub trait GuiSurfaceLeaf {
     /// a gesture the surface's painted geometry does not claim returns
     /// `None`.
     fn pointer(&mut self, gesture: PointerGesture<Position>) -> Option<Msg>;
+
+    /// Emit the queue move request for the selection this surface paints,
+    /// in `direction` (the GUI-only `Alt+J`/`Alt+K` actions, row 6.5). The
+    /// leaf resolves the selected slot from its own Surface state — never
+    /// the App's follow cursor — so the chord moves the row the user sees
+    /// selected. A surface that paints no queue selection returns `None`.
+    fn move_selected_row(&mut self, direction: QueueMove) -> Option<Msg>;
 }
 
 impl App {
@@ -83,7 +90,7 @@ impl App {
     pub fn route_gui_input(
         &mut self,
         input: GuiInput,
-        leaf: Option<&mut dyn GuiSurfaceLeaf>,
+        mut leaf: Option<&mut dyn GuiSurfaceLeaf>,
     ) -> bool {
         let GuiInput::Key(key) = input else {
             // Any pointer event disarms prefix mode, exactly as every
@@ -158,14 +165,14 @@ impl App {
             leaf.as_ref().map(|surface| surface.id())
         };
         match resolve_router_outcome_with_focused(key, &snapshot, focused.as_ref(), &keybinds) {
-            RouterOutcome::Command(command) => self.apply_router_command(&command),
+            RouterOutcome::Command(command) => self.apply_gui_router_command(&command, leaf),
             RouterOutcome::PrefixArm => {
                 self.prefix_armed = true;
                 false
             }
             RouterOutcome::PrefixDispatch(command) => {
                 self.prefix_armed = false;
-                self.apply_router_command(&command)
+                self.apply_gui_router_command(&command, leaf)
             }
             RouterOutcome::PrefixSwallow => {
                 self.prefix_armed = false;
@@ -195,7 +202,7 @@ impl App {
                 false
             }
             RouterOutcome::Deferred(command) => {
-                let consumed = match leaf {
+                let consumed = match leaf.as_mut() {
                     Some(surface) => {
                         let result = surface.key(key);
                         let consumed = matches!(result, LeafKeyResult::Consumed(_));
@@ -209,7 +216,7 @@ impl App {
                 if consumed {
                     false
                 } else {
-                    self.apply_router_command(&command)
+                    self.apply_gui_router_command(&command, leaf)
                 }
             }
         }
@@ -476,6 +483,29 @@ impl App {
         self.set_panel_focus(mbv_ui_model::settings::PanelFocus::Queue);
         self.mark_queue_cursor_user_active();
         Some(index)
+    }
+
+    /// Apply one router `Command` to this `App`, except the queue-move
+    /// command, which the focused leaf resolves against its own painted
+    /// selection (add-tauri-gui-client row 6.5): the chord must move the row
+    /// the user sees selected, not the App's follow cursor. The leaf emits
+    /// the same `QueueRequest::Move` the `Shift+Up`/`Shift+Down` key rule
+    /// emits, and that request's dispatch resolves the slot's index. Without
+    /// a focused leaf the chord moves nothing.
+    fn apply_gui_router_command(
+        &mut self,
+        command: &Command,
+        leaf: Option<&mut dyn GuiSurfaceLeaf>,
+    ) -> bool {
+        if let Command::App(AppCommand::Panel(PanelIntent::MoveQueueRow(direction))) = command {
+            if let Some(surface) = leaf
+                && let Some(msg) = surface.move_selected_row(*direction)
+            {
+                self.handle_gui_surface_msg(msg);
+            }
+            return false;
+        }
+        self.apply_router_command(command)
     }
 
     /// Apply one router `Command` to this `App`. The `App` arm is the App's

@@ -393,7 +393,10 @@ impl App {
             PanelIntent::ToggleQueueRightColumn => self.toggle_queue_right_column(),
             PanelIntent::ActivateQueueFilter => self.activate_queue_filter(),
             PanelIntent::ToggleTargetChooser => self.toggle_gui_target_chooser(),
-            PanelIntent::MoveQueueRow(direction) => self.move_selected_queue_row(direction),
+            // The GUI router delivers the row move to the focused Queue leaf
+            // (`input/gui.rs`), which addresses the selection its surface
+            // paints; the App holds no cursor-free selection to move here.
+            PanelIntent::MoveQueueRow(_) => {}
         }
     }
 
