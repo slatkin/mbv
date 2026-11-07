@@ -3,7 +3,9 @@
 //! `MediaSegments` plugin's detected segment bounds, the Trickplay tile
 //! grids' source description, and its tile sheets' bytes. Each is a
 //! decoration fetch keyed on an item id; none carries a caller-visible
-//! failure mode beyond its `Err`.
+//! failure mode beyond its `Err`. A payload member this client cannot parse
+//! logs a warn and projects no decoration for it, so a changed payload shape
+//! leaves a trace rather than reading as "no decoration".
 
 use super::EmbyClient;
 use mbv_emby_model::{EmbyChapter, EmbyMediaSegment, EmbyTrickplayGrid};
@@ -25,7 +27,18 @@ impl EmbyClient {
             .call()?
             .body_mut()
             .read_json()?;
-        Ok(serde_json::from_value(resp["Chapters"].clone()).unwrap_or_default())
+        Ok(
+            serde_json::from_value(resp["Chapters"].clone()).unwrap_or_else(|error| {
+                tracing::warn!(
+                    name: "emby.item_chapters.parse_failed",
+                    target: "api",
+                    item = %item_id,
+                    error = %error,
+                    "the item's Chapters did not parse; projecting none"
+                );
+                Vec::new()
+            }),
+        )
     }
 
     /// `GET /MediaSegments/{itemId}`: the detected Intro/Outro (and other)
@@ -43,7 +56,18 @@ impl EmbyClient {
             .call()?
             .body_mut()
             .read_json()?;
-        Ok(serde_json::from_value(resp["Items"].clone()).unwrap_or_default())
+        Ok(
+            serde_json::from_value(resp["Items"].clone()).unwrap_or_else(|error| {
+                tracing::warn!(
+                    name: "emby.media_segments.parse_failed",
+                    target: "api",
+                    item = %item_id,
+                    error = %error,
+                    "the media segments' Items did not parse; projecting no marks"
+                );
+                Vec::new()
+            }),
+        )
     }
 
     /// `GET /Videos/{itemId}/Trickplay`: the trickplay source description —
@@ -58,14 +82,31 @@ impl EmbyClient {
             .call()?
             .body_mut()
             .read_json()?;
-        Ok(resp
-            .as_object()
-            .map(|map| {
-                map.values()
-                    .filter_map(|grid| serde_json::from_value(grid.clone()).ok())
-                    .collect()
+        let Some(map) = resp.as_object() else {
+            tracing::warn!(
+                name: "emby.trickplay.shape_failed",
+                target: "api",
+                item = %item_id,
+                "trickplay payload was not an object; projecting no source"
+            );
+            return Ok(Vec::new());
+        };
+        Ok(map
+            .values()
+            .filter_map(|grid| match serde_json::from_value(grid.clone()) {
+                Ok(parsed) => Some(parsed),
+                Err(error) => {
+                    tracing::warn!(
+                        name: "emby.trickplay.grid_parse_failed",
+                        target: "api",
+                        item = %item_id,
+                        error = %error,
+                        "a trickplay grid did not parse; projecting no grid for it"
+                    );
+                    None
+                }
             })
-            .unwrap_or_default())
+            .collect())
     }
 
     /// `GET /Videos/{itemId}/Trickplay/{width}/{index}.jpg`: one tile sheet's
