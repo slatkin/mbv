@@ -33,7 +33,11 @@ ui-lint: ui-install
 ui-test: ui-install
 	pnpm -C $(UI_DIR) test
 
+# The GUI starts its Owner from the sibling `mbv` binary, and the handshake
+# refuses an Owner whose build id differs. `cargo run -p mbv-gui` alone leaves
+# `mbv` stale after a commit, so build both before the window starts.
 dev: ui-build
+	cargo build -p mbv -p mbv-gui
 	cargo run -p mbv-gui
 
 check-code-file-lines:
