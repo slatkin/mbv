@@ -14,6 +14,7 @@ The GUI Client presents only the player panel (Queue, Queue playback, Status bar
 - **The tab bar and the global Search** paint in the top bar. `Ctrl+K` opens Search in a GUI-only key context (beside the existing `Ctrl+/`); the Search results paint as a media list in the Music row look. The Search sidebar state moves to the shared Client core.
 - **A Library Status bar paints under the Library column** when the Library panel shows, as in the canvas: the shared prefix and toast, plus GUI-only key hints with their configured chords and the location (destination, selected pills, selected item). Prefix and toast stay in the Queue footer when only the Queue panel shows.
 - **Library art comes from the mbv image cache through the frame**, not from a webview fetch.
+- **The service bootstrap and the Library request dispatch become shared Client steps.** The GUI runs the same startup steps as the TUI, so its Library has content, and the App effects of the Library requests run in one shared dispatch that both Clients call. The GUI's authentication-only Emby fill is retired.
 - **Delivery has a gate.** Music lands first from end to end. A `/code-review` round and a user live-test round accept it before the other destinations start.
 
 ## Capabilities
@@ -32,7 +33,7 @@ None.
 - `crates/mbv-surfaces`: new Library Surface state (selector, list, tree, Workspace, filter, Search) used by both Clients.
 - `crates/mbv-components`: the seven destination owners, `library_panel`, `tab_panel`, `inline_search`, and `search_sidebar` become adapters over the Surface state. Paint and key output are unchanged.
 - `crates/mbv-ui-model`: a plain `LibrarySlotContent` model of the Library slots.
-- `src/app` and `src/lib.rs`: one public slot-content projection per destination, built from the `App`'s Service data and the Surface state, which both the TUI owners and the GUI frame read; the shared launch-snapshot builder; the GUI-only key context gains `{` and `}`, and Space, Alt+Space, and Backspace under pill focus, and `Ctrl+K`; the Library item context menu routes in the GUI.
+- `src/app` and `src/lib.rs`: the shared service bootstrap step and Library request dispatch (moved out of the TUI shell `Model`); the extra Music groups and their album levels in the `App`; the shared launch-restore step; one public slot-content projection per destination, built from the `App`'s Service data and the Surface state, which both the TUI owners and the GUI frame read; the shared launch-snapshot builder; the GUI-only key context gains `{` and `}`, and Space, Alt+Space, and Backspace under pill focus, and `Ctrl+K`; the Library item context menu routes in the GUI.
 - `crates/mbv-config`: `TuiLaunchState` gains an additive field for the extra selected Music groups; only the GUI applies it.
 - `crates/mbv-gui`: frame DTOs, region ids, `ListId`s, leaves, core-thread wiring, and the Svelte Library components.
 - `docs/architecture/gui-client.md`, `docs/architecture/interactive-surface-ledger.md`: the new surfaces and owners.

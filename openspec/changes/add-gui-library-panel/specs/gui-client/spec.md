@@ -65,6 +65,12 @@ The GUI Client SHALL present the Library panel and the Queue panel in one window
 - **THEN** the Library panel and the Queue panel both show
 - **AND** exactly one of them has Panel focus
 
+#### Scenario: The GUI Client starts with configured Services
+
+- **GIVEN** an Emby Service with a Music library is configured
+- **WHEN** the GUI Client attaches to the Owner
+- **THEN** the Library loads that Service's libraries and the Music content by the same startup steps as the TUI Client, with no step copied into the GUI Client
+
 #### Scenario: The user moves Panel focus
 
 - **WHEN** the user presses the TUI Client's Panel-focus key
@@ -83,6 +89,7 @@ The GUI Client SHALL classify the Library column width (the window width minus t
 
 - **WHEN** the Library column width is below the Narrow threshold
 - **THEN** only the panel with Panel focus shows
+- **AND** the Hero opens as the Library Hero overlay on demand, as in the TUI Client
 
 #### Scenario: The window is Narrow
 
@@ -165,7 +172,7 @@ Every action that the Hero shows SHALL run the TUI Client's action for the same 
 
 ### Requirement: Library interaction state lives in the shared Client core
 
-The Library panel's interaction state (Panel focus, held by the core focus stack; cursor, selection, viewport, tree open state, pill choice, Workspace focus, filter and Search drafts) SHALL live in the Client core that both Clients share. The TUI Client's Library behaviour, key output, and paint SHALL NOT change.
+The Library panel's interaction state (Panel focus, stored by the shared App and presented by the core focus stack; cursor, selection, viewport, tree open state, pill choice, Workspace focus, filter and Search drafts) SHALL live in the Client core that both Clients share. The TUI Client's Library behaviour, key output, and paint SHALL NOT change.
 
 #### Scenario: The window content reloads on a Library item
 
@@ -214,6 +221,12 @@ In the GUI Client a collection pill SHALL toggle on and off. A list SHALL show t
 - **GIVEN** several collection pills are selected
 - **WHEN** the user Alt-presses a pill, or presses Alt+Space on the focused pill
 - **THEN** only that pill is selected
+
+#### Scenario: A pill press gives pill focus
+
+- **WHEN** the user presses a collection pill and then presses Space
+- **THEN** the press toggles the pill and the selector holds pill focus on it
+- **AND** Space toggles that pill again and does not play or pause
 
 #### Scenario: The keyboard toggles a pill
 
