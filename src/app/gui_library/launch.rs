@@ -135,6 +135,16 @@ impl App {
             .collect()
     }
 
+    /// The destinations the GUI presents, in catalog order (design D9, D2):
+    /// the Grouped Music libraries, phase 1's presented set. The restore's
+    /// fallback and the frame's destination tabs (`gui_library_tabs`) read
+    /// this one list, so they cannot disagree about the presented set.
+    pub(in crate::app::gui_library) fn presented_destinations(&self) -> Vec<usize> {
+        (0..self.libs.len())
+            .filter(|lib_idx| self.is_grouped_music_library(*lib_idx))
+            .collect()
+    }
+
     /// The tab position of the destination a saved location names, resolved
     /// against the destinations the GUI presents (design D9): the matching
     /// presented library, else the first presented one. Phase 1 presents the
@@ -148,12 +158,7 @@ impl App {
             } => Some(library_id.as_str()),
             TabIdentity::Home | TabIdentity::Feeds | TabIdentity::ServiceLibrary { .. } => None,
         };
-        let presented = || {
-            (0..self.libs.len())
-                .filter(|lib_idx| self.is_grouped_music_library(*lib_idx))
-                .collect::<Vec<usize>>()
-        };
-        let presented = presented();
+        let presented = self.presented_destinations();
         let lib_idx = presented
             .iter()
             .copied()

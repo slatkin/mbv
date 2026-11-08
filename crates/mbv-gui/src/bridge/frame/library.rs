@@ -17,6 +17,7 @@ use mbv_ui_model::music_grouping::ArtistKey;
 use serde::Serialize;
 
 use crate::artwork::data_url;
+use mbv::GuiLibraryTab;
 
 /// The Library panel's frame section (design D2): the content revision, and
 /// the content itself when this frame carries it.
@@ -33,20 +34,51 @@ pub struct GuiLibraryFrame {
     pub content: Option<Box<GuiLibraryContent>>,
 }
 
-/// The content of the Library panel (design D2): the active destination's
-/// pills, list rows, Hero facts, and Hero artwork.
+/// The content of the Library panel (design D2): the destination tabs the
+/// top bar paints, and the active destination's pills, list rows, Hero facts,
+/// and Hero artwork.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GuiLibraryContent {
+    /// The presented destination tabs in catalog order (design D2): one per
+    /// Grouped Music library, phase 1's presented set. The top bar paints
+    /// only these — no stub for a destination the GUI does not present yet.
+    pub tabs: Vec<GuiLibraryTabFrame>,
+    /// The active tab's position while the active destination is one of the
+    /// tabs (design D2): the tab the top bar marks current. `None` for Home,
+    /// Feeds, and every destination the GUI does not present yet.
+    pub current_tab: Option<usize>,
     /// The Grouped Music library's content while Music is the active
     /// destination; `None` for a destination that presents no content yet.
     pub music: Option<GuiMusicFrame>,
+}
+
+/// One destination tab of the top bar (design D2).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GuiLibraryTabFrame {
+    /// The tab position the open-destination command takes, where 0 is Home.
+    pub position: usize,
+    /// The tab's label: the library's display name.
+    pub label: String,
+}
+
+impl From<GuiLibraryTab> for GuiLibraryTabFrame {
+    fn from(tab: GuiLibraryTab) -> Self {
+        Self {
+            position: tab.position,
+            label: tab.label,
+        }
+    }
 }
 
 /// The Music destination's content (design D5).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GuiMusicFrame {
+    /// The Grouped Music library index the set-collections command names
+    /// (design D2, D6): the library whose group pills these are.
+    pub lib_idx: usize,
     /// The group pills in the group level's order (design D6).
     pub pills: Vec<GuiMusicPillFrame>,
     /// Whether one of the selected groups' album lists has not landed yet.
@@ -189,10 +221,12 @@ pub enum GuiLibraryArt {
 }
 
 impl GuiMusicFrame {
-    /// The Music destination's content for `projection`, with the Hero's
-    /// artwork `art` — present exactly when the projection holds a Hero — and
-    /// the picked item's menu `menu`.
+    /// The Music destination's content for `projection`, with the library
+    /// index the set-collections command names, the Hero's artwork `art` —
+    /// present exactly when the projection holds a Hero — and the picked
+    /// item's menu `menu`.
     pub(crate) fn from_projection(
+        lib_idx: usize,
         projection: &GuiMusicProjection,
         art: Option<GuiLibraryArt>,
         menu: &[GuiLibraryMenuItem],
@@ -204,6 +238,7 @@ impl GuiMusicFrame {
         });
         let art = hero.as_ref().and(art);
         Self {
+            lib_idx,
             pills: projection
                 .pills
                 .iter()

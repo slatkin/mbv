@@ -9,6 +9,7 @@ mod artwork;
 mod launch;
 mod projection;
 mod store;
+mod tabs;
 
 pub use self::artwork::GuiLibraryArtwork;
 pub use self::projection::{
@@ -16,6 +17,7 @@ pub use self::projection::{
     GuiMusicTrackTotal,
 };
 pub(in crate::app) use self::store::{GuiGroupAlbums, GuiGroupAlbumsEvent};
+pub use self::tabs::{GuiLibraryTab, GuiLibraryTabs};
 
 use mbv_emby_model::EmbyItem;
 use mbv_ui_model::context_menu::ContextMenu;

@@ -13,7 +13,7 @@ use mbv_ctrl::CtrlCmd;
 use mbv_emby::EmbyClient;
 use mbv_gui::bridge::frame::GuiFrame;
 use mbv_gui::bridge::frame::focus::{GuiPanel, GuiSurface};
-use mbv_gui::bridge::frame::library::{GuiLibraryArt, GuiLibraryFrame};
+use mbv_gui::bridge::frame::library::{GuiLibraryArt, GuiLibraryFrame, GuiLibraryTabFrame};
 use mbv_gui::bridge::library::GuiLibraryCommand;
 use mbv_gui::core_thread::CoreInput;
 use mbv_net::mock_http::MockHttp;
@@ -399,6 +399,30 @@ fn assert_image(art: GuiLibraryArt) {
         panic!("the Hero paints the cached art, not {art:?}");
     };
     assert!(url.starts_with("data:image/jpeg;base64,"));
+}
+
+/// The frame's destination facts (row 4.3, design D2): the Library section
+/// carries the presented tabs — the seeded catalog's one Grouped Music
+/// library at its open-destination position, marked current — and the Music
+/// content names the `libIdx` the set-collections command takes.
+#[test]
+fn the_library_frame_carries_the_destination_tabs_and_the_lib_idx() {
+    let http = MockHttp::new();
+    let (mut test, _cmd_rx) = seeded_music_core(&http);
+
+    let frame = library_of(send_library_frame(&mut test, GuiLibraryCommand::TakeFocus));
+
+    let content = frame.content.expect("the first frame carries the content");
+    assert_eq!(
+        content.tabs,
+        [GuiLibraryTabFrame {
+            position: 1,
+            label: "Music".to_string(),
+        }]
+    );
+    assert_eq!(content.current_tab, Some(1));
+    let music = content.music.expect("the Music destination is active");
+    assert_eq!(music.lib_idx, 0);
 }
 
 /// The Library section carries its content only when the revision changes, and

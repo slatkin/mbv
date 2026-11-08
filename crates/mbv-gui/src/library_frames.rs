@@ -8,10 +8,10 @@
 //! copy; the reload's `report_layout` re-arms the section, and the next frame
 //! re-carries the next build under the revision the window already holds.
 
-use mbv::App;
+use mbv::{App, GuiLibraryTabs};
 
 use crate::bridge::frame::library::{
-    GuiLibraryArt, GuiLibraryContent, GuiLibraryFrame, GuiMusicFrame,
+    GuiLibraryArt, GuiLibraryContent, GuiLibraryFrame, GuiLibraryTabFrame, GuiMusicFrame,
 };
 
 /// The frames' Library section memo (design D2).
@@ -56,13 +56,18 @@ impl LibraryFrames {
 }
 
 /// The Library panel's content for the active destination (design D2): the
-/// Music destination's pills, list, and Hero while a Grouped Music library is
-/// active.
+/// destination tabs the top bar paints, and the Music destination's pills,
+/// list, and Hero while a Grouped Music library is active.
 fn content(app: &mut App) -> GuiLibraryContent {
+    let GuiLibraryTabs { tabs, current } = app.gui_library_tabs();
     let music = app
         .gui_music_destination()
         .map(|lib_idx| music_frame(app, lib_idx));
-    GuiLibraryContent { music }
+    GuiLibraryContent {
+        tabs: tabs.into_iter().map(GuiLibraryTabFrame::from).collect(),
+        current_tab: current,
+        music,
+    }
 }
 
 /// The Music destination's content (design D5): the projection's facts with
@@ -79,5 +84,5 @@ fn music_frame(app: &mut App, lib_idx: usize) -> GuiMusicFrame {
     let menu = picked
         .map(|album_id| app.gui_library_menu(&album_id))
         .unwrap_or_default();
-    GuiMusicFrame::from_projection(&projection, art, &menu)
+    GuiMusicFrame::from_projection(lib_idx, &projection, art, &menu)
 }

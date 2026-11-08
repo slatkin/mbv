@@ -679,11 +679,29 @@ export interface GuiLibraryFrame {
 	content: GuiLibraryContent | null;
 }
 
-/** The Library panel's content: the active destination's section. */
+/** The Library panel's content: the top bar's destination tabs and the
+ * active destination's section. */
 export interface GuiLibraryContent {
+	/** The presented destination tabs in catalog order (design D2): one per
+	 * Grouped Music library, phase 1's presented set. The top bar paints only
+	 * these — no stub for a destination the GUI does not present yet. */
+	tabs: GuiLibraryTab[];
+	/** The active tab's position while the active destination is one of the
+	 * tabs (design D2): the tab the top bar marks current. `null` for Home,
+	 * Feeds, and every destination the GUI does not present yet. */
+	currentTab: number | null;
 	/** The Grouped Music library's content while Music is active; `null` for a
 	 * destination that presents no content yet. */
 	music: GuiMusicFrame | null;
+}
+
+/** One destination tab of the top bar (design D2). */
+export interface GuiLibraryTab {
+	/** The tab position the open-destination command takes, where 0 is
+	 * Home. */
+	position: number;
+	/** The tab's label: the library's display name. */
+	label: string;
 }
 
 /** One request from the Library panel's window content (add-gui-library-panel
@@ -715,6 +733,9 @@ export type GuiLibraryCommand =
 
 /** The Music destination's content (design D5). */
 export interface GuiMusicFrame {
+	/** The Grouped Music library index the set-collections command names
+	 * (design D2, D6): the library whose group pills these are. */
+	libIdx: number;
 	/** The group pills in the group level's order (design D6). */
 	pills: GuiMusicPill[];
 	/** Whether one of the selected groups' album lists has not landed yet. */
