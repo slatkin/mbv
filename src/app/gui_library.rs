@@ -1,11 +1,17 @@
 //! The GUI Library panel's Client-core half (add-gui-library-panel design D2,
 //! D5): the semantic commands the window content sends, the public `App` entry
-//! that applies each one, and the Music collection store beside it. The window
-//! content sends intent, and every entry calls the existing `App` action for
-//! it. The TUI Client never calls any of them.
+//! that applies each one, the Music collection store beside it, and the Music
+//! projection the window content paints. The window content sends intent, and
+//! every entry calls the existing `App` action for it. The TUI Client never
+//! calls any of them.
 
+mod projection;
 mod store;
 
+pub use self::projection::{
+    GuiMusicAlbum, GuiMusicArtist, GuiMusicHero, GuiMusicPill, GuiMusicProjection, GuiMusicTrack,
+    GuiMusicTrackTotal,
+};
 pub(in crate::app) use self::store::{GuiGroupAlbums, GuiGroupAlbumsEvent};
 
 use mbv_emby_model::EmbyItem;

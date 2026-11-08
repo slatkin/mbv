@@ -40,6 +40,10 @@ pub use self::gui_client_state::{
     GuiOverlayProjection, PanelTogglesProjection, RowMenuEntryProjection, TrackPopoverChoice,
 };
 pub use self::gui_library::GuiLibraryCommand;
+pub use self::gui_library::{
+    GuiMusicAlbum, GuiMusicArtist, GuiMusicHero, GuiMusicPill, GuiMusicProjection, GuiMusicTrack,
+    GuiMusicTrackTotal,
+};
 pub use self::infra::image_fetch::CardImageDrain;
 pub(in crate::app) use self::infra::paging::{PAGE_SIZE, PREFETCH_AHEAD};
 pub(in crate::app) use self::infra::signals::{

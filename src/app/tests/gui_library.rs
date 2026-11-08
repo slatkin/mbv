@@ -1,12 +1,15 @@
-//! Tests of the GUI Library's Music collection store (add-gui-library-panel
-//! design D5, row 3.2): a selected group's albums land in the store outside
-//! `nav_stack`, a loaded group is not fetched again, and one failing group
-//! keeps the other groups' albums. The Emby boundary is the in-memory mock
-//! transport, so no request leaves the process.
+//! Tests of the GUI Library's Music collection store and its projection
+//! (add-gui-library-panel design D5, rows 3.2 and 3.3): a selected group's
+//! albums land in the store outside `nav_stack`, a loaded group is not fetched
+//! again, one failing group keeps the other groups' albums, and the projection
+//! unions the selected groups' artists with their facts. The Emby boundary is
+//! the in-memory mock transport, so no request leaves the process.
 
 use std::io::ErrorKind;
 
 use super::*;
+use crate::app::gui_library::GuiGroupAlbums;
+use mbv_emby_model::TICKS_PER_SECOND;
 use mbv_net::mock_http::MockHttp;
 use mbv_ui_model::browse::{BrowseResting, ServerRows};
 
@@ -88,6 +91,43 @@ fn select_groups(app: &mut App, group_ids: &[&str]) {
         lib_idx: 0,
         group_ids: group_ids.iter().map(|id| (*id).to_string()).collect(),
     });
+}
+
+/// One album as the store holds it, with the display artist and year the
+/// projection's facts come from.
+fn stored_album(id: &str, name: &str, artist: &str, year: u32) -> mbv_emby_model::EmbyItem {
+    let mut item = make_item(name, "MusicAlbum");
+    item.id = id.to_string();
+    item.artist = artist.to_string();
+    item.production_year = year;
+    item
+}
+
+/// One cached track of an album, `seconds` long.
+fn cached_track(id: &str, name: &str, number: i64, seconds: i64) -> mbv_emby_model::EmbyItem {
+    let mut item = make_item(name, "Audio");
+    item.id = id.to_string();
+    item.media_type = "Audio".to_string();
+    item.index_number = number;
+    item.runtime_ticks = seconds * TICKS_PER_SECOND;
+    item
+}
+
+/// A stub `App` with Hip-Hop and Soul selected and both groups' album lists
+/// already in the store, so a projection test reads the projection alone.
+fn app_with_stored_groups(
+    hiphop: Vec<mbv_emby_model::EmbyItem>,
+    soul: Vec<mbv_emby_model::EmbyItem>,
+) -> App {
+    let http = MockHttp::new();
+    let mut app = app_with_music_groups(&http);
+    app.gui_library_groups
+        .insert(0, vec![HIPHOP.to_string(), SOUL.to_string()]);
+    app.gui_music_albums
+        .insert((0, HIPHOP.to_string()), GuiGroupAlbums::Loaded(hiphop));
+    app.gui_music_albums
+        .insert((0, SOUL.to_string()), GuiGroupAlbums::Loaded(soul));
+    app
 }
 
 /// Drain one started group's fetch completion, the Client tick's library
@@ -174,5 +214,221 @@ fn one_failing_group_keeps_the_other_groups_albums() {
         app.gui_group_album_ids_for_test(0, HIPHOP),
         Some(vec!["alb-ill".to_string(), "alb-paul".to_string()]),
         "the other group keeps its albums"
+    );
+}
+
+/// The projection's union: two groups that share one artist yield that artist
+/// once, in artist sort-name order, with its sort letter, and the pills paint
+/// the core's selection (add-gui-library-panel design D5).
+#[test]
+fn two_groups_sharing_an_artist_yield_it_once_in_order_with_its_letter() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let app = app_with_stored_groups(
+        vec![stored_album(
+            "alb-ill",
+            "Licensed to Ill",
+            "Beastie Boys",
+            1986,
+        )],
+        vec![
+            stored_album("alb-paul", "Paul's Boutique", "Beastie Boys", 1989),
+            stored_album("alb-3ft", "3 Feet High and Rising", "De La Soul", 1989),
+        ],
+    );
+
+    let projection = app.gui_music_projection(0);
+
+    let pills: Vec<(&str, bool)> = projection
+        .pills
+        .iter()
+        .map(|pill| (pill.name.as_str(), pill.selected))
+        .collect();
+    assert_eq!(
+        pills,
+        [("Hip-Hop", true), ("Soul", true)],
+        "the pills paint the core's selection"
+    );
+    let artists: Vec<&str> = projection
+        .artists
+        .iter()
+        .map(|artist| artist.name.as_str())
+        .collect();
+    assert_eq!(
+        artists,
+        ["Beastie Boys", "De La Soul"],
+        "one row per artist, in artist sort-name order"
+    );
+    let letters: Vec<char> = projection
+        .artists
+        .iter()
+        .map(|artist| artist.sort_letter)
+        .collect();
+    assert_eq!(letters, ['B', 'D'], "each artist row carries its letter");
+    let shared: Vec<&str> = projection.artists[0]
+        .albums
+        .iter()
+        .map(|album| album.name.as_str())
+        .collect();
+    assert_eq!(
+        shared,
+        ["Licensed to Ill", "Paul's Boutique"],
+        "both groups' albums sit under the one shared artist row"
+    );
+}
+
+/// The Hero's facts for the picked album: the artist header, the album block,
+/// and the tracklist from the cached tracks (add-gui-library-panel design D5).
+#[test]
+fn a_picked_album_with_cached_tracks_yields_the_hero_facts_and_tracklist() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = app_with_stored_groups(
+        vec![stored_album(
+            "alb-ill",
+            "Licensed to Ill",
+            "Beastie Boys",
+            1986,
+        )],
+        vec![stored_album(
+            "alb-paul",
+            "Paul's Boutique",
+            "Beastie Boys",
+            1989,
+        )],
+    );
+    app.album_tracks_cache.insert(
+        "alb-ill".to_string(),
+        vec![
+            cached_track("trk-1", "Rhymin & Stealin", 1, 248),
+            cached_track("trk-2", "The New Style", 2, 275),
+        ],
+    );
+    app.album_tracks_cache.insert(
+        "alb-paul".to_string(),
+        vec![cached_track("trk-3", "Shake Your Rump", 1, 195)],
+    );
+    app.apply_gui_library_command(GuiLibraryCommand::ShowDetail {
+        item_id: "alb-ill".into(),
+    });
+
+    let hero = app
+        .gui_music_projection(0)
+        .hero
+        .expect("the picked album has a Hero");
+
+    assert_eq!(hero.artist, "Beastie Boys");
+    assert_eq!(hero.collections, ["Hip-Hop", "Soul"]);
+    assert_eq!(hero.album_count, 2, "the artist's albums in the union");
+    assert_eq!(hero.album.year, "1986");
+    assert_eq!(hero.album.name, "Licensed to Ill");
+    assert_eq!(
+        hero.album.total,
+        Some(GuiMusicTrackTotal {
+            count: 2,
+            duration: "8:43".to_string(),
+        })
+    );
+    let tracklist: Vec<(i64, &str, &str)> = hero
+        .album
+        .tracks
+        .iter()
+        .flatten()
+        .map(|track| (track.number, track.name.as_str(), track.duration.as_str()))
+        .collect();
+    assert_eq!(
+        tracklist,
+        [
+            (1, "Rhymin & Stealin", "4:08"),
+            (2, "The New Style", "4:35")
+        ]
+    );
+    assert_eq!(
+        hero.artist_tracks,
+        Some(GuiMusicTrackTotal {
+            count: 3,
+            duration: "11:58".to_string(),
+        }),
+        "the artist header counts every loaded album's tracks"
+    );
+}
+
+/// The artist header's track count and total time wait for every one of the
+/// artist's album tracklists (add-gui-library-panel design D5).
+#[test]
+fn the_artist_total_waits_for_every_albums_tracklist() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = app_with_stored_groups(
+        vec![stored_album(
+            "alb-ill",
+            "Licensed to Ill",
+            "Beastie Boys",
+            1986,
+        )],
+        vec![stored_album(
+            "alb-paul",
+            "Paul's Boutique",
+            "Beastie Boys",
+            1989,
+        )],
+    );
+    app.album_tracks_cache.insert(
+        "alb-ill".to_string(),
+        vec![cached_track("trk-1", "Rhymin & Stealin", 1, 248)],
+    );
+    app.apply_gui_library_command(GuiLibraryCommand::ShowDetail {
+        item_id: "alb-ill".into(),
+    });
+
+    let hero = app
+        .gui_music_projection(0)
+        .hero
+        .expect("the picked album has a Hero");
+
+    assert!(
+        hero.album.total.is_some(),
+        "the picked album's tracks are cached"
+    );
+    assert_eq!(
+        hero.artist_tracks, None,
+        "the artist's second album holds no tracklist yet"
+    );
+}
+
+/// A group that failed to load keeps the other groups' albums and names itself
+/// in the projection's failure line (add-gui-library-panel design D5).
+#[test]
+fn a_failed_group_keeps_the_other_albums_and_shows_a_failure_line() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let http = MockHttp::new();
+    let mut app = app_with_music_groups(&http);
+    app.gui_library_groups
+        .insert(0, vec![HIPHOP.to_string(), SOUL.to_string()]);
+    app.gui_music_albums.insert(
+        (0, HIPHOP.to_string()),
+        GuiGroupAlbums::Loaded(vec![stored_album(
+            "alb-ill",
+            "Licensed to Ill",
+            "Beastie Boys",
+            1986,
+        )]),
+    );
+    app.gui_music_albums
+        .insert((0, SOUL.to_string()), GuiGroupAlbums::Failed);
+
+    let projection = app.gui_music_projection(0);
+
+    assert_eq!(
+        projection.failure.as_deref(),
+        Some("Couldn't load albums: Soul"),
+        "the failure line names the group whose album list failed"
+    );
+    let artists: Vec<&str> = projection
+        .artists
+        .iter()
+        .map(|artist| artist.name.as_str())
+        .collect();
+    assert_eq!(
+        artists,
+        ["Beastie Boys"],
+        "the loaded group keeps its albums"
     );
 }
