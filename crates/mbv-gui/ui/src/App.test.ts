@@ -79,6 +79,7 @@ function hero(): GuiMusicHero {
 			tracks: null,
 			total: null,
 		},
+		menu: [],
 	};
 }
 

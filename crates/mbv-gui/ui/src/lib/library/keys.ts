@@ -14,19 +14,24 @@ import type { ListMove } from './list';
 import {
 	acceptLibraryFilter,
 	closeLibraryFilter,
+	closeLibraryHero,
+	closeLibraryItemMenu,
 	focusLibraryPane,
 	focusLibraryPill,
+	focusedItemId,
 	focusedLibraryPill,
+	heroOverlayOpen,
 	libraryContent,
 	libraryUi,
 	moveLibraryCursor,
 	moveLibraryPane,
+	moveLibraryTrackCursor,
 	openLibraryFilter,
 	pickLibraryCursor,
 	requestLibraryPillToggle,
 	setLibraryCursorOpen,
 } from './state';
-import type { LibraryPane } from './state';
+import type { LibraryUiState } from './state';
 
 /** The frame facts the routing reads. A slice `GuiFrame` satisfies it whole, so
  * the installer passes the frame it holds; a test builds only these fields. */
@@ -37,17 +42,13 @@ export type LibraryKeyFrame = Pick<
 	summary: Pick<GuiFrame['summary'], 'filterActive'>;
 };
 
-/** The keys whose target the list and the Hero own (rows 4.5 and 4.7): Enter
- * plays or presses the item under the cursor, `n` and `a` act on it, and the
- * movement keys move the cursor or open and close a node. The Library takes
- * them, so the core never reads them with Library Panel focus (design D3,
- * step 4); the movements and Enter act on the list's cursor, and the keys that
- * act on the cursor's item (`n`, `a`) and on the Hero's tracklist arrive with
- * row 4.7. */
+/** The keys the Library keeps from the core's router (design D3, step 4): the
+ * movements, Right and Left's open and close, and Enter. Each pane acts on the
+ * ones it owns — the list's cursor or the Hero's tracklist — and the others
+ * change nothing but still never reach the core. `n` and `a` are the Library's
+ * too, and `routeItemKey` answers them for every pane. */
 const LIST_AND_HERO_KEYS: ReadonlySet<string> = new Set([
 	'Enter',
-	'n',
-	'a',
 	'ArrowUp',
 	'ArrowDown',
 	'ArrowLeft',
@@ -139,9 +140,7 @@ function routeFilterKey(event: KeyboardEvent): KeyOutcome {
 
 /** Route a movement, open and close, or pick key to the list's cursor (design
  * D3, D7): the arrows, Page Up, Page Down, Home, and End move the cursor, Right
- * opens the cursor's node, Left closes it, and Enter picks the item under it.
- * The Hero's tracklist and the item keys `n` and `a` take these keys with row
- * 4.7. */
+ * opens the cursor's node, Left closes it, and Enter picks the item under it. */
 function routeListKey(event: KeyboardEvent): boolean {
 	const move = CURSOR_MOVES[event.key];
 	if (move !== undefined) {
@@ -163,9 +162,62 @@ function routeListKey(event: KeyboardEvent): boolean {
 	return false;
 }
 
+/** Route a movement or Enter key to the Hero's tracklist cursor (design D3):
+ * the movement keys move the tracklist's cursor, and Enter plays the track it
+ * rests on. */
+function routeTracklistKey(event: KeyboardEvent): boolean {
+	const move = CURSOR_MOVES[event.key];
+	if (move !== undefined) {
+		moveLibraryTrackCursor(move);
+		return true;
+	}
+	if (event.key === 'Enter') {
+		const itemId = focusedItemId();
+		if (itemId !== null) {
+			void sendLibraryCommand({ command: 'play', itemId });
+		}
+		return true;
+	}
+	return false;
+}
+
+/** Route `n` and `a` to the item the focused pane's cursor names (design D3,
+ * step 4, D8): play next and add to queue. The Library takes both keys while
+ * it has Library Panel focus, so the core's `a` chord never runs from here;
+ * with no item under the cursor the key sends no command. */
+function routeItemKey(event: KeyboardEvent): void {
+	const itemId = focusedItemId();
+	if (itemId === null) {
+		return;
+	}
+	if (event.key === 'n') {
+		void sendLibraryCommand({ command: 'playNext', itemId });
+		return;
+	}
+	void sendLibraryCommand({ command: 'addToQueue', itemId });
+}
+
+/** Close the front end's open menu or overlay with Esc (design D3): the picked
+ * item's menu first, then the Narrow arrangement's Hero overlay. Whether one
+ * paints decides the answer, so an Esc with nothing open stays the core's. */
+function routeEscapeKey(ui: LibraryUiState): KeyOutcome {
+	if (ui.itemMenuOpen) {
+		closeLibraryItemMenu();
+		return 'handled';
+	}
+	if (heroOverlayOpen(ui)) {
+		closeLibraryHero();
+		return 'handled';
+	}
+	return 'core';
+}
+
 /** Route a key to the Library keys (design D3, step 4), with the pane the
  * window content focused deciding which control the key acts on. */
-function routePanelKey(event: KeyboardEvent, pane: LibraryPane): KeyOutcome {
+function routePanelKey(event: KeyboardEvent, ui: LibraryUiState): KeyOutcome {
+	if (event.key === 'Escape' && bare(event)) {
+		return routeEscapeKey(ui);
+	}
 	if (event.key === '/' && bare(event)) {
 		openLibraryFilter();
 		return 'handled';
@@ -174,14 +226,14 @@ function routePanelKey(event: KeyboardEvent, pane: LibraryPane): KeyOutcome {
 	// no pill focused, it is the core's: Space plays and pauses (design D3,
 	// step 5).
 	if (event.key === ' ' && !event.ctrlKey && !event.metaKey) {
-		const pill = focusedLibraryPill(pills(), get(libraryUi));
+		const pill = focusedLibraryPill(pills(), ui);
 		if (pill === null) {
 			return 'core';
 		}
 		requestLibraryPillToggle(pill.groupId, event.altKey);
 		return 'handled';
 	}
-	if (pane === 'pills' && bare(event)) {
+	if (ui.pane === 'pills' && bare(event)) {
 		if (event.key === 'ArrowRight') {
 			movePillFocus(1);
 			return 'handled';
@@ -191,14 +243,20 @@ function routePanelKey(event: KeyboardEvent, pane: LibraryPane): KeyOutcome {
 			return 'handled';
 		}
 	}
-	if (pane === 'list' && bare(event) && routeListKey(event)) {
+	if (ui.pane === 'list' && bare(event) && routeListKey(event)) {
+		return 'handled';
+	}
+	if (ui.pane === 'hero' && bare(event) && routeTracklistKey(event)) {
+		return 'handled';
+	}
+	if (bare(event) && (event.key === 'n' || event.key === 'a')) {
+		routeItemKey(event);
 		return 'handled';
 	}
 	if (bare(event) && LIST_AND_HERO_KEYS.has(event.key)) {
 		return 'handled';
 	}
-	// Esc closes the open filter, overlay, or menu. The filter closes above,
-	// the overlay is the core's, and no other menu is open here.
+	// Nothing else of the Library's answers this key: the core's router does.
 	return 'core';
 }
 
@@ -246,7 +304,7 @@ export function routeLibraryKey(
 	}
 	// (4) The Library keys run while the Library panel has Panel focus.
 	if (frame.focus.panel === 'library') {
-		return routePanelKey(event, ui.pane);
+		return routePanelKey(event, ui);
 	}
 	// (5) Every other key goes to the core's keyboard router.
 	return 'core';

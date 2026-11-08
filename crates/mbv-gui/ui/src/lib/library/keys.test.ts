@@ -12,6 +12,7 @@ import { installInput } from '$lib/bridge/input';
 import type {
 	GuiLibraryContent,
 	GuiMusicArtist,
+	GuiMusicHero,
 	GuiMusicPill,
 	GuiPanel,
 } from '$lib/bridge/types';
@@ -23,6 +24,7 @@ import {
 	libraryUi,
 	measureLibraryList,
 	openLibraryFilter,
+	reportLibraryArrangement,
 	setLibraryFilter,
 } from './state';
 
@@ -79,9 +81,12 @@ const BRAND: GuiMusicArtist = {
 	albums: [{ albumId: 'al3', name: 'One For All', year: '1990', tracks: null, total: null }],
 };
 
-/** The carried Music content: two group pills, one selected, and the union the
- * list keys move through. */
-function content(artists: GuiMusicArtist[] = []): GuiLibraryContent {
+/** The carried Music content: two group pills, one selected, the union the
+ * list keys move through, and the Hero's facts while an album is picked. */
+function content(
+	artists: GuiMusicArtist[] = [],
+	hero: GuiMusicHero | null = null,
+): GuiLibraryContent {
 	return {
 		tabs: [{ position: 1, label: 'Music' }],
 		currentTab: 1,
@@ -91,11 +96,31 @@ function content(artists: GuiMusicArtist[] = []): GuiLibraryContent {
 			loading: false,
 			failure: null,
 			artists,
-			hero: null,
+			hero,
 			art: null,
 		},
 	};
 }
+
+/** The picked album's Hero facts: the tracklist the Hero pane's keys move
+ * through (design D3, D8). */
+const HERO: GuiMusicHero = {
+	artist: 'Beastie Boys',
+	collections: ['Rock'],
+	albumCount: 1,
+	artistTracks: { count: 2, duration: '7:02' },
+	album: {
+		albumId: 'al1',
+		name: 'Licensed To Ill',
+		year: '1986',
+		tracks: [
+			{ trackId: 't1', name: 'Rhymin & Stealin', number: 1, duration: '4:08' },
+			{ trackId: 't2', name: 'The New Style', number: 2, duration: '4:35' },
+		],
+		total: { count: 2, duration: '8:43' },
+	},
+	menu: [],
+};
 
 /** Carry the union the list keys move through, with the list pane focused. */
 function carryList(open: string[] = []): void {
@@ -290,4 +315,82 @@ test('Esc that clears the filter moves a stranded cursor to a painted row', () =
 	press('Escape');
 
 	expect(get(libraryUi).cursor).toBe('artist:service:a1');
+});
+
+// Row 4.7: the focused pane's cursor decides what `n`, `a`, Enter, and the
+// movement keys act on (design D3, step 4), and Esc closes the front end's own
+// menu and overlay.
+test('n with the list cursor on an album sends play next for that album', () => {
+	carryList(['artist:service:a1']);
+	libraryUi.update((ui) => ({ ...ui, cursor: 'album:al1' }));
+
+	press('n');
+
+	expect(invokeMock).toHaveBeenCalledWith('library', {
+		command: { command: 'playNext', itemId: 'al1' },
+	});
+});
+
+test('a with the Hero pane focused sends add to queue for the tracklist cursor track', () => {
+	carryLibraryContent({ revision: 1, content: content([BEASTIE], HERO) });
+	libraryUi.update((ui) => ({ ...ui, pane: 'hero', trackCursor: 't1' }));
+
+	press('a');
+
+	expect(invokeMock).toHaveBeenCalledWith('library', {
+		command: { command: 'addToQueue', itemId: 't1' },
+	});
+});
+
+test('Down with the Hero pane focused moves the tracklist cursor', () => {
+	carryLibraryContent({ revision: 1, content: content([BEASTIE], HERO) });
+	libraryUi.update((ui) => ({ ...ui, pane: 'hero', trackCursor: 't1' }));
+
+	press('ArrowDown');
+
+	expect(get(libraryUi).trackCursor).toBe('t2');
+	expect(invokeMock).not.toHaveBeenCalled();
+});
+
+test('Tab into the Hero puts the tracklist cursor on its first track', () => {
+	carryLibraryContent({ revision: 1, content: content([BEASTIE], HERO) });
+	libraryUi.update((ui) => ({ ...ui, pane: 'list' }));
+
+	press('Tab');
+
+	expect(get(libraryUi).pane).toBe('hero');
+	expect(get(libraryUi).trackCursor).toBe('t1');
+});
+
+test('Esc closes the open item menu and sends no key', () => {
+	libraryUi.update((ui) => ({ ...ui, itemMenuOpen: true }));
+
+	press('Escape');
+
+	expect(get(libraryUi).itemMenuOpen).toBe(false);
+	expect(invokeMock).not.toHaveBeenCalled();
+});
+
+test('Esc closes the Narrow Hero overlay and sends no key', () => {
+	carryLibraryContent({ revision: 1, content: content([BEASTIE], HERO) });
+	reportLibraryArrangement('narrow');
+
+	press('Escape');
+
+	expect(get(libraryUi).heroDismissed).toBe(true);
+	expect(invokeMock).not.toHaveBeenCalled();
+});
+
+// The overlay paints only in Narrow (design D4): the Esc that would close it
+// elsewhere still belongs to the core's router.
+test('Esc with no overlay or menu open is the core\u2019s key', () => {
+	carryLibraryContent({ revision: 1, content: content([BEASTIE], HERO) });
+	reportLibraryArrangement('wide');
+
+	press('Escape');
+
+	expect(get(libraryUi).heroDismissed).toBe(false);
+	expect(invokeMock).toHaveBeenCalledWith('key', {
+		event: expect.objectContaining({ key: 'Escape' }),
+	});
 });

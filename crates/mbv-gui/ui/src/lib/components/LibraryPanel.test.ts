@@ -1,12 +1,16 @@
 // add-gui-library-panel row 4.2: a press inside the Library panel sends the
 // take-focus command (design D4), so the core sets the focus stack and Panel
-// focus together before the press acts on the row. The Tauri IPC is mocked;
-// the asserted payload is the serde wire shape of bridge/library.rs.
+// focus together before the press acts on the row. Row 4.7 mounts the Hero in
+// the arrangement's two places — the Wide pane beside the list and the Narrow
+// overlay over it — with the same painters, and the overlay closes on a press
+// on its backdrop (design D3). The Tauri IPC is mocked; the asserted payload is
+// the serde wire shape of bridge/library.rs.
 
 import { invoke } from '@tauri-apps/api/core';
 import { fireEvent, render } from '@testing-library/svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
 import type { GuiMusicFrame, GuiMusicHero } from '$lib/bridge/types';
+import { initialLibraryUi, libraryUi } from '$lib/library/state';
 import LibraryPanel from './LibraryPanel.svelte';
 
 vi.mock('@tauri-apps/api/core', () => ({
@@ -18,6 +22,7 @@ const invokeMock = vi.mocked(invoke);
 beforeEach(() => {
 	invokeMock.mockReset();
 	invokeMock.mockResolvedValue(undefined);
+	libraryUi.set(initialLibraryUi());
 });
 
 /** The carried Music content with no album picked. */
@@ -47,6 +52,7 @@ function hero(): GuiMusicHero {
 			tracks: null,
 			total: null,
 		},
+		menu: [],
 	};
 }
 
@@ -85,10 +91,9 @@ test('the panel paints the top bar and the pill row above the list region', () =
 
 // Review of row 4.5, finding P1: a pick fills `music.hero`, so the Narrow
 // Hero's place mounted over the whole list — filter, rows, and rail — with an
-// opaque fill that no key dismissed, because the Hero's painters and its
-// dismissal arrive in row 4.7. The place takes no fill and no pointer events
-// until then.
-test('the Narrow Hero\u2019s place paints no fill over the list', () => {
+// opaque fill that no key dismissed. Row 4.7 paints the Hero into it and gives
+// it the dismissal the review required: a press on the backdrop closes it.
+test('the Narrow overlay paints the Hero and closes on a press on its backdrop', async () => {
 	const { container } = render(LibraryPanel, {
 		tabs: [{ position: 1, label: 'Music' }],
 		currentTab: 1,
@@ -97,7 +102,26 @@ test('the Narrow Hero\u2019s place paints no fill over the list', () => {
 	});
 	const overlay = container.querySelector('[data-library-region="heroOverlay"]');
 
-	expect(overlay).toBeTruthy();
-	expect(overlay?.className).toContain('pointer-events-none');
-	expect((overlay as HTMLElement).style.background).toBe('');
+	expect(overlay?.querySelector('[data-library-hero]')).toBeTruthy();
+	expect((overlay as HTMLElement).style.background).not.toBe('');
+
+	await fireEvent.click(
+		container.querySelector('[data-library-hero-backdrop]') as HTMLElement,
+	);
+
+	expect(container.querySelector('[data-library-region="heroOverlay"]')).toBeNull();
+});
+
+test('the Wide Hero pane paints the Hero beside the list', () => {
+	const { container } = render(LibraryPanel, {
+		tabs: [{ position: 1, label: 'Music' }],
+		currentTab: 1,
+		music: { ...music(), hero: hero() },
+		arrangement: 'wide',
+	});
+
+	expect(
+		container.querySelector('[data-library-region="hero"] [data-library-hero]'),
+	).toBeTruthy();
+	expect(container.querySelector('[data-library-region="heroOverlay"]')).toBeNull();
 });

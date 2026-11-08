@@ -813,6 +813,20 @@ export interface GuiMusicHero {
 	 * artist's union albums holds a cached tracklist. */
 	artistTracks: GuiMusicTrackTotal | null;
 	album: GuiMusicAlbum;
+	/** The picked item's item-menu entries in the shared builder's order
+	 * (design D8): More actions paints them, and a chosen entry sends its
+	 * index back. Empty while the item offers no menu — the Library panel does
+	 * not hold Panel focus, or the item is gone — so the window content offers
+	 * More actions only when the frame carries entries. */
+	menu: GuiMusicMenuEntryFrame[];
+}
+
+/** One entry of the picked item's item menu (design D8), as the window paints
+ * it: the label, and the key hint the row-menu face shows when the entry has
+ * one. The core keeps the action, so a chosen entry sends only its index. */
+export interface GuiMusicMenuEntryFrame {
+	label: string;
+	keyHint: string | null;
 }
 
 /** The Library Hero's square artwork (design D5). The image and placeholder

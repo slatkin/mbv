@@ -81,6 +81,8 @@
 	   bar and the list column. */
 	--canvas-library-column: #272e33; /* the Library column's body fill */
 	--canvas-library-panel: #2d353b; /* the Library's top bar and list column */
+	--canvas-library-raise: #343f44; /* the Hero's raised fill: the hovered and cursor track row, the album art box, and the secondary controls */
+	--canvas-library-control: #475258; /* the Hero's control border */
 	/* The canvas header's two lines over the 44 px filter control, between
 	   12 px and 8 px of padding. */
 	--canvas-queue-header-height: 64px;

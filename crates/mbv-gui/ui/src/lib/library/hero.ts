@@ -1,0 +1,96 @@
+// The Library Hero's facts and geometry (add-gui-library-panel design D5, D8):
+// the picked album's lines as the canvas prints them, the artist's albums in
+// the union that Shuffle artist plays, and the tracklist's cursor. The data is
+// the core's, so this module only reads the carried Hero; keeping the strings
+// and the cursor movement here lets the painters stay markup and the movement
+// test without a layout.
+
+import type {
+	GuiMusicFrame,
+	GuiMusicHero,
+	GuiMusicTrack,
+	GuiMusicTrackTotal,
+} from '$lib/bridge/types';
+import type { ListMove } from './list';
+
+/** The tracklist rows of the Hero's album (design D5): the picked album's
+ * cached tracklist, empty until the album node's open loads it. */
+export function heroTracks(hero: GuiMusicHero | null): GuiMusicTrack[] {
+	return hero?.album.tracks ?? [];
+}
+
+/** The artist header's first line, `ARTIST · HIP-HOP` as the canvas prints it:
+ * the artist label with the selected collection names (design D5). */
+export function heroKicker(hero: GuiMusicHero): string {
+	return hero.collections.length > 0
+		? `artist · ${hero.collections.join(' + ').toUpperCase()}`
+		: 'artist';
+}
+
+/** `13 tracks · 44:25`: a track count with its total time, each in the
+ * singular when the count is one. */
+export function trackTotalFacts(total: GuiMusicTrackTotal): string {
+	return `${total.count} ${total.count === 1 ? 'track' : 'tracks'} · ${total.duration}`;
+}
+
+/** The artist header's third line (design D5): the artist's album count in the
+ * union, and the track count and total time once every one of those albums
+ * holds a cached tracklist. */
+export function artistFacts(hero: GuiMusicHero): string {
+	const albums = `${hero.albumCount} ${hero.albumCount === 1 ? 'album' : 'albums'}`;
+	return hero.artistTracks === null
+		? albums
+		: `${albums} · ${trackTotalFacts(hero.artistTracks)}`;
+}
+
+/** The album block's facts line, or `''` while the album's tracklist has not
+ * landed (design D5). */
+export function albumFacts(hero: GuiMusicHero): string {
+	return hero.album.total === null ? '' : trackTotalFacts(hero.album.total);
+}
+
+/** The artist's albums in the union, which Shuffle artist plays (design D8).
+ * The union artist is the one that owns the picked album, so a name the
+ * Service repeats cannot pick the wrong artist; the picked album alone is the
+ * fallback while the union holds no owner. */
+export function artistUnionAlbums(music: GuiMusicFrame, hero: GuiMusicHero): string[] {
+	const owner = music.artists.find((artist) =>
+		artist.albums.some((album) => album.albumId === hero.album.albumId),
+	);
+	return (owner?.albums ?? [hero.album]).map((album) => album.albumId);
+}
+
+/** The rows a Page Up or Page Down spans in the tracklist: the tracklist is a
+ * short list inside the Hero, so a fixed page keeps the cursor a screenful
+ * away without measuring the Hero. */
+const TRACK_PAGE = 10;
+
+/** The tracklist's cursor row after one movement (design D3): row by row for
+ * Up and Down, a page for Page Up and Page Down, and the tracklist's ends for
+ * Home and End. With no cursor on a row, Up and End start from the last track
+ * and every other movement from the first, so one key press always lands the
+ * cursor. */
+export function moveTrackCursor(
+	tracks: readonly GuiMusicTrack[],
+	cursor: string | null,
+	move: ListMove,
+): string | null {
+	if (tracks.length === 0) {
+		return null;
+	}
+	const ids = tracks.map((track) => track.trackId);
+	const last = ids.length - 1;
+	const at = cursor === null ? -1 : ids.indexOf(cursor);
+	if (at < 0) {
+		return move === 'up' || move === 'end' ? ids[last] : ids[0];
+	}
+	const to = {
+		up: at - 1,
+		down: at + 1,
+		pageUp: at - TRACK_PAGE,
+		pageDown: at + TRACK_PAGE,
+		home: 0,
+		end: last,
+	}[move];
+	return ids[Math.min(Math.max(to, 0), last)];
+}

@@ -4,20 +4,32 @@
 	// top bar and the pill row above the list, and, in Wide, the Hero pane
 	// beside the list; in Narrow the Hero mounts as an overlay over the list
 	// once an album is picked. The list column is row 4.5's canvas tree with its
-	// letter rail, and the Hero (row 4.7) and the Status bar (row 4.8) still
-	// follow. The panel's interaction state lives in `$lib/library/state` and
-	// its keys in `$lib/library/keys`, so this shell holds no state of its own.
+	// letter rail, the Hero is row 4.7's painters, and the Status bar (row 4.8)
+	// still follows. The panel's interaction state lives in `$lib/library/state`
+	// and its keys in `$lib/library/keys`, so this shell holds no state of its
+	// own.
 	//
 	// A press inside the panel sends the take-focus command (design D4): the
 	// core sets the focus stack and Panel focus together, and the press that
 	// follows acts on the row. The panel paints through the GUI-local
 	// `--canvas-*` tokens of `app.css`; `mbv-theme` gains no Library slot.
+	//
+	// The Narrow Hero overlay covers the list, so it must be dismissible: its
+	// backdrop press closes it, and Esc closes it in the key router (design D3).
+	// The panel also reports the arrangement it paints, so the router closes an
+	// overlay only where one actually paints.
 	import type { GuiArrangement } from '$lib/bridge/arrangement';
 	import { sendLibraryCommand } from '$lib/bridge/library';
 	import type { GuiLibraryTab, GuiMusicFrame } from '$lib/bridge/types';
+	import LibraryHero from '$lib/components/LibraryHero.svelte';
 	import LibraryList from '$lib/components/LibraryList.svelte';
 	import LibraryPills from '$lib/components/LibraryPills.svelte';
 	import LibraryTopBar from '$lib/components/LibraryTopBar.svelte';
+	import {
+		closeLibraryHero,
+		libraryUi,
+		reportLibraryArrangement,
+	} from '$lib/library/state';
 
 	interface Props {
 		/** The presented destination tabs and the active one (design D2): the
@@ -50,6 +62,12 @@
 		el.addEventListener('pointerdown', takeFocus);
 		return () => el.removeEventListener('pointerdown', takeFocus);
 	});
+
+	// Report the arrangement the panel paints (design D4): the key router closes
+	// the Narrow Hero overlay with Esc only while one paints.
+	$effect(() => {
+		reportLibraryArrangement(arrangement);
+	});
 </script>
 
 <div
@@ -64,12 +82,17 @@
 	<div class="relative flex min-h-0 flex-1">
 		{#if wide}
 			<!-- The Wide arrangement's Hero pane, to the left of the list as the
-				canvas orders it. Row 4.7 paints the Hero here. -->
+				canvas orders it, with the Hero's own painters inside. -->
 			<div
 				data-library-region="hero"
 				class="flex min-h-0 min-w-0 flex-1 flex-col"
 				style:background="var(--canvas-library-column)"
-			></div>
+				style:overflow-y="auto"
+			>
+				{#if music.hero}
+					<LibraryHero {music} />
+				{/if}
+			</div>
 		{/if}
 		<!-- The list column: the canvas's 320 px index in Wide, the whole
 			Library column in Mini and Narrow. Row 4.5 paints the canvas tree and
@@ -84,14 +107,36 @@
 		>
 			<LibraryList {music} />
 		</div>
-		{#if arrangement === 'narrow' && music.hero}
-			<!-- The Narrow Hero overlay's place: picking an album opens the Hero over
-				the list. Until row 4.7 paints the Hero here, the box paints no fill and
-				takes no pointer events — a picked album never covers the list, its
-				filter, or the rail with an empty surface that no key dismisses (review
-				of row 4.5, finding P1). Row 4.7 gives it the Hero's fill, content, and
-				dismissal. -->
-			<div data-library-region="heroOverlay" class="pointer-events-none absolute inset-0"></div>
+		{#if arrangement === 'narrow' && music.hero && !$libraryUi.heroDismissed}
+			<!-- The Narrow Hero overlay (design D4): picking an item paints the Hero
+				over the list, through the same painters the Wide pane uses, so the two
+				cannot drift. The backdrop press and Esc close it (design D3), so a
+				picked album never leaves an overlay no input dismisses; the card scrolls
+				its own content and swallows the presses that land on it. -->
+			<div
+				data-library-region="heroOverlay"
+				class="absolute inset-0 z-10 flex"
+				style:background="rgba(0, 0, 0, 0.45)"
+			>
+				<button
+					type="button"
+					class="absolute inset-0"
+					style:background="none"
+					style:border="0"
+					aria-label="Close the Hero"
+					data-library-hero-backdrop=""
+					onclick={closeLibraryHero}
+				></button>
+				<div
+					class="relative m-3 flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto"
+					style:background="var(--canvas-library-column)"
+					style:border="1px solid var(--canvas-border)"
+					style:border-radius="8px"
+					data-library-hero-card=""
+				>
+					<LibraryHero {music} />
+				</div>
+			</div>
 		{/if}
 	</div>
 </div>
