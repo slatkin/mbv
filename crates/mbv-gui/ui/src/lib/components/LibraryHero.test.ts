@@ -45,9 +45,9 @@ function hero(): GuiMusicHero {
 			total: { count: 2, duration: '8:43' },
 		},
 		menu: [
-			{ label: 'Play All', keyHint: 'Enter' },
-			{ label: 'Shuffle', keyHint: null },
-			{ label: 'Add to Queue', keyHint: null },
+			{ label: 'Play All', keyHint: 'Enter', index: 0 },
+			{ label: 'Shuffle', keyHint: null, index: 1 },
+			{ label: 'Add to Queue', keyHint: null, index: 2 },
 		],
 	};
 }
@@ -72,6 +72,7 @@ function music(facts: GuiMusicHero): GuiMusicFrame {
 		hero: facts,
 		art: null,
 		playingTrackId: null,
+		rowMenu: null,
 	};
 }
 
@@ -154,12 +155,12 @@ test("More actions paints the item menu's entries from the frame", async () => {
 
 	await fireEvent.click(part(container, 'more'));
 
+	// The Hero's own buttons already send Play All and Add to Queue, so the
+	// dropped-duplicates rule leaves Shuffle the only painted entry, under its
+	// shared-builder index.
 	const entries = [...(container.querySelectorAll('[data-row-menu] [data-menu-entry]') ?? [])];
-	expect(entries.map((entry) => entry.textContent?.trim())).toEqual([
-		'Play All ⏎',
-		'Shuffle',
-		'Add to Queue',
-	]);
+	expect(entries.map((entry) => entry.textContent?.trim())).toEqual(['Shuffle']);
+	expect(entries.map((entry) => entry.getAttribute('data-menu-entry'))).toEqual(['1']);
 });
 
 test('a menu entry sends its index for the picked item', async () => {
@@ -175,13 +176,13 @@ test('a menu entry sends its index for the picked item', async () => {
 	});
 });
 
-// The frame carries no entries while the Library panel does not hold Panel
-// focus (design D8): `execute_context_action` would resolve a leaf target
-// through the TUI's cursor, so More actions must not open a menu then.
-test('More actions is disabled while the frame carries no entries', () => {
+// The frame carries no entries when every entry duplicates a Hero button (the
+// dropped-duplicates rule): the menu would add nothing, so no More actions
+// control paints at all.
+test('an empty hero menu paints no More actions control', () => {
 	const container = mountHero({ ...hero(), menu: [] });
 
-	expect(part(container, 'more').hasAttribute('disabled')).toBe(true);
+	expect(part(container, 'more')).toBeNull();
 });
 
 // Review of row 4.7, finding P2-b: the cursor was seeded only when a pane took

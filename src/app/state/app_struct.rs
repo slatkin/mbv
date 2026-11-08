@@ -217,6 +217,10 @@ pub struct App {
     /// The item the GUI Library's Hero shows (design D2): the album the window
     /// content picked. The TUI never reads it.
     pub(in crate::app) gui_library_detail: Option<EmbyItem>,
+    /// The item whose full menu the frame's `rowMenu` section carries (the
+    /// GUI Library's right-click item menu): the item the row-menu command
+    /// last named. The TUI never reads it.
+    pub(in crate::app) gui_library_row_menu_target: Option<String>,
     /// The one startup snapshot and its tab-scoped destination re-anchor.
     pub(in crate::app) launch_restore: LaunchRestore,
     /// Deferred tab switch for a `NavigateLanding::Album` landing: set when the

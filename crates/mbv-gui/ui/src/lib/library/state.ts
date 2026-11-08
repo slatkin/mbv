@@ -81,6 +81,11 @@ export interface LibraryUiState {
 	/** Whether the picked item's menu is open (design D8): More actions opens
 	 * it, a chosen entry runs and closes it, and Esc closes it. */
 	itemMenuOpen: boolean;
+	/** The right-click item menu (the row-menu command): the item a row
+	 * right-press named with the pointer position it opened at. `null` while
+	 * no right-click menu is up. The menu paints only while the frame carries
+	 * that item's entries, so a stale open state paints nothing. */
+	rowMenu: { itemId: string; x: number; y: number } | null;
 	/** The arrangement the panel paints, reported by the panel (design D4): the
 	 * keys close the Narrow Hero overlay only where one paints, so Esc in Wide
 	 * stays the core's. `null` until the panel reports. */
@@ -103,6 +108,7 @@ export function initialLibraryUi(): LibraryUiState {
 		trackCursor: null,
 		heroDismissed: false,
 		itemMenuOpen: false,
+		rowMenu: null,
 		arrangement: null,
 	};
 }
@@ -272,6 +278,7 @@ function showDetail(itemId: string | null): void {
 		...ui,
 		heroDismissed: false,
 		itemMenuOpen: false,
+		rowMenu: null,
 		trackCursor: null,
 	}));
 }
@@ -548,11 +555,41 @@ export function closeLibraryHero(): void {
 /** Open the picked item's menu (design D8): More actions paints the entries the
  * frame carries. */
 export function openLibraryItemMenu(): void {
-	libraryUi.update((ui) => (ui.itemMenuOpen ? ui : { ...ui, itemMenuOpen: true }));
+	libraryUi.update((ui) =>
+		ui.itemMenuOpen ? ui : { ...ui, itemMenuOpen: true, rowMenu: null },
+	);
 }
 
 /** Close the picked item's menu (design D8): a chosen entry closes it, and so
  * does Esc. */
 export function closeLibraryItemMenu(): void {
 	libraryUi.update((ui) => (ui.itemMenuOpen ? { ...ui, itemMenuOpen: false } : ui));
+}
+
+/** Open the right-click item menu for `itemId` (the row-menu command): the
+ * next frame carries the item's full entries for the menu to paint at the
+ * pointer position, and a chosen entry sends its index for that item. The
+ * Hero's own menu closes with it — one menu is up at a time. */
+export function openLibraryRowMenu(itemId: string, x: number, y: number): void {
+	void sendLibraryCommand({ command: 'rowMenu', itemId });
+	libraryUi.update((ui) => ({ ...ui, itemMenuOpen: false, rowMenu: { itemId, x, y } }));
+}
+
+/** Close the right-click item menu: a chosen entry closes it, and so do Esc,
+ * a press outside it, and a scroll of the surface the row painted in. */
+export function closeLibraryRowMenu(): void {
+	libraryUi.update((ui) => (ui.rowMenu === null ? ui : { ...ui, rowMenu: null }));
+}
+
+/** Run the right-click menu's entry at `index` for the item it opened on: the
+ * same menu-entry command the Hero's menu sends, resolved by that item's
+ * stable id in the core. The menu closes behind the press. */
+export function runLibraryRowMenuEntry(index: number): void {
+	const { rowMenu } = get(libraryUi);
+	const itemId = rowMenu?.itemId;
+	closeLibraryRowMenu();
+	if (itemId === undefined) {
+		return;
+	}
+	void sendLibraryCommand({ command: 'menuEntry', itemId, index });
 }

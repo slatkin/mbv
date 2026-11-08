@@ -45,6 +45,7 @@ function music(picked: GuiMusicHero | null): GuiMusicFrame {
 		hero: picked,
 		art: null,
 		playingTrackId: null,
+		rowMenu: null,
 	};
 }
 
@@ -52,6 +53,14 @@ test('the location joins the destination, the selected collections, and the pick
 	expect(libraryLocation(TABS, 1, music(hero()))).toBe(
 		'Music › Hip-Hop › Soul › Beastie Boys',
 	);
+});
+
+// An empty pill selection is the whole library: the location names it `All`,
+// as the list header names it.
+test('an empty selection names the location All', () => {
+	const empty = { ...music(null), collectionNames: [] };
+
+	expect(libraryLocation(TABS, 1, empty)).toContain('All');
 });
 
 // An unpicked Hero carries no item, so the location stops at the collections

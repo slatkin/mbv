@@ -41,9 +41,16 @@
 	/** The Hero's facts, or `null` while no album is picked. */
 	const hero = $derived(music.hero);
 
-	/** The picked item's menu as the frame carries it: empty while the core
-	 * offers none. */
-	const menu = $derived(music.hero?.menu ?? []);
+	/** The Hero's More-actions entries (design D8): the frame carries the
+	 * shared builder's entries in the builder's order — the order the
+	 * core's execution rebuild indexes. The entries the Hero's own buttons
+	 * already send (the Play entries and the add-to-queue entry) drop at
+	 * paint time, so the menu names only what no button offers, and an
+	 * album whose remainder is empty hides the control entirely. */
+	const heroButtonLabels: ReadonlySet<string> = new Set(['Play', 'Play All', 'Add to Queue']);
+	const menu = $derived(
+		(music.hero?.menu ?? []).filter((entry) => !heroButtonLabels.has(entry.label)),
+	);
 
 	/** Play the album (design D8): the shared play-or-activate path, so the
 	 * album's tracks reach the Owner as one replacement. */
@@ -250,24 +257,27 @@
 							>a</span
 						>
 					</button>
-					<button
-						type="button"
-						class="flex items-center justify-center"
-						style:width="44px"
-						style:height="44px"
-						style:background="none"
-						style:border="0"
-						style:color="var(--canvas-muted)"
-						style:cursor={menu.length === 0 ? 'default' : 'pointer'}
-						style:opacity={menu.length === 0 ? '0.4' : '1'}
-						aria-label="More album actions"
-						aria-expanded={$libraryUi.itemMenuOpen}
-						disabled={menu.length === 0}
-						data-library-hero-more=""
-						onclick={openLibraryItemMenu}
-					>
-						<Ellipsis size={16} />
-					</button>
+					{#if menu.length > 0}
+						<!-- The picked item's More actions: the dropped entries are the
+						ones the Hero's own buttons already send, so an album whose menu
+						left empty paints no control at all. -->
+						<button
+							type="button"
+							class="flex items-center justify-center"
+							style:width="44px"
+							style:height="44px"
+							style:background="none"
+							style:border="0"
+							style:color="var(--canvas-muted)"
+							style:cursor="pointer"
+							aria-label="More album actions"
+							aria-expanded={$libraryUi.itemMenuOpen}
+							data-library-hero-more=""
+							onclick={openLibraryItemMenu}
+						>
+							<Ellipsis size={16} />
+						</button>
+					{/if}
 					{#if $libraryUi.itemMenuOpen && menu.length > 0}
 						<!-- The picked item's menu in the row-menu face (`QueueRowMenu`),
 							dropped under the actions row as the canvas places a menu under

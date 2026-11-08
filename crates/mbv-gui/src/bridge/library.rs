@@ -47,6 +47,8 @@ pub enum GuiLibraryCommand {
     ShuffleArtist { album_ids: Vec<String> },
     /// Run the item menu's entry at `index`.
     MenuEntry { item_id: String, index: usize },
+    /// Carry the item's full menu in the frame (the right-click item menu).
+    RowMenu { item_id: String },
 }
 
 impl From<GuiLibraryCommand> for mbv::GuiLibraryCommand {
@@ -65,6 +67,7 @@ impl From<GuiLibraryCommand> for mbv::GuiLibraryCommand {
             GuiLibraryCommand::AddToQueue { item_id } => Self::AddToQueue { item_id },
             GuiLibraryCommand::ShuffleArtist { album_ids } => Self::ShuffleArtist { album_ids },
             GuiLibraryCommand::MenuEntry { item_id, index } => Self::MenuEntry { item_id, index },
+            GuiLibraryCommand::RowMenu { item_id } => Self::RowMenu { item_id },
         }
     }
 }

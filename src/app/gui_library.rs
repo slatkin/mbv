@@ -20,6 +20,7 @@ pub(in crate::app) use self::store::{GuiGroupAlbums, GuiGroupAlbumsEvent};
 pub use self::tabs::{GuiLibraryTab, GuiLibraryTabs};
 
 use mbv_emby_model::EmbyItem;
+use mbv_ui_model::context_menu::ContextAction;
 use mbv_ui_model::context_menu::ContextMenu;
 use mbv_ui_model::settings::PanelFocus;
 use mbv_ui_model::ui_util::is_playable;
@@ -68,14 +69,33 @@ pub enum GuiLibraryCommand {
     /// Run the item menu's entry at `index` (design D8): the entry the frame
     /// painted for the item, run through the shared context-action executor.
     MenuEntry { item_id: String, index: usize },
+    /// Carry the item's full menu in the frame (the right-click item menu):
+    /// the next frame's `rowMenu` section names the item and carries the
+    /// TUI menu builder's entries for it, and a chosen entry runs through the
+    /// same `MenuEntry` command as the Hero's menu carries.
+    RowMenu { item_id: String },
+}
+
+/// The Library item menu the frame's `rowMenu` section carries: the item
+/// the entries are about, and the TUI menu builder's entries in the
+/// builder's order.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GuiLibraryRowMenu {
+    pub item_id: String,
+    pub entries: Vec<GuiLibraryMenuItem>,
 }
 
 /// One entry of the GUI Library panel's item menu (design D8): the label the
-/// row menu paints and the key hint its surface shows when the entry has one.
+/// row menu paints, the key hint its surface shows when the entry has one, and
+/// the entry's index in the shared builder's order — the index a chosen entry
+/// sends back, so a front end that paints only some of the entries (the
+/// Hero's More actions drops its duplicated ones) still executes the entry it
+/// painted.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GuiLibraryMenuItem {
     pub label: String,
     pub key_hint: Option<String>,
+    pub index: usize,
 }
 
 impl App {
@@ -128,6 +148,9 @@ impl App {
             GuiLibraryCommand::MenuEntry { item_id, index } => {
                 self.run_gui_library_menu_entry(&item_id, index);
             }
+            GuiLibraryCommand::RowMenu { item_id } => {
+                self.gui_library_row_menu_target = Some(item_id);
+            }
         }
     }
 
@@ -156,8 +179,11 @@ impl App {
 
     /// The item's menu entries for the frame (design D8): the shared builder's
     /// entries for `item_id` while the Library panel has Panel focus, which is
-    /// also what `execute_context_action` needs to find the library. Empty when
-    /// the item is gone, no menu applies, or another panel holds focus.
+    /// also what `execute_context_action` needs to find the library. Entry
+    /// indexes are the builder's, shared by every carried menu and by the
+    /// execution rebuild — the Hero's More actions drops its own duplicate
+    /// labels at paint time, never here. Empty when the item is gone, no menu
+    /// applies, or another panel holds focus.
     pub fn gui_library_menu(&mut self, item_id: &str) -> Vec<GuiLibraryMenuItem> {
         let entries = self
             .gui_library_item_menu(item_id)
@@ -165,22 +191,61 @@ impl App {
             .unwrap_or_default();
         entries
             .into_iter()
-            .map(|entry| GuiLibraryMenuItem {
+            .enumerate()
+            .map(|(index, entry)| GuiLibraryMenuItem {
                 label: entry.label.to_string(),
                 key_hint: entry.key_hint.map(str::to_string),
+                index,
             })
             .collect()
     }
 
+    /// The right-click item menu for the frame's `rowMenu` section: the
+    /// TUI menu builder's full entries for the item the row-menu command
+    /// named, deferring to nothing the Hero carries. `None` while no
+    /// right-click has named an item or the named item is gone.
+    pub fn gui_library_row_menu(&mut self) -> Option<GuiLibraryRowMenu> {
+        let item_id = self.gui_library_row_menu_target.clone()?;
+        let entries = self.gui_library_item_menu(&item_id).map(|menu| {
+            menu.entries
+                .into_iter()
+                .enumerate()
+                .map(|(index, entry)| GuiLibraryMenuItem {
+                    label: entry.label.to_string(),
+                    key_hint: entry.key_hint.map(str::to_string),
+                    index,
+                })
+                .collect()
+        })?;
+        Some(GuiLibraryRowMenu {
+            item_id: item_id.clone(),
+            entries,
+        })
+    }
+
     /// Run the item menu's entry at `index` (design D8): the entry the frame
     /// painted, rebuilt from the item it names so the action targets that
-    /// item. The GUI never arms the TUI's `pending_overlay`.
+    /// item, resolved by stable id and never by the TUI's library cursor —
+    /// the cursor may rest on any other row. The two actions whose shared
+    /// executor resolves through the cursor (bare Play and bare Enqueue)
+    /// route to the item's own play and add: the GUI Library's explicit-play
+    /// replace and its add path apply the autoload rule. The GUI never arms
+    /// the TUI's `pending_overlay`.
     fn run_gui_library_menu_entry(&mut self, item_id: &str, index: usize) {
         let action = self
             .gui_library_item_menu(item_id)
-            .and_then(|menu| menu.entries.get(index).map(|entry| entry.action.clone()));
-        if let Some(action) = action {
-            self.execute_context_action(action, None);
+            .and_then(|menu| menu.entries.into_iter().nth(index))
+            .and_then(|entry| entry.action);
+        if let Some((lib_idx, item)) = self.gui_library_item(item_id) {
+            match action {
+                Some(ContextAction::Play) => self.play_gui_library_item(lib_idx, item),
+                Some(ContextAction::Enqueue) => self.add_gui_library_item_to_queue(&item.id),
+                Some(action) => self.execute_context_action(Some(action), None),
+                None => Self::log_ignored_library_command(
+                    "menuEntry",
+                    format_args!("the item's menu holds no entry at {index}"),
+                ),
+            }
         } else {
             Self::log_ignored_library_command(
                 "menuEntry",
@@ -254,8 +319,11 @@ impl App {
 
     /// Shuffle the artist whose albums are `album_ids` (design D8): the
     /// albums the window content's union holds, played through the shared
-    /// album expansion with shuffle on. Ids the store and the navigation
-    /// state no longer hold are skipped.
+    /// album expansion with shuffle on, replacing the queue directly — the
+    /// explicit Library shuffle behaves like the Library play, whose
+    /// replace-confirm is skipped (the saved-playlist prompt still gates the
+    /// replacement). Ids the store and the navigation state no longer hold
+    /// are skipped.
     fn shuffle_gui_artist(&mut self, album_ids: &[String]) {
         let albums: Vec<EmbyItem> = album_ids
             .iter()
@@ -269,7 +337,7 @@ impl App {
             );
             return;
         }
-        self.play_music_albums(albums, true);
+        self.play_music_albums(albums, true, false);
     }
 
     /// Play the item (design D8), as the GUI Library's explicit play: the

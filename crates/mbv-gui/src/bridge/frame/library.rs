@@ -104,6 +104,22 @@ pub struct GuiMusicFrame {
     /// active slot paints. `None` while idle or while the active slot holds no
     /// Emby item.
     pub playing_track_id: Option<String>,
+    /// The right-click item menu the window content last opened (the row-menu
+    /// command): the item it named with the TUI menu builder's full entries for
+    /// it. `None` while no right-click has named an item.
+    pub row_menu: Option<GuiMusicRowMenu>,
+}
+
+/// The Library's right-click item menu (the row-menu command): the item the
+/// entries are about, and the TUI menu builder's entries in the builder's
+/// order.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GuiMusicRowMenu {
+    /// The item's stable Service id the command named.
+    pub item_id: String,
+    /// The TUI menu builder's entries for the item.
+    pub entries: Vec<GuiMusicMenuEntryFrame>,
 }
 
 /// One group pill of the Music destination (design D6).
@@ -210,12 +226,16 @@ pub struct GuiMusicHeroFrame {
 }
 
 /// One entry of the picked item's menu, as the window paints it (design D8):
-/// the label, and the key hint the row menu shows when the entry has one.
+/// the label, the key hint the row menu shows when the entry has one, and the
+/// entry's index in the shared builder's order — the index a chosen entry
+/// sends back, so a front end that paints only some entries still executes
+/// the one it painted.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GuiMusicMenuEntryFrame {
     pub label: String,
     pub key_hint: Option<String>,
+    pub index: usize,
 }
 
 /// The Library Hero's square artwork (design D5), as the window paints it.
@@ -242,6 +262,7 @@ impl GuiMusicFrame {
         projection: &GuiMusicProjection,
         art: Option<GuiLibraryArt>,
         menu: &[GuiLibraryMenuItem],
+        row_menu: Option<&mbv::GuiLibraryRowMenu>,
         playing_track_id: Option<String>,
     ) -> Self {
         let hero = projection.hero.as_ref().map(|hero| {
@@ -273,6 +294,20 @@ impl GuiMusicFrame {
             art,
             hero,
             playing_track_id,
+            row_menu: row_menu.map(GuiMusicRowMenu::from),
+        }
+    }
+}
+
+impl From<&mbv::GuiLibraryRowMenu> for GuiMusicRowMenu {
+    fn from(menu: &mbv::GuiLibraryRowMenu) -> Self {
+        Self {
+            item_id: menu.item_id.clone(),
+            entries: menu
+                .entries
+                .iter()
+                .map(GuiMusicMenuEntryFrame::from)
+                .collect(),
         }
     }
 }
@@ -328,6 +363,7 @@ impl From<&GuiLibraryMenuItem> for GuiMusicMenuEntryFrame {
         Self {
             label: entry.label.clone(),
             key_hint: entry.key_hint.clone(),
+            index: entry.index,
         }
     }
 }

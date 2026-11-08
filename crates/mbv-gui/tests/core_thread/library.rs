@@ -537,6 +537,138 @@ fn the_item_menu_entries_ride_the_frame_and_run_their_action() {
     );
 }
 
+/// The right-click item menu (the row-menu command): the frame carries the
+/// named item's full TUI-menu entries — including the entries the Hero's
+/// buttons send — against that item's stable id.
+#[test]
+fn the_row_menu_command_carries_the_items_full_menu_in_the_frame() {
+    let http = MockHttp::new();
+    let (mut test, _cmd_rx) = seeded_music_core(&http);
+    send_library_frame(&mut test, GuiLibraryCommand::TakeFocus);
+    let frame = send_library_frame(
+        &mut test,
+        GuiLibraryCommand::RowMenu {
+            item_id: "alb-ill".into(),
+        },
+    );
+
+    let row_menu = library_of(frame)
+        .content
+        .and_then(|content| content.music)
+        .and_then(|music| music.row_menu)
+        .expect("the right-clicked item has a menu");
+    assert_eq!(row_menu.item_id, "alb-ill");
+    let labels: Vec<&str> = row_menu
+        .entries
+        .iter()
+        .map(|entry| entry.label.as_str())
+        .collect();
+    assert_eq!(labels, ["Play All", "Shuffle", "Add to Queue"],);
+}
+
+/// Entities a right-click menu names but the store no longer holds carry no
+/// menu (design D2: a stale frame addresses the item it painted or nothing);
+/// and there is no Music added toggling.
+#[test]
+fn a_row_menu_command_for_an_abandoned_item_carries_no_menu() {
+    let http = MockHttp::new();
+    let (mut test, _cmd_rx) = seeded_music_core(&http);
+    send_library_frame(&mut test, GuiLibraryCommand::TakeFocus);
+    let frame = send_library_frame(
+        &mut test,
+        GuiLibraryCommand::RowMenu {
+            item_id: "alb-gone".into(),
+        },
+    );
+
+    assert!(
+        library_of(frame)
+            .content
+            .and_then(|content| content.music)
+            .and_then(|music| music.row_menu)
+            .is_none(),
+        "a stale right-click carries no menu"
+    );
+}
+
+/// The explicit Library shuffle replaces the queue directly (the
+/// replace-confirm behaviour change): over a populated queue it replaces it
+/// without confirming, exactly as the Library play does.
+#[test]
+fn the_shuffle_artist_command_replaces_a_populated_queue_without_a_confirm() {
+    let http = MockHttp::new();
+    http.respond_repeated(200, TRACKS, 2);
+    let (app, cmd_rx) = stub_app_with_queue_and_cmd_rx(1);
+    let mut test = test_core_with(app);
+    let core = test.core.app_mut();
+    core.seed_gui_music_library_for_test(test_emby_client(&http));
+    core.seed_gui_library_groups_for_test(0, &["grp-hiphop"]);
+
+    send_library(
+        &mut test,
+        GuiLibraryCommand::ShuffleArtist {
+            album_ids: vec!["alb-ill".into()],
+        },
+    );
+
+    let (source, ids) = replacement(&cmd_rx);
+    assert_eq!(
+        ids.len(),
+        2,
+        "both albums' shuffled tracks reached the Owner"
+    );
+    assert_eq!(source, QueueSource::Shuffle);
+    assert!(
+        test.core.app_mut().pending_overlay_is_none_for_test(),
+        "no confirm is pending"
+    );
+}
+
+/// A menu entry executes for the item its id names, never for the item the
+/// TUI's library cursor rests on (the id-addressed path, add-gui-library-panel
+/// row 3.6): the album level's cursor rests on the first album while the
+/// entry names a track of the second album, and the Owner receives that
+/// track's own album's cached tracks.
+#[test]
+fn a_menu_entry_executes_for_its_named_item_not_the_cursor_item() {
+    let http = MockHttp::new();
+    let (mut test, cmd_rx) = music_core(&http);
+    // The cursor's album keeps its own cached tracks; the entry names the
+    // second album's track, so the two album expansions cannot be confused.
+    test.core.app_mut().seed_gui_album_tracks_for_test(
+        "alb-ill",
+        &[
+            ("ltrk-1", "Rhymin & Stealin", 1, 248),
+            ("ltrk-2", "The New Style", 2, 275),
+        ],
+    );
+    test.core.app_mut().seed_gui_album_tracks_for_test(
+        "alb-paul",
+        &[
+            ("ptrk-3", "Shake Your Rump", 1, 195),
+            ("ptrk-4", "Johnny Ryall", 2, 194),
+        ],
+    );
+    test.core.app_mut().set_autoload_for_test(true);
+
+    send_library(&mut test, GuiLibraryCommand::TakeFocus);
+    send_library(
+        &mut test,
+        GuiLibraryCommand::MenuEntry {
+            item_id: "ptrk-3".into(),
+            index: 0,
+        },
+    );
+
+    let (source, ids) = replacement(&cmd_rx);
+    assert_eq!(ids, ["ptrk-3", "ptrk-4"], "the named track's album played");
+    assert_eq!(
+        source,
+        QueueSource::Album,
+        "the autoload play names the album source"
+    );
+}
+
 /// A core over the grouped Music library with Hip-Hop's album list already in
 /// the GUI store, so a frame test reads the projection with no request and no
 /// fetch behind it: the group is loaded before the selection names it, and the

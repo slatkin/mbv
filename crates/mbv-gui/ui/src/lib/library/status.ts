@@ -16,9 +16,11 @@ function destinationLabel(
 
 /** The selected collection names in pill order (design D6): the names the core
  * derived once and carried on the Music frame, so the line and the list header
- * cannot disagree. */
+ * cannot disagree. An empty selection is the whole library, so the line names
+ * it `All`, as the list header names it. */
 function selectedCollections(music: GuiMusicFrame | null): string[] {
-	return music?.collectionNames ?? [];
+	const names = music?.collectionNames ?? [];
+	return names.length > 0 ? names : ['All'];
 }
 
 /** The picked item's name (design D5, D10): the Hero's artist, or the album's

@@ -39,6 +39,7 @@
 		libraryUi,
 		measureLibraryList,
 		openLibraryFilter,
+		openLibraryRowMenu,
 		pressLibraryRow,
 		scrollLibraryList,
 		setLibraryFilter,
@@ -79,15 +80,21 @@
 
 	/** The selected collection names in pill order (design D6): the core's one
 	 * derivation, carried on the Music frame so the list header and the Status
-	 * bar location cannot disagree. */
-	const selectedNames = $derived(music.collectionNames);
+	 * bar location cannot disagree. An empty selection is the whole library:
+	 * the header names it `All` instead of an empty label. */
+	const selectedNames = $derived(
+		music.collectionNames.length > 0 ? music.collectionNames : ['All'],
+	);
 
 	/** The header's right line: the canvas's selection label — the names joined
-	 * by ` + `, or one name with its sort rule (design D6). */
+	 * by ` + ` for several, one name with its sort rule for one, and `All` for
+	 * the whole-library empty selection. */
 	const selectionLabel = $derived(
 		selectedNames.length > 1
 			? selectedNames.join(' + ')
-			: selectedNames.map((name) => `${name} · sort name`).join(''),
+			: selectedNames.length === 1 && music.collectionNames.length > 0
+				? `${selectedNames[0]} · sort name`
+				: 'All',
 	);
 
 	/** The filter field's placeholder, naming the selection as the canvas
@@ -117,6 +124,33 @@
 	function lastBottom(): number {
 		const last = painted[painted.length - 1];
 		return last === undefined ? 0 : last.top + last.height;
+	}
+
+	/** The stable Service id a row's menu names: an artist's Service item, an
+	 * album's own id, and a track's id — the same id the row's actions send. */
+	function rowMenuItemId(row: LibraryRow): string | null {
+		switch (row.kind) {
+			case 'letter':
+				return null;
+			case 'artist':
+				return row.itemId;
+			case 'album':
+				return row.albumId;
+			case 'track':
+				return row.trackId;
+		}
+	}
+
+	/** Open the row's right-click item menu (the row-menu command): the next
+	 * frame carries the item's full entries, and the menu paints at the
+	 * pointer. A letter heading names no item, so its menu opens nothing. */
+	function rowMenu(event: MouseEvent, row: LibraryRow): void {
+		event.preventDefault();
+		const itemId = rowMenuItemId(row);
+		if (itemId === null) {
+			return;
+		}
+		openLibraryRowMenu(itemId, event.clientX, event.clientY);
 	}
 
 	/** The `var(--canvas-<name>)` value a part paints in: the Library's canvas
@@ -313,7 +347,8 @@
 										data-library-row-id={row.id}
 										data-library-cursor={row.id === $libraryUi.cursor ? '' : undefined}
 										onclick={() => pressLibraryRow(row)}
-										ondblclick={() => addLibraryTrackToQueue(row.trackId)}
+						oncontextmenu={(event) => rowMenu(event, row)}
+					ondblclick={() => addLibraryTrackToQueue(row.trackId)}
 									>
 										<span
 											class="flex flex-none items-center justify-end font-mono tabular-nums"
@@ -351,6 +386,7 @@
 							data-library-row-id={row.id}
 							data-library-cursor={row.id === $libraryUi.cursor ? '' : undefined}
 							onclick={() => pressLibraryRow(row)}
+							oncontextmenu={(event) => rowMenu(event, row)}
 						>
 							<span
 								class="flex flex-none items-center justify-center"

@@ -26,10 +26,13 @@
 	import LibraryPills from '$lib/components/LibraryPills.svelte';
 	import LibraryStatusBar from '$lib/components/LibraryStatusBar.svelte';
 	import LibraryTopBar from '$lib/components/LibraryTopBar.svelte';
+	import QueueRowMenu from '$lib/components/QueueRowMenu.svelte';
 	import {
 		closeLibraryHero,
+		closeLibraryRowMenu,
 		libraryUi,
 		reportLibraryArrangement,
+		runLibraryRowMenuEntry,
 	} from '$lib/library/state';
 
 	interface Props {
@@ -71,6 +74,32 @@
 	// the Narrow Hero overlay with Esc only while one paints.
 	$effect(() => {
 		reportLibraryArrangement(arrangement);
+	});
+
+	// The right-click item menu dismisses on a press outside it and on any
+	// scroll (the menu is viewport-anchored, so its helper row would drift
+	// under a scrolled list). The outside-press rule reads the press target, so
+	// a press on the menu's own entries runs the entry instead of closing —
+	// including the right-press that opens the menu over another row, which
+	// closes this one just before the context-menu event opens the next.
+	$effect(() => {
+		if ($libraryUi.rowMenu === null) {
+			return;
+		}
+		const outsidePress = (event: PointerEvent) => {
+			const target = event.target;
+			if (target instanceof Element && target.closest('[data-row-menu]')) {
+				return;
+			}
+			closeLibraryRowMenu();
+		};
+		const scrolled = () => closeLibraryRowMenu();
+		window.addEventListener('pointerdown', outsidePress);
+		window.addEventListener('scroll', scrolled, { capture: true });
+		return () => {
+			window.removeEventListener('pointerdown', outsidePress);
+			window.removeEventListener('scroll', scrolled, { capture: true });
+		};
 	});
 </script>
 
@@ -147,4 +176,22 @@
 		column with the canvas's fixed key hints and the location while the panel
 		paints. -->
 	<LibraryStatusBar {tabs} {currentTab} {music} {status} />
+	<!-- The right-click item menu (the row-menu command): the viewport-anchored
+		card at the pointer position, painted only while the frame carries the
+		item's own entries. A press runs the entry the core built, resolved by
+		that item's stable id. -->
+	{#if $libraryUi.rowMenu !== null}
+		{@const carried = music.rowMenu}
+		{#if carried?.itemId === $libraryUi.rowMenu.itemId && carried.entries.length > 0}
+			<div class="fixed" style:left="0" style:top="0" style:width="0" style:height="0">
+				<QueueRowMenu
+					cursor={-1}
+					entries={carried.entries}
+					top="{$libraryUi.rowMenu.y}px"
+					left="{$libraryUi.rowMenu.x}px"
+					onSelect={runLibraryRowMenuEntry}
+				/>
+			</div>
+		{/if}
+	{/if}
 </div>

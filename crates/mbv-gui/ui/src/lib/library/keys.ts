@@ -16,6 +16,7 @@ import {
 	closeLibraryFilter,
 	closeLibraryHero,
 	closeLibraryItemMenu,
+	closeLibraryRowMenu,
 	focusLibraryPane,
 	focusLibraryPill,
 	focusedItemId,
@@ -219,10 +220,15 @@ function routeItemKey(event: KeyboardEvent): void {
 	void sendLibraryCommand({ command: 'addToQueue', itemId });
 }
 
-/** Close the front end's open menu or overlay with Esc (design D3): the picked
- * item's menu first, then the Narrow arrangement's Hero overlay. Whether one
- * paints decides the answer, so an Esc with nothing open stays the core's. */
+/** Close the front end's open menu or overlay with Esc (design D3): the right-click
+ * item menu and the picked item's menu first, then the Narrow arrangement's Hero
+ * overlay. Whether one paints decides the answer, so an Esc with nothing open may
+ * not leave the core's Esc unclaimed. */
 function routeEscapeKey(ui: LibraryUiState): KeyOutcome {
+	if (ui.rowMenu !== null) {
+		closeLibraryRowMenu();
+		return 'handled';
+	}
 	if (ui.itemMenuOpen) {
 		closeLibraryItemMenu();
 		return 'handled';

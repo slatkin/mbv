@@ -69,7 +69,8 @@ export type GuiLibraryCommand =
 	| { command: 'playNext'; itemId: string }
 	| { command: 'addToQueue'; itemId: string }
 	| { command: 'shuffleArtist'; albumIds: string[] }
-	| { command: 'menuEntry'; itemId: string; index: number };
+	| { command: 'menuEntry'; itemId: string; index: number }
+	| { command: 'rowMenu'; itemId: string };
 
 /** The Music destination's content (design D5). */
 export interface GuiMusicFrame {
@@ -98,6 +99,20 @@ export interface GuiMusicFrame {
 	 * row and a list track row paint what the Queue's active slot paints.
 	 * `null` while idle or while the active slot holds no Emby item. */
 	playingTrackId: string | null;
+	/** The right-click item menu the window content last opened (the
+	 * row-menu command): the item it named with the TUI menu builder's full
+	 * entries for it. `null` while no right-click has named an item. */
+	rowMenu: GuiMusicRowMenu | null;
+}
+
+/** The Library's right-click item menu (the row-menu command): the item the
+ * entries are about, and the TUI menu builder's entries in the builder's
+ * order. The core keeps the action, so a chosen entry sends only its index. */
+export interface GuiMusicRowMenu {
+	/** The item's stable Service id the command named. */
+	itemId: string;
+	/** The TUI menu builder's entries for the item. */
+	entries: GuiMusicMenuEntryFrame[];
 }
 
 export interface GuiMusicPill {
@@ -172,11 +187,15 @@ export interface GuiMusicHero {
 }
 
 /** One entry of the picked item's item menu (design D8), as the window paints
- * it: the label, and the key hint the row-menu face shows when the entry has
- * one. The core keeps the action, so a chosen entry sends only its index. */
+ * it: the label, the key hint the row-menu face shows when the entry has one,
+ * and the entry's index in the shared builder's order — the index a chosen
+ * entry sends back, so a front end that paints only some entries still
+ * executes the one it painted. The core keeps the action. */
 export interface GuiMusicMenuEntryFrame {
 	label: string;
 	keyHint: string | null;
+	/** The entry's index in the shared builder's order (design D8). */
+	index: number;
 }
 
 /** The Library Hero's square artwork (design D5). The image and placeholder

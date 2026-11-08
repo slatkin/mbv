@@ -61,7 +61,12 @@ impl App {
     /// and natural track ordering as the existing folder effects; concatenating
     /// those results preserves album/tree order without replacing the queue per
     /// album.
-    pub(in crate::app) fn play_music_albums(&mut self, albums: Vec<EmbyItem>, shuffle: bool) {
+    pub(in crate::app) fn play_music_albums(
+        &mut self,
+        albums: Vec<EmbyItem>,
+        shuffle: bool,
+        confirm: bool,
+    ) {
         let Some(client) = self.emby_client() else {
             self.flash(
                 "Emby is unavailable".into(),
@@ -105,15 +110,28 @@ impl App {
         };
         // Keep the Library focused: `play_items_routed` only moves focus when
         // the caller is not already in the Library panel. The gate defers the
-        // single composed replacement and its save to `run_replacement`.
-        self.request_queue_replacement(
-            PendingQueueAction::PlayItems {
-                items,
-                start_idx: 0,
-                source,
-            },
-            ReplacementExecutor::Routed(RoutedReplacementPrep::MusicAlbums),
-        );
+        // single composed replacement and its save to `run_replacement`. The
+        // confirm follows the folder play's gate (add-gui-library-panel): the
+        // TUI's path keeps the populated-queue confirm, and the GUI Library's
+        // explicit play and shuffle replace directly — the saved-playlist
+        // prompt a dirty playlist owes still raises through
+        // `replace_queue_or_prompt`.
+        let action = PendingQueueAction::PlayItems {
+            items,
+            start_idx: 0,
+            source,
+        };
+        if confirm {
+            self.request_queue_replacement(
+                action,
+                ReplacementExecutor::Routed(RoutedReplacementPrep::MusicAlbums),
+            );
+        } else {
+            self.run_replacement(
+                action,
+                &ReplacementExecutor::Routed(RoutedReplacementPrep::MusicAlbums),
+            );
+        }
     }
 
     /// `collection_type` is the source library's Emby collection type; it

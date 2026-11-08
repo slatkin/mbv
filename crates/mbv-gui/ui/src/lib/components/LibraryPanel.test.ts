@@ -40,6 +40,7 @@ function music(): GuiMusicFrame {
 		hero: null,
 		art: null,
 		playingTrackId: null,
+		rowMenu: null,
 	};
 }
 

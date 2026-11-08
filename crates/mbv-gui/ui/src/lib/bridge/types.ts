@@ -20,6 +20,7 @@ export type {
 	GuiMusicHero,
 	GuiMusicMenuEntryFrame,
 	GuiMusicPill,
+	GuiMusicRowMenu,
 	GuiMusicTrack,
 	GuiMusicTrackTotal,
 } from './library-types';

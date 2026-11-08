@@ -171,8 +171,14 @@ impl super::super::Model {
         match action {
             MusicTreeAction::Play | MusicTreeAction::Shuffle => {
                 if had_items {
-                    self.app
-                        .play_music_albums(items, matches!(action, MusicTreeAction::Shuffle));
+                    // The TUI's own path keeps the populated-queue replace
+                    // confirm (add-gui-library-panel): only the GUI Library's
+                    // explicit play and shuffle replace directly.
+                    self.app.play_music_albums(
+                        items,
+                        matches!(action, MusicTreeAction::Shuffle),
+                        true,
+                    );
                 }
             }
             MusicTreeAction::Enqueue => {

@@ -81,6 +81,7 @@ function music(collectionNames: string[] = ['Hip-Hop']): GuiMusicFrame {
 		hero: null,
 		art: null,
 		playingTrackId: null,
+		rowMenu: null,
 	};
 }
 
@@ -129,6 +130,31 @@ test('the header names the carried selection, not a derivation from the pills', 
 	expect(container.querySelector('[data-library-selection-label]')?.textContent).toBe(
 		'Hip-Hop + Soul',
 	);
+});
+
+// An empty pill selection is the whole library: the header names it `All`
+// instead of printing no collection name (the Library's empty-selection
+// label).
+test('an empty selection names the header All', () => {
+	const { container } = render(LibraryList, { music: music([]) });
+
+	expect(container.querySelector('[data-library-selection-label]')?.textContent).toBe('All');
+});
+
+// A right-click on a row asks the core for that row's full item menu through
+// the row-menu command, naming the row's stable Service id (the artist's item
+// id, an album's own id, a track's id).
+test("a right-press on a row requests the item's menu for its id", async () => {
+	openBeastie();
+	openLicensedToIll();
+	const container = await mountList(240);
+	const row = container.querySelector('[data-library-row-id="album:al1"]');
+
+	await fireEvent.contextMenu(row as HTMLElement);
+
+	expect(invokeMock).toHaveBeenCalledWith('library', {
+		command: { command: 'rowMenu', itemId: 'al1' },
+	});
 });
 
 test('the list paints only the rows in view', async () => {

@@ -116,6 +116,14 @@ fn music_frame(app: &mut App, lib_idx: usize) -> GuiMusicFrame {
     let menu = picked
         .map(|album_id| app.gui_library_menu(&album_id))
         .unwrap_or_default();
+    let row_menu = app.gui_library_row_menu();
     let playing_track_id = app.gui_playing_track_id();
-    GuiMusicFrame::from_projection(lib_idx, &projection, art, &menu, playing_track_id)
+    GuiMusicFrame::from_projection(
+        lib_idx,
+        &projection,
+        art,
+        &menu,
+        row_menu.as_ref(),
+        playing_track_id,
+    )
 }

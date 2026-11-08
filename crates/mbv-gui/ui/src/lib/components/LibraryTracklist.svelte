@@ -19,7 +19,7 @@
 <script lang="ts">
 	import { ListEnd, Play, Plus } from '@lucide/svelte';
 	import type { GuiMusicHero, GuiMusicTrack } from '$lib/bridge/types';
-	import { addLibraryTrackToQueue } from '$lib/library/state';
+	import { addLibraryTrackToQueue, openLibraryRowMenu } from '$lib/library/state';
 	import { sendLibraryCommand } from '$lib/bridge/library';
 	import { heroTracks, resolveTrackCursor } from '$lib/library/hero';
 	import { libraryUi } from '$lib/library/state';
@@ -71,6 +71,15 @@
 	function rowColor(track: GuiMusicTrack): string {
 		return isPlaying(track) ? 'var(--canvas-ink)' : 'var(--canvas-text)';
 	}
+
+	/** Open the track's right-click item menu (the row-menu command): the
+	 * entries the TUI's library menu offers for a track row, carried in the
+	 * next frame's `rowMenu` section for the menu the panel paints at the
+	 * pointer. */
+	function rowMenu(event: MouseEvent, track: GuiMusicTrack): void {
+		event.preventDefault();
+		openLibraryRowMenu(track.trackId, event.clientX, event.clientY);
+	}
 </script>
 
 <section class="flex flex-col" aria-label="Tracklist" data-library-tracklist="">
@@ -101,6 +110,7 @@
 			data-library-track={track.trackId}
 			data-library-track-cursor={track.trackId === cursor ? '' : undefined}
 			data-library-track-playing={isPlaying(track) ? '' : undefined}
+			oncontextmenu={(event) => rowMenu(event, track)}
 			ondblclick={() => addLibraryTrackToQueue(track.trackId)}
 		>
 			<span

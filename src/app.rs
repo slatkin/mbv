@@ -43,8 +43,8 @@ pub use self::gui_client_state::{
 };
 pub use self::gui_library::GuiLibraryCommand;
 pub use self::gui_library::{
-    GuiLibraryArtwork, GuiLibraryMenuItem, GuiLibraryTab, GuiLibraryTabs, GuiMusicAlbum,
-    GuiMusicArtist, GuiMusicHero, GuiMusicPill, GuiMusicProjection, GuiMusicTrack,
+    GuiLibraryArtwork, GuiLibraryMenuItem, GuiLibraryRowMenu, GuiLibraryTab, GuiLibraryTabs,
+    GuiMusicAlbum, GuiMusicArtist, GuiMusicHero, GuiMusicPill, GuiMusicProjection, GuiMusicTrack,
     GuiMusicTrackTotal,
 };
 pub use self::infra::image_fetch::CardImageDrain;

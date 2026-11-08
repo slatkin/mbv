@@ -539,3 +539,37 @@ fn no_tab_is_current_while_a_destination_the_gui_does_not_present_is_active() {
 
     assert_eq!(app.gui_library_tabs().current, None);
 }
+
+/// A Music item's right-click item menu offers the played-state entries no
+/// item kind (the context-menu spec's music rule, through the GUI's menu
+/// builder): music ignores its played state everywhere, so the mark entries
+/// would name changes the UI never shows. An album-folder music item carries
+/// the standard folder entries — Play All, Shuffle, Add to Queue — and
+/// nothing else.
+#[test]
+fn a_music_items_row_menu_leaves_out_the_played_toggle() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let app = app_with_stored_groups(
+        vec![stored_album(
+            "alb-ill",
+            "Licensed to Ill",
+            "Beastie Boys",
+            1986,
+        )],
+        Vec::new(),
+    );
+    let mut app = app;
+    app.set_panel_focus(PanelFocus::Library);
+    app.apply_gui_library_command(GuiLibraryCommand::RowMenu {
+        item_id: "alb-ill".into(),
+    });
+
+    let menu = app.gui_library_row_menu().expect("the album has a menu");
+    let labels: Vec<&str> = menu
+        .entries
+        .iter()
+        .map(|entry| entry.label.as_str())
+        .collect();
+    assert!(!labels.iter().any(|label| label.contains("Mark")));
+    assert_eq!(labels, ["Play", "Add to Queue"]);
+}

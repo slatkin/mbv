@@ -33,25 +33,42 @@
 		/** The menu cursor the core holds; `-1` while no entry carries it. */
 		cursor: number;
 		/** The overlay's entries, in the frame's order: the queue's entries
-		 * carry the destructive flag, the Library's carry none. */
-		entries: { label: string; keyHint: string | null; destructive?: boolean }[];
+		 * carry the destructive flag, the Library's carry none. An entry's own
+		 * `index` is the core's shared-builder order, carried so a front end
+		 * that paints only some entries (the Hero's More actions) still sends
+		 * the index of the entry it painted. */
+		entries: {
+			label: string;
+			keyHint: string | null;
+			destructive?: boolean;
+			index?: number;
+		}[];
 		/** The menu's top edge as a CSS length, measured from the containing
 		 * block's top edge; the parent places it over the anchor row's
 		 * bottom edge, as the canvas draws it. */
 		top: string;
+		/** The menu's left edge from the containing block's left edge, for a
+		 * menu the front end anchors at a pointer position (the Library's
+		 * right-click item menu). When it is set, `right` stays unset. */
+		left?: string;
 		/** The menu's right edge from the containing block's right edge: the
 		 * queue anchors it to its value column, the Library's to its actions
 		 * row. */
 		right?: string;
 		/** The press on an entry, for a menu the front end owns: the Library's
 		 * item menu sends its own command. The queue's menu passes none, so its
-		 * presses reach the core's hit map as every other pointer event does. */
+		 * presses reach the core's hit map as every other pointer event does.
+		 * The index a press reports is the entry's own `index` when it carries
+		 * one (the core's shared-builder order), else this enumeration — so a
+		 * front end that paints only some entries still sends the index of the
+		 * entry it painted. */
 		onSelect?: (index: number) => void;
 	}
 	const {
 		cursor,
 		entries,
 		top,
+		left,
 		right = 'var(--mbv-cell-col)',
 		onSelect,
 	}: Props = $props();
@@ -70,6 +87,7 @@
 	role="menu"
 	aria-label="Row actions"
 	style:top
+	style:left
 	style:right
 	style:width="230px"
 	style:padding="6px"
@@ -104,8 +122,8 @@
 				: index === cursor
 					? 'var(--canvas-heading)'
 					: 'var(--canvas-text)'}
-			data-menu-entry={index}
-			onclick={() => onSelect?.(index)}
+			data-menu-entry={entry.index ?? index}
+			onclick={() => onSelect?.(entry.index ?? index)}
 		>
 			<span class="flex-1 truncate">{entry.label}</span>
 			{#if entry.keyHint}

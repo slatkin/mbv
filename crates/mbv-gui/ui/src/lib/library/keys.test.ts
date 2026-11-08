@@ -101,6 +101,7 @@ function content(
 			hero,
 			art: null,
 			playingTrackId: null,
+			rowMenu: null,
 		},
 	};
 }
