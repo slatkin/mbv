@@ -1,12 +1,14 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { libraryArrangement, queueColumnWidth } from '$lib/bridge/arrangement';
 	import { frames } from '$lib/bridge/frames';
 	import { installInput } from '$lib/bridge/input';
 	import { reportContainerSize } from '$lib/bridge/layout';
 	import type { LayoutSize } from '$lib/bridge/types';
 	import { routeLibraryKey } from '$lib/library/keys';
-	import { carryLibraryContent } from '$lib/library/state';
+	import { carryLibraryContent, libraryContent } from '$lib/library/state';
 	import AttachScreen from '$lib/components/AttachScreen.svelte';
+	import LibraryPanel from '$lib/components/LibraryPanel.svelte';
 	import Panel from '$lib/components/Panel.svelte';
 
 	// The webview's own context menu is turned off (add-tauri-gui-client D11).
@@ -74,21 +76,41 @@
 
 <main class="h-dvh bg-background text-foreground">
   {#if $frames && 'slice' in $frames}
-    <!-- The first slice's panel arrangement (spec gui-client): the panel's
-      four states (add-tauri-gui-client row 6.6) over the queue column's
-      backdrop fill — the TUI's `QueueColumn` gutter the panels' padding sits
-      on. The fill is focus-reactive like the TUI's `panel_appearance_focus`
-      picks it, so the chrome's `queueColumn` pair follows the frame's
-      Panel-focus fact. -->
-    {@const panelFocused = $frames.slice.focus.panel === 'queue'}
+    <!-- The two-panel arrangement (add-gui-library-panel design D4): the Queue
+      panel beside the Library panel, picked from the measured Library column
+      width — the window width minus the Queue panel's current width. Mini
+      mounts only the panel with Panel focus, Narrow mounts both with the Hero
+      as an overlay, and Wide mounts both with the Hero pane beside the list.
+      The Queue panel's four states (add-tauri-gui-client row 6.6) stay inside
+      every arrangement, and its backdrop fill stays focus-reactive like the
+      TUI's `panel_appearance_focus` picks it. Until Music content arrives the
+      Library panel does not mount and the Queue panel paints as before. -->
+    {@const frame = $frames.slice}
+    {@const arrangement = libraryArrangement(container, frame.panel)}
+    {@const music = $libraryContent?.music ?? null}
+    {@const queueFocused = frame.focus.panel === 'queue'}
+    {@const queueVisible = music === null || arrangement !== 'mini' || queueFocused}
+    {@const libraryVisible = music !== null && (arrangement !== 'mini' || !queueFocused)}
+    {@const twoColumns = queueVisible && libraryVisible}
     <div
       bind:this={containerEl}
-      class="relative flex h-full flex-col"
-      style:background={panelFocused
+      class="relative flex h-full min-h-0"
+      data-arrangement={arrangement}
+      style:background={queueFocused
         ? 'var(--mbv-queueColumnFocused)'
         : 'var(--mbv-queueColumn)'}
     >
-      <Panel frame={$frames.slice} {container} />
+      {#if queueVisible}
+        <div
+          class="flex h-full min-h-0 flex-col {twoColumns ? 'flex-none' : 'flex-1'}"
+          style:width={twoColumns ? `${queueColumnWidth(frame.panel)}px` : undefined}
+        >
+          <Panel frame={frame} {container} />
+        </div>
+      {/if}
+      {#if libraryVisible && music}
+        <LibraryPanel {music} {arrangement} />
+      {/if}
     </div>
   {:else}
     <!-- The pre-attach states (design D9): the wait before the first

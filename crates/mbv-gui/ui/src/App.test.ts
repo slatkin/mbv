@@ -1,13 +1,266 @@
+// add-gui-library-panel row 4.2: the window arranges the Queue panel and the
+// Library panel from the measured Library column width (design D4) — Mini
+// below 480 px showing only the panel with Panel focus, Narrow from 480 px
+// with both panels, and Wide from 880 px when the container is at least
+// 600 px tall. The Tauri event and IPC APIs are mocked; the frame is the
+// serde wire shape of bridge/frame.rs.
+
+import { listen } from '@tauri-apps/api/event';
 import { render } from '@testing-library/svelte';
-import { expect, test } from 'vitest';
+import { tick } from 'svelte';
+import { beforeEach, expect, test, vi } from 'vitest';
+import { frames } from '$lib/bridge/frames';
+import type {
+	GuiFrame,
+	GuiMusicFrame,
+	GuiMusicHero,
+	GuiPanel,
+	GuiWindowFrame,
+	LayoutSize,
+} from '$lib/bridge/types';
+import { libraryContent } from '$lib/library/state';
 import App from './App.svelte';
 
-// add-tauri-gui-client D11: the webview's own context menu is turned off.
+const listenMock = vi.mocked(listen);
+
+/** A ResizeObserver stub: jsdom has none and no layout. The test fires the
+ * observer after render, so the measured size lands outside the effect that
+ * observes the container. */
+class ResizeObserverStub {
+	static instances: ResizeObserverStub[] = [];
+	static size: LayoutSize = { width: 0, height: 0 };
+	readonly #callback: ResizeObserverCallback;
+	constructor(callback: ResizeObserverCallback) {
+		this.#callback = callback;
+		ResizeObserverStub.instances.push(this);
+	}
+	observe() {}
+	disconnect() {}
+	fire() {
+		this.#callback(
+			[{ contentRect: ResizeObserverStub.size }] as unknown as ResizeObserverEntry[],
+			this as unknown as ResizeObserver,
+		);
+	}
+}
+
+beforeEach(() => {
+	listenMock.mockReset();
+	listenMock.mockResolvedValue(() => {});
+	libraryContent.set(null);
+	ResizeObserverStub.instances = [];
+	vi.stubGlobal('ResizeObserver', ResizeObserverStub);
+});
+
+/** The Music content with an optional picked album for the Hero. */
+function music(hero: GuiMusicHero | null = null): GuiMusicFrame {
+	return {
+		pills: [],
+		loading: false,
+		failure: null,
+		artists: [],
+		hero,
+		art: null,
+	};
+}
+
+/** A picked album's Hero facts. */
+function hero(): GuiMusicHero {
+	return {
+		artist: 'Beastie Boys',
+		collections: ['Hip-Hop'],
+		albumCount: 1,
+		artistTracks: null,
+		album: {
+			albumId: 'album-1',
+			name: 'Licensed to Ill',
+			year: '1986',
+			tracks: null,
+			total: null,
+		},
+	};
+}
+
+/** The attached slice's frame: an empty queue, the given Panel focus, and the
+ * given carried Library content. */
+function frame(panel: GuiPanel, libraryMusic: GuiMusicFrame | null): GuiFrame {
+	return {
+		focus: { surface: 'queue', panel },
+		queue: { rows: [], cursor: null, marks: [], active: null, hover: null, drag: null },
+		summary: {
+			remaining: 0,
+			nextTitle: null,
+			finishClock: null,
+			rightColumn: 'length',
+			filter: '',
+			filterActive: false,
+		},
+		panel: { collapsed: false, queueFolded: false },
+		overlay: null,
+		playback: {
+			status: 'idle',
+			host: '',
+			hostIsRemote: false,
+			shown: false,
+			playback: {
+				active: false,
+				activeIdx: null,
+				positionTicks: 0,
+				runtimeTicks: 0,
+				paused: false,
+			},
+			elapsedClock: '0:00',
+			remainingClock: '0:00',
+			showControls: false,
+			nowPlayingTitle: null,
+			parentLine: null,
+			episodeBadge: null,
+			stillCaption: null,
+			finishClock: null,
+			availability: { stop: false, next: false, previous: false },
+			statusIndicators: null,
+			artwork: null,
+			chapters: [],
+			introMark: null,
+			creditsMark: null,
+			trickplay: null,
+			trackChips: null,
+			targetChoices: [],
+			hover: null,
+		},
+		footer: {
+			owner: { text: '', role: 'textPrimary', bold: false },
+			ownerLive: false,
+			playlist: { text: '', role: 'textPrimary', bold: false },
+			autosave: null,
+			dirty: null,
+		},
+		status: { prefixArmed: false, toast: null },
+		library:
+			libraryMusic === null
+				? null
+				: { revision: 1, content: { music: libraryMusic } },
+		theme: null,
+	};
+}
+
+/** Seeds the frame store, renders the window at `size`, and returns the
+ * rendered view once the observer's measurement has painted. */
+async function mount(size: LayoutSize, slice: GuiFrame) {
+	await frames.listen();
+	const handler = listenMock.mock.calls.at(-1)?.[1] as (
+		event: { payload: GuiWindowFrame },
+	) => void;
+	handler({ payload: { slice } });
+	// The frame store keeps the seeded slice; a stale carried value from
+	// another test would outlive the reset, so clear the store rather than the
+	// frame.
+	libraryContent.set(null);
+	ResizeObserverStub.size = size;
+	const view = render(App);
+	await tick();
+	ResizeObserverStub.instances.at(-1)?.fire();
+	await tick();
+	return view;
+}
+
 test('prevents the default context menu', () => {
-  render(App);
-  const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+	render(App);
+	const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
 
-  document.body.dispatchEvent(event);
+	document.body.dispatchEvent(event);
 
-  expect(event.defaultPrevented).toBe(true);
+	expect(event.defaultPrevented).toBe(true);
+});
+
+test('without Music content the Queue panel paints alone', async () => {
+	const { container } = await mount({ width: 1600, height: 900 }, frame('queue', null));
+
+	expect(container.querySelector('[data-arrangement]')?.getAttribute('data-arrangement')).toBe(
+		'wide',
+	);
+	expect(container.querySelector('[data-panel-state]')).toBeTruthy();
+	expect(container.querySelector('[data-library-panel]')).toBeNull();
+});
+
+test('Mini below 480 px mounts only the Queue panel while Panel focus is queue', async () => {
+	const { container } = await mount({ width: 700, height: 900 }, frame('queue', music()));
+
+	expect(container.querySelector('[data-arrangement]')?.getAttribute('data-arrangement')).toBe(
+		'mini',
+	);
+	expect(container.querySelector('[data-panel-state]')).toBeTruthy();
+	expect(container.querySelector('[data-library-panel]')).toBeNull();
+});
+
+test('Mini mounts only the Library panel while Panel focus is library', async () => {
+	const { container } = await mount({ width: 700, height: 900 }, frame('library', music()));
+
+	expect(container.querySelector('[data-arrangement]')?.getAttribute('data-arrangement')).toBe(
+		'mini',
+	);
+	expect(container.querySelector('[data-panel-state]')).toBeNull();
+	expect(
+		container.querySelector('[data-library-panel]')?.getAttribute('data-library-arrangement'),
+	).toBe('mini');
+});
+
+test('Narrow mounts both panels without a Hero pane', async () => {
+	const { container } = await mount({ width: 1200, height: 900 }, frame('library', music()));
+
+	expect(container.querySelector('[data-arrangement]')?.getAttribute('data-arrangement')).toBe(
+		'narrow',
+	);
+	expect(container.querySelector('[data-panel-state]')).toBeTruthy();
+	const panel = container.querySelector('[data-library-panel]');
+	expect(panel?.getAttribute('data-library-arrangement')).toBe('narrow');
+	expect(panel?.querySelector('[data-library-region="list"]')).toBeTruthy();
+	expect(container.querySelector('[data-library-region="hero"]')).toBeNull();
+	expect(container.querySelector('[data-library-region="heroOverlay"]')).toBeNull();
+});
+
+test('Narrow opens the Hero overlay once an album is picked', async () => {
+	const { container } = await mount(
+		{ width: 1200, height: 900 },
+		frame('library', music(hero())),
+	);
+
+	expect(container.querySelector('[data-library-region="heroOverlay"]')).toBeTruthy();
+});
+
+test('Wide mounts the Hero pane beside the list', async () => {
+	const { container } = await mount(
+		{ width: 1600, height: 900 },
+		frame('library', music(hero())),
+	);
+
+	expect(container.querySelector('[data-arrangement]')?.getAttribute('data-arrangement')).toBe(
+		'wide',
+	);
+	expect(container.querySelector('[data-panel-state]')).toBeTruthy();
+	const panel = container.querySelector('[data-library-panel]');
+	expect(panel?.getAttribute('data-library-arrangement')).toBe('wide');
+	expect(panel?.querySelector('[data-library-region="hero"]')).toBeTruthy();
+	expect(panel?.querySelector('[data-library-region="list"]')).toBeTruthy();
+	expect(container.querySelector('[data-library-region="heroOverlay"]')).toBeNull();
+});
+
+test('880 px wide but short of 600 px falls back to Narrow', async () => {
+	const { container } = await mount({ width: 1280, height: 500 }, frame('library', music()));
+
+	expect(container.querySelector('[data-arrangement]')?.getAttribute('data-arrangement')).toBe(
+		'narrow',
+	);
+	expect(container.querySelector('[data-library-region="hero"]')).toBeNull();
+});
+
+test('the collapsed rail leaves a wider Library column', async () => {
+	const slice = frame('library', music());
+	slice.panel = { collapsed: true, queueFolded: false };
+
+	const { container } = await mount({ width: 1000, height: 900 }, slice);
+
+	expect(container.querySelector('[data-arrangement]')?.getAttribute('data-arrangement')).toBe(
+		'wide',
+	);
 });

@@ -76,6 +76,11 @@
 	--canvas-destructive: #e67e80; /* the row menu's remove entry */
 	--canvas-source: #7fbbb3; /* the footer's queue source text */
 	--canvas-owner: #dbbc7f; /* the footer's owner marker */
+	/* The Library column's values (add-gui-library-panel design D4): the body
+	   fill the Hero pane and the column paint, and the raised fill of the top
+	   bar and the list column. */
+	--canvas-library-column: #272e33; /* the Library column's body fill */
+	--canvas-library-panel: #2d353b; /* the Library's top bar and list column */
 	/* The canvas header's two lines over the 44 px filter control, between
 	   12 px and 8 px of padding. */
 	--canvas-queue-header-height: 64px;
