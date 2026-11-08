@@ -4,6 +4,7 @@ mod client_core;
 mod client_drains;
 mod dispatch;
 mod gui_client_state;
+mod gui_library;
 #[cfg(feature = "test")]
 pub use self::app_stub::{
     set_cast_receivers_for_test, set_subtitle_tracks_for_test, stub_app_with_cached_emby_client,

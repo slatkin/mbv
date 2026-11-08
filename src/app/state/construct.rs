@@ -185,6 +185,9 @@ impl App {
             list_pane_width: list_pane_width_from_prefs(&prefs),
             visual_slot_hidden: visual_slot_hidden_from_prefs(&prefs),
             panel_mode: PanelMode::default(),
+            // The GUI Client sets this before its first step; a TUI Client
+            // keeps the TUI's panel rules.
+            gui_client: false,
             // Mini view always starts on the queue panel; not persisted.
             mini_view_focus: PanelFocus::Queue,
             // Always start on Home until the saved launch tab settles.

@@ -286,6 +286,13 @@ pub struct App {
     pub(in crate::app) list_pane_width: Option<u16>,
     pub(in crate::app) visual_slot_hidden: bool,
     pub(in crate::app) panel_mode: PanelMode,
+    /// The GUI Client's setting (add-gui-library-panel design D4, D9): the
+    /// GUI arranges its own panels from its measured size and always paints
+    /// the Queue panel, so the TUI's terminal-width Mini check and its hidden
+    /// empty queue column do not apply, and the GUI's own launch location
+    /// replaces the TUI's. Set by the GUI Client before its first step
+    /// (`App::enable_gui_client`); the TUI Client never sets it.
+    pub(in crate::app) gui_client: bool,
     /// The one startup snapshot and its tab-scoped destination re-anchor.
     pub(in crate::app) launch_restore: LaunchRestore,
     /// Deferred tab switch for a `NavigateLanding::Album` landing: set when the

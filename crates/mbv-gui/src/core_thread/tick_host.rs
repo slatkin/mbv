@@ -172,6 +172,14 @@ impl ClientTickHost for CoreThread {
                     outcome.input_received = true;
                     self.route_pointer(event);
                 }
+                CoreInput::PanelFocus(focus) => {
+                    // The take-focus command (add-gui-library-panel design
+                    // D4): the Library panel takes Panel focus, and the core
+                    // sets its stack and the App's stored focus together, so
+                    // the next frame paints it.
+                    outcome.input_received = true;
+                    self.take_panel_focus(focus);
+                }
                 CoreInput::Layout(report) => {
                     // A `report_layout` always emits the current frame,
                     // changed or not (design D3), and re-arms the theme: the

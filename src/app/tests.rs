@@ -12,6 +12,7 @@ mod context_menu_entries;
 mod context_menu_placement;
 mod daemon_bootstrap;
 mod feeds;
+mod gui_client_settings;
 mod home_latest;
 mod library_navigate_reveal;
 mod library_position;

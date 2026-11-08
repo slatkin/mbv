@@ -64,6 +64,11 @@ pub enum CoreInput {
     /// whether or not a tick changed state (design D3); the report applies
     /// to the Surface state's capacity and hit map first.
     Layout(LayoutReport),
+    /// A panel takes Panel focus (add-gui-library-panel design D4): a press
+    /// inside the Library panel and a Tab across the panel boundary send it.
+    /// The core sets its `FocusStack` and the App's stored Panel focus
+    /// together, so the next frame paints the focus the App's key gates use.
+    PanelFocus(PanelFocus),
     /// The wake value the installed `ClientWaker` sends (design D3), so
     /// Owner events and timers wake the core as they wake the TUI.
     Wake,
@@ -230,13 +235,20 @@ impl CoreThread {
     /// Surface state and the channel every input and wake feeds.
     #[must_use]
     pub fn new(mut app: App, rx: Receiver<CoreInput>, sink: FrameSink, quit: QuitSink) -> Self {
+        // The GUI Client's App rules come first (add-gui-library-panel design
+        // D4, D9): the GUI arranges its own panels from its measured size and
+        // keeps its own launch location, so the TUI's Mini check, its hidden
+        // empty queue column, and its launch state never apply here.
+        app.enable_gui_client();
         let mut focus = FocusStack::new();
         // The first slice mounts the Queue panel, the Queue playback band,
-        // and the Status bar (design D4), and the Queue side holds focus.
+        // and the Status bar (design D4), and the Queue side holds focus. The
+        // Library panel mounts beside the Queue (add-gui-library-panel task
+        // row 2.1) and takes Panel focus on the take-focus command.
         focus.mount(ComponentId::Queue);
         focus.mount(ComponentId::QueuePlaybackPanel);
         focus.mount(ComponentId::StatusBarPanel);
-        focus.set_panel_focus(PanelFocus::Queue);
+        focus.mount(ComponentId::Library);
         // The shared Service startup step every Client runs once after the
         // attach (add-gui-library-panel design D11): the Service startup
         // workers, the startup feed fetch, and capability registration. Then
@@ -251,7 +263,7 @@ impl CoreThread {
         if cached_emby_client {
             app.start_playback_target_discovery();
         }
-        Self {
+        let mut core = Self {
             app,
             focus,
             queue: QueueSurface::new(),
@@ -276,7 +288,22 @@ impl CoreThread {
             trickplay: crate::trickplay::TrickplayFrames::default(),
             painted: PaintedChoices::default(),
             idle_cadence: CLIENT_IDLE_CADENCE,
-        }
+        };
+        // The core sets its `FocusStack` and the App's stored Panel focus
+        // together (design D4), so the frame the window paints and the gates
+        // the keys meet agree from the first frame. The Queue side holds
+        // focus until the take-focus command moves it.
+        core.take_panel_focus(PanelFocus::Queue);
+        core
+    }
+
+    /// Move Panel focus on both authorities together (add-gui-library-panel
+    /// design D4): the App's stored Panel focus, which its key gates read,
+    /// through its public GUI entry, then the core's `FocusStack`, which
+    /// derives the frame's focus.
+    fn take_panel_focus(&mut self, focus: PanelFocus) {
+        self.app.set_gui_panel_focus(focus);
+        self.focus.set_panel_focus(focus);
     }
 
     /// Install the wake the App's relays invoke (design D3): every wake feeds
