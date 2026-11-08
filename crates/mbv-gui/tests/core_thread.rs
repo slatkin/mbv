@@ -18,17 +18,16 @@ use mbv_config::{
     LaunchPanelFocus, TUI_LAUNCH_STATE_VERSION, TabIdentity, TestStateDirGuard, TuiLaunchState,
     load_tui_launch_state, save_tui_launch_state,
 };
-use mbv_gui::bridge::frame::focus::{GuiPanel, GuiSurface};
 use mbv_gui::bridge::frame::playback::GuiCardArtwork;
 use mbv_gui::bridge::frame::{GuiFrame, GuiWindowFrame};
 use mbv_gui::bridge::layout::{
     LayoutRect, LayoutRegion, LayoutReport, LayoutSize, ListId, ListRows, RegionTarget,
 };
 use mbv_gui::core_thread::{CoreInput, CoreThread, FrameSink, QuitSink};
-use mbv_ui_model::settings::PanelFocus;
 use mbv_ui_msg::{Key, KeyEvent, KeyModifiers, PointerEvent, PointerKind, Position};
 
 mod core_thread {
+    mod library;
     mod overlay;
     mod pointer;
     mod queue;
@@ -371,26 +370,4 @@ fn a_cached_artwork_rides_the_frame_once() {
     assert!(test.core.step());
     let second = test.next_frame();
     assert!(second.playback.artwork.is_none());
-}
-
-/// The take-focus command (add-gui-library-panel design D4): the Library
-/// panel takes Panel focus, and the next frame carries it. The Library is
-/// mounted, so the stack resolves it as the focused surface — an unmounted
-/// Library panel focus would resolve to no surface.
-#[test]
-fn the_take_focus_command_puts_the_library_in_the_next_frame() {
-    let mut test = test_core(2);
-    test.tx.send(key_press()).unwrap();
-    assert!(test.core.step());
-    let first = test.next_frame();
-    assert_eq!(first.focus.panel, GuiPanel::Queue);
-
-    test.tx
-        .send(CoreInput::PanelFocus(PanelFocus::Library))
-        .unwrap();
-    assert!(test.core.step());
-
-    let frame = test.next_frame();
-    assert_eq!(frame.focus.panel, GuiPanel::Library);
-    assert_eq!(frame.focus.surface, Some(GuiSurface::Library));
 }

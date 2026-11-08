@@ -6,6 +6,7 @@
 use std::time::Instant;
 
 use mbv::{App, ClientLifecycle, ClientTickHost, HomeEventDrain, PlayerEventDrain, TickOutcome};
+use mbv_ui_model::settings::PanelFocus;
 use mbv_ui_msg::{Msg, ServiceRequest};
 
 use super::{CoreInput, CoreThread};
@@ -172,13 +173,18 @@ impl ClientTickHost for CoreThread {
                     outcome.input_received = true;
                     self.route_pointer(event);
                 }
-                CoreInput::PanelFocus(focus) => {
-                    // The take-focus command (add-gui-library-panel design
-                    // D4): the Library panel takes Panel focus, and the core
-                    // sets its stack and the App's stored focus together, so
-                    // the next frame paints it.
+                CoreInput::Library(command) => {
+                    // The Library panel's request (add-gui-library-panel design
+                    // D2): the App applies the semantic intent, and the
+                    // take-focus variant then moves the core's `FocusStack`
+                    // with the App's stored focus (design D4), so the frame
+                    // and the App's key gates agree.
                     outcome.input_received = true;
-                    self.take_panel_focus(focus);
+                    let taking_focus = matches!(command, mbv::GuiLibraryCommand::TakeFocus);
+                    self.app.apply_gui_library_command(command);
+                    if taking_focus {
+                        self.focus.set_panel_focus(PanelFocus::Library);
+                    }
                 }
                 CoreInput::Layout(report) => {
                     // A `report_layout` always emits the current frame,

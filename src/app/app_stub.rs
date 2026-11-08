@@ -60,6 +60,20 @@ pub fn stub_app_with_queue(n: usize) -> App {
 pub fn stub_app_with_queue_and_cmd_rx(
     n: usize,
 ) -> (App, std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
+    let (mut app, cmd_rx) = app_with_cmd_rx();
+    app.local_view = queue_view(n);
+    app.player.update_status(|status| status.active = false);
+    (app, cmd_rx)
+}
+
+/// The stub `App` over a player whose command channel records what an action
+/// sends (add-tauri-gui-client row 6.5): the stub owner advertises no
+/// `answered-queue-ops`, so a queue edit sends without waiting for an answer.
+/// The construction's own preference sync lands on the channel before the
+/// caller starts, so it is drained here and a test sees only what its actions
+/// send.
+#[cfg(feature = "test")]
+fn app_with_cmd_rx() -> (App, std::sync::mpsc::Receiver<mbv_ctrl::CtrlCmd>) {
     let (mut remote, player_rx, cmd_rx) =
         mbv_remote_player::RemotePlayer::stub_with_command_rx(Vec::new(), 0);
     let mut compatibility = mbv_ctrl::CtrlCompatibility::current();
@@ -68,10 +82,6 @@ pub fn stub_app_with_queue_and_cmd_rx(
     let player = mbv_player::PlayerProxy::from_remote(remote, false);
     let mut app = built_app(player, player_rx);
     apply_app_stub_defaults(&mut app);
-    app.local_view = queue_view(n);
-    app.player.update_status(|status| status.active = false);
-    // The construction's preference sync lands on the channel before the
-    // test starts; drain it so the test sees only commands its actions send.
     while cmd_rx.try_recv().is_ok() {}
     (app, cmd_rx)
 }
@@ -385,6 +395,62 @@ pub fn stub_app_with_cached_emby_client(client: mbv_emby::EmbyClient) -> App {
     app
 }
 
+/// The library id the seeded Music library tab holds.
+#[cfg(feature = "test")]
+pub const GUI_MUSIC_LIBRARY_ID: &str = "lib-music";
+
+/// A music group level: the library root's children, its cursor on the first.
+#[cfg(feature = "test")]
+fn music_group_level(groups: Vec<mbv_emby_model::EmbyItem>) -> mbv_ui_model::browse::BrowseLevel {
+    use mbv_ui_model::browse::{BrowseResting, ServerRows};
+
+    mbv_ui_model::browse::BrowseLevel {
+        parent_id: GUI_MUSIC_LIBRARY_ID.to_string(),
+        title: "Music".to_string(),
+        items: groups,
+        rows: ServerRows::new(0),
+        resting: BrowseResting::new(0, 0),
+        item_types: None,
+        unplayed_only: false,
+        sort_by: "SortName".to_string(),
+        sort_order: "Ascending".to_string(),
+        loading: false,
+        all_items: None,
+        letter_filter: None,
+        tv_content_mode: None,
+        music_grouping: None,
+    }
+}
+
+/// A group's album level: the group's children, its cursor on the first.
+#[cfg(feature = "test")]
+fn music_album_level(albums: Vec<mbv_emby_model::EmbyItem>) -> mbv_ui_model::browse::BrowseLevel {
+    let mut level = music_group_level(albums);
+    level.parent_id = "grp-hiphop".to_string();
+    level.title = "Hip-Hop".to_string();
+    level
+}
+
+/// A group row of the music group level.
+#[cfg(feature = "test")]
+fn group_item(id: &str, name: &str) -> mbv_emby_model::EmbyItem {
+    let mut item = mbv_emby_model::test_support::make_item(name, "MusicArtist");
+    item.id = id.to_string();
+    item.is_folder = true;
+    item
+}
+
+/// An album row of a group's album level: a folder with no playable media of
+/// its own, as Emby returns a `MusicAlbum`.
+#[cfg(feature = "test")]
+fn album_item(id: &str, name: &str) -> mbv_emby_model::EmbyItem {
+    let mut item = mbv_emby_model::test_support::make_item(name, "MusicAlbum");
+    item.id = id.to_string();
+    item.is_folder = true;
+    item.media_type.clear();
+    item
+}
+
 /// The `App` a GUI Client's test drives with a successful Emby startup
 /// completion already queued for the startup drain, over `views` as the
 /// bootstrap's library catalog. The worker's thread never runs: the test
@@ -412,13 +478,98 @@ pub fn stub_app_with_completed_emby_startup(views: Vec<mbv_emby_model::EmbyItem>
     app
 }
 
-#[cfg(feature = "test")]
+/// The test-only reads a Client's test makes of this `App`'s state. The gate
+/// spans the crate's own tests and a dependent Client's `test` build, as
+/// `make_app_stub` above does.
+#[cfg(any(test, feature = "test"))]
 impl App {
     /// The Library tabs the catalog holds, for a Client's test that asserts a
     /// startup landed the catalog (add-gui-library-panel design D11).
     #[must_use]
     pub fn libs_for_test(&self) -> &[mbv_ui_model::library_tab::LibraryTab] {
         &self.libs
+    }
+
+    /// Make the grouped Music library the GUI Library test's destination
+    /// (add-gui-library-panel row 3.1): the Emby runtime becomes Ready with
+    /// `client` (built over a mock transport), and the Music tab's group level
+    /// holds Hip-Hop and Soul with Hip-Hop's albums above it. A Client seeds it
+    /// after its core thread is built, because the launch Home load rebuilds
+    /// the catalog from the Service's views; Music is then the active
+    /// destination, as the Library panel keeps it.
+    #[cfg(feature = "test")]
+    pub fn seed_gui_music_library_for_test(&mut self, client: mbv_emby::EmbyClient) {
+        self.emby_runtime =
+            crate::app::state::service_runtime::EmbyRuntime::ready(Arc::new(Mutex::new(client)));
+        self.music_levels = vec!["group".to_string(), "album".to_string()];
+        let mut library = mbv_emby_model::test_support::make_item("Music", "CollectionFolder");
+        library.id = GUI_MUSIC_LIBRARY_ID.to_string();
+        library.collection_type = "music".to_string();
+        library.is_folder = true;
+        let mut tab = mbv_ui_model::library_tab::LibraryTab::new(library);
+        tab.nav_stack.push(music_group_level(vec![
+            group_item("grp-hiphop", "Hip-Hop"),
+            group_item("grp-soul", "Soul"),
+        ]));
+        tab.nav_stack.push(music_album_level(vec![
+            album_item("alb-ill", "Licensed to Ill"),
+            album_item("alb-paul", "Paul's Boutique"),
+        ]));
+        self.libs = vec![tab];
+        self.tab = mbv_ui_model::tab_selection::TabSelection::EmbyLibrary(0);
+        for album_id in ["alb-ill", "alb-paul"] {
+            self.album_artist_cache
+                .insert(album_id.to_string(), "Beastie Boys".to_string());
+        }
+    }
+
+    /// The active destination, for a Client's test that asserts an open-
+    /// destination command landed (add-gui-library-panel design D2).
+    #[must_use]
+    pub fn tab_for_test(&self) -> mbv_ui_model::tab_selection::TabSelection {
+        self.tab
+    }
+
+    /// The Grouped Music library's selected group ids in pill order
+    /// (add-gui-library-panel design D5).
+    #[must_use]
+    pub fn gui_library_groups_for_test(&self, lib_idx: usize) -> &[String] {
+        self.gui_library_groups
+            .get(&lib_idx)
+            .map_or(&[], Vec::as_slice)
+    }
+
+    /// The album ids the GUI Music store loaded for `group_id`; `None` while
+    /// the group is loading or after its fetch failed (design D5).
+    #[must_use]
+    pub fn gui_group_album_ids_for_test(
+        &self,
+        lib_idx: usize,
+        group_id: &str,
+    ) -> Option<Vec<String>> {
+        match self.gui_music_albums.get(&(lib_idx, group_id.to_string())) {
+            Some(crate::app::gui_library::GuiGroupAlbums::Loaded(albums)) => {
+                Some(albums.iter().map(|album| album.id.clone()).collect())
+            }
+            Some(
+                crate::app::gui_library::GuiGroupAlbums::Loading
+                | crate::app::gui_library::GuiGroupAlbums::Failed,
+            )
+            | None => None,
+        }
+    }
+
+    /// The item the GUI Library's Hero shows (design D2).
+    #[must_use]
+    pub fn gui_library_detail_for_test(&self) -> Option<&mbv_emby_model::EmbyItem> {
+        self.gui_library_detail.as_ref()
+    }
+
+    /// Whether the album's track fetch is in flight (design D5): the open-
+    /// album command's effect before its completion lands.
+    #[must_use]
+    pub fn album_tracks_loading_for_test(&self, album_id: &str) -> bool {
+        self.album_tracks_loading.contains(album_id)
     }
 
     /// Whether the `/Sessions` load a playback-target discovery starts is in

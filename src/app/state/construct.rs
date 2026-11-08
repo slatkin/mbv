@@ -188,6 +188,13 @@ impl App {
             // The GUI Client sets this before its first step; a TUI Client
             // keeps the TUI's panel rules.
             gui_client: false,
+            // The GUI Library panel's Client-core state starts empty:
+            // the window content's first command selects a destination's
+            // collections and an item's detail (add-gui-library-panel
+            // design D2, D5).
+            gui_library_groups: std::collections::HashMap::new(),
+            gui_music_albums: std::collections::HashMap::new(),
+            gui_library_detail: None,
             // Mini view always starts on the queue panel; not persisted.
             mini_view_focus: PanelFocus::Queue,
             // Always start on Home until the saved launch tab settles.

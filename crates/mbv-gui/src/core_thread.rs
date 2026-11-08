@@ -64,11 +64,12 @@ pub enum CoreInput {
     /// whether or not a tick changed state (design D3); the report applies
     /// to the Surface state's capacity and hit map first.
     Layout(LayoutReport),
-    /// A panel takes Panel focus (add-gui-library-panel design D4): a press
-    /// inside the Library panel and a Tab across the panel boundary send it.
-    /// The core sets its `FocusStack` and the App's stored Panel focus
-    /// together, so the next frame paints the focus the App's key gates use.
-    PanelFocus(PanelFocus),
+    /// One Library panel request (add-gui-library-panel design D2): the
+    /// window content's `library` command. The core applies it through
+    /// [`App::apply_gui_library_command`], and the take-focus variant also
+    /// moves the core's `FocusStack` with the App's stored focus (design D4),
+    /// so the frame paints the focus the App's key gates use.
+    Library(mbv::GuiLibraryCommand),
     /// The wake value the installed `ClientWaker` sends (design D3), so
     /// Owner events and timers wake the core as they wake the TUI.
     Wake,

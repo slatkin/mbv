@@ -257,13 +257,10 @@ impl<'a> AttachCampaign<'a> {
             Ok(CoreInput::Close) | Err(RecvTimeoutError::Disconnected) => {
                 return Err(CampaignEnd::Closed);
             }
-            // The pre-attach window has no App, so a Panel-focus command has
-            // nothing to move: it is served and dropped as a key is.
+            // The pre-attach window has no App, so a Library command has
+            // nothing to apply: it is served and dropped as a key is.
             Ok(
-                CoreInput::Key(_)
-                | CoreInput::Pointer(_)
-                | CoreInput::Wake
-                | CoreInput::PanelFocus(_),
+                CoreInput::Key(_) | CoreInput::Pointer(_) | CoreInput::Wake | CoreInput::Library(_),
             )
             | Err(RecvTimeoutError::Timeout) => {}
         }
@@ -309,9 +306,9 @@ impl<'a> AttachCampaign<'a> {
                         return self.prompt_outcome(outcome, restart_requested);
                     }
                 }
-                // No App exists before the attach, so no Panel focus can
-                // move; a wake serves the tick as it does after the attach.
-                Ok(CoreInput::Wake | CoreInput::PanelFocus(_)) => {}
+                // No App exists before the attach, so no Library command
+                // can act; a wake serves the tick as it does after the attach.
+                Ok(CoreInput::Wake | CoreInput::Library(_)) => {}
                 Ok(CoreInput::Close) | Err(RecvError) => {
                     return Err(CampaignEnd::Closed);
                 }
@@ -391,13 +388,13 @@ impl<'a> AttachCampaign<'a> {
                     // region the campaign resolves.
                     self.reshow(state);
                 }
-                // The pre-attach window has no App, so a Panel-focus command
-                // has nothing to move: it is served and dropped as a key is.
+                // The pre-attach window has no App, so a Library command has
+                // nothing to apply: it is served and dropped as a key is.
                 Ok(
                     CoreInput::Key(_)
                     | CoreInput::Pointer(_)
                     | CoreInput::Wake
-                    | CoreInput::PanelFocus(_),
+                    | CoreInput::Library(_),
                 ) => {}
                 Ok(CoreInput::Close) | Err(RecvError) => {
                     return Err(CampaignEnd::Closed);

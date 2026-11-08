@@ -12,6 +12,7 @@ use std::thread::JoinHandle;
 use mbv_gui::bridge::frame::GuiWindowFrame;
 use mbv_gui::bridge::keys::{DomKey, neutral_key};
 use mbv_gui::bridge::layout::LayoutReport;
+use mbv_gui::bridge::library::GuiLibraryCommand;
 use mbv_gui::bridge::pointer::{DomPointer, neutral_pointer};
 use mbv_gui::core_thread::{CoreInput, FrameSink, QuitSink};
 use mimalloc::MiMalloc;
@@ -58,6 +59,15 @@ fn pointer(channel: State<'_, CoreChannel>, event: DomPointer) {
 #[tauri::command]
 fn report_layout(channel: State<'_, CoreChannel>, report: LayoutReport) {
     push(channel, CoreInput::Layout(report));
+}
+
+/// The `library` command (add-gui-library-panel design D2): the Library
+/// panel's window content sends one semantic request, the bridge translates
+/// it to the neutral command, and it pushes into the core channel as a
+/// [`CoreInput::Library`].
+#[tauri::command]
+fn library(channel: State<'_, CoreChannel>, command: GuiLibraryCommand) {
+    push(channel, CoreInput::Library(command.into()));
 }
 
 /// Push one input into the core channel (design D3): the command hands the
@@ -142,7 +152,12 @@ fn main() -> tauri::Result<()> {
             *core_thread_slot.lock().unwrap() = Some(core_handle);
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![key, pointer, report_layout])
+        .invoke_handler(tauri::generate_handler![
+            key,
+            pointer,
+            report_layout,
+            library
+        ])
         .build(tauri::generate_context!())?;
     // The event loop ends on the window's destroy or the quit edge's close.
     // The core thread's exit teardown must complete before the process exits

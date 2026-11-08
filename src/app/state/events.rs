@@ -363,6 +363,10 @@ pub enum LibEvent {
     Audiobookshelf(AudiobookshelfEvent),
     Playlist(PlaylistEvent),
     ModelContent(ModelContentEvent),
+    /// The GUI Library's group album fetch completed (add-gui-library-panel
+    /// design D5). Only the GUI Client's collection store starts one, so the
+    /// TUI never receives it.
+    GuiGroupAlbums(crate::app::gui_library::GuiGroupAlbumsEvent),
     Error(String),
 }
 

@@ -21,16 +21,16 @@ mod startup;
 
 pub use self::app::{
     App, AppCommand, CLIENT_IDLE_CADENCE, CardImageDrain, ClientCore, ClientLifecycle,
-    ClientTickHost, ClientWaker, Command, FooterPill, GuiInput, GuiOverlayProjection,
-    GuiSurfaceLeaf, HomeContent, HomeEventDrain, NavigationIntent, OverlayFocus, PanelIntent,
-    PanelTogglesProjection, PlaybackChapter, PlaybackDecorations, PlaybackIntent,
-    PlaybackTargetChoice, PlayerEventDrain, QueueCardArtwork, QueueFooterProjection,
-    QueuePlaybackProjection, QueueRightColumn, QueueSummaryProjection, QueueSurfaceProjection,
-    RemoteControlTarget, RouterOutcome, RouterOverlayState, RouterPlaybackState, RouterSnapshot,
-    RowMenuEntryProjection, SegmentMark, ShellCommand, StartupWorkerDrain, StatusBarProjection,
-    TickOutcome, TrackChip, TrackChips, TrackChoice, TrackPopoverChoice, TrickplayGrid,
-    TrickplayPreviewTile, TrickplaySheetKey, TrickplayTile, VisualIntent, WorkspaceRelayout,
-    resolve_router_outcome_with_focused,
+    ClientTickHost, ClientWaker, Command, FooterPill, GuiInput, GuiLibraryCommand,
+    GuiOverlayProjection, GuiSurfaceLeaf, HomeContent, HomeEventDrain, NavigationIntent,
+    OverlayFocus, PanelIntent, PanelTogglesProjection, PlaybackChapter, PlaybackDecorations,
+    PlaybackIntent, PlaybackTargetChoice, PlayerEventDrain, QueueCardArtwork,
+    QueueFooterProjection, QueuePlaybackProjection, QueueRightColumn, QueueSummaryProjection,
+    QueueSurfaceProjection, RemoteControlTarget, RouterOutcome, RouterOverlayState,
+    RouterPlaybackState, RouterSnapshot, RowMenuEntryProjection, SegmentMark, ShellCommand,
+    StartupWorkerDrain, StatusBarProjection, TickOutcome, TrackChip, TrackChips, TrackChoice,
+    TrackPopoverChoice, TrickplayGrid, TrickplayPreviewTile, TrickplaySheetKey, TrickplayTile,
+    VisualIntent, WorkspaceRelayout, resolve_router_outcome_with_focused,
 };
 pub use self::config::{Config, load_config};
 pub use self::owner_link::{

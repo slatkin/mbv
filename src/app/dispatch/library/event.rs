@@ -52,6 +52,9 @@ impl App {
             LibEvent::Series(event) => self.handle_series_event(event),
             LibEvent::Audiobookshelf(event) => self.handle_audiobookshelf_event(event),
             LibEvent::Playlist(event) => self.handle_playlist_event(event),
+            // The GUI Library's collection store owns this event (add-gui-
+            // library-panel design D5); the TUI never starts one.
+            LibEvent::GuiGroupAlbums(event) => self.handle_gui_group_albums(event),
             // The shell drain applies Model-owned content.
             LibEvent::ModelContent(event) => handle_model_content_event(event),
             LibEvent::Error(error) => self.handle_error(&error),
