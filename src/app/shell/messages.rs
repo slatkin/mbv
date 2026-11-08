@@ -477,7 +477,7 @@ impl Model {
             )],
         });
         if slot_ids.len() > 1 {
-            if let Some(menu) = self.app.build_queue_selection_menu(&slot_ids) {
+            if let Some(menu) = self.app.build_queue_selection_menu_at(&slot_ids, anchor) {
                 self.app.pending_overlay = Some(OverlayRequest::ContextMenu(menu));
             }
         } else {

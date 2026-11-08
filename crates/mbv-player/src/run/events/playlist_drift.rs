@@ -47,6 +47,16 @@ impl PlaybackRun {
             || !self.load_is_ready()
             || !self.run_lifecycle.jump_arm().is_idle()
         {
+            // The rebuild's settle: the first observed count equal to the
+            // copy's length says the load plan has landed, so the gate the
+            // arming command left up (its count observations arrive on later
+            // run loop iterations) disarms here. A count that does not match
+            // stays suppressed — the plan may still be mid-flight — and the
+            // start item's PlaybackRestart disarms the gate when playback
+            // resumes regardless.
+            if count == self.queue_len() {
+                self.pending_initial_playlist_layout = false;
+            }
             tracing::debug!(name: "player.playlist_count.ignored", target: "player", count, "ignoring transient playlist count during queue transition");
             return;
         }

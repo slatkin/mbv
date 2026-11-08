@@ -646,3 +646,38 @@ fn playlist_count_drift_is_suppressed_during_a_pending_queue_rebuild() {
         Ok(PlayerEvent::QueueDesynced(_))
     ));
 }
+
+// The rebuild's own count sequence drains through the run-loop handler after
+// the arming command returned: `stop` empties the playlist (0), the no-play
+// loads raise it back to the copy's length (M). The gate must still be up for
+// both — a gate disarmed inside the synchronous arming command (the old
+// ordering) let the 0 drop delete every slot from the run copy and report a
+// desync, which is the deleted-items-keep-playing symptom
+// (local-daemon.log 2026-11-08T19:33:53). The first observed count equal to
+// the copy's length is the rebuild's settle and disarms the gate; the copy
+// and its identity → mpv-index map stay intact throughout.
+#[test]
+fn a_rebuilds_count_sequence_settles_the_gate_without_desync() {
+    let (mut session, _status, events) = make_queue_session_for_pos_tests_with_events(2);
+    while events.try_recv().is_ok() {}
+    // The submit arms the gate and sets the copy to the new queue inside one
+    // synchronous handler; the fixture's construction arms the same field the
+    // arming command sets, with the copy already matching the plan.
+    assert!(session.pending_initial_playlist_layout);
+    let rebuilt = session.queue_len();
+
+    // `stop`: the playlist empties before the loads land.
+    session.on_playlist_count_changed(0);
+    assert_eq!(session.queue_len(), rebuilt, "the stop's drop is not drift");
+    // The loads land: the observed count settles at the copy's length.
+    session.on_playlist_count_changed(rebuilt);
+    assert_eq!(session.queue_len(), rebuilt);
+    assert!(
+        !session.pending_initial_playlist_layout,
+        "the settle disarmed the gate"
+    );
+    assert!(
+        events.try_recv().is_err(),
+        "the rebuild's own sequence reported no desync"
+    );
+}

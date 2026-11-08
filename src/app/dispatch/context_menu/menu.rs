@@ -562,10 +562,23 @@ impl App {
     /// through `pending_overlay`. The GUI Client's queue row menu takes it for
     /// a multi-selection right-click (its canvas menu is a per-row menu, so
     /// the shared builder is the only bulk-entry source), and never raises
-    /// it — the frame carries the entries to the window content.
+    /// it — the frame carries the entries to the window content, which
+    /// anchors the menu on the first selected slot itself.
     pub(in crate::app) fn build_queue_selection_menu(
         &mut self,
         slot_ids: &[mbv_queue::QueueSlotId],
+    ) -> Option<ContextMenu> {
+        self.build_queue_selection_menu_at(slot_ids, None)
+    }
+
+    /// [`build_queue_selection_menu`](Self::build_queue_selection_menu) with
+    /// the opening gesture's pointer anchor: the TUI's multi-selection
+    /// right-click raises the menu at the pointer, exactly as its single-row
+    /// right-click does.
+    pub(in crate::app) fn build_queue_selection_menu_at(
+        &mut self,
+        slot_ids: &[mbv_queue::QueueSlotId],
+        anchor: Option<(u16, u16)>,
     ) -> Option<ContextMenu> {
         let link = self.playing_queue_link();
         let (items, remove_targets, capabilities) = slot_ids
@@ -596,7 +609,7 @@ impl App {
             &items,
             remove_targets,
             mbv_ui_model::settings::PanelFocus::Queue,
-            None,
+            anchor,
         )
     }
 

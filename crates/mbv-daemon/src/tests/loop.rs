@@ -594,4 +594,14 @@ fn a_queue_desync_resubmits_the_canonical_queue_to_the_player() {
             .collect::<Vec<_>>(),
         vec!["a", "b"],
     );
+
+    // A drift burst reports several observations for one surgery: the ones
+    // inside the cooldown coalesce, so the resubmit cannot loop.
+    let after_first = fixture.event_loop.last_queue_resync;
+    fixture
+        .event_loop
+        .handle_event(DaemonEvent::Player(PlayerEvent::QueueDesynced(
+            "burst repeat".into(),
+        )));
+    assert_eq!(fixture.event_loop.last_queue_resync, after_first);
 }
