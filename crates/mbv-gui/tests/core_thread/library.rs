@@ -8,7 +8,7 @@
 
 use std::sync::mpsc::Receiver;
 
-use mbv::{ClientTickHost, stub_app_with_queue_and_cmd_rx};
+use mbv::{ClientTickHost, stub_app_with_playing_items, stub_app_with_queue_and_cmd_rx};
 use mbv_ctrl::CtrlCmd;
 use mbv_emby_model::EmbyItem;
 use mbv_gui::bridge::frame::GuiFrame;
@@ -35,9 +35,12 @@ const TRACKS: &str = r#"{"Items":[{"Id":"trk-1","Name":"Rhymin & Stealin","Type"
 fn music_core(http: &MockHttp) -> (TestCore, Receiver<CtrlCmd>) {
     let (app, cmd_rx) = stub_app_with_queue_and_cmd_rx(0);
     let mut test = test_core_with(app);
-    test.core
-        .app_mut()
-        .seed_gui_music_library_for_test(test_emby_client(http));
+    let core = test.core.app_mut();
+    core.seed_gui_music_library_for_test(test_emby_client(http));
+    // The selection the restore would otherwise apply: a pinned set makes the
+    // restore's own application skip this destination, so the mock answers
+    // serve the test's commands alone.
+    core.seed_gui_library_groups_for_test(0, &["grp-hiphop"]);
     (test, cmd_rx)
 }
 
@@ -219,10 +222,10 @@ fn the_show_detail_command_shows_the_picked_album() {
 #[test]
 fn the_open_album_command_loads_the_albums_tracks() {
     let http = MockHttp::new();
-    // One answer for the launch restore's first-group fetch (design D9) and
-    // one for the open's own track load; the answers are identical, so the
-    // order they arrive in does not matter.
-    http.respond_repeated(200, TRACKS, 2);
+    // One answer for the open's own track load; the pinned selection keeps
+    // the launch restore's application off this destination, so no other
+    // fetch runs.
+    http.respond_repeated(200, TRACKS, 1);
     let (mut test, _cmd_rx) = music_core(&http);
 
     send_library(
@@ -243,10 +246,10 @@ fn the_open_album_command_loads_the_albums_tracks() {
 #[test]
 fn the_play_command_asks_the_owner_to_play_the_album() {
     let http = MockHttp::new();
-    // One answer for the launch restore's first-group fetch (design D9) and
-    // one for the play's own expansion; the answers are identical, so the
-    // order they arrive in does not matter.
-    http.respond_repeated(200, TRACKS, 2);
+    // One answer for the play's own expansion; the pinned selection keeps
+    // the launch restore's application off this destination, so no other
+    // fetch runs.
+    http.respond_repeated(200, TRACKS, 1);
     let (mut test, cmd_rx) = music_core(&http);
 
     send_library(
@@ -271,10 +274,10 @@ fn the_play_command_asks_the_owner_to_play_the_album() {
 #[test]
 fn the_add_to_queue_command_asks_the_owner_to_append_the_album() {
     let http = MockHttp::new();
-    // One answer for the launch restore's first-group fetch (design D9) and
-    // one for the enqueue's own expansion; the answers are identical, so the
-    // order they arrive in does not matter.
-    http.respond_repeated(200, TRACKS, 2);
+    // One answer for the enqueue's own expansion; the pinned selection keeps
+    // the launch restore's application off this destination, so no other
+    // fetch runs.
+    http.respond_repeated(200, TRACKS, 1);
     let (mut test, cmd_rx) = music_core(&http);
 
     send_library(
@@ -290,15 +293,149 @@ fn the_add_to_queue_command_asks_the_owner_to_append_the_album() {
     );
 }
 
+/// Add to queue applies the library playback policy's autoload rule to a
+/// track (add-gui-library-panel): with autoload on, the album's cached
+/// playable tracks enter in disc/track order starting at the selected track,
+/// so the double-clicked track is the first of the block and the album
+/// follows it. The tracks come from the same cache the tracklist paints —
+/// injected here, so no fetch runs.
+#[test]
+fn the_add_to_queue_command_applies_the_autoload_policy_to_a_track() {
+    let http = MockHttp::new();
+    let (mut test, cmd_rx) = music_core(&http);
+    test.core.app_mut().seed_gui_music_albums_for_test(
+        0,
+        "grp-hiphop",
+        &[("alb-ill", "Licensed to Ill")],
+    );
+    test.core.app_mut().seed_gui_album_tracks_for_test(
+        "alb-ill",
+        &[
+            ("trk-1", "Rhymin & Stealin", 1, 248),
+            ("trk-2", "The New Style", 2, 275),
+            ("trk-3", "She's Crafty", 3, 220),
+        ],
+    );
+    test.core.app_mut().set_autoload_for_test(true);
+
+    send_library(&mut test, GuiLibraryCommand::TakeFocus);
+    send_library(
+        &mut test,
+        GuiLibraryCommand::AddToQueue {
+            item_id: "trk-2".into(),
+        },
+    );
+
+    assert_eq!(
+        appended_ids(&cmd_rx),
+        (None, vec!["trk-2".into(), "trk-3".into()])
+    );
+}
+
+/// With autoload off, the same add queues only the selected track — the
+/// autoload rule's other half.
+#[test]
+fn the_add_to_queue_command_of_a_track_queues_only_it_while_autoload_is_off() {
+    let http = MockHttp::new();
+    let (mut test, cmd_rx) = music_core(&http);
+    test.core.app_mut().seed_gui_music_albums_for_test(
+        0,
+        "grp-hiphop",
+        &[("alb-ill", "Licensed to Ill")],
+    );
+    test.core.app_mut().seed_gui_album_tracks_for_test(
+        "alb-ill",
+        &[
+            ("trk-1", "Rhymin & Stealin", 1, 248),
+            ("trk-2", "The New Style", 2, 275),
+            ("trk-3", "She's Crafty", 3, 220),
+        ],
+    );
+    test.core.app_mut().set_autoload_for_test(false);
+
+    send_library(&mut test, GuiLibraryCommand::TakeFocus);
+    send_library(
+        &mut test,
+        GuiLibraryCommand::AddToQueue {
+            item_id: "trk-2".into(),
+        },
+    );
+
+    assert_eq!(appended_ids(&cmd_rx), (None, vec!["trk-2".into()]));
+}
+
+/// Play over a populated queue replaces it and starts, with no confirm
+/// pending (add-gui-library-panel): the replace-confirm is a TUI overlay the
+/// GUI never paints, so the TUI's gate held the play silently and the Hero's
+/// Play button did nothing over a populated queue. Regression for the live
+/// finding: one queued item and a Play that never ran.
+#[test]
+fn the_play_command_over_a_populated_queue_replaces_it_without_a_confirm() {
+    let http = MockHttp::new();
+    http.respond(200, TRACKS);
+    let (app, cmd_rx) = stub_app_with_queue_and_cmd_rx(1);
+    let mut test = test_core_with(app);
+    let core = test.core.app_mut();
+    core.seed_gui_music_library_for_test(test_emby_client(&http));
+    // The pinned selection keeps the launch restore's application off this
+    // destination, so the mock's one answer serves the play's expansion.
+    core.seed_gui_library_groups_for_test(0, &["grp-hiphop"]);
+    core.seed_gui_music_albums_for_test(0, "grp-hiphop", &[("alb-ill", "Licensed to Ill")]);
+
+    send_library(
+        &mut test,
+        GuiLibraryCommand::Play {
+            item_id: "alb-ill".into(),
+        },
+    );
+
+    let (source, ids) = replacement(&cmd_rx);
+    assert_eq!(ids, ["trk-1", "trk-2"], "the queue was replaced");
+    assert_eq!(
+        source,
+        QueueSource::Collection {
+            collection_type: "music".into()
+        }
+    );
+    assert!(
+        test.core.app_mut().pending_overlay_is_none_for_test(),
+        "no confirm is pending"
+    );
+}
+
+/// The frame carries the playing track's id (add-gui-library-panel, the
+/// Library's playing row): the Queue panel's own authority — the Owner status
+/// and the playback queue's item at the active index — so the tracklist's
+/// playing row paints what the Queue's active slot paints.
+#[test]
+fn the_music_frame_carries_the_playing_track_id() {
+    let http = MockHttp::new();
+    let mut playing = mbv_emby_model::test_support::make_item("Rhymin & Stealin", "Audio");
+    playing.id = "trk-1".into();
+    playing.media_type = "Audio".into();
+    let app = stub_app_with_playing_items(vec![mbv_queue::QueueItem::Emby(Box::new(playing))]);
+    let mut test = test_core_with(app);
+    let core = test.core.app_mut();
+    core.seed_gui_music_library_for_test(test_emby_client(&http));
+    core.seed_gui_library_groups_for_test(0, &["grp-hiphop"]);
+
+    let frame = library_of(send_library_frame(&mut test, GuiLibraryCommand::TakeFocus));
+
+    let music = frame
+        .content
+        .and_then(|content| content.music)
+        .expect("the Music destination is active");
+    assert_eq!(music.playing_track_id.as_deref(), Some("trk-1"));
+}
 /// Shuffle artist plays the artist's albums shuffled (design D8): one
 /// replacement over every named album's tracks, with the shuffle source.
 #[test]
 fn the_shuffle_artist_command_plays_the_artists_albums_shuffled() {
     let http = MockHttp::new();
-    // Two answers for the two albums' expansions and one for the launch
-    // restore's first-group fetch (design D9); the answers are identical, so
-    // the order they arrive in does not matter.
-    http.respond_repeated(200, TRACKS, 3);
+    // Two answers for the two albums' expansions; the pinned selection keeps
+    // the launch restore's application off this destination, so no other
+    // fetch runs.
+    http.respond_repeated(200, TRACKS, 2);
     let (mut test, cmd_rx) = music_core(&http);
 
     send_library(
@@ -407,14 +544,10 @@ fn the_item_menu_entries_ride_the_frame_and_run_their_action() {
 fn seeded_music_core(http: &MockHttp) -> (TestCore, Receiver<CtrlCmd>) {
     let (app, cmd_rx) = stub_app_with_queue_and_cmd_rx(0);
     let mut test = test_core_with(app);
-    test.core
-        .app_mut()
-        .seed_gui_music_library_for_test(test_emby_client(http));
-    test.core.app_mut().seed_gui_music_albums_for_test(
-        0,
-        "grp-hiphop",
-        &[("alb-ill", "Licensed to Ill")],
-    );
+    let core = test.core.app_mut();
+    core.seed_gui_music_library_for_test(test_emby_client(http));
+    core.seed_gui_library_groups_for_test(0, &["grp-hiphop"]);
+    core.seed_gui_music_albums_for_test(0, "grp-hiphop", &[("alb-ill", "Licensed to Ill")]);
     (test, cmd_rx)
 }
 

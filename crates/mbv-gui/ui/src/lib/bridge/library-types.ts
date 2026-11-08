@@ -93,6 +93,11 @@ export interface GuiMusicFrame {
 	hero: GuiMusicHero | null;
 	/** The Hero's square artwork, present exactly when `hero` is. */
 	art: GuiLibraryArt | null;
+	/** The id of the Emby track playing at the playhead (the Library's
+	 * playing row): the Queue panel's own authority, carried so a tracklist
+	 * row and a list track row paint what the Queue's active slot paints.
+	 * `null` while idle or while the active slot holds no Emby item. */
+	playingTrackId: string | null;
 }
 
 export interface GuiMusicPill {

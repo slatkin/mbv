@@ -276,6 +276,47 @@ fn two_groups_sharing_an_artist_yield_it_once_in_order_with_its_letter() {
     );
 }
 
+/// The empty selection is the show-all selection (add-gui-library-panel, the
+/// user's contract): the projection unions every group's albums, and the
+/// pills paint no selection.
+#[test]
+fn an_empty_selection_unions_every_group() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = app_with_stored_groups(
+        vec![stored_album(
+            "alb-ill",
+            "Licensed to Ill",
+            "Beastie Boys",
+            1986,
+        )],
+        vec![stored_album(
+            "alb-paul",
+            "Paul's Boutique",
+            "De La Soul",
+            1989,
+        )],
+    );
+    // The selection the restore would leave on a fresh launch: empty.
+    app.gui_library_groups.insert(0, Vec::new());
+
+    let projection = app.gui_music_projection(0);
+
+    assert!(
+        projection.pills.iter().all(|pill| !pill.selected),
+        "the pills paint no selection"
+    );
+    let artists: Vec<&str> = projection
+        .artists
+        .iter()
+        .map(|artist| artist.name.as_str())
+        .collect();
+    assert_eq!(
+        artists,
+        ["Beastie Boys", "De La Soul"],
+        "the empty selection shows every group's albums"
+    );
+}
+
 /// The Hero's facts for the picked album: the artist header, the album block,
 /// and the tracklist from the cached tracks (add-gui-library-panel design D5).
 #[test]

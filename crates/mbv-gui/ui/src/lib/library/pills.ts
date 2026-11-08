@@ -18,11 +18,12 @@ export function selectedPillIds(pills: readonly GuiMusicPill[]): string[] {
 }
 
 /**
- * The set a gesture leaves selected, as group ids in pill order (design D6). A
- * press toggles a collection pill on or off, an Alt-press solos it, and a
- * single-select pill replaces the set. At least one pill stays selected, so
- * turning off the last one changes nothing; clear keeps the first selected
- * pill in pill order. A stale group id selects nothing.
+ * The set a gesture leaves selected, as group ids in pill order (design D6).
+ * A press toggles a collection pill on or off, an Alt-press solos it, and a
+ * single-select pill replaces the set. Turning off the last selected pill
+ * leaves the empty set — the show-all selection, the same content as every
+ * pill selected (the user's contract); clear keeps the first selected pill in
+ * pill order. A stale group id selects nothing.
  */
 export function nextPillSelection(
 	pills: readonly GuiMusicPill[],
@@ -41,9 +42,6 @@ export function nextPillSelection(
 	}
 	const next = new Set(selected);
 	if (next.has(pill.groupId)) {
-		if (next.size === 1) {
-			return selected;
-		}
 		next.delete(pill.groupId);
 	} else {
 		next.add(pill.groupId);

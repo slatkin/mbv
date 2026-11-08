@@ -35,6 +35,7 @@
 	import type { LibraryRow } from '$lib/library/list';
 	import {
 		acceptLibraryFilter,
+		addLibraryTrackToQueue,
 		libraryUi,
 		measureLibraryList,
 		openLibraryFilter,
@@ -107,6 +108,11 @@
 	 * fill (design D7). */
 	const picked = $derived(music.hero?.album.albumId ?? null);
 
+	/** The track playing at the playhead: the Queue panel's own authority,
+	 * carried on the frame. Its row paints the playing fill — the canvas's
+	 * green with dark ink, as the Queue's active row paints (design D8). */
+	const playingTrackId = $derived(music.playingTrackId);
+
 	/** The bottom edge of the last painted row: the below-spacer's pair. */
 	function lastBottom(): number {
 		const last = painted[painted.length - 1];
@@ -124,20 +130,25 @@
 		return row.kind === 'album' && row.albumId === picked;
 	}
 
-	/** A row's painted fill: the picked album's green wins, then the cursor
-	 * row's fill (design D7). */
+	/** Whether the row is the track playing at the playhead. */
+	function isPlaying(row: LibraryRow): boolean {
+		return row.kind === 'track' && row.trackId === playingTrackId;
+	}
+
+	/** A row's painted fill: the playing track's green wins, then the picked
+	 * album's green, then the cursor row's fill (design D7, D8). */
 	function rowBackground(row: LibraryRow): string | undefined {
-		if (isPicked(row)) {
+		if (isPlaying(row) || isPicked(row)) {
 			return canvasVar('accent');
 		}
 		return row.id === $libraryUi.cursor ? canvasVar('selected') : undefined;
 	}
 
-	/** A row's name colour: the dark ink on the picked row, and otherwise the
-	 * canvas's tone by depth — the artist heading, the album text, the muted
-	 * track. */
+	/** A row's name colour: the dark ink on the playing row and the picked
+	 * row, and otherwise the canvas's tone by depth — the artist heading, the
+	 * album text, the muted track. */
 	function rowColor(row: LibraryRow): string {
-		if (isPicked(row)) {
+		if (isPlaying(row) || isPicked(row)) {
 			return canvasVar('ink');
 		}
 		return row.kind === 'artist'
@@ -147,9 +158,10 @@
 				: canvasVar('muted');
 	}
 
-	/** The meta colour beside a row's name: the dark ink on the picked row. */
+	/** The meta colour beside a row's name: the dark ink on the playing row
+	 * and the picked row. */
 	function metaColor(row: LibraryRow): string {
-		return isPicked(row) ? canvasVar('ink') : canvasVar('muted');
+		return isPlaying(row) || isPicked(row) ? canvasVar('ink') : canvasVar('muted');
 	}
 
 	/** A row's name weight: an artist row is bold, an album and a track regular,
@@ -296,19 +308,21 @@
 							style:text-align="left"
 							style:font-size="13px"
 							style:background={rowBackground(row)}
-							style:cursor="pointer"
-							data-library-row={row.kind}
-							data-library-row-id={row.id}
-							onclick={() => pressLibraryRow(row)}
-						>
-							<span
-								class="flex flex-none items-center justify-end font-mono tabular-nums"
-								style:width="18px"
-								style:font-size="11px"
-								style:color={isPicked(row)
-									? 'var(--canvas-ink)'
-									: 'var(--canvas-ordinal)'}>{row.number}</span
-							>
+										style:cursor="pointer"
+										data-library-row={row.kind}
+										data-library-row-id={row.id}
+										data-library-cursor={row.id === $libraryUi.cursor ? '' : undefined}
+										onclick={() => pressLibraryRow(row)}
+										ondblclick={() => addLibraryTrackToQueue(row.trackId)}
+									>
+										<span
+											class="flex flex-none items-center justify-end font-mono tabular-nums"
+											style:width="18px"
+											style:font-size="11px"
+											style:color={isPlaying(row) || isPicked(row)
+												? 'var(--canvas-ink)'
+												: 'var(--canvas-ordinal)'}>{row.number}</span
+										>
 							<span
 								class="min-w-0 flex-1 truncate"
 								style:color={rowColor(row)}>{row.name}</span
@@ -335,6 +349,7 @@
 							aria-expanded={row.open}
 							data-library-row={row.kind}
 							data-library-row-id={row.id}
+							data-library-cursor={row.id === $libraryUi.cursor ? '' : undefined}
 							onclick={() => pressLibraryRow(row)}
 						>
 							<span

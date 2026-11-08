@@ -51,6 +51,7 @@ function music(): GuiMusicFrame {
 		artists: [BEASTIE, BRAND],
 		hero: null,
 		art: null,
+		playingTrackId: null,
 	};
 }
 

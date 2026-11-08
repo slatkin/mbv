@@ -596,6 +596,19 @@ impl App {
             .map_or(&[], Vec::as_slice)
     }
 
+    /// Seed the GUI Music selection with `group_ids` for `lib_idx`, as a
+    /// landed set-collections command would (add-gui-library-panel): a
+    /// command test pins the selection before its first step, so the launch
+    /// restore's own application skips it and the test's mock answers serve
+    /// the test's commands alone.
+    #[cfg(feature = "test")]
+    pub fn seed_gui_library_groups_for_test(&mut self, lib_idx: usize, group_ids: &[&str]) {
+        self.gui_library_groups.insert(
+            lib_idx,
+            group_ids.iter().map(|id| (*id).to_string()).collect(),
+        );
+    }
+
     /// The album ids the GUI Music store loaded for `group_id`; `None` while
     /// the group is loading or after its fetch failed (design D5).
     #[must_use]
@@ -627,6 +640,40 @@ impl App {
     #[must_use]
     pub fn album_tracks_loading_for_test(&self, album_id: &str) -> bool {
         self.album_tracks_loading.contains(album_id)
+    }
+
+    /// Seed the album track cache with `tracks` for `album_id`, as a landed
+    /// album-track fetch would (add-gui-library-panel): the autoload add and
+    /// play rules read the cache, so a command test injects the tracks and
+    /// observes the Owner request with no fetch behind it.
+    #[cfg(feature = "test")]
+    pub fn seed_gui_album_tracks_for_test(
+        &mut self,
+        album_id: &str,
+        tracks: &[(&str, &str, i64, i64)],
+    ) {
+        let tracks = tracks
+            .iter()
+            .map(|(id, name, number, seconds)| {
+                let mut track = mbv_emby_model::test_support::make_item(name, "Audio");
+                track.id = (*id).to_string();
+                track.media_type = "Audio".to_string();
+                track.index_number = *number;
+                track.runtime_ticks = seconds * mbv_emby_model::TICKS_PER_SECOND;
+                track
+            })
+            .collect();
+        self.album_tracks_cache.insert(album_id.to_string(), tracks);
+    }
+
+    /// Set the autoload setting (add-gui-library-panel): the Library's add
+    /// and play commands read it, and a Client's test has no settings UI.
+    ///
+    /// # Panics
+    /// Panics if the settings mutex is poisoned: a previous holder panicked.
+    #[cfg(feature = "test")]
+    pub fn set_autoload_for_test(&mut self, autoload: bool) {
+        self.config.lock().unwrap().autoload = autoload;
     }
 
     /// Whether the core holds no pending TUI overlay (add-gui-library-panel

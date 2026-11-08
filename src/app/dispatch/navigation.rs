@@ -270,7 +270,7 @@ impl App {
     /// and `play_album_track`: find the cached candidate list containing
     /// `track_id`, keep only playable tracks, sort them, and locate `track_id`'s
     /// resulting position.
-    fn resolve_playable_album_tracks(
+    pub(in crate::app) fn resolve_playable_album_tracks(
         &self,
         album_id: &str,
         track_id: &str,

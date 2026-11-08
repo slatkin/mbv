@@ -49,9 +49,9 @@ impl App {
 
     /// Apply the saved collection set of the destination the first phase
     /// opened (design D9): a saved group that the library no longer holds is
-    /// dropped, and when none remain — a saved set the library emptied, and
-    /// a destination with no saved entry, a fresh launch's case — the first
-    /// group is selected, so the list is never empty for a missing set. The
+    /// dropped, and an empty result — a saved set the library emptied, and
+    /// a destination with no saved entry, a fresh launch's case — is the
+    /// show-all selection: the union of every group the library holds. The
     /// saved entry matches `destination`, the identity phase 1 recorded, and
     /// the active destination must still be that one: a mid-restore tab
     /// switch abandons the restore, so no other destination's saved set
@@ -74,27 +74,26 @@ impl App {
         let Some(present) = self.gui_music_present_groups(lib_idx) else {
             return false;
         };
+        if self.gui_library_groups.contains_key(&lib_idx) {
+            // The user already selected pills in the pre-restore window: the
+            // restore applies to a destination that holds no selection, and
+            // never clobbers one the session made.
+            return true;
+        }
         // No saved entry for the destination is an empty saved set (design
-        // D9): the selection below is empty, so the first-group rule applies
-        // and a fresh launch opens with the first group selected.
+        // D9): the selection below is empty, so the show-all selection
+        // applies and a fresh launch opens with every group's content.
         let saved_group_ids = state
             .collections
             .iter()
             .find(|entry| entry.destination == *destination)
             .map_or(&[][..], |entry| entry.group_ids.as_slice());
-        let mut selected: Vec<String> = saved_group_ids
+        let selected: Vec<String> = saved_group_ids
             .iter()
             .filter(|group_id| present.contains(group_id))
             .cloned()
             .collect();
-        if selected.is_empty()
-            && let Some(first) = present.first()
-        {
-            selected.push(first.clone());
-        }
-        if !selected.is_empty() {
-            self.set_gui_library_collections(lib_idx, selected);
-        }
+        self.set_gui_library_collections(lib_idx, selected);
         true
     }
 
@@ -200,7 +199,10 @@ impl App {
 
     /// The groups the library holds, in pill order. `None` while the list has
     /// not landed: the level is absent, or its fetch is still in flight.
-    fn gui_music_present_groups(&self, lib_idx: usize) -> Option<Vec<String>> {
+    pub(in crate::app::gui_library) fn gui_music_present_groups(
+        &self,
+        lib_idx: usize,
+    ) -> Option<Vec<String>> {
         let level = self.gui_music_group_level(lib_idx)?;
         if level.loading {
             return None;

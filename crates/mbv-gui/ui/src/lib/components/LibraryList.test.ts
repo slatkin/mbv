@@ -80,6 +80,7 @@ function music(collectionNames: string[] = ['Hip-Hop']): GuiMusicFrame {
 		artists: [BEASTIE, BRAND],
 		hero: null,
 		art: null,
+		playingTrackId: null,
 	};
 }
 
@@ -97,6 +98,11 @@ async function mountList(viewportHeight = 40): Promise<HTMLElement> {
 /** Open the Beastie Boys node, so its albums paint. */
 function openBeastie(): void {
 	libraryUi.update((ui) => ({ ...ui, openNodes: ['artist:service:a1'] }));
+}
+
+/** Open the Licensed To Ill album node, so its cached tracks paint. */
+function openLicensedToIll(): void {
+	libraryUi.update((ui) => ({ ...ui, openNodes: [...ui.openNodes, 'album:al1'] }));
 }
 
 test('a press on an album without its tracklist opens it and asks for the tracks', async () => {
@@ -157,4 +163,39 @@ test('a press closes and reopens a node while the filter narrows the rows', asyn
 	expect(album()?.getAttribute('aria-expanded')).toBe('false');
 	await fireEvent.click(album() as HTMLElement);
 	expect(album()?.getAttribute('aria-expanded')).toBe('true');
+});
+
+// The user's double-click contract (add-gui-library-panel): a double-click on
+// a track row adds that track to the queue, through the same add helper the
+// Hero's tracklist rows use.
+test('a double-click on a track row sends that track add to queue', async () => {
+	openBeastie();
+	openLicensedToIll();
+	const container = await mountList(240);
+	const track = container.querySelector('[data-library-row-id="track:t1"]');
+
+	await fireEvent.dblClick(track as HTMLElement);
+
+	expect(invokeMock).toHaveBeenCalledWith('library', {
+		command: { command: 'addToQueue', itemId: 't1' },
+	});
+});
+
+// The user's live finding: a track press had no observable effect, because its
+// only effect — picking its album — was already the state once the album node
+// was open. The press now also moves the cursor onto the row, as the Queue
+// panel's click moves the queue cursor.
+test('a press on a track row moves the cursor onto it', async () => {
+	openBeastie();
+	openLicensedToIll();
+	const container = await mountList(240);
+	const track = container.querySelector('[data-library-row-id="track:t1"]');
+
+	await fireEvent.click(track as HTMLElement);
+
+	expect(
+		container
+			.querySelector('[data-library-row-id="track:t1"]')
+			?.hasAttribute('data-library-cursor'),
+	).toBe(true);
 });

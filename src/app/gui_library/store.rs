@@ -35,8 +35,10 @@ impl App {
     /// Replace the selected collections of the Grouped Music library `lib_idx`
     /// (design D5, D6) and start the album fetch of every selected group the
     /// store does not hold. The store keeps a loaded group, so a deselected
-    /// group selects again without a fetch. An empty set never reaches here:
-    /// at least one pill stays selected.
+    /// group selects again without a fetch. An empty set is the show-all
+    /// selection: the union of every group the library holds, loaded through
+    /// the same per-group fetch and cache, so the fan-out is one cached fetch
+    /// per group, never a repeated one.
     pub(in crate::app) fn set_gui_library_collections(
         &mut self,
         lib_idx: usize,
@@ -47,6 +49,25 @@ impl App {
                 "setCollections",
                 format_args!("library {lib_idx}: {reason}"),
             );
+            return;
+        }
+        if group_ids.is_empty() {
+            // The show-all selection (the user's contract: an empty set is
+            // the same as every pill selected). Every group's album list
+            // enters the same per-group cache, so a later selection of the
+            // group fetches nothing.
+            let all = self.gui_music_present_groups(lib_idx).unwrap_or_default();
+            tracing::info!(
+                name: "gui_library.collections.set_all",
+                target: "gui_library",
+                library_index = lib_idx,
+                groups = all.len(),
+                "the empty selection shows every group"
+            );
+            for group_id in all {
+                self.fetch_gui_group_albums(lib_idx, group_id);
+            }
+            self.gui_library_groups.insert(lib_idx, Vec::new());
             return;
         }
         self.gui_library_groups.insert(lib_idx, group_ids.clone());
@@ -63,9 +84,9 @@ impl App {
     }
 
     /// Why the selected-collection set cannot apply to `lib_idx` (design D5,
-    /// D6): the library index names no tab, the set is empty — the pill rules
-    /// keep at least one pill selected, so a command that carries none is a
-    /// stale frame's — or the destination is not a Grouped Music library.
+    /// D6): the library index names no tab, or the destination is not a
+    /// Grouped Music library. The empty set applies — it is the show-all
+    /// selection.
     fn gui_collections_reject_reason(
         &self,
         lib_idx: usize,
@@ -74,12 +95,10 @@ impl App {
         if lib_idx >= self.libs.len() {
             return Some("the library index names no tab");
         }
-        if group_ids.is_empty() {
-            return Some("the selected set is empty");
-        }
         if !self.is_grouped_music_library(lib_idx) {
             return Some("the destination is not a Grouped Music library");
         }
+        let _ = group_ids;
         None
     }
 

@@ -1,9 +1,9 @@
 // add-gui-library-panel row 4.4: the pill row's multi-select rules (design
 // D6). One table of gestures and the exact selected set each one sends, in
-// pill order: a press toggles, an Alt-press solos, the last selected pill
-// stays, clear keeps the first selected pill, and a single-select pill
-// replaces the set. The Tauri IPC is mocked; the asserted payload is the
-// serde wire shape of bridge/library.rs.
+// pill order: a press toggles, an Alt-press solos, turning off the last
+// selected pill leaves the empty show-all set, clear keeps the first selected
+// pill, and a single-select pill replaces the set. The Tauri IPC is mocked;
+// the asserted payload is the serde wire shape of bridge/library.rs.
 
 import { invoke } from '@tauri-apps/api/core';
 import { beforeEach, expect, test, vi } from 'vitest';
@@ -87,9 +87,9 @@ test.each<Row>([
 		pills: TWO_SELECTED,
 	},
 	{
-		case: 'pressing the last selected pill keeps it selected',
+		case: 'turning off the last selected pill leaves the empty show-all set',
 		gesture: { kind: 'press', groupId: 'g1', solo: false },
-		groupIds: ['g1'],
+		groupIds: [],
 	},
 	{
 		case: 'an Alt-press solos the pressed pill',

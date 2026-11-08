@@ -97,6 +97,13 @@ pub struct GuiMusicFrame {
     pub hero: Option<GuiMusicHeroFrame>,
     /// The Hero's square artwork (design D5): present exactly when `hero` is.
     pub art: Option<GuiLibraryArt>,
+    /// The id of the Emby track playing at the playhead (add-gui-library-panel,
+    /// the Library's playing row): the Queue panel's own authority — the Owner
+    /// status and the playback queue's item at the active index — carried so
+    /// the tracklist's and the list's playing rows paint what the Queue's
+    /// active slot paints. `None` while idle or while the active slot holds no
+    /// Emby item.
+    pub playing_track_id: Option<String>,
 }
 
 /// One group pill of the Music destination (design D6).
@@ -228,13 +235,14 @@ pub enum GuiLibraryArt {
 impl GuiMusicFrame {
     /// The Music destination's content for `projection`, with the library
     /// index the set-collections command names, the Hero's artwork `art` —
-    /// present exactly when the projection holds a Hero — and the picked
-    /// item's menu `menu`.
+    /// present exactly when the projection holds a Hero — the picked item's
+    /// menu `menu`, and the playing track's id `playing_track_id`.
     pub(crate) fn from_projection(
         lib_idx: usize,
         projection: &GuiMusicProjection,
         art: Option<GuiLibraryArt>,
         menu: &[GuiLibraryMenuItem],
+        playing_track_id: Option<String>,
     ) -> Self {
         let hero = projection.hero.as_ref().map(|hero| {
             let mut frame = GuiMusicHeroFrame::from(hero);
@@ -264,6 +272,7 @@ impl GuiMusicFrame {
                 .collect(),
             art,
             hero,
+            playing_track_id,
         }
     }
 }

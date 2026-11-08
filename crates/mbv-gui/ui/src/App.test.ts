@@ -64,6 +64,7 @@ function music(hero: GuiMusicHero | null = null): GuiMusicFrame {
 		artists: [],
 		hero,
 		art: null,
+		playingTrackId: null,
 	};
 }
 

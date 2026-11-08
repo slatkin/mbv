@@ -284,6 +284,6 @@
 			</div>
 		</section>
 
-		<LibraryTracklist {hero} />
+		<LibraryTracklist {hero} playingTrackId={music.playingTrackId} />
 	</div>
 {/if}

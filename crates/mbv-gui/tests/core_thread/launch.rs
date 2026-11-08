@@ -169,10 +169,11 @@ fn a_restored_location_drops_a_group_the_library_no_longer_has() {
     );
 }
 
-/// When every saved group is gone, the first group the library holds is
-/// selected: a restored set never leaves the destination with no pill.
+/// When every saved group is gone, the show-all selection applies: the
+/// restored set is empty, and an empty selection is the union of every group
+/// (add-gui-library-panel, the user's contract).
 #[test]
-fn a_restored_location_whose_groups_are_all_gone_selects_the_first_group() {
+fn a_restored_location_whose_groups_are_all_gone_shows_every_group() {
     let _guard = TestStateDirGuard::new();
     save_gui_launch_state(&GuiLaunchState {
         version: GUI_LAUNCH_STATE_VERSION,
@@ -187,18 +188,22 @@ fn a_restored_location_whose_groups_are_all_gone_selects_the_first_group() {
 
     let mut test = core_with_seeded_catalog(seed_music);
 
-    assert_eq!(
-        test.core.app_mut().gui_library_groups_for_test(0),
-        ["grp-hiphop"]
+    assert!(
+        test.core
+            .app_mut()
+            .gui_library_groups_for_test(0)
+            .is_empty(),
+        "a saved set the library emptied restores as the show-all selection"
     );
 }
 
 /// A start with no saved location opens the first presented destination with
-/// Library Panel focus, and the restore's first-group rule selects the first
-/// group the destination holds (design D9), so the list is not empty on a
-/// fresh launch. Regression for the live finding that a fresh launch left
-/// the Library panel unreachable, then with no pill selected and an empty
-/// artist list: the restore returned before the first-group rule ran.
+/// Library Panel focus, and the restore applies the show-all selection: an
+/// empty set is the union of every group (add-gui-library-panel, the user's
+/// contract, which supersedes the first-group rule design D9 once carried).
+/// Regression for the live finding that a fresh launch left the Library
+/// panel unreachable: the restore now always lands a selection, empty or
+/// saved.
 #[test]
 fn a_fresh_launch_opens_the_first_presented_destination() {
     let _guard = TestStateDirGuard::new();
@@ -208,10 +213,9 @@ fn a_fresh_launch_opens_the_first_presented_destination() {
     let app = test.core.app_mut();
     assert_eq!(app.tab_for_test(), TabSelection::EmbyLibrary(0));
     assert_eq!(app.gui_panel_focus(), PanelFocus::Library);
-    assert_eq!(
-        app.gui_library_groups_for_test(0),
-        ["grp-hiphop"],
-        "a fresh launch selects the first group"
+    assert!(
+        app.gui_library_groups_for_test(0).is_empty(),
+        "a fresh launch restores the show-all selection"
     );
 }
 

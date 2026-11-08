@@ -207,16 +207,26 @@ impl App {
             .collect()
     }
 
-    /// The union of the selected groups' albums (design D5): each group's
-    /// whole album list in pill order, de-duplicated by album id, with the
-    /// `(artist, year, name)` facts and stable `ArtistKey` that
+    /// The union of the selected groups' albums (design D5): each selected
+    /// group's whole album list in pill order, de-duplicated by album id, with
+    /// the `(artist, year, name)` facts and stable `ArtistKey` that
     /// `mbv_render::group_album_plan` derives from `album_artist_cache`. A
     /// group that failed keeps the others' albums and names itself in the
-    /// failure line.
+    /// failure line. An empty selection is the show-all selection: every
+    /// group's albums, as the same union.
     fn gui_music_union(&self, lib_idx: usize, pills: &[GuiMusicPill]) -> GuiMusicUnion<'_> {
         let mut union = GuiMusicUnion::default();
         let mut seen: HashSet<&str> = HashSet::new();
-        for pill in pills.iter().filter(|pill| pill.selected) {
+        let selected: Vec<&GuiMusicPill> = pills.iter().filter(|pill| pill.selected).collect();
+        // The empty selection shows every group (the user's contract), so the
+        // union walks the whole pill row and the loading and failure facts of
+        // each group's fetch apply as they do for a selected one.
+        let chosen: Vec<&GuiMusicPill> = if selected.is_empty() {
+            pills.iter().collect()
+        } else {
+            selected
+        };
+        for pill in chosen {
             let Some(state) = self.gui_music_albums.get(&(lib_idx, pill.group_id.clone())) else {
                 union.loading = true;
                 continue;

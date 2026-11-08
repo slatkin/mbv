@@ -102,7 +102,8 @@ fn content(app: &mut App) -> GuiLibraryContent {
 }
 
 /// The Music destination's content (design D5): the projection's facts with
-/// the Hero's artwork projected beside them and the picked item's menu.
+/// the Hero's artwork projected beside them, the picked item's menu, and the
+/// playing track's id.
 fn music_frame(app: &mut App, lib_idx: usize) -> GuiMusicFrame {
     let projection = app.gui_music_projection(lib_idx);
     let picked = projection
@@ -115,5 +116,6 @@ fn music_frame(app: &mut App, lib_idx: usize) -> GuiMusicFrame {
     let menu = picked
         .map(|album_id| app.gui_library_menu(&album_id))
         .unwrap_or_default();
-    GuiMusicFrame::from_projection(lib_idx, &projection, art, &menu)
+    let playing_track_id = app.gui_playing_track_id();
+    GuiMusicFrame::from_projection(lib_idx, &projection, art, &menu, playing_track_id)
 }

@@ -339,15 +339,35 @@ function withId(ids: string[], id: string, present: boolean): string[] {
 	return present ? [...rest, id] : rest;
 }
 
+/** Add a track to the queue (add-gui-library-panel, the user's double-click
+ * contract): the track's own stable id, through the core's add path, which
+ * applies the library playback policy's autoload rule. The list's track rows
+ * and the Hero's tracklist rows both send it, so one gesture cannot drift
+ * from the other. */
+export function addLibraryTrackToQueue(trackId: string): void {
+	void sendLibraryCommand({ command: 'addToQueue', itemId: trackId });
+}
+
 /** Press a row (design D7): an artist or album row opens or closes and is
- * picked; a track row is picked. The row's painted open state is the half to
- * flip, so a press under a filter closes the node the filter opened. A press
- * moves no cursor — that is the keys' work. */
+ * picked; a track row moves the cursor onto itself and is picked — the pick's
+ * album shows in the Hero, and the cursor is the press's visible half, as the
+ * Queue panel's click moves the queue cursor. The row's painted open state is
+ * the half to flip, so a press under a filter closes the node the filter
+ * opened. A press on an artist or album row moves no cursor — that is the
+ * keys' work. */
 export function pressLibraryRow(row: LibraryRow): void {
 	if (row.kind === 'letter') {
 		return;
 	}
 	if (row.kind === 'track') {
+		libraryUi.update((ui) => {
+			const rows = rowsOf(ui);
+			return {
+				...ui,
+				cursor: row.id,
+				scrollTop: scrollTopToShowCursor(rows, row.id, ui.scrollTop, ui.viewportHeight),
+			};
+		});
 		showDetail(pickedItemId(row));
 		return;
 	}

@@ -71,6 +71,7 @@ function music(facts: GuiMusicHero): GuiMusicFrame {
 		],
 		hero: facts,
 		art: null,
+		playingTrackId: null,
 	};
 }
 
@@ -196,3 +197,34 @@ test('the tracklist paints the cursor on its first track before any key moves it
 		container.querySelector('[data-library-track="t2"]')?.hasAttribute('data-library-track-cursor'),
 	).toBe(false);
 });
+
+// The user's double-click contract (add-gui-library-panel): a double-click on
+// a tracklist row adds that track to the queue, through the same add helper
+// the list's track rows use.
+test('a double-click on a tracklist row sends that track add to queue', async () => {
+	const container = mountHero();
+
+	await fireEvent.dblClick(container.querySelector('[data-library-track="t2"]') as HTMLElement);
+
+	expect(invokeMock).toHaveBeenCalledWith('library', {
+		command: { command: 'addToQueue', itemId: 't2' },
+	});
+});
+
+// The Library's playing row (add-gui-library-panel): the frame carries the
+// playhead's track id, and that row paints the playing state over the
+// cursor's fill.
+test('the tracklist paints the playing state on the frame playing track id', () => {
+	const container = mountHeroWithPlaying('t1');
+
+	const playing = container.querySelector('[data-library-track="t1"]');
+	expect(playing?.hasAttribute('data-library-track-playing')).toBe(true);
+	expect(
+		container.querySelector('[data-library-track="t2"]')?.hasAttribute('data-library-track-playing'),
+	).toBe(false);
+});
+
+/** The Hero mounted with `trackId` playing at the playhead. */
+function mountHeroWithPlaying(trackId: string): HTMLElement {
+	return render(LibraryHero, { music: { ...music(hero()), playingTrackId: trackId } }).container;
+}

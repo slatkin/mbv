@@ -122,6 +122,23 @@ impl App {
     /// here, so cancelling the prompt leaves the queue source unchanged
     /// (design D4).
     pub(in crate::app) fn play_folder(&mut self, folder_id: &str, collection_type: String) {
+        self.play_folder_gated(folder_id, collection_type, true);
+    }
+
+    /// The folder play with the populated-queue confirm controlled by the
+    /// caller (add-gui-library-panel, the GUI Library's explicit Play): the
+    /// TUI's path keeps the confirm (`confirm` true), and the GUI Library's
+    /// Play replaces the queue directly — the confirm modal is a TUI overlay
+    /// the GUI Client never paints, so a GUI play gated behind it would be
+    /// swallowed. The local saved-playlist protection stays: the run still
+    /// goes through `replace_queue_or_prompt`, which raises the save/discard
+    /// prompt a dirty saved playlist owes.
+    pub(in crate::app) fn play_folder_gated(
+        &mut self,
+        folder_id: &str,
+        collection_type: String,
+        confirm: bool,
+    ) {
         let Some(client) = self.emby_client() else {
             self.flash(
                 "Emby is unavailable".into(),
@@ -139,14 +156,22 @@ impl App {
                     return;
                 }
                 drop(client);
-                self.request_queue_replacement(
-                    PendingQueueAction::PlayItems {
-                        items,
-                        start_idx: 0,
-                        source: mbv_queue::QueueSource::Collection { collection_type },
-                    },
-                    ReplacementExecutor::Routed(RoutedReplacementPrep::Folder),
-                );
+                let action = PendingQueueAction::PlayItems {
+                    items,
+                    start_idx: 0,
+                    source: mbv_queue::QueueSource::Collection { collection_type },
+                };
+                if confirm {
+                    self.request_queue_replacement(
+                        action,
+                        ReplacementExecutor::Routed(RoutedReplacementPrep::Folder),
+                    );
+                } else {
+                    self.run_replacement(
+                        action,
+                        &ReplacementExecutor::Routed(RoutedReplacementPrep::Folder),
+                    );
+                }
             }
             Err(e) => {
                 drop(client);

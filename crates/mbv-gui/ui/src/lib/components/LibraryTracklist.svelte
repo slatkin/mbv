@@ -9,11 +9,18 @@
   D8); a press on either sends the track's own id. Hover is the row's own
   paint, so it takes no state: the canvas shows the controls, the play glyph,
   and the raised fill on the row the pointer is over.
+
+  A double-click on a row adds the track to the queue (the user's contract),
+  through the same add helper the list's track rows use, so one gesture cannot
+  drift from the other. The row of the track playing at the playhead paints
+  the playing state — the canvas's green with dark ink, as the Queue's active
+  row paints — over the cursor's fill, from the frame's playing id.
 -->
 <script lang="ts">
 	import { ListEnd, Play, Plus } from '@lucide/svelte';
-	import { sendLibraryCommand } from '$lib/bridge/library';
 	import type { GuiMusicHero, GuiMusicTrack } from '$lib/bridge/types';
+	import { addLibraryTrackToQueue } from '$lib/library/state';
+	import { sendLibraryCommand } from '$lib/bridge/library';
 	import { heroTracks, resolveTrackCursor } from '$lib/library/hero';
 	import { libraryUi } from '$lib/library/state';
 
@@ -21,8 +28,11 @@
 		/** The picked album's Hero facts: the tracklist is the album's cached
 		 * tracks (design D5). */
 		hero: GuiMusicHero;
+		/** The id of the track playing at the playhead, or `null` while idle:
+		 * the frame's playing fact (design D8). */
+		playingTrackId: string | null;
 	}
-	const { hero }: Props = $props();
+	const { hero, playingTrackId }: Props = $props();
 
 	const tracks = $derived(heroTracks(hero));
 
@@ -40,6 +50,26 @@
 	/** Add the track to the queue's tail (design D8). */
 	function addToQueue(track: GuiMusicTrack): void {
 		void sendLibraryCommand({ command: 'addToQueue', itemId: track.trackId });
+	}
+
+	/** Whether the row is the track playing at the playhead: the row the
+	 * playing state paints over the cursor's fill (design D8). */
+	function isPlaying(track: GuiMusicTrack): boolean {
+		return track.trackId === playingTrackId;
+	}
+
+	/** A row's painted fill: the playing track's green wins, then the cursor
+	 * row's fill — the Queue canvas's `picked && !cur` rule. */
+	function rowBackground(track: GuiMusicTrack): string | undefined {
+		if (isPlaying(track)) {
+			return 'var(--canvas-accent)';
+		}
+		return track.trackId === cursor ? 'var(--canvas-selected)' : undefined;
+	}
+
+	/** A row's title and number colour: the dark ink on the playing row. */
+	function rowColor(track: GuiMusicTrack): string {
+		return isPlaying(track) ? 'var(--canvas-ink)' : 'var(--canvas-text)';
 	}
 </script>
 
@@ -61,31 +91,33 @@
 	</div>
 	<ol class="flex flex-col" style:margin="4px 0 0" style:padding="0" style:list-style="none">
 		{#each tracks as track (track.trackId)}
-			<li
-				class="group grid items-center hover:bg-[var(--canvas-library-raise)]"
-				style:grid-template-columns="40px minmax(0, 1fr) 88px 64px"
-				style:height="34px"
-				style:padding="0 8px"
-				style:border-radius="4px"
-				style:background={track.trackId === cursor ? 'var(--canvas-selected)' : undefined}
-				data-library-track={track.trackId}
-				data-library-track-cursor={track.trackId === cursor ? '' : undefined}
+		<li
+			class="group grid items-center"
+			style:grid-template-columns="40px minmax(0, 1fr) 88px 64px"
+			style:height="34px"
+			style:padding="0 8px"
+			style:border-radius="4px"
+			style:background={rowBackground(track)}
+			data-library-track={track.trackId}
+			data-library-track-cursor={track.trackId === cursor ? '' : undefined}
+			data-library-track-playing={isPlaying(track) ? '' : undefined}
+			ondblclick={() => addLibraryTrackToQueue(track.trackId)}
+		>
+			<span
+				class="flex-none font-mono tabular-nums"
+				style:font-size="12px"
+				style:color={isPlaying(track) ? 'var(--canvas-ink)' : 'var(--canvas-ordinal)'}
 			>
-				<span
-					class="flex-none font-mono tabular-nums"
-					style:font-size="12px"
-					style:color="var(--canvas-ordinal)"
-				>
-					<span class="group-hover:hidden">{track.number}</span>
-					<span class="hidden group-hover:flex">
-						<Play size={12} fill="var(--canvas-accent)" color="var(--canvas-accent)" />
-					</span>
+				<span class="group-hover:hidden">{track.number}</span>
+				<span class="hidden group-hover:flex">
+					<Play size={12} fill="var(--canvas-accent)" color="var(--canvas-accent)" />
 				</span>
-				<span
-					class="min-w-0 truncate group-hover:text-[var(--canvas-heading)]"
-					style:font-size="14px"
-					style:color="var(--canvas-text)">{track.name}</span
-				>
+			</span>
+			<span
+				class="min-w-0 truncate"
+				style:font-size="14px"
+				style:color={rowColor(track)}>{track.name}</span
+			>
 				<span class="flex justify-end" style:gap="2px">
 					<span class="hidden justify-end group-hover:flex" style:gap="2px">
 						<button

@@ -100,6 +100,7 @@ function content(
 			artists,
 			hero,
 			art: null,
+			playingTrackId: null,
 		},
 	};
 }

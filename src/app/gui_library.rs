@@ -22,6 +22,7 @@ pub use self::tabs::{GuiLibraryTab, GuiLibraryTabs};
 use mbv_emby_model::EmbyItem;
 use mbv_ui_model::context_menu::ContextMenu;
 use mbv_ui_model::settings::PanelFocus;
+use mbv_ui_model::ui_util::is_playable;
 
 use crate::app::App;
 
@@ -109,17 +110,16 @@ impl App {
             GuiLibraryCommand::TakeFocus => self.set_gui_panel_focus(PanelFocus::Library),
             GuiLibraryCommand::TakeQueueFocus => self.set_gui_panel_focus(PanelFocus::Queue),
             GuiLibraryCommand::Play { item_id } => match self.gui_library_item(&item_id) {
-                Some((lib_idx, item)) => self.play_or_activate_lib_item(lib_idx, item),
+                Some((lib_idx, item)) => self.play_gui_library_item(lib_idx, item),
                 None => Self::log_stale_library_item("play", &item_id),
             },
             GuiLibraryCommand::PlayNext { item_id } => match self.gui_library_item(&item_id) {
                 Some((lib_idx, item)) => self.play_lib_item_next(lib_idx, item),
                 None => Self::log_stale_library_item("playNext", &item_id),
             },
-            GuiLibraryCommand::AddToQueue { item_id } => match self.gui_library_item(&item_id) {
-                Some((lib_idx, item)) => self.enqueue_lib_item(lib_idx, item),
-                None => Self::log_stale_library_item("addToQueue", &item_id),
-            },
+            GuiLibraryCommand::AddToQueue { item_id } => {
+                self.add_gui_library_item_to_queue(&item_id);
+            }
             GuiLibraryCommand::ShuffleArtist { album_ids } => {
                 self.shuffle_gui_artist(&album_ids);
             }
@@ -216,6 +216,24 @@ impl App {
         self.effective_panel_focus()
     }
 
+    /// The id of the Emby item playing at the playhead (add-gui-library-panel,
+    /// the Library's playing row): the Queue panel's own authority — the Owner
+    /// status and the playback queue's item at the active index — read once
+    /// for the frame's Library section, so the Library's playing row and the
+    /// Queue's active slot cannot disagree. `None` while idle or while the
+    /// active slot holds no Emby item.
+    #[must_use]
+    pub fn gui_playing_track_id(&self) -> Option<String> {
+        let state = self.displayed_playback_state();
+        if !state.active {
+            return None;
+        }
+        match self.queue_item_at_playhead(state) {
+            Some(mbv_queue::QueueItem::Emby(item)) => Some(item.id.clone()),
+            Some(_) | None => None,
+        }
+    }
+
     /// Show `item_id` in the Hero (design D2): the album the window content
     /// picked. An id the current Service data does not hold leaves the Hero's
     /// item as it was, because the frame that carried the id is stale.
@@ -252,6 +270,105 @@ impl App {
             return;
         }
         self.play_music_albums(albums, true);
+    }
+
+    /// Play the item (design D8), as the GUI Library's explicit play: the
+    /// populated-queue replace-confirm is skipped — it is a TUI overlay the
+    /// GUI Client never paints, so a play gated behind it was swallowed and
+    /// the Hero's Play button did nothing over a populated queue. An album
+    /// (folder) replaces the queue with its whole playable content through
+    /// the shared folder path; a track replaces the queue with the album's
+    /// cached playable tracks in disc/track order starting at the selected
+    /// track when autoload is on (the library playback policy's autoload
+    /// rule, through the same cache the add path reads), and otherwise takes
+    /// the shared select-item path.
+    fn play_gui_library_item(&mut self, lib_idx: usize, item: EmbyItem) {
+        if item.is_folder {
+            let ct = self.libs[lib_idx].library.collection_type.clone();
+            self.play_folder_gated(&item.id, ct, false);
+            return;
+        }
+        if !is_playable(&item) {
+            return;
+        }
+        let autoload = self.config.lock().unwrap().autoload;
+        if autoload
+            && let Some(album_id) = self.gui_track_album_id(&item.id)
+            && let Some((tracks, start_idx)) =
+                self.resolve_playable_album_tracks(&album_id, &item.id)
+        {
+            self.play_items_routed(tracks, start_idx, mbv_queue::QueueSource::Album);
+            return;
+        }
+        self.select_item(lib_idx, item);
+    }
+
+    /// Add the item to the queue (design D8), with the library playback
+    /// policy's autoload rule applied to this one route: a track whose album
+    /// the track cache holds queues that album's cached playable tracks in
+    /// disc/track order starting at the selected track when autoload is on,
+    /// and only the selected track when it is off. Every other item — an
+    /// album, a folder, an item the cache does not hold — takes the shared
+    /// add path unchanged. The TUI's own add paths keep their per-item
+    /// appends; only the GUI Library's add applies the rule.
+    fn add_gui_library_item_to_queue(&mut self, item_id: &str) {
+        let Some((lib_idx, item)) = self.gui_library_item(item_id) else {
+            Self::log_stale_library_item("addToQueue", item_id);
+            return;
+        };
+        let autoload = self.config.lock().unwrap().autoload;
+        if item.is_folder || !is_playable(&item) || !autoload {
+            self.enqueue_lib_item(lib_idx, item);
+            return;
+        }
+        let Some(album_id) = self.gui_track_album_id(&item.id) else {
+            self.enqueue_lib_item(lib_idx, item);
+            return;
+        };
+        let Some((tracks, start_idx)) = self.resolve_playable_album_tracks(&album_id, &item.id)
+        else {
+            self.enqueue_lib_item(lib_idx, item);
+            return;
+        };
+        // The shared admission checks and tail append, as `enqueue_lib_item`
+        // runs them for the single item, with every track of the autoload
+        // block entering as one append in disc/track order.
+        let first = &tracks[start_idx];
+        tracing::info!(
+            name: "library_route.enqueue.requested",
+            target: "library_route",
+            item = %first.id,
+            item_name = %first.name,
+            count = tracks.len() - start_idx,
+            source = "library_view",
+            "enqueue requested"
+        );
+        let resolved = self.route_for_active_library_view(lib_idx).map(|(n, _)| n);
+        if self.enqueue_route_conflict(resolved.as_ref()) {
+            return;
+        }
+        let items = tracks
+            .into_iter()
+            .skip(start_idx)
+            .map(|track| mbv_queue::QueueItem::Emby(Box::new(track)))
+            .collect();
+        let link = self.playing_queue_link();
+        self.append_on_owner(link, items, None);
+    }
+
+    /// The album whose cached tracklist holds `track_id` (design D5): the
+    /// tracklist a track row and the Hero's tracklist paint, keyed by the
+    /// album the open-album command fetched it for. `None` when no cached
+    /// tracklist holds the id — the add falls back to the single item.
+    fn gui_track_album_id(&self, track_id: &str) -> Option<String> {
+        self.album_tracks_cache
+            .iter()
+            .find_map(|(album_id, tracks)| {
+                tracks
+                    .iter()
+                    .any(|track| track.id == track_id)
+                    .then(|| album_id.clone())
+            })
     }
 
     /// The item a command names, with the library it belongs to: the album
