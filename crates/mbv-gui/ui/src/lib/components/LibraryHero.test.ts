@@ -181,3 +181,17 @@ test('More actions is disabled while the frame carries no entries', () => {
 
 	expect(part(container, 'more').hasAttribute('disabled')).toBe(true);
 });
+
+// Review of row 4.7, finding P2-b: the cursor was seeded only when a pane took
+// the focus, so a tracklist that landed afterwards painted none. The painted
+// cursor derives from the tracks, so the first track carries it.
+test('the tracklist paints the cursor on its first track before any key moves it', () => {
+	const container = mountHero();
+
+	expect(
+		container.querySelector('[data-library-track="t1"]')?.hasAttribute('data-library-track-cursor'),
+	).toBe(true);
+	expect(
+		container.querySelector('[data-library-track="t2"]')?.hasAttribute('data-library-track-cursor'),
+	).toBe(false);
+});

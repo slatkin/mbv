@@ -60,6 +60,20 @@ export function artistUnionAlbums(music: GuiMusicFrame, hero: GuiMusicHero): str
 	return (owner?.albums ?? [hero.album]).map((album) => album.albumId);
 }
 
+/** The tracklist's cursor resolved against the tracks that paint (design D3):
+ * the stored track while the tracklist holds it, and the first track while it
+ * does not — a tracklist whose cache lands after the Hero pane took focus still
+ * paints a cursor, and Enter acts on it without waiting for a movement key. */
+export function resolveTrackCursor(
+	tracks: readonly GuiMusicTrack[],
+	cursor: string | null,
+): string | null {
+	if (tracks.some((track) => track.trackId === cursor)) {
+		return cursor;
+	}
+	return tracks[0]?.trackId ?? null;
+}
+
 /** The rows a Page Up or Page Down spans in the tracklist: the tracklist is a
  * short list inside the Hero, so a fixed page keeps the cursor a screenful
  * away without measuring the Hero. */
@@ -67,9 +81,9 @@ const TRACK_PAGE = 10;
 
 /** The tracklist's cursor row after one movement (design D3): row by row for
  * Up and Down, a page for Page Up and Page Down, and the tracklist's ends for
- * Home and End. With no cursor on a row, Up and End start from the last track
- * and every other movement from the first, so one key press always lands the
- * cursor. */
+ * Home and End, clamped to the tracklist. The caller resolves the cursor
+ * against the painted tracks first (`resolveTrackCursor`), so a cursor the
+ * tracklist does not hold starts the movement from the first row. */
 export function moveTrackCursor(
 	tracks: readonly GuiMusicTrack[],
 	cursor: string | null,
@@ -80,10 +94,7 @@ export function moveTrackCursor(
 	}
 	const ids = tracks.map((track) => track.trackId);
 	const last = ids.length - 1;
-	const at = cursor === null ? -1 : ids.indexOf(cursor);
-	if (at < 0) {
-		return move === 'up' || move === 'end' ? ids[last] : ids[0];
-	}
+	const at = Math.max(ids.indexOf(cursor ?? ''), 0);
 	const to = {
 		up: at - 1,
 		down: at + 1,

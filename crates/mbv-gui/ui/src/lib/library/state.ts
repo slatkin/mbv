@@ -16,7 +16,7 @@ import type {
 	GuiMusicFrame,
 	GuiMusicPill,
 } from '$lib/bridge/types';
-import { heroTracks, moveTrackCursor } from './hero';
+import { heroTracks, moveTrackCursor, resolveTrackCursor } from './hero';
 import {
 	buildLibraryRows,
 	clampScrollTop,
@@ -145,10 +145,10 @@ export function acceptLibraryFilter(): void {
 }
 
 /** Focus a pane: the window content of Tab and Shift+Tab (design D3, step 3).
- * Taking the Hero's pane puts the tracklist's cursor on its first track while
- * no track carries it, so a movement key and Enter land on a painted row. */
+ * Taking the Hero's pane paints the Hero again where the arrangement overlays
+ * it, so the keys never act on a pane that paints nothing. */
 export function focusLibraryPane(pane: LibraryPane): void {
-	libraryUi.update((ui) => withTrackCursor({ ...ui, pane }));
+	libraryUi.update((ui) => withHeroPane({ ...ui, pane }));
 }
 
 /** Move the pane focus `step` panes along, wrapping at the ends. */
@@ -156,7 +156,7 @@ export function moveLibraryPane(step: number): void {
 	libraryUi.update((ui) => {
 		const at = PANES.indexOf(ui.pane);
 		const next = (at + step + PANES.length) % PANES.length;
-		return withTrackCursor({ ...ui, pane: PANES[next] });
+		return withHeroPane({ ...ui, pane: PANES[next] });
 	});
 }
 
@@ -445,25 +445,24 @@ export function focusedLibraryPill(
 	return pills.find((pill) => pill.groupId === ui.focusedPill) ?? null;
 }
 
-/** The state with the tracklist's cursor on its first track while the Hero
- * pane has the pane focus and no track carries it (design D3): a Tab into the
- * Hero shows the cursor it moves. */
-function withTrackCursor(ui: LibraryUiState): LibraryUiState {
-	if (ui.pane !== 'hero' || ui.trackCursor !== null) {
-		return ui;
-	}
-	const first = heroTracks(libraryMusic()?.hero ?? null)[0];
-	return first === undefined ? ui : { ...ui, trackCursor: first.trackId };
+/** The state with the Hero pane ready while it takes the pane focus (design
+ * D3, D4): the Narrow arrangement paints the Hero again, so the keys never act
+ * on a pane that paints nothing, and the tracklist's cursor is derived from the
+ * tracks that paint rather than seeded here. */
+function withHeroPane(ui: LibraryUiState): LibraryUiState {
+	return ui.pane === 'hero' ? { ...ui, heroDismissed: false } : ui;
 }
 
 /** Move the Hero's tracklist cursor one movement along (design D3): the
  * movement keys move the tracklist's cursor, not the list's, while the Hero
- * pane has the pane focus. */
+ * pane has the pane focus. The movement starts from the cursor the painted
+ * tracklist shows, so the first key lands beside it. */
 export function moveLibraryTrackCursor(move: ListMove): void {
 	libraryUi.update((ui) => {
+		const tracks = heroTracks(libraryMusic()?.hero ?? null);
 		const cursor = moveTrackCursor(
-			heroTracks(libraryMusic()?.hero ?? null),
-			ui.trackCursor,
+			tracks,
+			resolveTrackCursor(tracks, ui.trackCursor),
 			move,
 		);
 		return cursor === ui.trackCursor ? ui : { ...ui, trackCursor: cursor };
@@ -473,14 +472,16 @@ export function moveLibraryTrackCursor(move: ListMove): void {
 /** The item the focused pane's cursor names (design D3, D8): the tracklist's
  * track while the Hero pane has the pane focus, and the list's row while the
  * list has it. `null` while no cursor rests on an item, so the key that acts
- * on it sends no command. */
+ * on it sends no command. The Hero pane's track is the one the painted
+ * tracklist shows, so Enter acts before any movement key has moved the
+ * cursor. */
 export function focusedItemId(): string | null {
 	const ui = get(libraryUi);
 	if (ui.pane === 'hero') {
-		const track = heroTracks(libraryMusic()?.hero ?? null).find(
-			(candidate) => candidate.trackId === ui.trackCursor,
+		return resolveTrackCursor(
+			heroTracks(libraryMusic()?.hero ?? null),
+			ui.trackCursor,
 		);
-		return track?.trackId ?? null;
 	}
 	if (ui.pane === 'list') {
 		const row = cursorRow(ui);
@@ -510,9 +511,16 @@ export function heroOverlayOpen(ui: LibraryUiState): boolean {
 }
 
 /** Close the Narrow Hero overlay (design D3): Esc while it paints, and a press
- * on its backdrop. A later pick paints it again. */
+ * on its backdrop. A later pick, or a Tab onto the Hero's pane, paints it
+ * again. While the Hero pane held the pane focus, the focus falls back to the
+ * list, so the keys never rest on a pane that paints nothing. */
 export function closeLibraryHero(): void {
-	libraryUi.update((ui) => ({ ...ui, heroDismissed: true, itemMenuOpen: false }));
+	libraryUi.update((ui) => ({
+		...ui,
+		pane: ui.pane === 'hero' ? 'list' : ui.pane,
+		heroDismissed: true,
+		itemMenuOpen: false,
+	}));
 }
 
 /** Open the picked item's menu (design D8): More actions paints the entries the

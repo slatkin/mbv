@@ -14,7 +14,7 @@
 	import { ListEnd, Play, Plus } from '@lucide/svelte';
 	import { sendLibraryCommand } from '$lib/bridge/library';
 	import type { GuiMusicHero, GuiMusicTrack } from '$lib/bridge/types';
-	import { heroTracks } from '$lib/library/hero';
+	import { heroTracks, resolveTrackCursor } from '$lib/library/hero';
 	import { libraryUi } from '$lib/library/state';
 
 	interface Props {
@@ -26,8 +26,10 @@
 
 	const tracks = $derived(heroTracks(hero));
 
-	/** The cursor's track: the row the movement keys rest on (design D3). */
-	const cursor = $derived($libraryUi.trackCursor);
+	/** The cursor's track: the row the movement keys rest on (design D3). It is
+	 * derived from the tracks that paint, so a tracklist whose cache lands after
+	 * the Hero pane took focus shows the cursor its keys act on. */
+	const cursor = $derived(resolveTrackCursor(tracks, $libraryUi.trackCursor));
 
 	/** Play next on the track (design D8): it enters directly after the active
 	 * slot. */

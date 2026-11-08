@@ -352,14 +352,45 @@ test('Down with the Hero pane focused moves the tracklist cursor', () => {
 	expect(invokeMock).not.toHaveBeenCalled();
 });
 
-test('Tab into the Hero puts the tracklist cursor on its first track', () => {
+// Review of row 4.7, finding P2-a: the pane walk reached the Hero in Narrow
+// while its overlay was dismissed, so the movement keys, `n`/`a`, and Enter
+// acted on a pane that painted nothing. Taking the Hero's pane paints it again.
+test('Tab onto the Hero in Narrow paints its overlay again', () => {
 	carryLibraryContent({ revision: 1, content: content([BEASTIE], HERO) });
-	libraryUi.update((ui) => ({ ...ui, pane: 'list' }));
+	reportLibraryArrangement('narrow');
+	libraryUi.update((ui) => ({ ...ui, pane: 'list', heroDismissed: true }));
 
 	press('Tab');
 
 	expect(get(libraryUi).pane).toBe('hero');
-	expect(get(libraryUi).trackCursor).toBe('t1');
+	expect(get(libraryUi).heroDismissed).toBe(false);
+});
+
+// The other half of the same invariant: closing the overlay while the Hero pane
+// held the focus moves the focus back to the painted list.
+test('Esc with the Hero pane focused returns the pane focus to the list', () => {
+	carryLibraryContent({ revision: 1, content: content([BEASTIE], HERO) });
+	reportLibraryArrangement('narrow');
+	libraryUi.update((ui) => ({ ...ui, pane: 'hero' }));
+
+	press('Escape');
+
+	expect(get(libraryUi).heroDismissed).toBe(true);
+	expect(get(libraryUi).pane).toBe('list');
+});
+
+// Review of row 4.7, finding P2-b: the cursor was seeded only when a pane took
+// the focus, so a tracklist whose cache landed afterwards painted no cursor and
+// Enter did nothing. The cursor now derives from the tracks that paint.
+test('Enter in the Hero pane plays the track the painted tracklist shows', () => {
+	carryLibraryContent({ revision: 1, content: content([BEASTIE], HERO) });
+	libraryUi.update((ui) => ({ ...ui, pane: 'hero', trackCursor: null }));
+
+	press('Enter');
+
+	expect(invokeMock).toHaveBeenCalledWith('library', {
+		command: { command: 'play', itemId: 't1' },
+	});
 });
 
 test('Esc closes the open item menu and sends no key', () => {
