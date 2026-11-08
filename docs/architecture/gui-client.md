@@ -51,6 +51,23 @@ window-content reload never wait for a state change. The window's `Destroyed`
 event delivers `CoreInput::Close`; the run ends as a quit, and the exit
 boundary runs `client_exit_teardown` before the `App` drops.
 
+When the Owner process itself exits while the window is open, the Client
+closes with it, exactly as the TUI Client does. The daemon's deliberate
+shutdown is announced before its socket closes (`daemon-disconnect-`
+`handling`: "A deliberate shutdown is announced before the socket closes"),
+and the announce reaches the GUI's App through the same shared drain half
+that serves the TUI: `PlayerEvent::DaemonShutdownAnnounced` sets the
+run-loop quit signal the TUI's `'outer` loop breaks on
+(`src/app/infra/signals.rs`), the GUI core's `step` polls it beside the
+tick outcome, and the run ends through the quit edge — the window closes,
+and the run's exit boundary saves the GUI's launch location first
+(design D9), then runs `client_exit_teardown`. (`gui_core.run_quit` logs
+the reason with the App's exit message.) An unannounced ctrl-link loss is
+not an exit: the App raises the DaemonLost recovery modal
+(`daemon-disconnect-handling`: "An unannounced connection loss raises a
+recovery dialog"), a TUI-owned surface the GUI does not yet present, so
+the GUI window stays open and no GUI-local recovery path exists yet.
+
 ## The bridge contract
 
 Rust to front end there is one event, `mbv://frame` (`FRAME_EVENT` in
