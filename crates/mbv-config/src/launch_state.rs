@@ -270,21 +270,21 @@ pub enum LibraryItemIdentity {
 /// (missing/malformed → `None`, never a startup failure), so only the
 /// writer surfaces errors.
 #[derive(Debug)]
-pub struct TuiLaunchStateError {
-    kind: TuiLaunchStateErrorKind,
+pub struct LaunchStateError {
+    kind: LaunchStateErrorKind,
     backtrace: std::backtrace::Backtrace,
 }
 
 #[derive(Debug)]
-enum TuiLaunchStateErrorKind {
+enum LaunchStateErrorKind {
     CreateDirectory(String),
     Serialize(String),
     Write(String),
     Replace(String),
 }
 
-impl TuiLaunchStateError {
-    fn new(kind: TuiLaunchStateErrorKind) -> Self {
+impl LaunchStateError {
+    fn new(kind: LaunchStateErrorKind) -> Self {
         Self {
             kind,
             backtrace: std::backtrace::Backtrace::capture(),
@@ -301,30 +301,30 @@ impl TuiLaunchStateError {
     #[must_use]
     pub fn kind_name(&self) -> &'static str {
         match &self.kind {
-            TuiLaunchStateErrorKind::CreateDirectory(_) => "config.launch_state.create_directory",
-            TuiLaunchStateErrorKind::Serialize(_) => "config.launch_state.serialize",
-            TuiLaunchStateErrorKind::Write(_) => "config.launch_state.write",
-            TuiLaunchStateErrorKind::Replace(_) => "config.launch_state.replace",
+            LaunchStateErrorKind::CreateDirectory(_) => "config.launch_state.create_directory",
+            LaunchStateErrorKind::Serialize(_) => "config.launch_state.serialize",
+            LaunchStateErrorKind::Write(_) => "config.launch_state.write",
+            LaunchStateErrorKind::Replace(_) => "config.launch_state.replace",
         }
     }
 }
 
-impl std::fmt::Display for TuiLaunchStateError {
+impl std::fmt::Display for LaunchStateError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.kind {
-            TuiLaunchStateErrorKind::CreateDirectory(detail) => {
+            LaunchStateErrorKind::CreateDirectory(detail) => {
                 write!(f, "create directory: {detail}")
             }
-            TuiLaunchStateErrorKind::Serialize(detail) => {
+            LaunchStateErrorKind::Serialize(detail) => {
                 write!(f, "serialize launch state: {detail}")
             }
-            TuiLaunchStateErrorKind::Write(detail) => write!(f, "write launch state: {detail}"),
-            TuiLaunchStateErrorKind::Replace(detail) => write!(f, "replace launch state: {detail}"),
+            LaunchStateErrorKind::Write(detail) => write!(f, "write launch state: {detail}"),
+            LaunchStateErrorKind::Replace(detail) => write!(f, "replace launch state: {detail}"),
         }
     }
 }
 
-impl std::error::Error for TuiLaunchStateError {}
+impl std::error::Error for LaunchStateError {}
 
 #[must_use]
 pub fn tui_launch_state_path() -> PathBuf {
@@ -339,34 +339,47 @@ pub fn tui_launch_state_path() -> PathBuf {
 /// completed snapshot intact: only a finished rename is ever observed by
 /// the next launch, whose snapshot is intentionally last-completed-exit
 /// wins (no locking, merge, or Client identity).
-pub fn save_tui_launch_state(state: &TuiLaunchState) -> Result<(), TuiLaunchStateError> {
+pub fn save_tui_launch_state(state: &TuiLaunchState) -> Result<(), LaunchStateError> {
     save_tui_launch_state_at(&tui_launch_state_path(), state)
 }
 
 pub(super) fn save_tui_launch_state_at(
     path: &Path,
     state: &TuiLaunchState,
-) -> Result<(), TuiLaunchStateError> {
+) -> Result<(), LaunchStateError> {
+    write_state_at(path, state)
+}
+
+/// Serialize one launch-location snapshot, write a process-unique temporary
+/// file beside `path`, and atomically rename it over `path`. Both launch
+/// locations (the TUI's and the GUI's) write through this one path, so the
+/// replace rule holds for either file: a killed or crashed Client leaves the
+/// previous completed snapshot intact, and the next launch observes only a
+/// finished rename.
+pub(super) fn write_state_at<T: serde::Serialize>(
+    path: &Path,
+    state: &T,
+) -> Result<(), LaunchStateError> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir).map_err(|e| {
-            TuiLaunchStateError::new(TuiLaunchStateErrorKind::CreateDirectory(format!(
+            LaunchStateError::new(LaunchStateErrorKind::CreateDirectory(format!(
                 "{}: {e}",
                 dir.display()
             )))
         })?;
     }
     let json = serde_json::to_string(state)
-        .map_err(|e| TuiLaunchStateError::new(TuiLaunchStateErrorKind::Serialize(e.to_string())))?;
+        .map_err(|e| LaunchStateError::new(LaunchStateErrorKind::Serialize(e.to_string())))?;
     let tmp = tui_launch_state_tmp_path(path);
     std::fs::write(&tmp, &json).map_err(|e| {
-        TuiLaunchStateError::new(TuiLaunchStateErrorKind::Write(format!(
+        LaunchStateError::new(LaunchStateErrorKind::Write(format!(
             "{}: {e}",
             tmp.display()
         )))
     })?;
     std::fs::rename(&tmp, path).map_err(|e| {
         let _ = std::fs::remove_file(&tmp);
-        TuiLaunchStateError::new(TuiLaunchStateErrorKind::Replace(format!(
+        LaunchStateError::new(LaunchStateErrorKind::Replace(format!(
             "{} to {}: {e}",
             tmp.display(),
             path.display()
@@ -409,7 +422,8 @@ pub(super) fn load_tui_launch_state_at(path: &Path) -> Option<TuiLaunchState> {
 
 /// Process-unique sibling path for the atomic replace: same directory (so
 /// the rename stays atomic), qualified by pid and a fresh uuid so two
-/// Clients writing concurrently never share a pathname.
+/// Clients writing concurrently never share a pathname. Both launch-location
+/// files write through it, so the name is the TUI file's only by history.
 pub(super) fn tui_launch_state_tmp_path(path: &Path) -> PathBuf {
     let file_name = path.file_name().map_or_else(
         || "tui_launch_state.json".to_string(),

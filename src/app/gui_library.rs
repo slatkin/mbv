@@ -6,6 +6,7 @@
 //! calls any of them.
 
 mod artwork;
+mod launch;
 mod projection;
 mod store;
 
@@ -152,6 +153,14 @@ impl App {
     /// the frame's focus and the App's key gates cannot disagree.
     pub fn set_gui_panel_focus(&mut self, focus: PanelFocus) {
         self.set_panel_focus(focus);
+    }
+
+    /// The Panel that holds focus (design D4, D9): the value the GUI Client's
+    /// `FocusStack` and the frame's focus follow, and the one the launch
+    /// location saves.
+    #[must_use]
+    pub fn gui_panel_focus(&self) -> PanelFocus {
+        self.effective_panel_focus()
     }
 
     /// Show `item_id` in the Hero (design D2): the album the window content

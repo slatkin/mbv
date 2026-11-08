@@ -44,6 +44,22 @@ use crate::painted_choices::PaintedChoices;
 
 mod tick_host;
 
+/// How far the saved GUI launch location's restore has come (add-gui-library-
+/// panel design D9). The file is read once, before the first step; the
+/// destination opens when the catalog lands, and the saved collection sets
+/// apply once the destination's group list lands, because a saved group is
+/// dropped against the groups the library actually holds.
+enum GuiLaunchRestore {
+    /// No saved location: nothing to restore.
+    None,
+    /// The saved location, waiting for the catalog's presented destination.
+    Destination(mbv_config::GuiLaunchState),
+    /// The destination is open, waiting for its group list.
+    Collections(mbv_config::GuiLaunchState),
+    /// Restored.
+    Done,
+}
+
 /// The viewport height before the first `report_layout` measures the window:
 /// the frame carries every row the queue holds. The front end reports the
 /// real capacity when it mounts (design D5), so the placeholder never
@@ -233,6 +249,8 @@ pub struct CoreThread {
     /// The wait between ticks. Production keeps `CLIENT_IDLE_CADENCE`; the
     /// step test zeroes it.
     idle_cadence: Duration,
+    /// The saved GUI launch location and its restore phase (design D9).
+    launch_restore: GuiLaunchRestore,
 }
 
 impl CoreThread {
@@ -268,6 +286,11 @@ impl CoreThread {
         if cached_emby_client {
             app.start_playback_target_discovery();
         }
+        // The GUI's own launch location (design D9), read once before the
+        // first step: the TUI's launch state never moves this Client's tab or
+        // Panel focus, and this file is the only location it restores.
+        let launch_restore = mbv_config::load_gui_launch_state()
+            .map_or(GuiLaunchRestore::None, GuiLaunchRestore::Destination);
         let mut core = Self {
             app,
             focus,
@@ -294,13 +317,48 @@ impl CoreThread {
             trickplay: crate::trickplay::TrickplayFrames::default(),
             painted: PaintedChoices::default(),
             idle_cadence: CLIENT_IDLE_CADENCE,
+            launch_restore,
         };
         // The core sets its `FocusStack` and the App's stored Panel focus
         // together (design D4), so the frame the window paints and the gates
         // the keys meet agree from the first frame. The Queue side holds
         // focus until the take-focus command moves it.
         core.take_panel_focus(PanelFocus::Queue);
+        // The saved location applies over that default (design D9): a launch
+        // the attach brought a catalog for restores here, and a launch whose
+        // catalog lands through the startup worker restores on that drain.
+        core.restore_launch_location();
         core
+    }
+
+    /// Advance the saved launch location's restore (design D9): open the saved
+    /// destination once the catalog lands, then apply its saved collection
+    /// sets once the destination's group list lands, and set the saved Panel
+    /// focus on both authorities. Idempotent, so the catalog and library
+    /// drains call it whenever their content can complete a phase.
+    pub(crate) fn restore_launch_location(&mut self) {
+        let state = match &self.launch_restore {
+            GuiLaunchRestore::None | GuiLaunchRestore::Done => return,
+            GuiLaunchRestore::Destination(state) | GuiLaunchRestore::Collections(state) => {
+                state.clone()
+            }
+        };
+        if matches!(self.launch_restore, GuiLaunchRestore::Destination(_)) {
+            if !self.app.open_gui_launch_destination(&state) {
+                return;
+            }
+            // The open applied the saved Panel focus; the core's stack
+            // mirrors the App's stored focus, so the first frame agrees.
+            let focus = self.app.gui_panel_focus();
+            self.focus.set_panel_focus(focus);
+            self.launch_restore = GuiLaunchRestore::Collections(state.clone());
+        }
+        // The destination's group list may already be there (a cached launch),
+        // so the second phase runs in the same call; otherwise a library drain
+        // retries it when the list lands.
+        if self.app.restore_gui_launch_collections(&state) {
+            self.launch_restore = GuiLaunchRestore::Done;
+        }
     }
 
     /// Move Panel focus on both authorities together (add-gui-library-panel
@@ -581,16 +639,35 @@ impl CoreThread {
     /// as a [`CoreInput::Close`], and a routed quit key answers the same
     /// way — or when the channel itself ends.
     ///
-    /// The run's exit boundary runs the shared Client exit teardown once,
-    /// after the loop, whichever edge ended it — a routed quit, the window's
-    /// close, or a channel end: the deferred settings save flushes, the
-    /// auto-reconnect record persists, and the daemon-lifetime policy applies
-    /// (daemon-lifecycle "Quitting a client follows Stay Alive and offers no
-    /// detach"). The join in `main` holds the process until it completes, so
-    /// the teardown survives the window's close.
+    /// The run's exit boundary saves the GUI's launch location first (design
+    /// D9: the orderly exit's save, and the only write of that file), then
+    /// runs the shared Client exit teardown once, after the loop, whichever
+    /// edge ended it — a routed quit, the window's close, or a channel end:
+    /// the deferred settings save flushes, the auto-reconnect record persists,
+    /// and the daemon-lifetime policy applies (daemon-lifecycle "Quitting a
+    /// client follows Stay Alive and offers no detach"). The join in `main`
+    /// holds the process until it completes, so the teardown survives the
+    /// window's close.
     pub fn run(&mut self) {
         while self.step() {}
+        self.save_launch_location();
         self.app.client_exit_teardown();
+    }
+
+    /// Save the GUI's launch location (design D9): the destination, the
+    /// selected collections of each destination, and Panel focus, written at
+    /// orderly exit and never while the window is open. A failed write is
+    /// logged and never blocks the exit.
+    fn save_launch_location(&mut self) {
+        let state = self.app.gui_launch_state();
+        if let Err(error) = mbv_config::save_gui_launch_state(&state) {
+            tracing::warn!(
+                name: "launch_state.save.failed",
+                target: "launch_state",
+                error = %error,
+                "GUI launch state save failed"
+            );
+        }
     }
 
     /// One step: wait for the next input, run one tick, and emit the frame a

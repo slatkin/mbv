@@ -501,6 +501,16 @@ impl App {
     pub fn seed_gui_music_library_for_test(&mut self, client: mbv_emby::EmbyClient) {
         self.emby_runtime =
             crate::app::state::service_runtime::EmbyRuntime::ready(Arc::new(Mutex::new(client)));
+        self.seed_gui_music_library_tab_for_test();
+    }
+
+    /// The grouped Music library without a Service client (add-gui-library-panel
+    /// design D9): a launch-location test seeds the catalog this way, so the
+    /// launch Home load starts no Emby request and the seeded tabs survive it.
+    /// The Music tab's group level holds Hip-Hop and Soul with Hip-Hop's albums
+    /// above it, and Music is the active destination.
+    #[cfg(feature = "test")]
+    pub fn seed_gui_music_library_tab_for_test(&mut self) {
         self.music_levels = vec!["group".to_string(), "album".to_string()];
         let mut library = mbv_emby_model::test_support::make_item("Music", "CollectionFolder");
         library.id = GUI_MUSIC_LIBRARY_ID.to_string();
@@ -528,6 +538,15 @@ impl App {
     #[must_use]
     pub fn tab_for_test(&self) -> mbv_ui_model::tab_selection::TabSelection {
         self.tab
+    }
+
+    /// Push `library` as another Emby library tab (add-gui-library-panel
+    /// design D9): a launch-location test holds a catalog destination that
+    /// the GUI Client does not present.
+    #[cfg(feature = "test")]
+    pub fn push_gui_library_tab_for_test(&mut self, library: mbv_emby_model::EmbyItem) {
+        self.libs
+            .push(mbv_ui_model::library_tab::LibraryTab::new(library));
     }
 
     /// Seed the GUI Music store with `albums` for the `group_id` of `lib_idx`,

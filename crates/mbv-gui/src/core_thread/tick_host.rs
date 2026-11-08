@@ -26,6 +26,9 @@ impl ClientTickHost for CoreThread {
         if drain.emby_started {
             self.app.start_playback_target_discovery();
         }
+        // A landed catalog can complete the saved launch location's first
+        // phase (add-gui-library-panel design D9).
+        self.restore_launch_location();
         drain.events
     }
 
@@ -74,6 +77,9 @@ impl ClientTickHost for CoreThread {
         while self.app.drain_lib_event() {
             had_events = true;
         }
+        // A landed group list can complete the saved launch location's second
+        // phase (add-gui-library-panel design D9).
+        self.restore_launch_location();
         had_events
     }
 

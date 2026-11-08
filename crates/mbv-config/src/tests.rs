@@ -7,6 +7,8 @@ pub use paths_env::SYS_ENV_LOCK;
 mod credentials;
 mod emby_admin;
 #[cfg(test)]
+mod gui_launch_state;
+#[cfg(test)]
 mod launch_state;
 mod paths_migration;
 mod script_source;

@@ -25,9 +25,15 @@ mod launch_state;
 pub use launch_state::{
     AudiobookshelfBookBucket, AudiobookshelfPodcastFilter, AudiobookshelfSelectorKey,
     EmbyLetterBucket, EmbySelectorKey, FeedGroupKey, FeedsFilter, FeedsSelectorKey,
-    HomeSelectorKey, LaunchPanelFocus, LibraryItemIdentity, SelectorIdentity,
-    TUI_LAUNCH_STATE_VERSION, TabIdentity, TuiLaunchState, TuiLaunchStateError,
-    load_tui_launch_state, save_tui_launch_state, tui_launch_state_path,
+    HomeSelectorKey, LaunchPanelFocus, LaunchStateError, LibraryItemIdentity, SelectorIdentity,
+    TUI_LAUNCH_STATE_VERSION, TabIdentity, TuiLaunchState, load_tui_launch_state,
+    save_tui_launch_state, tui_launch_state_path,
+};
+mod gui_launch_state;
+#[doc(inline)]
+pub use gui_launch_state::{
+    GUI_LAUNCH_STATE_VERSION, GuiDestinationCollections, GuiLaunchState, gui_launch_state_path,
+    load_gui_launch_state, save_gui_launch_state,
 };
 mod test_support;
 #[cfg(test)]

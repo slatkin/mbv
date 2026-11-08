@@ -27,6 +27,7 @@ use mbv_gui::core_thread::{CoreInput, CoreThread, FrameSink, QuitSink};
 use mbv_ui_msg::{Key, KeyEvent, KeyModifiers, PointerEvent, PointerKind, Position};
 
 mod core_thread {
+    mod launch;
     mod library;
     mod overlay;
     mod pointer;
