@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>mbv queue panel</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#232a2e}
+a{color:#83c092}a:hover{color:#a7c080}
+button{font:inherit}
+</style>
+</helmet>
+<div style="width: 400px; min-height: 1800px; box-sizing: border-box; background: #2d353b; color: #d3c6aa; font-family: 'IBM Plex Sans', system-ui, sans-serif; display: flex; flex-direction: column">
+
+  <!-- Header -->
+  <div style="display: flex; align-items: center; justify-content: space-between; height: 44px; padding: 0 8px 0 4px; border-bottom: 1px solid #3d484d">
+    <button aria-label="Cast to device" style="display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 10px; background: none; border: 0; color: #83c092; cursor: pointer; font-size: 13px">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M2 16a5 5 0 0 1 5 5M2 12a9 9 0 0 1 9 9M2 8.5V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6"></path></svg>
+      Living room TV
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
+    </button>
+    <div style="display: flex; align-items: center; gap: 4px">
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.08em; color: #a7c080; padding: 0 8px">● PLAYING</span>
+      <button aria-label="Collapse panel" style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; background: none; border: 0; color: #9da9a0; cursor: pointer">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7"></path></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Artwork -->
+  <div style="position: relative; height: 225px; background: #343f44; display: flex; align-items: center; justify-content: center">
+    <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #9da9a0">[Episode still · Emby Primary / Thumb]</span>
+    <span style="position: absolute; left: 12px; bottom: 10px; display: flex; gap: 6px">
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; background: #232a2e; color: #d3c6aa; padding: 3px 6px; border-radius: 4px">S4 · E1</span>
+    </span>
+  </div>
+
+  <!-- Title -->
+  <div style="padding: 14px 16px 6px; display: flex; flex-direction: column; gap: 2px">
+    <div style="font-size: 18px; font-weight: 600; color: #e9e1cc">Nether Zone</div>
+    <a href="#" style="font-size: 13px; text-decoration: none">Peep Show</a>
+  </div>
+
+  <!-- Scrubber -->
+  <div style="padding: 10px 16px 4px; display: flex; flex-direction: column; gap: 8px">
+    <div style="position: relative; height: 60px">
+      <!-- hover preview -->
+      <div style="position: absolute; left: 170px; top: -84px; width: 128px; display: flex; flex-direction: column; align-items: center; gap: 4px">
+        <div style="width: 128px; height: 72px; background: #475258; border: 1px solid #56635f; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #c5cdc0">[trickplay]</div>
+        <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; background: #232a2e; color: #e9e1cc; padding: 2px 6px; border-radius: 3px">12:31 · Ch. 2</div>
+      </div>
+      <!-- bar -->
+      <div style="position: absolute; left: 0; right: 0; top: 22px; height: 6px; background: #414b50; border-radius: 3px"></div>
+      <div style="position: absolute; left: 0; top: 22px; width: 6px; height: 6px; background: #e69875; border-radius: 3px 0 0 3px" title="Intro"></div>
+      <div style="position: absolute; left: 0; top: 22px; width: 16px; height: 6px; background: #a7c080; border-radius: 3px"></div>
+      <div style="position: absolute; left: 116px; top: 18px; width: 2px; height: 14px; background: #7a8478"></div>
+      <div style="position: absolute; left: 232px; top: 18px; width: 2px; height: 14px; background: #7a8478"></div>
+      <div style="position: absolute; left: 340px; top: 18px; width: 4px; height: 6px; background: #e69875; margin-top: 4px" title="Credits"></div>
+      <div style="position: absolute; left: 233px; top: 14px; width: 1px; height: 22px; background: #e9e1cc"></div>
+      <div style="position: absolute; left: 10px; top: 17px; width: 16px; height: 16px; border-radius: 8px; background: #e9e1cc; box-shadow: 0 0 0 3px #2d353b"></div>
+      <div style="position: absolute; left: 0; right: 0; top: 42px; display: flex; justify-content: space-between; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-variant-numeric: tabular-nums">
+        <span style="color: #a7c080">1:03</span>
+        <span style="color: #9da9a0">−22:14</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Transport -->
+  <div style="display: flex; align-items: center; justify-content: center; gap: 4px; padding: 0 16px 6px">
+    <button aria-label="Previous episode" style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; background: none; border: 0; color: #d3c6aa; cursor: pointer"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M19 20 9 12l10-8zM5 19V5"></path></svg></button>
+    <button aria-label="Back 10 seconds" style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; background: none; border: 0; color: #d3c6aa; cursor: pointer; font-family: 'JetBrains Mono', monospace; font-size: 11px">−10</button>
+    <button aria-label="Pause" style="width: 56px; height: 56px; display: flex; align-items: center; justify-content: center; background: #a7c080; border: 0; border-radius: 28px; color: #232a2e; cursor: pointer"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="1"></rect><rect x="14" y="4" width="4" height="16" rx="1"></rect></svg></button>
+    <button aria-label="Forward 30 seconds" style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; background: none; border: 0; color: #d3c6aa; cursor: pointer; font-family: 'JetBrains Mono', monospace; font-size: 11px">+30</button>
+    <button aria-label="Next episode" style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; background: none; border: 0; color: #d3c6aa; cursor: pointer"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="m5 4 10 8-10 8zM19 5v14"></path></svg></button>
+  </div>
+
+  <!-- Track chips -->
+  <div style="display: flex; gap: 8px; padding: 4px 16px 16px; border-bottom: 1px solid #3d484d">
+    <button style="height: 32px; padding: 0 10px; display: flex; align-items: center; gap: 6px; background: #343f44; border: 1px solid #475258; border-radius: 6px; color: #e69875; font-family: 'JetBrains Mono', monospace; font-size: 12px; cursor: pointer">FHD · direct<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></button>
+    <button style="height: 32px; padding: 0 10px; display: flex; align-items: center; gap: 6px; background: #343f44; border: 1px solid #475258; border-radius: 6px; color: #e69875; font-family: 'JetBrains Mono', monospace; font-size: 12px; cursor: pointer">EN 2.0<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></button>
+    <button style="height: 32px; padding: 0 10px; display: flex; align-items: center; gap: 6px; background: #343f44; border: 1px solid #475258; border-radius: 6px; color: #e69875; font-family: 'JetBrains Mono', monospace; font-size: 12px; cursor: pointer">CC EN<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></button>
+  </div>
+
+  <!-- Queue header -->
+  <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 8px 8px 16px">
+    <div style="display: flex; flex-direction: column; gap: 2px">
+      <div style="font-size: 13px; font-weight: 600; color: #e9e1cc">Up next · {{remainingCount}}</div>
+      <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #9da9a0">{{queueTotal}} total</div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 4px">
+      <button aria-label="Filter queue" style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; background: none; border: 0; color: #9da9a0; cursor: pointer"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></button>
+    </div>
+  </div>
+
+  <!-- Rows -->
+  <ol style="list-style: none; margin: 0; padding: 0 8px; display: flex; flex-direction: column; gap: 0px; flex-grow: 1">
+    <sc-for list="{{rows}}" as="r" hint-placeholder-count="12">
+      <li>
+        <button onClick="{{r.pick}}" style="{{r.rowStyle}}">
+          <span style="{{r.numStyle}}">{{r.num}}</span>
+          <span style="display: flex; flex-direction: column; justify-content: center; gap: 3px; min-width: 0; flex: 1 1 auto">
+            <span style="{{r.titleStyle}}">{{r.title}}</span>
+            <sc-if value="{{r.hasProgress}}" hint-placeholder-val="{{ false }}">
+              <span style="{{r.trackStyle}}"><span style="{{r.fillStyle}}"></span></span>
+            </sc-if>
+          </span>
+          <span style="{{r.rightStyle}}">{{r.right}}</span>
+        </button>
+      </li>
+    </sc-for>
+  </ol>
+
+  <!-- Footer -->
+  <div style="display: flex; align-items: center; justify-content: space-between; height: 40px; padding: 0 16px; border-top: 1px solid #3d484d; font-family: 'JetBrains Mono', monospace; font-size: 12px">
+    <span style="color: #7fbbb3">Peep Show · Series 1–6</span>
+    <span style="color: #dbbc7f">woims ●</span>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":400,"height":1800}}'>
+class Component extends DCLogic {
+  constructor(p){ super(p); this.state = { mode: 'ends', picked: 0 }; }
+  renderVals() {
+    const raw = [
+      ['Nether Zone','23:17','cur',4],["New Year's Eve",'24:29','w',0],['Threeism','24:45','',0],['The Love Bunker','23:13','',0],
+      ['On the Pull','23:37','',0],['Conference','25:48','',0],['Dance Class','26:53','',0],['Jurying','25:07','',0],
+      ['Handyman','25:09','',0],['The Interview','24:03','',0],['Dream Job','24:48','',0],['Wedding','25:55','',0],
+      ['Shrooming','23:19','',0],["Sophie's Parents",'24:40','',0],['Sectioning','24:04','',0],['Mugging','24:49','',0],
+      ['Spin War','24:03','',0],['Sistering','23:35','',0],["Gregory's Beard",'24:24','',0],['Chairman Mark','22:43','',0],
+      ['Jeremy at JLB','23:50','p',5],['Wedding','25:56','',0],['The Man Show','25:49','',0],['Man Jam','24:28','',0],
+      ['Das Boot','24:01','',0],['The Party','24:35','',0],['Seasonal Beatings','25:34','',0],['Business Secrets of the Pharaohs','24:22','',0],
+      ['St. Hospitals','23:54','',0],['Holiday','23:55','',0],['Are We Going to Be Alright?','24:19','',0],["Jeremy's Manager",'24:48','',0],
+      ['Jeremy Makes It','25:57','',0],['Big Mad Andy','24:55','',0],['The Test','24:27','',0],["Jeremy's Mummy",'24:19','',0],
+      ['Burgling','23:46','',0],['Jeremy in Love','23:34','',0]
+    ];
+    const secs = (s) => { const [m, x] = s.split(':').map(Number); return m * 60 + x; };
+    const clock = (t) => { const d = new Date(t * 1000); const h = d.getUTCHours(), m = d.getUTCMinutes(); return String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0'); };
+    let t = 21 * 3600 + 22 * 60; // now 21:22
+    const mono = "font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums;";
+    const mode = this.state.mode;
+    let currentEnds = '', remainingCount = 0;
+    const rows = raw.map(([title, dur, st, pct], i) => {
+      const d = secs(dur);
+      let left = d;
+      if (st === 'cur') left = d - 63;
+      else if (st === 'p') left = Math.round(d * (1 - pct / 100));
+      t += left;
+      const ends = clock(t);
+      if (st === 'cur') currentEnds = ends; else remainingCount++;
+      const cur = st === 'cur', w = st === 'w', sel = this.state.picked === i && !cur;
+      const bg = cur ? '#a7c080' : (sel ? '#3d484d' : 'transparent');
+      const fg = cur ? '#232a2e' : (w ? '#9da9a0' : '#d3c6aa');
+      return {
+        num: String(i + 1).padStart(2, '0'),
+        title,
+        right: dur,
+        hasProgress: cur || st === 'p',
+        rowStyle: `width: 100%; min-height: 30px; display: flex; align-items: center; gap: 10px; padding: 0 8px; background: ${bg}; border: 0; border-radius: 4px; text-align: left; cursor: pointer; color: ${fg};`,
+        numStyle: `${mono} font-size: 11px; width: 18px; flex: 0 0 auto; color: ${cur ? '#232a2e' : '#7f897d'};`,
+        titleStyle: `font-size: 13.5px; font-weight: ${cur ? 600 : 400}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; ${w ? 'text-decoration: line-through; text-decoration-color: #56635f;' : ''}`,
+        trackStyle: `display: block; height: 2px; border-radius: 1px; background: ${cur ? '#7d9460' : '#414b50'};`,
+        fillStyle: `display: block; height: 2px; width: ${Math.max(pct, 3)}%; background: ${cur ? '#232a2e' : '#e69875'}; border-radius: 1px;`,
+        rightStyle: `${mono} font-size: 12px; flex: 0 0 auto; color: ${cur ? '#232a2e' : '#9da9a0'};`,
+        pick: () => this.setState({ picked: i })
+      };
+    });
+    const seg = (on) => `height: 28px; padding: 0 10px; border: 0; border-radius: 4px; cursor: pointer; font-size: 12px; background: ${on ? '#475258' : 'transparent'}; color: ${on ? '#e9e1cc' : '#9da9a0'};`;
+    return {
+      rows, remainingCount,
+      queueTotal: (() => { const s = t - (21 * 3600 + 22 * 60); return Math.floor(s / 3600) + 'h ' + String(Math.floor(s % 3600 / 60)).padStart(2, '0') + 'm'; })()
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -2,7 +2,7 @@
 
 ## Context
 
-See `proposal.md` for the why and `specs/gui-client/spec.md` for the requirements. The canvas reference is in `canvas/Library.dc.html` and `canvas/canvas.json` (a verbatim copy of the Library artboard source and the canvas index, with the SPEC note on multi-select pills). The copy is a source to read, not a page to open: its `./support.js` runtime belongs to the canvas host. To see it rendered, open the live canvas, `https://claude.ai/artifact/D8uLGS6NyCeHd6ed7PHgsr` (the *Library — Music › Hip-Hop* artboard).
+See `proposal.md` for the why and `specs/gui-client/spec.md` for the requirements. The canvas reference is a verbatim local copy of all the canvas files in `openspec/changes/add-gui-library-panel/canvas/`: `canvas.json` (the canvas index, with the SPEC note on multi-select pills), `Library.dc.html` (*Library — Music › Hip-Hop*), `Main.dc.html` (*Queue panel — expanded*), `Collapsed.dc.html` (*Collapsed states*), and `Menus.dc.html` (*Track popover, row menu, drag*). The copy is a source to read, not a page to open: its `./support.js` runtime belongs to the canvas host. To see it rendered, open the live canvas, `https://claude.ai/artifact/D8uLGS6NyCeHd6ed7PHgsr` (the *Library — Music › Hip-Hop* artboard).
 
 What the code holds today:
 
