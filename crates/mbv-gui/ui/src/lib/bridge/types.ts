@@ -1,7 +1,28 @@
 // The wire types of the GUI bridge contract (openspec change
 // add-tauri-gui-client, design D4). Each type mirrors one serde DTO in
 // crates/mbv-gui/src/bridge/ field for field: the names are the serde wire
-// names, so a rename on the Rust side is a rename here.
+// names, so a rename on the Rust side is a rename here. The Library family
+// lives in `library-types.ts`; this module re-exports it so every consumer
+// keeps importing from the one bridge module.
+
+import type { GuiLibraryFrame } from './library-types';
+
+export type {
+	GuiArtistKey,
+	GuiLibraryArt,
+	GuiLibraryCommand,
+	GuiLibraryContent,
+	GuiLibraryFrame,
+	GuiLibraryTab,
+	GuiMusicAlbum,
+	GuiMusicArtist,
+	GuiMusicFrame,
+	GuiMusicHero,
+	GuiMusicMenuEntryFrame,
+	GuiMusicPill,
+	GuiMusicTrack,
+	GuiMusicTrackTotal,
+} from './library-types';
 
 /** One `mbv://frame` payload: the attached slice's frame, or the state of a window whose Owner attach has not finished (design D9). */
 export type GuiWindowFrame = { slice: GuiFrame } | { attach: GuiAttachFrame };
@@ -669,169 +690,3 @@ export type QueuePlaybackTargetId =
 	| { trackPopoverChoice: number };
 
 export type StatusBarTargetId = 'volumePill' | 'mutePill' | 'visualClear';
-
-/** The Library panel's section (add-gui-library-panel design D2). A frame
- * re-carries `content` only when `revision` changes; a `reportLayout` reload
- * re-carries it under the revision the window already holds, so the window
- * keeps its last carried content while `content` is `null`. */
-export interface GuiLibraryFrame {
-	revision: number;
-	content: GuiLibraryContent | null;
-}
-
-/** The Library panel's content: the top bar's destination tabs and the
- * active destination's section. */
-export interface GuiLibraryContent {
-	/** The presented destination tabs in catalog order (design D2): one per
-	 * Grouped Music library, phase 1's presented set. The top bar paints only
-	 * these — no stub for a destination the GUI does not present yet. */
-	tabs: GuiLibraryTab[];
-	/** The active tab's position while the active destination is one of the
-	 * tabs (design D2): the tab the top bar marks current. `null` for Home,
-	 * Feeds, and every destination the GUI does not present yet. */
-	currentTab: number | null;
-	/** The Grouped Music library's content while Music is active; `null` for a
-	 * destination that presents no content yet. */
-	music: GuiMusicFrame | null;
-}
-
-/** One destination tab of the top bar (design D2). */
-export interface GuiLibraryTab {
-	/** The tab position the open-destination command takes, where 0 is
-	 * Home. */
-	position: number;
-	/** The tab's label: the library's display name. */
-	label: string;
-}
-
-/** One request from the Library panel's window content (add-gui-library-panel
- * design D2): the wire shape of `GuiLibraryCommand` in bridge/library.rs, whose
- * variants and field names this mirrors. Item identities are stable Service
- * ids, never row positions. */
-export type GuiLibraryCommand =
-	| {
-			/** Open the destination tab at `position`: the tab position the
-			 * frame's destination tabs carry, where 0 is Home. */
-			command: 'openDestination';
-			position: number;
-	  }
-	| {
-			/** Replace the selected collections of the Grouped Music library
-			 * `libIdx` with `groupIds`, in pill order. */
-			command: 'setCollections';
-			libIdx: number;
-			groupIds: string[];
-	  }
-	| { command: 'showDetail'; itemId: string }
-	| { command: 'openAlbum'; albumId: string }
-	| { command: 'takeFocus' }
-	| { command: 'play'; itemId: string }
-	| { command: 'playNext'; itemId: string }
-	| { command: 'addToQueue'; itemId: string }
-	| { command: 'shuffleArtist'; albumIds: string[] }
-	| { command: 'menuEntry'; itemId: string; index: number };
-
-/** The Music destination's content (design D5). */
-export interface GuiMusicFrame {
-	/** The Grouped Music library index the set-collections command names
-	 * (design D2, D6): the library whose group pills these are. */
-	libIdx: number;
-	/** The group pills in the group level's order (design D6). */
-	pills: GuiMusicPill[];
-	/** Whether one of the selected groups' album lists has not landed yet. */
-	loading: boolean;
-	/** The failure line naming the selected groups whose list failed. */
-	failure: string | null;
-	/** The union of the selected groups' artists in artist sort-name order. */
-	artists: GuiMusicArtist[];
-	/** The Hero's facts; `null` while no album of the union is picked. */
-	hero: GuiMusicHero | null;
-	/** The Hero's square artwork, present exactly when `hero` is. */
-	art: GuiLibraryArt | null;
-}
-
-export interface GuiMusicPill {
-	/** The group's stable Service id: the set-collections command keys it. */
-	groupId: string;
-	name: string;
-	/** Whether the core's stored selection holds the group. */
-	selected: boolean;
-	/** Whether the pill is a collection pill (multi-select) rather than a
-	 * single-select one. Every Music pill is a collection pill. */
-	collection: boolean;
-}
-
-export interface GuiMusicArtist {
-	artistKey: GuiArtistKey;
-	name: string;
-	/** The letter heading above the row, and the rail's letter, or `#`. */
-	sortLetter: string;
-	albums: GuiMusicAlbum[];
-}
-
-/** An artist's stable identity: the Service-resolved one, or the fallback name
- * when the Service resolves none. */
-export type GuiArtistKey = { kind: 'service'; id: string } | { kind: 'fallback'; id: string };
-
-export interface GuiMusicAlbum {
-	/** The album's stable Service id: the commands that name it, and the key
-	 * its artwork and its track fetch use. */
-	albumId: string;
-	name: string;
-	/** The release year; empty when the Service holds none. */
-	year: string;
-	/** The cached tracklist; `null` until the album node's open loads it. */
-	tracks: GuiMusicTrack[] | null;
-	/** The album's track count and total time, present exactly when `tracks`
-	 * is. */
-	total: GuiMusicTrackTotal | null;
-}
-
-export interface GuiMusicTrack {
-	/** The track's stable Service id. */
-	trackId: string;
-	name: string;
-	/** The number the row paints. */
-	number: number;
-	/** The runtime, `M:SS` or `H:MM:SS`; empty when unknown. */
-	duration: string;
-}
-
-export interface GuiMusicTrackTotal {
-	count: number;
-	duration: string;
-}
-
-/** The Hero's facts for the picked album (design D5). */
-export interface GuiMusicHero {
-	artist: string;
-	/** The selected collection names in pill order. */
-	collections: string[];
-	/** The artist's album count in the union. */
-	albumCount: number;
-	/** The artist's track count and total time, present once every one of the
-	 * artist's union albums holds a cached tracklist. */
-	artistTracks: GuiMusicTrackTotal | null;
-	album: GuiMusicAlbum;
-	/** The picked item's item-menu entries in the shared builder's order
-	 * (design D8): More actions paints them, and a chosen entry sends its
-	 * index back. Empty while the item offers no menu — the Library panel does
-	 * not hold Panel focus, or the item is gone — so the window content offers
-	 * More actions only when the frame carries entries. */
-	menu: GuiMusicMenuEntryFrame[];
-}
-
-/** One entry of the picked item's item menu (design D8), as the window paints
- * it: the label, and the key hint the row-menu face shows when the entry has
- * one. The core keeps the action, so a chosen entry sends only its index. */
-export interface GuiMusicMenuEntryFrame {
-	label: string;
-	keyHint: string | null;
-}
-
-/** The Library Hero's square artwork (design D5). The image and placeholder
- * payloads are `data:` URLs the core encoded from the mbv image cache. */
-export type GuiLibraryArt =
-	| { kind: 'image'; detail: string }
-	| { kind: 'placeholder'; detail: string }
-	| { kind: 'loading' };
