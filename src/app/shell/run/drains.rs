@@ -3,7 +3,6 @@
 
 use super::super::{
     Model, MusicTrackFocusRequest, RouterOutcome, arbitrate_key, fold_mouse_messages,
-    service_startup,
 };
 use super::pin_swap::PinSwapLink;
 use super::{Duration, IdleFeed, Instant, PollStrategy};
@@ -517,31 +516,11 @@ impl Model {
 
     /// Start the configured Remote Service workers after the first TUI frame
     /// has rendered, kick off the startup feed fetch, and register client
-    /// capabilities.
+    /// capabilities. The shared step is `App::start_client_services`
+    /// (add-gui-library-panel design D11); the TUI runs it at the same point
+    /// it always has, so its order and timing do not change.
     pub(super) fn spawn_startup_services(&mut self) {
-        // Only start the configured Remote Service after the first TUI frame
-        // has been rendered. The selected Player owner and UI therefore never
-        // wait for Emby setup, authentication, or connectivity.
-        if let Some(request) = self.app.setup.emby_startup_request.take() {
-            self.app.setup.emby_startup_rx =
-                Some(service_startup::start(request.config, request.generation));
-        }
-        if let Some(request) = self.app.setup.audiobookshelf_startup_request.take() {
-            self.app.setup.audiobookshelf_startup_rx = Some(service_startup::start_audiobookshelf(
-                request.config,
-                request.generation,
-                service_startup::AudiobookshelfCompletionKind::Startup,
-            ));
-        }
-
-        // Auto-fetch configured feeds asynchronously so the Feeds tab and the
-        // Home "Feeds" pill are populated shortly after startup instead
-        // of staying empty until the user presses the manual refresh key.
-        self.app.start_feed_fetch();
-
-        if let Some(client) = self.app.emby_client() {
-            client.lock().unwrap().register_capabilities();
-        }
+        self.app.start_client_services();
     }
 
     /// Create the idle-feed channel pair and start its first fetch when an

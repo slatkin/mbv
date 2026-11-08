@@ -1,3 +1,4 @@
+pub(in crate::app) mod client_startup;
 pub(in crate::app) mod command;
 pub(in crate::app) mod connect;
 pub(in crate::app) mod daemon_restart;

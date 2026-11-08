@@ -237,12 +237,20 @@ impl CoreThread {
         focus.mount(ComponentId::QueuePlaybackPanel);
         focus.mount(ComponentId::StatusBarPanel);
         focus.set_panel_focus(PanelFocus::Queue);
-        // The minimal Emby client fill (design D9's ruled exception): the
-        // armed startup request becomes an authentication-only worker — no
-        // library bootstrap — whose completion installs the client the
-        // session list, cast discovery, artwork, and item-metadata fetches
-        // read. Its drain is the tick's `drain_startup_workers` phase.
-        app.start_emby_client_fill();
+        // The shared Service startup step every Client runs once after the
+        // attach (add-gui-library-panel design D11): the Service startup
+        // workers, the startup feed fetch, and capability registration. Then
+        // the launch Home load, whose content the GUI drops until Home lands
+        // (unit 10). A client the attach brought (`owner_link`'s
+        // `cached_emby_client`) starts neither startup worker, so the GUI
+        // starts the playback-target discovery it feeds here; a startup the
+        // drain reports starts it in the drain host instead.
+        let cached_emby_client = app.has_emby_client();
+        app.start_client_services();
+        let _home = app.load_home_at_startup();
+        if cached_emby_client {
+            app.start_playback_target_discovery();
+        }
         Self {
             app,
             focus,

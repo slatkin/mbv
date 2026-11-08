@@ -79,6 +79,11 @@ pub struct StartupWorkerDrain {
     pub events: bool,
     /// Home content a completion rebuilt, for the Client that presents Home.
     pub home: Option<HomeContent>,
+    /// The drain applied a successful Emby startup, so the client is installed
+    /// and Ready. The GUI Client starts its playback-target discovery on this
+    /// fact (add-gui-library-panel design D11); the TUI Client's tick is
+    /// unaffected and ignores it.
+    pub emby_started: bool,
 }
 
 impl App {
@@ -95,7 +100,9 @@ impl App {
                 // completion returns None.
                 Ok(completion) => {
                     drain.events = true;
-                    drain.home = self.apply_emby_completion(completion).or(drain.home);
+                    let home = self.apply_emby_completion(completion);
+                    drain.emby_started |= home.is_some();
+                    drain.home = home.or(drain.home);
                 }
                 Err(TryRecvError::Empty) => self.setup.emby_startup_rx = Some(worker),
                 Err(TryRecvError::Disconnected) => {
@@ -110,29 +117,14 @@ impl App {
             match rx.try_recv() {
                 Ok(completion) => {
                     drain.events = true;
-                    drain.home = self.apply_emby_setup_completion(completion).or(drain.home);
+                    let home = self.apply_emby_setup_completion(completion);
+                    drain.emby_started |= home.is_some();
+                    drain.home = home.or(drain.home);
                 }
                 Err(TryRecvError::Empty) => self.setup.emby_setup_rx = Some(rx),
                 Err(TryRecvError::Disconnected) => {
                     drain.events = true;
                     self.handle_emby_setup_worker_disconnect();
-                }
-            }
-        }
-        // The GUI Client's minimal Emby client fill (add-tauri-gui-client
-        // design D9's ruled exception) lands on the same drain; the TUI
-        // never arms its receiver.
-        if let Some(worker) = self.setup.emby_client_fill_rx.take() {
-            let generation = worker.generation;
-            match worker.rx.try_recv() {
-                Ok(completion) => {
-                    drain.events = true;
-                    self.apply_emby_client_fill(completion);
-                }
-                Err(TryRecvError::Empty) => self.setup.emby_client_fill_rx = Some(worker),
-                Err(TryRecvError::Disconnected) => {
-                    drain.events = true;
-                    self.handle_emby_startup_worker_disconnect(generation);
                 }
             }
         }

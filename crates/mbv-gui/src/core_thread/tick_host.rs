@@ -17,8 +17,15 @@ impl ClientTickHost for CoreThread {
 
     fn drain_startup_workers(&mut self) -> bool {
         // The GUI presents no Home panel; a completion's rebuilt Home content
-        // drops here — the App-side handlers already applied the semantics.
-        self.app.drain_startup_workers().events
+        // drops here — the App-side handlers already applied the semantics. A
+        // startup this drain reports starts the playback-target discovery the
+        // full Emby startup itself never starts (add-gui-library-panel design
+        // D11), exactly as the deleted client fill did on its completion.
+        let drain = self.app.drain_startup_workers();
+        if drain.emby_started {
+            self.app.start_playback_target_discovery();
+        }
+        drain.events
     }
 
     fn reproject_audiobookshelf_content(&mut self) {

@@ -91,6 +91,8 @@ impl App {
         let mut app = App {
             #[cfg(any(test, feature = "test"))]
             _test_state_dir_guard: test_state_dir_guard,
+            #[cfg(any(test, feature = "test"))]
+            cast_discovery_starts: 0,
             config: init.config,
             emby_runtime: init.emby_runtime,
             audiobookshelf_runtime: init.audiobookshelf_runtime,

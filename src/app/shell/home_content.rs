@@ -1,7 +1,6 @@
 //! Shell-side Continue Watching projection and destination Latest marker state.
 
 use super::Model;
-use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::state::playback::{
     DestinationLatestSnapshot, DestinationLatestSource, HomeContent,
 };
@@ -182,35 +181,11 @@ impl Model {
     }
 
     pub(in crate::app) fn fetch_home_at_startup(&mut self) {
-        let fetched_home = self.app.fetch_home();
+        let fetched_home = self.app.load_home_at_startup();
         self.home_content.loading = false;
         match fetched_home {
-            Ok(content) => {
-                // A launch with a cached Emby client brings the Service to
-                // Ready at construction, so `apply_emby_bootstrap` -- the
-                // async-startup seam that re-arms the Home Recently added
-                // fetch -- never runs on this path. This is that launch's
-                // one Home load with the eligible libraries already known,
-                // so it arms the fetch here (spec `home-latest-sections`,
-                // "Recently added loads at launch independent of
-                // destinations": "when that Service becomes ready"). The
-                // spawn is a no-op without an Emby client, which keeps the
-                // async-startup launch (still Connecting here) on its own
-                // bootstrap seam.
-                self.app
-                    .spawn_home_recently_added(mbv_queue::ServiceKind::Emby);
-                if !self.app.status_toast_live() {
-                    self.app.status.clear();
-                }
-                self.assign_home_content(content);
-            }
-            Err(error) => {
-                self.app.flash(
-                    format!("Couldn't load home: {error}"),
-                    ToastSeverity::Warning,
-                );
-                self.push_home_content();
-            }
+            Some(content) => self.assign_home_content(content),
+            None => self.push_home_content(),
         }
     }
 

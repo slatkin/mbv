@@ -595,6 +595,11 @@ pub struct App {
     pub(in crate::app) resize_drag_activity: Option<std::time::Instant>,
     #[cfg(any(test, feature = "test"))]
     pub(in crate::app) _test_state_dir_guard: Option<crate::config::TestStateDirGuard>,
+    /// How many cast discovery browses this `App` started. Only the Clients'
+    /// tests read it: the GUI Client's startup regression asserts that the
+    /// discovery began without waiting on a real browse.
+    #[cfg(any(test, feature = "test"))]
+    pub(in crate::app) cast_discovery_starts: usize,
 }
 
 impl App {

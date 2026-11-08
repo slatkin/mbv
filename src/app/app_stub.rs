@@ -371,21 +371,68 @@ pub fn stub_app_with_track_choices() -> (App, std::sync::mpsc::Receiver<mbv_ctrl
     (app, cmd_rx)
 }
 
-/// The `App` a GUI Client's test drives with the Emby startup request
-/// armed, as `initialize_service_startup` arms it for an attached session
-/// whose Emby is configured without a client, so the test reads the
-/// minimal client fill the core starts (add-tauri-gui-client design D9's
-/// ruled exception). The request's worker resolves against the isolated
-/// state dir, where no credential exists.
+/// The `App` a GUI Client's test drives with the Emby client an attach
+/// brings (`owner_link`'s `cached_emby_client`): the runtime is Ready and
+/// holds `client`, so the shared startup step starts no Emby startup worker
+/// (add-gui-library-panel design D11). The test builds the client over an
+/// isolated mock transport, so no request leaves the process.
 #[cfg(feature = "test")]
 #[must_use]
-pub fn stub_app_with_armed_emby_fill() -> App {
+pub fn stub_app_with_cached_emby_client(client: mbv_emby::EmbyClient) -> App {
     let mut app = make_app_stub();
-    app.setup.emby_startup_request = Some(crate::app::state::service_setup::StartupRequest {
-        config: crate::config::Config::default(),
-        generation: app.emby_runtime.generation(),
-    });
+    app.emby_runtime =
+        crate::app::state::service_runtime::EmbyRuntime::ready(Arc::new(Mutex::new(client)));
     app
+}
+
+/// The `App` a GUI Client's test drives with a successful Emby startup
+/// completion already queued for the startup drain, over `views` as the
+/// bootstrap's library catalog. The worker's thread never runs: the test
+/// hands the drain the one completion a worker would send (add-gui-library-panel
+/// design D11).
+#[cfg(feature = "test")]
+#[must_use]
+pub fn stub_app_with_completed_emby_startup(views: Vec<mbv_emby_model::EmbyItem>) -> App {
+    let mut app = make_app_stub();
+    let generation = app.emby_runtime.generation();
+    let (tx, rx) = std::sync::mpsc::channel();
+    let _ = tx.send(crate::app::dispatch::session::service_startup::Completion {
+        generation,
+        result: Ok(crate::app::dispatch::session::service_startup::Startup {
+            client: mbv_emby::EmbyClient::new(crate::config::Config::default()),
+            bootstrap: mbv_emby::EmbyBootstrap {
+                continue_items: Vec::new(),
+                views,
+            },
+            setup: mbv_config::EmbySetup::default(),
+        }),
+    });
+    app.setup.emby_startup_rx =
+        Some(crate::app::dispatch::session::service_startup::StartupReceiver { generation, rx });
+    app
+}
+
+#[cfg(feature = "test")]
+impl App {
+    /// The Library tabs the catalog holds, for a Client's test that asserts a
+    /// startup landed the catalog (add-gui-library-panel design D11).
+    #[must_use]
+    pub fn libs_for_test(&self) -> &[mbv_ui_model::library_tab::LibraryTab] {
+        &self.libs
+    }
+
+    /// Whether the `/Sessions` load a playback-target discovery starts is in
+    /// flight.
+    #[must_use]
+    pub fn sessions_load_started_for_test(&self) -> bool {
+        self.sessions_loading
+    }
+
+    /// How many cast discovery browses this `App` started.
+    #[must_use]
+    pub fn cast_discovery_starts_for_test(&self) -> usize {
+        self.cast_discovery_starts
+    }
 }
 
 /// The ordinary `App::build` construction over stub channels: no live

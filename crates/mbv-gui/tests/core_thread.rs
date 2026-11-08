@@ -11,8 +11,8 @@ use std::sync::mpsc::{self, TryRecvError};
 use std::time::{Duration, Instant};
 
 use mbv::{
-    App, ClientTickHost, load_config, stub_app_with_armed_emby_fill,
-    stub_app_with_pending_settings_save, stub_app_with_playing_queue, stub_app_with_queue,
+    App, load_config, stub_app_with_pending_settings_save, stub_app_with_playing_queue,
+    stub_app_with_queue,
 };
 use mbv_config::{
     LaunchPanelFocus, TUI_LAUNCH_STATE_VERSION, TabIdentity, TestStateDirGuard, TuiLaunchState,
@@ -136,18 +136,6 @@ impl TestCore {
 
 pub(crate) fn test_core(slots: usize) -> TestCore {
     test_core_with(stub_app_with_queue(slots))
-}
-
-/// The core starts the minimal Emby client fill (design D9's ruled
-/// exception): an `App` whose startup request is armed — the state
-/// `initialize_service_startup` produces for a configured Emby without a
-/// client — has the fill worker in flight after construction, so its
-/// completion installs the client the session list, cast discovery,
-/// artwork, and item-metadata fetches read.
-#[test]
-fn core_thread_starts_the_emby_client_fill() {
-    let mut core = test_core_with(stub_app_with_armed_emby_fill());
-    assert!(core.core.app_mut().emby_client_fill_pending_for_test());
 }
 
 /// A core thread over a caller-built `App`, for the stubs the queue stub

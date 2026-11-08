@@ -9,7 +9,6 @@ use super::{
 use super::{
     QUIT_REQUESTED, init_terminal, install_signal_handlers, restore_terminal, start_quit_watchdog,
 };
-use crate::app::dispatch::session::service_startup;
 pub(in crate::app) use crate::app::input::router::RouterOutcome;
 #[cfg(test)]
 use crate::app::state::home_latest::current_launch_secs;

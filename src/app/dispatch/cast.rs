@@ -49,11 +49,26 @@ impl App {
     /// concurrently with `spawn_sessions_load`'s `/Sessions` fetch -- callers
     /// invoke both, never wait on this one before showing Emby rows.
     pub(in crate::app) fn spawn_cast_discovery(&mut self) {
+        self.note_cast_discovery_start();
         let tx = self.channels.cast_tx.clone();
         std::thread::spawn(move || {
             let receivers = mbv_cast::discovery::browse_cast_receivers(CAST_DISCOVERY_TIMEOUT);
             let _ = tx.send(CastEvent::DiscoveryCompleted(receivers));
         });
+    }
+
+    /// Record a started browse for the Clients' tests: the browse itself is a
+    /// background network discovery, so a test asserts that it began rather
+    /// than waiting for a result.
+    #[cfg(any(test, feature = "test"))]
+    fn note_cast_discovery_start(&mut self) {
+        self.cast_discovery_starts = self.cast_discovery_starts.saturating_add(1);
+    }
+
+    /// No Client reads a discovery count in a shipped build.
+    #[cfg(not(any(test, feature = "test")))]
+    fn note_cast_discovery_start(&mut self) {
+        let _ = self;
     }
 
     pub(in crate::app) fn handle_cast_event(&mut self, event: CastEvent) {
