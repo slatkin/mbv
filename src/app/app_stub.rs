@@ -697,6 +697,25 @@ impl App {
     }
 }
 
+/// The `App` a GUI Client's Owner-exit test drives (`daemon-disconnect-`
+/// `handling` "Clients exit cleanly on an announced shutdown"): the stub
+/// queue's App attached at the local endpoint — the route the announce's
+/// exit path checks — with the returned sender feeding its player-event
+/// channel, because the channel itself is behind `pub(in crate::app)` and
+/// a Client's cross-crate test injects through this seam. The constructor
+/// sends no player event, so a test's sends are the first ones.
+#[cfg(feature = "test")]
+#[must_use]
+pub fn stub_app_with_local_daemon_events(
+    n: usize,
+) -> (App, std::sync::mpsc::Sender<mbv_ctrl::player::PlayerEvent>) {
+    let mut app = stub_app_with_queue(n);
+    app.player_endpoint = Some(mbv_remote_player::DaemonEndpoint::Local);
+    let (tx, rx) = std::sync::mpsc::channel();
+    app.player_rx = rx;
+    (app, tx)
+}
+
 /// The ordinary `App::build` construction over stub channels: no live
 /// Owner, no live Service, and the stub player whose command channel is
 /// already dropped.

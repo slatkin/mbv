@@ -58,6 +58,7 @@ impl App {
     /// ticks. The Owner broadcasts the playhead's progress without an event
     /// a Client's drains see, so the cadence check is what keeps a frame
     /// moving while the Client takes no input.
+    #[must_use]
     pub fn frame_cadence_due(&self, last_frame: Instant) -> bool {
         last_frame.elapsed() >= self.render_interval()
     }

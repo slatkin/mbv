@@ -1,6 +1,22 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
+use super::super::App;
+
+impl App {
+    /// The run-loop quit signal (`QUIT_REQUESTED`): the keyboard quit, the
+    /// quit signals, the pin swap, and an announced Owner shutdown
+    /// (`handle_daemon_shutdown_announced`) all set it, and every Client's
+    /// run loop polls it beside the tick outcome — the TUI's `'outer` break,
+    /// the GUI core's quit edge (`daemon-disconnect-handling`: "Clients
+    /// exit cleanly on an announced shutdown"). The App records the signal;
+    /// the Client's run loop is what acts on it.
+    #[must_use]
+    pub fn quit_requested(&self) -> bool {
+        QUIT_REQUESTED.load(Ordering::Relaxed)
+    }
+}
+
 pub(in crate::app) static QUIT_REQUESTED: AtomicBool = AtomicBool::new(false);
 // Set only by SIGHUP or stdin POLLHUP (terminal vanished). Never set by q/SIGTERM.
 // The watchdog's forced exit arms only on this flag so clean q-quits are never raced.

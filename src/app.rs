@@ -8,7 +8,8 @@ mod gui_library;
 #[cfg(feature = "test")]
 pub use self::app_stub::{
     set_cast_receivers_for_test, set_subtitle_tracks_for_test, stub_app_with_cached_emby_client,
-    stub_app_with_cast_target, stub_app_with_completed_emby_startup, stub_app_with_open_row_menu,
+    stub_app_with_cast_target, stub_app_with_completed_emby_startup,
+    stub_app_with_local_daemon_events, stub_app_with_open_row_menu,
     stub_app_with_pending_settings_save, stub_app_with_playing_items, stub_app_with_playing_queue,
     stub_app_with_prefix_and_toast, stub_app_with_queue, stub_app_with_queue_and_cmd_rx,
     stub_app_with_rebound_quit, stub_app_with_track_choices, stub_app_with_track_popover,

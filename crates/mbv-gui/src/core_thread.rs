@@ -622,16 +622,21 @@ impl CoreThread {
 
     /// Run the loop (design D3): wait for input, wake, or the idle cadence,
     /// then tick. The loop ends when the window closes — its close arrives
-    /// as a [`CoreInput::Close`], and a routed quit key answers the same
-    /// way — or when the channel itself ends.
+    /// as a [`CoreInput::Close`], a routed quit key answers the same way,
+    /// and an announced exit path the App's drains recorded — the Owner
+    /// shutdown's quit signal (`daemon-disconnect-handling`: "Clients exit
+    /// cleanly on an announced shutdown", the TUI run loop's `'outer` break
+    /// on `QUIT_REQUESTED`) ends it through the quit edge — or when the
+    /// channel itself ends.
     ///
     /// The run's exit boundary saves the GUI's launch location first (design
     /// D9: the orderly exit's save, and the only write of that file), then
     /// runs the shared Client exit teardown once, after the loop, whichever
-    /// edge ended it — a routed quit, the window's close, or a channel end:
-    /// the deferred settings save flushes, the auto-reconnect record persists,
-    /// and the daemon-lifetime policy applies (daemon-lifecycle "Quitting a
-    /// client follows Stay Alive and offers no detach"). The join in `main`
+    /// edge ended it — a routed quit, the window's close, the Owner's
+    /// announced shutdown, or a channel end: the deferred settings save
+    /// flushes, the auto-reconnect record persists, and the daemon-lifetime
+    /// policy applies (daemon-lifecycle "Quitting a client follows Stay
+    /// Alive and offers no detach"). The join in `main`
     /// holds the process until it completes, so the teardown survives the
     /// window's close.
     pub fn run(&mut self) {
@@ -654,7 +659,19 @@ impl CoreThread {
             Err(RecvTimeoutError::Disconnected) => return false,
         }
         let outcome = ClientCore::tick(self, Instant::now());
-        if outcome.quit_requested {
+        // The run-loop quit signal the TUI's `'outer` loop breaks on
+        // (`shell/run.rs`): an announced Owner shutdown sets it from the
+        // App's drain half, and the GUI Client takes the same orderly exit
+        // — the quit edge closes the window, and the run's exit boundary in
+        // `run` saves the launch location and tears the shared state down.
+        if outcome.quit_requested || self.app.quit_requested() {
+            tracing::info!(
+                name: "gui_core.run_quit",
+                target: "gui_core",
+                input_quit = outcome.quit_requested,
+                reason = ?self.app.exit_message(),
+                "the GUI run ends through the quit edge"
+            );
             // The routed quit closes the window through the same edge the
             // mismatch state's Quit uses (design D9).
             (self.quit)();

@@ -120,6 +120,16 @@ impl App {
         self.teardown_inner(quit_timeout, false);
     }
 
+    /// The orderly-exit message the Client reports at its exit boundary —
+    /// what the TUI's run prints after the terminal restore
+    /// (`pending_exit_message`). An exit path sets it: the Owner shutdown's
+    /// announce (`handle_daemon_shutdown_announced`), a failed teardown
+    /// shutdown request, a stale build. A Client's exit logging reads it.
+    #[must_use]
+    pub fn exit_message(&self) -> Option<&str> {
+        self.pending_exit_message.as_deref()
+    }
+
     fn teardown_inner(&mut self, quit_timeout: Duration, swapped_out: bool) {
         // Stop the visualizer before requesting daemon shutdown so its worker
         // can exit concurrently with the remote request.

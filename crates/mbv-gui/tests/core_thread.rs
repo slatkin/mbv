@@ -11,12 +11,12 @@ use std::sync::mpsc::{self, TryRecvError};
 use std::time::{Duration, Instant};
 
 use mbv::{
-    App, load_config, stub_app_with_pending_settings_save, stub_app_with_playing_queue,
-    stub_app_with_queue,
+    App, load_config, stub_app_with_local_daemon_events, stub_app_with_pending_settings_save,
+    stub_app_with_playing_queue, stub_app_with_queue,
 };
 use mbv_config::{
     LaunchPanelFocus, TUI_LAUNCH_STATE_VERSION, TabIdentity, TestStateDirGuard, TuiLaunchState,
-    load_tui_launch_state, save_tui_launch_state,
+    gui_launch_state_path, load_tui_launch_state, save_tui_launch_state,
 };
 use mbv_emby::EmbyClient;
 use mbv_gui::bridge::frame::playback::GuiCardArtwork;
@@ -370,6 +370,42 @@ fn the_window_close_leaves_the_tui_launch_state_untouched() {
     assert_eq!(
         load_tui_launch_state().map(|state| state.tab),
         Some(TabIdentity::Home)
+    );
+}
+
+/// An announced Owner shutdown ends the run through the quit edge
+/// (`daemon-disconnect-handling` "Clients exit cleanly on an announced
+/// shutdown"): the announce's exit arm sets the run-loop quit signal the
+/// TUI's `'outer` loop breaks on (`quit_requested`), and the GUI Client's
+/// run takes the same orderly exit — one quit edge (the window closes),
+/// and the run's exit boundary saves the GUI's launch location before the
+/// teardown. The announce is injected on the stub Owner's event channel; no
+/// live Owner, window, or timer runs.
+///
+/// Regression for the user report of 2026-11-08: an Owner exit left the GUI
+/// window open, the run still ticking a dead Owner link.
+#[test]
+fn an_announced_owner_shutdown_ends_the_run_and_saves_the_launch_location() {
+    let _guard = TestStateDirGuard::new();
+    let (app, events) = stub_app_with_local_daemon_events(2);
+    events
+        .send(mbv_ctrl::player::PlayerEvent::DaemonShutdownAnnounced)
+        .unwrap();
+    let mut test = test_core_with(app);
+    assert!(
+        !gui_launch_state_path().exists(),
+        "nothing writes the GUI launch location while the window is open"
+    );
+
+    test.core.run();
+
+    test.quits.try_recv().expect("the quit edge fired");
+    test.quits
+        .try_recv()
+        .expect_err("the run ended on one quit edge");
+    assert!(
+        gui_launch_state_path().exists(),
+        "the run's exit boundary saved the GUI launch location"
     );
 }
 
