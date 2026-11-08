@@ -64,6 +64,22 @@ pub fn save_gui_launch_state(state: &GuiLaunchState) -> Result<(), LaunchStateEr
     save_gui_launch_state_at(&gui_launch_state_path(), state)
 }
 
+/// The location a start without a saved one restores (design D9's
+/// first-choice fallback): the restore takes the same open path a saved
+/// location takes, and its fallback opens the first presented destination.
+/// The identity is Home — no Service library, so the fallback resolution
+/// picks the first presented one — with Library Panel focus and no saved
+/// collection sets, so the destination keeps no selected pill.
+#[must_use]
+pub fn first_launch() -> GuiLaunchState {
+    GuiLaunchState {
+        version: GUI_LAUNCH_STATE_VERSION,
+        destination: TabIdentity::Home,
+        panel_focus: LaunchPanelFocus::Library,
+        collections: Vec::new(),
+    }
+}
+
 pub(super) fn save_gui_launch_state_at(
     path: &Path,
     state: &GuiLaunchState,

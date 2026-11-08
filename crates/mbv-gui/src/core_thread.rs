@@ -279,9 +279,14 @@ impl CoreThread {
         }
         // The GUI's own launch location (design D9), read once before the
         // first step: the TUI's launch state never moves this Client's tab or
-        // Panel focus, and this file is the only location it restores.
-        let launch_restore = mbv_config::load_gui_launch_state()
-            .map_or(GuiLaunchRestore::None, GuiLaunchRestore::Destination);
+        // Panel focus, and this file is the only location it restores. A start
+        // with no saved location — or one that fails to load — restores the
+        // Client's first-choice rules through the same restore path: the first
+        // presented destination, Library Panel focus, and no saved collection
+        // sets, so the Library panel is reachable from the first launch.
+        let launch_restore = GuiLaunchRestore::Destination(
+            mbv_config::load_gui_launch_state().unwrap_or_else(mbv_config::first_launch),
+        );
         let mut core = Self {
             app,
             focus,

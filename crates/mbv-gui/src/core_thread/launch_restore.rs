@@ -11,11 +11,11 @@ use mbv_ui_model::settings::PanelFocus;
 use super::CoreThread;
 
 /// How far the saved GUI launch location's restore has come (add-gui-library-
-/// panel design D9).
+/// panel design D9). A start with no saved location restores
+/// [`mbv_config::GuiLaunchState::first_launch`] through the same phases.
 pub(super) enum GuiLaunchRestore {
-    /// No saved location: nothing to restore.
-    None,
-    /// The saved location, waiting for the catalog's presented destination.
+    /// The saved location, or a fresh launch's first-choice default, waiting
+    /// for the catalog's presented destination.
     Destination(mbv_config::GuiLaunchState),
     /// The destination is open, waiting for its group list. `destination` is
     /// the identity of the destination the first phase opened, so the saved
@@ -30,17 +30,18 @@ pub(super) enum GuiLaunchRestore {
 }
 
 impl CoreThread {
-    /// Advance the saved launch location's restore (design D9): open the saved
-    /// destination once the catalog lands, then apply its saved collection
-    /// sets once the destination's group list lands, and set the saved Panel
-    /// focus on both authorities. The collection sets apply only to the
+    /// Advance the launch location's restore (design D9): open the saved
+    /// destination — a start with no saved location opens the first presented
+    /// one, through [`mbv_config::GuiLaunchState::first_launch`] — once the
+    /// catalog lands, then apply its saved collection sets once the
+    /// destination's group list lands, and set the saved Panel focus on both authorities. The collection sets apply only to the
     /// destination the first phase opened; a mid-restore tab switch abandons
     /// them. The saved Panel focus applies only while the user has not taken
     /// focus in the pre-catalog window. Idempotent, so the catalog and library
     /// drains call it whenever their content can complete a phase.
     pub(crate) fn restore_launch_location(&mut self) {
         let (state, destination) = match &self.launch_restore {
-            GuiLaunchRestore::None | GuiLaunchRestore::Done => return,
+            GuiLaunchRestore::Done => return,
             GuiLaunchRestore::Destination(state) => {
                 let Some(destination) = self.app.open_gui_launch_destination(state) else {
                     return;
@@ -86,10 +87,7 @@ impl CoreThread {
     /// pending (design D9): the first phase then skips the saved Panel-focus
     /// re-apply, so the pre-catalog take-focus survives the restore.
     pub(crate) fn note_launch_focus_taken(&mut self) {
-        if !matches!(
-            self.launch_restore,
-            GuiLaunchRestore::None | GuiLaunchRestore::Done
-        ) {
+        if !matches!(self.launch_restore, GuiLaunchRestore::Done) {
             self.launch_focus_taken = true;
         }
     }
