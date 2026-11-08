@@ -47,12 +47,15 @@ impl App {
     /// Browses for cast receivers on a background thread and reports the
     /// result back as `CastEvent::DiscoveryCompleted` (8.1). Runs
     /// concurrently with `spawn_sessions_load`'s `/Sessions` fetch -- callers
-    /// invoke both, never wait on this one before showing Emby rows.
+    /// invoke both, never wait on this one before showing Emby rows. A test
+    /// build records that the browse started but runs no LAN browse: a test
+    /// injects its receivers instead (`set_cast_receivers_for_test`).
     pub(in crate::app) fn spawn_cast_discovery(&mut self) {
-        self.note_cast_discovery_start();
+        self.record_cast_discovery_start();
+        let browse = cast_browse();
         let tx = self.channels.cast_tx.clone();
         std::thread::spawn(move || {
-            let receivers = mbv_cast::discovery::browse_cast_receivers(CAST_DISCOVERY_TIMEOUT);
+            let receivers = browse(CAST_DISCOVERY_TIMEOUT);
             let _ = tx.send(CastEvent::DiscoveryCompleted(receivers));
         });
     }
@@ -61,13 +64,13 @@ impl App {
     /// background network discovery, so a test asserts that it began rather
     /// than waiting for a result.
     #[cfg(any(test, feature = "test"))]
-    fn note_cast_discovery_start(&mut self) {
+    fn record_cast_discovery_start(&mut self) {
         self.cast_discovery_starts = self.cast_discovery_starts.saturating_add(1);
     }
 
     /// No Client reads a discovery count in a shipped build.
     #[cfg(not(any(test, feature = "test")))]
-    fn note_cast_discovery_start(&mut self) {
+    fn record_cast_discovery_start(&mut self) {
         let _ = self;
     }
 
@@ -88,6 +91,19 @@ impl App {
         }
         produced
     }
+}
+
+/// The browse a discovery start runs: the real LAN browse in a shipped build.
+#[cfg(not(any(test, feature = "test")))]
+fn cast_browse() -> fn(std::time::Duration) -> Vec<mbv_cast::discovery::CastReceiver> {
+    mbv_cast::discovery::browse_cast_receivers
+}
+
+/// A test build opens no LAN browse (no test may touch the network) and
+/// reports no receivers: a test that needs target rows injects them.
+#[cfg(any(test, feature = "test"))]
+fn cast_browse() -> fn(std::time::Duration) -> Vec<mbv_cast::discovery::CastReceiver> {
+    |_timeout| Vec::new()
 }
 
 #[cfg(test)]
