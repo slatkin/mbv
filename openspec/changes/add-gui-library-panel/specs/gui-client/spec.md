@@ -153,12 +153,19 @@ The Library panel SHALL paint the same slots for every destination: a selector r
 
 ### Requirement: Hero actions match the TUI Client
 
-Every action that the Hero shows SHALL run the TUI Client's action for the same item, and SHALL show the chord that runs that action in the GUI Client: the configured chord for an action that `[keys]` binds, and the fixed key otherwise.
+Every action that the Hero shows SHALL run the TUI Client's action for the same item where the TUI Client has one (play, add to queue, shuffle, the item menu). Play next has no TUI action; it SHALL admit the item after the active slot, and the GUI Client SHALL bind `n` to it and `a` to add to queue, with Library Panel focus. Every Hero action SHALL show the chord that runs that action in the GUI Client: the configured chord for an action that `[keys]` binds, and the fixed key otherwise.
 
 #### Scenario: Play next from the Hero
 
 - **WHEN** the user presses the Hero's play-next control
-- **THEN** the selected item is admitted after the active slot, as the TUI Client's play-next key does
+- **THEN** the selected item is admitted directly after the active slot, and is appended when there is no active slot or the active slot is the last
+- **AND** no slot already in the queue moves
+
+#### Scenario: The Library keys reach the Library under Library focus
+
+- **WHEN** the Library has Panel focus and the user presses `/`, then Esc, then `]`
+- **THEN** `/` opens the Library filter, not the Queue filter, and `]` moves the pill as in the TUI Client, with no seek
+- **AND** with Queue focus, `/` opens the Queue filter and `]` seeks forward
 
 #### Scenario: More actions opens the item menu
 
