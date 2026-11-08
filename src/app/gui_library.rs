@@ -80,11 +80,25 @@ pub struct GuiLibraryMenuItem {
 impl App {
     /// Apply one GUI Library command (design D2): each arm calls the existing
     /// `App` action for the intent, so the TUI's own paths do not change.
+    /// Every command logs its receipt (`gui_library.command`), and one that
+    /// the App's data cannot act on logs why it was ignored, so a live
+    /// session's Library path is visible in the GUI log.
     pub fn apply_gui_library_command(&mut self, command: GuiLibraryCommand) {
+        tracing::info!(
+            name: "gui_library.command",
+            target: "gui_library",
+            command = ?command,
+            "the GUI Library panel sent a command"
+        );
         match command {
             GuiLibraryCommand::OpenDestination { position } => {
                 if self.presents_open_position(position) {
                     self.set_library_tab(position);
+                } else {
+                    Self::log_ignored_library_command(
+                        "openDestination",
+                        format_args!("the position {position} names no presented destination"),
+                    );
                 }
             }
             GuiLibraryCommand::SetCollections { lib_idx, group_ids } => {
@@ -94,21 +108,18 @@ impl App {
             GuiLibraryCommand::OpenAlbum { album_id } => self.open_gui_library_album(album_id),
             GuiLibraryCommand::TakeFocus => self.set_gui_panel_focus(PanelFocus::Library),
             GuiLibraryCommand::TakeQueueFocus => self.set_gui_panel_focus(PanelFocus::Queue),
-            GuiLibraryCommand::Play { item_id } => {
-                if let Some((lib_idx, item)) = self.gui_library_item(&item_id) {
-                    self.play_or_activate_lib_item(lib_idx, item);
-                }
-            }
-            GuiLibraryCommand::PlayNext { item_id } => {
-                if let Some((lib_idx, item)) = self.gui_library_item(&item_id) {
-                    self.play_lib_item_next(lib_idx, item);
-                }
-            }
-            GuiLibraryCommand::AddToQueue { item_id } => {
-                if let Some((lib_idx, item)) = self.gui_library_item(&item_id) {
-                    self.enqueue_lib_item(lib_idx, item);
-                }
-            }
+            GuiLibraryCommand::Play { item_id } => match self.gui_library_item(&item_id) {
+                Some((lib_idx, item)) => self.play_or_activate_lib_item(lib_idx, item),
+                None => Self::log_stale_library_item("play", &item_id),
+            },
+            GuiLibraryCommand::PlayNext { item_id } => match self.gui_library_item(&item_id) {
+                Some((lib_idx, item)) => self.play_lib_item_next(lib_idx, item),
+                None => Self::log_stale_library_item("playNext", &item_id),
+            },
+            GuiLibraryCommand::AddToQueue { item_id } => match self.gui_library_item(&item_id) {
+                Some((lib_idx, item)) => self.enqueue_lib_item(lib_idx, item),
+                None => Self::log_stale_library_item("addToQueue", &item_id),
+            },
             GuiLibraryCommand::ShuffleArtist { album_ids } => {
                 self.shuffle_gui_artist(&album_ids);
             }
@@ -118,6 +129,29 @@ impl App {
                 self.run_gui_library_menu_entry(&item_id, index);
             }
         }
+    }
+
+    /// Log the Library command the active destination cannot serve: the
+    /// command's intent arrives, the frame it rode is stale, or the position
+    /// names no destination the GUI presents.
+    fn log_ignored_library_command(command: &str, reason: impl std::fmt::Display) {
+        tracing::info!(
+            name: "gui_library.command.ignored",
+            target: "gui_library",
+            command,
+            reason = %reason,
+            "the Library command changed nothing"
+        );
+    }
+
+    /// Log the item-named Library command whose item the App's Service data
+    /// no longer holds (design D2: a stale frame addresses the item it
+    /// painted or nothing).
+    fn log_stale_library_item(command: &str, item_id: &str) {
+        Self::log_ignored_library_command(
+            command,
+            format_args!("the item {item_id} is not in the Service data"),
+        );
     }
 
     /// The item's menu entries for the frame (design D8): the shared builder's
@@ -147,6 +181,11 @@ impl App {
             .and_then(|menu| menu.entries.get(index).map(|entry| entry.action.clone()));
         if let Some(action) = action {
             self.execute_context_action(action, None);
+        } else {
+            Self::log_ignored_library_command(
+                "menuEntry",
+                format_args!("the item's menu holds no entry at {index}"),
+            );
         }
     }
 
@@ -183,6 +222,8 @@ impl App {
     fn show_gui_library_detail(&mut self, item_id: &str) {
         if let Some((_lib_idx, item)) = self.gui_library_item(item_id) {
             self.gui_library_detail = Some(item);
+        } else {
+            Self::log_stale_library_item("showDetail", item_id);
         }
     }
 
@@ -204,6 +245,10 @@ impl App {
             .map(|(_lib_idx, album)| album)
             .collect();
         if albums.is_empty() {
+            Self::log_ignored_library_command(
+                "shuffleArtist",
+                format_args!("the album ids name no album the Service data holds"),
+            );
             return;
         }
         self.play_music_albums(albums, true);

@@ -45,6 +45,7 @@ impl LibraryFrames {
             // theoretical hazard, not a real one.
             self.revision = self.revision.wrapping_add(1);
             self.last = Some(content.clone());
+            log_content_built(self.revision, &content);
         }
         let carried = self.sent != Some(self.revision);
         if carried {
@@ -61,6 +62,28 @@ impl LibraryFrames {
     pub(crate) fn rearm(&mut self) {
         self.sent = None;
     }
+}
+
+/// The Library content's one built-differently fact per change (design D2):
+/// a frame re-carries the content only when its revision changes, so the log
+/// rides the same changes the window repaints — never a per-frame spam. The
+/// line names the selection's shape and the list's size, so a live session's
+/// empty list and its unselected pills are visible in the GUI log.
+fn log_content_built(revision: u64, content: &GuiLibraryContent) {
+    let music = content.music.as_ref();
+    let pills = music.map_or(0, |music| music.pills.len());
+    let selected = music.map_or(0, |music| music.pills.iter().filter(|p| p.selected).count());
+    let artists = music.map_or(0, |music| music.artists.len());
+    tracing::info!(
+        name: "gui_library.content.built",
+        target: "gui_library",
+        revision,
+        pills,
+        selected,
+        artists,
+        hero = music.is_some_and(|music| music.hero.is_some()),
+        "the Library content changed"
+    );
 }
 
 /// The Library panel's content for the active destination (design D2): the

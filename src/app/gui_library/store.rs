@@ -42,16 +42,45 @@ impl App {
         lib_idx: usize,
         group_ids: Vec<String>,
     ) {
-        if lib_idx >= self.libs.len()
-            || group_ids.is_empty()
-            || !self.is_grouped_music_library(lib_idx)
-        {
+        if let Some(reason) = self.gui_collections_reject_reason(lib_idx, &group_ids) {
+            App::log_ignored_library_command(
+                "setCollections",
+                format_args!("library {lib_idx}: {reason}"),
+            );
             return;
         }
         self.gui_library_groups.insert(lib_idx, group_ids.clone());
+        tracing::info!(
+            name: "gui_library.collections.set",
+            target: "gui_library",
+            library_index = lib_idx,
+            groups = ?group_ids,
+            "the selected collections changed"
+        );
         for group_id in group_ids {
             self.fetch_gui_group_albums(lib_idx, group_id);
         }
+    }
+
+    /// Why the selected-collection set cannot apply to `lib_idx` (design D5,
+    /// D6): the library index names no tab, the set is empty — the pill rules
+    /// keep at least one pill selected, so a command that carries none is a
+    /// stale frame's — or the destination is not a Grouped Music library.
+    fn gui_collections_reject_reason(
+        &self,
+        lib_idx: usize,
+        group_ids: &[String],
+    ) -> Option<&'static str> {
+        if lib_idx >= self.libs.len() {
+            return Some("the library index names no tab");
+        }
+        if group_ids.is_empty() {
+            return Some("the selected set is empty");
+        }
+        if !self.is_grouped_music_library(lib_idx) {
+            return Some("the destination is not a Grouped Music library");
+        }
+        None
     }
 
     /// Start `group_id`'s album fetch when the store holds no list for it
