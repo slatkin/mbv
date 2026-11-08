@@ -87,7 +87,8 @@
       Library panel does not mount and the Queue panel paints as before. -->
     {@const frame = $frames.slice}
     {@const arrangement = libraryArrangement(container, frame.panel)}
-    {@const music = $libraryContent?.music ?? null}
+    {@const content = $libraryContent}
+    {@const music = content?.music ?? null}
     {@const queueFocused = frame.focus.panel === 'queue'}
     {@const queueVisible = music === null || arrangement !== 'mini' || queueFocused}
     {@const libraryVisible = music !== null && (arrangement !== 'mini' || !queueFocused)}
@@ -109,7 +110,12 @@
         </div>
       {/if}
       {#if libraryVisible && music}
-        <LibraryPanel {music} {arrangement} />
+        <LibraryPanel
+          {music}
+          tabs={content?.tabs ?? []}
+          currentTab={content?.currentTab ?? null}
+          {arrangement}
+        />
       {/if}
     </div>
   {:else}

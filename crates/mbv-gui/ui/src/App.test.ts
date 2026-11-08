@@ -55,6 +55,7 @@ beforeEach(() => {
 /** The Music content with an optional picked album for the Hero. */
 function music(hero: GuiMusicHero | null = null): GuiMusicFrame {
 	return {
+		libIdx: 0,
 		pills: [],
 		loading: false,
 		failure: null,
@@ -139,7 +140,14 @@ function frame(panel: GuiPanel, libraryMusic: GuiMusicFrame | null): GuiFrame {
 		library:
 			libraryMusic === null
 				? null
-				: { revision: 1, content: { music: libraryMusic } },
+				: {
+						revision: 1,
+						content: {
+							tabs: [{ position: 1, label: 'Music' }],
+							currentTab: 1,
+							music: libraryMusic,
+						},
+					},
 		theme: null,
 	};
 }

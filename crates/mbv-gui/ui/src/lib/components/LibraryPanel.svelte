@@ -1,12 +1,12 @@
 <script lang="ts">
 	// The Library panel (add-gui-library-panel design D4): the column beside
-	// the Queue panel. This row paints the shell and the arrangement's regions
-	// — the list and, in Wide, the Hero pane beside it; in Narrow the Hero
-	// mounts as an overlay over the list once an album is picked. The section
-	// interiors (top bar, pills, list rows, rail, Hero, Status bar) land in rows
-	// 4.3 through 4.8. The panel's interaction state lives in
-	// `$lib/library/state` and its keys in `$lib/library/keys`, so this shell
-	// holds no state of its own.
+	// the Queue panel. It paints the shell and the arrangement's regions — the
+	// top bar and the pill row above the list, and, in Wide, the Hero pane
+	// beside the list; in Narrow the Hero mounts as an overlay over the list
+	// once an album is picked. The section interiors still to come are the list
+	// rows and the rail (row 4.5), the Hero (row 4.7), and the Status bar (row
+	// 4.8). The panel's interaction state lives in `$lib/library/state` and its
+	// keys in `$lib/library/keys`, so this shell holds no state of its own.
 	//
 	// A press inside the panel sends the take-focus command (design D4): the
 	// core sets the focus stack and Panel focus together, and the press that
@@ -14,16 +14,22 @@
 	// `--canvas-*` tokens of `app.css`; `mbv-theme` gains no Library slot.
 	import type { GuiArrangement } from '$lib/bridge/arrangement';
 	import { sendLibraryCommand } from '$lib/bridge/library';
-	import type { GuiMusicFrame } from '$lib/bridge/types';
+	import type { GuiLibraryTab, GuiMusicFrame } from '$lib/bridge/types';
+	import LibraryPills from '$lib/components/LibraryPills.svelte';
+	import LibraryTopBar from '$lib/components/LibraryTopBar.svelte';
 
 	interface Props {
+		/** The presented destination tabs and the active one (design D2): the
+		 * top bar paints them. */
+		tabs: GuiLibraryTab[];
+		currentTab: number | null;
 		/** The carried Music content (design D2): the picked collections, the
 		 * union list, and the Hero. */
 		music: GuiMusicFrame;
 		/** The arrangement picked from the Library column width (design D4). */
 		arrangement: GuiArrangement;
 	}
-	const { music, arrangement }: Props = $props();
+	const { tabs, currentTab, music, arrangement }: Props = $props();
 
 	/** Whether the Hero sits beside the list rather than over it. */
 	const wide = $derived(arrangement === 'wide');
@@ -52,6 +58,8 @@
 	data-library-panel=""
 	data-library-arrangement={arrangement}
 >
+	<LibraryTopBar {tabs} {currentTab} />
+	<LibraryPills {music} />
 	<div class="relative flex min-h-0 flex-1">
 		{#if wide}
 			<!-- The Wide arrangement's Hero pane, to the left of the list as the

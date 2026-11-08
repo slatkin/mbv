@@ -53,7 +53,10 @@ const pills: GuiMusicPill[] = [
 /** The carried Music content: two group pills, one selected. */
 function content(): GuiLibraryContent {
 	return {
+		tabs: [{ position: 1, label: 'Music' }],
+		currentTab: 1,
 		music: {
+			libIdx: 0,
 			pills,
 			loading: false,
 			failure: null,

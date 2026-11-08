@@ -23,6 +23,7 @@ beforeEach(() => {
 /** The carried Music content with no album picked. */
 function music(): GuiMusicFrame {
 	return {
+		libIdx: 0,
 		pills: [],
 		loading: false,
 		failure: null,
@@ -34,6 +35,8 @@ function music(): GuiMusicFrame {
 
 test('a press inside the panel sends the take-focus command', () => {
 	const { container } = render(LibraryPanel, {
+		tabs: [{ position: 1, label: 'Music' }],
+		currentTab: 1,
 		music: music(),
 		arrangement: 'wide',
 	});
@@ -45,4 +48,20 @@ test('a press inside the panel sends the take-focus command', () => {
 	expect(invokeMock).toHaveBeenCalledWith('library', {
 		command: { command: 'takeFocus' },
 	});
+});
+
+test('the panel paints the top bar and the pill row above the list region', () => {
+	const { container } = render(LibraryPanel, {
+		tabs: [{ position: 1, label: 'Music' }],
+		currentTab: 1,
+		music: music(),
+		arrangement: 'wide',
+	});
+	const panel = container.querySelector('[data-library-panel]');
+	const regions = [...(panel?.querySelectorAll('[data-library-region]') ?? [])].map((el) =>
+		el.getAttribute('data-library-region'),
+	);
+
+	expect(regions.slice(0, 3)).toEqual(['topBar', 'pills', 'hero']);
+	expect(regions).toContain('list');
 });

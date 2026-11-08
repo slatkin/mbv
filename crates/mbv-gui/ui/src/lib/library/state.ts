@@ -7,12 +7,15 @@
 // item), so nothing here mirrors it: the pill toggle the keys request is an
 // intent the pill row turns into the set-collections command (design D6).
 
-import { writable } from 'svelte/store';
+import { get, writable } from 'svelte/store';
+import { sendLibraryCommand } from '$lib/bridge/library';
 import type {
 	GuiLibraryContent,
 	GuiLibraryFrame,
 	GuiMusicPill,
 } from '$lib/bridge/types';
+import { nextPillSelection } from './pills';
+import type { PillGesture } from './pills';
 
 /** The panes Tab moves focus across (design D3, step 3). The Queue panel is
  * the pane past the Hero, but it takes Panel focus through the core's focus
@@ -106,6 +109,40 @@ export function focusLibraryPill(groupId: string | null): void {
 /** Ask for the focused pill to toggle, or to solo with Alt+Space (design D6). */
 export function requestLibraryPillToggle(groupId: string, solo: boolean): void {
 	libraryUi.update((ui) => ({ ...ui, pillToggle: { groupId, solo } }));
+}
+
+/** Send the set a pill gesture leaves selected (design D6): the core stores it
+ * per destination and loads the new groups. The set reads the core's carried
+ * selection, so the pills and the command cannot disagree. */
+export function selectLibraryPills(
+	libIdx: number,
+	pills: readonly GuiMusicPill[],
+	gesture: PillGesture,
+): void {
+	void sendLibraryCommand({
+		command: 'setCollections',
+		libIdx,
+		groupIds: nextPillSelection(pills, gesture),
+	});
+}
+
+/** Turn the keys' pill toggle into the set-collections command a press on the
+ * pill sends (design D6): Space toggles the focused pill and Alt+Space solos
+ * it. The intent is consumed here, so one key sends one command. */
+export function applyLibraryPillToggle(
+	libIdx: number,
+	pills: readonly GuiMusicPill[],
+): void {
+	const { pillToggle } = get(libraryUi);
+	if (pillToggle === null) {
+		return;
+	}
+	libraryUi.update((ui) => ({ ...ui, pillToggle: null }));
+	selectLibraryPills(libIdx, pills, {
+		kind: 'press',
+		groupId: pillToggle.groupId,
+		solo: pillToggle.solo,
+	});
 }
 
 /** The pill the pill row's focus holds, resolved against the carried content
