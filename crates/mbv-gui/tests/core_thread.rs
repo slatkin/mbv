@@ -125,6 +125,12 @@ fn assert_no_frame(frames: &mpsc::Receiver<GuiWindowFrame>) {
 /// the capture end of its frame sink, and the App's waker. The wait cadence
 /// is zeroed, so a step with nothing queued is non-blocking.
 pub(crate) struct TestCore {
+    /// The scratch state directory the construction read: the core thread
+    /// reads the GUI launch state at construction, so a test without its own
+    /// guard must not restore the real machine's saved location — the
+    /// first-group rule would then start a fetch the test never scripted.
+    /// `None` when the test pinned its own guard before building the core.
+    _state_dir: Option<TestStateDirGuard>,
     pub(crate) core: CoreThread,
     pub(crate) tx: mpsc::Sender<CoreInput>,
     waker: mbv::ClientWaker,
@@ -169,10 +175,14 @@ pub(crate) fn test_core_with(app: App) -> TestCore {
     let quit: QuitSink = Box::new(move || {
         let _ = quit_tx.send(());
     });
+    // A test that pins its own guard keeps it: the guard installs only when
+    // this thread has none, so an explicitly seeded launch state stands.
+    let state_dir_ownership = TestStateDirGuard::new_if_unset();
     let mut core = CoreThread::new(app, rx, sink, quit);
     core.set_idle_cadence_for_test(Duration::ZERO);
     core.install_waker(tx.clone());
     TestCore {
+        _state_dir: state_dir_ownership,
         core,
         tx,
         waker,

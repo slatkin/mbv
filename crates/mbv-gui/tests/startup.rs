@@ -11,6 +11,7 @@ use mbv::{
     App, ClientTickHost, Config, stub_app_with_cached_emby_client,
     stub_app_with_completed_emby_startup,
 };
+use mbv_config::TestStateDirGuard;
 use mbv_emby::EmbyClient;
 use mbv_emby_model::EmbyItem;
 use mbv_gui::core_thread::{CoreInput, CoreThread, FrameSink, QuitSink};
@@ -31,7 +32,12 @@ fn music_view() -> EmbyItem {
 }
 
 /// A core thread over `app`, as the window's `main` builds after the attach.
+/// The construction reads the GUI launch state, so a test without its own
+/// guard points the state dir at a scratch directory here: the real machine's
+/// saved location must not steer a test — the first-group rule would start a
+/// fetch the test never scripted.
 fn core_over(app: App) -> CoreThread {
+    let _state_dir = TestStateDirGuard::new_if_unset();
     let (_tx, rx) = mpsc::channel::<CoreInput>();
     let sink: FrameSink = Box::new(|_| {});
     let quit: QuitSink = Box::new(|| {});

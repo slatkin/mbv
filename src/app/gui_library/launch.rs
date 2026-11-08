@@ -49,13 +49,14 @@ impl App {
 
     /// Apply the saved collection set of the destination the first phase
     /// opened (design D9): a saved group that the library no longer holds is
-    /// dropped, and when none remain the first group is selected. A
-    /// destination with no saved set keeps no selected pill. The saved entry
-    /// matches `destination`, the identity phase 1 recorded, and the active
-    /// destination must still be that one: a mid-restore tab switch abandons
-    /// the restore, so no other destination's saved set lands under the user.
-    /// Returns `false` while the destination's group list has not landed, so
-    /// the caller retries.
+    /// dropped, and when none remain — a saved set the library emptied, and
+    /// a destination with no saved entry, a fresh launch's case — the first
+    /// group is selected, so the list is never empty for a missing set. The
+    /// saved entry matches `destination`, the identity phase 1 recorded, and
+    /// the active destination must still be that one: a mid-restore tab
+    /// switch abandons the restore, so no other destination's saved set
+    /// lands under the user. Returns `false` while the destination's group
+    /// list has not landed, so the caller retries.
     pub fn restore_gui_launch_collections(
         &mut self,
         state: &GuiLaunchState,
@@ -73,15 +74,15 @@ impl App {
         let Some(present) = self.gui_music_present_groups(lib_idx) else {
             return false;
         };
-        let Some(saved) = state
+        // No saved entry for the destination is an empty saved set (design
+        // D9): the selection below is empty, so the first-group rule applies
+        // and a fresh launch opens with the first group selected.
+        let saved_group_ids = state
             .collections
             .iter()
             .find(|entry| entry.destination == *destination)
-        else {
-            return true;
-        };
-        let mut selected: Vec<String> = saved
-            .group_ids
+            .map_or(&[][..], |entry| entry.group_ids.as_slice());
+        let mut selected: Vec<String> = saved_group_ids
             .iter()
             .filter(|group_id| present.contains(group_id))
             .cloned()

@@ -194,10 +194,11 @@ fn a_restored_location_whose_groups_are_all_gone_selects_the_first_group() {
 }
 
 /// A start with no saved location opens the first presented destination with
-/// Library Panel focus and no selected pills (design D9's first-choice
-/// fallback): the restore takes the same open path a saved location takes,
-/// so a fresh launch reaches the Library panel too. Regression for the live
-/// finding that a fresh launch left the Library panel unreachable.
+/// Library Panel focus, and the restore's first-group rule selects the first
+/// group the destination holds (design D9), so the list is not empty on a
+/// fresh launch. Regression for the live finding that a fresh launch left
+/// the Library panel unreachable, then with no pill selected and an empty
+/// artist list: the restore returned before the first-group rule ran.
 #[test]
 fn a_fresh_launch_opens_the_first_presented_destination() {
     let _guard = TestStateDirGuard::new();
@@ -207,9 +208,10 @@ fn a_fresh_launch_opens_the_first_presented_destination() {
     let app = test.core.app_mut();
     assert_eq!(app.tab_for_test(), TabSelection::EmbyLibrary(0));
     assert_eq!(app.gui_panel_focus(), PanelFocus::Library);
-    assert!(
-        app.gui_library_groups_for_test(0).is_empty(),
-        "a fresh launch keeps no selected pills"
+    assert_eq!(
+        app.gui_library_groups_for_test(0),
+        ["grp-hiphop"],
+        "a fresh launch selects the first group"
     );
 }
 

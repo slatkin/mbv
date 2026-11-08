@@ -219,7 +219,10 @@ fn the_show_detail_command_shows_the_picked_album() {
 #[test]
 fn the_open_album_command_loads_the_albums_tracks() {
     let http = MockHttp::new();
-    http.respond(200, TRACKS);
+    // One answer for the launch restore's first-group fetch (design D9) and
+    // one for the open's own track load; the answers are identical, so the
+    // order they arrive in does not matter.
+    http.respond_repeated(200, TRACKS, 2);
     let (mut test, _cmd_rx) = music_core(&http);
 
     send_library(
@@ -240,7 +243,10 @@ fn the_open_album_command_loads_the_albums_tracks() {
 #[test]
 fn the_play_command_asks_the_owner_to_play_the_album() {
     let http = MockHttp::new();
-    http.respond(200, TRACKS);
+    // One answer for the launch restore's first-group fetch (design D9) and
+    // one for the play's own expansion; the answers are identical, so the
+    // order they arrive in does not matter.
+    http.respond_repeated(200, TRACKS, 2);
     let (mut test, cmd_rx) = music_core(&http);
 
     send_library(
@@ -265,7 +271,10 @@ fn the_play_command_asks_the_owner_to_play_the_album() {
 #[test]
 fn the_add_to_queue_command_asks_the_owner_to_append_the_album() {
     let http = MockHttp::new();
-    http.respond(200, TRACKS);
+    // One answer for the launch restore's first-group fetch (design D9) and
+    // one for the enqueue's own expansion; the answers are identical, so the
+    // order they arrive in does not matter.
+    http.respond_repeated(200, TRACKS, 2);
     let (mut test, cmd_rx) = music_core(&http);
 
     send_library(
@@ -286,8 +295,10 @@ fn the_add_to_queue_command_asks_the_owner_to_append_the_album() {
 #[test]
 fn the_shuffle_artist_command_plays_the_artists_albums_shuffled() {
     let http = MockHttp::new();
-    http.respond(200, TRACKS);
-    http.respond(200, TRACKS);
+    // Two answers for the two albums' expansions and one for the launch
+    // restore's first-group fetch (design D9); the answers are identical, so
+    // the order they arrive in does not matter.
+    http.respond_repeated(200, TRACKS, 3);
     let (mut test, cmd_rx) = music_core(&http);
 
     send_library(
@@ -308,7 +319,10 @@ fn the_shuffle_artist_command_plays_the_artists_albums_shuffled() {
 #[test]
 fn the_play_next_command_asks_the_owner_to_admit_the_album_next() {
     let http = MockHttp::new();
-    http.respond(200, TRACKS);
+    // One answer for the launch restore's first-group fetch (design D9) and
+    // one for the admission's own expansion; the answers are identical, so
+    // the order they arrive in does not matter.
+    http.respond_repeated(200, TRACKS, 2);
     let (mut test, cmd_rx) = music_core(&http);
 
     send_library(

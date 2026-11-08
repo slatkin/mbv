@@ -1,7 +1,12 @@
 //! Build script: runs `tauri_build`, which generates the Tauri context inputs
-//! and the capability JSON schemas under `gen/`. The app manifest declares the
-//! three bridge commands so their `allow-$command` permissions exist for the
-//! capability file to grant (design D11).
+//! and the capability JSON schemas under `gen/`. The app manifest declares
+//! the four bridge commands so their `allow-$command` permissions exist for
+//! the capability file to grant (design D11, add-gui-library-panel design
+//! D2). A command missing here is one the webview's `invoke` cannot call:
+//! the ACL denies it and the front end's `void`-ed promise swallows the
+//! denial, so the feature dies silently — the live finding the `library`
+//! command's absence caused (regression test
+//! `crates/mbv-gui/tests/capabilities.rs`).
 
 fn main() {
     // The failure path mirrors `tauri_build::build`'s own: print the error
@@ -11,6 +16,7 @@ fn main() {
             "key",
             "pointer",
             "report_layout",
+            "library",
         ]));
     if let Err(error) = tauri_build::try_build(attributes) {
         println!("failed to run tauri-build: {error:#}");
