@@ -35,7 +35,7 @@ Phase 1 (groups 1–5) delivers Music from end to end. Phase 2 (groups 6–12) s
 
 ## 5. Phase 1 docs and checks
 
-- [ ] 5.1 Update `docs/architecture/gui-client.md`: the GUI Library panel section (the ownership split, the frame section and its revision, the `library` command, the key routing order, the arrangement, the launch location), the input forwarding that now runs after the Library handler, and the shared Service startup in *The attach states*. Record the GUI Library panel in `docs/architecture/interactive-surface-ledger.md` as GUI-owned, with no Surface state. Verify: the guide names each new frame field and command variant.
+- [x] 5.1 Update `docs/architecture/gui-client.md`: the GUI Library panel section (the ownership split, the frame section and its revision, the `library` command, the key routing order, the arrangement, the launch location), the input forwarding that now runs after the Library handler, and the shared Service startup in *The attach states*. Record the GUI Library panel in `docs/architecture/interactive-surface-ledger.md` as GUI-owned, with no Surface state. Verify: the guide names each new frame field and command variant.
 - [ ] 5.2 Run `cargo clippy --workspace --all-targets -- -D warnings`, `cargo nextest run --workspace`, `cargo fmt --all -- --check`, `make ui-check ui-lint ui-test`, and `make check-code-file-lines` before the Phase 1 push. Verify: all green.
 
 ## Phase 2 — the other destinations and Search
