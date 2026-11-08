@@ -63,7 +63,11 @@ impl App {
     /// focused, the shell resolves the track (the component owns the cursor)
     /// and passes it here so '.' targets the focused track instead of the
     /// album row. All other arms resolve exactly as `build_context_menu`.
-    fn build_context_menu_for(
+    ///
+    /// The GUI Library panel calls it for its picked item (add-gui-library-
+    /// panel design D8) and never raises the result through `pending_overlay`:
+    /// the frame carries the entries to the window content.
+    pub(in crate::app) fn build_context_menu_for(
         &mut self,
         tracked_item: Option<EmbyItem>,
         home_cw_selected: bool,

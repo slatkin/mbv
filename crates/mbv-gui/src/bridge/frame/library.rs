@@ -9,8 +9,8 @@
 //! the facts it belongs to.
 
 use mbv::{
-    GuiLibraryArtwork, GuiMusicAlbum, GuiMusicArtist, GuiMusicHero, GuiMusicProjection,
-    GuiMusicTrack, GuiMusicTrackTotal,
+    GuiLibraryArtwork, GuiLibraryMenuItem, GuiMusicAlbum, GuiMusicArtist, GuiMusicHero,
+    GuiMusicProjection, GuiMusicTrack, GuiMusicTrackTotal,
 };
 use mbv_images::QUEUE_CARD_PLACEHOLDER_BYTES;
 use mbv_ui_model::music_grouping::ArtistKey;
@@ -159,6 +159,19 @@ pub struct GuiMusicHeroFrame {
     pub artist_tracks: Option<GuiMusicTrackTotalFrame>,
     /// The picked album, with its tracklist when the cache holds it.
     pub album: GuiMusicAlbumFrame,
+    /// The picked item's menu entries (design D8): the shared builder's entries
+    /// for the album, which More actions paints. Empty when the item offers no
+    /// menu.
+    pub menu: Vec<GuiMusicMenuEntryFrame>,
+}
+
+/// One entry of the picked item's menu, as the window paints it (design D8):
+/// the label, and the key hint the row menu shows when the entry has one.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GuiMusicMenuEntryFrame {
+    pub label: String,
+    pub key_hint: Option<String>,
 }
 
 /// The Library Hero's square artwork (design D5), as the window paints it.
@@ -177,12 +190,18 @@ pub enum GuiLibraryArt {
 
 impl GuiMusicFrame {
     /// The Music destination's content for `projection`, with the Hero's
-    /// artwork `art` — present exactly when the projection holds a Hero.
+    /// artwork `art` — present exactly when the projection holds a Hero — and
+    /// the picked item's menu `menu`.
     pub(crate) fn from_projection(
         projection: &GuiMusicProjection,
         art: Option<GuiLibraryArt>,
+        menu: &[GuiLibraryMenuItem],
     ) -> Self {
-        let hero = projection.hero.as_ref().map(GuiMusicHeroFrame::from);
+        let hero = projection.hero.as_ref().map(|hero| {
+            let mut frame = GuiMusicHeroFrame::from(hero);
+            frame.menu = menu.iter().map(GuiMusicMenuEntryFrame::from).collect();
+            frame
+        });
         let art = hero.as_ref().and(art);
         Self {
             pills: projection
@@ -254,6 +273,15 @@ impl From<&GuiMusicTrackTotal> for GuiMusicTrackTotalFrame {
     }
 }
 
+impl From<&GuiLibraryMenuItem> for GuiMusicMenuEntryFrame {
+    fn from(entry: &GuiLibraryMenuItem) -> Self {
+        Self {
+            label: entry.label.clone(),
+            key_hint: entry.key_hint.clone(),
+        }
+    }
+}
+
 impl From<&GuiMusicHero> for GuiMusicHeroFrame {
     fn from(hero: &GuiMusicHero) -> Self {
         Self {
@@ -265,6 +293,7 @@ impl From<&GuiMusicHero> for GuiMusicHeroFrame {
                 .as_ref()
                 .map(GuiMusicTrackTotalFrame::from),
             album: GuiMusicAlbumFrame::from(&hero.album),
+            menu: Vec::new(),
         }
     }
 }

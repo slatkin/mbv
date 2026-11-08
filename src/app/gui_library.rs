@@ -17,6 +17,7 @@ pub use self::projection::{
 pub(in crate::app) use self::store::{GuiGroupAlbums, GuiGroupAlbumsEvent};
 
 use mbv_emby_model::EmbyItem;
+use mbv_ui_model::context_menu::ContextMenu;
 use mbv_ui_model::settings::PanelFocus;
 
 use crate::app::App;
@@ -53,9 +54,17 @@ pub enum GuiLibraryCommand {
     AddToQueue { item_id: String },
     /// Shuffle the artist whose albums are `album_ids` (design D8).
     ShuffleArtist { album_ids: Vec<String> },
-    /// Run the item menu's entry at `index` (design D8). The menu's builder
-    /// and executor widen with row 3.6, which replaces this documented no-op.
+    /// Run the item menu's entry at `index` (design D8): the entry the frame
+    /// painted for the item, run through the shared context-action executor.
     MenuEntry { item_id: String, index: usize },
+}
+
+/// One entry of the GUI Library panel's item menu (design D8): the label the
+/// row menu paints and the key hint its surface shows when the entry has one.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GuiLibraryMenuItem {
+    pub label: String,
+    pub key_hint: Option<String>,
 }
 
 impl App {
@@ -88,11 +97,53 @@ impl App {
             GuiLibraryCommand::ShuffleArtist { album_ids } => {
                 self.shuffle_gui_artist(&album_ids);
             }
-            // Row 3.6 widens the menu builder and executor; until then the
-            // intent is accepted and runs nothing, so no value of `index` can
-            // reach the TUI's context-menu dispatch.
-            GuiLibraryCommand::MenuEntry { item_id, index } => drop((item_id, index)),
+            // Row 3.6 runs the menu entry the frame carried through the shared
+            // context-action executor.
+            GuiLibraryCommand::MenuEntry { item_id, index } => {
+                self.run_gui_library_menu_entry(&item_id, index);
+            }
         }
+    }
+
+    /// The item's menu entries for the frame (design D8): the shared builder's
+    /// entries for `item_id` while the Library panel has Panel focus, which is
+    /// also what `execute_context_action` needs to find the library. Empty when
+    /// the item is gone, no menu applies, or another panel holds focus.
+    pub fn gui_library_menu(&mut self, item_id: &str) -> Vec<GuiLibraryMenuItem> {
+        let entries = self
+            .gui_library_item_menu(item_id)
+            .map(|menu| menu.entries)
+            .unwrap_or_default();
+        entries
+            .into_iter()
+            .map(|entry| GuiLibraryMenuItem {
+                label: entry.label.to_string(),
+                key_hint: entry.key_hint.map(str::to_string),
+            })
+            .collect()
+    }
+
+    /// Run the item menu's entry at `index` (design D8): the entry the frame
+    /// painted, rebuilt from the item it names so the action targets that
+    /// item. The GUI never arms the TUI's `pending_overlay`.
+    fn run_gui_library_menu_entry(&mut self, item_id: &str, index: usize) {
+        let action = self
+            .gui_library_item_menu(item_id)
+            .and_then(|menu| menu.entries.get(index).map(|entry| entry.action.clone()));
+        if let Some(action) = action {
+            self.execute_context_action(action, None);
+        }
+    }
+
+    /// The item's menu from the shared builder (design D8): the Library panel's
+    /// focus and an Emby library tab are what both the builder's target
+    /// resolution and the executor's library lookup need.
+    fn gui_library_item_menu(&mut self, item_id: &str) -> Option<ContextMenu> {
+        if !matches!(self.effective_panel_focus(), PanelFocus::Library) {
+            return None;
+        }
+        let (_lib_idx, item) = self.gui_library_item(item_id)?;
+        self.build_context_menu_for(Some(item), false, None)
     }
 
     /// Set Panel focus for the GUI Library panel (design D4): the take-focus

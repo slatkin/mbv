@@ -22,9 +22,9 @@ mod startup;
 pub use self::app::{
     App, AppCommand, CLIENT_IDLE_CADENCE, CardImageDrain, ClientCore, ClientLifecycle,
     ClientTickHost, ClientWaker, Command, FooterPill, GuiInput, GuiLibraryArtwork,
-    GuiLibraryCommand, GuiMusicAlbum, GuiMusicArtist, GuiMusicHero, GuiMusicPill,
-    GuiMusicProjection, GuiMusicTrack, GuiMusicTrackTotal, GuiOverlayProjection, GuiSurfaceLeaf,
-    HomeContent, HomeEventDrain, NavigationIntent, OverlayFocus, PanelIntent,
+    GuiLibraryCommand, GuiLibraryMenuItem, GuiMusicAlbum, GuiMusicArtist, GuiMusicHero,
+    GuiMusicPill, GuiMusicProjection, GuiMusicTrack, GuiMusicTrackTotal, GuiOverlayProjection,
+    GuiSurfaceLeaf, HomeContent, HomeEventDrain, NavigationIntent, OverlayFocus, PanelIntent,
     PanelTogglesProjection, PlaybackChapter, PlaybackDecorations, PlaybackIntent,
     PlaybackTargetChoice, PlayerEventDrain, QueueCardArtwork, QueueFooterProjection,
     QueuePlaybackProjection, QueueRightColumn, QueueSummaryProjection, QueueSurfaceProjection,

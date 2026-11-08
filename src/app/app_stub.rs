@@ -532,7 +532,9 @@ impl App {
 
     /// Seed the GUI Music store with `albums` for the `group_id` of `lib_idx`,
     /// as a landed fetch would (add-gui-library-panel design D5): a projection
-    /// or frame test reads the store alone, with no request behind it.
+    /// or frame test reads the store alone, with no request behind it. Each
+    /// album is a folder, as the live parse makes every `MusicAlbum`
+    /// (`mbv_emby::parse_item`), so its item menu is the album menu.
     #[cfg(feature = "test")]
     pub fn seed_gui_music_albums_for_test(
         &mut self,
@@ -545,6 +547,7 @@ impl App {
             .map(|(id, name)| {
                 let mut album = mbv_emby_model::test_support::make_item(name, "MusicAlbum");
                 album.id = (*id).to_string();
+                album.is_folder = true;
                 album
             })
             .collect();
@@ -605,6 +608,13 @@ impl App {
     #[must_use]
     pub fn album_tracks_loading_for_test(&self, album_id: &str) -> bool {
         self.album_tracks_loading.contains(album_id)
+    }
+
+    /// Whether the core holds no pending TUI overlay (add-gui-library-panel
+    /// row 3.6): the GUI runs an item-menu entry without arming one.
+    #[must_use]
+    pub fn pending_overlay_is_none_for_test(&self) -> bool {
+        self.pending_overlay.is_none()
     }
 
     /// Whether the `/Sessions` load a playback-target discovery starts is in
