@@ -9,6 +9,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { fireEvent, render } from '@testing-library/svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
+import { DEFAULT_DRAGGED_WIDTHS, LIBRARY_LIST_DEFAULT_WIDTH_PX, draggedWidths } from '$lib/bridge/resize';
 import type { GuiMusicFrame, GuiMusicHero, GuiStatusBar } from '$lib/bridge/types';
 import { initialLibraryUi, libraryUi } from '$lib/library/state';
 import LibraryPanel from './LibraryPanel.svelte';
@@ -23,6 +24,9 @@ beforeEach(() => {
 	invokeMock.mockReset();
 	invokeMock.mockResolvedValue(undefined);
 	libraryUi.set(initialLibraryUi());
+	// The widths are session state (design D4): a drag held by one test would
+	// outlive it.
+	draggedWidths.set(DEFAULT_DRAGGED_WIDTHS);
 });
 
 /** The frame's Status bar facts: nothing armed and no live toast. */
@@ -69,6 +73,8 @@ test('a press inside the panel sends the take-focus command', () => {
 		music: music(),
 		status: idle,
 		arrangement: 'wide',
+		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
+		libraryColumn: 1200,
 	});
 	const panel = container.querySelector('[data-library-panel]');
 
@@ -87,6 +93,8 @@ test('the panel paints the top bar and the pill row above the list region', () =
 		music: music(),
 		status: idle,
 		arrangement: 'wide',
+		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
+		libraryColumn: 1200,
 	});
 	const panel = container.querySelector('[data-library-panel]');
 	const regions = [...(panel?.querySelectorAll('[data-library-region]') ?? [])].map((el) =>
@@ -108,6 +116,8 @@ test('the Narrow overlay paints the Hero and closes on a press on its backdrop',
 		music: { ...music(), hero: hero() },
 		status: idle,
 		arrangement: 'narrow',
+		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
+		libraryColumn: 800,
 	});
 	const overlay = container.querySelector('[data-library-region="heroOverlay"]');
 
@@ -128,6 +138,8 @@ test('the Wide Hero pane paints the Hero beside the list', () => {
 		music: { ...music(), hero: hero() },
 		status: idle,
 		arrangement: 'wide',
+		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
+		libraryColumn: 1200,
 	});
 
 	expect(

@@ -20,12 +20,14 @@
 	// overlay only where one actually paints.
 	import type { GuiArrangement } from '$lib/bridge/arrangement';
 	import { sendLibraryCommand } from '$lib/bridge/library';
+	import { dragListWidth, resetListWidth } from '$lib/bridge/resize';
 	import type { GuiLibraryTab, GuiMusicFrame, GuiStatusBar } from '$lib/bridge/types';
 	import LibraryHero from '$lib/components/LibraryHero.svelte';
 	import LibraryList from '$lib/components/LibraryList.svelte';
 	import LibraryPills from '$lib/components/LibraryPills.svelte';
 	import LibraryStatusBar from '$lib/components/LibraryStatusBar.svelte';
 	import LibraryTopBar from '$lib/components/LibraryTopBar.svelte';
+	import PanelDivider from '$lib/components/PanelDivider.svelte';
 	import QueueRowMenu from '$lib/components/QueueRowMenu.svelte';
 	import {
 		closeLibraryHero,
@@ -48,8 +50,14 @@
 		status: GuiStatusBar;
 		/** The arrangement picked from the Library column width (design D4). */
 		arrangement: GuiArrangement;
+		/** The list column's painted width (design D4): the session's dragged
+		 * width, or its default. */
+		listWidth: number;
+		/** The Library column the list column sits in: the drag's clamp. */
+		libraryColumn: number;
 	}
-	const { tabs, currentTab, music, status, arrangement }: Props = $props();
+	const { tabs, currentTab, music, status, arrangement, listWidth, libraryColumn }: Props =
+		$props();
 
 	/** Whether the Hero sits beside the list rather than over it. */
 	const wide = $derived(arrangement === 'wide');
@@ -127,14 +135,23 @@
 				{/if}
 			</div>
 		{/if}
-		<!-- The list column: the canvas's 320 px index in Wide, the whole
-			Library column in Mini and Narrow. Row 4.5 paints the canvas tree and
-			the letter rail here. -->
+		<!-- The list column: the canvas's index in Wide, the whole Library
+			column in Mini and Narrow. Row 4.5 paints the canvas tree and the
+			letter rail here. Wide paints the session's width (design D4), and its
+			divider sits between the list and the Hero pane. -->
+		{#if wide}
+			<PanelDivider
+				side="right"
+				name="list"
+				width={listWidth}
+				onDrag={(width) => dragListWidth(width, libraryColumn)}
+				onReset={resetListWidth}
+			/>
+		{/if}
 		<div
 			data-library-region="list"
-			class="flex min-h-0 flex-col {wide
-				? 'w-[320px] flex-none border-l'
-				: 'min-w-0 flex-1'}"
+			class="flex min-h-0 flex-col {wide ? 'flex-none border-l' : 'min-w-0 flex-1'}"
+			style:width={wide ? `${listWidth}px` : undefined}
 			style:background="var(--canvas-library-panel)"
 			style:border-color="var(--canvas-border)"
 		>

@@ -6,10 +6,11 @@
 // serde wire shape of bridge/frame.rs.
 
 import { listen } from '@tauri-apps/api/event';
-import { render } from '@testing-library/svelte';
+import { fireEvent, render } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
 import { frames } from '$lib/bridge/frames';
+import { DEFAULT_DRAGGED_WIDTHS, draggedWidths } from '$lib/bridge/resize';
 import type {
 	GuiFrame,
 	GuiLibraryContent,
@@ -49,6 +50,9 @@ beforeEach(() => {
 	listenMock.mockReset();
 	listenMock.mockResolvedValue(() => {});
 	libraryContent.set(null);
+	// The divider widths are session state (design D4): a drag one test holds
+	// would outlive it.
+	draggedWidths.set(DEFAULT_DRAGGED_WIDTHS);
 	ResizeObserverStub.instances = [];
 	vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 });
@@ -364,4 +368,34 @@ test('the collapsed rail leaves a wider Library column', async () => {
 	expect(container.querySelector('[data-arrangement]')?.getAttribute('data-arrangement')).toBe(
 		'wide',
 	);
+});
+
+// Design D4's dividers: a drag reports the sized column's new width, the Queue
+// column paints it, and the arrangement classifies that same width; a
+// double-click returns the column to its default. jsdom has no PointerEvent, so
+// the drag's coordinates ride a MouseEvent of the same type.
+test('dragging the Queue divider resizes the column and a double-click resets it', async () => {
+	const { container } = await mount(
+		{ width: 1600, height: 900 },
+		frame('library', music(hero())),
+	);
+	const column = container.querySelector('[data-queue-column]') as HTMLElement;
+	const divider = container.querySelector('[data-divider="queue"]') as HTMLElement;
+
+	expect(column.style.width).toBe('400px');
+
+	fireEvent(divider, new MouseEvent('pointerdown', { clientX: 400, button: 0, bubbles: true }));
+	fireEvent(window, new MouseEvent('pointermove', { clientX: 500 }));
+	await tick();
+
+	expect(column.style.width).toBe('500px');
+	// The Library column narrowed by the drag: 1600 - 500 is still Wide.
+	expect(container.querySelector('[data-arrangement]')?.getAttribute('data-arrangement')).toBe(
+		'wide',
+	);
+
+	fireEvent(divider, new MouseEvent('dblclick', { bubbles: true }));
+	await tick();
+
+	expect(column.style.width).toBe('400px');
 });

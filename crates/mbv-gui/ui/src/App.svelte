@@ -1,9 +1,15 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { libraryArrangement, queueColumnWidth } from '$lib/bridge/arrangement';
+	import { libraryArrangement } from '$lib/bridge/arrangement';
 	import { frames } from '$lib/bridge/frames';
 	import { installInput } from '$lib/bridge/input';
 	import { reportContainerSize } from '$lib/bridge/layout';
+	import {
+		dragQueueWidth,
+		draggedWidths,
+		panelWidths,
+		resetQueueWidth,
+	} from '$lib/bridge/resize';
 	import type { LayoutSize } from '$lib/bridge/types';
 	import { routeLibraryKey } from '$lib/library/keys';
 	import { carryLibraryContent, libraryContent, libraryShown } from '$lib/library/state';
@@ -11,6 +17,7 @@
 	import ConfirmOverlay from './lib/components/ConfirmOverlay.svelte';
 	import LibraryPanel from '$lib/components/LibraryPanel.svelte';
 	import Panel from '$lib/components/Panel.svelte';
+	import PanelDivider from '$lib/components/PanelDivider.svelte';
 
 	// The webview's own context menu is turned off (add-tauri-gui-client D11).
 	// Tauri has no config key for it on WebKitGTK.
@@ -87,7 +94,11 @@
       TUI's `panel_appearance_focus` picks it. Until Music content arrives the
       Library panel does not mount and the Queue panel paints as before. -->
     {@const frame = $frames.slice}
-    {@const arrangement = libraryArrangement(container, frame.panel)}
+    <!-- The Queue panel's column and the Wide list column are the session's
+      widths (design D4): the dividers below and the arrangement read one
+      resolution, so a drag paints the width the thresholds classify. -->
+    {@const widths = panelWidths(container, frame.panel, $draggedWidths)}
+    {@const arrangement = libraryArrangement(container, widths.queue)}
     {@const content = $libraryContent}
     {@const music = content?.music ?? null}
     {@const queueFocused = frame.focus.panel === 'queue'}
@@ -110,10 +121,23 @@
       {#if queueVisible}
         <div
           class="flex h-full min-h-0 flex-col {twoColumns ? 'flex-none' : 'flex-1'}"
-          style:width={twoColumns ? `${queueColumnWidth(frame.panel)}px` : undefined}
+          style:width={twoColumns ? `${widths.queue}px` : undefined}
+          data-queue-column=""
         >
           <Panel frame={frame} {container} {libraryVisible} />
         </div>
+      {/if}
+      {#if twoColumns && !frame.panel.collapsed}
+        <!-- The Queue panel's divider (design D4): dragging it resizes the
+          Queue column and, with it, the Library column the arrangement
+          measures; a double-click returns the canvas width. -->
+        <PanelDivider
+          side="left"
+          name="queue"
+          width={widths.queue}
+          onDrag={(width) => dragQueueWidth(width, container.width)}
+          onReset={resetQueueWidth}
+        />
       {/if}
       {#if libraryVisible && music}
         <LibraryPanel
@@ -122,6 +146,8 @@
           currentTab={content?.currentTab ?? null}
           status={frame.status}
           {arrangement}
+          listWidth={widths.list}
+          libraryColumn={widths.libraryColumn}
         />
       {/if}
     </div>
