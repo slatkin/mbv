@@ -4,6 +4,8 @@
 	import { installInput } from '$lib/bridge/input';
 	import { reportContainerSize } from '$lib/bridge/layout';
 	import type { LayoutSize } from '$lib/bridge/types';
+	import { routeLibraryKey } from '$lib/library/keys';
+	import { carryLibraryContent } from '$lib/library/state';
 	import AttachScreen from '$lib/components/AttachScreen.svelte';
 	import Panel from '$lib/components/Panel.svelte';
 
@@ -36,10 +38,30 @@
 		return () => observer.disconnect();
 	});
 
+	/** The last slice frame, or `null` before the first one and while the window
+	 * shows an attach state. */
+	function lastSlice() {
+		const held = frames.frame;
+		return held && 'slice' in held ? held.slice : null;
+	}
+
+	// The Library content is carried only by the frames whose revision changed
+	// (add-gui-library-panel design D2), so the window keeps the last value the
+	// core carried.
+	$effect(() => {
+		const held = $frames;
+		carryLibraryContent(held && 'slice' in held ? held.slice.library : null);
+	});
+
 	onMount(() => {
 		// Input forwarding and the frame subscription live for the window's
-		// life (add-tauri-gui-client D4/D6); both clean up on unmount.
-		const detachInput = installInput();
+		// life (add-tauri-gui-client D4/D6); both clean up on unmount. Every
+		// keydown meets the Library's router first, which takes the keys the
+		// Library handles and lets the forwarder send the rest (add-gui-library-
+		// panel design D3).
+		const detachInput = installInput(window, (event) =>
+			routeLibraryKey(event, lastSlice()),
+		);
 		const unlisten = frames.listen();
 		return () => {
 			detachInput();

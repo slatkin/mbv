@@ -1,9 +1,14 @@
 // The input layer (designs D4 and D6): forwards DOM events to the core
-// thread's commands and interprets nothing. Every keydown goes to `key` with
-// its default action prevented, and pointer press, release, move, and wheel
-// events go to `pointer`. The Rust side owns the key translation and the
-// gesture policy; an event the neutral vocabulary cannot represent drops
-// there, as the TUI's terminal edge drops it.
+// thread's commands and interprets nothing. Every keydown first meets the key
+// router the window content installs — the Library panel's handler, which runs
+// before the forward and takes the keys it handles (design D3 of
+// add-gui-library-panel) — and then, unless the router took the key, goes to
+// `key` with its default action prevented. A router lets an open text field
+// take the key as `text`: the core receives no key and the browser's own
+// default types it. Pointer press, release, move, and wheel events go to
+// `pointer`. The Rust side owns the key translation and the gesture policy; an
+// event the neutral vocabulary cannot represent drops there, as the TUI's
+// terminal edge drops it.
 
 import { invoke } from '@tauri-apps/api/core';
 import type {
@@ -12,6 +17,26 @@ import type {
 	DomPointerKind,
 	LayoutReport,
 } from './types';
+
+/**
+ * What the key router did with one keydown (design D3 of
+ * add-gui-library-panel): `core` forwards the key to the core's keyboard
+ * router; `handled` means the window content took it, so the core receives no
+ * key and the webview default — Tab's focus move, Space's scroll — does not
+ * run; `text` means an open text field takes it, so the core receives no key
+ * and the browser's default types it.
+ */
+export type KeyOutcome = 'core' | 'handled' | 'text';
+
+/**
+ * The handler the forwarder runs before it sends a keydown (design D3 of
+ * add-gui-library-panel). The window content installs one; its answer decides
+ * whether the core ever sees the key.
+ */
+export type KeyRouter = (event: KeyboardEvent) => KeyOutcome;
+
+/** The router that takes nothing: every key goes to the core. */
+const forwardEveryKey: KeyRouter = () => 'core';
 
 /**
  * The DOM `KeyboardEvent` fields the `key` command carries (design D6). The
@@ -130,19 +155,31 @@ export function sendLayoutReport(report: LayoutReport): Promise<unknown> {
 }
 
 /**
- * Installs the window's input forwarding: every keydown goes to `key` with
- * its default action prevented (design D6 — no webview default such as
- * reload, find, zoom, or back navigation runs), and pointer press, release,
- * move, and wheel events go to `pointer` (design D4). A `pointercancel`, any
+ * Installs the window's input forwarding: every keydown goes to `route` first,
+ * and only a key the router leaves to the core goes to `key` with its default
+ * action prevented (design D6 — no webview default such as reload, find, zoom,
+ * or back navigation runs). Pointer press, release, move, and wheel events go
+ * to `pointer` (design D4). A `pointercancel`, any
  * `pointerleave` — with or without a button held — and the window's blur
  * forward the neutral cancel, so a gesture the webview loses never leaves a
  * drag armed and a pointer that left the window never leaves a hover armed
  * (rows 6.4 and 6.5). Returns the cleanup that removes every listener.
  */
-export function installInput(target: Window = window): () => void {
+export function installInput(
+	target: Window = window,
+	route: KeyRouter = forwardEveryKey,
+): () => void {
 	const onKeydown = (event: KeyboardEvent) => {
-		event.preventDefault();
-		void sendKey(domKey(event));
+		const outcome = route(event);
+		if (outcome === 'core') {
+			event.preventDefault();
+			void sendKey(domKey(event));
+		} else if (outcome === 'handled') {
+			// The window content took the key: the webview runs no default of
+			// its own for it either.
+			event.preventDefault();
+		}
+		// `text`: the field's own default runs, and the core gets no key.
 	};
 	const onPointerDown = (event: PointerEvent) => {
 		void sendPointer(domPointer('press', event));

@@ -686,6 +686,33 @@ export interface GuiLibraryContent {
 	music: GuiMusicFrame | null;
 }
 
+/** One request from the Library panel's window content (add-gui-library-panel
+ * design D2): the wire shape of `GuiLibraryCommand` in bridge/library.rs, whose
+ * variants and field names this mirrors. Item identities are stable Service
+ * ids, never row positions. */
+export type GuiLibraryCommand =
+	| {
+			/** Open the destination tab at `position`: the tab position the
+			 * frame's destination tabs carry, where 0 is Home. */
+			command: 'openDestination';
+			position: number;
+	  }
+	| {
+			/** Replace the selected collections of the Grouped Music library
+			 * `libIdx` with `groupIds`, in pill order. */
+			command: 'setCollections';
+			libIdx: number;
+			groupIds: string[];
+	  }
+	| { command: 'showDetail'; itemId: string }
+	| { command: 'openAlbum'; albumId: string }
+	| { command: 'takeFocus' }
+	| { command: 'play'; itemId: string }
+	| { command: 'playNext'; itemId: string }
+	| { command: 'addToQueue'; itemId: string }
+	| { command: 'shuffleArtist'; albumIds: string[] }
+	| { command: 'menuEntry'; itemId: string; index: number };
+
 /** The Music destination's content (design D5). */
 export interface GuiMusicFrame {
 	/** The group pills in the group level's order (design D6). */
