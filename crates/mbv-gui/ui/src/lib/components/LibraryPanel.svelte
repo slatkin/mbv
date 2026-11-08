@@ -3,10 +3,10 @@
 	// the Queue panel. It paints the shell and the arrangement's regions — the
 	// top bar and the pill row above the list, and, in Wide, the Hero pane
 	// beside the list; in Narrow the Hero mounts as an overlay over the list
-	// once an album is picked. The section interiors still to come are the list
-	// rows and the rail (row 4.5), the Hero (row 4.7), and the Status bar (row
-	// 4.8). The panel's interaction state lives in `$lib/library/state` and its
-	// keys in `$lib/library/keys`, so this shell holds no state of its own.
+	// once an album is picked. The list column is row 4.5's canvas tree with its
+	// letter rail, and the Hero (row 4.7) and the Status bar (row 4.8) still
+	// follow. The panel's interaction state lives in `$lib/library/state` and
+	// its keys in `$lib/library/keys`, so this shell holds no state of its own.
 	//
 	// A press inside the panel sends the take-focus command (design D4): the
 	// core sets the focus stack and Panel focus together, and the press that
@@ -15,6 +15,7 @@
 	import type { GuiArrangement } from '$lib/bridge/arrangement';
 	import { sendLibraryCommand } from '$lib/bridge/library';
 	import type { GuiLibraryTab, GuiMusicFrame } from '$lib/bridge/types';
+	import LibraryList from '$lib/components/LibraryList.svelte';
 	import LibraryPills from '$lib/components/LibraryPills.svelte';
 	import LibraryTopBar from '$lib/components/LibraryTopBar.svelte';
 
@@ -71,7 +72,8 @@
 			></div>
 		{/if}
 		<!-- The list column: the canvas's 320 px index in Wide, the whole
-			Library column in Mini and Narrow. Row 4.5 paints the list here. -->
+			Library column in Mini and Narrow. Row 4.5 paints the canvas tree and
+			the letter rail here. -->
 		<div
 			data-library-region="list"
 			class="flex min-h-0 flex-col {wide
@@ -79,7 +81,9 @@
 				: 'min-w-0 flex-1'}"
 			style:background="var(--canvas-library-panel)"
 			style:border-color="var(--canvas-border)"
-		></div>
+		>
+			<LibraryList {music} />
+		</div>
 		{#if arrangement === 'narrow' && music.hero}
 			<!-- The Narrow Hero overlay: picking an album opens the Hero over the
 				list. Row 4.7 paints the same Hero painters here. -->

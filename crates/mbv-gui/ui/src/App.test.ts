@@ -167,7 +167,12 @@ async function mount(size: LayoutSize, slice: GuiFrame) {
 	ResizeObserverStub.size = size;
 	const view = render(App);
 	await tick();
-	ResizeObserverStub.instances.at(-1)?.fire();
+	// The window and the Library list each measure through their own observer,
+	// so every one fires: the window takes the container's size and the list
+	// takes its own measured height.
+	for (const instance of ResizeObserverStub.instances) {
+		instance.fire();
+	}
 	await tick();
 	return view;
 }

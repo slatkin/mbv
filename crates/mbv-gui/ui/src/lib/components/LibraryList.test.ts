@@ -1,0 +1,134 @@
+// add-gui-library-panel row 4.5: the Library list paints the canvas tree (design
+// D7) over native scroll and only the rows in view, opens an album whose
+// tracklist is not loaded and asks the core for the tracks, and narrows the
+// painted rows by the `/` filter. The Tauri IPC is mocked; the asserted
+// payloads are the serde wire shapes of bridge/library.rs. The row geometry is
+// asserted on the model in `$lib/library/list.test.ts`.
+
+import { invoke } from '@tauri-apps/api/core';
+import { fireEvent, render } from '@testing-library/svelte';
+import { tick } from 'svelte';
+import { beforeEach, expect, test, vi } from 'vitest';
+import type { GuiMusicArtist, GuiMusicFrame } from '$lib/bridge/types';
+import { initialLibraryUi, libraryUi } from '$lib/library/state';
+import LibraryList from './LibraryList.svelte';
+
+vi.mock('@tauri-apps/api/core', () => ({
+	invoke: vi.fn(),
+}));
+
+const invokeMock = vi.mocked(invoke);
+
+/** A ResizeObserver stub: jsdom has none and no layout. The test fires the
+ * callback to stand in for a layout change. */
+class ResizeObserverStub {
+	static instances: ResizeObserverStub[] = [];
+	readonly #callback: ResizeObserverCallback;
+	constructor(callback: ResizeObserverCallback) {
+		this.#callback = callback;
+		ResizeObserverStub.instances.push(this);
+	}
+	observe() {}
+	disconnect() {}
+	fire() {
+		this.#callback([], this as unknown as ResizeObserver);
+	}
+}
+
+beforeEach(() => {
+	invokeMock.mockReset();
+	invokeMock.mockResolvedValue(undefined);
+	libraryUi.set(initialLibraryUi());
+	ResizeObserverStub.instances = [];
+	vi.stubGlobal('ResizeObserver', ResizeObserverStub);
+});
+
+/** The Beastie Boys artist: one album with a cached tracklist, one without. */
+const BEASTIE: GuiMusicArtist = {
+	artistKey: { kind: 'service', id: 'a1' },
+	name: 'Beastie Boys',
+	sortLetter: 'B',
+	albums: [
+		{
+			albumId: 'al1',
+			name: 'Licensed To Ill',
+			year: '1986',
+			tracks: [{ trackId: 't1', name: 'Rhymin & Stealin', number: 1, duration: '3:27' }],
+			total: { count: 1, duration: '3:27' },
+		},
+		{ albumId: 'al2', name: 'Paul’s Boutique', year: '1989', tracks: null, total: null },
+	],
+};
+
+/** The Brand Nubian artist: one album, closed under the artist. */
+const BRAND: GuiMusicArtist = {
+	artistKey: { kind: 'service', id: 'a2' },
+	name: 'Brand Nubian',
+	sortLetter: 'B',
+	albums: [{ albumId: 'al3', name: 'One For All', year: '1990', tracks: null, total: null }],
+};
+
+/** The carried Music content: the two artists and one selected collection. */
+function music(): GuiMusicFrame {
+	return {
+		libIdx: 0,
+		pills: [{ groupId: 'g1', name: 'Hip-Hop', selected: true, collection: true }],
+		loading: false,
+		failure: null,
+		artists: [BEASTIE, BRAND],
+		hero: null,
+		art: null,
+	};
+}
+
+/** Render the list and report a `viewportHeight` px viewport, so the rows in
+ * view are the rows a measured list of that height paints. */
+async function mountList(viewportHeight = 40): Promise<HTMLElement> {
+	const { container } = render(LibraryList, { music: music() });
+	const list = container.querySelector<HTMLElement>('[data-library-list]');
+	Object.defineProperty(list, 'clientHeight', { value: viewportHeight, configurable: true });
+	ResizeObserverStub.instances[0]?.fire();
+	await tick();
+	return container;
+}
+
+/** Open the Beastie Boys node, so its albums paint. */
+function openBeastie(): void {
+	libraryUi.update((ui) => ({ ...ui, openNodes: ['artist:service:a1'] }));
+}
+
+test('a press on an album without its tracklist opens it and asks for the tracks', async () => {
+	openBeastie();
+	const container = await mountList(240);
+	const row = container.querySelector('[data-library-row-id="album:al2"]');
+
+	await fireEvent.click(row as HTMLElement);
+
+	expect(invokeMock).toHaveBeenCalledWith('library', {
+		command: { command: 'openAlbum', albumId: 'al2' },
+	});
+	expect(invokeMock).toHaveBeenCalledWith('library', {
+		command: { command: 'showDetail', itemId: 'al2' },
+	});
+	expect(
+		container.querySelector('[data-library-row-id="album:al2"]')?.getAttribute('aria-expanded'),
+	).toBe('true');
+});
+
+test('the list paints only the rows in view', async () => {
+	const container = await mountList();
+
+	expect(container.querySelector('[data-library-row-id="artist:service:a1"]')).toBeTruthy();
+	expect(container.querySelector('[data-library-row-id="artist:service:a2"]')).toBeNull();
+});
+
+test('the filter narrows the painted rows to the names that contain its text', async () => {
+	const container = await mountList(240);
+	const field = container.querySelector<HTMLInputElement>('[data-library-filter]');
+
+	await fireEvent.input(field as HTMLElement, { target: { value: 'nubian' } });
+	await tick();
+
+	expect(container.querySelector('[data-library-row-id="artist:service:a1"]')).toBeNull();
+	expect(container.querySelector('[data-library-row-id="artist:service:a2"]')).toBeTruthy();
+});

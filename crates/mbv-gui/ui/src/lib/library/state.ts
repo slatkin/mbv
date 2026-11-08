@@ -12,8 +12,18 @@ import { sendLibraryCommand } from '$lib/bridge/library';
 import type {
 	GuiLibraryContent,
 	GuiLibraryFrame,
+	GuiMusicFrame,
 	GuiMusicPill,
 } from '$lib/bridge/types';
+import {
+	buildLibraryRows,
+	clampScrollTop,
+	letterRail,
+	listWindow,
+	moveListCursor,
+	scrollTopToShowCursor,
+} from './list';
+import type { LibraryNodeRow, LibraryRow, LibraryTree, ListMove } from './list';
 import { nextPillSelection } from './pills';
 import type { PillGesture } from './pills';
 
@@ -42,6 +52,18 @@ export interface LibraryUiState {
 	 * the focused pill (design D6). The pill row turns it into the
 	 * set-collections command. */
 	pillToggle: { groupId: string; solo: boolean } | null;
+	/** The list's cursor row id, or `null` while no row carries the cursor
+	 * (design D7). The cursor and the picked item are different: the cursor
+	 * moves by keys, and the picked album is the core's. */
+	cursor: string | null;
+	/** The list's open tree node row ids (design D7): an artist and an album
+	 * each open and close on their own. */
+	openNodes: string[];
+	/** The list's native scroll offset in pixels (design D7). */
+	scrollTop: number;
+	/** The list's measured viewport height in pixels: `0` until the list
+	 * measures, and then the rows that paint are the rows in view. */
+	viewportHeight: number;
 }
 
 /** The state a freshly mounted window content starts with. */
@@ -52,6 +74,10 @@ export function initialLibraryUi(): LibraryUiState {
 		filter: '',
 		focusedPill: null,
 		pillToggle: null,
+		cursor: null,
+		openNodes: [],
+		scrollTop: 0,
+		viewportHeight: 0,
 	};
 }
 
@@ -142,6 +168,176 @@ export function applyLibraryPillToggle(
 		kind: 'press',
 		groupId: pillToggle.groupId,
 		solo: pillToggle.solo,
+	});
+}
+
+/** The carried Music content, or `null` while the active destination carries
+ * none. */
+export function libraryMusic(): GuiMusicFrame | null {
+	return get(libraryContent)?.music ?? null;
+}
+
+/** The row model under one interaction state (design D7): the carried union,
+ * the open nodes, and the filter text. */
+function rowsOf(ui: LibraryUiState): LibraryRow[] {
+	return buildLibraryRows(libraryTree(ui));
+}
+
+function libraryTree(ui: LibraryUiState): LibraryTree {
+	return {
+		artists: libraryMusic()?.artists ?? [],
+		open: ui.openNodes,
+		filter: ui.filter,
+	};
+}
+
+/** The cursor's row, or `null` while no painted row carries the cursor. */
+function cursorRow(ui: LibraryUiState): LibraryRow | null {
+	return rowsOf(ui).find((row) => row.id === ui.cursor) ?? null;
+}
+
+/** Send the detail of the item a row picks (design D7): the core stores it and
+ * the next frame carries the Hero. No command for a row that names no item. */
+function showDetail(itemId: string | null): void {
+	if (itemId !== null) {
+		void sendLibraryCommand({ command: 'showDetail', itemId });
+	}
+}
+
+/** The item a row picks (design D7, D5): an album's own id, and a track's album
+ * — a picked track picks its album. An artist row picks nothing: the Hero is
+ * album-scoped (design D5), so an artist's detail would empty it. */
+function pickedItemId(row: LibraryRow): string | null {
+	switch (row.kind) {
+		case 'letter':
+			return null;
+		case 'artist':
+			return null;
+		case 'album':
+			return row.albumId;
+		case 'track':
+			return row.albumId;
+	}
+}
+
+/** Open or close one tree node (design D7): opening an album whose tracklist
+ * the carried content does not hold asks the core to load it (design D5). */
+function setNodeOpen(row: LibraryNodeRow, open: boolean): void {
+	libraryUi.update((ui) => ({
+		...ui,
+		openNodes: open
+			? [...ui.openNodes.filter((id) => id !== row.id), row.id]
+			: ui.openNodes.filter((id) => id !== row.id),
+	}));
+	if (open && row.kind === 'album' && !row.tracksLoaded) {
+		void sendLibraryCommand({ command: 'openAlbum', albumId: row.albumId });
+	}
+}
+
+/** Press a row (design D7): an artist or album row opens or closes and is
+ * picked; a track row is picked. A press moves no cursor — that is the keys'
+ * work. */
+export function pressLibraryRow(row: LibraryRow): void {
+	if (row.kind === 'letter') {
+		return;
+	}
+	if (row.kind === 'track') {
+		showDetail(pickedItemId(row));
+		return;
+	}
+	setNodeOpen(row, !get(libraryUi).openNodes.includes(row.id));
+	showDetail(pickedItemId(row));
+}
+
+/** Move the list's cursor one movement along (design D3, D7): Up and Down
+ * move a row, Page Up and Page Down move the rows in view, and Home and End
+ * take the list's ends. The scroll offset follows, so the cursor row stays
+ * fully visible. */
+export function moveLibraryCursor(move: ListMove): void {
+	libraryUi.update((ui) => {
+		const rows = rowsOf(ui);
+		const view = listWindow(rows, ui.scrollTop, ui.viewportHeight);
+		const cursor = moveListCursor(rows, ui.cursor, move, view.end - view.start);
+		return {
+			...ui,
+			cursor,
+			scrollTop: scrollTopToShowCursor(rows, cursor, ui.scrollTop, ui.viewportHeight),
+		};
+	});
+}
+
+/** Pick the item under the cursor (design D3's Enter): the Hero shows it on the
+ * next frame. Enter's play lands with the Hero's own actions. */
+export function pickLibraryCursor(): void {
+	const row = cursorRow(get(libraryUi));
+	if (row !== null) {
+		showDetail(pickedItemId(row));
+	}
+}
+
+/** Open or close the cursor's node (design D7's Right and Left). */
+export function setLibraryCursorOpen(open: boolean): void {
+	const row = cursorRow(get(libraryUi));
+	if (row !== null && (row.kind === 'artist' || row.kind === 'album')) {
+		setNodeOpen(row, open);
+	}
+}
+
+/** Narrow the list to the names that contain `filter`, without case (design
+ * D7). The cursor keeps its row while that row stays painted, and otherwise
+ * falls to the first painted row; the scroll offset follows the narrower
+ * list. */
+export function setLibraryFilter(filter: string): void {
+	libraryUi.update((ui) => {
+		const next = { ...ui, filter };
+		const rows = rowsOf(next);
+		const cursor = rows.some((row) => row.id === next.cursor)
+			? next.cursor
+			: moveListCursor(rows, null, 'home');
+		return {
+			...next,
+			cursor,
+			scrollTop: scrollTopToShowCursor(rows, cursor, next.scrollTop, next.viewportHeight),
+		};
+	});
+}
+
+/** Jump to a letter of the rail (design D7): the cursor moves to the first row
+ * under the letter and that row scrolls into view. A letter without rows
+ * changes nothing. */
+export function jumpToLetter(letter: string): void {
+	libraryUi.update((ui) => {
+		const rows = rowsOf(ui);
+		const target = letterRail(rows).find((entry) => entry.letter === letter)?.rowId;
+		if (target === null || target === undefined) {
+			return ui;
+		}
+		return {
+			...ui,
+			cursor: target,
+			scrollTop: scrollTopToShowCursor(rows, target, ui.scrollTop, ui.viewportHeight),
+		};
+	});
+}
+
+/** Report the list's measured viewport height (design D7): the rows in view
+ * follow it, and the scroll offset stays inside the narrower range. */
+export function measureLibraryList(viewportHeight: number): void {
+	libraryUi.update((ui) => {
+		const next = { ...ui, viewportHeight };
+		return {
+			...next,
+			scrollTop: clampScrollTop(rowsOf(next), next.scrollTop, viewportHeight),
+		};
+	});
+}
+
+/** Report the list's native scroll offset (design D7): a user scroll moves the
+ * rows in view, and the offset stays inside the list's range. */
+export function scrollLibraryList(scrollTop: number): void {
+	libraryUi.update((ui) => {
+		const top = clampScrollTop(rowsOf(ui), scrollTop, ui.viewportHeight);
+		return top === ui.scrollTop ? ui : { ...ui, scrollTop: top };
 	});
 }
 

@@ -11,6 +11,7 @@ import { beforeEach, expect, test, vi } from 'vitest';
 import { installInput } from '$lib/bridge/input';
 import type {
 	GuiLibraryContent,
+	GuiMusicArtist,
 	GuiMusicPill,
 	GuiPanel,
 } from '$lib/bridge/types';
@@ -20,6 +21,7 @@ import {
 	carryLibraryContent,
 	initialLibraryUi,
 	libraryUi,
+	measureLibraryList,
 } from './state';
 
 const invokeMock = vi.mocked(invoke);
@@ -50,8 +52,34 @@ const pills: GuiMusicPill[] = [
 	{ groupId: 'g2', name: 'Jazz', selected: false, collection: true },
 ];
 
-/** The carried Music content: two group pills, one selected. */
-function content(): GuiLibraryContent {
+/** The Beastie Boys artist: one album with a cached tracklist, one without. */
+const BEASTIE: GuiMusicArtist = {
+	artistKey: { kind: 'service', id: 'a1' },
+	name: 'Beastie Boys',
+	sortLetter: 'B',
+	albums: [
+		{
+			albumId: 'al1',
+			name: 'Licensed To Ill',
+			year: '1986',
+			tracks: [{ trackId: 't1', name: 'Rhymin & Stealin', number: 1, duration: '3:27' }],
+			total: { count: 1, duration: '3:27' },
+		},
+		{ albumId: 'al2', name: 'Paul’s Boutique', year: '1989', tracks: null, total: null },
+	],
+};
+
+/** The Brand Nubian artist: one album, closed under the artist. */
+const BRAND: GuiMusicArtist = {
+	artistKey: { kind: 'service', id: 'a2' },
+	name: 'Brand Nubian',
+	sortLetter: 'B',
+	albums: [{ albumId: 'al3', name: 'One For All', year: '1990', tracks: null, total: null }],
+};
+
+/** The carried Music content: two group pills, one selected, and the union the
+ * list keys move through. */
+function content(artists: GuiMusicArtist[] = []): GuiLibraryContent {
 	return {
 		tabs: [{ position: 1, label: 'Music' }],
 		currentTab: 1,
@@ -60,11 +88,18 @@ function content(): GuiLibraryContent {
 			pills,
 			loading: false,
 			failure: null,
-			artists: [],
+			artists,
 			hero: null,
 			art: null,
 		},
 	};
+}
+
+/** Carry the union the list keys move through, with the list pane focused. */
+function carryList(open: string[] = []): void {
+	carryLibraryContent({ revision: 1, content: content([BEASTIE, BRAND]) });
+	libraryUi.update((ui) => ({ ...ui, pane: 'list', openNodes: open }));
+	measureLibraryList(40);
 }
 
 /** Dispatch one keydown through the installed forwarder, its router reading
@@ -202,4 +237,38 @@ test('Esc closes the filter, clears its text, and sends no key', () => {
 	expect(get(libraryUi).filterOpen).toBe(false);
 	expect(get(libraryUi).filter).toBe('');
 	expect(invokeMock).not.toHaveBeenCalled();
+});
+
+test('a cursor move below the rows in view scrolls its row into view', () => {
+	carryList();
+	libraryUi.update((ui) => ({ ...ui, cursor: 'artist:service:a1' }));
+
+	press('ArrowDown');
+
+	expect(get(libraryUi).cursor).toBe('artist:service:a2');
+	expect(get(libraryUi).scrollTop).toBe(44);
+	expect(invokeMock).not.toHaveBeenCalled();
+});
+
+test('Right opens the cursor album and asks for its tracks', () => {
+	carryList(['artist:service:a1']);
+	libraryUi.update((ui) => ({ ...ui, cursor: 'album:al2' }));
+
+	press('ArrowRight');
+
+	expect(invokeMock).toHaveBeenCalledWith('library', {
+		command: { command: 'openAlbum', albumId: 'al2' },
+	});
+	expect(get(libraryUi).openNodes).toContain('album:al2');
+});
+
+test('Enter picks the item under the cursor', () => {
+	carryList(['artist:service:a1']);
+	libraryUi.update((ui) => ({ ...ui, cursor: 'album:al2' }));
+
+	press('Enter');
+
+	expect(invokeMock).toHaveBeenCalledWith('library', {
+		command: { command: 'showDetail', itemId: 'al2' },
+	});
 });

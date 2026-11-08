@@ -10,6 +10,7 @@ import { get } from 'svelte/store';
 import { sendLibraryCommand } from '$lib/bridge/library';
 import type { KeyOutcome } from '$lib/bridge/input';
 import type { GuiFrame, GuiPanel } from '$lib/bridge/types';
+import type { ListMove } from './list';
 import {
 	acceptLibraryFilter,
 	closeLibraryFilter,
@@ -18,9 +19,12 @@ import {
 	focusedLibraryPill,
 	libraryContent,
 	libraryUi,
+	moveLibraryCursor,
 	moveLibraryPane,
 	openLibraryFilter,
+	pickLibraryCursor,
 	requestLibraryPillToggle,
+	setLibraryCursorOpen,
 } from './state';
 import type { LibraryPane } from './state';
 
@@ -37,7 +41,9 @@ export type LibraryKeyFrame = Pick<
  * plays or presses the item under the cursor, `n` and `a` act on it, and the
  * movement keys move the cursor or open and close a node. The Library takes
  * them, so the core never reads them with Library Panel focus (design D3,
- * step 4); the components that act on them arrive with those rows. */
+ * step 4); the movements and Enter act on the list's cursor, and the keys that
+ * act on the cursor's item (`n`, `a`) and on the Hero's tracklist arrive with
+ * row 4.7. */
 const LIST_AND_HERO_KEYS: ReadonlySet<string> = new Set([
 	'Enter',
 	'n',
@@ -51,6 +57,16 @@ const LIST_AND_HERO_KEYS: ReadonlySet<string> = new Set([
 	'Home',
 	'End',
 ]);
+
+/** The list movement each cursor key names (design D3, D7). */
+const CURSOR_MOVES: Readonly<Record<string, ListMove>> = {
+	ArrowUp: 'up',
+	ArrowDown: 'down',
+	PageUp: 'pageUp',
+	PageDown: 'pageDown',
+	Home: 'home',
+	End: 'end',
+};
 
 /** Whether no modifier is held. */
 function bare(event: KeyboardEvent): boolean {
@@ -121,6 +137,32 @@ function routeFilterKey(event: KeyboardEvent): KeyOutcome {
 	return 'text';
 }
 
+/** Route a movement, open and close, or pick key to the list's cursor (design
+ * D3, D7): the arrows, Page Up, Page Down, Home, and End move the cursor, Right
+ * opens the cursor's node, Left closes it, and Enter picks the item under it.
+ * The Hero's tracklist and the item keys `n` and `a` take these keys with row
+ * 4.7. */
+function routeListKey(event: KeyboardEvent): boolean {
+	const move = CURSOR_MOVES[event.key];
+	if (move !== undefined) {
+		moveLibraryCursor(move);
+		return true;
+	}
+	if (event.key === 'ArrowRight') {
+		setLibraryCursorOpen(true);
+		return true;
+	}
+	if (event.key === 'ArrowLeft') {
+		setLibraryCursorOpen(false);
+		return true;
+	}
+	if (event.key === 'Enter') {
+		pickLibraryCursor();
+		return true;
+	}
+	return false;
+}
+
 /** Route a key to the Library keys (design D3, step 4), with the pane the
  * window content focused deciding which control the key acts on. */
 function routePanelKey(event: KeyboardEvent, pane: LibraryPane): KeyOutcome {
@@ -148,6 +190,9 @@ function routePanelKey(event: KeyboardEvent, pane: LibraryPane): KeyOutcome {
 			movePillFocus(-1);
 			return 'handled';
 		}
+	}
+	if (pane === 'list' && bare(event) && routeListKey(event)) {
+		return 'handled';
 	}
 	if (bare(event) && LIST_AND_HERO_KEYS.has(event.key)) {
 		return 'handled';

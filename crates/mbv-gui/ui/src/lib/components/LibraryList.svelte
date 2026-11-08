@@ -1,0 +1,376 @@
+<script lang="ts">
+	// The Library list (add-gui-library-panel design D7): the canvas's artist
+	// index in the list column — the *Artists* line over the selected
+	// collection names (design D6), the `/` filter field, the canvas tree of
+	// artist, album, and track rows under its letter headings, and the A–Z
+	// letter rail beside it. The rows paint at the canvas's fixed heights over
+	// native scroll, and only the rows in view paint, so a long artist list
+	// stays fast.
+	//
+	// The cursor, the open nodes, the scroll offset, and the filter text are
+	// window-content state in `$lib/library/state` (design D1), and the row
+	// model is `$lib/library/list`'s. This component paints that state and
+	// reports the two facts only the DOM holds — its measured viewport height
+	// and its native scroll offset. A press picks and opens: an artist or album
+	// row opens or closes and picks, an album without a cached tracklist asks
+	// the core to load it, and a track picks its album. A press moves no
+	// cursor; the design's keys do that.
+	//
+	// The filter field is the panel's open text field (design D3, step 2): the
+	// key router types into it without checking focus, so this field owns its
+	// focus. It takes the keyboard while the filter is open and closes the
+	// filter when it loses focus, keeping its text as Enter does.
+	import { onMount } from 'svelte';
+	import { ChevronRight } from '@lucide/svelte';
+	import type { GuiMusicFrame } from '$lib/bridge/types';
+	import {
+		LETTER_ROW_HEIGHT,
+		NODE_ROW_HEIGHT,
+		TRACK_ROW_HEIGHT,
+		buildLibraryRows,
+		letterRail,
+		listWindow,
+		rowsHeight,
+	} from '$lib/library/list';
+	import type { LibraryRow } from '$lib/library/list';
+	import { selectedPillIds } from '$lib/library/pills';
+	import {
+		acceptLibraryFilter,
+		libraryUi,
+		measureLibraryList,
+		openLibraryFilter,
+		pressLibraryRow,
+		scrollLibraryList,
+		setLibraryFilter,
+	} from '$lib/library/state';
+	import LibraryLetterRail from './LibraryLetterRail.svelte';
+
+	interface Props {
+		/** The carried Music content: the union the list paints and the pills
+		 * whose names the header line reads (design D2, D6). */
+		music: GuiMusicFrame;
+	}
+	const { music }: Props = $props();
+
+	let listEl: HTMLElement | undefined = $state();
+	let filterEl: HTMLInputElement | undefined = $state();
+
+	/** The painted rows of the canvas tree (design D7): the same model
+	 * `$lib/library/state` builds from the carried content, over the open nodes
+	 * and the filter this component paints. */
+	const rows = $derived(
+		buildLibraryRows({
+			artists: music.artists,
+			open: $libraryUi.openNodes,
+			filter: $libraryUi.filter,
+		}),
+	);
+
+	/** The rows in view: only these paint. */
+	const view = $derived(listWindow(rows, $libraryUi.scrollTop, $libraryUi.viewportHeight));
+	const painted = $derived(rows.slice(view.start, view.end));
+
+	/** The list's whole painted height, and the spacers that hold its scroll
+	 * range while only the rows in view paint. */
+	const total = $derived(rowsHeight(rows));
+	const above = $derived(painted.length > 0 ? painted[0].top : 0);
+	const below = $derived(total - (painted.length > 0 ? lastBottom() : above));
+
+	/** The selected collection names in pill order (design D6). */
+	const selectedNames = $derived.by(() => {
+		const selected = selectedPillIds(music.pills);
+		return music.pills
+			.filter((pill) => selected.includes(pill.groupId))
+			.map((pill) => pill.name);
+	});
+
+	/** The header's right line: the canvas's selection label — the names joined
+	 * by ` + `, or one name with its sort rule (design D6). */
+	const selectionLabel = $derived(
+		selectedNames.length > 1
+			? selectedNames.join(' + ')
+			: selectedNames.map((name) => `${name} · sort name`).join(''),
+	);
+
+	/** The filter field's placeholder, naming the selection as the canvas
+	 * does. */
+	const filterPlaceholder = $derived(
+		selectedNames.length > 0 ? `Filter ${selectedNames.join(' + ')}` : 'Filter',
+	);
+
+	/** The rail's A–Z letters over the painted rows. */
+	const rail = $derived(letterRail(rows));
+
+	/** The letter the rail marks: the one the cursor row belongs to. */
+	const marked = $derived(
+		rows.find((row) => row.id === $libraryUi.cursor)?.letter ?? null,
+	);
+
+	/** The album the Hero shows: the list paints its row in the canvas's picked
+	 * fill (design D7). */
+	const picked = $derived(music.hero?.album.albumId ?? null);
+
+	/** The bottom edge of the last painted row: the below-spacer's pair. */
+	function lastBottom(): number {
+		const last = painted[painted.length - 1];
+		return last === undefined ? 0 : last.top + last.height;
+	}
+
+	/** The `var(--canvas-<name>)` value a part paints in: the Library's canvas
+	 * hexes, which name no theme slot. */
+	function canvasVar(name: string): string {
+		return `var(--canvas-${name})`;
+	}
+
+	/** Whether the row is the album the Hero shows. */
+	function isPicked(row: LibraryRow): boolean {
+		return row.kind === 'album' && row.albumId === picked;
+	}
+
+	/** A row's painted fill: the picked album's green wins, then the cursor
+	 * row's fill (design D7). */
+	function rowBackground(row: LibraryRow): string | undefined {
+		if (isPicked(row)) {
+			return canvasVar('accent');
+		}
+		return row.id === $libraryUi.cursor ? canvasVar('selected') : undefined;
+	}
+
+	/** A row's name colour: the dark ink on the picked row, and otherwise the
+	 * canvas's tone by depth — the artist heading, the album text, the muted
+	 * track. */
+	function rowColor(row: LibraryRow): string {
+		if (isPicked(row)) {
+			return canvasVar('ink');
+		}
+		return row.kind === 'artist'
+			? canvasVar('heading')
+			: row.kind === 'album'
+				? canvasVar('text')
+				: canvasVar('muted');
+	}
+
+	/** The meta colour beside a row's name: the dark ink on the picked row. */
+	function metaColor(row: LibraryRow): string {
+		return isPicked(row) ? canvasVar('ink') : canvasVar('muted');
+	}
+
+	/** A row's name weight: an artist row is bold, an album and a track regular,
+	 * as the canvas draws them. */
+	function rowWeight(row: LibraryRow): number {
+		return row.kind === 'artist' ? 600 : 400;
+	}
+
+	/** A row's indent: the canvas's tree inset by depth. */
+	function rowPadding(row: LibraryRow): string {
+		if (row.kind === 'artist') {
+			return '0 8px 0 4px';
+		}
+		return row.kind === 'album' ? '0 8px 0 22px' : '0 8px 0 40px';
+	}
+
+	/** Report the list's measured height (design D7): the rows in view follow
+	 * it. */
+	function measure(): void {
+		measureLibraryList(listEl?.clientHeight ?? 0);
+	}
+
+	/** Report the list's native scroll offset, so the windowed paint follows a
+	 * user scroll. */
+	function onScroll(event: Event): void {
+		scrollLibraryList((event.currentTarget as HTMLElement).scrollTop);
+	}
+
+	// The scroller mirrors the state (design D7): a key that moved the cursor
+	// set the offset, and the element follows it. A user scroll already wrote
+	// the offset back, so this assignment is a no-op for it.
+	$effect(() => {
+		const el = listEl;
+		const top = $libraryUi.scrollTop;
+		if (el !== undefined && el.scrollTop !== top) {
+			el.scrollTop = top;
+		}
+	});
+
+	// The filter field owns its focus (design D3, step 2): it takes the keyboard
+	// while the filter is open and gives it back when the filter closes.
+	$effect(() => {
+		const open = $libraryUi.filterOpen;
+		const el = filterEl;
+		if (el === undefined) {
+			return;
+		}
+		if (open && document.activeElement !== el) {
+			el.focus();
+		}
+		if (!open && document.activeElement === el) {
+			el.blur();
+		}
+	});
+
+	onMount(() => {
+		measure();
+		const observer =
+			typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(measure);
+		if (listEl !== undefined) {
+			observer?.observe(listEl);
+		}
+		return () => observer?.disconnect();
+	});
+</script>
+
+<div class="flex min-h-0 min-w-0 flex-1 flex-col" data-library-list-column="">
+	<div class="flex flex-none flex-col" style:padding="14px 16px 10px" style:gap="10px">
+		<div class="flex items-baseline justify-between">
+			<span style:font-size="13px" style:font-weight="600" style:color="var(--canvas-heading)"
+				>Artists</span
+			>
+			<span
+				class="font-mono"
+				style:font-size="11px"
+				style:color="var(--canvas-muted)"
+				data-library-selection-label="">{selectionLabel}</span
+			>
+		</div>
+		<label
+			class="flex items-center"
+			style:height="32px"
+			style:padding="0 10px"
+			style:gap="8px"
+			style:background="var(--canvas-library-column)"
+			style:border="1px solid var(--canvas-border)"
+			style:border-radius="6px"
+			style:color="var(--canvas-muted)"
+		>
+			<span class="font-mono" style:font-size="12px" style:color="var(--canvas-source)">/</span>
+			<input
+				bind:this={filterEl}
+				type="text"
+				class="min-w-0 flex-1"
+				style:background="none"
+				style:border="0"
+				style:outline="none"
+				style:color="var(--canvas-heading)"
+				style:font-size="13px"
+				placeholder={filterPlaceholder}
+				aria-label="Filter artists"
+				value={$libraryUi.filter}
+				data-library-filter=""
+				onfocus={() => openLibraryFilter()}
+				onblur={() => acceptLibraryFilter()}
+				oninput={(event) => setLibraryFilter(event.currentTarget.value)}
+			/>
+		</label>
+	</div>
+	<div class="flex min-h-0 flex-1" style:overflow="hidden">
+		<ol
+			bind:this={listEl}
+			class="min-h-0 flex-1"
+			style:overflow-y="auto"
+			style:list-style="none"
+			style:margin="0"
+			style:padding="0 0 0 8px"
+			data-library-list=""
+			onscroll={onScroll}
+		>
+			<li style:height="{above}px" aria-hidden="true"></li>
+			{#each painted as row (row.id)}
+				<li>
+					{#if row.kind === 'letter'}
+						<div
+							class="flex items-end font-mono"
+							style:height="{LETTER_ROW_HEIGHT}px"
+							style:padding="0 8px 2px"
+							style:font-size="11px"
+							style:color="var(--canvas-source)"
+							data-library-letter={row.letter}
+						>
+							{row.letter}
+						</div>
+					{:else if row.kind === 'track'}
+						<button
+							type="button"
+							class="flex w-full items-center overflow-hidden"
+							style:height="{TRACK_ROW_HEIGHT}px"
+							style:padding={rowPadding(row)}
+							style:gap="8px"
+							style:border="0"
+							style:border-radius={isPicked(row) ? '4px' : '0'}
+							style:text-align="left"
+							style:font-size="13px"
+							style:background={rowBackground(row)}
+							style:cursor="pointer"
+							data-library-row={row.kind}
+							data-library-row-id={row.id}
+							onclick={() => pressLibraryRow(row)}
+						>
+							<span
+								class="flex flex-none items-center justify-end font-mono tabular-nums"
+								style:width="18px"
+								style:font-size="11px"
+								style:color={isPicked(row)
+									? 'var(--canvas-ink)'
+									: 'var(--canvas-ordinal)'}>{row.number}</span
+							>
+							<span
+								class="min-w-0 flex-1 truncate"
+								style:color={rowColor(row)}>{row.name}</span
+							>
+							<span
+								class="flex-none font-mono tabular-nums"
+								style:font-size="11px"
+								style:color={metaColor(row)}>{row.duration}</span
+							>
+						</button>
+					{:else}
+						<button
+							type="button"
+							class="flex w-full items-center overflow-hidden"
+							style:height="{NODE_ROW_HEIGHT}px"
+							style:padding={rowPadding(row)}
+							style:gap="8px"
+							style:border="0"
+							style:border-radius={isPicked(row) ? '4px' : '0'}
+							style:text-align="left"
+							style:font-size="13.5px"
+							style:background={rowBackground(row)}
+							style:cursor="pointer"
+							aria-expanded={row.open}
+							data-library-row={row.kind}
+							data-library-row-id={row.id}
+							onclick={() => pressLibraryRow(row)}
+						>
+							<span
+								class="flex flex-none items-center justify-center"
+								style:width="18px"
+								style:color={rowColor(row)}
+							>
+								<span
+									class="flex"
+									style:transform="rotate({row.open ? 90 : 0}deg)"
+									style:transition="transform 120ms ease"
+								>
+									<ChevronRight size={10} strokeWidth={3} />
+								</span>
+							</span>
+							<span
+								class="min-w-0 flex-1 truncate"
+								style:color={rowColor(row)}
+								style:font-weight={rowWeight(row)}>{row.name}</span
+							>
+							{#if row.kind === 'album' && row.year !== ''}
+								<span
+									class="flex-none font-mono tabular-nums"
+									style:font-size="11px"
+									style:color={metaColor(row)}>{row.year}</span
+								>
+							{/if}
+						</button>
+					{/if}
+				</li>
+			{/each}
+			<li style:height="{below}px" aria-hidden="true"></li>
+		</ol>
+		<LibraryLetterRail letters={rail} {marked} />
+	</div>
+</div>
