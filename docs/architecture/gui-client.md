@@ -586,16 +586,35 @@ and `a` opens the audio popover as before (design D3).
 
 `libraryArrangement` (`ui/src/lib/bridge/arrangement.ts`) picks the
 arrangement from the measured Library column width — the window width minus
-the Queue panel's current width, 400 px expanded or 72 px in the rail — with
-the canvas sizes as thresholds. Below 480 px is Mini, from 880 px with at
-least 600 px of height is Wide, and between them is Narrow. The thresholds are
-front-end constants beside the Queue panel's state constants, and the core
-does not classify the size. Mini mounts only the panel that holds Panel focus.
-Narrow mounts both panels, and a picked item opens the Hero as an overlay over
-the list. Wide mounts both panels with the Hero beside the list. The Queue
-panel keeps its four states inside every arrangement, and a resize across a
-threshold moves no cursor, pill selection, or picked item, because those live
-in the window content and the core.
+the Queue panel's current painted width, 400 px expanded, 72 px in the rail,
+or the width a drag gave it — with the canvas sizes as thresholds. Below
+480 px is Mini, from 880 px with at least 600 px of height is Wide, and
+between them is Narrow. The thresholds are front-end constants beside the
+Queue panel's state constants, and the core does not classify the size. Mini
+mounts only the panel that holds Panel focus. Narrow mounts both panels, and
+a picked item opens the Hero as an overlay over the list. Wide mounts both
+panels with the Hero beside the list. The Queue panel keeps its four states
+inside every arrangement, and a resize across a threshold moves no cursor,
+pill selection, or picked item, because those live in the window content and
+the core.
+
+Both columns are resizable (`ui/src/lib/bridge/resize.ts`). A drag on either
+divider (`PanelDivider.svelte`) reports the sized column's new width in
+pixels — the Queue panel's column, or the Wide arrangement's list column —
+and the window content keeps it for the session. A width survives tab and
+breakpoint changes because the store is module state, and nothing persists:
+a window-content reload returns both dividers to their defaults. The list
+column defaults to 368 px, the canvas's 320 px index 15 % wider. The Queue
+column holds between its 400 px artboard and the width that leaves the
+Library column its 480 px Mini threshold, and the list column holds between
+320 px and 640 px, short enough to leave the Hero pane its minimum.
+`panelWidths` resolves the two painted widths and the Library column they
+leave — a divider's 6 px included — and the arrangement classifies that same
+value, so a drag paints the geometry the thresholds measure and the two
+never disagree. A double-click returns a divider to its default. The
+dividers are the window content's: they report no region to the core, which
+needs none, because the Queue panel's own resize observer re-reports the
+regions a drag moved.
 
 Panel focus stays in the core's `FocusStack`, and the frame's `GuiFocus`
 carries it. `CoreThread::new` mounts `ComponentId::Library`; a press inside the
