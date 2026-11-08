@@ -1,5 +1,41 @@
 ## MODIFIED Requirements
 
+### Requirement: The GUI Client attaches to the Owner process as a Client
+
+The GUI Client SHALL be a Client of the Owner process under the same rules as a TUI Client. It SHALL find, start, and attach to the Owner process as a TUI Client does. It SHALL NOT hold the owner lock. It SHALL NOT become a Player owner. When the Owner process exits, the GUI Client SHALL follow `daemon-disconnect-handling`: an announced shutdown SHALL end the run, and an unannounced connection loss SHALL present the recovery dialog.
+
+#### Scenario: No Owner process is running
+
+- **WHEN** the GUI Client starts and no Owner process is running
+- **THEN** the GUI Client starts the Owner process from the `mbv` program and attaches to it
+
+#### Scenario: A TUI Client and a GUI Client are attached at once
+
+- **GIVEN** Stay-alive is enabled and a TUI Client is attached
+- **WHEN** the GUI Client starts
+- **THEN** it attaches alongside the TUI Client without displacing it
+- **AND** both show the same Bound queue and playback state
+
+#### Scenario: Stay-alive is disabled and a Client is attached
+
+- **GIVEN** Stay-alive is disabled and a TUI Client is attached
+- **WHEN** the GUI Client starts
+- **THEN** the GUI Client refuses to start with the same explanation a second TUI Client gets
+
+#### Scenario: The Owner process is from a different build
+
+- **GIVEN** a running Owner process from a different build
+- **WHEN** the GUI Client starts
+- **THEN** the window shows the mismatch and offers Restart and Quit, each on a key
+- **AND** Restart stops that Owner process, starts a new one from the `mbv` program, and attaches to it
+
+#### Scenario: Unannounced Owner loss presents the recovery dialog
+
+- **GIVEN** the GUI Client is attached to the Owner process
+- **WHEN** the connection closes with no announced shutdown
+- **THEN** the window shows the recovery dialog with the last playing title, the daemon log path, and the Restart and resume, Restart, don't resume, and Quit choices, each on its key
+- **AND** no other key and no press outside the dialog answers it, and the GUI Client does not exit on its own
+
 ### Requirement: The first GUI slice presents the player panel of the design canvas
 
 The GUI Client SHALL present one player panel whose content, arrangement, and states follow the design canvas. The TUI layout SHALL NOT be the reference. The footer line SHALL show the prefix-armed state and the toasts of the shared Status bar projection while the Library panel does not show; while the Library panel shows, the Library Status bar shows them. A surface, or a Library destination, that the GUI Client does not yet present SHALL be absent, with no stub and no placeholder: the top bar carries only the destination tabs that the GUI Client presents, and it carries the Search field only once Search is presented.

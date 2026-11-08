@@ -60,7 +60,7 @@ The projections that build the section are public `App` methods in `src/app/gui_
 
 The front end routes each keydown in this order:
 
-1. While a core overlay is open (the row menu, the track popover, the playback-target chooser, the confirmation modal) or prefix mode is armed (both are in the frame), the key goes to the core as today.
+1. While a core overlay is open (the row menu, the track popover, the playback-target chooser, the confirmation modal, the daemon-lost recovery dialog) or prefix mode is armed (both are in the frame), the key goes to the core as today.
 2. While a text field in the Library has focus (the `/` filter, the Search field), the field takes the key. Esc closes the field, and Enter accepts it.
 3. While the Library panel shows: Tab and Shift+Tab move focus to the next or previous pane (pill row, list, Hero, Queue panel), the canvas's *tab pane*. `1` to `7` open the first to seventh destination tab after Home, the canvas's *1–7 library*. With global search presented, `Ctrl+K` focuses the Search field.
 4. While the Library panel has Panel focus, the Library keys below run in the front end.

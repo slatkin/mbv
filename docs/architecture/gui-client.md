@@ -65,8 +65,12 @@ and the run's exit boundary saves the GUI's launch location first
 the reason with the App's exit message.) An unannounced ctrl-link loss is
 not an exit: the App raises the DaemonLost recovery modal
 (`daemon-disconnect-handling`: "An unannounced connection loss raises a
-recovery dialog"), a TUI-owned surface the GUI does not yet present, so
-the GUI window stays open and no GUI-local recovery path exists yet.
+recovery dialog"), and the GUI presents it as the blocking
+`GuiOverlay::DaemonLost` overlay (`DaemonLostOverlay.svelte`, the
+`daemonLost` frame section). The window stays open and dead until one of
+the dialog's three choices answers it, and each answer runs the shared
+`App::apply_daemon_lost_intent` — the same action the TUI's modal handler
+runs — so the GUI holds no recovery path of its own.
 
 ## The bridge contract
 
@@ -83,8 +87,9 @@ item title, finish clock, right-column mode, and filter text with its caret
 fact (`GuiQueueSummary`), the collapse and queue-fold toggles the Client
 core holds (`GuiPanelToggles`), the open menu or popover (`GuiOverlayFrame`:
 the row menu with its entries, key hints, and destructive flags, the track
-popover, the playback-target chooser, and the shared confirmation modal with
-its message and button row), the Queue playback projection
+popover, the playback-target chooser, the shared confirmation modal with
+its message and button row, and the daemon-lost recovery dialog with its
+diagnostics and recovery choices), the Queue playback projection
 (`GuiQueuePlayback`), the footer pills (`GuiQueueFooter`), the Status bar
 projection (`GuiStatusBar`), the Library panel's section (`GuiLibraryFrame`;
 *The Library panel* names it), and the theme when it is armed (`GuiTheme`).
@@ -190,10 +195,12 @@ and regions already measure the layout that size painted (design D10). The
 `RegionTarget` ids mirror the surface hit-target enums variant
 for variant — `QueueTargetId` names `QueueHitTarget`,
 `QueuePlaybackTargetId` names `QueuePlaybackHitTarget`,
-`StatusBarTargetId` names `StatusBarHitTarget` — plus `ConfirmTargetId`, the
-confirmation modal's buttons by index, and `AttachTargetId` for the
-pre-attach buttons. A confirm button owns no surface: the core resolves its
-press itself (`App::execute_gui_confirm_button`) and mounts no leaf for it.
+`StatusBarTargetId` names `StatusBarHitTarget` — plus `ConfirmTargetId` and
+`DaemonLostTargetId`, the confirmation modal's and the daemon-lost
+dialog's buttons by index, and `AttachTargetId` for the pre-attach buttons.
+A confirm or daemon-lost button owns no surface: the core resolves its
+press itself (`App::execute_gui_confirm_button`,
+`App::execute_gui_daemon_lost_button`) and mounts no leaf for it.
 
 A GUI list paints only the viewport: fixed-height rows, no native DOM
 scroll. The core's viewport decides which rows the frame carries; wheel
@@ -413,6 +420,23 @@ transfer the prompt guarded unwinds. Each button reports a `confirm` region
 and the core executes the button's own key hint, so a press answers what the
 window painted; a press whose region outlived the modal executes nothing.
 
+The daemon-lost recovery dialog (`DaemonLostOverlay.svelte`) paints in that
+same window-modal language, on the same scrim, whenever the App raised the
+TUI's DaemonLost modal: `raise_daemon_lost_modal` holds the shared
+`DaemonLostModal` as `GuiOverlay::DaemonLost` beside the TUI's raise, and
+`dismiss_daemon_lost` clears it with the shell request. The frame carries
+the diagnostics the TUI's modal paints — the last playing title, the daemon
+log path, and a failed restart's `Restart failed:` line — and the three
+recovery choices from the one table the dialog's chords read,
+`Restart and resume` (`r`), `Restart, don't resume` (`s`), and `Quit`
+(`q`). The dialog blocks every other input: Enter, Esc, and a press outside
+it all answer nothing, because the TUI binds only those three chords and
+the dialog must not be dismissed back to a dead Owner. Each button reports
+a `daemonLost` region, and a press and a chord run the same
+`App::apply_daemon_lost_intent`, so a failed restart leaves the dialog up
+with the restart's own diagnostic and the quit choice returns the run's
+quit decision to the core.
+
 The footer line paints below the box between gap rows on the
 `queueFooterBand` fill. Its left group carries the `PREFIX` badge while
 prefix mode is armed, the autosave indicator, and the playlist pill; its
@@ -558,8 +582,8 @@ own default types it. `App.svelte` installs `routeLibraryKey`
 before the forwarder (design D3). The order is:
 
 1. While a core overlay is open (the row menu, the track popover, the
-   playback-target chooser, the confirmation modal) or prefix mode is armed,
-   the key goes to the core.
+   playback-target chooser, the confirmation modal, the daemon-lost recovery
+   dialog) or prefix mode is armed, the key goes to the core.
    Both facts are in the frame. The Queue filter's text entry is the core's
    too, so every key is the core's while it holds the keyboard.
 2. While a text field of the panel holds the keyboard (the `/` filter), the
