@@ -128,11 +128,11 @@ The Client kind that presents the full terminal UI. It is the `mbv` program. It 
 _Avoid_: terminal client, thin client, viewer
 
 GUI Client:
-The Client kind that presents a native window. It is a separate program. It attaches to an out-of-process Player owner over ctrl like every Client. It never touches mpv; video plays in mpv's own window. It shares the *Client core* with the TUI Client: the same Surface state, focus stack, neutral events, and Keyboard Router. It paints with its own painters and translates its raw input into neutral events.
+The Client kind that presents a native window. It is a separate program. It attaches to an out-of-process Player owner over ctrl like every Client. It never touches mpv; video plays in mpv's own window. The design canvas is its reference, not the TUI Client. For the surfaces that both Clients present (the player panel and the Status bar) it shares the *Client core* with the TUI Client: the same Surface state, focus stack, neutral events, and Keyboard Router. Its *GUI Library panel* is its own (ADR 0036). It paints with its own painters and translates its raw input into neutral events.
 _Avoid_: windowed client, desktop client, GUI (bare, for the app)
 
 Client core:
-The layer of interaction behaviour that the TUI Client and the GUI Client share. It holds each interaction rule one time: Surface state, the focus stack, neutral key and pointer events, the one Keyboard Router, list capacity, and the semantic hit map. A Client owns only three things: painting, its own geometry, and the translation of raw input into neutral events. It never reimplements an interaction rule.
+The layer of interaction behaviour that the TUI Client and the GUI Client share for the surfaces that both present. It holds each of their interaction rules one time: Surface state, the focus stack, neutral key and pointer events, the one Keyboard Router, list capacity, and the semantic hit map. For those surfaces a Client owns only three things: painting, its own geometry, and the translation of raw input into neutral events, and it never reimplements an interaction rule. A surface that one Client presents alone, such as the *GUI Library panel*, keeps its rules in that Client.
 _Avoid_: core (bare), shared UI layer, interaction layer (bare)
 
 Surface state:
@@ -461,6 +461,22 @@ _Avoid_: status bar
 Library panel:
 The root-composed Panel that owns the shared Wide and Narrow library skeleton. Destinations supply typed Selector row, list, Hero header, and Workspace content. They do not place or paint those slots. It also owns the Library Hero overlay lifecycle and its Library-confined placement and hit geometry.
 _Avoid_: destination panel, library screen
+
+GUI Library panel:
+The GUI Client's Library panel, beside its Queue panel. The design canvas specifies it, not the TUI's *Library panel*. The GUI front end holds its interaction state (cursor, hover, scroll, open tree nodes, focus inside the panel, filter text) and handles its keys while it has Panel focus. The Client core holds its data selection (destination, selected collections, the Hero's item), its Service data, and its actions (ADR 0036).
+_Avoid_: GUI library screen, Library panel (bare, for the GUI's)
+
+Collection pill:
+A *GUI Library panel* pill that narrows the list to one content set that the Service holds: a Music group, a Podcast show, a Feeds subscription, or an Emby feed group. Collection pills are multi-select; the list is the de-duplicated union of the selected collections. Latest, filter, and letter-bucket pills are single pills.
+_Avoid_: multi-pill, filter pill (for a collection)
+
+Letter rail:
+The A to Z column beside a name-sorted *GUI Library panel* list. A press jumps the list to the first row of that letter. A letter with no rows is disabled.
+_Avoid_: alphabet bar, jump bar
+
+Library Status bar:
+The *GUI Library panel*'s bottom bar: the canvas key hints on the left and the location (destination, selected collections, picked item) on the right. The shared prefix state and toasts replace the hints while active. It is not the TUI's *Status bar panel*.
+_Avoid_: footer (for this bar), breadcrumb bar
 
 Library Hero overlay:
 A Library-panel-local detail surface for a selected hero-bearing browser row in non-Wide geometry. It is centered in and confined to 90 percent of the visible Library pane. In non-Wide geometry that pane is the inset list box of the browser. The Selector row and the spacer band below it stay outside both the overlay frame and its dimmed backdrop. It reuses the shared Hero header, overview (including cast and crew), artwork, and optional Workspace content. Its provider-link row stays plain text. It leaves a visible Queue independently operable. Library focus can end it with Esc or a click on the dimmed Library remainder. Change of destination ends it. It differs from application popups and from the four anchored Sidebars.

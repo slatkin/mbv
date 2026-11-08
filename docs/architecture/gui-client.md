@@ -292,8 +292,7 @@ every panel offset — the paddings, the gaps, the queue box's inset — is a
 
 The `align-gui-with-design-canvas` change aligned the queue's paint with the
 canvas and nothing else: a paint-only restyle of the queue's four bands
-with no new command, derivation, key, or contract, and the rest of the
-window keeps TUI parity. The artboards (`Main.dc.html`, `Menus.dc.html`)
+with no new command, derivation, key, or contract. The artboards (`Main.dc.html`, `Menus.dc.html`)
 and the change's gap audits, copied into that change's directory under
 `openspec/changes/align-gui-with-design-canvas/`, are the reference for
 the exact values; this file records what the paint changed, not every
@@ -400,6 +399,13 @@ must not duplicate them in `mbv-gui` (design D9).
 
 A surface joins the GUI slice in this order. A surface the GUI does not yet
 present stays absent — no stub, no placeholder (the `gui-client` spec).
+
+The GUI does not keep parity with the TUI; the design canvas is the
+reference. These steps are for a surface that both Clients share, such as
+the Queue panel. A GUI-only surface owns its interaction state in the
+front end, and the Client core supplies only its data and actions: the GUI
+Library panel is the first one
+([ADR 0036](../adr/0036-gui-library-panel-owns-its-interaction-state.md)).
 
 1. **Hold the interaction state once.** The surface's cursor, selection,
    viewport, and drafts live in `mbv-surfaces` as Surface state, shared by

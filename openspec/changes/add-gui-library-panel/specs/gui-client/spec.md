@@ -2,7 +2,7 @@
 
 ### Requirement: The first GUI slice presents the player panel of the design canvas
 
-The GUI Client SHALL present one player panel whose content, arrangement, and states follow the design canvas. The TUI layout SHALL NOT be the reference. The footer line SHALL show the prefix-armed state and the toasts of the shared Status bar projection while the Library panel does not show; while the Library panel shows, the Library Status bar shows them. A surface, or a Library destination, that the GUI Client does not yet present SHALL be absent, with no stub and no placeholder: the tab bar carries only the destinations the GUI Client presents, and the top bar carries the Search field only once global Search is presented.
+The GUI Client SHALL present one player panel whose content, arrangement, and states follow the design canvas. The TUI layout SHALL NOT be the reference. The footer line SHALL show the prefix-armed state and the toasts of the shared Status bar projection while the Library panel does not show; while the Library panel shows, the Library Status bar shows them. A surface, or a Library destination, that the GUI Client does not yet present SHALL be absent, with no stub and no placeholder: the top bar carries only the destination tabs that the GUI Client presents, and it carries the Search field only once Search is presented.
 
 #### Scenario: The queue has slots
 
@@ -39,13 +39,7 @@ The GUI Client SHALL present one player panel whose content, arrangement, and st
 
 - **GIVEN** the GUI Client presents only the Music destination
 - **WHEN** the top bar paints
-- **THEN** the tab bar shows no tab for another destination, and a tab-jump key for one opens nothing
-
-#### Scenario: The saved destination is not yet presented
-
-- **GIVEN** the GUI Client presents only the Music destination, and the launch state was saved on Shows
-- **WHEN** the GUI Client starts
-- **THEN** Music is the active destination, its tab is marked current, and the saved Panel focus applies
+- **THEN** it shows no tab for another destination, and a digit key for one opens nothing
 
 #### Scenario: The artwork has a still slot
 
@@ -58,11 +52,72 @@ The GUI Client SHALL present one player panel whose content, arrangement, and st
 - **THEN** the left line shows the queue's existing source text — the playlist text the frame carries — without a leading icon, the owner marker paints the label then the dot, and the line uses the canvas footer's type and border
 - **AND** the prefix, toast, autosave, and dirty states still paint in the footer line when they are active and the Library panel does not show
 
+### Requirement: GUI keyboard interaction matches the TUI Client
+
+For every action that the player panel and the Status bar present, each key chord SHALL have the same effect as in the TUI Client, and these surfaces SHALL use the same `[keys]` configuration and the same keyboard router. The key hints that the canvas shows for them are the default bindings. The canvas chords `z` (collapse), `q` (queue fold), and `c` (cycle subtitle) bind in a GUI-only key context; the TUI Client's default bindings SHALL NOT change. The Library panel's keys are GUI keys that the requirement "The Library panel handles its own keys" defines; a key that the Library panel does not take SHALL reach the keyboard router.
+
+#### Scenario: A configured binding is used in both Clients
+
+- **GIVEN** the user rebinds a queue action in `[keys]`
+- **WHEN** the user presses the new chord in the GUI Client
+- **THEN** the GUI Client runs that queue action, as the TUI Client does
+
+#### Scenario: Prefix mode
+
+- **WHEN** the user arms prefix mode in the GUI Client
+- **THEN** the footer line shows the armed state and the next chord resolves in the prefix namespace, as in the TUI Client
+
+### Requirement: GUI pointer input resolves through semantic targets
+
+A pointer press, drag, or wheel step on the player panel SHALL resolve to the semantic target that the GUI painted at that point in the current frame. The effect SHALL be the gesture that the design canvas defines. Where the canvas is silent and the TUI has a matching gesture, the effect SHALL be the same. Pointer input on the Library panel is the window content's own (the requirement "The Library panel's interaction state lives in the window content").
+
+#### Scenario: The slice gestures
+
+- **WHEN** the user uses the pointer on the panel
+- **THEN** the panel supports row selection, row activation, the row-actions button and menu, row drag, wheel scrolling, the transport controls, the scrubber, the track chips and their popovers, the playback-target chooser, and the collapse and fold controls
+
+#### Scenario: A queue row is clicked
+
+- **WHEN** the user clicks a painted queue row
+- **THEN** the queue cursor moves to that slot, as a click does in the TUI Client
+
+#### Scenario: The wheel moves over the queue
+
+- **WHEN** the user scrolls the wheel over the queue
+- **THEN** the queue viewport moves by the uniform wheel step and the cursor follows the TUI wheel rules
+
+#### Scenario: A control is clicked in a surface without focus
+
+- **GIVEN** the queue has focus
+- **WHEN** the user clicks the play/pause control
+- **THEN** playback toggles
+
+#### Scenario: A press lands on no target
+
+- **WHEN** the user clicks a point with no painted target
+- **THEN** nothing changes
+
+### Requirement: The window content holds no interaction state
+
+The interaction state of the player panel and the Status bar (focus, cursor, selection, marks, viewport, prefix mode, the collapse and queue-fold toggles, the drag, and the open menu or popover) SHALL live in the Client core, not in the window content. For these surfaces the window content SHALL paint what the Client core projects and SHALL forward key and pointer input to it. Panel focus between the Library panel and the Queue panel SHALL live in the Client core. The layout that the container size picks is not interaction state. The Library panel's interaction state is the exception that the requirement "The Library panel's interaction state lives in the window content" defines.
+
+#### Scenario: The window content reloads
+
+- **GIVEN** the queue cursor is on a slot and the queue has focus
+- **WHEN** the window content reloads
+- **THEN** the queue has focus and the cursor is on the same slot
+
+#### Scenario: A key arrives in the window content
+
+- **GIVEN** the Library panel does not take the key
+- **WHEN** the user presses a key while the GUI window has focus
+- **THEN** the Client core resolves the chord through the one keyboard router
+
 ## ADDED Requirements
 
 ### Requirement: The GUI presents the Library panel beside the Queue panel
 
-The GUI Client SHALL present the Library panel and the Queue panel in one window, as the TUI Client arranges them. The Library panel's content, arrangement, and states SHALL follow the Library artboard of the design canvas. Panel focus SHALL move between the two panels by the same keys and pointer presses as in the TUI Client.
+The GUI Client SHALL present the Library panel and the Queue panel in one window. The Library panel's content, arrangement, and states SHALL follow the Library artboard of the design canvas, not the TUI Client. Panel focus SHALL move to a panel by a press in it and by Tab or Shift+Tab across the panel boundary.
 
 #### Scenario: Both panels show
 
@@ -75,153 +130,120 @@ The GUI Client SHALL present the Library panel and the Queue panel in one window
 
 - **GIVEN** an Emby Service with a Music library is configured
 - **WHEN** the GUI Client attaches to the Owner
-- **THEN** the Library loads that Service's libraries and the Music content by the same startup steps as the TUI Client, with no step copied into the GUI Client
-
-#### Scenario: The user moves Panel focus
-
-- **WHEN** the user presses the TUI Client's Panel-focus key
-- **THEN** Panel focus moves to the other panel, as in the TUI Client
+- **THEN** the Library loads that Service's libraries by the same Service startup steps as the TUI Client, with no step copied into the GUI Client
 
 #### Scenario: The user presses in the panel without focus
 
-- **WHEN** the user presses a Library row while the Queue panel has focus
-- **THEN** the Library panel takes Panel focus and the Library cursor moves to that row, as a press does in the TUI Client
+- **GIVEN** the Queue panel has Panel focus
+- **WHEN** the user presses a Library row
+- **THEN** the Library panel takes Panel focus and the press acts on the row
 
-### Requirement: The window arrangement follows the shared breakpoint classes
+#### Scenario: The queue is empty
 
-The GUI Client SHALL classify the Library column width (the window width minus the Queue panel's current width) into the shared breakpoint classes Mini, Narrow, and Wide, and SHALL give each class the TUI Client's layout behaviour. The width thresholds SHALL come from the canvas sizes. The Queue panel SHALL keep its own four states inside each class.
+- **GIVEN** the queue is empty
+- **WHEN** the user moves Panel focus to the Queue panel
+- **THEN** the Queue panel has Panel focus and shows its empty-queue state
+
+### Requirement: The window arrangement follows the Library column width
+
+The GUI Client SHALL arrange the panels from the measured Library column width (the window width minus the Queue panel's current width), with thresholds from the canvas sizes: Mini below 480 px, Narrow from 480 px, and Wide from 880 px with at least 600 px of height. The Queue panel SHALL keep its own four states inside each arrangement.
 
 #### Scenario: The window is Mini
 
-- **WHEN** the Library column width is below the Narrow threshold
+- **WHEN** the Library column width is below 480 px
 - **THEN** only the panel with Panel focus shows
-- **AND** the Hero opens as the Library Hero overlay on demand, as in the TUI Client
 
 #### Scenario: The window is Narrow
 
 - **WHEN** the Library column width is Narrow
-- **THEN** both panels show, the Library panel shows its browser pane without a Hero pane, and the Hero opens as the Library Hero overlay on demand, as in the TUI Client
+- **THEN** both panels show, the Library panel shows its list without a Hero pane, and picking an item opens the Hero as an overlay over the list
 
 #### Scenario: The window is Wide
 
 - **WHEN** the Library column width is Wide and the height guard holds
-- **THEN** both panels show and the Hero pane sits beside the browser pane
+- **THEN** both panels show and the Hero pane sits beside the list
 
 #### Scenario: The window is resized across a threshold
 
 - **GIVEN** the Library cursor is on an item
-- **WHEN** the Library column width crosses a breakpoint threshold
-- **THEN** the arrangement changes and the Library cursor, selection, and pill choice do not change
+- **WHEN** the Library column width crosses a threshold
+- **THEN** the arrangement changes and the cursor, the selected pills, and the Hero's item do not change
 
-### Requirement: Every destination paints the Library slots
+### Requirement: The Library panel's interaction state lives in the window content
 
-The Library panel SHALL paint the same slots for every destination: a selector row, a list, a Hero, and a Workspace inside the Hero. The Music artboard SHALL set the look of each slot. Each destination SHALL fill the slots with the content its TUI Client owner supplies: Home, Movies and other Emby libraries, Shows, Music, Audiobooks, Podcasts, and Feeds.
-
-#### Scenario: Music paints its slots
-
-- **WHEN** the Music destination is active and an album is selected
-- **THEN** the selector row shows the collection pills, the list shows the artist and album tree, the Hero shows the album with square artwork and its actions, and the Workspace shows the tracklist
-
-#### Scenario: A destination has a different artwork shape
-
-- **WHEN** a destination's Hero carries landscape or portrait artwork
-- **THEN** the Hero paints the artwork in that shape in the Music Hero's place
-
-#### Scenario: A destination has no Workspace
-
-- **WHEN** the selected item's Hero carries no Workspace
-- **THEN** the Hero paints without a Workspace
-
-#### Scenario: Shows has a season selector
-
-- **WHEN** the Shows destination's Hero carries a Workspace with season pills
-- **THEN** the Workspace shows the season pills above the episode list
-
-#### Scenario: The list carries no media
-
-- **WHEN** the active list carries rows that are not media, such as Shows Upcoming
-- **THEN** the Library panel paints no Hero and the list takes the whole content area
-
-#### Scenario: The list is loading or empty
-
-- **WHEN** the active list is loading or empty
-- **THEN** the list paints the loading state or the empty text that the TUI Client shows
-
-#### Scenario: The inline filter opens, filters, and closes
-
-- **GIVEN** the Library panel has Panel focus on a list that has the inline filter, such as the Music artist list
-- **WHEN** the user presses `/` and types `bo`
-- **THEN** the filter bar paints under the selector row with the query `bo`, and the list shows only the rows that the TUI Client's filter accepts for `bo`
-- **WHEN** the user then presses Esc, or Backspace with an empty query
-- **THEN** the filter bar closes and the list shows all its rows, as in the TUI Client
-- **WHEN** the user instead presses Enter
-- **THEN** the filter bar closes and the cursor stays on the accepted row, as in the TUI Client
-
-### Requirement: Hero actions match the TUI Client
-
-Every action that the Hero shows SHALL run the TUI Client's action for the same item where the TUI Client has one (play, add to queue, shuffle, the item menu). Play next has no TUI action; it SHALL admit the item after the active slot, and the GUI Client SHALL bind `n` to it and `a` to add to queue, with Library Panel focus. Every Hero action SHALL show the chord that runs that action in the GUI Client: the configured chord for an action that `[keys]` binds, and the fixed key otherwise.
-
-#### Scenario: Play next from the Hero
-
-- **WHEN** the user presses the Hero's play-next control
-- **THEN** the selected item is admitted directly after the active slot, and is appended when there is no active slot or the active slot is the last
-- **AND** no slot already in the queue moves
-
-#### Scenario: The Library keys reach the Library under Library focus
-
-- **WHEN** the Library has Panel focus and the user presses `/`, then Esc, then `]`
-- **THEN** `/` opens the Library filter, not the Queue filter, and `]` moves the pill as in the TUI Client, with no seek
-- **AND** with Queue focus, `/` opens the Queue filter and `]` seeks forward
-
-#### Scenario: More actions opens the item menu
-
-- **WHEN** the user presses the Hero's more-actions control, or the TUI Client's context-menu chord on the selected item
-- **THEN** the Library item context menu of the TUI Client opens for that item, and each entry runs the TUI Client's action
-
-#### Scenario: A row action appears on hover
-
-- **WHEN** the pointer is over a Workspace row and the row's play-next and add controls appear
-- **THEN** the same actions run from the keyboard on the Workspace cursor row
-
-### Requirement: Library interaction state lives in the shared Client core
-
-The Library panel's interaction state (Panel focus, stored by the shared App and presented by the core focus stack; cursor, selection, viewport, tree open state, pill choice, Workspace focus, filter and Search drafts) SHALL live in the Client core that both Clients share. The TUI Client's Library behaviour, key output, and paint SHALL NOT change.
+The Library panel's interaction state (cursor, hover, scroll, open tree nodes, focus inside the panel, filter and Search text, the open Hero overlay and item menu) SHALL live in the window content. The Client core SHALL hold the data selection: the active destination, each destination's selected collections, and the Hero's item. The window content SHALL change the data selection only through the Client core.
 
 #### Scenario: The window content reloads on a Library item
 
-- **GIVEN** the Library cursor is on an album and the Library has Panel focus
+- **GIVEN** Music is active with Hip-Hop and Soul selected and an album in the Hero
 - **WHEN** the window content reloads
-- **THEN** the Library has Panel focus and the cursor is on the same album
+- **THEN** Music is active with Hip-Hop and Soul selected and the same album in the Hero
+- **AND** the list's cursor, scroll, and open nodes start from their defaults
 
 #### Scenario: The TUI Client browses a library
 
 - **WHEN** the user browses any destination in the TUI Client
 - **THEN** every key, pointer gesture, and painted frame behaves as before this change
 
-### Requirement: Library lists keep the cursor visible
+### Requirement: The window content takes the window keys
 
-Every Library list SHALL keep the cursor row fully visible after every keyboard movement and SHALL use fixed row heights so that capacity is a whole number of rows.
+While the Library panel shows, the window content SHALL take Tab and Shift+Tab, which move focus to the next or previous pane (the pill row, the list, the Hero, the Queue panel), and the digits `1` to `7`, which open the first to seventh destination tab after Home. Once Search is presented, it SHALL also take `Ctrl+K`, which focuses the Search field. While a core overlay is open or prefix mode is armed, every key SHALL go to the Client core.
 
-#### Scenario: A list has letter headings
+#### Scenario: Tab moves to the Queue panel
 
-- **GIVEN** the Music artist list shows letter headings
-- **WHEN** the list paints
-- **THEN** every heading and every row has the same fixed height, the capacity counts headings and rows together, and the cursor never rests on a heading
+- **GIVEN** the Library panel has Panel focus and its last pane has focus
+- **WHEN** the user presses Tab
+- **THEN** the Queue panel has Panel focus
 
-#### Scenario: The cursor moves past the last visible Library row
+#### Scenario: A digit opens a destination
 
-- **WHEN** the user moves the Library cursor below the last fully visible row
-- **THEN** the list scrolls so that the cursor row is fully visible
+- **WHEN** the user presses `2` while the Library panel shows
+- **THEN** the second destination tab after Home becomes active
 
-### Requirement: Collection pills are multi-select in the GUI Client
+### Requirement: The Library panel handles its own keys
 
-In the GUI Client a collection pill SHALL toggle on and off. A list SHALL show the de-duplicated union of the selected collections, sorted as one list. At least one pill SHALL stay selected. Latest, filter, and letter-bucket pills SHALL stay single-select. The TUI Client's pills SHALL stay single-select.
+While the Library panel has Panel focus, the window content SHALL take the Library keys: `/` opens the list filter, Enter plays the item under the cursor or presses the focused control, `n` plays it next, `a` adds it to the queue, Space and Alt+Space toggle and solo a focused pill, the arrow, Page Up, Page Down, Home, and End keys move the cursor, and Esc closes the open filter, overlay, or menu. Every key that the window content does not take SHALL go to the Client core's keyboard router.
+
+#### Scenario: Right and Left in the list and on the pill row
+
+- **WHEN** the user presses Right on a closed artist row, then Left
+- **THEN** the artist opens and then closes
+- **AND** on the pill row Right and Left move the focused pill without a change to the selection
+
+#### Scenario: The Library keys reach the Library under Library focus
+
+- **GIVEN** the Library panel has Panel focus and no pill has focus
+- **WHEN** the user presses `/`, types `bo`, presses Esc, and then presses Space
+- **THEN** `/` opens the Library filter, not the Queue filter, the list shows only the rows whose names contain `bo`, Esc closes the filter, and Space plays or pauses
+
+#### Scenario: The Queue keeps its keys under Queue focus
+
+- **GIVEN** the Queue panel has Panel focus
+- **WHEN** the user presses `/`, then Esc, then `a`
+- **THEN** `/` opens the Queue filter and `a` opens the audio popover
+
+#### Scenario: Prefix mode passes the Library
+
+- **GIVEN** the Library panel has Panel focus and prefix mode is armed
+- **WHEN** the user presses a key
+- **THEN** the key resolves in the prefix namespace, and the Library does not take it
+
+### Requirement: Collection pills are multi-select
+
+A collection pill SHALL toggle on and off by a press, and an Alt-press SHALL solo it. Space SHALL toggle the focused collection pill and Alt+Space SHALL solo it. At least one pill SHALL stay selected. With two or more selected, the pill row SHALL show the selected count with a clear control. The list SHALL show the de-duplicated union of the selected collections, sorted as one list. Latest, filter, and letter-bucket pills SHALL stay single-select.
+
+#### Scenario: Collection pills per destination
+
+- **WHEN** a destination paints its pill row
+- **THEN** the collection pills are the Music group pills, the Podcast show pills, the Feeds subscription pills, and the group pills of an Emby library in feed-group mode
+- **AND** every other pill is single-select
 
 #### Scenario: A second collection is selected
 
 - **GIVEN** the Hip-Hop collection is selected
 - **WHEN** the user presses the Soul pill
 - **THEN** both pills are selected and the list shows the artists of both collections, each artist once, sorted by sort name
+- **AND** the list header reads Hip-Hop + Soul
 
 #### Scenario: The last selected pill is pressed
 
@@ -235,40 +257,16 @@ In the GUI Client a collection pill SHALL toggle on and off. A list SHALL show t
 - **WHEN** the user Alt-presses a pill, or presses Alt+Space on the focused pill
 - **THEN** only that pill is selected
 
-#### Scenario: A pill press gives pill focus
-
-- **WHEN** the user presses a collection pill and then presses Space
-- **THEN** the press toggles the pill and the selector holds pill focus on it
-- **AND** Space toggles that pill again and does not play or pause
-
 #### Scenario: The keyboard toggles a pill
 
-- **WHEN** the user presses Space on the focused collection pill
-- **THEN** the pill toggles as a press does
-
-#### Scenario: Space outside the pill row keeps play/pause
-
-- **GIVEN** the selector does not hold pill focus, or the Queue panel has Panel focus
+- **GIVEN** the pill row has focus and the Soul pill is the focused pill
 - **WHEN** the user presses Space
-- **THEN** Space keeps its existing effect and no pill changes
-
-#### Scenario: The keyboard moves the focused pill without selecting
-
-- **GIVEN** the Hip-Hop pill is selected and focused
-- **WHEN** the user presses `}` and then Space
-- **THEN** the focused pill moves to the next pill and the selector keeps pill focus
-- **THEN** Space adds that pill to the selection, and Hip-Hop stays selected
-
-#### Scenario: The TUI pill keys keep their effect
-
-- **WHEN** the user presses `]` in the GUI Client
-- **THEN** the focused pill moves to the next pill and only that pill is selected, as in the TUI Client
-- **THEN** the selector does not hold pill focus, so a following Space keeps its existing effect
+- **THEN** Soul toggles as a press does, and playback does not change
 
 #### Scenario: The selection is cleared
 
 - **GIVEN** two or more collection pills are selected
-- **WHEN** the user presses the clear control, or presses Backspace while the selector holds pill focus
+- **WHEN** the user presses the clear control
 - **THEN** only the first selected pill in pill order stays selected
 
 #### Scenario: A non-collection pill is selected
@@ -277,20 +275,14 @@ In the GUI Client a collection pill SHALL toggle on and off. A list SHALL show t
 - **WHEN** the user selects the Latest pill
 - **THEN** only the Latest pill is selected
 
-#### Scenario: Collection pills per destination
-
-- **WHEN** a destination paints its selector row
-- **THEN** the collection pills are the Music group pills, the Podcast show pills, the Feeds subscription pills, and the group pills of an Emby library in feed-group mode
-- **AND** every other pill, including every Shows, Movies, Home, and Audiobooks pill, is single-select
-
 ### Requirement: The pill selection persists per destination
 
-Each destination SHALL keep its own pill selection while the GUI Client runs. Across a restart, the GUI Client SHALL restore the persisted pill scope of the `tui-launch-state` capability; for a Grouped Music library that scope SHALL include every selected group. The TUI Client SHALL restore only the first selected group.
+Each destination SHALL keep its own pill selection while the GUI Client runs and across a restart of the GUI Client.
 
 #### Scenario: The user changes destination and returns
 
 - **GIVEN** Hip-Hop and Soul are selected in Music
-- **WHEN** the user opens Shows and then Music again
+- **WHEN** the user opens another destination and then Music again
 - **THEN** Hip-Hop and Soul are still selected
 
 #### Scenario: The GUI starts again
@@ -299,42 +291,44 @@ Each destination SHALL keep its own pill selection while the GUI Client runs. Ac
 - **WHEN** the GUI Client starts again
 - **THEN** Music opens with Hip-Hop and Soul selected
 
-#### Scenario: The TUI starts after the GUI
+#### Scenario: A saved collection no longer exists
 
-- **GIVEN** the GUI Client quit with Hip-Hop and Soul selected in Music
-- **WHEN** the TUI Client starts
-- **THEN** Music opens with Hip-Hop selected
-
-#### Scenario: A destination with a Latest pill starts again
-
-- **GIVEN** the GUI Client quit with two Podcast show pills selected
+- **GIVEN** the GUI Client quit with Hip-Hop and Soul selected, and the library no longer has Soul
 - **WHEN** the GUI Client starts again
-- **THEN** Podcasts opens on its Latest pill, as the launch-state rule requires
+- **THEN** Music opens with Hip-Hop selected and no other pill in Soul's place
 
-### Requirement: The Library Status bar shows hints and the location
+### Requirement: The GUI Client keeps its own launch location
 
-While the Library panel shows, the Status bar under the Library column SHALL show the key hints of the focused Library surface's main actions, each with the chord that runs it in the GUI Client (the configured chord for an action that `[keys]` binds, the fixed key otherwise), and the location: the destination, the selected pills, and the selected item. While prefix mode is armed or a toast is active, the prefix state or the toast SHALL replace the key hints.
+At orderly exit the GUI Client SHALL save its launch location: the active destination, the selected collections of each destination, and Panel focus. At start it SHALL restore that location. The GUI Client SHALL NOT read or write the TUI launch state, and SHALL NOT save its launch location while the window is open. While the GUI Client presents only some destinations, a saved destination that it does not present SHALL fall back to the first presented destination.
 
-#### Scenario: Music has an album selected
+#### Scenario: The GUI and the TUI exit in turn
 
-- **GIVEN** Music is active with Hip-Hop selected and an album selected
-- **WHEN** the Library Status bar paints
-- **THEN** it shows the filter, play, play-next, add-to-queue, Panel-focus, and tab hints with their chords, and the location Music › Hip-Hop › the selected list row's artist, as the canvas Library artboard shows it
+- **GIVEN** the TUI exits on Shows, and the GUI Client later exits on Music with Library focus
+- **WHEN** the TUI and the GUI Client each start again
+- **THEN** the TUI starts on Shows and the GUI Client starts on Music with Library focus
 
-#### Scenario: A chord is rebound
+### Requirement: The Library list is the canvas tree
 
-- **GIVEN** the user rebinds the Panel-focus action in `[keys]`
-- **WHEN** the Library Status bar paints
-- **THEN** the Panel-focus hint shows the new chord
+The Music list SHALL show the artists of the selected collections as a tree: artist rows, album rows with the year, and track rows with the track number, with a letter heading above the first artist of each letter. A press on an artist or album row SHALL open or close it and pick it; a press on a track row SHALL pick it. The list SHALL keep the cursor row fully visible after every keyboard movement.
 
-#### Scenario: A toast arrives
+#### Scenario: An album is opened
 
-- **WHEN** the shared Status bar projection holds a toast while the Library panel shows
-- **THEN** the toast replaces the key hints until it ends, and the location stays
+- **WHEN** the user presses an album row whose tracks are not loaded
+- **THEN** the album opens, its tracks appear when they load, and the Hero shows the album
+
+#### Scenario: The cursor moves past the last visible row
+
+- **WHEN** the user moves the Library cursor below the last fully visible row
+- **THEN** the list scrolls so that the cursor row is fully visible
+
+#### Scenario: The list is loading or empty
+
+- **WHEN** the selected collections are loading or hold no artists
+- **THEN** the list paints a loading state or an empty text
 
 ### Requirement: The letter rail jumps a name-sorted list
 
-A Library list that is sorted by name and has the inline filter SHALL show a letter rail. A list without the inline filter SHALL show no rail. A press on a letter SHALL move the cursor to the first row whose sort name starts with that letter. A letter with no row SHALL do nothing. The rail is a pointer shortcut: its keyboard path SHALL be the list's existing filter. A list sorted by date SHALL show no rail.
+A Library list sorted by name SHALL show a letter rail from A to Z. A letter with no rows SHALL be disabled. A press on a letter SHALL scroll to the first row whose sort name starts with that letter and move the cursor there. The rail's keyboard path SHALL be the list's `/` filter. A list sorted by date SHALL show no rail.
 
 #### Scenario: A letter is pressed
 
@@ -343,49 +337,75 @@ A Library list that is sorted by name and has the inline filter SHALL show a let
 
 #### Scenario: A letter without rows is pressed
 
-- **WHEN** the user presses a letter that no row starts with
+- **WHEN** the user presses a disabled letter
 - **THEN** the cursor and the list do not change
 
-#### Scenario: The list has no inline filter
+### Requirement: The Hero shows the picked item with its actions
 
-- **WHEN** the Audiobooks destination is active
-- **THEN** its book list shows no letter rail
+The Hero SHALL show the picked album with its artist header, its square artwork, and its tracklist. It SHALL offer Play, Play next with the key hint `n`, Add to queue with the key hint `a`, Shuffle artist, and More actions. Play next SHALL admit the item directly after the active slot, and SHALL append it when there is no active slot or the active slot is the last. No slot already in the queue SHALL move. More actions SHALL open the item's menu.
 
-#### Scenario: The list is sorted by date
+#### Scenario: The Hero paints a picked album
 
-- **WHEN** the Feeds destination is active
-- **THEN** its list shows no letter rail
+- **WHEN** the user picks the album Licensed to Ill
+- **THEN** the artist header shows the artist, the selected collections, the album count, and the track count and total time
+- **AND** the album block shows the year, the title, the track count, the time, and the square artwork, above the tracklist
 
-### Requirement: The top bar shows the tabs and global Search
+#### Scenario: Play next from the Hero
 
-The Library panel SHALL show a top bar with the destination tabs and a global Search field. The tabs SHALL behave as the TUI Client's tab panel. `Ctrl+K` SHALL open global Search in a GUI-only key context, and the TUI Client's Search chord SHALL also open it. Global Search SHALL behave as the TUI Client's Search sidebar.
+- **WHEN** the user presses the Hero's Play next control
+- **THEN** the album is admitted directly after the active slot
+- **AND** no slot already in the queue moves
+
+#### Scenario: A tracklist row's hover controls
+
+- **WHEN** the pointer is over a tracklist row and the user presses its Play next or Add to queue control
+- **THEN** that track is admitted after the active slot, or at the end of the queue
+
+#### Scenario: More actions opens the item menu
+
+- **WHEN** the user presses the Hero's More actions control
+- **THEN** the item's menu opens in the row-menu look, and each entry runs its action for that item
+
+### Requirement: The top bar shows the destination tabs and Search
+
+The Library panel SHALL show a top bar with a Home icon and the destination tabs, and, once Search is presented, a Search field with the hint `Ctrl K`. A press on a tab SHALL make its destination active. The Search field SHALL search all libraries, show the results under the field, and activate a result by Enter or a press.
 
 #### Scenario: A tab is pressed
 
-- **WHEN** the user presses the Shows tab
-- **THEN** the Shows destination becomes active, as the TUI Client's tab panel does
+- **WHEN** the user presses the Music tab
+- **THEN** Music becomes the active destination and its tab is marked current
 
 #### Scenario: Search opens from the keyboard
 
 - **WHEN** the user presses `Ctrl+K`
-- **THEN** global Search opens with the query field focused
+- **THEN** the Search field has focus
 
 #### Scenario: A Search result is activated
 
 - **WHEN** the user activates a Search result
-- **THEN** the GUI Client runs the TUI Client's Search activation for that result
+- **THEN** the GUI Client opens the result's destination on that item
 
-#### Scenario: The TUI keys are unchanged
+### Requirement: The Library Status bar shows hints and the location
 
-- **WHEN** the user presses `Ctrl+K` in the TUI Client
-- **THEN** the TUI Client behaves as before this change
+While the Library panel shows, a Library Status bar SHALL show under the Library column: the canvas key hints (`/ filter`, `⏎ play`, `n next`, `a queue`, `tab pane`, `1–7 library`) on the left and the location on the right: the destination, the selected collection names, and the picked item, joined by `›`. While prefix mode is armed or a toast is active, that SHALL replace the key hints, and the location SHALL stay.
+
+#### Scenario: Music has an album picked
+
+- **GIVEN** Music is active with Hip-Hop selected and a Beastie Boys album picked
+- **WHEN** the Library Status bar paints
+- **THEN** it shows the key hints and the location Music › Hip-Hop › Beastie Boys
+
+#### Scenario: A toast arrives
+
+- **WHEN** the shared Status bar projection holds a toast while the Library panel shows
+- **THEN** the toast replaces the key hints until it ends, and the location stays
 
 ### Requirement: Library art comes through the frame
 
 The Library panel SHALL paint artwork only from the mbv image cache through the frame. The window content SHALL fetch no image itself.
 
-#### Scenario: An album is selected
+#### Scenario: An album is picked
 
-- **WHEN** the user selects an album whose artwork is not yet cached
+- **WHEN** the user picks an album whose artwork is not yet cached
 - **THEN** the Hero paints the artwork placeholder until a later frame carries the cached image
 - **AND** the window content makes no network request for the artwork

@@ -2,20 +2,20 @@
 
 ## Why
 
-The GUI Client presents only the player panel (Queue, Queue playback, Status bar). A user cannot browse a library or start playback from the window (issue #986). The design canvas now has a Library artboard (`canvas/Library.dc.html`, Music › Hip-Hop), so the Library panel can join the GUI with the Queue panel, as the TUI arranges them.
+The GUI Client presents only the player panel. A user cannot browse a library or start playback from the window (issue #986). The design canvas (`canvas/Library.dc.html`, *Library — Music › Hip-Hop*) specifies the Library panel of a mouse-driven GUI: destination tabs and a Search field in a top bar, multi-select collection pills, an artist tree with letter headings and a letter rail, a Hero with the album and its tracklist, and a Library Status bar. The canvas is the specification. The GUI does not need parity with the TUI, and the TUI does not change.
 
 ## What Changes
 
-- **The GUI presents the Library panel beside the Queue panel.** Panel focus moves between the two panels as in the TUI. The window arranges the panels by the shared breakpoint classes (`mbv_surfaces::breakpoint`): Mini shows one panel, Narrow shows the browser pane plus the Queue panel and opens the Hero as an overlay, Wide shows the Hero beside the browser pane plus the Queue panel. The Queue panel keeps its four states.
-- **All seven destinations are in scope:** Home, Movies and other Emby libraries, Shows (TV), Music, Audiobooks, Podcasts, and Feeds. The Music artboard is the template for every slot. Each other destination paints the same slots with the content its TUI owner supplies (`LibraryPanelContent`): its selector pills, its list, its Hero arm (Landscape, Portrait, Square, or no Hero), and its Workspace (none, a list, or a selector plus a list).
-- **Library interaction state moves to the shared Client core.** The cursor, viewport, tree open state, pill choice, Workspace focus, and filter draft of each destination owner move from the TUI components into `mbv-surfaces` Surface state. The TUI components become adapters. **The TUI output does not change.**
-- **Collection pills are multi-select in the GUI** (canvas SPEC note). A press toggles a pill, Alt solos it, Space and Alt+Space are the keys (Backspace clears), at least one pill stays on, and the list is the de-duplicated union of the selected collections. The collection pills are the Music groups, Podcast shows, Feeds subscriptions, and Emby feed groups; every other pill stays single-select. The TUI stays single-select. Each destination keeps its set for the session; across a restart only Music's extra groups persist, because Music's groups are the only multi-select collection pills the launch state keeps today (the Audiobookshelf bucket also persists, but it stays single-select).
-- **The letter rail** jumps the list to a letter on lists sorted by name that have the `/` filter. It is a pointer shortcut; the keyboard path is the existing `/` filter.
-- **The tab bar and the global Search** paint in the top bar. `Ctrl+K` opens Search in a GUI-only key context (beside the existing `Ctrl+/`); the Search results paint as a media list in the Music row look. The Search sidebar state moves to the shared Client core.
-- **A Library Status bar paints under the Library column** when the Library panel shows, as in the canvas: the shared prefix and toast, plus GUI-only key hints with their configured chords and the location (destination, selected pills, selected item). Prefix and toast stay in the Queue footer when only the Queue panel shows.
-- **Library art comes from the mbv image cache through the frame**, not from a webview fetch.
-- **The service bootstrap and the Library request dispatch become shared Client steps.** The GUI runs the same startup steps as the TUI, so its Library has content, and the App effects of the Library requests run in one shared dispatch that both Clients call. The GUI's authentication-only Emby fill is retired.
-- **Delivery has a gate.** Music lands first from end to end. A `/code-review` round and a user live-test round accept it before the other destinations start.
+- **The GUI presents the Library panel beside the Queue panel**, as the canvas Library and Queue artboards show. The front end arranges the two panels from its own measured size: Wide shows the Hero beside the list, Narrow opens the Hero as an overlay, and Mini shows only the panel with Panel focus.
+- **The GUI Library panel owns its interaction state** (ADR 0036). The front end holds the cursor, hover, scroll, open tree nodes, focus inside the panel, filter text, and the open Hero overlay and item menu, and it handles the panel's keys while the panel has Panel focus. The Client core holds the data selection (destination, selected collections, the Hero's item), loads the Service data, encodes the artwork, and runs the actions. No Library interaction rule moves out of the TUI.
+- **Collection pills are multi-select** (canvas SPEC note): a press toggles a pill, an Alt-press solos it, Space and Alt+Space do the same on the focused pill, at least one pill stays selected, the clear control keeps the first selected pill in pill order, and the list is the de-duplicated union of the selected collections in sort-name order.
+- **The list** is the canvas tree: artists, their albums, and the album tracks, with letter headings, the `/` filter, and a letter rail that jumps to a letter.
+- **The Hero** shows the picked album with its artist header and its tracklist, and the actions Play, Play next (`n`), Add to queue (`a`), Shuffle artist, and More actions. Play next is a new core action: it admits the item after the active slot. More actions opens the item's menu.
+- **The top bar** shows the destination tabs and, with global search, the Search field (`Ctrl+K`).
+- **The Library Status bar** under the Library column shows the canvas key hints and the location (destination › selected collections › picked item). The prefix state and toasts replace the hints while active.
+- **The GUI keeps its own launch location**: the destination, the selected collections of each destination, and Panel focus, saved at orderly exit and restored at start. The GUI no longer reads the TUI launch state.
+- **The service bootstrap becomes a shared Client step**, so the GUI runs the same Service startup as the TUI and its Library has content. The TUI's startup order and behaviour do not change.
+- **Delivery has a gate.** Music lands first from end to end. A `/code-review` round and a user live-test round accept it before the other destinations and Search start.
 
 ## Capabilities
 
@@ -25,16 +25,13 @@ None.
 
 ### Modified Capabilities
 
-- `gui-client`: the GUI presents the Library panel, its slots, the destinations, the responsive arrangement with the Queue panel, Panel focus, multi-select collection pills, the letter rail, the tab bar, global Search, and the Library Status bar.
-- `tui-launch-state`: the GUI Client also writes the shared snapshot at its orderly exit (the last exit of either Client wins), and the snapshot carries the GUI Client's extra selected Grouped Music groups; the TUI restores only the first.
+- `gui-client`: the GUI presents the Library panel, owns its interaction state and keys, and keeps its own launch location. The keyboard, pointer, and window-content requirements of the player panel are scoped to the surfaces that the GUI shares with the TUI.
+- `client-interaction-core`: the shared-rule requirements apply to the surfaces that both Clients present. A surface that one Client presents alone keeps its rules in that Client. The GUI derives no breakpoint class for the Library.
 
 ## Impact
 
-- `crates/mbv-surfaces`: new Library Surface state (selector, list, tree, Workspace, filter, Search) used by both Clients.
-- `crates/mbv-components`: the seven destination owners, `library_panel`, `inline_search`, and `search_sidebar` become adapters over the Surface state (`tab_panel` already is an adapter over `App::tab`). Paint and key output are unchanged.
-- `crates/mbv-ui-model`: a plain `LibrarySlotContent` model of the Library slots.
-- `src/app` and `src/lib.rs`: the shared service bootstrap step and Library request dispatch (moved out of the TUI shell `Model`); the extra Music groups and their album levels in the `App`; the shared launch-restore step; one public slot-content projection per destination, built from the `App`'s Service data and the Surface state, which both the TUI owners and the GUI frame read; the shared launch-snapshot builder; the GUI-only key context gains `{` and `}`, and Space, Alt+Space, and Backspace under pill focus, and `Ctrl+K`; with Library focus, `/`, `[`, `]`, and `a` reach the Library in place of the Queue filter, the seeks, and the audio popover; a new Library play-next action with `n`, and `a` for add to queue; the Library item context menu routes in the GUI.
-- `crates/mbv-config`: `TuiLaunchState` gains an additive field for the extra selected Music groups; only the GUI applies it.
-- `crates/mbv-gui`: frame DTOs, region ids, `ListId`s, leaves, core-thread wiring, and the Svelte Library components.
-- `docs/architecture/gui-client.md`, `docs/architecture/interactive-surface-ledger.md`: the new surfaces and owners.
-- No Owner-side, ctrl protocol, or Player change. No new dependency.
+- `crates/mbv-gui`: the Library frame section and bridge command, the core-thread wiring, the artwork encode for Library art, and the Svelte Library components.
+- `src/app` and `src/lib.rs`: GUI-only Library entry points and projections (beside `src/app/gui_client_state.rs`), the Music collection store, the new play-next action, the shared service bootstrap step, and the GUI's Panel-focus and launch-restore settings.
+- `crates/mbv-config`: an additive GUI launch-location file.
+- `docs/adr/0036-gui-library-panel-owns-its-interaction-state.md`, `docs/architecture/gui-client.md`, `CONTEXT.md`, `AGENTS.md`.
+- No TUI behaviour change. No Owner-side, ctrl protocol, or Player change. No new dependency.

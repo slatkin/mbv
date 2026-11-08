@@ -24,7 +24,7 @@ mbv is a Rust terminal media client for Emby, Audiobookshelf, and Feeds. It embe
 * `crates/mbv-surfaces/`: Surface state (cursor, selection, marks, viewport), the core `FocusStack`, `HitMap`, and per-list capacity. No ratatui, TuiRealm, crossterm, or GUI toolkit.
 * `crates/mbv-components/`: TuiRealm Interactive Components. A component over a shared surface (Queue, Queue playback, Status bar) is an adapter over its Surface state: it forwards neutral events, paints from that state, and reports geometry. Other components still own their local interaction state. Both kinds send typed `Msg`s (`Msg`s live in `mbv-ui-msg`).
 * `crates/mbv-render/`: `screens/` prepare content, `arrangements/` place it, `components/` paint it, and `layout.rs` composes layouts.
-* `src/app/input/`: the only keyboard routing site (`router.rs` precedence, `key_policy.rs` order, `resolver.rs` chords). Never add another.
+* `src/app/input/`: the only keyboard routing site (`router.rs` precedence, `key_policy.rs` order, `resolver.rs` chords) for the TUI and for the surfaces that both Clients share. Never add another. The GUI Library panel takes its own keys in the GUI front end, before they reach this router (ADR 0036).
 * `src/local_daemon.rs`: Local-daemon bootstrap. The rest of `src/` is the shared `mbv` library and the thin `mbv` binary over it.
 * `crates/mbv-audiobookshelf/`: Audiobookshelf provider client.
 * `crates/mbv-cast/`: Google Cast client, discovery, per-provider dispatch.
