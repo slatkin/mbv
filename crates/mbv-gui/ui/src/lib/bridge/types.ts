@@ -141,7 +141,24 @@ export type GuiOverlayFrame =
 			kind: 'targetChooser';
 			cursor: number;
 			choices: GuiTargetChoice[];
+	  }
+	| {
+			/** The shared confirmation modal the App raised: the message and
+			 * the button row, each with its key hint and tone. The action
+			 * stays in the core's held state, so a press or key answers what
+			 * the window painted. */
+			kind: 'confirm';
+			message: string;
+			buttons: GuiConfirmButton[];
 	  };
+
+/** One button of the confirm overlay: the label, the key hint inside the
+ * pill (`Enter`, `Esc`), and how the canvas paints it. */
+export interface GuiConfirmButton {
+	label: string;
+	keys: string;
+	tone: 'affirmative' | 'cancel';
+}
 
 /** One row-menu entry: the label, the key hint that selects it directly
  * when it has one, and whether the entry is destructive (the canvas paints
@@ -653,7 +670,9 @@ export type RegionTarget =
 	| { surface: 'queue'; id: QueueTargetId }
 	| { surface: 'queuePlayback'; id: QueuePlaybackTargetId }
 	| { surface: 'statusBar'; id: StatusBarTargetId }
-	| { surface: 'attach'; id: AttachTargetId };
+	| { surface: 'attach'; id: AttachTargetId }
+	/** The confirm overlay's button, by index in the overlay's `buttons`. */
+	| { surface: 'confirm'; id: { button: number } };
 
 /** The pre-attach screen's button targets (design D9). */
 export type AttachTargetId = 'restart' | 'quit';

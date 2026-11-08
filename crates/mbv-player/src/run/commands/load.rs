@@ -141,6 +141,12 @@ impl PlaybackRun {
         }
         let start_idx = start_idx.min(items.len() - 1);
         self.close_prepared_source();
+        // The rebuild's own mpv surgery (the `stop`, then the no-play loads)
+        // moves `playlist-count` while the run's queue copy still holds the
+        // outgoing queue: the drift handler must read none of it as external
+        // (design D3's load-then-play window). `initialize_queue_start`
+        // disarms the gate once the start item initializes.
+        self.pending_initial_playlist_layout = true;
 
         // Loading new items should always start playing, even if mpv was
         // left paused on the previous item (reused-window fast path).

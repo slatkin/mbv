@@ -37,7 +37,8 @@ pub use self::dispatch::action::{
     AppCommand, Command, NavigationIntent, PanelIntent, PlaybackIntent, ShellCommand, VisualIntent,
 };
 pub use self::gui_client_state::{
-    GuiOverlayProjection, PanelTogglesProjection, RowMenuEntryProjection, TrackPopoverChoice,
+    GuiConfirmButtonProjection, GuiConfirmButtonTone, GuiOverlayProjection, PanelTogglesProjection,
+    RowMenuEntryProjection, TrackPopoverChoice,
 };
 pub use self::gui_library::GuiLibraryCommand;
 pub use self::gui_library::{

@@ -60,6 +60,7 @@ pub(crate) fn row_region_target(target: &RegionTarget) -> Option<QueueSlotId> {
         RegionTarget::Queue(_)
         | RegionTarget::QueuePlayback(_)
         | RegionTarget::StatusBar(_)
+        | RegionTarget::Confirm(_)
         | RegionTarget::Attach(_) => None,
     }
 }
@@ -193,6 +194,9 @@ impl<'a> QueueLeaf<'a> {
             RegionTarget::Queue(QueueTargetId::PlaylistPill)
             | RegionTarget::QueuePlayback(_)
             | RegionTarget::StatusBar(_)
+            // A confirm button resolves in the core's own route_pointer arm,
+            // never through a surface leaf.
+            | RegionTarget::Confirm(_)
             | RegionTarget::Attach(_) => None,
         }
     }

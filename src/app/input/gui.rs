@@ -269,13 +269,15 @@ impl App {
     /// (a GUI Client presents only the surfaces it has ported).
     fn handle_gui_queue_intent(&mut self, intent: QueueIntent) {
         match intent {
-            // The four intents whose TUI effect opens or reaches a surface
-            // the GUI does not present — the clear confirmation modal, the
-            // TUI's queue-column resize, the save-playlist dialog, and the
-            // Library-panel navigation — stay undelivered
+            // The clear request runs the TUI's own App action: the prompt the
+            // `c` chord raises, which the GUI now presents as its confirm
+            // overlay (the TUI's mounted Confirm modal). The three intents
+            // whose TUI effect opens or reaches a surface the GUI does not
+            // present — the TUI's queue-column resize, the save-playlist
+            // dialog, and the Library-panel navigation — stay undelivered
             // (a GUI Client presents only the surfaces it has ported).
-            QueueIntent::Clear
-            | QueueIntent::ResizeColumn(_)
+            QueueIntent::Clear => self.request_clear_queue(),
+            QueueIntent::ResizeColumn(_)
             | QueueIntent::SavePlaylist
             | QueueIntent::Navigate { .. } => {}
             QueueIntent::PlayNow => {

@@ -13,6 +13,7 @@
 //! global bindings), and these rules — not a surface's — consume or drop it.
 
 use mbv_queue::QueueSlotId;
+use mbv_ui_model::confirm::ConfirmModal;
 use mbv_ui_model::context_menu::{ContextAction, ContextMenuEntry};
 use mbv_ui_model::panel_targets::SessionTargetKey;
 use mbv_ui_msg::{Key, KeyEvent, KeyModifiers, TrackChipKind};
@@ -89,6 +90,31 @@ pub enum GuiOverlayProjection {
         cursor: usize,
         choices: Vec<PlaybackTargetChoice>,
     },
+    /// The shared confirmation modal the App raised (`ask_confirm`): the
+    /// message and the button row, as the frame carries them. The action
+    /// stays in the core's held state (`GuiOverlay::Confirm`).
+    Confirm {
+        message: String,
+        buttons: Vec<GuiConfirmButtonProjection>,
+    },
+}
+
+/// One button of the projected confirmation modal: the label, the key
+/// hint inside the pill (`"Enter"`, `"Esc"`), and the tone the canvas
+/// paints it in (the shared modal's own tones).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GuiConfirmButtonProjection {
+    pub label: String,
+    pub keys: String,
+    pub tone: GuiConfirmButtonTone,
+}
+
+/// How a projected confirm button paints, mirroring `ConfirmButtonTone`
+/// variant for variant.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GuiConfirmButtonTone {
+    Affirmative,
+    Cancel,
 }
 
 /// The open queue row's menu, held by the Client core while it is up. The
@@ -124,12 +150,17 @@ pub(in crate::app) struct TargetChooserState {
 }
 
 /// The GUI Client's open overlay (design D4a): the row menu, a track chip's
-/// popover, or the playback-target chooser. `App::gui_overlay` holds the
-/// open one.
+/// popover, the playback-target chooser, or the shared confirmation modal.
+/// `App::gui_overlay` holds the open one.
 pub(in crate::app) enum GuiOverlay {
     RowMenu(GuiRowMenu),
     TrackPopover(TrackPopoverState),
     TargetChooser(TargetChooserState),
+    /// The shared confirmation modal (`App::ask_confirm` raised it): the
+    /// same `ConfirmModal` the TUI's mounted Confirm component holds. The
+    /// overlay owns the keyboard while it is up, and its buttons report
+    /// press regions the core resolves.
+    Confirm(ConfirmModal),
 }
 
 /// One key's outcome over the open overlay: consumed with nothing to run,
@@ -279,10 +310,15 @@ impl App {
                         key_hint: entry.key_hint.map(str::to_string),
                         // From the action, not the label or the position: the
                         // menu's remove entry is always last today, and the
-                        // paint must not depend on that.
+                        // paint must not depend on that. The shared selection
+                        // menu's bulk remove is destructive the same way.
                         destructive: matches!(
                             entry.action.as_ref(),
-                            Some(ContextAction::RemoveFromQueue(_))
+                            Some(
+                                ContextAction::RemoveFromQueue(_)
+                                    | ContextAction::RemoveSelection(_)
+                                    | ContextAction::ClearQueue,
+                            )
                         ),
                     })
                     .collect(),
@@ -302,6 +338,29 @@ impl App {
                 cursor: chooser.cursor,
                 choices: playback.target_choices.clone(),
             }),
+            // The confirm's message and button row are the modal's own text:
+            // the frame carries them verbatim, and the action stays in the
+            // core's held state so a press or key answers what the window
+            // painted.
+            Some(GuiOverlay::Confirm(modal)) => Some(GuiOverlayProjection::Confirm {
+                message: modal.message.clone(),
+                buttons: modal
+                    .buttons
+                    .iter()
+                    .map(|button| GuiConfirmButtonProjection {
+                        label: button.label.clone(),
+                        keys: button.keys.clone(),
+                        tone: match button.tone {
+                            mbv_ui_model::confirm::ConfirmButtonTone::Affirmative => {
+                                GuiConfirmButtonTone::Affirmative
+                            }
+                            mbv_ui_model::confirm::ConfirmButtonTone::Cancel => {
+                                GuiConfirmButtonTone::Cancel
+                            }
+                        },
+                    })
+                    .collect(),
+            }),
             None => None,
         }
     }
@@ -309,11 +368,25 @@ impl App {
     /// Open the GUI Client's row menu over a queue row. `targets` are the
     /// rows the opening gesture resolved — the queue surface's context-menu
     /// key or right-click, which name one row (the first of a marked
-    /// selection). The menu carries the canvas's entries: Play now, Play
-    /// next, the mark entry the row's own state picks, the go-to entry, and
-    /// Remove — the mark and go-to entries only for a non-music Emby row,
-    /// per the TUI queue menu's rules.
+    /// selection). A multi-selection takes the shared selection menu the
+    /// TUI's right-click builds (its bulk `Remove` names every marked
+    /// slot); a single row takes the canvas's per-row entries: Play now,
+    /// Play next, the mark entry the row's own state picks, the go-to
+    /// entry, Remove, and Clear queue — the mark and go-to entries only
+    /// for a non-music Emby row, per the TUI queue menu's rules.
     pub(in crate::app) fn open_gui_row_menu(&mut self, targets: &[QueueSlotId]) {
+        if targets.len() > 1 {
+            let Some(menu) = self.build_queue_selection_menu(targets) else {
+                return;
+            };
+            self.gui_overlay = Some(GuiOverlay::RowMenu(GuiRowMenu {
+                anchor_slot: targets[0],
+                cursor: 0,
+                pending_delete: false,
+                entries: menu.entries,
+            }));
+            return;
+        }
         let Some(slot) = targets.first().copied() else {
             return;
         };
@@ -362,6 +435,20 @@ impl App {
             action: Some(ContextAction::RemoveFromQueue(index)),
             key_hint: Some("dd"),
         });
+        // The clear entry names the whole queue, not the row: the same
+        // prompt the `c` chord raises (`App::request_clear_queue`). An
+        // empty queue has nothing to clear, so the entry does not list.
+        if self
+            .queue_for_link(self.playing_queue_link())
+            .total_queue_len()
+            > 0
+        {
+            entries.push(ContextMenuEntry {
+                label: "Clear queue",
+                action: Some(ContextAction::ClearQueue),
+                key_hint: Some("c"),
+            });
+        }
         self.gui_overlay = Some(GuiOverlay::RowMenu(GuiRowMenu {
             anchor_slot: slot,
             cursor: 0,
@@ -444,11 +531,29 @@ impl App {
         self.gui_overlay.is_some()
     }
 
+    /// Execute the confirm overlay's button at `index` (the press on the
+    /// region the front end reported): the same execution the button's key
+    /// hint applies (`execute_gui_overlay_entry`'s confirm arm). Gated on
+    /// the open overlay being the confirm — a stale press while another
+    /// overlay or none holds the slot executes nothing.
+    pub fn execute_gui_confirm_button(&mut self, index: usize) {
+        if matches!(self.gui_overlay, Some(GuiOverlay::Confirm(_))) {
+            self.execute_gui_overlay_entry(index);
+        }
+    }
+
     /// Dismiss the open overlay without executing an entry: the outside
     /// press the canvas and the TUI's blocking context menu both take
-    /// (add-tauri-gui-client row 6.5).
+    /// (add-tauri-gui-client row 6.5). A confirm's outside press answers
+    /// Esc — the same cancel the modal's own key applies — so a staged
+    /// transfer the prompt guarded still unwinds.
     pub fn dismiss_open_gui_overlay(&mut self) {
-        self.gui_overlay = None;
+        if let Some(GuiOverlay::Confirm(modal)) = self.gui_overlay.take() {
+            self.apply_confirm_action(
+                modal.on_confirm,
+                KeyEvent::new(Key::Esc, KeyModifiers::NONE),
+            );
+        }
     }
 
     /// Toggle the playback-target chooser (add-tauri-gui-client row 6.4):
@@ -514,6 +619,32 @@ impl App {
             Some(GuiOverlay::TargetChooser(chooser)) => {
                 apply_overlay_list_key(&mut chooser.cursor, key, chooser_choices)
             }
+            Some(GuiOverlay::Confirm(modal)) => {
+                // The confirm's key rules mirror the TUI's Confirm component
+                // (`confirm_intent_for_key`): Enter accepts, Esc cancels, and
+                // the three-way dirty-playlist prompt's `d` discards. Every
+                // other chord is consumed and dropped — the modal stays up.
+                let action = modal.on_confirm.clone();
+                let answering = match key.code {
+                    Key::Enter => Some(KeyEvent::new(Key::Enter, KeyModifiers::NONE)),
+                    Key::Esc => Some(KeyEvent::new(Key::Esc, KeyModifiers::NONE)),
+                    Key::Char('d')
+                        if key.modifiers.is_empty()
+                            && matches!(
+                                action,
+                                mbv_ui_model::confirm::ConfirmAction::DiscardOrSaveDirtyPlaylist
+                            ) =>
+                    {
+                        Some(KeyEvent::new(Key::Char('d'), KeyModifiers::NONE))
+                    }
+                    _ => None,
+                };
+                if let Some(key) = answering {
+                    self.gui_overlay = None;
+                    self.apply_confirm_action(action, key);
+                }
+                OverlayKeyOutcome::Consumed
+            }
             None => return false,
         };
         match outcome {
@@ -564,6 +695,20 @@ impl App {
                     return;
                 };
                 self.select_target_for_key(&choice.key);
+            }
+            // A confirm button's press runs the same execution the button's
+            // key hint applies: resolve the hint to its chord and answer
+            // through the shared confirm dispatcher, then close the modal.
+            GuiOverlay::Confirm(modal) => {
+                let Some(button) = modal.buttons.get(index) else {
+                    return;
+                };
+                let Some(key) = confirm_button_key(&button.keys) else {
+                    return;
+                };
+                let action = modal.on_confirm.clone();
+                self.gui_overlay = None;
+                self.apply_confirm_action(action, KeyEvent::new(key, KeyModifiers::NONE));
             }
         }
     }
@@ -654,6 +799,21 @@ impl App {
     /// Focus the queue header's filter text entry (the GUI-only `/`).
     pub(in crate::app) fn activate_queue_filter(&mut self) {
         self.queue_filter_active = true;
+    }
+}
+
+/// The key chord a confirm button's `keys` hint names: `"Enter"`, `"Esc"`,
+/// or a single character — the same mapping the TUI's Confirm component
+/// resolves a click's pill hint through.
+fn confirm_button_key(hint: &str) -> Option<Key> {
+    match hint {
+        "Enter" => Some(Key::Enter),
+        "Esc" => Some(Key::Esc),
+        other => {
+            let mut chars = other.chars();
+            let ch = chars.next()?;
+            chars.next().is_none().then_some(Key::Char(ch))
+        }
     }
 }
 

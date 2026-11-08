@@ -65,6 +65,7 @@
 	--canvas-menu: #343f44; /* the row menu's fill */
 	--canvas-menu-border: #475258; /* the row menu's border and its divider */
 	--canvas-menu-shadow: 0 12px 32px rgba(0, 0, 0, 0.45); /* the row menu's lift */
+	--canvas-modal-scrim: rgb(0 0 0 / 0.5); /* the confirm modal's backdrop */
 	--canvas-popover: #343f44; /* the track popover's fill */
 	--canvas-popover-border: #475258; /* the track popover's border */
 	--canvas-popover-shadow: 0 12px 32px rgba(0, 0, 0, 0.45); /* the track popover's lift */

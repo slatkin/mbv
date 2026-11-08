@@ -721,6 +721,7 @@ fn run_with_owner_outputs(
         audio_only,
         last_keepalive: Instant::now(),
         last_capabilities: Instant::now(),
+        last_queue_resync: Instant::now(),
         store: Box::new(|state| Ok(mbv_config::save_stay_alive_queue_state(state)?)),
         queue_persist_tx: Some(queue_persist_tx),
         tray,

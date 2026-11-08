@@ -7,6 +7,7 @@ mod tests;
 use super::{AlbumCursorKind, Model, ToastSeverity, apply_terminal_observer};
 use crate::app::state::playback::DestinationLatestSource;
 use mbv_components::library_panel::LibraryPanel;
+use mbv_ui_model::overlay::OverlayRequest;
 use mbv_ui_msg::{ComponentId, Msg, ShellRequest};
 
 impl Model {
@@ -476,37 +477,9 @@ impl Model {
             )],
         });
         if slot_ids.len() > 1 {
-            let link = self.app.playing_queue_link();
-            let (items, remove_targets, capabilities) = slot_ids
-                .iter()
-                .filter_map(|sid| {
-                    let slot = self.app.queue_for_link(link).slot(*sid)?;
-                    let item = slot.item.as_emby().cloned();
-                    let remove = mbv_ui_model::context_menu::BulkRemoveTarget::Queue(*sid);
-                    let capability =
-                        crate::app::state::context_menu_capabilities::queue_item_capabilities(
-                            &slot.item,
-                        );
-                    Some((item, remove, capability))
-                })
-                .fold(
-                    (Vec::new(), Vec::new(), Vec::new()),
-                    |(mut items, mut removes, mut capabilities), (item, remove, capability)| {
-                        if let Some(item) = item {
-                            items.push(item);
-                        }
-                        removes.push(remove);
-                        capabilities.push(capability);
-                        (items, removes, capabilities)
-                    },
-                );
-            self.app.open_context_menu_for_selection(
-                &items,
-                anchor,
-                mbv_ui_model::settings::PanelFocus::Queue,
-                capabilities,
-                remove_targets,
-            );
+            if let Some(menu) = self.app.build_queue_selection_menu(&slot_ids) {
+                self.app.pending_overlay = Some(OverlayRequest::ContextMenu(menu));
+            }
         } else {
             let slot_id = slot_ids.into_iter().next();
             let cw_selected = Model::home_continue_watching_selected();

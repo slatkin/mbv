@@ -6,7 +6,7 @@ use super::playback::QueueLink;
 /// the modal's trigger site can hand off the whole decision to the single
 /// the shell's confirm-action dispatcher instead of a bespoke bool/option
 /// field per confirmation.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ConfirmAction {
     ClearQueue,
     RemoveActiveQueueItem(usize),
@@ -66,7 +66,7 @@ pub enum ConfirmButtonTone {
 /// and is also what a mouse click resolves through: the click presses the
 /// button's first key, so the pill and the keyboard share one intent mapping
 /// (`confirm_intent_for_key`).
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ConfirmButton {
     pub keys: String,
     pub label: String,
@@ -100,7 +100,7 @@ impl ConfirmButton {
 /// message and a row of keypress buttons. Only one can be active at a time
 /// (`App::confirm_modal: Option<ConfirmModal>`); setting a new one replaces
 /// whatever was showing.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ConfirmModal {
     pub message: String,
     pub buttons: Vec<ConfirmButton>,

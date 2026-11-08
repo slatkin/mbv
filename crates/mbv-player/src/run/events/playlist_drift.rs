@@ -36,6 +36,20 @@ impl PlaybackRun {
         if self.run_lifecycle.is_active_file() {
             return;
         }
+        // A queue load plan's own rebuild moves the observed count while the
+        // run's queue copy still holds the outgoing queue: the same transient
+        // window `on_playlist_pos_changed` suppresses, and reading it as
+        // external drift would delete the copy's slots the plan is about to
+        // replace (the deleted items then keep playing — local-daemon.log
+        // 2026-11-08T19:33:53, the GUI queue fix). The final layout is
+        // `reassert_queue_layout`'s check, not this handler's.
+        if self.pending_initial_playlist_layout
+            || !self.load_is_ready()
+            || !self.run_lifecycle.jump_arm().is_idle()
+        {
+            tracing::debug!(name: "player.playlist_count.ignored", target: "player", count, "ignoring transient playlist count during queue transition");
+            return;
+        }
         if count == self.queue_len() {
             return;
         }

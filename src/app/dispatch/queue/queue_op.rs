@@ -93,6 +93,7 @@ impl App {
         let answer = match remote.send_queue_op(operation) {
             Ok(answer) => answer,
             Err(e) => {
+                tracing::warn!(name: "queue.edit.send_failed", target: "queue", error = %e, "the queue edit did not reach the Player owner");
                 self.flash_error(&e);
                 return QueueOpEdit::NotApplied;
             }
@@ -104,6 +105,7 @@ impl App {
         if self.await_queue_op(link, id) {
             QueueOpEdit::Applied
         } else {
+            tracing::warn!(name: "queue.edit.not_applied", target: "queue", "the Player owner did not apply the queue edit in the answer bound");
             QueueOpEdit::NotApplied
         }
     }

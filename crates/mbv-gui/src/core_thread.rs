@@ -33,7 +33,7 @@ use crate::attach::{AttachCampaign, LibraryOwnerSteps};
 use crate::bridge::frame::playback::GuiScrubberTile;
 use crate::bridge::frame::{FrameSources, GuiFrame, GuiWindowFrame, scrubber_ticks};
 use crate::bridge::layout::{
-    LayoutReport, LayoutSize, ListId, QueueTargetId, RegionTarget, hit_map,
+    ConfirmTargetId, LayoutReport, LayoutSize, ListId, QueueTargetId, RegionTarget, hit_map,
 };
 use crate::leaves::{
     PlaybackLeaf, QueueLeaf, StatusBarLeaf, TransportAvailability, gesture_point, row_slot_at,
@@ -474,13 +474,7 @@ impl CoreThread {
         // outside its own targets dismisses it and does not reach what is
         // painted beneath (the canvas's outside press; the TUI's blocking
         // context menu dismisses the same way).
-        if matches!(event.kind, PointerKind::Press | PointerKind::RightPress)
-            && self.app.gui_overlay_is_open()
-            && !self
-                .regions
-                .resolve(event.position)
-                .is_some_and(RegionTarget::owns_gui_overlay)
-        {
+        if self.press_outside_open_overlay(&event) {
             self.app.dismiss_open_gui_overlay();
             return;
         }
@@ -577,8 +571,33 @@ impl CoreThread {
             // A pre-attach button region is the attach campaign's target: the
             // attached slice resolves nothing for it, even when a stale
             // report carried one — and so does a point in no reported region.
+            // A confirm button's press answers the modal through the same
+            // execution the button's key hint applies; the outside-press
+            // dismissal above already left confirm regions un-dismissed.
+            Some(RegionTarget::Confirm(ConfirmTargetId::Button(index))) => {
+                self.confirm_button_press(gesture, *index);
+            }
             Some(RegionTarget::Attach(_)) | None => {}
         }
+    }
+
+    /// A press on a confirm button executes the button the index names; any
+    /// other gesture on its region does nothing.
+    fn confirm_button_press(&mut self, gesture: PointerGesture<Position>, index: usize) {
+        if matches!(gesture, PointerGesture::Click { .. }) {
+            self.app.execute_gui_confirm_button(index);
+        }
+    }
+
+    /// Whether this press lands outside an open overlay's own targets — the
+    /// dismissal condition the caller applies.
+    fn press_outside_open_overlay(&self, event: &PointerEvent) -> bool {
+        matches!(event.kind, PointerKind::Press | PointerKind::RightPress)
+            && self.app.gui_overlay_is_open()
+            && !self
+                .regions
+                .resolve(event.position)
+                .is_some_and(RegionTarget::owns_gui_overlay)
     }
 
     /// Deliver a gesture the row drag owns to the Queue leaf: motion previews

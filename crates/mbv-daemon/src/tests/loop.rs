@@ -142,6 +142,7 @@ pub(super) fn test_loop_with_queue(
         audio_only: false,
         last_keepalive: Instant::now(),
         last_capabilities: Instant::now(),
+        last_queue_resync: Instant::now(),
         store: Box::new(move |state| {
             recorded.borrow_mut().push(RecordedSnapshot::of(state));
             Ok(())
@@ -544,3 +545,53 @@ fn playback_resolved_failure_line_carries_intent_client_and_request() {
 }
 
 mod persistence;
+
+// The canonical queue is the authority and mpv is only its projection, so a
+// `QueueDesynced` (the run's playlist and its queue copy diverged) must
+// resubmit the canonical queue to the player: the run's copy and mpv's
+// playlist are rebuilt from the same slots, and the identity → index mapping
+// every slot-addressed mpv operation reads is restored. Before this the
+// owner relayed the event to clients and repaired nothing, so the deleted
+// items kept playing after a divergence (local-daemon.log
+// 2026-11-08T19:33:53, the GUI queue fix).
+#[test]
+fn a_queue_desync_resubmits_the_canonical_queue_to_the_player() {
+    let mut fixture = test_loop_with_queue(
+        crate::DaemonRole::Local,
+        vec![
+            emby_qi("a", "Video", "Movie"),
+            emby_qi("b", "Video", "Movie"),
+        ],
+        0,
+    );
+    // The cooldown window opens the loop's clock at construction; move it
+    // into the past so the first desync resubmits.
+    fixture.event_loop.last_queue_resync -= std::time::Duration::from_secs(3);
+
+    fixture
+        .event_loop
+        .handle_event(DaemonEvent::Player(PlayerEvent::QueueDesynced(
+            "test divergence".into(),
+        )));
+
+    // The inhibited test player keeps the submit's seeding: the run the
+    // resubmit drives starts from the canonical queue's active slot.
+    let status = fixture.event_loop.player.status.lock().unwrap().clone();
+    assert!(status.active);
+    assert_eq!(status.queue_len, 2);
+    assert_eq!(status.current_idx, 0);
+    // The canonical queue itself is untouched: the resync repairs the
+    // projection, never the authority.
+    assert_eq!(
+        fixture
+            .event_loop
+            .owner
+            .core
+            .queue
+            .slots()
+            .iter()
+            .map(|slot| slot.item.id().to_string())
+            .collect::<Vec<_>>(),
+        vec!["a", "b"],
+    );
+}

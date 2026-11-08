@@ -8,6 +8,7 @@
 	import { routeLibraryKey } from '$lib/library/keys';
 	import { carryLibraryContent, libraryContent, libraryShown } from '$lib/library/state';
 	import AttachScreen from '$lib/components/AttachScreen.svelte';
+	import ConfirmOverlay from './lib/components/ConfirmOverlay.svelte';
 	import LibraryPanel from '$lib/components/LibraryPanel.svelte';
 	import Panel from '$lib/components/Panel.svelte';
 
@@ -124,6 +125,13 @@
         />
       {/if}
     </div>
+    {#if frame.overlay?.kind === 'confirm'}
+      <!-- The App's raised confirmation modal, window-modal over every panel
+        (add-gui-library-panel queue fixes): Enter and Esc answer in the
+        core's overlay key rules, and the buttons report their press
+        regions. -->
+      <ConfirmOverlay confirm={frame.overlay} />
+    {/if}
   {:else}
     <!-- The pre-attach states (design D9): the wait before the first
       frame, the Owner attach outcomes, and the mismatch prompt. -->

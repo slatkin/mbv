@@ -264,6 +264,10 @@ impl App {
                 self.remove_from_queue(pos);
                 None
             }
+            Some(ContextAction::ClearQueue) => {
+                self.request_clear_queue();
+                None
+            }
             Some(ContextAction::FeedsPlay(entries)) => {
                 self.play_feed_entries(entries);
                 None
@@ -418,6 +422,7 @@ impl App {
                 | ContextAction::MarkUnplayed(_)
                 | ContextAction::RemoveFromContinueWatching
                 | ContextAction::RemoveFromQueue(_)
+                | ContextAction::ClearQueue
                 | ContextAction::ShuffleQueue
                 | ContextAction::FeedsPlay(_)
                 | ContextAction::FeedsShuffle(_)

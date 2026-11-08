@@ -44,7 +44,10 @@ impl PaintedChoices {
                 let ids = choices.iter().map(|choice| choice.id).collect();
                 self.popover_track_ids = Some(ids);
             }
-            Some(GuiOverlayFrame::RowMenu { .. }) | None => {}
+            Some(GuiOverlayFrame::RowMenu { .. } | GuiOverlayFrame::Confirm { .. })
+            // The confirm names no choice list: its buttons resolve through
+            // their own regions, not through painted choice indexes.
+            | None => {}
         }
     }
 

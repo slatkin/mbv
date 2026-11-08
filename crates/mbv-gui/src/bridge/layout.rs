@@ -92,6 +92,9 @@ pub enum RegionTarget {
     /// paints Restart and Quit; before attach the core thread resolves them
     /// itself, so the press routes to the campaign, not to a surface leaf.
     Attach(AttachTargetId),
+    /// The confirm overlay's button: the press answers the modal through the
+    /// same execution the button's key hint applies.
+    Confirm(ConfirmTargetId),
 }
 
 impl RegionTarget {
@@ -113,10 +116,19 @@ impl RegionTarget {
                 | QueuePlaybackTargetId::SubtitleChip
                 | QueuePlaybackTargetId::PlaybackTarget,
             )
-            | Self::Queue(QueueTargetId::RowMenuEntry(_) | QueueTargetId::RowActions(_)) => true,
+            | Self::Queue(QueueTargetId::RowMenuEntry(_) | QueueTargetId::RowActions(_))
+            | Self::Confirm(_) => true,
             Self::Queue(_) | Self::QueuePlayback(_) | Self::StatusBar(_) | Self::Attach(_) => false,
         }
     }
+}
+
+/// The confirm overlay's button targets: one per painted button, by its
+/// index in the overlay's `buttons`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ConfirmTargetId {
+    Button(usize),
 }
 
 /// The pre-attach screen's button targets (design D9), as the mismatch

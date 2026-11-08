@@ -762,6 +762,12 @@ impl App {
     }
 
     pub(in crate::app) fn ask_confirm(&mut self, modal: ConfirmModal) {
+        // The GUI Client presents the shared confirmation as its own blocking
+        // overlay (the canvas's modal); the shell request stays undrained —
+        // the GUI mounts no TUI modal component.
+        if self.gui_client {
+            self.gui_overlay = Some(GuiOverlay::Confirm(modal.clone()));
+        }
         self.pending_overlay = Some(mbv_ui_model::overlay::OverlayRequest::Confirm(modal));
     }
 
@@ -770,6 +776,9 @@ impl App {
     }
 
     pub(in crate::app) fn dismiss_confirm(&mut self) {
+        if self.gui_client && matches!(self.gui_overlay, Some(GuiOverlay::Confirm(_))) {
+            self.gui_overlay = None;
+        }
         self.pending_overlay = Some(mbv_ui_model::overlay::OverlayRequest::DismissConfirm);
     }
 
