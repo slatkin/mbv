@@ -76,6 +76,7 @@ function rows() {
 	return buildLibraryRows({
 		artists: [TRIBE, BEASTIE, BRAND],
 		open: ['artist:service:a1', 'album:al1'],
+		closed: [],
 		filter: '',
 	});
 }
@@ -102,6 +103,7 @@ test('the filter narrows the rows to the names that contain its text', () => {
 	const painted = buildLibraryRows({
 		artists: [TRIBE, BEASTIE, BRAND],
 		open: [],
+		closed: [],
 		filter: 'ALL FOR',
 	});
 

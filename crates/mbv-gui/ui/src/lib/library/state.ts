@@ -59,6 +59,11 @@ export interface LibraryUiState {
 	/** The list's open tree node row ids (design D7): an artist and an album
 	 * each open and close on their own. */
 	openNodes: string[];
+	/** The node row ids the user closed while the filter narrowed the rows:
+	 * the filter opens a node that holds a match, so the close half needs an
+	 * override to stay shut (design D7's open and close). A new filter and a
+	 * cleared one drop it. */
+	filterClosed: string[];
 	/** The list's native scroll offset in pixels (design D7). */
 	scrollTop: number;
 	/** The list's measured viewport height in pixels: `0` until the list
@@ -76,6 +81,7 @@ export function initialLibraryUi(): LibraryUiState {
 		pillToggle: null,
 		cursor: null,
 		openNodes: [],
+		filterClosed: [],
 		scrollTop: 0,
 		viewportHeight: 0,
 	};
@@ -102,15 +108,20 @@ export function openLibraryFilter(): void {
 }
 
 /** Close the filter with Esc: the text goes with it, so a closed filter
- * narrows nothing (design D3, step 2). */
+ * narrows nothing (design D3, step 2). The cursor and the scroll follow the
+ * widened rows, and the filter's own open and close over the nodes goes with
+ * the text. */
 export function closeLibraryFilter(): void {
-	libraryUi.update((ui) => ({ ...ui, filterOpen: false, filter: '' }));
+	libraryUi.update((ui) =>
+		resolveCursor({ ...ui, filterOpen: false, filter: '', filterClosed: [] }),
+	);
 }
 
-/** Accept the filter with Enter: the field closes and the list keeps the
- * text (design D3, step 2). */
+/** Accept the filter with Enter: the field closes and the list keeps the text
+ * (design D3, step 2). The cursor and the scroll follow the rows the same way
+ * a text change moves them. */
 export function acceptLibraryFilter(): void {
-	libraryUi.update((ui) => ({ ...ui, filterOpen: false }));
+	libraryUi.update((ui) => resolveCursor({ ...ui, filterOpen: false }));
 }
 
 /** Focus a pane: the window content of Tab and Shift+Tab (design D3, step 3). */
@@ -187,7 +198,25 @@ function libraryTree(ui: LibraryUiState): LibraryTree {
 	return {
 		artists: libraryMusic()?.artists ?? [],
 		open: ui.openNodes,
+		closed: ui.filterClosed,
 		filter: ui.filter,
+	};
+}
+
+/** The interaction state once the painted rows may have changed: the cursor
+ * keeps its row while that row still paints, and falls to the first painted row
+ * otherwise, with the scroll offset showing it (design D7). A filter's text
+ * change and its clear both run this, so the cursor never rests on a row that
+ * no longer paints. */
+function resolveCursor(ui: LibraryUiState): LibraryUiState {
+	const rows = rowsOf(ui);
+	const cursor = rows.some((row) => row.id === ui.cursor)
+		? ui.cursor
+		: moveListCursor(rows, null, 'home');
+	return {
+		...ui,
+		cursor,
+		scrollTop: scrollTopToShowCursor(rows, cursor, ui.scrollTop, ui.viewportHeight),
 	};
 }
 
@@ -221,22 +250,40 @@ function pickedItemId(row: LibraryRow): string | null {
 }
 
 /** Open or close one tree node (design D7): opening an album whose tracklist
- * the carried content does not hold asks the core to load it (design D5). */
+ * the carried content does not hold asks the core to load it (design D5). While
+ * the filter narrows the rows, the press overrides the filter's auto-open for
+ * that node instead of the stored open state, so the node the user closed stays
+ * closed until the filter changes. */
 function setNodeOpen(row: LibraryNodeRow, open: boolean): void {
-	libraryUi.update((ui) => ({
-		...ui,
-		openNodes: open
-			? [...ui.openNodes.filter((id) => id !== row.id), row.id]
-			: ui.openNodes.filter((id) => id !== row.id),
-	}));
+	libraryUi.update((ui) =>
+		ui.filter.trim() === ''
+			? {
+					...ui,
+					openNodes: withId(ui.openNodes, row.id, open),
+				}
+			: {
+					...ui,
+					// The closed set names the nodes to keep shut, so it takes the id
+					// when the press closes the node.
+					filterClosed: withId(ui.filterClosed, row.id, !open),
+				},
+	);
 	if (open && row.kind === 'album' && !row.tracksLoaded) {
 		void sendLibraryCommand({ command: 'openAlbum', albumId: row.albumId });
 	}
 }
 
+/** The id list with `id` present when `present` and absent otherwise, keeping
+ * the other ids' order. */
+function withId(ids: string[], id: string, present: boolean): string[] {
+	const rest = ids.filter((candidate) => candidate !== id);
+	return present ? [...rest, id] : rest;
+}
+
 /** Press a row (design D7): an artist or album row opens or closes and is
- * picked; a track row is picked. A press moves no cursor — that is the keys'
- * work. */
+ * picked; a track row is picked. The row's painted open state is the half to
+ * flip, so a press under a filter closes the node the filter opened. A press
+ * moves no cursor — that is the keys' work. */
 export function pressLibraryRow(row: LibraryRow): void {
 	if (row.kind === 'letter') {
 		return;
@@ -245,7 +292,7 @@ export function pressLibraryRow(row: LibraryRow): void {
 		showDetail(pickedItemId(row));
 		return;
 	}
-	setNodeOpen(row, !get(libraryUi).openNodes.includes(row.id));
+	setNodeOpen(row, !row.open);
 	showDetail(pickedItemId(row));
 }
 
@@ -285,20 +332,17 @@ export function setLibraryCursorOpen(open: boolean): void {
 
 /** Narrow the list to the names that contain `filter`, without case (design
  * D7). The cursor keeps its row while that row stays painted, and otherwise
- * falls to the first painted row; the scroll offset follows the narrower
- * list. */
+ * falls to the first painted row; the scroll offset follows the narrower list.
+ * New text starts the filter's own open and close over: the nodes the user
+ * closed under the old text open again. */
 export function setLibraryFilter(filter: string): void {
 	libraryUi.update((ui) => {
-		const next = { ...ui, filter };
-		const rows = rowsOf(next);
-		const cursor = rows.some((row) => row.id === next.cursor)
-			? next.cursor
-			: moveListCursor(rows, null, 'home');
-		return {
-			...next,
-			cursor,
-			scrollTop: scrollTopToShowCursor(rows, cursor, next.scrollTop, next.viewportHeight),
+		const next = {
+			...ui,
+			filter,
+			filterClosed: filter === ui.filter ? ui.filterClosed : [],
 		};
+		return resolveCursor(next);
 	});
 }
 

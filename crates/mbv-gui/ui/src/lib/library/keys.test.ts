@@ -22,6 +22,8 @@ import {
 	initialLibraryUi,
 	libraryUi,
 	measureLibraryList,
+	openLibraryFilter,
+	setLibraryFilter,
 } from './state';
 
 const invokeMock = vi.mocked(invoke);
@@ -271,4 +273,21 @@ test('Enter picks the item under the cursor', () => {
 	expect(invokeMock).toHaveBeenCalledWith('library', {
 		command: { command: 'showDetail', itemId: 'al2' },
 	});
+});
+
+// Review of row 4.5, finding P2: the filter opens a node that holds a match,
+// so the cursor can rest on a track row that only the narrowing paints. Esc
+// clears the filter, and the row goes: the cursor must move to a row that does
+// paint, or Enter and Right would reach no row at all.
+test('Esc that clears the filter moves a stranded cursor to a painted row', () => {
+	carryList();
+	setLibraryFilter('rhymin');
+	press('ArrowDown');
+	press('ArrowDown');
+	expect(get(libraryUi).cursor).toBe('track:t1');
+
+	openLibraryFilter();
+	press('Escape');
+
+	expect(get(libraryUi).cursor).toBe('artist:service:a1');
 });

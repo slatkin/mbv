@@ -85,13 +85,13 @@
 			<LibraryList {music} />
 		</div>
 		{#if arrangement === 'narrow' && music.hero}
-			<!-- The Narrow Hero overlay: picking an album opens the Hero over the
-				list. Row 4.7 paints the same Hero painters here. -->
-			<div
-				data-library-region="heroOverlay"
-				class="absolute inset-0"
-				style:background="var(--canvas-library-column)"
-			></div>
+			<!-- The Narrow Hero overlay's place: picking an album opens the Hero over
+				the list. Until row 4.7 paints the Hero here, the box paints no fill and
+				takes no pointer events — a picked album never covers the list, its
+				filter, or the rail with an empty surface that no key dismisses (review
+				of row 4.5, finding P1). Row 4.7 gives it the Hero's fill, content, and
+				dismissal. -->
+			<div data-library-region="heroOverlay" class="pointer-events-none absolute inset-0"></div>
 		{/if}
 	</div>
 </div>

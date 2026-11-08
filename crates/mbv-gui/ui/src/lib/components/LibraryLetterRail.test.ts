@@ -55,7 +55,9 @@ function music(): GuiMusicFrame {
 
 /** The rail's letters: the A–Z entries over the painted rows. */
 function letters() {
-	return letterRail(buildLibraryRows({ artists: music().artists, open: [], filter: '' }));
+	return letterRail(
+		buildLibraryRows({ artists: music().artists, open: [], closed: [], filter: '' }),
+	);
 }
 
 test('a letter with no painted rows is disabled and a press changes nothing', async () => {

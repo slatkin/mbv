@@ -62,6 +62,7 @@
 		buildLibraryRows({
 			artists: music.artists,
 			open: $libraryUi.openNodes,
+			closed: $libraryUi.filterClosed,
 			filter: $libraryUi.filter,
 		}),
 	);

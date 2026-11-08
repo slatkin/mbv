@@ -93,6 +93,10 @@ export interface LibraryTree {
 	artists: readonly GuiMusicArtist[];
 	/** The open node ids (artist and album row ids). */
 	open: readonly string[];
+	/** The node ids the user closed while the filter was narrowing the rows:
+	 * they override the filter's auto-open, so a press still closes a node
+	 * under a filter (design D7's open and close). */
+	closed: readonly string[];
 	/** The filter text: the list paints only the rows whose name contains it,
 	 * without case (design D7). */
 	filter: string;
@@ -109,9 +113,10 @@ export interface LibraryTree {
  * The filter narrows the rows to the names that contain the text, without
  * case: a row paints when its own name matches. An artist or album whose rows
  * all drop out stays when one of its descendants matches, so a match is never
- * orphaned, and a node with a matching child paints open so no match hides.
- * Outside a filter, a node paints open when the window content has it open,
- * even while an album's tracklist is still loading.
+ * orphaned, and a node with a matching child paints open so no match hides —
+ * unless the user closed that node under the filter, which the closed set
+ * keeps shut. Outside a filter, a node paints open when the window content has
+ * it open, even while an album's tracklist is still loading.
  */
 export function buildLibraryRows(tree: LibraryTree): LibraryRow[] {
 	const needle = tree.filter.trim().toLowerCase();
@@ -148,7 +153,7 @@ export function buildLibraryRows(tree: LibraryTree): LibraryRow[] {
 			push({ id: `letter:${letter}`, kind: 'letter', letter }, LETTER_ROW_HEIGHT);
 		}
 		const artistOpen = narrowing
-			? keptAlbums.length > 0
+			? keptAlbums.length > 0 && !tree.closed.includes(artistId)
 			: tree.open.includes(artistId);
 		push(
 			{
@@ -170,7 +175,7 @@ export function buildLibraryRows(tree: LibraryTree): LibraryRow[] {
 			}
 			const albumId = albumRowId(album.albumId);
 			const albumOpen = narrowing
-				? tracks.length > 0
+				? tracks.length > 0 && !tree.closed.includes(albumId)
 				: tree.open.includes(albumId);
 			push(
 				{

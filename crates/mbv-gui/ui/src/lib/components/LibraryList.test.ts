@@ -132,3 +132,19 @@ test('the filter narrows the painted rows to the names that contain its text', a
 	expect(container.querySelector('[data-library-row-id="artist:service:a1"]')).toBeNull();
 	expect(container.querySelector('[data-library-row-id="artist:service:a2"]')).toBeTruthy();
 });
+
+// Review of row 4.5, finding P2: the filter opens a node that holds a match,
+// so a press under the filter must still close it — the close half of the
+// design's "a press on an artist or album row opens or closes it".
+test('a press closes and reopens a node while the filter narrows the rows', async () => {
+	libraryUi.update((ui) => ({ ...ui, filter: 'rhymin' }));
+	const container = await mountList(240);
+	const album = () =>
+		container.querySelector('[data-library-row-id="album:al1"]');
+
+	expect(album()?.getAttribute('aria-expanded')).toBe('true');
+	await fireEvent.click(album() as HTMLElement);
+	expect(album()?.getAttribute('aria-expanded')).toBe('false');
+	await fireEvent.click(album() as HTMLElement);
+	expect(album()?.getAttribute('aria-expanded')).toBe('true');
+});
