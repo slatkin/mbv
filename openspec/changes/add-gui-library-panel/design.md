@@ -118,7 +118,7 @@ Collection pills by destination (Phase 2 uses the same rule; a pill is a collect
 
 ### D7. The list and the letter rail
 
-The list is the canvas tree: artist rows (30 px), album rows with the year (30 px), and track rows with the track number (28 px), with 24 px letter headings above the first artist of each letter. A press on an artist or album row opens or closes it and picks it; a press on a track picks it. The cursor and the picked item are different: the cursor moves by keys, and a press or Enter on an album picks it for the Hero. The list paints only the rows in view (fixed heights, native scroll), so a long artist list stays fast.
+The list is the canvas tree: artist rows (30 px), album rows with the year (30 px), and track rows with the track number (28 px), with 24 px letter headings above the first artist of each letter. A press on an artist or album row opens or closes it and picks it; a press on a track picks it. The cursor and the picked item are different: the cursor moves by keys, and a press picks the item for the Hero. Enter plays the item under the cursor and never picks it: the GUI is mouse-driven for picking, and the TUI's Enter-picks behaviour is its own compromise. The list paints only the rows in view (fixed heights, native scroll), so a long artist list stays fast.
 
 The letter rail shows A to Z beside a list sorted by name. A letter with no rows is disabled. A press scrolls to the first row of that letter and moves the cursor there. The canvas gives the rail no key. Its keyboard path is the `/` filter. The filter narrows the rows to the names that contain the text, without case.
 
