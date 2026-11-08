@@ -381,14 +381,32 @@ test('Right opens the cursor album and asks for its tracks', () => {
 	expect(get(libraryUi).openNodes).toContain('album:al2');
 });
 
-test('Enter picks the item under the cursor', () => {
+// The Library is mouse-driven for picking and keyboard-driven for playback
+// (`design.md` D7): Enter plays the item under the cursor and never picks it,
+// so a mouse press stays the only way to pick an album for the Hero.
+test('Enter in the list plays the item under the cursor', () => {
 	carryList(['artist:service:a1']);
 	libraryUi.update((ui) => ({ ...ui, cursor: 'album:al2' }));
 
 	press('Enter');
 
 	expect(invokeMock).toHaveBeenCalledWith('library', {
+		command: { command: 'play', itemId: 'al2' },
+	});
+	expect(invokeMock).not.toHaveBeenCalledWith('library', {
 		command: { command: 'showDetail', itemId: 'al2' },
+	});
+});
+
+// A track row plays its own track, not the album a pick would show.
+test('Enter in the list plays the track under the cursor', () => {
+	carryList(['artist:service:a1', 'album:al1']);
+	libraryUi.update((ui) => ({ ...ui, cursor: 'track:t1' }));
+
+	press('Enter');
+
+	expect(invokeMock).toHaveBeenCalledWith('library', {
+		command: { command: 'play', itemId: 't1' },
 	});
 });
 

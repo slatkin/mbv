@@ -29,7 +29,6 @@ import {
 	moveLibraryPane,
 	moveLibraryTrackCursor,
 	openLibraryFilter,
-	pickLibraryCursor,
 	requestLibraryPillToggle,
 	setLibraryCursorOpen,
 } from './state';
@@ -153,9 +152,20 @@ function routeFilterKey(event: KeyboardEvent): KeyOutcome {
 	return 'text';
 }
 
-/** Route a movement, open and close, or pick key to the list's cursor (design
- * D3, D7): the arrows, Page Up, Page Down, Home, and End move the cursor, Right
- * opens the cursor's node, Left closes it, and Enter picks the item under it. */
+/** Play the item the focused pane's cursor names (design D3's Enter): the list
+ * row, or the Hero's tracklist track while that pane has the pane focus. With
+ * no item under the cursor the key sends no command. Enter never picks: a mouse
+ * press picks the item for the Hero, and Enter plays. */
+function playFocusedItem(): void {
+	const itemId = focusedItemId();
+	if (itemId !== null) {
+		void sendLibraryCommand({ command: 'play', itemId });
+	}
+}
+
+/** Route a movement or open key to the list's cursor (design D3, D7): the
+ * arrows, Page Up, Page Down, Home, and End move the cursor, Right opens the
+ * cursor's node, Left closes it, and Enter plays the item under it. */
 function routeListKey(event: KeyboardEvent): boolean {
 	const move = CURSOR_MOVES[event.key];
 	if (move !== undefined) {
@@ -171,7 +181,7 @@ function routeListKey(event: KeyboardEvent): boolean {
 		return true;
 	}
 	if (event.key === 'Enter') {
-		pickLibraryCursor();
+		playFocusedItem();
 		return true;
 	}
 	return false;
@@ -187,10 +197,7 @@ function routeTracklistKey(event: KeyboardEvent): boolean {
 		return true;
 	}
 	if (event.key === 'Enter') {
-		const itemId = focusedItemId();
-		if (itemId !== null) {
-			void sendLibraryCommand({ command: 'play', itemId });
-		}
+		playFocusedItem();
 		return true;
 	}
 	return false;

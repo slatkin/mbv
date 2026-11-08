@@ -372,15 +372,6 @@ export function moveLibraryCursor(move: ListMove): void {
 	});
 }
 
-/** Pick the item under the cursor (design D3's Enter): the Hero shows it on the
- * next frame. Enter's play lands with the Hero's own actions. */
-export function pickLibraryCursor(): void {
-	const row = cursorRow(get(libraryUi));
-	if (row !== null) {
-		showDetail(pickedItemId(row));
-	}
-}
-
 /** Open or close the cursor's node (design D7's Right and Left). */
 export function setLibraryCursorOpen(open: boolean): void {
 	const row = cursorRow(get(libraryUi));
