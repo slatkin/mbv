@@ -6,7 +6,7 @@
 	import { reportContainerSize } from '$lib/bridge/layout';
 	import type { LayoutSize } from '$lib/bridge/types';
 	import { routeLibraryKey } from '$lib/library/keys';
-	import { carryLibraryContent, libraryContent } from '$lib/library/state';
+	import { carryLibraryContent, libraryContent, libraryShown } from '$lib/library/state';
 	import AttachScreen from '$lib/components/AttachScreen.svelte';
 	import LibraryPanel from '$lib/components/LibraryPanel.svelte';
 	import Panel from '$lib/components/Panel.svelte';
@@ -90,8 +90,13 @@
     {@const content = $libraryContent}
     {@const music = content?.music ?? null}
     {@const queueFocused = frame.focus.panel === 'queue'}
-    {@const queueVisible = music === null || arrangement !== 'mini' || queueFocused}
-    {@const libraryVisible = music !== null && (arrangement !== 'mini' || !queueFocused)}
+    <!-- The Library panel's one presence fact (design D2, D10): the frame
+      carries the Library section and the window holds the Music content it
+      paints. The key router gates on the same fact, so a destination that
+      leaves unmounts the panel and stops its keys together. -->
+    {@const panelShows = libraryShown(frame.library, music)}
+    {@const queueVisible = !panelShows || arrangement !== 'mini' || queueFocused}
+    {@const libraryVisible = panelShows && (arrangement !== 'mini' || !queueFocused)}
     {@const twoColumns = queueVisible && libraryVisible}
     <div
       bind:this={containerEl}

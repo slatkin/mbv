@@ -9,7 +9,7 @@
 import { get } from 'svelte/store';
 import { sendLibraryCommand } from '$lib/bridge/library';
 import type { KeyOutcome } from '$lib/bridge/input';
-import type { GuiFrame, GuiPanel } from '$lib/bridge/types';
+import type { GuiFrame, GuiLibraryTab, GuiPanel } from '$lib/bridge/types';
 import type { ListMove } from './list';
 import {
 	acceptLibraryFilter,
@@ -22,6 +22,8 @@ import {
 	focusedLibraryPill,
 	heroOverlayOpen,
 	libraryContent,
+	libraryMusic,
+	libraryShown,
 	libraryUi,
 	moveLibraryCursor,
 	moveLibraryPane,
@@ -74,24 +76,37 @@ function bare(event: KeyboardEvent): boolean {
 	return !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey;
 }
 
-/** The destination tab a digit opens (design D3, step 3): `1` opens the first
- * tab after Home, so the digit is the position the frame's tabs are indexed
- * by. */
-function destinationPosition(event: KeyboardEvent): number | null {
+/** The carried destination tabs (design D2): the tabs the top bar paints, and
+ * the ones the digits open. */
+function carriedTabs(): readonly GuiLibraryTab[] {
+	return get(libraryContent)?.tabs ?? [];
+}
+
+/** The place of the destination tab a digit opens (design D3, step 3): `1`
+ * opens the first tab after Home, so the digit is the tab's place in the
+ * carried list rather than a tab position. */
+function destinationPlace(event: KeyboardEvent): number | null {
 	if (!bare(event) || event.key.length !== 1) {
 		return null;
 	}
-	const position = Number(event.key);
-	return position >= 1 && position <= 7 ? position : null;
+	const place = Number(event.key);
+	return place >= 1 && place <= 7 ? place : null;
 }
 
 /** Move the pane focus (design D3, step 3): Tab and Shift+Tab walk the pill
- * row, the list, and the Hero. Tab across the panel boundary sends the
- * take-focus command, because Panel focus lives in the core (design D4). */
+ * row, the list, and the Hero. The ends of that walk cross the panel boundary
+ * (design D4): Tab past the Hero and Shift+Tab before the pill row give the
+ * Queue panel Panel focus, and Queue Panel focus gives the Library panel's
+ * near end the keyboard, because Panel focus lives in the core. */
 function takePaneFocus(panel: GuiPanel, step: number): void {
 	if (panel === 'queue') {
 		sendLibraryCommand({ command: 'takeFocus' });
 		focusLibraryPane(step > 0 ? 'pills' : 'hero');
+		return;
+	}
+	const { pane } = get(libraryUi);
+	if ((step > 0 && pane === 'hero') || (step < 0 && pane === 'pills')) {
+		sendLibraryCommand({ command: 'takeQueueFocus' });
 		return;
 	}
 	moveLibraryPane(step);
@@ -242,6 +257,14 @@ function routePanelKey(event: KeyboardEvent, ui: LibraryUiState): KeyOutcome {
 			movePillFocus(-1);
 			return 'handled';
 		}
+		// Enter presses the focused pill, as Space does (design D3, step 4, D6).
+		if (event.key === 'Enter') {
+			const pill = focusedLibraryPill(pills(), ui);
+			if (pill !== null) {
+				requestLibraryPillToggle(pill.groupId, false);
+				return 'handled';
+			}
+		}
 	}
 	if (ui.pane === 'list' && bare(event) && routeListKey(event)) {
 		return 'handled';
@@ -269,16 +292,15 @@ export function routeLibraryKey(
 	frame: LibraryKeyFrame | null,
 ): KeyOutcome {
 	// The attach states carry no slice, and no Library panel means no Library
-	// keys: the core takes the key.
-	if (!frame) {
+	// keys: the core takes every one of them. The panel's presence is the
+	// window's mount fact (design D2, D10), so a key never acts on a panel that
+	// paints nothing.
+	if (!frame || !libraryShown(frame.library, libraryMusic())) {
 		return 'core';
 	}
 	// (1) An open core overlay or an armed prefix keeps the keyboard with the
 	// core: both are in the frame, and the core's own router answers them.
 	if (frame.overlay !== null || frame.status.prefixArmed) {
-		return 'core';
-	}
-	if (frame.library === null) {
 		return 'core';
 	}
 	// The Queue filter's text entry is the core's, so while it holds the
@@ -297,9 +319,15 @@ export function routeLibraryKey(
 		takePaneFocus(frame.focus.panel, event.shiftKey ? -1 : 1);
 		return 'handled';
 	}
-	const destination = destinationPosition(event);
-	if (destination !== null) {
-		sendLibraryCommand({ command: 'openDestination', position: destination });
+	const place = destinationPlace(event);
+	if (place !== null) {
+		// A digit names a carried tab, never a raw position: it opens the tab
+		// the top bar paints at that place, and a digit past the carried tabs
+		// opens nothing (design D3, step 3).
+		const tab = carriedTabs()[place - 1];
+		if (tab !== undefined) {
+			sendLibraryCommand({ command: 'openDestination', position: tab.position });
+		}
 		return 'handled';
 	}
 	// (4) The Library keys run while the Library panel has Panel focus.

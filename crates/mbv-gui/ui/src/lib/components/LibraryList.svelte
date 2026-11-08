@@ -33,7 +33,6 @@
 		rowsHeight,
 	} from '$lib/library/list';
 	import type { LibraryRow } from '$lib/library/list';
-	import { selectedPillIds } from '$lib/library/pills';
 	import {
 		acceptLibraryFilter,
 		libraryUi,
@@ -77,13 +76,10 @@
 	const above = $derived(painted.length > 0 ? painted[0].top : 0);
 	const below = $derived(total - (painted.length > 0 ? lastBottom() : above));
 
-	/** The selected collection names in pill order (design D6). */
-	const selectedNames = $derived.by(() => {
-		const selected = selectedPillIds(music.pills);
-		return music.pills
-			.filter((pill) => selected.includes(pill.groupId))
-			.map((pill) => pill.name);
-	});
+	/** The selected collection names in pill order (design D6): the core's one
+	 * derivation, carried on the Music frame so the list header and the Status
+	 * bar location cannot disagree. */
+	const selectedNames = $derived(music.collectionNames);
 
 	/** The header's right line: the canvas's selection label — the names joined
 	 * by ` + `, or one name with its sort rule (design D6). */

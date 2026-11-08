@@ -12,6 +12,7 @@ import { beforeEach, expect, test, vi } from 'vitest';
 import { frames } from '$lib/bridge/frames';
 import type {
 	GuiFrame,
+	GuiLibraryContent,
 	GuiMusicFrame,
 	GuiMusicHero,
 	GuiPanel,
@@ -154,18 +155,23 @@ function frame(panel: GuiPanel, libraryMusic: GuiMusicFrame | null): GuiFrame {
 	};
 }
 
-/** Seeds the frame store, renders the window at `size`, and returns the
- * rendered view once the observer's measurement has painted. */
-async function mount(size: LayoutSize, slice: GuiFrame) {
+/** Seeds the frame store and the Library content the window holds, renders the
+ * window at `size`, and returns the rendered view once the observer's
+ * measurement has painted. */
+async function mount(
+	size: LayoutSize,
+	slice: GuiFrame,
+	carried: GuiLibraryContent | null = null,
+) {
 	await frames.listen();
 	const handler = listenMock.mock.calls.at(-1)?.[1] as (
 		event: { payload: GuiWindowFrame },
 	) => void;
 	handler({ payload: { slice } });
 	// The frame store keeps the seeded slice; a stale carried value from
-	// another test would outlive the reset, so clear the store rather than the
+	// another test would outlive the reset, so set the store rather than the
 	// frame.
-	libraryContent.set(null);
+	libraryContent.set(carried);
 	ResizeObserverStub.size = size;
 	const view = render(App);
 	await tick();
@@ -257,6 +263,23 @@ test('the Queue footer drops the prefix and the toast while the Library panel sh
 
 	expect(container.querySelector('[data-library-status-toast]')?.textContent).toContain('Scanning');
 	expect(container.querySelector('[data-footer-line]')?.textContent).not.toContain('Scanning');
+});
+
+// The Library panel's one presence fact (design D2, D10): a frame that carries
+// no Library section paints no panel and hides no Queue panel, whatever content
+// the window kept from an earlier frame.
+test('a frame without the Library section paints only the Queue panel', async () => {
+	const { container } = await mount(
+		{ width: 700, height: 900 },
+		frame('library', null),
+		{ tabs: [{ position: 1, label: 'Music' }], currentTab: 1, music: music() },
+	);
+
+	expect(container.querySelector('[data-arrangement]')?.getAttribute('data-arrangement')).toBe(
+		'mini',
+	);
+	expect(container.querySelector('[data-panel-state]')).toBeTruthy();
+	expect(container.querySelector('[data-library-panel]')).toBeNull();
 });
 
 test('Mini below 480 px mounts only the Queue panel while Panel focus is queue', async () => {

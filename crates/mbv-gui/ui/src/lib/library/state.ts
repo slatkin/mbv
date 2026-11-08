@@ -122,6 +122,17 @@ export function carryLibraryContent(frame: GuiLibraryFrame | null): void {
 	}
 }
 
+/** Whether the Library panel shows (design D2, D10): the frame carries the
+ * Library section and the window holds the Music content the panel paints. The
+ * window mounts the panel on this one fact and the key router gates on it, so
+ * no Library key acts while the panel paints nothing. */
+export function libraryShown(
+	library: GuiLibraryFrame | null,
+	music: GuiMusicFrame | null,
+): boolean {
+	return library !== null && music !== null;
+}
+
 /** Open the list's filter: `/` with Library Panel focus (design D3, step 4). */
 export function openLibraryFilter(): void {
 	libraryUi.update((ui) => ({ ...ui, filterOpen: true }));

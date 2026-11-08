@@ -11,6 +11,7 @@ import { beforeEach, expect, test, vi } from 'vitest';
 import { installInput } from '$lib/bridge/input';
 import type {
 	GuiLibraryContent,
+	GuiLibraryTab,
 	GuiMusicArtist,
 	GuiMusicHero,
 	GuiMusicPill,
@@ -103,6 +104,19 @@ function content(
 	};
 }
 
+/** Carry the content the panel paints, so the window holds the Music content
+ * its presence fact needs (design D2, D10). */
+function carryPanel(): void {
+	carryLibraryContent({ revision: 1, content: content() });
+}
+
+/** Carry the content with the given destination tabs (design D2): the tabs the
+ * digits open.
+ */
+function carryTabs(tabs: GuiLibraryTab[]): void {
+	carryLibraryContent({ revision: 1, content: { ...content(), tabs } });
+}
+
 /** The picked album's Hero facts: the tracklist the Hero pane's keys move
  * through (design D3, D8). */
 const HERO: GuiMusicHero = {
@@ -149,6 +163,8 @@ function press(
 }
 
 test('Library Panel focus: / opens the filter and sends no key', () => {
+	carryPanel();
+
 	press('/');
 
 	expect(get(libraryUi).filterOpen).toBe(true);
@@ -156,6 +172,8 @@ test('Library Panel focus: / opens the filter and sends no key', () => {
 });
 
 test('Queue Panel focus sends / to the core', () => {
+	carryPanel();
+
 	press('/', {}, frame('queue'));
 
 	expect(get(libraryUi).filterOpen).toBe(false);
@@ -165,6 +183,8 @@ test('Queue Panel focus sends / to the core', () => {
 });
 
 test('an armed prefix sends a Library key to the core', () => {
+	carryPanel();
+
 	press(
 		'n',
 		{},
@@ -177,6 +197,8 @@ test('an armed prefix sends a Library key to the core', () => {
 });
 
 test('an open core overlay sends a Library key to the core', () => {
+	carryPanel();
+
 	press(
 		'/',
 		{},
@@ -191,6 +213,21 @@ test('an open core overlay sends a Library key to the core', () => {
 	);
 
 	expect(get(libraryUi).filterOpen).toBe(false);
+	expect(invokeMock).toHaveBeenCalledWith('key', {
+		event: expect.objectContaining({ key: '/' }),
+	});
+});
+
+// The panel's presence is one fact for the window and the router (design D2,
+// D10): a frame that carries no Library section takes no Library key, even
+// while the window still holds the content of an earlier frame.
+test('a frame without the Library section leaves every Library key to the core', () => {
+	carryPanel();
+
+	press('/', {}, frame('library', { library: null }));
+
+	expect(get(libraryUi).filterOpen).toBe(false);
+	expect(invokeMock).not.toHaveBeenCalledWith('library', expect.anything());
 	expect(invokeMock).toHaveBeenCalledWith('key', {
 		event: expect.objectContaining({ key: '/' }),
 	});
@@ -226,7 +263,19 @@ test('Right with no focused pill focuses the first pill and sends no key', () =>
 	expect(invokeMock).not.toHaveBeenCalled();
 });
 
+test('Enter on a focused pill asks for its toggle and sends no key', () => {
+	carryPanel();
+	libraryUi.update((ui) => ({ ...ui, focusedPill: 'g2' }));
+
+	press('Enter');
+
+	expect(get(libraryUi).pillToggle).toEqual({ groupId: 'g2', solo: false });
+	expect(invokeMock).not.toHaveBeenCalled();
+});
+
 test('Tab with Queue Panel focus takes Library focus and sends no key', () => {
+	carryPanel();
+
 	press('Tab', {}, frame('queue'));
 
 	expect(invokeMock).toHaveBeenCalledWith('library', {
@@ -236,15 +285,56 @@ test('Tab with Queue Panel focus takes Library focus and sends no key', () => {
 	expect(invokeMock).not.toHaveBeenCalledWith('key', expect.anything());
 });
 
-test('a digit opens the destination tab at its position', () => {
-	press('3');
+// The walks cross the panel boundary at their ends (design D3, D4): Tab past
+// the Hero and Shift+Tab before the pill row give the Queue panel Panel focus,
+// and only Queue Panel focus asks for the Library panel's focus.
+test('Tab past the last Library pane takes Queue Panel focus', () => {
+	carryPanel();
+	libraryUi.update((ui) => ({ ...ui, pane: 'hero' }));
+
+	press('Tab');
 
 	expect(invokeMock).toHaveBeenCalledWith('library', {
-		command: { command: 'openDestination', position: 3 },
+		command: { command: 'takeQueueFocus' },
+	});
+	expect(invokeMock).not.toHaveBeenCalledWith('key', expect.anything());
+});
+
+test('Shift+Tab before the first Library pane takes Queue Panel focus', () => {
+	carryPanel();
+
+	press('Tab', { shiftKey: true });
+
+	expect(invokeMock).toHaveBeenCalledWith('library', {
+		command: { command: 'takeQueueFocus' },
 	});
 });
 
+// A digit names a carried tab, never a raw position (design D3, step 3): the
+// presented destinations are the tabs the top bar paints.
+test('a digit opens the carried tab at its place', () => {
+	carryTabs([
+		{ position: 1, label: 'Music' },
+		{ position: 4, label: 'Audiobooks' },
+	]);
+
+	press('2');
+
+	expect(invokeMock).toHaveBeenCalledWith('library', {
+		command: { command: 'openDestination', position: 4 },
+	});
+});
+
+test('a digit past the carried tabs opens nothing', () => {
+	carryTabs([{ position: 1, label: 'Music' }]);
+
+	press('2');
+
+	expect(invokeMock).not.toHaveBeenCalled();
+});
+
 test('the open filter takes a typed key without preventing its default', () => {
+	carryPanel();
 	libraryUi.update((ui) => ({ ...ui, filterOpen: true }));
 
 	const event = press('r');
@@ -254,6 +344,7 @@ test('the open filter takes a typed key without preventing its default', () => {
 });
 
 test('Esc closes the filter, clears its text, and sends no key', () => {
+	carryPanel();
 	libraryUi.update((ui) => ({
 		...ui,
 		filterOpen: true,
@@ -395,6 +486,7 @@ test('Enter in the Hero pane plays the track the painted tracklist shows', () =>
 });
 
 test('Esc closes the open item menu and sends no key', () => {
+	carryPanel();
 	libraryUi.update((ui) => ({ ...ui, itemMenuOpen: true }));
 
 	press('Escape');

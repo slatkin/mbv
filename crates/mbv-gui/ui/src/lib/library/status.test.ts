@@ -29,15 +29,14 @@ function hero(): GuiMusicHero {
 	};
 }
 
-/** The Music content: two pills with the second selected, and an optional
- * picked album. */
+/** The Music content: the pills disagree with the carried names, so the line
+ * proves it reads the core's one derivation (design D6). */
 function music(picked: GuiMusicHero | null): GuiMusicFrame {
 	return {
 		libIdx: 0,
 		pills: [
-			{ groupId: 'g1', name: 'Jazz', selected: false, collection: true },
-			{ groupId: 'g2', name: 'Hip-Hop', selected: true, collection: true },
-			{ groupId: 'g3', name: 'Soul', selected: true, collection: true },
+			{ groupId: 'g1', name: 'Jazz', selected: true, collection: true },
+			{ groupId: 'g2', name: 'Hip-Hop', selected: false, collection: true },
 		],
 		collectionNames: ['Hip-Hop', 'Soul'],
 		loading: false,

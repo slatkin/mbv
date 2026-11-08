@@ -14,12 +14,11 @@ function destinationLabel(
 	return tabs.find((tab) => tab.position === currentTab)?.label ?? null;
 }
 
-/** The selected collection names in pill order (design D6): the pills the
- * core's carried selection holds selected. */
+/** The selected collection names in pill order (design D6): the names the core
+ * derived once and carried on the Music frame, so the line and the list header
+ * cannot disagree. */
 function selectedCollections(music: GuiMusicFrame | null): string[] {
-	return (music?.pills ?? [])
-		.filter((pill) => pill.selected)
-		.map((pill) => pill.name);
+	return music?.collectionNames ?? [];
 }
 
 /** The picked item's name (design D5, D10): the Hero's artist, or the album's

@@ -68,12 +68,13 @@ const BRAND: GuiMusicArtist = {
 	albums: [{ albumId: 'al3', name: 'One For All', year: '1990', tracks: null, total: null }],
 };
 
-/** The carried Music content: the two artists and one selected collection. */
-function music(): GuiMusicFrame {
+/** The carried Music content: the two artists, and the collection names the
+ * header reads (design D6). */
+function music(collectionNames: string[] = ['Hip-Hop']): GuiMusicFrame {
 	return {
 		libIdx: 0,
 		pills: [{ groupId: 'g1', name: 'Hip-Hop', selected: true, collection: true }],
-		collectionNames: ['Hip-Hop'],
+		collectionNames,
 		loading: false,
 		failure: null,
 		artists: [BEASTIE, BRAND],
@@ -114,6 +115,14 @@ test('a press on an album without its tracklist opens it and asks for the tracks
 	expect(
 		container.querySelector('[data-library-row-id="album:al2"]')?.getAttribute('aria-expanded'),
 	).toBe('true');
+});
+
+test('the header names the carried selection, not a derivation from the pills', () => {
+	const { container } = render(LibraryList, { music: music(['Hip-Hop', 'Soul']) });
+
+	expect(container.querySelector('[data-library-selection-label]')?.textContent).toBe(
+		'Hip-Hop + Soul',
+	);
 });
 
 test('the list paints only the rows in view', async () => {
