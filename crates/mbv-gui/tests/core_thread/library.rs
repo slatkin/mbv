@@ -19,7 +19,6 @@ use mbv_gui::core_thread::CoreInput;
 use mbv_net::mock_http::MockHttp;
 use mbv_queue::QueueSource;
 use mbv_ui_model::tab_selection::TabSelection;
-use rstest::rstest;
 
 use crate::{TestCore, layout_report, test_core_with};
 
@@ -259,21 +258,26 @@ fn the_shuffle_artist_command_plays_the_artists_albums_shuffled() {
     assert_eq!(source, QueueSource::Shuffle);
 }
 
-/// The commands rows 3.5 and 3.6 own run nothing yet (add-gui-library-panel
-/// rows 3.1, 3.5, 3.6): a stale frame's play-next or menu-entry press sends no
-/// Owner request and reaches no Emby endpoint, so the interim no-op is
-/// deliberate until those rows replace it.
-#[rstest]
-#[case::play_next(GuiLibraryCommand::PlayNext { item_id: "alb-ill".into() })]
-#[case::menu_entry(GuiLibraryCommand::MenuEntry { item_id: "alb-ill".into(), index: 0 })]
-fn the_interim_library_commands_run_nothing(#[case] command: GuiLibraryCommand) {
+/// Play next asks the Owner to admit the album's tracks next (design D8):
+/// with no active slot the append has no anchor, so the tracks land at the
+/// tail.
+#[test]
+fn the_play_next_command_asks_the_owner_to_admit_the_album_next() {
     let http = MockHttp::new();
+    http.respond(200, TRACKS);
     let (mut test, cmd_rx) = music_core(&http);
 
-    send_library(&mut test, command);
+    send_library(
+        &mut test,
+        GuiLibraryCommand::PlayNext {
+            item_id: "alb-ill".into(),
+        },
+    );
 
-    assert!(cmd_rx.try_iter().next().is_none(), "no Owner request");
-    assert_eq!(http.request_count(), 0, "no Emby request");
+    assert_eq!(
+        appended_ids(&cmd_rx),
+        (None, vec!["trk-1".into(), "trk-2".into()])
+    );
 }
 
 /// A core over the grouped Music library with Hip-Hop's album list already in

@@ -46,8 +46,8 @@ pub enum GuiLibraryCommand {
     TakeFocus,
     /// Play the item (design D8).
     Play { item_id: String },
-    /// Play the item next (design D8). `App::play_lib_item_next` arrives with
-    /// row 3.5, which replaces this documented no-op.
+    /// Play the item next (design D8): the shared play-next admission, so the
+    /// item enters directly after the active slot.
     PlayNext { item_id: String },
     /// Add the item to the queue (design D8).
     AddToQueue { item_id: String },
@@ -75,10 +75,11 @@ impl App {
                     self.play_or_activate_lib_item(lib_idx, item);
                 }
             }
-            // Row 3.5 adds `App::play_lib_item_next`; until then the intent is
-            // accepted and does nothing, so a stale frame's command cannot
-            // play the item a different way.
-            GuiLibraryCommand::PlayNext { item_id } => drop(item_id),
+            GuiLibraryCommand::PlayNext { item_id } => {
+                if let Some((lib_idx, item)) = self.gui_library_item(&item_id) {
+                    self.play_lib_item_next(lib_idx, item);
+                }
+            }
             GuiLibraryCommand::AddToQueue { item_id } => {
                 if let Some((lib_idx, item)) = self.gui_library_item(&item_id) {
                     self.enqueue_lib_item(lib_idx, item);
