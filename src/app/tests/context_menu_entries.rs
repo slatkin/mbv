@@ -317,3 +317,37 @@ fn visual_slot_hide_entry_hides_the_slot() {
 
     assert!(app.visual_slot_hidden);
 }
+
+/// The queue multi-selection menu keeps its opening gesture's pointer anchor
+/// (the TUI's multi-selection right-click raises the menu at the pointer,
+/// exactly as its single-row right-click does); only the GUI's frame-carried
+/// menu, which the window anchors on the first selected slot, builds without
+/// one.
+#[test]
+fn the_queue_selection_menu_keeps_its_pointer_anchor() {
+    let mut app = queue_shuffle_capable_app();
+    app.panel_focus = PanelFocus::Queue;
+    app.local_view = QueueView::from_snapshot(&queue_state(vec![
+        mbv_queue::QueueItem::Emby(Box::new(leaf_item("one", "Movie", "Video", false))),
+        mbv_queue::QueueItem::Emby(Box::new(leaf_item("two", "Movie", "Video", false))),
+    ]));
+    let slots: Vec<mbv_queue::QueueSlotId> = (0..2)
+        .filter_map(|index| app.local_view.slot_id_at(index))
+        .collect();
+
+    let anchored = app
+        .build_queue_selection_menu_at(&slots, Some((12, 34)))
+        .expect("the anchored selection menu built");
+    assert!(matches!(
+        anchored.anchor,
+        mbv_ui_model::context_menu::ContextMenuAnchor::Pointer { x: 12, y: 34 }
+    ));
+
+    let unanchored = app
+        .build_queue_selection_menu(&slots)
+        .expect("the unanchored selection menu built");
+    assert!(matches!(
+        unanchored.anchor,
+        mbv_ui_model::context_menu::ContextMenuAnchor::SelectedItem(_)
+    ));
+}
