@@ -36,43 +36,48 @@ impl App {
 
     /// Open the destination a saved location names (design D9): the presented
     /// destination whose identity matches, or the first presented one while
-    /// the GUI presents only some destinations. The saved Panel focus applies
-    /// after the open, because opening a library takes Library focus. Returns
-    /// whether a presented destination opened; `false` means the catalog holds
-    /// none yet and the caller retries when one lands.
-    pub fn open_gui_launch_destination(&mut self, state: &GuiLaunchState) -> bool {
-        let Some(position) = self.presented_destination_position(&state.destination) else {
-            return false;
-        };
+    /// the GUI presents only some destinations. Returns the opened
+    /// destination's identity as the saved file carries it; `None` means the
+    /// catalog holds none yet and the caller retries when one lands. The
+    /// caller applies the saved Panel focus after the open, because opening a
+    /// library takes Library focus.
+    pub fn open_gui_launch_destination(&mut self, state: &GuiLaunchState) -> Option<TabIdentity> {
+        let position = self.presented_destination_position(&state.destination)?;
         self.set_library_tab(position);
-        match state.panel_focus {
-            LaunchPanelFocus::Library => self.set_gui_panel_focus(PanelFocus::Library),
-            LaunchPanelFocus::Queue => self.set_gui_panel_focus(PanelFocus::Queue),
-        }
-        true
+        Some(self.gui_launch_destination())
     }
 
-    /// Apply the saved collection set of the active destination (design D9): a
-    /// saved group that the library no longer holds is dropped, and when none
-    /// remain the first group is selected. A destination with no saved set
-    /// keeps no selected pill. Returns `false` while the destination's group
-    /// list has not landed, so the caller retries.
-    pub fn restore_gui_launch_collections(&mut self, state: &GuiLaunchState) -> bool {
+    /// Apply the saved collection set of the destination the first phase
+    /// opened (design D9): a saved group that the library no longer holds is
+    /// dropped, and when none remain the first group is selected. A
+    /// destination with no saved set keeps no selected pill. The saved entry
+    /// matches `destination`, the identity phase 1 recorded, and the active
+    /// destination must still be that one: a mid-restore tab switch abandons
+    /// the restore, so no other destination's saved set lands under the user.
+    /// Returns `false` while the destination's group list has not landed, so
+    /// the caller retries.
+    pub fn restore_gui_launch_collections(
+        &mut self,
+        state: &GuiLaunchState,
+        destination: &TabIdentity,
+    ) -> bool {
         let Some(lib_idx) = self.gui_music_destination() else {
             // The active destination paints no collection pills.
             return true;
         };
-        let library_id = self.libs[lib_idx].library.id.clone();
+        if self.gui_launch_destination() != *destination {
+            // A different destination is active: the restore gives up rather
+            // than applying a saved set the user did not ask for.
+            return true;
+        }
         let Some(present) = self.gui_music_present_groups(lib_idx) else {
             return false;
         };
-        let Some(saved) = state.collections.iter().find(|entry| {
-            matches!(
-                &entry.destination,
-                TabIdentity::ServiceLibrary { kind: ServiceKind::Emby, library_id: saved_id }
-                    if *saved_id == library_id
-            )
-        }) else {
+        let Some(saved) = state
+            .collections
+            .iter()
+            .find(|entry| entry.destination == *destination)
+        else {
             return true;
         };
         let mut selected: Vec<String> = saved

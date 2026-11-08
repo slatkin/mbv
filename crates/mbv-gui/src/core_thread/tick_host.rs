@@ -189,6 +189,10 @@ impl ClientTickHost for CoreThread {
                     let taking_focus = matches!(command, mbv::GuiLibraryCommand::TakeFocus);
                     self.app.apply_gui_library_command(command);
                     if taking_focus {
+                        // The take-focus may run in the pre-catalog window
+                        // (design D9): the restore then leaves the taken
+                        // focus alone.
+                        self.note_launch_focus_taken();
                         self.focus.set_panel_focus(PanelFocus::Library);
                     }
                 }

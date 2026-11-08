@@ -13,10 +13,12 @@ use mbv_config::{
 };
 use mbv_emby::EmbyClient;
 use mbv_emby_model::EmbyItem;
+use mbv_gui::bridge::frame::focus::GuiPanel;
 use mbv_gui::bridge::library::GuiLibraryCommand;
 use mbv_gui::core_thread::CoreInput;
 use mbv_net::mock_http::MockHttp;
 use mbv_queue::ServiceKind;
+use mbv_ui_model::settings::PanelFocus;
 use mbv_ui_model::tab_selection::TabSelection;
 
 use crate::{TestCore, test_core_with};
@@ -31,6 +33,9 @@ const MUSIC_LIBRARY: (&str, &str) = ("lib-music", "Music");
 /// The id of a Shows library tab the GUI does not present (Phase 1 presents
 /// the Grouped Music libraries only).
 const SHOWS_LIBRARY: (&str, &str) = ("lib-shows", "Shows");
+
+/// The id and name of a second Grouped Music library the GUI presents.
+const SECOND_MUSIC: (&str, &str) = ("lib-music-2", "Music 2");
 
 /// The identity the saved location names for a library.
 fn library_identity(library_id: &str) -> TabIdentity {
@@ -84,6 +89,17 @@ fn seed_music_and_shows(app: &mut mbv::App, http: &MockHttp) {
         "tvshows".into(),
     ));
     app.apply_gui_library_command(GuiLibraryCommand::OpenDestination { position: 0 }.into());
+}
+
+/// Seed two grouped Music libraries: the first holds its group list, and the
+/// second's pushed tab has none yet, so the Collections phase waits for it.
+fn seed_two_music(app: &mut mbv::App, http: &MockHttp) {
+    seed_music(app, http);
+    app.push_gui_library_tab_for_test(EmbyItem::folder(
+        SECOND_MUSIC.0.into(),
+        SECOND_MUSIC.1.into(),
+        "music".into(),
+    ));
 }
 
 /// Send one Library command, as the `library` command's bridge translation
@@ -212,4 +228,110 @@ fn a_location_saved_on_shows_opens_music() {
         "the saved destination is not the first presented one"
     );
     assert_eq!(app.tab_for_test(), TabSelection::EmbyLibrary(0));
+}
+
+/// A tab switch between the catalog landing and a group list's landing never
+/// applies another destination's saved set (design D9): the Collections phase
+/// records the destination phase 1 opened, applies only its saved entry, and
+/// gives up when a different destination is active.
+#[test]
+fn a_mid_restore_destination_switch_applies_no_saved_pills() {
+    let _guard = TestStateDirGuard::new();
+    save_gui_launch_state(&GuiLaunchState {
+        version: GUI_LAUNCH_STATE_VERSION,
+        destination: library_identity(SECOND_MUSIC.0),
+        panel_focus: LaunchPanelFocus::Queue,
+        collections: vec![
+            GuiDestinationCollections {
+                destination: library_identity(MUSIC_LIBRARY.0),
+                group_ids: vec!["grp-hiphop".into()],
+            },
+            GuiDestinationCollections {
+                destination: library_identity(SECOND_MUSIC.0),
+                group_ids: vec!["grp-jazz".into()],
+            },
+        ],
+    })
+    .unwrap();
+
+    let mut test = core_with_seeded_catalog(seed_two_music);
+
+    // Phase 1 opened the saved destination, whose group list has not landed,
+    // so the restore waits in the Collections phase.
+    assert_eq!(
+        test.core.app_mut().tab_for_test(),
+        TabSelection::EmbyLibrary(1)
+    );
+
+    // The user switches to the first Music library while the group list is
+    // still pending.
+    send_library(
+        &mut test,
+        GuiLibraryCommand::OpenDestination { position: 1 },
+    );
+    assert!(test.core.step());
+
+    assert!(
+        test.core
+            .app_mut()
+            .gui_library_groups_for_test(0)
+            .is_empty(),
+        "the switched-to destination keeps no saved pills"
+    );
+    assert!(
+        test.core
+            .app_mut()
+            .gui_library_groups_for_test(1)
+            .is_empty(),
+        "the opened destination's saved set is not applied after the switch"
+    );
+}
+
+/// A take-focus in the pre-catalog window survives the restore (design D9):
+/// phase 1 still opens the saved destination, but it skips the saved
+/// Panel-focus re-apply once the user has moved focus.
+#[test]
+fn a_pre_catalog_take_focus_survives_the_restore() {
+    let _guard = TestStateDirGuard::new();
+    save_gui_launch_state(&GuiLaunchState {
+        version: GUI_LAUNCH_STATE_VERSION,
+        destination: library_identity(MUSIC_LIBRARY.0),
+        panel_focus: LaunchPanelFocus::Queue,
+        collections: vec![GuiDestinationCollections {
+            destination: library_identity(MUSIC_LIBRARY.0),
+            group_ids: vec!["grp-hiphop".into()],
+        }],
+    })
+    .unwrap();
+
+    // The catalog is absent at construction, so the window is interactive
+    // while the restore waits in the Destination phase.
+    let mut test = test_core_with(stub_app_with_queue(0));
+
+    // The user takes Panel focus for the Library panel before the catalog
+    // lands, and the frame carries it.
+    send_library(&mut test, GuiLibraryCommand::TakeFocus);
+    assert_eq!(test.core.app_mut().gui_panel_focus(), PanelFocus::Library);
+    assert_eq!(test.next_frame().focus.panel, GuiPanel::Library);
+
+    // The catalog lands: the destination jump still runs, and the saved
+    // Queue focus does not replace the taken Library focus.
+    test.core.app_mut().seed_gui_music_library_tab_for_test();
+    assert!(test.core.step());
+
+    assert_eq!(
+        test.core.app_mut().tab_for_test(),
+        TabSelection::EmbyLibrary(0)
+    );
+    assert_eq!(test.core.app_mut().gui_panel_focus(), PanelFocus::Library);
+    // The saved collection set still applies: only the Panel-focus re-apply
+    // is conditional. The wake's step emits the frame the restore's state
+    // landed in.
+    assert_eq!(
+        test.core.app_mut().gui_library_groups_for_test(0),
+        ["grp-hiphop"]
+    );
+    test.tx.send(CoreInput::Wake).unwrap();
+    assert!(test.core.step());
+    assert_eq!(test.next_frame().focus.panel, GuiPanel::Library);
 }
