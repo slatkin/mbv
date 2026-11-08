@@ -41,6 +41,12 @@ The GUI Client SHALL present one player panel whose content, arrangement, and st
 - **WHEN** the top bar paints
 - **THEN** the tab bar shows no tab for another destination, and a tab-jump key for one opens nothing
 
+#### Scenario: The saved destination is not yet presented
+
+- **GIVEN** the GUI Client presents only the Music destination, and the launch state was saved on Shows
+- **WHEN** the GUI Client starts
+- **THEN** Music is the active destination, its tab is marked current, and the saved Panel focus applies
+
 #### Scenario: The artwork has a still slot
 
 - **WHEN** the expanded panel paints the artwork of the active item
@@ -313,7 +319,7 @@ While the Library panel shows, the Status bar under the Library column SHALL sho
 
 - **GIVEN** Music is active with Hip-Hop selected and an album selected
 - **WHEN** the Library Status bar paints
-- **THEN** it shows the filter, play, play-next, add-to-queue, Panel-focus, and tab hints with their chords, and the location Music, Hip-Hop, and the album
+- **THEN** it shows the filter, play, play-next, add-to-queue, Panel-focus, and tab hints with their chords, and the location Music › Hip-Hop › the selected list row's artist, as the canvas Library artboard shows it
 
 #### Scenario: A chord is rebound
 
