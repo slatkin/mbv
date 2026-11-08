@@ -349,6 +349,11 @@ pub struct App {
     /// key it encodes: the downscale-and-encode pass runs once per key so a
     /// Client's frame reads stay encode-free between artwork changes.
     pub(in crate::app) card_artwork_encoded: Option<(String, Vec<u8>)>,
+    /// The GUI Library Hero's display encode (add-gui-library-panel design
+    /// D5), keyed by the album cache key it encodes: the picked album's art
+    /// re-encodes once per key, as the visual slot's does, so a frame between
+    /// artwork changes stays encode-free.
+    pub(in crate::app) gui_library_art_encoded: Option<(String, Vec<u8>)>,
     pub(in crate::app) title_log_gate: crate::app::state::projection::card::TitleLogGate,
     pub(in crate::app) dim_backdrop_active: bool,
     pub(in crate::app) settings_destination: SettingsDestination,

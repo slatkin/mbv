@@ -5,9 +5,11 @@
 //! every entry calls the existing `App` action for it. The TUI Client never
 //! calls any of them.
 
+mod artwork;
 mod projection;
 mod store;
 
+pub use self::artwork::GuiLibraryArtwork;
 pub use self::projection::{
     GuiMusicAlbum, GuiMusicArtist, GuiMusicHero, GuiMusicPill, GuiMusicProjection, GuiMusicTrack,
     GuiMusicTrackTotal,

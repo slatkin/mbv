@@ -127,6 +127,7 @@ function frame(
 			dirty: null,
 		},
 		status: { prefixArmed: false, toast: null },
+		library: null,
 		theme: null,
 	};
 }

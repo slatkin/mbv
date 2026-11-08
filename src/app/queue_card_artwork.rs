@@ -153,7 +153,7 @@ impl App {
 ///
 /// Panics when the in-memory JPEG encode fails: a `Cursor` over a `Vec`
 /// cannot fail to write, so a failure is a bug.
-fn encode_for_display(img: &image::DynamicImage) -> Vec<u8> {
+pub(in crate::app) fn encode_for_display(img: &image::DynamicImage) -> Vec<u8> {
     let resized = img.resize(
         ARTWORK_ENCODE_BOX,
         ARTWORK_ENCODE_BOX,

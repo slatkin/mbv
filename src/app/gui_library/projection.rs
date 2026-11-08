@@ -141,6 +141,17 @@ struct GuiMusicUnion<'a> {
 }
 
 impl App {
+    /// The active destination's Grouped Music library index (design D2, D5):
+    /// the destination whose Music content the GUI Library panel paints.
+    /// `None` for every other destination, which presents no Music section.
+    #[must_use]
+    pub fn gui_music_destination(&self) -> Option<usize> {
+        let mbv_ui_model::tab_selection::TabSelection::EmbyLibrary(lib_idx) = self.tab else {
+            return None;
+        };
+        (lib_idx < self.libs.len() && self.is_grouped_music_library(lib_idx)).then_some(lib_idx)
+    }
+
     /// The Music projection the GUI Library panel paints (design D5): the
     /// Grouped Music library's pills, the union of the selected groups'
     /// artists with their albums and cached tracklists, and the Hero's facts

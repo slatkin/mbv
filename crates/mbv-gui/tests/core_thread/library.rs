@@ -1,16 +1,19 @@
-//! The Library panel command's contracts (add-gui-library-panel row 3.1): every
+//! The Library panel's contracts (add-gui-library-panel rows 3.1, 3.4): every
 //! command family reaches the `App` effect it names — the destination, the
 //! stored selection or detail, the picked album's track load, and the mocked
-//! Owner request a play, an add, or a shuffle sends. The Emby answers come from
-//! the in-memory mock transport, so no request leaves the process, and no live
-//! Owner, Service, or webview runs (design D13).
+//! Owner request a play, an add, or a shuffle sends — and the Library section's
+//! content revision and Hero artwork reach the frame from the image cache. The
+//! Emby answers come from the in-memory mock transport, so no request leaves
+//! the process, and no live Owner, Service, or webview runs (design D13).
 
 use std::sync::mpsc::Receiver;
 
 use mbv::{ClientTickHost, Config, stub_app_with_queue_and_cmd_rx};
 use mbv_ctrl::CtrlCmd;
 use mbv_emby::EmbyClient;
+use mbv_gui::bridge::frame::GuiFrame;
 use mbv_gui::bridge::frame::focus::{GuiPanel, GuiSurface};
+use mbv_gui::bridge::frame::library::{GuiLibraryArt, GuiLibraryFrame};
 use mbv_gui::bridge::library::GuiLibraryCommand;
 use mbv_gui::core_thread::CoreInput;
 use mbv_net::mock_http::MockHttp;
@@ -18,7 +21,7 @@ use mbv_queue::QueueSource;
 use mbv_ui_model::tab_selection::TabSelection;
 use rstest::rstest;
 
-use crate::{TestCore, test_core_with};
+use crate::{TestCore, layout_report, test_core_with};
 
 /// A URL that never leaves the process: the mock transport ignores it, but it
 /// must remain an IP literal so the default resolver never attempts DNS.
@@ -271,4 +274,149 @@ fn the_interim_library_commands_run_nothing(#[case] command: GuiLibraryCommand) 
 
     assert!(cmd_rx.try_iter().next().is_none(), "no Owner request");
     assert_eq!(http.request_count(), 0, "no Emby request");
+}
+
+/// A core over the grouped Music library with Hip-Hop's album list already in
+/// the GUI store, so a frame test reads the projection with no request and no
+/// fetch behind it: the group is loaded before the selection names it, and the
+/// stub's image cache stays off until a test enables it.
+fn seeded_music_core(http: &MockHttp) -> (TestCore, Receiver<CtrlCmd>) {
+    let (app, cmd_rx) = stub_app_with_queue_and_cmd_rx(0);
+    let mut test = test_core_with(app);
+    let client = EmbyClient::new(Config {
+        server_url: TEST_URL.into(),
+        ..Config::default()
+    })
+    .with_test_agent(http.agent());
+    test.core.app_mut().seed_gui_music_library_for_test(client);
+    test.core.app_mut().seed_gui_music_albums_for_test(
+        0,
+        "grp-hiphop",
+        &[("alb-ill", "Licensed to Ill")],
+    );
+    (test, cmd_rx)
+}
+
+/// Send one Library command and read the frame its step emitted.
+fn send_library_frame(test: &mut TestCore, command: GuiLibraryCommand) -> GuiFrame {
+    send_library(test, command);
+    test.next_frame()
+}
+
+/// The Library section a frame carries (design D2).
+fn library_of(frame: GuiFrame) -> GuiLibraryFrame {
+    frame
+        .library
+        .expect("the slice carries the Library section")
+}
+
+/// The Hero's artwork value of a frame that carries the Library content.
+fn hero_art(frame: GuiFrame) -> GuiLibraryArt {
+    library_of(frame)
+        .content
+        .and_then(|content| content.music)
+        .and_then(|music| music.art)
+        .expect("the frame carries the Hero's art")
+}
+
+/// The Hero paints the bundled placeholder as a `data:image/webp` URL.
+fn assert_placeholder(art: GuiLibraryArt) {
+    let GuiLibraryArt::Placeholder(url) = art else {
+        panic!("the Hero paints the placeholder, not {art:?}");
+    };
+    assert!(url.starts_with("data:image/webp;base64,"));
+}
+
+/// The Hero paints the cached art as a `data:image/jpeg` URL.
+fn assert_image(art: GuiLibraryArt) {
+    let GuiLibraryArt::Image(url) = art else {
+        panic!("the Hero paints the cached art, not {art:?}");
+    };
+    assert!(url.starts_with("data:image/jpeg;base64,"));
+}
+
+/// The Library section carries its content only when the revision changes, and
+/// again after a `report_layout` (add-gui-library-panel row 3.4, design D2):
+/// the front end keeps the last carried content, so a frame whose content is
+/// unchanged carries the revision alone.
+#[test]
+fn the_library_content_rides_a_changed_revision_and_a_layout_report() {
+    let http = MockHttp::new();
+    let (mut test, _cmd_rx) = seeded_music_core(&http);
+    let first = library_of(send_library_frame(
+        &mut test,
+        GuiLibraryCommand::SetCollections {
+            lib_idx: 0,
+            group_ids: vec!["grp-hiphop".into()],
+        },
+    ));
+    let revision = first.revision;
+    assert!(first.content.is_some(), "the first content rides its frame");
+
+    test.waker.wake();
+    assert!(test.core.step());
+    let unchanged = library_of(test.next_frame());
+    assert_eq!(unchanged.revision, revision);
+    assert!(
+        unchanged.content.is_none(),
+        "an unchanged revision carries no content"
+    );
+
+    // Picking the album gives the Hero its facts, so the content changes.
+    let changed = library_of(send_library_frame(
+        &mut test,
+        GuiLibraryCommand::ShowDetail {
+            item_id: "alb-ill".into(),
+        },
+    ));
+    assert_eq!(changed.revision, revision.wrapping_add(1));
+    assert!(
+        changed.content.is_some(),
+        "a changed revision rides its frame"
+    );
+
+    // A window reload's report re-arms the section: the content rides again
+    // under the revision the window already knows.
+    test.tx.send(layout_report()).unwrap();
+    assert!(test.core.step());
+    let rearmed = library_of(test.next_frame());
+    assert_eq!(rearmed.revision, changed.revision);
+    assert!(
+        rearmed.content.is_some(),
+        "the report re-carries the content"
+    );
+}
+
+/// The Hero's art comes through the frame from the image cache (row 3.4,
+/// design D5): the placeholder paints until a fetched image lands, and the
+/// landed art rides the frame its revision change asks for.
+#[test]
+fn the_hero_art_rides_the_frame_after_the_image_lands() {
+    let http = MockHttp::new();
+    let (mut test, _cmd_rx) = seeded_music_core(&http);
+    let _selected = send_library_frame(
+        &mut test,
+        GuiLibraryCommand::SetCollections {
+            lib_idx: 0,
+            group_ids: vec!["grp-hiphop".into()],
+        },
+    );
+    let picked = send_library_frame(
+        &mut test,
+        GuiLibraryCommand::ShowDetail {
+            item_id: "alb-ill".into(),
+        },
+    );
+    assert_placeholder(hero_art(picked));
+
+    // The cache's enabled gate opens and the album's fetch resolves with an
+    // image: the tick's drain lands it, so the next frame carries the art.
+    test.core.app_mut().enable_card_images_for_test();
+    test.core.app_mut().complete_card_image_for_test(
+        &mbv_images::emby_card_cache_key("alb-ill", ""),
+        image::DynamicImage::new_rgb8(4, 4),
+    );
+    test.waker.wake();
+    assert!(test.core.step());
+    assert_image(hero_art(test.next_frame()));
 }

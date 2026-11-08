@@ -39,6 +39,7 @@ use crate::leaves::{
     PlaybackLeaf, QueueLeaf, StatusBarLeaf, TransportAvailability, gesture_point, row_slot_at,
     seekbar_region,
 };
+use crate::library_frames::LibraryFrames;
 use crate::painted_choices::PaintedChoices;
 
 mod tick_host;
@@ -218,6 +219,9 @@ pub struct CoreThread {
     /// The frames' artwork memo (design D10): the value a frame arms, and
     /// the encoded artwork a re-armed frame re-carries encode-free.
     artwork: ArtworkFrames,
+    /// The frames' Library section memo (add-gui-library-panel design D2): the
+    /// content revision, and the content a re-armed frame re-carries.
+    library: LibraryFrames,
     /// The frames' trickplay memo (task 6.7): the hovered sheet's encoded
     /// image, re-carried only when the hovered sheet changes.
     trickplay: crate::trickplay::TrickplayFrames,
@@ -286,6 +290,7 @@ impl CoreThread {
             last_frame: Instant::now(),
             theme_pending: true,
             artwork: ArtworkFrames::default(),
+            library: LibraryFrames::default(),
             trickplay: crate::trickplay::TrickplayFrames::default(),
             painted: PaintedChoices::default(),
             idle_cadence: CLIENT_IDLE_CADENCE,
@@ -658,6 +663,10 @@ impl CoreThread {
         let hover_tile = self.hover_tile(&playback);
         let artwork = self.app.queue_card_artwork();
         let artwork = self.artwork.frame_value(&artwork);
+        // The Library section builds from the App's Service data (add-gui-
+        // library-panel design D2): the memo re-carries it only on a changed
+        // revision, and the reload's `report_layout` re-arms it.
+        let library = self.library.frame(&mut self.app);
         let theme_changed = std::mem::take(&mut self.theme_pending);
         let frame = GuiFrame::build(&FrameSources {
             app: &self.app,
@@ -669,6 +678,7 @@ impl CoreThread {
             viewport_rows: self.viewport_rows,
             theme_changed,
             artwork,
+            library: Some(library),
         });
         // The frame the window is about to paint becomes the choice lists a
         // pointer press resolves against (add-tauri-gui-client row 6.5).

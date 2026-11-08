@@ -40,6 +40,7 @@ fn frame_with_playback_surface(app: &mut App, playback: &QueuePlaybackSurface) -
         viewport_rows: VIEWPORT_ROWS,
         theme_changed: false,
         artwork: None,
+        library: None,
     })
 }
 
@@ -65,6 +66,7 @@ fn frame_after_tick(app: &mut App) -> GuiFrame {
         viewport_rows: VIEWPORT_ROWS,
         theme_changed: false,
         artwork: None,
+        library: None,
     })
 }
 
@@ -642,6 +644,7 @@ fn the_scrubber_hover_carries_the_cores_trickplay_tile() {
         viewport_rows: VIEWPORT_ROWS,
         theme_changed: false,
         artwork: None,
+        library: None,
     });
 
     let hover = frame.playback.hover.expect("the frame carries the hover");
@@ -660,6 +663,7 @@ fn the_scrubber_hover_carries_the_cores_trickplay_tile() {
         viewport_rows: VIEWPORT_ROWS,
         theme_changed: false,
         artwork: None,
+        library: None,
     });
     assert!(frame.playback.hover.is_none());
 }

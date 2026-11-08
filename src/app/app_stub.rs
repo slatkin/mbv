@@ -530,6 +530,41 @@ impl App {
         self.tab
     }
 
+    /// Seed the GUI Music store with `albums` for the `group_id` of `lib_idx`,
+    /// as a landed fetch would (add-gui-library-panel design D5): a projection
+    /// or frame test reads the store alone, with no request behind it.
+    #[cfg(feature = "test")]
+    pub fn seed_gui_music_albums_for_test(
+        &mut self,
+        lib_idx: usize,
+        group_id: &str,
+        albums: &[(&str, &str)],
+    ) {
+        let albums = albums
+            .iter()
+            .map(|(id, name)| {
+                let mut album = mbv_emby_model::test_support::make_item(name, "MusicAlbum");
+                album.id = (*id).to_string();
+                album
+            })
+            .collect();
+        self.gui_music_albums.insert(
+            (lib_idx, group_id.to_string()),
+            crate::app::gui_library::GuiGroupAlbums::Loaded(albums),
+        );
+    }
+
+    /// Deliver `key`'s image as a completed fetch would (add-gui-library-panel
+    /// design D13): the next tick's card-image drain lands it in the cache, so
+    /// a frame test observes the art with no request and no thread.
+    #[cfg(feature = "test")]
+    pub fn complete_card_image_for_test(&self, key: &str, img: image::DynamicImage) {
+        let _ = self
+            .images
+            .card_image_tx()
+            .send((key.to_string(), mbv_images::ImageFetchOutcome::Image(img)));
+    }
+
     /// The Grouped Music library's selected group ids in pill order
     /// (add-gui-library-panel design D5).
     #[must_use]
