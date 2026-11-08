@@ -20,7 +20,7 @@ binary, and the handshake refuses an Owner with a different build id.
 ## Process shape: one core thread
 
 Tauri owns the main thread and the window's event loop. `src/main.rs` builds
-the Tauri application, registers the three bridge commands, starts the core
+the Tauri application, registers the four bridge commands, starts the core
 thread in `setup`, turns the webview's context menu off, and joins the core
 thread after the event loop ends so a quit's exit teardown completes before
 the process exits.
@@ -68,7 +68,8 @@ core holds (`GuiPanelToggles`), the open menu or popover (`GuiOverlayFrame`:
 the row menu with its entries and key hints, the track popover, and the
 playback-target chooser), the Queue playback projection
 (`GuiQueuePlayback`), the footer pills (`GuiQueueFooter`), the Status bar
-projection (`GuiStatusBar`), and the theme when it is armed (`GuiTheme`).
+projection (`GuiStatusBar`), the Library panel's section (`GuiLibraryFrame`;
+*The Library panel* names it), and the theme when it is armed (`GuiTheme`).
 The window picks the panel state from the frame's toggles and its own
 measurement of the panel container; the frame carries no breakpoint class
 (design D10).
@@ -123,12 +124,18 @@ Front end to Rust there are three commands, registered in
 - `report_layout(LayoutReport)`: whole visible rows per list, the painted
   regions with their semantic target ids, and the panel container's painted
   size in logical pixels (`src/bridge/layout.rs`).
+- `library(GuiLibraryCommand)`: the Library panel's one semantic request,
+  pushed into the core channel as `CoreInput::Library` (*The Library panel*
+  names the variants).
 
-The front end interprets no input. `ui/src/lib/bridge/input.ts` prevents the
+The front end interprets no input apart from the Library panel's own keys and
+gestures (*The Library panel*). `ui/src/lib/bridge/input.ts` prevents the
 default action of every keydown (no webview default such as reload, find,
 zoom, or back navigation runs) and forwards pointerdown, pointerup,
 pointermove, and wheel events; it converts a wheel delta in lines or pages to
-logical pixels before it sends. A lost gesture — a `pointercancel`, a
+logical pixels before it sends. A keydown meets the window's key router first
+(`KeyRouter`), which `App.svelte` installs, and only a key the router leaves to
+the core reaches the `key` command. A lost gesture — a `pointercancel`, a
 `pointerleave` with a button held, or the window's blur — forwards the
 `cancel` kind. The core's `PointerGestureState` recognizes
 the gesture; a recognized gesture's point resolves against the combined hit
@@ -366,15 +373,174 @@ toast paints inline at its centre in the severity colour.
 ## The Status bar in the footer line
 
 `GuiStatusBar` mirrors the shared `StatusBarProjection`: the prefix-armed
-state and the live toast with its severity. The canvas has no separate
-status bar: `QueueFooter.svelte` paints both facts in the footer line. The
+state and the live toast with its severity. The Queue column's canvas has no
+separate status bar: `QueueFooter.svelte` paints both facts in the footer
+line. The
 badge drops while a toast is live — the TUI's pill-drop rule — and the
 toast moves no layout, because the line is always painted and the toast
 only fills its centre span. The line reports no regions: the playlist pill
 paints but is no press target (the slice presents no playlists surface), and
 a point anywhere on the line resolves to nothing. The spec permits the GUI to show toasts in a
 conventional GUI form that TUI geometry does not constrain, so a toast
-presentation outside the line is lawful.
+presentation outside the line is lawful. While the Library panel shows, the
+Library Status bar paints the same projection (design D10): the hints on the
+left, the location on the right, and the armed prefix or the live toast in
+place of the hints.
+
+## The Library panel
+
+The GUI paints a Library panel in a column beside the Queue panel
+(`LibraryPanel.svelte`). It follows the design canvas's Library artboard, not
+the TUI: the GUI does not keep parity with the TUI, and the TUI does not change
+(ADR 0036). The panel's interaction state lives in the window content, and the
+Client core holds the data selection and the actions (design D1).
+
+| Window content (`ui/src/lib/library/`) | Client core (`App`) |
+| --- | --- |
+| Cursor, hover, scroll, open tree nodes | The active destination (`App::tab`) |
+| Focus inside the panel (pill row, list, Hero, tracklist) | The selected collections of each destination |
+| Filter text and Search query text | The item whose detail the Hero shows |
+| The open Hero overlay and the item menu | Service data, its loading, and the artwork |
+| The Library's keys while it has Panel focus | Panel focus (`FocusStack`) and the actions |
+
+The data selection is core state because the core decides what to load and
+what to save at exit. The window content changes it only by a command, and the
+frame carries it back, so the pill row paints the core's set. The panel uses
+no TUI component, no `mbv-surfaces` Surface state, no `GuiSurfaceLeaf`, and no
+`[keys]` action, and its pointer input never reaches the core's gesture
+recogniser or hit map. `LibraryPanel.svelte` paints `LibraryTopBar`,
+`LibraryPills`, `LibraryList` with `LibraryLetterRail`, `LibraryHero` with
+`LibraryTracklist`, and `LibraryStatusBar`.
+
+### The frame section and its revision
+
+`GuiFrame.library` carries a `GuiLibraryFrame`
+(`src/bridge/frame/library.rs`). A Library list can hold thousands of rows, so
+the section carries a revision and the content rides a frame only when that
+revision changes, as the visual slot's artwork does. `revision` changes when
+any part of the built content changes, the art included. `content` is
+`Option<Box<GuiLibraryContent>>`: `None` while the window already holds the
+revision, so an unchanged frame carries only the number. The window content
+keeps the last carried content (`carryLibraryContent`,
+`ui/src/lib/library/state.ts`), and a window-content reload's `report_layout`
+re-arms the section (`LibraryFrames::rearm`,
+`crates/mbv-gui/src/library_frames.rs`), so the next frame re-carries the
+whole content.
+
+`GuiLibraryContent` carries `tabs` (the presented destinations in catalog
+order, each a `GuiLibraryTabFrame` with a `position` and a `label`, Home at
+position 0), `current_tab` (the active tab's position, `None` for Home and for
+every destination the GUI does not present yet), and `music`
+(`Option<GuiMusicFrame>`, present while a Grouped Music library is active).
+
+`GuiMusicFrame` carries `lib_idx` (the Grouped Music library index the
+set-collections command names), `pills` (`group_id`, `name`, `selected`, and
+`collection`), `loading`, `failure` (the failure line naming the selected
+groups whose album list failed), `artists` (`artist_key`, `name`,
+`sort_letter`, and `albums`), `hero`, and `art`. An album carries `album_id`,
+`name`, `year`, and its `tracks` and `total` when the cache holds them; a
+track carries `track_id`, `name`, `number`, and `duration`. `GuiMusicHeroFrame`
+carries `artist`, `collections`, `album_count`, `artist_tracks`, the picked
+`album`, and its `menu` entries with `label` and `key_hint`. `GuiLibraryArt`
+is the cached artwork's display encode or the bundled placeholder as a
+`data:` URL, or `Loading`. The window fetches no Library image: every byte is
+the core's image cache.
+
+### The `library` command
+
+`library(GuiLibraryCommand)` is the fourth bridge command (`src/main.rs`). It
+only pushes `CoreInput::Library` into the core channel, as the other commands
+do. `src/bridge/library.rs` translates the wire variants and
+`App::apply_gui_library_command` (`src/app/gui_library.rs`) applies each one
+through the existing `App` action, so the TUI's own paths do not change. The
+variants are `openDestination` (`position`), `setCollections` (`libIdx`,
+`groupIds`), `showDetail` (`itemId`), `openAlbum` (`albumId`), `takeFocus`,
+`play` (`itemId`), `playNext` (`itemId`), `addToQueue` (`itemId`),
+`shuffleArtist` (`albumIds`), and `menuEntry` (`itemId`, `index`). Item
+identities are stable Service ids, never row positions, so a command built
+from a stale frame addresses the item that frame painted or nothing. The
+`takeFocus` variant also moves the core's `FocusStack`, so the frame paints
+the focus the `App`'s key gates read (design D4).
+
+### The key routing order
+
+`input.ts` forwards a keydown only after the window's key router, and it
+never interprets the key itself. The router answers one of three outcomes
+(`KeyOutcome`): `core` sends the key to the `key` command with its default
+action prevented, `handled` means the window content took the key so the core
+receives none, and `text` means an open text field takes it, so the browser's
+own default types it. `App.svelte` installs `routeLibraryKey`
+(`ui/src/lib/library/keys.ts`) as that router, so the Library's handler runs
+before the forwarder (design D3). The order is:
+
+1. While a core overlay is open (the row menu, the track popover, the
+   playback-target chooser) or prefix mode is armed, the key goes to the core.
+   Both facts are in the frame. The Queue filter's text entry is the core's
+   too, so every key is the core's while it holds the keyboard.
+2. While a text field of the panel holds the keyboard (the `/` filter), the
+   field takes the key. Esc closes it and Enter accepts it.
+3. While the Library panel shows, the window keys run: Tab and Shift+Tab move
+   the pane focus (the pill row, the list, the Hero, and across the panel
+   boundary to the Queue panel), and `1` to `7` open the first to seventh
+   destination tab after Home.
+4. While the Library panel has Panel focus, the Library keys run in the window
+   content: `/` opens the list filter, Enter plays the item under the cursor
+   or presses the focused control, `n` plays it next, `a` adds it to the
+   queue, Space and Alt+Space toggle and solo a focused pill, the arrow, Page
+   Up, Page Down, Home, and End keys move the cursor, Right and Left open or
+   close a tree node or walk the pill row, and Esc closes the open filter,
+   overlay, or menu.
+5. Every other key goes to the core's keyboard router. So Space plays or
+   pauses while no pill has focus, `[` and `]` seek, and the GUI-only chords
+   `z`, `q`, and `c` and every `[keys]` binding keep their effect.
+
+With Queue Panel focus the Library takes no key, so `/` opens the Queue filter
+and `a` opens the audio popover as before (design D3).
+
+### The arrangement
+
+`libraryArrangement` (`ui/src/lib/bridge/arrangement.ts`) picks the
+arrangement from the measured Library column width — the window width minus
+the Queue panel's current width, 400 px expanded or 72 px in the rail — with
+the canvas sizes as thresholds. Below 480 px is Mini, from 880 px with at
+least 600 px of height is Wide, and between them is Narrow. The thresholds are
+front-end constants beside the Queue panel's state constants, and the core
+does not classify the size. Mini mounts only the panel that holds Panel focus.
+Narrow mounts both panels, and a picked item opens the Hero as an overlay over
+the list. Wide mounts both panels with the Hero beside the list. The Queue
+panel keeps its four states inside every arrangement, and a resize across a
+threshold moves no cursor, pill selection, or picked item, because those live
+in the window content and the core.
+
+Panel focus stays in the core's `FocusStack`, and the frame's `GuiFocus`
+carries it. `CoreThread::new` mounts `ComponentId::Library`; a press inside the
+Library panel sends `takeFocus`, and the core sets the stack and
+`App::panel_focus` together. The GUI's `App` applies neither the TUI's
+terminal-width Mini check nor its hidden empty queue column, so the core's key
+gates see the stored Panel focus.
+
+### The launch location
+
+The GUI keeps its own launch location (design D9). Its `App` starts with
+`LaunchRestore::Done`, so the TUI launch state never moves the GUI's tab or
+Panel focus, and the GUI never writes the TUI file. The GUI file
+(`mbv_config::load_gui_launch_state` and `save_gui_launch_state`) holds the
+destination, the selected collections of each destination, and Panel focus as
+stable Service identities. The core reads it once before the first step, saves
+it at orderly exit before `client_exit_teardown`, and never while the window
+is open.
+
+The restore runs in two phases (`GuiLaunchRestore`,
+`CoreThread::restore_launch_location`). The first phase opens the saved
+destination once the catalog presents it — a saved destination the GUI does
+not present falls back to the first presented one — and applies the saved
+Panel focus over the Library focus the open takes, unless the user already
+took focus while the restore was pending. The second phase applies the saved
+collection sets once the destination's group list lands: a saved group the
+library no longer holds drops, and when none remain the first group is
+selected. A mid-restore tab switch abandons the saved sets rather than landing
+them under another destination. The restore is idempotent, so the catalog and
+library drains call it whenever their content can complete a phase.
 
 ## The attach states
 
@@ -388,12 +554,24 @@ reported `Attach` button regions against its own hit map. Dead-end states
 park the window: they serve only `report_layout` (re-showing the state with
 its theme) and `Close`.
 
-The core thread does not run the TUI's post-attach service bootstrap
-(`spawn_startup_services`, `fetch_home_at_startup`, `init_idle_feed`,
-capability registration). Those steps belong to the TUI shell `Model`, and
-the first slice presents no library surface. A later change that ports a
-library surface must first factor those steps into a shared Client step; it
-must not duplicate them in `mbv-gui` (design D9).
+After the attach both Clients run the same Service startup (design D11).
+`App::start_client_services` is the shared step: the Emby startup worker, the
+Audiobookshelf startup worker, `start_feed_fetch`, and capability
+registration. `Model::spawn_startup_services` calls it in place of its own
+body at the same point, so the TUI's order and timing do not change, and
+`CoreThread::new` calls it in place of the deleted minimal Emby client fill.
+`App::load_home_at_startup` is the `App` half of the launch Home load: it
+fetches Home, arms the `Recently added` fetch, and clears a stale status row,
+or flashes the "Couldn't load home" toast. Both Clients call it right after
+`start_client_services`; the `Model` keeps its own half (`home_content.loading`
+and the content assignment), and the GUI drops the returned content until Home
+is presented.
+
+The GUI keeps its playback-target discovery, which the full Emby startup does
+not start. `App::start_playback_target_discovery` starts the `/Sessions` fetch
+and the cast receiver browse, and the core thread runs it when the attach
+brought a cached Emby client and in its startup drain host when the drain
+reports a successful Emby startup. `Model::init_idle_feed` stays the TUI's.
 
 ## Adding a surface to the GUI
 
@@ -405,7 +583,12 @@ reference. These steps are for a surface that both Clients share, such as
 the Queue panel. A GUI-only surface owns its interaction state in the
 front end, and the Client core supplies only its data and actions: the GUI
 Library panel is the first one
-([ADR 0036](../adr/0036-gui-library-panel-owns-its-interaction-state.md)).
+([ADR 0036](../adr/0036-gui-library-panel-owns-its-interaction-state.md),
+and `docs/architecture/interactive-surface-ledger.md` records it GUI-owned
+with no Surface state). Such a surface skips step 1, names no region in step
+3, mounts no leaf in step 4, and mounts only its `ComponentId` in step 5: its
+state is the window content's own, and the core supplies its data and its
+actions.
 
 1. **Hold the interaction state once.** The surface's cursor, selection,
    viewport, and drafts live in `mbv-surfaces` as Surface state, shared by
