@@ -265,7 +265,8 @@ fn playing_queue_frame_carries_row_states_finish_clocks_and_the_open_menu() {
             "Play next",
             "Mark watched",
             "Go to episode",
-            "Remove from queue"
+            "Remove from queue",
+            "Clear queue"
         ]
     );
     let hints: Vec<Option<&str>> = entries
@@ -274,7 +275,14 @@ fn playing_queue_frame_carries_row_states_finish_clocks_and_the_open_menu() {
         .collect();
     assert_eq!(
         hints,
-        [Some("Enter"), Some("n"), Some("w"), Some("g"), Some("dd")]
+        [
+            Some("Enter"),
+            Some("n"),
+            Some("w"),
+            Some("g"),
+            Some("dd"),
+            Some("c")
+        ]
     );
 }
 
