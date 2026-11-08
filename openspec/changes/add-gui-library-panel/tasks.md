@@ -10,7 +10,7 @@ Phase 1 (groups 1–5) delivers Music from end to end. Phase 2 (groups 6–12) s
 
 ## 2. The GUI's App settings
 
-- [ ] 2.1 Add the GUI setting on the `App` (design D4): with it, `is_mini_view` and `queue_column_hidden_empty` return false, and the `App` starts with `LaunchRestore::Done` (design D9). `CoreThread::new` sets it before its first step and mounts `ComponentId::Library`. A public GUI entry sets Panel focus on the `App` and the core thread sets its `FocusStack` with it. Verify: an `App` test with the GUI setting and an empty queue keeps the stored Queue focus and the `Both` mode; a core-thread test sends the take-focus command and finds Library focus in the next frame; the TUI panel-focus and launch-restore tests pass unedited.
+- [x] 2.1 Add the GUI setting on the `App` (design D4): with it, `is_mini_view` and `queue_column_hidden_empty` return false, and the `App` starts with `LaunchRestore::Done` (design D9). `CoreThread::new` sets it before its first step and mounts `ComponentId::Library`. A public GUI entry sets Panel focus on the `App` and the core thread sets its `FocusStack` with it. Verify: an `App` test with the GUI setting and an empty queue keeps the stored Queue focus and the `Both` mode; a core-thread test sends the take-focus command and finds Library focus in the next frame; the TUI panel-focus and launch-restore tests pass unedited.
 
 ## 3. The Library core
 
