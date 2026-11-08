@@ -227,6 +227,37 @@ test('the Queue footer keeps the prefix and the toast while the Library panel do
 	expect(container.querySelector('[data-footer-line]')?.textContent).toContain('Scanning');
 });
 
+// Row 4.8's positive case (design D10): while the Library panel shows, its
+// Library Status bar paints the frame's armed prefix and live toast, and the
+// Queue footer line paints neither — each fact paints once a frame.
+test('the Queue footer drops the prefix and the toast while the Library panel shows', async () => {
+	const slice = frame('queue', music());
+	slice.status = { prefixArmed: true, toast: null };
+	const { container } = await mount({ width: 1600, height: 900 }, slice);
+
+	expect(container.querySelector('[data-library-panel]')).toBeTruthy();
+	expect(container.querySelector('[data-library-status-prefix]')?.textContent).toContain('PREFIX');
+	expect(container.querySelector('[data-footer-line]')?.textContent).not.toContain('PREFIX');
+
+	// The next frame carries a toast: the Library Status bar paints it, and the
+	// footer line stays clear of it.
+	const handler = listenMock.mock.calls.at(-1)?.[1] as (
+		event: { payload: GuiWindowFrame },
+	) => void;
+	handler({
+		payload: {
+			slice: {
+				...slice,
+				status: { prefixArmed: false, toast: { text: 'Scanning', severity: 'neutral' } },
+			},
+		},
+	});
+	await tick();
+
+	expect(container.querySelector('[data-library-status-toast]')?.textContent).toContain('Scanning');
+	expect(container.querySelector('[data-footer-line]')?.textContent).not.toContain('Scanning');
+});
+
 test('Mini below 480 px mounts only the Queue panel while Panel focus is queue', async () => {
 	const { container } = await mount({ width: 700, height: 900 }, frame('queue', music()));
 

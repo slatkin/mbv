@@ -106,7 +106,7 @@
           class="flex h-full min-h-0 flex-col {twoColumns ? 'flex-none' : 'flex-1'}"
           style:width={twoColumns ? `${queueColumnWidth(frame.panel)}px` : undefined}
         >
-          <Panel frame={frame} {container} />
+          <Panel frame={frame} {container} {libraryVisible} />
         </div>
       {/if}
       {#if libraryVisible && music}

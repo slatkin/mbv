@@ -45,7 +45,7 @@ function renderFooter(
 	foot: GuiQueueFooter = footer,
 	status: GuiStatusBar = idle,
 ) {
-	return render(QueueFooter, { footer: foot, status });
+	return render(QueueFooter, { footer: foot, status, libraryVisible: false });
 }
 
 test('the footer renders the queue source and the session marker', () => {
