@@ -7,9 +7,7 @@ use mbv_gui::bridge::library::GuiLibraryCommand;
 use mbv_net::mock_http::MockHttp;
 use mbv_queue::QueueSource;
 
-use super::{
-    TRACKS, library_of, replacement, seeded_music_core, send_library, send_library_frame,
-};
+use super::{TRACKS, library_of, replacement, seeded_music_core, send_library, send_library_frame};
 
 /// The item menu (design D8): the frame carries the picked album's entries,
 /// and a chosen entry runs through the shared context-action executor for that
