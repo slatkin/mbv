@@ -459,7 +459,18 @@ no TUI component, no `mbv-surfaces` Surface state, no `GuiSurfaceLeaf`, and no
 `[keys]` action, and its pointer input never reaches the core's gesture
 recogniser or hit map. `LibraryPanel.svelte` paints `LibraryTopBar`,
 `LibraryPills`, `LibraryList` with `LibraryLetterRail`, `LibraryHero` with
-`LibraryTracklist`, and `LibraryStatusBar`.
+`LibraryTracklist`, and `LibraryStatusBar`, and the right-click item menu
+(`QueueRowMenu` under the panel), which a right-press on a list row or a
+Hero tracklist row opens through the `rowMenu` command: the command names
+the row's stable Service id, the frame's `rowMenu` section carries the
+shared builder's full entries for that item, and the menu paints at the
+pointer position. A press outside the menu, a scroll, or Esc closes it, and
+a chosen entry sends the same `menuEntry` command the Hero's More actions
+sends. The Hero's More actions paints the shared builder's entries minus
+the ones its own buttons already send (`Play`, `Play All`, `Add to
+Queue`), under each entry's carried builder index, and paints no control at
+all when the remainder is empty — the live finding that a Music album's
+menu repeated the buttons and offered nothing new.
 
 ### The frame section and its revision
 
@@ -493,7 +504,12 @@ dark ink, as the Queue's active row paints). An album carries `album_id`,
 `name`, `year`, and its `tracks` and `total` when the cache holds them; a
 track carries `track_id`, `name`, `number`, and `duration`. `GuiMusicHeroFrame`
 carries `artist`, `collections`, `album_count`, `artist_tracks`, the picked
-`album`, and its `menu` entries with `label` and `key_hint`. `GuiLibraryArt`
+`album`, and its `menu` entries with `label`, `key_hint`, and `index` (the
+entry's index in the shared builder's order, so a front end that paints only
+some entries still executes the one it painted). `GuiMusicFrame` also
+carries `row_menu` (`Option`): the item of the `rowMenu` command with the
+TUI menu builder's full entries for it, which the right-click item menu
+paints. `GuiLibraryArt`
 is the cached artwork's display encode or the bundled placeholder as a
 `data:` URL, or `Loading`. The window fetches no Library image: every byte is
 the core's image cache.
@@ -508,7 +524,8 @@ through the existing `App` action, so the TUI's own paths do not change. The
 variants are `openDestination` (`position`), `setCollections` (`libIdx`,
 `groupIds`), `showDetail` (`itemId`), `openAlbum` (`albumId`), `takeFocus`,
 `play` (`itemId`), `playNext` (`itemId`), `addToQueue` (`itemId`),
-`shuffleArtist` (`albumIds`), and `menuEntry` (`itemId`, `index`). Item
+`shuffleArtist` (`albumIds`), `menuEntry` (`itemId`, `index`), and `rowMenu`
+(`itemId`). Item
 identities are stable Service ids, never row positions, so a command built
 from a stale frame addresses the item that frame painted or nothing. The
 `takeFocus` variant also moves the core's `FocusStack`, so the frame paints
@@ -517,11 +534,17 @@ the focus the `App`'s key gates read (design D4). The `play` and
 the Library's routes: with autoload on, a track whose album the track cache
 holds replaces the queue with that album's cached tracks starting at the
 selected track, or queues them from the selected track onward; with autoload
-off, the play and the add act on the track alone. The `play` variant replaces
-the queue directly (`App::play_folder_gated` with the confirm off), so the
-Library's Play never raises the TUI's populated-queue replace prompt. The
+off, the play and the add act on the track alone. The `play` and
+`shuffleArtist` variants replace the queue directly (the shared folder and
+album-expansion paths run with the confirm off), so the Library's Play and
+its explicit Shuffle artist never raise the TUI's populated-queue
+replace prompt. The
 saved-playlist save/discard prompt still presents, through the confirmation
-modal.
+modal. The `rowMenu` variant arms the frame's `rowMenu` section (the
+right-click item menu the next paragraph describes), and each carried menu
+entry names its index in the shared builder's order, so a chosen entry
+executes the entry the frame painted, resolved by the item's id and not by
+the TUI's library cursor.
 
 ### The key routing order
 
