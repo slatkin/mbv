@@ -688,7 +688,8 @@ impl CoreThread {
         let artwork = self.artwork.frame_value(&artwork);
         // The Library section builds from the App's Service data (add-gui-
         // library-panel design D2): the memo re-carries it only on a changed
-        // revision, and the reload's `report_layout` re-arms it.
+        // revision, and the reload's `report_layout` re-arms it. `None` while
+        // no presented destination is active.
         let library = self.library.frame(&mut self.app);
         let theme_changed = std::mem::take(&mut self.theme_pending);
         let frame = GuiFrame::build(&FrameSources {
@@ -701,7 +702,7 @@ impl CoreThread {
             viewport_rows: self.viewport_rows,
             theme_changed,
             artwork,
-            library: Some(library),
+            library,
         });
         // The frame the window is about to paint becomes the choice lists a
         // pointer press resolves against (add-tauri-gui-client row 6.5).

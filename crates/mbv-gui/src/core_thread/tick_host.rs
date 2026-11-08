@@ -11,6 +11,18 @@ use mbv_ui_msg::{Msg, ServiceRequest};
 
 use super::{CoreInput, CoreThread};
 
+/// The Panel a Library command moves focus to (design D4): the two take-focus
+/// commands move it on the core's `FocusStack` too, so the frame's focus and
+/// the App's key gates agree. Every other command moves no focus — a
+/// documented no-op, not a hidden one.
+fn focus_target(command: &mbv::GuiLibraryCommand) -> Option<PanelFocus> {
+    match command {
+        mbv::GuiLibraryCommand::TakeFocus => Some(PanelFocus::Library),
+        mbv::GuiLibraryCommand::TakeQueueFocus => Some(PanelFocus::Queue),
+        _ => None,
+    }
+}
+
 impl ClientTickHost for CoreThread {
     fn app_mut(&mut self) -> &mut App {
         &mut self.app
@@ -182,18 +194,18 @@ impl ClientTickHost for CoreThread {
                 CoreInput::Library(command) => {
                     // The Library panel's request (add-gui-library-panel design
                     // D2): the App applies the semantic intent, and the
-                    // take-focus variant then moves the core's `FocusStack`
+                    // take-focus variants then move the core's `FocusStack`
                     // with the App's stored focus (design D4), so the frame
                     // and the App's key gates agree.
                     outcome.input_received = true;
-                    let taking_focus = matches!(command, mbv::GuiLibraryCommand::TakeFocus);
+                    let focus_target = focus_target(&command);
                     self.app.apply_gui_library_command(command);
-                    if taking_focus {
+                    if let Some(panel) = focus_target {
                         // The take-focus may run in the pre-catalog window
                         // (design D9): the restore then leaves the taken
                         // focus alone.
                         self.note_launch_focus_taken();
-                        self.focus.set_panel_focus(PanelFocus::Library);
+                        self.focus.set_panel_focus(panel);
                     }
                 }
                 CoreInput::Layout(report) => {

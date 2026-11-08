@@ -67,6 +67,15 @@ impl MockHttp {
         self.push(Scripted::Respond(Self::response(status, body)));
     }
 
+    /// Queue `count` responses with the given status and body: the scripted
+    /// answer for the several requests that read one unchanging catalog in
+    /// any interleaving, so the script covers whichever order they arrive in.
+    pub fn respond_repeated(&self, status: u16, body: &str, count: usize) {
+        for _ in 0..count {
+            self.respond(status, body);
+        }
+    }
+
     fn response(status: u16, body: &str) -> String {
         let reason = if status == 200 { "OK" } else { "Error" };
         format!(

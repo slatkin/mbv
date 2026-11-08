@@ -93,6 +93,7 @@ function content(
 		music: {
 			libIdx: 0,
 			pills,
+			collectionNames: ['Rock'],
 			loading: false,
 			failure: null,
 			artists,

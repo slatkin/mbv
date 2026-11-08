@@ -18,12 +18,14 @@ use mbv_config::{
     LaunchPanelFocus, TUI_LAUNCH_STATE_VERSION, TabIdentity, TestStateDirGuard, TuiLaunchState,
     load_tui_launch_state, save_tui_launch_state,
 };
+use mbv_emby::EmbyClient;
 use mbv_gui::bridge::frame::playback::GuiCardArtwork;
 use mbv_gui::bridge::frame::{GuiFrame, GuiWindowFrame};
 use mbv_gui::bridge::layout::{
     LayoutRect, LayoutRegion, LayoutReport, LayoutSize, ListId, ListRows, RegionTarget,
 };
 use mbv_gui::core_thread::{CoreInput, CoreThread, FrameSink, QuitSink};
+use mbv_net::mock_http::MockHttp;
 use mbv_ui_msg::{Key, KeyEvent, KeyModifiers, PointerEvent, PointerKind, Position};
 
 mod core_thread {
@@ -33,6 +35,10 @@ mod core_thread {
     mod pointer;
     mod queue;
 }
+
+/// A URL that never leaves the process: the mock transport ignores it, but it
+/// must remain an IP literal so the default resolver never attempts DNS.
+pub(crate) const TEST_URL: &str = "http://127.0.0.1:1";
 
 /// A key press with no modifier held, as the translated `key` command
 /// carries it.
@@ -138,6 +144,16 @@ impl TestCore {
 
 pub(crate) fn test_core(slots: usize) -> TestCore {
     test_core_with(stub_app_with_queue(slots))
+}
+
+/// The Emby client the GUI Music tests seed their library with (design D13):
+/// built over the in-memory mock transport, so no request leaves the process.
+pub(crate) fn test_emby_client(http: &MockHttp) -> EmbyClient {
+    EmbyClient::new(mbv::Config {
+        server_url: TEST_URL.into(),
+        ..mbv::Config::default()
+    })
+    .with_test_agent(http.agent())
 }
 
 /// A core thread over a caller-built `App`, for the stubs the queue stub

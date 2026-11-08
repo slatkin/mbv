@@ -28,8 +28,16 @@ pub(crate) struct LibraryFrames {
 
 impl LibraryFrames {
     /// The frame's Library section: the built content with its revision, or no
-    /// content when the window already holds this revision.
-    pub(crate) fn frame(&mut self, app: &mut App) -> GuiLibraryFrame {
+    /// section when no presented destination is active or the window already
+    /// holds this revision.
+    pub(crate) fn frame(&mut self, app: &mut App) -> Option<GuiLibraryFrame> {
+        // No presented destination is active (design D2): the section is
+        // absent, and the next one re-carries its content whatever the window
+        // kept while the section was away.
+        if app.gui_music_destination().is_none() {
+            self.sent = None;
+            return None;
+        }
         let content = content(app);
         if self.last.as_ref() != Some(&content) {
             // The counter wraps like the queue's revision mint: a client
@@ -42,10 +50,10 @@ impl LibraryFrames {
         if carried {
             self.sent = Some(self.revision);
         }
-        GuiLibraryFrame {
+        Some(GuiLibraryFrame {
             revision: self.revision,
             content: carried.then(|| Box::new(content)),
-        }
+        })
     }
 
     /// Arm the next frame: a window reload's `report_layout` re-carries the

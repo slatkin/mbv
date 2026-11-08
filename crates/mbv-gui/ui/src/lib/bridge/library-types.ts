@@ -59,6 +59,12 @@ export type GuiLibraryCommand =
 	| { command: 'showDetail'; itemId: string }
 	| { command: 'openAlbum'; albumId: string }
 	| { command: 'takeFocus' }
+	| {
+			/** Take Panel focus for the Queue panel: Tab across the panel
+			 * boundary's far end (design D3, D4). The mirror of
+			 * `takeFocus`. */
+			command: 'takeQueueFocus';
+	  }
 	| { command: 'play'; itemId: string }
 	| { command: 'playNext'; itemId: string }
 	| { command: 'addToQueue'; itemId: string }
@@ -72,6 +78,11 @@ export interface GuiMusicFrame {
 	libIdx: number;
 	/** The group pills in the group level's order (design D6). */
 	pills: GuiMusicPill[];
+	/** The selected collection names in pill order (design D6): the names the
+	 * list header and the Library Status bar location read, carried once for
+	 * the whole panel. The Hero header's own copy rides in
+	 * `hero.collections`, present exactly when the Hero is. */
+	collectionNames: string[];
 	/** Whether one of the selected groups' album lists has not landed yet. */
 	loading: boolean;
 	/** The failure line naming the selected groups whose list failed. */

@@ -39,6 +39,7 @@ function music(picked: GuiMusicHero | null): GuiMusicFrame {
 			{ groupId: 'g2', name: 'Hip-Hop', selected: true, collection: true },
 			{ groupId: 'g3', name: 'Soul', selected: true, collection: true },
 		],
+		collectionNames: ['Hip-Hop', 'Soul'],
 		loading: false,
 		failure: null,
 		artists: [],

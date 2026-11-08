@@ -110,7 +110,8 @@ pub struct GuiFrame {
     pub status: GuiStatusBar,
     /// The Library panel's section (add-gui-library-panel design D2): the
     /// active destination's content under its revision. `None` while no
-    /// Library panel shows.
+    /// presented Library destination is active — the front end mounts the
+    /// Library panel only for a frame that carries the section.
     pub library: Option<GuiLibraryFrame>,
     /// The role-to-colour map (design D7). `None` unless the theme changed for
     /// this window.
@@ -150,7 +151,8 @@ pub struct FrameSources<'a> {
     pub artwork: Option<GuiCardArtwork>,
     /// The Library panel's section (add-gui-library-panel design D2): the
     /// core thread's memo builds it, so a frame carries the content only when
-    /// its revision changed. `None` while no Library panel shows.
+    /// its revision changed. `None` while no presented Library destination is
+    /// active.
     pub library: Option<GuiLibraryFrame>,
 }
 

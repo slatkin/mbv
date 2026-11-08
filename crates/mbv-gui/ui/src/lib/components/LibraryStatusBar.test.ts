@@ -34,6 +34,7 @@ function music(): GuiMusicFrame {
 	return {
 		libIdx: 0,
 		pills: [{ groupId: 'g1', name: 'Hip-Hop', selected: true, collection: true }],
+		collectionNames: ['Hip-Hop'],
 		loading: false,
 		failure: null,
 		artists: [],

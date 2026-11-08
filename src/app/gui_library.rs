@@ -33,7 +33,10 @@ use crate::app::App;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum GuiLibraryCommand {
     /// Open a destination: `position` is the tab position the frame's
-    /// destination tabs carry, where 0 is Home.
+    /// destination tabs carry, where 0 is Home. A position that names no
+    /// presented destination opens nothing (design D2): the command the
+    /// frame's tabs carry can name only a painted tab, and a stale frame must
+    /// not activate a destination the top bar does not carry.
     OpenDestination { position: usize },
     /// Replace the selected collections of the Grouped Music library
     /// `lib_idx` with `group_ids`, in pill order (design D5, D6).
@@ -48,6 +51,10 @@ pub enum GuiLibraryCommand {
     OpenAlbum { album_id: String },
     /// Take Panel focus for the Library panel (design D4).
     TakeFocus,
+    /// Take Panel focus for the Queue panel (design D4): Tab across the panel
+    /// boundary's far end. The mirror of [`GuiLibraryCommand::TakeFocus`],
+    /// whose press path moves focus back the other way.
+    TakeQueueFocus,
     /// Play the item (design D8).
     Play { item_id: String },
     /// Play the item next (design D8): the shared play-next admission, so the
@@ -75,13 +82,18 @@ impl App {
     /// `App` action for the intent, so the TUI's own paths do not change.
     pub fn apply_gui_library_command(&mut self, command: GuiLibraryCommand) {
         match command {
-            GuiLibraryCommand::OpenDestination { position } => self.set_library_tab(position),
+            GuiLibraryCommand::OpenDestination { position } => {
+                if self.presents_open_position(position) {
+                    self.set_library_tab(position);
+                }
+            }
             GuiLibraryCommand::SetCollections { lib_idx, group_ids } => {
                 self.set_gui_library_collections(lib_idx, group_ids);
             }
             GuiLibraryCommand::ShowDetail { item_id } => self.show_gui_library_detail(&item_id),
             GuiLibraryCommand::OpenAlbum { album_id } => self.open_gui_library_album(album_id),
             GuiLibraryCommand::TakeFocus => self.set_gui_panel_focus(PanelFocus::Library),
+            GuiLibraryCommand::TakeQueueFocus => self.set_gui_panel_focus(PanelFocus::Queue),
             GuiLibraryCommand::Play { item_id } => {
                 if let Some((lib_idx, item)) = self.gui_library_item(&item_id) {
                     self.play_or_activate_lib_item(lib_idx, item);

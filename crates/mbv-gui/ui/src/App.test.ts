@@ -57,6 +57,7 @@ function music(hero: GuiMusicHero | null = null): GuiMusicFrame {
 	return {
 		libIdx: 0,
 		pills: [],
+		collectionNames: [],
 		loading: false,
 		failure: null,
 		artists: [],

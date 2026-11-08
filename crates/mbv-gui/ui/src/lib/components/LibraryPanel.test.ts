@@ -33,6 +33,7 @@ function music(): GuiMusicFrame {
 	return {
 		libIdx: 0,
 		pills: [],
+		collectionNames: [],
 		loading: false,
 		failure: null,
 		artists: [],

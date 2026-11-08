@@ -81,6 +81,11 @@ pub struct GuiMusicFrame {
     pub lib_idx: usize,
     /// The group pills in the group level's order (design D6).
     pub pills: Vec<GuiMusicPillFrame>,
+    /// The selected collection names in pill order (design D6): the names
+    /// the list header and the Library Status bar location read, carried
+    /// once for the whole panel. The Hero header's own copy rides in
+    /// `hero.collections`, present exactly when the Hero is.
+    pub collection_names: Vec<String>,
     /// Whether one of the selected groups' album lists has not landed yet.
     pub loading: bool,
     /// The failure line naming the selected groups whose album list failed.
@@ -249,6 +254,7 @@ impl GuiMusicFrame {
                     collection: true,
                 })
                 .collect(),
+            collection_names: projection.collection_names.clone(),
             loading: projection.loading,
             failure: projection.failure.clone(),
             artists: projection

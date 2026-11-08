@@ -114,6 +114,10 @@ pub struct GuiMusicHero {
 pub struct GuiMusicProjection {
     /// The group pills in the group level's order (design D5, D6).
     pub pills: Vec<GuiMusicPill>,
+    /// The selected collection names in pill order (design D6): the one
+    /// derivation of the names the frame carries, so the list header, the
+    /// Status bar location, and the Hero header cannot disagree.
+    pub collection_names: Vec<String>,
     /// Whether one of the selected groups' album lists has not landed yet.
     pub loading: bool,
     /// The failure line naming every selected group whose album list failed
@@ -159,11 +163,13 @@ impl App {
     #[must_use]
     pub fn gui_music_projection(&self, lib_idx: usize) -> GuiMusicProjection {
         let pills = self.gui_music_pills(lib_idx);
+        let collection_names = selected_collection_names(&pills);
         let union = self.gui_music_union(lib_idx, &pills);
         let artists = self.gui_music_artists(&union);
-        let hero = self.gui_music_hero(&artists, &pills);
+        let hero = self.gui_music_hero(&artists, &collection_names);
         GuiMusicProjection {
             pills,
+            collection_names,
             loading: union.loading,
             failure: failure_line(&union.failed),
             artists,
@@ -303,7 +309,7 @@ impl App {
     fn gui_music_hero(
         &self,
         artists: &[GuiMusicArtist],
-        pills: &[GuiMusicPill],
+        collection_names: &[String],
     ) -> Option<GuiMusicHero> {
         let picked = self.gui_library_detail.as_ref()?.id.as_str();
         let (artist, album) = artists.iter().find_map(|artist| {
@@ -315,11 +321,7 @@ impl App {
         })?;
         Some(GuiMusicHero {
             artist: artist.name.clone(),
-            collections: pills
-                .iter()
-                .filter(|pill| pill.selected)
-                .map(|pill| pill.name.clone())
-                .collect(),
+            collections: collection_names.to_vec(),
             album_count: artist.albums.len(),
             artist_tracks: self.gui_artist_tracks(artist),
             album: album.clone(),
@@ -341,6 +343,17 @@ impl App {
             duration: fmt_duration_short(ticks / TICKS_PER_SECOND),
         })
     }
+}
+
+/// The selected pills' names in pill order (design D6): the one derivation
+/// of the names the projection carries, so every painter that names the
+/// selected collections reads the same fact.
+fn selected_collection_names(pills: &[GuiMusicPill]) -> Vec<String> {
+    pills
+        .iter()
+        .filter(|pill| pill.selected)
+        .map(|pill| pill.name.clone())
+        .collect()
 }
 
 /// The album's tracklist rows (design D5, D7).

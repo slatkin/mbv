@@ -145,6 +145,21 @@ impl App {
             .collect()
     }
 
+    /// Whether an open-destination command's `position` names a destination
+    /// the GUI presents (design D2): Home, or one of the presented
+    /// destinations' tab positions. The command arm reads this one
+    /// definition, so a stale frame's position cannot activate a destination
+    /// the top bar does not paint — an unpresented destination opens
+    /// nothing, as the absent digit key does.
+    pub(in crate::app::gui_library) fn presents_open_position(&self, position: usize) -> bool {
+        position == 0
+            || self.presented_destinations().into_iter().any(|lib_idx| {
+                TabSelection::EmbyLibrary(lib_idx)
+                    .to_position_with_counts(self.libs.len(), self.feeds_tab_pos())
+                    == position
+            })
+    }
+
     /// The tab position of the destination a saved location names, resolved
     /// against the destinations the GUI presents (design D9): the matching
     /// presented library, else the first presented one. Phase 1 presents the

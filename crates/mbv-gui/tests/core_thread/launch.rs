@@ -5,13 +5,12 @@
 //! in-memory mock transport, so no request leaves the process and no live
 //! Owner, Service, or webview runs (design D13).
 
-use mbv::{ClientTickHost, Config, stub_app_with_queue};
+use mbv::{ClientTickHost, stub_app_with_queue};
 use mbv_config::{
     GUI_LAUNCH_STATE_VERSION, GuiDestinationCollections, GuiLaunchState, LaunchPanelFocus,
     TabIdentity, TestStateDirGuard, gui_launch_state_path, load_gui_launch_state,
     save_gui_launch_state,
 };
-use mbv_emby::EmbyClient;
 use mbv_emby_model::EmbyItem;
 use mbv_gui::bridge::frame::focus::GuiPanel;
 use mbv_gui::bridge::library::GuiLibraryCommand;
@@ -21,11 +20,7 @@ use mbv_queue::ServiceKind;
 use mbv_ui_model::settings::PanelFocus;
 use mbv_ui_model::tab_selection::TabSelection;
 
-use crate::{TestCore, test_core_with};
-
-/// A URL that never leaves the process: the mock transport ignores it, but it
-/// must remain an IP literal so the default resolver never attempts DNS.
-const TEST_URL: &str = "http://127.0.0.1:1";
+use crate::{TestCore, test_core_with, test_emby_client};
 
 /// The library id and name the seeded Music tab holds.
 const MUSIC_LIBRARY: (&str, &str) = ("lib-music", "Music");
@@ -54,12 +49,9 @@ const NO_ALBUMS: &str = r#"{"Items":[],"TotalRecordCount":0}"#;
 /// so it starts no Emby request the test would have to script.
 fn music_core(http: &MockHttp) -> TestCore {
     let mut test = test_core_with(stub_app_with_queue(0));
-    let client = EmbyClient::new(Config {
-        server_url: TEST_URL.into(),
-        ..Config::default()
-    })
-    .with_test_agent(http.agent());
-    test.core.app_mut().seed_gui_music_library_for_test(client);
+    test.core
+        .app_mut()
+        .seed_gui_music_library_for_test(test_emby_client(http));
     test
 }
 

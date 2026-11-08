@@ -68,9 +68,7 @@ fn a_cached_emby_client_landing_finds_the_music_tab_and_starts_the_discovery() {
     let http = MockHttp::new();
     // The views fetch and its siblings, in any interleaving with the
     // background loads: every response carries the same one-library catalog.
-    for _ in 0..8 {
-        http.respond(200, MUSIC_VIEWS);
-    }
+    http.respond_repeated(200, MUSIC_VIEWS, 8);
     let client = EmbyClient::new(Config {
         server_url: TEST_URL.into(),
         ..Config::default()

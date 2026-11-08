@@ -42,6 +42,7 @@ function music(): GuiMusicFrame {
 			{ groupId: 'g3', name: 'Soul', selected: false, collection: true },
 			{ groupId: 'latest', name: 'Latest', selected: false, collection: false },
 		],
+		collectionNames: ['Hip-Hop', 'Jazz'],
 		loading: false,
 		failure: null,
 		artists: [],

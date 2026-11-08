@@ -8,9 +8,9 @@
 
 use std::sync::mpsc::Receiver;
 
-use mbv::{ClientTickHost, Config, stub_app_with_queue_and_cmd_rx};
+use mbv::{ClientTickHost, stub_app_with_queue_and_cmd_rx};
 use mbv_ctrl::CtrlCmd;
-use mbv_emby::EmbyClient;
+use mbv_emby_model::EmbyItem;
 use mbv_gui::bridge::frame::GuiFrame;
 use mbv_gui::bridge::frame::focus::{GuiPanel, GuiSurface};
 use mbv_gui::bridge::frame::library::{GuiLibraryArt, GuiLibraryFrame, GuiLibraryTabFrame};
@@ -20,11 +20,7 @@ use mbv_net::mock_http::MockHttp;
 use mbv_queue::QueueSource;
 use mbv_ui_model::tab_selection::TabSelection;
 
-use crate::{TestCore, layout_report, test_core_with};
-
-/// A URL that never leaves the process: the mock transport ignores it, but it
-/// must remain an IP literal so the default resolver never attempts DNS.
-const TEST_URL: &str = "http://127.0.0.1:1";
+use crate::{TestCore, layout_report, test_core_with, test_emby_client};
 
 /// One group's album listing, as the mock transport returns it.
 const ALBUMS: &str = r#"{"Items":[{"Id":"alb-ill","Name":"Licensed to Ill","Type":"MusicAlbum"}],"TotalRecordCount":1}"#;
@@ -39,12 +35,9 @@ const TRACKS: &str = r#"{"Items":[{"Id":"trk-1","Name":"Rhymin & Stealin","Type"
 fn music_core(http: &MockHttp) -> (TestCore, Receiver<CtrlCmd>) {
     let (app, cmd_rx) = stub_app_with_queue_and_cmd_rx(0);
     let mut test = test_core_with(app);
-    let client = EmbyClient::new(Config {
-        server_url: TEST_URL.into(),
-        ..Config::default()
-    })
-    .with_test_agent(http.agent());
-    test.core.app_mut().seed_gui_music_library_for_test(client);
+    test.core
+        .app_mut()
+        .seed_gui_music_library_for_test(test_emby_client(http));
     (test, cmd_rx)
 }
 
@@ -110,6 +103,36 @@ fn the_open_destination_command_opens_the_music_tab() {
     );
 }
 
+/// An open-destination command for a destination the GUI does not present is
+/// a no-op (design D2: the top bar carries only the presented tabs, and a
+/// destination the GUI does not present is absent — a digit key for one opens
+/// nothing). Regression for the Phase-1 gate finding: the command applied the
+/// raw position, so a position past the presented tabs activated the
+/// unpresented library.
+#[test]
+fn an_open_destination_command_for_an_unpresented_destination_is_a_no_op() {
+    let http = MockHttp::new();
+    let (mut test, _cmd_rx) = music_core(&http);
+    test.core
+        .app_mut()
+        .push_gui_library_tab_for_test(EmbyItem::folder(
+            "lib-shows".into(),
+            "Shows".into(),
+            "tvshows".into(),
+        ));
+
+    send_library(
+        &mut test,
+        GuiLibraryCommand::OpenDestination { position: 0 },
+    );
+    send_library(
+        &mut test,
+        GuiLibraryCommand::OpenDestination { position: 2 },
+    );
+
+    assert_eq!(test.core.app_mut().tab_for_test(), TabSelection::Home);
+}
+
 /// The take-focus command (design D4): the Library panel takes Panel focus,
 /// and the next frame carries it. The Library is mounted, so the stack
 /// resolves it as the focused surface.
@@ -121,6 +144,27 @@ fn the_take_focus_command_puts_the_library_in_the_next_frame() {
     let frame = test.next_frame();
     assert_eq!(frame.focus.panel, GuiPanel::Library);
     assert_eq!(frame.focus.surface, Some(GuiSurface::Library));
+}
+
+/// The take-queue-focus command returns Panel focus to the Queue panel on
+/// both authorities (design D4): the App's stored focus, which its key gates
+/// read, and the core's `FocusStack`, which the frame's focus derives from.
+/// Regression for the Phase-1 gate finding: the command vocabulary had the
+/// Library's take-focus alone, so Tab could never leave the Library panel.
+#[test]
+fn the_take_queue_focus_command_moves_both_focus_authorities_to_the_queue() {
+    let mut test = crate::test_core(2);
+    send_library(&mut test, GuiLibraryCommand::TakeFocus);
+    send_library(&mut test, GuiLibraryCommand::TakeQueueFocus);
+
+    let _library_frame = test.next_frame();
+    let frame = test.next_frame();
+    assert_eq!(frame.focus.panel, GuiPanel::Queue);
+    assert_eq!(frame.focus.surface, Some(GuiSurface::Queue));
+    assert_eq!(
+        test.core.app_mut().gui_panel_focus(),
+        mbv_ui_model::settings::PanelFocus::Queue
+    );
 }
 
 /// The set-collections command stores the destination's selection in pill
@@ -349,12 +393,9 @@ fn the_item_menu_entries_ride_the_frame_and_run_their_action() {
 fn seeded_music_core(http: &MockHttp) -> (TestCore, Receiver<CtrlCmd>) {
     let (app, cmd_rx) = stub_app_with_queue_and_cmd_rx(0);
     let mut test = test_core_with(app);
-    let client = EmbyClient::new(Config {
-        server_url: TEST_URL.into(),
-        ..Config::default()
-    })
-    .with_test_agent(http.agent());
-    test.core.app_mut().seed_gui_music_library_for_test(client);
+    test.core
+        .app_mut()
+        .seed_gui_music_library_for_test(test_emby_client(http));
     test.core.app_mut().seed_gui_music_albums_for_test(
         0,
         "grp-hiphop",
@@ -423,6 +464,31 @@ fn the_library_frame_carries_the_destination_tabs_and_the_lib_idx() {
     assert_eq!(content.current_tab, Some(1));
     let music = content.music.expect("the Music destination is active");
     assert_eq!(music.lib_idx, 0);
+}
+
+/// The frame carries the selected collection names in pill order once for
+/// the whole panel (design D6): the list header's, the Status bar location's,
+/// and the Hero header's names read this one fact. Regression for the
+/// Phase-1 gate finding: the names were derived separately in the projection,
+/// the Status bar, and the list header.
+#[test]
+fn the_music_frame_carries_the_selected_collection_names() {
+    let http = MockHttp::new();
+    let (mut test, _cmd_rx) = seeded_music_core(&http);
+
+    send_library(
+        &mut test,
+        GuiLibraryCommand::SetCollections {
+            lib_idx: 0,
+            group_ids: vec!["grp-hiphop".into()],
+        },
+    );
+
+    let music = library_of(test.next_frame())
+        .content
+        .and_then(|content| content.music)
+        .expect("the Music destination is active");
+    assert_eq!(music.collection_names, ["Hip-Hop"]);
 }
 
 /// The Library section carries its content only when the revision changes, and
