@@ -437,7 +437,10 @@ every destination the GUI does not present yet), and `music`
 set-collections command names), `pills` (`group_id`, `name`, `selected`, and
 `collection`), `loading`, `failure` (the failure line naming the selected
 groups whose album list failed), `artists` (`artist_key`, `name`,
-`sort_letter`, and `albums`), `hero`, and `art`. An album carries `album_id`,
+`sort_letter`, and `albums`), `hero`, `art`, and `playing_track_id` (the
+playhead's Emby track id, from the Queue panel's own authority, which the
+tracklist's and the list's playing rows paint — the canvas's green fill with
+dark ink, as the Queue's active row paints). An album carries `album_id`,
 `name`, `year`, and its `tracks` and `total` when the cache holds them; a
 track carries `track_id`, `name`, `number`, and `duration`. `GuiMusicHeroFrame`
 carries `artist`, `collections`, `album_count`, `artist_tracks`, the picked
@@ -460,7 +463,13 @@ variants are `openDestination` (`position`), `setCollections` (`libIdx`,
 identities are stable Service ids, never row positions, so a command built
 from a stale frame addresses the item that frame painted or nothing. The
 `takeFocus` variant also moves the core's `FocusStack`, so the frame paints
-the focus the `App`'s key gates read (design D4).
+the focus the `App`'s key gates read (design D4). The `play` and
+`addToQueue` variants apply the library playback policy's autoload rule to
+the Library's routes: with autoload on, a track whose album the track cache
+holds replaces the queue with that album's cached tracks starting at the
+selected track, or queues them from the selected track onward; with autoload
+off, the play and the add act on the track alone. The `play` variant skips
+the TUI's populated-queue replace-confirm, which the GUI never paints.
 
 ### The key routing order
 
@@ -538,11 +547,14 @@ Panel focus over the Library focus the open takes, unless the user already
 took focus while the restore was pending. A start with no saved location — or
 one that fails to load — restores through the same path
 (`mbv_config::first_launch`): the first presented destination, Library Panel
-focus, and no saved collection sets, so the Library panel is reachable from
-the first launch. The second phase applies the saved
+focus, and no saved collection sets, whose empty set is the show-all
+selection, so the Library panel is reachable from the first launch. The
+second phase applies the saved
 collection sets once the destination's group list lands: a saved group the
-library no longer holds drops, and when none remain the first group is
-selected. A mid-restore tab switch abandons the saved sets rather than landing
+library no longer holds drops, and an empty result — a saved set the library
+emptied, or no saved entry — is the show-all selection. The restore applies
+to a destination that holds no selection and never clobbers one the session
+already made. A mid-restore tab switch abandons the saved sets rather than landing
 them under another destination. The restore is idempotent, so the catalog and
 library drains call it whenever their content can complete a phase.
 

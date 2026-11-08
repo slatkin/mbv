@@ -230,7 +230,7 @@ While the Library panel has Panel focus, the window content SHALL take the Libra
 
 ### Requirement: Collection pills are multi-select
 
-A collection pill SHALL toggle on and off by a press, and an Alt-press SHALL solo it. Space SHALL toggle the focused collection pill and Alt+Space SHALL solo it. At least one pill SHALL stay selected. With two or more selected, the pill row SHALL show the selected count with a clear control. The list SHALL show the de-duplicated union of the selected collections, sorted as one list. Latest, filter, and letter-bucket pills SHALL stay single-select.
+A collection pill SHALL toggle on and off by a press, and an Alt-press SHALL solo it. Space SHALL toggle the focused collection pill and Alt+Space SHALL solo it. Turning off the last selected collection pill SHALL leave the empty selection, which SHALL show every collection: the same content every pill selected produces. With two or more selected, the pill row SHALL show the selected count with a clear control. The list SHALL show the de-duplicated union of the selected collections, sorted as one list. Latest, filter, and letter-bucket pills SHALL stay single-select.
 
 #### Scenario: Collection pills per destination
 
@@ -245,11 +245,11 @@ A collection pill SHALL toggle on and off by a press, and an Alt-press SHALL sol
 - **THEN** both pills are selected and the list shows the artists of both collections, each artist once, sorted by sort name
 - **AND** the list header reads Hip-Hop + Soul
 
-#### Scenario: The last selected pill is pressed
+#### Scenario: The last selected pill is turned off
 
 - **GIVEN** only one collection pill is selected
 - **WHEN** the user presses that pill
-- **THEN** the pill stays selected and the list does not change
+- **THEN** the pill deselects, no pill paints a selection, and the list shows the union of every collection, as all pills selected do
 
 #### Scenario: A pill is soloed
 
@@ -299,7 +299,7 @@ Each destination SHALL keep its own pill selection while the GUI Client runs and
 
 ### Requirement: The GUI Client keeps its own launch location
 
-At orderly exit the GUI Client SHALL save its launch location: the active destination, the selected collections of each destination, and Panel focus. At start it SHALL restore that location. The GUI Client SHALL NOT read or write the TUI launch state, and SHALL NOT save its launch location while the window is open. While the GUI Client presents only some destinations, a saved destination that it does not present SHALL fall back to the first presented destination.
+At orderly exit the GUI Client SHALL save its launch location: the active destination, the selected collections of each destination, and Panel focus. At start it SHALL restore that location, and an empty saved selection SHALL restore as the show-all selection. The GUI Client SHALL NOT read or write the TUI launch state, and SHALL NOT save its launch location while the window is open. While the GUI Client presents only some destinations, a saved destination that it does not present SHALL fall back to the first presented destination.
 
 #### Scenario: The GUI and the TUI exit in turn
 
@@ -309,7 +309,12 @@ At orderly exit the GUI Client SHALL save its launch location: the active destin
 
 ### Requirement: The Library list is the canvas tree
 
-The Music list SHALL show the artists of the selected collections as a tree: artist rows, album rows with the year, and track rows with the track number, with a letter heading above the first artist of each letter. A press on an artist or album row SHALL open or close it and pick it; a press on a track row SHALL pick it. The list SHALL keep the cursor row fully visible after every keyboard movement.
+The Music list SHALL show the artists of the selected collections as a tree: artist rows, album rows with the year, and track rows with the track number, with a letter heading above the first artist of each letter. A press on an artist or album row SHALL open or close it and pick it; a press on a track row SHALL move the cursor onto the row and pick its album. A double-click on a track row of the list or of the Hero's tracklist SHALL add that track to the queue through the library playback policy's autoload rule. The list SHALL keep the cursor row fully visible after every keyboard movement.
+
+#### Scenario: A track is double-clicked
+
+- **WHEN** the user double-clicks a track row
+- **THEN** the track enters the queue — with autoload on, that track's cached album tracks in disc/track order starting at the selected track; with autoload off, only the track
 
 #### Scenario: An album is opened
 
@@ -342,7 +347,7 @@ A Library list sorted by name SHALL show a letter rail from A to Z. A letter wit
 
 ### Requirement: The Hero shows the picked item with its actions
 
-The Hero SHALL show the picked album with its artist header, its square artwork, and its tracklist. It SHALL offer Play, Play next with the key hint `n`, Add to queue with the key hint `a`, Shuffle artist, and More actions. Play next SHALL admit the item directly after the active slot, and SHALL append it when there is no active slot or the active slot is the last. No slot already in the queue SHALL move. More actions SHALL open the item's menu.
+The Hero SHALL show the picked album with its artist header, its square artwork, and its tracklist. It SHALL offer Play, Play next with the key hint `n`, Add to queue with the key hint `a`, Shuffle artist, and More actions. Play SHALL replace the queue and start the item without the TUI's populated-queue replace-confirm, which the GUI never paints. Play next SHALL admit the item directly after the active slot, and SHALL append it when there is no active slot or the active slot is the last. No slot already in the queue SHALL move. More actions SHALL open the item's menu. The tracklist row of the track playing at the playhead SHALL paint the playing state.
 
 #### Scenario: The Hero paints a picked album
 

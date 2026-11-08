@@ -73,7 +73,7 @@ The Library keys (the canvas names the first six; this design adds the movement 
 | `/` | Open the filter of the list. |
 | Enter | Play the item under the cursor, or press the focused control. |
 | `n` | Play next the item under the cursor. |
-| `a` | Add the item under the cursor to the queue. |
+| `a` | Add the item under the cursor to the queue. The add applies the library playback policy's autoload rule to the Library's routes (D8). |
 | Space | On a focused pill: toggle it. |
 | Alt+Space | On a focused pill: solo it. |
 | Up, Down, Page Up, Page Down, Home, End | Move the cursor in the focused list or tracklist. |
@@ -102,7 +102,7 @@ The Hero shows the picked album: the artist header (the artist, the selected col
 
 ### D6. Multi-select collection pills
 
-The canvas SPEC note sets the rules. A press on a collection pill toggles it, and an Alt-press solos it. Space and Alt+Space do the same on the focused pill. Turning off the last selected pill is ignored. With two or more selected, the row shows *N selected · clear*, and clear keeps the first selected pill in pill order. The list header reads the selected names joined by ` + `, or *Name · sort name* for one. A single pill (Latest, a filter, a letter bucket) clears the set and selects alone.
+The canvas SPEC note sets the rules. A press on a collection pill toggles it, and an Alt-press solos it. Space and Alt+Space do the same on the focused pill. Turning off the last selected pill leaves the empty set — the show-all selection: the union of every group, the same content every pill selected produces, loaded through the same per-group fetch and cache. With two or more selected, the row shows *N selected · clear*, and clear keeps the first selected pill in pill order. The list header reads the selected names joined by ` + `, or *Name · sort name* for one. A single pill (Latest, a filter, a letter bucket) clears the set and selects alone.
 
 The front end computes the new set from the press and sends it with the set-collections command. The core stores it per destination and loads the new groups (D5). Each destination keeps its set while the GUI runs, and the launch location saves it (D9).
 
@@ -118,7 +118,7 @@ Collection pills by destination (Phase 2 uses the same rule; a pill is a collect
 
 ### D7. The list and the letter rail
 
-The list is the canvas tree: artist rows (30 px), album rows with the year (30 px), and track rows with the track number (28 px), with 24 px letter headings above the first artist of each letter. A press on an artist or album row opens or closes it and picks it; a press on a track picks it. The cursor and the picked item are different: the cursor moves by keys, and a press picks the item for the Hero. Enter plays the item under the cursor and never picks it: the GUI is mouse-driven for picking, and the TUI's Enter-picks behaviour is its own compromise. The list paints only the rows in view (fixed heights, native scroll), so a long artist list stays fast.
+The list is the canvas tree: artist rows (30 px), album rows with the year (30 px), and track rows with the track number (28 px), with 24 px letter headings above the first artist of each letter. A press on an artist or album row opens or closes it and picks it; a press on a track moves the cursor onto the row and picks its album — the pick's Hero is album-scoped, so the cursor is the press's visible half, as the Queue panel's click moves the queue cursor. A double-click on a track row of the list or of the Hero's tracklist adds that track to the queue through the add path's autoload rule (D8). The cursor and the picked item are different: the cursor moves by keys, and a press picks the item for the Hero. Enter plays the item under the cursor and never picks it: the GUI is mouse-driven for picking, and the TUI's Enter-picks behaviour is its own compromise. The list paints only the rows in view (fixed heights, native scroll), so a long artist list stays fast.
 
 The letter rail shows A to Z beside a list sorted by name. A letter with no rows is disabled. A press scrolls to the first row of that letter and moves the cursor there. The canvas gives the rail no key. Its keyboard path is the `/` filter. The filter narrows the rows to the names that contain the text, without case.
 
@@ -126,13 +126,19 @@ The letter rail shows A to Z beside a list sorted by name. A letter with no rows
 
 Play, Add to queue, and Shuffle artist call existing `App` actions: `App::play_or_activate_lib_item`, `App::play_album_track`, and `App::play_music_albums` (with shuffle for Shuffle artist, over the artist's albums in the current union), and `App::enqueue_lib_item`.
 
+The Library's own play and add apply the library playback policy's autoload rule (the Grouped Music tree's track activation): with autoload on, a track whose album the track cache holds replaces the queue with that album's cached playable tracks in disc/track order starting at the selected track, and the add queues the album's cached tracks from the selected track onward; with autoload off, the play and the add act on the track alone. Every other item takes the shared paths unchanged, and the TUI's own add paths keep their per-item appends.
+
+The Library's explicit play skips the TUI's populated-queue replace-confirm: the confirm modal is a TUI overlay the GUI never paints, so a play gated behind it was swallowed and the Hero's Play button did nothing over a populated queue. The shared folder path runs with the confirm off, and the local saved-playlist protection stays.
+
+The frame carries the playhead's Emby track id from the Queue panel's own authority — the Owner status and the playback queue's item at the active index — so a tracklist row and a list track row whose track plays paint the canvas's playing look: the green fill with dark ink, as the Queue's active row paints, over the cursor's fill.
+
 Play next is new: `App::play_lib_item_next(lib_idx, item)`. It resolves the item with the same route and admission checks as `App::enqueue_lib_item` (folder expansion, playability, route conflict), then sends the Owner's answered Append with `before` set to the slot after the active slot (`QueueOp::Append { items, before }`). With no active slot, or when the active slot is the last one, it sends `before: None`. It never moves a slot that is already in the queue. The TUI has no producer for it.
 
 The Hero's controls show their keys (`n`, `a`). The tracklist's hover controls run play next and add to queue on that track. More actions opens the item menu: the core builds its entries with `App::build_context_menu_for` (the private builder behind `App::open_context_menu_for`, widened to `pub(in crate::app)`), the frame carries them, the front end paints them in the row-menu look of `canvas/Menus.dc.html`, and a chosen entry runs through `App::execute_context_action`. The GUI never arms the TUI's `pending_overlay`. `execute_context_action` finds the library through `App::context_menu_lib_idx`, which needs Library Panel focus and an Emby library in `App::tab`; D4 keeps both true while the Library has Panel focus.
 
 ### D9. The GUI keeps its own launch location
 
-The GUI's `App` starts with `LaunchRestore::Done`, so the TUI launch state never moves the GUI's tab or Panel focus. The GUI keeps its own file (`mbv_config::load_gui_launch_state` and `save_gui_launch_state`, additive, beside the TUI launch state): the destination, the selected collections of each destination, and Panel focus. The core saves it at orderly exit, before `client_exit_teardown`, and never while the window is open. At start, after the catalog lands, the core opens the saved destination, applies its saved sets (a saved group that no longer exists is dropped; when none remain, the first group is selected), and sets Panel focus. While the GUI presents only some destinations, a saved destination that it does not present falls back to the first presented one. A start with no saved location — or one that fails to load — restores through the same path: the first presented destination, Library Panel focus, and no saved collections.
+The GUI's `App` starts with `LaunchRestore::Done`, so the TUI launch state never moves the GUI's tab or Panel focus. The GUI keeps its own file (`mbv_config::load_gui_launch_state` and `save_gui_launch_state`, additive, beside the TUI launch state): the destination, the selected collections of each destination, and Panel focus. The core saves it at orderly exit, before `client_exit_teardown`, and never while the window is open. At start, after the catalog lands, the core opens the saved destination, applies its saved sets (a saved group that no longer exists is dropped; when none remain — a saved set the library emptied, and a destination with no saved entry, a fresh launch's case — the empty set applies, the show-all selection), and sets Panel focus. The restore applies to a destination that holds no selection and never clobbers one the session already made. While the GUI presents only some destinations, a saved destination that it does not present falls back to the first presented one. A start with no saved location — or one that fails to load — restores through the same path: the first presented destination, Library Panel focus, and no saved collections, whose empty set is the show-all selection.
 
 The TUI launch state does not change: the TUI never reads the GUI file, and the GUI never writes the TUI file.
 
