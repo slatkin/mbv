@@ -60,7 +60,7 @@ The projections that build the section are public `App` methods in `src/app/gui_
 
 The front end routes each keydown in this order:
 
-1. While a core overlay is open (the row menu, the track popover, the playback-target chooser) or prefix mode is armed (both are in the frame), the key goes to the core as today.
+1. While a core overlay is open (the row menu, the track popover, the playback-target chooser, the confirmation modal) or prefix mode is armed (both are in the frame), the key goes to the core as today.
 2. While a text field in the Library has focus (the `/` filter, the Search field), the field takes the key. Esc closes the field, and Enter accepts it.
 3. While the Library panel shows: Tab and Shift+Tab move focus to the next or previous pane (pill row, list, Hero, Queue panel), the canvas's *tab pane*. `1` to `7` open the first to seventh destination tab after Home, the canvas's *1–7 library*. With global search presented, `Ctrl+K` focuses the Search field.
 4. While the Library panel has Panel focus, the Library keys below run in the front end.
@@ -128,7 +128,7 @@ Play, Add to queue, and Shuffle artist call existing `App` actions: `App::play_o
 
 The Library's own play and add apply the library playback policy's autoload rule (the Grouped Music tree's track activation): with autoload on, a track whose album the track cache holds replaces the queue with that album's cached playable tracks in disc/track order starting at the selected track, and the add queues the album's cached tracks from the selected track onward; with autoload off, the play and the add act on the track alone. Every other item takes the shared paths unchanged, and the TUI's own add paths keep their per-item appends.
 
-The Library's explicit play skips the TUI's populated-queue replace-confirm: the confirm modal is a TUI overlay the GUI never paints, so a play gated behind it was swallowed and the Hero's Play button did nothing over a populated queue. The shared folder path runs with the confirm off, and the local saved-playlist protection stays.
+The Library's explicit play skips the TUI's populated-queue replace-confirm: the shared folder path runs with the confirm off, so a play is never gated behind that prompt and a populated queue does not swallow the Hero's Play button. The local saved-playlist protection stays, and its prompt presents in the GUI's confirmation overlay.
 
 The frame carries the playhead's Emby track id from the Queue panel's own authority — the Owner status and the playback queue's item at the active index — so a tracklist row and a list track row whose track plays paint the canvas's playing look: the green fill with dark ink, as the Queue's active row paints, over the cursor's fill.
 

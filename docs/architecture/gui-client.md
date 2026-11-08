@@ -65,8 +65,9 @@ row's zebra parity (`GuiQueue`), the queue header's remaining count, next
 item title, finish clock, right-column mode, and filter text with its caret
 fact (`GuiQueueSummary`), the collapse and queue-fold toggles the Client
 core holds (`GuiPanelToggles`), the open menu or popover (`GuiOverlayFrame`:
-the row menu with its entries and key hints, the track popover, and the
-playback-target chooser), the Queue playback projection
+the row menu with its entries, key hints, and destructive flags, the track
+popover, the playback-target chooser, and the shared confirmation modal with
+its message and button row), the Queue playback projection
 (`GuiQueuePlayback`), the footer pills (`GuiQueueFooter`), the Status bar
 projection (`GuiStatusBar`), the Library panel's section (`GuiLibraryFrame`;
 *The Library panel* names it), and the theme when it is armed (`GuiTheme`).
@@ -172,8 +173,10 @@ and regions already measure the layout that size painted (design D10). The
 `RegionTarget` ids mirror the surface hit-target enums variant
 for variant — `QueueTargetId` names `QueueHitTarget`,
 `QueuePlaybackTargetId` names `QueuePlaybackHitTarget`,
-`StatusBarTargetId` names `StatusBarHitTarget` — plus `AttachTargetId` for
-the pre-attach buttons.
+`StatusBarTargetId` names `StatusBarHitTarget` — plus `ConfirmTargetId`, the
+confirmation modal's buttons by index, and `AttachTargetId` for the
+pre-attach buttons. A confirm button owns no surface: the core resolves its
+press itself (`App::execute_gui_confirm_button`) and mounts no leaf for it.
 
 A GUI list paints only the viewport: fixed-height rows, no native DOM
 scroll. The core's viewport decides which rows the frame carries; wheel
@@ -345,16 +348,29 @@ while the list is focused and overflows.
 The row hover and the drag paint from the frame, and the window holds
 neither. `GuiQueue.hover` names the row the pointer rests on: that row shows
 the grip and the row-actions button. The button opens the `rowMenu` overlay,
-whose entries — Play now, Play next, Mark watched, Go to episode, and Remove
-from queue — carry their key hints; the menu paints the canvas's return
-glyph `⏎` where the core's hint chord is `Enter`, at paint time only, so
-`direct_select` and the key routes keep matching the raw chord.
-`Remove from queue` is the destructive entry: it paints in the canvas's
+whose entries — Play now, Play next, Mark watched, Go to episode, Remove
+from queue, and Clear queue — carry their key hints; the menu paints the
+canvas's return glyph `⏎` where the core's hint chord is `Enter`, at paint
+time only, so `direct_select` and the key routes keep matching the raw
+chord. `Clear queue` lists while the queue holds any slot, and it raises the
+same prompt the `c` chord raises (`App::request_clear_queue`). The `Remove`
+and `Clear queue` entries are destructive: they paint in the canvas's
 destructive tone under a divider on a GUI-only `destructive` flag that
 `RowMenuEntryProjection` and `GuiRowMenuEntry` carry, derived from the
-entry's `ContextAction::RemoveFromQueue` action; the shared
-`ContextMenuEntry` and every TUI paint site stay untouched. The menu
-anchors on the row it opened on (`anchorSlot`). `GuiQueue.drag` carries the
+entry's `ContextAction::RemoveFromQueue`, `ContextAction::RemoveSelection`,
+or `ContextAction::ClearQueue` action; the shared `ContextMenuEntry` and
+every TUI paint site stay untouched. The menu anchors on the row it opened
+on (`anchorSlot`).
+
+The menu a multi-row selection opens is not the per-row menu: the gesture
+names the marked slots, and `App::build_queue_selection_menu` returns the
+entries the TUI's right-click builds from the same `build_selection_menu`
+builder, over capabilities intersected across the marked items, with no
+raise of the TUI's `pending_overlay`. Its `Remove` names every marked slot
+and the core applies it as one Owner `UnifiedQueueRemoveSlots` edit; a
+selection that holds the now-playing slot defers to the confirmation modal,
+whose answer carries the removal. The menu anchors on the first marked
+slot. `GuiQueue.drag` carries the
 dragged row's content as the ghost, the final index the drop leaves it at,
 and the insertion line's stable-slot anchor; the ghost floats at that line
 — with no ordinal, and the dragged row's painted percent — and the dragged
@@ -363,6 +379,22 @@ gesture and the drop index, and it sends
 one move request to the Owner on release. `Alt+J` and `Alt+K` ask the core
 for the same move on the keyboard-selected row. A `cancel` pointer kind
 drops the drag, the row hover, and the scrubber hover without a move.
+
+The shared confirmation modal (`ConfirmOverlay.svelte`) paints window-modal
+over every panel on the `--canvas-modal-scrim` backdrop. `ask_confirm` holds
+the modal as `GuiOverlay::Confirm` and still raises the shell's own
+`OverlayRequest::Confirm`, which the GUI leaves undrained because it mounts
+no TUI modal component, so the same `ConfirmModal` the TUI's Confirm
+component paints reaches the GUI: the frame carries its message and its
+button row, each button with its label, its key hint, and its tone. The
+action stays in the core's held state, and both a key and a button press
+answer it through the shared `apply_confirm_action`. The modal owns the
+keyboard while it is up: Enter accepts, Esc cancels, the three-way
+dirty-playlist prompt also takes `d`, and every other chord is consumed with
+the modal still up. A press outside the modal answers Esc, so a staged
+transfer the prompt guarded unwinds. Each button reports a `confirm` region
+and the core executes the button's own key hint, so a press answers what the
+window painted; a press whose region outlived the modal executes nothing.
 
 The footer line paints below the box between gap rows on the
 `queueFooterBand` fill. Its left group carries the `PREFIX` badge while
@@ -468,8 +500,11 @@ the focus the `App`'s key gates read (design D4). The `play` and
 the Library's routes: with autoload on, a track whose album the track cache
 holds replaces the queue with that album's cached tracks starting at the
 selected track, or queues them from the selected track onward; with autoload
-off, the play and the add act on the track alone. The `play` variant skips
-the TUI's populated-queue replace-confirm, which the GUI never paints.
+off, the play and the add act on the track alone. The `play` variant replaces
+the queue directly (`App::play_folder_gated` with the confirm off), so the
+Library's Play never raises the TUI's populated-queue replace prompt. The
+saved-playlist save/discard prompt still presents, through the confirmation
+modal.
 
 ### The key routing order
 
@@ -483,7 +518,8 @@ own default types it. `App.svelte` installs `routeLibraryKey`
 before the forwarder (design D3). The order is:
 
 1. While a core overlay is open (the row menu, the track popover, the
-   playback-target chooser) or prefix mode is armed, the key goes to the core.
+   playback-target chooser, the confirmation modal) or prefix mode is armed,
+   the key goes to the core.
    Both facts are in the frame. The Queue filter's text entry is the core's
    too, so every key is the core's while it holds the keyboard.
 2. While a text field of the panel holds the keyboard (the `/` filter), the
