@@ -95,6 +95,9 @@ pub enum RegionTarget {
     /// The confirm overlay's button: the press answers the modal through the
     /// same execution the button's key hint applies.
     Confirm(ConfirmTargetId),
+    /// The daemon-lost dialog's button: the press answers the dialog through
+    /// the same execution the button's key hint applies.
+    DaemonLost(DaemonLostTargetId),
 }
 
 impl RegionTarget {
@@ -117,7 +120,8 @@ impl RegionTarget {
                 | QueuePlaybackTargetId::PlaybackTarget,
             )
             | Self::Queue(QueueTargetId::RowMenuEntry(_) | QueueTargetId::RowActions(_))
-            | Self::Confirm(_) => true,
+            | Self::Confirm(_)
+            | Self::DaemonLost(_) => true,
             Self::Queue(_) | Self::QueuePlayback(_) | Self::StatusBar(_) | Self::Attach(_) => false,
         }
     }
@@ -128,6 +132,14 @@ impl RegionTarget {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ConfirmTargetId {
+    Button(usize),
+}
+
+/// The daemon-lost dialog's button targets: one per painted recovery choice,
+/// by its index in the overlay's `buttons`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum DaemonLostTargetId {
     Button(usize),
 }
 

@@ -1,6 +1,7 @@
 pub(in crate::app) mod client_startup;
 pub(in crate::app) mod command;
 pub(in crate::app) mod connect;
+pub(in crate::app) mod daemon_lost;
 pub(in crate::app) mod daemon_restart;
 pub(in crate::app) mod emby_service;
 pub(in crate::app) mod emby_service_completion;

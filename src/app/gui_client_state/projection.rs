@@ -6,6 +6,7 @@ use mbv_queue::QueueSlotId;
 use mbv_ui_model::context_menu::ContextAction;
 use mbv_ui_msg::TrackChipKind;
 
+use super::daemon_lost::daemon_lost_buttons;
 use super::overlay::GuiOverlay;
 use super::popover::track_popover_choices;
 use crate::app::App;
@@ -80,6 +81,22 @@ pub enum GuiOverlayProjection {
     /// stays in the core's held state (`GuiOverlay::Confirm`).
     Confirm {
         message: String,
+        buttons: Vec<GuiConfirmButtonProjection>,
+    },
+    /// The daemon-lost recovery dialog the App raised
+    /// (`raise_daemon_lost_modal`): the diagnostics the TUI's modal paints
+    /// and the recovery choices, as the frame carries them. The dialog
+    /// stays in the core's held state (`GuiOverlay::DaemonLost`).
+    DaemonLost {
+        /// The label of whatever was playing right before the Owner
+        /// vanished, when one was known.
+        last_playing_title: Option<String>,
+        /// Where the local daemon's own log lives, so the window can name it
+        /// without the user knowing the path by heart.
+        daemon_log_path: String,
+        /// The last restart attempt's failure, when one failed: the dialog's
+        /// `Restart failed:` line.
+        restart_error: Option<String>,
         buttons: Vec<GuiConfirmButtonProjection>,
     },
 }
@@ -175,6 +192,16 @@ impl App {
                         },
                     })
                     .collect(),
+            }),
+            // The daemon-lost dialog's diagnostics and its recovery choices:
+            // the frame carries the same facts the TUI's modal paints, and
+            // the choices come from the one table the dialog's chords read,
+            // so a press and a key cannot name different answers.
+            Some(GuiOverlay::DaemonLost(modal)) => Some(GuiOverlayProjection::DaemonLost {
+                last_playing_title: modal.last_playing_title.clone(),
+                daemon_log_path: modal.daemon_log_path.clone(),
+                restart_error: modal.restart_error.clone(),
+                buttons: daemon_lost_buttons(),
             }),
             None => None,
         }

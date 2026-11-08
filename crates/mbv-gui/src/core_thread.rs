@@ -33,7 +33,8 @@ use crate::attach::{AttachCampaign, LibraryOwnerSteps};
 use crate::bridge::frame::playback::GuiScrubberTile;
 use crate::bridge::frame::{FrameSources, GuiFrame, GuiWindowFrame, scrubber_ticks};
 use crate::bridge::layout::{
-    ConfirmTargetId, LayoutReport, LayoutSize, ListId, QueueTargetId, RegionTarget, hit_map,
+    ConfirmTargetId, DaemonLostTargetId, LayoutReport, LayoutSize, ListId, QueueTargetId,
+    RegionTarget, hit_map,
 };
 use crate::leaves::{
     PlaybackLeaf, QueueLeaf, StatusBarLeaf, TransportAvailability, gesture_point, row_slot_at,
@@ -43,6 +44,7 @@ use crate::library_frames::LibraryFrames;
 use crate::painted_choices::PaintedChoices;
 
 mod launch_restore;
+mod overlays;
 mod tick_host;
 
 use self::launch_restore::GuiLaunchRestore;
@@ -431,7 +433,7 @@ impl CoreThread {
     /// to nothing (`client-interaction-core`: pointer targets resolve from a
     /// semantic hit map); the disarm precedes all of it, so every pointer
     /// event cancels an armed prefix even when nothing resolves.
-    fn route_pointer(&mut self, event: PointerEvent) {
+    fn route_pointer(&mut self, event: PointerEvent) -> bool {
         // Any pointer event disarms prefix mode first — the shared contract
         // `App::route_gui_input`'s pointer arm carries, the same silent
         // disarm every terminal mouse event applies in the TUI. The call
@@ -449,7 +451,7 @@ impl CoreThread {
             self.queue.cancel_row_drag();
             self.queue.set_hover(None);
             self.playback.set_scrubber_hover(None);
-            return;
+            return false;
         }
         self.pointer_at = Some(event.position);
         // A new press while a row drag is armed discards the stale drag
@@ -476,14 +478,14 @@ impl CoreThread {
         // context menu dismisses the same way).
         if self.press_outside_open_overlay(&event) {
             self.app.dismiss_open_gui_overlay();
-            return;
+            return false;
         }
         let now = Instant::now();
         let Some(gesture) =
             self.gestures
                 .recognize(event.kind, event.modifiers, event.position, now)
         else {
-            return;
+            return false;
         };
         // The row drag's motion and release address the Queue Surface state
         // directly (add-tauri-gui-client row 6.5, design D5): motion only
@@ -495,10 +497,10 @@ impl CoreThread {
             PointerGesture::Drag { .. } | PointerGesture::DragEnd
         ) && self.route_row_drag_gesture(gesture)
         {
-            return;
+            return false;
         }
         let Some(point) = gesture_point(&gesture) else {
-            return;
+            return false;
         };
         match self.regions.resolve(point) {
             Some(RegionTarget::Queue(target)) => {
@@ -577,27 +579,15 @@ impl CoreThread {
             Some(RegionTarget::Confirm(ConfirmTargetId::Button(index))) => {
                 self.confirm_button_press(gesture, *index);
             }
+            // The daemon-lost dialog's buttons answer through the same
+            // execution their key hints apply; the press that lands outside
+            // them left the dialog up (it is not dismissible).
+            Some(RegionTarget::DaemonLost(DaemonLostTargetId::Button(index))) => {
+                return self.daemon_lost_button_press(gesture, *index);
+            }
             Some(RegionTarget::Attach(_)) | None => {}
         }
-    }
-
-    /// A press on a confirm button executes the button the index names; any
-    /// other gesture on its region does nothing.
-    fn confirm_button_press(&mut self, gesture: PointerGesture<Position>, index: usize) {
-        if matches!(gesture, PointerGesture::Click { .. }) {
-            self.app.execute_gui_confirm_button(index);
-        }
-    }
-
-    /// Whether this press lands outside an open overlay's own targets — the
-    /// dismissal condition the caller applies.
-    fn press_outside_open_overlay(&self, event: &PointerEvent) -> bool {
-        matches!(event.kind, PointerKind::Press | PointerKind::RightPress)
-            && self.app.gui_overlay_is_open()
-            && !self
-                .regions
-                .resolve(event.position)
-                .is_some_and(RegionTarget::owns_gui_overlay)
+        false
     }
 
     /// Deliver a gesture the row drag owns to the Queue leaf: motion previews

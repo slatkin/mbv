@@ -187,9 +187,13 @@ impl ClientTickHost for CoreThread {
                 CoreInput::Pointer(event) => {
                     // The gesture resolves against the slice hit map and
                     // routes through `App::route_gui_pointer` with the
-                    // surface that owns the region (design D4).
+                    // surface that owns the region (design D4). A press on
+                    // the daemon-lost dialog's quit choice ends the run
+                    // through the same quit edge a routed quit key uses.
                     outcome.input_received = true;
-                    self.route_pointer(event);
+                    if self.route_pointer(event) {
+                        outcome.quit_requested = true;
+                    }
                 }
                 CoreInput::Library(command) => {
                     // The Library panel's request (add-gui-library-panel design

@@ -705,3 +705,56 @@ fn multi_selection_row_menu_removes_exactly_the_selected_slots() {
     );
     assert!(app.gui_overlay.is_none());
 }
+
+// An unannounced local-Owner loss raises the recovery dialog
+// (`daemon-disconnect-handling`: "An unannounced connection loss raises a
+// recovery dialog"). The App's own raise presents it as the GUI's blocking
+// overlay, the frame carries the same diagnostics and the three recovery
+// choices the TUI's hint line offers, and the dialog blocks every other
+// input — Esc and an outside press included — until a choice runs.
+#[test]
+fn unannounced_loss_raises_the_gui_daemon_lost_dialog() {
+    let mut app = make_app_stub();
+    app.enable_gui_client();
+    app.playback_queue_mut().adopt_items(make_items(2), 0);
+
+    app.raise_daemon_lost_modal();
+
+    let playback = app.queue_playback_projection();
+    let Some(GuiOverlayProjection::DaemonLost {
+        last_playing_title,
+        daemon_log_path,
+        restart_error,
+        buttons,
+    }) = app.gui_overlay_projection(&playback)
+    else {
+        panic!("the unannounced loss raised the dialog");
+    };
+    assert_eq!(last_playing_title.as_deref(), Some("Item 0"));
+    assert!(daemon_log_path.ends_with("local-daemon.log"));
+    assert!(restart_error.is_none(), "no restart has failed yet");
+    let choices: Vec<(&str, &str)> = buttons
+        .iter()
+        .map(|button| (button.label.as_str(), button.keys.as_str()))
+        .collect();
+    assert_eq!(
+        choices,
+        [
+            ("Restart and resume", "R"),
+            ("Restart, don't resume", "S"),
+            ("Quit", "Q"),
+        ]
+    );
+
+    // No chord but the three choices does anything: the dialog's own key
+    // rules bind no default answer, and Esc must not dismiss it back to a
+    // dead Owner.
+    for code in [Key::Esc, Key::Enter, Key::Char('x')] {
+        app.route_gui_input(GuiInput::Key(KeyEvent::new(code, KeyModifiers::NONE)), None);
+        assert!(app.gui_overlay_is_open(), "{code:?} left the dialog up");
+    }
+    // An outside press leaves it up too (the confirm modal's opposite: the
+    // recovery choice is the only way out).
+    app.dismiss_open_gui_overlay();
+    assert!(app.gui_overlay_is_open());
+}

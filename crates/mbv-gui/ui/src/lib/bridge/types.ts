@@ -151,6 +151,24 @@ export type GuiOverlayFrame =
 			kind: 'confirm';
 			message: string;
 			buttons: GuiConfirmButton[];
+	  }
+	| {
+			/** The daemon-lost recovery dialog the App raised
+			 * (`daemon-disconnect-handling`: an unannounced connection loss
+			 * raises a recovery dialog): the diagnostics the TUI's modal
+			 * paints and the recovery choices, each with its key hint and
+			 * tone. The dialog stays in the core's held state, so a press or
+			 * key answers what the window painted. */
+			kind: 'daemonLost';
+			/** The title of whatever was playing right before the Owner
+			 * vanished; `null` when nothing was. */
+			lastPlayingTitle: string | null;
+			/** Where the local daemon's own log lives. */
+			daemonLogPath: string;
+			/** The last restart attempt's failure: the dialog's
+			 * `Restart failed:` line. */
+			restartError: string | null;
+			buttons: GuiConfirmButton[];
 	  };
 
 /** One button of the confirm overlay: the label, the key hint inside the
@@ -673,7 +691,10 @@ export type RegionTarget =
 	| { surface: 'statusBar'; id: StatusBarTargetId }
 	| { surface: 'attach'; id: AttachTargetId }
 	/** The confirm overlay's button, by index in the overlay's `buttons`. */
-	| { surface: 'confirm'; id: { button: number } };
+	| { surface: 'confirm'; id: { button: number } }
+	/** The daemon-lost dialog's button, by index in the overlay's
+	 * `buttons`. */
+	| { surface: 'daemonLost'; id: { button: number } };
 
 /** The pre-attach screen's button targets (design D9). */
 export type AttachTargetId = 'restart' | 'quit';

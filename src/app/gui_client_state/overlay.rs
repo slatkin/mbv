@@ -5,9 +5,11 @@
 use mbv_queue::QueueSlotId;
 use mbv_ui_model::confirm::ConfirmModal;
 use mbv_ui_model::context_menu::ContextMenuEntry;
+use mbv_ui_model::daemon_lost::DaemonLostModal;
 use mbv_ui_msg::{Key, KeyEvent, KeyModifiers, TrackChipKind};
 
 use super::confirm::confirm_button_key;
+use super::daemon_lost::daemon_lost_entry_index;
 use super::popover::track_popover_choices;
 use crate::app::App;
 
@@ -44,8 +46,8 @@ pub(in crate::app) struct TargetChooserState {
 }
 
 /// The GUI Client's open overlay (design D4a): the row menu, a track chip's
-/// popover, the playback-target chooser, or the shared confirmation modal.
-/// `App::gui_overlay` holds the open one.
+/// popover, the playback-target chooser, the shared confirmation modal, or
+/// the daemon-lost recovery dialog. `App::gui_overlay` holds the open one.
 pub(in crate::app) enum GuiOverlay {
     RowMenu(GuiRowMenu),
     TrackPopover(TrackPopoverState),
@@ -55,6 +57,13 @@ pub(in crate::app) enum GuiOverlay {
     /// overlay owns the keyboard while it is up, and its buttons report
     /// press regions the core resolves.
     Confirm(ConfirmModal),
+    /// The daemon-lost recovery dialog (`App::raise_daemon_lost_modal`
+    /// raised it, `daemon-disconnect-handling`: "An unannounced connection
+    /// loss raises a recovery dialog"): the same `DaemonLostModal` the
+    /// TUI's mounted `DaemonLost` component holds. The dialog blocks every
+    /// other input until one of its choices runs, and its buttons report
+    /// press regions the core resolves.
+    DaemonLost(DaemonLostModal),
 }
 
 /// One key's outcome over the open overlay: consumed with nothing to run,
@@ -170,7 +179,8 @@ impl App {
 
     /// The open overlay's key rules: the overlay owns the keyboard while it
     /// is open — a key it binds runs its action, any other key is dropped,
-    /// and no surface sees a chord. Returns whether an overlay was open.
+    /// and no surface sees a chord. Returns whether the Client's run should
+    /// end, which only the daemon-lost dialog's quit choice asks for.
     pub(in crate::app) fn apply_gui_overlay_key(&mut self, key: KeyEvent) -> bool {
         // The popover's cursor clamps against its live choice list, read
         // before the overlay borrow so the two reads cannot interleave.
@@ -187,6 +197,12 @@ impl App {
             self.playback_target_choices().len()
         } else {
             0
+        };
+        // The daemon-lost dialog's chords name its painted choices; read
+        // before the overlay borrow, as the two cursors above are.
+        let daemon_lost_entry = match &self.gui_overlay {
+            Some(GuiOverlay::DaemonLost(_)) => daemon_lost_entry_index(key.code),
+            _ => None,
         };
         let outcome = match &mut self.gui_overlay {
             Some(GuiOverlay::RowMenu(menu)) => menu.apply_key(key),
@@ -222,30 +238,51 @@ impl App {
                 }
                 OverlayKeyOutcome::Consumed
             }
+            // The daemon-lost dialog binds its three recovery choices and
+            // nothing else: the TUI's component binds no default answer, and
+            // the dialog blocks every other key until a choice runs
+            // (`daemon-disconnect-handling`: "SHALL NOT act on other key
+            // presses while the dialog is open"). Esc included — there is no
+            // dismissing it back to a dead Owner.
+            Some(GuiOverlay::DaemonLost(_)) => match daemon_lost_entry {
+                Some(index) => OverlayKeyOutcome::Execute(index),
+                None => OverlayKeyOutcome::Consumed,
+            },
             None => return false,
         };
         match outcome {
-            OverlayKeyOutcome::Consumed => {}
-            OverlayKeyOutcome::Dismiss => self.gui_overlay = None,
+            OverlayKeyOutcome::Consumed => false,
+            OverlayKeyOutcome::Dismiss => {
+                self.gui_overlay = None;
+                false
+            }
             OverlayKeyOutcome::Execute(index) => self.execute_gui_overlay_entry(index),
         }
-        true
     }
 
     /// Execute the open overlay's entry at `index`, then close the overlay —
     /// the TUI menu's Select flow (dismiss, then dispatch), with the row
-    /// menu's action carrying its own resolved queue index (D2).
-    pub(super) fn execute_gui_overlay_entry(&mut self, index: usize) {
+    /// menu's action carrying its own resolved queue index (D2). Returns
+    /// whether the Client's run should end, which only the daemon-lost
+    /// dialog's quit choice asks for.
+    pub(super) fn execute_gui_overlay_entry(&mut self, index: usize) -> bool {
+        // The daemon-lost dialog answers through the shared `App` action and
+        // keeps its own held state while the answer runs: a failed restart
+        // writes its diagnostic into that same state, so the overlay is not
+        // taken here.
+        if matches!(self.gui_overlay, Some(GuiOverlay::DaemonLost(_))) {
+            return self.apply_gui_daemon_lost_choice(index);
+        }
         let Some(overlay) = self.gui_overlay.take() else {
-            return;
+            return false;
         };
         match overlay {
             GuiOverlay::RowMenu(menu) => {
                 let Some(entry) = menu.entries.into_iter().nth(index) else {
-                    return;
+                    return false;
                 };
                 let Some(action) = entry.action else {
-                    return;
+                    return false;
                 };
                 // The GUI row menu carries no bulk action (the canvas's menu
                 // is a per-row menu), so no selection cleanup joins the
@@ -254,11 +291,11 @@ impl App {
             }
             GuiOverlay::TrackPopover(popover) => {
                 let Some(chips) = self.track_chips() else {
-                    return;
+                    return false;
                 };
                 let choices = track_popover_choices(popover.chip, &chips);
                 let Some(choice) = choices.get(index) else {
-                    return;
+                    return false;
                 };
                 self.apply_track_choice(popover.chip, choice.id);
             }
@@ -269,7 +306,7 @@ impl App {
             // (design D6's shell-side resolution, applied Client-side).
             GuiOverlay::TargetChooser(_) => {
                 let Some(choice) = self.playback_target_choices().get(index).cloned() else {
-                    return;
+                    return false;
                 };
                 self.select_target_for_key(&choice.key);
             }
@@ -278,15 +315,17 @@ impl App {
             // through the shared confirm dispatcher, then close the modal.
             GuiOverlay::Confirm(modal) => {
                 let Some(button) = modal.buttons.get(index) else {
-                    return;
+                    return false;
                 };
                 let Some(key) = confirm_button_key(&button.keys) else {
-                    return;
+                    return false;
                 };
                 let action = modal.on_confirm.clone();
                 self.gui_overlay = None;
                 self.apply_confirm_action(action, KeyEvent::new(key, KeyModifiers::NONE));
             }
+            GuiOverlay::DaemonLost(_) => return false,
         }
+        false
     }
 }

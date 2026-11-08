@@ -15,6 +15,7 @@
 	import { carryLibraryContent, libraryContent, libraryShown } from '$lib/library/state';
 	import AttachScreen from '$lib/components/AttachScreen.svelte';
 	import ConfirmOverlay from './lib/components/ConfirmOverlay.svelte';
+	import DaemonLostOverlay from './lib/components/DaemonLostOverlay.svelte';
 	import LibraryPanel from '$lib/components/LibraryPanel.svelte';
 	import Panel from '$lib/components/Panel.svelte';
 	import PanelDivider from '$lib/components/PanelDivider.svelte';
@@ -157,6 +158,11 @@
         core's overlay key rules, and the buttons report their press
         regions. -->
       <ConfirmOverlay confirm={frame.overlay} />
+    {:else if frame.overlay?.kind === 'daemonLost'}
+      <!-- The App's raised daemon-lost recovery dialog, window-modal over
+        every panel: the dialog blocks every other input until one of its
+        choices runs, and the buttons report their press regions. -->
+      <DaemonLostOverlay daemonLost={frame.overlay} />
     {/if}
   {:else}
     <!-- The pre-attach states (design D9): the wait before the first

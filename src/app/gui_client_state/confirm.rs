@@ -23,8 +23,14 @@ impl App {
     /// press the canvas and the TUI's blocking context menu both take
     /// (add-tauri-gui-client row 6.5). A confirm's outside press answers
     /// Esc — the same cancel the modal's own key applies — so a staged
-    /// transfer the prompt guarded still unwinds.
+    /// transfer the prompt guarded still unwinds. A daemon-lost dialog is
+    /// not dismissible: its recovery choice is the only way out
+    /// (`daemon-disconnect-handling`: the dialog blocks all other input
+    /// until the user chooses), so an outside press leaves it up.
     pub fn dismiss_open_gui_overlay(&mut self) {
+        if matches!(self.gui_overlay, Some(GuiOverlay::DaemonLost(_))) {
+            return;
+        }
         if let Some(GuiOverlay::Confirm(modal)) = self.gui_overlay.take() {
             self.apply_confirm_action(
                 modal.on_confirm,

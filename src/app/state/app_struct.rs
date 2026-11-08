@@ -696,6 +696,14 @@ impl App {
     }
 
     pub(in crate::app) fn dismiss_daemon_lost(&mut self) {
+        // The GUI Client presents the dialog as its own blocking overlay and
+        // mounts no TUI modal component, so the dismissal clears that held
+        // overlay; the shell request stays undrained, as the confirmation's
+        // does. A successful restart reaches here from
+        // `restart_local_daemon`.
+        if self.gui_client && matches!(self.gui_overlay, Some(GuiOverlay::DaemonLost(_))) {
+            self.gui_overlay = None;
+        }
         self.pending_overlay = Some(mbv_ui_model::overlay::OverlayRequest::DismissDaemonLost);
     }
 

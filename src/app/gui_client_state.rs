@@ -13,6 +13,7 @@
 //! global bindings), and these rules — not a surface's — consume or drop it.
 
 mod confirm;
+mod daemon_lost;
 mod overlay;
 mod popover;
 mod projection;

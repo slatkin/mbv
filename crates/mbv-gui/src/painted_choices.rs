@@ -44,9 +44,14 @@ impl PaintedChoices {
                 let ids = choices.iter().map(|choice| choice.id).collect();
                 self.popover_track_ids = Some(ids);
             }
-            Some(GuiOverlayFrame::RowMenu { .. } | GuiOverlayFrame::Confirm { .. })
-            // The confirm names no choice list: its buttons resolve through
-            // their own regions, not through painted choice indexes.
+            // The confirm and the daemon-lost dialog name no choice list:
+            // their buttons resolve through their own regions, not through
+            // painted choice indexes.
+            Some(
+                GuiOverlayFrame::RowMenu { .. }
+                | GuiOverlayFrame::Confirm { .. }
+                | GuiOverlayFrame::DaemonLost { .. },
+            )
             | None => {}
         }
     }
