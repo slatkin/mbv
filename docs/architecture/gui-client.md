@@ -535,7 +535,11 @@ The restore runs in two phases (`GuiLaunchRestore`,
 destination once the catalog presents it — a saved destination the GUI does
 not present falls back to the first presented one — and applies the saved
 Panel focus over the Library focus the open takes, unless the user already
-took focus while the restore was pending. The second phase applies the saved
+took focus while the restore was pending. A start with no saved location — or
+one that fails to load — restores through the same path
+(`mbv_config::first_launch`): the first presented destination, Library Panel
+focus, and no saved collection sets, so the Library panel is reachable from
+the first launch. The second phase applies the saved
 collection sets once the destination's group list lands: a saved group the
 library no longer holds drops, and when none remain the first group is
 selected. A mid-restore tab switch abandons the saved sets rather than landing
