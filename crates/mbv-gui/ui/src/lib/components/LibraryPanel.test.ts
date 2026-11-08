@@ -9,7 +9,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { fireEvent, render } from '@testing-library/svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
-import type { GuiMusicFrame, GuiMusicHero } from '$lib/bridge/types';
+import type { GuiMusicFrame, GuiMusicHero, GuiStatusBar } from '$lib/bridge/types';
 import { initialLibraryUi, libraryUi } from '$lib/library/state';
 import LibraryPanel from './LibraryPanel.svelte';
 
@@ -24,6 +24,9 @@ beforeEach(() => {
 	invokeMock.mockResolvedValue(undefined);
 	libraryUi.set(initialLibraryUi());
 });
+
+/** The frame's Status bar facts: nothing armed and no live toast. */
+const idle: GuiStatusBar = { prefixArmed: false, toast: null };
 
 /** The carried Music content with no album picked. */
 function music(): GuiMusicFrame {
@@ -61,6 +64,7 @@ test('a press inside the panel sends the take-focus command', () => {
 		tabs: [{ position: 1, label: 'Music' }],
 		currentTab: 1,
 		music: music(),
+		status: idle,
 		arrangement: 'wide',
 	});
 	const panel = container.querySelector('[data-library-panel]');
@@ -78,6 +82,7 @@ test('the panel paints the top bar and the pill row above the list region', () =
 		tabs: [{ position: 1, label: 'Music' }],
 		currentTab: 1,
 		music: music(),
+		status: idle,
 		arrangement: 'wide',
 	});
 	const panel = container.querySelector('[data-library-panel]');
@@ -98,6 +103,7 @@ test('the Narrow overlay paints the Hero and closes on a press on its backdrop',
 		tabs: [{ position: 1, label: 'Music' }],
 		currentTab: 1,
 		music: { ...music(), hero: hero() },
+		status: idle,
 		arrangement: 'narrow',
 	});
 	const overlay = container.querySelector('[data-library-region="heroOverlay"]');
@@ -117,6 +123,7 @@ test('the Wide Hero pane paints the Hero beside the list', () => {
 		tabs: [{ position: 1, label: 'Music' }],
 		currentTab: 1,
 		music: { ...music(), hero: hero() },
+		status: idle,
 		arrangement: 'wide',
 	});
 

@@ -197,6 +197,36 @@ test('without Music content the Queue panel paints alone', async () => {
 	expect(container.querySelector('[data-library-panel]')).toBeNull();
 });
 
+// Row 4.8's negative case: the Library Status bar paints the frame's armed
+// prefix and live toast only while the Library panel shows, so the Queue
+// footer keeps painting both while it does not. The frame's `status` is one
+// fact carried to both surfaces, never consumed by either.
+test('the Queue footer keeps the prefix and the toast while the Library panel does not show', async () => {
+	const slice = frame('queue', null);
+	slice.status = { prefixArmed: true, toast: null };
+	const { container } = await mount({ width: 1600, height: 900 }, slice);
+
+	expect(container.querySelector('[data-library-panel]')).toBeNull();
+	expect(container.querySelector('[data-footer-line]')?.textContent).toContain('PREFIX');
+
+	// The next frame carries a toast: the footer paints it in the same line.
+	const handler = listenMock.mock.calls.at(-1)?.[1] as (
+		event: { payload: GuiWindowFrame },
+	) => void;
+	handler({
+		payload: {
+			slice: {
+				...slice,
+				status: { prefixArmed: false, toast: { text: 'Scanning', severity: 'neutral' } },
+			},
+		},
+	});
+	await tick();
+
+	expect(container.querySelector('[data-library-panel]')).toBeNull();
+	expect(container.querySelector('[data-footer-line]')?.textContent).toContain('Scanning');
+});
+
 test('Mini below 480 px mounts only the Queue panel while Panel focus is queue', async () => {
 	const { container } = await mount({ width: 700, height: 900 }, frame('queue', music()));
 

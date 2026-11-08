@@ -114,6 +114,7 @@
           {music}
           tabs={content?.tabs ?? []}
           currentTab={content?.currentTab ?? null}
+          status={frame.status}
           {arrangement}
         />
       {/if}

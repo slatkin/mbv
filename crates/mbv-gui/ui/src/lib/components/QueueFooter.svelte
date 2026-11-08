@@ -42,13 +42,9 @@
 	import { onMount } from 'svelte';
 	import { SaveCheck, SaveOff } from '@lucide/svelte';
 	import { observeLayout, reportLayout } from '$lib/bridge/layout';
+	import { toastColor } from '$lib/bridge/status';
 	import { roleVar } from '$lib/bridge/theme';
-	import type {
-		GuiQueueFooter,
-		GuiStatusBar,
-		GuiToastSeverity,
-		LayoutRegion
-	} from '$lib/bridge/types';
+	import type { GuiQueueFooter, GuiStatusBar, LayoutRegion } from '$lib/bridge/types';
 
 	interface Props {
 		footer: GuiQueueFooter;
@@ -58,21 +54,6 @@
 
 	const reportKey = Symbol('queue-footer');
 	let lineEl: HTMLElement | undefined = $state();
-
-	/** The toast text's severity foreground (`toast_spans` in the TUI's
-	 * status bar panel). */
-	function toastColor(severity: GuiToastSeverity): string {
-		switch (severity) {
-			case 'neutral':
-				return 'var(--mbv-textPrimary)';
-			case 'success':
-				return 'var(--mbv-statusAvailable)';
-			case 'warning':
-				return 'var(--mbv-textFocusAccent)';
-			case 'error':
-				return 'var(--mbv-statusError)';
-		}
-	}
 
 	/** The painted regions this frame's DOM reports (design D4): none. The
 	 * line's pills are informational, so a point on it resolves to no

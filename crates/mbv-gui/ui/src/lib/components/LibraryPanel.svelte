@@ -5,9 +5,9 @@
 	// beside the list; in Narrow the Hero mounts as an overlay over the list
 	// once an album is picked. The list column is row 4.5's canvas tree with its
 	// letter rail, the Hero is row 4.7's painters, and the Status bar (row 4.8)
-	// still follows. The panel's interaction state lives in `$lib/library/state`
-	// and its keys in `$lib/library/keys`, so this shell holds no state of its
-	// own.
+	// closes the column under both. The panel's interaction state lives in
+	// `$lib/library/state` and its keys in `$lib/library/keys`, so this shell
+	// holds no state of its own.
 	//
 	// A press inside the panel sends the take-focus command (design D4): the
 	// core sets the focus stack and Panel focus together, and the press that
@@ -20,10 +20,11 @@
 	// overlay only where one actually paints.
 	import type { GuiArrangement } from '$lib/bridge/arrangement';
 	import { sendLibraryCommand } from '$lib/bridge/library';
-	import type { GuiLibraryTab, GuiMusicFrame } from '$lib/bridge/types';
+	import type { GuiLibraryTab, GuiMusicFrame, GuiStatusBar } from '$lib/bridge/types';
 	import LibraryHero from '$lib/components/LibraryHero.svelte';
 	import LibraryList from '$lib/components/LibraryList.svelte';
 	import LibraryPills from '$lib/components/LibraryPills.svelte';
+	import LibraryStatusBar from '$lib/components/LibraryStatusBar.svelte';
 	import LibraryTopBar from '$lib/components/LibraryTopBar.svelte';
 	import {
 		closeLibraryHero,
@@ -39,10 +40,13 @@
 		/** The carried Music content (design D2): the picked collections, the
 		 * union list, and the Hero. */
 		music: GuiMusicFrame;
+		/** The frame's Status bar facts (design D10): the armed prefix and the
+		 * live toast, which the Status bar replaces the hints with. */
+		status: GuiStatusBar;
 		/** The arrangement picked from the Library column width (design D4). */
 		arrangement: GuiArrangement;
 	}
-	const { tabs, currentTab, music, arrangement }: Props = $props();
+	const { tabs, currentTab, music, status, arrangement }: Props = $props();
 
 	/** Whether the Hero sits beside the list rather than over it. */
 	const wide = $derived(arrangement === 'wide');
@@ -139,4 +143,8 @@
 			</div>
 		{/if}
 	</div>
+	<!-- The Library Status bar (design D10): under the list region, closing the
+		column with the canvas's fixed key hints and the location while the panel
+		paints. -->
+	<LibraryStatusBar {tabs} {currentTab} {music} {status} />
 </div>
