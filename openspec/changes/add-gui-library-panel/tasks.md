@@ -31,7 +31,7 @@ Phase 1 (groups 1–5) delivers Music from end to end. Phase 2 (groups 6–12) s
 - [x] 4.5 Paint the list (design D7): the artist, album, and track rows at their canvas heights, the letter headings, the cursor, open and close, pick, the `/` filter, and only the rows in view. Verify: vitest that opening an unloaded album sends the open-album command, that a cursor move past the last visible row scrolls the row into view, and that the filter narrows the rows.
 - [x] 4.6 Paint the letter rail (design D7). Verify: vitest that a letter with no rows is disabled and that a press moves the cursor to the first row of its letter.
 - [x] 4.7 Paint the Hero (design D5, D8): the artist header with Shuffle artist, the album block with the square art and Play, Play next (`n`), Add to queue (`a`), and More actions, the tracklist with its hover Play next and Add to queue controls, the item menu in the row-menu look, and the Narrow overlay with the same painters. Verify: vitest that each control sends its command with the item's id, that the menu paints the frame's entries, and that the overlay mounts in Narrow.
-- [ ] 4.8 Paint the Library Status bar (design D10). Verify: vitest for the hints and the location, for a toast and the armed prefix replacing the hints, and for the Queue footer keeping them while the Library panel does not show.
+- [x] 4.8 Paint the Library Status bar (design D10). Verify: vitest for the hints and the location, for a toast and the armed prefix replacing the hints, and for the Queue footer keeping them while the Library panel does not show.
 
 ## 5. Phase 1 docs and checks
 
