@@ -72,16 +72,37 @@ export function routeShowsPanelKey(event: KeyboardEvent, ui: LibraryUiState): Ke
 		return 'core';
 	}
 	if (ui.pane === 'pills') {
-		return routePillKey(event, shows);
+		return orRemaining(routePillKey(event, shows), event);
 	}
 	if (ui.pane === 'list') {
 		return routeListKey(event);
 	}
 	if (ui.pane === 'hero' && shows.hero !== null) {
-		return routeWorkspaceKey(event, shows);
+		return orRemaining(routeWorkspaceKey(event, shows), event);
 	}
-	// The arrow keys and Enter the pane owns answered above; the rest of the
-	// Library's keys never reach the core (design D3, step 4).
+	// The Hero pane the Upcoming mode does not paint, and any pane that left a
+	// key unclaimed, still keep the Library's keys from the core: the movements
+	// and Enter change nothing, and `n` and `a` act on the list's cursor row.
+	return routeRemainingKey(event);
+}
+
+/** The key's answer, or the remaining Library keys' answer when the pane left
+ * it unclaimed: a pane that does not act on a key never passes it to the
+ * core's playback chords (design D3, step 4). */
+function orRemaining(outcome: KeyOutcome, event: KeyboardEvent): KeyOutcome {
+	return outcome === 'core' ? routeRemainingKey(event) : outcome;
+}
+
+/** The Library's own keys no Shows pane claims (design D3, step 4): `n` and `a`
+ * act on the list's cursor row, as the Music router's item key acts from every
+ * pane, and a series row is not playable so its key changes nothing; the
+ * movements and Enter change nothing at all. Every one of them is consumed, so
+ * a playback chord never runs from a Shows key. */
+function routeRemainingKey(event: KeyboardEvent): KeyOutcome {
+	if (event.key === 'n' || event.key === 'a') {
+		routeListItemKey(event, showsCursorRow());
+		return 'handled';
+	}
 	return LIST_AND_HERO_KEYS.has(event.key) ? 'handled' : 'core';
 }
 

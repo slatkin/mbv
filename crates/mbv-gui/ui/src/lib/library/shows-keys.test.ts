@@ -260,3 +260,34 @@ test('Tab from the Queue panel focuses the Shows pill row', () => {
 		command: { command: 'takeFocus' },
 	});
 });
+
+// Review of row 7.1, finding P1: the Shows panes keep the Library's keys from
+// the core's router (design D3, step 4). A pane that does not act on a key
+// still consumes it, so `a` and `n` never reach the core's playback chords,
+// which are not gated on Panel focus.
+test('a movement key on the pills pane does not reach the core', () => {
+	carryShows(showsContent('latest', SHOWS_EPISODES), 'pills');
+
+	press('ArrowDown');
+
+	expect(invokeMock).not.toHaveBeenCalled();
+});
+
+test('a on the pills pane queues the list cursor\u2019s flat row and sends no key', () => {
+	carryShows(showsContent('latest', SHOWS_EPISODES), 'pills', 'e1');
+
+	press('a');
+
+	expect(invokeMock).toHaveBeenCalledWith('library', {
+		command: { command: 'showsQueue', libIdx: 0, itemId: 'e1' },
+	});
+	expect(invokeMock).not.toHaveBeenCalledWith('key', expect.anything());
+});
+
+test('n on the hero-less Hero pane does not reach the core', () => {
+	carryShows(showsContent('upcoming', SHOWS_EPISODES), 'hero', 'e2');
+
+	press('n');
+
+	expect(invokeMock).not.toHaveBeenCalledWith('key', expect.anything());
+});
