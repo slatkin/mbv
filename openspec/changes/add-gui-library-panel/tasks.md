@@ -53,7 +53,7 @@ Each unit starts by reading its destination's data path in the `App` and recordi
 
 ## 8. Movies and other Emby libraries
 
-- [ ] 8.1 Project and paint an Emby library: the Hero without a Workspace, the art shape from the artwork policy, the letter rail while sorted by name, and, in feed-group mode, the feed-group pills as collection pills with each selected group's items loaded and their union in the list's sort. Verify: a projection test; a union test for two feed groups.
+- [ ] 8.1 Project and paint an Emby library: the Hero without a Workspace, the art shape from the artwork policy, a plain library's flat list sorted by name with the letter rail and no pills, and, in feed-group mode, the pills of All plus each folder that has items as single-select pills with the list in the server's date order and no letter rail. Enter plays the row through the TUI's folder-play rule, with no drill-in, and `n` and `a` work as in Music. Verify: a projection test; a test that a pill switch loads that group's items.
 
 ## 9. Audiobooks
 

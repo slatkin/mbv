@@ -258,6 +258,11 @@ While the Library panel has Panel focus, the window content SHALL take the Libra
 - **WHEN** the user presses `/`, then Esc, then `a`
 - **THEN** `/` opens the Queue filter and `a` opens the audio popover
 
+#### Scenario: Enter plays an Emby library's folder
+
+- **WHEN** the cursor is on a folder or boxset row of an Emby library and the user presses Enter
+- **THEN** the folder plays through the TUI's folder-play rule, the queue is replaced by its items, and no nested list opens
+
 #### Scenario: Prefix mode passes the Library
 
 - **GIVEN** the Library panel has Panel focus and prefix mode is armed
@@ -271,7 +276,7 @@ One collection pill SHALL be selected at a time, as the TUI's Grouped Music pill
 #### Scenario: Collection pills per destination
 
 - **WHEN** a destination paints its pill row
-- **THEN** the collection pills are the Music group pills, the Podcast show pills, the Feeds subscription pills, and the group pills of an Emby library in feed-group mode
+- **THEN** the collection pills are the Music group pills, the Podcast show pills, the Feeds subscription pills, and All and each folder pill of an Emby library in feed-group mode
 - **AND** every other pill is single-select
 
 #### Scenario: A second collection is selected
@@ -298,6 +303,11 @@ One collection pill SHALL be selected at a time, as the TUI's Grouped Music pill
 - **GIVEN** the pill row has focus and the Soul pill is the focused pill
 - **WHEN** the user presses Space
 - **THEN** Soul is selected as a press selects it, and playback does not change
+
+#### Scenario: An Emby library in feed-group mode changes pill
+
+- **WHEN** the user presses a folder pill of an Emby library in feed-group mode
+- **THEN** only that pill is selected and the list shows that folder's items in date order with no letter rail
 
 #### Scenario: A non-collection pill is selected
 
@@ -403,7 +413,12 @@ The Music list SHALL show the artists of the selected collection as a tree: arti
 
 ### Requirement: The letter rail jumps a name-sorted list
 
-A Library list sorted by name SHALL show a letter rail from A to Z. A letter with no rows SHALL be disabled. A press on a letter SHALL scroll to the first row whose sort name starts with that letter and move the cursor there. The rail's keyboard path SHALL be the list's `/` filter. A list sorted by date SHALL show no rail.
+A Library list sorted by name SHALL show a letter rail from A to Z. A letter with no rows SHALL be disabled. A press on a letter SHALL scroll to the first row whose sort name starts with that letter and move the cursor there. The rail's keyboard path SHALL be the list's `/` filter. A list sorted by date SHALL show no rail. An Emby library that is not a feed-group library SHALL show the rail and no pills: the rail replaces the TUI's letter-range pill row, as it does for Shows.
+
+#### Scenario: A plain Emby library paints the rail and no pills
+
+- **WHEN** a Movies library paints its list
+- **THEN** the list is flat and sorted by name, it shows the letter rail, and its pill row holds no pill
 
 #### Scenario: A letter is pressed
 
