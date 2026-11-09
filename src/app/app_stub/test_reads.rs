@@ -717,6 +717,24 @@ impl App {
         ));
     }
 
+    /// Block until one library event lands on the lib channel and apply it
+    /// through the same App arm the tick's drain runs (add-gui-library-panel
+    /// design D13): a Client test that pumps GUI ticks over a mocked fetch
+    /// waits here for the completion instead of sleeping between steps, so a
+    /// passing pump spends no real time and the fetch workers never starve
+    /// behind a spinning test. Returns whether an event landed within
+    /// `bound` — a safety net that fails a broken pipeline instead of hanging
+    /// the test, never a cadence a passing pump spends.
+    #[cfg(feature = "test")]
+    #[must_use]
+    pub fn drain_lib_event_blocking_for_test(&mut self, bound: std::time::Duration) -> bool {
+        let Ok(event) = self.channels.lib_rx.recv_timeout(bound) else {
+            return false;
+        };
+        self.handle_lib_event(event);
+        true
+    }
+
     /// The ids of the Home `Recently added` rows the App stores, over the
     /// sources in store order (add-gui-library-panel row 6.2): a Client's
     /// test reads them without the crate-internal source type. Each id is

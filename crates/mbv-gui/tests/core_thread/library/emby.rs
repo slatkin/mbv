@@ -13,7 +13,7 @@ use mbv_gui::bridge::library::GuiLibraryCommand;
 use mbv_net::mock_http::MockHttp;
 use mbv_ui_model::feed::FeedHomeVideoSelection;
 
-use super::{TestCore, send_library};
+use super::{TestCore, pump_until, send_library};
 use crate::{test_core_with, test_emby_client};
 
 /// The library's one listing, as the mock transport returns it: the body the
@@ -36,29 +36,14 @@ fn emby_section(frame: &GuiFrame) -> Option<&mbv_gui::bridge::frame::library::Gu
 }
 
 /// Pump GUI ticks until the plain Emby-library section a frame carries
-/// satisfies `want`, bounded so a broken fetch fails the assertion instead
-/// of hanging the test. Each miss waits briefly on the mock for one more
-/// transmitted request — the sanctioned seam for the fetch workers' own
-/// progress, as the Shows tests run it.
+/// satisfies `want`, waiting for the next library completion between steps
+/// (the fetch workers' own progress) instead of sleeping between them.
 fn pump_until_emby(
     test: &mut TestCore,
-    http: &MockHttp,
     want: impl Fn(&mbv_gui::bridge::frame::library::GuiEmbyFrame) -> bool,
     what: &str,
 ) {
-    for _ in 0..250 {
-        assert!(test.core.step(), "the core thread never quits mid-drain");
-        if let Some(emby) = test.latest_frame().as_ref().and_then(emby_section)
-            && want(emby)
-        {
-            return;
-        }
-        let _ = http.wait_for_requests(
-            http.request_count() + 1,
-            std::time::Duration::from_millis(50),
-        );
-    }
-    panic!("the tick never produced {what}");
+    pump_until(test, |frame| emby_section(frame).is_some_and(&want), what);
 }
 
 /// The mocked bootstrap's catalog presents the Movies destination, and the
@@ -93,12 +78,7 @@ fn the_bootstrap_movies_destination_finds_the_emby_frame_and_a_select_moves_the_
     // The no-URL stub client's root-list fetch fails; the frame names the
     // failure once it lands, and a later frame build re-issues nothing
     // behind the seed below.
-    pump_until_emby(
-        &mut test,
-        &MockHttp::new(),
-        |emby| emby.failed,
-        "the failed root fetch",
-    );
+    pump_until_emby(&mut test, |emby| emby.failed, "the failed root fetch");
 
     test.core
         .app_mut()
@@ -145,7 +125,6 @@ fn an_emby_set_feed_group_command_loads_the_groups_items_into_the_next_frame() {
     // count fan-out land through the tick's drains.
     pump_until_emby(
         &mut test,
-        &http,
         |emby| emby.pills.len() == 2 && !emby.loading,
         "the counted folder pill",
     );
@@ -159,7 +138,6 @@ fn an_emby_set_feed_group_command_loads_the_groups_items_into_the_next_frame() {
     );
     pump_until_emby(
         &mut test,
-        &http,
         |emby| {
             emby.rows.iter().any(|row| row.id == "vid-1")
                 && emby

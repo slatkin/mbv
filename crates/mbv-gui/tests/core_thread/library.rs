@@ -35,6 +35,37 @@ mod podcasts;
 mod selection;
 mod shows;
 
+/// The bound on one pump round's wait for the next library completion
+/// (design D13): a safety net that turns a fetch pipeline that stops
+/// answering into a failure. A passing pump never spends it.
+const LIB_EVENT_BOUND: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// Pump GUI ticks until the newest frame satisfies `want`, waiting for the
+/// next library completion instead of sleeping between steps (design D13):
+/// each round steps, checks the newest emitted frame, then blocks until one
+/// more fetch completion lands on the lib channel — the event the next
+/// step's drain applies. The wait blocks for the outcome, so the fetch
+/// workers never starve behind a spinning test and a passing pump spends no
+/// real time; the bound only fires when the pipeline has stopped, and the
+/// panic then names `what`.
+fn pump_until(test: &mut TestCore, want: impl Fn(&GuiFrame) -> bool, what: &str) {
+    loop {
+        assert!(test.core.step(), "the core thread never quits mid-drain");
+        if test.latest_frame().as_ref().is_some_and(&want) {
+            return;
+        }
+        assert!(
+            test.core
+                .app_mut()
+                .drain_lib_event_blocking_for_test(LIB_EVENT_BOUND),
+            "no library completion landed while waiting for {what}"
+        );
+        // The applied completion frames on the next step: an input the core
+        // answers with a frame, as the drain's own arm does.
+        test.waker.wake();
+    }
+}
+
 /// One group's album listing, as the mock transport returns it.
 const ALBUMS: &str = r#"{"Items":[{"Id":"alb-ill","Name":"Licensed to Ill","Type":"MusicAlbum"}],"TotalRecordCount":1}"#;
 

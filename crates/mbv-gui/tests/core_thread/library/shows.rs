@@ -10,7 +10,7 @@
 use mbv::ClientTickHost;
 use mbv_net::mock_http::MockHttp;
 
-use super::{TestCore, send_library};
+use super::{LIB_EVENT_BOUND, TestCore, pump_until, send_library};
 use crate::{test_core_with, test_emby_client};
 
 /// A Shows library's series listing, as the mode load's ranged fetch
@@ -45,11 +45,12 @@ fn shows_core(http: &MockHttp) -> TestCore {
     test
 }
 
-/// Pump GUI ticks until the root level holds rows (the fetch worker's
-/// completion is asynchronous over the in-memory mock), bounded so a broken
-/// fetch fails the assertion instead of hanging the test.
+/// Pump GUI ticks until the root level holds rows: the fetch worker's
+/// completion lands on the lib channel, and each round blocks for one more
+/// of them instead of sleeping between steps.
 fn pump_until_root_rows(test: &mut TestCore) {
-    for _ in 0..250 {
+    loop {
+        assert!(test.core.step(), "the core thread never quits mid-drain");
         if test
             .core
             .app_mut()
@@ -59,9 +60,13 @@ fn pump_until_root_rows(test: &mut TestCore) {
         {
             return;
         }
-        assert!(test.core.step(), "the core thread never quits mid-drain");
+        assert!(
+            test.core
+                .app_mut()
+                .drain_lib_event_blocking_for_test(LIB_EVENT_BOUND),
+            "the All series mode's root load sent no further completion"
+        );
     }
-    panic!("the All series mode's root load never landed on the App");
 }
 
 /// The Shows section a frame carries, present only while a Shows
@@ -73,31 +78,15 @@ fn shows_section(
 }
 
 /// Pump GUI ticks until the Shows section a frame carries satisfies `want`,
-/// bounded so a broken fetch fails the assertion instead of hanging the
-/// test. Each step's frames drain through `latest_frame`, so the predicate
-/// reads the newest emitted state, and each miss waits briefly on the mock
-/// for one more transmitted request — the sanctioned seam for the fetch
-/// workers' own progress, which the fetch-driven loads (a detail landing's
-/// own first-season fetch) issue between steps.
+/// waiting for the next library completion between steps: the section is
+/// absent from a frame that re-carried no changed content, so a miss waits
+/// for the fetch that changes it.
 fn pump_until_shows(
     test: &mut TestCore,
-    http: &MockHttp,
     want: impl Fn(&mbv_gui::bridge::frame::library::GuiShowsFrame) -> bool,
     what: &str,
 ) {
-    for _ in 0..250 {
-        assert!(test.core.step(), "the core thread never quits mid-drain");
-        if let Some(shows) = test.latest_frame().as_ref().and_then(shows_section)
-            && want(shows)
-        {
-            return;
-        }
-        let _ = http.wait_for_requests(
-            http.request_count() + 1,
-            std::time::Duration::from_millis(50),
-        );
-    }
-    panic!("the tick never produced {what}");
+    pump_until(test, |frame| shows_section(frame).is_some_and(&want), what);
 }
 
 /// A core thread over an App whose catalog holds a grouped Music library
@@ -131,22 +120,19 @@ fn shows_command_core(http: &MockHttp) -> TestCore {
 /// Opening the Shows library in the All series mode lands the series root
 /// rows on the App through the GUI tick (row 7.1, contract a): the open and
 /// set-mode actions run the TUI's own mode load, and the tick's
-/// `drain_lib_event` applies the refresh completion's App arm. The mock's
-/// request wait is the sanctioned seam for the fetch worker's own progress,
-/// so the step pump never starves it.
+/// `drain_lib_event` applies the refresh completion's App arm. The mock
+/// answers each request by its own path, so the open's eager Upcoming
+/// snapshot and the mode's load cannot take each other's answer.
 #[test]
 fn opening_shows_in_all_mode_lands_the_series_root_rows_on_the_tick() {
     let http = MockHttp::new();
-    http.respond(200, SERIES);
+    http.respond_when("IncludeItemTypes=Series", 200, SERIES);
+    http.respond_when("/Shows/Upcoming", 200, NO_PREMIERES);
     let mut test = shows_core(&http);
 
     let app = test.core.app_mut();
     app.gui_tv_open(0);
     app.gui_tv_set_mode(0, &mbv_queue::TvContentMode::All);
-    assert!(
-        http.wait_for_requests(1, std::time::Duration::from_secs(2)),
-        "the mode load's fetch was never sent"
-    );
     pump_until_root_rows(&mut test);
 
     assert_eq!(
@@ -223,10 +209,9 @@ fn open_shows_destination(test: &mut TestCore, position: usize, lib_idx: usize) 
 
 /// Pump until the All series mode selects `series` and the Hero's title is
 /// `title`.
-fn pump_until_series_hero(test: &mut TestCore, http: &MockHttp, series: &str, title: &str) {
+fn pump_until_series_hero(test: &mut TestCore, series: &str, title: &str) {
     pump_until_shows(
         test,
-        http,
         |shows| {
             shows.rows.len() == 2
                 && shows.selected.as_deref() == Some(series)
@@ -237,16 +222,9 @@ fn pump_until_series_hero(test: &mut TestCore, http: &MockHttp, series: &str, ti
 }
 
 /// Pump until the Workspace shows `episode_id` under `season_id`.
-fn pump_until_workspace(
-    test: &mut TestCore,
-    http: &MockHttp,
-    season_id: &str,
-    episode_id: &str,
-    what: &str,
-) {
+fn pump_until_workspace(test: &mut TestCore, season_id: &str, episode_id: &str, what: &str) {
     pump_until_shows(
         test,
-        http,
         |shows| {
             shows
                 .hero
@@ -271,25 +249,24 @@ fn pump_until_workspace(
 /// the frame path's detail ensure loads the default series' Workspace, a
 /// select command names the row the frame painted and the Hero follows it
 /// with its own Workspace, and a season command moves the Workspace to that
-/// season's episodes. Each `wait_for_requests` is the sanctioned seam for
-/// the fetch workers' own progress (the pinned total keeps the root load's
-/// completion from spawning a default-mode reload behind the script).
+/// season's episodes. The mock answers every request by its own path, so the
+/// concurrent fetch workers' interleaving cannot change an answer (the
+/// pinned total keeps the root load's completion from spawning a
+/// default-mode reload behind the script).
 #[test]
 fn a_series_select_moves_the_hero_and_a_season_select_moves_the_workspace() {
     let http = MockHttp::new();
-    // In request order: the open's default root load, the eager Upcoming
-    // snapshot, the All series load, series-a's detail (the frame path's
-    // ensure) and its first-season fetch, then series-b's detail (the
-    // select) with its first-season fetch, then the selected season's
-    // episodes.
-    http.respond(200, SERIES);
-    http.respond(200, NO_PREMIERES);
-    http.respond(200, SERIES);
-    http.respond(200, SEASONS_A);
-    http.respond(200, SEASON_1_A);
-    http.respond(200, SEASONS_B);
-    http.respond(200, SEASON_1_B);
-    http.respond(200, SEASON_2_B);
+    // The open's default root load and the set-mode command's All series
+    // load read the series list, the eager Upcoming snapshot reads the
+    // premieres, each series' detail reads its own season list, and each
+    // season fetch reads its own episodes.
+    http.respond_when("IncludeItemTypes=Series", 200, SERIES);
+    http.respond_when("/Shows/Upcoming", 200, NO_PREMIERES);
+    http.respond_when("ParentId=series-a&", 200, SEASONS_A);
+    http.respond_when("ParentId=series-b&", 200, SEASONS_B);
+    http.respond_when("ParentId=s1-a&", 200, SEASON_1_A);
+    http.respond_when("ParentId=s1-b&", 200, SEASON_1_B);
+    http.respond_when("ParentId=s2-b&", 200, SEASON_2_B);
     let mut test = shows_command_core(&http);
 
     open_shows_destination(&mut test, 2, 1);
@@ -300,14 +277,8 @@ fn a_series_select_moves_the_hero_and_a_season_select_moves_the_workspace() {
             mode: mbv_gui::bridge::library::GuiShowsMode::All,
         },
     );
-    pump_until_series_hero(&mut test, &http, "series-a", "Alfred");
-    pump_until_workspace(
-        &mut test,
-        &http,
-        "s1-a",
-        "ep-a1",
-        "the default series' Workspace",
-    );
+    pump_until_series_hero(&mut test, "series-a", "Alfred");
+    pump_until_workspace(&mut test, "s1-a", "ep-a1", "the default series' Workspace");
 
     send_library(
         &mut test,
@@ -328,13 +299,7 @@ fn a_series_select_moves_the_hero_and_a_season_select_moves_the_workspace() {
         "Bridgerton",
         "the Hero's facts follow the selected series"
     );
-    pump_until_workspace(
-        &mut test,
-        &http,
-        "s1-b",
-        "ep-b1",
-        "the selected series' Workspace",
-    );
+    pump_until_workspace(&mut test, "s1-b", "ep-b1", "the selected series' Workspace");
 
     send_library(
         &mut test,
@@ -343,11 +308,5 @@ fn a_series_select_moves_the_hero_and_a_season_select_moves_the_workspace() {
             season_id: "s2-b".into(),
         },
     );
-    pump_until_workspace(
-        &mut test,
-        &http,
-        "s2-b",
-        "ep-b2",
-        "the season command's Workspace",
-    );
+    pump_until_workspace(&mut test, "s2-b", "ep-b2", "the season command's Workspace");
 }

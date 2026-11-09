@@ -32,6 +32,11 @@ enum Scripted {
 #[derive(Debug)]
 struct Shared {
     script: Mutex<VecDeque<Scripted>>,
+    /// Answers keyed by a needle in the request's wire text, consulted for
+    /// every request the needle matches and never consumed: a test with
+    /// several concurrent fetch workers scripts each answer by its own
+    /// request, so no worker depends on the others' arrival order.
+    matched: Mutex<Vec<(String, String)>>,
     requests: Mutex<Vec<String>>,
     /// Signalled whenever a request is recorded, so a test can wait for the
     /// request instead of polling for it.
@@ -56,6 +61,7 @@ impl MockHttp {
         Self {
             shared: Arc::new(Shared {
                 script: Mutex::new(VecDeque::new()),
+                matched: Mutex::new(Vec::new()),
                 requests: Mutex::new(Vec::new()),
                 requests_changed: Condvar::new(),
             }),
@@ -74,6 +80,26 @@ impl MockHttp {
         for _ in 0..count {
             self.respond(status, body);
         }
+    }
+
+    /// Queue an answer for every request whose wire text contains `needle`,
+    /// however many arrive and in whatever order, for the rest of the mock's
+    /// life. A needle answer wins over the queued script.
+    ///
+    /// This is the script a test with concurrent fetch workers writes: a
+    /// request's answer follows its own path, not its position in a
+    /// sequence, so the workers' interleaving cannot change any answer.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `matched` mutex is poisoned: a previous holder panicked
+    /// while holding the lock.
+    pub fn respond_when(&self, needle: &str, status: u16, body: &str) {
+        self.shared
+            .matched
+            .lock()
+            .unwrap()
+            .push((needle.to_string(), Self::response(status, body)));
     }
 
     fn response(status: u16, body: &str) -> String {
@@ -175,7 +201,19 @@ impl MockHttp {
 }
 
 impl Shared {
-    fn next_response(&self) -> Scripted {
+    /// The answer `request` gets: the first needle answer it matches, else
+    /// the script's next entry, else a stall no caller waits out.
+    fn next_response(&self, request: &str) -> Scripted {
+        let matched = self
+            .matched
+            .lock()
+            .unwrap()
+            .iter()
+            .find(|(needle, _)| request.contains(needle.as_str()))
+            .map(|(_, raw)| raw.clone());
+        if let Some(raw) = matched {
+            return Scripted::Respond(raw);
+        }
         self.script
             .lock()
             .unwrap()
@@ -262,7 +300,7 @@ impl Transport for MockTransport {
                 "mock: closed",
             )));
         }
-        match self.shared.next_response() {
+        match self.shared.next_response(&self.received) {
             Scripted::Respond(raw) => {
                 self.response_served = true;
                 self.serve(&raw);
