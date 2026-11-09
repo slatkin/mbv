@@ -172,8 +172,9 @@ impl App {
     /// The destinations the GUI presents, in catalog order (design D9, D2):
     /// the Grouped Music libraries, the Emby TV (Shows) libraries, every
     /// other Emby library (row 8.1's plain Emby-library destination), and the
-    /// Audiobookshelf book libraries (row 9.1's Audiobooks destination), as
-    /// the destination-kind enum names them. The restore's fallback and the
+    /// Audiobookshelf libraries — the book libraries' Audiobooks destination
+    /// (row 9.1) and the podcast libraries' Podcasts destination (row 10.1) —
+    /// as the destination-kind enum names them. The restore's fallback and the
     /// frame's destination tabs (`gui_library_tabs`) read this one list, so
     /// they cannot disagree about the presented set.
     pub(in crate::app::gui_library) fn presented_destinations(&self) -> Vec<GuiDestinationKind> {
@@ -189,14 +190,21 @@ impl App {
             })
             .collect();
         // The Audiobookshelf libraries' tab positions follow the Emby ones,
-        // so appending the book libraries keeps the catalog order.
+        // so appending them keeps the catalog order. A library's browse kind
+        // picks its destination: a book library presents Audiobooks and a
+        // podcast library presents Podcasts.
         presented.extend(
-            (0..self.audiobookshelf_libraries.len())
-                .filter(|index| {
-                    self.audiobookshelf_kind_at(*index)
-                        == Some(mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseKind::Book)
-                })
-                .map(|lib_idx| GuiDestinationKind::Audiobooks { lib_idx }),
+            (0..self.audiobookshelf_libraries.len()).filter_map(|lib_idx| {
+                match self.audiobookshelf_kind_at(lib_idx) {
+                    Some(mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseKind::Book) => {
+                        Some(GuiDestinationKind::Audiobooks { lib_idx })
+                    }
+                    Some(
+                        mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseKind::Podcast,
+                    ) => Some(GuiDestinationKind::Podcasts { lib_idx }),
+                    None => None,
+                }
+            }),
         );
         presented
     }
@@ -250,7 +258,8 @@ impl App {
     /// The stable Service library id the presented destination `kind` names
     /// at `lib_idx` (design D9): the identity the launch file saves and the
     /// restore resolves against. An Emby kind's index names `App::libs`; the
-    /// Audiobooks kind's names the Audiobookshelf libraries.
+    /// Audiobooks and Podcasts kinds' index names the Audiobookshelf
+    /// libraries.
     fn gui_destination_library_id(&self, kind: ServiceKind, lib_idx: usize) -> Option<String> {
         match kind {
             ServiceKind::Audiobookshelf => {

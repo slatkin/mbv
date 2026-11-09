@@ -58,7 +58,7 @@ pub use self::gui_library::{
 pub use self::gui_library::{
     GuiLibraryArtwork, GuiLibraryMenuItem, GuiLibraryRowMenu, GuiLibraryTab, GuiLibraryTabs,
     GuiMusicAlbum, GuiMusicArtist, GuiMusicHero, GuiMusicPill, GuiMusicProjection, GuiMusicTrack,
-    GuiMusicTrackTotal,
+    GuiMusicTrackTotal, GuiPodcastPill,
 };
 pub use self::infra::image_fetch::CardImageDrain;
 pub(in crate::app) use self::infra::paging::{PAGE_SIZE, PREFETCH_AHEAD};

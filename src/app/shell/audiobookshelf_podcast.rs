@@ -89,14 +89,12 @@ impl Model {
             .cloned()
             .unwrap_or_default();
         let selected_latest = self.abs_podcast_latest_selected();
-        // Latest is the default pill, so its shelf loads on first view.
-        if selected_latest
-            && self
-                .app
-                .audiobookshelf_shelf_requested
-                .insert(library_id.clone())
-        {
-            self.spawn_audiobookshelf_latest_shelves(&library_id);
+        // Latest is the default pill, so its shelf loads on first view. The
+        // App's shared guard owns the one-shot request the GUI's frame path
+        // also uses (row 10.1 dispatch A), so both Clients' App data hold the
+        // same shelf; this pass keeps only the projection below.
+        if selected_latest {
+            self.app.ensure_audiobookshelf_latest_shelf(&library_id);
         }
         let source = crate::app::state::playback::DestinationLatestSource::Audiobookshelf(
             library_id.clone(),

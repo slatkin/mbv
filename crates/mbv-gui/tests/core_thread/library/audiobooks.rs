@@ -1,8 +1,8 @@
 //! The Audiobooks destination's contracts (add-gui-library-panel design D12,
-//! row 9.1): the presented tabs name the Audiobookshelf book libraries and
-//! never the podcast ones, and the open-destination command activates the
-//! book library through the same presented-position gate every destination
-//! shares.
+//! row 9.1): the presented tabs name both Audiobookshelf destinations — the
+//! book libraries as Audiobooks and the podcast libraries as Podcasts (row
+//! 10.1) — and the open-destination command activates the book library through
+//! the same presented-position gate every destination shares.
 
 use mbv::ClientTickHost;
 use mbv_ctrl::CtrlCmd;
@@ -13,9 +13,8 @@ use mbv_ui_model::tab_selection::TabSelection;
 use super::{library_of, send_library};
 
 /// A core thread over an App whose catalog holds one Audiobookshelf book
-/// library and one podcast library, with no Emby library: the Audiobooks
-/// destination is the only presented one (row 9.1; the podcast destination
-/// joins in row 10.1).
+/// library and one podcast library, with no Emby library: the Audiobooks and
+/// Podcasts destinations are the presented ones (rows 9.1 and 10.1).
 fn audiobooks_core() -> crate::TestCore {
     let mut test = crate::test_core(0);
     test.core.app_mut().seed_gui_abs_libraries_for_test();
@@ -91,20 +90,21 @@ fn commanded_book_id(cmd_rx: &std::sync::mpsc::Receiver<CtrlCmd>) -> String {
         .expect("the Owner received the book's queue command")
 }
 
-/// The presented tabs carry the book library and never the podcast library
-/// (row 9.1, contract c): the Audiobooks destination joins the presented set
-/// with its library's label, so the top bar paints it and the launch
-/// restore's fallback reads the same set.
+/// The presented tabs carry both Audiobookshelf destinations (row 9.1,
+/// contract c; row 10.1 presents Podcasts): the Audiobooks destination joins
+/// the presented set with its library's label and the podcast library joins
+/// with its own, so the top bar paints both and the launch restore's fallback
+/// reads the same set.
 #[test]
-fn the_presented_tabs_carry_the_book_library_and_not_the_podcast_library() {
+fn the_presented_tabs_carry_the_book_library_and_the_podcast_library() {
     let mut test = audiobooks_core();
 
     let tabs = test.core.app_mut().gui_library_tabs();
     let labels: Vec<&str> = tabs.tabs.iter().map(|tab| tab.label.as_str()).collect();
     assert_eq!(
         labels,
-        vec!["Audiobooks"],
-        "the book library presents a tab and the podcast library none"
+        vec!["Audiobooks", "Podcasts"],
+        "each Audiobookshelf library presents its own destination"
     );
 }
 

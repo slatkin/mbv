@@ -36,6 +36,15 @@ impl LibraryFrames {
         // absent, and the next one re-carries its content whatever the window
         // kept while the section was away.
         let destination = app.gui_active_destination();
+        // The Podcasts destination's frame-path ensure (add-gui-library-panel
+        // design D12, row 10.1): the selected pill's own loads — the Latest
+        // shelf and every show's episodes, or one show's episodes — start
+        // before any command does, as the Audiobooks ensure starts its
+        // default pick's detail. Row 10.1's later dispatch adds the section
+        // this destination carries to the content below.
+        if let Some(GuiDestinationKind::Podcasts { lib_idx }) = destination {
+            app.ensure_gui_podcast_selection(lib_idx);
+        }
         // The Audiobooks destination's frame-path ensure (add-gui-library-panel
         // design D12, row 9.1): the default pick's detail load starts before
         // any select does, as the Shows frame path ensures its default series'

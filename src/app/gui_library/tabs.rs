@@ -30,8 +30,13 @@ pub enum GuiDestinationKind {
     Library { lib_idx: usize },
     /// An Audiobookshelf book library's Audiobooks destination (design D12,
     /// row 9.1). `lib_idx` indexes the Audiobookshelf libraries, not the Emby
-    /// ones. The podcast libraries stay unpresented until row 10.1.
+    /// ones.
     Audiobooks { lib_idx: usize },
+    /// An Audiobookshelf podcast library's Podcasts destination (design D12,
+    /// row 10.1). `lib_idx` indexes the Audiobookshelf libraries, as the
+    /// Audiobooks kind does; a podcast library never presents the Audiobooks
+    /// destination and a book library never presents this one.
+    Podcasts { lib_idx: usize },
 }
 
 impl GuiDestinationKind {
@@ -44,7 +49,8 @@ impl GuiDestinationKind {
             Self::Music { lib_idx }
             | Self::Shows { lib_idx }
             | Self::Library { lib_idx }
-            | Self::Audiobooks { lib_idx } => Some(lib_idx),
+            | Self::Audiobooks { lib_idx }
+            | Self::Podcasts { lib_idx } => Some(lib_idx),
         }
     }
 }
@@ -89,13 +95,17 @@ impl App {
                 }
             }
             TabSelection::AudiobookshelfLibrary(index)
-                if index < self.audiobookshelf_libraries.len()
-                    && self.audiobookshelf_kind_at(index)
-                        == Some(
-                            mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseKind::Book,
-                        ) =>
+                if index < self.audiobookshelf_libraries.len() =>
             {
-                Some(GuiDestinationKind::Audiobooks { lib_idx: index })
+                match self.audiobookshelf_kind_at(index) {
+                    Some(mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseKind::Book) => {
+                        Some(GuiDestinationKind::Audiobooks { lib_idx: index })
+                    }
+                    Some(
+                        mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseKind::Podcast,
+                    ) => Some(GuiDestinationKind::Podcasts { lib_idx: index }),
+                    None => None,
+                }
             }
             _ => None,
         }
@@ -108,7 +118,11 @@ impl App {
         &self,
         kind: GuiDestinationKind,
     ) -> Option<usize> {
-        if let GuiDestinationKind::Audiobooks { lib_idx } = kind {
+        if matches!(
+            kind,
+            GuiDestinationKind::Audiobooks { .. } | GuiDestinationKind::Podcasts { .. }
+        ) {
+            let lib_idx = kind.library_index()?;
             return Some(
                 TabSelection::AudiobookshelfLibrary(lib_idx)
                     .to_position_with_counts(self.libs.len(), self.feeds_tab_pos()),
@@ -126,7 +140,8 @@ impl App {
     fn gui_destination_label(&self, kind: GuiDestinationKind) -> Option<String> {
         match kind {
             GuiDestinationKind::Home => None,
-            GuiDestinationKind::Audiobooks { lib_idx } => {
+            GuiDestinationKind::Audiobooks { lib_idx }
+            | GuiDestinationKind::Podcasts { lib_idx } => {
                 Some(self.audiobookshelf_libraries.get(lib_idx)?.name.clone())
             }
             _ => Some(self.libs[kind.library_index()?].library.name.clone()),
@@ -135,10 +150,11 @@ impl App {
 
     /// The destination tabs the Library panel's frame carries (design D2):
     /// the presented destinations in catalog order — one tab per Grouped
-    /// Music and Shows library — and the active tab's position when the
-    /// active destination is one of them. The presented list is the launch
-    /// restore's (`presented_destinations`), so the top bar and the restore
-    /// cannot disagree.
+    /// Music and Shows library, per plain Emby library, and per
+    /// Audiobookshelf library of either kind — and the active tab's position
+    /// when the active destination is one of them. The presented list is the
+    /// launch restore's (`presented_destinations`), so the top bar and the
+    /// restore cannot disagree.
     #[must_use]
     pub fn gui_library_tabs(&self) -> GuiLibraryTabs {
         let tabs = self

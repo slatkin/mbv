@@ -4,7 +4,8 @@
 //! on the App through the GUI tick's own drain, a select stores the picked
 //! book and lands its chapters in the detail cache through the TUI's loader,
 //! the frame path's ensure loads the default pick's detail, the presented
-//! destination set names the book libraries and never the podcast ones, and
+//! destination set names the book libraries as Audiobooks and the podcast
+//! libraries as Podcasts (row 10.1 presents the Podcasts destination), and
 //! the projection and the play, chapter, and queue commands follow the TUI's
 //! row, hero, and activation rules. The Audiobookshelf boundary is the lib
 //! event channel, so no request leaves the process and no worker outlives
@@ -223,13 +224,13 @@ fn the_frame_paths_ensure_loads_the_default_picks_detail() {
     );
 }
 
-/// The presented destination set names the book libraries and never the
-/// podcast ones (row 9.1, contract c): the tabs carry the Audiobooks
-/// destination with its library's label, a podcast library presents no tab,
-/// and the active book destination's kind is the Audiobooks one while the
-/// podcast destination is not presented at all.
+/// The presented destination set names the book libraries as Audiobooks and
+/// the podcast libraries as Podcasts (row 9.1, contract c; row 10.1 presents
+/// the Podcasts destination): the tabs carry the Audiobooks destination with
+/// its library's label, the podcast library presents its own Podcasts tab at
+/// the next position, and each active destination's kind is its own.
 #[test]
-fn the_presented_tabs_include_a_book_library_and_not_a_podcast_library() {
+fn the_presented_tabs_include_a_book_library_and_a_podcast_library() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = abs_app();
 
@@ -237,8 +238,8 @@ fn the_presented_tabs_include_a_book_library_and_not_a_podcast_library() {
     let labels: Vec<&str> = tabs.tabs.iter().map(|tab| tab.label.as_str()).collect();
     assert_eq!(
         labels,
-        vec!["Audiobooks"],
-        "the book library presents a tab and the podcast library none"
+        vec!["Audiobooks", "Podcasts"],
+        "the book library presents Audiobooks and the podcast library Podcasts"
     );
     assert_eq!(
         app.gui_active_destination()
@@ -255,8 +256,8 @@ fn the_presented_tabs_include_a_book_library_and_not_a_podcast_library() {
     app.tab = TabSelection::AudiobookshelfLibrary(1);
     assert_eq!(
         app.gui_active_destination(),
-        None,
-        "the podcast destination is not presented"
+        Some(crate::app::gui_library::GuiDestinationKind::Podcasts { lib_idx: 1 }),
+        "the podcast destination presents its own kind"
     );
 }
 

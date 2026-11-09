@@ -12,6 +12,7 @@ mod emby;
 mod emby_projection;
 mod home;
 mod launch;
+mod podcasts;
 mod projection;
 mod shows;
 mod store;
@@ -33,6 +34,7 @@ pub use self::home::{
     GuiArtShape, GuiHomeHero, GuiHomeItemRow, GuiHomeProjection, GuiHomeRow, GuiHomeRowId,
     GuiHomeRowKind, GuiHomeRowState,
 };
+pub use self::podcasts::{GuiPodcastPill, GuiPodcastsSelection};
 pub use self::projection::{
     GuiMusicAlbum, GuiMusicArtist, GuiMusicHero, GuiMusicPill, GuiMusicProjection, GuiMusicTrack,
     GuiMusicTrackTotal,
@@ -340,6 +342,7 @@ impl App {
             Some(GuiDestinationKind::Shows { lib_idx }) => self.gui_tv_open(lib_idx),
             Some(GuiDestinationKind::Library { lib_idx }) => self.gui_emby_open(lib_idx),
             Some(GuiDestinationKind::Audiobooks { lib_idx }) => self.gui_abs_open(lib_idx),
+            Some(GuiDestinationKind::Podcasts { lib_idx }) => self.gui_podcast_open(lib_idx),
             _ => {}
         }
     }

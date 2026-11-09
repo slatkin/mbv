@@ -308,8 +308,8 @@ fn abs_identity(library_id: &str) -> TabIdentity {
 }
 
 /// Seed one Audiobookshelf book library the GUI presents, with no Emby
-/// library at all: the Audiobooks destination is the only presented one
-/// (add-gui-library-panel row 9.1; the podcast library presents no tab).
+/// library at all: the Audiobooks destination is the presented one
+/// (add-gui-library-panel row 9.1; row 10.1 presents Podcasts beside it).
 fn seed_abs(app: &mut mbv::App, _http: &MockHttp) {
     app.seed_gui_abs_libraries_for_test();
 }

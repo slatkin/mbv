@@ -281,6 +281,15 @@ pub struct App {
     /// the two Clients' selections stay independent. The TUI never reads it.
     pub(in crate::app) gui_abs_libs:
         std::collections::HashMap<usize, crate::app::gui_library::GuiAudiobooksSelection>,
+    /// The GUI Library's Podcasts selection (add-gui-library-panel design
+    /// D12, row 10.1): per podcast library, the selected pill (default
+    /// Latest) and the episode the Hero shows, by the provider's
+    /// `(library_item_id, episode_id)` identity. The browse state's
+    /// `committed_show_pill` is the one write both Clients make — the bounded
+    /// fan-out's scope reads it — while the browse state's own selected show
+    /// and episode stay the TUI's. The TUI never reads this store.
+    pub(in crate::app) gui_podcast_libs:
+        std::collections::HashMap<usize, crate::app::gui_library::GuiPodcastsSelection>,
     /// The one startup snapshot and its tab-scoped destination re-anchor.
     pub(in crate::app) launch_restore: LaunchRestore,
     /// Deferred tab switch for a `NavigateLanding::Album` landing: set when the
