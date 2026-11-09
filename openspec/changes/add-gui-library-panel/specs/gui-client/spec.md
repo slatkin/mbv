@@ -203,17 +203,17 @@ The GUI Client SHALL arrange the panels from the measured Library column width (
 
 - **GIVEN** the Library cursor is on an item
 - **WHEN** the Library column width crosses a threshold
-- **THEN** the arrangement changes and the cursor, the selected pills, and the Hero's item do not change
+- **THEN** the arrangement changes and the cursor, the selected pill, and the Hero's item do not change
 
 ### Requirement: The Library panel's interaction state lives in the window content
 
-The Library panel's interaction state (cursor, hover, scroll, open tree nodes, focus inside the panel, filter and Search text, the open Hero overlay and item menu) SHALL live in the window content. The Client core SHALL hold the data selection: the active destination, each destination's selected collections, and the Hero's item. The window content SHALL change the data selection only through the Client core.
+The Library panel's interaction state (cursor, hover, scroll, open tree nodes, focus inside the panel, filter and Search text, the open Hero overlay and item menu) SHALL live in the window content. The Client core SHALL hold the data selection: the active destination, each destination's selected collection, and the Hero's item. The window content SHALL change the data selection only through the Client core.
 
 #### Scenario: The window content reloads on a Library item
 
-- **GIVEN** Music is active with Hip-Hop and Soul selected and an album in the Hero
+- **GIVEN** Music is active with Hip-Hop selected and an album in the Hero
 - **WHEN** the window content reloads
-- **THEN** Music is active with Hip-Hop and Soul selected and the same album in the Hero
+- **THEN** Music is active with Hip-Hop selected and the same album in the Hero
 - **AND** the list's cursor, scroll, and open nodes start from their defaults
 
 #### Scenario: The TUI Client browses a library
@@ -238,7 +238,7 @@ While the Library panel shows, the window content SHALL take Tab and Shift+Tab, 
 
 ### Requirement: The Library panel handles its own keys
 
-While the Library panel has Panel focus, the window content SHALL take the Library keys: `/` opens the list filter, Enter plays the item under the cursor or presses the focused control, `n` plays it next, `a` adds it to the queue, Space and Alt+Space toggle and solo a focused pill, the arrow, Page Up, Page Down, Home, and End keys move the cursor, and Esc closes the open filter, overlay, or menu. Every key that the window content does not take SHALL go to the Client core's keyboard router.
+While the Library panel has Panel focus, the window content SHALL take the Library keys: `/` opens the list filter, Enter plays the item under the cursor or presses the focused control, `n` plays it next, `a` adds it to the queue, Space and Alt+Space select the focused collection pill, the arrow, Page Up, Page Down, Home, and End keys move the cursor, and Esc closes the open filter, overlay, or menu. Every key that the window content does not take SHALL go to the Client core's keyboard router.
 
 #### Scenario: Right and Left in the list and on the pill row
 
@@ -368,7 +368,7 @@ The Queue panel's column width and the Wide list column's width that the user dr
 
 ### Requirement: The GUI Client keeps its own launch location
 
-At orderly exit the GUI Client SHALL save its launch location: the active destination, the selected collections of each destination, and Panel focus. At start it SHALL restore that location; a destination with no saved selection SHALL open on its first group. The GUI Client SHALL NOT read or write the TUI launch state, and SHALL NOT save its launch location while the window is open. While the GUI Client presents only some destinations, a saved destination that it does not present SHALL fall back to the first presented destination.
+At orderly exit the GUI Client SHALL save its launch location: the active destination, the selected collection of each destination, and Panel focus. At start it SHALL restore that location; a destination with no saved selection SHALL open on its first group. The GUI Client SHALL NOT read or write the TUI launch state, and SHALL NOT save its launch location while the window is open. While the GUI Client presents only some destinations, a saved destination that it does not present SHALL fall back to the first presented destination.
 
 #### Scenario: The GUI and the TUI exit in turn
 
@@ -378,12 +378,13 @@ At orderly exit the GUI Client SHALL save its launch location: the active destin
 
 ### Requirement: The Library list is the canvas tree
 
-The Music list SHALL show the artists of the selected collections as a tree: artist rows, album rows with the year, and track rows with the track number, with a letter heading above the first artist of each letter. A press on an artist or album row SHALL open or close it and pick it; a press on a track row SHALL move the cursor onto the row and pick its album. A double-click on a track row of the list or of the Hero's tracklist SHALL add that track to the queue through the library playback policy's autoload rule. The list SHALL keep the cursor row fully visible after every keyboard movement.
+The Music list SHALL show the artists of the selected collection as a tree: artist rows, album rows with the year, and track rows with the track number, with a letter heading above the first artist of each letter. A press on an artist or album row SHALL open or close it and pick it; a press on a track row SHALL move the cursor onto the row and pick its album. A double-click on a track row of the list SHALL play that track, as the Enter play does: the queue SHALL be replaced — with autoload on, by the track's album in disc/track order starting at that track (the library playback policy's autoload rule); with autoload off, by the track alone. The list SHALL keep the cursor row fully visible after every keyboard movement.
 
 #### Scenario: A track is double-clicked
 
-- **WHEN** the user double-clicks a track row
-- **THEN** the track enters the queue — with autoload on, that track's cached album tracks in disc/track order starting at the selected track; with autoload off, only the track
+- **WHEN** the user double-clicks a track row of the list
+- **THEN** the queue is replaced and the track plays
+- **AND** with autoload on the queue holds that track's album starting at the track, and with autoload off the track alone
 
 #### Scenario: An album is opened
 
@@ -397,7 +398,7 @@ The Music list SHALL show the artists of the selected collections as a tree: art
 
 #### Scenario: The list is loading or empty
 
-- **WHEN** the selected collections are loading or hold no artists
+- **WHEN** the selected collection is loading or holds no artists
 - **THEN** the list paints a loading state or an empty text
 
 ### Requirement: The letter rail jumps a name-sorted list
@@ -416,7 +417,7 @@ A Library list sorted by name SHALL show a letter rail from A to Z. A letter wit
 
 ### Requirement: The Hero shows the picked item with its actions
 
-The Hero SHALL show the picked album with its artist header, its square artwork, and its tracklist. It SHALL offer Play, Play next with the key hint `n`, Add to queue with the key hint `a`, Shuffle artist, and More actions. Play SHALL replace the queue and start the item without the TUI's populated-queue replace-confirm. The saved-playlist save/discard prompt SHALL still present, through the GUI's confirmation overlay. Play next SHALL admit the item directly after the active slot, and SHALL append it when there is no active slot or the active slot is the last. No slot already in the queue SHALL move. More actions SHALL open the item's menu. The tracklist row of the track playing at the playhead SHALL show a play glyph beside its title. A highlight marks focus only, so the playing row SHALL NOT paint a green fill.
+The Hero SHALL show the picked album with its artist header, its square artwork, and its tracklist. It SHALL offer Play, Play next with the key hint `n`, Add to queue with the key hint `a`, Shuffle artist, and More actions. Play SHALL replace the queue and start the item without the TUI's populated-queue replace-confirm. The saved-playlist save/discard prompt SHALL still present, through the GUI's confirmation overlay. Play next SHALL admit the item directly after the active slot, and SHALL append it when there is no active slot or the active slot is the last. No slot already in the queue SHALL move. More actions SHALL open the item's menu. The tracklist row's hover play button SHALL be the tracklist's only play gesture: on hover it replaces the row's track number, and it plays the row's track as a double-clicked list track plays. A double-click on a tracklist row SHALL NOT play. The tracklist row of the track playing at the playhead SHALL show a play glyph beside its title. A highlight marks focus only, so the playing row SHALL NOT paint a green fill.
 
 #### Scenario: The Hero paints a picked album
 
@@ -434,6 +435,13 @@ The Hero SHALL show the picked album with its artist header, its square artwork,
 
 - **WHEN** the pointer is over a tracklist row and the user presses its Play next or Add to queue control
 - **THEN** that track is admitted after the active slot, or at the end of the queue
+
+#### Scenario: A tracklist play button is pressed
+
+- **GIVEN** the pointer is over a tracklist row
+- **WHEN** the user presses the row's play button
+- **THEN** the track plays: the queue is replaced, as a double-clicked list track is
+- **AND** a double-click on the tracklist row itself does not play
 
 #### Scenario: More actions opens the item menu
 
@@ -461,7 +469,7 @@ The Library panel SHALL show a top bar with a Home icon and the destination tabs
 
 ### Requirement: The Library Status bar shows hints and the location
 
-While the Library panel shows, a Library Status bar SHALL show under the Library column: the canvas key hints (`/ filter`, `⏎ play`, `n next`, `a queue`, `tab pane`, `1–7 library`) on the left and the location on the right: the destination, the selected collection names, and the picked item, joined by `›`. While prefix mode is armed or a toast is active, that SHALL replace the key hints, and the location SHALL stay.
+While the Library panel shows, a Library Status bar SHALL show under the Library column: the canvas key hints (`/ filter`, `⏎ play`, `n next`, `a queue`, `tab pane`, `1–7 library`) on the left and the location on the right: the destination, the selected collection's name, and the picked item, joined by `›`. While prefix mode is armed or a toast is active, that SHALL replace the key hints, and the location SHALL stay.
 
 #### Scenario: Music has an album picked
 
