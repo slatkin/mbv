@@ -78,20 +78,25 @@ fn seed_podcast_catalog(test: &mut crate::TestCore) {
     );
 }
 
-/// Run one step and read the newest emitted frame: the frames the core emitted
-/// before the seed stay queued, so a test reads the one its last change built.
-fn frame(test: &mut crate::TestCore) -> mbv_gui::bridge::frame::GuiFrame {
-    assert!(test.core.step());
+/// The newest frame the core emitted, draining the older ones: the frames the
+/// core emitted before the seed stay queued, so a test reads the frame its
+/// last step built. The read takes no step of its own. A tick that lands a
+/// fetch completion emits a frame as well, and the Library memo re-carries its
+/// content only on a changed revision (design D2), so that frame carries no
+/// section content and would shadow the frame under test.
+fn newest_frame(test: &mut crate::TestCore) -> mbv_gui::bridge::frame::GuiFrame {
     test.latest_frame().expect("the core emitted a frame")
 }
 
 /// Report a layout, as a window content reload does, so the Library section
-/// re-carries the content it built from the seeded data.
+/// re-carries the content it built from the seeded data: the reload re-arms
+/// the memo, and the report's own step emits the frame that carries it.
 fn reloaded_frame(test: &mut crate::TestCore) -> mbv_gui::bridge::frame::GuiFrame {
     test.tx
         .send(crate::measured_layout(10, Vec::new()))
         .unwrap();
-    frame(test)
+    assert!(test.core.step());
+    newest_frame(test)
 }
 
 /// The Podcasts section a frame carries (row 10.1).
@@ -183,7 +188,7 @@ fn the_pill_command_changes_the_rows() {
         },
     );
 
-    let podcasts = podcasts_of(frame(&mut test));
+    let podcasts = podcasts_of(newest_frame(&mut test));
     let titles: Vec<&str> = podcasts.rows.iter().map(|row| row.title.as_str()).collect();
     assert_eq!(titles, ["A Old", "A Undated"]);
     let selected: Vec<&str> = podcasts
@@ -216,7 +221,7 @@ fn the_select_command_moves_the_hero() {
         },
     );
 
-    let podcasts = podcasts_of(frame(&mut test));
+    let podcasts = podcasts_of(newest_frame(&mut test));
     assert_eq!(podcasts.selected.as_deref(), Some(row.as_str()));
     let hero = podcasts.hero.expect("the Hero paints");
     assert_eq!(hero.title, "A Old");
@@ -281,5 +286,5 @@ fn a_stale_podcast_row_submits_nothing() {
     );
 
     assert!(cmd_rx.try_recv().is_err(), "a stale id submits nothing");
-    assert!(frame(&mut test).status.toast.is_none());
+    assert!(newest_frame(&mut test).status.toast.is_none());
 }
