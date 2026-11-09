@@ -2,6 +2,7 @@
 // D10) — the destination, the selected collection names in pill order, and the
 // picked item's artist or title, joined by the canvas's separator.
 
+import type { GuiAudiobooksFrame } from '$lib/bridge/types';
 import { expect, test } from 'vitest';
 import type {
 	GuiEmbyFrame,
@@ -123,6 +124,46 @@ test('the location reads the feed pill name in feed-group mode', () => {
 	expect(libraryLocation([{ position: 2, label: 'Home videos' }], 2, null, null, null, emby)).toBe(
 		'Home videos › Home videos › Holiday',
 	);
+});
+
+// add-gui-library-panel row 9.1: on an Audiobooks library the location reads
+// the destination tab's label and the selected book's title, joined by the
+// canvas's separator (design D10, D12).
+test('the location reads the Audiobooks destination and the selected book', () => {
+	const audiobooks: GuiAudiobooksFrame = {
+		libIdx: 1,
+		loading: false,
+		failed: false,
+		workspaceLoading: false,
+		rows: [
+			{ id: 'b1', title: 'Dune', subtitle: 'Frank Herbert', duration: '15:12:00', sortLetter: 'D' },
+			{ id: 'b2', title: 'Hyperion', subtitle: 'Dan Simmons', duration: '9:18:00', sortLetter: 'H' },
+		],
+		selected: 'b2',
+		hero: null,
+	};
+
+	expect(
+		libraryLocation(TABS, 2, null, null, null, null, audiobooks),
+	).toBe('Audiobooks › Hyperion');
+});
+
+// A frame whose selection names no carried book fills no last segment, so the
+// location stops at the destination (design D10, D12).
+test('an Audiobooks selection with no carried book leaves the location at the destination', () => {
+	const audiobooks: GuiAudiobooksFrame = {
+		libIdx: 1,
+		loading: false,
+		failed: false,
+		workspaceLoading: false,
+		rows: [],
+		selected: null,
+		hero: null,
+	};
+
+	expect(
+		libraryLocation(TABS, 2, null, null, null, null, audiobooks),
+	).toBe('Audiobooks');
 });
 
 // add-gui-library-panel row 6.2: on Home the location reads `Home`, then the

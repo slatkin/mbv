@@ -4,6 +4,7 @@
 // carried Library content, so the line composes no state of its own.
 
 import type {
+	GuiAudiobooksFrame,
 	GuiEmbyFrame,
 	GuiHomeFrame,
 	GuiLibraryTab,
@@ -68,14 +69,25 @@ function embySelectedTitle(emby: GuiEmbyFrame | null): string | null {
 	return emby.rows.find((row) => row.id === emby.selected)?.title ?? null;
 }
 
+/** The Audiobooks location's last segment (design D10, D12, row 9.1): the
+ * title of the book the core selected, which is the book the Hero shows. A
+ * frame whose selection names no carried book leaves the segment out. */
+function audiobooksSelectedTitle(audiobooks: GuiAudiobooksFrame | null): string | null {
+	if (audiobooks === null || audiobooks.selected === null) {
+		return null;
+	}
+	return audiobooks.rows.find((row) => row.id === audiobooks.selected)?.title ?? null;
+}
+
 /** The location line's segments in canvas order. On Home the line reads
  * `Home`, then the selected row's Hero title (design D10, D12). On Shows it
  * reads the destination tab's label, the active view mode's name, and the
  * selected row's title (row 7.1). On a plain Emby library it reads the
  * destination tab's label, the selected feed pill in feed-group mode, and the
- * selected row's title (row 8.1). A segment the content does not fill drops,
- * so an unpicked Hero leaves the destination and the collections, and a
- * destination outside the tabs leaves the rest. */
+ * selected row's title (row 8.1). On an Audiobooks library it reads the
+ * destination tab's label and the selected book's title (row 9.1). A segment
+ * the content does not fill drops, so an unpicked Hero leaves the destination
+ * and the collections, and a destination outside the tabs leaves the rest. */
 export function libraryLocationSegments(
 	tabs: readonly GuiLibraryTab[],
 	currentTab: number | null,
@@ -83,6 +95,7 @@ export function libraryLocationSegments(
 	home: GuiHomeFrame | null = null,
 	shows: GuiShowsFrame | null = null,
 	emby: GuiEmbyFrame | null = null,
+	audiobooks: GuiAudiobooksFrame | null = null,
 ): string[] {
 	if (home !== null) {
 		return ['Home', home.hero?.title ?? null].filter(
@@ -101,6 +114,12 @@ export function libraryLocationSegments(
 			embySelectedTitle(emby),
 		].filter((segment): segment is string => segment !== null && segment.trim() !== '');
 	}
+	if (audiobooks !== null) {
+		return [
+			destinationLabel(tabs, currentTab),
+			audiobooksSelectedTitle(audiobooks),
+		].filter((segment): segment is string => segment !== null && segment.trim() !== '');
+	}
 	return [
 		destinationLabel(tabs, currentTab),
 		...selectedCollections(music),
@@ -117,6 +136,15 @@ export function libraryLocation(
 	home: GuiHomeFrame | null = null,
 	shows: GuiShowsFrame | null = null,
 	emby: GuiEmbyFrame | null = null,
+	audiobooks: GuiAudiobooksFrame | null = null,
 ): string {
-	return libraryLocationSegments(tabs, currentTab, music, home, shows, emby).join(' › ');
+	return libraryLocationSegments(
+		tabs,
+		currentTab,
+		music,
+		home,
+		shows,
+		emby,
+		audiobooks,
+	).join(' › ');
 }

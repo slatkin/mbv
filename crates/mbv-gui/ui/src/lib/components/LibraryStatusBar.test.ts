@@ -5,6 +5,7 @@
 import { render } from '@testing-library/svelte';
 import { expect, test } from 'vitest';
 import type {
+	GuiAudiobooksFrame,
 	GuiEmbyFrame,
 	GuiLibraryTab,
 	GuiMusicFrame,
@@ -126,5 +127,33 @@ test('the bar paints the plain Emby location for the carried content', () => {
 	expect(
 		container.querySelector('[data-library-status-location]')?.textContent?.trim(),
 	).toBe('Movies › Heat');
+	expect(container.querySelectorAll('[data-library-hint]')).toHaveLength(6);
+});
+
+// add-gui-library-panel row 9.1: the bar's carried Audiobooks content becomes
+// the location while that destination is active (design D10, D12).
+test('the bar paints the Audiobooks location for the carried content', () => {
+	const audiobooks: GuiAudiobooksFrame = {
+		libIdx: 1,
+		loading: false,
+		failed: false,
+		workspaceLoading: false,
+		rows: [
+			{ id: 'b1', title: 'Dune', subtitle: 'Frank Herbert', duration: '15:12:00', sortLetter: 'D' },
+		],
+		selected: 'b1',
+		hero: null,
+	};
+	const { container } = render(LibraryStatusBar, {
+		tabs: [{ position: 2, label: 'Audiobooks' }],
+		currentTab: 2,
+		music: null,
+		audiobooks,
+		status: IDLE,
+	});
+
+	expect(
+		container.querySelector('[data-library-status-location]')?.textContent?.trim(),
+	).toBe('Audiobooks › Dune');
 	expect(container.querySelectorAll('[data-library-hint]')).toHaveLength(6);
 });

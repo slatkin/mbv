@@ -17,6 +17,7 @@
 	// as the canvas's bar carries none.
 	import { toastColor } from '$lib/bridge/status';
 	import type {
+		GuiAudiobooksFrame,
 		GuiEmbyFrame,
 		GuiHomeFrame,
 		GuiLibraryTab,
@@ -45,6 +46,9 @@
 		 * location reads the destination, the selected feed pill in
 		 * feed-group mode, and the selected row on it. */
 		emby?: GuiEmbyFrame | null;
+		/** The carried Audiobooks content (design D12, row 9.1): the location
+		 * reads the destination and the selected book on it. */
+		audiobooks?: GuiAudiobooksFrame | null;
 		/** The armed prefix and the live toast (design D10): they replace the
 		 * hints while active. */
 		status: GuiStatusBar;
@@ -56,6 +60,7 @@
 		home = null,
 		shows = null,
 		emby = null,
+		audiobooks = null,
 		status,
 	}: Props = $props();
 
@@ -74,8 +79,11 @@
 	 * it reads the destination's one-word name, then the selected row
 	 * (design D12); on Shows the tab's label, the view mode, and the selected
 	 * row (row 7.1); on a plain Emby library the tab's label, the selected
-	 * feed pill, and the selected row (row 8.1). */
-	const location = $derived(libraryLocation(tabs, currentTab, music, home, shows, emby));
+	 * feed pill, and the selected row (row 8.1); on an Audiobooks library the
+	 * tab's label and the selected book (row 9.1). */
+	const location = $derived(
+		libraryLocation(tabs, currentTab, music, home, shows, emby, audiobooks),
+	);
 </script>
 
 <!-- The canvas status bar: 40 px, 16 px side padding, the canvas's 1 px top
