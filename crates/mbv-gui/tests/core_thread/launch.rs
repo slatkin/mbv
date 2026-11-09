@@ -29,6 +29,10 @@ const MUSIC_LIBRARY: (&str, &str) = ("lib-music", "Music");
 /// the Grouped Music libraries only).
 const SHOWS_LIBRARY: (&str, &str) = ("lib-shows", "Shows");
 
+/// The id and name of a plain Emby (Movies) library the GUI presents (row
+/// 8.1).
+const MOVIES_LIBRARY: (&str, &str) = ("lib-movies", "Movies");
+
 /// The id and name of a second Grouped Music library the GUI presents.
 const SECOND_MUSIC: (&str, &str) = ("lib-music-2", "Music 2");
 
@@ -91,6 +95,17 @@ fn seed_two_music(app: &mut mbv::App, http: &MockHttp) {
         SECOND_MUSIC.0.into(),
         SECOND_MUSIC.1.into(),
         "music".into(),
+    ));
+}
+
+/// Seed the grouped Music library and one plain Emby (Movies) library the
+/// GUI presents (row 8.1), and leave Home active.
+fn seed_music_and_movies(app: &mut mbv::App, http: &MockHttp) {
+    seed_music(app, http);
+    app.push_gui_library_tab_for_test(EmbyItem::folder(
+        MOVIES_LIBRARY.0.into(),
+        MOVIES_LIBRARY.1.into(),
+        "movies".into(),
     ));
 }
 
@@ -247,6 +262,40 @@ fn a_location_saved_on_shows_opens_shows() {
         app.tab_for_test(),
         TabSelection::EmbyLibrary(shows_index),
         "the saved Shows destination restored"
+    );
+}
+
+/// A location saved on a plain Emby (Movies) library opens it
+/// (add-gui-library-panel row 8.1): the plain Emby-library destinations join
+/// the presented set, so the matching presented library restores through the
+/// same two-phase path.
+#[test]
+fn a_location_saved_on_a_movies_library_opens_it() {
+    let _guard = TestStateDirGuard::new();
+    save_gui_launch_state(&GuiLaunchState {
+        version: GUI_LAUNCH_STATE_VERSION,
+        destination: library_identity(MOVIES_LIBRARY.0),
+        panel_focus: LaunchPanelFocus::Library,
+        collections: Vec::new(),
+    })
+    .unwrap();
+
+    let mut test = core_with_seeded_catalog(seed_music_and_movies);
+
+    let app = test.core.app_mut();
+    let movies_index = app
+        .libs_for_test()
+        .iter()
+        .position(|tab| tab.library.id == MOVIES_LIBRARY.0)
+        .expect("the catalog holds the Movies library");
+    assert_ne!(
+        movies_index, 0,
+        "the saved destination is not the catalog's first library"
+    );
+    assert_eq!(
+        app.tab_for_test(),
+        TabSelection::EmbyLibrary(movies_index),
+        "the saved Movies destination restored"
     );
 }
 

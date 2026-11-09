@@ -6,6 +6,7 @@
 //! calls any of them.
 
 mod artwork;
+mod emby;
 mod home;
 mod launch;
 mod projection;
@@ -15,6 +16,8 @@ mod tabs;
 mod tv;
 
 pub use self::artwork::GuiLibraryArtwork;
+pub use self::emby::GuiEmbyLibrarySelection;
+pub(in crate::app) use self::emby::{GuiEmbyRootItems, GuiEmbyRootItemsEvent};
 pub use self::home::{
     GuiArtShape, GuiHomeHero, GuiHomeItemRow, GuiHomeProjection, GuiHomeRow, GuiHomeRowId,
     GuiHomeRowKind, GuiHomeRowState,
@@ -248,11 +251,14 @@ impl App {
     /// The open step the active destination's kind needs (design D12): the
     /// Shows destination seeds its mode selection with the TUI default
     /// rule's resolution and starts its root load when the stack holds no
-    /// level. The other destinations' loads ride the tab settlement and the
-    /// frame path.
+    /// level, and the plain Emby-library destination starts its root-list
+    /// load (row 8.1). The other destinations' loads ride the tab settlement
+    /// and the frame path.
     fn open_gui_active_destination(&mut self) {
-        if let Some(GuiDestinationKind::Shows { lib_idx }) = self.gui_active_destination() {
-            self.gui_tv_open(lib_idx);
+        match self.gui_active_destination() {
+            Some(GuiDestinationKind::Shows { lib_idx }) => self.gui_tv_open(lib_idx),
+            Some(GuiDestinationKind::Library { lib_idx }) => self.gui_emby_open(lib_idx),
+            _ => {}
         }
     }
 
@@ -563,20 +569,25 @@ impl App {
     }
 
     /// The item a command names, with the library it belongs to: the album
-    /// lists the GUI store holds, then the navigation levels the TUI also
-    /// loads, then the picked album's cached tracks (design D5).
+    /// lists the GUI store holds, then the plain Emby libraries' root lists,
+    /// then the navigation levels the TUI also loads, then the picked album's
+    /// cached tracks (design D5, row 8.1).
     fn gui_library_item(&self, item_id: &str) -> Option<(usize, EmbyItem)> {
         for (lib_idx, lib) in self.libs.iter().enumerate() {
             let stored = self
                 .gui_stored_albums(lib_idx)
                 .find(|album| album.id == item_id);
+            let emby_root = || {
+                self.gui_stored_emby_root_items(lib_idx)
+                    .find(|item| item.id == item_id)
+            };
             let browsed = || {
                 lib.nav_stack
                     .iter()
                     .rev()
                     .find_map(|level| level.items.iter().find(|item| item.id == item_id))
             };
-            if let Some(item) = stored.or_else(browsed) {
+            if let Some(item) = stored.or_else(emby_root).or_else(browsed) {
                 return Some((lib_idx, item.clone()));
             }
         }

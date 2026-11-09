@@ -258,6 +258,22 @@ pub struct App {
     /// series, and the selected season. The TUI never reads it.
     pub(in crate::app) gui_tv_shows:
         std::collections::HashMap<usize, crate::app::gui_library::GuiTvShowsSelection>,
+    /// The GUI Library's plain Emby-library selection (add-gui-library-panel
+    /// design D12, row 8.1): per plain Emby library, the row the Hero shows.
+    /// The feed-view library's selected group is the library tab's own
+    /// `feed_home_video` selection, which the set-feed-group action writes
+    /// through the TUI's path — no second store of it exists here. The TUI
+    /// never reads it.
+    pub(in crate::app) gui_emby_libs:
+        std::collections::HashMap<usize, crate::app::gui_library::GuiEmbyLibrarySelection>,
+    /// The GUI Library's Emby root-list store (row 8.1): each plain Emby
+    /// library's full root list, paged to completion, keyed by the library
+    /// index. It lands outside `nav_stack`, because the TUI's root path
+    /// buckets a large library by letter range and pages a smaller one as its
+    /// cursor moves, so neither serves the full flat list the letter rail
+    /// reads. The TUI never reads it.
+    pub(in crate::app) gui_emby_roots:
+        std::collections::HashMap<usize, crate::app::gui_library::GuiEmbyRootItems>,
     /// The one startup snapshot and its tab-scoped destination re-anchor.
     pub(in crate::app) launch_restore: LaunchRestore,
     /// Deferred tab switch for a `NavigateLanding::Album` landing: set when the

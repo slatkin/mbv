@@ -34,12 +34,13 @@ fn the_open_destination_command_opens_the_music_tab() {
     );
 }
 
-/// An open-destination command for a destination the GUI does not present is
-/// a no-op (design D2: the top bar carries only the presented tabs, and a
+/// An open-destination command for a position no presented destination names
+/// is a no-op (design D2: the top bar carries only the presented tabs, and a
 /// destination the GUI does not present is absent — a digit key for one opens
 /// nothing). Regression for the Phase-1 gate finding: the command applied the
 /// raw position, so a position past the presented tabs activated the
-/// unpresented library.
+/// unpresented library. Row 8.1 presents every plain Emby library, so the
+/// unpresented case is now a position past the tab row's end.
 #[test]
 fn an_open_destination_command_for_an_unpresented_destination_is_a_no_op() {
     let http = MockHttp::new();
@@ -56,12 +57,27 @@ fn an_open_destination_command_for_an_unpresented_destination_is_a_no_op() {
         &mut test,
         GuiLibraryCommand::OpenDestination { position: 0 },
     );
+    // Position 2 is the Movies tab's position (the presented set now names
+    // it, row 8.1), and position 3 is past every tab.
     send_library(
         &mut test,
         GuiLibraryCommand::OpenDestination { position: 2 },
     );
+    assert_eq!(
+        test.core.app_mut().tab_for_test(),
+        TabSelection::EmbyLibrary(1),
+        "the Movies destination presents and opens"
+    );
 
-    assert_eq!(test.core.app_mut().tab_for_test(), TabSelection::Home);
+    send_library(
+        &mut test,
+        GuiLibraryCommand::OpenDestination { position: 3 },
+    );
+    assert_eq!(
+        test.core.app_mut().tab_for_test(),
+        TabSelection::EmbyLibrary(1),
+        "a position past the presented tabs opens nothing"
+    );
 }
 
 /// The take-focus command (design D4): the Library panel takes Panel focus,

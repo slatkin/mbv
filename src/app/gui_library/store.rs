@@ -117,7 +117,7 @@ impl App {
         self.gui_music_albums.insert(key, GuiGroupAlbums::Loading);
         let tx = self.channels.lib_tx.clone();
         std::thread::spawn(move || {
-            let result = fetch_all_albums(&client, &group_id);
+            let result = fetch_all_pages(&client, &group_id, None);
             let _ = tx.send(LibEvent::GuiGroupAlbums(GuiGroupAlbumsEvent {
                 lib_idx,
                 group_id,
@@ -152,18 +152,21 @@ impl App {
     }
 }
 
-/// Fetch every page of `group_id`'s album listing (design D5): the
-/// `get_items_sorted` call `App::spawn_browse` makes with the group as parent
-/// and the name sort, paged until the server's total is reached.
-fn fetch_all_albums(
+/// Fetch every page of `parent_id`'s listing (design D5, row 8.1): the
+/// `get_items_sorted` call `App::spawn_browse` makes with the given parent
+/// and item-type filter and the name sort, paged until the server's total is
+/// reached. The Music collection store and the plain Emby library's
+/// root-list store share it.
+pub(in crate::app::gui_library) fn fetch_all_pages(
     client: &mbv_emby::EmbyClient,
-    group_id: &str,
+    parent_id: &str,
+    item_types: Option<&str>,
 ) -> Result<Vec<EmbyItem>, mbv_emby::EmbyError> {
     let mut albums: Vec<EmbyItem> = Vec::new();
     loop {
         let (page, total) = client.get_items_sorted(
-            group_id,
-            None,
+            parent_id,
+            item_types,
             false,
             albums.len(),
             PAGE_SIZE,

@@ -510,8 +510,9 @@ fn a_failed_selected_group_shows_a_failure_line() {
 }
 
 /// A stub `App` whose catalog holds two Grouped Music libraries around a
-/// Movies library, so the tabs present the Music libraries only, in catalog
-/// order. No Service client: the tab projection reads the catalog alone.
+/// Movies library, so the tabs present every Emby library in catalog order
+/// (row 8.1 presents the plain Emby libraries beside Music). No Service
+/// client: the tab projection reads the catalog alone.
 fn app_with_two_music_libraries() -> App {
     let mut app = make_app_stub();
     app.music_levels = vec!["group".to_string(), "album".to_string()];
@@ -529,12 +530,11 @@ fn app_with_two_music_libraries() -> App {
     app
 }
 
-/// The frame's destination tabs (row 4.3, design D2): one tab per Grouped
-/// Music library — the destinations phase 1 presents — in catalog order, each
-/// naming the position the open-destination command takes, and no tab for a
-/// library the GUI does not present.
+/// The frame's destination tabs (row 4.3, design D2; row 8.1 presents the
+/// plain Emby libraries beside Music): one tab per Emby library in catalog
+/// order, each naming the position the open-destination command takes.
 #[test]
-fn the_tabs_present_only_the_grouped_music_libraries_in_catalog_order() {
+fn the_tabs_present_every_emby_library_in_catalog_order() {
     let app = app_with_two_music_libraries();
 
     let tabs = app.gui_library_tabs().tabs;
@@ -547,11 +547,15 @@ fn the_tabs_present_only_the_grouped_music_libraries_in_catalog_order() {
                 label: "Music A".to_string(),
             },
             GuiLibraryTab {
+                position: 2,
+                label: "Movies".to_string(),
+            },
+            GuiLibraryTab {
                 position: 3,
                 label: "Music B".to_string(),
             },
         ],
-        "the Movies library presents no tab, and the positions are the open command's"
+        "every Emby library presents a tab, and the positions are the open command's"
     );
 }
 
@@ -565,14 +569,15 @@ fn the_current_tab_names_the_active_presented_destination() {
     assert_eq!(app.gui_library_tabs().current, Some(3));
 }
 
-/// No tab is current while the active destination is one the GUI does not
-/// present (row 4.3, design D2): the top bar marks no tab.
+/// The current tab names the plain Emby-library destination the row 8.1
+/// presented set added (row 4.3, design D2): the Movies library's tab is
+/// current while it is active.
 #[test]
-fn no_tab_is_current_while_a_destination_the_gui_does_not_present_is_active() {
+fn the_current_tab_names_the_movies_destination() {
     let mut app = app_with_two_music_libraries();
     app.tab = TabSelection::EmbyLibrary(1);
 
-    assert_eq!(app.gui_library_tabs().current, None);
+    assert_eq!(app.gui_library_tabs().current, Some(2));
 }
 
 /// A Music item's right-click item menu offers the played-state entries no

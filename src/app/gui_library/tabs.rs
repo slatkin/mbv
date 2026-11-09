@@ -23,6 +23,11 @@ pub enum GuiDestinationKind {
     /// An Emby TV (Shows) library's Shows destination (design D12, row
     /// 7.1).
     Shows { lib_idx: usize },
+    /// A plain Emby library's destination (design D12, row 8.1): every Emby
+    /// library that is neither a Grouped Music library nor a TV library —
+    /// Movies, boxsets, music videos, home videos outside the feed view,
+    /// mixed, and the open collection types.
+    Library { lib_idx: usize },
 }
 
 impl GuiDestinationKind {
@@ -32,7 +37,9 @@ impl GuiDestinationKind {
     pub fn library_index(self) -> Option<usize> {
         match self {
             Self::Home => None,
-            Self::Music { lib_idx } | Self::Shows { lib_idx } => Some(lib_idx),
+            Self::Music { lib_idx } | Self::Shows { lib_idx } | Self::Library { lib_idx } => {
+                Some(lib_idx)
+            }
         }
     }
 }
@@ -73,7 +80,7 @@ impl App {
                 } else if self.libs[lib_idx].library.collection_type == "tvshows" {
                     Some(GuiDestinationKind::Shows { lib_idx })
                 } else {
-                    None
+                    Some(GuiDestinationKind::Library { lib_idx })
                 }
             }
             _ => None,

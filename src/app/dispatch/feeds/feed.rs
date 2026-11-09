@@ -265,9 +265,27 @@ impl App {
         let Some(selection) = selection_for_group(&counted, group_idx) else {
             return;
         };
+        self.apply_feed_home_video_group_selection(lib_idx, &selection);
+    }
+
+    /// Apply one feed-group selection to the library's feed state: the
+    /// selection write, the cursor reset, the stale-fetch drop, the lazy
+    /// fetch trigger, and the state log. Shared by the TUI pill press
+    /// (`select_feed_folder_group`) and the GUI Library's set-feed-group
+    /// action (add-gui-library-panel row 8.1), so the two Clients cannot
+    /// drift. The callers guard the library index; an empty nav stack leaves
+    /// the selection as it is.
+    pub(in crate::app) fn apply_feed_home_video_group_selection(
+        &mut self,
+        lib_idx: usize,
+        selection: &FeedHomeVideoSelection,
+    ) {
+        if self.libs[lib_idx].nav_stack.is_empty() {
+            return;
+        }
         let mut changed = false;
         if let Some(state) = self.libs[lib_idx].feed_home_video.as_mut() {
-            changed = state.selection != selection;
+            changed = state.selection != *selection;
             // The user's pick supersedes any still-unresolved restored pill
             // index.
             state.restored_group = None;
@@ -278,7 +296,7 @@ impl App {
                 // A cached selection has no fetch to wait for; an outstanding
                 // fetch belonged to the previous selection and is
                 // stale-dropped on arrival.
-                if state.items.contains_key(&selection) {
+                if state.items.contains_key(selection) {
                     state.loading = false;
                 }
             }

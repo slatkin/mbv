@@ -369,6 +369,10 @@ pub enum LibEvent {
     /// design D5). Only the GUI Client's collection store starts one, so the
     /// TUI never receives it.
     GuiGroupAlbums(crate::app::gui_library::GuiGroupAlbumsEvent),
+    /// The GUI Library's plain Emby library's root-list fetch completed
+    /// (add-gui-library-panel design D12, row 8.1). Only the GUI Client's
+    /// root-list store starts one, so the TUI never receives it.
+    GuiEmbyRootItems(crate::app::gui_library::GuiEmbyRootItemsEvent),
     Error(String),
 }
 

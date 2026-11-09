@@ -222,6 +222,8 @@ impl App {
             gui_library_art_encoded: None,
             gui_home_selection: None,
             gui_tv_shows: std::collections::HashMap::new(),
+            gui_emby_libs: std::collections::HashMap::new(),
+            gui_emby_roots: std::collections::HashMap::new(),
             gui_home_art_encoded: std::collections::HashMap::new(),
             title_log_gate: crate::app::state::projection::card::TitleLogGate::default(),
             dim_backdrop_active: false,

@@ -249,6 +249,31 @@ impl App {
             .map(String::as_str)
     }
 
+    /// The row the GUI Library's Hero shows for the plain Emby library
+    /// `lib_idx` (add-gui-library-panel row 8.1).
+    #[must_use]
+    pub fn gui_emby_picked_row_for_test(&self, lib_idx: usize) -> Option<&str> {
+        self.gui_emby_libs
+            .get(&lib_idx)
+            .and_then(|selection| selection.picked_row.as_deref())
+    }
+
+    /// The root item ids the GUI's Emby root-list store loaded for `lib_idx`;
+    /// `None` while the list is loading or after its fetch failed (row 8.1).
+    #[must_use]
+    pub fn gui_emby_root_ids_for_test(&self, lib_idx: usize) -> Option<Vec<String>> {
+        match self.gui_emby_roots.get(&lib_idx) {
+            Some(crate::app::gui_library::GuiEmbyRootItems::Loaded(items)) => {
+                Some(items.iter().map(|item| item.id.clone()).collect())
+            }
+            Some(
+                crate::app::gui_library::GuiEmbyRootItems::Loading
+                | crate::app::gui_library::GuiEmbyRootItems::Failed,
+            )
+            | None => None,
+        }
+    }
+
     /// Whether the album's track fetch is in flight (design D5): the open-
     /// album command's effect before its completion lands.
     #[must_use]

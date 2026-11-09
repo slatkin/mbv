@@ -170,19 +170,20 @@ impl App {
     }
 
     /// The destinations the GUI presents, in catalog order (design D9, D2):
-    /// the Grouped Music libraries and the Emby TV (Shows) libraries, as the
+    /// the Grouped Music libraries, the Emby TV (Shows) libraries, and every
+    /// other Emby library (row 8.1's plain Emby-library destination), as the
     /// destination-kind enum names them. The restore's fallback and the
     /// frame's destination tabs (`gui_library_tabs`) read this one list, so
     /// they cannot disagree about the presented set.
     pub(in crate::app::gui_library) fn presented_destinations(&self) -> Vec<GuiDestinationKind> {
         (0..self.libs.len())
-            .filter_map(|lib_idx| {
+            .map(|lib_idx| {
                 if self.is_grouped_music_library(lib_idx) {
-                    Some(GuiDestinationKind::Music { lib_idx })
+                    GuiDestinationKind::Music { lib_idx }
                 } else if self.libs[lib_idx].library.collection_type == "tvshows" {
-                    Some(GuiDestinationKind::Shows { lib_idx })
+                    GuiDestinationKind::Shows { lib_idx }
                 } else {
-                    None
+                    GuiDestinationKind::Library { lib_idx }
                 }
             })
             .collect()
