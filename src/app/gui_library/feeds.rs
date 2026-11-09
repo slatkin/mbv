@@ -15,6 +15,7 @@
 
 use mbv_queue::FeedEntry;
 
+use super::feeds_projection::{GuiFeedEntryId, feed_entry_matches};
 use crate::app::App;
 
 /// The Feeds destination's pills (row 11.1).
@@ -36,17 +37,18 @@ pub enum GuiFeedPill {
 /// The GUI Library's Feeds selection (row 11.1).
 ///
 /// The selected pill and the entry the Hero shows. One feed tab exists per
-/// Client, so one store holds it. The picked entry is named by its stable
-/// `guid` — the identity the TUI owner's row target and the queue's feed
-/// content id carry — and a pick the selected pill's list no longer holds
-/// falls back to that list's first row in the projection, as every
-/// selection's stale arm does.
+/// Client, so one store holds it. The picked entry is named by its composite
+/// `(subscription url, guid)` identity, encoded as one opaque string — two
+/// subscriptions can publish the same `guid`, so the entry's own `guid` alone
+/// names no row — and a pick the selected pill's list no longer holds falls
+/// back to that list's first row in the projection, as every selection's
+/// stale arm does.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct GuiFeedsSelection {
     /// The selected pill. Latest is the default.
     pub pill: GuiFeedPill,
-    /// The entry the Hero shows, by its `guid`. `None` before a select
-    /// command names one.
+    /// The entry the Hero shows, as [`GuiFeedEntryId::encode`] writes it.
+    /// `None` before a select command names one.
     pub picked_entry: Option<String>,
 }
 
@@ -99,9 +101,10 @@ impl App {
     /// Select the entry the Hero shows (row 11.1).
     ///
     /// The selection the core owns, so the frame carries it back. The entry's
-    /// own fields are already in the fetched list, so no load starts. An entry
-    /// the selected pill's list does not carry is a stale frame's pick and
-    /// changes nothing.
+    /// own fields are already in the fetched list, so no load starts. The pick
+    /// is the frame's opaque composite identity; a string that is no encoding
+    /// of it, and an entry the selected pill's list does not carry, are both a
+    /// stale frame's pick and change nothing.
     pub fn gui_feeds_select(&mut self, entry: &str) {
         if !self.gui_feeds_present() {
             Self::log_ignored_library_command(
@@ -110,11 +113,40 @@ impl App {
             );
             return;
         }
-        if !self.gui_feeds_entry_known(entry) {
+        let Some(entry) = GuiFeedEntryId::decode(entry) else {
             Self::log_stale_library_item("feedsSelect", entry);
             return;
+        };
+        if !self.gui_feeds_entry_known(&entry) {
+            Self::log_stale_library_item("feedsSelect", &entry.encode());
+            return;
         }
-        self.gui_feeds_selection.picked_entry = Some(entry.to_string());
+        self.gui_feeds_selection.picked_entry = Some(entry.encode());
+    }
+
+    /// Play the entry a row id names (row 11.1): Enter on the row, or the
+    /// double-click a front end sends with this same command. The TUI's own
+    /// play path replaces the queue with the entry at its saved position, and
+    /// its no-playable-source guard flashes the TUI's toast. A string that is
+    /// no encoding of a row id, and an entry the App's data no longer holds,
+    /// are a stale frame's row and play nothing.
+    pub(in crate::app::gui_library) fn play_gui_feed_row(&mut self, item_id: &str) {
+        let Some(entry) = self.gui_feed_entry(item_id) else {
+            Self::log_stale_library_item("feedsPlay", item_id);
+            return;
+        };
+        self.play_feed_entry(entry);
+    }
+
+    /// Add the entry a row id names to the queue (row 11.1): `a` on the row,
+    /// through the TUI's own enqueue path, whose no-playable-source guard
+    /// flashes the TUI's toast. A stale row id queues nothing.
+    pub(in crate::app::gui_library) fn enqueue_gui_feed_row(&mut self, item_id: &str) {
+        let Some(entry) = self.gui_feed_entry(item_id) else {
+            Self::log_stale_library_item("feedsQueue", item_id);
+            return;
+        };
+        self.enqueue_feed_entry(entry);
     }
 
     /// The frame-path trigger for the active Feeds destination (row 11.1).
@@ -193,12 +225,34 @@ impl App {
             .position(|subscription| subscription.url == feed_id)
     }
 
-    /// Whether the selected pill's list carries the entry whose `guid` is
-    /// `entry` (row 11.1): a landed list admits only an entry it holds, and
-    /// an empty list admits nothing, because no row is painted to pick.
-    fn gui_feeds_entry_known(&self, entry: &str) -> bool {
+    /// The entry a row id names (row 11.1): the composite identity the frame's
+    /// row carries, resolved against the entries the App holds — the selected
+    /// pill's list first, because that is the list the frame painted, then the
+    /// other subscriptions' lists, so a play whose pill moved under a stale
+    /// frame still addresses the entry it painted. `None` on a string that is
+    /// no encoding of a row id and on an entry no list holds.
+    fn gui_feed_entry(&self, item_id: &str) -> Option<FeedEntry> {
+        let id = GuiFeedEntryId::decode(item_id)?;
+        let listed = self
+            .gui_feeds_entries()
+            .iter()
+            .find(|entry| feed_entry_matches(entry, &id));
+        listed
+            .or_else(|| {
+                self.feed_tab
+                    .all_entries
+                    .iter()
+                    .find(|entry| feed_entry_matches(entry, &id))
+            })
+            .cloned()
+    }
+
+    /// Whether the selected pill's list carries the entry `entry` names (row
+    /// 11.1): a landed list admits only an entry it holds, and an empty list
+    /// admits nothing, because no row is painted to pick.
+    fn gui_feeds_entry_known(&self, entry: &GuiFeedEntryId) -> bool {
         self.gui_feeds_entries()
             .iter()
-            .any(|known| known.guid == entry)
+            .any(|known| feed_entry_matches(known, entry))
     }
 }

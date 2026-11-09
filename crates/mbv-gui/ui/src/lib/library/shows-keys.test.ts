@@ -98,6 +98,7 @@ function showsContent(
 		emby: null,
 		audiobooks: null,
 		podcasts: null,
+		feeds: null,
 		shows: {
 			libIdx: 0,
 			pills: showsPills(mode),

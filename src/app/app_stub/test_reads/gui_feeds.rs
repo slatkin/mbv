@@ -42,30 +42,55 @@ impl App {
         subscription_index: usize,
         entries: &[(&str, Option<u64>)],
     ) {
+        let entries: Vec<mbv_queue::FeedEntry> = entries
+            .iter()
+            .map(|(guid, pub_date_secs)| mbv_queue::FeedEntry {
+                guid: (*guid).to_string(),
+                title: (*guid).to_string(),
+                enclosure_url: Some(format!("https://example.test/{guid}.mp3")),
+                link: None,
+                mime_type: Some("audio/mpeg".to_string()),
+                duration_ticks: None,
+                pub_date_secs: *pub_date_secs,
+                feed_kind: Some(mbv_queue::FeedKind::Audio),
+                feed_id: None,
+                position_ticks: 0,
+                played: false,
+            })
+            .collect();
+        self.send_gui_feed_entries_for_test(subscription_index, &entries);
+    }
+
+    /// Push one subscription fetch's completion with entries the caller builds
+    /// (add-gui-library-panel row 11.1), so a test owns every field the
+    /// projection and the play path read — a source-less entry among them. The
+    /// subscription's URL is stamped as each entry's feed identity, exactly as
+    /// the fetch stamps it.
+    #[cfg(any(test, feature = "test"))]
+    pub fn send_gui_feed_entries_for_test(
+        &mut self,
+        subscription_index: usize,
+        entries: &[mbv_queue::FeedEntry],
+    ) {
         let Some(subscription) = self.feed_tab.subscriptions.get(subscription_index) else {
             return;
         };
         let feed_id = subscription.url.clone();
-        let result = mbv_ui_model::feed_tab::FeedTabRefreshResult {
-            feed_id: feed_id.clone(),
-            subscription_index,
-            entries: Ok(entries
-                .iter()
-                .map(|(guid, pub_date_secs)| mbv_queue::FeedEntry {
-                    guid: (*guid).to_string(),
-                    title: (*guid).to_string(),
-                    enclosure_url: Some(format!("https://example.test/{guid}.mp3")),
-                    link: None,
-                    mime_type: Some("audio/mpeg".to_string()),
-                    duration_ticks: None,
-                    pub_date_secs: *pub_date_secs,
-                    feed_kind: Some(mbv_queue::FeedKind::Audio),
-                    feed_id: Some(feed_id.clone()),
-                    position_ticks: 0,
-                    played: false,
-                })
-                .collect()),
-        };
-        let _ = self.feed_tab.refresh_tx.send(result);
+        let entries = entries
+            .iter()
+            .map(|entry| {
+                let mut entry = entry.clone();
+                entry.feed_id = Some(feed_id.clone());
+                entry
+            })
+            .collect();
+        let _ = self
+            .feed_tab
+            .refresh_tx
+            .send(mbv_ui_model::feed_tab::FeedTabRefreshResult {
+                feed_id,
+                subscription_index,
+                entries: Ok(entries),
+            });
     }
 }

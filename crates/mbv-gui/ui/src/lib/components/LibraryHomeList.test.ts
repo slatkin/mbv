@@ -51,6 +51,7 @@ function carriedContent(): GuiLibraryContent {
 		emby: null,
 		audiobooks: null,
 		podcasts: null,
+		feeds: null,
 	};
 }
 

@@ -94,6 +94,7 @@ async function mountList(
 			emby: null,
 			audiobooks: frame(rows, selected),
 			podcasts: null,
+			feeds: null,
 		},
 	});
 	const { container } = render(LibraryAudiobooksList, { audiobooks: frame(rows, selected) });
@@ -199,6 +200,7 @@ test('loading and failed paint their placeholder lines', () => {
 					failed: true,
 				},
 				podcasts: null,
+				feeds: null,
 			},
 		});
 		const failed = render(LibraryAudiobooksList, {
@@ -226,6 +228,7 @@ test('a selection change calls resetAbsChapterCursor', () => {
 			emby: null,
 			audiobooks: frame(CATALOG, 'b2'),
 			podcasts: null,
+			feeds: null,
 		},
 	});
 	render(LibraryAudiobooksList, { audiobooks: frame(CATALOG, 'b2') });

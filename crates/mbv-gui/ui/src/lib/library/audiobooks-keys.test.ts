@@ -121,6 +121,7 @@ function content(hero: GuiAudiobooksFrame['hero']): GuiLibraryContent {
 		emby: null,
 		audiobooks: { ...AUIB_FRAME, hero },
 		podcasts: null,
+		feeds: null,
 	};
 }
 

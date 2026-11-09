@@ -65,6 +65,7 @@ function content(): GuiLibraryContent {
 		emby: null,
 		audiobooks: null,
 		podcasts: null,
+		feeds: null,
 		home: {
 			rows: [
 				{ row: 'heading', text: 'Continue watching' },

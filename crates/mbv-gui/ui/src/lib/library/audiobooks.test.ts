@@ -57,6 +57,7 @@ function carry(selected: string | null = 'b1', cursor: string | null = null): vo
 		emby: null,
 		audiobooks: frame(selected),
 		podcasts: null,
+		feeds: null,
 	};
 	carryLibraryContent({ revision: 1, content });
 	audiobooksUi.set({ ...initialAudiobooksUi(), cursor });

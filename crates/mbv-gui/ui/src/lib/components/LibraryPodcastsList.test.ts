@@ -96,6 +96,7 @@ async function mountList(
 			emby: null,
 			audiobooks: null,
 			podcasts,
+			feeds: null,
 			shows: null,
 		},
 	});

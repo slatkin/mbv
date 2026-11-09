@@ -11,8 +11,9 @@
 use mbv::{App, GuiDestinationKind, GuiLibraryTabs};
 
 use crate::bridge::frame::library::{
-    GuiAudiobooksFrame, GuiEmbyFrame, GuiHomeFrame, GuiLibraryArt, GuiLibraryContent,
-    GuiLibraryFrame, GuiLibraryTabFrame, GuiMusicFrame, GuiPodcastsFrame, GuiShowsFrame,
+    GuiAudiobooksFrame, GuiEmbyFrame, GuiFeedsFrame, GuiHomeFrame, GuiLibraryArt,
+    GuiLibraryContent, GuiLibraryFrame, GuiLibraryTabFrame, GuiMusicFrame, GuiPodcastsFrame,
+    GuiShowsFrame,
 };
 
 /// The frames' Library section memo (design D2).
@@ -79,21 +80,26 @@ impl LibraryFrames {
             Some(GuiDestinationKind::Podcasts { lib_idx }) => Some(podcasts_frame(app, lib_idx)),
             _ => None,
         };
+        let feeds =
+            matches!(destination, Some(GuiDestinationKind::Feeds)).then(|| feeds_frame(app));
         // Home presents while no library destination presents content
         // (design D12): the destinations are exclusive, so no two fields of
         // the content set themselves at once.
         let home = matches!(destination, Some(GuiDestinationKind::Home)).then(|| home_frame(app));
-        if music.is_none()
-            && home.is_none()
-            && shows.is_none()
-            && emby.is_none()
-            && audiobooks.is_none()
-            && podcasts.is_none()
-        {
+        let sections = DestinationSections {
+            music,
+            home,
+            shows,
+            emby,
+            audiobooks,
+            podcasts,
+            feeds,
+        };
+        if !sections.any() {
             self.sent = None;
             return None;
         }
-        let content = content(app, music, home, shows, emby, audiobooks, podcasts);
+        let content = content(app, sections);
         if self.last.as_ref() != Some(&content) {
             // The counter wraps like the queue's revision mint: a client
             // lives far shorter than a revision's range, so a repeat is a
@@ -140,6 +146,7 @@ fn log_content_built(revision: u64, content: &GuiLibraryContent) {
         .podcasts
         .as_ref()
         .map_or(0, |podcasts| podcasts.rows.len());
+    let feeds_rows = content.feeds.as_ref().map_or(0, |feeds| feeds.rows.len());
     tracing::info!(
         name: "gui_library.content.built",
         target: "gui_library",
@@ -155,36 +162,60 @@ fn log_content_built(revision: u64, content: &GuiLibraryContent) {
         emby_rows,
         audiobooks_rows = abs_rows,
         podcasts_rows,
+        feeds_rows,
         "the Library content changed"
     );
 }
 
-/// The Library panel's content for the active destination (design D2): the
-/// destination tabs the top bar paints, the Music destination's pills, list,
-/// and Hero while a Grouped Music library is active, Home's flat list and
-/// Hero while Home is active (design D12), and the Shows destination's mode
-/// pills, list, and Hero while a Shows library is active (design D12, row
-/// 7.1). Each destination's field is computed by the caller, so the gate and
-/// the content cannot disagree.
-fn content(
-    app: &mut App,
+/// The active destination's section, computed by the gate above (design D2):
+/// exactly one field is present, because the destinations are exclusive. The
+/// struct keeps the content build's argument count in hand as the presented
+/// destinations grow.
+#[derive(Debug, Default)]
+struct DestinationSections {
     music: Option<GuiMusicFrame>,
     home: Option<GuiHomeFrame>,
     shows: Option<GuiShowsFrame>,
     emby: Option<GuiEmbyFrame>,
     audiobooks: Option<GuiAudiobooksFrame>,
     podcasts: Option<GuiPodcastsFrame>,
-) -> GuiLibraryContent {
+    feeds: Option<GuiFeedsFrame>,
+}
+
+impl DestinationSections {
+    /// Whether any destination presents content: the gate's condition, and the
+    /// one the section's absence names.
+    fn any(&self) -> bool {
+        self.music.is_some()
+            || self.home.is_some()
+            || self.shows.is_some()
+            || self.emby.is_some()
+            || self.audiobooks.is_some()
+            || self.podcasts.is_some()
+            || self.feeds.is_some()
+    }
+}
+
+/// The Library panel's content for the active destination (design D2): the
+/// destination tabs the top bar paints, and the one active destination's
+/// section — the Music destination's pills, list, and Hero while a Grouped
+/// Music library is active, Home's flat list and Hero while Home is active
+/// (design D12), the Shows destination's mode pills, list, and Hero while a
+/// Shows library is active (design D12, row 7.1), and the Feeds destination's
+/// pill row, entry rows, and Hero while Feeds is active (row 11.1). The gate
+/// above computes the section, so the gate and the content cannot disagree.
+fn content(app: &mut App, sections: DestinationSections) -> GuiLibraryContent {
     let GuiLibraryTabs { tabs, current } = app.gui_library_tabs();
     GuiLibraryContent {
         tabs: tabs.into_iter().map(GuiLibraryTabFrame::from).collect(),
         current_tab: current,
-        music,
-        home,
-        shows,
-        emby,
-        audiobooks,
-        podcasts,
+        music: sections.music,
+        home: sections.home,
+        shows: sections.shows,
+        emby: sections.emby,
+        audiobooks: sections.audiobooks,
+        podcasts: sections.podcasts,
+        feeds: sections.feeds,
     }
 }
 
@@ -264,4 +295,14 @@ fn audiobooks_frame(app: &mut App, lib_idx: usize) -> GuiAudiobooksFrame {
 fn podcasts_frame(app: &mut App, lib_idx: usize) -> GuiPodcastsFrame {
     let projection = app.gui_podcasts_projection(lib_idx);
     GuiPodcastsFrame::from_projection(lib_idx, &projection)
+}
+
+/// The Feeds destination's content (design D12, row 11.1): the pill row, the
+/// active pill's entry rows, the selected entry, and its Hero, built here per
+/// frame so an unchanged frame's revision carries nothing (the memo's content
+/// compare). The entries arrive from the shared startup fetch, so the build
+/// starts no load; the frame path's ensure has already settled the pill.
+fn feeds_frame(app: &mut App) -> GuiFeedsFrame {
+    let projection = app.gui_feeds_projection();
+    GuiFeedsFrame::from_projection(&projection)
 }

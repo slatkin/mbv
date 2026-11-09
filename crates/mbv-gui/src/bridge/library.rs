@@ -127,6 +127,46 @@ pub enum GuiLibraryCommand {
     PodcastsPlay { lib_idx: usize, item_id: String },
     /// Add a Podcasts episode to the queue (row 10.1).
     PodcastsQueue { lib_idx: usize, item_id: String },
+    /// Set the Feeds destination's pill (add-gui-library-panel design D12,
+    /// row 11.1): Latest, or one subscription by its URL. A Client holds one
+    /// feed tab, so no library index rides here.
+    FeedsSetPill { pill: GuiFeedPill },
+    /// Select the Feeds entry the Hero shows (row 11.1): the row id the frame
+    /// carried — the entry's opaque identity.
+    FeedsSelect { row: String },
+    /// Play a Feeds entry (row 11.1): Enter on the row, or the double-click a
+    /// front end sends with this same command.
+    FeedsPlay { item_id: String },
+    /// Add a Feeds entry to the queue (row 11.1).
+    FeedsQueue { item_id: String },
+}
+
+/// One Feeds pill (add-gui-library-panel design D12, row 11.1): the merged
+/// Latest view, or one subscription by its URL. The pill row is single-select
+/// and the state pills are dropped.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", content = "id", rename_all = "camelCase")]
+pub enum GuiFeedPill {
+    Latest,
+    Subscription(String),
+}
+
+impl From<GuiFeedPill> for mbv::GuiFeedPill {
+    fn from(pill: GuiFeedPill) -> Self {
+        match pill {
+            GuiFeedPill::Latest => Self::Latest,
+            GuiFeedPill::Subscription(feed_id) => Self::Subscription(feed_id),
+        }
+    }
+}
+
+impl From<&mbv::GuiFeedPill> for GuiFeedPill {
+    fn from(pill: &mbv::GuiFeedPill) -> Self {
+        match pill {
+            mbv::GuiFeedPill::Latest => Self::Latest,
+            mbv::GuiFeedPill::Subscription(feed_id) => Self::Subscription(feed_id.clone()),
+        }
+    }
 }
 
 /// One Podcasts pill (design D12, row 10.1): the library's merged Latest view,
@@ -286,6 +326,12 @@ impl From<GuiLibraryCommand> for mbv::GuiLibraryCommand {
             GuiLibraryCommand::PodcastsQueue { lib_idx, item_id } => {
                 Self::PodcastsQueue { lib_idx, item_id }
             }
+            GuiLibraryCommand::FeedsSetPill { pill } => Self::FeedsSetPill {
+                pill: mbv::GuiFeedPill::from(pill),
+            },
+            GuiLibraryCommand::FeedsSelect { row } => Self::FeedsSelect { row },
+            GuiLibraryCommand::FeedsPlay { item_id } => Self::FeedsPlay { item_id },
+            GuiLibraryCommand::FeedsQueue { item_id } => Self::FeedsQueue { item_id },
         }
     }
 }

@@ -56,10 +56,11 @@ pub use self::gui_library::{
     GuiShowsProjection, GuiShowsRow, GuiShowsSeasonPill, GuiShowsWorkspace,
 };
 pub use self::gui_library::{
-    GuiFeedPill, GuiFeedsSelection, GuiLibraryArtwork, GuiLibraryMenuItem, GuiLibraryRowMenu,
-    GuiLibraryTab, GuiLibraryTabs, GuiMusicAlbum, GuiMusicArtist, GuiMusicHero, GuiMusicPill,
-    GuiMusicProjection, GuiMusicTrack, GuiMusicTrackTotal, GuiPodcastEpisodeId, GuiPodcastPill,
-    GuiPodcastsHero, GuiPodcastsPillOption, GuiPodcastsProjection, GuiPodcastsRow,
+    GuiFeedEntryId, GuiFeedPill, GuiFeedsHero, GuiFeedsPillOption, GuiFeedsProjection, GuiFeedsRow,
+    GuiFeedsSelection, GuiLibraryArtwork, GuiLibraryMenuItem, GuiLibraryRowMenu, GuiLibraryTab,
+    GuiLibraryTabs, GuiMusicAlbum, GuiMusicArtist, GuiMusicHero, GuiMusicPill, GuiMusicProjection,
+    GuiMusicTrack, GuiMusicTrackTotal, GuiPodcastEpisodeId, GuiPodcastPill, GuiPodcastsHero,
+    GuiPodcastsPillOption, GuiPodcastsProjection, GuiPodcastsRow,
 };
 pub use self::infra::image_fetch::CardImageDrain;
 pub(in crate::app) use self::infra::paging::{PAGE_SIZE, PREFETCH_AHEAD};

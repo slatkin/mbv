@@ -23,6 +23,7 @@ use mbv::GuiLibraryTab;
 
 mod audiobooks;
 mod emby;
+mod feeds;
 mod podcasts;
 mod shows;
 
@@ -34,6 +35,7 @@ pub use self::emby::{
     GuiEmbyFeedGroupFrame, GuiEmbyFrame, GuiEmbyHeroFrame, GuiEmbyPillFrame, GuiEmbyRowFrame,
     GuiEmbyRowKindFrame,
 };
+pub use self::feeds::{GuiFeedsFrame, GuiFeedsHeroFrame, GuiFeedsPillFrame, GuiFeedsRowFrame};
 pub use self::podcasts::{
     GuiPodcastsFrame, GuiPodcastsHeroFrame, GuiPodcastsPillFrame, GuiPodcastsRowFrame,
 };
@@ -96,6 +98,11 @@ pub struct GuiLibraryContent {
     /// library is the active destination (add-gui-library-panel design D12,
     /// row 10.1); `None` while any other destination is active.
     pub podcasts: Option<GuiPodcastsFrame>,
+    /// The Feeds destination's content while Feeds is the active destination
+    /// (add-gui-library-panel design D12, row 11.1); `None` while any other
+    /// destination is active. A Client holds one feed tab, so no library index
+    /// names it.
+    pub feeds: Option<GuiFeedsFrame>,
 }
 
 /// One destination tab of the top bar (design D2).

@@ -2,9 +2,11 @@
 // add-gui-library-panel, design D2). Each type mirrors one serde DTO in
 // crates/mbv-gui/src/bridge/ field for field: the names are the serde wire
 // names, so a rename on the Rust side is a rename here. The Podcasts DTOs
-// live in `library-types-podcasts.ts` and are re-exported below, so every
-// call site keeps importing from the one bridge module.
+// live in `library-types-podcasts.ts` and `library-types-feeds.ts` and are
+// re-exported below, so every call site keeps importing from the one bridge
+// module.
 
+import type { GuiFeedsFrame, GuiFeedsLibraryCommand } from './library-types-feeds';
 import type { GuiPodcastsFrame } from './library-types-podcasts';
 
 /** The Library panel's section (add-gui-library-panel design D2). A frame
@@ -49,6 +51,10 @@ export interface GuiLibraryContent {
 	 * library is active (design D12, row 10.1); `null` while any other
 	 * destination is active. */
 	podcasts: GuiPodcastsFrame | null;
+	/** The Feeds destination's content while Feeds is the active destination
+	 * (design D12, row 11.1); `null` while any other destination is active. A
+	 * Client holds one feed tab, so no library index names it. */
+	feeds: GuiFeedsFrame | null;
 }
 
 /** One destination tab of the top bar (design D2). */
@@ -254,7 +260,8 @@ export type GuiLibraryCommand =
 			command: 'podcastsQueue';
 			libIdx: number;
 			itemId: string;
-	  };
+	  }
+	| GuiFeedsLibraryCommand;
 
 /** One Podcasts pill (design D12, row 10.1): the library's merged Latest
  * view, or one show by its stable `library_item_id`. The pill row is
@@ -765,6 +772,15 @@ export interface GuiAudiobooksChapterRow {
 	current: boolean;
 }
 
+
+export type {
+	GuiFeedPill,
+	GuiFeedsFrame,
+	GuiFeedsHero,
+	GuiFeedsLibraryCommand,
+	GuiFeedsPill,
+	GuiFeedsRow,
+} from './library-types-feeds';
 
 export type {
 	GuiPodcastsFrame,

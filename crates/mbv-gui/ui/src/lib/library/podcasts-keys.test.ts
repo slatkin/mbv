@@ -131,6 +131,7 @@ function podcastsContent(
 			selected,
 			hero,
 		},
+		feeds: null,
 		shows: null,
 	};
 }

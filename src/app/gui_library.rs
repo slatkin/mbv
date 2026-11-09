@@ -11,7 +11,9 @@ mod audiobooks_projection;
 mod emby;
 mod emby_projection;
 mod feeds;
+mod feeds_projection;
 mod home;
+mod item_menu;
 mod launch;
 mod podcasts;
 mod podcasts_projection;
@@ -33,10 +35,14 @@ pub use self::emby_projection::{
     GuiEmbyFeedGroup, GuiEmbyHero, GuiEmbyPill, GuiEmbyProjection, GuiEmbyRow, GuiEmbyRowKind,
 };
 pub use self::feeds::{GuiFeedPill, GuiFeedsSelection};
+pub use self::feeds_projection::{
+    GuiFeedEntryId, GuiFeedsHero, GuiFeedsPillOption, GuiFeedsProjection, GuiFeedsRow,
+};
 pub use self::home::{
     GuiArtShape, GuiHomeHero, GuiHomeItemRow, GuiHomeProjection, GuiHomeRow, GuiHomeRowId,
     GuiHomeRowKind, GuiHomeRowState,
 };
+pub use self::item_menu::{GuiLibraryMenuItem, GuiLibraryRowMenu};
 pub use self::podcasts::{GuiPodcastPill, GuiPodcastsSelection};
 pub use self::podcasts_projection::{
     GuiPodcastEpisodeId, GuiPodcastsHero, GuiPodcastsPillOption, GuiPodcastsProjection,
@@ -55,9 +61,6 @@ pub use self::tabs::{GuiDestinationKind, GuiLibraryTab, GuiLibraryTabs};
 pub use self::tv::GuiTvShowsSelection;
 
 use mbv_emby_model::EmbyItem;
-use mbv_ui_model::context_menu::ContextAction;
-use mbv_ui_model::context_menu::ContextMenu;
-use mbv_ui_model::context_menu::ContextMenuEntry;
 use mbv_ui_model::feed::FeedHomeVideoSelection;
 use mbv_ui_model::settings::PanelFocus;
 use mbv_ui_model::ui_util::is_playable;
@@ -217,28 +220,23 @@ pub enum GuiLibraryCommand {
     /// Add a Podcasts episode to the queue (design D12, row 10.1): the TUI's
     /// enqueue path, through the Owner's Audiobookshelf admission.
     PodcastsQueue { lib_idx: usize, item_id: String },
-}
-
-/// The Library item menu the frame's `rowMenu` section carries: the item
-/// the entries are about, and the TUI menu builder's entries in the
-/// builder's order.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct GuiLibraryRowMenu {
-    pub item_id: String,
-    pub entries: Vec<GuiLibraryMenuItem>,
-}
-
-/// One entry of the GUI Library panel's item menu (design D8): the label the
-/// row menu paints, the key hint its surface shows when the entry has one, and
-/// the entry's index in the shared builder's order — the index a chosen entry
-/// sends back, so a front end that paints only some of the entries (the
-/// Hero's More actions drops its duplicated ones) still executes the entry it
-/// painted.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct GuiLibraryMenuItem {
-    pub label: String,
-    pub key_hint: Option<String>,
-    pub index: usize,
+    /// Set the Feeds destination's pill (design D12, row 11.1): Latest, or one
+    /// subscription by its URL. The pill row is single-select, the state pills
+    /// are dropped, and a subscription the tab no longer holds changes nothing.
+    /// A Client holds one feed tab, so no library index rides here.
+    FeedsSetPill { pill: feeds::GuiFeedPill },
+    /// Select the Feeds entry the Hero shows (design D12, row 11.1): a press
+    /// on the row. The row id is the frame's opaque entry identity, so a stale
+    /// frame's row changes nothing.
+    FeedsSelect { row: String },
+    /// Play a Feeds entry (design D12, row 11.1): Enter on the row, or the
+    /// double-click a front end sends with this same command. The queue is
+    /// replaced with the entry through the TUI's feed play path, whose
+    /// no-playable-source guard flashes the TUI's toast.
+    FeedsPlay { item_id: String },
+    /// Add a Feeds entry to the queue (design D12, row 11.1): the TUI's
+    /// enqueue path.
+    FeedsQueue { item_id: String },
 }
 
 /// The command's row identity for a stale-frame log: a play or enqueue
@@ -348,6 +346,14 @@ impl App {
             | GuiLibraryCommand::PodcastsQueue { .. }) => {
                 self.apply_gui_audiobookshelf_command(command);
             }
+            // The Feeds destination's own commands (row 11.1): the one feed
+            // tab the Client holds, so no library index rides them.
+            command @ (GuiLibraryCommand::FeedsSetPill { .. }
+            | GuiLibraryCommand::FeedsSelect { .. }
+            | GuiLibraryCommand::FeedsPlay { .. }
+            | GuiLibraryCommand::FeedsQueue { .. }) => {
+                self.apply_gui_feeds_command(command);
+            }
         }
     }
 
@@ -399,6 +405,24 @@ impl App {
             other => Self::log_ignored_library_command(
                 "audiobookshelf",
                 format_args!("{other:?} is no Audiobookshelf destination command"),
+            ),
+        }
+    }
+
+    /// Apply one of the Feeds destination's commands (row 11.1): the pill, the
+    /// select, the play, and the enqueue. The caller routes only these
+    /// variants here, so the trailing arm is the group's own no-op for a
+    /// routing mistake — it logs and changes nothing rather than dropping the
+    /// request silently.
+    fn apply_gui_feeds_command(&mut self, command: GuiLibraryCommand) {
+        match command {
+            GuiLibraryCommand::FeedsSetPill { pill } => self.gui_feeds_set_pill(pill),
+            GuiLibraryCommand::FeedsSelect { row } => self.gui_feeds_select(&row),
+            GuiLibraryCommand::FeedsPlay { item_id } => self.play_gui_feed_row(&item_id),
+            GuiLibraryCommand::FeedsQueue { item_id } => self.enqueue_gui_feed_row(&item_id),
+            other => Self::log_ignored_library_command(
+                "feeds",
+                format_args!("{other:?} is no Feeds destination command"),
             ),
         }
     }
@@ -480,94 +504,6 @@ impl App {
             command,
             format_args!("the item {item_id} is not in the Service data"),
         );
-    }
-
-    /// The frame's form of the shared builder's menu entries (design D8): the
-    /// builder's labels and key hints, indexed by the entry's position in the
-    /// builder's order — the order the execution rebuild and every carried
-    /// menu share.
-    fn gui_library_menu_items(entries: Vec<ContextMenuEntry>) -> Vec<GuiLibraryMenuItem> {
-        entries
-            .into_iter()
-            .enumerate()
-            .map(|(index, entry)| GuiLibraryMenuItem {
-                label: entry.label.to_string(),
-                key_hint: entry.key_hint.map(str::to_string),
-                index,
-            })
-            .collect()
-    }
-
-    /// The item's menu entries for the frame (design D8): the shared builder's
-    /// entries for `item_id` while the Library panel has Panel focus, which is
-    /// also what `execute_context_action` needs to find the library. Entry
-    /// indexes are the builder's, shared by every carried menu and by the
-    /// execution rebuild — the Hero's More actions drops its own duplicate
-    /// labels at paint time, never here. Empty when the item is gone, no menu
-    /// applies, or another panel holds focus.
-    pub fn gui_library_menu(&mut self, item_id: &str) -> Vec<GuiLibraryMenuItem> {
-        let entries = self
-            .gui_library_item_menu(item_id)
-            .map(|menu| menu.entries)
-            .unwrap_or_default();
-        Self::gui_library_menu_items(entries)
-    }
-
-    /// The right-click item menu for the frame's `rowMenu` section: the
-    /// TUI menu builder's full entries for the item the row-menu command
-    /// named, deferring to nothing the Hero carries. `None` while no
-    /// right-click has named an item or the named item is gone.
-    pub fn gui_library_row_menu(&mut self) -> Option<GuiLibraryRowMenu> {
-        let item_id = self.gui_library_row_menu_target.clone()?;
-        let entries = self
-            .gui_library_item_menu(&item_id)
-            .map(|menu| Self::gui_library_menu_items(menu.entries))?;
-        Some(GuiLibraryRowMenu {
-            item_id: item_id.clone(),
-            entries,
-        })
-    }
-
-    /// Run the item menu's entry at `index` (design D8): the entry the frame
-    /// painted, rebuilt from the item it names so the action targets that
-    /// item, resolved by stable id and never by the TUI's library cursor —
-    /// the cursor may rest on any other row. The two actions whose shared
-    /// executor resolves through the cursor (bare Play and bare Enqueue)
-    /// route to the item's own play and add: the GUI Library's explicit-play
-    /// replace and its add path apply the autoload rule. The GUI never arms
-    /// the TUI's `pending_overlay`.
-    fn run_gui_library_menu_entry(&mut self, item_id: &str, index: usize) {
-        let action = self
-            .gui_library_item_menu(item_id)
-            .and_then(|menu| menu.entries.into_iter().nth(index))
-            .and_then(|entry| entry.action);
-        if let Some((lib_idx, item)) = self.gui_library_item(item_id) {
-            match action {
-                Some(ContextAction::Play) => self.play_gui_library_item(lib_idx, item),
-                Some(ContextAction::Enqueue) => self.add_gui_library_item_to_queue(&item.id),
-                Some(action) => self.execute_context_action(Some(action), None),
-                None => Self::log_ignored_library_command(
-                    "menuEntry",
-                    format_args!("the item's menu holds no entry at {index}"),
-                ),
-            }
-        } else {
-            Self::log_ignored_library_command(
-                "menuEntry",
-                format_args!("the item's menu holds no entry at {index}"),
-            );
-        }
-    }
-
-    /// The item's menu from the shared builder (design D8): the Library panel's
-    /// focus and an Emby library tab are what both the builder's target
-    /// resolution and the executor's library lookup need.
-    fn gui_library_item_menu(&mut self, item_id: &str) -> Option<ContextMenu> {
-        if !matches!(self.effective_panel_focus(), PanelFocus::Library) {
-            return None;
-        }
-        let (_lib_idx, item) = self.gui_library_item(item_id)?;
-        self.build_context_menu_for(Some(item), false, None)
     }
 
     /// Set Panel focus for the GUI Library panel (design D4): the take-focus

@@ -42,6 +42,12 @@ fn listed_guids(app: &App) -> Vec<String> {
         .collect()
 }
 
+/// The entry identity the frame paints (row 11.1): the subscription's URL and
+/// the entry's `guid`, encoded as one opaque string.
+fn entry_id(feed_id: &str, guid: &str) -> String {
+    crate::app::gui_library::GuiFeedEntryId::new(feed_id.to_string(), guid.to_string()).encode()
+}
+
 fn feed_b_pill() -> crate::app::gui_library::GuiFeedPill {
     crate::app::gui_library::GuiFeedPill::Subscription(FEED_B.into())
 }
@@ -174,17 +180,226 @@ fn an_entry_pick_is_stored_and_one_outside_the_selected_list_changes_nothing() {
     let mut app = fetched_feeds_app();
     app.gui_feeds_set_pill(feed_b_pill());
 
-    app.gui_feeds_select("b-mid");
+    app.gui_feeds_select(&entry_id(FEED_B, "b-mid"));
     assert_eq!(
         app.gui_feeds_picked_entry(),
-        Some("b-mid"),
+        Some(entry_id(FEED_B, "b-mid").as_str()),
         "the picked entry is the select command's"
     );
 
-    app.gui_feeds_select("a-old");
+    app.gui_feeds_select(&entry_id(FEED_A, "a-old"));
     assert_eq!(
         app.gui_feeds_picked_entry(),
-        Some("b-mid"),
+        Some(entry_id(FEED_B, "b-mid").as_str()),
         "an entry the selected pill's list does not carry changes nothing"
     );
+}
+
+/// The entry row id round-trips through its one encoding (row 11.1): the
+/// length prefix keeps the pair unambiguous even when the ids hold the
+/// separator, and a string of another shape decodes to nothing.
+#[test]
+fn the_entry_row_id_round_trips_through_its_encoding() {
+    let entry = crate::app::gui_library::GuiFeedEntryId::new(
+        "https://example.test/a:1".into(),
+        "guid:2".into(),
+    );
+    let encoded = entry.encode();
+
+    assert_eq!(
+        crate::app::gui_library::GuiFeedEntryId::decode(&encoded),
+        Some(entry)
+    );
+    assert_eq!(
+        crate::app::gui_library::GuiFeedEntryId::decode("no-separator"),
+        None
+    );
+    assert_eq!(
+        crate::app::gui_library::GuiFeedEntryId::decode("99:too-short"),
+        None
+    );
+    assert_eq!(
+        crate::app::gui_library::GuiFeedEntryId::decode("4:abcd"),
+        None,
+        "an empty guid names no entry"
+    );
+}
+
+/// Latest merges both subscriptions' entries in the TUI's date order with the
+/// pill row and the default Hero (row 11.1, contract a): newest first with the
+/// undated entries last, Latest first in the pill row and selected, the first
+/// row as the selected entry, and the Hero carrying that entry's title, its
+/// subscription name, and the Square placeholder shape with no artwork.
+#[test]
+fn the_latest_pill_merges_two_subscriptions_in_date_order_with_the_default_hero() {
+    let app = fetched_feeds_app();
+
+    let projection = app.gui_feeds_projection();
+
+    assert_eq!(
+        projection
+            .rows
+            .iter()
+            .map(|row| row.title.as_str())
+            .collect::<Vec<_>>(),
+        ["a-new", "b-mid", "a-old", "a-undated", "b-undated"],
+        "Latest merges both subscriptions newest first with nothing dated last"
+    );
+    assert_eq!(
+        projection.rows[0].subtitle.as_deref(),
+        Some("Feed A"),
+        "the merged row names its own subscription"
+    );
+    assert_eq!(
+        projection.rows[0].date.as_deref(),
+        Some(mbv_ui_model::ui_util::fmt_publish_date_short(300).as_str()),
+        "the gutter carries the publish date"
+    );
+    assert_eq!(
+        projection.rows[4].date, None,
+        "an undated entry carries no gutter"
+    );
+    assert_eq!(
+        projection.rows[0].id,
+        entry_id(FEED_A, "a-new"),
+        "the row id is the composite entry identity"
+    );
+    assert_eq!(
+        projection
+            .pills
+            .iter()
+            .map(|pill| (pill.name.as_str(), pill.selected))
+            .collect::<Vec<_>>(),
+        [("Latest", true), ("Feed A", false), ("Feed B", false)],
+        "the pill row is Latest first, then each subscription by name"
+    );
+    assert_eq!(
+        projection.selected.as_deref(),
+        Some(entry_id(FEED_A, "a-new").as_str()),
+        "the first row is the Hero default"
+    );
+
+    let hero = projection.hero.expect("the Hero paints");
+    assert_eq!(hero.title, "a-new");
+    assert_eq!(
+        hero.meta_rows,
+        ["Feed A"],
+        "the subscription name rides the meta rows, and an entry of no duration adds none"
+    );
+    assert_eq!(hero.duration_row, None);
+    assert_eq!(hero.progress_row, None);
+    assert_eq!(
+        hero.art_shape,
+        crate::app::GuiArtShape::Square,
+        "a podcast feed reserves the Square placeholder"
+    );
+}
+
+/// A subscription pill scopes the list to that subscription (row 11.1,
+/// contract a): only that subscription's entries ride the rows, and its pill
+/// is the selected one.
+#[test]
+fn a_subscription_pill_scopes_the_rows_to_that_subscription() {
+    let mut app = fetched_feeds_app();
+
+    app.gui_feeds_set_pill(feed_b_pill());
+    let projection = app.gui_feeds_projection();
+
+    assert_eq!(
+        projection
+            .rows
+            .iter()
+            .map(|row| row.title.as_str())
+            .collect::<Vec<_>>(),
+        ["b-mid", "b-undated"],
+        "a subscription pill holds that subscription's entries only"
+    );
+    assert_eq!(
+        projection
+            .pills
+            .iter()
+            .filter(|pill| pill.selected)
+            .map(|pill| pill.name.as_str())
+            .collect::<Vec<_>>(),
+        ["Feed B"]
+    );
+    assert_eq!(
+        projection.selected.as_deref(),
+        Some(entry_id(FEED_B, "b-mid").as_str()),
+        "the scoped list's first row is the Hero default"
+    );
+}
+
+/// A subscription pill the tab no longer holds falls back to Latest (row
+/// 11.1): the projection paints Latest's merged rows and marks Latest
+/// selected.
+#[test]
+fn a_stale_subscription_pill_falls_back_to_latest() {
+    let mut app = fetched_feeds_app();
+    app.gui_feeds_set_pill(feed_b_pill());
+    app.seed_gui_feeds_for_test(&[("Feed A", FEED_A)]);
+    app.send_gui_feed_fetch_result_for_test(
+        0,
+        &[
+            ("a-old", Some(100)),
+            ("a-new", Some(300)),
+            ("a-undated", None),
+        ],
+    );
+    assert!(app.drain_feed_tab_results(), "the refetch drained");
+
+    let projection = app.gui_feeds_projection();
+
+    assert_eq!(
+        projection
+            .rows
+            .iter()
+            .map(|row| row.title.as_str())
+            .collect::<Vec<_>>(),
+        ["a-new", "a-old", "a-undated"],
+        "the fallback view lists the remaining subscription"
+    );
+    assert_eq!(
+        projection
+            .pills
+            .iter()
+            .filter(|pill| pill.selected)
+            .map(|pill| pill.name.as_str())
+            .collect::<Vec<_>>(),
+        ["Latest"],
+        "Latest paints as selected"
+    );
+}
+
+/// Two subscriptions that publish the same `guid` name different entries (row
+/// 11.1): both rows ride Latest with different ids, and picking the second one
+/// selects exactly that row, so the composite identity is what addresses one
+/// entry.
+#[test]
+fn two_subscriptions_publishing_the_same_guid_name_different_entries() {
+    let mut app = make_app_stub();
+    app.seed_gui_feeds_for_test(&[("Feed A", FEED_A), ("Feed B", FEED_B)]);
+    app.tab = TabSelection::Feeds;
+    app.send_gui_feed_fetch_result_for_test(0, &[("dup", Some(100))]);
+    app.send_gui_feed_fetch_result_for_test(1, &[("dup", Some(200))]);
+    assert!(app.drain_feed_tab_results(), "both results drained");
+
+    let rows = app.gui_feeds_projection().rows;
+    assert_eq!(rows.len(), 2, "both subscriptions' entries are rows");
+    assert_eq!(rows[0].subtitle.as_deref(), Some("Feed B"));
+    assert_eq!(rows[0].id, entry_id(FEED_B, "dup"));
+    assert_eq!(
+        rows[1].id,
+        entry_id(FEED_A, "dup"),
+        "the same guid in another subscription is another entry"
+    );
+
+    app.gui_feeds_select(&rows[1].id);
+    let projection = app.gui_feeds_projection();
+    assert_eq!(
+        projection.selected.as_deref(),
+        Some(rows[1].id.as_str()),
+        "the pick addresses the one entry it names"
+    );
+    assert_eq!(projection.hero.map(|hero| hero.title), Some("dup".into()));
 }
