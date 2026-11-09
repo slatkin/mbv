@@ -333,6 +333,9 @@ function withId(ids: string[], id: string, present: boolean): string[] {
 	return present ? [...rest, id] : rest;
 }
 
+/** The album row a reveal waits to scroll into view, until the list is measured. */
+let pendingRevealRow: string | null = null;
+
 /** Reveal the Hero's picked album in the list. The cursor takes the album's row
  * and its artist opens, so the row shows. An album whose tracks are not loaded
  * is opened through the same command a press sends, which is what loads them.
@@ -349,11 +352,23 @@ export function revealPickedAlbum(music: GuiMusicFrame): void {
 		return;
 	}
 	const albumRow = albumRowId(album.albumId);
-	libraryUi.update((ui) => ({
-		...ui,
-		openNodes: withId(ui.openNodes, artistRowId(artist), true),
-		cursor: albumRow,
-	}));
+	libraryUi.update((ui) => {
+		const next = {
+			...ui,
+			openNodes: withId(ui.openNodes, artistRowId(artist), true),
+			cursor: albumRow,
+		};
+		if (ui.viewportHeight <= 0) {
+			// The list is not measured yet, so the row cannot scroll into view.
+			// The first measurement takes the scroll.
+			pendingRevealRow = albumRow;
+			return next;
+		}
+		return {
+			...next,
+			scrollTop: scrollTopToShowCursor(rowsOf(next), albumRow, ui.scrollTop, ui.viewportHeight),
+		};
+	});
 	if (album.tracks === null) {
 		void sendLibraryCommand({ command: 'openAlbum', albumId: album.albumId });
 	}
@@ -460,6 +475,14 @@ export function jumpToLetter(letter: string): void {
 export function measureLibraryList(viewportHeight: number): void {
 	libraryUi.update((ui) => {
 		const next = { ...ui, viewportHeight };
+		if (pendingRevealRow !== null && viewportHeight > 0) {
+			const row = pendingRevealRow;
+			pendingRevealRow = null;
+			return {
+				...next,
+				scrollTop: scrollTopToShowCursor(rowsOf(next), row, next.scrollTop, viewportHeight),
+			};
+		}
 		return {
 			...next,
 			scrollTop: clampScrollTop(rowsOf(next), next.scrollTop, viewportHeight),
