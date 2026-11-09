@@ -110,7 +110,12 @@ impl App {
                     .find(|group_id| present.contains(group_id))
             });
         if let Some(group_id) = saved_group.cloned() {
-            self.select_gui_library_collection(lib_idx, group_id);
+            self.select_gui_library_collection(lib_idx, group_id.clone());
+            // A restored pick never opens its album, so the Hero's tracks
+            // load here, as a manual pick's album press does.
+            if let Some(album_id) = self.gui_library_picks.get(&(lib_idx, group_id)).cloned() {
+                self.fetch_album_tracks(album_id);
+            }
         }
         true
     }
