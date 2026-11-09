@@ -122,7 +122,7 @@ The Library's own play and add apply the library playback policy's autoload rule
 
 The Library's explicit play and the explicit Shuffle artist skip the TUI's populated-queue replace-confirm: the shared folder and album-expansion paths run with the confirm off, so a play or a shuffle is never gated behind that prompt and a populated queue does not swallow the Hero's buttons. The local saved-playlist protection stays, and its prompt presents in the GUI's confirmation overlay.
 
-The frame carries the playhead's Emby track id from the Queue panel's own authority — the Owner status and the playback queue's item at the active index — so a tracklist row and a list track row whose track plays show the canvas's play glyph beside the title, in the accent colour. The row keeps its own fill: a highlight marks focus only, so the playing row takes no green fill.
+The frame carries the playhead's Emby track id from the Queue panel's own authority — the Owner status and the playback queue's item at the active index — so the Hero tracklist row whose track plays shows the canvas's play glyph beside the title, in the accent colour. The library tree shows no playing marker. The row keeps its own fill: a highlight marks focus only, so the playing row takes no green fill.
 
 Play next is new: `App::play_lib_item_next(lib_idx, item)`. It resolves the item with the same route and admission checks as `App::enqueue_lib_item` (folder expansion, playability, route conflict), then sends the Owner's answered Append with `before` set to the slot after the active slot (`QueueOp::Append { items, before }`). With no active slot, or when the active slot is the last one, it sends `before: None`. It never moves a slot that is already in the queue. The TUI has no producer for it.
 

@@ -523,8 +523,8 @@ set-collections command names), `pills` (`group_id`, `name`, `selected`, and
 groups whose album list failed), `artists` (`artist_key`, `name`,
 `sort_letter`, and `albums`), `hero`, `art`, and `playing_track_id` (the
 playhead's Emby track id, from the Queue panel's own authority, which the
-tracklist's and the list's playing rows paint with a play glyph beside the
-title, as the Queue's now-playing row does). An album carries `album_id`,
+tracklist's playing row paints with a play glyph beside the title, as the
+Queue's now-playing row does; the library tree shows no playing marker). An album carries `album_id`,
 `name`, `year`, and its `tracks` and `total` when the cache holds them; a
 track carries `track_id`, `name`, `number`, and `duration`. `GuiMusicHeroFrame`
 carries `artist`, `collections`, `album_count`, `artist_tracks`, the picked
