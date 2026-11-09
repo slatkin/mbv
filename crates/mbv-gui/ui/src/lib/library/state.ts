@@ -18,6 +18,8 @@ import type {
 } from '$lib/bridge/types';
 import { heroTracks, moveTrackCursor, resolveTrackCursor } from './hero';
 import {
+	albumRowId,
+	artistRowId,
 	buildLibraryRows,
 	clampScrollTop,
 	letterRail,
@@ -329,6 +331,32 @@ function setNodeOpen(row: LibraryNodeRow, open: boolean): void {
 function withId(ids: string[], id: string, present: boolean): string[] {
 	const rest = ids.filter((candidate) => candidate !== id);
 	return present ? [...rest, id] : rest;
+}
+
+/** Reveal the Hero's picked album in the list. The cursor takes the album's row
+ * and its artist opens, so the row shows. An album whose tracks are not loaded
+ * is opened through the same command a press sends, which is what loads them.
+ * A restored pick and a pill's last pick reach the Hero this way. */
+export function revealPickedAlbum(music: GuiMusicFrame): void {
+	const album = music.hero?.album;
+	if (!album) {
+		return;
+	}
+	const artist = music.artists.find((candidate) =>
+		candidate.albums.some((row) => row.albumId === album.albumId),
+	);
+	if (!artist) {
+		return;
+	}
+	const albumRow = albumRowId(album.albumId);
+	libraryUi.update((ui) => ({
+		...ui,
+		openNodes: withId(ui.openNodes, artistRowId(artist), true),
+		cursor: albumRow,
+	}));
+	if (album.tracks === null) {
+		void sendLibraryCommand({ command: 'openAlbum', albumId: album.albumId });
+	}
 }
 
 /** Play a track (add-gui-library-panel, the user's double-click contract): the

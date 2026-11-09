@@ -41,6 +41,7 @@
 		openLibraryFilter,
 		openLibraryRowMenu,
 		pressLibraryRow,
+		revealPickedAlbum,
 		scrollLibraryList,
 		setLibraryFilter,
 	} from '$lib/library/state';
@@ -55,6 +56,18 @@
 
 	let listEl: HTMLElement | undefined = $state();
 	let filterEl: HTMLInputElement | undefined = $state();
+
+	/** The album the list last revealed. A pick reveals once, so a later frame
+	 * carrying the same pick does not move the cursor again. */
+	let revealedAlbum: string | null = null;
+	$effect(() => {
+		const albumId = music.hero?.album.albumId ?? null;
+		if (albumId === null || albumId === revealedAlbum) {
+			return;
+		}
+		revealedAlbum = albumId;
+		revealPickedAlbum(music);
+	});
 
 	/** The painted rows of the canvas tree (design D7): the same model
 	 * `$lib/library/state` builds from the carried content, over the open nodes
