@@ -110,10 +110,35 @@ impl App {
         )
     }
 
-    fn play_autoloaded_siblings(&mut self, lib_idx: usize, fresh: &EmbyItem) -> bool {
-        if !self.config.lock().unwrap().autoload {
-            return false;
+    /// Play one TV episode under the autoload policy. With autoload on, the
+    /// episode's season fills the queue from that episode — the same
+    /// folder-sibling rule `select_item` applies to a played browse row; with
+    /// it off, only the episode plays. The season comes from the shell's
+    /// cached series detail (the source the TV Workspace renders from); an
+    /// episode outside a cached season takes the single-item path.
+    pub(in crate::app) fn play_tv_episode(&mut self, episode: EmbyItem) {
+        let season_id = self.season_id_for_episode(&episode);
+        if let Some(season_id) = season_id
+            && self.play_autoloaded_children(&season_id, &episode, mbv_queue::QueueSource::Series)
+        {
+            return;
         }
+        self.play_item(episode);
+    }
+
+    /// The season that holds `episode`, resolved from the cached series
+    /// detail. Season IDs are unique across one series, so the first season
+    /// whose cached episodes hold the item is the only candidate.
+    fn season_id_for_episode(&self, episode: &EmbyItem) -> Option<String> {
+        let detail = self.series_detail_cache.get(&episode.series_id)?;
+        detail
+            .episodes
+            .iter()
+            .find(|(_, episodes)| episodes.iter().any(|cached| cached.id == episode.id))
+            .map(|(season_id, _)| season_id.clone())
+    }
+
+    fn play_autoloaded_siblings(&mut self, lib_idx: usize, fresh: &EmbyItem) -> bool {
         let parent_id = if self.is_feed_home_video_group_view(lib_idx) {
             self.feed_home_video_selected_parent_id(lib_idx)
         } else {
@@ -125,33 +150,41 @@ impl App {
         let Some(parent_id) = parent_id else {
             return false;
         };
+        let queue_source = self.playback_queue().source().clone();
+        self.play_autoloaded_children(&parent_id, fresh, queue_source)
+    }
+
+    /// Queue the playable direct children of `parent_id`, starting at `fresh`,
+    /// when the autoload policy is on and `fresh` is one of them. Returns false
+    /// — leaving playback to the caller — when the policy is off, the fetch
+    /// fails, or `fresh` is not in the resolved list.
+    fn play_autoloaded_children(
+        &mut self,
+        parent_id: &str,
+        fresh: &EmbyItem,
+        queue_source: mbv_queue::QueueSource,
+    ) -> bool {
+        if !self.config.lock().unwrap().autoload {
+            return false;
+        }
         let Some(client) = self.emby_client() else {
             self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
             return false;
         };
         let client = client.lock().unwrap();
-        match client.get_direct_playable(&parent_id) {
-            Ok(mut siblings) => {
-                siblings.retain(|i| !i.is_folder);
-                siblings.sort_by_key(|a| natural_sort_key(a.sort_key()));
-                if let Some(start_idx) = siblings.iter().position(|i| i.id == fresh.id) {
-                    drop(client);
-                    // Row 5.3 (design D6): `play_items_routed` replaces the
-                    // queue on the Player owner; no Client-side queue write.
-                    self.play_items_routed(
-                        siblings,
-                        start_idx,
-                        self.playback_queue().source().clone(),
-                    );
-                    return true;
-                }
-                drop(client);
-            }
-            Err(_) => {
-                drop(client);
-            }
-        }
-        false
+        let Ok(mut siblings) = client.get_direct_playable(parent_id) else {
+            return false;
+        };
+        siblings.retain(|i| !i.is_folder);
+        siblings.sort_by_key(|a| natural_sort_key(a.sort_key()));
+        let Some(start_idx) = siblings.iter().position(|i| i.id == fresh.id) else {
+            return false;
+        };
+        drop(client);
+        // Row 5.3 (design D6): `play_items_routed` replaces the queue on the
+        // Player owner; no Client-side queue write.
+        self.play_items_routed(siblings, start_idx, queue_source);
+        true
     }
 
     /// Candidate track sources for one album Workspace row, in resolution
