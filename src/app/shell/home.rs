@@ -200,13 +200,14 @@ impl Model {
 
     pub(in crate::app) fn push_home_content(&mut self) {
         let continue_items = self
+            .app
             .home_content
             .continue_items
             .iter()
             .cloned()
             .map(|item| QueueItem::Emby(Box::new(item)))
             .collect();
-        let loading = self.home_content.loading;
+        let loading = self.app.home_content.loading;
         let now_secs = mbv_render::screens::feeds_model::current_time_secs();
         let recent_rows = self.home_recent_rows(now_secs);
         self.update_home_owner(|home| {
@@ -319,7 +320,7 @@ mod tests {
         // observed on the wire rather than in an optimistic Client write.
         let cmd_rx = crate::app::tests::live_owner_channel(&mut app);
         let mut model = Model::new(app);
-        model.home_content.continue_items = make_items(3);
+        model.app.home_content.continue_items = make_items(3);
 
         model.handle_home_request(HomeRequest::Enqueue(vec![target("id2")]));
         let appended: Vec<String> = cmd_rx
@@ -343,7 +344,7 @@ mod tests {
     fn continue_watching_context_menu_uses_explicit_target() {
         let mut model = Model::new(make_app_stub());
         let item = make_item("cw-target", "Movie");
-        model.home_content.continue_items = vec![item.clone()];
+        model.app.home_content.continue_items = vec![item.clone()];
         model.handle_home_request(HomeRequest::ContextMenu(vec![target(&item.id)], None));
         let Some(mbv_ui_model::overlay::OverlayRequest::ContextMenu(menu)) =
             model.app.pending_overlay

@@ -343,12 +343,13 @@ pub enum ModelContentEvent {
         items: Vec<QueueItem>,
     },
     /// A freshly computed Continue Watching snapshot delivered by an
-    /// App-internal writer. App-internal callers cannot touch Model-owned
-    /// `home_content`, so the result travels here for shell assignment.
+    /// App-internal writer. App-internal callers cannot run the shell's
+    /// assignment side (eviction and the owner push), so the result travels
+    /// here for the assignment that lands in the App's `home_content`.
     HomeContentRefreshed(Box<HomeContent>),
     /// The Emby service has been cleared (removed/replaced); the shell
-    /// resets the Model-owned Continue Watching items and re-projects. The
-    /// `loading` flag is intentionally untouched,
+    /// resets the stored Continue Watching items in the App's `home_content`
+    /// and re-projects. The `loading` flag is intentionally untouched,
     /// matching the legacy `clear_emby_memory` which never reset it.
     HomeContentCleared,
 }

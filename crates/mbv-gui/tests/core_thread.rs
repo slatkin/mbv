@@ -29,6 +29,7 @@ use mbv_net::mock_http::MockHttp;
 use mbv_ui_msg::{Key, KeyEvent, KeyModifiers, PointerEvent, PointerKind, Position};
 
 mod core_thread {
+    mod home;
     mod launch;
     mod library;
     mod overlay;

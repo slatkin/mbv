@@ -77,7 +77,7 @@ impl App {
             }
             WsEvent::UserDataChanged => {
                 // The fetch runs synchronously (order-sensitive side
-                // effects); the computed content travels to Model-owned
+                // effects); the computed content travels into the stored
                 // `home_content` via lib_tx (task 5.3d).
                 if let Ok(content) = self.fetch_home() {
                     let _ = self.channels.lib_tx.send(LibEvent::ModelContent(

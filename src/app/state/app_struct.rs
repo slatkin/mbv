@@ -3,7 +3,9 @@ use crate::app::QueueDeferrals;
 use crate::app::gui_client_state::GuiOverlay;
 use crate::app::queue_summary_projection::QueueRightColumn;
 use crate::app::state::events::{PendingSeriesHandoff, PendingSeriesLanding};
-use crate::app::state::playback::{PlaylistMutationState, SuspendedLocalSession, UndoEntry};
+use crate::app::state::playback::{
+    HomeContent, PlaylistMutationState, SuspendedLocalSession, UndoEntry,
+};
 use crate::app::state::queue_owner::QueueEpoch;
 use crate::app::state::queue_view::QueueView;
 use crate::app::state::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
@@ -128,6 +130,14 @@ pub struct App {
     pub(in crate::app) player_endpoint: Option<mbv_remote_player::DaemonEndpoint>,
     pub(in crate::app) hidden_libraries: Vec<String>,
     pub(in crate::app) home_latest_launch_window: mbv_ui_model::home_latest::HomeLatestLaunchWindow,
+    /// Home content (add-gui-library-panel row 6.1): the authoritative
+    /// Continue Watching snapshot both Clients store. The launch Home load
+    /// fills it (`App::load_home_at_startup`), a rebuilt startup-drain
+    /// snapshot replaces it (`App::drain_startup_workers`), and App-internal
+    /// refresh writers hand their snapshot to the shell, whose assignment
+    /// lands here. The shell reads it for its Home paint; the GUI Library's
+    /// later Home projection reads it from row 6.2.
+    pub(in crate::app) home_content: HomeContent,
     /// `Config.library_routes` at startup (#256). Values are resolved
     /// `tcp://host:port` endpoints, read directly with no live-session
     /// lookup -- see `mbv_remote_player::resolve_library_route`.

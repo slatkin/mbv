@@ -37,9 +37,9 @@ fn handle_model_content_event(ev: ModelContentEvent) {
             generation,
             items,
         } => drop((source, generation, items)),
-        // The shell drain applies the Model-owned refreshed content.
+        // The shell drain applies the refreshed content.
         ModelContentEvent::HomeContentRefreshed(content) => drop(content),
-        // Clearing Model-owned content is handled by the shell drain.
+        // Clearing the stored content is handled by the shell drain.
         ModelContentEvent::HomeContentCleared => {}
     }
 }
@@ -55,7 +55,7 @@ impl App {
             // The GUI Library's collection store owns this event (add-gui-
             // library-panel design D5); the TUI never starts one.
             LibEvent::GuiGroupAlbums(event) => self.handle_gui_group_albums(event),
-            // The shell drain applies Model-owned content.
+            // The shell drain applies the refreshed content.
             LibEvent::ModelContent(event) => handle_model_content_event(event),
             LibEvent::Error(error) => self.handle_error(&error),
         }

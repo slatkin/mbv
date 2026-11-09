@@ -5,7 +5,7 @@ use super::super::{
     Model, MusicTrackFocusRequest, RouterOutcome, arbitrate_key, fold_mouse_messages,
 };
 use super::pin_swap::PinSwapLink;
-use super::{Duration, IdleFeed, Instant, PollStrategy};
+use super::{Duration, Instant, PollStrategy};
 use crate::app::{
     BrowseEvent, ClientLifecycle, HomeEventDrain, LibEvent, ModelContentEvent, MusicEvent,
     PlayerEventDrain, SeriesEvent,
@@ -515,31 +515,12 @@ impl Model {
     }
 
     /// Start the configured Remote Service workers after the first TUI frame
-    /// has rendered, kick off the startup feed fetch, and register client
-    /// capabilities. The shared step is `App::start_client_services`
-    /// (add-gui-library-panel design D11); the TUI runs it at the same point
-    /// it always has, so its order and timing do not change.
+    /// has rendered, kick off the startup feed fetch, create the idle feed,
+    /// and register client capabilities. The shared step is
+    /// `App::start_client_services` (add-gui-library-panel design D11); the
+    /// TUI runs it at the same point it always has, so its order and timing
+    /// do not change.
     pub(super) fn spawn_startup_services(&mut self) {
         self.app.start_client_services();
-    }
-
-    /// Create the idle-feed channel pair and start its first fetch when an
-    /// RSS URL is configured.
-    pub(super) fn init_idle_feed(&mut self) {
-        // Initialize idle feed if configured
-        if self.app.config.lock().unwrap().idle_feed_rss_url.is_empty() {
-            // No RSS URL configured, skip idle feed
-        } else {
-            let (items_tx, items_rx) = std::sync::mpsc::channel();
-            self.app.idle_feed = Some(IdleFeed {
-                items: Vec::new(),
-                current_index: 0,
-                last_rotation: Instant::now(),
-                last_fetch: Instant::now(),
-                items_tx,
-                items_rx,
-            });
-            self.app.spawn_idle_feed_fetch();
-        }
     }
 }

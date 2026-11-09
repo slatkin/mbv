@@ -1,4 +1,5 @@
 use crate::app::state::app_struct::LaunchRestore;
+use crate::app::state::playback::HomeContent;
 use crate::app::state::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
 use crate::app::{App, AppInit, spawn_resize_worker, spawn_waking_relay};
 use indexmap::IndexMap;
@@ -290,6 +291,7 @@ impl App {
             pending_series_season_expansions: std::collections::HashSet::new(),
             player_endpoint: None,
             idle_feed: init.idle_feed,
+            home_content: HomeContent::default(),
             feed_seek_pending_slot: None,
             feed_tab: mbv_ui_model::feed_tab::FeedTabState::default(),
             feed_entry_state: mbv_feed::FeedEntryStore::load(),

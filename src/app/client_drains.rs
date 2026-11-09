@@ -86,11 +86,26 @@ pub struct StartupWorkerDrain {
     pub emby_started: bool,
 }
 
+/// The startup-drain contract: the App stores its own copy so the
+/// presenting Client's assignment is the same facts; a Client that keeps no
+/// shell state (the GUI) reads the stored one. A prior completion's snapshot
+/// is replaced only when a rebuild ran (row 6.1)
+fn store_drained_home(
+    app: &mut HomeContent,
+    drain: &mut StartupWorkerDrain,
+    home: Option<HomeContent>,
+) {
+    if let Some(content) = home {
+        *app = content.clone();
+        drain.home = Some(content);
+    }
+}
+
 impl App {
     /// Drain the Emby startup and Emby setup worker channels. Each channel
     /// delivers its one completion to this drain, which applies it through the
     /// App-side completion handlers; the rebuilt Home content is handed back
-    /// for the Client that presents Home.
+    /// for the Client that presents Home, and the App stores its own copy.
     pub fn drain_startup_workers(&mut self) -> StartupWorkerDrain {
         let mut drain = StartupWorkerDrain::default();
         if let Some(worker) = self.setup.emby_startup_rx.take() {
@@ -102,7 +117,7 @@ impl App {
                     drain.events = true;
                     let home = self.apply_emby_completion(completion);
                     drain.emby_started |= home.is_some();
-                    drain.home = home.or(drain.home);
+                    store_drained_home(&mut self.home_content, &mut drain, home);
                 }
                 Err(TryRecvError::Empty) => self.setup.emby_startup_rx = Some(worker),
                 Err(TryRecvError::Disconnected) => {
@@ -119,7 +134,7 @@ impl App {
                     drain.events = true;
                     let home = self.apply_emby_setup_completion(completion);
                     drain.emby_started |= home.is_some();
-                    drain.home = home.or(drain.home);
+                    store_drained_home(&mut self.home_content, &mut drain, home);
                 }
                 Err(TryRecvError::Empty) => self.setup.emby_setup_rx = Some(rx),
                 Err(TryRecvError::Disconnected) => {

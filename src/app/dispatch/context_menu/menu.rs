@@ -46,10 +46,11 @@ impl App {
     /// active Tab selection, "Remove from Continue Watching" appears exactly
     /// when the Home component has Continue Watching selected.
     ///
-    /// `cw_item` is the resolved Continue Watching column item (Model-owned
-    /// `home_content.continue_items[continue_cursor]`, resolved at the Model
-    /// boundary, task 5.3d) that the Home arm builds its entries from — the
-    /// App no longer holds the deleted `home.continue_items` to re-read.
+    /// `cw_item` is the resolved Continue Watching column item (the
+    /// App-stored `home_content.continue_items[continue_cursor]`, resolved at
+    /// the Model boundary, task 5.3d) that the Home arm builds its entries
+    /// from — the App no longer holds the deleted `home.continue_items` to
+    /// re-read.
     fn build_context_menu(
         &mut self,
         home_cw_selected: bool,

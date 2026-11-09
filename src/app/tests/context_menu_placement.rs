@@ -95,7 +95,7 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout() {
     let mut model = crate::app::shell::Model::new(make_app_stub());
     model.app.tab = TabSelection::Home;
     model.app.panel_focus = PanelFocus::Library;
-    model.home_content.continue_items = make_items(5);
+    model.app.home_content.continue_items = make_items(5);
     model.handle_terminal_message(
         Msg::Shell(Box::new(mbv_ui_msg::ShellRequest::Home(
             mbv_ui_msg::HomeRequest::ContextMenu(
@@ -201,7 +201,7 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout_narrow()
     let mut model = crate::app::shell::Model::new(make_app_stub());
     model.app.tab = TabSelection::Home;
     model.app.panel_focus = PanelFocus::Library;
-    model.home_content.continue_items = make_items(5);
+    model.app.home_content.continue_items = make_items(5);
     model.handle_terminal_message(
         Msg::Shell(Box::new(mbv_ui_msg::ShellRequest::Home(
             mbv_ui_msg::HomeRequest::ContextMenu(

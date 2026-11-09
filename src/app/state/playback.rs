@@ -77,15 +77,15 @@ impl DestinationLatestSnapshot {
     }
 }
 
-/// Home content (task 5.3d): the authoritative snapshot the Client pushes to
-/// its Home surface at its writers. Re-homed from the deleted `App.home`
-/// (`HomePane`) + `App.home_loading`; `loading` mirrors the old
-/// `home_loading` flag (true from startup until the first fetch completes,
-/// then set false synchronously after every content computation). The Client
-/// core hands a rebuilt snapshot to its Client
-/// ([`crate::app::StartupWorkerDrain`]), which stores it in the state it
-/// presents.
-#[derive(Debug)]
+/// Home content (task 5.3d): the authoritative Continue Watching snapshot
+/// the presenting Client's shell pushes to its Home surface at its writers.
+/// `loading` mirrors the deleted `home_loading` flag (true from startup
+/// until the first fetch completes, then set false synchronously after every
+/// content computation). The `App` stores the snapshot (`App.home_content`):
+/// the launch Home load and a rebuilt startup-drain snapshot are the launch
+/// sources, and the Client core hands a rebuilt snapshot back to its Client
+/// ([`crate::app::StartupWorkerDrain`]) for the shell's own projection half.
+#[derive(Clone, Debug)]
 pub struct HomeContent {
     pub continue_items: Vec<EmbyItem>,
     pub loading: bool,

@@ -227,8 +227,8 @@ fn stale_emby_completion_does_not_change_runtime_or_home() {
     let mut app = make_app_stub();
     app.emby_runtime.begin_setup();
     let stale_generation = mbv_core::service_runtime::SetupGeneration::default();
-    // Home content is Model-owned (task 5.3d): a stale completion returns no
-    // snapshot, so the shell leaves `home_content` untouched — the invariance
+    // Home content lives on the App (row 6.1): a stale completion returns no
+    // snapshot, so the stored `home_content` stays untouched — the invariance
     // that used to be asserted on `app.home.continue_items` here.
     let content =
         app.apply_emby_completion(crate::app::dispatch::session::service_startup::Completion {

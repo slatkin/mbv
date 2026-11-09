@@ -267,9 +267,10 @@ impl CoreThread {
         focus.mount(ComponentId::Library);
         // The shared Service startup step every Client runs once after the
         // attach (add-gui-library-panel design D11): the Service startup
-        // workers, the startup feed fetch, and capability registration. Then
-        // the launch Home load, whose content the GUI drops until Home lands
-        // (unit 10). A client the attach brought (`owner_link`'s
+        // workers, the startup feed fetch, capability registration, and the
+        // idle feed. Then the launch Home load, whose content the App
+        // stores for the Home projection that lands in row 6.2. A client the
+        // attach brought (`owner_link`'s
         // `cached_emby_client`) starts neither startup worker, so the GUI
         // starts the playback-target discovery it feeds here; a startup the
         // drain reports starts it in the drain host instead.

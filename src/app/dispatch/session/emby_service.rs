@@ -32,8 +32,8 @@ impl App {
         self.pending_delete_slot = None;
         self.pending_delete_selection = None;
         self.next_up_item = None;
-        // Home content is Model-owned (task 5.3d): clearing it is delivered
-        // through lib_tx; the shell wipes `home_content` (items, cursor,
+        // Home content is stored on the App (row 6.1): clearing it is
+        // delivered through lib_tx; the shell wipes `home_content` (items, cursor,
         // latest — the `loading` flag is intentionally left alone, matching
         // the legacy clear) and re-projects.
         let _ = self.channels.lib_tx.send(LibEvent::ModelContent(
@@ -126,8 +126,8 @@ impl App {
         self.ws_send_tx = Some(mbv_ws::start(ws_url, ws_tx));
         self.ws_rx = ws_rx;
         self.emby_runtime.client = Some(client);
-        // The App-internal confirm path cannot touch Model-owned
-        // `home_content`; deliver the freshly bootstrapped content through
+        // The App-internal confirm path cannot run the shell's
+        // assignment; deliver the freshly bootstrapped content through
         // lib_tx (the `clear_emby_memory` above already queued
         // `HomeContentCleared`, so the drain sees the wipe first, then this
         // full snapshot). The merge input is empty because the clear just

@@ -358,7 +358,7 @@ impl Model {
         if let Ok(content) = self.app.fetch_home() {
             // The commit runs the fetch synchronously (order-sensitive
             // side effects); the computed content is assigned to
-            // Model-owned `home_content` directly — a shell-side caller
+            // the stored `home_content` directly — a shell-side caller
             // (task 5.3d).
             self.assign_home_content(content);
         }

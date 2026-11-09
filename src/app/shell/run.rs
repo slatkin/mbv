@@ -4,8 +4,8 @@ use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
 use super::{
-    IdleFeed, Model, PanelFocus, PollStrategy, QUIT_REQUESTED, init_terminal,
-    install_signal_handlers, restore_terminal, start_quit_watchdog,
+    Model, PanelFocus, PollStrategy, QUIT_REQUESTED, init_terminal, install_signal_handlers,
+    restore_terminal, start_quit_watchdog,
 };
 // The run-loop tests reach `App` through this module's scope.
 #[cfg(test)]
@@ -265,15 +265,13 @@ impl Model {
         // Image pickers are initialised in `main` before `Model::new` starts
         // the TuiRealm listener — see `App::init_image_pickers` (#654).
 
-        self.home_content.loading = true;
+        self.app.home_content.loading = true;
         terminal.draw(|f| self.draw_frame(f, false, false))?;
 
         self.spawn_startup_services();
 
         // Home populates now; Emby's startup merges its portion later (#543).
         self.fetch_home_at_startup();
-
-        self.init_idle_feed();
 
         terminal.draw(|f| self.draw_frame(f, false, false))?;
 

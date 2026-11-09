@@ -451,14 +451,12 @@ fn album_item(id: &str, name: &str) -> mbv_emby_model::EmbyItem {
     item
 }
 
-/// The `App` a GUI Client's test drives with a successful Emby startup
-/// completion already queued for the startup drain, over `views` as the
-/// bootstrap's library catalog. The worker's thread never runs: the test
-/// hands the drain the one completion a worker would send (add-gui-library-panel
-/// design D11).
 #[cfg(feature = "test")]
 #[must_use]
-pub fn stub_app_with_completed_emby_startup(views: Vec<mbv_emby_model::EmbyItem>) -> App {
+pub fn stub_app_with_completed_emby_startup_and_contents(
+    views: Vec<mbv_emby_model::EmbyItem>,
+    continue_items: Vec<mbv_emby_model::EmbyItem>,
+) -> App {
     let mut app = make_app_stub();
     let generation = app.emby_runtime.generation();
     let (tx, rx) = std::sync::mpsc::channel();
@@ -467,7 +465,7 @@ pub fn stub_app_with_completed_emby_startup(views: Vec<mbv_emby_model::EmbyItem>
         result: Ok(crate::app::dispatch::session::service_startup::Startup {
             client: mbv_emby::EmbyClient::new(crate::config::Config::default()),
             bootstrap: mbv_emby::EmbyBootstrap {
-                continue_items: Vec::new(),
+                continue_items,
                 views,
             },
             setup: mbv_config::EmbySetup::default(),
@@ -476,6 +474,17 @@ pub fn stub_app_with_completed_emby_startup(views: Vec<mbv_emby_model::EmbyItem>
     app.setup.emby_startup_rx =
         Some(crate::app::dispatch::session::service_startup::StartupReceiver { generation, rx });
     app
+}
+
+/// The `App` a GUI Client's test drives with a successful Emby startup
+/// completion already queued for the startup drain, over `views` as the
+/// bootstrap's library catalog. The worker's thread never runs: the test
+/// hands the drain the one completion a worker would send (add-gui-library-panel
+/// design D11).
+#[cfg(feature = "test")]
+#[must_use]
+pub fn stub_app_with_completed_emby_startup(views: Vec<mbv_emby_model::EmbyItem>) -> App {
+    stub_app_with_completed_emby_startup_and_contents(views, Vec::new())
 }
 
 /// The test-only reads a Client's test makes of this `App`'s state. The gate
@@ -488,6 +497,14 @@ impl App {
     #[must_use]
     pub fn libs_for_test(&self) -> &[mbv_ui_model::library_tab::LibraryTab] {
         &self.libs
+    }
+
+    /// Home's stored content snapshot, for a Client's test that asserts the
+    /// frame the next tick carries reads the stored snapshot
+    /// (add-gui-library-panel row 6.1).
+    #[must_use]
+    pub fn home_content_for_test(&self) -> &crate::app::state::playback::HomeContent {
+        &self.home_content
     }
 
     /// Make the grouped Music library the GUI Library test's destination

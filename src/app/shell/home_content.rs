@@ -18,7 +18,7 @@ use mbv_ui_msg::ComponentId;
 
 impl Model {
     pub(in crate::app) fn assign_home_content(&mut self, content: HomeContent) {
-        self.home_content = content;
+        self.app.home_content = content;
         // A bootstrap or refresh may carry a rebuilt library set that dropped
         // a previously fetched source's library; evict it before projecting
         // (see `openspec/specs/home-latest-sections`).
@@ -81,7 +81,7 @@ impl Model {
     }
 
     pub(in crate::app) fn clear_home_content(&mut self) {
-        self.home_content.continue_items.clear();
+        self.app.home_content.continue_items.clear();
         // `HomeContentCleared` is the Service teardown arm: a removed or
         // replaced setup also drops its fetched `Recently added` sources
         // (review P2).
@@ -145,6 +145,7 @@ impl Model {
         // merged list (`openspec/specs/home-latest-sections`).
         match target {
             mbv_ui_model::targets::HomeItemTarget::Continue(item_id) => self
+                .app
                 .home_content
                 .continue_items
                 .iter()
@@ -182,7 +183,7 @@ impl Model {
 
     pub(in crate::app) fn fetch_home_at_startup(&mut self) {
         let fetched_home = self.app.load_home_at_startup();
-        self.home_content.loading = false;
+        self.app.home_content.loading = false;
         match fetched_home {
             Some(content) => self.assign_home_content(content),
             None => self.push_home_content(),

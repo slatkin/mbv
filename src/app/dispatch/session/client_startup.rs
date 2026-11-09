@@ -8,6 +8,8 @@ use crate::app::App;
 use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::dispatch::session::service_startup;
 use crate::app::state::playback::HomeContent;
+use mbv_ui_model::feed::IdleFeed;
+use std::time::Instant;
 
 impl App {
     /// Start the configured Remote Service workers, kick off the startup feed
@@ -39,6 +41,29 @@ impl App {
         if let Some(client) = self.emby_client() {
             client.lock().unwrap().register_capabilities();
         }
+
+        // Create the idle-feed channel pair and start its first fetch when an
+        // RSS URL is configured (row 6.1): the feed is Client-neutral data the
+        // drains read, so the shared step initializes it for both Clients.
+        self.init_idle_feed();
+    }
+
+    fn init_idle_feed(&mut self) {
+        // Initialize idle feed if configured
+        if self.config.lock().unwrap().idle_feed_rss_url.is_empty() {
+            // No RSS URL configured, skip idle feed
+        } else {
+            let (items_tx, items_rx) = std::sync::mpsc::channel();
+            self.idle_feed = Some(IdleFeed {
+                items: Vec::new(),
+                current_index: 0,
+                last_rotation: Instant::now(),
+                last_fetch: Instant::now(),
+                items_tx,
+                items_rx,
+            });
+            self.spawn_idle_feed_fetch();
+        }
     }
 
     /// The `App` half of the launch Home load (design D11): fetch Home, and on
@@ -54,6 +79,10 @@ impl App {
     pub fn load_home_at_startup(&mut self) -> Option<HomeContent> {
         match self.fetch_home() {
             Ok(content) => {
+                // The App stores the snapshot (row 6.1): the presenting
+                // Client's shell assignment and a GUI Home projection read
+                // the same facts.
+                self.home_content = content.clone();
                 self.spawn_home_recently_added(mbv_queue::ServiceKind::Emby);
                 if !self.status_toast_live() {
                     self.status.clear();
