@@ -523,9 +523,10 @@ library's Shows destination is active — design D12, row 7.1), and `emby`
 (`Option<GuiEmbyFrame>`, present while a plain Emby library's destination is
 active — design D12, row 8.1), and `audiobooks` (`Option<GuiAudiobooksFrame>`,
 present while an Audiobookshelf book library's Audiobooks destination is
-active — design D12, row 9.1), and `podcasts` (`Option<GuiPodcastsFrame>`,
+active — design D12, row 9.1), `podcasts` (`Option<GuiPodcastsFrame>`,
 present while an Audiobookshelf podcast library's Podcasts destination is
-active — design D12, row 10.1). No two
+active — design D12, row 10.1), and `feeds` (`Option<GuiFeedsFrame>`, present
+while the Feeds destination is active — design D12, row 11.1). No two
 destination fields present at once: the destinations are exclusive, so the
 present field names the active destination, and the top bar marks the Home
 icon current exactly while `home` is present.
@@ -686,6 +687,42 @@ the parent show's cover through the Service-scoped cover chain (`null` while
 the show declares no cover or no server is configured). There is no
 Workspace: a podcast Hero is episode information only.
 
+`GuiFeedsFrame` (`src/bridge/frame/library/feeds.rs`) carries `pills`,
+`loading`, `failed`, `rows`, `selected`, and `hero`. It carries no `libIdx`: a
+Client holds one feed tab, so the Feeds commands name no library. No letter
+rail rides here — the list is sorted by date — and no state filter.
+`failed` is always `false`, because the feed tab keeps no failure state: a
+failed subscription's fetch flashes the TUI's toast and keeps that
+subscription's previous entries. `pills` holds the single-select pill row in
+paint order — `Latest` first, then one pill per configured subscription in the
+tab's order — each with `pill` (`{ kind: 'latest' }` or
+`{ kind: 'subscription', id }`, the id being the subscription's URL),
+`name` (`Latest`, or the subscription's name), `selected`, and `collection`
+(`false`). The rows are the active pill's entries: `Latest` merges every
+subscription's entries, and a subscription pill holds that one
+subscription's, both newest first with undated entries last, exactly as
+`FeedTabState::rebuild_all_entries` orders them. A row carries `id` — the
+entry's stable identity, its `(subscription url, guid)` pair encoded as one
+opaque string (`GuiFeedEntryId::encode`: the URL's byte length, a `:`, then
+the URL and the `guid`; `decode` is its only reader), because two
+subscriptions can publish the same `guid` — `title` (the entry), `subtitle`
+(the subscription's name, `null` when the tab no longer holds it), `date`
+(the `day month` gutter, `null` on an undated entry), and `state`
+(`ordinary`, `played`, or `{ active: { progress } }`, the TUI feed row's own
+arms). `selected` carries the core's picked entry as the frame painted it
+while the active list still holds it, else that list's first row, so the Hero
+paints as soon as a list lands; a stored pill whose subscription the tab no
+longer holds falls back to `Latest`.
+
+`hero` is the selected entry's Hero: the shared `hero_content_feed`
+producer's facts — `title` (the entry) and `meta_rows` (the subscription
+name, then the duration when the entry declares one) with `duration_row` and
+`progress_row` (the producer fills no progress row for an entry) — and
+`art_shape` at the feed artwork policy's arm: Square for a podcast feed
+(`FeedKind::Audio`), Landscape otherwise. No `overview`, no `art`, and no
+Workspace ride here: a feed entry has no artwork source and no description,
+so the Hero paints its placeholder in the reserved shape.
+
 `GuiMusicFrame` carries `lib_idx` (the Grouped Music library index the
 set-collections command names), `pills` (`group_id`, `name`, `selected`, and
 `collection`), `loading`, `failure` (the failure line naming the selected
@@ -792,6 +829,22 @@ honours `player.can_admit_audiobookshelf()`, and a refusal flashes the TUI's
 owner-unavailable toast; the Owner owns the queue, so no Podcasts command
 mutates it directly. A row id of no valid shape, or an episode the per-show
 cache no longer holds, logs and changes nothing.
+
+The Feeds commands name an entry by the opaque row id the frame carried and
+carry no library index (row 11.1): `feedsSetPill` (`pill`) stores the
+single-select pill — `{ kind: 'latest' }` or `{ kind: 'subscription', id }` —
+and starts no load, because the shared startup fetch already fills every
+subscription's entries; a subscription the tab no longer holds logs and
+changes nothing. `feedsSelect` (`row`) selects the entry the Hero shows.
+`feedsPlay` (`itemId`) — the command Enter and a double-click both send —
+replaces the queue through the TUI's `play_feed_entry`, and `feedsQueue`
+(`itemId`) appends through `enqueue_feed_entry`; both flash the TUI's
+"Feed entry has no playable source" toast for an entry with no enclosure and
+no link. There is no play-next command: `n` is consumed by the front end and
+does nothing for feed entries, because the TUI has no feed play-next producer.
+The Owner owns the queue, so no Feeds command mutates it directly. A row id of
+no valid shape, or an entry the App's data no longer holds, logs and changes
+nothing.
 
 The `takeFocus` variant also moves the core's `FocusStack`, so the frame paints
 the focus the `App`'s key gates read (design D4). The `play` and
