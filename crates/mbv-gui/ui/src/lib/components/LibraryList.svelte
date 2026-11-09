@@ -21,7 +21,7 @@
 	// focus. It takes the keyboard while the filter is open and closes the
 	// filter when it loses focus, keeping its text as Enter does.
 	import { onMount } from 'svelte';
-	import { ChevronRight, Play } from '@lucide/svelte';
+	import { ChevronRight } from '@lucide/svelte';
 	import type { GuiMusicFrame } from '$lib/bridge/types';
 	import {
 		LETTER_ROW_HEIGHT,
@@ -115,11 +115,6 @@
 	 * fill (design D7). */
 	const picked = $derived(music.hero?.album.albumId ?? null);
 
-	/** The track playing at the playhead: the Queue panel's own authority,
-	 * carried on the frame. Its row shows a play glyph beside its name (design
-	 * D8); a highlight marks focus only. */
-	const playingTrackId = $derived(music.playingTrackId);
-
 	/** The bottom edge of the last painted row: the below-spacer's pair. */
 	function lastBottom(): number {
 		const last = painted[painted.length - 1];
@@ -164,11 +159,6 @@
 		return row.kind === 'album' && row.albumId === picked;
 	}
 
-	/** Whether the row is the track playing at the playhead. */
-	function isPlaying(row: LibraryRow): boolean {
-		return row.kind === 'track' && row.trackId === playingTrackId;
-	}
-
 	/** A row's painted fill: the cursor row's focus fill only. A highlight marks
 	 * focus, so the playing track and the picked album keep their own fill
 	 * (design D7, D8). */
@@ -176,13 +166,9 @@
 		return row.id === $libraryUi.cursor ? canvasVar('selected') : undefined;
 	}
 
-	/** A row's name colour: the playing track's heading tone, and otherwise the
-	 * canvas's tone by depth — the artist heading, the album text, the muted
-	 * track. */
+	/** A row's name colour: the canvas's tone by depth — the artist heading,
+	 * the album text, the muted track. */
 	function rowColor(row: LibraryRow): string {
-		if (isPlaying(row)) {
-			return canvasVar('heading');
-		}
 		return row.kind === 'artist'
 			? canvasVar('heading')
 			: row.kind === 'album'
@@ -354,9 +340,9 @@
 											style:color="var(--canvas-ordinal)">{row.number}</span
 										>
 							<span
-								class="flex min-w-0 flex-1 items-center"
-								style:gap="6px"
-								style:color={rowColor(row)}>{#if isPlaying(row)}<Play size={12} fill="var(--canvas-accent)" color="var(--canvas-accent)" />{/if}<span class="min-w-0 truncate">{row.name}</span></span>
+								class="min-w-0 flex-1 truncate"
+								style:color={rowColor(row)}>{row.name}</span
+							>
 							<span
 								class="flex-none font-mono tabular-nums"
 								style:font-size="11px"
