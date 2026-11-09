@@ -331,13 +331,14 @@ function withId(ids: string[], id: string, present: boolean): string[] {
 	return present ? [...rest, id] : rest;
 }
 
-/** Add a track to the queue (add-gui-library-panel, the user's double-click
- * contract): the track's own stable id, through the core's add path, which
- * applies the library playback policy's autoload rule. The list's track rows
- * and the Hero's tracklist rows both send it, so one gesture cannot drift
- * from the other. */
-export function addLibraryTrackToQueue(trackId: string): void {
-	void sendLibraryCommand({ command: 'addToQueue', itemId: trackId });
+/** Play a track (add-gui-library-panel, the user's double-click contract): the
+ * track's own stable id, through the same play command Enter sends. The Owner's
+ * queue is replaced, and with the library playback policy's autoload on, the
+ * album's tracks replace it from the played track onward. The list's track rows
+ * and the Hero's tracklist rows both send it, so one gesture cannot drift from
+ * the other. */
+export function playLibraryTrack(trackId: string): void {
+	void sendLibraryCommand({ command: 'play', itemId: trackId });
 }
 
 /** Press a row (design D7): an artist or album row opens or closes and is

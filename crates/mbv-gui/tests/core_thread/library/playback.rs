@@ -67,8 +67,7 @@ fn the_add_to_queue_command_asks_the_owner_to_append_the_album() {
 /// Add to queue applies the library playback policy's autoload rule to a
 /// track (add-gui-library-panel): with autoload on, the album's cached
 /// playable tracks enter in disc/track order starting at the selected track,
-/// so the double-clicked track is the first of the block and the album
-/// follows it. The tracks come from the same cache the tracklist paints —
+/// so the selected track is the first of the block and the album follows it. The tracks come from the same cache the tracklist paints —
 /// injected here, so no fetch runs.
 #[test]
 fn the_add_to_queue_command_applies_the_autoload_policy_to_a_track() {
@@ -133,6 +132,50 @@ fn the_add_to_queue_command_of_a_track_queues_only_it_while_autoload_is_off() {
     );
 
     assert_eq!(appended_ids(&cmd_rx), (None, vec!["trk-2".into()]));
+}
+
+/// Play on a track applies the library playback policy's autoload rule
+/// (add-gui-library-panel): the double-click and Enter both send it, so with
+/// autoload on the album's cached playable tracks replace the queue, and the
+/// played track is its start slot, under the album source.
+#[test]
+fn the_play_command_of_a_track_replaces_the_queue_from_it_under_autoload() {
+    let http = MockHttp::new();
+    let (mut test, cmd_rx) = music_core(&http);
+    test.core.app_mut().seed_gui_music_albums_for_test(
+        0,
+        "grp-hiphop",
+        &[("alb-ill", "Licensed to Ill")],
+    );
+    test.core.app_mut().seed_gui_album_tracks_for_test(
+        "alb-ill",
+        &[
+            ("trk-1", "Rhymin & Stealin", 1, 248),
+            ("trk-2", "The New Style", 2, 275),
+            ("trk-3", "She's Crafty", 3, 220),
+        ],
+    );
+    test.core.app_mut().set_autoload_for_test(true);
+
+    send_library(&mut test, GuiLibraryCommand::TakeFocus);
+    send_library(
+        &mut test,
+        GuiLibraryCommand::Play {
+            item_id: "trk-2".into(),
+        },
+    );
+
+    let start = cmd_rx.try_iter().find_map(|cmd| match cmd {
+        mbv_ctrl::CtrlCmd::UnifiedQueueReplace {
+            start_idx, source, ..
+        } => Some((start_idx, source)),
+        _ => None,
+    });
+    assert_eq!(
+        start,
+        Some((Some(1), QueueSource::Album)),
+        "the album replaced the queue, starting at the played track"
+    );
 }
 
 /// Play over a populated queue replaces it and starts, with no confirm

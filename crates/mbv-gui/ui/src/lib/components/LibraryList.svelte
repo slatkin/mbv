@@ -35,7 +35,7 @@
 	import type { LibraryRow } from '$lib/library/list';
 	import {
 		acceptLibraryFilter,
-		addLibraryTrackToQueue,
+		playLibraryTrack,
 		libraryUi,
 		measureLibraryList,
 		openLibraryFilter,
@@ -331,7 +331,7 @@
 										data-library-cursor={row.id === $libraryUi.cursor ? '' : undefined}
 										onclick={() => pressLibraryRow(row)}
 						oncontextmenu={(event) => rowMenu(event, row)}
-					ondblclick={() => addLibraryTrackToQueue(row.trackId)}
+					ondblclick={() => playLibraryTrack(row.trackId)}
 									>
 										<span
 											class="flex flex-none items-center justify-end font-mono tabular-nums"

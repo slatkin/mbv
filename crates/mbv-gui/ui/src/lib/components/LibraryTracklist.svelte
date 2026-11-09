@@ -10,8 +10,9 @@
   paint, so it takes no state: the canvas shows the controls, the play glyph,
   and the raised fill on the row the pointer is over.
 
-  A double-click on a row adds the track to the queue (the user's contract),
-  through the same add helper the list's track rows use, so one gesture cannot
+  A double-click on a row plays the track (the user's contract): the queue is
+  replaced, and under autoload the album plays from that track onward. It goes
+  through the same play helper the list's track rows use, so one gesture cannot
   drift from the other. The row of the track playing at the playhead paints
   the playing state — the canvas's green with dark ink, as the Queue's active
   row paints — over the cursor's fill, from the frame's playing id.
@@ -19,7 +20,7 @@
 <script lang="ts">
 	import { ListEnd, Play, Plus } from '@lucide/svelte';
 	import type { GuiMusicHero, GuiMusicTrack } from '$lib/bridge/types';
-	import { addLibraryTrackToQueue, openLibraryRowMenu } from '$lib/library/state';
+	import { openLibraryRowMenu, playLibraryTrack } from '$lib/library/state';
 	import { sendLibraryCommand } from '$lib/bridge/library';
 	import { heroTracks, resolveTrackCursor } from '$lib/library/hero';
 	import { libraryUi } from '$lib/library/state';
@@ -108,7 +109,7 @@
 			data-library-track-cursor={track.trackId === cursor ? '' : undefined}
 			data-library-track-playing={isPlaying(track) ? '' : undefined}
 			oncontextmenu={(event) => rowMenu(event, track)}
-			ondblclick={() => addLibraryTrackToQueue(track.trackId)}
+			ondblclick={() => playLibraryTrack(track.trackId)}
 		>
 			<span
 				class="flex-none font-mono tabular-nums"

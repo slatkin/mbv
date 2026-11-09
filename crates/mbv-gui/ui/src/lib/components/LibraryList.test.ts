@@ -192,9 +192,9 @@ test('a press closes and reopens a node while the filter narrows the rows', asyn
 });
 
 // The user's double-click contract (add-gui-library-panel): a double-click on
-// a track row adds that track to the queue, through the same add helper the
-// Hero's tracklist rows use.
-test('a double-click on a track row sends that track add to queue', async () => {
+// a track row plays that track, through the same play helper the Hero's
+// tracklist rows use.
+test('a double-click on a track row sends that track play', async () => {
 	openBeastie();
 	openLicensedToIll();
 	const container = await mountList(240);
@@ -203,7 +203,7 @@ test('a double-click on a track row sends that track add to queue', async () => 
 	await fireEvent.dblClick(track as HTMLElement);
 
 	expect(invokeMock).toHaveBeenCalledWith('library', {
-		command: { command: 'addToQueue', itemId: 't1' },
+		command: { command: 'play', itemId: 't1' },
 	});
 });
 

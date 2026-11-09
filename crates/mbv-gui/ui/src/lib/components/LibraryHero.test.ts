@@ -200,15 +200,15 @@ test('the tracklist paints the cursor on its first track before any key moves it
 });
 
 // The user's double-click contract (add-gui-library-panel): a double-click on
-// a tracklist row adds that track to the queue, through the same add helper
-// the list's track rows use.
-test('a double-click on a tracklist row sends that track add to queue', async () => {
+// a tracklist row plays that track, through the same play helper the list's
+// track rows use.
+test('a double-click on a tracklist row sends that track play', async () => {
 	const container = mountHero();
 
 	await fireEvent.dblClick(container.querySelector('[data-library-track="t2"]') as HTMLElement);
 
 	expect(invokeMock).toHaveBeenCalledWith('library', {
-		command: { command: 'addToQueue', itemId: 't2' },
+		command: { command: 'play', itemId: 't2' },
 	});
 });
 
