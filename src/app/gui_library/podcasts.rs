@@ -10,6 +10,8 @@
 use mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseKind;
 use mbv_ui_msg::PodcastEpisodeTarget;
 
+use super::podcasts_projection::GuiPodcastEpisodeId;
+
 use crate::app::App;
 
 /// The Podcasts destination's pills (row 10.1): the library's merged Latest
@@ -202,6 +204,52 @@ impl App {
             return;
         }
         let _ = self.submit_queue_item(item, false);
+    }
+
+    /// Select the Podcasts episode a row id names (design D12, row 10.1): the
+    /// frame carries the episode's identity as one opaque string, so a string
+    /// that is no encoding of it is a stale frame's row and changes nothing.
+    pub(in crate::app::gui_library) fn select_gui_podcast_row(
+        &mut self,
+        lib_idx: usize,
+        row: &str,
+    ) {
+        let Some(episode) = GuiPodcastEpisodeId::decode(row) else {
+            Self::log_stale_library_item("podcastSelect", row);
+            return;
+        };
+        self.gui_podcast_select(lib_idx, &episode.target());
+    }
+
+    /// Play the Podcasts episode a row id names (design D12, row 10.1): Enter
+    /// on the row, or the double-click a front end sends with this same
+    /// command. The episode's identity is the frame's opaque row id; a string
+    /// that is no encoding of it changes nothing.
+    pub(in crate::app::gui_library) fn play_gui_podcast_row(
+        &mut self,
+        lib_idx: usize,
+        item_id: &str,
+    ) {
+        let Some(episode) = GuiPodcastEpisodeId::decode(item_id) else {
+            Self::log_stale_library_item("podcastPlay", item_id);
+            return;
+        };
+        self.play_gui_podcast_episode(lib_idx, &episode.target());
+    }
+
+    /// Add the Podcasts episode a row id names to the queue (design D12, row
+    /// 10.1): `a` on the row. The episode's identity is the frame's opaque row
+    /// id; a string that is no encoding of it changes nothing.
+    pub(in crate::app::gui_library) fn enqueue_gui_podcast_row(
+        &mut self,
+        lib_idx: usize,
+        item_id: &str,
+    ) {
+        let Some(episode) = GuiPodcastEpisodeId::decode(item_id) else {
+            Self::log_stale_library_item("podcastQueue", item_id);
+            return;
+        };
+        self.enqueue_gui_podcast_episode(lib_idx, &episode.target());
     }
 
     /// The pill the frame paints (row 10.1): the stored pill, or Latest for a

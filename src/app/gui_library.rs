@@ -417,40 +417,6 @@ impl App {
         }
     }
 
-    /// Select the Podcasts episode a row id names (design D12, row 10.1): the
-    /// frame carries the episode's identity as one opaque string, so a string
-    /// that is no encoding of it is a stale frame's row and changes nothing.
-    fn select_gui_podcast_row(&mut self, lib_idx: usize, row: &str) {
-        let Some(episode) = GuiPodcastEpisodeId::decode(row) else {
-            Self::log_stale_library_item("podcastSelect", row);
-            return;
-        };
-        self.gui_podcast_select(lib_idx, &episode.target());
-    }
-
-    /// Play the Podcasts episode a row id names (design D12, row 10.1): Enter
-    /// on the row, or the double-click a front end sends with this same
-    /// command. The episode's identity is the frame's opaque row id; a string
-    /// that is no encoding of it changes nothing.
-    fn play_gui_podcast_row(&mut self, lib_idx: usize, item_id: &str) {
-        let Some(episode) = GuiPodcastEpisodeId::decode(item_id) else {
-            Self::log_stale_library_item("podcastPlay", item_id);
-            return;
-        };
-        self.play_gui_podcast_episode(lib_idx, &episode.target());
-    }
-
-    /// Add the Podcasts episode a row id names to the queue (design D12, row
-    /// 10.1): `a` on the row. The episode's identity is the frame's opaque row
-    /// id; a string that is no encoding of it changes nothing.
-    fn enqueue_gui_podcast_row(&mut self, lib_idx: usize, item_id: &str) {
-        let Some(episode) = GuiPodcastEpisodeId::decode(item_id) else {
-            Self::log_stale_library_item("podcastQueue", item_id);
-            return;
-        };
-        self.enqueue_gui_podcast_episode(lib_idx, &episode.target());
-    }
-
     /// Select a Home row (design D2, D12): the row the Hero shows. The
     /// selection is the core's, so the frame carries it back and the launch
     /// of a window-content reload keeps it.
