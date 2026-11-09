@@ -17,6 +17,18 @@ use super::{
 };
 
 #[cfg(any(test, feature = "test"))]
+/// One seeded book row of the GUI's Audiobooks catalog helper: `(id, title,
+/// author display, author sort key, duration seconds, cover path)`.
+#[cfg(any(test, feature = "test"))]
+pub(in crate::app) type SeededAbsBook<'a> = (
+    &'a str,
+    &'a str,
+    Option<&'a str>,
+    &'a str,
+    f64,
+    Option<&'a str>,
+);
+
 impl App {
     /// The Library tabs the catalog holds, for a Client's test that asserts a
     /// startup landed the catalog (add-gui-library-panel design D11).
@@ -317,6 +329,119 @@ impl App {
         self.gui_abs_libs
             .get(&lib_idx)
             .and_then(|selection| selection.picked_book.as_deref())
+    }
+
+    /// Seed the GUI's Audiobooks book catalog for `lib_idx` with `books`, as
+    /// a landed fetch would — already in the TUI's author-sort order
+    /// (add-gui-library-panel row 9.1): `(id, title, author credit, author
+    /// sort key, duration seconds, cover path)`. A Client's command test
+    /// injects the rows and observes the frame with no fetch behind it.
+    #[cfg(any(test, feature = "test"))]
+    pub fn seed_gui_abs_books_for_test(&mut self, lib_idx: usize, books: &[SeededAbsBook<'_>]) {
+        let Some(state) = self.audiobookshelf_book_browse.get_mut(lib_idx) else {
+            return;
+        };
+        for (id, title, author_display, author_sort_key, duration, cover) in books {
+            state.books.push(mbv_audiobookshelf::AudiobookshelfBook {
+                library_item_id: (*id).into(),
+                title: (*title).into(),
+                author_display: author_display.map(str::to_string),
+                author_sort_key: (*author_sort_key).into(),
+                cover_path: cover.map(str::to_string),
+                duration_seconds: *duration,
+                narrator: None,
+                published_year: None,
+                genres: Vec::new(),
+                description: None,
+                series_name: None,
+                chapters: Vec::new(),
+                audio_files: Vec::new(),
+            });
+        }
+        state.total = state.books.len();
+    }
+
+    /// Seed the selected book's chapter detail for the GUI's Audiobooks
+    /// projection, as a landed detail fetch would (add-gui-library-panel row
+    /// 9.1): `(chapter id, start seconds, end seconds, title)` chapters and
+    /// `(index, duration seconds)` audio files.
+    #[cfg(any(test, feature = "test"))]
+    pub fn seed_gui_abs_book_detail_for_test(
+        &mut self,
+        lib_idx: usize,
+        book_id: &str,
+        chapters: &[(usize, f64, f64, &str)],
+        files: &[(usize, f64)],
+    ) {
+        let Some(state) = self.audiobookshelf_book_browse.get_mut(lib_idx) else {
+            return;
+        };
+        state.detail_cache.insert(
+            book_id.to_string(),
+            (
+                chapters
+                    .iter()
+                    .map(
+                        |(id, start, end, title)| mbv_audiobookshelf::AudiobookshelfChapter {
+                            id: *id,
+                            start: *start,
+                            end: *end,
+                            title: (*title).into(),
+                        },
+                    )
+                    .collect(),
+                files
+                    .iter()
+                    .map(
+                        |(index, duration)| mbv_audiobookshelf::AudiobookshelfAudioFile {
+                            index: *index,
+                            ino: String::new(),
+                            duration: *duration,
+                        },
+                    )
+                    .collect(),
+            ),
+        );
+    }
+
+    /// Seed the cached book progress the Hero's `Finished`/`N%` row and the
+    /// play path's saved position read (add-gui-library-panel row 9.1).
+    #[cfg(any(test, feature = "test"))]
+    pub fn seed_gui_abs_book_progress_for_test(
+        &mut self,
+        lib_idx: usize,
+        book_id: &str,
+        current_time_seconds: f64,
+        is_finished: bool,
+    ) {
+        if let Some(state) = self.audiobookshelf_book_browse.get_mut(lib_idx) {
+            state.progress.insert(
+                book_id.to_string(),
+                mbv_audiobookshelf::AudiobookshelfBookProgress {
+                    library_item_id: book_id.to_string(),
+                    current_time_seconds,
+                    is_finished,
+                },
+            );
+        }
+    }
+
+    /// Set the Owner's Audiobookshelf queue admission (add-gui-library-panel
+    /// row 9.1): the play and enqueue commands gate on it, and a Client's
+    /// test has no live Owner. The stub owner's ctrl compatibility carries
+    /// the gate, so the player proxy is rebuilt over a stub remote with the
+    /// requested capability.
+    #[cfg(any(test, feature = "test"))]
+    pub fn set_abs_admission_for_test(&mut self, admitted: bool) {
+        let (mut remote, player_rx, _cmd_rx) =
+            mbv_remote_player::RemotePlayer::stub_with_command_rx(Vec::new(), 0);
+        let mut compatibility = mbv_ctrl::CtrlCompatibility::current();
+        compatibility.audiobookshelf.queue = admitted;
+        compatibility.audiobookshelf.book_queue = admitted;
+        remote.set_ctrl_compatibility_for_test(compatibility);
+        let always_play_next = self.player.always_play_next;
+        self.player = mbv_player::PlayerProxy::from_remote(remote, always_play_next);
+        self.player_rx = player_rx;
     }
 
     /// Seed the GUI's plain Emby root-list store with `items` for `lib_idx`,

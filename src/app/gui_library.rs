@@ -7,6 +7,7 @@
 
 mod artwork;
 mod audiobooks;
+mod audiobooks_projection;
 mod emby;
 mod emby_projection;
 mod home;
@@ -19,6 +20,10 @@ mod tv;
 
 pub use self::artwork::GuiLibraryArtwork;
 pub use self::audiobooks::GuiAudiobooksSelection;
+pub use self::audiobooks_projection::{
+    GuiAudiobooksChapterRow, GuiAudiobooksHero, GuiAudiobooksProjection, GuiAudiobooksRow,
+    GuiAudiobooksWorkspace,
+};
 pub use self::emby::GuiEmbyLibrarySelection;
 pub(in crate::app) use self::emby::{GuiEmbyRootItems, GuiEmbyRootItemsEvent};
 pub use self::emby_projection::{
@@ -161,6 +166,28 @@ pub enum GuiLibraryCommand {
     /// Add a plain Emby-library row to the queue (design D12, row 8.1): the
     /// shared add path.
     EmbyQueue { lib_idx: usize, item_id: String },
+    /// Select an Audiobooks book (design D12, row 9.1): the book the Hero
+    /// shows, whose select runs the TUI's own detail loader. A book the
+    /// published catalog no longer carries changes nothing.
+    AbsSelect { lib_idx: usize, row: String },
+    /// Play an Audiobooks book (design D12, row 9.1): Enter on the book row,
+    /// or the double-click a front end sends with this same command. The
+    /// queue is replaced with the book at its saved position, through the
+    /// TUI's book play path and the Owner's Audiobookshelf admission.
+    AbsPlay { lib_idx: usize, item_id: String },
+    /// Play or seek from an Audiobooks chapter (design D12, row 9.1): Enter
+    /// on a Workspace chapter row, or the double-click a front end sends
+    /// with this same command. The TUI's chapter-activation rule runs: a seek
+    /// on the active book, a replace-and-start at the chapter's offset on
+    /// another one.
+    AbsPlayChapter {
+        lib_idx: usize,
+        book_id: String,
+        chapter: usize,
+    },
+    /// Add an Audiobooks book to the queue (design D12, row 9.1): the TUI's
+    /// enqueue path, through the Owner's Audiobookshelf admission.
+    AbsQueue { lib_idx: usize, item_id: String },
 }
 
 /// The Library item menu the frame's `rowMenu` section carries: the item
@@ -246,18 +273,12 @@ impl App {
             GuiLibraryCommand::RowMenu { item_id } => {
                 self.gui_library_row_menu_target = Some(item_id);
             }
-            GuiLibraryCommand::HomeSelect { row } => {
-                self.select_gui_home_row(&row);
-            }
-            GuiLibraryCommand::HomePlay { row } => {
-                self.play_gui_home_row(&row);
-            }
+            GuiLibraryCommand::HomeSelect { row } => self.select_gui_home_row(&row),
+            GuiLibraryCommand::HomePlay { row } => self.play_gui_home_row(&row),
             GuiLibraryCommand::HomePlayNext { row } => {
                 self.enqueue_gui_home_row(&row, "homePlayNext");
             }
-            GuiLibraryCommand::HomeQueue { row } => {
-                self.enqueue_gui_home_row(&row, "homeQueue");
-            }
+            GuiLibraryCommand::HomeQueue { row } => self.enqueue_gui_home_row(&row, "homeQueue"),
             GuiLibraryCommand::ShowsSetMode { lib_idx, mode } => {
                 self.gui_tv_set_mode(lib_idx, &mbv_queue::TvContentMode::from(mode));
             }
@@ -290,6 +311,20 @@ impl App {
             }
             GuiLibraryCommand::EmbyQueue { lib_idx, item_id } => {
                 self.enqueue_gui_emby_item(lib_idx, &item_id);
+            }
+            GuiLibraryCommand::AbsSelect { lib_idx, row } => self.gui_abs_select(lib_idx, &row),
+            GuiLibraryCommand::AbsPlay { lib_idx, item_id } => {
+                self.play_gui_abs_book(lib_idx, &item_id);
+            }
+            GuiLibraryCommand::AbsPlayChapter {
+                lib_idx,
+                book_id,
+                chapter,
+            } => {
+                self.play_gui_abs_chapter(lib_idx, &book_id, chapter);
+            }
+            GuiLibraryCommand::AbsQueue { lib_idx, item_id } => {
+                self.enqueue_gui_abs_book(lib_idx, &item_id);
             }
         }
     }

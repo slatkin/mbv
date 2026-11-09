@@ -21,9 +21,14 @@ use serde::Serialize;
 use crate::artwork::data_url;
 use mbv::GuiLibraryTab;
 
+mod audiobooks;
 mod emby;
 mod shows;
 
+pub use self::audiobooks::{
+    GuiAudiobooksChapterRowFrame, GuiAudiobooksFrame, GuiAudiobooksHeroFrame,
+    GuiAudiobooksRowFrame, GuiAudiobooksWorkspaceFrame,
+};
 pub use self::emby::{
     GuiEmbyFeedGroupFrame, GuiEmbyFrame, GuiEmbyHeroFrame, GuiEmbyPillFrame, GuiEmbyRowFrame,
     GuiEmbyRowKindFrame,
@@ -79,6 +84,10 @@ pub struct GuiLibraryContent {
     /// row 8.1, the USER-APPROVED GUI Emby-library design); `None` while any
     /// other destination is active.
     pub emby: Option<GuiEmbyFrame>,
+    /// The Audiobooks destination's content while an Audiobookshelf book
+    /// library is the active destination (add-gui-library-panel design D12,
+    /// row 9.1); `None` while any other destination is active.
+    pub audiobooks: Option<GuiAudiobooksFrame>,
 }
 
 /// One destination tab of the top bar (design D2).

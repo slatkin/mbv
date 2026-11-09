@@ -143,6 +143,7 @@ function embyContent(
 		home: null,
 		shows: null,
 		emby,
+		audiobooks: null,
 	};
 }
 

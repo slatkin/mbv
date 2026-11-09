@@ -9,6 +9,11 @@ import type { GuiLibraryFrame } from './library-types';
 
 export type {
 	GuiArtistKey,
+	GuiAudiobooksChapterRow,
+	GuiAudiobooksFrame,
+	GuiAudiobooksHero,
+	GuiAudiobooksRow,
+	GuiAudiobooksWorkspace,
 	GuiHomeContentId,
 	GuiHomeFrame,
 	GuiHomeHero,

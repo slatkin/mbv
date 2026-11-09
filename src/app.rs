@@ -47,6 +47,10 @@ pub use self::gui_library::{
     GuiHomeRowKind, GuiHomeRowState,
 };
 pub use self::gui_library::{
+    GuiAudiobooksChapterRow, GuiAudiobooksHero, GuiAudiobooksProjection, GuiAudiobooksRow,
+    GuiAudiobooksWorkspace,
+};
+pub use self::gui_library::{
     GuiDestinationKind, GuiEmbyFeedGroup, GuiEmbyHero, GuiEmbyPill, GuiEmbyProjection, GuiEmbyRow,
     GuiEmbyRowKind, GuiShowsEpisodeRow, GuiShowsHero, GuiShowsMode, GuiShowsPill,
     GuiShowsProjection, GuiShowsRow, GuiShowsSeasonPill, GuiShowsWorkspace,

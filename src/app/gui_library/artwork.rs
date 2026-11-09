@@ -130,8 +130,12 @@ impl App {
 
     /// The cached art under `cache_key`, display-encoded once per key
     /// (`gui_home_art_encoded`), or the empty fetch's placeholder and the
-    /// in-flight fetch's loading state — the queue card's resolution.
-    fn resolve_gui_home_art(&mut self, cache_key: &str) -> GuiLibraryArtwork {
+    /// in-flight fetch's loading state — the queue card's resolution. The
+    /// Audiobooks hero's cover resolution shares it.
+    pub(in crate::app::gui_library) fn resolve_gui_home_art(
+        &mut self,
+        cache_key: &str,
+    ) -> GuiLibraryArtwork {
         if self
             .images
             .image(cache_key)

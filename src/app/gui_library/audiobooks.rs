@@ -7,9 +7,12 @@
 //! so this module only names the pick and triggers the loads the TUI's own
 //! loaders run. The TUI never reads any of it.
 
+use mbv_queue::QueueItem;
 use mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseKind;
+use mbv_ui_model::audiobookshelf_browse::books::audiobookshelf_book_queue_item_for_id;
 
 use crate::app::App;
+use crate::app::dispatch::notify::ToastSeverity;
 
 /// The GUI Library's Audiobooks selection (row 9.1): per book library, the
 /// book the Hero shows, by stable `library_item_id`. The TUI's own resting
@@ -146,5 +149,77 @@ impl App {
                 .books
                 .iter()
                 .any(|book| book.library_item_id == book_id)
+    }
+
+    /// The book a play or enqueue command names, as the TUI's queue-item
+    /// producer builds it (row 9.1): the saved position and the finished
+    /// state the browse state's progress holds. `None` when the published
+    /// catalog carries no book of the id — a stale command plays nothing.
+    fn gui_abs_book_queue_item(&self, lib_idx: usize, book_id: &str) -> Option<QueueItem> {
+        let state = self.audiobookshelf_book_browse.get(lib_idx)?;
+        audiobookshelf_book_queue_item_for_id(state, book_id)
+    }
+
+    /// Play the book a command names (row 9.1): the TUI's book play path —
+    /// the queue is replaced with the book, and the player honours its saved
+    /// position as the resume position — with the Owner's Audiobookshelf
+    /// admission honoured. A refusal flashes the TUI's owner-unavailable
+    /// toast; a stale id plays nothing.
+    pub(in crate::app::gui_library) fn play_gui_abs_book(&mut self, lib_idx: usize, book_id: &str) {
+        let Some(item) = self.gui_abs_book_queue_item(lib_idx, book_id) else {
+            Self::log_stale_library_item("absPlay", book_id);
+            return;
+        };
+        if !self.player.can_admit_audiobookshelf() {
+            self.flash_abs_owner_unavailable();
+            return;
+        }
+        let _ = self.submit_queue_item(item, true);
+    }
+
+    /// Play or seek from the chapter a command names (row 9.1): the TUI's
+    /// `ActivateChapter` rule (`activate_audiobookshelf_book_chapter`), scoped
+    /// to the destination the frame named. A stale id or chapter resolves
+    /// through the same rule's arms, whose refusal flashes its own toast.
+    pub(in crate::app::gui_library) fn play_gui_abs_chapter(
+        &mut self,
+        lib_idx: usize,
+        book_id: &str,
+        chapter_id: usize,
+    ) {
+        if self.gui_abs_book_queue_item(lib_idx, book_id).is_none() {
+            Self::log_stale_library_item("absPlayChapter", book_id);
+            return;
+        }
+        self.activate_audiobookshelf_book_chapter(lib_idx, book_id, chapter_id);
+    }
+
+    /// Add the book a command names to the queue (row 9.1): the TUI's
+    /// enqueue path — one append at the tail — with the Owner's
+    /// Audiobookshelf admission honoured. A refusal flashes the TUI's
+    /// owner-unavailable toast; a stale id queues nothing.
+    pub(in crate::app::gui_library) fn enqueue_gui_abs_book(
+        &mut self,
+        lib_idx: usize,
+        book_id: &str,
+    ) {
+        let Some(item) = self.gui_abs_book_queue_item(lib_idx, book_id) else {
+            Self::log_stale_library_item("absQueue", book_id);
+            return;
+        };
+        if !self.player.can_admit_audiobookshelf() {
+            self.flash_abs_owner_unavailable();
+            return;
+        }
+        let _ = self.submit_queue_item(item, false);
+    }
+
+    /// The TUI's owner-unavailable toast (row 9.1): every play and enqueue
+    /// refusal flashes it, so the GUI reads the same refusal the TUI paints.
+    fn flash_abs_owner_unavailable(&mut self) {
+        self.flash(
+            "Audiobookshelf playback owner is unavailable".into(),
+            ToastSeverity::Error,
+        );
     }
 }

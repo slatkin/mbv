@@ -49,6 +49,7 @@ function carriedContent(): GuiLibraryContent {
 		home: homeFrame(),
 		shows: null,
 		emby: null,
+		audiobooks: null,
 	};
 }
 

@@ -494,7 +494,7 @@ pub fn stub_app_with_completed_emby_startup(views: Vec<mbv_emby_model::EmbyItem>
 /// The Client tests' test-only reads and seeds of an `App`'s state
 /// (`app_stub::test_reads`).
 #[cfg(any(test, feature = "test"))]
-mod test_reads;
+pub(in crate::app) mod test_reads;
 
 /// The `App` a GUI Client's Owner-exit test drives (`daemon-disconnect-`
 /// `handling` "Clients exit cleanly on an announced shutdown"): the stub

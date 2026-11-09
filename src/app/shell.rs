@@ -47,7 +47,7 @@ mod library_panel;
 mod messages;
 mod modal_actions;
 mod music_workspace;
-mod now_playing;
+pub(in crate::app) mod now_playing;
 mod overlays;
 mod playback;
 mod playlists;

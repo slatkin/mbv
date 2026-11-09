@@ -11,8 +11,8 @@
 use mbv::{App, GuiDestinationKind, GuiLibraryTabs};
 
 use crate::bridge::frame::library::{
-    GuiEmbyFrame, GuiHomeFrame, GuiLibraryArt, GuiLibraryContent, GuiLibraryFrame,
-    GuiLibraryTabFrame, GuiMusicFrame, GuiShowsFrame,
+    GuiAudiobooksFrame, GuiEmbyFrame, GuiHomeFrame, GuiLibraryArt, GuiLibraryContent,
+    GuiLibraryFrame, GuiLibraryTabFrame, GuiMusicFrame, GuiShowsFrame,
 };
 
 /// The frames' Library section memo (design D2).
@@ -39,10 +39,7 @@ impl LibraryFrames {
         // The Audiobooks destination's frame-path ensure (add-gui-library-panel
         // design D12, row 9.1): the default pick's detail load starts before
         // any select does, as the Shows frame path ensures its default series'
-        // detail. The section itself joins in the later core surface's unit.
-        if let Some(GuiDestinationKind::Audiobooks { lib_idx }) = destination {
-            app.ensure_gui_abs_selection(lib_idx);
-        }
+        // detail. The section itself is built with the content below.
         let music = match destination {
             Some(GuiDestinationKind::Music { lib_idx }) => Some(music_frame(app, lib_idx)),
             _ => None,
@@ -55,15 +52,27 @@ impl LibraryFrames {
             Some(GuiDestinationKind::Library { lib_idx }) => Some(emby_frame(app, lib_idx)),
             _ => None,
         };
+        let audiobooks = match destination {
+            Some(GuiDestinationKind::Audiobooks { lib_idx }) => {
+                app.ensure_gui_abs_selection(lib_idx);
+                Some(audiobooks_frame(app, lib_idx))
+            }
+            _ => None,
+        };
         // Home presents while no library destination presents content
         // (design D12): the destinations are exclusive, so no two fields of
         // the content set themselves at once.
         let home = matches!(destination, Some(GuiDestinationKind::Home)).then(|| home_frame(app));
-        if music.is_none() && home.is_none() && shows.is_none() && emby.is_none() {
+        if music.is_none()
+            && home.is_none()
+            && shows.is_none()
+            && emby.is_none()
+            && audiobooks.is_none()
+        {
             self.sent = None;
             return None;
         }
-        let content = content(app, music, home, shows, emby);
+        let content = content(app, music, home, shows, emby, audiobooks);
         if self.last.as_ref() != Some(&content) {
             // The counter wraps like the queue's revision mint: a client
             // lives far shorter than a revision's range, so a repeat is a
@@ -102,6 +111,10 @@ fn log_content_built(revision: u64, content: &GuiLibraryContent) {
     let home_rows = content.home.as_ref().map_or(0, |home| home.rows.len());
     let shows_rows = content.shows.as_ref().map_or(0, |shows| shows.rows.len());
     let emby_rows = content.emby.as_ref().map_or(0, |emby| emby.rows.len());
+    let abs_rows = content
+        .audiobooks
+        .as_ref()
+        .map_or(0, |audiobooks| audiobooks.rows.len());
     tracing::info!(
         name: "gui_library.content.built",
         target: "gui_library",
@@ -115,6 +128,7 @@ fn log_content_built(revision: u64, content: &GuiLibraryContent) {
         home_rows,
         shows_rows,
         emby_rows,
+        audiobooks_rows = abs_rows,
         "the Library content changed"
     );
 }
@@ -132,6 +146,7 @@ fn content(
     home: Option<GuiHomeFrame>,
     shows: Option<GuiShowsFrame>,
     emby: Option<GuiEmbyFrame>,
+    audiobooks: Option<GuiAudiobooksFrame>,
 ) -> GuiLibraryContent {
     let GuiLibraryTabs { tabs, current } = app.gui_library_tabs();
     GuiLibraryContent {
@@ -141,6 +156,7 @@ fn content(
         home,
         shows,
         emby,
+        audiobooks,
     }
 }
 
@@ -200,4 +216,14 @@ fn emby_frame(app: &mut App, lib_idx: usize) -> GuiEmbyFrame {
     app.ensure_gui_emby_selection(lib_idx);
     let projection = app.gui_emby_projection(lib_idx);
     GuiEmbyFrame::from_projection(lib_idx, &projection)
+}
+
+/// The Audiobooks destination's content (design D12, row 9.1): the book
+/// list, the selected book, and its Hero with its chapters Workspace, built
+/// here per frame so an unchanged frame's revision carries nothing (the
+/// memo's content compare). The ensure above the content build is the
+/// default pick's detail-load trigger.
+fn audiobooks_frame(app: &mut App, lib_idx: usize) -> GuiAudiobooksFrame {
+    let projection = app.gui_audiobooks_projection(lib_idx);
+    GuiAudiobooksFrame::from_projection(lib_idx, &projection)
 }

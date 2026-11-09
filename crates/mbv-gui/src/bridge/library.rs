@@ -94,6 +94,24 @@ pub enum GuiLibraryCommand {
     EmbyPlayNext { lib_idx: usize, item_id: String },
     /// Add a plain Emby-library row to the queue (row 8.1).
     EmbyQueue { lib_idx: usize, item_id: String },
+    /// Select an Audiobooks book (add-gui-library-panel design D12, row
+    /// 9.1): the book the Hero shows. A book the published catalog no longer
+    /// carries changes nothing.
+    AbsSelect { lib_idx: usize, row: String },
+    /// Play an Audiobooks book (row 9.1): Enter on the book row, or the
+    /// double-click a front end sends with this same command. The queue is
+    /// replaced with the book at its saved position.
+    AbsPlay { lib_idx: usize, item_id: String },
+    /// Play or seek from an Audiobooks chapter (row 9.1): Enter on a
+    /// Workspace chapter row, or the double-click a front end sends with
+    /// this same command.
+    AbsPlayChapter {
+        lib_idx: usize,
+        book_id: String,
+        chapter: usize,
+    },
+    /// Add an Audiobooks book to the queue (row 9.1).
+    AbsQueue { lib_idx: usize, item_id: String },
 }
 
 /// One Shows view mode (design D12): the three single-select pills the
@@ -200,6 +218,18 @@ impl From<GuiLibraryCommand> for mbv::GuiLibraryCommand {
             GuiLibraryCommand::EmbyQueue { lib_idx, item_id } => {
                 Self::EmbyQueue { lib_idx, item_id }
             }
+            GuiLibraryCommand::AbsSelect { lib_idx, row } => Self::AbsSelect { lib_idx, row },
+            GuiLibraryCommand::AbsPlay { lib_idx, item_id } => Self::AbsPlay { lib_idx, item_id },
+            GuiLibraryCommand::AbsPlayChapter {
+                lib_idx,
+                book_id,
+                chapter,
+            } => Self::AbsPlayChapter {
+                lib_idx,
+                book_id,
+                chapter,
+            },
+            GuiLibraryCommand::AbsQueue { lib_idx, item_id } => Self::AbsQueue { lib_idx, item_id },
         }
     }
 }

@@ -96,6 +96,7 @@ function showsContent(
 		music: null,
 		home: null,
 		emby: null,
+		audiobooks: null,
 		shows: {
 			libIdx: 0,
 			pills: showsPills(mode),
