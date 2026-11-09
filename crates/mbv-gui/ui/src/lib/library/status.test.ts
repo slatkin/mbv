@@ -3,7 +3,13 @@
 // picked item's artist or title, joined by the canvas's separator.
 
 import { expect, test } from 'vitest';
-import type { GuiLibraryTab, GuiMusicFrame, GuiMusicHero, GuiShowsFrame } from '$lib/bridge/types';
+import type {
+	GuiEmbyFrame,
+	GuiLibraryTab,
+	GuiMusicFrame,
+	GuiMusicHero,
+	GuiShowsFrame,
+} from '$lib/bridge/types';
 import { libraryLocation } from './status';
 
 const TABS: GuiLibraryTab[] = [
@@ -67,6 +73,56 @@ test('a library with no group names no collection', () => {
 // the canvas joins.
 test('an unpicked item leaves the location without its last segment', () => {
 	expect(libraryLocation(TABS, 1, music(null))).toBe('Music › Hip-Hop › Soul');
+});
+
+// add-gui-library-panel row 8.1: on a plain Emby library the location reads the
+// destination tab's label and the selected row's title, and the plain mode's
+// letter rail replaces the pill row, so no collection segment appears
+// (design D10, D12).
+test('the location reads the plain Emby destination and the selected row', () => {
+	const emby: GuiEmbyFrame = {
+		libIdx: 2,
+		pills: [],
+		collectionNames: [],
+		feedGroup: false,
+		loading: false,
+		failed: false,
+		rows: [
+			{ id: 'm1', title: 'Alien', subtitle: '1979', date: null, sortLetter: 'A', kind: 'media' },
+			{ id: 'm2', title: 'Heat', subtitle: '1995', date: null, sortLetter: 'H', kind: 'media' },
+		],
+		selected: 'm2',
+		hero: null,
+	};
+
+	expect(libraryLocation([{ position: 2, label: 'Movies' }], 2, null, null, null, emby)).toBe(
+		'Movies › Heat',
+	);
+});
+
+// add-gui-library-panel row 8.1: a feed-group library names the selected feed
+// pill between the destination and the row (design D10, D12).
+test('the location reads the feed pill name in feed-group mode', () => {
+	const emby: GuiEmbyFrame = {
+		libIdx: 2,
+		pills: [
+			{ group: { kind: 'all' }, name: 'All', selected: false, collection: false },
+			{ group: { kind: 'folder', id: 'f1' }, name: 'Home videos', selected: true, collection: false },
+		],
+		collectionNames: ['Home videos'],
+		feedGroup: true,
+		loading: false,
+		failed: false,
+		rows: [
+			{ id: 'v1', title: 'Holiday', subtitle: null, date: '2019', sortLetter: null, kind: 'media' },
+		],
+		selected: 'v1',
+		hero: null,
+	};
+
+	expect(libraryLocation([{ position: 2, label: 'Home videos' }], 2, null, null, null, emby)).toBe(
+		'Home videos › Home videos › Holiday',
+	);
 });
 
 // add-gui-library-panel row 6.2: on Home the location reads `Home`, then the

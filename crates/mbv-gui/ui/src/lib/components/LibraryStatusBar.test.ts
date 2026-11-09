@@ -4,7 +4,13 @@
 
 import { render } from '@testing-library/svelte';
 import { expect, test } from 'vitest';
-import type { GuiLibraryTab, GuiMusicFrame, GuiMusicHero, GuiStatusBar } from '$lib/bridge/types';
+import type {
+	GuiEmbyFrame,
+	GuiLibraryTab,
+	GuiMusicFrame,
+	GuiMusicHero,
+	GuiStatusBar,
+} from '$lib/bridge/types';
 import LibraryStatusBar from './LibraryStatusBar.svelte';
 
 const TABS: GuiLibraryTab[] = [{ position: 1, label: 'Music' }];
@@ -91,4 +97,34 @@ test('an armed prefix replaces the hints and keeps the location', () => {
 	expect(container.querySelector('[data-library-status-location]')?.textContent).toContain(
 		'Music › Hip-Hop › Beastie Boys',
 	);
+});
+
+// add-gui-library-panel row 8.1: the bar's carried plain Emby-library content
+// becomes the location while that destination is active (design D10, D12).
+test('the bar paints the plain Emby location for the carried content', () => {
+	const emby: GuiEmbyFrame = {
+		libIdx: 2,
+		pills: [],
+		collectionNames: [],
+		feedGroup: false,
+		loading: false,
+		failed: false,
+		rows: [
+			{ id: 'm1', title: 'Heat', subtitle: '1995', date: null, sortLetter: 'H', kind: 'media' },
+		],
+		selected: 'm1',
+		hero: null,
+	};
+	const { container } = render(LibraryStatusBar, {
+		tabs: [{ position: 2, label: 'Movies' }],
+		currentTab: 2,
+		music: null,
+		emby,
+		status: IDLE,
+	});
+
+	expect(
+		container.querySelector('[data-library-status-location]')?.textContent?.trim(),
+	).toBe('Movies › Heat');
+	expect(container.querySelectorAll('[data-library-hint]')).toHaveLength(6);
 });

@@ -17,6 +17,7 @@
 	// as the canvas's bar carries none.
 	import { toastColor } from '$lib/bridge/status';
 	import type {
+		GuiEmbyFrame,
 		GuiHomeFrame,
 		GuiLibraryTab,
 		GuiMusicFrame,
@@ -40,11 +41,23 @@
 		/** The carried Shows content (design D12, row 7.1): the location reads
 		 * the destination, the view mode, and the selected row on it. */
 		shows?: GuiShowsFrame | null;
+		/** The carried plain Emby-library content (design D12, row 8.1): the
+		 * location reads the destination, the selected feed pill in
+		 * feed-group mode, and the selected row on it. */
+		emby?: GuiEmbyFrame | null;
 		/** The armed prefix and the live toast (design D10): they replace the
 		 * hints while active. */
 		status: GuiStatusBar;
 	}
-	const { tabs, currentTab, music, home = null, shows = null, status }: Props = $props();
+	const {
+		tabs,
+		currentTab,
+		music,
+		home = null,
+		shows = null,
+		emby = null,
+		status,
+	}: Props = $props();
 
 	/** The canvas's key hints, key glyph then what the key does (design D3,
 	 * D10). */
@@ -60,8 +73,9 @@
 	/** The location line, or `''` while the content fills no segment. On Home
 	 * it reads the destination's one-word name, then the selected row
 	 * (design D12); on Shows the tab's label, the view mode, and the selected
-	 * row (row 7.1). */
-	const location = $derived(libraryLocation(tabs, currentTab, music, home, shows));
+	 * row (row 7.1); on a plain Emby library the tab's label, the selected
+	 * feed pill, and the selected row (row 8.1). */
+	const location = $derived(libraryLocation(tabs, currentTab, music, home, shows, emby));
 </script>
 
 <!-- The canvas status bar: 40 px, 16 px side padding, the canvas's 1 px top

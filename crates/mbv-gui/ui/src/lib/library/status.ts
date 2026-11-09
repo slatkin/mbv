@@ -3,7 +3,13 @@
 // title, joined by ` › ` as the canvas prints them. Every part reads the
 // carried Library content, so the line composes no state of its own.
 
-import type { GuiHomeFrame, GuiLibraryTab, GuiMusicFrame, GuiShowsFrame } from '$lib/bridge/types';
+import type {
+	GuiEmbyFrame,
+	GuiHomeFrame,
+	GuiLibraryTab,
+	GuiMusicFrame,
+	GuiShowsFrame,
+} from '$lib/bridge/types';
 
 /** The current destination's label: the tab whose position the frame marks
  * current, absent while the active destination is not one of the tabs. */
@@ -42,10 +48,32 @@ function showsSelectedTitle(shows: GuiShowsFrame | null): string | null {
 	return shows.rows.find((row) => row.id === shows.selected)?.title ?? null;
 }
 
+/** The plain Emby-library location's middle segment (design D10, D12, row
+ * 8.1): the selected feed pill's name in feed-group mode, and nothing in
+ * plain mode, whose letter rail replaces the pill row. */
+function embySelectedGroup(emby: GuiEmbyFrame): string | null {
+	if (!emby.feedGroup) {
+		return null;
+	}
+	return emby.collectionNames[0] ?? null;
+}
+
+/** The plain Emby-library location's last segment (design D10, D12, row 8.1):
+ * the title of the row the core selected, which is the row the Hero shows. A
+ * frame whose selection names no carried row leaves the segment out. */
+function embySelectedTitle(emby: GuiEmbyFrame | null): string | null {
+	if (emby === null || emby.selected === null) {
+		return null;
+	}
+	return emby.rows.find((row) => row.id === emby.selected)?.title ?? null;
+}
+
 /** The location line's segments in canvas order. On Home the line reads
  * `Home`, then the selected row's Hero title (design D10, D12). On Shows it
  * reads the destination tab's label, the active view mode's name, and the
- * selected row's title (row 7.1). A segment the content does not fill drops,
+ * selected row's title (row 7.1). On a plain Emby library it reads the
+ * destination tab's label, the selected feed pill in feed-group mode, and the
+ * selected row's title (row 8.1). A segment the content does not fill drops,
  * so an unpicked Hero leaves the destination and the collections, and a
  * destination outside the tabs leaves the rest. */
 export function libraryLocationSegments(
@@ -54,6 +82,7 @@ export function libraryLocationSegments(
 	music: GuiMusicFrame | null,
 	home: GuiHomeFrame | null = null,
 	shows: GuiShowsFrame | null = null,
+	emby: GuiEmbyFrame | null = null,
 ): string[] {
 	if (home !== null) {
 		return ['Home', home.hero?.title ?? null].filter(
@@ -64,6 +93,13 @@ export function libraryLocationSegments(
 		return [destinationLabel(tabs, currentTab), ...shows.collectionNames, showsSelectedTitle(shows)].filter(
 			(segment): segment is string => segment !== null && segment.trim() !== '',
 		);
+	}
+	if (emby !== null) {
+		return [
+			destinationLabel(tabs, currentTab),
+			embySelectedGroup(emby),
+			embySelectedTitle(emby),
+		].filter((segment): segment is string => segment !== null && segment.trim() !== '');
 	}
 	return [
 		destinationLabel(tabs, currentTab),
@@ -80,6 +116,7 @@ export function libraryLocation(
 	music: GuiMusicFrame | null,
 	home: GuiHomeFrame | null = null,
 	shows: GuiShowsFrame | null = null,
+	emby: GuiEmbyFrame | null = null,
 ): string {
-	return libraryLocationSegments(tabs, currentTab, music, home, shows).join(' › ');
+	return libraryLocationSegments(tabs, currentTab, music, home, shows, emby).join(' › ');
 }
