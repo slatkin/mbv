@@ -519,7 +519,9 @@ every destination the GUI does not present yet), `music`
 `home` (`Option<GuiHomeFrame>`, present while Home is the active
 destination — add-gui-library-panel design D12, the USER-APPROVED GUI Home
 design), and `shows` (`Option<GuiShowsFrame>`, present while an Emby TV
-library's Shows destination is active — design D12, row 7.1). No two
+library's Shows destination is active — design D12, row 7.1), and `emby`
+(`Option<GuiEmbyFrame>`, present while a plain Emby library's destination is
+active — design D12, row 8.1). No two
 destination fields present at once: the destinations are exclusive, so the
 present field names the active destination, and the top bar marks the Home
 icon current exactly while `home` is present.
@@ -590,6 +592,32 @@ Hero is the selected episode's same facts with no `workspace`. A click or a
 double-click on a Workspace episode sends that episode's `episode_id` with
 `showsPlay`.
 
+`GuiEmbyFrame` (`src/bridge/frame/library/emby.rs`) carries `lib_idx` (the
+plain Emby-library index the Emby commands name), `pills`,
+`collection_names` (the selected collection's name the Library Status bar's
+location reads; empty in plain mode, whose list is the whole library),
+`feed_group`, `loading`, `failed`, `rows`, `selected`, and `hero`. A plain
+Emby library (row 8.1: every Emby library that is neither a Grouped Music
+library nor a TV library) paints the plain mode: `feed_group` is `false`,
+the rows are the root-list store's full list in the server's `SortName`
+order, each with `sort_letter` over the article-stripped sort name (`#`
+past Z), the year or the runtime on `subtitle`, and no `date` — the letter
+rail replaces the TUI's letter-range pill row, so no pill rides. A library
+in the feed-group mode (`feed_view_libraries`) paints `feed_group` `true`
+with a single-select pill row of All and each root folder whose video count
+is positive, in listing order, each pill with `group` (`{ kind: 'all' }` or
+`{ kind: 'folder', id }`), `name`, `selected`, and `collection` (`false`,
+design D6). Its rows are the selected group's items in the server's date
+order — All newest first, a folder oldest first — with the production year
+in `date` and no `sort_letter`. In both modes `selected` carries the core's
+selected row as the frame painted it, with the first row as the default, so
+the Hero paints as soon as a list lands, and a stored id the list no longer
+carries falls back to that first row; a plain mode's fetch that failed
+carries `failed` and shows no row until the library opens again. `hero` is
+the selected row's shared Emby hero producer's facts — `title`, `meta_rows`
+with `duration_row` and `progress_row`, `overview`, `art_shape` at the
+artwork policy's declared arm, and `art` — and carries no Workspace.
+
 `GuiMusicFrame` carries `lib_idx` (the Grouped Music library index the
 set-collections command names), `pills` (`group_id`, `name`, `selected`, and
 `collection`), `loading`, `failure` (the failure line naming the selected
@@ -648,6 +676,22 @@ that season's episodes, and `showsPlay`, `showsPlayNext`, and `showsQueue`
 paths on an episode. The Owner owns the queue, so no Shows command mutates
 it directly, and a row, season, or episode id the active list no longer holds
 logs and changes nothing.
+
+The plain Emby-library commands name their library by its `libIdx` and its
+content by the stable Service id the frame painted (row 8.1):
+`embySelect` (`libIdx`, `row`) selects the row the Hero shows, and
+`embySetFeedGroup` (`libIdx`, `group`) runs the TUI's own feed-group
+selection path — the session cache, the stale-drop, and the lazy fetch
+behave as the TUI pill's press does — with a group the library does not
+present, or a library that presents no feed-group mode, logging and changing
+nothing. `embyPlay` (`libIdx`, `itemId`) — the command Enter and a
+double-click both send — runs the shared library play path, whose
+folder-play rule expands a folder or a boxset into its playable content, so
+the queue is replaced with the folder's items and no nested list opens;
+`embyPlayNext` and `embyQueue` (`libIdx`, `itemId`) run the shared play-next
+and add paths. The Owner owns the queue, so no Emby command mutates it
+directly, and a row or folder id the active list no longer holds logs and
+changes nothing.
 
 The `takeFocus` variant also moves the core's `FocusStack`, so the frame paints
 the focus the `App`'s key gates read (design D4). The `play` and
