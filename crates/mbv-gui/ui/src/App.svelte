@@ -103,6 +103,7 @@
     {@const content = $libraryContent}
     {@const music = content?.music ?? null}
     {@const home = content?.home ?? null}
+    {@const shows = content?.shows ?? null}
     {@const queueFocused = frame.focus.panel === 'queue'}
     <!-- The Library panel's one presence fact (design D2, D10, D12): the
       frame carries the Library section and the window holds the active
@@ -142,10 +143,11 @@
           onReset={resetQueueWidth}
         />
       {/if}
-      {#if libraryVisible && (music || home)}
+      {#if libraryVisible && (music || home || shows)}
         <LibraryPanel
           {music}
           {home}
+          {shows}
           tabs={content?.tabs ?? []}
           currentTab={content?.currentTab ?? null}
           status={frame.status}

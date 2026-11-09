@@ -10,9 +10,10 @@ import { get } from 'svelte/store';
 import { sendLibraryCommand } from '$lib/bridge/library';
 import type { KeyOutcome } from '$lib/bridge/input';
 import type { GuiFrame, GuiLibraryTab, GuiPanel } from '$lib/bridge/types';
-import type { ListMove } from './list';
+import { CURSOR_MOVES, LIST_AND_HERO_KEYS } from './keys-shared';
 import {
 	acceptLibraryFilter,
+	activeLibraryPanes,
 	closeLibraryFilter,
 	closeLibraryHero,
 	closeLibraryItemMenu,
@@ -24,6 +25,7 @@ import {
 	heroOverlayOpen,
 	libraryContent,
 	libraryHome,
+	libraryShows,
 	libraryShown,
 	libraryUi,
 	moveLibraryCursor,
@@ -41,6 +43,7 @@ import {
 	playHomeRowNext,
 	queueHomeRow,
 } from './home';
+import { routeShowsPanelKey } from './shows-keys';
 
 /** The frame facts the routing reads. A slice `GuiFrame` satisfies it whole, so
  * the installer passes the frame it holds; a test builds only these fields. */
@@ -49,33 +52,6 @@ export type LibraryKeyFrame = Pick<
 	'focus' | 'overlay' | 'status' | 'library'
 > & {
 	summary: Pick<GuiFrame['summary'], 'filterActive'>;
-};
-
-/** The keys the Library keeps from the core's router (design D3, step 4): the
- * movements, Right and Left's open and close, and Enter. Each pane acts on the
- * ones it owns — the list's cursor or the Hero's tracklist — and the others
- * change nothing but still never reach the core. `n` and `a` are the Library's
- * too, and `routeItemKey` answers them for every pane. */
-const LIST_AND_HERO_KEYS: ReadonlySet<string> = new Set([
-	'Enter',
-	'ArrowUp',
-	'ArrowDown',
-	'ArrowLeft',
-	'ArrowRight',
-	'PageUp',
-	'PageDown',
-	'Home',
-	'End',
-]);
-
-/** The list movement each cursor key names (design D3, D7). */
-const CURSOR_MOVES: Readonly<Record<string, ListMove>> = {
-	ArrowUp: 'up',
-	ArrowDown: 'down',
-	PageUp: 'pageUp',
-	PageDown: 'pageDown',
-	Home: 'home',
-	End: 'end',
 };
 
 /** Whether no modifier is held. */
@@ -101,21 +77,24 @@ function destinationPlace(event: KeyboardEvent): number | null {
 }
 
 /** Move the pane focus (design D3, step 3, D12): Tab and Shift+Tab walk the
- * panes the active destination paints — the pill row, the list, and the Hero
- * on Music; the list and the Hero on Home. The ends of that walk cross the
- * panel boundary (design D4): Tab past the Hero and Shift+Tab before the
- * first pane give the Queue panel Panel focus, and Queue Panel focus gives
- * the Library panel's near end the keyboard, because Panel focus lives in
- * the core. */
+ * panes the active destination paints — the pill row, the list, and the Hero on
+ * Music; the list and the Hero on Home; the mode pills, the list, and the Hero
+ * on Shows, without the Hero the Upcoming mode does not paint. The ends of that
+ * walk cross the panel boundary (design D4): Tab past the last pane and
+ * Shift+Tab before the first give the Queue panel Panel focus, and Queue Panel
+ * focus gives the Library panel's near end the keyboard, because Panel focus
+ * lives in the core. */
 function takePaneFocus(panel: GuiPanel, step: number): void {
+	const panes = activeLibraryPanes();
 	if (panel === 'queue') {
 		sendLibraryCommand({ command: 'takeFocus' });
-		focusLibraryPane(step > 0 ? (libraryHome() === null ? 'pills' : 'list') : 'hero');
+		focusLibraryPane(step > 0 ? panes[0] : panes[panes.length - 1]);
 		return;
 	}
 	const { pane } = get(libraryUi);
 	const back = step < 0;
-	if ((step > 0 && pane === 'hero') || (back && (libraryHome() === null ? pane === 'pills' : pane === 'list'))) {
+	const at = panes.includes(pane) ? panes.indexOf(pane) : back ? panes.length : -1;
+	if (back ? at <= 0 : at === panes.length - 1) {
 		sendLibraryCommand({ command: 'takeQueueFocus' });
 		return;
 	}
@@ -252,13 +231,17 @@ function routeEscapeKey(ui: LibraryUiState): KeyOutcome {
 
 /** Route a key to the Library keys (design D3, step 4), with the pane the
  * window content focused deciding which control the key acts on. On Home the
- * Home keys route instead (design D12). */
+ * Home keys route instead (design D12), and on Shows the Shows keys
+ * (row 7.1). */
 function routePanelKey(event: KeyboardEvent, ui: LibraryUiState): KeyOutcome {
-	if (libraryHome() !== null) {
-		return routeHomePanelKey(event, ui);
-	}
 	if (event.key === 'Escape' && bare(event)) {
 		return routeEscapeKey(ui);
+	}
+	if (libraryHome() !== null) {
+		return routeHomePanelKey(event);
+	}
+	if (libraryShows() !== null) {
+		return routeShowsPanelKey(event, ui);
 	}
 	if (event.key === '/' && bare(event)) {
 		openLibraryFilter();
@@ -316,10 +299,7 @@ function routePanelKey(event: KeyboardEvent, ui: LibraryUiState): KeyOutcome {
  * Home, so `/` and Space are not taken: they pass to the core's router. The
  * tree's Right and Left have no node to open, so they change nothing but
  * still never reach the core. */
-function routeHomePanelKey(event: KeyboardEvent, ui: LibraryUiState): KeyOutcome {
-	if (event.key === 'Escape' && bare(event)) {
-		return routeEscapeKey(ui);
-	}
+function routeHomePanelKey(event: KeyboardEvent): KeyOutcome {
 	if (event.key === '/' || event.key === ' ') {
 		// No filter and no pill row on Home (row 6.2): the key keeps its core
 		// effect, as it does under Queue focus.

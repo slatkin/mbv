@@ -17,8 +17,9 @@ export const NODE_ROW_HEIGHT = 30;
 export const TRACK_ROW_HEIGHT = 28;
 
 /** The letters the rail spans (design D7): A to Z, as the canvas paints it. A
- * `#` heading for a Service's non-alphabetic names stays off the rail. */
-const RAIL_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+ * `#` heading for a Service's non-alphabetic names stays off the rail. The
+ * Shows list's rail spans the same letters (design D12). */
+export const RAIL_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 
 /** The fields every painted row carries: its stable id (the cursor's identity
  * and the each-block's key), its top edge from the list's first row, its

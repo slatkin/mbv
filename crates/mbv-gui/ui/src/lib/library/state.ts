@@ -16,6 +16,7 @@ import type {
 	GuiLibraryFrame,
 	GuiMusicFrame,
 	GuiMusicPill,
+	GuiShowsFrame,
 } from '$lib/bridge/types';
 import { heroTracks, moveTrackCursor, resolveTrackCursor } from './hero';
 import {
@@ -98,10 +99,24 @@ export interface LibraryUiState {
  * them. */
 export const HOME_PANES: readonly LibraryPane[] = ['list', 'hero'];
 
+/** The Library panel's panes on Shows (design D12, row 7.1): the mode pills,
+ * the list, and the Hero. The Upcoming mode paints no Hero, so the walk skips
+ * it there. */
+export const SHOWS_PANES: readonly LibraryPane[] = ['pills', 'list', 'hero'];
+export const SHOWS_PANES_NO_HERO: readonly LibraryPane[] = ['pills', 'list'];
+
 /** The panes the active destination paints (design D12): the one walk on
- * Home skips the panes it does not paint. */
-function activeLibraryPanes(): readonly LibraryPane[] {
-	return libraryHome() === null ? PANES : HOME_PANES;
+ * Home skips the panes it does not paint, and on Shows it skips the Hero the
+ * Upcoming mode does not paint. */
+export function activeLibraryPanes(): readonly LibraryPane[] {
+	if (libraryHome() !== null) {
+		return HOME_PANES;
+	}
+	const shows = libraryShows();
+	if (shows !== null) {
+		return shows.hero === null ? SHOWS_PANES_NO_HERO : SHOWS_PANES;
+	}
+	return PANES;
 }
 
 /** The state a freshly mounted window content starts with. */
@@ -142,9 +157,9 @@ export function carryLibraryContent(frame: GuiLibraryFrame | null): void {
 
 /** Whether the Library panel shows (design D2, D10, D12): the frame carries
  * the Library section and the window holds the active destination's content
- * — Music's or Home's — to paint. The window mounts the panel on this one
- * fact and the key router gates on it, so no Library key acts while the
- * panel paints nothing. */
+ * — Music's, Home's, or Shows' — to paint. The window mounts the panel on
+ * this one fact and the key router gates on it, so no Library key acts while
+ * the panel paints nothing. */
 export function libraryShown(
 	library: GuiLibraryFrame | null,
 	content: GuiLibraryContent | null,
@@ -152,7 +167,7 @@ export function libraryShown(
 	return (
 		library !== null &&
 		content !== null &&
-		(content.music !== null || content.home !== null)
+		(content.music !== null || content.home !== null || content.shows !== null)
 	);
 }
 
@@ -247,6 +262,12 @@ export function libraryMusic(): GuiMusicFrame | null {
  * while this is present. */
 export function libraryHome(): GuiHomeFrame | null {
 	return get(libraryContent)?.home ?? null;
+}
+
+/** The carried Shows content (design D12, row 7.1), or `null` while any other
+ * destination is active. */
+export function libraryShows(): GuiShowsFrame | null {
+	return get(libraryContent)?.shows ?? null;
 }
 
 /** The row model under one interaction state (design D7): the carried union,
@@ -609,7 +630,9 @@ export function heroOverlayOpen(ui: LibraryUiState): boolean {
 	return (
 		ui.arrangement === 'narrow' &&
 		!ui.heroDismissed &&
-		((libraryMusic()?.hero ?? null) !== null || (libraryHome()?.hero ?? null) !== null)
+		((libraryMusic()?.hero ?? null) !== null ||
+			(libraryHome()?.hero ?? null) !== null ||
+			(libraryShows()?.hero ?? null) !== null)
 	);
 }
 

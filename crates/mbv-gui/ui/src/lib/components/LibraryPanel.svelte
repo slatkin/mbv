@@ -6,9 +6,11 @@
 	// item is picked. The active destination decides which painters mount
 	// (design D12): Music paints the pill row, the union list, and the album
 	// Hero; Home paints the flat list and its Hero, with no pill row, no
-	// letter rail, and no Workspace. The Status bar (row 4.8) closes the
-	// column under both. The panel's interaction state lives in
-	// `$lib/library/state` and `$lib/library/home` and its keys in
+	// letter rail, and no Workspace; Shows paints its mode pills, the series or
+	// flat list with the All series mode's rail, and the series Hero with its
+	// Workspace. The Status bar (row 4.8) closes the column under both. The
+	// panel's interaction state lives in `$lib/library/state`,
+	// `$lib/library/home`, and `$lib/library/shows`, and its keys in
 	// `$lib/library/keys`, so this shell holds no state of its own.
 	//
 	// A press inside the panel sends the take-focus command (design D4): the
@@ -27,6 +29,7 @@
 		GuiHomeFrame,
 		GuiLibraryTab,
 		GuiMusicFrame,
+		GuiShowsFrame,
 		GuiStatusBar,
 	} from '$lib/bridge/types';
 	import LibraryHero from '$lib/components/LibraryHero.svelte';
@@ -34,6 +37,9 @@
 	import LibraryHomeList from '$lib/components/LibraryHomeList.svelte';
 	import LibraryList from '$lib/components/LibraryList.svelte';
 	import LibraryPills from '$lib/components/LibraryPills.svelte';
+	import LibraryShowsHero from '$lib/components/LibraryShowsHero.svelte';
+	import LibraryShowsList from '$lib/components/LibraryShowsList.svelte';
+	import LibraryShowsPills from '$lib/components/LibraryShowsPills.svelte';
 	import LibraryStatusBar from '$lib/components/LibraryStatusBar.svelte';
 	import LibraryTopBar from '$lib/components/LibraryTopBar.svelte';
 	import PanelDivider from '$lib/components/PanelDivider.svelte';
@@ -58,6 +64,10 @@
 		/** The carried Home content (design D12): the flat list and the
 		 * Hero; `null` while another destination is active. */
 		home?: GuiHomeFrame | null;
+		/** The carried Shows content (design D12, row 7.1): the mode pills, the
+		 * active mode's list, and the selected row's Hero with its Workspace;
+		 * `null` while another destination is active. */
+		shows?: GuiShowsFrame | null;
 		/** The frame's Status bar facts (design D10): the armed prefix and the
 		 * live toast, which the Status bar replaces the hints with. */
 		status: GuiStatusBar;
@@ -69,24 +79,37 @@
 		/** The Library column the list column sits in: the drag's clamp. */
 		libraryColumn: number;
 	}
-	const { tabs, currentTab, music, home = null, status, arrangement, listWidth, libraryColumn }: Props =
-		$props();
+	const {
+		tabs,
+		currentTab,
+		music,
+		home = null,
+		shows = null,
+		status,
+		arrangement,
+		listWidth,
+		libraryColumn,
+	}: Props = $props();
 
 	/** Whether the Hero sits beside the list rather than over it. */
 	const wide = $derived(arrangement === 'wide');
 
 	/** The Narrow Hero overlay's facts, whichever destination carries them:
-	 * Music's picked album, or the Home frame's selected row (design D12). */
+	 * Music's picked album, the Home frame's selected row, or the Shows frame's
+	 * selected row with its Workspace (design D12). */
 	type OverlayHero =
 		| { kind: 'music'; music: GuiMusicFrame }
 		| { kind: 'home'; home: GuiHomeFrame }
+		| { kind: 'shows'; shows: GuiShowsFrame }
 		| null;
 	const overlayHero: OverlayHero = $derived(
 		music !== null && music.hero !== null
 			? { kind: 'music', music }
 			: home !== null && home.hero !== null
 				? { kind: 'home', home }
-				: null,
+				: shows !== null && shows.hero !== null
+					? { kind: 'shows', shows }
+					: null,
 	);
 
 	let panelEl: HTMLElement | undefined = $state();
@@ -150,6 +173,10 @@
 		<!-- The Music destination's pills (design D6): Home paints none
 			(design D12), so the row is absent on it, not collapsed. -->
 		<LibraryPills {music} />
+	{:else if shows !== null}
+		<!-- The Shows destination's mode pills (design D12, row 7.1): single
+			select over the three view modes. -->
+		<LibraryShowsPills {shows} />
 	{/if}
 	<div class="relative flex min-h-0 flex-1">
 		{#if wide}
@@ -168,6 +195,12 @@
 				{:else if home !== null}
 					{#if home.hero !== null}
 						<LibraryHomeHero {home} />
+					{/if}
+				{:else if shows !== null}
+					<!-- The series Hero with its Workspace (design D12, row 7.1): the
+						Upcoming mode carries no Hero, so the pane stays empty there. -->
+					{#if shows.hero !== null}
+						<LibraryShowsHero {shows} />
 					{/if}
 				{/if}
 			</div>
@@ -197,6 +230,8 @@
 				<LibraryList {music} />
 			{:else if home !== null}
 				<LibraryHomeList {home} />
+			{:else if shows !== null}
+				<LibraryShowsList {shows} />
 			{/if}
 		</div>
 		{#if arrangement === 'narrow' && overlayHero !== null && !$libraryUi.heroDismissed}
@@ -229,8 +264,10 @@
 				>
 					{#if overlayHero.kind === 'music'}
 						<LibraryHero music={overlayHero.music} />
-					{:else}
+					{:else if overlayHero.kind === 'home'}
 						<LibraryHomeHero home={overlayHero.home} />
+					{:else}
+						<LibraryShowsHero shows={overlayHero.shows} />
 					{/if}
 				</div>
 			</div>
@@ -239,7 +276,7 @@
 	<!-- The Library Status bar (design D10): under the list region, closing the
 		column with the canvas's fixed key hints and the location while the panel
 		paints. -->
-	<LibraryStatusBar {tabs} {currentTab} {music} {home} {status} />
+	<LibraryStatusBar {tabs} {currentTab} {music} {home} {shows} {status} />
 	<!-- The right-click item menu (the row-menu command): the viewport-anchored
 		card at the pointer position, painted only while the Music frame carries
 		the item's own entries. A press runs the entry the core built, resolved by

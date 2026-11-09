@@ -3,7 +3,7 @@
 // picked item's artist or title, joined by the canvas's separator.
 
 import { expect, test } from 'vitest';
-import type { GuiLibraryTab, GuiMusicFrame, GuiMusicHero } from '$lib/bridge/types';
+import type { GuiLibraryTab, GuiMusicFrame, GuiMusicHero, GuiShowsFrame } from '$lib/bridge/types';
 import { libraryLocation } from './status';
 
 const TABS: GuiLibraryTab[] = [
@@ -87,4 +87,31 @@ test('the location reads Home and the Home Hero title', () => {
 			},
 		}),
 	).toBe('Home › Better Call Saul');
+});
+
+// add-gui-library-panel row 7.1: on Shows the location reads the destination
+// tab's label, the active view mode's name, and the selected row's title
+// (design D10, D12).
+test('the location reads the Shows destination, the view mode, and the selected row', () => {
+	const shows: GuiShowsFrame = {
+		libIdx: 0,
+		pills: [
+			{ mode: 'latest', name: 'Latest', selected: false, collection: false },
+			{ mode: 'upcoming', name: 'Upcoming', selected: false, collection: false },
+			{ mode: 'all', name: 'All series', selected: true, collection: false },
+		],
+		collectionNames: ['All series'],
+		loading: false,
+		workspaceLoading: false,
+		rows: [
+			{ id: 's1', title: 'Atlanta', subtitle: null, date: null, sortLetter: 'A' },
+			{ id: 's2', title: 'The Bear', subtitle: null, date: null, sortLetter: 'B' },
+		],
+		selected: 's2',
+		hero: null,
+	};
+
+	expect(
+		libraryLocation([{ position: 3, label: 'Shows' }], 3, null, null, shows),
+	).toBe('Shows › All series › The Bear');
 });

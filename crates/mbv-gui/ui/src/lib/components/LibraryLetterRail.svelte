@@ -16,8 +16,12 @@
 		/** The letter the cursor row belongs to, or `null` while no row holds
 		 * the cursor. */
 		marked: string | null;
+		/** What a press on an enabled letter does: the Music list's jump by
+		 * default, and the Shows list's own while it paints the rail
+		 * (design D12). */
+		jump?: (letter: string) => void;
 	}
-	const { letters, marked }: Props = $props();
+	const { letters, marked, jump = jumpToLetter }: Props = $props();
 
 	/** The `var(--canvas-<name>)` value a part paints in: the Library's canvas
 	 * hexes, which name no theme slot. */
@@ -58,7 +62,7 @@
 			disabled={letter.rowId === null}
 			data-library-rail-letter={letter.letter}
 			aria-current={letter.letter === marked ? 'true' : undefined}
-			onclick={() => jumpToLetter(letter.letter)}
+			onclick={() => jump(letter.letter)}
 		>
 			{letter.letter}
 		</button>

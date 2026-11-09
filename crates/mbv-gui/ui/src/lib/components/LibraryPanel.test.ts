@@ -10,7 +10,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { fireEvent, render } from '@testing-library/svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
 import { DEFAULT_DRAGGED_WIDTHS, LIBRARY_LIST_DEFAULT_WIDTH_PX, draggedWidths } from '$lib/bridge/resize';
-import type { GuiMusicFrame, GuiMusicHero, GuiStatusBar } from '$lib/bridge/types';
+import type { GuiMusicFrame, GuiMusicHero, GuiShowsFrame, GuiStatusBar } from '$lib/bridge/types';
 import { initialLibraryUi, libraryUi } from '$lib/library/state';
 import LibraryPanel from './LibraryPanel.svelte';
 
@@ -232,3 +232,80 @@ test('the Narrow overlay paints the Home Hero and closes on a press on its backd
 
 	expect(container.querySelector('[data-library-region="heroOverlay"]')).toBeNull();
 });
+
+// add-gui-library-panel row 7.1: while the Shows content is present (design
+// D12, the destinations are exclusive), the panel mounts the Shows painters in
+// place of the Music and Home ones — its mode pills, its list, and the series
+// Hero with its Workspace.
+test('the Shows content mounts the mode pills, the Shows list, and the series Hero', () => {
+	const { container } = render(LibraryPanel, {
+		tabs: [{ position: 3, label: 'Shows' }],
+		currentTab: 3,
+		music: null,
+		home: null,
+		shows: shows('all'),
+		status: idle,
+		arrangement: 'wide',
+		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
+		libraryColumn: 1200,
+	});
+
+	expect(container.querySelector('[data-library-region="pills"]')).toBeTruthy();
+	expect(container.querySelector('[data-library-shows-list]')).toBeTruthy();
+	expect(
+		container.querySelector('[data-library-region="hero"] [data-library-shows-hero]'),
+	).toBeTruthy();
+	expect(container.querySelector('[data-library-list]')).toBeNull();
+	expect(container.querySelector('[data-library-home-list]')).toBeNull();
+});
+
+// The Upcoming mode carries no Hero (design D12): the panel paints its flat
+// list and no Hero in the Wide pane or the Narrow overlay.
+test('the Upcoming Shows content paints no Hero', () => {
+	const { container } = render(LibraryPanel, {
+		tabs: [{ position: 3, label: 'Shows' }],
+		currentTab: 3,
+		music: null,
+		home: null,
+		shows: shows('upcoming'),
+		status: idle,
+		arrangement: 'narrow',
+		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
+		libraryColumn: 800,
+	});
+
+	expect(container.querySelector('[data-library-shows-list]')).toBeTruthy();
+	expect(container.querySelector('[data-library-shows-hero]')).toBeNull();
+	expect(container.querySelector('[data-library-region="heroOverlay"]')).toBeNull();
+});
+
+/** The carried Shows content of `mode`, with the series Hero the Upcoming mode
+ * does not paint (design D12). */
+function shows(mode: 'latest' | 'upcoming' | 'all'): GuiShowsFrame {
+	return {
+		libIdx: 0,
+		pills: [
+			{ mode: 'latest', name: 'Latest', selected: mode === 'latest', collection: false },
+			{ mode: 'upcoming', name: 'Upcoming', selected: mode === 'upcoming', collection: false },
+			{ mode: 'all', name: 'All series', selected: mode === 'all', collection: false },
+		],
+		collectionNames: [mode],
+		loading: false,
+		workspaceLoading: false,
+		rows: [{ id: 's1', title: 'Atlanta', subtitle: null, date: null, sortLetter: 'A' }],
+		selected: 's1',
+		hero:
+			mode === 'upcoming'
+				? null
+				: {
+						title: 'Atlanta',
+						metaRows: ['4 seasons'],
+						durationRow: null,
+						progressRow: null,
+						overview: null,
+						artShape: 'landscape',
+						art: null,
+						workspace: null,
+					},
+	};
+}

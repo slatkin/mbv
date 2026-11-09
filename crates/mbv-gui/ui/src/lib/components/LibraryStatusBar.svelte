@@ -20,6 +20,7 @@
 		GuiHomeFrame,
 		GuiLibraryTab,
 		GuiMusicFrame,
+		GuiShowsFrame,
 		GuiStatusBar,
 	} from '$lib/bridge/types';
 	import { libraryLocation } from '$lib/library/status';
@@ -36,11 +37,14 @@
 		/** The carried Home content (design D12): the location reads `Home` on
 		 * it. */
 		home?: GuiHomeFrame | null;
+		/** The carried Shows content (design D12, row 7.1): the location reads
+		 * the destination, the view mode, and the selected row on it. */
+		shows?: GuiShowsFrame | null;
 		/** The armed prefix and the live toast (design D10): they replace the
 		 * hints while active. */
 		status: GuiStatusBar;
 	}
-	const { tabs, currentTab, music, home = null, status }: Props = $props();
+	const { tabs, currentTab, music, home = null, shows = null, status }: Props = $props();
 
 	/** The canvas's key hints, key glyph then what the key does (design D3,
 	 * D10). */
@@ -55,8 +59,9 @@
 
 	/** The location line, or `''` while the content fills no segment. On Home
 	 * it reads the destination's one-word name, then the selected row
-	 * (design D12). */
-	const location = $derived(libraryLocation(tabs, currentTab, music, home));
+	 * (design D12); on Shows the tab's label, the view mode, and the selected
+	 * row (row 7.1). */
+	const location = $derived(libraryLocation(tabs, currentTab, music, home, shows));
 </script>
 
 <!-- The canvas status bar: 40 px, 16 px side padding, the canvas's 1 px top
