@@ -12,7 +12,7 @@ use mbv::{App, GuiDestinationKind, GuiLibraryTabs};
 
 use crate::bridge::frame::library::{
     GuiAudiobooksFrame, GuiEmbyFrame, GuiHomeFrame, GuiLibraryArt, GuiLibraryContent,
-    GuiLibraryFrame, GuiLibraryTabFrame, GuiMusicFrame, GuiShowsFrame,
+    GuiLibraryFrame, GuiLibraryTabFrame, GuiMusicFrame, GuiPodcastsFrame, GuiShowsFrame,
 };
 
 /// The frames' Library section memo (design D2).
@@ -40,8 +40,8 @@ impl LibraryFrames {
         // design D12, row 10.1): the selected pill's own loads — the Latest
         // shelf and every show's episodes, or one show's episodes — start
         // before any command does, as the Audiobooks ensure starts its
-        // default pick's detail. Row 10.1's later dispatch adds the section
-        // this destination carries to the content below.
+        // default pick's detail. The section itself is built with the content
+        // below.
         if let Some(GuiDestinationKind::Podcasts { lib_idx }) = destination {
             app.ensure_gui_podcast_selection(lib_idx);
         }
@@ -68,6 +68,10 @@ impl LibraryFrames {
             }
             _ => None,
         };
+        let podcasts = match destination {
+            Some(GuiDestinationKind::Podcasts { lib_idx }) => Some(podcasts_frame(app, lib_idx)),
+            _ => None,
+        };
         // Home presents while no library destination presents content
         // (design D12): the destinations are exclusive, so no two fields of
         // the content set themselves at once.
@@ -77,11 +81,12 @@ impl LibraryFrames {
             && shows.is_none()
             && emby.is_none()
             && audiobooks.is_none()
+            && podcasts.is_none()
         {
             self.sent = None;
             return None;
         }
-        let content = content(app, music, home, shows, emby, audiobooks);
+        let content = content(app, music, home, shows, emby, audiobooks, podcasts);
         if self.last.as_ref() != Some(&content) {
             // The counter wraps like the queue's revision mint: a client
             // lives far shorter than a revision's range, so a repeat is a
@@ -124,6 +129,10 @@ fn log_content_built(revision: u64, content: &GuiLibraryContent) {
         .audiobooks
         .as_ref()
         .map_or(0, |audiobooks| audiobooks.rows.len());
+    let podcasts_rows = content
+        .podcasts
+        .as_ref()
+        .map_or(0, |podcasts| podcasts.rows.len());
     tracing::info!(
         name: "gui_library.content.built",
         target: "gui_library",
@@ -138,6 +147,7 @@ fn log_content_built(revision: u64, content: &GuiLibraryContent) {
         shows_rows,
         emby_rows,
         audiobooks_rows = abs_rows,
+        podcasts_rows,
         "the Library content changed"
     );
 }
@@ -156,6 +166,7 @@ fn content(
     shows: Option<GuiShowsFrame>,
     emby: Option<GuiEmbyFrame>,
     audiobooks: Option<GuiAudiobooksFrame>,
+    podcasts: Option<GuiPodcastsFrame>,
 ) -> GuiLibraryContent {
     let GuiLibraryTabs { tabs, current } = app.gui_library_tabs();
     GuiLibraryContent {
@@ -166,6 +177,7 @@ fn content(
         shows,
         emby,
         audiobooks,
+        podcasts,
     }
 }
 
@@ -235,4 +247,14 @@ fn emby_frame(app: &mut App, lib_idx: usize) -> GuiEmbyFrame {
 fn audiobooks_frame(app: &mut App, lib_idx: usize) -> GuiAudiobooksFrame {
     let projection = app.gui_audiobooks_projection(lib_idx);
     GuiAudiobooksFrame::from_projection(lib_idx, &projection)
+}
+
+/// The Podcasts destination's content (design D12, row 10.1): the pill row,
+/// the active pill's episode rows, the selected episode, and its Hero, built
+/// here per frame so an unchanged frame's revision carries nothing (the memo's
+/// content compare). The ensure above the content build is the selected pill's
+/// load trigger.
+fn podcasts_frame(app: &mut App, lib_idx: usize) -> GuiPodcastsFrame {
+    let projection = app.gui_podcasts_projection(lib_idx);
+    GuiPodcastsFrame::from_projection(lib_idx, &projection)
 }

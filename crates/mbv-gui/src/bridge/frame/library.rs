@@ -23,6 +23,7 @@ use mbv::GuiLibraryTab;
 
 mod audiobooks;
 mod emby;
+mod podcasts;
 mod shows;
 
 pub use self::audiobooks::{
@@ -32,6 +33,9 @@ pub use self::audiobooks::{
 pub use self::emby::{
     GuiEmbyFeedGroupFrame, GuiEmbyFrame, GuiEmbyHeroFrame, GuiEmbyPillFrame, GuiEmbyRowFrame,
     GuiEmbyRowKindFrame,
+};
+pub use self::podcasts::{
+    GuiPodcastsFrame, GuiPodcastsHeroFrame, GuiPodcastsPillFrame, GuiPodcastsRowFrame,
 };
 pub use self::shows::{
     GuiShowsEpisodeRowFrame, GuiShowsFrame, GuiShowsHeroFrame, GuiShowsModeFrame,
@@ -88,6 +92,10 @@ pub struct GuiLibraryContent {
     /// library is the active destination (add-gui-library-panel design D12,
     /// row 9.1); `None` while any other destination is active.
     pub audiobooks: Option<GuiAudiobooksFrame>,
+    /// The Podcasts destination's content while an Audiobookshelf podcast
+    /// library is the active destination (add-gui-library-panel design D12,
+    /// row 10.1); `None` while any other destination is active.
+    pub podcasts: Option<GuiPodcastsFrame>,
 }
 
 /// One destination tab of the top bar (design D2).

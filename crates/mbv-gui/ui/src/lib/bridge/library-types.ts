@@ -1,8 +1,11 @@
 // The Library wire types of the GUI bridge contract (openspec change
 // add-gui-library-panel, design D2). Each type mirrors one serde DTO in
 // crates/mbv-gui/src/bridge/ field for field: the names are the serde wire
-// names, so a rename on the Rust side is a rename here. `types.ts` re-exports
-// this family, so every call site keeps importing from the one bridge module.
+// names, so a rename on the Rust side is a rename here. The Podcasts DTOs
+// live in `library-types-podcasts.ts` and are re-exported below, so every
+// call site keeps importing from the one bridge module.
+
+import type { GuiPodcastsFrame } from './library-types-podcasts';
 
 /** The Library panel's section (add-gui-library-panel design D2). A frame
  * re-carries `content` only when `revision` changes; a `reportLayout` reload
@@ -42,6 +45,10 @@ export interface GuiLibraryContent {
 	 * library is active (design D12, row 9.1); `null` while any other
 	 * destination is active. */
 	audiobooks: GuiAudiobooksFrame | null;
+	/** The Podcasts destination's content while an Audiobookshelf podcast
+	 * library is active (design D12, row 10.1); `null` while any other
+	 * destination is active. */
+	podcasts: GuiPodcastsFrame | null;
 }
 
 /** One destination tab of the top bar (design D2). */
@@ -219,7 +226,40 @@ export type GuiLibraryCommand =
 			command: 'absQueue';
 			libIdx: number;
 			itemId: string;
+	  }
+	| {
+			/** Set the Podcasts destination's pill (design D12, row 10.1):
+			 * Latest, or one show by its stable `library_item_id`. */
+			command: 'podcastsSetPill';
+			libIdx: number;
+			pill: GuiPodcastPill;
+	  }
+	| {
+			/** Select the Podcasts episode the Hero shows (design D12, row
+			 * 10.1): the row id the frame carried. */
+			command: 'podcastsSelect';
+			libIdx: number;
+			row: string;
+	  }
+	| {
+			/** Play a Podcasts episode (design D12, row 10.1): Enter on the
+			 * row, or the double-click a front end sends with this same
+			 * command. */
+			command: 'podcastsPlay';
+			libIdx: number;
+			itemId: string;
+	  }
+	| {
+			/** Add a Podcasts episode to the queue (design D12, row 10.1). */
+			command: 'podcastsQueue';
+			libIdx: number;
+			itemId: string;
 	  };
+
+/** One Podcasts pill (design D12, row 10.1): the library's merged Latest
+ * view, or one show by its stable `library_item_id`. The pill row is
+ * single-select; the state pills are dropped. */
+export type GuiPodcastPill = { kind: 'latest' } | { kind: 'show'; id: string };
 
 /** The Music destination's content (design D5). */
 export interface GuiMusicFrame {
@@ -724,3 +764,11 @@ export interface GuiAudiobooksChapterRow {
 	 * paints. */
 	current: boolean;
 }
+
+
+export type {
+	GuiPodcastsFrame,
+	GuiPodcastsHero,
+	GuiPodcastsPill,
+	GuiPodcastsRow,
+} from './library-types-podcasts';

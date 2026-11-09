@@ -383,3 +383,335 @@ fn the_latest_shelfs_shared_guard_requests_once() {
             .contains("lib-abs-podcasts")
     );
 }
+
+/// A stub `App` whose podcast library 1 holds `shows` in the list's title
+/// order, with each show's episodes cached through [`episode_cache`] — the
+/// data a landed fan-out leaves.
+fn projection_app() -> App {
+    let mut app = podcast_app();
+    app.seed_gui_podcast_shows_for_test(1, &[("show-a", "Show A"), ("show-b", "Show B")]);
+    app.seed_gui_podcast_episodes_for_test(
+        1,
+        "show-a",
+        Some("show-a-cover"),
+        &[
+            (
+                "a-old",
+                "A Old",
+                Some("The A show's older episode."),
+                Some(1_700_000_000),
+                Some(600.0),
+            ),
+            ("a-undated", "A Undated", None, None, Some(600.0)),
+        ],
+    );
+    app.seed_gui_podcast_episodes_for_test(
+        1,
+        "show-b",
+        Some("show-b-cover"),
+        &[(
+            "b-new",
+            "B New",
+            Some("The B show's newest episode."),
+            Some(1_800_000_000),
+            Some(1200.0),
+        )],
+    );
+    app
+}
+
+/// The Latest pill merges every listed show's episodes in the TUI's date order
+/// (row 10.1, contract a): newest first with the undated episode last, the
+/// pill row Latest plus one pill per show by title with Latest selected, the
+/// first row as the selected episode, and the Hero carrying that episode's
+/// facts, its description, and the parent show's Square cover.
+#[test]
+fn the_latest_pill_merges_two_shows_in_date_order_with_the_default_hero() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = projection_app();
+
+    let projection = app.gui_podcasts_projection(1);
+
+    let titles: Vec<&str> = projection
+        .rows
+        .iter()
+        .map(|row| row.title.as_str())
+        .collect();
+    assert_eq!(
+        titles,
+        ["B New", "A Old", "A Undated"],
+        "Latest merges both shows newest first with the undated episode last"
+    );
+    assert_eq!(
+        projection.rows[0].subtitle.as_deref(),
+        Some("Show B"),
+        "the merged row names its own show"
+    );
+    assert_eq!(
+        projection.rows[0].date.as_deref(),
+        Some(mbv_ui_model::ui_util::fmt_publish_date_short(1_800_000_000).as_str()),
+        "the gutter carries the publish date"
+    );
+    assert_eq!(
+        projection.rows[2].date, None,
+        "an undated episode carries no gutter"
+    );
+
+    let names: Vec<&str> = projection
+        .pills
+        .iter()
+        .map(|pill| pill.name.as_str())
+        .collect();
+    assert_eq!(names, ["Latest", "Show A", "Show B"]);
+    let selected_pills: Vec<bool> = projection.pills.iter().map(|pill| pill.selected).collect();
+    assert_eq!(
+        selected_pills,
+        [true, false, false],
+        "Latest is the default pill"
+    );
+
+    let first = GuiPodcastEpisodeId::new("show-b".into(), "b-new".into()).encode();
+    assert_eq!(
+        projection.selected.as_deref(),
+        Some(first.as_str()),
+        "the first row is the selected episode"
+    );
+
+    let hero = projection.hero.expect("the Hero paints");
+    assert_eq!(hero.title, "B New");
+    assert_eq!(hero.meta_rows.len(), 3, "the show, the duration, the date");
+    assert_eq!(hero.meta_rows[0], "Show B");
+    assert_eq!(hero.duration_row, Some(1));
+    assert_eq!(
+        hero.overview.as_deref(),
+        Some("The B show's newest episode."),
+        "the episode's description rides the overview"
+    );
+    assert_eq!(
+        hero.art_shape,
+        GuiArtShape::Square,
+        "podcast artwork is Square"
+    );
+    assert!(
+        hero.art.is_some(),
+        "the parent show's cover resolves through the Service-scoped chain"
+    );
+}
+
+/// A show pill scopes the list to that show (row 10.1, contract a): the pill
+/// is the one selected and only that show's episodes ride the rows.
+#[test]
+fn a_show_pill_scopes_the_rows_to_that_show() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = projection_app();
+
+    app.gui_podcast_set_pill(1, GuiPodcastPill::Show("show-a".into()));
+    let projection = app.gui_podcasts_projection(1);
+
+    let titles: Vec<&str> = projection
+        .rows
+        .iter()
+        .map(|row| row.title.as_str())
+        .collect();
+    assert_eq!(
+        titles,
+        ["A Old", "A Undated"],
+        "a show pill holds that show's episodes only"
+    );
+    let selected_pills: Vec<bool> = projection.pills.iter().map(|pill| pill.selected).collect();
+    assert_eq!(selected_pills, [false, true, false]);
+}
+
+/// A show pill the published show list no longer carries falls back to Latest
+/// (row 10.1): the stored pill survives in the core, the projection paints
+/// Latest's merged rows and marks Latest selected.
+#[test]
+fn a_stale_show_pill_falls_back_to_latest() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = projection_app();
+    app.gui_podcast_set_pill(1, GuiPodcastPill::Show("show-a".into()));
+    app.audiobookshelf_browse[1]
+        .shows
+        .retain(|show| show.library_item_id != "show-a");
+
+    let projection = app.gui_podcasts_projection(1);
+
+    let titles: Vec<&str> = projection
+        .rows
+        .iter()
+        .map(|row| row.title.as_str())
+        .collect();
+    assert_eq!(
+        titles,
+        ["B New"],
+        "the fallback view merges every listed show"
+    );
+    let selected_pills: Vec<bool> = projection.pills.iter().map(|pill| pill.selected).collect();
+    assert_eq!(selected_pills, [true, false], "Latest paints as selected");
+}
+
+/// The rows carry the TUI podcast row's played state (row 10.1): a finished
+/// episode is `Played`, a partly played one is `Active` with its percent, and
+/// every other episode is `Ordinary`.
+#[test]
+fn the_rows_carry_the_played_and_resume_state() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = projection_app();
+    app.seed_gui_podcast_progress_for_test(1, "show-a", "a-old", 300.0, false);
+    app.seed_gui_podcast_progress_for_test(1, "show-a", "a-undated", 600.0, true);
+
+    let projection = app.gui_podcasts_projection(1);
+
+    let states: Vec<crate::app::GuiHomeRowState> = projection
+        .rows
+        .iter()
+        .map(|row| row.state.clone())
+        .collect();
+    assert_eq!(
+        states,
+        [
+            crate::app::GuiHomeRowState::Ordinary,
+            crate::app::GuiHomeRowState::Active { progress: Some(50) },
+            crate::app::GuiHomeRowState::Played,
+        ]
+    );
+}
+
+/// The episode row id round-trips through its one encoding (row 10.1): the
+/// length prefix keeps the pair unambiguous even when the ids hold the
+/// separator, and a string of another shape decodes to nothing.
+#[test]
+fn the_episode_row_id_round_trips_through_its_encoding() {
+    let episode = GuiPodcastEpisodeId::new("show:1".into(), "ep:2".into());
+    let encoded = episode.encode();
+
+    assert_eq!(GuiPodcastEpisodeId::decode(&encoded), Some(episode));
+    assert_eq!(GuiPodcastEpisodeId::decode("no-separator"), None);
+    assert_eq!(GuiPodcastEpisodeId::decode("99:too-short"), None);
+    assert_eq!(
+        GuiPodcastEpisodeId::decode("0:empty-show"),
+        None,
+        "an empty show id names no episode"
+    );
+}
+
+/// The play and queue commands reach the Owner under the admission (row
+/// 10.1): the play replaces the queue with the episode, and the queue command
+/// appends it.
+#[test]
+fn the_play_and_queue_commands_replace_and_append_under_the_admission() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = projection_app();
+    let cmd_rx = super::live_owner_channel(&mut app);
+    let row = GuiPodcastEpisodeId::new("show-a".into(), "a-old".into()).encode();
+
+    app.apply_gui_library_command(crate::app::gui_library::GuiLibraryCommand::PodcastsPlay {
+        lib_idx: 1,
+        item_id: row.clone(),
+    });
+    let replaced = cmd_rx
+        .try_iter()
+        .find_map(|command| match command {
+            mbv_ctrl::CtrlCmd::UnifiedQueueReplace { items, .. } => match &*items {
+                [
+                    mbv_queue::QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Episode(
+                        episode,
+                    )),
+                ] => Some((episode.library_item_id.clone(), episode.episode_id.clone())),
+                _ => None,
+            },
+            _ => None,
+        })
+        .expect("the Owner received a queue replacement");
+    assert_eq!(replaced, ("show-a".to_string(), "a-old".to_string()));
+
+    app.apply_gui_library_command(crate::app::gui_library::GuiLibraryCommand::PodcastsQueue {
+        lib_idx: 1,
+        item_id: row,
+    });
+    let appended: Vec<String> = cmd_rx
+        .try_iter()
+        .filter_map(|command| match command {
+            mbv_ctrl::CtrlCmd::UnifiedQueueAppend { items, .. } => match &*items {
+                [
+                    mbv_queue::QueueItem::Audiobookshelf(mbv_queue::AudiobookshelfItem::Episode(
+                        episode,
+                    )),
+                ] => Some(episode.episode_id.clone()),
+                _ => None,
+            },
+            _ => None,
+        })
+        .collect();
+    assert_eq!(appended, vec!["a-old".to_string()]);
+}
+
+/// A denied Owner flashes the TUI's owner-unavailable toast and submits
+/// nothing (row 10.1): both the play and the queue command gate on the
+/// Audiobookshelf admission.
+#[test]
+fn a_denied_podcast_owner_flashes_the_owner_unavailable_toast() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = projection_app();
+    let cmd_rx = super::live_owner_channel(&mut app);
+    app.set_abs_admission_for_test(false);
+    let row = GuiPodcastEpisodeId::new("show-a".into(), "a-old".into()).encode();
+
+    app.apply_gui_library_command(crate::app::gui_library::GuiLibraryCommand::PodcastsPlay {
+        lib_idx: 1,
+        item_id: row.clone(),
+    });
+    assert_eq!(
+        app.status, "Audiobookshelf playback owner is unavailable",
+        "the play's refusal flashes the owner-unavailable toast"
+    );
+    app.apply_gui_library_command(crate::app::gui_library::GuiLibraryCommand::PodcastsQueue {
+        lib_idx: 1,
+        item_id: row,
+    });
+    assert!(
+        cmd_rx.try_recv().is_err(),
+        "a denied Owner receives no queue change"
+    );
+}
+
+/// Stale Podcasts ids change nothing (row 10.1): a row id of no valid shape, a
+/// play of an episode the cache does not hold, and an enqueue of one all
+/// submit nothing and flash no toast, and a select of a stale row leaves the
+/// pick as it was.
+#[test]
+fn stale_podcast_ids_change_nothing() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = projection_app();
+    let cmd_rx = super::live_owner_channel(&mut app);
+    let picked = GuiPodcastEpisodeId::new("show-a".into(), "a-old".into()).encode();
+    app.apply_gui_library_command(crate::app::gui_library::GuiLibraryCommand::PodcastsSelect {
+        lib_idx: 1,
+        row: picked.clone(),
+    });
+    let gone = GuiPodcastEpisodeId::new("show-a".into(), "gone".into()).encode();
+
+    app.apply_gui_library_command(crate::app::gui_library::GuiLibraryCommand::PodcastsSelect {
+        lib_idx: 1,
+        row: "not-an-id".into(),
+    });
+    app.apply_gui_library_command(crate::app::gui_library::GuiLibraryCommand::PodcastsPlay {
+        lib_idx: 1,
+        item_id: gone.clone(),
+    });
+    app.apply_gui_library_command(crate::app::gui_library::GuiLibraryCommand::PodcastsQueue {
+        lib_idx: 1,
+        item_id: gone,
+    });
+
+    assert!(cmd_rx.try_recv().is_err(), "a stale id submits nothing");
+    assert!(app.status.is_empty(), "a stale id flashes no toast");
+    assert_eq!(
+        app.gui_podcast_picked_episode(1)
+            .map(GuiPodcastEpisodeId::from)
+            .map(|episode| episode.encode())
+            .as_deref(),
+        Some(picked.as_str()),
+        "a stale select leaves the pick as it was"
+    );
+}

@@ -159,6 +159,7 @@ function frame(panel: GuiPanel, libraryMusic: GuiMusicFrame | null): GuiFrame {
 							shows: null,
 							emby: null,
 							audiobooks: null,
+							podcasts: null,
 						},
 					},
 		theme: null,
@@ -282,7 +283,7 @@ test('a frame without the Library section paints only the Queue panel', async ()
 	const { container } = await mount(
 		{ width: 700, height: 900 },
 		frame('library', null),
-		{ tabs: [{ position: 1, label: 'Music' }], currentTab: 1, music: music(), home: null, shows: null, emby: null, audiobooks: null },
+		{ tabs: [{ position: 1, label: 'Music' }], currentTab: 1, music: music(), home: null, shows: null, emby: null, audiobooks: null, podcasts: null },
 	);
 
 	expect(container.querySelector('[data-arrangement]')?.getAttribute('data-arrangement')).toBe(
@@ -462,5 +463,6 @@ function embyContent(): GuiLibraryContent {
 			},
 		},
 		audiobooks: null,
+		podcasts: null,
 	};
 }

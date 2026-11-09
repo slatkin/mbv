@@ -164,6 +164,46 @@ impl App {
         self.start_audiobookshelf_podcast_fan_out(lib_idx);
     }
 
+    /// Play the episode a command names (row 10.1): the TUI's ordinary episode
+    /// play — the queue is replaced with the episode, whose saved position is
+    /// the resume position — with the Owner's Audiobookshelf admission
+    /// honoured. A refusal flashes the TUI's owner-unavailable toast; a stale
+    /// identity plays nothing.
+    pub(in crate::app::gui_library) fn play_gui_podcast_episode(
+        &mut self,
+        lib_idx: usize,
+        target: &PodcastEpisodeTarget,
+    ) {
+        if self
+            .selected_audiobookshelf_queue_item_target(lib_idx, target)
+            .is_none()
+        {
+            Self::log_stale_library_item("podcastPlay", target.episode_id());
+            return;
+        }
+        self.play_selected_audiobookshelf_episode_target(lib_idx, target);
+    }
+
+    /// Add the episode a command names to the queue (row 10.1): the TUI's
+    /// enqueue path — one append at the tail — with the Owner's
+    /// Audiobookshelf admission honoured. A refusal flashes the TUI's
+    /// owner-unavailable toast; a stale identity queues nothing.
+    pub(in crate::app::gui_library) fn enqueue_gui_podcast_episode(
+        &mut self,
+        lib_idx: usize,
+        target: &PodcastEpisodeTarget,
+    ) {
+        let Some(item) = self.selected_audiobookshelf_queue_item_target(lib_idx, target) else {
+            Self::log_stale_library_item("podcastQueue", target.episode_id());
+            return;
+        };
+        if !self.player.can_admit_audiobookshelf() {
+            self.flash_abs_owner_unavailable();
+            return;
+        }
+        let _ = self.submit_queue_item(item, false);
+    }
+
     /// The pill the frame paints (row 10.1): the stored pill, or Latest for a
     /// library the session never selected one for — the default.
     #[must_use]

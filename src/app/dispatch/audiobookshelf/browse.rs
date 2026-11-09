@@ -526,7 +526,7 @@ pub(in crate::app) fn seconds_to_ticks(seconds: f64) -> i64 {
         .and_then(|ticks| i64::try_from(ticks).ok())
         .unwrap_or(0)
 }
-pub(super) fn seconds_to_ticks_u64(seconds: f64) -> Option<u64> {
+pub(in crate::app) fn seconds_to_ticks_u64(seconds: f64) -> Option<u64> {
     (seconds.is_finite() && seconds >= 0.0).then(|| {
         let ticks = saturating_i64_from_f64((seconds * TICKS_PER_SECOND_F64).round());
         u64::try_from(ticks).unwrap_or(0)

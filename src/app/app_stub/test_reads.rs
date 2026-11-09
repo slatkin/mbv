@@ -17,6 +17,12 @@ use super::{
 };
 
 #[cfg(any(test, feature = "test"))]
+/// One seeded episode row of the GUI's Podcasts helpers: `(episode id, title,
+/// description, publish instant in unix seconds, duration seconds)`.
+#[cfg(any(test, feature = "test"))]
+pub(in crate::app) type SeededAbsEpisode<'a> =
+    (&'a str, &'a str, Option<&'a str>, Option<u64>, Option<f64>);
+
 /// One seeded book row of the GUI's Audiobooks catalog helper: `(id, title,
 /// author display, author sort key, duration seconds, cover path)`.
 #[cfg(any(test, feature = "test"))]
@@ -419,6 +425,96 @@ impl App {
                 book_id.to_string(),
                 mbv_audiobookshelf::AudiobookshelfBookProgress {
                     library_item_id: book_id.to_string(),
+                    current_time_seconds,
+                    is_finished,
+                },
+            );
+        }
+    }
+
+    /// Seed the GUI's Podcasts show list for `lib_idx` with `shows`, as a
+    /// landed show page would — the list's title order is the projection's
+    /// pill order (add-gui-library-panel row 10.1): `(show id, title)` pairs.
+    /// A Client's command test injects the catalog and observes the frame
+    /// with no fetch behind it.
+    #[cfg(any(test, feature = "test"))]
+    pub fn seed_gui_podcast_shows_for_test(&mut self, lib_idx: usize, shows: &[(&str, &str)]) {
+        let Some(state) = self.audiobookshelf_browse.get_mut(lib_idx) else {
+            return;
+        };
+        for (id, title) in shows {
+            state.shows.push(mbv_audiobookshelf::AudiobookshelfShow {
+                library_item_id: (*id).into(),
+                title: (*title).into(),
+                author: None,
+                description: None,
+                cover_path: None,
+            });
+        }
+        state.total = state.shows.len();
+    }
+
+    /// Seed one show's episode cache for the GUI's Podcasts projection, as a
+    /// landed per-show fetch would (add-gui-library-panel row 10.1):
+    /// `(episode id, title, description, publish instant in unix seconds,
+    /// duration seconds)` rows, with the show's own cover path when `cover` is
+    /// some so the Hero's cover chain resolves.
+    #[cfg(any(test, feature = "test"))]
+    pub fn seed_gui_podcast_episodes_for_test(
+        &mut self,
+        lib_idx: usize,
+        show_id: &str,
+        cover: Option<&str>,
+        episodes: &[SeededAbsEpisode<'_>],
+    ) {
+        let Some(state) = self.audiobookshelf_browse.get_mut(lib_idx) else {
+            return;
+        };
+        if let Some(cover) = cover
+            && let Some(show) = state
+                .shows
+                .iter_mut()
+                .find(|show| show.library_item_id == show_id)
+        {
+            show.cover_path = Some(cover.to_string());
+        }
+        state.cache_detail(
+            show_id.to_string(),
+            episodes
+                .iter()
+                .map(
+                    |(episode_id, title, description, published_at, duration_seconds)| {
+                        mbv_audiobookshelf::AudiobookshelfDownloadedEpisode {
+                            library_item_id: show_id.to_string(),
+                            episode_id: (*episode_id).into(),
+                            title: (*title).into(),
+                            description: description.map(str::to_string),
+                            published_at: *published_at,
+                            duration_seconds: *duration_seconds,
+                        }
+                    },
+                )
+                .collect(),
+        );
+    }
+
+    /// Seed one episode's progress for the GUI's Podcasts row state and the
+    /// Hero's resume facts (add-gui-library-panel row 10.1).
+    #[cfg(any(test, feature = "test"))]
+    pub fn seed_gui_podcast_progress_for_test(
+        &mut self,
+        lib_idx: usize,
+        show_id: &str,
+        episode_id: &str,
+        current_time_seconds: f64,
+        is_finished: bool,
+    ) {
+        if let Some(state) = self.audiobookshelf_browse.get_mut(lib_idx) {
+            state.progress.insert(
+                (show_id.to_string(), episode_id.to_string()),
+                mbv_audiobookshelf::AudiobookshelfProgress {
+                    library_item_id: show_id.to_string(),
+                    episode_id: episode_id.to_string(),
                     current_time_seconds,
                     is_finished,
                 },

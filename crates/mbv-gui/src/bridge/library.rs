@@ -6,7 +6,7 @@
 //! or nothing.
 
 use mbv_queue::QueueItemContentId;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 /// One request from the Library panel's window content (design D2). The
 /// variants and their field names are the wire vocabulary the front end
@@ -112,6 +112,49 @@ pub enum GuiLibraryCommand {
     },
     /// Add an Audiobooks book to the queue (row 9.1).
     AbsQueue { lib_idx: usize, item_id: String },
+    /// Set the Podcasts destination's pill (add-gui-library-panel design D12,
+    /// row 10.1): Latest, or one show by its stable `library_item_id`. The
+    /// selected pill's own loads start through the TUI's own loaders.
+    PodcastsSetPill {
+        lib_idx: usize,
+        pill: GuiPodcastPill,
+    },
+    /// Select the Podcasts episode the Hero shows (row 10.1): the row id the
+    /// frame carried — the episode's opaque identity.
+    PodcastsSelect { lib_idx: usize, row: String },
+    /// Play a Podcasts episode (row 10.1): Enter on the row, or the
+    /// double-click a front end sends with this same command.
+    PodcastsPlay { lib_idx: usize, item_id: String },
+    /// Add a Podcasts episode to the queue (row 10.1).
+    PodcastsQueue { lib_idx: usize, item_id: String },
+}
+
+/// One Podcasts pill (design D12, row 10.1): the library's merged Latest view,
+/// or one show by its stable `library_item_id`. The pill row is single-select,
+/// as the TUI's one-valued `PillSelection` is; the state pills are dropped.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", content = "id", rename_all = "camelCase")]
+pub enum GuiPodcastPill {
+    Latest,
+    Show(String),
+}
+
+impl From<GuiPodcastPill> for mbv::GuiPodcastPill {
+    fn from(pill: GuiPodcastPill) -> Self {
+        match pill {
+            GuiPodcastPill::Latest => Self::Latest,
+            GuiPodcastPill::Show(show_id) => Self::Show(show_id),
+        }
+    }
+}
+
+impl From<&mbv::GuiPodcastPill> for GuiPodcastPill {
+    fn from(pill: &mbv::GuiPodcastPill) -> Self {
+        match pill {
+            mbv::GuiPodcastPill::Latest => Self::Latest,
+            mbv::GuiPodcastPill::Show(show_id) => Self::Show(show_id.clone()),
+        }
+    }
 }
 
 /// One Shows view mode (design D12): the three single-select pills the
@@ -230,6 +273,19 @@ impl From<GuiLibraryCommand> for mbv::GuiLibraryCommand {
                 chapter,
             },
             GuiLibraryCommand::AbsQueue { lib_idx, item_id } => Self::AbsQueue { lib_idx, item_id },
+            GuiLibraryCommand::PodcastsSetPill { lib_idx, pill } => Self::PodcastsSetPill {
+                lib_idx,
+                pill: mbv::GuiPodcastPill::from(pill),
+            },
+            GuiLibraryCommand::PodcastsSelect { lib_idx, row } => {
+                Self::PodcastsSelect { lib_idx, row }
+            }
+            GuiLibraryCommand::PodcastsPlay { lib_idx, item_id } => {
+                Self::PodcastsPlay { lib_idx, item_id }
+            }
+            GuiLibraryCommand::PodcastsQueue { lib_idx, item_id } => {
+                Self::PodcastsQueue { lib_idx, item_id }
+            }
         }
     }
 }

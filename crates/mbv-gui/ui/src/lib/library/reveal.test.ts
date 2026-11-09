@@ -73,6 +73,7 @@ function content(): GuiLibraryContent {
 		shows: null,
 		emby: null,
 		audiobooks: null,
+		podcasts: null,
 	};
 }
 

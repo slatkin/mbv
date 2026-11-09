@@ -13,6 +13,7 @@ mod emby_projection;
 mod home;
 mod launch;
 mod podcasts;
+mod podcasts_projection;
 mod projection;
 mod shows;
 mod store;
@@ -35,6 +36,10 @@ pub use self::home::{
     GuiHomeRowKind, GuiHomeRowState,
 };
 pub use self::podcasts::{GuiPodcastPill, GuiPodcastsSelection};
+pub use self::podcasts_projection::{
+    GuiPodcastEpisodeId, GuiPodcastsHero, GuiPodcastsPillOption, GuiPodcastsProjection,
+    GuiPodcastsRow,
+};
 pub use self::projection::{
     GuiMusicAlbum, GuiMusicArtist, GuiMusicHero, GuiMusicPill, GuiMusicProjection, GuiMusicTrack,
     GuiMusicTrackTotal,
@@ -190,6 +195,26 @@ pub enum GuiLibraryCommand {
     /// Add an Audiobooks book to the queue (design D12, row 9.1): the TUI's
     /// enqueue path, through the Owner's Audiobookshelf admission.
     AbsQueue { lib_idx: usize, item_id: String },
+    /// Set the Podcasts destination's pill (design D12, row 10.1): Latest, or
+    /// one show by its stable `library_item_id`. The pill row is single-select,
+    /// and the selected pill's own loads start through the TUI's own loaders.
+    /// A show the published show list no longer carries changes nothing.
+    PodcastsSetPill {
+        lib_idx: usize,
+        pill: podcasts::GuiPodcastPill,
+    },
+    /// Select the Podcasts episode the Hero shows (design D12, row 10.1): a
+    /// press on the row. The row id is the frame's opaque episode identity, so
+    /// a stale frame's row changes nothing.
+    PodcastsSelect { lib_idx: usize, row: String },
+    /// Play a Podcasts episode (design D12, row 10.1): Enter on the row, or the
+    /// double-click a front end sends with this same command. The queue is
+    /// replaced with the episode through the TUI's episode play path and the
+    /// Owner's Audiobookshelf admission.
+    PodcastsPlay { lib_idx: usize, item_id: String },
+    /// Add a Podcasts episode to the queue (design D12, row 10.1): the TUI's
+    /// enqueue path, through the Owner's Audiobookshelf admission.
+    PodcastsQueue { lib_idx: usize, item_id: String },
 }
 
 /// The Library item menu the frame's `rowMenu` section carries: the item
@@ -228,12 +253,7 @@ impl App {
     /// the App's data cannot act on logs why it was ignored, so a live
     /// session's Library path is visible in the GUI log.
     pub fn apply_gui_library_command(&mut self, command: GuiLibraryCommand) {
-        tracing::info!(
-            name: "gui_library.command",
-            target: "gui_library",
-            command = ?command,
-            "the GUI Library panel sent a command"
-        );
+        Self::log_library_command(&command);
         match command {
             GuiLibraryCommand::OpenDestination { position } => {
                 if self.presents_open_position(position) {
@@ -315,6 +335,40 @@ impl App {
                 self.enqueue_gui_emby_item(lib_idx, &item_id);
             }
             GuiLibraryCommand::AbsSelect { lib_idx, row } => self.gui_abs_select(lib_idx, &row),
+            // The Audiobookshelf destinations' groups (rows 9.1, 10.1): the
+            // book list and the podcast list each send their own commands.
+            command @ (GuiLibraryCommand::AbsPlay { .. }
+            | GuiLibraryCommand::AbsPlayChapter { .. }
+            | GuiLibraryCommand::AbsQueue { .. }
+            | GuiLibraryCommand::PodcastsSetPill { .. }
+            | GuiLibraryCommand::PodcastsSelect { .. }
+            | GuiLibraryCommand::PodcastsPlay { .. }
+            | GuiLibraryCommand::PodcastsQueue { .. }) => {
+                self.apply_gui_audiobookshelf_command(command);
+            }
+        }
+    }
+
+    /// Log one GUI Library command's receipt (`gui_library.command`): every
+    /// command reaches this line, so a live session's Library path is visible
+    /// in the GUI log before any arm acts on it.
+    fn log_library_command(command: &GuiLibraryCommand) {
+        tracing::info!(
+            name: "gui_library.command",
+            target: "gui_library",
+            command = ?command,
+            "the GUI Library panel sent a command"
+        );
+    }
+
+    /// Apply one of the Audiobookshelf destinations' commands (rows 9.1,
+    /// 10.1): the book list's play, chapter, and enqueue, and the podcast
+    /// list's pill, select, play, and enqueue. The caller routes only these
+    /// variants here, so the trailing arm is the group's own no-op for a
+    /// routing mistake — it logs and changes nothing rather than dropping the
+    /// request silently.
+    fn apply_gui_audiobookshelf_command(&mut self, command: GuiLibraryCommand) {
+        match command {
             GuiLibraryCommand::AbsPlay { lib_idx, item_id } => {
                 self.play_gui_abs_book(lib_idx, &item_id);
             }
@@ -328,6 +382,22 @@ impl App {
             GuiLibraryCommand::AbsQueue { lib_idx, item_id } => {
                 self.enqueue_gui_abs_book(lib_idx, &item_id);
             }
+            GuiLibraryCommand::PodcastsSetPill { lib_idx, pill } => {
+                self.gui_podcast_set_pill(lib_idx, pill);
+            }
+            GuiLibraryCommand::PodcastsSelect { lib_idx, row } => {
+                self.select_gui_podcast_row(lib_idx, &row);
+            }
+            GuiLibraryCommand::PodcastsPlay { lib_idx, item_id } => {
+                self.play_gui_podcast_row(lib_idx, &item_id);
+            }
+            GuiLibraryCommand::PodcastsQueue { lib_idx, item_id } => {
+                self.enqueue_gui_podcast_row(lib_idx, &item_id);
+            }
+            other => Self::log_ignored_library_command(
+                "audiobookshelf",
+                format_args!("{other:?} is no Audiobookshelf destination command"),
+            ),
         }
     }
 
@@ -345,6 +415,40 @@ impl App {
             Some(GuiDestinationKind::Podcasts { lib_idx }) => self.gui_podcast_open(lib_idx),
             _ => {}
         }
+    }
+
+    /// Select the Podcasts episode a row id names (design D12, row 10.1): the
+    /// frame carries the episode's identity as one opaque string, so a string
+    /// that is no encoding of it is a stale frame's row and changes nothing.
+    fn select_gui_podcast_row(&mut self, lib_idx: usize, row: &str) {
+        let Some(episode) = GuiPodcastEpisodeId::decode(row) else {
+            Self::log_stale_library_item("podcastSelect", row);
+            return;
+        };
+        self.gui_podcast_select(lib_idx, &episode.target());
+    }
+
+    /// Play the Podcasts episode a row id names (design D12, row 10.1): Enter
+    /// on the row, or the double-click a front end sends with this same
+    /// command. The episode's identity is the frame's opaque row id; a string
+    /// that is no encoding of it changes nothing.
+    fn play_gui_podcast_row(&mut self, lib_idx: usize, item_id: &str) {
+        let Some(episode) = GuiPodcastEpisodeId::decode(item_id) else {
+            Self::log_stale_library_item("podcastPlay", item_id);
+            return;
+        };
+        self.play_gui_podcast_episode(lib_idx, &episode.target());
+    }
+
+    /// Add the Podcasts episode a row id names to the queue (design D12, row
+    /// 10.1): `a` on the row. The episode's identity is the frame's opaque row
+    /// id; a string that is no encoding of it changes nothing.
+    fn enqueue_gui_podcast_row(&mut self, lib_idx: usize, item_id: &str) {
+        let Some(episode) = GuiPodcastEpisodeId::decode(item_id) else {
+            Self::log_stale_library_item("podcastQueue", item_id);
+            return;
+        };
+        self.enqueue_gui_podcast_episode(lib_idx, &episode.target());
     }
 
     /// Select a Home row (design D2, D12): the row the Hero shows. The

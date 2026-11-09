@@ -50,6 +50,7 @@ function carriedContent(): GuiLibraryContent {
 		shows: null,
 		emby: null,
 		audiobooks: null,
+		podcasts: null,
 	};
 }
 

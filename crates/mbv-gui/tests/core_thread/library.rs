@@ -31,6 +31,7 @@ mod emby;
 mod frame;
 mod menu;
 mod playback;
+mod podcasts;
 mod selection;
 mod shows;
 
