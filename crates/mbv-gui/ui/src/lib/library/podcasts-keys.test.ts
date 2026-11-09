@@ -68,7 +68,7 @@ const EPISODES = [
 	{ id: 'e2:ep2', title: 'Episode B', subtitle: 'Show Two', date: '9 May', state: 'played' as const },
 ];
 
-/** The Latest pill and a show pill, with the frame carrying `selected`
+/** The Latest pill and two show pills, with the frame carrying `selected`
  * (design D12). */
 function pills(selected: 'latest' | 'show'): GuiPodcastsPill[] {
 	return [
@@ -82,6 +82,12 @@ function pills(selected: 'latest' | 'show'): GuiPodcastsPill[] {
 			pill: { kind: 'show', id: 'sh1' },
 			name: 'Show One',
 			selected: selected === 'show',
+			collection: false,
+		},
+		{
+			pill: { kind: 'show', id: 'sh2' },
+			name: 'Show Two',
+			selected: false,
 			collection: false,
 		},
 	];
@@ -198,6 +204,22 @@ test('Space on a focused show pill asks for its selection', () => {
 
 	expect(get(podcastsUi).pillSelect).toEqual({ kind: 'show', id: 'sh1' });
 	expect(invokeMock).not.toHaveBeenCalled();
+});
+
+// Review of row 10.1, finding P2: the pill walk finds the focused pill by
+// its key, not its object, because every carried frame is a fresh
+// deserialization. An object-identity find would lose the focus across
+// frames and the walk would restart from a row end.
+test('the pill walk keeps its place when the frame re-carries equal pills', () => {
+	carryPodcasts(podcastsContent('latest', EPISODES), 'pills');
+	podcastsUi.update((ui) => ({ ...ui, focusedPill: { kind: 'show', id: 'sh1' } }));
+
+	// A new frame: structurally equal pills, all fresh objects.
+	carryLibraryContent({ revision: 2, content: podcastsContent('show', EPISODES) });
+
+	press('ArrowRight');
+
+	expect(get(podcastsUi).focusedPill).toEqual({ kind: 'show', id: 'sh2' });
 });
 
 test('Enter on a focused pill asks for its selection', () => {

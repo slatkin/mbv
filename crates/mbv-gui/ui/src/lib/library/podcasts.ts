@@ -173,11 +173,23 @@ export function movePodcastsPillFocus(step: number): void {
 	if (row.length === 0) {
 		return;
 	}
+	// The pill's place is its key, not its object: every carried frame is a
+	// fresh deserialization, so an object-identity find would lose the focus
+	// across frames and the walk would restart from a row end (row 10.1
+	// review P2).
+	// The pill's place is its key, not its object: every carried frame is a
+	// fresh deserialization, so an object-identity find would lose the focus
+	// across frames and the walk would restart from a row end (row 10.1
+	// review P2).
 	const key = get(podcastsUi).focusedPill;
+	const focusedKey = key === null ? null : podcastPillKey(key);
 	const at =
-		key === null
+		focusedKey === null
 			? -1
-			: row.findIndex((candidate: GuiPodcastsFrame['pills'][number]) => key === candidate.pill);
+			: row.findIndex(
+					(candidate: GuiPodcastsFrame['pills'][number]) =>
+						podcastPillKey(candidate.pill) === focusedKey,
+			  );
 	const next =
 		at === -1
 			? step > 0
