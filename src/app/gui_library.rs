@@ -22,6 +22,7 @@ pub use self::tabs::{GuiLibraryTab, GuiLibraryTabs};
 use mbv_emby_model::EmbyItem;
 use mbv_ui_model::context_menu::ContextAction;
 use mbv_ui_model::context_menu::ContextMenu;
+use mbv_ui_model::context_menu::ContextMenuEntry;
 use mbv_ui_model::settings::PanelFocus;
 use mbv_ui_model::ui_util::is_playable;
 
@@ -174,6 +175,22 @@ impl App {
         );
     }
 
+    /// The frame's form of the shared builder's menu entries (design D8): the
+    /// builder's labels and key hints, indexed by the entry's position in the
+    /// builder's order — the order the execution rebuild and every carried
+    /// menu share.
+    fn gui_library_menu_items(entries: Vec<ContextMenuEntry>) -> Vec<GuiLibraryMenuItem> {
+        entries
+            .into_iter()
+            .enumerate()
+            .map(|(index, entry)| GuiLibraryMenuItem {
+                label: entry.label.to_string(),
+                key_hint: entry.key_hint.map(str::to_string),
+                index,
+            })
+            .collect()
+    }
+
     /// The item's menu entries for the frame (design D8): the shared builder's
     /// entries for `item_id` while the Library panel has Panel focus, which is
     /// also what `execute_context_action` needs to find the library. Entry
@@ -186,15 +203,7 @@ impl App {
             .gui_library_item_menu(item_id)
             .map(|menu| menu.entries)
             .unwrap_or_default();
-        entries
-            .into_iter()
-            .enumerate()
-            .map(|(index, entry)| GuiLibraryMenuItem {
-                label: entry.label.to_string(),
-                key_hint: entry.key_hint.map(str::to_string),
-                index,
-            })
-            .collect()
+        Self::gui_library_menu_items(entries)
     }
 
     /// The right-click item menu for the frame's `rowMenu` section: the
@@ -203,17 +212,9 @@ impl App {
     /// right-click has named an item or the named item is gone.
     pub fn gui_library_row_menu(&mut self) -> Option<GuiLibraryRowMenu> {
         let item_id = self.gui_library_row_menu_target.clone()?;
-        let entries = self.gui_library_item_menu(&item_id).map(|menu| {
-            menu.entries
-                .into_iter()
-                .enumerate()
-                .map(|(index, entry)| GuiLibraryMenuItem {
-                    label: entry.label.to_string(),
-                    key_hint: entry.key_hint.map(str::to_string),
-                    index,
-                })
-                .collect()
-        })?;
+        let entries = self
+            .gui_library_item_menu(&item_id)
+            .map(|menu| Self::gui_library_menu_items(menu.entries))?;
         Some(GuiLibraryRowMenu {
             item_id: item_id.clone(),
             entries,
@@ -398,30 +399,10 @@ impl App {
             self.enqueue_lib_item(lib_idx, item);
             return;
         };
-        // The shared admission checks and tail append, as `enqueue_lib_item`
-        // runs them for the single item, with every track of the autoload
-        // block entering as one append in disc/track order.
-        let first = &tracks[start_idx];
-        tracing::info!(
-            name: "library_route.enqueue.requested",
-            target: "library_route",
-            item = %first.id,
-            item_name = %first.name,
-            count = tracks.len() - start_idx,
-            source = "library_view",
-            "enqueue requested"
-        );
-        let resolved = self.route_for_active_library_view(lib_idx).map(|(n, _)| n);
-        if self.enqueue_route_conflict(resolved.as_ref()) {
-            return;
-        }
-        let items = tracks
-            .into_iter()
-            .skip(start_idx)
-            .map(|track| mbv_queue::QueueItem::Emby(Box::new(track)))
-            .collect();
-        let link = self.playing_queue_link();
-        self.append_on_owner(link, items, None);
+        // The autoload block enters as one append in disc/track order, with
+        // the admission checks and tail append the shared plural path runs.
+        let tracks = tracks.into_iter().skip(start_idx).collect();
+        self.enqueue_lib_items(lib_idx, tracks);
     }
 
     /// The album whose cached tracklist holds `track_id` (design D5): the

@@ -200,12 +200,38 @@ impl App {
         if !is_playable(&item) {
             return;
         }
-        tracing::info!(name: "library_route.enqueue.requested", target: "library_route", item = %item.id, item_name = %item.name, source = "library_view", "enqueue requested");
+        self.enqueue_lib_items(lib_idx, vec![item]);
+    }
+
+    /// Enqueue explicitly resolved library-view items (add-gui-library-panel,
+    /// the GUI Library's autoload rule): the admission checks and tail append
+    /// [`App::enqueue_lib_item`] runs for one item, applied to the whole
+    /// block so every item enters as one append in the caller's order — the
+    /// autoload rule's album block enters in disc/track order. An empty block
+    /// adds nothing, not even the request log line.
+    pub(in crate::app) fn enqueue_lib_items(&mut self, lib_idx: usize, items: Vec<EmbyItem>) {
+        let Some(first) = items.first() else {
+            return;
+        };
+        tracing::info!(
+            name: "library_route.enqueue.requested",
+            target: "library_route",
+            item = %first.id,
+            item_name = %first.name,
+            count = items.len(),
+            source = "library_view",
+            "enqueue requested"
+        );
         let resolved = self.route_for_active_library_view(lib_idx).map(|(n, _)| n);
         if self.enqueue_route_conflict(resolved.as_ref()) {
             return;
         }
-        self.append_item_to_queue(item);
+        let items = items
+            .into_iter()
+            .map(|item| QueueItem::Emby(Box::new(item)))
+            .collect();
+        let link = self.playing_queue_link();
+        self.append_on_owner(link, items, None);
     }
 
     /// Play an explicitly resolved library-view item next (add-gui-library-
