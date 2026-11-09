@@ -28,6 +28,10 @@ pub enum GuiDestinationKind {
     /// Movies, boxsets, music videos, home videos outside the feed view,
     /// mixed, and the open collection types.
     Library { lib_idx: usize },
+    /// An Audiobookshelf book library's Audiobooks destination (design D12,
+    /// row 9.1). `lib_idx` indexes the Audiobookshelf libraries, not the Emby
+    /// ones. The podcast libraries stay unpresented until row 10.1.
+    Audiobooks { lib_idx: usize },
 }
 
 impl GuiDestinationKind {
@@ -37,9 +41,10 @@ impl GuiDestinationKind {
     pub fn library_index(self) -> Option<usize> {
         match self {
             Self::Home => None,
-            Self::Music { lib_idx } | Self::Shows { lib_idx } | Self::Library { lib_idx } => {
-                Some(lib_idx)
-            }
+            Self::Music { lib_idx }
+            | Self::Shows { lib_idx }
+            | Self::Library { lib_idx }
+            | Self::Audiobooks { lib_idx } => Some(lib_idx),
         }
     }
 }
@@ -83,6 +88,15 @@ impl App {
                     Some(GuiDestinationKind::Library { lib_idx })
                 }
             }
+            TabSelection::AudiobookshelfLibrary(index)
+                if index < self.audiobookshelf_libraries.len()
+                    && self.audiobookshelf_kind_at(index)
+                        == Some(
+                            mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseKind::Book,
+                        ) =>
+            {
+                Some(GuiDestinationKind::Audiobooks { lib_idx: index })
+            }
             _ => None,
         }
     }
@@ -94,6 +108,12 @@ impl App {
         &self,
         kind: GuiDestinationKind,
     ) -> Option<usize> {
+        if let GuiDestinationKind::Audiobooks { lib_idx } = kind {
+            return Some(
+                TabSelection::AudiobookshelfLibrary(lib_idx)
+                    .to_position_with_counts(self.libs.len(), self.feeds_tab_pos()),
+            );
+        }
         let lib_idx = kind.library_index()?;
         Some(
             TabSelection::EmbyLibrary(lib_idx)
@@ -104,7 +124,13 @@ impl App {
     /// One presented destination's tab label (design D2): the library's
     /// display name. `None` for Home, whose icon paints no label here.
     fn gui_destination_label(&self, kind: GuiDestinationKind) -> Option<String> {
-        Some(self.libs[kind.library_index()?].library.name.clone())
+        match kind {
+            GuiDestinationKind::Home => None,
+            GuiDestinationKind::Audiobooks { lib_idx } => {
+                Some(self.audiobookshelf_libraries.get(lib_idx)?.name.clone())
+            }
+            _ => Some(self.libs[kind.library_index()?].library.name.clone()),
+        }
     }
 
     /// The destination tabs the Library panel's frame carries (design D2):

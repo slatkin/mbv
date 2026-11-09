@@ -170,13 +170,14 @@ impl App {
     }
 
     /// The destinations the GUI presents, in catalog order (design D9, D2):
-    /// the Grouped Music libraries, the Emby TV (Shows) libraries, and every
-    /// other Emby library (row 8.1's plain Emby-library destination), as the
-    /// destination-kind enum names them. The restore's fallback and the
+    /// the Grouped Music libraries, the Emby TV (Shows) libraries, every
+    /// other Emby library (row 8.1's plain Emby-library destination), and the
+    /// Audiobookshelf book libraries (row 9.1's Audiobooks destination), as
+    /// the destination-kind enum names them. The restore's fallback and the
     /// frame's destination tabs (`gui_library_tabs`) read this one list, so
     /// they cannot disagree about the presented set.
     pub(in crate::app::gui_library) fn presented_destinations(&self) -> Vec<GuiDestinationKind> {
-        (0..self.libs.len())
+        let mut presented: Vec<GuiDestinationKind> = (0..self.libs.len())
             .map(|lib_idx| {
                 if self.is_grouped_music_library(lib_idx) {
                     GuiDestinationKind::Music { lib_idx }
@@ -186,7 +187,18 @@ impl App {
                     GuiDestinationKind::Library { lib_idx }
                 }
             })
-            .collect()
+            .collect();
+        // The Audiobookshelf libraries' tab positions follow the Emby ones,
+        // so appending the book libraries keeps the catalog order.
+        presented.extend(
+            (0..self.audiobookshelf_libraries.len())
+                .filter(|index| {
+                    self.audiobookshelf_kind_at(*index)
+                        == Some(mbv_ui_model::audiobookshelf_browse::AudiobookshelfBrowseKind::Book)
+                })
+                .map(|lib_idx| GuiDestinationKind::Audiobooks { lib_idx }),
+        );
+        presented
     }
 
     /// Whether an open-destination command's `position` names a destination
@@ -205,37 +217,56 @@ impl App {
 
     /// The tab position of the destination a saved location names, resolved
     /// against the destinations the GUI presents (design D9): the matching
-    /// presented library, else the first presented one. The GUI presents the
-    /// Grouped Music and Shows libraries, so every other saved destination
-    /// falls back to the first of them.
+    /// presented library, else the first presented one. A saved
+    /// Audiobookshelf destination whose catalog has not settled yet resolves
+    /// to nothing, so the restore retries instead of opening a fallback the
+    /// catalog's arrival would contradict. The GUI presents the Grouped
+    /// Music and Shows libraries, so every other saved destination falls
+    /// back to the first of them.
     fn presented_destination_position(&self, destination: &TabIdentity) -> Option<usize> {
-        let saved_library_id = match destination {
-            TabIdentity::ServiceLibrary {
-                kind: ServiceKind::Emby,
-                library_id,
-            } => Some(library_id.as_str()),
-            TabIdentity::Home | TabIdentity::Feeds | TabIdentity::ServiceLibrary { .. } => None,
+        let saved = match destination {
+            TabIdentity::ServiceLibrary { kind, library_id } => Some((*kind, library_id.as_str())),
+            TabIdentity::Home | TabIdentity::Feeds => None,
         };
+        if saved.is_some_and(|(kind, _)| kind == ServiceKind::Audiobookshelf)
+            && self.gui_abs_catalog_pending()
+        {
+            return None;
+        }
         let presented = self.presented_destinations();
-        let lib_idx = presented
-            .iter()
-            .copied()
-            .find_map(|kind| {
-                kind.library_index().filter(|lib_idx| {
-                    saved_library_id
-                        .is_some_and(|library_id| self.libs[*lib_idx].library.id == library_id)
+        let kind = saved
+            .and_then(|(saved_kind, library_id)| {
+                presented.iter().copied().find(|kind| {
+                    kind.library_index().is_some_and(|lib_idx| {
+                        self.gui_destination_library_id(saved_kind, lib_idx)
+                            .is_some_and(|id| id == library_id)
+                    })
                 })
             })
-            .or_else(|| {
-                presented
-                    .iter()
-                    .copied()
-                    .find_map(GuiDestinationKind::library_index)
-            })?;
-        Some(
-            TabSelection::EmbyLibrary(lib_idx)
-                .to_position_with_counts(self.libs.len(), self.feeds_tab_pos()),
-        )
+            .or_else(|| presented.first().copied())?;
+        self.gui_destination_position(kind)
+    }
+
+    /// The stable Service library id the presented destination `kind` names
+    /// at `lib_idx` (design D9): the identity the launch file saves and the
+    /// restore resolves against. An Emby kind's index names `App::libs`; the
+    /// Audiobooks kind's names the Audiobookshelf libraries.
+    fn gui_destination_library_id(&self, kind: ServiceKind, lib_idx: usize) -> Option<String> {
+        match kind {
+            ServiceKind::Audiobookshelf => {
+                Some(self.audiobookshelf_libraries.get(lib_idx)?.id.clone())
+            }
+            ServiceKind::Emby => Some(self.libs.get(lib_idx)?.library.id.clone()),
+        }
+    }
+
+    /// Whether the Audiobookshelf catalog can still land (row 9.1): the
+    /// startup is still running, or its catalog fetch is still in flight —
+    /// either way the libraries list is not final, and a saved
+    /// Audiobookshelf destination's resolution must wait for it.
+    fn gui_abs_catalog_pending(&self) -> bool {
+        self.audiobookshelf_runtime.state == mbv_core::service_runtime::ServiceState::Connecting
+            || self.setup.audiobookshelf_catalog_rx.is_some()
     }
 
     /// The active Grouped Music library's group level: the library's root in

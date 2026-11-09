@@ -25,6 +25,7 @@ use mbv_queue::QueueSource;
 
 use crate::{TestCore, test_core_with, test_emby_client};
 
+mod audiobooks;
 mod destination;
 mod emby;
 mod frame;

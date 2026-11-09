@@ -36,6 +36,13 @@ impl LibraryFrames {
         // absent, and the next one re-carries its content whatever the window
         // kept while the section was away.
         let destination = app.gui_active_destination();
+        // The Audiobooks destination's frame-path ensure (add-gui-library-panel
+        // design D12, row 9.1): the default pick's detail load starts before
+        // any select does, as the Shows frame path ensures its default series'
+        // detail. The section itself joins in the later core surface's unit.
+        if let Some(GuiDestinationKind::Audiobooks { lib_idx }) = destination {
+            app.ensure_gui_abs_selection(lib_idx);
+        }
         let music = match destination {
             Some(GuiDestinationKind::Music { lib_idx }) => Some(music_frame(app, lib_idx)),
             _ => None,

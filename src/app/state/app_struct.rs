@@ -274,6 +274,13 @@ pub struct App {
     /// reads. The TUI never reads it.
     pub(in crate::app) gui_emby_roots:
         std::collections::HashMap<usize, crate::app::gui_library::GuiEmbyRootItems>,
+    /// The GUI Library's Audiobooks selection (add-gui-library-panel design
+    /// D12, row 9.1): per Audiobookshelf book library, the book the Hero
+    /// shows, by stable `library_item_id`. The TUI's own resting selection is
+    /// the browse state's `selected_id`, which this store never writes, so
+    /// the two Clients' selections stay independent. The TUI never reads it.
+    pub(in crate::app) gui_abs_libs:
+        std::collections::HashMap<usize, crate::app::gui_library::GuiAudiobooksSelection>,
     /// The one startup snapshot and its tab-scoped destination re-anchor.
     pub(in crate::app) launch_restore: LaunchRestore,
     /// Deferred tab switch for a `NavigateLanding::Album` landing: set when the

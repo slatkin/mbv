@@ -299,6 +299,47 @@ fn a_location_saved_on_a_movies_library_opens_it() {
     );
 }
 
+/// The identity the saved location names for an Audiobookshelf library.
+fn abs_identity(library_id: &str) -> TabIdentity {
+    TabIdentity::ServiceLibrary {
+        kind: ServiceKind::Audiobookshelf,
+        library_id: library_id.to_string(),
+    }
+}
+
+/// Seed one Audiobookshelf book library the GUI presents, with no Emby
+/// library at all: the Audiobooks destination is the only presented one
+/// (add-gui-library-panel row 9.1; the podcast library presents no tab).
+fn seed_abs(app: &mut mbv::App, _http: &MockHttp) {
+    app.seed_gui_abs_libraries_for_test();
+}
+
+/// A location saved on an Audiobookshelf book library opens it
+/// (add-gui-library-panel design D9, row 9.1): the Audiobooks destinations
+/// join the presented set, so the matching presented library restores through
+/// the same first phase, whose resolution waits for the Audiobookshelf
+/// catalog to settle instead of opening a fallback the catalog's arrival
+/// would contradict.
+#[test]
+fn a_location_saved_on_audiobooks_opens_it() {
+    let _guard = TestStateDirGuard::new();
+    save_gui_launch_state(&GuiLaunchState {
+        version: GUI_LAUNCH_STATE_VERSION,
+        destination: abs_identity("lib-abs-books"),
+        panel_focus: LaunchPanelFocus::Library,
+        collections: Vec::new(),
+    })
+    .unwrap();
+
+    let mut test = core_with_seeded_catalog(seed_abs);
+
+    assert_eq!(
+        test.core.app_mut().tab_for_test(),
+        TabSelection::AudiobookshelfLibrary(0),
+        "the saved Audiobooks destination restored"
+    );
+}
+
 /// A tab switch between the catalog landing and a group list's landing never
 /// applies another destination's saved set (design D9): the Collections phase
 /// records the destination phase 1 opened, applies only its saved entry, and

@@ -6,6 +6,7 @@
 //! calls any of them.
 
 mod artwork;
+mod audiobooks;
 mod emby;
 mod emby_projection;
 mod home;
@@ -17,6 +18,7 @@ mod tabs;
 mod tv;
 
 pub use self::artwork::GuiLibraryArtwork;
+pub use self::audiobooks::GuiAudiobooksSelection;
 pub use self::emby::GuiEmbyLibrarySelection;
 pub(in crate::app) use self::emby::{GuiEmbyRootItems, GuiEmbyRootItemsEvent};
 pub use self::emby_projection::{
@@ -302,6 +304,7 @@ impl App {
         match self.gui_active_destination() {
             Some(GuiDestinationKind::Shows { lib_idx }) => self.gui_tv_open(lib_idx),
             Some(GuiDestinationKind::Library { lib_idx }) => self.gui_emby_open(lib_idx),
+            Some(GuiDestinationKind::Audiobooks { lib_idx }) => self.gui_abs_open(lib_idx),
             _ => {}
         }
     }

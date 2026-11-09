@@ -14,6 +14,7 @@ mod daemon_bootstrap;
 mod feeds;
 mod gui_client_settings;
 mod gui_library;
+mod gui_library_audiobooks;
 mod gui_library_emby;
 mod gui_library_home;
 mod gui_library_shows;

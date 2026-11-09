@@ -274,6 +274,51 @@ impl App {
         }
     }
 
+    /// Seed one Audiobookshelf book library and one podcast library with
+    /// their parallel browse states (add-gui-library-panel row 9.1): the
+    /// catalog a landed Audiobookshelf startup leaves, with no books yet and
+    /// the runtime settled out of its startup, so a saved location's restore
+    /// resolves against it. A Client's test seeds it after its core thread is
+    /// built.
+    #[cfg(any(test, feature = "test"))]
+    pub fn seed_gui_abs_libraries_for_test(&mut self) {
+        use mbv_ui_model::audiobookshelf_browse::{
+            AudiobookshelfBookBrowseState, AudiobookshelfBrowseState,
+        };
+        let book = mbv_audiobookshelf::AudiobookshelfLibrary {
+            id: "lib-abs-books".into(),
+            name: "Audiobooks".into(),
+            media_type: "book".into(),
+        };
+        let podcast = mbv_audiobookshelf::AudiobookshelfLibrary {
+            id: "lib-abs-podcasts".into(),
+            name: "Podcasts".into(),
+            media_type: "podcast".into(),
+        };
+        self.audiobookshelf_libraries = vec![book, podcast];
+        self.audiobookshelf_browse = self
+            .audiobookshelf_libraries
+            .iter()
+            .cloned()
+            .map(AudiobookshelfBrowseState::new)
+            .collect();
+        self.audiobookshelf_book_browse = self
+            .audiobookshelf_libraries
+            .iter()
+            .cloned()
+            .map(AudiobookshelfBookBrowseState::new)
+            .collect();
+    }
+
+    /// The book the GUI Library's Hero shows for the Audiobookshelf book
+    /// library `lib_idx` (add-gui-library-panel row 9.1).
+    #[must_use]
+    pub fn gui_abs_picked_book_for_test(&self, lib_idx: usize) -> Option<&str> {
+        self.gui_abs_libs
+            .get(&lib_idx)
+            .and_then(|selection| selection.picked_book.as_deref())
+    }
+
     /// Seed the GUI's plain Emby root-list store with `items` for `lib_idx`,
     /// as a landed fetch would (add-gui-library-panel row 8.1): a Client's
     /// command test injects the rows and observes the frame with no fetch
