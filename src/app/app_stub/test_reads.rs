@@ -254,6 +254,38 @@ impl App {
         ));
     }
 
+    /// Queue a Home content refresh for the Client tests' next tick
+    /// (add-gui-library-panel row 6.2): the event rides the lib channel
+    /// exactly as the App-internal Continue Watching writers send it, so
+    /// the tick's drain that applies it is the production path with no
+    /// worker thread. The snapshot arrives settled (`loading` false), as
+    /// every computed refresh carries.
+    #[cfg(feature = "test")]
+    pub fn queue_home_content_refreshed_for_test(&mut self, items: Vec<mbv_emby_model::EmbyItem>) {
+        use crate::app::{LibEvent, ModelContentEvent};
+
+        let _ = self.channels.lib_tx.send(LibEvent::ModelContent(
+            ModelContentEvent::HomeContentRefreshed(Box::new(
+                crate::app::state::playback::HomeContent {
+                    continue_items: items,
+                    loading: false,
+                },
+            )),
+        ));
+    }
+
+    /// Queue a Home content clear for the Client tests' next tick
+    /// (add-gui-library-panel row 6.2): the Service teardown event, on the
+    /// lib channel, exactly as the teardown sends it.
+    #[cfg(feature = "test")]
+    pub fn queue_home_content_cleared_for_test(&mut self) {
+        use crate::app::{LibEvent, ModelContentEvent};
+
+        let _ = self.channels.lib_tx.send(LibEvent::ModelContent(
+            ModelContentEvent::HomeContentCleared,
+        ));
+    }
+
     /// The ids of the Home `Recently added` rows the App stores, over the
     /// sources in store order (add-gui-library-panel row 6.2): a Client's
     /// test reads them without the crate-internal source type. Each id is

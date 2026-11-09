@@ -31,6 +31,7 @@ use std::sync::mpsc;
 use std::time::Instant;
 
 mod fill_state;
+mod home_content;
 mod home_recently_added;
 mod launch_restore;
 

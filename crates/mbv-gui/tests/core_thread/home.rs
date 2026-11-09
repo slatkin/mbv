@@ -51,6 +51,16 @@ fn home_section(frame: GuiFrame) -> mbv_gui::bridge::frame::library::GuiHomeFram
         .expect("the open's frame carries the Home content")
 }
 
+/// The contents a queued refresh carries: different Continue Watching movies
+/// than the startup snapshot, so the test tells the refreshed rows apart.
+fn refreshed_contents() -> Vec<mbv_emby_model::EmbyItem> {
+    let mut third = make_item("Continue Third", "Movie");
+    third.id = "cw-third".to_string();
+    let mut fourth = make_item("Continue Fourth", "Movie");
+    fourth.id = "cw-fourth".to_string();
+    vec![third, fourth]
+}
+
 /// An asynchronous Emby bootstrap completes on the startup drain, and the
 /// next frame's tick reads its Continue Watching items from the App's stored
 /// Home content (row 6.1): the later Home projection of row 6.2 reads the
@@ -129,6 +139,73 @@ fn a_recently_added_fetch_result_lands_in_the_app_on_the_next_tick() {
         !test.core.app_mut().home_content_for_test().loading,
         "the bootstrap the same drain ran settled Home's loading flag"
     );
+}
+
+/// A Home content refresh event on the lib channel lands in the App's
+/// stored Home content on the next tick (add-gui-library-panel row 6.2),
+/// so the next Home frame's `Continue watching` rows read the refreshed
+/// snapshot instead of the startup one. Regression for the GUI's frozen
+/// Continue Watching report of 2026-11-09: the App arms used to defer both
+/// events to the shell drain a GUI core thread never runs.
+#[test]
+fn a_home_content_refresh_event_lands_in_the_next_home_frame() {
+    let mut app = stub_app_with_completed_emby_startup_and_contents(Vec::new(), home_contents());
+    app.queue_home_content_refreshed_for_test(refreshed_contents());
+    let mut test = test_core_with(app);
+    test.tx
+        .send(CoreInput::Library(
+            GuiLibraryCommand::OpenDestination { position: 0 }.into(),
+        ))
+        .unwrap();
+
+    // The zeroed-cadence step drains the queued refresh, opens Home, and
+    // emits the frame that follows both.
+    assert!(test.core.step());
+    let home = home_section(test.next_frame());
+
+    let titles: Vec<&str> = home
+        .rows
+        .iter()
+        .filter_map(|row| match row {
+            mbv_gui::bridge::frame::library::GuiHomeRowFrame::Item(item) => {
+                Some(item.title.as_str())
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        titles,
+        vec!["Continue Third", "Continue Fourth"],
+        "the frame paints the refreshed snapshot, not the startup one"
+    );
+    assert_eq!(
+        home.hero.expect("the Hero paints").title,
+        "Continue Third",
+        "the Hero reads the refreshed snapshot's first row"
+    );
+}
+
+/// A Home content clear event on the lib channel empties the App's stored
+/// Home content on the next tick (add-gui-library-panel row 6.2): the
+/// Service teardown's GUI arm runs the same App write the shell's drain
+/// does, so the next Home frame carries no rows.
+#[test]
+fn a_home_content_cleared_event_empties_the_next_home_frame() {
+    let mut test = home_core_with_open();
+    assert!(
+        !home_section(test.next_frame()).rows.is_empty(),
+        "the seeded snapshot painted rows before the clear"
+    );
+
+    test.core.app_mut().queue_home_content_cleared_for_test();
+    assert!(test.core.step());
+    let home = home_section(test.next_frame());
+
+    assert!(
+        home.rows.is_empty(),
+        "the clear emptied the Continue watching section"
+    );
+    assert!(home.hero.is_none(), "no row survives to select");
 }
 
 /// An open-destination command for Home (position 0) presents the Home

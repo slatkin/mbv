@@ -19,11 +19,9 @@ use mbv_ui_msg::ComponentId;
 
 impl Model {
     pub(in crate::app) fn assign_home_content(&mut self, content: HomeContent) {
-        self.app.home_content = content;
-        // A bootstrap or refresh may carry a rebuilt library set that dropped
-        // a previously fetched source's library; evict it before projecting
-        // (see `openspec/specs/home-latest-sections`).
-        self.app.evict_gone_home_recently_added();
+        // The App's write owns the eviction; this half is the projection
+        // below (add-gui-library-panel row 6.2).
+        self.app.apply_home_content(Some(content));
         self.push_home_content();
     }
 
@@ -59,11 +57,9 @@ impl Model {
     }
 
     pub(in crate::app) fn clear_home_content(&mut self) {
-        self.app.home_content.continue_items.clear();
-        // `HomeContentCleared` is the Service teardown arm: a removed or
-        // replaced setup also drops its fetched `Recently added` sources
-        // (review P2).
-        self.app.evict_gone_home_recently_added();
+        // The App's write owns the snapshot clear and the eviction (review
+        // P2); this half is the projection below.
+        self.app.apply_home_content(None);
         self.push_home_content();
     }
 

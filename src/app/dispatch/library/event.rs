@@ -41,10 +41,14 @@ impl App {
                 generation,
                 items,
             } => self.accept_home_recently_added(source, generation, items),
-            // The shell drain applies the refreshed content.
-            ModelContentEvent::HomeContentRefreshed(content) => drop(content),
-            // Clearing the stored content is handled by the shell drain.
-            ModelContentEvent::HomeContentCleared => {}
+            // A Home content write lands in the App's stored snapshot
+            // (row 6.2): the same acceptance the presenting Client's shell
+            // drain runs, so a Client that keeps no shell state (the GUI)
+            // applies the write too through this drain arm.
+            ModelContentEvent::HomeContentRefreshed(content) => {
+                self.apply_home_content(Some(*content));
+            }
+            ModelContentEvent::HomeContentCleared => self.apply_home_content(None),
         }
     }
 
