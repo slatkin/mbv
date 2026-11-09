@@ -396,18 +396,59 @@ pub fn load_tui_launch_state() -> Option<TuiLaunchState> {
 }
 
 pub(super) fn load_tui_launch_state_at(path: &Path) -> Option<TuiLaunchState> {
+    load_state_at(path, TUI_LAUNCH_STATE_VERSION)
+}
+
+/// Read one launch-location snapshot, accepting only a file whose `version`
+/// matches `expected_version`: a newer file never mis-resolves into stale
+/// identities, and a start without a location falls back to first-valid-choice
+/// rules. Both launch locations (the TUI's and the GUI's) load through this
+/// one path, so the gate and the fallback live in one place, like the writes'
+/// [`write_state_at`]. A file without a `version` field loses nothing — the
+/// snapshot types default the field to the current version — so an absent
+/// field counts as the expected one; a present-but-wrong-typed field is
+/// reported by the structured re-read as malformed, not as a version
+/// mismatch. Missing, unreadable, malformed, or version-mismatched files all
+/// yield `None` — a start is never prevented by launch-state data.
+pub(super) fn load_state_at<T: serde::de::DeserializeOwned>(
+    path: &Path,
+    expected_version: u32,
+) -> Option<T> {
     let text = std::fs::read_to_string(path).ok()?;
-    match serde_json::from_str::<TuiLaunchState>(&text) {
-        Ok(state) if state.version == TUI_LAUNCH_STATE_VERSION => Some(state),
-        Ok(state) => {
+    let value: serde_json::Value = match serde_json::from_str(&text) {
+        Ok(value) => value,
+        Err(e) => {
+            tracing::warn!(
+                name: "launch_state.restore.failed",
+                target: "launch_state",
+                error = %e,
+                "launch state not restored"
+            );
+            return None;
+        }
+    };
+    match value
+        .get("version")
+        .map(<u32 as serde::Deserialize>::deserialize)
+    {
+        // An absent field loses nothing — the snapshot type's serde default
+        // fills the current version — so the file is read at the expected
+        // one; a wrong-typed field is reported by the structured re-read
+        // below.
+        None | Some(Err(_)) => {}
+        Some(Ok(found)) if found == expected_version => {}
+        Some(Ok(found)) => {
             tracing::warn!(
                 name: "launch_state.restore.unsupported_version",
                 target: "launch_state",
-                version = state.version,
+                version = found,
                 "launch state not restored"
             );
-            None
+            return None;
         }
+    }
+    match serde_json::from_value::<T>(value) {
+        Ok(state) => Some(state),
         Err(e) => {
             tracing::warn!(
                 name: "launch_state.restore.failed",

@@ -12,7 +12,7 @@
 // destination the Client does not present, a group the library no longer
 // holds) belongs to the Client, not to this file.
 
-use super::launch_state::{LaunchStateError, write_state_at};
+use super::launch_state::{LaunchStateError, load_state_at, write_state_at};
 use super::{LaunchPanelFocus, TabIdentity, state_dir};
 use std::path::{Path, PathBuf};
 
@@ -110,26 +110,5 @@ pub fn load_gui_launch_state() -> Option<GuiLaunchState> {
 }
 
 pub(super) fn load_gui_launch_state_at(path: &Path) -> Option<GuiLaunchState> {
-    let text = std::fs::read_to_string(path).ok()?;
-    match serde_json::from_str::<GuiLaunchState>(&text) {
-        Ok(state) if state.version == GUI_LAUNCH_STATE_VERSION => Some(state),
-        Ok(state) => {
-            tracing::warn!(
-                name: "launch_state.restore.unsupported_version",
-                target: "launch_state",
-                version = state.version,
-                "GUI launch state not restored"
-            );
-            None
-        }
-        Err(e) => {
-            tracing::warn!(
-                name: "launch_state.restore.failed",
-                target: "launch_state",
-                error = %e,
-                "GUI launch state not restored"
-            );
-            None
-        }
-    }
+    load_state_at(path, GUI_LAUNCH_STATE_VERSION)
 }
