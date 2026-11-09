@@ -147,3 +147,88 @@ test('the Wide Hero pane paints the Hero beside the list', () => {
 	).toBeTruthy();
 	expect(container.querySelector('[data-library-region="heroOverlay"]')).toBeNull();
 });
+
+// add-gui-library-panel row 6.2: while the Home content is present (design
+// D12, the destinations are exclusive), the panel mounts the Home painters in
+// place of the Music ones, and the pill row and the letter rail do not paint:
+// Home paints no pills, no filter, and no rail.
+test('the Home content mounts the Home list and Hero and no pills or rail', () => {
+	const { container } = render(LibraryPanel, {
+		tabs: [{ position: 1, label: 'Music' }],
+		currentTab: null,
+		music: null,
+		home: {
+			rows: [
+				{ row: 'heading', text: 'Continue watching' },
+				{
+					row: 'item',
+					id: { kind: 'continue', id: 'e1' },
+					title: 'Better Call Saul',
+					subtitle: null,
+					date: null,
+					kind: 'media',
+					state: 'ordinary',
+					art: null,
+				},
+			],
+			selected: { kind: 'continue', id: 'e1' },
+			hero: {
+				title: 'Better Call Saul',
+				metaRows: ['1 h 47 m left'],
+				durationRow: 0,
+				progressRow: null,
+				overview: null,
+				artShape: 'square',
+				art: null,
+			},
+		},
+		status: idle,
+		arrangement: 'wide',
+		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
+		libraryColumn: 1200,
+	});
+
+	expect(container.querySelector('[data-library-region="pills"]')).toBeNull();
+	expect(container.querySelector('[data-library-region="rail"]')).toBeNull();
+	expect(container.querySelector('[data-library-home-list]')).toBeTruthy();
+	expect(
+		container.querySelector('[data-library-region="hero"] [data-library-home-hero]'),
+	).toBeTruthy();
+	expect(container.querySelector('[data-library-list]')).toBeNull();
+});
+
+// The Narrow Hero overlay works for the Home Hero through the same painters
+// the Wide pane uses (design D4, D12), and closes on a press on its backdrop.
+test('the Narrow overlay paints the Home Hero and closes on a press on its backdrop', async () => {
+	const { container } = render(LibraryPanel, {
+		tabs: [{ position: 1, label: 'Music' }],
+		currentTab: null,
+		music: null,
+		home: {
+			rows: [],
+			selected: { kind: 'continue', id: 'e1' },
+			hero: {
+				title: 'Better Call Saul',
+				metaRows: [],
+				durationRow: null,
+				progressRow: null,
+				overview: null,
+				artShape: 'square',
+				art: null,
+			},
+		},
+		status: idle,
+		arrangement: 'narrow',
+		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
+		libraryColumn: 800,
+	});
+	const overlay = container.querySelector('[data-library-region="heroOverlay"]');
+
+	expect(overlay?.querySelector('[data-library-home-hero]')).toBeTruthy();
+
+	await fireEvent.click(
+		container.querySelector('[data-library-hero-backdrop]') as HTMLElement,
+	);
+
+	expect(container.querySelector('[data-library-region="heroOverlay"]')).toBeNull();
+});

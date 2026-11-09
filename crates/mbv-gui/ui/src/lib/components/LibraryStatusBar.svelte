@@ -16,22 +16,31 @@
 	// band paints no interactive region: a point on it resolves to no target,
 	// as the canvas's bar carries none.
 	import { toastColor } from '$lib/bridge/status';
-	import type { GuiLibraryTab, GuiMusicFrame, GuiStatusBar } from '$lib/bridge/types';
+	import type {
+		GuiHomeFrame,
+		GuiLibraryTab,
+		GuiMusicFrame,
+		GuiStatusBar,
+	} from '$lib/bridge/types';
 	import { libraryLocation } from '$lib/library/status';
 
 	interface Props {
 		/** The presented destination tabs and the active one (design D2): the
-		 * location's first segment. */
+		 * location's first segment. While the Home content is present the
+		 * location's segments come from it. */
 		tabs: GuiLibraryTab[];
 		currentTab: number | null;
 		/** The carried Music content (design D2): the selected collections and
 		 * the picked item's Hero. */
 		music: GuiMusicFrame | null;
+		/** The carried Home content (design D12): the location reads `Home` on
+		 * it. */
+		home?: GuiHomeFrame | null;
 		/** The armed prefix and the live toast (design D10): they replace the
 		 * hints while active. */
 		status: GuiStatusBar;
 	}
-	const { tabs, currentTab, music, status }: Props = $props();
+	const { tabs, currentTab, music, home = null, status }: Props = $props();
 
 	/** The canvas's key hints, key glyph then what the key does (design D3,
 	 * D10). */
@@ -44,8 +53,10 @@
 		{ key: '1–7', label: 'library' },
 	];
 
-	/** The location line, or `''` while the content fills no segment. */
-	const location = $derived(libraryLocation(tabs, currentTab, music));
+	/** The location line, or `''` while the content fills no segment. On Home
+	 * it reads the destination's one-word name, then the selected row
+	 * (design D12). */
+	const location = $derived(libraryLocation(tabs, currentTab, music, home));
 </script>
 
 <!-- The canvas status bar: 40 px, 16 px side padding, the canvas's 1 px top

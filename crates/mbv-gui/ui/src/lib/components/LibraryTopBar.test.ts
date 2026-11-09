@@ -49,3 +49,36 @@ test('a press opens the destination tab at its position', () => {
 		command: { command: 'openDestination', position: 3 },
 	});
 });
+
+// add-gui-library-panel row 6.2: the canvas's Home icon sits before the tabs
+// (design D12), opens Home's own position, and marks itself current while the
+// Home content is present — the tabs keep marking their destination.
+test('a press on the Home icon opens Home', () => {
+	const { container } = render(LibraryTopBar, {
+		tabs: [{ position: 1, label: 'Music' }],
+		currentTab: 1,
+	});
+
+	fireEvent.click(container.querySelector('[data-library-home]') as HTMLElement);
+
+	expect(invokeMock).toHaveBeenCalledWith('library', {
+		command: { command: 'openDestination', position: 0 },
+	});
+});
+
+test('the Home icon is current only while the Home content is present', () => {
+	// A realistic frame (design D12): the destinations are exclusive, so the
+	// frame's `currentTab` stays null while the Home content is present.
+	const { container } = render(LibraryTopBar, {
+		tabs: [{ position: 1, label: 'Music' }],
+		currentTab: null,
+		homeActive: true,
+	});
+
+	expect(
+		container.querySelector('[data-library-home]')?.getAttribute('aria-current'),
+	).toBe('page');
+	expect(
+		container.querySelector('[data-library-tab]')?.getAttribute('aria-current'),
+	).toBeNull();
+});

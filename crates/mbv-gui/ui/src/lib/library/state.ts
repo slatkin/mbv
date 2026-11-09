@@ -1,5 +1,5 @@
 // The Library panel's own state (add-gui-library-panel design D1): what the
-// window content owns and the core never reads. Two stores keep the two kinds
+// window content owns and the core never reads there. Two stores keep the two kinds
 // apart — the content the frame carries, kept from the last frame that carried
 // it, and the interaction state the panel's keys and controls move.
 //
@@ -11,6 +11,7 @@ import { get, writable } from 'svelte/store';
 import type { GuiArrangement } from '$lib/bridge/arrangement';
 import { sendLibraryCommand } from '$lib/bridge/library';
 import type {
+	GuiHomeFrame,
 	GuiLibraryContent,
 	GuiLibraryFrame,
 	GuiMusicFrame,
@@ -92,6 +93,17 @@ export interface LibraryUiState {
 	arrangement: GuiArrangement | null;
 }
 
+/** The Library panel's panes on Home (design D12): the flat list and the
+ * Hero. Home paints no pill row and no letter rail, so the pane walk skips
+ * them. */
+export const HOME_PANES: readonly LibraryPane[] = ['list', 'hero'];
+
+/** The panes the active destination paints (design D12): the one walk on
+ * Home skips the panes it does not paint. */
+function activeLibraryPanes(): readonly LibraryPane[] {
+	return libraryHome() === null ? PANES : HOME_PANES;
+}
+
 /** The state a freshly mounted window content starts with. */
 export function initialLibraryUi(): LibraryUiState {
 	return {
@@ -128,15 +140,20 @@ export function carryLibraryContent(frame: GuiLibraryFrame | null): void {
 	}
 }
 
-/** Whether the Library panel shows (design D2, D10): the frame carries the
- * Library section and the window holds the Music content the panel paints. The
- * window mounts the panel on this one fact and the key router gates on it, so
- * no Library key acts while the panel paints nothing. */
+/** Whether the Library panel shows (design D2, D10, D12): the frame carries
+ * the Library section and the window holds the active destination's content
+ * — Music's or Home's — to paint. The window mounts the panel on this one
+ * fact and the key router gates on it, so no Library key acts while the
+ * panel paints nothing. */
 export function libraryShown(
 	library: GuiLibraryFrame | null,
-	music: GuiMusicFrame | null,
+	content: GuiLibraryContent | null,
 ): boolean {
-	return library !== null && music !== null;
+	return (
+		library !== null &&
+		content !== null &&
+		(content.music !== null || content.home !== null)
+	);
 }
 
 /** Open the list's filter: `/` with Library Panel focus (design D3, step 4). */
@@ -168,13 +185,24 @@ export function focusLibraryPane(pane: LibraryPane): void {
 	libraryUi.update((ui) => withHeroPane({ ...ui, pane }));
 }
 
-/** Move the pane focus `step` panes along, wrapping at the ends. */
+/** Move the pane focus `step` panes along, wrapping at the ends. The walk
+ * skips the panes the active destination does not paint (design D12): Home
+ * walks the list and the Hero only. */
 export function moveLibraryPane(step: number): void {
 	libraryUi.update((ui) => {
-		const at = PANES.indexOf(ui.pane);
-		const next = (at + step + PANES.length) % PANES.length;
-		return withHeroPane({ ...ui, pane: PANES[next] });
+		const panes = activeLibraryPanes();
+		const at = panes.indexOf(activeLibraryPane(ui.pane, panes));
+		const next = (at + step + panes.length) % panes.length;
+		return withHeroPane({ ...ui, pane: panes[next] });
 	});
+}
+
+/** The pane of `ui` the walk starts from: the pane itself while the active
+ * destination paints it, and the walk's first pane otherwise — a destination
+ * switch that leaves the last destination's pane never walks from a pane
+ * that paints nothing. */
+function activeLibraryPane(pane: LibraryPane, panes: readonly LibraryPane[]): LibraryPane {
+	return panes.includes(pane) ? pane : panes[0];
 }
 
 /** Focus a pill, or no pill while `groupId` is `null`. */
@@ -212,6 +240,13 @@ export function applyLibraryPillSelect(libIdx: number): void {
  * none. */
 export function libraryMusic(): GuiMusicFrame | null {
 	return get(libraryContent)?.music ?? null;
+}
+
+/** The carried Home content (design D12), or `null` while any other
+ * destination is active. The top bar marks the Home icon current exactly
+ * while this is present. */
+export function libraryHome(): GuiHomeFrame | null {
+	return get(libraryContent)?.home ?? null;
 }
 
 /** The row model under one interaction state (design D7): the carried union,
@@ -565,14 +600,16 @@ export function reportLibraryArrangement(arrangement: GuiArrangement): void {
 	);
 }
 
-/** Whether the Narrow arrangement paints the Hero overlay (design D4, D3): a
- * picked item, an arrangement that overlays rather than splits, and no
- * dismissal since that pick. Esc and a press on the backdrop close it. */
+/** Whether the Narrow arrangement paints the Hero overlay (design D4, D3):
+ * a picked item, an arrangement that overlays rather than splits, and no
+ * dismissal since that pick. The Hero is the Music Hero or the Home Hero
+ * (design D12), whichever destination is active. Esc and a press on the
+ * backdrop close it. */
 export function heroOverlayOpen(ui: LibraryUiState): boolean {
 	return (
 		ui.arrangement === 'narrow' &&
 		!ui.heroDismissed &&
-		(libraryMusic()?.hero ?? null) !== null
+		((libraryMusic()?.hero ?? null) !== null || (libraryHome()?.hero ?? null) !== null)
 	);
 }
 

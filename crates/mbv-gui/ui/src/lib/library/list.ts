@@ -67,6 +67,16 @@ export type LibraryRow =
 			duration: string;
 		});
 
+/** The fields the scroll and window geometry read (add-gui-library-panel
+ * design D7, D12): the stable id, the top edge from the list's first row, and
+ * the painted height. The Library tree's rows and the Home list's rows both
+ * satisfy it, so one window implementation serves both lists. */
+export interface GeometryRow {
+	readonly id: string;
+	readonly top: number;
+	readonly height: number;
+}
+
 /** A row the cursor rests on and the tree's open and close acts on: the
  * letter headings and the track rows are neither. */
 export type LibraryNodeRow = Extract<LibraryRow, { kind: 'artist' } | { kind: 'album' }>;
@@ -219,7 +229,7 @@ export function selectableRows(rows: readonly LibraryRow[]): LibraryRow[] {
 }
 
 /** The painted height of the whole list: the bottom edge of its last row. */
-export function rowsHeight(rows: readonly LibraryRow[]): number {
+export function rowsHeight(rows: readonly GeometryRow[]): number {
 	const last = rows[rows.length - 1];
 	return last === undefined ? 0 : last.top + last.height;
 }
@@ -273,9 +283,9 @@ export interface ListWindow {
 	end: number;
 }
 
-/** The rows in view: only these paint, so a long artist list stays fast. */
+/** The rows in view: only these paint, so a long list stays fast. */
 export function listWindow(
-	rows: readonly LibraryRow[],
+	rows: readonly GeometryRow[],
 	scrollTop: number,
 	viewportHeight: number,
 ): ListWindow {
@@ -297,7 +307,7 @@ export function listWindow(
 
 /** A scroll offset held inside the list's scrollable range. */
 export function clampScrollTop(
-	rows: readonly LibraryRow[],
+	rows: readonly GeometryRow[],
 	scrollTop: number,
 	viewportHeight: number,
 ): number {
@@ -313,7 +323,7 @@ export function clampScrollTop(
  * moves nothing.
  */
 export function scrollTopToShowCursor(
-	rows: readonly LibraryRow[],
+	rows: readonly GeometryRow[],
 	cursor: string | null,
 	scrollTop: number,
 	viewportHeight: number,

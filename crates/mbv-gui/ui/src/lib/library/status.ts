@@ -3,7 +3,7 @@
 // title, joined by ` › ` as the canvas prints them. Every part reads the
 // carried Library content, so the line composes no state of its own.
 
-import type { GuiLibraryTab, GuiMusicFrame } from '$lib/bridge/types';
+import type { GuiHomeFrame, GuiLibraryTab, GuiMusicFrame } from '$lib/bridge/types';
 
 /** The current destination's label: the tab whose position the frame marks
  * current, absent while the active destination is not one of the tabs. */
@@ -32,14 +32,22 @@ function pickedName(music: GuiMusicFrame | null): string | null {
 	return hero.artist.trim() === '' ? hero.album.name : hero.artist;
 }
 
-/** The location line's segments in canvas order. A segment the content does
- * not fill drops, so an unpicked Hero leaves the destination and the
- * collections, and a destination outside the tabs leaves the rest. */
+/** The location line's segments in canvas order. On Home the line reads
+ * `Home`, then the selected row's Hero title (design D10, D12). A segment
+ * the content does not fill drops, so an unpicked Hero leaves the
+ * destination and the collections, and a destination outside the tabs leaves
+ * the rest. */
 export function libraryLocationSegments(
 	tabs: readonly GuiLibraryTab[],
 	currentTab: number | null,
 	music: GuiMusicFrame | null,
+	home: GuiHomeFrame | null = null,
 ): string[] {
+	if (home !== null) {
+		return ['Home', home.hero?.title ?? null].filter(
+			(segment): segment is string => segment !== null && segment.trim() !== '',
+		);
+	}
 	return [
 		destinationLabel(tabs, currentTab),
 		...selectedCollections(music),
@@ -53,6 +61,7 @@ export function libraryLocation(
 	tabs: readonly GuiLibraryTab[],
 	currentTab: number | null,
 	music: GuiMusicFrame | null,
+	home: GuiHomeFrame | null = null,
 ): string {
-	return libraryLocationSegments(tabs, currentTab, music).join(' › ');
+	return libraryLocationSegments(tabs, currentTab, music, home).join(' › ');
 }

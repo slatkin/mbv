@@ -102,12 +102,14 @@
     {@const arrangement = libraryArrangement(container, widths.queue)}
     {@const content = $libraryContent}
     {@const music = content?.music ?? null}
+    {@const home = content?.home ?? null}
     {@const queueFocused = frame.focus.panel === 'queue'}
-    <!-- The Library panel's one presence fact (design D2, D10): the frame
-      carries the Library section and the window holds the Music content it
-      paints. The key router gates on the same fact, so a destination that
-      leaves unmounts the panel and stops its keys together. -->
-    {@const panelShows = libraryShown(frame.library, music)}
+    <!-- The Library panel's one presence fact (design D2, D10, D12): the
+      frame carries the Library section and the window holds the active
+      destination's content, whose painters the panel mounts. The key router
+      gates on the same fact, so a destination that leaves unmounts the
+      panel and stops its keys together. -->
+    {@const panelShows = libraryShown(frame.library, content)}
     {@const queueVisible = !panelShows || arrangement !== 'mini' || queueFocused}
     {@const libraryVisible = panelShows && (arrangement !== 'mini' || !queueFocused)}
     {@const twoColumns = queueVisible && libraryVisible}
@@ -140,9 +142,10 @@
           onReset={resetQueueWidth}
         />
       {/if}
-      {#if libraryVisible && music}
+      {#if libraryVisible && (music || home)}
         <LibraryPanel
           {music}
+          {home}
           tabs={content?.tabs ?? []}
           currentTab={content?.currentTab ?? null}
           status={frame.status}

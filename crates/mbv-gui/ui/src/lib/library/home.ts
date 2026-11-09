@@ -1,0 +1,135 @@
+// The Home destination's interaction state (add-gui-library-panel design D1,
+// D12): what the window content owns and the core never reads — the cursor,
+// the scroll offset, and the measured viewport. The core owns the selection
+// (the frame's `selected` row), so nothing here mirrors it: a press and the
+// cursor's settle send the select command, and the frame carries the
+// selection back. The row model is `$lib/library/home-list`'s; the panel's
+// pane focus and the Hero overlay stay in `./state`'s shared store.
+
+import { get, writable } from 'svelte/store';
+import { sendLibraryCommand } from '$lib/bridge/library';
+import type { GuiHomeRowId } from '$lib/bridge/types';
+import { buildHomeRows, moveHomeCursor } from './home-list';
+import type { HomeListRow } from './home-list';
+import type { ListMove } from './list';
+import { clampScrollTop, listWindow, scrollTopToShowCursor } from './list';
+import { libraryHome, libraryUi } from './state';
+
+/** The Home list's interaction state. */
+export interface HomeUiState {
+	/** The cursor's row key, or `null` while no row carries the cursor
+	 * (design D12). The cursor moves over the item rows only. */
+	cursor: string | null;
+	/** The list's native scroll offset in pixels (design D12). */
+	scrollTop: number;
+	/** The list's measured viewport height in pixels: `0` until the list
+	 * measures, and then the rows that paint are the rows in view. */
+	viewportHeight: number;
+}
+
+/** The state a freshly mounted Home list starts with. */
+export function initialHomeUi(): HomeUiState {
+	return { cursor: null, scrollTop: 0, viewportHeight: 0 };
+}
+
+/** The Home list's interaction state. */
+export const homeUi = writable<HomeUiState>(initialHomeUi());
+
+/** The painted rows of the carried Home content (design D12). */
+function homeRows(): HomeListRow[] {
+	return buildHomeRows(libraryHome()?.rows ?? []);
+}
+
+/** The row the cursor rests on, or `null` while no painted row carries it. */
+function cursorRow(list: HomeListRow[], cursor: string | null): HomeListRow | null {
+	return list.find((row) => row.id === cursor) ?? null;
+}
+
+/** The item row id the Home cursor rests on (design D12): the opaque
+ * identity the play, play-next, and add-to-queue keys carry. `null` while
+ * the cursor rests on no item row. */
+export function homeCursorRowId(): GuiHomeRowId | null {
+	const row = cursorRow(homeRows(), get(homeUi).cursor);
+	return row !== null && row.kind === 'item' ? row.rowId : null;
+}
+
+/** Select the row (design D12): the select command the core stores, whose
+ * frame paints the Hero. A select repaints the Narrow arrangement's Hero
+ * overlay and closes an open menu, because the facts they paint belong to the
+ * previous row (the pick's reset, as Music's does). */
+function settleSelection(row: HomeListRow | null): void {
+	if (row === null || row.kind !== 'item') {
+		return;
+	}
+	void sendLibraryCommand({ command: 'homeSelect', row: row.rowId });
+	libraryUi.update((ui) => ({
+		...ui,
+		heroDismissed: false,
+		itemMenuOpen: false,
+		rowMenu: null,
+	}));
+}
+
+/** Press a Home row (design D12): the press selects, and Enter or a press on
+ * an already-selected row plays it — the press never plays on its own. A
+ * heading or spacer names no item, so its press changes nothing. */
+export function pressHomeRow(row: HomeListRow): void {
+	settleSelection(row);
+}
+
+/** Play a Home row (design D12): Enter's play, and a double-click's. */
+export function playHomeRow(rowId: GuiHomeRowId): void {
+	void sendLibraryCommand({ command: 'homePlay', row: rowId });
+}
+
+/** Enqueue a Home row directly after the active slot, or at the tail with no
+ * active slot (design D12): `n` and the Hero's Play next. */
+export function playHomeRowNext(rowId: GuiHomeRowId): void {
+	void sendLibraryCommand({ command: 'homePlayNext', row: rowId });
+}
+
+/** Add a Home row to the queue's tail (design D12): `a` and the Hero's Add to
+ * queue. */
+export function queueHomeRow(rowId: GuiHomeRowId): void {
+	void sendLibraryCommand({ command: 'homeQueue', row: rowId });
+}
+
+/** Move the Home cursor one movement along (design D12): Up and Down move an
+ * item row, Page Up and Page Down move the rows in view, and Home and End
+ * take the list's ends, stepping over the headings and spacers. The scroll
+ * offset follows, so the cursor row stays fully visible, and the cursor's
+ * settle selects the row it rests on — the Hero follows the cursor. */
+export function moveHomeListCursor(move: ListMove): void {
+	const list = homeRows();
+	const current = get(homeUi);
+	const view = listWindow(list, current.scrollTop, current.viewportHeight);
+	const cursor = moveHomeCursor(list, current.cursor, move, view.end - view.start);
+	if (cursor === current.cursor) {
+		return;
+	}
+	homeUi.update((ui) => ({
+		...ui,
+		cursor,
+		scrollTop: scrollTopToShowCursor(list, cursor, ui.scrollTop, ui.viewportHeight),
+	}));
+	settleSelection(cursorRow(list, cursor));
+}
+
+/** Report the Home list's measured viewport height (design D12): the rows in
+ * view follow it, and the scroll offset stays inside the narrower range. */
+export function measureHomeList(viewportHeight: number): void {
+	homeUi.update((ui) => ({
+		...ui,
+		viewportHeight,
+		scrollTop: clampScrollTop(homeRows(), ui.scrollTop, viewportHeight),
+	}));
+}
+
+/** Report the Home list's native scroll offset (design D12): a user scroll
+ * moves the rows in view, and the offset stays inside the list's range. */
+export function scrollHomeList(scrollTop: number): void {
+	homeUi.update((ui) => {
+		const top = clampScrollTop(homeRows(), Math.max(scrollTop, 0), ui.viewportHeight);
+		return top === ui.scrollTop ? ui : { ...ui, scrollTop: top };
+	});
+}

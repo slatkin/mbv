@@ -9,7 +9,13 @@ import { invoke } from '@tauri-apps/api/core';
 import { get } from 'svelte/store';
 import { beforeEach, expect, test, vi } from 'vitest';
 import { installInput } from '$lib/bridge/input';
+import {
+	initialHomeUi,
+	homeUi,
+} from './home';
+import { homeRowKey } from './home-list';
 import type {
+	GuiHomeFrame,
 	GuiLibraryContent,
 	GuiLibraryTab,
 	GuiMusicArtist,
@@ -34,6 +40,7 @@ const invokeMock = vi.mocked(invoke);
 beforeEach(() => {
 	invokeMock.mockClear();
 	libraryUi.set(initialLibraryUi());
+	homeUi.set(initialHomeUi());
 	carryLibraryContent(null);
 });
 
@@ -537,5 +544,143 @@ test('Esc with no overlay or menu open is the core\u2019s key', () => {
 	expect(get(libraryUi).heroDismissed).toBe(false);
 	expect(invokeMock).toHaveBeenCalledWith('key', {
 		event: expect.objectContaining({ key: 'Escape' }),
+	});
+});
+
+// add-gui-library-panel row 6.2: the Home keys (design D12) — the Home cursor
+// owns the movement keys wherever the pane focus sits, Enter plays the row it
+// rests on, `n` and `a` enqueue from it, and `/` is not taken: there is no
+// filter on Home, so the key passes to the core's router.
+
+/** The `Continue watching` row the Home fixture carries. */
+const CONTINUED_ROW = {
+	row: 'item' as const,
+	id: { kind: 'continue' as const, id: 'e1' },
+	title: 'Better Call Saul',
+	subtitle: null,
+	date: null,
+	kind: 'media' as const,
+	state: 'ordinary' as const,
+	art: null,
+};
+
+/** The `Recently added` row the movement steps to. */
+const ADDED_ROW = {
+	row: 'item' as const,
+	id: { kind: 'recent' as const, id: { provider: 'Feed' as const, value: 'f1' } },
+	title: 'A Feed Entry',
+	subtitle: null,
+	date: '12 May',
+	kind: 'media' as const,
+	state: 'ordinary' as const,
+	art: null,
+};
+
+/** The carried content while Home is active (design D12): no Music content,
+ * the flat list's rules, and the Home rows. */
+function homeContent(): GuiLibraryContent {
+	return {
+		tabs: [{ position: 1, label: 'Music' }],
+		currentTab: null,
+		music: null,
+		home: {
+			rows: [
+				{ row: 'heading', text: 'Continue watching' },
+				CONTINUED_ROW,
+				{ row: 'spacer' },
+				{ row: 'heading', text: 'Recently added' },
+				ADDED_ROW,
+			],
+			selected: CONTINUED_ROW.id,
+			hero: null,
+		} satisfies GuiHomeFrame,
+	};
+}
+
+function carryHome(): void {
+	carryLibraryContent({ revision: 1, content: homeContent() });
+}
+
+test('Enter on Home plays the cursor row by its opaque id', () => {
+	carryHome();
+	homeUi.set({ ...initialHomeUi(), cursor: homeRowKey(CONTINUED_ROW.id) });
+
+	press('Enter');
+
+	expect(invokeMock).toHaveBeenCalledWith('library', {
+		command: { command: 'homePlay', row: CONTINUED_ROW.id },
+	});
+});
+
+test('n on Home sends play next for the cursor row', () => {
+	carryHome();
+	homeUi.set({ ...initialHomeUi(), cursor: homeRowKey(CONTINUED_ROW.id) });
+
+	press('n');
+
+	expect(invokeMock).toHaveBeenCalledWith('library', {
+		command: { command: 'homePlayNext', row: CONTINUED_ROW.id },
+	});
+});
+
+test('a on Home adds the cursor row to the queue', () => {
+	carryHome();
+	homeUi.set({ ...initialHomeUi(), cursor: homeRowKey(CONTINUED_ROW.id) });
+
+	press('a');
+
+	expect(invokeMock).toHaveBeenCalledWith('library', {
+		command: { command: 'homeQueue', row: CONTINUED_ROW.id },
+	});
+});
+
+// The cursor's settle selects (design D12): the Hero follows the cursor,
+// named by the opaque id and never a position.
+test('Down on Home moves the cursor and selects the row it settles on', () => {
+	carryHome();
+	homeUi.set({ ...initialHomeUi(), cursor: homeRowKey(CONTINUED_ROW.id) });
+
+	press('ArrowDown');
+
+	expect(get(homeUi).cursor).toBe(homeRowKey(ADDED_ROW.id));
+	expect(invokeMock).toHaveBeenCalledWith('library', {
+		command: { command: 'homeSelect', row: ADDED_ROW.id },
+	});
+});
+
+// No filter in Phase 2 (row 6.2): the Library does not take `/` on Home, so
+// the Queue filter's key reaches the core.
+test('the filter key is not taken on Home', () => {
+	carryHome();
+
+	press('/');
+
+	expect(get(libraryUi).filterOpen).toBe(false);
+	expect(invokeMock).toHaveBeenCalledWith('key', {
+		event: expect.objectContaining({ key: '/' }),
+	});
+});
+
+// The pane walk skips the panes Home does not paint (design D12): no pill row,
+// so Tab from the Queue panel focuses the list.
+test('Tab from the Queue panel focuses the list pane on Home', () => {
+	carryHome();
+
+	press('Tab', {}, frame('queue'));
+
+	expect(get(libraryUi).pane).toBe('list');
+	expect(invokeMock).toHaveBeenCalledWith('library', {
+		command: { command: 'takeFocus' },
+	});
+});
+
+test('Tab past the Hero on Home takes Queue Panel focus', () => {
+	carryHome();
+	libraryUi.update((ui) => ({ ...ui, pane: 'hero' }));
+
+	press('Tab');
+
+	expect(invokeMock).toHaveBeenCalledWith('library', {
+		command: { command: 'takeQueueFocus' },
 	});
 });

@@ -68,3 +68,23 @@ test('a library with no group names no collection', () => {
 test('an unpicked item leaves the location without its last segment', () => {
 	expect(libraryLocation(TABS, 1, music(null))).toBe('Music › Hip-Hop › Soul');
 });
+
+// add-gui-library-panel row 6.2: on Home the location reads `Home`, then the
+// selected row's Hero title (design D10, D12).
+test('the location reads Home and the Home Hero title', () => {
+	expect(
+		libraryLocation(TABS, null, null, {
+			rows: [],
+			selected: { kind: 'continue', id: 'e1' },
+			hero: {
+				title: 'Better Call Saul',
+				metaRows: ['1 h 47 m left'],
+				durationRow: 0,
+				progressRow: null,
+				overview: null,
+				artShape: 'square',
+				art: null,
+			},
+		}),
+	).toBe('Home › Better Call Saul');
+});

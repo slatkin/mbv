@@ -23,7 +23,7 @@ import {
 	focusedLibraryPill,
 	heroOverlayOpen,
 	libraryContent,
-	libraryMusic,
+	libraryHome,
 	libraryShown,
 	libraryUi,
 	moveLibraryCursor,
@@ -34,6 +34,13 @@ import {
 	setLibraryCursorOpen,
 } from './state';
 import type { LibraryUiState } from './state';
+import {
+	homeCursorRowId,
+	moveHomeListCursor,
+	playHomeRow,
+	playHomeRowNext,
+	queueHomeRow,
+} from './home';
 
 /** The frame facts the routing reads. A slice `GuiFrame` satisfies it whole, so
  * the installer passes the frame it holds; a test builds only these fields. */
@@ -93,19 +100,22 @@ function destinationPlace(event: KeyboardEvent): number | null {
 	return place >= 1 && place <= 7 ? place : null;
 }
 
-/** Move the pane focus (design D3, step 3): Tab and Shift+Tab walk the pill
- * row, the list, and the Hero. The ends of that walk cross the panel boundary
- * (design D4): Tab past the Hero and Shift+Tab before the pill row give the
- * Queue panel Panel focus, and Queue Panel focus gives the Library panel's
- * near end the keyboard, because Panel focus lives in the core. */
+/** Move the pane focus (design D3, step 3, D12): Tab and Shift+Tab walk the
+ * panes the active destination paints — the pill row, the list, and the Hero
+ * on Music; the list and the Hero on Home. The ends of that walk cross the
+ * panel boundary (design D4): Tab past the Hero and Shift+Tab before the
+ * first pane give the Queue panel Panel focus, and Queue Panel focus gives
+ * the Library panel's near end the keyboard, because Panel focus lives in
+ * the core. */
 function takePaneFocus(panel: GuiPanel, step: number): void {
 	if (panel === 'queue') {
 		sendLibraryCommand({ command: 'takeFocus' });
-		focusLibraryPane(step > 0 ? 'pills' : 'hero');
+		focusLibraryPane(step > 0 ? (libraryHome() === null ? 'pills' : 'list') : 'hero');
 		return;
 	}
 	const { pane } = get(libraryUi);
-	if ((step > 0 && pane === 'hero') || (step < 0 && pane === 'pills')) {
+	const back = step < 0;
+	if ((step > 0 && pane === 'hero') || (back && (libraryHome() === null ? pane === 'pills' : pane === 'list'))) {
 		sendLibraryCommand({ command: 'takeQueueFocus' });
 		return;
 	}
@@ -241,8 +251,12 @@ function routeEscapeKey(ui: LibraryUiState): KeyOutcome {
 }
 
 /** Route a key to the Library keys (design D3, step 4), with the pane the
- * window content focused deciding which control the key acts on. */
+ * window content focused deciding which control the key acts on. On Home the
+ * Home keys route instead (design D12). */
 function routePanelKey(event: KeyboardEvent, ui: LibraryUiState): KeyOutcome {
+	if (libraryHome() !== null) {
+		return routeHomePanelKey(event, ui);
+	}
 	if (event.key === 'Escape' && bare(event)) {
 		return routeEscapeKey(ui);
 	}
@@ -296,6 +310,58 @@ function routePanelKey(event: KeyboardEvent, ui: LibraryUiState): KeyOutcome {
 	return 'core';
 }
 
+/** Route a key to the Home keys (design D12): the Home cursor owns the
+ * movement keys wherever the pane focus sits, Enter plays the row it rests
+ * on, and `n` and `a` enqueue from it. There is no filter and no pill row on
+ * Home, so `/` and Space are not taken: they pass to the core's router. The
+ * tree's Right and Left have no node to open, so they change nothing but
+ * still never reach the core. */
+function routeHomePanelKey(event: KeyboardEvent, ui: LibraryUiState): KeyOutcome {
+	if (event.key === 'Escape' && bare(event)) {
+		return routeEscapeKey(ui);
+	}
+	if (event.key === '/' || event.key === ' ') {
+		// No filter and no pill row on Home (row 6.2): the key keeps its core
+		// effect, as it does under Queue focus.
+		return 'core';
+	}
+	if (!bare(event)) {
+		return 'core';
+	}
+	const move = CURSOR_MOVES[event.key];
+	if (move !== undefined) {
+		moveHomeListCursor(move);
+		return 'handled';
+	}
+	if (event.key === 'Enter') {
+		const row = homeCursorRowId();
+		if (row !== null) {
+			playHomeRow(row);
+		}
+		return 'handled';
+	}
+	if (event.key === 'n') {
+		const row = homeCursorRowId();
+		if (row !== null) {
+			playHomeRowNext(row);
+		}
+		return 'handled';
+	}
+	if (event.key === 'a') {
+		const row = homeCursorRowId();
+		if (row !== null) {
+			queueHomeRow(row);
+		}
+		return 'handled';
+	}
+	if (LIST_AND_HERO_KEYS.has(event.key)) {
+		// Right and Left have no tree node to open on Home; the other keys are
+		// answered above. They still never reach the core (design D3, step 4).
+		return 'handled';
+	}
+	return 'core';
+}
+
 /**
  * Route one keydown (design D3): the front end does its part, and the answer is
  * what the input forwarder must do with the key.
@@ -308,7 +374,11 @@ export function routeLibraryKey(
 	// keys: the core takes every one of them. The panel's presence is the
 	// window's mount fact (design D2, D10), so a key never acts on a panel that
 	// paints nothing.
-	if (!frame || !libraryShown(frame.library, libraryMusic())) {
+	// The panel's presence is one fact for the window and the router (design
+	// D2, D10): a frame that carries no Library section takes no Library key,
+	// even while the window still holds the content of an earlier frame. The
+	// content names the active destination's section (design D12).
+	if (!frame || !libraryShown(frame.library, get(libraryContent))) {
 		return 'core';
 	}
 	// (1) An open core overlay or an armed prefix keeps the keyboard with the
