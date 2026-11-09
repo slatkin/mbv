@@ -83,6 +83,15 @@ impl App {
             self.activate_library_position(lib_idx);
         }
         if !self.is_feed_home_video_library(lib_idx) {
+            // A failed list retries on an open (the failure "stays failed
+            // until the library is opened again"), so the open clears the
+            // failed mark the frame path's fetch would otherwise honour.
+            if matches!(
+                self.gui_emby_roots.get(&lib_idx),
+                Some(GuiEmbyRootItems::Failed)
+            ) {
+                self.gui_emby_roots.remove(&lib_idx);
+            }
             self.fetch_gui_emby_root_items(lib_idx);
         }
     }
@@ -186,7 +195,9 @@ impl App {
     pub(in crate::app) fn fetch_gui_emby_root_items(&mut self, lib_idx: usize) {
         if matches!(
             self.gui_emby_roots.get(&lib_idx),
-            Some(GuiEmbyRootItems::Loading | GuiEmbyRootItems::Loaded(_))
+            Some(
+                GuiEmbyRootItems::Loading | GuiEmbyRootItems::Loaded(_) | GuiEmbyRootItems::Failed
+            )
         ) {
             return;
         }
@@ -234,6 +245,48 @@ impl App {
             }
         };
         self.gui_emby_roots.insert(lib_idx, state);
+    }
+
+    /// Play the plain Emby-library row a command names (design D12, row
+    /// 8.1): the shared library play path, whose folder-play rule expands a
+    /// folder or a boxset into its playable content and whose admission and
+    /// route checks are the Owner's queue's own. A stale id plays nothing.
+    pub(in crate::app::gui_library) fn play_gui_emby_item(
+        &mut self,
+        lib_idx: usize,
+        item_id: &str,
+    ) {
+        match self.gui_emby_item(lib_idx, item_id) {
+            Some(item) => self.play_or_activate_lib_item(lib_idx, item),
+            None => Self::log_stale_library_item("embyPlay", item_id),
+        }
+    }
+
+    /// Play the plain Emby-library row next (design D12, row 8.1): the
+    /// shared play-next admission, so the row enters directly after the
+    /// active slot.
+    pub(in crate::app::gui_library) fn play_next_gui_emby_item(
+        &mut self,
+        lib_idx: usize,
+        item_id: &str,
+    ) {
+        match self.gui_emby_item(lib_idx, item_id) {
+            Some(item) => self.play_lib_item_next(lib_idx, item),
+            None => Self::log_stale_library_item("embyPlayNext", item_id),
+        }
+    }
+
+    /// Add the plain Emby-library row to the queue (design D12, row 8.1):
+    /// the shared add path.
+    pub(in crate::app::gui_library) fn enqueue_gui_emby_item(
+        &mut self,
+        lib_idx: usize,
+        item_id: &str,
+    ) {
+        match self.gui_emby_item(lib_idx, item_id) {
+            Some(item) => self.enqueue_lib_item(lib_idx, item),
+            None => Self::log_stale_library_item("embyQueue", item_id),
+        }
     }
 
     /// The root items the GUI store loaded for `lib_idx` (row 8.1): the list

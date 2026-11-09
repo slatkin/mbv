@@ -7,6 +7,7 @@
 
 mod artwork;
 mod emby;
+mod emby_projection;
 mod home;
 mod launch;
 mod projection;
@@ -18,6 +19,9 @@ mod tv;
 pub use self::artwork::GuiLibraryArtwork;
 pub use self::emby::GuiEmbyLibrarySelection;
 pub(in crate::app) use self::emby::{GuiEmbyRootItems, GuiEmbyRootItemsEvent};
+pub use self::emby_projection::{
+    GuiEmbyFeedGroup, GuiEmbyHero, GuiEmbyPill, GuiEmbyProjection, GuiEmbyRow, GuiEmbyRowKind,
+};
 pub use self::home::{
     GuiArtShape, GuiHomeHero, GuiHomeItemRow, GuiHomeProjection, GuiHomeRow, GuiHomeRowId,
     GuiHomeRowKind, GuiHomeRowState,
@@ -38,6 +42,7 @@ use mbv_emby_model::EmbyItem;
 use mbv_ui_model::context_menu::ContextAction;
 use mbv_ui_model::context_menu::ContextMenu;
 use mbv_ui_model::context_menu::ContextMenuEntry;
+use mbv_ui_model::feed::FeedHomeVideoSelection;
 use mbv_ui_model::settings::PanelFocus;
 use mbv_ui_model::ui_util::is_playable;
 
@@ -128,8 +133,32 @@ pub enum GuiLibraryCommand {
     /// Play a Shows episode next (design D12): the shared play-next
     /// admission, so the episode enters directly after the active slot.
     ShowsPlayNext { lib_idx: usize, item_id: String },
+    /// Play a Shows episode to the queue's front...
     /// Add a Shows episode to the queue (design D12): the shared add path.
     ShowsQueue { lib_idx: usize, item_id: String },
+    /// Select a plain Emby-library row (design D12, row 8.1): the row the
+    /// Hero shows. A row the active list no longer holds changes nothing.
+    EmbySelect { lib_idx: usize, row: String },
+    /// Set the feed-view library's selected group (design D12, row 8.1):
+    /// the TUI's own selection path, so the session cache, the stale-drop,
+    /// and the lazy fetch behave as the TUI pill's press does. A `lib_idx`
+    /// that names no feed-view library changes nothing.
+    EmbySetFeedGroup {
+        lib_idx: usize,
+        group: emby_projection::GuiEmbyFeedGroup,
+    },
+    /// Play a plain Emby-library row (design D12, row 8.1): Enter on the
+    /// row, or the double-click a front end sends with this same command.
+    /// A folder or a boxset plays through the TUI's folder-play rule, so no
+    /// nested list opens.
+    EmbyPlay { lib_idx: usize, item_id: String },
+    /// Play a plain Emby-library row next (design D12, row 8.1): the shared
+    /// play-next admission, so the row enters directly after the active
+    /// slot.
+    EmbyPlayNext { lib_idx: usize, item_id: String },
+    /// Add a plain Emby-library row to the queue (design D12, row 8.1): the
+    /// shared add path.
+    EmbyQueue { lib_idx: usize, item_id: String },
 }
 
 /// The Library item menu the frame's `rowMenu` section carries: the item
@@ -244,6 +273,21 @@ impl App {
             }
             GuiLibraryCommand::ShowsQueue { lib_idx, item_id } => {
                 self.enqueue_gui_shows_item(lib_idx, &item_id);
+            }
+            GuiLibraryCommand::EmbySelect { lib_idx, row } => {
+                self.gui_emby_select(lib_idx, &row);
+            }
+            GuiLibraryCommand::EmbySetFeedGroup { lib_idx, group } => {
+                self.gui_emby_set_feed_group(lib_idx, &FeedHomeVideoSelection::from(group));
+            }
+            GuiLibraryCommand::EmbyPlay { lib_idx, item_id } => {
+                self.play_gui_emby_item(lib_idx, &item_id);
+            }
+            GuiLibraryCommand::EmbyPlayNext { lib_idx, item_id } => {
+                self.play_next_gui_emby_item(lib_idx, &item_id);
+            }
+            GuiLibraryCommand::EmbyQueue { lib_idx, item_id } => {
+                self.enqueue_gui_emby_item(lib_idx, &item_id);
             }
         }
     }

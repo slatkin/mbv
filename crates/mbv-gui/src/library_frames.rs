@@ -11,8 +11,8 @@
 use mbv::{App, GuiDestinationKind, GuiLibraryTabs};
 
 use crate::bridge::frame::library::{
-    GuiHomeFrame, GuiLibraryArt, GuiLibraryContent, GuiLibraryFrame, GuiLibraryTabFrame,
-    GuiMusicFrame, GuiShowsFrame,
+    GuiEmbyFrame, GuiHomeFrame, GuiLibraryArt, GuiLibraryContent, GuiLibraryFrame,
+    GuiLibraryTabFrame, GuiMusicFrame, GuiShowsFrame,
 };
 
 /// The frames' Library section memo (design D2).
@@ -44,15 +44,19 @@ impl LibraryFrames {
             Some(GuiDestinationKind::Shows { lib_idx }) => Some(shows_frame(app, lib_idx)),
             _ => None,
         };
+        let emby = match destination {
+            Some(GuiDestinationKind::Library { lib_idx }) => Some(emby_frame(app, lib_idx)),
+            _ => None,
+        };
         // Home presents while no library destination presents content
         // (design D12): the destinations are exclusive, so no two fields of
         // the content set themselves at once.
         let home = matches!(destination, Some(GuiDestinationKind::Home)).then(|| home_frame(app));
-        if music.is_none() && home.is_none() && shows.is_none() {
+        if music.is_none() && home.is_none() && shows.is_none() && emby.is_none() {
             self.sent = None;
             return None;
         }
-        let content = content(app, music, home, shows);
+        let content = content(app, music, home, shows, emby);
         if self.last.as_ref() != Some(&content) {
             // The counter wraps like the queue's revision mint: a client
             // lives far shorter than a revision's range, so a repeat is a
@@ -90,6 +94,7 @@ fn log_content_built(revision: u64, content: &GuiLibraryContent) {
     let artists = music.map_or(0, |music| music.artists.len());
     let home_rows = content.home.as_ref().map_or(0, |home| home.rows.len());
     let shows_rows = content.shows.as_ref().map_or(0, |shows| shows.rows.len());
+    let emby_rows = content.emby.as_ref().map_or(0, |emby| emby.rows.len());
     tracing::info!(
         name: "gui_library.content.built",
         target: "gui_library",
@@ -102,6 +107,7 @@ fn log_content_built(revision: u64, content: &GuiLibraryContent) {
             || content.shows.as_ref().is_some_and(|shows| shows.hero.is_some()),
         home_rows,
         shows_rows,
+        emby_rows,
         "the Library content changed"
     );
 }
@@ -118,6 +124,7 @@ fn content(
     music: Option<GuiMusicFrame>,
     home: Option<GuiHomeFrame>,
     shows: Option<GuiShowsFrame>,
+    emby: Option<GuiEmbyFrame>,
 ) -> GuiLibraryContent {
     let GuiLibraryTabs { tabs, current } = app.gui_library_tabs();
     GuiLibraryContent {
@@ -126,6 +133,7 @@ fn content(
         music,
         home,
         shows,
+        emby,
     }
 }
 
@@ -174,4 +182,15 @@ fn shows_frame(app: &mut App, lib_idx: usize) -> GuiShowsFrame {
     app.ensure_gui_shows_detail(lib_idx);
     let projection = app.gui_shows_projection(lib_idx);
     GuiShowsFrame::from_projection(lib_idx, &projection)
+}
+
+/// The plain Emby-library destination's content (design D12, row 8.1): the
+/// feed pills, the active list's rows, the selected row, and its Hero,
+/// fetched and built here per frame so an unchanged frame's revision carries
+/// nothing (the memo's content compare). The frame path's ensure is the
+/// shown-pass trigger the TUI projection pass's lazy-fetch arm mirrors.
+fn emby_frame(app: &mut App, lib_idx: usize) -> GuiEmbyFrame {
+    app.ensure_gui_emby_selection(lib_idx);
+    let projection = app.gui_emby_projection(lib_idx);
+    GuiEmbyFrame::from_projection(lib_idx, &projection)
 }

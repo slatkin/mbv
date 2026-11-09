@@ -71,6 +71,7 @@ function content(): GuiLibraryContent {
 		music: music(),
 		home: null,
 		shows: null,
+		emby: null,
 	};
 }
 

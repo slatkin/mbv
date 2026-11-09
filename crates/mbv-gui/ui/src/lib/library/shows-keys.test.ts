@@ -95,6 +95,7 @@ function showsContent(
 		currentTab: 2,
 		music: null,
 		home: null,
+		emby: null,
 		shows: {
 			libIdx: 0,
 			pills: showsPills(mode),

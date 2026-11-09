@@ -62,6 +62,7 @@ function content(): GuiLibraryContent {
 		currentTab: null,
 		music: null,
 		shows: null,
+		emby: null,
 		home: {
 			rows: [
 				{ row: 'heading', text: 'Continue watching' },

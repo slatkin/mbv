@@ -22,7 +22,8 @@ mod startup;
 pub use self::app::{
     App, AppCommand, CLIENT_IDLE_CADENCE, CardImageDrain, ClientCore, ClientLifecycle,
     ClientTickHost, ClientWaker, Command, FooterPill, GuiArtShape, GuiConfirmButtonProjection,
-    GuiConfirmButtonTone, GuiDestinationKind, GuiHomeHero, GuiHomeItemRow, GuiHomeProjection,
+    GuiConfirmButtonTone, GuiDestinationKind, GuiEmbyFeedGroup, GuiEmbyHero, GuiEmbyPill,
+    GuiEmbyProjection, GuiEmbyRow, GuiEmbyRowKind, GuiHomeHero, GuiHomeItemRow, GuiHomeProjection,
     GuiHomeRow, GuiHomeRowId, GuiHomeRowKind, GuiHomeRowState, GuiInput, GuiLibraryArtwork,
     GuiLibraryCommand, GuiLibraryMenuItem, GuiLibraryRowMenu, GuiLibraryTab, GuiLibraryTabs,
     GuiMusicAlbum, GuiMusicArtist, GuiMusicHero, GuiMusicPill, GuiMusicProjection, GuiMusicTrack,

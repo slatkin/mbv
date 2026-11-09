@@ -274,6 +274,80 @@ impl App {
         }
     }
 
+    /// Seed the GUI's plain Emby root-list store with `items` for `lib_idx`,
+    /// as a landed fetch would (add-gui-library-panel row 8.1): a Client's
+    /// command test injects the rows and observes the frame with no fetch
+    /// behind it.
+    #[cfg(feature = "test")]
+    pub fn seed_gui_emby_roots_for_test(
+        &mut self,
+        lib_idx: usize,
+        items: Vec<mbv_emby_model::EmbyItem>,
+    ) {
+        self.gui_emby_roots.insert(
+            lib_idx,
+            crate::app::gui_library::GuiEmbyRootItems::Loaded(items),
+        );
+    }
+
+    /// Make a feed-view home-videos library the GUI Library test's
+    /// destination (add-gui-library-panel row 8.1): the Emby runtime becomes
+    /// Ready with `client` (built over a mock transport), the feed-view
+    /// config names the library, the root listing holds one folder whose
+    /// counted videos admit its pill, and the feed state is present with the
+    /// default All selection — the state a landed root listing and count
+    /// fan-out leave. A Client seeds it after its core thread is built, so
+    /// the launch Home load starts no request the test would script.
+    ///
+    /// # Panics
+    /// Panics if the settings mutex is poisoned: a previous holder panicked.
+    #[cfg(feature = "test")]
+    pub fn seed_gui_feed_view_library_for_test(&mut self, client: mbv_emby::EmbyClient) {
+        self.emby_runtime =
+            crate::app::state::service_runtime::EmbyRuntime::ready(Arc::new(Mutex::new(client)));
+        self.config
+            .lock()
+            .unwrap()
+            .feed_view_libraries
+            .push("youtube".to_string());
+        let mut library = mbv_emby_model::test_support::make_item("YouTube", "CollectionFolder");
+        library.id = "lib-youtube".to_string();
+        library.collection_type = "homevideos".to_string();
+        library.is_folder = true;
+        let mut folder = mbv_emby_model::test_support::make_item("Channel 1", "Folder");
+        folder.id = "folder-1".to_string();
+        folder.is_folder = true;
+        let mut tab = mbv_ui_model::library_tab::LibraryTab::new(library);
+        tab.nav_stack.push(mbv_ui_model::browse::BrowseLevel {
+            parent_id: "lib-youtube".to_string(),
+            title: "YouTube".to_string(),
+            items: vec![folder],
+            rows: mbv_ui_model::browse::ServerRows::new(0),
+            resting: mbv_ui_model::browse::BrowseResting::new(0, 0),
+            item_types: None,
+            unplayed_only: false,
+            sort_by: "SortName".to_string(),
+            sort_order: "Ascending".to_string(),
+            loading: false,
+            all_items: None,
+            letter_filter: None,
+            tv_content_mode: None,
+            music_grouping: None,
+        });
+        tab.feed_home_video = Some(mbv_ui_model::feed::FeedHomeVideoState {
+            folder_counts: [("folder-1".to_string(), 2_usize)].into_iter().collect(),
+            // The default All selection arrives cached empty, so a Client's
+            // set-feed-group test makes the folder fetch the one items fetch
+            // the mock answers.
+            items: [(mbv_ui_model::feed::FeedHomeVideoSelection::All, Vec::new())]
+                .into_iter()
+                .collect(),
+            ..mbv_ui_model::feed::FeedHomeVideoState::default()
+        });
+        self.libs = vec![tab];
+        self.tab = mbv_ui_model::tab_selection::TabSelection::EmbyLibrary(0);
+    }
+
     /// Whether the album's track fetch is in flight (design D5): the open-
     /// album command's effect before its completion lands.
     #[must_use]

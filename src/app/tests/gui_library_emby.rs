@@ -317,3 +317,186 @@ fn the_presented_tabs_include_the_plain_emby_libraries() {
         "the Movies destination's kind is the plain Emby-library one"
     );
 }
+
+/// A plain-mode root-list item with its year, runtime, and sort name.
+fn movie_item(id: &str, name: &str, year: u32, runtime_ticks: i64) -> EmbyItem {
+    let mut item = make_item(name, "Movie");
+    item.id = id.to_string();
+    item.production_year = year;
+    item.runtime_ticks = runtime_ticks;
+    item
+}
+
+/// A stub `App` whose plain Movies library is active, with the root-list
+/// store holding `items` (row 8.1): the state a landed fetch leaves, read by
+/// the projection with no Service behind it.
+fn plain_movies_app(items: Vec<EmbyItem>) -> App {
+    let mut app = make_app_stub();
+    let mut library = make_item("Movies", "CollectionFolder");
+    library.id = MOVIES_ID.into();
+    library.collection_type = "movies".into();
+    library.is_folder = true;
+    app.libs.push(LibraryTab::new(library));
+    app.tab = TabSelection::EmbyLibrary(0);
+    app.gui_emby_roots
+        .insert(0, crate::app::gui_library::GuiEmbyRootItems::Loaded(items));
+    app
+}
+
+/// The plain mode's projection (row 8.1, contract a): the rows are the
+/// root-list store's rows in the server's `SortName` order, each with its
+/// rail letter over the article-stripped sort name (`#` past Z), the first
+/// row is the Hero default, the Hero is the shared Emby hero producer's
+/// facts with no Workspace, and the mode carries no pill at all.
+#[test]
+fn the_plain_mode_projects_rows_letters_and_the_hero_without_workspace() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = plain_movies_app(vec![
+        {
+            let mut item = movie_item(
+                "m-1",
+                "A Movie",
+                1999,
+                5400 * mbv_emby_model::TICKS_PER_SECOND,
+            );
+            item.premiere_date = "1999-06-01T00:00:00Z".into();
+            item
+        },
+        movie_item("m-2", "B Movie", 0, 900 * mbv_emby_model::TICKS_PER_SECOND),
+        movie_item("m-3", "9th Street", 0, 0),
+    ]);
+
+    let projection = app.gui_emby_projection(0);
+
+    let ids: Vec<&str> = projection.rows.iter().map(|row| row.id.as_str()).collect();
+    assert_eq!(ids, ["m-1", "m-2", "m-3"], "the rows are the store's list");
+    // The rail letter reads the article-stripped sort name, as the TUI's
+    // letter buckets do: "A Movie" sorts as "Movie".
+    let letters: Vec<char> = projection
+        .rows
+        .iter()
+        .filter_map(|row| row.sort_letter)
+        .collect();
+    assert_eq!(letters, ['M', 'B', '#'], "the rail letters read the names");
+    assert_eq!(
+        projection.rows[0].subtitle.as_deref(),
+        Some("1999"),
+        "a year rides the row's subtitle"
+    );
+    assert_eq!(
+        projection.rows[1].subtitle.as_deref(),
+        Some("15:00"),
+        "a runtime rides the row's subtitle when no year exists"
+    );
+    assert!(projection.rows.iter().all(|row| row.date.is_none()));
+    assert!(
+        projection.pills.is_empty() && !projection.feed_group,
+        "the plain mode carries no pill"
+    );
+    assert!(!projection.loading && !projection.failed);
+    assert_eq!(
+        projection.selected.as_deref(),
+        Some("m-1"),
+        "the first row is the Hero default"
+    );
+    let hero = projection.hero.expect("the Hero paints");
+    assert_eq!(hero.title, "A Movie");
+    // The shared Emby hero producer's facts: the premiere date and the
+    // duration row, the same meta rows the TUI's hero paints.
+    assert_eq!(hero.meta_rows, vec!["1 Jun 1999", "01:30:00"]);
+    assert_eq!(hero.duration_row, Some(1));
+    assert_eq!(hero.progress_row, None);
+    assert!(hero.overview.is_none());
+    // No image tag declares a source, so the Hero carries none and the
+    // window paints its own placeholder.
+    assert!(hero.art.is_none());
+}
+
+/// The feed-group mode's projection (row 8.1, contract b): the pills are All
+/// and each folder whose video count is positive, with the selection's pill
+/// the selected one, the selected group's items are the rows in the server's
+/// date order with the year gutter and no rail letter, and the mode's flag
+/// is set.
+#[test]
+fn the_feed_group_mode_projects_pills_and_the_date_ordered_rows() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = make_app_stub();
+    let mut library = make_item("YouTube", "CollectionFolder");
+    library.id = FEED_ID.into();
+    library.collection_type = "homevideos".into();
+    library.is_folder = true;
+    app.libs.push(LibraryTab::new(library));
+    app.tab = TabSelection::EmbyLibrary(0);
+    app.config
+        .lock()
+        .unwrap()
+        .feed_view_libraries
+        .push("youtube".into());
+    app.libs[0].nav_stack.push(level(
+        FEED_ID,
+        "YouTube",
+        vec![
+            folder_item("folder-1", "Channel 1"),
+            folder_item("folder-2", "Empty"),
+        ],
+    ));
+    let mut first = make_item("Old Clip", "Video");
+    first.id = "vid-1".into();
+    first.production_year = 2020;
+    let mut second = make_item("New Clip", "Video");
+    second.id = "vid-2".into();
+    app.libs[0].feed_home_video = Some(FeedHomeVideoState {
+        folder_counts: [("folder-1".to_string(), 2_usize)].into_iter().collect(),
+        items: [(FeedHomeVideoSelection::All, vec![second, first])]
+            .into_iter()
+            .collect(),
+        ..FeedHomeVideoState::default()
+    });
+
+    let projection = app.gui_emby_projection(0);
+
+    assert!(projection.feed_group, "the feed-group mode is named");
+    let names: Vec<&str> = projection
+        .pills
+        .iter()
+        .map(|pill| pill.name.as_str())
+        .collect();
+    assert_eq!(
+        names,
+        ["All", "Channel 1"],
+        "the pills are All and each folder with items"
+    );
+    let selected: Vec<&str> = projection
+        .pills
+        .iter()
+        .filter(|pill| pill.selected)
+        .map(|pill| pill.name.as_str())
+        .collect();
+    assert_eq!(
+        selected,
+        ["All"],
+        "the selection's pill is the selected one"
+    );
+    let ids: Vec<&str> = projection.rows.iter().map(|row| row.id.as_str()).collect();
+    assert_eq!(
+        ids,
+        ["vid-2", "vid-1"],
+        "the rows are the group's date order"
+    );
+    assert!(
+        projection.rows.iter().all(|row| row.sort_letter.is_none()),
+        "the date-ordered list shows no rail"
+    );
+    assert_eq!(
+        projection.rows[1].date.as_deref(),
+        Some("2020"),
+        "the year rides the feed row's gutter"
+    );
+    assert_eq!(projection.collection_names, vec!["All"]);
+    assert_eq!(
+        projection.selected.as_deref(),
+        Some("vid-2"),
+        "the first row is the Hero default"
+    );
+    assert!(projection.hero.is_some(), "the Hero paints");
+}

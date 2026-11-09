@@ -26,6 +26,7 @@ use mbv_queue::QueueSource;
 use crate::{TestCore, test_core_with, test_emby_client};
 
 mod destination;
+mod emby;
 mod frame;
 mod menu;
 mod playback;

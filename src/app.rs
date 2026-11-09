@@ -47,7 +47,8 @@ pub use self::gui_library::{
     GuiHomeRowKind, GuiHomeRowState,
 };
 pub use self::gui_library::{
-    GuiDestinationKind, GuiShowsEpisodeRow, GuiShowsHero, GuiShowsMode, GuiShowsPill,
+    GuiDestinationKind, GuiEmbyFeedGroup, GuiEmbyHero, GuiEmbyPill, GuiEmbyProjection, GuiEmbyRow,
+    GuiEmbyRowKind, GuiShowsEpisodeRow, GuiShowsHero, GuiShowsMode, GuiShowsPill,
     GuiShowsProjection, GuiShowsRow, GuiShowsSeasonPill, GuiShowsWorkspace,
 };
 pub use self::gui_library::{

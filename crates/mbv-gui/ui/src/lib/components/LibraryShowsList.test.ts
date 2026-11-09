@@ -106,7 +106,7 @@ async function mountList(
 	const shows = showsFrame(mode, rows);
 	carryLibraryContent({
 		revision: 1,
-		content: { tabs: [], currentTab: 2, music: null, home: null, shows },
+		content: { tabs: [], currentTab: 2, music: null, home: null, shows, emby: null },
 	});
 	const { container } = render(LibraryShowsList, { shows });
 	const list = container.querySelector<HTMLElement>('[data-library-shows-list]');

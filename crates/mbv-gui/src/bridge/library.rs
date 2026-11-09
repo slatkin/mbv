@@ -74,6 +74,26 @@ pub enum GuiLibraryCommand {
     ShowsPlayNext { lib_idx: usize, item_id: String },
     /// Add a Shows episode to the queue (design D12).
     ShowsQueue { lib_idx: usize, item_id: String },
+    /// Select a plain Emby-library row (add-gui-library-panel design D12,
+    /// row 8.1): the row the Hero shows. A row the active list no longer
+    /// holds changes nothing.
+    EmbySelect { lib_idx: usize, row: String },
+    /// Set the feed-view library's selected group (row 8.1): the TUI's own
+    /// selection path. Feed-group mode only; a library that presents none
+    /// changes nothing.
+    EmbySetFeedGroup {
+        lib_idx: usize,
+        group: GuiEmbyFeedGroup,
+    },
+    /// Play a plain Emby-library row (row 8.1): Enter on the row, or the
+    /// double-click a front end sends with this same command. A folder or a
+    /// boxset plays through the TUI's folder-play rule, so no nested list
+    /// opens.
+    EmbyPlay { lib_idx: usize, item_id: String },
+    /// Play a plain Emby-library row next (row 8.1).
+    EmbyPlayNext { lib_idx: usize, item_id: String },
+    /// Add a plain Emby-library row to the queue (row 8.1).
+    EmbyQueue { lib_idx: usize, item_id: String },
 }
 
 /// One Shows view mode (design D12): the three single-select pills the
@@ -95,6 +115,15 @@ impl From<GuiShowsMode> for mbv::GuiShowsMode {
             GuiShowsMode::All => Self::All,
         }
     }
+}
+
+/// One feed-group pill of a feed-view Emby library (add-gui-library-panel
+/// design D12, row 8.1): `All`, or one root folder by its stable Service id.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(tag = "kind", content = "id", rename_all = "camelCase")]
+pub enum GuiEmbyFeedGroup {
+    All,
+    Folder(String),
 }
 
 /// One Home row's stable identity (design D12): the identity the Home
@@ -155,6 +184,21 @@ impl From<GuiLibraryCommand> for mbv::GuiLibraryCommand {
             }
             GuiLibraryCommand::ShowsQueue { lib_idx, item_id } => {
                 Self::ShowsQueue { lib_idx, item_id }
+            }
+            GuiLibraryCommand::EmbySelect { lib_idx, row } => Self::EmbySelect { lib_idx, row },
+            GuiLibraryCommand::EmbySetFeedGroup { lib_idx, group } => Self::EmbySetFeedGroup {
+                lib_idx,
+                group: match group {
+                    GuiEmbyFeedGroup::All => mbv::GuiEmbyFeedGroup::All,
+                    GuiEmbyFeedGroup::Folder(folder_id) => mbv::GuiEmbyFeedGroup::Folder(folder_id),
+                },
+            },
+            GuiLibraryCommand::EmbyPlay { lib_idx, item_id } => Self::EmbyPlay { lib_idx, item_id },
+            GuiLibraryCommand::EmbyPlayNext { lib_idx, item_id } => {
+                Self::EmbyPlayNext { lib_idx, item_id }
+            }
+            GuiLibraryCommand::EmbyQueue { lib_idx, item_id } => {
+                Self::EmbyQueue { lib_idx, item_id }
             }
         }
     }

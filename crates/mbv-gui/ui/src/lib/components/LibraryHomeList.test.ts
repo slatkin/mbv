@@ -48,6 +48,7 @@ function carriedContent(): GuiLibraryContent {
 		music: null,
 		home: homeFrame(),
 		shows: null,
+		emby: null,
 	};
 }
 

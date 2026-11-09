@@ -21,8 +21,13 @@ use serde::Serialize;
 use crate::artwork::data_url;
 use mbv::GuiLibraryTab;
 
+mod emby;
 mod shows;
 
+pub use self::emby::{
+    GuiEmbyFeedGroupFrame, GuiEmbyFrame, GuiEmbyHeroFrame, GuiEmbyPillFrame, GuiEmbyRowFrame,
+    GuiEmbyRowKindFrame,
+};
 pub use self::shows::{
     GuiShowsEpisodeRowFrame, GuiShowsFrame, GuiShowsHeroFrame, GuiShowsModeFrame,
     GuiShowsPillFrame, GuiShowsRowFrame, GuiShowsSeasonPillFrame, GuiShowsWorkspaceFrame,
@@ -69,6 +74,11 @@ pub struct GuiLibraryContent {
     /// destination (add-gui-library-panel design D12, the USER-APPROVED GUI
     /// Shows design); `None` while any other destination is active.
     pub shows: Option<GuiShowsFrame>,
+    /// The plain Emby-library destination's content while a plain Emby
+    /// library is the active destination (add-gui-library-panel design D12,
+    /// row 8.1, the USER-APPROVED GUI Emby-library design); `None` while any
+    /// other destination is active.
+    pub emby: Option<GuiEmbyFrame>,
 }
 
 /// One destination tab of the top bar (design D2).
