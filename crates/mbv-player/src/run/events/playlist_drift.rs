@@ -2,14 +2,21 @@ use super::super::{PlaybackRun, divergent_entry};
 use mbv_ctrl::player::PlayerEvent;
 
 impl PlaybackRun {
+    /// Whether a queue transition is in flight: the guard both
+    /// `on_playlist_pos_changed` and `on_playlist_count_changed` apply while
+    /// a queue load plan's rebuild lands (the transient window its layout
+    /// observations arrive in).
+    fn queue_transition_in_flight(&self) -> bool {
+        self.pending_initial_playlist_layout
+            || !self.load_is_ready()
+            || !self.run_lifecycle.jump_arm().is_idle()
+    }
+
     pub(crate) fn on_playlist_pos_changed(&mut self, pos: i64, mpv_pos_ticks: i64) {
         if self.run_lifecycle.is_active_file() {
             return;
         }
-        if self.pending_initial_playlist_layout
-            || !self.load_is_ready()
-            || !self.run_lifecycle.jump_arm().is_idle()
-        {
+        if self.queue_transition_in_flight() {
             tracing::debug!(name: "player.playlist_position.ignored", target: "player", position = pos, "ignoring transient playlist position during queue transition");
             return;
         }
@@ -43,10 +50,7 @@ impl PlaybackRun {
         // replace (the deleted items then keep playing — local-daemon.log
         // 2026-11-08T19:33:53, the GUI queue fix). The final layout is
         // `reassert_queue_layout`'s check, not this handler's.
-        if self.pending_initial_playlist_layout
-            || !self.load_is_ready()
-            || !self.run_lifecycle.jump_arm().is_idle()
-        {
+        if self.queue_transition_in_flight() {
             // The rebuild's settle: the first observed count equal to the
             // copy's length says the load plan has landed, so the gate the
             // arming command left up (its count observations arrive on later
