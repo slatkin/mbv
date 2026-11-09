@@ -514,8 +514,42 @@ whole content.
 `GuiLibraryContent` carries `tabs` (the presented destinations in catalog
 order, each a `GuiLibraryTabFrame` with a `position` and a `label`, Home at
 position 0), `current_tab` (the active tab's position, `None` for Home and for
-every destination the GUI does not present yet), and `music`
-(`Option<GuiMusicFrame>`, present while a Grouped Music library is active).
+every destination the GUI does not present yet), `music`
+(`Option<GuiMusicFrame>`, present while a Grouped Music library is active),
+and `home` (`Option<GuiHomeFrame>`, present while Home is the active
+destination — add-gui-library-panel design D12, the USER-APPROVED GUI Home
+design). The two destination fields never both present: the destinations are
+exclusive, so the present field names the active destination, and the top bar
+marks the Home icon current exactly while `home` is present.
+
+`GuiHomeFrame` carries `rows`, `selected`, and `hero`: Home's flat list in
+the Music list slot, with no pill, no letter rail, and no Workspace. `rows`
+are the two sections' heading rows and item rows in paint order —
+`Continue watching` first, then `Recently added` — with a heading only above
+its rows, an empty section omitted, and the spacer only between two
+non-empty sections, the TUI's flat list's rules. An item row carries:
+`id` (`GuiHomeRowId`), the stable identity `App::home_stable_target`
+resolves — a `Continue` tag with the row's Emby item id, or a `Recent` tag
+with the queue item's content id (`provider`/`value`, never a position);
+`title` and `subtitle`, the split title parts the TUI's flat list paints;
+`date`, the gutter date as the shared projection's `day month` text
+(`fmt_publish_date_short` over the provider timestamp; `None` on a Continue
+row and on an undated item); `kind` (`collection` when the row targets a
+container the play path refuses, `media` on a playable leaf, mirroring the
+shared flat-list vocabulary); `state` (`ordinary`, `played`, or
+`{ active: { progress } }` with the Continue Watching resume percent);
+and `art` (`GuiLibraryArt | null`, the row's card art for Emby items only —
+the Audiobookshelf and Feed rows paint without art in Phase 2, and the
+front end paints its own placeholder while `null`). `selected` carries the
+core's selected row the select command last named — the first item row is
+the Hero default, so the Hero paints as soon as a section lands; a stale
+frame's selection resolves on its own rows or falls back without a hero.
+`hero` carries `title`, `meta_rows` with `duration_row` and `progress_row`,
+`overview`, `art_shape` (`landscape`, `square`, or `portrait`, the artwork
+policy's declared arm), and `art` (the artwork policy chain's display
+encode for Emby items only, again `null` on the rows without art) — the
+shared hero producers' facts, the same facts the TUI paints for the same
+item.
 
 `GuiMusicFrame` carries `lib_idx` (the Grouped Music library index the
 set-collections command names), `pills` (`group_id`, `name`, `selected`, and
@@ -548,11 +582,23 @@ through the existing `App` action, so the TUI's own paths do not change. The
 variants are `openDestination` (`position`), `selectCollection` (`libIdx`,
 `groupId`), `showDetail` (`itemId`), `openAlbum` (`albumId`), `takeFocus`,
 `play` (`itemId`), `playNext` (`itemId`), `addToQueue` (`itemId`),
-`shuffleArtist` (`albumIds`), `menuEntry` (`itemId`, `index`), and `rowMenu`
-(`itemId`). Item
+`shuffleArtist` (`albumIds`), `menuEntry` (`itemId`, `index`), `rowMenu`
+(`itemId`), and the Home commands — `homeSelect`, `homePlay`,
+`homePlayNext`, and `homeQueue` (each carrying `row`, the
+`GuiHomeRowId` the frame painted). Item
 identities are stable Service ids, never row positions, so a command built
 from a stale frame addresses the item that frame painted or nothing. The
-`takeFocus` variant also moves the core's `FocusStack`, so the frame paints
+Home row id, not a Music item id, is
+what `App::home_stable_target` resolves: `homePlay` runs the Home flat
+list's play path (`App::home_play_target`, whose resume behaviour the row's
+Continue Watching membership decides), and `homePlayNext` and `homeQueue`
+both run its enqueue path (`App::home_enqueue_target`) — the Owner owns the
+queue, so a Home command never mutates it directly, and Home's rows carry
+no library the Music play-next admission resolves against. A stale frame's
+row, one whose item the App's Home data no longer holds, logs and changes
+nothing, as every item-named variant's stale arm does.
+
+The `takeFocus` variant also moves the core's `FocusStack`, so the frame paints
 the focus the `App`'s key gates read (design D4). The `play` and
 `addToQueue` variants apply the library playback policy's autoload rule to
 the Library's routes: with autoload on, a track whose album the track cache
