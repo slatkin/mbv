@@ -521,7 +521,9 @@ destination — add-gui-library-panel design D12, the USER-APPROVED GUI Home
 design), and `shows` (`Option<GuiShowsFrame>`, present while an Emby TV
 library's Shows destination is active — design D12, row 7.1), and `emby`
 (`Option<GuiEmbyFrame>`, present while a plain Emby library's destination is
-active — design D12, row 8.1). No two
+active — design D12, row 8.1), and `audiobooks` (`Option<GuiAudiobooksFrame>`,
+present while an Audiobookshelf book library's Audiobooks destination is
+active — design D12, row 9.1). No two
 destination fields present at once: the destinations are exclusive, so the
 present field names the active destination, and the top bar marks the Home
 icon current exactly while `home` is present.
@@ -618,6 +620,37 @@ the selected row's shared Emby hero producer's facts — `title`, `meta_rows`
 with `duration_row` and `progress_row`, `overview`, `art_shape` at the
 artwork policy's declared arm, and `art` — and carries no Workspace.
 
+`GuiAudiobooksFrame` (`src/bridge/frame/library/audiobooks.rs`) carries
+`lib_idx` (the Audiobooks library index the Audiobooks commands name),
+`loading`, `failed` (the browse state's catalog states),
+`workspace_loading` (the selected book's detail fetch), `rows`, `selected`,
+and `hero`. No pill rides here: the A-Z letter rail replaces the TUI's eight
+surname buckets, as it does for Shows and the plain Emby libraries. The rows
+are the catalog's books in the TUI's order — author sort key, then title —
+each with `id` (the book's stable `library_item_id`), `title`, `subtitle`
+(the author display credit), `duration` (the book's total duration, the TUI
+row's duration gutter), and `sort_letter` (the first letter of the author
+sort key, `#` for a digit- or symbol-led surname). `selected` carries the
+core's selected book as the frame painted it, with the catalog's first book
+as the default, so the Hero paints as soon as the catalog lands, and a stale
+pick falls back to that first book.
+
+`hero` is the selected book's Hero: the shared `hero_content_abs_book`
+producer's facts — `title`, `meta_rows` (the author, the duration, and the
+`Finished` or `N%` progress row) with `duration_row` and `progress_row`, and
+no narrator, series, or description — `art_shape` at the book artwork
+policy's portrait arm, `art` (the cover through the Service-scoped book-cover
+chain, `null` while the book declares no cover or no server is configured),
+and `workspace`: the book's chapter rows in the TUI's `visible_rows` order.
+A chapter row carries `chapter` (the stable Service discriminator the TUI's
+chapter activation addresses — the chapter number, or the audio-part index
+on a `Part N` row, never a display position), `title`, `duration`, and
+`current` — the current-chapter mark while that book plays, derived exactly
+as the TUI's `WorkspaceNowPlaying::Chapter` projection derives it; a frame
+re-carries the content when the mark moves, so the Workspace paints what the
+Queue's active slot paints. An audio-part row never carries the mark, as the
+TUI's rows never light.
+
 `GuiMusicFrame` carries `lib_idx` (the Grouped Music library index the
 set-collections command names), `pills` (`group_id`, `name`, `selected`, and
 `collection`), `loading`, `failure` (the failure line naming the selected
@@ -692,6 +725,22 @@ the queue is replaced with the folder's items and no nested list opens;
 and add paths. The Owner owns the queue, so no Emby command mutates it
 directly, and a row or folder id the active list no longer holds logs and
 changes nothing.
+
+The Audiobooks commands name their library by its `libIdx` and the book by
+its stable `library_item_id` (row 9.1): `absSelect` (`libIdx`, `row`)
+selects the book the Hero shows, whose select runs the TUI's own detail
+loader; `absPlay` (`libIdx`, `itemId`) — the command Enter and a double-click
+both send — replaces the queue with the book at its saved position, through
+the TUI's book play path; `absPlayChapter` (`libIdx`, `bookId`, `chapter`)
+runs the TUI's `ActivateChapter` rule on a Workspace chapter row — one
+absolute seek on the active book's merged timeline, or a replace-and-start at
+the chapter's offset on another book; and `absQueue` (`libIdx`, `itemId`)
+appends the book at the tail. There is no play-next command: `n` is consumed
+by the front end and does nothing for books. Every play and enqueue honours
+`player.can_admit_audiobookshelf()`, and a refusal flashes the TUI's
+owner-unavailable toast; the Owner owns the queue, so no Audiobooks command
+mutates it directly, and a book or chapter id the Service data no longer
+holds logs and changes nothing.
 
 The `takeFocus` variant also moves the core's `FocusStack`, so the frame paints
 the focus the `App`'s key gates read (design D4). The `play` and
