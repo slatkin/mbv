@@ -37,6 +37,7 @@
 		Check,
 		ChevronDown,
 		Maximize2,
+		Monitor,
 		Pause,
 		Play,
 		SkipBack,
@@ -399,6 +400,9 @@
 								<Check size={14} color={roleVar('accent')} />
 							{/if}
 						</span>
+						{#if choice.key.kind === 'local'}
+							<Monitor size={14} color={roleVar('playbackTargetLocalFg')} />
+						{/if}
 						<span class="truncate">{choice.label}</span>
 					</button>
 				{/each}

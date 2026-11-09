@@ -9,7 +9,7 @@ use mbv_render::components::chrome_player::TransportAvailability;
 use mbv_render::components::indicators::{
     StatusIndicator, short_resolution_label, status_indicator_items,
 };
-use mbv_ui_model::panel_targets::SessionTargetKey;
+use mbv_ui_model::panel_targets::{ChooserTargetKey, SessionTargetKey};
 use mbv_ui_model::playback::PlaybackState;
 use mbv_ui_model::playback_target::NowPlayingStatus;
 use mbv_ui_model::ui_util::{fmt_duration_short, fmt_wall_clock};
@@ -24,8 +24,9 @@ use crate::app::{App, queue_summary_projection::playback_finish_epoch};
 /// attached playback output.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PlaybackTargetChoice {
-    /// The Emby session id or the cast receiver id, qualified by its channel.
-    pub key: SessionTargetKey,
+    /// The local output, or the Emby session id or cast receiver id, qualified
+    /// by its channel.
+    pub key: ChooserTargetKey,
     /// The Emby session's device name, or the cast receiver's friendly name.
     pub label: String,
     /// Whether this target is the Owner's attached playback output: a Cast
@@ -360,42 +361,46 @@ impl App {
     }
 
     /// The playback-target chooser's choices (design D4a, "Cast and session
-    /// choices"): the kept `panel_targets` merge — Emby sessions then cast
-    /// receivers, the cast half gated on the Owner's playback-output
-    /// capability — each marked with whether it is the Owner's attached
-    /// output: a Cast receiver by its receiver id, an Emby Session by the
-    /// output's device id.
+    /// choices"): this machine's local output first, then the kept
+    /// `panel_targets` merge — Emby sessions then cast receivers, the cast half
+    /// gated on the Owner's playback-output capability. Each is marked with
+    /// whether it is the Owner's attached output: a Cast receiver by its
+    /// receiver id, an Emby Session by the output's device id. The local output
+    /// is attached while no remote session or remote output holds the playback.
     pub(in crate::app) fn playback_target_choices(&self) -> Vec<PlaybackTargetChoice> {
         let attached = self.playback_output.as_ref();
-        self.panel_targets
-            .iter()
-            .map(|target| {
-                let key = target.key();
-                let label = match target {
-                    PanelTarget::Emby(session) => session.device_name.clone(),
-                    PanelTarget::Cast(receiver) => receiver.friendly_name.clone(),
-                };
-                let is_active = match (attached, &key) {
-                    (
-                        Some(mbv_ctrl::OutputState::Cast { receiver_id, .. }),
-                        SessionTargetKey::Cast(id),
-                    ) => receiver_id == id,
-                    (
-                        Some(mbv_ctrl::OutputState::EmbySession { device_id, .. }),
-                        SessionTargetKey::Emby(id),
-                    ) => self
-                        .sessions
-                        .iter()
-                        .any(|session| &session.id == id && &session.device_id == device_id),
-                    _ => false,
-                };
-                PlaybackTargetChoice {
-                    key,
-                    label,
-                    is_active,
-                }
-            })
-            .collect()
+        let local = PlaybackTargetChoice {
+            key: ChooserTargetKey::Local,
+            label: mbv_emby::device_name(),
+            is_active: !self.remote_playback_attached(),
+        };
+        let remote = self.panel_targets.iter().map(|target| {
+            let key = target.key();
+            let label = match target {
+                PanelTarget::Emby(session) => session.device_name.clone(),
+                PanelTarget::Cast(receiver) => receiver.friendly_name.clone(),
+            };
+            let is_active = match (attached, &key) {
+                (
+                    Some(mbv_ctrl::OutputState::Cast { receiver_id, .. }),
+                    SessionTargetKey::Cast(id),
+                ) => receiver_id == id,
+                (
+                    Some(mbv_ctrl::OutputState::EmbySession { device_id, .. }),
+                    SessionTargetKey::Emby(id),
+                ) => self
+                    .sessions
+                    .iter()
+                    .any(|session| &session.id == id && &session.device_id == device_id),
+                _ => false,
+            };
+            PlaybackTargetChoice {
+                key: ChooserTargetKey::Target(key),
+                label,
+                is_active,
+            }
+        });
+        std::iter::once(local).chain(remote).collect()
     }
 
     /// Which transport controls are actionable for `state`: Stop while a

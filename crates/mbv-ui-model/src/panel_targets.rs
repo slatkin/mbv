@@ -35,6 +35,16 @@ pub enum SessionTargetKey {
     Cast(String),
 }
 
+/// What a playback-target chooser row selects: this machine's own output, or a
+/// remote target the F3 panel lists.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ChooserTargetKey {
+    /// This machine's own playback output.
+    Local,
+    /// A remote target, by its kind-qualified identity.
+    Target(SessionTargetKey),
+}
+
 /// Which queue-transfer actions the selected F3 target offers (design D6):
 /// the Interactive Component resolves the gates from its shell-owned
 /// projection, and the Sessions painter lists the offered keys.

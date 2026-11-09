@@ -460,6 +460,33 @@ fn open_sessions_request_toggles_the_target_chooser() {
     assert!(app.gui_overlay.is_none());
 }
 
+// The chooser's local row returns a remote output to this machine: the same
+// hand-back the Sessions sidebar's detach sends, reached from the chooser.
+#[test]
+fn the_local_chooser_row_returns_a_cast_output_to_local() {
+    let (mut app, cmd_rx) = cast_target_app();
+    app.playback_output = Some(mbv_ctrl::OutputState::Cast {
+        receiver_id: "receiver-1".to_string(),
+        name: "Living Room".to_string(),
+        connection: mbv_ctrl::OutputConnection::Connected,
+    });
+
+    app.handle_gui_surface_msg(Msg::Shell(Box::new(ShellRequest::SelectChooserTarget(
+        mbv_ui_model::panel_targets::ChooserTargetKey::Local,
+    ))));
+
+    let selections: Vec<_> = cmd_rx
+        .try_iter()
+        .filter(|cmd| matches!(cmd, CtrlCmd::SelectPlaybackOutput(_)))
+        .collect();
+    assert!(matches!(
+        selections.as_slice(),
+        [CtrlCmd::SelectPlaybackOutput(
+            mbv_ctrl::OutputSelection::Local
+        )]
+    ));
+}
+
 // The GUI-only `r` chord opens the chooser (add-tauri-gui-client row 6.4):
 // no TUI default binds `r`, and Esc — the overlay's own key rule — closes
 // it.
@@ -487,11 +514,16 @@ fn gui_context_r_opens_the_target_chooser() {
 // dispatch the TUI's Sessions sidebar applies: the cast receiver's stable
 // key resolves against the target snapshot and the Owner receives the
 // `SelectPlaybackOutput` the F3 selection sends (add-tauri-gui-client row
-// 6.4).
+// 6.4). The cursor starts on the local row, so the test moves it to the cast
+// receiver first.
 #[test]
 fn target_chooser_enter_selects_the_cursor_choice() {
     let (mut app, cmd_rx) = cast_target_app();
     app.handle_gui_surface_msg(Msg::Shell(Box::new(ShellRequest::OpenSessions)));
+    app.route_gui_input(
+        GuiInput::Key(KeyEvent::new(Key::Down, KeyModifiers::NONE)),
+        None,
+    );
 
     app.route_gui_input(
         GuiInput::Key(KeyEvent::new(Key::Enter, KeyModifiers::NONE)),

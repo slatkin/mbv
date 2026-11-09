@@ -158,8 +158,8 @@ fn a_chooser_press_selects_the_painted_choice_after_the_list_grows() {
     assert!(test.core.step());
     test.next_frame();
 
-    // The chooser opens over the one receiver the frame paints, and its row
-    // is reported as painted.
+    // The chooser opens over the local row and the one receiver the frame
+    // paints; the receiver's row (index 1) is reported as painted.
     test.tx.send(press_at(10.0, 10.0)).unwrap();
     assert!(test.core.step());
     test.next_frame();
@@ -169,7 +169,7 @@ fn a_chooser_press_selects_the_painted_choice_after_the_list_grows() {
             vec![region_at(
                 0.0,
                 50.0,
-                RegionTarget::QueuePlayback(QueuePlaybackTargetId::TargetChoice(0)),
+                RegionTarget::QueuePlayback(QueuePlaybackTargetId::TargetChoice(1)),
             )],
         ))
         .unwrap();

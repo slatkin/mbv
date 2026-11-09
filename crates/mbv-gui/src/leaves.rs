@@ -428,13 +428,12 @@ impl<'a> PlaybackLeaf<'a> {
             Some(RegionTarget::QueuePlayback(QueuePlaybackTargetId::PlaybackTarget)) => {
                 Some(Msg::Shell(Box::new(ShellRequest::OpenSessions)))
             }
-            // A chooser row resolves its painted index to the stable target
-            // key and selects the output through the request the TUI's
-            // Sessions sidebar sends for its selected row.
+            // A chooser row resolves its painted index to the choice's stable
+            // key and selects that output: the local output, or a remote target.
             Some(RegionTarget::QueuePlayback(QueuePlaybackTargetId::TargetChoice(index))) => self
                 .painted
                 .target_key(*index)
-                .map(|key| Msg::Shell(Box::new(ShellRequest::SelectSession(key.clone())))),
+                .map(|key| Msg::Shell(Box::new(ShellRequest::SelectChooserTarget(key.clone())))),
             // The audio and subtitle chips emit the popover's opener: the
             // press toggles the open popover as the target press toggles
             // the chooser. The video chip is label-only (design D4a's

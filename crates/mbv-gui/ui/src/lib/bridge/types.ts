@@ -464,9 +464,12 @@ export interface GuiTargetChoice {
 	isActive: boolean;
 }
 
-/** A playback target's stable identity: the Emby session id, or the cast
- * receiver id. */
-export type GuiTargetKey = { kind: 'emby'; id: string } | { kind: 'cast'; id: string };
+/** A playback target's stable identity: this machine's local output, the Emby
+ * session id, or the cast receiver id. */
+export type GuiTargetKey =
+	| { kind: 'local' }
+	| { kind: 'emby'; id: string }
+	| { kind: 'cast'; id: string };
 
 /** One status indicator of the queue band's cluster: the uppercased label
  * and the foreground role its text paints in. */

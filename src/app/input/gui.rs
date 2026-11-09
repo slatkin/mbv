@@ -362,6 +362,11 @@ impl App {
                     self.gui_overlay = None;
                 }
             }
+            ShellRequest::SelectChooserTarget(key) => {
+                if self.select_chooser_target(&key) {
+                    self.gui_overlay = None;
+                }
+            }
             request => {
                 tracing::debug!(
                     name: "gui.surface_msg.undelivered",

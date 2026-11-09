@@ -308,7 +308,7 @@ impl App {
                 let Some(choice) = self.playback_target_choices().get(index).cloned() else {
                     return false;
                 };
-                self.select_target_for_key(&choice.key);
+                self.select_chooser_target(&choice.key);
             }
             // A confirm button's press runs the same execution the button's
             // key hint applies: resolve the hint to its chord and answer

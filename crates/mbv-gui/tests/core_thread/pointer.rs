@@ -219,8 +219,8 @@ fn the_target_press_opens_the_chooser_and_a_choice_selects_it() {
         panic!("the target press opened the chooser: {:?}", frame.overlay);
     };
     assert_eq!(*cursor, 0);
-    assert_eq!(choices.len(), 1);
-    assert_eq!(choices[0].label, "Living Room");
+    assert_eq!(choices.len(), 2, "the local row leads the remote target");
+    assert_eq!(choices[1].label, "Living Room");
 
     // The chooser's paint reports its row: the choice region joins the
     // next report's hit map.
@@ -230,7 +230,7 @@ fn the_target_press_opens_the_chooser_and_a_choice_selects_it() {
             vec![region_at(
                 0.0,
                 50.0,
-                RegionTarget::QueuePlayback(QueuePlaybackTargetId::TargetChoice(0)),
+                RegionTarget::QueuePlayback(QueuePlaybackTargetId::TargetChoice(1)),
             )],
         ))
         .unwrap();
