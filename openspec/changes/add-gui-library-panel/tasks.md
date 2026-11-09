@@ -61,7 +61,7 @@ Each unit starts by reading its destination's data path in the `App` and recordi
 
 ## 10. Podcasts
 
-- [ ] 10.1 Project and paint Podcasts: the single-select pills of Latest and one per show, with Latest the default; the merged Latest list and a show's list, newest first with undated episodes last, in a date gutter with no letter rail; the episode Hero with square cover art, facts, and its description; Enter or a double-click plays the episode, replacing the queue under the Audiobookshelf admission rule, and `a` adds it to the queue. Verify: a test that Latest merges two shows' episodes in date order and that a show pill scopes the list to that show.
+- [x] 10.1 Project and paint Podcasts: the single-select pills of Latest and one per show, with Latest the default; the merged Latest list and a show's list, newest first with undated episodes last, in a date gutter with no letter rail; the episode Hero with square cover art, facts, and its description; Enter or a double-click plays the episode, replacing the queue under the Audiobookshelf admission rule, and `a` adds it to the queue. Verify: a test that Latest merges two shows' episodes in date order and that a show pill scopes the list to that show.
 
 ## 11. Feeds
 
