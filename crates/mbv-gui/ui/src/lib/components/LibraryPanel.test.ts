@@ -10,7 +10,13 @@ import { invoke } from '@tauri-apps/api/core';
 import { fireEvent, render } from '@testing-library/svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
 import { DEFAULT_DRAGGED_WIDTHS, LIBRARY_LIST_DEFAULT_WIDTH_PX, draggedWidths } from '$lib/bridge/resize';
-import type { GuiMusicFrame, GuiMusicHero, GuiShowsFrame, GuiStatusBar } from '$lib/bridge/types';
+import type {
+	GuiEmbyFrame,
+	GuiMusicFrame,
+	GuiMusicHero,
+	GuiShowsFrame,
+	GuiStatusBar,
+} from '$lib/bridge/types';
 import { initialLibraryUi, libraryUi } from '$lib/library/state';
 import LibraryPanel from './LibraryPanel.svelte';
 
@@ -307,5 +313,86 @@ function shows(mode: 'latest' | 'upcoming' | 'all'): GuiShowsFrame {
 						art: null,
 						workspace: null,
 					},
+	};
+}
+
+// add-gui-library-panel row 8.1: while the plain Emby-library content is present
+// (design D12, the destinations are exclusive), the panel mounts the Emby
+// painters in place of the Music, Home, and Shows ones — its list with the plain
+// mode's rail, its Hero with no Workspace, and no pill row.
+test('the plain Emby content mounts the Emby list, rail, and Hero and none of the other destinations', () => {
+	const { container } = render(LibraryPanel, {
+		tabs: [{ position: 3, label: 'Movies' }],
+		currentTab: 3,
+		music: null,
+		home: null,
+		shows: null,
+		emby: emby(false),
+		status: idle,
+		arrangement: 'wide',
+		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
+		libraryColumn: 1200,
+	});
+
+	expect(container.querySelector('[data-library-emby-list]')).toBeTruthy();
+	expect(container.querySelector('[data-library-region="rail"]')).toBeTruthy();
+	expect(
+		container.querySelector('[data-library-region="hero"] [data-library-emby-hero]'),
+	).toBeTruthy();
+	expect(container.querySelector('[data-library-region="pills"]')).toBeNull();
+	expect(container.querySelector('[data-library-list]')).toBeNull();
+	expect(container.querySelector('[data-library-home-list]')).toBeNull();
+	expect(container.querySelector('[data-library-shows-list]')).toBeNull();
+});
+
+test('the feed-group Emby content mounts its pill row and no rail', () => {
+	const { container } = render(LibraryPanel, {
+		tabs: [{ position: 3, label: 'Home videos' }],
+		currentTab: 3,
+		music: null,
+		emby: emby(true),
+		status: idle,
+		arrangement: 'wide',
+		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
+		libraryColumn: 1200,
+	});
+
+	expect(container.querySelector('[data-library-emby-pill]')).toBeTruthy();
+	expect(container.querySelector('[data-library-emby-list]')).toBeTruthy();
+	expect(container.querySelector('[data-library-region="rail"]')).toBeNull();
+});
+
+/** The carried plain Emby-library content: the plain mode's list, or the
+ * feed-group mode's pills and date-ordered rows, with a Hero. */
+function emby(feedGroup: boolean): GuiEmbyFrame {
+	return {
+		libIdx: 3,
+		pills: feedGroup
+			? [{ group: { kind: 'all' }, name: 'All', selected: true, collection: false }]
+			: [],
+		collectionNames: feedGroup ? ['All'] : [],
+		feedGroup,
+		loading: false,
+		failed: false,
+		rows: [
+			{
+				id: 'm1',
+				title: 'Alien',
+				subtitle: '1979',
+				date: feedGroup ? '1979' : null,
+				sortLetter: feedGroup ? null : 'A',
+				kind: 'media',
+			},
+		],
+		selected: 'm1',
+		hero: {
+			title: 'Alien',
+			metaRows: ['1979'],
+			durationRow: 0,
+			progressRow: null,
+			overview: null,
+			artShape: 'landscape',
+			art: null,
+		},
 	};
 }

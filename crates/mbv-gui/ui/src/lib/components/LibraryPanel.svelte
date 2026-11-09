@@ -8,7 +8,9 @@
 	// Hero; Home paints the flat list and its Hero, with no pill row, no
 	// letter rail, and no Workspace; Shows paints its mode pills, the series or
 	// flat list with the All series mode's rail, and the series Hero with its
-	// Workspace. The Status bar (row 4.8) closes the column under both. The
+	// Workspace; a plain Emby library paints its feed-group pills, its list with
+	// the plain mode's rail, and its Hero with no Workspace. The Status bar
+	// (row 4.8) closes the column under both. The
 	// panel's interaction state lives in `$lib/library/state`,
 	// `$lib/library/home`, and `$lib/library/shows`, and its keys in
 	// `$lib/library/keys`, so this shell holds no state of its own.
@@ -26,12 +28,16 @@
 	import { sendLibraryCommand } from '$lib/bridge/library';
 	import { dragListWidth, resetListWidth } from '$lib/bridge/resize';
 	import type {
+		GuiEmbyFrame,
 		GuiHomeFrame,
 		GuiLibraryTab,
 		GuiMusicFrame,
 		GuiShowsFrame,
 		GuiStatusBar,
 	} from '$lib/bridge/types';
+	import LibraryEmbyHero from '$lib/components/LibraryEmbyHero.svelte';
+	import LibraryEmbyList from '$lib/components/LibraryEmbyList.svelte';
+	import LibraryEmbyPills from '$lib/components/LibraryEmbyPills.svelte';
 	import LibraryHero from '$lib/components/LibraryHero.svelte';
 	import LibraryHomeHero from '$lib/components/LibraryHomeHero.svelte';
 	import LibraryHomeList from '$lib/components/LibraryHomeList.svelte';
@@ -68,6 +74,10 @@
 		 * active mode's list, and the selected row's Hero with its Workspace;
 		 * `null` while another destination is active. */
 		shows?: GuiShowsFrame | null;
+		/** The carried plain Emby-library content (design D12, row 8.1): the
+		 * feed-group mode's pills, the active list, and the selected row's Hero
+		 * with no Workspace; `null` while another destination is active. */
+		emby?: GuiEmbyFrame | null;
 		/** The frame's Status bar facts (design D10): the armed prefix and the
 		 * live toast, which the Status bar replaces the hints with. */
 		status: GuiStatusBar;
@@ -85,6 +95,7 @@
 		music,
 		home = null,
 		shows = null,
+		emby = null,
 		status,
 		arrangement,
 		listWidth,
@@ -95,12 +106,14 @@
 	const wide = $derived(arrangement === 'wide');
 
 	/** The Narrow Hero overlay's facts, whichever destination carries them:
-	 * Music's picked album, the Home frame's selected row, or the Shows frame's
-	 * selected row with its Workspace (design D12). */
+	 * Music's picked album, the Home frame's selected row, the Shows frame's
+	 * selected row with its Workspace, or a plain Emby library's selected row
+	 * (design D12). */
 	type OverlayHero =
 		| { kind: 'music'; music: GuiMusicFrame }
 		| { kind: 'home'; home: GuiHomeFrame }
 		| { kind: 'shows'; shows: GuiShowsFrame }
+		| { kind: 'emby'; emby: GuiEmbyFrame }
 		| null;
 	const overlayHero: OverlayHero = $derived(
 		music !== null && music.hero !== null
@@ -109,7 +122,9 @@
 				? { kind: 'home', home }
 				: shows !== null && shows.hero !== null
 					? { kind: 'shows', shows }
-					: null,
+					: emby !== null && emby.hero !== null
+						? { kind: 'emby', emby }
+						: null,
 	);
 
 	let panelEl: HTMLElement | undefined = $state();
@@ -177,6 +192,11 @@
 		<!-- The Shows destination's mode pills (design D12, row 7.1): single
 			select over the three view modes. -->
 		<LibraryShowsPills {shows} />
+	{:else if emby !== null && emby.feedGroup}
+		<!-- The feed-group Emby library's pills (design D12, row 8.1): All and
+			each root folder that holds items. A plain library paints no pill row at
+			all — its letter rail replaces the TUI's letter-range pill row. -->
+		<LibraryEmbyPills {emby} />
 	{/if}
 	<div class="relative flex min-h-0 flex-1">
 		{#if wide}
@@ -201,6 +221,12 @@
 						Upcoming mode carries no Hero, so the pane stays empty there. -->
 					{#if shows.hero !== null}
 						<LibraryShowsHero {shows} />
+					{/if}
+				{:else if emby !== null}
+					<!-- The Emby library's Hero with no Workspace (design D12, row 8.1):
+						a frame without one leaves the pane empty. -->
+					{#if emby.hero !== null}
+						<LibraryEmbyHero {emby} />
 					{/if}
 				{/if}
 			</div>
@@ -232,6 +258,8 @@
 				<LibraryHomeList {home} />
 			{:else if shows !== null}
 				<LibraryShowsList {shows} />
+			{:else if emby !== null}
+				<LibraryEmbyList {emby} />
 			{/if}
 		</div>
 		{#if arrangement === 'narrow' && overlayHero !== null && !$libraryUi.heroDismissed}
@@ -266,8 +294,10 @@
 						<LibraryHero music={overlayHero.music} />
 					{:else if overlayHero.kind === 'home'}
 						<LibraryHomeHero home={overlayHero.home} />
-					{:else}
+					{:else if overlayHero.kind === 'shows'}
 						<LibraryShowsHero shows={overlayHero.shows} />
+					{:else}
+						<LibraryEmbyHero emby={overlayHero.emby} />
 					{/if}
 				</div>
 			</div>
@@ -276,7 +306,7 @@
 	<!-- The Library Status bar (design D10): under the list region, closing the
 		column with the canvas's fixed key hints and the location while the panel
 		paints. -->
-	<LibraryStatusBar {tabs} {currentTab} {music} {home} {shows} {status} />
+	<LibraryStatusBar {tabs} {currentTab} {music} {home} {shows} {emby} {status} />
 	<!-- The right-click item menu (the row-menu command): the viewport-anchored
 		card at the pointer position, painted only while the Music frame carries
 		the item's own entries. A press runs the entry the core built, resolved by

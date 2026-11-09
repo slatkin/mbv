@@ -402,3 +402,63 @@ test('dragging the Queue divider resizes the column and a double-click resets it
 
 	expect(column.style.width).toBe('400px');
 });
+
+// add-gui-library-panel row 8.1: while a plain Emby library is the active
+// destination (design D12), the window mounts the Library panel with the Emby
+// painters — its list, its rail, and its Hero — as it does for the other
+// destinations.
+test('the Emby content mounts the Library panel with the Emby painters', async () => {
+	const slice = frame('library', null);
+	slice.library = { revision: 1, content: embyContent() };
+	const { container } = await mount({ width: 1600, height: 900 }, slice);
+
+	const panel = container.querySelector('[data-library-panel]');
+
+	expect(panel).toBeTruthy();
+	expect(panel?.querySelector('[data-library-emby-list]')).toBeTruthy();
+	expect(panel?.querySelector('[data-library-region="rail"]')).toBeTruthy();
+	expect(
+		panel?.querySelector('[data-library-region="hero"] [data-library-emby-hero]'),
+	).toBeTruthy();
+	expect(panel?.querySelector('[data-library-list]')).toBeNull();
+});
+
+/** The carried content while a plain Emby library is active: one name-sorted
+ * row with its rail letter and its Hero (design D12, row 8.1). */
+function embyContent(): GuiLibraryContent {
+	return {
+		tabs: [{ position: 3, label: 'Movies' }],
+		currentTab: 3,
+		music: null,
+		home: null,
+		shows: null,
+		emby: {
+			libIdx: 3,
+			pills: [],
+			collectionNames: [],
+			feedGroup: false,
+			loading: false,
+			failed: false,
+			rows: [
+				{
+					id: 'm1',
+					title: 'Alien',
+					subtitle: '1979',
+					date: null,
+					sortLetter: 'A',
+					kind: 'media',
+				},
+			],
+			selected: 'm1',
+			hero: {
+				title: 'Alien',
+				metaRows: ['1979'],
+				durationRow: 0,
+				progressRow: null,
+				overview: null,
+				artShape: 'landscape',
+				art: null,
+			},
+		},
+	};
+}

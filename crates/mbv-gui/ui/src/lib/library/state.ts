@@ -11,6 +11,7 @@ import { get, writable } from 'svelte/store';
 import type { GuiArrangement } from '$lib/bridge/arrangement';
 import { sendLibraryCommand } from '$lib/bridge/library';
 import type {
+	GuiEmbyFrame,
 	GuiHomeFrame,
 	GuiLibraryContent,
 	GuiLibraryFrame,
@@ -105,9 +106,21 @@ export const HOME_PANES: readonly LibraryPane[] = ['list', 'hero'];
 export const SHOWS_PANES: readonly LibraryPane[] = ['pills', 'list', 'hero'];
 export const SHOWS_PANES_NO_HERO: readonly LibraryPane[] = ['pills', 'list'];
 
+/** The Library panel's panes on a plain Emby library (design D12, row 8.1):
+ * the list and the Hero, because a plain library paints no pills — its letter
+ * rail replaces the TUI's letter-range pill row. */
+export const EMBY_PANES: readonly LibraryPane[] = ['list', 'hero'];
+export const EMBY_PANES_NO_HERO: readonly LibraryPane[] = ['list'];
+
+/** The Library panel's panes on a feed-group Emby library (design D12, row
+ * 8.1): the feed-group pills, the list, and the Hero. */
+export const EMBY_FEED_PANES: readonly LibraryPane[] = ['pills', 'list', 'hero'];
+export const EMBY_FEED_PANES_NO_HERO: readonly LibraryPane[] = ['pills', 'list'];
+
 /** The panes the active destination paints (design D12): the one walk on
- * Home skips the panes it does not paint, and on Shows it skips the Hero the
- * Upcoming mode does not paint. */
+ * Home skips the panes it does not paint, on Shows it skips the Hero the
+ * Upcoming mode does not paint, and on an Emby library it skips the pill row a
+ * plain library does not paint and the Hero a frame without one does not. */
 export function activeLibraryPanes(): readonly LibraryPane[] {
 	if (libraryHome() !== null) {
 		return HOME_PANES;
@@ -116,7 +129,20 @@ export function activeLibraryPanes(): readonly LibraryPane[] {
 	if (shows !== null) {
 		return shows.hero === null ? SHOWS_PANES_NO_HERO : SHOWS_PANES;
 	}
+	const emby = libraryEmby();
+	if (emby !== null) {
+		return embyPanes(emby);
+	}
 	return PANES;
+}
+
+/** The Emby walk's panes: the feed-group mode's pill row and the Hero ride
+ * only where the frame paints them (row 8.1). */
+function embyPanes(emby: GuiEmbyFrame): readonly LibraryPane[] {
+	if (emby.feedGroup) {
+		return emby.hero === null ? EMBY_FEED_PANES_NO_HERO : EMBY_FEED_PANES;
+	}
+	return emby.hero === null ? EMBY_PANES_NO_HERO : EMBY_PANES;
 }
 
 /** The state a freshly mounted window content starts with. */
@@ -157,9 +183,9 @@ export function carryLibraryContent(frame: GuiLibraryFrame | null): void {
 
 /** Whether the Library panel shows (design D2, D10, D12): the frame carries
  * the Library section and the window holds the active destination's content
- * — Music's, Home's, or Shows' — to paint. The window mounts the panel on
- * this one fact and the key router gates on it, so no Library key acts while
- * the panel paints nothing. */
+ * — Music's, Home's, Shows', or an Emby library's — to paint. The window
+ * mounts the panel on this one fact and the key router gates on it, so no
+ * Library key acts while the panel paints nothing. */
 export function libraryShown(
 	library: GuiLibraryFrame | null,
 	content: GuiLibraryContent | null,
@@ -167,7 +193,10 @@ export function libraryShown(
 	return (
 		library !== null &&
 		content !== null &&
-		(content.music !== null || content.home !== null || content.shows !== null)
+		(content.music !== null ||
+			content.home !== null ||
+			content.shows !== null ||
+			content.emby !== null)
 	);
 }
 
@@ -268,6 +297,12 @@ export function libraryHome(): GuiHomeFrame | null {
  * destination is active. */
 export function libraryShows(): GuiShowsFrame | null {
 	return get(libraryContent)?.shows ?? null;
+}
+
+/** The carried plain Emby-library content (design D12, row 8.1), or `null`
+ * while any other destination is active. */
+export function libraryEmby(): GuiEmbyFrame | null {
+	return get(libraryContent)?.emby ?? null;
 }
 
 /** The row model under one interaction state (design D7): the carried union,
@@ -623,16 +658,17 @@ export function reportLibraryArrangement(arrangement: GuiArrangement): void {
 
 /** Whether the Narrow arrangement paints the Hero overlay (design D4, D3):
  * a picked item, an arrangement that overlays rather than splits, and no
- * dismissal since that pick. The Hero is the Music Hero or the Home Hero
- * (design D12), whichever destination is active. Esc and a press on the
- * backdrop close it. */
+ * dismissal since that pick. The Hero is the Music Hero, the Home Hero, the
+ * Shows Hero, or a plain Emby library's Hero (design D12), whichever
+ * destination is active. Esc and a press on the backdrop close it. */
 export function heroOverlayOpen(ui: LibraryUiState): boolean {
 	return (
 		ui.arrangement === 'narrow' &&
 		!ui.heroDismissed &&
 		((libraryMusic()?.hero ?? null) !== null ||
 			(libraryHome()?.hero ?? null) !== null ||
-			(libraryShows()?.hero ?? null) !== null)
+			(libraryShows()?.hero ?? null) !== null ||
+			(libraryEmby()?.hero ?? null) !== null)
 	);
 }
 
