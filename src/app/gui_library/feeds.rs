@@ -17,27 +17,30 @@ use mbv_queue::FeedEntry;
 
 use crate::app::App;
 
-/// The Feeds destination's pills (row 11.1): the merged Latest view, or one
-/// subscription's entries by the subscription's URL — the feed identity the
-/// fetch stamps on each entry and the identity the state store keys on. The
-/// pill row is single-select, and Latest is the default, as the TUI owner's
-/// one-valued group selection is.
+/// The Feeds destination's pills (row 11.1).
+///
+/// The merged Latest view, or one subscription's entries by the subscription's
+/// URL — the feed identity the fetch stamps on each entry and the identity the
+/// state store keys on. The pill row is single-select, and Latest is the
+/// default, as the TUI owner's one-valued group selection is.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub enum GuiFeedPill {
     /// Every subscription's entries, merged newest first with undated rows
-    /// last: the TUI's default group and the GUI's too.
+    /// last. The TUI's default group and the GUI's too.
     #[default]
     Latest,
     /// The merged view scoped to one subscription's entries.
     Subscription(String),
 }
 
-/// The GUI Library's Feeds selection (row 11.1): the selected pill and the
-/// entry the Hero shows. One feed tab exists per Client, so one store holds
-/// it. The picked entry is named by its stable `guid` — the identity the
-/// TUI owner's row target and the queue's feed content id carry — and a pick
-/// the selected pill's list no longer holds falls back to that list's first
-/// row in the projection, as every selection's stale arm does.
+/// The GUI Library's Feeds selection (row 11.1).
+///
+/// The selected pill and the entry the Hero shows. One feed tab exists per
+/// Client, so one store holds it. The picked entry is named by its stable
+/// `guid` — the identity the TUI owner's row target and the queue's feed
+/// content id carry — and a pick the selected pill's list no longer holds
+/// falls back to that list's first row in the projection, as every
+/// selection's stale arm does.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct GuiFeedsSelection {
     /// The selected pill. Latest is the default.
@@ -48,9 +51,10 @@ pub struct GuiFeedsSelection {
 }
 
 impl App {
-    /// The feed tab's presence rule (row 11.1): configured subscriptions make
-    /// the tab, exactly as the TUI's own tab-strip rule does
-    /// (`App::has_feeds_subscriptions`).
+    /// The feed tab's presence rule (row 11.1).
+    ///
+    /// Configured subscriptions make the tab, exactly as the TUI's own
+    /// tab-strip rule does (`App::has_feeds_subscriptions`).
     pub(in crate::app::gui_library) fn gui_feeds_present(&self) -> bool {
         self.has_feeds_subscriptions()
     }
@@ -68,12 +72,13 @@ impl App {
         self.ensure_gui_feeds_selection();
     }
 
-    /// Select the destination's pill (row 11.1): the selection the core
-    /// owns, so the frame carries it back. No load starts, because every
-    /// subscription's entries arrive from the one fetch. A subscription the
-    /// tab no longer holds is a stale frame's pill and changes nothing; a set
-    /// of entries still landing admits it, because the subscription list is
-    /// what would name it stale.
+    /// Select the destination's pill (row 11.1).
+    ///
+    /// The selection the core owns, so the frame carries it back. No load
+    /// starts, because every subscription's entries arrive from the one fetch.
+    /// A subscription the tab no longer holds is a stale frame's pill and
+    /// changes nothing; a set of entries still landing admits it, because the
+    /// subscription list is what would name it stale.
     pub fn gui_feeds_set_pill(&mut self, pill: GuiFeedPill) {
         if !self.gui_feeds_present() {
             Self::log_ignored_library_command(
@@ -91,10 +96,12 @@ impl App {
         self.gui_feeds_selection.pill = pill;
     }
 
-    /// Select the entry the Hero shows (row 11.1): the selection the core
-    /// owns, so the frame carries it back. The entry's own fields are already
-    /// in the fetched list, so no load starts. An entry the selected pill's
-    /// list does not carry is a stale frame's pick and changes nothing.
+    /// Select the entry the Hero shows (row 11.1).
+    ///
+    /// The selection the core owns, so the frame carries it back. The entry's
+    /// own fields are already in the fetched list, so no load starts. An entry
+    /// the selected pill's list does not carry is a stale frame's pick and
+    /// changes nothing.
     pub fn gui_feeds_select(&mut self, entry: &str) {
         if !self.gui_feeds_present() {
             Self::log_ignored_library_command(
@@ -110,12 +117,13 @@ impl App {
         self.gui_feeds_selection.picked_entry = Some(entry.to_string());
     }
 
-    /// The frame-path trigger for the active Feeds destination (row 11.1):
-    /// the stored pill converges on the subscription set the tab holds, so a
+    /// The frame-path trigger for the active Feeds destination (row 11.1).
+    ///
+    /// The stored pill converges on the subscription set the tab holds, so a
     /// removed subscription's pill falls back to Latest instead of naming a
-    /// dead list. The trigger starts no load — the fetch is the shared
-    /// startup step's — and it is idempotent, so the frame path runs it on
-    /// every frame.
+    /// dead list. The trigger starts no load — the fetch is the shared startup
+    /// step's — and it is idempotent, so the frame path runs it on every
+    /// frame.
     pub fn ensure_gui_feeds_selection(&mut self) {
         if !self.gui_feeds_present() || !self.tab.is_feeds() {
             return;
@@ -127,10 +135,11 @@ impl App {
         }
     }
 
-    /// The pill the frame paints (row 11.1): the stored pill, or Latest when
-    /// the session never selected one or a removed subscription took it
-    /// away. The read-side fallback keeps a dead pill off the frame even
-    /// before the ensure converges the store.
+    /// The pill the frame paints (row 11.1).
+    ///
+    /// The stored pill, or Latest when the session never selected one or a
+    /// removed subscription took it away. The read-side fallback keeps a dead
+    /// pill off the frame even before the ensure converges the store.
     #[must_use]
     pub fn gui_feeds_pill(&self) -> GuiFeedPill {
         match &self.gui_feeds_selection.pill {
@@ -149,12 +158,13 @@ impl App {
         self.gui_feeds_selection.picked_entry.as_deref()
     }
 
-    /// The entries the selected pill lists (row 11.1), in the order the App
-    /// stores them: Latest is the merged `all_entries`, and a subscription
-    /// pill is that subscription's own list. Both are newest first with
-    /// undated entries last, because `FeedTabState::rebuild_all_entries`
-    /// sorted them when the fetch landed. Empty while the subscription the
-    /// pill names holds no fetched entries.
+    /// The entries the selected pill lists (row 11.1), in App order.
+    ///
+    /// Latest is the merged `all_entries`, and a subscription pill is that
+    /// subscription's own list. Both are newest first with undated entries
+    /// last, because `FeedTabState::rebuild_all_entries` sorted them when the
+    /// fetch landed. Empty while the subscription the pill names holds no
+    /// fetched entries.
     #[must_use]
     pub fn gui_feeds_entries(&self) -> Vec<&FeedEntry> {
         match self.gui_feeds_pill() {
