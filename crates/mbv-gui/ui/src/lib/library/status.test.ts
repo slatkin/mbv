@@ -2,7 +2,7 @@
 // D10) — the destination, the selected collection names in pill order, and the
 // picked item's artist or title, joined by the canvas's separator.
 
-import type { GuiAudiobooksFrame } from '$lib/bridge/types';
+import type { GuiAudiobooksFrame, GuiFeedsFrame } from '$lib/bridge/types';
 import { expect, test } from 'vitest';
 import type {
 	GuiEmbyFrame,
@@ -164,6 +164,50 @@ test('an Audiobooks selection with no carried book leaves the location at the de
 	expect(
 		libraryLocation(TABS, 2, null, null, null, null, audiobooks),
 	).toBe('Audiobooks');
+});
+
+// add-gui-library-panel row 11.1: on a Feeds destination the location reads
+// the destination tab's label, the selected pill's name, and the selected
+// entry's title, joined by the canvas's separator (design D10, D12).
+test('the location reads the Feeds destination, the selected pill, and the selected entry', () => {
+	const feeds: GuiFeedsFrame = {
+		loading: false,
+		failed: false,
+		pills: [
+			{ pill: { kind: 'latest' }, name: 'Latest', selected: false, collection: false },
+			{
+				pill: { kind: 'subscription', id: 'sub1' },
+				name: 'Bits and Bites',
+				selected: true,
+				collection: false,
+			},
+		],
+		rows: [
+			{
+				id: 'sub1:guid12',
+				title: 'The Long Road Home',
+				subtitle: 'Bits and Bites',
+				date: '08 Oct',
+				state: 'ordinary',
+			},
+		],
+		selected: 'sub1:guid12',
+		hero: null,
+	};
+
+	expect(
+		libraryLocation(
+			[{ position: 5, label: 'Feeds' }],
+			5,
+			null,
+			null,
+			null,
+			null,
+			null,
+			null,
+			feeds,
+		),
+	).toBe('Feeds › Bits and Bites › The Long Road Home');
 });
 
 // add-gui-library-panel row 6.2: on Home the location reads `Home`, then the

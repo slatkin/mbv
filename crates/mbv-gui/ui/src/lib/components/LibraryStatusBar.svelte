@@ -17,14 +17,15 @@
 	// as the canvas's bar carries none.
 	import { toastColor } from '$lib/bridge/status';
 import type {
-		GuiAudiobooksFrame,
-		GuiEmbyFrame,
-		GuiHomeFrame,
-		GuiLibraryTab,
-		GuiMusicFrame,
-		GuiPodcastsFrame,
-		GuiShowsFrame,
-		GuiStatusBar,
+GuiAudiobooksFrame,
+GuiEmbyFrame,
+GuiFeedsFrame,
+GuiHomeFrame,
+GuiLibraryTab,
+GuiMusicFrame,
+GuiPodcastsFrame,
+GuiShowsFrame,
+GuiStatusBar,
 } from '$lib/bridge/types';
 	import { libraryLocation } from '$lib/library/status';
 
@@ -54,6 +55,10 @@ import type {
 		 * reads the destination, the selected pill, and the selected episode
 		 * on it. */
 		podcasts?: GuiPodcastsFrame | null;
+		/** The carried Feeds content (design D12, row 11.1): the location
+		 * reads the destination, the selected pill, and the selected entry
+		 * on it. */
+		feeds?: GuiFeedsFrame | null;
 		/** The armed prefix and the live toast (design D10): they replace the
 		 * hints while active. */
 		status: GuiStatusBar;
@@ -67,6 +72,7 @@ import type {
 		emby = null,
 		audiobooks = null,
 		podcasts = null,
+		feeds = null,
 		status,
 	}: Props = $props();
 
@@ -87,9 +93,11 @@ import type {
 	 * row (row 7.1); on a plain Emby library the tab's label, the selected
 	 * feed pill, and the selected row (row 8.1); on an Audiobooks library the
 	 * tab's label and the selected book (row 9.1); on a Podcasts library the
-	 * tab's label, the selected pill, and the selected episode (row 10.1). */
+	 * tab's label, the selected pill, and the selected episode (row 10.1); on a
+	 * Feeds destination the tab's label, the selected pill, and the selected
+	 * entry (row 11.1). */
 	const location = $derived(
-		libraryLocation(tabs, currentTab, music, home, shows, emby, audiobooks, podcasts),
+		libraryLocation(tabs, currentTab, music, home, shows, emby, audiobooks, podcasts, feeds),
 	);
 </script>
 
