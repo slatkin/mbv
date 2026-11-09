@@ -116,11 +116,12 @@ fn the_library_content_rides_a_changed_revision_and_a_layout_report() {
         "an unchanged revision carries no content"
     );
 
-    // Picking the album gives the Hero its facts, so the content changes.
+    // Picking the other album moves the Hero off its default first album, so the
+    // content changes.
     let changed = library_of(send_library_frame(
         &mut test,
         GuiLibraryCommand::ShowDetail {
-            item_id: "alb-ill".into(),
+            item_id: "alb-paul".into(),
         },
     ));
     assert_eq!(changed.revision, revision.wrapping_add(1));
@@ -158,7 +159,7 @@ fn the_hero_art_rides_the_frame_after_the_image_lands() {
     let picked = send_library_frame(
         &mut test,
         GuiLibraryCommand::ShowDetail {
-            item_id: "alb-ill".into(),
+            item_id: "alb-paul".into(),
         },
     );
     assert_placeholder(hero_art(picked));
@@ -167,7 +168,7 @@ fn the_hero_art_rides_the_frame_after_the_image_lands() {
     // image: the tick's drain lands it, so the next frame carries the art.
     test.core.app_mut().enable_card_images_for_test();
     test.core.app_mut().complete_card_image_for_test(
-        &mbv_images::emby_card_cache_key("alb-ill", ""),
+        &mbv_images::emby_card_cache_key("alb-paul", ""),
         image::DynamicImage::new_rgb8(4, 4),
     );
     test.waker.wake();

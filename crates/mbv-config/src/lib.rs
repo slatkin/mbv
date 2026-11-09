@@ -32,8 +32,8 @@ pub use launch_state::{
 mod gui_launch_state;
 #[doc(inline)]
 pub use gui_launch_state::{
-    GUI_LAUNCH_STATE_VERSION, GuiDestinationCollections, GuiLaunchState, first_launch,
-    gui_launch_state_path, load_gui_launch_state, save_gui_launch_state,
+    GUI_LAUNCH_STATE_VERSION, GuiDestinationCollections, GuiGroupPick, GuiLaunchState,
+    first_launch, gui_launch_state_path, load_gui_launch_state, save_gui_launch_state,
 };
 mod test_support;
 #[cfg(test)]

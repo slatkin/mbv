@@ -166,7 +166,7 @@ impl App {
         let collection_names = selected_collection_names(&pills);
         let union = self.gui_music_union(lib_idx, &pills);
         let artists = self.gui_music_artists(&union);
-        let hero = self.gui_music_hero(&artists, &collection_names);
+        let hero = self.gui_music_hero(lib_idx, &artists, &collection_names);
         GuiMusicProjection {
             pills,
             collection_names,
@@ -310,17 +310,38 @@ impl App {
         }
     }
 
-    /// The Hero's facts for the picked album (design D5): the artist header
-    /// from the album's union row, and the album block with its tracklist.
-    /// The picked album is the one the window content showed the detail of;
-    /// an album outside the selected collections' union has no Hero, because
-    /// its artist header's facts are the union's.
+    /// The picked album id for the selected group (design D13): the group's
+    /// last pick while the union holds it, else the union's first album in list
+    /// order. `None` while the union holds no album.
+    fn gui_picked_album_id(&self, lib_idx: usize, artists: &[GuiMusicArtist]) -> Option<String> {
+        let group_id = self.gui_selected_group(lib_idx)?;
+        let holds = |album_id: &str| {
+            artists
+                .iter()
+                .any(|artist| artist.albums.iter().any(|album| album.album_id == album_id))
+        };
+        if let Some(pick) = self.gui_library_picks.get(&(lib_idx, group_id))
+            && holds(pick.as_str())
+        {
+            return Some(pick.clone());
+        }
+        artists
+            .iter()
+            .find_map(|artist| artist.albums.first())
+            .map(|album| album.album_id.clone())
+    }
+
+    /// The Hero's facts for the picked album (design D5, D13): the artist header
+    /// from the album's union row, and the album block with its tracklist. The
+    /// picked album is the selected group's pick, or its first album, so the
+    /// Hero is never blank while the group's albums are loaded.
     fn gui_music_hero(
         &self,
+        lib_idx: usize,
         artists: &[GuiMusicArtist],
         collection_names: &[String],
     ) -> Option<GuiMusicHero> {
-        let picked = self.gui_library_detail.as_ref()?.id.as_str();
+        let picked = self.gui_picked_album_id(lib_idx, artists)?;
         let (artist, album) = artists.iter().find_map(|artist| {
             artist
                 .albums

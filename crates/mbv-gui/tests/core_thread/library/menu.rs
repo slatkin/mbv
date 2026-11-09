@@ -28,7 +28,7 @@ fn the_item_menu_entries_ride_the_frame_and_run_their_action() {
     let picked = send_library_frame(
         &mut test,
         GuiLibraryCommand::ShowDetail {
-            item_id: "alb-ill".into(),
+            item_id: "alb-paul".into(),
         },
     );
 

@@ -5,7 +5,6 @@
 	// deselect. The pills paint the core's carried choice, so the row and the
 	// list cannot disagree; a press sends the select-collection command (design
 	// D1). The keys' Space and Enter intent (design D3) becomes the same command.
-	import { Check } from '@lucide/svelte';
 	import { roleVar } from '$lib/bridge/theme';
 	import type { GuiMusicFrame, GuiMusicPill } from '$lib/bridge/types';
 	import {
@@ -55,7 +54,7 @@
 			class="flex flex-none items-center whitespace-nowrap"
 			style:height="32px"
 			style:gap="5px"
-			style:padding={pill.selected ? '0 12px 0 9px' : '0 12px'}
+			style:padding="0 12px"
 			style:border-radius="16px"
 			style:font-size="13px"
 			style:font-weight={pill.selected ? 600 : 400}
@@ -73,9 +72,6 @@
 			data-library-pill-focused={pill.groupId === focused ? '' : undefined}
 			onclick={() => press(pill)}
 		>
-			{#if pill.selected}
-				<Check size={12} strokeWidth={3} color="var(--canvas-ink)" />
-			{/if}
 			{pill.name}
 		</button>
 	{/each}

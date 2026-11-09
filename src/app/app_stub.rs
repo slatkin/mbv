@@ -625,10 +625,12 @@ impl App {
         }
     }
 
-    /// The item the GUI Library's Hero shows (design D2).
+    /// The album a collection group's pill last showed (design D13).
     #[must_use]
-    pub fn gui_library_detail_for_test(&self) -> Option<&mbv_emby_model::EmbyItem> {
-        self.gui_library_detail.as_ref()
+    pub fn gui_library_pick_for_test(&self, lib_idx: usize, group_id: &str) -> Option<&str> {
+        self.gui_library_picks
+            .get(&(lib_idx, group_id.to_string()))
+            .map(String::as_str)
     }
 
     /// Whether the album's track fetch is in flight (design D5): the open-

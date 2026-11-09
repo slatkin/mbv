@@ -8,7 +8,9 @@
 //! resolution that finds no match falls back instead of opening a stale
 //! position.
 
-use mbv_config::{GUI_LAUNCH_STATE_VERSION, GuiDestinationCollections, GuiLaunchState};
+use mbv_config::{
+    GUI_LAUNCH_STATE_VERSION, GuiDestinationCollections, GuiGroupPick, GuiLaunchState,
+};
 use mbv_config::{LaunchPanelFocus, TabIdentity};
 use mbv_queue::ServiceKind;
 use mbv_ui_model::browse::BrowseLevel;
@@ -74,6 +76,21 @@ impl App {
         let Some(present) = self.gui_music_present_groups(lib_idx) else {
             return false;
         };
+        // The saved picks of the groups the library still holds (design D13)
+        // restore first, and never overwrite a pick the session already made.
+        if let Some(entry) = state
+            .collections
+            .iter()
+            .find(|entry| entry.destination == *destination)
+        {
+            for pick in &entry.picks {
+                if present.contains(&pick.group_id) {
+                    self.gui_library_picks
+                        .entry((lib_idx, pick.group_id.clone()))
+                        .or_insert_with(|| pick.album_id.clone());
+                }
+            }
+        }
         if self.gui_library_groups.contains_key(&lib_idx) {
             // The user already selected a group in the pre-restore window: the
             // restore never clobbers a choice the session made.
@@ -118,20 +135,36 @@ impl App {
         }
     }
 
-    /// The selected collection of the catalog's destinations (design D9), in
-    /// catalog order: one entry per destination whose choice the session holds,
-    /// so a destination the session never chose opens on its first group. The
-    /// file keeps the list shape, and each entry holds the one selected group.
+    /// The selected collection and the group picks of the catalog's
+    /// destinations (design D9, D13), in catalog order: one entry per
+    /// destination whose choice or pick the session holds, so a destination the
+    /// session never touched opens on its first group. The file keeps the list
+    /// shape, and each entry holds the one selected group and the picks in
+    /// group-id order, so the saved file is stable.
     fn gui_launch_collections(&self) -> Vec<GuiDestinationCollections> {
         (0..self.libs.len())
             .filter_map(|lib_idx| {
-                let group_id = self.gui_library_groups.get(&lib_idx)?;
+                let selected = self.gui_library_groups.get(&lib_idx);
+                let mut picks: Vec<GuiGroupPick> = self
+                    .gui_library_picks
+                    .iter()
+                    .filter(|((pick_lib, _), _)| *pick_lib == lib_idx)
+                    .map(|((_, group_id), album_id)| GuiGroupPick {
+                        group_id: group_id.clone(),
+                        album_id: album_id.clone(),
+                    })
+                    .collect();
+                if selected.is_none() && picks.is_empty() {
+                    return None;
+                }
+                picks.sort_by(|a, b| a.group_id.cmp(&b.group_id));
                 Some(GuiDestinationCollections {
                     destination: library_identity(
                         ServiceKind::Emby,
                         &self.libs[lib_idx].library.id,
                     ),
-                    group_ids: vec![group_id.clone()],
+                    group_ids: selected.cloned().into_iter().collect(),
+                    picks,
                 })
             })
             .collect()

@@ -215,9 +215,10 @@ pub struct App {
     /// not change.
     pub(in crate::app) gui_music_albums:
         std::collections::HashMap<(usize, String), crate::app::gui_library::GuiGroupAlbums>,
-    /// The item the GUI Library's Hero shows (design D2): the album the window
-    /// content picked. The TUI never reads it.
-    pub(in crate::app) gui_library_detail: Option<EmbyItem>,
+    /// The album each collection group's pill last showed in the GUI Library's
+    /// Hero (design D13), keyed by the library index and the group id. A group
+    /// with no entry shows its first album. The TUI never reads it.
+    pub(in crate::app) gui_library_picks: std::collections::HashMap<(usize, String), String>,
     /// The item whose full menu the frame's `rowMenu` section carries (the
     /// GUI Library's right-click item menu): the item the row-menu command
     /// last named. The TUI never reads it.

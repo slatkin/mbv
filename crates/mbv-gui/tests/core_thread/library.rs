@@ -101,7 +101,14 @@ fn seeded_music_core(http: &MockHttp) -> (TestCore, Receiver<CtrlCmd>) {
     let core = test.core.app_mut();
     core.seed_gui_music_library_for_test(test_emby_client(http));
     core.seed_gui_library_groups_for_test(0, "grp-hiphop");
-    core.seed_gui_music_albums_for_test(0, "grp-hiphop", &[("alb-ill", "Licensed to Ill")]);
+    core.seed_gui_music_albums_for_test(
+        0,
+        "grp-hiphop",
+        &[
+            ("alb-ill", "Licensed to Ill"),
+            ("alb-paul", "Paul's Boutique"),
+        ],
+    );
     (test, cmd_rx)
 }
 

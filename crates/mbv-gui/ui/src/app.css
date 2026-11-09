@@ -132,6 +132,29 @@
 	--radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* The scrollbars are filled, not outlined: the thumb paints the canvas
+   scrollbar colour #3D484D on a transparent track, with no border or
+   rounding. The standard properties cover Chromium and Firefox; the WebKit
+   pseudo-elements cover the WebKitGTK window. */
+* {
+	scrollbar-color: #3d484d transparent;
+	scrollbar-width: thin;
+}
+*::-webkit-scrollbar {
+	width: 10px;
+	height: 10px;
+	background: transparent;
+}
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-corner {
+	background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+	background: #3d484d;
+	border: 0;
+	border-radius: 0;
+}
+
 @layer base {
 	* {
 		@apply border-border outline-ring/50;

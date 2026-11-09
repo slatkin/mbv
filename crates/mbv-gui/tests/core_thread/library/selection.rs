@@ -47,8 +47,7 @@ fn the_show_detail_command_shows_the_picked_album() {
     assert_eq!(
         test.core
             .app_mut()
-            .gui_library_detail_for_test()
-            .map(|item| item.id.as_str()),
+            .gui_library_pick_for_test(0, "grp-hiphop"),
         Some("alb-ill")
     );
 }

@@ -296,12 +296,15 @@ impl App {
         }
     }
 
-    /// Show `item_id` in the Hero (design D2): the album the window content
-    /// picked. An id the current Service data does not hold leaves the Hero's
-    /// item as it was, because the frame that carried the id is stale.
+    /// Show `item_id` in the Hero (design D2, D13): the album the window content
+    /// picked becomes the selected group's pick, so the pill reopens on it. An
+    /// id the current Service data does not hold leaves the Hero's item as it
+    /// was, because the frame that carried the id is stale.
     fn show_gui_library_detail(&mut self, item_id: &str) {
-        if let Some((_lib_idx, item)) = self.gui_library_item(item_id) {
-            self.gui_library_detail = Some(item);
+        if let Some((lib_idx, item)) = self.gui_library_item(item_id) {
+            if let Some(group_id) = self.gui_selected_group(lib_idx) {
+                self.gui_library_picks.insert((lib_idx, group_id), item.id);
+            }
         } else {
             Self::log_stale_library_item("showDetail", item_id);
         }

@@ -472,7 +472,7 @@ Client core holds the data selection and the actions (design D1).
 | --- | --- |
 | Cursor, hover, scroll, open tree nodes | The active destination (`App::tab`) |
 | Focus inside the panel (pill row, list, Hero, tracklist) | The selected collections of each destination |
-| Filter text and Search query text | The item whose detail the Hero shows |
+| Filter text and Search query text | The album each collection last showed in the Hero (`App::gui_library_picks`) |
 | The open Hero overlay and the item menu | Service data, its loading, and the artwork |
 | The Library's keys while it has Panel focus | Panel focus (`FocusStack`) and the actions |
 
@@ -654,8 +654,8 @@ The GUI keeps its own launch location (design D9). Its `App` starts with
 `LaunchRestore::Done`, so the TUI launch state never moves the GUI's tab or
 Panel focus, and the GUI never writes the TUI file. The GUI file
 (`mbv_config::load_gui_launch_state` and `save_gui_launch_state`) holds the
-destination, the selected collections of each destination, and Panel focus as
-stable Service identities. The core reads it once before the first step, saves
+destination, the selected collections of each destination with the album each
+collection last showed, and Panel focus as stable Service identities. The core reads it once before the first step, saves
 it at orderly exit before `client_exit_teardown`, and never while the window
 is open.
 
@@ -676,7 +676,9 @@ no longer held, or no saved entry, leaves the first group selected. The
 restore applies to a destination that holds no choice and never clobbers one
 the session already made. A mid-restore tab switch abandons the saved sets rather than landing
 them under another destination. The restore is idempotent, so the catalog and
-library drains call it whenever their content can complete a phase.
+library drains call it whenever their content can complete a phase. The saved
+picks restore with the group list, and a group with no pick heroes its first
+album (design D13).
 
 ## The attach states
 

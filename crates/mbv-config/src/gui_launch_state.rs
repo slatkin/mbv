@@ -45,11 +45,24 @@ pub struct GuiLaunchState {
 }
 
 /// The selected collections of one destination: the destination's stable
-/// identity and the selected collection group ids, in pill order.
+/// identity, the selected collection group ids in pill order, and the album
+/// each group's pill last showed (`add-gui-library-panel` design D13).
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct GuiDestinationCollections {
     pub destination: TabIdentity,
     pub group_ids: Vec<String>,
+    /// The last picked album of each collection group, so each pill reopens
+    /// on its own album. Absent in a file written before this field.
+    #[serde(default)]
+    pub picks: Vec<GuiGroupPick>,
+}
+
+/// The album a collection group's pill last showed: the group's Service id
+/// and the album's Service id, never a position or a display name.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct GuiGroupPick {
+    pub group_id: String,
+    pub album_id: String,
 }
 
 #[must_use]

@@ -55,13 +55,12 @@ function pill(container: HTMLElement, groupId: string): HTMLElement {
 	return container.querySelector(`[data-library-pill="${groupId}"]`) as HTMLElement;
 }
 
-test('paints aria-pressed and the check on the one selected pill', () => {
+test('marks the one selected pill with aria-pressed and no check glyph', () => {
 	const { container } = render(LibraryPills, { music: music() });
 
 	expect(pill(container, 'g1').getAttribute('aria-pressed')).toBe('true');
-	expect(pill(container, 'g1').querySelector('svg')).toBeTruthy();
 	expect(pill(container, 'g2').getAttribute('aria-pressed')).toBe('false');
-	expect(pill(container, 'g2').querySelector('svg')).toBeNull();
+	expect(pill(container, 'g1').querySelector('svg')).toBeNull();
 });
 
 test('paints no selected count or clear control', () => {

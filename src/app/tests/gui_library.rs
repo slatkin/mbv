@@ -322,6 +322,61 @@ fn the_first_group_is_selected_when_no_choice_is_stored() {
     assert_eq!(selected, [HIPHOP]);
 }
 
+/// The album the Hero shows, by Service id (add-gui-library-panel design D13).
+fn hero_album_id(app: &App) -> Option<String> {
+    app.gui_music_projection(0)
+        .hero
+        .map(|hero| hero.album.album_id)
+}
+
+/// A group with no pick heroes its first album in list order, so the Hero is
+/// never blank while the group's albums are loaded (design D13).
+#[test]
+fn a_group_with_no_pick_heroes_its_first_album() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let app = app_with_stored_groups(
+        vec![
+            stored_album("alb-ill", "Licensed to Ill", "Beastie Boys", 1986),
+            stored_album("alb-paul", "Paul's Boutique", "Beastie Boys", 1989),
+        ],
+        Vec::new(),
+    );
+    let first = app.gui_music_projection(0).artists[0].albums[0]
+        .album_id
+        .clone();
+
+    assert_eq!(hero_album_id(&app), Some(first));
+}
+
+/// Each pill keeps its own last picked album: a pick on one group survives a
+/// switch to another, and reselecting the group reopens on the pick, while the
+/// other group with no pick heroes its first album (design D13).
+#[test]
+fn each_pill_reopens_on_its_own_last_pick() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = app_with_stored_groups(
+        vec![
+            stored_album("alb-ill", "Licensed to Ill", "Beastie Boys", 1986),
+            stored_album("alb-paul", "Paul's Boutique", "Beastie Boys", 1989),
+        ],
+        vec![stored_album(
+            "alb-3ft",
+            "3 Feet High and Rising",
+            "De La Soul",
+            1989,
+        )],
+    );
+    app.apply_gui_library_command(GuiLibraryCommand::ShowDetail {
+        item_id: "alb-paul".into(),
+    });
+
+    select_group(&mut app, SOUL);
+    assert_eq!(hero_album_id(&app), Some("alb-3ft".to_string()));
+
+    select_group(&mut app, HIPHOP);
+    assert_eq!(hero_album_id(&app), Some("alb-paul".to_string()));
+}
+
 /// The Hero's facts for the picked album: the artist header, the album block,
 /// and the tracklist from the cached tracks (add-gui-library-panel design D5).
 #[test]

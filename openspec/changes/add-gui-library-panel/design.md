@@ -156,6 +156,12 @@ Each destination paints the Music slots with its own data: a pill row, a list, a
 
 Search: the top bar's Search field (*Search everything*) sends its query with the search command. The core runs `App::spawn_search_sidebar_query`, and the GUI tick host runs `drain_search_results` in place of its no-op. The results paint below the field in the list-row look. Enter or a press activates a result through `App::activate_search_result`, and Esc closes the results.
 
+### D13. Each pill keeps its last album, and the Hero defaults to the first
+
+The Hero shows the album the selected group's pill last showed. The core keeps one pick per library and group (`App::gui_library_picks`): the window content's `showDetail` sets the selected group's pick. A group with no pick, or whose kept album its list no longer holds, shows the first album in list order. The default makes the Hero paint as soon as a collection's albums land, so the window never opens blank.
+
+The picks persist in the launch file beside each destination's selection (`GuiDestinationCollections.picks`, keyed by the stable group id and album id). The field is `#[serde(default)]`, so a file written before it loads with no picks, and the file version does not change. The restore applies the picks with the group list, and it never overwrites a pick the session already made.
+
 ## Risks / Trade-offs
 
 - [A window-content reload resets the Library's cursor, scroll, and open nodes] → The data selection survives in the core, so the destination, the pills, and the Hero's item stay.

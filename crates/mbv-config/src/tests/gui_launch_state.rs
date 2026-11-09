@@ -28,6 +28,7 @@ fn two_group_location() -> GuiLaunchState {
         collections: vec![GuiDestinationCollections {
             destination: music_destination(),
             group_ids: vec!["grp-hiphop".to_string(), "grp-soul".to_string()],
+            picks: Vec::new(),
         }],
     }
 }
@@ -56,4 +57,26 @@ fn gui_launch_state_wrong_version_loads_none() {
     .unwrap();
 
     assert_eq!(load_gui_launch_state_at(&path), None);
+}
+
+/// A file written before the group picks existed still loads: the selection
+/// survives the upgrade, and the picks start empty (design D13).
+#[test]
+fn gui_launch_state_without_picks_loads_with_none() {
+    let scratch = TestTempDir::new();
+    let path = scratch.join("gui_launch_state.json");
+    let mut value = serde_json::to_value(two_group_location()).unwrap();
+    value["collections"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("picks");
+    std::fs::write(&path, value.to_string()).unwrap();
+
+    let loaded = load_gui_launch_state_at(&path).expect("the old file loads");
+
+    assert_eq!(loaded.collections[0].picks, Vec::new());
+    assert_eq!(
+        loaded.collections[0].group_ids,
+        two_group_location().collections[0].group_ids
+    );
 }

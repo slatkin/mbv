@@ -135,6 +135,7 @@ fn the_window_close_saves_the_launch_location_once() {
         vec![GuiDestinationCollections {
             destination: library_identity(MUSIC_LIBRARY.0),
             group_ids: vec!["grp-soul".into()],
+            picks: Vec::new(),
         }]
     );
 }
@@ -152,6 +153,7 @@ fn a_restored_location_drops_a_group_the_library_no_longer_has() {
         collections: vec![GuiDestinationCollections {
             destination: library_identity(MUSIC_LIBRARY.0),
             group_ids: vec!["grp-hiphop".into(), "grp-gone".into()],
+            picks: Vec::new(),
         }],
     })
     .unwrap();
@@ -180,6 +182,7 @@ fn a_restored_location_whose_groups_are_all_gone_selects_the_first_group() {
         collections: vec![GuiDestinationCollections {
             destination: library_identity(MUSIC_LIBRARY.0),
             group_ids: vec!["grp-gone".into(), "grp-also-gone".into()],
+            picks: Vec::new(),
         }],
     })
     .unwrap();
@@ -257,10 +260,12 @@ fn a_mid_restore_destination_switch_applies_no_saved_pills() {
             GuiDestinationCollections {
                 destination: library_identity(MUSIC_LIBRARY.0),
                 group_ids: vec!["grp-hiphop".into()],
+                picks: Vec::new(),
             },
             GuiDestinationCollections {
                 destination: library_identity(SECOND_MUSIC.0),
                 group_ids: vec!["grp-jazz".into()],
+                picks: Vec::new(),
             },
         ],
     })
@@ -308,6 +313,7 @@ fn a_pre_catalog_take_focus_survives_the_restore() {
         collections: vec![GuiDestinationCollections {
             destination: library_identity(MUSIC_LIBRARY.0),
             group_ids: vec!["grp-hiphop".into()],
+            picks: Vec::new(),
         }],
     })
     .unwrap();

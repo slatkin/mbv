@@ -327,6 +327,35 @@ Each destination SHALL keep its own selected pill while the GUI Client runs and 
 - **WHEN** the GUI Client starts again
 - **THEN** Music opens with the first group selected, as the TUI does
 
+### Requirement: Each collection pill keeps its last picked album
+
+Each collection pill SHALL keep the album its Hero last showed, while the GUI Client runs and across a restart of the GUI Client. A pill with no kept album, or whose kept album the selected collection no longer holds, SHALL show the first album in its list. The Hero SHALL therefore never be blank while the selected collection's albums are loaded.
+
+#### Scenario: A pill reopens on its own album
+
+- **GIVEN** the user picked Paul's Boutique under Hip-Hop, and then selected Soul, whose first album is 3 Feet High and Rising
+- **WHEN** the user selects Hip-Hop again
+- **THEN** the Hero shows Paul's Boutique
+- **AND** selecting Soul again shows 3 Feet High and Rising
+
+#### Scenario: A pill with no kept album
+
+- **GIVEN** Soul has never had an album picked
+- **WHEN** the user selects Soul
+- **THEN** the Hero shows the first album in the Soul list
+
+#### Scenario: The kept albums survive a restart
+
+- **GIVEN** the GUI Client quit with Paul's Boutique kept under Hip-Hop
+- **WHEN** the GUI Client starts again
+- **THEN** Music opens with Hip-Hop selected, and the Hero shows Paul's Boutique
+
+#### Scenario: A kept album no longer exists
+
+- **GIVEN** the kept album is no longer in the pill's list
+- **WHEN** the pill is selected
+- **THEN** the Hero shows the first album in the list
+
 ### Requirement: The panel widths persist across launches
 
 The Queue panel's column width and the Wide list column's width that the user dragged SHALL persist across launches of the GUI Client, and a double-click SHALL reset a divider to its default and save the default. A saved width that is missing or unreadable SHALL fall back to the default.

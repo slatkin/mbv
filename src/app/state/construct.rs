@@ -194,7 +194,7 @@ impl App {
             // design D2, D5).
             gui_library_groups: std::collections::HashMap::new(),
             gui_music_albums: std::collections::HashMap::new(),
-            gui_library_detail: None,
+            gui_library_picks: std::collections::HashMap::new(),
             gui_library_row_menu_target: None,
             // Mini view always starts on the queue panel; not persisted.
             mini_view_focus: PanelFocus::Queue,
