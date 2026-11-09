@@ -7,6 +7,10 @@
 #[cfg(any(test, feature = "test"))]
 use super::App;
 
+/// The Feeds destination's test seeds and pushes (row 11.1) live in their own
+/// child module so this file stays within its line ceiling.
+mod gui_feeds;
+
 #[cfg(feature = "test")]
 use std::sync::{Arc, Mutex};
 

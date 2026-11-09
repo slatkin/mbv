@@ -171,10 +171,11 @@ impl App {
 
     /// The destinations the GUI presents, in catalog order (design D9, D2):
     /// the Grouped Music libraries, the Emby TV (Shows) libraries, every
-    /// other Emby library (row 8.1's plain Emby-library destination), and the
+    /// other Emby library (row 8.1's plain Emby-library destination), the
     /// Audiobookshelf libraries — the book libraries' Audiobooks destination
     /// (row 9.1) and the podcast libraries' Podcasts destination (row 10.1) —
-    /// as the destination-kind enum names them. The restore's fallback and the
+    /// and the Feeds tab when subscriptions are configured (row 11.1), as the
+    /// destination-kind enum names them. The restore's fallback and the
     /// frame's destination tabs (`gui_library_tabs`) read this one list, so
     /// they cannot disagree about the presented set.
     pub(in crate::app::gui_library) fn presented_destinations(&self) -> Vec<GuiDestinationKind> {
@@ -206,6 +207,13 @@ impl App {
                 }
             }),
         );
+        // The Feeds tab follows every Service library, and it presents while
+        // subscriptions are configured (row 11.1): the TUI's own tab-strip
+        // rule, so a subscription set the session emptied presents no tab.
+        presented.extend(
+            self.has_feeds_subscriptions()
+                .then_some(GuiDestinationKind::Feeds),
+        );
         presented
     }
 
@@ -228,10 +236,22 @@ impl App {
     /// presented library, else the first presented one. A saved
     /// Audiobookshelf destination whose catalog has not settled yet resolves
     /// to nothing, so the restore retries instead of opening a fallback the
-    /// catalog's arrival would contradict. The GUI presents the Grouped
-    /// Music and Shows libraries, so every other saved destination falls
-    /// back to the first of them.
+    /// catalog's arrival would contradict. A saved Feeds location resolves to
+    /// the feed tab while subscriptions are configured, and falls back like
+    /// every other unpresented destination when they are not. The GUI
+    /// presents the Grouped Music and Shows libraries, so every other saved
+    /// destination falls back to the first of them.
     fn presented_destination_position(&self, destination: &TabIdentity) -> Option<usize> {
+        let presented = self.presented_destinations();
+        // The Feeds destination names no library: the saved identity matches
+        // the presented kind or nothing.
+        if *destination == TabIdentity::Feeds {
+            let feeds = presented
+                .iter()
+                .copied()
+                .find(|kind| matches!(kind, GuiDestinationKind::Feeds));
+            return self.gui_destination_position(feeds.or_else(|| presented.first().copied())?);
+        }
         let saved = match destination {
             TabIdentity::ServiceLibrary { kind, library_id } => Some((*kind, library_id.as_str())),
             TabIdentity::Home | TabIdentity::Feeds => None,
@@ -241,7 +261,6 @@ impl App {
         {
             return None;
         }
-        let presented = self.presented_destinations();
         let kind = saved
             .and_then(|(saved_kind, library_id)| {
                 presented.iter().copied().find(|kind| {

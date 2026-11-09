@@ -37,15 +37,20 @@ pub enum GuiDestinationKind {
     /// Audiobooks kind does; a podcast library never presents the Audiobooks
     /// destination and a book library never presents this one.
     Podcasts { lib_idx: usize },
+    /// The Feeds destination (design D12, row 11.1): the one synthetic tab
+    /// after every Service library, present while feed subscriptions are
+    /// configured, as the TUI's own tab-strip rule has it. It names no
+    /// library.
+    Feeds,
 }
 
 impl GuiDestinationKind {
-    /// The destination's library index; `None` for Home, which names no
-    /// library.
+    /// The destination's library index; `None` for Home and Feeds, which name
+    /// no library.
     #[must_use]
     pub fn library_index(self) -> Option<usize> {
         match self {
-            Self::Home => None,
+            Self::Home | Self::Feeds => None,
             Self::Music { lib_idx }
             | Self::Shows { lib_idx }
             | Self::Library { lib_idx }
@@ -79,12 +84,16 @@ pub struct GuiLibraryTabs {
 impl App {
     /// The active destination's kind (design D2, D12): the one fact the
     /// content gate, the tabs' current mark, and the Shows open step read.
-    /// `None` for Feeds and every other destination the GUI does not present
-    /// yet.
+    /// `None` for every destination the GUI does not present yet.
     #[must_use]
     pub fn gui_active_destination(&self) -> Option<GuiDestinationKind> {
         match self.tab {
             TabSelection::Home => Some(GuiDestinationKind::Home),
+            // The feed tab presents while subscriptions are configured, so a
+            // subscription set the session emptied presents no destination.
+            TabSelection::Feeds if self.has_feeds_subscriptions() => {
+                Some(GuiDestinationKind::Feeds)
+            }
             TabSelection::EmbyLibrary(lib_idx) if lib_idx < self.libs.len() => {
                 if self.is_grouped_music_library(lib_idx) {
                     Some(GuiDestinationKind::Music { lib_idx })
@@ -113,11 +122,17 @@ impl App {
 
     /// The tab position one presented destination's tab takes (design D2):
     /// the position the open-destination command takes. `None` for Home,
-    /// which names no library tab.
+    /// which names no library tab, and for Feeds while no subscription makes
+    /// its tab.
     pub(in crate::app::gui_library) fn gui_destination_position(
         &self,
         kind: GuiDestinationKind,
     ) -> Option<usize> {
+        match kind {
+            GuiDestinationKind::Home => return None,
+            GuiDestinationKind::Feeds => return self.feeds_tab_pos(),
+            _ => {}
+        }
         if matches!(
             kind,
             GuiDestinationKind::Audiobooks { .. } | GuiDestinationKind::Podcasts { .. }
@@ -136,10 +151,12 @@ impl App {
     }
 
     /// One presented destination's tab label (design D2): the library's
-    /// display name. `None` for Home, whose icon paints no label here.
+    /// display name, or the Feeds tab's fixed label, as the TUI's tab strip
+    /// paints it.
     fn gui_destination_label(&self, kind: GuiDestinationKind) -> Option<String> {
         match kind {
             GuiDestinationKind::Home => None,
+            GuiDestinationKind::Feeds => Some("Feeds".to_string()),
             GuiDestinationKind::Audiobooks { lib_idx }
             | GuiDestinationKind::Podcasts { lib_idx } => {
                 Some(self.audiobookshelf_libraries.get(lib_idx)?.name.clone())
@@ -150,11 +167,11 @@ impl App {
 
     /// The destination tabs the Library panel's frame carries (design D2):
     /// the presented destinations in catalog order — one tab per Grouped
-    /// Music and Shows library, per plain Emby library, and per
-    /// Audiobookshelf library of either kind — and the active tab's position
-    /// when the active destination is one of them. The presented list is the
-    /// launch restore's (`presented_destinations`), so the top bar and the
-    /// restore cannot disagree.
+    /// Music and Shows library, per plain Emby library, per Audiobookshelf
+    /// library of either kind, and the Feeds tab — and the active tab's
+    /// position when the active destination is one of them. The presented
+    /// list is the launch restore's (`presented_destinations`), so the top bar
+    /// and the restore cannot disagree.
     #[must_use]
     pub fn gui_library_tabs(&self) -> GuiLibraryTabs {
         let tabs = self

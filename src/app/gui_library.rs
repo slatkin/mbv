@@ -10,6 +10,7 @@ mod audiobooks;
 mod audiobooks_projection;
 mod emby;
 mod emby_projection;
+mod feeds;
 mod home;
 mod launch;
 mod podcasts;
@@ -31,6 +32,7 @@ pub(in crate::app) use self::emby::{GuiEmbyRootItems, GuiEmbyRootItemsEvent};
 pub use self::emby_projection::{
     GuiEmbyFeedGroup, GuiEmbyHero, GuiEmbyPill, GuiEmbyProjection, GuiEmbyRow, GuiEmbyRowKind,
 };
+pub use self::feeds::{GuiFeedPill, GuiFeedsSelection};
 pub use self::home::{
     GuiArtShape, GuiHomeHero, GuiHomeItemRow, GuiHomeProjection, GuiHomeRow, GuiHomeRowId,
     GuiHomeRowKind, GuiHomeRowState,
@@ -404,15 +406,17 @@ impl App {
     /// The open step the active destination's kind needs (design D12): the
     /// Shows destination seeds its mode selection with the TUI default
     /// rule's resolution and starts its root load when the stack holds no
-    /// level, and the plain Emby-library destination starts its root-list
-    /// load (row 8.1). The other destinations' loads ride the tab settlement
-    /// and the frame path.
+    /// level, the plain Emby-library destination starts its root-list load
+    /// (row 8.1), and the Feeds destination settles its stored pill (row
+    /// 11.1, whose entries the shared startup fetch already fills). The other
+    /// destinations' loads ride the tab settlement and the frame path.
     fn open_gui_active_destination(&mut self) {
         match self.gui_active_destination() {
             Some(GuiDestinationKind::Shows { lib_idx }) => self.gui_tv_open(lib_idx),
             Some(GuiDestinationKind::Library { lib_idx }) => self.gui_emby_open(lib_idx),
             Some(GuiDestinationKind::Audiobooks { lib_idx }) => self.gui_abs_open(lib_idx),
             Some(GuiDestinationKind::Podcasts { lib_idx }) => self.gui_podcast_open(lib_idx),
+            Some(GuiDestinationKind::Feeds) => self.gui_feeds_open(),
             _ => {}
         }
     }

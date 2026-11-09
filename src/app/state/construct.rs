@@ -226,6 +226,7 @@ impl App {
             gui_emby_roots: std::collections::HashMap::new(),
             gui_abs_libs: std::collections::HashMap::new(),
             gui_podcast_libs: std::collections::HashMap::new(),
+            gui_feeds_selection: crate::app::gui_library::GuiFeedsSelection::default(),
             gui_home_art_encoded: std::collections::HashMap::new(),
             title_log_gate: crate::app::state::projection::card::TitleLogGate::default(),
             dim_backdrop_active: false,

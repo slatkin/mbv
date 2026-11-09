@@ -34,6 +34,7 @@ mod fill_state;
 mod home_content;
 mod home_recently_added;
 mod launch_restore;
+mod waker;
 
 pub(in crate::app) use self::fill_state::{
     LevelFillAction, LevelFillState, MAX_ALBUM_TRACKS_CACHE, MAX_SERIES_DETAIL_CACHE,
@@ -290,6 +291,12 @@ pub struct App {
     /// and episode stay the TUI's. The TUI never reads this store.
     pub(in crate::app) gui_podcast_libs:
         std::collections::HashMap<usize, crate::app::gui_library::GuiPodcastsSelection>,
+    /// The GUI Library's Feeds selection (add-gui-library-panel design D12,
+    /// row 11.1): the selected pill (default Latest) and the entry the Hero
+    /// shows, by the entry's stable `guid`. One feed tab exists per Client, so
+    /// one store holds it. The TUI's feed group and Watched filter stay the
+    /// TUI owner's, and the TUI never reads this store.
+    pub(in crate::app) gui_feeds_selection: crate::app::gui_library::GuiFeedsSelection,
     /// The one startup snapshot and its tab-scoped destination re-anchor.
     pub(in crate::app) launch_restore: LaunchRestore,
     /// Deferred tab switch for a `NavigateLanding::Album` landing: set when the
@@ -617,47 +624,6 @@ pub struct App {
 }
 
 impl App {
-    /// The shared wake handle this `App` hands to its Owner-snapshot relays
-    /// (design D7 of `extract-client-core`). The Client core shares it, so the
-    /// waker the Client installs reaches every relay, including one the
-    /// initial attach already spawned.
-    #[must_use]
-    pub fn client_waker(&self) -> crate::app::ClientWaker {
-        self.client_waker.clone()
-    }
-
-    /// Record the `mbv` program this Client starts the Owner from (design
-    /// D9 of `extract-client-core`). The Owner link sets it at attach time;
-    /// `None` keeps this process's own executable.
-    pub(crate) fn set_owner_exe(&mut self, owner_exe: Option<std::path::PathBuf>) {
-        self.owner_exe = owner_exe;
-    }
-
-    /// Start this machine's Owner process from the Client's `mbv` program and
-    /// wait until its control socket accepts connections. Every App-side
-    /// Owner start goes through here so a GUI Client never starts itself as
-    /// the Owner (design D9 of `extract-client-core`).
-    pub(in crate::app) fn start_local_daemon(
-        &self,
-    ) -> Result<(), mbv_remote_player::RemotePlayerError> {
-        crate::owner_link::start_owner(&crate::owner_link::OwnerStartOptions {
-            owner_exe: self.owner_exe.as_deref(),
-            log_level: None,
-        })
-    }
-
-    /// Relay one freshly attached Owner event channel through the wake
-    /// relay (design D7 of `extract-client-core`): forwarded events reach the
-    /// drain in order and each send wakes the Client. Receivers already
-    /// behind a relay — a resumed suspended home link included — must not
-    /// be re-wrapped.
-    pub(in crate::app) fn waking_player_rx(
-        &self,
-        rx: mpsc::Receiver<PlayerEvent>,
-    ) -> mpsc::Receiver<PlayerEvent> {
-        crate::app::spawn_waking_relay(rx, self.client_waker.clone())
-    }
-
     /// Whether a flash toast is still live: its expiry instant is strictly
     /// in the future. One predicate for every liveness reader (the status-row
     /// projection, the expiry cleanup, and the startup guards) so the rule

@@ -45,6 +45,13 @@ impl LibraryFrames {
         if let Some(GuiDestinationKind::Podcasts { lib_idx }) = destination {
             app.ensure_gui_podcast_selection(lib_idx);
         }
+        // The Feeds destination's frame-path ensure (add-gui-library-panel
+        // design D12, row 11.1): the stored pill converges on the subscription
+        // set the tab holds. The entries arrive from the shared startup fetch,
+        // so the ensure starts no load.
+        if matches!(destination, Some(GuiDestinationKind::Feeds)) {
+            app.ensure_gui_feeds_selection();
+        }
         // The Audiobooks destination's frame-path ensure (add-gui-library-panel
         // design D12, row 9.1): the default pick's detail load starts before
         // any select does, as the Shows frame path ensures its default series'
