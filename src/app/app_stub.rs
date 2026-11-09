@@ -399,6 +399,10 @@ pub fn stub_app_with_cached_emby_client(client: mbv_emby::EmbyClient) -> App {
 #[cfg(feature = "test")]
 pub const GUI_MUSIC_LIBRARY_ID: &str = "lib-music";
 
+/// The library id the seeded Shows library tab holds.
+#[cfg(feature = "test")]
+pub const GUI_TV_LIBRARY_ID: &str = "lib-tv";
+
 /// A music group level: the library root's children, its cursor on the first.
 #[cfg(feature = "test")]
 fn music_group_level(groups: Vec<mbv_emby_model::EmbyItem>) -> mbv_ui_model::browse::BrowseLevel {

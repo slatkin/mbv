@@ -39,20 +39,10 @@ impl Model {
             library_id.to_string(),
             DestinationLatestSnapshot::new(items),
         );
-        for library in &mut self.app.libs {
-            if library.library.id != library_id || library.library.collection_type != "tvshows" {
-                continue;
-            }
-            let Some(level) = library.nav_stack.last_mut() else {
-                continue;
-            };
-            if level.tv_content_mode != Some(mbv_queue::TvContentMode::Latest) {
-                continue;
-            }
-            level.items.clone_from(&emby_items);
-            level.rows = mbv_ui_model::browse::ServerRows::complete(emby_items.len());
-            level.loading = false;
-        }
+        // The App's write owns the Latest root level's fill (row 7.1); this
+        // half is the shell-owned snapshot store above and the projection
+        // below.
+        self.app.apply_tv_latest_snapshot(library_id, emby_items);
         self.push_active_emby_library_owner_content();
     }
 

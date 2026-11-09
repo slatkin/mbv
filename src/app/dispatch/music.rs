@@ -321,7 +321,11 @@ impl App {
         self.save_default_library_position(lib_idx);
     }
 
-    fn apply_tv_letter_mode(&mut self, lib_idx: usize, mode: &mbv_queue::TvContentMode) {
+    pub(in crate::app) fn apply_tv_letter_mode(
+        &mut self,
+        lib_idx: usize,
+        mode: &mbv_queue::TvContentMode,
+    ) {
         let Some(level) = self.libs[lib_idx].nav_stack.last() else {
             return;
         };

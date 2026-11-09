@@ -30,6 +30,7 @@ mod frame;
 mod menu;
 mod playback;
 mod selection;
+mod shows;
 
 /// One group's album listing, as the mock transport returns it.
 const ALBUMS: &str = r#"{"Items":[{"Id":"alb-ill","Name":"Licensed to Ill","Type":"MusicAlbum"}],"TotalRecordCount":1}"#;

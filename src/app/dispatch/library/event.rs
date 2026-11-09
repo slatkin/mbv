@@ -12,25 +12,30 @@ use mbv_ui_model::ui_util::sort_audio_tracks;
 mod audiobookshelf;
 mod browse_loads;
 
-/// Each variant keeps its own documented no-op arm so a future
+/// Each variant keeps its own documented arm so a future
 /// `ModelContentEvent` variant that must reach the shell drain cannot
 /// silently fall through here.
 impl App {
     pub(in crate::app) fn handle_model_content_event(&mut self, ev: ModelContentEvent) {
         match ev {
-            // The shell drain applies the fetched snapshot: the Latest variant
-            // into the shell-owned latest snapshot, the TV Upcoming variant into
-            // the per-session Upcoming store.
+            // The App-side half fills the TV library's Latest root level
+            // (row 7.1): the same write the presenting Client's shell drain
+            // runs in `update_emby_latest_snapshot`, whose own half is the
+            // shell-owned snapshot store and the projection push.
             ModelContentEvent::EmbyLatestSnapshotFetched { library_id, items } => {
-                drop((library_id, items));
+                self.apply_tv_latest_snapshot(&library_id, items);
             }
+            // The App-side half accepts the per-session Upcoming snapshot
+            // and fills a waiting Upcoming root level (row 7.1): the same
+            // acceptance the presenting Client's shell drain runs.
             ModelContentEvent::TvUpcomingSnapshotFetched { library_id, items } => {
-                drop((library_id, items));
+                self.accept_tv_upcoming_snapshot(&library_id, items);
             }
-            // The shell drain clears the per-session request mark and unsets a
-            // waiting Upcoming root level's loading flag.
+            // The App-side half marks the per-session request `Failed` and
+            // unsets a waiting Upcoming root level's loading flag (row 7.1):
+            // the same write the presenting Client's shell drain runs.
             ModelContentEvent::TvUpcomingSnapshotFailed { library_id } => {
-                drop(library_id);
+                self.tv_upcoming_snapshot_failed(&library_id);
             }
             // The App stores the fetched rows under their source (row 6.2):
             // the same acceptance the presenting Client's shell drain runs,

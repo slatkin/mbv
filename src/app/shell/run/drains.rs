@@ -98,6 +98,10 @@ impl Model {
                     library_id,
                     items,
                 }) => {
+                    // The App-side half (the Latest root level's fill) runs
+                    // inside `update_emby_latest_snapshot` (row 7.1); this
+                    // Client's half is the shell-owned snapshot store and
+                    // the projection push below it.
                     self.update_emby_latest_snapshot(
                         &library_id,
                         items
@@ -110,11 +114,16 @@ impl Model {
                     library_id,
                     items,
                 }) => {
+                    // The App-side half is the shared acceptance (row 7.1);
+                    // this Client's half is the projection at the loop tail.
                     self.app.accept_tv_upcoming_snapshot(&library_id, items);
                 }
                 LibEvent::ModelContent(ModelContentEvent::TvUpcomingSnapshotFailed {
                     library_id,
                 }) => {
+                    // The App-side half is the shared failed-mark write
+                    // (row 7.1); this Client's half is the projection at the
+                    // loop tail.
                     self.app.tv_upcoming_snapshot_failed(&library_id);
                 }
                 LibEvent::ModelContent(ModelContentEvent::HomeRecentlyAddedFetched {

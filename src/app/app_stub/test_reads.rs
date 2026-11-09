@@ -11,7 +11,10 @@ use super::App;
 use std::sync::{Arc, Mutex};
 
 #[cfg(feature = "test")]
-use super::{GUI_MUSIC_LIBRARY_ID, album_item, group_item, music_album_level, music_group_level};
+use super::{
+    GUI_MUSIC_LIBRARY_ID, GUI_TV_LIBRARY_ID, album_item, group_item, music_album_level,
+    music_group_level,
+};
 
 #[cfg(any(test, feature = "test"))]
 impl App {
@@ -81,6 +84,58 @@ impl App {
             self.album_artist_cache
                 .insert(album_id.to_string(), "Beastie Boys".to_string());
         }
+    }
+
+    /// Make the Shows library the GUI Library test's destination (design
+    /// D12): the Emby runtime becomes Ready with `client` (built over a mock
+    /// transport), and the Shows tab holds an empty root level — the state a
+    /// first open finds before its mode's load lands — with no resolved TV
+    /// mode, so the open's own default rule applies. Shows is then the
+    /// active destination, as the Library panel keeps it.
+    #[cfg(feature = "test")]
+    pub fn seed_gui_tv_library_for_test(&mut self, client: mbv_emby::EmbyClient) {
+        self.emby_runtime =
+            crate::app::state::service_runtime::EmbyRuntime::ready(Arc::new(Mutex::new(client)));
+        let mut library = mbv_emby_model::test_support::make_item("Shows", "CollectionFolder");
+        library.id = GUI_TV_LIBRARY_ID.to_string();
+        library.collection_type = "tvshows".to_string();
+        let mut tab = mbv_ui_model::library_tab::LibraryTab::new(library);
+        tab.nav_stack.push(mbv_ui_model::browse::BrowseLevel {
+            parent_id: GUI_TV_LIBRARY_ID.to_string(),
+            title: "Shows".to_string(),
+            items: Vec::new(),
+            rows: mbv_ui_model::browse::ServerRows::new(0),
+            resting: mbv_ui_model::browse::BrowseResting::new(0, 0),
+            item_types: Some("Series".to_string()),
+            unplayed_only: false,
+            sort_by: "SortName".to_string(),
+            sort_order: "Ascending".to_string(),
+            loading: false,
+            all_items: None,
+            letter_filter: None,
+            tv_content_mode: None,
+            music_grouping: None,
+        });
+        self.libs = vec![tab];
+        self.tab = mbv_ui_model::tab_selection::TabSelection::EmbyLibrary(0);
+    }
+
+    /// The root level's item ids of the Shows library `lib_idx`, for a
+    /// Client's test that asserts a mode load landed the rows
+    /// (add-gui-library-panel design D12). `None` while the library holds
+    /// no root level.
+    #[must_use]
+    pub fn tv_root_item_ids_for_test(&self, lib_idx: usize) -> Option<Vec<String>> {
+        Some(
+            self.libs
+                .get(lib_idx)?
+                .nav_stack
+                .last()?
+                .items
+                .iter()
+                .map(|item| item.id.clone())
+                .collect(),
+        )
     }
 
     /// The active destination, for a Client's test that asserts an open-

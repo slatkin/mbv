@@ -252,6 +252,12 @@ pub struct App {
     /// to the first item row in the projection, so the Hero's default is
     /// never blank. The TUI never reads it.
     pub(in crate::app) gui_home_selection: Option<crate::app::gui_library::GuiHomeRowId>,
+    /// The GUI Library's Shows selection (add-gui-library-panel design D12,
+    /// the USER-APPROVED GUI Shows design): per Shows library, the active
+    /// view mode (default from `resolve_tv_content_mode`), the selected
+    /// series, and the selected season. The TUI never reads it.
+    pub(in crate::app) gui_tv_shows:
+        std::collections::HashMap<usize, crate::app::gui_library::GuiTvShowsSelection>,
     /// The one startup snapshot and its tab-scoped destination re-anchor.
     pub(in crate::app) launch_restore: LaunchRestore,
     /// Deferred tab switch for a `NavigateLanding::Album` landing: set when the

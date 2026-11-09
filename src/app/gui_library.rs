@@ -11,6 +11,7 @@ mod launch;
 mod projection;
 mod store;
 mod tabs;
+mod tv;
 
 pub use self::artwork::GuiLibraryArtwork;
 pub use self::home::{
@@ -23,6 +24,7 @@ pub use self::projection::{
 };
 pub(in crate::app) use self::store::{GuiGroupAlbums, GuiGroupAlbumsEvent};
 pub use self::tabs::{GuiLibraryTab, GuiLibraryTabs};
+pub use self::tv::GuiTvShowsSelection;
 
 use mbv_emby_model::EmbyItem;
 use mbv_ui_model::context_menu::ContextAction;
