@@ -271,10 +271,17 @@ fn chapter_row(
         }) if library_item_id == book_id
     );
     match row {
-        BookRow::Chapter { id, end, title, .. } => GuiAudiobooksChapterRow {
+        BookRow::Chapter {
+            id,
+            start,
+            end,
+            title,
+        } => GuiAudiobooksChapterRow {
             chapter: id,
             title,
-            duration: gutter(end),
+            // The chapter's own span, the TUI chapter row's duration: `end`
+            // is the chapter's absolute end on the merged timeline.
+            duration: gutter(end - start),
             current: current
                 && matches!(now_playing, Some(WorkspaceNowPlaying::Chapter { chapter_id: playing, .. }) if *playing == id),
         },
