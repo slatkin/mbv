@@ -516,11 +516,13 @@ order, each a `GuiLibraryTabFrame` with a `position` and a `label`, Home at
 position 0), `current_tab` (the active tab's position, `None` for Home and for
 every destination the GUI does not present yet), `music`
 (`Option<GuiMusicFrame>`, present while a Grouped Music library is active),
-and `home` (`Option<GuiHomeFrame>`, present while Home is the active
+`home` (`Option<GuiHomeFrame>`, present while Home is the active
 destination — add-gui-library-panel design D12, the USER-APPROVED GUI Home
-design). The two destination fields never both present: the destinations are
-exclusive, so the present field names the active destination, and the top bar
-marks the Home icon current exactly while `home` is present.
+design), and `shows` (`Option<GuiShowsFrame>`, present while an Emby TV
+library's Shows destination is active — design D12, row 7.1). No two
+destination fields present at once: the destinations are exclusive, so the
+present field names the active destination, and the top bar marks the Home
+icon current exactly while `home` is present.
 
 `GuiHomeFrame` carries `rows`, `selected`, and `hero`: Home's flat list in
 the Music list slot, with no pill, no letter rail, and no Workspace. `rows`
@@ -550,6 +552,43 @@ policy's declared arm), and `art` (the artwork policy chain's display
 encode for Emby items only, again `null` on the rows without art) — the
 shared hero producers' facts, the same facts the TUI paints for the same
 item.
+
+`GuiShowsFrame` (`src/bridge/frame/library/shows.rs`) carries `lib_idx` (the
+Shows library index the Shows commands name), `pills`, `collection_names`
+(the active mode's name, which the Library Status bar's location reads),
+`loading`, `workspace_loading`, `rows`, `selected`, and `hero`. The pill row
+is single-select and holds the design's three modes in order — `latest`,
+`upcoming`, and `all`, labelled Latest, Upcoming, and All series — each with
+`mode`, `name`, `selected`, and `collection` (`false`: the TUI's letter-range
+buckets are not pills here, because the All series list's letter rail
+replaces them). A row carries `id`, `title`, `subtitle`, `date`, and
+`sort_letter`: in the All series mode the rows are the library's series in
+the server's `SortName` order, each with its rail letter over the
+article-stripped sort name; in Latest they are the newest episodes, with the
+show's name as `title`, the episode's own name as `subtitle`, and the
+provider date in `date`; in Upcoming they are the snapshot's premieres, with
+the series' name as `title`, the season/episode label and the episode's name
+as `subtitle`, and the premiere date in `date`. Both flat lists are
+date-sorted and carry no `sort_letter`. `selected` carries the core's
+selected row as the frame painted it — the series id in All series, the
+episode id or the premiere's stable key in the flat modes — with the first
+row as the default, so the Hero paints as soon as a list lands, and a stored
+id the list no longer carries falls back to that first row.
+
+`hero` is the selected row's Hero and is absent in Upcoming, which paints
+none. In All series it carries the shared Emby hero producer's facts —
+`title`, `meta_rows` with `duration_row` and `progress_row`, `overview`,
+`art_shape` at the artwork policy's landscape arm, and `art` — plus
+`workspace`: the detail's season pills (`season_id`, `name`, `selected`),
+`selected_season` (the stored choice while the detail still holds it, else
+the first season, because the pills start on the first season and are never
+kept across a series change), and that season's `episodes`. A Workspace
+episode row carries `episode_id`, `number`, `name`, `duration`, and `state`
+(the shared row state the Home rows carry), and a season whose episodes have
+not landed yet is empty while `workspace_loading` is `true`. In Latest the
+Hero is the selected episode's same facts with no `workspace`. A click or a
+double-click on a Workspace episode sends that episode's `episode_id` with
+`showsPlay`.
 
 `GuiMusicFrame` carries `lib_idx` (the Grouped Music library index the
 set-collections command names), `pills` (`group_id`, `name`, `selected`, and
@@ -597,6 +636,18 @@ queue, so a Home command never mutates it directly, and Home's rows carry
 no library the Music play-next admission resolves against. A stale frame's
 row, one whose item the App's Home data no longer holds, logs and changes
 nothing, as every item-named variant's stale arm does.
+
+The Shows commands name a Shows library by its `libIdx` and its content by
+the stable Service id the frame painted: `showsSetMode` (`libIdx`, `mode`)
+loads the chosen mode through the TUI's own mode load, `showsSelect`
+(`libIdx`, `row`) selects the row the Hero shows — the All series mode's
+series, which also starts its detail load, or a flat mode's episode or
+premiere — `showsSelectSeason` (`libIdx`, `seasonId`) moves the Workspace to
+that season's episodes, and `showsPlay`, `showsPlayNext`, and `showsQueue`
+(`libIdx`, `itemId`) run the shared library play, play-next, and enqueue
+paths on an episode. The Owner owns the queue, so no Shows command mutates
+it directly, and a row, season, or episode id the active list no longer holds
+logs and changes nothing.
 
 The `takeFocus` variant also moves the core's `FocusStack`, so the frame paints
 the focus the `App`'s key gates read (design D4). The `play` and
