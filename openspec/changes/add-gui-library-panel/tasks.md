@@ -57,7 +57,7 @@ Each unit starts by reading its destination's data path in the `App` and recordi
 
 ## 9. Audiobooks
 
-- [ ] 9.1 Project and paint Audiobooks: the book list, the book Hero, and the chapters as the Hero's Workspace. Verify: a projection test; vitest for the chapter Workspace.
+- [x] 9.1 Project and paint Audiobooks: the book list, the book Hero, and the chapters as the Hero's Workspace. Verify: a projection test; vitest for the chapter Workspace.
 
 ## 10. Podcasts
 
