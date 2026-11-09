@@ -51,7 +51,7 @@ export interface LibraryUiState {
 	 * it (design D6). */
 	focusedPill: string | null;
 	/** The pill selection the keys asked for: Space and Enter select the
-	 * the focused pill (design D6). The pill row turns it into the
+	 * focused pill (design D6). The pill row turns it into the
 	 * select-collection command. */
 	pillSelect: { groupId: string } | null;
 	/** The list's cursor row id, or `null` while no row carries the cursor

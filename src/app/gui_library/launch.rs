@@ -49,12 +49,14 @@ impl App {
         Some(self.gui_launch_destination())
     }
 
-    /// Apply the saved collection set of the destination the first phase
-    /// opened (design D9): a saved group that the library no longer holds is
-    /// dropped, and an empty result — a saved set the library emptied, and
-    /// a destination with no saved entry, a fresh launch's case — is the
-    /// show-all selection: the union of every group the library holds. The
-    /// saved entry matches `destination`, the identity phase 1 recorded, and
+    /// Apply the saved collection choices of the destination the first phase
+    /// opened (design D9, D13): the saved picks of the groups the library
+    /// still holds restore, and the first saved group the library still
+    /// holds — in saved order — is the one selected; with none, a saved set
+    /// the library emptied, and a destination with no saved entry, a fresh
+    /// launch's case, the destination keeps its default first group (design
+    /// D6). The saved entry matches `destination`, the identity phase 1
+    /// recorded, and
     /// the active destination must still be that one: a mid-restore tab
     /// switch abandons the restore, so no other destination's saved set
     /// lands under the user. Returns `false` while the destination's group
@@ -76,19 +78,19 @@ impl App {
         let Some(present) = self.gui_music_present_groups(lib_idx) else {
             return false;
         };
-        // The saved picks of the groups the library still holds (design D13)
-        // restore first, and never overwrite a pick the session already made.
-        if let Some(entry) = state
+        // The saved entry of the destination the first phase opened: its
+        // picks restore first, and its group ids select the group with.
+        let saved_entry = state
             .collections
             .iter()
-            .find(|entry| entry.destination == *destination)
-        {
-            for pick in &entry.picks {
-                if present.contains(&pick.group_id) {
-                    self.gui_library_picks
-                        .entry((lib_idx, pick.group_id.clone()))
-                        .or_insert_with(|| pick.album_id.clone());
-                }
+            .find(|entry| entry.destination == *destination);
+        // The saved picks of the groups the library still holds (design D13)
+        // restore first, and never overwrite a pick the session already made.
+        for pick in saved_entry.map_or(&[][..], |entry| entry.picks.as_slice()) {
+            if present.contains(&pick.group_id) {
+                self.gui_library_picks
+                    .entry((lib_idx, pick.group_id.clone()))
+                    .or_insert_with(|| pick.album_id.clone());
             }
         }
         if self.gui_library_groups.contains_key(&lib_idx) {
@@ -99,16 +101,12 @@ impl App {
         // The saved group the library still holds, in saved order, is the
         // one selected. Without one, the destination keeps the default first
         // group (design D6), so a fresh launch opens on the first group.
-        let saved_group = state
-            .collections
-            .iter()
-            .find(|entry| entry.destination == *destination)
-            .and_then(|entry| {
-                entry
-                    .group_ids
-                    .iter()
-                    .find(|group_id| present.contains(group_id))
-            });
+        let saved_group = saved_entry.and_then(|entry| {
+            entry
+                .group_ids
+                .iter()
+                .find(|group_id| present.contains(group_id))
+        });
         if let Some(group_id) = saved_group.cloned() {
             self.select_gui_library_collection(lib_idx, group_id);
         }

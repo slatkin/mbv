@@ -184,12 +184,7 @@ impl App {
         if lib_idx >= self.libs.len() || !self.is_grouped_music_library(lib_idx) {
             return Vec::new();
         }
-        let lib = &self.libs[lib_idx];
-        let Some(group_level) = lib
-            .nav_stack
-            .iter()
-            .find(|level| level.parent_id == lib.library.id)
-        else {
+        let Some(group_level) = self.gui_music_group_level(lib_idx) else {
             return Vec::new();
         };
         let selected = self.gui_selected_group(lib_idx);

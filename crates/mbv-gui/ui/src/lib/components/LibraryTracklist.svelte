@@ -12,17 +12,21 @@
 
   A track plays from its row's play button, which replaces the track number on
   hover and glows under the pointer: the queue is replaced, and under autoload
-  the album plays from that track onward. A double-click does not play. The row of the track playing at the playhead paints
-  the playing state — the canvas's green with dark ink, as the Queue's active
-  row paints — over the cursor's fill, from the frame's playing id.
+  the album plays from that track onward. A double-click does not play. The
+  row of the track playing at the playhead shows a play glyph beside its
+  title, in the accent colour (the `GuiQueue` frame still names `active`). The
+  row keeps its own fill, because a highlight marks focus only.
 -->
 <script lang="ts">
 	import { ListEnd, Play, Plus } from '@lucide/svelte';
 	import type { GuiMusicHero, GuiMusicTrack } from '$lib/bridge/types';
-	import { openLibraryRowMenu, playLibraryTrack } from '$lib/library/state';
+	import {
+		libraryUi,
+		openLibraryRowMenu,
+		playLibraryTrack,
+	} from '$lib/library/state';
 	import { sendLibraryCommand } from '$lib/bridge/library';
 	import { heroTracks, resolveTrackCursor } from '$lib/library/hero';
-	import { libraryUi } from '$lib/library/state';
 
 	interface Props {
 		/** The picked album's Hero facts: the tracklist is the album's cached
@@ -52,8 +56,8 @@
 		void sendLibraryCommand({ command: 'addToQueue', itemId: track.trackId });
 	}
 
-	/** Whether the row is the track playing at the playhead: the row the
-	 * playing state paints over the cursor's fill (design D8). */
+	/** Whether the row is the track playing at the playhead: its row shows
+	 * the play glyph beside its title (design D8). */
 	function isPlaying(track: GuiMusicTrack): boolean {
 		return track.trackId === playingTrackId;
 	}

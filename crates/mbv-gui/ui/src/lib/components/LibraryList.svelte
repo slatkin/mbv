@@ -189,11 +189,6 @@
 				: canvasVar('muted');
 	}
 
-	/** The meta colour beside a row's name: the muted tone on every row. */
-	function metaColor(): string {
-		return canvasVar('muted');
-	}
-
 	/** A row's name weight: an artist row is bold, an album and a track regular,
 	 * as the canvas draws them. */
 	function rowWeight(row: LibraryRow): number {
@@ -359,7 +354,7 @@
 							<span
 								class="flex-none font-mono tabular-nums"
 								style:font-size="11px"
-								style:color={metaColor()}>{row.duration}</span
+								style:color="var(--canvas-muted)">{row.duration}</span
 							>
 						</button>
 					{:else}
@@ -404,7 +399,7 @@
 								<span
 									class="flex-none font-mono tabular-nums"
 									style:font-size="11px"
-									style:color={metaColor()}>{row.year}</span
+									style:color="var(--canvas-muted)">{row.year}</span
 								>
 							{/if}
 						</button>
