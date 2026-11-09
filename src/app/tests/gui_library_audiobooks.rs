@@ -788,3 +788,29 @@ fn the_select_command_stores_the_pick() {
         "the select command stored the pick"
     );
 }
+
+/// Opening a catalog whose initial pages are still in flight starts no
+/// second chain (row 9.1, review of unit 9.1): the unloaded condition counts
+/// the in-flight page marks, so an open during the startup chain's first
+/// page arms no replacement batch beside it. The armed batch is the
+/// observable, because arming it is what starts the second chain's workers;
+/// the request channel is no witness, since a worker's failure event lands
+/// after the assertion would run.
+#[test]
+fn opening_a_catalog_with_a_page_in_flight_starts_no_second_chain() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = abs_app();
+    app.audiobookshelf_book_browse[0].loading_pages.insert(0);
+
+    app.gui_abs_open(0);
+
+    let state = book_state(&app);
+    assert!(
+        state.replacement.is_none(),
+        "the open armed no replacement batch beside the in-flight page"
+    );
+    assert!(
+        state.loading_pages.contains(&0),
+        "the in-flight page mark is untouched"
+    );
+}

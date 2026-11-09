@@ -59,7 +59,13 @@ impl App {
             .audiobookshelf_book_browse
             .get(lib_idx)
             .is_some_and(|state| {
-                state.books.is_empty() && state.total == 0 && state.replacement.is_none()
+                // The in-flight page marks count as unloaded's negation: the
+                // startup chain's first page is already walking, and an open
+                // beside it would start a second chain (review of unit 9.1).
+                state.books.is_empty()
+                    && state.total == 0
+                    && state.loading_pages.is_empty()
+                    && state.replacement.is_none()
             });
         if !unloaded || self.tab.audiobookshelf_index() != Some(lib_idx) {
             return;
@@ -214,9 +220,10 @@ impl App {
         let _ = self.submit_queue_item(item, false);
     }
 
-    /// The TUI's owner-unavailable toast (row 9.1): every play and enqueue
-    /// refusal flashes it, so the GUI reads the same refusal the TUI paints.
-    fn flash_abs_owner_unavailable(&mut self) {
+    /// The TUI's owner-unavailable toast (row 9.1, row 10.1): every play and
+    /// enqueue refusal of either Audiobookshelf destination flashes it, so the
+    /// GUI reads the same refusal the TUI paints.
+    pub(in crate::app::gui_library) fn flash_abs_owner_unavailable(&mut self) {
         self.flash(
             "Audiobookshelf playback owner is unavailable".into(),
             ToastSeverity::Error,
