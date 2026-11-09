@@ -1,8 +1,8 @@
 // The two dividers (add-gui-library-panel design D4): the Queue panel's column
-// and the Wide arrangement's list column are resized by dragging, and the
-// session keeps both widths. Nothing persists — a window-content reload returns
-// both dividers to their defaults — and a width the user dragged outlives tab
-// and breakpoint changes, because the store is module state.
+// and the Wide arrangement's list column are resized by dragging. The widths
+// persist across launches: every drag writes them to the webview's local
+// storage, and the next start reads them back. A width the user dragged also
+// outlives tab and breakpoint changes, because the store is module state.
 //
 // Every painted width resolves here, so the columns the window paints and the
 // width the arrangement classifies are one value: a drag can never paint a
@@ -48,12 +48,47 @@ export interface DraggedWidths {
 /** The session's widths before any drag: both dividers at their defaults. */
 export const DEFAULT_DRAGGED_WIDTHS: DraggedWidths = { queue: null, list: null };
 
+/** The local-storage key the dragged widths persist under (design D4). */
+export const PANEL_WIDTHS_STORAGE_KEY = 'mbv.gui.panelWidths';
+
+/** A saved width when it is a finite number, else `null` (the default). */
+function savedWidth(value: unknown): number | null {
+	return typeof value === 'number' && Number.isFinite(value) ? Math.round(value) : null;
+}
+
+/**
+ * The widths a previous launch saved (design D4). A missing, unreadable, or
+ * corrupt value yields the defaults, so stored data never blocks the window.
+ */
+export function loadDraggedWidths(storage: Storage = localStorage): DraggedWidths {
+	try {
+		const raw = storage.getItem(PANEL_WIDTHS_STORAGE_KEY);
+		if (raw === null) {
+			return { ...DEFAULT_DRAGGED_WIDTHS };
+		}
+		const saved = JSON.parse(raw) as Partial<Record<keyof DraggedWidths, unknown>>;
+		return { queue: savedWidth(saved.queue), list: savedWidth(saved.list) };
+	} catch {
+		return { ...DEFAULT_DRAGGED_WIDTHS };
+	}
+}
+
+/** Write the widths to local storage; a refused write only loses the save. */
+function saveDraggedWidths(widths: DraggedWidths, storage: Storage = localStorage): void {
+	try {
+		storage.setItem(PANEL_WIDTHS_STORAGE_KEY, JSON.stringify(widths));
+	} catch {
+		// Storage is full or disabled: the session still holds the widths.
+	}
+}
+
 /**
  * The widths the session holds (design D4): a drag writes one, a double-click
- * clears it, and the window-content life is the session's, so the widths
- * survive tab and breakpoint changes and no frame carries them.
+ * clears it, and every change is saved, so the widths survive a relaunch as
+ * well as tab and breakpoint changes.
  */
-export const draggedWidths = writable<DraggedWidths>(DEFAULT_DRAGGED_WIDTHS);
+export const draggedWidths = writable<DraggedWidths>(loadDraggedWidths());
+draggedWidths.subscribe((widths) => saveDraggedWidths(widths));
 
 /**
  * A Queue column width held between the panel's canvas width and the width

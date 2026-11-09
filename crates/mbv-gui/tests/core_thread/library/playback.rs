@@ -150,7 +150,7 @@ fn the_play_command_over_a_populated_queue_replaces_it_without_a_confirm() {
     core.seed_gui_music_library_for_test(test_emby_client(&http));
     // The pinned selection keeps the launch restore's application off this
     // destination, so the mock's one answer serves the play's expansion.
-    core.seed_gui_library_groups_for_test(0, &["grp-hiphop"]);
+    core.seed_gui_library_groups_for_test(0, "grp-hiphop");
     core.seed_gui_music_albums_for_test(0, "grp-hiphop", &[("alb-ill", "Licensed to Ill")]);
 
     send_library(
@@ -233,7 +233,7 @@ fn the_shuffle_artist_command_replaces_a_populated_queue_without_a_confirm() {
     let mut test = test_core_with(app);
     let core = test.core.app_mut();
     core.seed_gui_music_library_for_test(test_emby_client(&http));
-    core.seed_gui_library_groups_for_test(0, &["grp-hiphop"]);
+    core.seed_gui_library_groups_for_test(0, "grp-hiphop");
 
     send_library(
         &mut test,

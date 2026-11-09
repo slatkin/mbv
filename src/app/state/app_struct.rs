@@ -202,12 +202,13 @@ pub struct App {
     /// replaces the TUI's. Set by the GUI Client before its first step
     /// (`App::enable_gui_client`); the TUI Client never sets it.
     pub(in crate::app) gui_client: bool,
-    /// The GUI Library panel's selected collections per destination
-    /// (add-gui-library-panel design D2, D5): a Grouped Music library's
-    /// selected group ids in pill order, keyed by the library index. The
-    /// window content sends them with the set-collections command; the TUI
-    /// never reads them.
-    pub(in crate::app) gui_library_groups: std::collections::HashMap<usize, Vec<String>>,
+    /// The GUI Library panel's selected collection per destination
+    /// (add-gui-library-panel design D2, D5, D6): a Grouped Music library's
+    /// selected group id, keyed by the library index. One group is always
+    /// selected, so an absent entry (or one the library no longer holds)
+    /// selects the first group. The window content sends the choice with the
+    /// select-collection command; the TUI never reads it.
+    pub(in crate::app) gui_library_groups: std::collections::HashMap<usize, String>,
     /// The GUI Library's Music collection store (design D5): each selected
     /// group's album list, keyed by the library index and the group id. It
     /// lands outside `nav_stack`, so the TUI's navigation state and fetches do

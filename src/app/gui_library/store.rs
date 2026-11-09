@@ -1,23 +1,24 @@
 //! The GUI Library's Music collection store (add-gui-library-panel design D5):
-//! per Grouped Music library, the album list each selected group loaded. The
-//! fetch runs off the Client core thread and lands in the store rather than in
-//! `nav_stack`, so the TUI's navigation state and fetches do not change.
+//! per Grouped Music library, the one selected group and the album list each
+//! group loaded. The fetch runs off the Client core thread and lands in the
+//! store rather than in `nav_stack`, so the TUI's navigation state and fetches
+//! do not change.
 
 use mbv_emby_model::EmbyItem;
 
 use crate::app::state::events::LibEvent;
 use crate::app::{App, PAGE_SIZE};
 
-/// One selected group's album list in the store (design D5): a group's first
-/// selection starts its fetch, a loaded list lives for the session, and a
-/// failed list keeps the other groups' albums on screen.
+/// One group's album list in the store (design D5): a group's first selection
+/// starts its fetch, a loaded list lives for the session, and a failed list
+/// stays failed until the group is selected again.
 #[derive(Clone, Debug, PartialEq)]
 pub(in crate::app) enum GuiGroupAlbums {
     /// The group's album fetch is in flight.
     Loading,
     /// The whole album list, paged to completion.
     Loaded(Vec<EmbyItem>),
-    /// The group's fetch failed; the other selected groups keep their albums.
+    /// The group's fetch failed.
     Failed,
 }
 
@@ -32,74 +33,70 @@ pub(in crate::app) struct GuiGroupAlbumsEvent {
 }
 
 impl App {
-    /// Replace the selected collections of the Grouped Music library `lib_idx`
-    /// (design D5, D6) and start the album fetch of every selected group the
-    /// store does not hold. The store keeps a loaded group, so a deselected
-    /// group selects again without a fetch. An empty set is the show-all
-    /// selection: the union of every group the library holds, loaded through
-    /// the same per-group fetch and cache, so the fan-out is one cached fetch
-    /// per group, never a repeated one.
-    pub(in crate::app) fn set_gui_library_collections(
+    /// Select the one collection group of the Grouped Music library `lib_idx`
+    /// (design D5, D6): one group is always selected, as in the TUI. The store
+    /// keeps the choice per library and starts the group's album fetch when
+    /// the store holds no list for it, so a group selected again fetches
+    /// nothing.
+    pub(in crate::app) fn select_gui_library_collection(
         &mut self,
         lib_idx: usize,
-        group_ids: Vec<String>,
+        group_id: String,
     ) {
-        if let Some(reason) = self.gui_collections_reject_reason(lib_idx, &group_ids) {
+        if let Some(reason) = self.gui_collection_reject_reason(lib_idx, &group_id) {
             App::log_ignored_library_command(
-                "setCollections",
+                "selectCollection",
                 format_args!("library {lib_idx}: {reason}"),
             );
             return;
         }
-        if group_ids.is_empty() {
-            // The show-all selection (the user's contract: an empty set is
-            // the same as every pill selected). Every group's album list
-            // enters the same per-group cache, so a later selection of the
-            // group fetches nothing.
-            let all = self.gui_music_present_groups(lib_idx).unwrap_or_default();
-            tracing::info!(
-                name: "gui_library.collections.set_all",
-                target: "gui_library",
-                library_index = lib_idx,
-                groups = all.len(),
-                "the empty selection shows every group"
-            );
-            for group_id in all {
-                self.fetch_gui_group_albums(lib_idx, group_id);
-            }
-            self.gui_library_groups.insert(lib_idx, Vec::new());
-            return;
-        }
-        self.gui_library_groups.insert(lib_idx, group_ids.clone());
         tracing::info!(
             name: "gui_library.collections.set",
             target: "gui_library",
             library_index = lib_idx,
-            groups = ?group_ids,
-            "the selected collections changed"
+            group = %group_id,
+            "the selected collection changed"
         );
-        for group_id in group_ids {
-            self.fetch_gui_group_albums(lib_idx, group_id);
-        }
+        self.gui_library_groups.insert(lib_idx, group_id.clone());
+        self.fetch_gui_group_albums(lib_idx, group_id);
     }
 
-    /// Why the selected-collection set cannot apply to `lib_idx` (design D5,
-    /// D6): the library index names no tab, or the destination is not a
-    /// Grouped Music library. The empty set applies — it is the show-all
-    /// selection.
-    fn gui_collections_reject_reason(
-        &self,
-        lib_idx: usize,
-        group_ids: &[String],
-    ) -> Option<&'static str> {
+    /// Why the selected collection cannot apply to `lib_idx` (design D5, D6):
+    /// the library index names no tab, the destination is not a Grouped Music
+    /// library, or the library's group list holds no group `group_id` (a stale
+    /// frame's pick). A group list that has not landed yet admits the pick,
+    /// because the list is what would name it stale.
+    fn gui_collection_reject_reason(&self, lib_idx: usize, group_id: &str) -> Option<&'static str> {
         if lib_idx >= self.libs.len() {
             return Some("the library index names no tab");
         }
         if !self.is_grouped_music_library(lib_idx) {
             return Some("the destination is not a Grouped Music library");
         }
-        let _ = group_ids;
-        None
+        let level = self.gui_music_group_level(lib_idx)?;
+        if level.items.iter().any(|group| group.id == group_id) {
+            None
+        } else {
+            Some("the group is not one of the library's collections")
+        }
+    }
+
+    /// Start the shown group's album fetch when the store holds no list for it
+    /// (design D5). The frame path calls this for the Music destination, so
+    /// the default first group loads without a pick. A failed fetch is not
+    /// retried here: it stays failed until the user selects the group again,
+    /// so a paint never re-issues it.
+    pub fn ensure_gui_music_selection(&mut self, lib_idx: usize) {
+        let Some(group_id) = self.gui_selected_group(lib_idx) else {
+            return;
+        };
+        if self
+            .gui_music_albums
+            .contains_key(&(lib_idx, group_id.clone()))
+        {
+            return;
+        }
+        self.fetch_gui_group_albums(lib_idx, group_id);
     }
 
     /// Start `group_id`'s album fetch when the store holds no list for it
@@ -130,8 +127,7 @@ impl App {
     }
 
     /// Land one group's album fetch (design D5): a loaded list replaces the
-    /// loading mark, and a failure marks only that group, so the other
-    /// selected groups keep their albums.
+    /// loading mark, and a failure marks only that group.
     pub(in crate::app) fn handle_gui_group_albums(&mut self, event: GuiGroupAlbumsEvent) {
         let GuiGroupAlbumsEvent {
             lib_idx,

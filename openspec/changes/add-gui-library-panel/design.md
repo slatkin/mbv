@@ -90,7 +90,7 @@ The GUI's `App` does not apply the TUI's terminal-width Mini check or its hidden
 
 The front end picks the arrangement from the measured Library column width (the window width minus the Queue panel's current painted width, 400 px expanded, 72 px rail, or the width a drag gave it), with the canvas sizes as thresholds: below 480 px (the 320 px list plus the pill row) is Mini, from 880 px (the 320 px list plus a 560 px Hero) is Wide, and between is Narrow. Wide also needs 600 px of height. Mini shows only the panel with Panel focus. Narrow shows the list and opens the Hero as an overlay when an item is picked. Wide shows the Hero beside the list. The thresholds are front-end constants beside the queue panel's state constants. The core does not classify the size, so `mbv_surfaces::breakpoint` stays unused by the GUI.
 
-Both columns are resizable. A drag on the divider between the Queue panel and the Library column sizes the Queue column, and a drag on the divider between the Wide list column and the Hero pane sizes the list column. A double-click returns a divider to its default, and the pointer shows the column-resize cursor over a band that lights while hovered or dragged. The session keeps both widths in front-end module state (`ui/src/lib/bridge/resize.ts`), so they survive tab and breakpoint changes, and nothing persists: a window-content reload returns them to their defaults. The list column defaults to the canvas's 320 px index 15 % wider, 368 px. The Queue column keeps its 400 px artboard as its minimum, and its maximum leaves the Library column its 480 px Mini threshold, so a drag removes no panel. The list column is held between 320 px and 640 px, short enough to leave the Hero pane its 320 px minimum. One resolution (`panelWidths`) returns the two painted widths and the Library column they leave, the divider's 6 px included, and the arrangement classifies that same value: the drag and the thresholds cannot disagree, so no arrangement flaps between the paint and the classification. The dividers are mouse-only and send the core no region; the Queue panel's own resize observer re-reports the regions a drag moved.
+Both columns are resizable. A drag on the divider between the Queue panel and the Library column sizes the Queue column, and a drag on the divider between the Wide list column and the Hero pane sizes the list column. A double-click returns a divider to its default, and the pointer shows the column-resize cursor over a band that lights while hovered or dragged. The session keeps both widths in front-end module state (`ui/src/lib/bridge/resize.ts`), so they survive tab and breakpoint changes, and the widths persist across launches: each drag writes them to the webview's local storage (`PANEL_WIDTHS_STORAGE_KEY`), and the next start reads them back, with a corrupt value falling back to the defaults. The list column defaults to the canvas's 320 px index 15 % wider, 368 px. The Queue column keeps its 400 px artboard as its minimum, and its maximum leaves the Library column its 480 px Mini threshold, so a drag removes no panel. The list column is held between 320 px and 640 px, short enough to leave the Hero pane its 320 px minimum. One resolution (`panelWidths`) returns the two painted widths and the Library column they leave, the divider's 6 px included, and the arrangement classifies that same value: the drag and the thresholds cannot disagree, so no arrangement flaps between the paint and the classification. The dividers are mouse-only and send the core no region; the Queue panel's own resize observer re-reports the regions a drag moved.
 
 ### D5. Music data: the collection store and the projection
 
@@ -102,21 +102,11 @@ The Music projection builds the list from the selected groups' albums. `mbv_rend
 
 The Hero shows the picked album: the artist header (the artist, the selected collections, the album count, and the track count and total time once the artist's album tracklists have loaded), the album facts, the square artwork, and the tracklist. The core requests the album art with `App::fetch_card_image` and encodes it from the image cache as `src/artwork.rs` does. A picked track picks its album.
 
-### D6. Multi-select collection pills
+### D6. Single-select collection pills
 
-The canvas SPEC note sets the rules. A press on a collection pill toggles it, and an Alt-press solos it. Space and Alt+Space do the same on the focused pill. Turning off the last selected pill leaves the empty set — the show-all selection: the union of every group, the same content every pill selected produces, loaded through the same per-group fetch and cache. With two or more selected, the row shows *N selected · clear*, and clear keeps the first selected pill in pill order. The list header reads the selected names joined by ` + `, or *Name · sort name* for one. A single pill (Latest, a filter, a letter bucket) clears the set and selects alone.
+The TUI's Grouped Music pill holds one group selected at all times, so the GUI does the same and drops the canvas SPEC note's multi-select rules. A press on a collection pill selects it and deselects the rest; an Alt-press selects it the same way; Space and Enter select the focused pill. No gesture leaves the row empty, so the show-all selection is gone. The list shows the selected group's albums, and its header reads *Name · sort name*.
 
-The front end computes the new set from the press and sends it with the set-collections command. The core stores it per destination and loads the new groups (D5). Each destination keeps its set while the GUI runs, and the launch location saves it (D9).
-
-Collection pills by destination (Phase 2 uses the same rule; a pill is a collection when it narrows the list to one content set that the Service holds):
-
-| Destination | Collection pills | Single pills |
-| --- | --- | --- |
-| Music (grouped) | every group pill | none |
-| Podcasts | every show pill | Latest, the played-state filters |
-| Feeds | every subscription pill | Latest, the watched filters |
-| Emby library in feed-group mode | every feed-group pill | Latest, All |
-| Shows, Movies and other Emby libraries, Home, Audiobooks | none | every pill |
+The front end sends the pressed group id with the select-collection command. The core stores the choice per destination (`gui_library_groups` holds one group id per library) and loads the group (D5). When the stored group is absent or the library no longer holds it, the first group in pill order is the selection. The launch location saves the choice (D9); the saved file keeps its list shape, and each entry holds the one group.
 
 ### D7. The list and the letter rail
 

@@ -75,25 +75,26 @@ impl App {
             return false;
         };
         if self.gui_library_groups.contains_key(&lib_idx) {
-            // The user already selected pills in the pre-restore window: the
-            // restore applies to a destination that holds no selection, and
-            // never clobbers one the session made.
+            // The user already selected a group in the pre-restore window: the
+            // restore never clobbers a choice the session made.
             return true;
         }
-        // No saved entry for the destination is an empty saved set (design
-        // D9): the selection below is empty, so the show-all selection
-        // applies and a fresh launch opens with every group's content.
-        let saved_group_ids = state
+        // The saved group the library still holds, in saved order, is the
+        // one selected. Without one, the destination keeps the default first
+        // group (design D6), so a fresh launch opens on the first group.
+        let saved_group = state
             .collections
             .iter()
             .find(|entry| entry.destination == *destination)
-            .map_or(&[][..], |entry| entry.group_ids.as_slice());
-        let selected: Vec<String> = saved_group_ids
-            .iter()
-            .filter(|group_id| present.contains(group_id))
-            .cloned()
-            .collect();
-        self.set_gui_library_collections(lib_idx, selected);
+            .and_then(|entry| {
+                entry
+                    .group_ids
+                    .iter()
+                    .find(|group_id| present.contains(group_id))
+            });
+        if let Some(group_id) = saved_group.cloned() {
+            self.select_gui_library_collection(lib_idx, group_id);
+        }
         true
     }
 
@@ -117,19 +118,20 @@ impl App {
         }
     }
 
-    /// The selected collection sets of the catalog's destinations (design D9),
-    /// in catalog order: one entry per destination whose set the session
-    /// holds, so a destination the session never selected opens with none.
+    /// The selected collection of the catalog's destinations (design D9), in
+    /// catalog order: one entry per destination whose choice the session holds,
+    /// so a destination the session never chose opens on its first group. The
+    /// file keeps the list shape, and each entry holds the one selected group.
     fn gui_launch_collections(&self) -> Vec<GuiDestinationCollections> {
         (0..self.libs.len())
             .filter_map(|lib_idx| {
-                let group_ids = self.gui_library_groups.get(&lib_idx)?;
+                let group_id = self.gui_library_groups.get(&lib_idx)?;
                 Some(GuiDestinationCollections {
                     destination: library_identity(
                         ServiceKind::Emby,
                         &self.libs[lib_idx].library.id,
                     ),
-                    group_ids: group_ids.clone(),
+                    group_ids: vec![group_id.clone()],
                 })
             })
             .collect()
@@ -190,7 +192,10 @@ impl App {
 
     /// The active Grouped Music library's group level: the library's root in
     /// `nav_stack`, whose items are the collection groups the pills paint.
-    fn gui_music_group_level(&self, lib_idx: usize) -> Option<&BrowseLevel> {
+    pub(in crate::app::gui_library) fn gui_music_group_level(
+        &self,
+        lib_idx: usize,
+    ) -> Option<&BrowseLevel> {
         let lib = self.libs.get(lib_idx)?;
         lib.nav_stack
             .iter()

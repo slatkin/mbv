@@ -50,11 +50,11 @@ export type GuiLibraryCommand =
 			position: number;
 	  }
 	| {
-			/** Replace the selected collections of the Grouped Music library
-			 * `libIdx` with `groupIds`, in pill order. */
-			command: 'setCollections';
+			/** Select the one collection group of the Grouped Music library
+			 * `libIdx`: one group is always selected (design D6). */
+			command: 'selectCollection';
 			libIdx: number;
-			groupIds: string[];
+			groupId: string;
 	  }
 	| { command: 'showDetail'; itemId: string }
 	| { command: 'openAlbum'; albumId: string }

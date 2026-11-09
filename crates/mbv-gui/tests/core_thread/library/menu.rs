@@ -20,9 +20,9 @@ fn the_item_menu_entries_ride_the_frame_and_run_their_action() {
     send_library_frame(&mut test, GuiLibraryCommand::TakeFocus);
     send_library_frame(
         &mut test,
-        GuiLibraryCommand::SetCollections {
+        GuiLibraryCommand::SelectCollection {
             lib_idx: 0,
-            group_ids: vec!["grp-hiphop".into()],
+            group_id: "grp-hiphop".into(),
         },
     );
     let picked = send_library_frame(

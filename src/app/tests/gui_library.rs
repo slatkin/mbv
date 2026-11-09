@@ -84,12 +84,13 @@ fn app_with_music_groups(http: &MockHttp) -> App {
     app
 }
 
-/// Select `group_ids` for the stub's Music library and land the fetch
-/// completions the selection started, as a Client tick drains them.
-fn select_groups(app: &mut App, group_ids: &[&str]) {
-    app.apply_gui_library_command(GuiLibraryCommand::SetCollections {
+/// Select `group_id` for the stub's Music library (one group is always
+/// selected). The fetch it started lands through `land_one_group`, as a Client
+/// tick drains it.
+fn select_group(app: &mut App, group_id: &str) {
+    app.apply_gui_library_command(GuiLibraryCommand::SelectCollection {
         lib_idx: 0,
-        group_ids: group_ids.iter().map(|id| (*id).to_string()).collect(),
+        group_id: group_id.to_string(),
     });
 }
 
@@ -121,8 +122,7 @@ fn app_with_stored_groups(
 ) -> App {
     let http = MockHttp::new();
     let mut app = app_with_music_groups(&http);
-    app.gui_library_groups
-        .insert(0, vec![HIPHOP.to_string(), SOUL.to_string()]);
+    app.gui_library_groups.insert(0, HIPHOP.to_string());
     app.gui_music_albums
         .insert((0, HIPHOP.to_string()), GuiGroupAlbums::Loaded(hiphop));
     app.gui_music_albums
@@ -153,7 +153,7 @@ fn selecting_a_group_lands_its_albums_in_the_store_without_touching_the_nav_stac
         .map(|level| level.parent_id.clone())
         .collect();
 
-    select_groups(&mut app, &[HIPHOP]);
+    select_group(&mut app, HIPHOP);
     land_one_group(&mut app);
 
     assert_eq!(
@@ -177,13 +177,13 @@ fn reselecting_a_loaded_group_starts_no_fetch() {
     http.respond(200, ALBUMS);
     let mut app = app_with_music_groups(&http);
 
-    select_groups(&mut app, &[HIPHOP]);
+    select_group(&mut app, HIPHOP);
     land_one_group(&mut app);
-    select_groups(&mut app, &[HIPHOP, SOUL]);
+    select_group(&mut app, SOUL);
     land_one_group(&mut app);
     let requests = http.request_count();
 
-    select_groups(&mut app, &[HIPHOP]);
+    select_group(&mut app, HIPHOP);
 
     assert_eq!(http.request_count(), requests, "a loaded group: no fetch");
     assert!(
@@ -198,11 +198,11 @@ fn one_failing_group_keeps_the_other_groups_albums() {
     let http = MockHttp::new();
     http.respond(200, ALBUMS);
     let mut app = app_with_music_groups(&http);
-    select_groups(&mut app, &[HIPHOP]);
+    select_group(&mut app, HIPHOP);
     land_one_group(&mut app);
 
     http.fail(ErrorKind::ConnectionRefused);
-    select_groups(&mut app, &[HIPHOP, SOUL]);
+    select_group(&mut app, SOUL);
     land_one_group(&mut app);
 
     assert_eq!(
@@ -217,11 +217,11 @@ fn one_failing_group_keeps_the_other_groups_albums() {
     );
 }
 
-/// The projection's union: two groups that share one artist yield that artist
-/// once, in artist sort-name order, with its sort letter, and the pills paint
-/// the core's selection (add-gui-library-panel design D5).
+/// One selected group is the whole list: the other group's albums stay out, and
+/// the selected pill is the only one painted (add-gui-library-panel design D5,
+/// D6).
 #[test]
-fn two_groups_sharing_an_artist_yield_it_once_in_order_with_its_letter() {
+fn the_selected_group_alone_fills_the_list() {
     let _guard = crate::config::TestStateDirGuard::new();
     let app = app_with_stored_groups(
         vec![stored_album(
@@ -245,7 +245,7 @@ fn two_groups_sharing_an_artist_yield_it_once_in_order_with_its_letter() {
         .collect();
     assert_eq!(
         pills,
-        [("Hip-Hop", true), ("Soul", true)],
+        [("Hip-Hop", true), ("Soul", false)],
         "the pills paint the core's selection"
     );
     let artists: Vec<&str> = projection
@@ -255,15 +255,15 @@ fn two_groups_sharing_an_artist_yield_it_once_in_order_with_its_letter() {
         .collect();
     assert_eq!(
         artists,
-        ["Beastie Boys", "De La Soul"],
-        "one row per artist, in artist sort-name order"
+        ["Beastie Boys"],
+        "one row per artist of the selected group, in artist sort-name order"
     );
     let letters: Vec<char> = projection
         .artists
         .iter()
         .map(|artist| artist.sort_letter)
         .collect();
-    assert_eq!(letters, ['B', 'D'], "each artist row carries its letter");
+    assert_eq!(letters, ['B'], "each artist row carries its letter");
     let shared: Vec<&str> = projection.artists[0]
         .albums
         .iter()
@@ -271,16 +271,34 @@ fn two_groups_sharing_an_artist_yield_it_once_in_order_with_its_letter() {
         .collect();
     assert_eq!(
         shared,
-        ["Licensed to Ill", "Paul's Boutique"],
-        "both groups' albums sit under the one shared artist row"
+        ["Licensed to Ill"],
+        "the selected group's albums sit under the artist row, and no other group's"
     );
 }
 
-/// The empty selection is the show-all selection (add-gui-library-panel, the
-/// user's contract): the projection unions every group's albums, and the
-/// pills paint no selection.
+/// A stored group the library no longer holds falls back to the first group,
+/// as the TUI's persisted pill does (design D6): one group stays selected.
 #[test]
-fn an_empty_selection_unions_every_group() {
+fn a_stored_group_the_library_lost_falls_back_to_the_first_group() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = app_with_stored_groups(Vec::new(), Vec::new());
+    app.gui_library_groups.insert(0, "grp-gone".to_string());
+
+    let projection = app.gui_music_projection(0);
+
+    let selected: Vec<&str> = projection
+        .pills
+        .iter()
+        .filter(|pill| pill.selected)
+        .map(|pill| pill.group_id.as_str())
+        .collect();
+    assert_eq!(selected, [HIPHOP]);
+}
+
+/// With no stored choice, the first group in pill order is the selected one
+/// (design D6): one group is always selected.
+#[test]
+fn the_first_group_is_selected_when_no_choice_is_stored() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = app_with_stored_groups(
         vec![stored_album(
@@ -289,32 +307,19 @@ fn an_empty_selection_unions_every_group() {
             "Beastie Boys",
             1986,
         )],
-        vec![stored_album(
-            "alb-paul",
-            "Paul's Boutique",
-            "De La Soul",
-            1989,
-        )],
+        Vec::new(),
     );
-    // The selection the restore would leave on a fresh launch: empty.
-    app.gui_library_groups.insert(0, Vec::new());
+    app.gui_library_groups.remove(&0);
 
     let projection = app.gui_music_projection(0);
 
-    assert!(
-        projection.pills.iter().all(|pill| !pill.selected),
-        "the pills paint no selection"
-    );
-    let artists: Vec<&str> = projection
-        .artists
+    let selected: Vec<&str> = projection
+        .pills
         .iter()
-        .map(|artist| artist.name.as_str())
+        .filter(|pill| pill.selected)
+        .map(|pill| pill.group_id.as_str())
         .collect();
-    assert_eq!(
-        artists,
-        ["Beastie Boys", "De La Soul"],
-        "the empty selection shows every group's albums"
-    );
+    assert_eq!(selected, [HIPHOP]);
 }
 
 /// The Hero's facts for the picked album: the artist header, the album block,
@@ -323,18 +328,11 @@ fn an_empty_selection_unions_every_group() {
 fn a_picked_album_with_cached_tracks_yields_the_hero_facts_and_tracklist() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = app_with_stored_groups(
-        vec![stored_album(
-            "alb-ill",
-            "Licensed to Ill",
-            "Beastie Boys",
-            1986,
-        )],
-        vec![stored_album(
-            "alb-paul",
-            "Paul's Boutique",
-            "Beastie Boys",
-            1989,
-        )],
+        vec![
+            stored_album("alb-ill", "Licensed to Ill", "Beastie Boys", 1986),
+            stored_album("alb-paul", "Paul's Boutique", "Beastie Boys", 1989),
+        ],
+        Vec::new(),
     );
     app.album_tracks_cache.insert(
         "alb-ill".to_string(),
@@ -357,7 +355,7 @@ fn a_picked_album_with_cached_tracks_yields_the_hero_facts_and_tracklist() {
         .expect("the picked album has a Hero");
 
     assert_eq!(hero.artist, "Beastie Boys");
-    assert_eq!(hero.collections, ["Hip-Hop", "Soul"]);
+    assert_eq!(hero.collections, ["Hip-Hop"]);
     assert_eq!(hero.album_count, 2, "the artist's albums in the union");
     assert_eq!(hero.album.year, "1986");
     assert_eq!(hero.album.name, "Licensed to Ill");
@@ -398,18 +396,11 @@ fn a_picked_album_with_cached_tracks_yields_the_hero_facts_and_tracklist() {
 fn the_artist_total_waits_for_every_albums_tracklist() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = app_with_stored_groups(
-        vec![stored_album(
-            "alb-ill",
-            "Licensed to Ill",
-            "Beastie Boys",
-            1986,
-        )],
-        vec![stored_album(
-            "alb-paul",
-            "Paul's Boutique",
-            "Beastie Boys",
-            1989,
-        )],
+        vec![
+            stored_album("alb-ill", "Licensed to Ill", "Beastie Boys", 1986),
+            stored_album("alb-paul", "Paul's Boutique", "Beastie Boys", 1989),
+        ],
+        Vec::new(),
     );
     app.album_tracks_cache.insert(
         "alb-ill".to_string(),
@@ -437,21 +428,11 @@ fn the_artist_total_waits_for_every_albums_tracklist() {
 /// A group that failed to load keeps the other groups' albums and names itself
 /// in the projection's failure line (add-gui-library-panel design D5).
 #[test]
-fn a_failed_group_keeps_the_other_albums_and_shows_a_failure_line() {
+fn a_failed_selected_group_shows_a_failure_line() {
     let _guard = crate::config::TestStateDirGuard::new();
     let http = MockHttp::new();
     let mut app = app_with_music_groups(&http);
-    app.gui_library_groups
-        .insert(0, vec![HIPHOP.to_string(), SOUL.to_string()]);
-    app.gui_music_albums.insert(
-        (0, HIPHOP.to_string()),
-        GuiGroupAlbums::Loaded(vec![stored_album(
-            "alb-ill",
-            "Licensed to Ill",
-            "Beastie Boys",
-            1986,
-        )]),
-    );
+    app.gui_library_groups.insert(0, SOUL.to_string());
     app.gui_music_albums
         .insert((0, SOUL.to_string()), GuiGroupAlbums::Failed);
 
@@ -467,10 +448,9 @@ fn a_failed_group_keeps_the_other_albums_and_shows_a_failure_line() {
         .iter()
         .map(|artist| artist.name.as_str())
         .collect();
-    assert_eq!(
-        artists,
-        ["Beastie Boys"],
-        "the loaded group keeps its albums"
+    assert!(
+        artists.is_empty(),
+        "the failed selected group holds no albums"
     );
 }
 

@@ -264,9 +264,9 @@ While the Library panel has Panel focus, the window content SHALL take the Libra
 - **WHEN** the user presses a key
 - **THEN** the key resolves in the prefix namespace, and the Library does not take it
 
-### Requirement: Collection pills are multi-select
+### Requirement: Collection pills are single-select
 
-A collection pill SHALL toggle on and off by a press, and an Alt-press SHALL solo it. Space SHALL toggle the focused collection pill and Alt+Space SHALL solo it. Turning off the last selected collection pill SHALL leave the empty selection, which SHALL show every collection: the same content every pill selected produces. With two or more selected, the pill row SHALL show the selected count with a clear control. The list SHALL show the de-duplicated union of the selected collections, sorted as one list. Latest, filter, and letter-bucket pills SHALL stay single-select.
+One collection pill SHALL be selected at a time, as the TUI's Grouped Music pill is: one group is always selected. A press on a collection pill SHALL select it and deselect the others, and an Alt-press SHALL select it the same way. Space SHALL select the focused collection pill. A press SHALL NOT deselect the selected pill, so no gesture leaves the row empty. The list SHALL show the selected group's albums, sorted as one list. Latest, filter, and letter-bucket pills SHALL stay single-select.
 
 #### Scenario: Collection pills per destination
 
@@ -278,64 +278,68 @@ A collection pill SHALL toggle on and off by a press, and an Alt-press SHALL sol
 
 - **GIVEN** the Hip-Hop collection is selected
 - **WHEN** the user presses the Soul pill
-- **THEN** both pills are selected and the list shows the artists of both collections, each artist once, sorted by sort name
-- **AND** the list header reads Hip-Hop + Soul
+- **THEN** only the Soul pill is selected and the list shows the artists of Soul
+- **AND** the list header reads Soul · sort name
 
-#### Scenario: The last selected pill is turned off
+#### Scenario: The selected pill is pressed again
 
-- **GIVEN** only one collection pill is selected
-- **WHEN** the user presses that pill
-- **THEN** the pill deselects, no pill paints a selection, and the list shows the union of every collection, as all pills selected do
+- **GIVEN** the Hip-Hop collection is selected
+- **WHEN** the user presses the Hip-Hop pill
+- **THEN** Hip-Hop stays selected and the list does not change
 
-#### Scenario: A pill is soloed
+#### Scenario: An Alt-press selects the pill
 
-- **GIVEN** several collection pills are selected
-- **WHEN** the user Alt-presses a pill, or presses Alt+Space on the focused pill
-- **THEN** only that pill is selected
+- **GIVEN** the Hip-Hop collection is selected
+- **WHEN** the user Alt-presses the Soul pill
+- **THEN** only the Soul pill is selected
 
-#### Scenario: The keyboard toggles a pill
+#### Scenario: The keyboard selects a pill
 
 - **GIVEN** the pill row has focus and the Soul pill is the focused pill
 - **WHEN** the user presses Space
-- **THEN** Soul toggles as a press does, and playback does not change
-
-#### Scenario: The selection is cleared
-
-- **GIVEN** two or more collection pills are selected
-- **WHEN** the user presses the clear control
-- **THEN** only the first selected pill in pill order stays selected
+- **THEN** Soul is selected as a press selects it, and playback does not change
 
 #### Scenario: A non-collection pill is selected
 
-- **GIVEN** several collection pills are selected
+- **GIVEN** the Hip-Hop collection is selected
 - **WHEN** the user selects the Latest pill
 - **THEN** only the Latest pill is selected
 
 ### Requirement: The pill selection persists per destination
 
-Each destination SHALL keep its own pill selection while the GUI Client runs and across a restart of the GUI Client.
+Each destination SHALL keep its own selected pill while the GUI Client runs and across a restart of the GUI Client.
 
 #### Scenario: The user changes destination and returns
 
-- **GIVEN** Hip-Hop and Soul are selected in Music
+- **GIVEN** Soul is selected in Music
 - **WHEN** the user opens another destination and then Music again
-- **THEN** Hip-Hop and Soul are still selected
+- **THEN** Soul is still selected
 
 #### Scenario: The GUI starts again
 
-- **GIVEN** the GUI Client quit with Hip-Hop and Soul selected in Music
+- **GIVEN** the GUI Client quit with Soul selected in Music
 - **WHEN** the GUI Client starts again
-- **THEN** Music opens with Hip-Hop and Soul selected
+- **THEN** Music opens with Soul selected
 
 #### Scenario: A saved collection no longer exists
 
-- **GIVEN** the GUI Client quit with Hip-Hop and Soul selected, and the library no longer has Soul
+- **GIVEN** the GUI Client quit with Soul selected, and the library no longer has Soul
 - **WHEN** the GUI Client starts again
-- **THEN** Music opens with Hip-Hop selected and no other pill in Soul's place
+- **THEN** Music opens with the first group selected, as the TUI does
+
+### Requirement: The panel widths persist across launches
+
+The Queue panel's column width and the Wide list column's width that the user dragged SHALL persist across launches of the GUI Client, and a double-click SHALL reset a divider to its default and save the default. A saved width that is missing or unreadable SHALL fall back to the default.
+
+#### Scenario: A dragged divider survives a restart
+
+- **GIVEN** the user dragged the list column divider to 420 px
+- **WHEN** the GUI Client starts again
+- **THEN** the list column opens at 420 px
 
 ### Requirement: The GUI Client keeps its own launch location
 
-At orderly exit the GUI Client SHALL save its launch location: the active destination, the selected collections of each destination, and Panel focus. At start it SHALL restore that location, and an empty saved selection SHALL restore as the show-all selection. The GUI Client SHALL NOT read or write the TUI launch state, and SHALL NOT save its launch location while the window is open. While the GUI Client presents only some destinations, a saved destination that it does not present SHALL fall back to the first presented destination.
+At orderly exit the GUI Client SHALL save its launch location: the active destination, the selected collections of each destination, and Panel focus. At start it SHALL restore that location; a destination with no saved selection SHALL open on its first group. The GUI Client SHALL NOT read or write the TUI launch state, and SHALL NOT save its launch location while the window is open. While the GUI Client presents only some destinations, a saved destination that it does not present SHALL fall back to the first presented destination.
 
 #### Scenario: The GUI and the TUI exit in turn
 

@@ -55,12 +55,12 @@ test('the location joins the destination, the selected collections, and the pick
 	);
 });
 
-// An empty pill selection is the whole library: the location names it `All`,
-// as the list header names it.
-test('an empty selection names the location All', () => {
+// A library that holds no group selects none, so the location names no
+// collection and leaves the segment out.
+test('a library with no group names no collection', () => {
 	const empty = { ...music(null), collectionNames: [] };
 
-	expect(libraryLocation(TABS, 1, empty)).toContain('All');
+	expect(libraryLocation(TABS, 1, empty)).not.toContain('All');
 });
 
 // An unpicked Hero carries no item, so the location stops at the collections

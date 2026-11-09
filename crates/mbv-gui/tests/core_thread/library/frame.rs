@@ -29,7 +29,7 @@ fn the_music_frame_carries_the_playing_track_id() {
     let mut test = test_core_with(app);
     let core = test.core.app_mut();
     core.seed_gui_music_library_for_test(test_emby_client(&http));
-    core.seed_gui_library_groups_for_test(0, &["grp-hiphop"]);
+    core.seed_gui_library_groups_for_test(0, "grp-hiphop");
 
     let frame = library_of(send_library_frame(&mut test, GuiLibraryCommand::TakeFocus));
 
@@ -76,9 +76,9 @@ fn the_music_frame_carries_the_selected_collection_names() {
 
     send_library(
         &mut test,
-        GuiLibraryCommand::SetCollections {
+        GuiLibraryCommand::SelectCollection {
             lib_idx: 0,
-            group_ids: vec!["grp-hiphop".into()],
+            group_id: "grp-hiphop".into(),
         },
     );
 
@@ -99,9 +99,9 @@ fn the_library_content_rides_a_changed_revision_and_a_layout_report() {
     let (mut test, _cmd_rx) = seeded_music_core(&http);
     let first = library_of(send_library_frame(
         &mut test,
-        GuiLibraryCommand::SetCollections {
+        GuiLibraryCommand::SelectCollection {
             lib_idx: 0,
-            group_ids: vec!["grp-hiphop".into()],
+            group_id: "grp-hiphop".into(),
         },
     ));
     let revision = first.revision;
@@ -150,9 +150,9 @@ fn the_hero_art_rides_the_frame_after_the_image_lands() {
     let (mut test, _cmd_rx) = seeded_music_core(&http);
     let _selected = send_library_frame(
         &mut test,
-        GuiLibraryCommand::SetCollections {
+        GuiLibraryCommand::SelectCollection {
             lib_idx: 0,
-            group_ids: vec!["grp-hiphop".into()],
+            group_id: "grp-hiphop".into(),
         },
     );
     let picked = send_library_frame(

@@ -545,8 +545,8 @@ only pushes `CoreInput::Library` into the core channel, as the other commands
 do. `src/bridge/library.rs` translates the wire variants and
 `App::apply_gui_library_command` (`src/app/gui_library.rs`) applies each one
 through the existing `App` action, so the TUI's own paths do not change. The
-variants are `openDestination` (`position`), `setCollections` (`libIdx`,
-`groupIds`), `showDetail` (`itemId`), `openAlbum` (`albumId`), `takeFocus`,
+variants are `openDestination` (`position`), `selectCollection` (`libIdx`,
+`groupId`), `showDetail` (`itemId`), `openAlbum` (`albumId`), `takeFocus`,
 `play` (`itemId`), `playNext` (`itemId`), `addToQueue` (`itemId`),
 `shuffleArtist` (`albumIds`), `menuEntry` (`itemId`, `index`), and `rowMenu`
 (`itemId`). Item
@@ -626,8 +626,9 @@ Both columns are resizable (`ui/src/lib/bridge/resize.ts`). A drag on either
 divider (`PanelDivider.svelte`) reports the sized column's new width in
 pixels — the Queue panel's column, or the Wide arrangement's list column —
 and the window content keeps it for the session. A width survives tab and
-breakpoint changes because the store is module state, and nothing persists:
-a window-content reload returns both dividers to their defaults. The list
+breakpoint changes because the store is module state, and every drag is saved
+to the webview's local storage (`mbv.gui.panelWidths`), so the next launch
+reads the widths back; a corrupt value falls back to the defaults. The list
 column defaults to 368 px, the canvas's 320 px index 15 % wider. The Queue
 column holds between its 400 px artboard and the width that leaves the
 Library column its 480 px Mini threshold, and the list column holds between
@@ -666,14 +667,14 @@ Panel focus over the Library focus the open takes, unless the user already
 took focus while the restore was pending. A start with no saved location — or
 one that fails to load — restores through the same path
 (`mbv_config::first_launch`): the first presented destination, Library Panel
-focus, and no saved collection sets, whose empty set is the show-all
-selection, so the Library panel is reachable from the first launch. The
+focus, and no saved collection choice, so the destination opens on its first
+group and the Library panel is reachable from the first launch. The
 second phase applies the saved
-collection sets once the destination's group list lands: a saved group the
-library no longer holds drops, and an empty result — a saved set the library
-emptied, or no saved entry — is the show-all selection. The restore applies
-to a destination that holds no selection and never clobbers one the session
-already made. A mid-restore tab switch abandons the saved sets rather than landing
+collection choice once the destination's group list lands: the first saved
+group the library still holds is selected, and a saved group the library
+no longer held, or no saved entry, leaves the first group selected. The
+restore applies to a destination that holds no choice and never clobbers one
+the session already made. A mid-restore tab switch abandons the saved sets rather than landing
 them under another destination. The restore is idempotent, so the catalog and
 library drains call it whenever their content can complete a phase.
 

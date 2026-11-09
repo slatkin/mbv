@@ -40,12 +40,9 @@ pub enum GuiLibraryCommand {
     /// frame's tabs carry can name only a painted tab, and a stale frame must
     /// not activate a destination the top bar does not carry.
     OpenDestination { position: usize },
-    /// Replace the selected collections of the Grouped Music library
-    /// `lib_idx` with `group_ids`, in pill order (design D5, D6).
-    SetCollections {
-        lib_idx: usize,
-        group_ids: Vec<String>,
-    },
+    /// Select the one collection group of the Grouped Music library `lib_idx`
+    /// (design D5, D6): one group is always selected, as in the TUI.
+    SelectCollection { lib_idx: usize, group_id: String },
     /// Show the item's detail in the Hero (design D2).
     ShowDetail { item_id: String },
     /// Open an album node: load its tracks when the cache does not hold them
@@ -122,8 +119,8 @@ impl App {
                     );
                 }
             }
-            GuiLibraryCommand::SetCollections { lib_idx, group_ids } => {
-                self.set_gui_library_collections(lib_idx, group_ids);
+            GuiLibraryCommand::SelectCollection { lib_idx, group_id } => {
+                self.select_gui_library_collection(lib_idx, group_id);
             }
             GuiLibraryCommand::ShowDetail { item_id } => self.show_gui_library_detail(&item_id),
             GuiLibraryCommand::OpenAlbum { album_id } => self.open_gui_library_album(album_id),

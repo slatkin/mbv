@@ -8,27 +8,26 @@ use mbv_net::mock_http::MockHttp;
 
 use super::{ALBUMS, TRACKS, music_core, send_library};
 
-/// The set-collections command stores the destination's selection in pill
-/// order (design D5, D6): the core keeps it, so the frame's pills paint the
-/// core's set.
+/// The select-collection command stores the destination's one selected group
+/// (design D5, D6): the core keeps it, so the frame's pills paint the core's
+/// choice.
 #[test]
-fn the_set_collections_command_stores_the_selected_groups() {
+fn the_select_collection_command_stores_the_selected_group() {
     let http = MockHttp::new();
-    http.respond(200, ALBUMS);
     http.respond(200, ALBUMS);
     let (mut test, _cmd_rx) = music_core(&http);
 
     send_library(
         &mut test,
-        GuiLibraryCommand::SetCollections {
+        GuiLibraryCommand::SelectCollection {
             lib_idx: 0,
-            group_ids: vec!["grp-hiphop".into(), "grp-soul".into()],
+            group_id: "grp-soul".into(),
         },
     );
 
     assert_eq!(
         test.core.app_mut().gui_library_groups_for_test(0),
-        ["grp-hiphop", "grp-soul"]
+        Some("grp-soul")
     );
 }
 

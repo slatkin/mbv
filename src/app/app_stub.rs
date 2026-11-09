@@ -590,10 +590,8 @@ impl App {
     /// The Grouped Music library's selected group ids in pill order
     /// (add-gui-library-panel design D5).
     #[must_use]
-    pub fn gui_library_groups_for_test(&self, lib_idx: usize) -> &[String] {
-        self.gui_library_groups
-            .get(&lib_idx)
-            .map_or(&[], Vec::as_slice)
+    pub fn gui_library_groups_for_test(&self, lib_idx: usize) -> Option<&str> {
+        self.gui_library_groups.get(&lib_idx).map(String::as_str)
     }
 
     /// Seed the GUI Music selection with `group_ids` for `lib_idx`, as a
@@ -602,11 +600,9 @@ impl App {
     /// restore's own application skips it and the test's mock answers serve
     /// the test's commands alone.
     #[cfg(feature = "test")]
-    pub fn seed_gui_library_groups_for_test(&mut self, lib_idx: usize, group_ids: &[&str]) {
-        self.gui_library_groups.insert(
-            lib_idx,
-            group_ids.iter().map(|id| (*id).to_string()).collect(),
-        );
+    pub fn seed_gui_library_groups_for_test(&mut self, lib_idx: usize, group_id: &str) {
+        self.gui_library_groups
+            .insert(lib_idx, group_id.to_string());
     }
 
     /// The album ids the GUI Music store loaded for `group_id`; `None` while

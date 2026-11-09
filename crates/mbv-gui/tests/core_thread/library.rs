@@ -49,7 +49,7 @@ fn music_core(http: &MockHttp) -> (TestCore, Receiver<CtrlCmd>) {
     // The selection the restore would otherwise apply: a pinned set makes the
     // restore's own application skip this destination, so the mock answers
     // serve the test's commands alone.
-    core.seed_gui_library_groups_for_test(0, &["grp-hiphop"]);
+    core.seed_gui_library_groups_for_test(0, "grp-hiphop");
     (test, cmd_rx)
 }
 
@@ -100,7 +100,7 @@ fn seeded_music_core(http: &MockHttp) -> (TestCore, Receiver<CtrlCmd>) {
     let mut test = test_core_with(app);
     let core = test.core.app_mut();
     core.seed_gui_music_library_for_test(test_emby_client(http));
-    core.seed_gui_library_groups_for_test(0, &["grp-hiphop"]);
+    core.seed_gui_library_groups_for_test(0, "grp-hiphop");
     core.seed_gui_music_albums_for_test(0, "grp-hiphop", &[("alb-ill", "Licensed to Ill")]);
     (test, cmd_rx)
 }

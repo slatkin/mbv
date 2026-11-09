@@ -14,13 +14,12 @@ function destinationLabel(
 	return tabs.find((tab) => tab.position === currentTab)?.label ?? null;
 }
 
-/** The selected collection names in pill order (design D6): the names the core
- * derived once and carried on the Music frame, so the line and the list header
- * cannot disagree. An empty selection is the whole library, so the line names
- * it `All`, as the list header names it. */
+/** The selected collection name (design D6): the name the core derived once
+ * and carried on the Music frame, so the line and the list header cannot
+ * disagree. One group is always selected, so the line names one collection; a
+ * library that holds no group names none. */
 function selectedCollections(music: GuiMusicFrame | null): string[] {
-	const names = music?.collectionNames ?? [];
-	return names.length > 0 ? names : ['All'];
+	return music?.collectionNames ?? [];
 }
 
 /** The picked item's name (design D5, D10): the Hero's artist, or the album's

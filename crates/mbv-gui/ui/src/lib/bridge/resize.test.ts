@@ -12,9 +12,11 @@ import {
 	DIVIDER_WIDTH_PX,
 	LIBRARY_LIST_DEFAULT_WIDTH_PX,
 	LIBRARY_LIST_MIN_WIDTH_PX,
+	PANEL_WIDTHS_STORAGE_KEY,
 	dragListWidth,
 	dragQueueWidth,
 	draggedWidths,
+	loadDraggedWidths,
 	panelWidths,
 	resetListWidth,
 	resetQueueWidth,
@@ -100,4 +102,25 @@ test('a double-click returns each divider to its default', () => {
 	const widths = panelWidths(container, expanded, get(draggedWidths));
 	expect(widths.queue).toBe(400);
 	expect(widths.list).toBe(LIBRARY_LIST_DEFAULT_WIDTH_PX);
+});
+
+// The sticky widths (design D4): a drag is saved, a relaunch reads it back, and
+// a corrupt saved value falls back to the defaults.
+test('a dragged width is saved and read back on the next start', () => {
+	localStorage.clear();
+
+	dragListWidth(420, 1400);
+
+	expect(JSON.parse(localStorage.getItem(PANEL_WIDTHS_STORAGE_KEY) ?? 'null')).toEqual({
+		queue: null,
+		list: 420,
+	});
+	expect(loadDraggedWidths()).toEqual({ queue: null, list: 420 });
+	resetListWidth();
+});
+
+test('a corrupt saved value loads the defaults', () => {
+	const corrupt = { getItem: () => '{not json', setItem: () => {} } as unknown as Storage;
+
+	expect(loadDraggedWidths(corrupt)).toEqual(DEFAULT_DRAGGED_WIDTHS);
 });

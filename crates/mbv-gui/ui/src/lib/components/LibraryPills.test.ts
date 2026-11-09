@@ -1,10 +1,8 @@
 // add-gui-library-panel row 4.4: the pill row paints the core's carried
-// selection and sends the set a gesture leaves (design D6). The pointer
-// gestures and the keys' Space and Alt+Space intent send the same
-// set-collections command; the row marks the pill the keys' focus holds. The
-// Tauri IPC is mocked; the asserted payloads are the serde wire shape of
-// bridge/library.rs. The gesture table of the rules lives in
-// `$lib/library/pills.test.ts`.
+// selection and sends the select-collection command a press or a key leaves
+// (design D6). One group is always selected, so a press selects its pill and
+// the Space key does the same on the focused pill. The Tauri IPC is mocked;
+// the asserted payloads are the serde wire shape of bridge/library.rs.
 
 import { invoke } from '@tauri-apps/api/core';
 import { fireEvent, render } from '@testing-library/svelte';
@@ -15,7 +13,7 @@ import {
 	focusLibraryPill,
 	initialLibraryUi,
 	libraryUi,
-	requestLibraryPillToggle,
+	requestLibraryPillSelect,
 } from '$lib/library/state';
 import LibraryPills from './LibraryPills.svelte';
 
@@ -31,18 +29,17 @@ beforeEach(() => {
 	libraryUi.set(initialLibraryUi());
 });
 
-/** The carried Music content: Hip-Hop and Jazz selected, Soul and the
- * single-select Latest pill clear, in a Grouped Music library. */
+/** The carried Music content: Hip-Hop selected, Jazz and Soul clear, in a
+ * Grouped Music library. */
 function music(): GuiMusicFrame {
 	return {
 		libIdx: 2,
 		pills: [
 			{ groupId: 'g1', name: 'Hip-Hop', selected: true, collection: true },
-			{ groupId: 'g2', name: 'Jazz', selected: true, collection: true },
+			{ groupId: 'g2', name: 'Jazz', selected: false, collection: true },
 			{ groupId: 'g3', name: 'Soul', selected: false, collection: true },
-			{ groupId: 'latest', name: 'Latest', selected: false, collection: false },
 		],
-		collectionNames: ['Hip-Hop', 'Jazz'],
+		collectionNames: ['Hip-Hop'],
 		loading: false,
 		failure: null,
 		artists: [],
@@ -58,79 +55,39 @@ function pill(container: HTMLElement, groupId: string): HTMLElement {
 	return container.querySelector(`[data-library-pill="${groupId}"]`) as HTMLElement;
 }
 
-/** The clear control's button. */
-function clearControl(container: HTMLElement): HTMLElement {
-	return container.querySelector('[data-library-pill-clear]') as HTMLElement;
-}
-
-test('paints aria-pressed and the check on the selected pills', () => {
+test('paints aria-pressed and the check on the one selected pill', () => {
 	const { container } = render(LibraryPills, { music: music() });
 
 	expect(pill(container, 'g1').getAttribute('aria-pressed')).toBe('true');
 	expect(pill(container, 'g1').querySelector('svg')).toBeTruthy();
-	expect(pill(container, 'g3').getAttribute('aria-pressed')).toBe('false');
-	expect(pill(container, 'g3').querySelector('svg')).toBeNull();
+	expect(pill(container, 'g2').getAttribute('aria-pressed')).toBe('false');
+	expect(pill(container, 'g2').querySelector('svg')).toBeNull();
 });
 
-test('shows the selected count with the clear control for two or more', () => {
+test('paints no selected count or clear control', () => {
 	const { container } = render(LibraryPills, { music: music() });
 
-	expect(clearControl(container).textContent?.trim()).toBe('2 selected · clear');
+	expect(container.querySelector('[data-library-pill-clear]')).toBeNull();
 });
 
-test('a press toggles the pressed pill', () => {
+test('a press selects the pressed pill', () => {
 	const { container } = render(LibraryPills, { music: music() });
 
 	fireEvent.click(pill(container, 'g3'));
 
 	expect(invokeMock).toHaveBeenCalledWith('library', {
-		command: {
-			command: 'setCollections',
-			libIdx: 2,
-			groupIds: ['g1', 'g2', 'g3'],
-		},
+		command: { command: 'selectCollection', libIdx: 2, groupId: 'g3' },
 	});
 });
 
-test('an Alt-press solos the pressed pill', () => {
-	const { container } = render(LibraryPills, { music: music() });
-
-	fireEvent.click(pill(container, 'g3'), { altKey: true });
-
-	expect(invokeMock).toHaveBeenCalledWith('library', {
-		command: { command: 'setCollections', libIdx: 2, groupIds: ['g3'] },
-	});
-});
-
-test('the clear control keeps the first selected pill in pill order', () => {
-	const { container } = render(LibraryPills, { music: music() });
-
-	fireEvent.click(clearControl(container));
-
-	expect(invokeMock).toHaveBeenCalledWith('library', {
-		command: { command: 'setCollections', libIdx: 2, groupIds: ['g1'] },
-	});
-});
-
-test.each([
-	{
-		case: 'Space toggles the focused pill',
-		solo: false,
-		groupIds: ['g1', 'g2', 'g3'],
-	},
-	{
-		case: 'Alt+Space solos the focused pill',
-		solo: true,
-		groupIds: ['g3'],
-	},
-])('$case', async ({ solo, groupIds }) => {
+test('Space selects the focused pill', async () => {
 	render(LibraryPills, { music: music() });
 
-	requestLibraryPillToggle('g3', solo);
+	requestLibraryPillSelect('g2');
 	await tick();
 
 	expect(invokeMock).toHaveBeenCalledWith('library', {
-		command: { command: 'setCollections', libIdx: 2, groupIds },
+		command: { command: 'selectCollection', libIdx: 2, groupId: 'g2' },
 	});
 });
 

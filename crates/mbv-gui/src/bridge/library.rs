@@ -21,12 +21,8 @@ pub enum GuiLibraryCommand {
     /// Open the destination at `position`: the tab position the frame's
     /// destination tabs carry, where 0 is Home.
     OpenDestination { position: usize },
-    /// Replace the selected collections of the Grouped Music library
-    /// `libIdx` with `groupIds`, in pill order.
-    SetCollections {
-        lib_idx: usize,
-        group_ids: Vec<String>,
-    },
+    /// Select the one collection group of the Grouped Music library `libIdx`.
+    SelectCollection { lib_idx: usize, group_id: String },
     /// Show the item's detail in the Hero.
     ShowDetail { item_id: String },
     /// Open the album node: load its tracks when the cache does not hold
@@ -55,8 +51,8 @@ impl From<GuiLibraryCommand> for mbv::GuiLibraryCommand {
     fn from(command: GuiLibraryCommand) -> Self {
         match command {
             GuiLibraryCommand::OpenDestination { position } => Self::OpenDestination { position },
-            GuiLibraryCommand::SetCollections { lib_idx, group_ids } => {
-                Self::SetCollections { lib_idx, group_ids }
+            GuiLibraryCommand::SelectCollection { lib_idx, group_id } => {
+                Self::SelectCollection { lib_idx, group_id }
             }
             GuiLibraryCommand::ShowDetail { item_id } => Self::ShowDetail { item_id },
             GuiLibraryCommand::OpenAlbum { album_id } => Self::OpenAlbum { album_id },

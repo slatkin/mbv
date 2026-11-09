@@ -109,14 +109,13 @@ fn the_window_close_saves_the_launch_location_once() {
     let _guard = TestStateDirGuard::new();
     let http = MockHttp::new();
     http.respond(200, NO_ALBUMS);
-    http.respond(200, NO_ALBUMS);
     let mut test = music_core(&http);
 
     send_library(
         &mut test,
-        GuiLibraryCommand::SetCollections {
+        GuiLibraryCommand::SelectCollection {
             lib_idx: 0,
-            group_ids: vec!["grp-hiphop".into(), "grp-soul".into()],
+            group_id: "grp-soul".into(),
         },
     );
     send_library(&mut test, GuiLibraryCommand::TakeFocus);
@@ -135,7 +134,7 @@ fn the_window_close_saves_the_launch_location_once() {
         state.collections,
         vec![GuiDestinationCollections {
             destination: library_identity(MUSIC_LIBRARY.0),
-            group_ids: vec!["grp-hiphop".into(), "grp-soul".into()],
+            group_ids: vec!["grp-soul".into()],
         }]
     );
 }
@@ -165,15 +164,14 @@ fn a_restored_location_drops_a_group_the_library_no_longer_has() {
     );
     assert_eq!(
         test.core.app_mut().gui_library_groups_for_test(0),
-        ["grp-hiphop"]
+        Some("grp-hiphop")
     );
 }
 
-/// When every saved group is gone, the show-all selection applies: the
-/// restored set is empty, and an empty selection is the union of every group
-/// (add-gui-library-panel, the user's contract).
+/// When every saved group is gone, no choice is restored: the destination opens
+/// on its first group (design D6).
 #[test]
-fn a_restored_location_whose_groups_are_all_gone_shows_every_group() {
+fn a_restored_location_whose_groups_are_all_gone_selects_the_first_group() {
     let _guard = TestStateDirGuard::new();
     save_gui_launch_state(&GuiLaunchState {
         version: GUI_LAUNCH_STATE_VERSION,
@@ -188,22 +186,17 @@ fn a_restored_location_whose_groups_are_all_gone_shows_every_group() {
 
     let mut test = core_with_seeded_catalog(seed_music);
 
-    assert!(
-        test.core
-            .app_mut()
-            .gui_library_groups_for_test(0)
-            .is_empty(),
-        "a saved set the library emptied restores as the show-all selection"
+    assert_eq!(
+        test.core.app_mut().gui_library_groups_for_test(0),
+        None,
+        "a saved group the library lost leaves the default first group selected"
     );
 }
 
 /// A start with no saved location opens the first presented destination with
-/// Library Panel focus, and the restore applies the show-all selection: an
-/// empty set is the union of every group (add-gui-library-panel, the user's
-/// contract, which supersedes the first-group rule design D9 once carried).
-/// Regression for the live finding that a fresh launch left the Library
-/// panel unreachable: the restore now always lands a selection, empty or
-/// saved.
+/// Library Panel focus. No choice is saved, so the destination shows its first
+/// group, which one group always selects (design D6). Regression for the live
+/// finding that a fresh launch left the Library panel unreachable.
 #[test]
 fn a_fresh_launch_opens_the_first_presented_destination() {
     let _guard = TestStateDirGuard::new();
@@ -213,9 +206,10 @@ fn a_fresh_launch_opens_the_first_presented_destination() {
     let app = test.core.app_mut();
     assert_eq!(app.tab_for_test(), TabSelection::EmbyLibrary(0));
     assert_eq!(app.gui_panel_focus(), PanelFocus::Library);
-    assert!(
-        app.gui_library_groups_for_test(0).is_empty(),
-        "a fresh launch restores the show-all selection"
+    assert_eq!(
+        app.gui_library_groups_for_test(0),
+        None,
+        "a fresh launch opens on the first group"
     );
 }
 
@@ -289,18 +283,14 @@ fn a_mid_restore_destination_switch_applies_no_saved_pills() {
     );
     assert!(test.core.step());
 
-    assert!(
-        test.core
-            .app_mut()
-            .gui_library_groups_for_test(0)
-            .is_empty(),
+    assert_eq!(
+        test.core.app_mut().gui_library_groups_for_test(0),
+        None,
         "the switched-to destination keeps no saved pills"
     );
-    assert!(
-        test.core
-            .app_mut()
-            .gui_library_groups_for_test(1)
-            .is_empty(),
+    assert_eq!(
+        test.core.app_mut().gui_library_groups_for_test(1),
+        None,
         "the opened destination's saved set is not applied after the switch"
     );
 }
@@ -347,7 +337,7 @@ fn a_pre_catalog_take_focus_survives_the_restore() {
     // landed in.
     assert_eq!(
         test.core.app_mut().gui_library_groups_for_test(0),
-        ["grp-hiphop"]
+        Some("grp-hiphop")
     );
     test.tx.send(CoreInput::Wake).unwrap();
     assert!(test.core.step());

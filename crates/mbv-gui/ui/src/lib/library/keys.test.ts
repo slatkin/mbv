@@ -241,7 +241,7 @@ test('Space on a focused pill asks for its toggle and sends no key', () => {
 
 	press(' ');
 
-	expect(get(libraryUi).pillToggle).toEqual({ groupId: 'g2', solo: false });
+	expect(get(libraryUi).pillSelect).toEqual({ groupId: 'g2' });
 	expect(invokeMock).not.toHaveBeenCalled();
 });
 
@@ -250,7 +250,7 @@ test('Space with no focused pill is sent to the core', () => {
 
 	press(' ');
 
-	expect(get(libraryUi).pillToggle).toBeNull();
+	expect(get(libraryUi).pillSelect).toBeNull();
 	expect(invokeMock).toHaveBeenCalledWith('key', {
 		event: expect.objectContaining({ key: ' ' }),
 	});
@@ -271,7 +271,7 @@ test('Enter on a focused pill asks for its toggle and sends no key', () => {
 
 	press('Enter');
 
-	expect(get(libraryUi).pillToggle).toEqual({ groupId: 'g2', solo: false });
+	expect(get(libraryUi).pillSelect).toEqual({ groupId: 'g2' });
 	expect(invokeMock).not.toHaveBeenCalled();
 });
 

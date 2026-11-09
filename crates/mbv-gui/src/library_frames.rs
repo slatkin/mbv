@@ -105,6 +105,7 @@ fn content(app: &mut App) -> GuiLibraryContent {
 /// the Hero's artwork projected beside them, the picked item's menu, and the
 /// playing track's id.
 fn music_frame(app: &mut App, lib_idx: usize) -> GuiMusicFrame {
+    app.ensure_gui_music_selection(lib_idx);
     let projection = app.gui_music_projection(lib_idx);
     let picked = projection
         .hero

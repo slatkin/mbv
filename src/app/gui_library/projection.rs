@@ -192,41 +192,40 @@ impl App {
         else {
             return Vec::new();
         };
-        let selected = self
-            .gui_library_groups
-            .get(&lib_idx)
-            .map_or(&[][..], Vec::as_slice);
+        let selected = self.gui_selected_group(lib_idx);
         group_level
             .items
             .iter()
             .map(|group| GuiMusicPill {
                 group_id: group.id.clone(),
                 name: group.name.clone(),
-                selected: selected.contains(&group.id),
+                selected: selected.as_deref() == Some(group.id.as_str()),
             })
             .collect()
     }
 
-    /// The union of the selected groups' albums (design D5): each selected
-    /// group's whole album list in pill order, de-duplicated by album id, with
-    /// the `(artist, year, name)` facts and stable `ArtistKey` that
-    /// `mbv_render::group_album_plan` derives from `album_artist_cache`. A
-    /// group that failed keeps the others' albums and names itself in the
-    /// failure line. An empty selection is the show-all selection: every
-    /// group's albums, as the same union.
+    /// The group the Music destination shows (design D6): the stored choice
+    /// while the library still holds it, else the first group in pill order.
+    /// One group is always selected, as in the TUI. `None` while the group
+    /// list has not landed or the library holds no group.
+    #[must_use]
+    pub(in crate::app::gui_library) fn gui_selected_group(&self, lib_idx: usize) -> Option<String> {
+        let groups = &self.gui_music_group_level(lib_idx)?.items;
+        match self.gui_library_groups.get(&lib_idx) {
+            Some(stored) if groups.iter().any(|group| group.id == *stored) => Some(stored.clone()),
+            _ => groups.first().map(|group| group.id.clone()),
+        }
+    }
+
+    /// The albums of the selected group (design D5): its whole album list,
+    /// with the `(artist, year, name)` facts and stable `ArtistKey` that
+    /// `mbv_render::group_album_plan` derives from `album_artist_cache`. One
+    /// group is always selected (design D6), so the union is that one list; a
+    /// failed fetch names the group in the failure line.
     fn gui_music_union(&self, lib_idx: usize, pills: &[GuiMusicPill]) -> GuiMusicUnion<'_> {
         let mut union = GuiMusicUnion::default();
         let mut seen: HashSet<&str> = HashSet::new();
-        let selected: Vec<&GuiMusicPill> = pills.iter().filter(|pill| pill.selected).collect();
-        // The empty selection shows every group (the user's contract), so the
-        // union walks the whole pill row and the loading and failure facts of
-        // each group's fetch apply as they do for a selected one.
-        let chosen: Vec<&GuiMusicPill> = if selected.is_empty() {
-            pills.iter().collect()
-        } else {
-            selected
-        };
-        for pill in chosen {
+        for pill in pills.iter().filter(|pill| pill.selected) {
             let Some(state) = self.gui_music_albums.get(&(lib_idx, pill.group_id.clone())) else {
                 union.loading = true;
                 continue;

@@ -30,7 +30,7 @@ import {
 	moveLibraryPane,
 	moveLibraryTrackCursor,
 	openLibraryFilter,
-	requestLibraryPillToggle,
+	requestLibraryPillSelect,
 	setLibraryCursorOpen,
 } from './state';
 import type { LibraryUiState } from './state';
@@ -250,7 +250,7 @@ function routePanelKey(event: KeyboardEvent, ui: LibraryUiState): KeyOutcome {
 		openLibraryFilter();
 		return 'handled';
 	}
-	// Space toggles the focused pill and Alt+Space solos it (design D6). With
+	// Space selects the focused pill (design D6). With
 	// no pill focused, it is the core's: Space plays and pauses (design D3,
 	// step 5).
 	if (event.key === ' ' && !event.ctrlKey && !event.metaKey) {
@@ -258,7 +258,7 @@ function routePanelKey(event: KeyboardEvent, ui: LibraryUiState): KeyOutcome {
 		if (pill === null) {
 			return 'core';
 		}
-		requestLibraryPillToggle(pill.groupId, event.altKey);
+		requestLibraryPillSelect(pill.groupId);
 		return 'handled';
 	}
 	if (ui.pane === 'pills' && bare(event)) {
@@ -274,7 +274,7 @@ function routePanelKey(event: KeyboardEvent, ui: LibraryUiState): KeyOutcome {
 		if (event.key === 'Enter') {
 			const pill = focusedLibraryPill(pills(), ui);
 			if (pill !== null) {
-				requestLibraryPillToggle(pill.groupId, false);
+				requestLibraryPillSelect(pill.groupId);
 				return 'handled';
 			}
 		}

@@ -26,8 +26,6 @@ import {
 	scrollTopToShowCursor,
 } from './list';
 import type { LibraryNodeRow, LibraryRow, LibraryTree, ListMove } from './list';
-import { nextPillSelection } from './pills';
-import type { PillGesture } from './pills';
 
 /** The panes Tab moves focus across (design D3, step 3). The Queue panel is
  * the pane past the Hero, but it takes Panel focus through the core's focus
@@ -50,10 +48,10 @@ export interface LibraryUiState {
 	/** The pill Left and Right move the focus to, or `null` while no pill has
 	 * it (design D6). */
 	focusedPill: string | null;
-	/** The pill toggle the keys asked for: Space toggles and Alt+Space solos
+	/** The pill selection the keys asked for: Space and Enter select the
 	 * the focused pill (design D6). The pill row turns it into the
-	 * set-collections command. */
-	pillToggle: { groupId: string; solo: boolean } | null;
+	 * select-collection command. */
+	pillSelect: { groupId: string } | null;
 	/** The list's cursor row id, or `null` while no row carries the cursor
 	 * (design D7). The cursor and the picked item are different: the cursor
 	 * moves by keys, and the picked album is the core's. */
@@ -99,7 +97,7 @@ export function initialLibraryUi(): LibraryUiState {
 		filterOpen: false,
 		filter: '',
 		focusedPill: null,
-		pillToggle: null,
+		pillSelect: null,
 		cursor: null,
 		openNodes: [],
 		filterClosed: [],
@@ -182,43 +180,30 @@ export function focusLibraryPill(groupId: string | null): void {
 	libraryUi.update((ui) => ({ ...ui, focusedPill: groupId }));
 }
 
-/** Ask for the focused pill to toggle, or to solo with Alt+Space (design D6). */
-export function requestLibraryPillToggle(groupId: string, solo: boolean): void {
-	libraryUi.update((ui) => ({ ...ui, pillToggle: { groupId, solo } }));
+/** Ask for the focused pill to be selected: Space and Enter request it (design
+ * D6). */
+export function requestLibraryPillSelect(groupId: string): void {
+	libraryUi.update((ui) => ({ ...ui, pillSelect: { groupId } }));
 }
 
-/** Send the set a pill gesture leaves selected (design D6): the core stores it
- * per destination and loads the new groups. The set reads the core's carried
- * selection, so the pills and the command cannot disagree. */
-export function selectLibraryPills(
-	libIdx: number,
-	pills: readonly GuiMusicPill[],
-	gesture: PillGesture,
-): void {
-	void sendLibraryCommand({
-		command: 'setCollections',
-		libIdx,
-		groupIds: nextPillSelection(pills, gesture),
-	});
+/** Select the collection pill `groupId` of the Grouped Music library `libIdx`
+ * (design D6): one group is always selected, as in the TUI. The core stores the
+ * choice per destination and loads the group, and the pills paint the core's
+ * choice back, so the row and the list cannot disagree. */
+export function selectLibraryPill(libIdx: number, groupId: string): void {
+	void sendLibraryCommand({ command: 'selectCollection', libIdx, groupId });
 }
 
-/** Turn the keys' pill toggle into the set-collections command a press on the
- * pill sends (design D6): Space toggles the focused pill and Alt+Space solos
- * it. The intent is consumed here, so one key sends one command. */
-export function applyLibraryPillToggle(
-	libIdx: number,
-	pills: readonly GuiMusicPill[],
-): void {
-	const { pillToggle } = get(libraryUi);
-	if (pillToggle === null) {
+/** Turn the keys' pill request into the select-collection command the pill
+ * sends (design D6). The intent is consumed here, so one key sends one
+ * command. */
+export function applyLibraryPillSelect(libIdx: number): void {
+	const { pillSelect } = get(libraryUi);
+	if (pillSelect === null) {
 		return;
 	}
-	libraryUi.update((ui) => ({ ...ui, pillToggle: null }));
-	selectLibraryPills(libIdx, pills, {
-		kind: 'press',
-		groupId: pillToggle.groupId,
-		solo: pillToggle.solo,
-	});
+	libraryUi.update((ui) => ({ ...ui, pillSelect: null }));
+	selectLibraryPill(libIdx, pillSelect.groupId);
 }
 
 /** The carried Music content, or `null` while the active destination carries
