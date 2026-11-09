@@ -199,13 +199,19 @@ test('the tracklist paints the cursor on its first track before any key moves it
 	).toBe(false);
 });
 
-// The user's double-click contract (add-gui-library-panel): a double-click on
-// a tracklist row plays that track, through the same play helper the list's
-// track rows use.
-test('a double-click on a tracklist row sends that track play', async () => {
+// A tracklist row plays from its play button, which replaces the track number
+// on hover (add-gui-library-panel). A double-click on the row does not play.
+test('the play button on a tracklist row sends that track play', async () => {
 	const container = mountHero();
 
 	await fireEvent.dblClick(container.querySelector('[data-library-track="t2"]') as HTMLElement);
+	expect(invokeMock).not.toHaveBeenCalledWith('library', {
+		command: { command: 'play', itemId: 't2' },
+	});
+
+	await fireEvent.click(
+		container.querySelector('[data-library-track="t2"] [data-library-track-action="play"]') as HTMLElement,
+	);
 
 	expect(invokeMock).toHaveBeenCalledWith('library', {
 		command: { command: 'play', itemId: 't2' },

@@ -26,9 +26,6 @@ export const LIBRARY_LIST_DEFAULT_WIDTH_PX = 368;
 /** The list column's narrowest: the canvas's 320 px index. */
 export const LIBRARY_LIST_MIN_WIDTH_PX = 320;
 
-/** The list column's widest: twice the canvas's index. */
-export const LIBRARY_LIST_MAX_WIDTH_PX = 640;
-
 /** The narrowest the Hero pane keeps beside the list, so neither pane squeezes
  * the other away: the list column's own minimum. */
 export const HERO_MIN_WIDTH_PX = LIBRARY_LIST_MIN_WIDTH_PX;
@@ -105,17 +102,14 @@ export function clampQueueWidth(width: number, containerWidth: number): number {
 }
 
 /**
- * A list column width held between the canvas index and the widest, and short
- * enough to leave the Hero pane its minimum. A Library column too narrow for
- * both panes gives the list its minimum.
+ * A list column width held between the canvas index and the room the Hero pane
+ * leaves beside it at its minimum. A Library column too narrow for both panes
+ * gives the list its minimum.
  */
 export function clampListWidth(width: number, libraryColumn: number): number {
 	const max = Math.max(
 		LIBRARY_LIST_MIN_WIDTH_PX,
-		Math.min(
-			LIBRARY_LIST_MAX_WIDTH_PX,
-			Math.round(libraryColumn) - HERO_MIN_WIDTH_PX - DIVIDER_WIDTH_PX,
-		),
+		Math.round(libraryColumn) - HERO_MIN_WIDTH_PX - DIVIDER_WIDTH_PX,
 	);
 	return Math.min(Math.max(Math.round(width), LIBRARY_LIST_MIN_WIDTH_PX), max);
 }

@@ -56,12 +56,13 @@ test('the Queue column stays between its canvas width and the Library Mini thres
 	expect(panelWidths(container, expanded, get(draggedWidths)).queue).toBe(500);
 });
 
-test('the list column stays between the canvas index and the widest, leaving the Hero its minimum', () => {
+test('the list column stays between the canvas index and the room the Hero leaves its minimum', () => {
 	dragListWidth(100, 1200);
 	expect(get(draggedWidths).list).toBe(LIBRARY_LIST_MIN_WIDTH_PX);
 
+	// 1200 px less the Hero's 320 px minimum and the 6 px divider.
 	dragListWidth(900, 1200);
-	expect(get(draggedWidths).list).toBe(640);
+	expect(get(draggedWidths).list).toBe(874);
 
 	dragListWidth(500, 1200);
 	expect(panelWidths(container, expanded, get(draggedWidths)).list).toBe(500);

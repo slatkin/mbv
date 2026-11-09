@@ -10,10 +10,9 @@
   paint, so it takes no state: the canvas shows the controls, the play glyph,
   and the raised fill on the row the pointer is over.
 
-  A double-click on a row plays the track (the user's contract): the queue is
-  replaced, and under autoload the album plays from that track onward. It goes
-  through the same play helper the list's track rows use, so one gesture cannot
-  drift from the other. The row of the track playing at the playhead paints
+  A track plays from its row's play button, which replaces the track number on
+  hover and glows under the pointer: the queue is replaced, and under autoload
+  the album plays from that track onward. A double-click does not play. The row of the track playing at the playhead paints
   the playing state — the canvas's green with dark ink, as the Queue's active
   row paints — over the cursor's fill, from the frame's playing id.
 -->
@@ -109,7 +108,6 @@
 			data-library-track-cursor={track.trackId === cursor ? '' : undefined}
 			data-library-track-playing={isPlaying(track) ? '' : undefined}
 			oncontextmenu={(event) => rowMenu(event, track)}
-			ondblclick={() => playLibraryTrack(track.trackId)}
 		>
 			<span
 				class="flex-none font-mono tabular-nums"
@@ -117,9 +115,15 @@
 				style:color="var(--canvas-ordinal)"
 			>
 				<span class="group-hover:hidden">{track.number}</span>
-				<span class="hidden group-hover:flex">
+				<button
+					type="button"
+					class="hidden cursor-pointer items-center group-hover:flex hover:drop-shadow-[0_0_4px_var(--canvas-accent)]"
+					aria-label="Play {track.name}"
+					data-library-track-action="play"
+					onclick={() => playLibraryTrack(track.trackId)}
+				>
 					<Play size={12} fill="var(--canvas-accent)" color="var(--canvas-accent)" />
-				</span>
+				</button>
 			</span>
 			<span class="flex min-w-0 items-center" style:gap="6px">
 				{#if isPlaying(track)}
