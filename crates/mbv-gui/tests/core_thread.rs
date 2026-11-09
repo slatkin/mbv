@@ -147,6 +147,21 @@ impl TestCore {
             GuiWindowFrame::Attach(..) => panic!("the core thread emitted an attach state"),
         }
     }
+
+    /// The newest frame the core has emitted, draining the older ones: a
+    /// test that pumps steps between commands reads the frame the last
+    /// emitted state built, never an intermediate one. `None` while the core
+    /// has emitted no frame at all.
+    pub(crate) fn latest_frame(&self) -> Option<GuiFrame> {
+        let mut latest = None;
+        while let Ok(frame) = self.frames.try_recv() {
+            latest = Some(match frame {
+                GuiWindowFrame::Slice(frame) => *frame,
+                GuiWindowFrame::Attach(..) => panic!("the core thread emitted an attach state"),
+            });
+        }
+        latest
+    }
 }
 
 pub(crate) fn test_core(slots: usize) -> TestCore {

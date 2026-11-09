@@ -17,8 +17,8 @@ export interface GuiLibraryFrame {
  * active destination's section. */
 export interface GuiLibraryContent {
 	/** The presented destination tabs in catalog order (design D2): one per
-	 * Grouped Music library, phase 1's presented set. The top bar paints only
-	 * these — no stub for a destination the GUI does not present yet. */
+	 * Grouped Music and Shows library. The top bar paints only these — no
+	 * stub for a destination the GUI does not present yet. */
 	tabs: GuiLibraryTab[];
 	/** The active tab's position while the active destination is one of the
 	 * tabs (design D2): the tab the top bar marks current. `null` for Home,
@@ -31,6 +31,9 @@ export interface GuiLibraryContent {
 	 * `null` while any other destination is active. The top bar marks the
 	 * Home icon current exactly while this field is present. */
 	home: GuiHomeFrame | null;
+	/** The Shows destination's content while a Shows library is active
+	 * (design D12, row 7.1); `null` while any other destination is active. */
+	shows: GuiShowsFrame | null;
 }
 
 /** One destination tab of the top bar (design D2). */
@@ -97,6 +100,47 @@ export type GuiLibraryCommand =
 			/** Enqueue a Home row (design D12). */
 			command: 'homeQueue';
 			row: GuiHomeRowId;
+	  }
+	| {
+			/** Set the Shows destination's view mode (design D12, row 7.1):
+			 * the root level loads through the TUI's own mode load. */
+			command: 'showsSetMode';
+			libIdx: number;
+			mode: GuiShowsMode;
+	  }
+	| {
+			/** Select a Shows row (design D12): the row the Hero shows —
+			 * the All series mode's series, or a flat mode's episode or
+			 * premiere row. */
+			command: 'showsSelect';
+			libIdx: number;
+			row: string;
+	  }
+	| {
+			/** Select the season whose episodes the Hero's Workspace shows
+			 * (design D12). */
+			command: 'showsSelectSeason';
+			libIdx: number;
+			seasonId: string;
+	  }
+	| {
+			/** Play a Shows episode (design D12): Enter on the row, or the
+			 * double-click a front end sends with this same command. */
+			command: 'showsPlay';
+			libIdx: number;
+			itemId: string;
+	  }
+	| {
+			/** Play a Shows episode next (design D12). */
+			command: 'showsPlayNext';
+			libIdx: number;
+			itemId: string;
+	  }
+	| {
+			/** Add a Shows episode to the queue (design D12). */
+			command: 'showsQueue';
+			libIdx: number;
+			itemId: string;
 	  };
 
 /** The Music destination's content (design D5). */
@@ -311,4 +355,123 @@ export interface GuiHomeHero {
 	 * from the image cache; the window paints its own placeholder while
 	 * `null`. */
 	art: GuiLibraryArt | null;
+}
+
+/** One view mode of the Shows destination's pill row (design D12, row
+ * 7.1). The TUI's letter-range buckets are not pills here — the All series
+ * list's letter rail replaces them. */
+export type GuiShowsMode = 'latest' | 'upcoming' | 'all';
+
+/** The Shows destination's content (design D12, row 7.1), present while a
+ * Shows library is the active destination: the view-mode pills, the active
+ * mode's rows, the core's selected row, and its Hero. */
+export interface GuiShowsFrame {
+	/** The Shows library index the Shows commands name (design D2, D12). */
+	libIdx: number;
+	/** The three view-mode pills in the design's order (design D12). */
+	pills: GuiShowsPill[];
+	/** The active mode's name, as the selected collection's name the
+	 * Library Status bar's location reads (design D10). */
+	collectionNames: string[];
+	/** Whether the active mode's list has not landed yet. */
+	loading: boolean;
+	/** Whether the selected series' detail or the selected season's episodes
+	 * fetch has not landed yet (the All series mode only). */
+	workspaceLoading: boolean;
+	/** The active mode's rows in the list's order. */
+	rows: GuiShowsRow[];
+	/** The core's selected row (design D2, D12), as the frame painted it:
+	 * a select command sends it back. The first row is the Hero default. */
+	selected: string | null;
+	/** The selected row's Hero facts; `null` in the Upcoming mode and while
+	 * no row is selected. */
+	hero: GuiShowsHero | null;
+}
+
+/** One view-mode pill of the Shows destination (design D12):
+ * single-select, the selected one the core's active mode. */
+export interface GuiShowsPill {
+	/** The mode the pill selects: the set-mode command carries it back. */
+	mode: GuiShowsMode;
+	name: string;
+	/** Whether the core's active mode is this one. */
+	selected: boolean;
+	/** Whether the pill is a collection pill (multi-select) rather than a
+	 * single-select one. Every Shows pill is single-select. */
+	collection: boolean;
+}
+
+/** One row of the Shows list (design D12): a series row in the All series
+ * mode, or a flat episode or premiere row in the Latest and Upcoming
+ * modes. The identity is the stable Service id a select or play command
+ * sends, never a row position. */
+export interface GuiShowsRow {
+	/** The row's stable identity. */
+	id: string;
+	/** The row's primary label: the series' name in the All series mode,
+	 * the show's name on a flat episode row, the series' name on a premiere
+	 * row. */
+	title: string;
+	/** The row's secondary label: the episode's own title on a flat row. */
+	subtitle: string | null;
+	/** The gutter date on a flat row; `null` on a series row. */
+	date: string | null;
+	/** The row's rail letter (design D7), or `#`; `null` on the date-sorted
+	 * flat rows, whose list shows no rail. */
+	sortLetter: string | null;
+}
+
+/** The Hero's facts for the selected row (design D12), with the series
+ * Hero's Workspace. */
+export interface GuiShowsHero {
+	title: string;
+	metaRows: string[];
+	durationRow: number | null;
+	progressRow: number | null;
+	overview: string | null;
+	/** The artwork box the Hero reserves (the artwork policy's declared
+	 * arm: landscape for a series and a thumb-declared episode, portrait
+	 * for a poster-declared one). */
+	artShape: 'landscape' | 'square' | 'portrait';
+	art: GuiLibraryArt | null;
+	/** The series Hero's Workspace; `null` on the Latest mode's episode
+	 * Hero and while the selected series' detail has not landed. */
+	workspace: GuiShowsWorkspace | null;
+}
+
+/** A series Hero's Workspace (design D12): the season pills and the
+ * selected season's episodes. The season pills start on the first season. */
+export interface GuiShowsWorkspace {
+	/** The season pills in the detail's order. */
+	seasons: GuiShowsSeasonPill[];
+	/** The selected season's id; `null` while the detail holds no season. */
+	selectedSeason: string | null;
+	/** The selected season's episodes in their fetch order; empty while
+	 * that fetch has not landed, which the frame's `workspaceLoading`
+	 * names. */
+	episodes: GuiShowsEpisodeRow[];
+}
+
+/** One season pill of a series' Hero (design D12). */
+export interface GuiShowsSeasonPill {
+	/** The season's stable Service id: the select-season command carries
+	 * it. */
+	seasonId: string;
+	name: string;
+	/** Whether this is the Workspace's selected season. */
+	selected: boolean;
+}
+
+/** One episode row of the Hero's Workspace (design D12). */
+export interface GuiShowsEpisodeRow {
+	/** The episode's stable Service id. */
+	episodeId: string;
+	/** The number the row paints. */
+	number: number;
+	name: string;
+	/** The runtime, `M:SS` or `H:MM:SS`; empty when unknown. */
+	duration: string;
+	/** The played/progress state, the shared media-list row state the Home
+	 * rows carry (`GuiHomeRowState`). */
+	state: GuiHomeRowState;
 }

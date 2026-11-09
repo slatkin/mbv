@@ -57,6 +57,44 @@ pub enum GuiLibraryCommand {
     HomePlayNext { row: GuiHomeRowId },
     /// Enqueue a Home row (design D12).
     HomeQueue { row: GuiHomeRowId },
+    /// Set the Shows destination's view mode (add-gui-library-panel design
+    /// D12, the USER-APPROVED GUI Shows design): the root level loads
+    /// through the TUI's own mode load.
+    ShowsSetMode { lib_idx: usize, mode: GuiShowsMode },
+    /// Select a Shows row (design D12): the row the Hero shows — the All
+    /// series mode's series, or a flat mode's episode or premiere row.
+    ShowsSelect { lib_idx: usize, row: String },
+    /// Select the season whose episodes the Hero's Workspace shows (design
+    /// D12).
+    ShowsSelectSeason { lib_idx: usize, season_id: String },
+    /// Play a Shows episode (design D12): Enter on the row, or the
+    /// double-click a front end sends with this same command.
+    ShowsPlay { lib_idx: usize, item_id: String },
+    /// Play a Shows episode next (design D12).
+    ShowsPlayNext { lib_idx: usize, item_id: String },
+    /// Add a Shows episode to the queue (design D12).
+    ShowsQueue { lib_idx: usize, item_id: String },
+}
+
+/// One Shows view mode (design D12): the three single-select pills the
+/// Shows pill row paints. The TUI's letter-range buckets are not pills
+/// here — the All series list's letter rail replaces them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum GuiShowsMode {
+    Latest,
+    Upcoming,
+    All,
+}
+
+impl From<GuiShowsMode> for mbv::GuiShowsMode {
+    fn from(mode: GuiShowsMode) -> Self {
+        match mode {
+            GuiShowsMode::Latest => Self::Latest,
+            GuiShowsMode::Upcoming => Self::Upcoming,
+            GuiShowsMode::All => Self::All,
+        }
+    }
 }
 
 /// One Home row's stable identity (design D12): the identity the Home
@@ -101,6 +139,23 @@ impl From<GuiLibraryCommand> for mbv::GuiLibraryCommand {
             GuiLibraryCommand::HomeQueue { row } => Self::HomeQueue {
                 row: mbv::GuiHomeRowId::from(&row),
             },
+            GuiLibraryCommand::ShowsSetMode { lib_idx, mode } => Self::ShowsSetMode {
+                lib_idx,
+                mode: mbv::GuiShowsMode::from(mode),
+            },
+            GuiLibraryCommand::ShowsSelect { lib_idx, row } => Self::ShowsSelect { lib_idx, row },
+            GuiLibraryCommand::ShowsSelectSeason { lib_idx, season_id } => {
+                Self::ShowsSelectSeason { lib_idx, season_id }
+            }
+            GuiLibraryCommand::ShowsPlay { lib_idx, item_id } => {
+                Self::ShowsPlay { lib_idx, item_id }
+            }
+            GuiLibraryCommand::ShowsPlayNext { lib_idx, item_id } => {
+                Self::ShowsPlayNext { lib_idx, item_id }
+            }
+            GuiLibraryCommand::ShowsQueue { lib_idx, item_id } => {
+                Self::ShowsQueue { lib_idx, item_id }
+            }
         }
     }
 }

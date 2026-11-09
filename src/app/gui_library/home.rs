@@ -340,7 +340,7 @@ impl App {
             .iter()
             .find_map(|item| (item.id() == selected).then_some(*item))?;
         let content = hero_content_queue(&item.item);
-        let art_shape = home_hero_shape(content.facts.artwork.shape);
+        let art_shape = artwork_shape(content.facts.artwork.shape);
         // The artwork rides the artwork policy's declared source: an Emby
         // source is the fetched chain, and the Audiobookshelf covers and the
         // undeclared arms paint without art in Phase 2 (the USER-APPROVED
@@ -379,10 +379,18 @@ fn home_item_kind(item: &QueueItem) -> GuiHomeRowKind {
 /// The item row's state, the media-list semantic state's Home arms: a resume
 /// position is `Active` with its bounded percentage, `played` without one is
 /// `Played`, and an undated music row is `Ordinary` per that state's rule.
-fn home_item_state(item: &QueueItem) -> GuiHomeRowState {
-    match MediaSemanticState::from_queue_item(item) {
-        // `from_queue_item` derives `Active`, `Played`, and `Ordinary` only;
-        // the `NowPlaying` arm stays exhaustive for the shared vocabulary.
+/// Shared with the Shows rows' states (design D12), which read the same
+/// media-list vocabulary.
+pub(in crate::app::gui_library) fn home_item_state(item: &QueueItem) -> GuiHomeRowState {
+    media_row_state(&MediaSemanticState::from_queue_item(item))
+}
+
+/// One media-list semantic state's row-state arm, mapped onto the shared
+/// row-state vocabulary. `from_queue_item` derives `Active`, `Played`, and
+/// `Ordinary` only; the `NowPlaying` arm stays exhaustive for the shared
+/// vocabulary.
+pub(in crate::app::gui_library) fn media_row_state(state: &MediaSemanticState) -> GuiHomeRowState {
+    match state {
         MediaSemanticState::Active { progress } | MediaSemanticState::NowPlaying { progress } => {
             GuiHomeRowState::Active {
                 progress: progress.map(mbv_ui_model::media_list::ActiveProgress::percent),
@@ -394,8 +402,9 @@ fn home_item_state(item: &QueueItem) -> GuiHomeRowState {
 }
 
 /// The Hero's art box shape, mirrored from the artwork policy's declared
-/// arms.
-fn home_hero_shape(shape: ArtworkShape) -> GuiArtShape {
+/// arms. Shared with the Shows heroes (design D12), which read the same
+/// policy.
+pub(in crate::app::gui_library) fn artwork_shape(shape: ArtworkShape) -> GuiArtShape {
     match shape {
         ArtworkShape::Landscape => GuiArtShape::Landscape,
         ArtworkShape::Square => GuiArtShape::Square,

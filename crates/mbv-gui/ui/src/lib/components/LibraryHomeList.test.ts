@@ -47,6 +47,7 @@ function carriedContent(): GuiLibraryContent {
 		currentTab: null,
 		music: null,
 		home: homeFrame(),
+		shows: null,
 	};
 }
 

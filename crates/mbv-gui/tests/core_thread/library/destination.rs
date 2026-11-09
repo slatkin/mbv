@@ -47,9 +47,9 @@ fn an_open_destination_command_for_an_unpresented_destination_is_a_no_op() {
     test.core
         .app_mut()
         .push_gui_library_tab_for_test(EmbyItem::folder(
-            "lib-shows".into(),
-            "Shows".into(),
-            "tvshows".into(),
+            "lib-movies".into(),
+            "Movies".into(),
+            "movies".into(),
         ));
 
     send_library(

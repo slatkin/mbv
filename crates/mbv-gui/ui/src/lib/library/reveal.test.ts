@@ -70,6 +70,7 @@ function content(): GuiLibraryContent {
 		currentTab: 1,
 		music: music(),
 		home: null,
+		shows: null,
 	};
 }
 

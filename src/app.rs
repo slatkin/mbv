@@ -47,6 +47,10 @@ pub use self::gui_library::{
     GuiHomeRowKind, GuiHomeRowState,
 };
 pub use self::gui_library::{
+    GuiDestinationKind, GuiShowsEpisodeRow, GuiShowsHero, GuiShowsMode, GuiShowsPill,
+    GuiShowsProjection, GuiShowsRow, GuiShowsSeasonPill, GuiShowsWorkspace,
+};
+pub use self::gui_library::{
     GuiLibraryArtwork, GuiLibraryMenuItem, GuiLibraryRowMenu, GuiLibraryTab, GuiLibraryTabs,
     GuiMusicAlbum, GuiMusicArtist, GuiMusicHero, GuiMusicPill, GuiMusicProjection, GuiMusicTrack,
     GuiMusicTrackTotal,

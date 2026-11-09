@@ -19,7 +19,8 @@ use super::App;
 /// the season is never kept across a series change — the season pills start
 /// on the first season. A series Hero exists only in the All series mode
 /// (Latest and Upcoming are flat episode lists, and Upcoming paints no
-/// Hero), so the series and season ids carry no meaning in those modes.
+/// Hero), so the series and season ids carry no meaning in those modes; the
+/// flat modes' own selection lives in `flat_row`.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct GuiTvShowsSelection {
     /// The active view mode: the set-mode command's last value, else the
@@ -30,12 +31,18 @@ pub struct GuiTvShowsSelection {
     /// The season whose episodes the Hero's Workspace shows, by stable
     /// Service id.
     pub season_id: Option<String>,
+    /// The flat mode's selected row (design D12): the Latest episode's item
+    /// id, or the Upcoming premiere's stable key the row carries. The All
+    /// series mode's selection is `series_id`, so this field carries meaning
+    /// only while a flat mode is active; a stale id falls back to the list's
+    /// first row in the projection, as every selection's stale arm does.
+    pub flat_row: Option<String>,
 }
 
 impl App {
     /// Whether `lib_idx` names an Emby TV (Shows) library: every GUI Shows
     /// method's destination guard.
-    fn gui_tv_library(&self, lib_idx: usize) -> bool {
+    pub(in crate::app::gui_library) fn gui_tv_library(&self, lib_idx: usize) -> bool {
         self.libs
             .get(lib_idx)
             .is_some_and(|lib| lib.library.collection_type == "tvshows")

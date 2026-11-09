@@ -61,6 +61,7 @@ function content(): GuiLibraryContent {
 		tabs: [{ position: 1, label: 'Music' }],
 		currentTab: null,
 		music: null,
+		shows: null,
 		home: {
 			rows: [
 				{ row: 'heading', text: 'Continue watching' },

@@ -120,6 +120,17 @@ impl App {
         self.tab = mbv_ui_model::tab_selection::TabSelection::EmbyLibrary(0);
     }
 
+    /// Pin `lib_idx`'s captured library total (add-gui-library-panel design
+    /// D12): a Client's test that scripts one mode load pins the total, so
+    /// the root load's completion captures nothing and spawns no
+    /// default-mode reload behind the scripted answers.
+    #[cfg(feature = "test")]
+    pub fn pin_gui_library_total_for_test(&mut self, lib_idx: usize, total: usize) {
+        if let Some(tab) = self.libs.get_mut(lib_idx) {
+            tab.library_total = Some(total);
+        }
+    }
+
     /// The root level's item ids of the Shows library `lib_idx`, for a
     /// Client's test that asserts a mode load landed the rows
     /// (add-gui-library-panel design D12). `None` while the library holds

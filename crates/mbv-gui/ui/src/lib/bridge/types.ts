@@ -30,6 +30,14 @@ export type {
 	GuiMusicRowMenu,
 	GuiMusicTrack,
 	GuiMusicTrackTotal,
+	GuiShowsEpisodeRow,
+	GuiShowsFrame,
+	GuiShowsHero,
+	GuiShowsMode,
+	GuiShowsPill,
+	GuiShowsRow,
+	GuiShowsSeasonPill,
+	GuiShowsWorkspace,
 } from './library-types';
 
 /** One `mbv://frame` payload: the attached slice's frame, or the state of a window whose Owner attach has not finished (design D9). */

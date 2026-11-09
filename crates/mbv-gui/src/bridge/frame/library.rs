@@ -21,6 +21,13 @@ use serde::Serialize;
 use crate::artwork::data_url;
 use mbv::GuiLibraryTab;
 
+mod shows;
+
+pub use self::shows::{
+    GuiShowsEpisodeRowFrame, GuiShowsFrame, GuiShowsHeroFrame, GuiShowsModeFrame,
+    GuiShowsPillFrame, GuiShowsRowFrame, GuiShowsSeasonPillFrame, GuiShowsWorkspaceFrame,
+};
+
 /// The Library panel's frame section (design D2): the content revision, and
 /// the content itself when this frame carries it.
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -58,6 +65,10 @@ pub struct GuiLibraryContent {
     /// design); `None` while any other destination is active. The top bar
     /// marks the Home icon current exactly while this field is present.
     pub home: Option<GuiHomeFrame>,
+    /// The Shows destination's content while a Shows library is the active
+    /// destination (add-gui-library-panel design D12, the USER-APPROVED GUI
+    /// Shows design); `None` while any other destination is active.
+    pub shows: Option<GuiShowsFrame>,
 }
 
 /// One destination tab of the top bar (design D2).

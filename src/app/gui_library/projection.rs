@@ -434,9 +434,10 @@ fn failure_line(failed: &[String]) -> Option<String> {
 /// An artist row's letter heading and rail letter (design D7): the first
 /// letter of the article-stripped sort name that the artist order uses,
 /// uppercased, or `#` for a name that starts with a digit or a non-ASCII
-/// letter.
-fn sort_letter(artist: &str) -> char {
-    match strip_article(artist).chars().next() {
+/// letter. Shared with the Shows rows' rail letters (design D12), which use
+/// the same rule over the item's sort name.
+pub(in crate::app::gui_library) fn sort_letter(name: &str) -> char {
+    match strip_article(name).chars().next() {
         Some(first) if first.is_ascii_alphabetic() => first.to_ascii_uppercase(),
         Some(_) | None => '#',
     }

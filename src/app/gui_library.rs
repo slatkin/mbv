@@ -9,6 +9,7 @@ mod artwork;
 mod home;
 mod launch;
 mod projection;
+mod shows;
 mod store;
 mod tabs;
 mod tv;
@@ -22,8 +23,12 @@ pub use self::projection::{
     GuiMusicAlbum, GuiMusicArtist, GuiMusicHero, GuiMusicPill, GuiMusicProjection, GuiMusicTrack,
     GuiMusicTrackTotal,
 };
+pub use self::shows::{
+    GuiShowsEpisodeRow, GuiShowsHero, GuiShowsMode, GuiShowsPill, GuiShowsProjection, GuiShowsRow,
+    GuiShowsSeasonPill, GuiShowsWorkspace,
+};
 pub(in crate::app) use self::store::{GuiGroupAlbums, GuiGroupAlbumsEvent};
-pub use self::tabs::{GuiLibraryTab, GuiLibraryTabs};
+pub use self::tabs::{GuiDestinationKind, GuiLibraryTab, GuiLibraryTabs};
 pub use self::tv::GuiTvShowsSelection;
 
 use mbv_emby_model::EmbyItem;
@@ -97,6 +102,31 @@ pub enum GuiLibraryCommand {
     /// Enqueue a Home row (design D12): `a` on the row, through the Home
     /// flat list's enqueue path.
     HomeQueue { row: home::GuiHomeRowId },
+    /// Set the Shows destination's view mode (design D12, the USER-APPROVED
+    /// GUI Shows design): the root level loads through the TUI's own mode
+    /// load. A `lib_idx` that names no Shows library changes nothing.
+    ShowsSetMode {
+        lib_idx: usize,
+        mode: shows::GuiShowsMode,
+    },
+    /// Select a Shows row (design D12): the row the Hero shows — the All
+    /// series mode's series (whose select runs the series-detail load), or a
+    /// flat mode's episode or premiere row. A row the active mode's list no
+    /// longer holds changes nothing.
+    ShowsSelect { lib_idx: usize, row: String },
+    /// Select the season whose episodes the Hero's Workspace shows (design
+    /// D12): the season-episodes load starts when the cache does not hold
+    /// them.
+    ShowsSelectSeason { lib_idx: usize, season_id: String },
+    /// Play a Shows episode (design D12): Enter on the row, or the
+    /// double-click a front end sends with this same command. The shared
+    /// library play path runs, so the Owner owns the queue.
+    ShowsPlay { lib_idx: usize, item_id: String },
+    /// Play a Shows episode next (design D12): the shared play-next
+    /// admission, so the episode enters directly after the active slot.
+    ShowsPlayNext { lib_idx: usize, item_id: String },
+    /// Add a Shows episode to the queue (design D12): the shared add path.
+    ShowsQueue { lib_idx: usize, item_id: String },
 }
 
 /// The Library item menu the frame's `rowMenu` section carries: the item
@@ -145,6 +175,7 @@ impl App {
             GuiLibraryCommand::OpenDestination { position } => {
                 if self.presents_open_position(position) {
                     self.set_library_tab(position);
+                    self.open_gui_active_destination();
                 } else {
                     Self::log_ignored_library_command(
                         "openDestination",
@@ -193,6 +224,35 @@ impl App {
             GuiLibraryCommand::HomeQueue { row } => {
                 self.enqueue_gui_home_row(&row, "homeQueue");
             }
+            GuiLibraryCommand::ShowsSetMode { lib_idx, mode } => {
+                self.gui_tv_set_mode(lib_idx, &mbv_queue::TvContentMode::from(mode));
+            }
+            GuiLibraryCommand::ShowsSelect { lib_idx, row } => {
+                self.select_gui_shows_row(lib_idx, &row);
+            }
+            GuiLibraryCommand::ShowsSelectSeason { lib_idx, season_id } => {
+                self.gui_tv_select_season(lib_idx, &season_id);
+            }
+            GuiLibraryCommand::ShowsPlay { lib_idx, item_id } => {
+                self.play_gui_shows_item(lib_idx, &item_id);
+            }
+            GuiLibraryCommand::ShowsPlayNext { lib_idx, item_id } => {
+                self.play_next_gui_shows_item(lib_idx, &item_id);
+            }
+            GuiLibraryCommand::ShowsQueue { lib_idx, item_id } => {
+                self.enqueue_gui_shows_item(lib_idx, &item_id);
+            }
+        }
+    }
+
+    /// The open step the active destination's kind needs (design D12): the
+    /// Shows destination seeds its mode selection with the TUI default
+    /// rule's resolution and starts its root load when the stack holds no
+    /// level. The other destinations' loads ride the tab settlement and the
+    /// frame path.
+    fn open_gui_active_destination(&mut self) {
+        if let Some(GuiDestinationKind::Shows { lib_idx }) = self.gui_active_destination() {
+            self.gui_tv_open(lib_idx);
         }
     }
 

@@ -216,11 +216,12 @@ fn a_fresh_launch_opens_the_first_presented_destination() {
     );
 }
 
-/// A location saved on Shows opens Music instead: the GUI presents only the
-/// Grouped Music libraries, so a saved destination it does not present falls
-/// back to the first presented one.
+/// A location saved on Shows opens Shows (add-gui-library-panel design D9,
+/// row 7.1): the GUI presents the Shows destinations now, so the matching
+/// presented library opens — the saved-destination fallback stays only for a
+/// destination the GUI still does not present (row 13.1 owns its deletion).
 #[test]
-fn a_location_saved_on_shows_opens_music() {
+fn a_location_saved_on_shows_opens_shows() {
     let _guard = TestStateDirGuard::new();
     save_gui_launch_state(&GuiLaunchState {
         version: GUI_LAUNCH_STATE_VERSION,
@@ -240,9 +241,13 @@ fn a_location_saved_on_shows_opens_music() {
         .expect("the catalog holds the Shows library");
     assert_ne!(
         shows_index, 0,
-        "the saved destination is not the first presented one"
+        "the saved destination is not the catalog's first library"
     );
-    assert_eq!(app.tab_for_test(), TabSelection::EmbyLibrary(0));
+    assert_eq!(
+        app.tab_for_test(),
+        TabSelection::EmbyLibrary(shows_index),
+        "the saved Shows destination restored"
+    );
 }
 
 /// A tab switch between the catalog landing and a group list's landing never

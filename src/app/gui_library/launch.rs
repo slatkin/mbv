@@ -17,6 +17,7 @@ use mbv_ui_model::browse::BrowseLevel;
 use mbv_ui_model::settings::PanelFocus;
 use mbv_ui_model::tab_selection::TabSelection;
 
+use super::tabs::GuiDestinationKind;
 use crate::app::App;
 
 impl App {
@@ -169,12 +170,21 @@ impl App {
     }
 
     /// The destinations the GUI presents, in catalog order (design D9, D2):
-    /// the Grouped Music libraries, phase 1's presented set. The restore's
-    /// fallback and the frame's destination tabs (`gui_library_tabs`) read
-    /// this one list, so they cannot disagree about the presented set.
-    pub(in crate::app::gui_library) fn presented_destinations(&self) -> Vec<usize> {
+    /// the Grouped Music libraries and the Emby TV (Shows) libraries, as the
+    /// destination-kind enum names them. The restore's fallback and the
+    /// frame's destination tabs (`gui_library_tabs`) read this one list, so
+    /// they cannot disagree about the presented set.
+    pub(in crate::app::gui_library) fn presented_destinations(&self) -> Vec<GuiDestinationKind> {
         (0..self.libs.len())
-            .filter(|lib_idx| self.is_grouped_music_library(*lib_idx))
+            .filter_map(|lib_idx| {
+                if self.is_grouped_music_library(lib_idx) {
+                    Some(GuiDestinationKind::Music { lib_idx })
+                } else if self.libs[lib_idx].library.collection_type == "tvshows" {
+                    Some(GuiDestinationKind::Shows { lib_idx })
+                } else {
+                    None
+                }
+            })
             .collect()
     }
 
@@ -186,18 +196,17 @@ impl App {
     /// nothing, as the absent digit key does.
     pub(in crate::app::gui_library) fn presents_open_position(&self, position: usize) -> bool {
         position == 0
-            || self.presented_destinations().into_iter().any(|lib_idx| {
-                TabSelection::EmbyLibrary(lib_idx)
-                    .to_position_with_counts(self.libs.len(), self.feeds_tab_pos())
-                    == position
-            })
+            || self
+                .presented_destinations()
+                .iter()
+                .any(|kind| self.gui_destination_position(*kind) == Some(position))
     }
 
     /// The tab position of the destination a saved location names, resolved
     /// against the destinations the GUI presents (design D9): the matching
-    /// presented library, else the first presented one. Phase 1 presents the
-    /// Grouped Music libraries only, so every other saved destination falls
-    /// back to the first of them.
+    /// presented library, else the first presented one. The GUI presents the
+    /// Grouped Music and Shows libraries, so every other saved destination
+    /// falls back to the first of them.
     fn presented_destination_position(&self, destination: &TabIdentity) -> Option<usize> {
         let saved_library_id = match destination {
             TabIdentity::ServiceLibrary {
@@ -210,11 +219,18 @@ impl App {
         let lib_idx = presented
             .iter()
             .copied()
-            .find(|lib_idx| {
-                saved_library_id
-                    .is_some_and(|library_id| self.libs[*lib_idx].library.id == library_id)
+            .find_map(|kind| {
+                kind.library_index().filter(|lib_idx| {
+                    saved_library_id
+                        .is_some_and(|library_id| self.libs[*lib_idx].library.id == library_id)
+                })
             })
-            .or_else(|| presented.first().copied())?;
+            .or_else(|| {
+                presented
+                    .iter()
+                    .copied()
+                    .find_map(GuiDestinationKind::library_index)
+            })?;
         Some(
             TabSelection::EmbyLibrary(lib_idx)
                 .to_position_with_counts(self.libs.len(), self.feeds_tab_pos()),

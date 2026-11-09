@@ -111,6 +111,7 @@ function content(
 			rowMenu: null,
 		},
 		home: null,
+		shows: null,
 	};
 }
 
@@ -583,6 +584,7 @@ function homeContent(): GuiLibraryContent {
 		tabs: [{ position: 1, label: 'Music' }],
 		currentTab: null,
 		music: null,
+		shows: null,
 		home: {
 			rows: [
 				{ row: 'heading', text: 'Continue watching' },
