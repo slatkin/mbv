@@ -44,7 +44,8 @@ impl App {
     /// The stored `panel_mode` is never written: the `x` cycle reads the
     /// stored mode and still advances `both -> queue-only` while hidden.
     pub(in crate::app) fn queue_column_hidden_empty(&self) -> bool {
-        !self.is_mini_view()
+        !self.gui_client
+            && !self.is_mini_view()
             && self.panel_mode == PanelMode::Both
             && self.displayed_queue().slots().is_empty()
     }
