@@ -523,7 +523,9 @@ library's Shows destination is active — design D12, row 7.1), and `emby`
 (`Option<GuiEmbyFrame>`, present while a plain Emby library's destination is
 active — design D12, row 8.1), and `audiobooks` (`Option<GuiAudiobooksFrame>`,
 present while an Audiobookshelf book library's Audiobooks destination is
-active — design D12, row 9.1). No two
+active — design D12, row 9.1), and `podcasts` (`Option<GuiPodcastsFrame>`,
+present while an Audiobookshelf podcast library's Podcasts destination is
+active — design D12, row 10.1). No two
 destination fields present at once: the destinations are exclusive, so the
 present field names the active destination, and the top bar marks the Home
 icon current exactly while `home` is present.
@@ -651,6 +653,39 @@ re-carries the content when the mark moves, so the Workspace paints what the
 Queue's active slot paints. An audio-part row never carries the mark, as the
 TUI's rows never light.
 
+`GuiPodcastsFrame` (`src/bridge/frame/library/podcasts.rs`) carries `lib_idx`
+(the Podcasts library index the Podcasts commands name), `pills`, `loading`
+(the show catalog's pages or the active view's own episode fetches),
+`failed` (the catalog's error), `rows`, `selected`, and `hero`. No letter rail
+rides here: the list is sorted by date. `pills` holds the single-select pill
+row in paint order — `Latest` first, then one pill per show in the show
+list's title order — each with `pill` (`{ kind: 'latest' }` or
+`{ kind: 'show', id }`), `name` (`Latest`, or the show's title), `selected`,
+and `collection` (`false`). The rows are the active pill's episodes: `Latest`
+merges every listed show's episodes, and a show pill holds that one show's,
+both newest first with undated episodes last, exactly as the TUI's
+`visible_episodes` and `visible_episodes_from` order them. A row carries `id`
+— the episode's stable identity, the provider's `(library_item_id,
+episode_id)` pair encoded as one opaque string
+(`GuiPodcastEpisodeId::encode`: the show id's byte length, a `:`, then the
+show id and the episode id; `decode` is its only reader) — `title` (the
+episode), `subtitle` (the parent show's title), `date` (the `day month`
+gutter, `null` on an undated episode), and `state` (`ordinary`, `played`, or
+`{ active: { progress } }`, the TUI podcast row's own arms). `selected`
+carries the core's picked episode as the frame painted it while the active
+list still holds it, else that list's first row, so the Hero paints as soon
+as a list lands; a stored pill whose show the published show list no longer
+carries falls back to `Latest`.
+
+`hero` is the selected episode's Hero: the shared `hero_content_abs_episode`
+producer's facts — `title` (the episode), `meta_rows` (the show title, the
+duration, and the publish date) with `duration_row` and `progress_row` (the
+producer fills no progress row for an episode) — the cleaned description as
+`overview`, `art_shape` at the episode artwork policy's Square arm, and `art`:
+the parent show's cover through the Service-scoped cover chain (`null` while
+the show declares no cover or no server is configured). There is no
+Workspace: a podcast Hero is episode information only.
+
 `GuiMusicFrame` carries `lib_idx` (the Grouped Music library index the
 set-collections command names), `pills` (`group_id`, `name`, `selected`, and
 `collection`), `loading`, `failure` (the failure line naming the selected
@@ -741,6 +776,22 @@ by the front end and does nothing for books. Every play and enqueue honours
 owner-unavailable toast; the Owner owns the queue, so no Audiobooks command
 mutates it directly, and a book or chapter id the Service data no longer
 holds logs and changes nothing.
+
+The Podcasts commands name their library by its `libIdx` and an episode by the
+opaque row id the frame carried (row 10.1): `podcastsSetPill` (`libIdx`,
+`pill`) stores the single-select pill — `{ kind: 'latest' }` or
+`{ kind: 'show', id }` — and starts the loads that pill needs through the
+TUI's own loaders, with a show the published show list no longer carries
+logging and changing nothing; `podcastsSelect` (`libIdx`, `row`) selects the
+episode the Hero shows; `podcastsPlay` (`libIdx`, `itemId`) — the command
+Enter and a double-click both send — replaces the queue with the episode
+through the TUI's episode play path; and `podcastsQueue` (`libIdx`, `itemId`)
+appends it at the tail. There is no play-next command: `n` is consumed by the
+front end and does nothing for podcast episodes. Every play and enqueue
+honours `player.can_admit_audiobookshelf()`, and a refusal flashes the TUI's
+owner-unavailable toast; the Owner owns the queue, so no Podcasts command
+mutates it directly. A row id of no valid shape, or an episode the per-show
+cache no longer holds, logs and changes nothing.
 
 The `takeFocus` variant also moves the core's `FocusStack`, so the frame paints
 the focus the `App`'s key gates read (design D4). The `play` and
