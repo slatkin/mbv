@@ -61,11 +61,11 @@ Each unit starts by reading its destination's data path in the `App` and recordi
 
 ## 10. Podcasts
 
-- [ ] 10.1 Project and paint Podcasts: the show pills as collection pills, the union of the selected shows' episodes in date order, the episode Hero, and no letter rail. Verify: a union test for two shows in date order.
+- [ ] 10.1 Project and paint Podcasts: the single-select pills of Latest and one per show, with Latest the default; the merged Latest list and a show's list, newest first with undated episodes last, in a date gutter with no letter rail; the episode Hero with square cover art, facts, and its description; Enter or a double-click plays the episode, replacing the queue under the Audiobookshelf admission rule, and `a` adds it to the queue. Verify: a test that Latest merges two shows' episodes in date order and that a show pill scopes the list to that show.
 
 ## 11. Feeds
 
-- [ ] 11.1 Project and paint Feeds: the subscription pills as collection pills, the union of the selected subscriptions' entries in date order, and no letter rail. Verify: a union test for two subscriptions.
+- [ ] 11.1 Project and paint Feeds: the single-select pills of Latest, which holds all entries, and one per subscription; the merged Latest list and a subscription's list, newest first with undated entries last, in a date gutter with no letter rail; the Hero with the entry's title and duration and placeholder art; Enter or a double-click plays the entry, replacing the queue, and `a` adds it to the queue. Verify: a test that Latest merges two subscriptions' entries in date order and that a subscription pill scopes the list to it.
 
 ## 12. Search
 

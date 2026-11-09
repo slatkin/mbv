@@ -271,12 +271,12 @@ While the Library panel has Panel focus, the window content SHALL take the Libra
 
 ### Requirement: Collection pills are single-select
 
-One collection pill SHALL be selected at a time, as the TUI's Grouped Music pill is: one group is always selected. A press on a collection pill SHALL select it and deselect the others, and an Alt-press SHALL select it the same way. Space SHALL select the focused collection pill. A press SHALL NOT deselect the selected pill, so no gesture leaves the row empty. The list SHALL show the selected group's albums, sorted as one list. Latest, filter, and letter-bucket pills SHALL stay single-select.
+One collection pill SHALL be selected at a time, as the TUI's Grouped Music pill is: one group is always selected. A press on a collection pill SHALL select it and deselect the others, and an Alt-press SHALL select it the same way. Space SHALL select the focused collection pill. A press SHALL NOT deselect the selected pill, so no gesture leaves the row empty. The list SHALL show the selected group's albums, sorted as one list. Latest, filter, and letter-bucket pills SHALL stay single-select. A Podcasts or Feeds pill row SHALL offer Latest plus one pill per show or subscription, with Latest selected by default. The Latest list SHALL merge every collection's rows newest first with undated rows last, and one collection pill SHALL scope the list to that collection. Such a date-ordered list SHALL show no letter rail.
 
 #### Scenario: Collection pills per destination
 
 - **WHEN** a destination paints its pill row
-- **THEN** the collection pills are the Music group pills, the Podcast show pills, the Feeds subscription pills, and All and each folder pill of an Emby library in feed-group mode
+- **THEN** the collection pills are the Music group pills, the Podcast Latest pill and its show pills, the Feeds Latest pill and its subscription pills, and All and each folder pill of an Emby library in feed-group mode
 - **AND** every other pill is single-select
 
 #### Scenario: A second collection is selected
@@ -303,6 +303,28 @@ One collection pill SHALL be selected at a time, as the TUI's Grouped Music pill
 - **GIVEN** the pill row has focus and the Soul pill is the focused pill
 - **WHEN** the user presses Space
 - **THEN** Soul is selected as a press selects it, and playback does not change
+
+#### Scenario: The Podcasts Latest pill merges the shows
+
+- **WHEN** the user presses the Latest pill of Podcasts, whose two shows have episodes
+- **THEN** only Latest is selected and the list merges both shows' episodes newest first with undated episodes last
+- **AND** no letter rail shows
+
+#### Scenario: A podcast show pill scopes the list
+
+- **WHEN** the user presses a show pill of Podcasts
+- **THEN** only that pill is selected and the list shows that show's episodes in date order
+
+#### Scenario: The Feeds Latest pill merges the subscriptions
+
+- **WHEN** the user presses the Latest pill of Feeds, whose two subscriptions have entries
+- **THEN** only Latest is selected and the list merges both subscriptions' entries newest first with undated entries last
+- **AND** no letter rail shows
+
+#### Scenario: A feed subscription pill scopes the list
+
+- **WHEN** the user presses a subscription pill of Feeds
+- **THEN** only that pill is selected and the list shows that subscription's entries in date order
 
 #### Scenario: An Emby library in feed-group mode changes pill
 
