@@ -103,6 +103,7 @@ function content(
 			playingTrackId: null,
 			rowMenu: null,
 		},
+		home: null,
 	};
 }
 

@@ -9,10 +9,12 @@
 //! the facts it belongs to.
 
 use mbv::{
-    GuiLibraryArtwork, GuiLibraryMenuItem, GuiMusicAlbum, GuiMusicArtist, GuiMusicHero,
-    GuiMusicProjection, GuiMusicTrack, GuiMusicTrackTotal,
+    GuiArtShape, GuiHomeHero, GuiHomeItemRow, GuiHomeProjection, GuiHomeRow, GuiHomeRowId,
+    GuiHomeRowKind, GuiHomeRowState, GuiLibraryArtwork, GuiLibraryMenuItem, GuiMusicAlbum,
+    GuiMusicArtist, GuiMusicHero, GuiMusicProjection, GuiMusicTrack, GuiMusicTrackTotal,
 };
 use mbv_images::QUEUE_CARD_PLACEHOLDER_BYTES;
+use mbv_queue::QueueItemContentId;
 use mbv_ui_model::music_grouping::ArtistKey;
 use serde::Serialize;
 
@@ -51,6 +53,11 @@ pub struct GuiLibraryContent {
     /// The Grouped Music library's content while Music is the active
     /// destination; `None` for a destination that presents no content yet.
     pub music: Option<GuiMusicFrame>,
+    /// The Home destination's content while Home is the active destination
+    /// (add-gui-library-panel design D12, the USER-APPROVED GUI Home
+    /// design); `None` while any other destination is active. The top bar
+    /// marks the Home icon current exactly while this field is present.
+    pub home: Option<GuiHomeFrame>,
 }
 
 /// One destination tab of the top bar (design D2).
@@ -401,6 +408,229 @@ impl From<&GuiLibraryArtwork> for GuiLibraryArt {
                 Self::Placeholder(data_url("image/webp", QUEUE_CARD_PLACEHOLDER_BYTES))
             }
             GuiLibraryArtwork::Loading => Self::Loading,
+        }
+    }
+}
+
+/// The Home destination's content (add-gui-library-panel design D12, the
+/// USER-APPROVED GUI Home design): the flat list's rows in paint order, the
+/// core's selected row, and its Hero. No pill, no letter rail, and no
+/// Workspace ride here.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GuiHomeFrame {
+    /// The flat list's rows in paint order: the two sections' heading rows
+    /// and item rows, with the sections and the spacer the projection
+    /// builds (a heading only above its rows, empty sections omitted, the
+    /// spacer only between two non-empty sections).
+    pub rows: Vec<GuiHomeRowFrame>,
+    /// The core's selected row (design D2, D12), as the frame painted it:
+    /// a select, play, or enqueue command sends it back.
+    pub selected: Option<GuiHomeRowIdFrame>,
+    /// The selected row's Hero facts; `None` while no row is selected — an
+    /// all-empty list, or the loading list's slot.
+    pub hero: Option<GuiHomeHeroFrame>,
+}
+
+/// One row of the flat Home list, as the window paints it (design D12):
+/// the row tag names the three row kinds the projection builds.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "row", rename_all = "camelCase")]
+pub enum GuiHomeRowFrame {
+    /// A section heading row (`Continue watching`, `Recently added`).
+    Heading {
+        /// The section's name, painted as-is.
+        text: String,
+    },
+    /// The gap between the two sections.
+    Spacer,
+    /// One item row.
+    Item(GuiHomeItemRowFrame),
+}
+
+/// One item row of the flat Home list (design D12).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GuiHomeItemRowFrame {
+    /// The row's stable identity (design D2, D12): a command names it, the
+    /// frame's `selected` carries it, never a row position.
+    pub id: GuiHomeRowIdFrame,
+    /// The row's primary label (a `Recently added` episode's show, or the
+    /// item's own title on an unsplit row).
+    pub title: String,
+    /// The row's secondary label: the item's own title on a split row;
+    /// `None` on an unsplit row.
+    pub subtitle: Option<String>,
+    /// The gutter date, the shared projection's `day month` text; `None` on
+    /// a `Continue watching` row and on an item with no parseable date.
+    pub date: Option<String>,
+    /// The row's kind (`collection` when the row targets a container the
+    /// play path refuses, `media` on a playable leaf).
+    pub kind: GuiHomeRowKindFrame,
+    /// The row's state, with the Continue Watching resume progress.
+    pub state: GuiHomeRowStateFrame,
+    /// The row's artwork, present exactly while the row's item obtains art
+    /// from the image cache.
+    pub art: Option<GuiLibraryArt>,
+}
+
+/// One Home row's stable identity, mirroring `mbv::GuiHomeRowId` (design
+/// D12): the identity `App::home_stable_target` resolves. `Recent` carries
+/// the queue item's content id, whose serde form is itself (`provider` and
+/// `value`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "kind", content = "id", rename_all = "camelCase")]
+pub enum GuiHomeRowIdFrame {
+    /// A `Continue watching` row's Emby item id.
+    Continue(String),
+    /// A `Recently added` row's queue-item content id.
+    Recent(QueueItemContentId),
+}
+
+/// The state one item row paints (design D12), mirroring
+/// `mbv::GuiHomeRowState`: `playing`'s resume position is `active` with the
+/// bounded percentage, `played` without one is `played`, otherwise
+/// `ordinary`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum GuiHomeRowStateFrame {
+    Ordinary,
+    Played,
+    Active {
+        /// The resume progress's bounded percentage, `None` when the
+        /// item's runtime is unknown.
+        progress: Option<u8>,
+    },
+}
+
+/// The kind one item row paints (design D12), mirroring
+/// `mbv::GuiHomeRowKind`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum GuiHomeRowKindFrame {
+    Collection,
+    Media,
+}
+
+/// The Hero's facts for the selected row (design D12): the meta rows with
+/// their duration and progress roles, the overview, and the artwork.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GuiHomeHeroFrame {
+    /// The hero's title.
+    pub title: String,
+    /// The meta rows in display order.
+    pub meta_rows: Vec<String>,
+    /// Which meta row paints the duration role, when one does.
+    pub duration_row: Option<usize>,
+    /// Which meta row paints the progress role, when one does.
+    pub progress_row: Option<usize>,
+    /// The cleaned overview text, when the item's payload carries one.
+    pub overview: Option<String>,
+    /// The artwork box the Hero reserves (the artwork policy's arm).
+    pub art_shape: GuiArtShapeFrame,
+    /// The Hero's artwork, present exactly while the row's item obtains
+    /// art from the image cache; the window paints its own placeholder
+    /// while `None`.
+    pub art: Option<GuiLibraryArt>,
+}
+
+/// The Hero artwork's box shape, mirroring `mbv::GuiArtShape` (the artwork
+/// policy's arms).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum GuiArtShapeFrame {
+    Landscape,
+    Square,
+    Portrait,
+}
+
+impl GuiHomeFrame {
+    /// The Home content for `projection` (design D12): the rows, the
+    /// selection, and the Hero's facts beside their artwork.
+    pub(crate) fn from_projection(projection: &GuiHomeProjection) -> Self {
+        Self {
+            rows: projection.rows.iter().map(GuiHomeRowFrame::from).collect(),
+            selected: projection.selected.as_ref().map(GuiHomeRowIdFrame::from),
+            hero: projection.hero.as_ref().map(GuiHomeHeroFrame::from),
+        }
+    }
+}
+
+impl From<&GuiHomeRow> for GuiHomeRowFrame {
+    fn from(row: &GuiHomeRow) -> Self {
+        match row {
+            GuiHomeRow::Heading { text } => Self::Heading { text: text.clone() },
+            GuiHomeRow::Spacer => Self::Spacer,
+            GuiHomeRow::Item(item) => Self::Item(GuiHomeItemRowFrame::from(item)),
+        }
+    }
+}
+
+impl From<&GuiHomeItemRow> for GuiHomeItemRowFrame {
+    fn from(item: &GuiHomeItemRow) -> Self {
+        Self {
+            id: GuiHomeRowIdFrame::from(&item.id),
+            title: item.title.clone(),
+            subtitle: item.subtitle.clone(),
+            date: item.date.clone(),
+            kind: GuiHomeRowKindFrame::from(item.kind),
+            state: GuiHomeRowStateFrame::from(&item.state),
+            art: item.art.as_ref().map(GuiLibraryArt::from),
+        }
+    }
+}
+
+impl From<&GuiHomeRowId> for GuiHomeRowIdFrame {
+    fn from(id: &GuiHomeRowId) -> Self {
+        match id {
+            GuiHomeRowId::Continue(item_id) => Self::Continue(item_id.clone()),
+            GuiHomeRowId::Recent(content_id) => Self::Recent(content_id.clone()),
+        }
+    }
+}
+
+impl From<&GuiHomeRowState> for GuiHomeRowStateFrame {
+    fn from(state: &GuiHomeRowState) -> Self {
+        match state {
+            GuiHomeRowState::Ordinary => Self::Ordinary,
+            GuiHomeRowState::Played => Self::Played,
+            GuiHomeRowState::Active { progress } => Self::Active {
+                progress: *progress,
+            },
+        }
+    }
+}
+
+impl From<GuiHomeRowKind> for GuiHomeRowKindFrame {
+    fn from(kind: GuiHomeRowKind) -> Self {
+        match kind {
+            GuiHomeRowKind::Collection => Self::Collection,
+            GuiHomeRowKind::Media => Self::Media,
+        }
+    }
+}
+
+impl From<&GuiHomeHero> for GuiHomeHeroFrame {
+    fn from(hero: &GuiHomeHero) -> Self {
+        Self {
+            title: hero.title.clone(),
+            meta_rows: hero.meta_rows.clone(),
+            duration_row: hero.duration_row,
+            progress_row: hero.progress_row,
+            overview: hero.overview.clone(),
+            art_shape: GuiArtShapeFrame::from(hero.art_shape),
+            art: hero.art.as_ref().map(GuiLibraryArt::from),
+        }
+    }
+}
+
+impl From<GuiArtShape> for GuiArtShapeFrame {
+    fn from(shape: GuiArtShape) -> Self {
+        match shape {
+            GuiArtShape::Landscape => Self::Landscape,
+            GuiArtShape::Square => Self::Square,
+            GuiArtShape::Portrait => Self::Portrait,
         }
     }
 }

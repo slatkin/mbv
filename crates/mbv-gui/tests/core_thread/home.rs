@@ -7,8 +7,49 @@
 
 use mbv::{ClientTickHost, stub_app_with_completed_emby_startup_and_contents};
 use mbv_emby_model::test_support::make_item;
+use mbv_gui::bridge::frame::GuiFrame;
+use mbv_gui::bridge::library::GuiLibraryCommand;
+use mbv_gui::core_thread::CoreInput;
 
 use crate::test_core_with;
+
+/// The contents the Home frame tests seed: two Continue Watching movies.
+fn home_contents() -> Vec<mbv_emby_model::EmbyItem> {
+    let mut first = make_item("Continue First", "Movie");
+    first.id = "cw-first".to_string();
+    let mut second = make_item("Continue Second", "Movie");
+    second.id = "cw-second".to_string();
+    vec![first, second]
+}
+
+/// Open Home (position 0, design D2) over the core whose App the bootstrap
+/// completes on the same first tick (design D13): the command rides the
+/// queued channel ahead of the step, so the frame that tick emits presents
+/// the Home section.
+fn home_core_with_open() -> crate::TestCore {
+    let mut test = test_core_with(stub_app_with_completed_emby_startup_and_contents(
+        Vec::new(),
+        home_contents(),
+    ));
+    test.tx
+        .send(CoreInput::Library(
+            GuiLibraryCommand::OpenDestination { position: 0 }.into(),
+        ))
+        .unwrap();
+    assert!(test.core.step());
+    test
+}
+
+/// The Home section a frame carries, present only while Home presents.
+fn home_section(frame: GuiFrame) -> mbv_gui::bridge::frame::library::GuiHomeFrame {
+    frame
+        .library
+        .expect("the slice carries the Library section")
+        .content
+        .expect("the open's frame carries the changed content")
+        .home
+        .expect("the open's frame carries the Home content")
+}
 
 /// An asynchronous Emby bootstrap completes on the startup drain, and the
 /// next frame's tick reads its Continue Watching items from the App's stored
@@ -87,5 +128,84 @@ fn a_recently_added_fetch_result_lands_in_the_app_on_the_next_tick() {
     assert!(
         !test.core.app_mut().home_content_for_test().loading,
         "the bootstrap the same drain ran settled Home's loading flag"
+    );
+}
+
+/// An open-destination command for Home (position 0) presents the Home
+/// frame (row 6.2, design D12): the flat list's `Continue watching` heading
+/// row and item rows carry the stored snapshot, with the first item row
+/// selected — Home's Hero default, so a window that opens Home has a Hero.
+#[test]
+fn an_open_home_destination_finds_the_home_frame() {
+    let mut test = home_core_with_open();
+    assert_eq!(
+        test.core.app_mut().tab_for_test(),
+        mbv_ui_model::tab_selection::TabSelection::Home,
+        "the position-0 open made Home the active destination"
+    );
+
+    let home = home_section(test.next_frame());
+
+    assert_eq!(
+        home.rows.len(),
+        3,
+        "the heading row, then the two item rows"
+    );
+    assert!(
+        matches!(
+            &home.rows[0],
+            mbv_gui::bridge::frame::library::GuiHomeRowFrame::Heading { .. }
+        ),
+        "the section opens with its heading row"
+    );
+    assert_eq!(
+        home.selected,
+        Some(mbv_gui::bridge::frame::library::GuiHomeRowIdFrame::Continue("cw-first".into())),
+        "the first item row is the Hero default"
+    );
+    assert_eq!(
+        home.hero.expect("the Hero paints").title,
+        "Continue First",
+        "the Hero's facts read the selected row's item"
+    );
+}
+
+/// A select command moves the Hero (row 6.2, design D2, D12): the command
+/// names the row the frame painted, by stable id, and the next frame's
+/// `selected` and Hero facts carry that row.
+#[test]
+fn a_home_select_command_moves_the_hero() {
+    let mut test = home_core_with_open();
+    let home = home_section(test.next_frame());
+    let second = match &home.rows[2] {
+        mbv_gui::bridge::frame::library::GuiHomeRowFrame::Item(item) => item.id.clone(),
+        _ => panic!("the second item row carries an identity"),
+    };
+
+    test.tx
+        .send(CoreInput::Library(
+            GuiLibraryCommand::HomeSelect {
+                row: mbv_gui::bridge::library::GuiHomeRowId::Continue("cw-second".into()),
+            }
+            .into(),
+        ))
+        .unwrap();
+    assert!(test.core.step());
+    let home = home_section(test.next_frame());
+
+    assert_eq!(
+        home.selected,
+        Some(mbv_gui::bridge::frame::library::GuiHomeRowIdFrame::Continue("cw-second".into())),
+        "the frame paints the core's selection"
+    );
+    assert_eq!(
+        home.hero.expect("the Hero paints").title,
+        "Continue Second",
+        "the Hero's facts follow the selected row"
+    );
+    // `second`'s frame id round-trips the same identity the command carries.
+    assert_eq!(
+        second,
+        mbv_gui::bridge::frame::library::GuiHomeRowIdFrame::Continue("cw-second".into())
     );
 }

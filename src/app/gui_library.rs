@@ -6,12 +6,17 @@
 //! calls any of them.
 
 mod artwork;
+mod home;
 mod launch;
 mod projection;
 mod store;
 mod tabs;
 
 pub use self::artwork::GuiLibraryArtwork;
+pub use self::home::{
+    GuiArtShape, GuiHomeHero, GuiHomeItemRow, GuiHomeProjection, GuiHomeRow, GuiHomeRowId,
+    GuiHomeRowKind, GuiHomeRowState,
+};
 pub use self::projection::{
     GuiMusicAlbum, GuiMusicArtist, GuiMusicHero, GuiMusicPill, GuiMusicProjection, GuiMusicTrack,
     GuiMusicTrackTotal,
@@ -72,6 +77,24 @@ pub enum GuiLibraryCommand {
     /// TUI menu builder's entries for it, and a chosen entry runs through the
     /// same `MenuEntry` command as the Hero's menu carries.
     RowMenu { item_id: String },
+    /// Select a Home row (design D2, D12, the USER-APPROVED GUI Home design):
+    /// the row the Hero shows. The core owns the selection, as the Music
+    /// collection groups own their pick (`showDetail`), so the hero re-arms
+    /// to its first item row when the frame's row has left the list.
+    HomeSelect { row: home::GuiHomeRowId },
+    /// Play a Home row (design D12): Enter on the row plays it through the
+    /// Home flat list's play path, whose resume behaviour the row's
+    /// Continue Watching membership decides.
+    HomePlay { row: home::GuiHomeRowId },
+    /// Enqueue a Home row after the active slot (design D12): `n` on the
+    /// row, carried as its own command for the front end's label, resolved
+    /// through the same Home enqueue path as the add — the Owner owns the
+    /// queue, and the Home rows have no library the play-next admission
+    /// resolves against.
+    HomePlayNext { row: home::GuiHomeRowId },
+    /// Enqueue a Home row (design D12): `a` on the row, through the Home
+    /// flat list's enqueue path.
+    HomeQueue { row: home::GuiHomeRowId },
 }
 
 /// The Library item menu the frame's `rowMenu` section carries: the item
@@ -94,6 +117,13 @@ pub struct GuiLibraryMenuItem {
     pub label: String,
     pub key_hint: Option<String>,
     pub index: usize,
+}
+
+/// The command's row identity for a stale-frame log: a play or enqueue
+/// command names a Home row, so the ignored log carries the same identity
+/// the frame painted.
+fn home_row_command_id(command: &str, row: &GuiHomeRowId) -> String {
+    format!("{command} {row:?}")
 }
 
 impl App {
@@ -149,6 +179,53 @@ impl App {
             GuiLibraryCommand::RowMenu { item_id } => {
                 self.gui_library_row_menu_target = Some(item_id);
             }
+            GuiLibraryCommand::HomeSelect { row } => {
+                self.select_gui_home_row(&row);
+            }
+            GuiLibraryCommand::HomePlay { row } => {
+                self.play_gui_home_row(&row);
+            }
+            GuiLibraryCommand::HomePlayNext { row } => {
+                self.enqueue_gui_home_row(&row, "homePlayNext");
+            }
+            GuiLibraryCommand::HomeQueue { row } => {
+                self.enqueue_gui_home_row(&row, "homeQueue");
+            }
+        }
+    }
+
+    /// Select a Home row (design D2, D12): the row the Hero shows. The
+    /// selection is the core's, so the frame carries it back and the launch
+    /// of a window-content reload keeps it.
+    fn select_gui_home_row(&mut self, row: &GuiHomeRowId) {
+        self.gui_home_selection = Some(row.clone());
+    }
+
+    /// Play a Home row (design D12): the Home flat list's play path, whose
+    /// resume behaviour the row's Continue Watching membership decides. A
+    /// stale frame's row, one whose item the App's Home data no longer
+    /// holds, changes nothing, as every stale command's item arm does.
+    fn play_gui_home_row(&mut self, row: &GuiHomeRowId) {
+        let from_cw = row.is_continue();
+        if let Some(item) = self.home_stable_target(&row.clone().into_home_item_target()) {
+            self.home_play_target(item, from_cw);
+        } else {
+            Self::log_stale_library_item("homePlay", &home_row_command_id("homePlay", row));
+        }
+    }
+
+    /// Enqueue a Home row (design D12): the Home flat list's enqueue path,
+    /// for both the explicit add and the play-next label — the Owner owns
+    /// the queue, and the command's intent reaches it through the same
+    /// resolved row, never a direct queue mutation. `name` is the command's
+    /// intent, for the stale-frame log the item arms share.
+    fn enqueue_gui_home_row(&mut self, row: &GuiHomeRowId, name: &str) {
+        let logged = home_row_command_id(name, row);
+        let from_cw = row.is_continue();
+        if let Some(item) = self.home_stable_target(&row.clone().into_home_item_target()) {
+            self.home_enqueue_target(item, from_cw);
+        } else {
+            Self::log_stale_library_item(name, &logged);
         }
     }
 
@@ -165,6 +242,9 @@ impl App {
         );
     }
 
+    /// The command's row identity for a stale-frame log: a select, play, or
+    /// enqueue command names a Home row, so the ignored log carries the same
+    /// identity the frame painted.
     /// Log the item-named Library command whose item the App's Service data
     /// no longer holds (design D2: a stale frame addresses the item it
     /// painted or nothing).

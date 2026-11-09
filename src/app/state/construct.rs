@@ -220,6 +220,8 @@ impl App {
             queue_card_projection: mbv_ui_model::playback::QueueCardProjection::default(),
             card_artwork_encoded: None,
             gui_library_art_encoded: None,
+            gui_home_selection: None,
+            gui_home_art_encoded: std::collections::HashMap::new(),
             title_log_gate: crate::app::state::projection::card::TitleLogGate::default(),
             dim_backdrop_active: false,
             settings_destination: mbv_ui_model::settings::SettingsDestination::Main,

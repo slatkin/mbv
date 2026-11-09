@@ -3,6 +3,7 @@
 //! The fetch is issued here, as the TUI's hero projection issues its own, so
 //! the window content never requests an image itself.
 
+use mbv_emby_model::EmbyItem;
 use mbv_render::components::widgets::MUSIC_ALBUM_IMAGE_TYPES;
 
 use super::super::queue_card_artwork::encode_for_display;
@@ -82,5 +83,84 @@ impl App {
             key: key.clone(),
             jpeg: encoded.clone(),
         }
+    }
+
+    /// One Home row's card art (add-gui-library-panel design D12, the
+    /// USER-APPROVED GUI Home design): the queue card's chain and cache
+    /// key for `item` — the now-playing card's conventions, so a Home row
+    /// whose item plays shares its cache entry — fetched here and encoded
+    /// from the image cache once per key. A fetch in flight paints the
+    /// loading fill, and a fetch that resolved empty paints the
+    /// placeholder — the queue card's resolution.
+    pub(in crate::app::gui_library) fn gui_home_row_artwork(
+        &mut self,
+        item: &EmbyItem,
+    ) -> GuiLibraryArtwork {
+        let cache_key = crate::app::state::projection::card::card_cache_key(item);
+        let types = crate::app::state::projection::card::card_image_types(item);
+        self.fetch_card_image(
+            cache_key.clone(),
+            item.id.clone(),
+            item.series_id.clone(),
+            types,
+        );
+        self.resolve_gui_home_art(&cache_key)
+    }
+
+    /// The Home Hero's artwork under the artwork policy's declared source
+    /// (add-gui-library-panel design D12): the policy chain and cache key
+    /// the TUI hero fetches, fetched here and encoded from the image cache
+    /// once per key. The same resolution the row art runs.
+    pub(in crate::app::gui_library) fn gui_home_hero_artwork(
+        &mut self,
+        cache_key: &str,
+        item_id: &str,
+        series_id: &str,
+        image_types: &[String],
+    ) -> GuiLibraryArtwork {
+        let types: Vec<&str> = image_types.iter().map(String::as_str).collect();
+        self.fetch_card_image(
+            cache_key.to_owned(),
+            item_id.to_owned(),
+            series_id.to_owned(),
+            &types,
+        );
+        self.resolve_gui_home_art(cache_key)
+    }
+
+    /// The cached art under `cache_key`, display-encoded once per key
+    /// (`gui_home_art_encoded`), or the empty fetch's placeholder and the
+    /// in-flight fetch's loading state — the queue card's resolution.
+    fn resolve_gui_home_art(&mut self, cache_key: &str) -> GuiLibraryArtwork {
+        if self
+            .images
+            .image(cache_key)
+            .is_none_or(|entry| entry.img.is_none())
+        {
+            if self.images.is_loading(cache_key) || self.images.is_fetch_interrupted(cache_key) {
+                return GuiLibraryArtwork::Loading;
+            }
+            return GuiLibraryArtwork::Placeholder;
+        }
+        if !self.gui_home_art_encoded.contains_key(cache_key) {
+            let Some(entry) = self
+                .images
+                .image(cache_key)
+                .and_then(|entry| entry.img.clone())
+            else {
+                return GuiLibraryArtwork::Placeholder;
+            };
+            let encoded = encode_for_display(&entry);
+            self.gui_home_art_encoded
+                .insert(cache_key.to_owned(), encoded);
+        }
+        self.gui_home_art_encoded
+            .get(cache_key)
+            .map_or(GuiLibraryArtwork::Placeholder, |jpeg| {
+                GuiLibraryArtwork::Image {
+                    key: cache_key.to_owned(),
+                    jpeg: jpeg.clone(),
+                }
+            })
     }
 }

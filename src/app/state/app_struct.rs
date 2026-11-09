@@ -245,6 +245,12 @@ pub struct App {
     /// GUI Library's right-click item menu): the item the row-menu command
     /// last named. The TUI never reads it.
     pub(in crate::app) gui_library_row_menu_target: Option<String>,
+    /// The Home row the GUI Library's Hero shows (design D2, D12): the row
+    /// the select command last named, as the Home-stable id the Home paths
+    /// resolve. A row whose item the Home data no longer carries falls back
+    /// to the first item row in the projection, so the Hero's default is
+    /// never blank. The TUI never reads it.
+    pub(in crate::app) gui_home_selection: Option<crate::app::gui_library::GuiHomeRowId>,
     /// The one startup snapshot and its tab-scoped destination re-anchor.
     pub(in crate::app) launch_restore: LaunchRestore,
     /// Deferred tab switch for a `NavigateLanding::Album` landing: set when the
@@ -291,6 +297,11 @@ pub struct App {
     /// re-encodes once per key, as the visual slot's does, so a frame between
     /// artwork changes stays encode-free.
     pub(in crate::app) gui_library_art_encoded: Option<(String, Vec<u8>)>,
+    /// The Home rows' and Hero's display encodes (add-gui-library-panel
+    /// design D12), keyed by the cache key each encodes: the flat list's
+    /// art re-encodes once per key, as the visual slot's does, so a frame
+    /// between artwork changes stays encode-free. The TUI never reads it.
+    pub(in crate::app) gui_home_art_encoded: std::collections::HashMap<String, Vec<u8>>,
     pub(in crate::app) title_log_gate: crate::app::state::projection::card::TitleLogGate,
     pub(in crate::app) dim_backdrop_active: bool,
     pub(in crate::app) settings_destination: SettingsDestination,

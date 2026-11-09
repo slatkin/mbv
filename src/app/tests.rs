@@ -14,6 +14,7 @@ mod daemon_bootstrap;
 mod feeds;
 mod gui_client_settings;
 mod gui_library;
+mod gui_library_home;
 mod home_latest;
 mod library_navigate_reveal;
 mod library_position;

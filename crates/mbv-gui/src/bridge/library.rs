@@ -5,6 +5,7 @@
 //! so a command built from a stale frame addresses the item that frame painted
 //! or nothing.
 
+use mbv_queue::QueueItemContentId;
 use serde::Deserialize;
 
 /// One request from the Library panel's window content (design D2). The
@@ -45,6 +46,30 @@ pub enum GuiLibraryCommand {
     MenuEntry { item_id: String, index: usize },
     /// Carry the item's full menu in the frame (the right-click item menu).
     RowMenu { item_id: String },
+    /// Select a Home row (add-gui-library-panel design D12): the row the
+    /// Hero shows. The core keeps the selection, so the frame paints it.
+    HomeSelect { row: GuiHomeRowId },
+    /// Play a Home row (design D12).
+    HomePlay { row: GuiHomeRowId },
+    /// Enqueue a Home row after the active slot (design D12): the Owner
+    /// owns the queue, and the row resolves through the same Home enqueue
+    /// path the add carries.
+    HomePlayNext { row: GuiHomeRowId },
+    /// Enqueue a Home row (design D12).
+    HomeQueue { row: GuiHomeRowId },
+}
+
+/// One Home row's stable identity (design D12): the identity the Home
+/// paths resolve, addressed by Service ids and never by a row position.
+/// `Recent` carries the queue item's content id, whose own serde form is
+/// itself (`provider` and `value`).
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(tag = "kind", content = "id", rename_all = "camelCase")]
+pub enum GuiHomeRowId {
+    /// A `Continue watching` row's Emby item id.
+    Continue(String),
+    /// A `Recently added` row's queue-item content id.
+    Recent(QueueItemContentId),
 }
 
 impl From<GuiLibraryCommand> for mbv::GuiLibraryCommand {
@@ -64,6 +89,30 @@ impl From<GuiLibraryCommand> for mbv::GuiLibraryCommand {
             GuiLibraryCommand::ShuffleArtist { album_ids } => Self::ShuffleArtist { album_ids },
             GuiLibraryCommand::MenuEntry { item_id, index } => Self::MenuEntry { item_id, index },
             GuiLibraryCommand::RowMenu { item_id } => Self::RowMenu { item_id },
+            GuiLibraryCommand::HomeSelect { row } => Self::HomeSelect {
+                row: mbv::GuiHomeRowId::from(&row),
+            },
+            GuiLibraryCommand::HomePlay { row } => Self::HomePlay {
+                row: mbv::GuiHomeRowId::from(&row),
+            },
+            GuiLibraryCommand::HomePlayNext { row } => Self::HomePlayNext {
+                row: mbv::GuiHomeRowId::from(&row),
+            },
+            GuiLibraryCommand::HomeQueue { row } => Self::HomeQueue {
+                row: mbv::GuiHomeRowId::from(&row),
+            },
+        }
+    }
+}
+
+/// One row id's core identity, resolving the wire type the front end sends.
+/// The frame mirrors the same shape on the way out, so a command built from
+/// a carried row addresses exactly that row.
+impl From<&GuiHomeRowId> for mbv::GuiHomeRowId {
+    fn from(row: &GuiHomeRowId) -> Self {
+        match row {
+            GuiHomeRowId::Continue(item_id) => Self::Continue(item_id.clone()),
+            GuiHomeRowId::Recent(content_id) => Self::Recent(content_id.clone()),
         }
     }
 }

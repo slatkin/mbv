@@ -9,6 +9,13 @@ import type { GuiLibraryFrame } from './library-types';
 
 export type {
 	GuiArtistKey,
+	GuiHomeContentId,
+	GuiHomeFrame,
+	GuiHomeHero,
+	GuiHomeRow,
+	GuiHomeRowId,
+	GuiHomeRowKind,
+	GuiHomeRowState,
 	GuiLibraryArt,
 	GuiLibraryCommand,
 	GuiLibraryContent,

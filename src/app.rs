@@ -43,6 +43,10 @@ pub use self::gui_client_state::{
 };
 pub use self::gui_library::GuiLibraryCommand;
 pub use self::gui_library::{
+    GuiArtShape, GuiHomeHero, GuiHomeItemRow, GuiHomeProjection, GuiHomeRow, GuiHomeRowId,
+    GuiHomeRowKind, GuiHomeRowState,
+};
+pub use self::gui_library::{
     GuiLibraryArtwork, GuiLibraryMenuItem, GuiLibraryRowMenu, GuiLibraryTab, GuiLibraryTabs,
     GuiMusicAlbum, GuiMusicArtist, GuiMusicHero, GuiMusicPill, GuiMusicProjection, GuiMusicTrack,
     GuiMusicTrackTotal,

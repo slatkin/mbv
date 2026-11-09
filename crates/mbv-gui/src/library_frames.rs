@@ -11,7 +11,8 @@
 use mbv::{App, GuiLibraryTabs};
 
 use crate::bridge::frame::library::{
-    GuiLibraryArt, GuiLibraryContent, GuiLibraryFrame, GuiLibraryTabFrame, GuiMusicFrame,
+    GuiHomeFrame, GuiLibraryArt, GuiLibraryContent, GuiLibraryFrame, GuiLibraryTabFrame,
+    GuiMusicFrame,
 };
 
 /// The frames' Library section memo (design D2).
@@ -34,11 +35,17 @@ impl LibraryFrames {
         // No presented destination is active (design D2): the section is
         // absent, and the next one re-carries its content whatever the window
         // kept while the section was away.
-        if app.gui_music_destination().is_none() {
+        let music_lib = app.gui_music_destination();
+        let music = music_lib.map(|lib_idx| music_frame(app, lib_idx));
+        // The Home destination presents while Music presents no content
+        // (design D12): the destinations are exclusive, so a Music position's
+        // content and Home's never both set their field.
+        let home = (music_lib.is_none() && app.gui_home_destination()).then(|| home_frame(app));
+        if music.is_none() && home.is_none() {
             self.sent = None;
             return None;
         }
-        let content = content(app);
+        let content = content(app, music, home);
         if self.last.as_ref() != Some(&content) {
             // The counter wraps like the queue's revision mint: a client
             // lives far shorter than a revision's range, so a repeat is a
@@ -74,6 +81,7 @@ fn log_content_built(revision: u64, content: &GuiLibraryContent) {
     let pills = music.map_or(0, |music| music.pills.len());
     let selected = music.map_or(0, |music| music.pills.iter().filter(|p| p.selected).count());
     let artists = music.map_or(0, |music| music.artists.len());
+    let home_rows = content.home.as_ref().map_or(0, |home| home.rows.len());
     tracing::info!(
         name: "gui_library.content.built",
         target: "gui_library",
@@ -81,23 +89,29 @@ fn log_content_built(revision: u64, content: &GuiLibraryContent) {
         pills,
         selected,
         artists,
-        hero = music.is_some_and(|music| music.hero.is_some()),
+        hero = music.is_some_and(|music| music.hero.is_some())
+            || content.home.as_ref().is_some_and(|home| home.hero.is_some()),
+        home_rows,
         "the Library content changed"
     );
 }
 
 /// The Library panel's content for the active destination (design D2): the
-/// destination tabs the top bar paints, and the Music destination's pills,
-/// list, and Hero while a Grouped Music library is active.
-fn content(app: &mut App) -> GuiLibraryContent {
+/// destination tabs the top bar paints, the Music destination's pills, list,
+/// and Hero while a Grouped Music library is active, and Home's flat list and
+/// Hero while Home is active (design D12). Each destination's field is
+/// computed by the caller, so the gate and the content cannot disagree.
+fn content(
+    app: &mut App,
+    music: Option<GuiMusicFrame>,
+    home: Option<GuiHomeFrame>,
+) -> GuiLibraryContent {
     let GuiLibraryTabs { tabs, current } = app.gui_library_tabs();
-    let music = app
-        .gui_music_destination()
-        .map(|lib_idx| music_frame(app, lib_idx));
     GuiLibraryContent {
         tabs: tabs.into_iter().map(GuiLibraryTabFrame::from).collect(),
         current_tab: current,
         music,
+        home,
     }
 }
 
@@ -127,4 +141,13 @@ fn music_frame(app: &mut App, lib_idx: usize) -> GuiMusicFrame {
         row_menu.as_ref(),
         playing_track_id,
     )
+}
+
+/// The Home destination's content (design D12, the USER-APPROVED GUI Home
+/// design): the flat list's projection rows, the core's selected row, and
+/// its Hero, fetched and built here per frame so an unchanged frame's
+/// revision carries nothing (the memo's content compare).
+fn home_frame(app: &mut App) -> GuiHomeFrame {
+    let projection = app.gui_home_projection();
+    GuiHomeFrame::from_projection(&projection)
 }

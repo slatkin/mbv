@@ -30,6 +30,16 @@ impl App {
         &self.home_content
     }
 
+    /// Seed Home's content snapshot with `items` (add-gui-library-panel
+    /// design D12): the Client tests build the Home frame over it without
+    /// the bootstrap's mock transport, so the seeded snapshot is the one
+    /// the projection reads.
+    #[cfg(any(test, feature = "test"))]
+    pub fn seed_home_content_for_test(&mut self, items: Vec<mbv_emby_model::EmbyItem>) {
+        self.home_content.continue_items = items;
+        self.home_content.loading = false;
+    }
+
     /// Make the grouped Music library the GUI Library test's destination
     /// (add-gui-library-panel row 3.1): the Emby runtime becomes Ready with
     /// `client` (built over a mock transport), and the Music tab's group level

@@ -69,6 +69,7 @@ function content(): GuiLibraryContent {
 		tabs: [{ position: 1, label: 'Music' }],
 		currentTab: 1,
 		music: music(),
+		home: null,
 	};
 }
 
