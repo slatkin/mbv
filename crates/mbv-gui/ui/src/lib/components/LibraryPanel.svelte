@@ -30,13 +30,14 @@
 	import { sendLibraryCommand } from '$lib/bridge/library';
 	import { dragListWidth, resetListWidth } from '$lib/bridge/resize';
 import type {
-		GuiAudiobooksFrame,
-		GuiEmbyFrame,
-		GuiHomeFrame,
-		GuiLibraryTab,
-		GuiMusicFrame,
-		GuiShowsFrame,
-		GuiStatusBar,
+GuiAudiobooksFrame,
+GuiEmbyFrame,
+GuiHomeFrame,
+GuiLibraryTab,
+GuiMusicFrame,
+GuiPodcastsFrame,
+GuiShowsFrame,
+GuiStatusBar,
 } from '$lib/bridge/types';
 import LibraryAudiobooksHero from './LibraryAudiobooksHero.svelte';
 import LibraryAudiobooksList from './LibraryAudiobooksList.svelte';
@@ -48,6 +49,9 @@ import LibraryEmbyHero from '$lib/components/LibraryEmbyHero.svelte';
 	import LibraryHomeList from '$lib/components/LibraryHomeList.svelte';
 	import LibraryList from '$lib/components/LibraryList.svelte';
 	import LibraryPills from '$lib/components/LibraryPills.svelte';
+import LibraryPodcastsHero from '$lib/components/LibraryPodcastsHero.svelte';
+import LibraryPodcastsList from '$lib/components/LibraryPodcastsList.svelte';
+import LibraryPodcastsPills from '$lib/components/LibraryPodcastsPills.svelte';
 	import LibraryShowsHero from '$lib/components/LibraryShowsHero.svelte';
 	import LibraryShowsList from '$lib/components/LibraryShowsList.svelte';
 	import LibraryShowsPills from '$lib/components/LibraryShowsPills.svelte';
@@ -87,6 +91,10 @@ import LibraryEmbyHero from '$lib/components/LibraryEmbyHero.svelte';
 		 * book list and the selected book's Hero with its chapters Workspace;
 		 * `null` while another destination is active. */
 		audiobooks?: GuiAudiobooksFrame | null;
+		/** The carried Podcasts content (design D12, row 10.1): the episode
+		 * pills, the active view's date-gutter list, and the selected episode's
+		 * Hero with no Workspace; `null` while another destination is active. */
+		podcasts?: GuiPodcastsFrame | null;
 		/** The frame's Status bar facts (design D10): the armed prefix and the
 		 * live toast, which the Status bar replaces the hints with. */
 		status: GuiStatusBar;
@@ -106,6 +114,7 @@ import LibraryEmbyHero from '$lib/components/LibraryEmbyHero.svelte';
 		shows = null,
 		emby = null,
 		audiobooks = null,
+		podcasts = null,
 		status,
 		arrangement,
 		listWidth,
@@ -119,12 +128,13 @@ import LibraryEmbyHero from '$lib/components/LibraryEmbyHero.svelte';
 	 * Music's picked album, the Home frame's selected row, the Shows frame's
 	 * selected row with its Workspace, or a plain Emby library's selected row
 	 * (design D12). */
-	type OverlayHero =
+type OverlayHero =
 		| { kind: 'music'; music: GuiMusicFrame }
 		| { kind: 'home'; home: GuiHomeFrame }
 		| { kind: 'shows'; shows: GuiShowsFrame }
 		| { kind: 'emby'; emby: GuiEmbyFrame }
 		| { kind: 'audiobooks'; audiobooks: GuiAudiobooksFrame }
+		| { kind: 'podcasts'; podcasts: GuiPodcastsFrame }
 		| null;
 	const overlayHero: OverlayHero = $derived(
 		music !== null && music.hero !== null
@@ -133,11 +143,13 @@ import LibraryEmbyHero from '$lib/components/LibraryEmbyHero.svelte';
 				? { kind: 'home', home }
 				: shows !== null && shows.hero !== null
 					? { kind: 'shows', shows }
-				: emby !== null && emby.hero !== null
-					? { kind: 'emby', emby }
-					: audiobooks !== null && audiobooks.hero !== null
-						? { kind: 'audiobooks', audiobooks }
-						: null,
+					: emby !== null && emby.hero !== null
+						? { kind: 'emby', emby }
+						: audiobooks !== null && audiobooks.hero !== null
+							? { kind: 'audiobooks', audiobooks }
+							: podcasts !== null && podcasts.hero !== null
+								? { kind: 'podcasts', podcasts }
+								: null,
 	);
 
 	let panelEl: HTMLElement | undefined = $state();
@@ -210,6 +222,10 @@ import LibraryEmbyHero from '$lib/components/LibraryEmbyHero.svelte';
 			each root folder that holds items. A plain library paints no pill row at
 			all — its letter rail replaces the TUI's letter-range pill row. -->
 		<LibraryEmbyPills {emby} />
+	{:else if podcasts !== null}
+		<!-- The Podcasts destination's episode pills (design D12, row 10.1):
+			single select over Latest and each show. -->
+		<LibraryPodcastsPills {podcasts} />
 	{/if}
 	<div class="relative flex min-h-0 flex-1">
 		{#if wide}
@@ -247,6 +263,12 @@ import LibraryEmbyHero from '$lib/components/LibraryEmbyHero.svelte';
 					{#if audiobooks.hero !== null}
 						<LibraryAudiobooksHero {audiobooks} />
 					{/if}
+				{:else if podcasts !== null}
+					<!-- The episode Hero with no Workspace (design D12, row 10.1):
+						a frame without one leaves the pane empty. -->
+					{#if podcasts.hero !== null}
+						<LibraryPodcastsHero {podcasts} />
+					{/if}
 				{/if}
 			</div>
 		{/if}
@@ -281,6 +303,8 @@ import LibraryEmbyHero from '$lib/components/LibraryEmbyHero.svelte';
 				<LibraryEmbyList {emby} />
 			{:else if audiobooks !== null}
 				<LibraryAudiobooksList {audiobooks} />
+			{:else if podcasts !== null}
+				<LibraryPodcastsList {podcasts} />
 			{/if}
 		</div>
 		{#if arrangement === 'narrow' && overlayHero !== null && !$libraryUi.heroDismissed}
@@ -319,6 +343,8 @@ import LibraryEmbyHero from '$lib/components/LibraryEmbyHero.svelte';
 						<LibraryShowsHero shows={overlayHero.shows} />
 					{:else if overlayHero.kind === 'audiobooks'}
 						<LibraryAudiobooksHero audiobooks={overlayHero.audiobooks} />
+					{:else if overlayHero.kind === 'podcasts'}
+						<LibraryPodcastsHero podcasts={overlayHero.podcasts} />
 					{:else}
 						<LibraryEmbyHero emby={overlayHero.emby} />
 					{/if}
@@ -329,7 +355,17 @@ import LibraryEmbyHero from '$lib/components/LibraryEmbyHero.svelte';
 	<!-- The Library Status bar (design D10): under the list region, closing the
 		column with the canvas's fixed key hints and the location while the panel
 		paints. -->
-	<LibraryStatusBar {tabs} {currentTab} {music} {home} {shows} {emby} {audiobooks} {status} />
+	<LibraryStatusBar
+		{tabs}
+		{currentTab}
+		{music}
+		{home}
+		{shows}
+		{emby}
+		{audiobooks}
+		{podcasts}
+		{status}
+	/>
 	<!-- The right-click item menu (the row-menu command): the viewport-anchored
 		card at the pointer position, painted only while the Music frame carries
 		the item's own entries. A press runs the entry the core built, resolved by

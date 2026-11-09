@@ -25,6 +25,7 @@ import {
 	heroOverlayOpen,
 	libraryAudiobooks,
 	libraryContent,
+	libraryPodcasts,
 	libraryEmby,
 	libraryHome,
 	libraryShows,
@@ -48,6 +49,7 @@ import {
 import { routeShowsPanelKey } from './shows-keys';
 import { routeEmbyPanelKey } from './emby-keys';
 import { routeAudiobooksPanelKey } from './audiobooks-keys';
+import { routePodcastsPanelKey } from './podcasts-keys';
 
 /** The frame facts the routing reads. A slice `GuiFrame` satisfies it whole, so
  * the installer passes the frame it holds; a test builds only these fields. */
@@ -253,6 +255,9 @@ function routePanelKey(event: KeyboardEvent, ui: LibraryUiState): KeyOutcome {
 	}
 	if (libraryAudiobooks() !== null) {
 		return routeAudiobooksPanelKey(event, ui);
+	}
+	if (libraryPodcasts() !== null) {
+		return routePodcastsPanelKey(event, ui);
 	}
 	if (event.key === '/' && bare(event)) {
 		openLibraryFilter();

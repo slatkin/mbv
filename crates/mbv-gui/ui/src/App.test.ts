@@ -425,6 +425,71 @@ test('the Emby content mounts the Library panel with the Emby painters', async (
 	expect(panel?.querySelector('[data-library-list]')).toBeNull();
 });
 
+// add-gui-library-panel row 10.1: while a Podcasts library is the active
+// destination (design D12), the window mounts the Library panel with the
+// Podcasts painters — its pills, its date-gutter list, and its Hero — and
+// none of the other destinations' painters.
+test('the Podcasts content mounts the Library panel with the Podcasts painters', async () => {
+	const slice = frame('library', null);
+	slice.library = { revision: 1, content: podcastsContent() };
+	const { container } = await mount({ width: 1600, height: 900 }, slice);
+
+	const panel = container.querySelector('[data-library-panel]');
+
+	expect(panel).toBeTruthy();
+	expect(panel?.querySelector('[data-library-podcasts-list]')).toBeTruthy();
+	expect(
+		panel?.querySelector('[data-library-region="hero"] [data-library-podcasts-hero]'),
+	).toBeTruthy();
+	expect(panel?.querySelector('[data-library-pill="latest"]')).toBeTruthy();
+	expect(panel?.querySelector('[data-library-list]')).toBeNull();
+	expect(panel?.querySelector('[data-library-emby-list]')).toBeNull();
+	expect(panel?.querySelector('[data-library-audiobooks-list]')).toBeNull();
+});
+
+/** The carried content while a Podcasts library is active: the Latest pill
+ * and a show pill, one merged episode row, and the selected episode's Hero
+ * (design D12, row 10.1). */
+function podcastsContent(): GuiLibraryContent {
+	return {
+		tabs: [{ position: 2, label: 'Podcasts' }],
+		currentTab: 2,
+		music: null,
+		home: null,
+		shows: null,
+		emby: null,
+		audiobooks: null,
+		podcasts: {
+			libIdx: 2,
+			pills: [
+				{ pill: { kind: 'latest' }, name: 'Latest', selected: true, collection: false },
+				{ pill: { kind: 'show', id: 'sh1' }, name: 'Show One', selected: false, collection: false },
+			],
+			loading: false,
+			failed: false,
+			rows: [
+				{
+					id: 'e1:ep1',
+					title: 'Episode A',
+					subtitle: 'Show One',
+					date: '12 May',
+					state: 'ordinary',
+				},
+			],
+			selected: 'e1:ep1',
+			hero: {
+				title: 'Episode A',
+				metaRows: ['Show One', '34:00'],
+				durationRow: 1,
+				progressRow: null,
+				overview: null,
+				artShape: 'square',
+				art: null,
+			},
+		},
+	};
+}
+
 /** The carried content while a plain Emby library is active: one name-sorted
  * row with its rail letter and its Hero (design D12, row 8.1). */
 function embyContent(): GuiLibraryContent {

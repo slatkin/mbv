@@ -18,6 +18,7 @@ import type {
 	GuiLibraryFrame,
 	GuiMusicFrame,
 	GuiMusicPill,
+	GuiPodcastsFrame,
 	GuiShowsFrame,
 } from '$lib/bridge/types';
 import { heroTracks, moveTrackCursor, resolveTrackCursor } from './hero';
@@ -125,6 +126,12 @@ export const EMBY_PANES_NO_HERO: readonly LibraryPane[] = ['list'];
 export const EMBY_FEED_PANES: readonly LibraryPane[] = ['pills', 'list', 'hero'];
 export const EMBY_FEED_PANES_NO_HERO: readonly LibraryPane[] = ['pills', 'list'];
 
+/** The Library panel's panes on the Podcasts destination (design D12, row
+ * 10.1): the episode pills, the date-gutter list, and the Hero. A frame
+ * without a Hero leaves the walk on the pills and the list. */
+export const PODCASTS_PANES: readonly LibraryPane[] = ['pills', 'list', 'hero'];
+export const PODCASTS_PANES_NO_HERO: readonly LibraryPane[] = ['pills', 'list'];
+
 /** The panes the active destination paints (design D12): the one walk on
  * Home skips the panes it does not paint, on Shows it skips the Hero the
  * Upcoming mode does not paint, and on an Emby library it skips the pill row a
@@ -144,6 +151,10 @@ export function activeLibraryPanes(): readonly LibraryPane[] {
 	const audiobooks = libraryAudiobooks();
 	if (audiobooks !== null) {
 		return audiobooks.hero === null ? AUIB_PANES_NO_HERO : AUIB_PANES;
+	}
+	const podcasts = libraryPodcasts();
+	if (podcasts !== null) {
+		return podcasts.hero === null ? PODCASTS_PANES_NO_HERO : PODCASTS_PANES;
 	}
 	return PANES;
 }
@@ -209,7 +220,8 @@ export function libraryShown(
 			content.home !== null ||
 			content.shows !== null ||
 			content.emby !== null ||
-			content.audiobooks !== null)
+			content.audiobooks !== null ||
+			content.podcasts !== null)
 	);
 }
 
@@ -322,6 +334,12 @@ export function libraryEmby(): GuiEmbyFrame | null {
  * `null` while any other destination is active. */
 export function libraryAudiobooks(): GuiAudiobooksFrame | null {
 	return get(libraryContent)?.audiobooks ?? null;
+}
+
+/** The carried Podcasts destination's content (design D12, row 10.1), or
+ * `null` while any other destination is active. */
+export function libraryPodcasts(): GuiPodcastsFrame | null {
+	return get(libraryContent)?.podcasts ?? null;
 }
 
 /** The row model under one interaction state (design D7): the carried union,
@@ -688,7 +706,8 @@ export function heroOverlayOpen(ui: LibraryUiState): boolean {
 			(libraryHome()?.hero ?? null) !== null ||
 			(libraryShows()?.hero ?? null) !== null ||
 			(libraryEmby()?.hero ?? null) !== null ||
-			(libraryAudiobooks()?.hero ?? null) !== null)
+			(libraryAudiobooks()?.hero ?? null) !== null ||
+			(libraryPodcasts()?.hero ?? null) !== null)
 	);
 }
 
