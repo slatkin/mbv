@@ -511,7 +511,7 @@ async fn poll_status(
         else {
             continue;
         };
-        let ctxt = iface_ref.signal_context();
+        let ctxt = iface_ref.signal_emitter();
         let iface = iface_ref.get().await;
 
         if cur_status != last_status {
