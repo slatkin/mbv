@@ -82,8 +82,9 @@ pub fn save_gui_launch_state(state: &GuiLaunchState) -> Result<(), LaunchStateEr
 /// location takes, and its fallback opens the first presented destination.
 /// The identity is Home — no Service library, so the fallback resolution
 /// picks the first presented one — with Library Panel focus and no saved
-/// collection sets, whose empty set is the show-all selection: the union of
-/// every group (add-gui-library-panel, the user's contract).
+/// collection sets, so the restore selects nothing for any destination and
+/// each opens on its default first group (design D6's single-select pills;
+/// see `restore_gui_launch_collections`).
 #[must_use]
 pub fn first_launch() -> GuiLaunchState {
     GuiLaunchState {
