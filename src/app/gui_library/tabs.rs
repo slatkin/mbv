@@ -123,36 +123,35 @@ impl App {
     /// The tab position one presented destination's tab takes (design D2):
     /// the position the open-destination command takes. `None` for Home,
     /// which names no library tab, and for Feeds while no subscription makes
-    /// its tab.
+    /// its tab. Every destination kind is named, so a new kind is a compile
+    /// error here rather than a tab that silently takes another kind's
+    /// position.
     pub(in crate::app::gui_library) fn gui_destination_position(
         &self,
         kind: GuiDestinationKind,
     ) -> Option<usize> {
+        let emby_position = |lib_idx: usize| {
+            TabSelection::EmbyLibrary(lib_idx)
+                .to_position_with_counts(self.libs.len(), self.feeds_tab_pos())
+        };
         match kind {
-            GuiDestinationKind::Home => return None,
-            GuiDestinationKind::Feeds => return self.feeds_tab_pos(),
-            _ => {}
-        }
-        if matches!(
-            kind,
-            GuiDestinationKind::Audiobooks { .. } | GuiDestinationKind::Podcasts { .. }
-        ) {
-            let lib_idx = kind.library_index()?;
-            return Some(
+            GuiDestinationKind::Home => None,
+            GuiDestinationKind::Feeds => self.feeds_tab_pos(),
+            GuiDestinationKind::Music { lib_idx }
+            | GuiDestinationKind::Shows { lib_idx }
+            | GuiDestinationKind::Library { lib_idx } => Some(emby_position(lib_idx)),
+            GuiDestinationKind::Audiobooks { lib_idx }
+            | GuiDestinationKind::Podcasts { lib_idx } => Some(
                 TabSelection::AudiobookshelfLibrary(lib_idx)
                     .to_position_with_counts(self.libs.len(), self.feeds_tab_pos()),
-            );
+            ),
         }
-        let lib_idx = kind.library_index()?;
-        Some(
-            TabSelection::EmbyLibrary(lib_idx)
-                .to_position_with_counts(self.libs.len(), self.feeds_tab_pos()),
-        )
     }
 
     /// One presented destination's tab label (design D2): the library's
     /// display name, or the Feeds tab's fixed label, as the TUI's tab strip
-    /// paints it.
+    /// paints it. Every destination kind is named, so a new kind is a compile
+    /// error here rather than a tab that silently takes another kind's label.
     fn gui_destination_label(&self, kind: GuiDestinationKind) -> Option<String> {
         match kind {
             GuiDestinationKind::Home => None,
@@ -161,7 +160,11 @@ impl App {
             | GuiDestinationKind::Podcasts { lib_idx } => {
                 Some(self.audiobookshelf_libraries.get(lib_idx)?.name.clone())
             }
-            _ => Some(self.libs[kind.library_index()?].library.name.clone()),
+            GuiDestinationKind::Music { lib_idx }
+            | GuiDestinationKind::Shows { lib_idx }
+            | GuiDestinationKind::Library { lib_idx } => {
+                Some(self.libs.get(lib_idx)?.library.name.clone())
+            }
         }
     }
 

@@ -164,16 +164,16 @@ impl App {
     /// subscription's own list. Both are newest first with undated entries
     /// last, because `FeedTabState::rebuild_all_entries` sorted them when the
     /// fetch landed. Empty while the subscription the pill names holds no
-    /// fetched entries.
+    /// fetched entries. The slice borrows the App's stored list, so a frame
+    /// that lists a subscription copies no entry.
     #[must_use]
-    pub fn gui_feeds_entries(&self) -> Vec<&FeedEntry> {
+    pub fn gui_feeds_entries(&self) -> &[FeedEntry] {
         match self.gui_feeds_pill() {
-            GuiFeedPill::Latest => self.feed_tab.all_entries.iter().collect(),
+            GuiFeedPill::Latest => self.feed_tab.all_entries.as_slice(),
             GuiFeedPill::Subscription(feed_id) => self
                 .gui_feeds_subscription_index(&feed_id)
                 .and_then(|index| self.feed_tab.entries.get(index))
-                .map(|entries| entries.iter().collect())
-                .unwrap_or_default(),
+                .map_or(&[], Vec::as_slice),
         }
     }
 
