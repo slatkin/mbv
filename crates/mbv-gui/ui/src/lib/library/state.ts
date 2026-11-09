@@ -11,6 +11,7 @@ import { get, writable } from 'svelte/store';
 import type { GuiArrangement } from '$lib/bridge/arrangement';
 import { sendLibraryCommand } from '$lib/bridge/library';
 import type {
+	GuiAudiobooksFrame,
 	GuiEmbyFrame,
 	GuiHomeFrame,
 	GuiLibraryContent,
@@ -106,6 +107,13 @@ export const HOME_PANES: readonly LibraryPane[] = ['list', 'hero'];
 export const SHOWS_PANES: readonly LibraryPane[] = ['pills', 'list', 'hero'];
 export const SHOWS_PANES_NO_HERO: readonly LibraryPane[] = ['pills', 'list'];
 
+/** The Library panel's panes on the Audiobooks destination (design D12, row
+ * 9.1): the book list and the Hero. No pill row rides on the destination — the
+ * letter rail replaces the TUI's surname buckets — and the Hero's chapter
+ * Workspace belongs to the Hero pane. */
+export const AUIB_PANES: readonly LibraryPane[] = ['list', 'hero'];
+export const AUIB_PANES_NO_HERO: readonly LibraryPane[] = ['list'];
+
 /** The Library panel's panes on a plain Emby library (design D12, row 8.1):
  * the list and the Hero, because a plain library paints no pills — its letter
  * rail replaces the TUI's letter-range pill row. */
@@ -132,6 +140,10 @@ export function activeLibraryPanes(): readonly LibraryPane[] {
 	const emby = libraryEmby();
 	if (emby !== null) {
 		return embyPanes(emby);
+	}
+	const audiobooks = libraryAudiobooks();
+	if (audiobooks !== null) {
+		return audiobooks.hero === null ? AUIB_PANES_NO_HERO : AUIB_PANES;
 	}
 	return PANES;
 }
@@ -196,7 +208,8 @@ export function libraryShown(
 		(content.music !== null ||
 			content.home !== null ||
 			content.shows !== null ||
-			content.emby !== null)
+			content.emby !== null ||
+			content.audiobooks !== null)
 	);
 }
 
@@ -303,6 +316,12 @@ export function libraryShows(): GuiShowsFrame | null {
  * while any other destination is active. */
 export function libraryEmby(): GuiEmbyFrame | null {
 	return get(libraryContent)?.emby ?? null;
+}
+
+/** The carried Audiobooks destination's content (design D12, row 9.1), or
+ * `null` while any other destination is active. */
+export function libraryAudiobooks(): GuiAudiobooksFrame | null {
+	return get(libraryContent)?.audiobooks ?? null;
 }
 
 /** The row model under one interaction state (design D7): the carried union,
@@ -668,7 +687,8 @@ export function heroOverlayOpen(ui: LibraryUiState): boolean {
 		((libraryMusic()?.hero ?? null) !== null ||
 			(libraryHome()?.hero ?? null) !== null ||
 			(libraryShows()?.hero ?? null) !== null ||
-			(libraryEmby()?.hero ?? null) !== null)
+			(libraryEmby()?.hero ?? null) !== null ||
+			(libraryAudiobooks()?.hero ?? null) !== null)
 	);
 }
 

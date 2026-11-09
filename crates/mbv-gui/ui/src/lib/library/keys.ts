@@ -23,6 +23,7 @@ import {
 	focusedItemId,
 	focusedLibraryPill,
 	heroOverlayOpen,
+	libraryAudiobooks,
 	libraryContent,
 	libraryEmby,
 	libraryHome,
@@ -46,6 +47,7 @@ import {
 } from './home';
 import { routeShowsPanelKey } from './shows-keys';
 import { routeEmbyPanelKey } from './emby-keys';
+import { routeAudiobooksPanelKey } from './audiobooks-keys';
 
 /** The frame facts the routing reads. A slice `GuiFrame` satisfies it whole, so
  * the installer passes the frame it holds; a test builds only these fields. */
@@ -233,8 +235,9 @@ function routeEscapeKey(ui: LibraryUiState): KeyOutcome {
 
 /** Route a key to the Library keys (design D3, step 4), with the pane the
  * window content focused deciding which control the key acts on. On Home the
- * Home keys route instead (design D12), on Shows the Shows keys (row 7.1), and
- * on a plain Emby library the Emby keys (row 8.1). */
+ * Home keys route instead (design D12), on Shows the Shows keys (row 7.1), on
+ * a plain Emby library the Emby keys (row 8.1), and on Audiobooks the
+ * Audiobooks keys (row 9.1). */
 function routePanelKey(event: KeyboardEvent, ui: LibraryUiState): KeyOutcome {
 	if (event.key === 'Escape' && bare(event)) {
 		return routeEscapeKey(ui);
@@ -247,6 +250,9 @@ function routePanelKey(event: KeyboardEvent, ui: LibraryUiState): KeyOutcome {
 	}
 	if (libraryEmby() !== null) {
 		return routeEmbyPanelKey(event, ui);
+	}
+	if (libraryAudiobooks() !== null) {
+		return routeAudiobooksPanelKey(event, ui);
 	}
 	if (event.key === '/' && bare(event)) {
 		openLibraryFilter();

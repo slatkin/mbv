@@ -9,8 +9,10 @@
 	// letter rail, and no Workspace; Shows paints its mode pills, the series or
 	// flat list with the All series mode's rail, and the series Hero with its
 	// Workspace; a plain Emby library paints its feed-group pills, its list with
-	// the plain mode's rail, and its Hero with no Workspace. The Status bar
-	// (row 4.8) closes the column under both. The
+	// the plain mode's rail, and its Hero with no Workspace; Audiobooks paints
+	// the book list with its letter rail and the book Hero with its chapters
+	// Workspace (row 9.1). The Status bar (row 4.8) closes the column under
+	// both. The
 	// panel's interaction state lives in `$lib/library/state`,
 	// `$lib/library/home`, and `$lib/library/shows`, and its keys in
 	// `$lib/library/keys`, so this shell holds no state of its own.
@@ -27,15 +29,18 @@
 	import type { GuiArrangement } from '$lib/bridge/arrangement';
 	import { sendLibraryCommand } from '$lib/bridge/library';
 	import { dragListWidth, resetListWidth } from '$lib/bridge/resize';
-	import type {
+import type {
+		GuiAudiobooksFrame,
 		GuiEmbyFrame,
 		GuiHomeFrame,
 		GuiLibraryTab,
 		GuiMusicFrame,
 		GuiShowsFrame,
 		GuiStatusBar,
-	} from '$lib/bridge/types';
-	import LibraryEmbyHero from '$lib/components/LibraryEmbyHero.svelte';
+} from '$lib/bridge/types';
+import LibraryAudiobooksHero from './LibraryAudiobooksHero.svelte';
+import LibraryAudiobooksList from './LibraryAudiobooksList.svelte';
+import LibraryEmbyHero from '$lib/components/LibraryEmbyHero.svelte';
 	import LibraryEmbyList from '$lib/components/LibraryEmbyList.svelte';
 	import LibraryEmbyPills from '$lib/components/LibraryEmbyPills.svelte';
 	import LibraryHero from '$lib/components/LibraryHero.svelte';
@@ -78,6 +83,10 @@
 		 * feed-group mode's pills, the active list, and the selected row's Hero
 		 * with no Workspace; `null` while another destination is active. */
 		emby?: GuiEmbyFrame | null;
+		/** The carried Audiobooks content (design D12, row 9.1): the catalog's
+		 * book list and the selected book's Hero with its chapters Workspace;
+		 * `null` while another destination is active. */
+		audiobooks?: GuiAudiobooksFrame | null;
 		/** The frame's Status bar facts (design D10): the armed prefix and the
 		 * live toast, which the Status bar replaces the hints with. */
 		status: GuiStatusBar;
@@ -96,6 +105,7 @@
 		home = null,
 		shows = null,
 		emby = null,
+		audiobooks = null,
 		status,
 		arrangement,
 		listWidth,
@@ -114,6 +124,7 @@
 		| { kind: 'home'; home: GuiHomeFrame }
 		| { kind: 'shows'; shows: GuiShowsFrame }
 		| { kind: 'emby'; emby: GuiEmbyFrame }
+		| { kind: 'audiobooks'; audiobooks: GuiAudiobooksFrame }
 		| null;
 	const overlayHero: OverlayHero = $derived(
 		music !== null && music.hero !== null
@@ -122,8 +133,10 @@
 				? { kind: 'home', home }
 				: shows !== null && shows.hero !== null
 					? { kind: 'shows', shows }
-					: emby !== null && emby.hero !== null
-						? { kind: 'emby', emby }
+				: emby !== null && emby.hero !== null
+					? { kind: 'emby', emby }
+					: audiobooks !== null && audiobooks.hero !== null
+						? { kind: 'audiobooks', audiobooks }
 						: null,
 	);
 
@@ -228,6 +241,12 @@
 					{#if emby.hero !== null}
 						<LibraryEmbyHero {emby} />
 					{/if}
+				{:else if audiobooks !== null}
+					<!-- The book Hero with its chapters Workspace (design D12, row
+						9.1): a frame without one leaves the pane empty. -->
+					{#if audiobooks.hero !== null}
+						<LibraryAudiobooksHero {audiobooks} />
+					{/if}
 				{/if}
 			</div>
 		{/if}
@@ -260,6 +279,8 @@
 				<LibraryShowsList {shows} />
 			{:else if emby !== null}
 				<LibraryEmbyList {emby} />
+			{:else if audiobooks !== null}
+				<LibraryAudiobooksList {audiobooks} />
 			{/if}
 		</div>
 		{#if arrangement === 'narrow' && overlayHero !== null && !$libraryUi.heroDismissed}
@@ -296,6 +317,8 @@
 						<LibraryHomeHero home={overlayHero.home} />
 					{:else if overlayHero.kind === 'shows'}
 						<LibraryShowsHero shows={overlayHero.shows} />
+					{:else if overlayHero.kind === 'audiobooks'}
+						<LibraryAudiobooksHero audiobooks={overlayHero.audiobooks} />
 					{:else}
 						<LibraryEmbyHero emby={overlayHero.emby} />
 					{/if}
@@ -306,7 +329,7 @@
 	<!-- The Library Status bar (design D10): under the list region, closing the
 		column with the canvas's fixed key hints and the location while the panel
 		paints. -->
-	<LibraryStatusBar {tabs} {currentTab} {music} {home} {shows} {emby} {status} />
+	<LibraryStatusBar {tabs} {currentTab} {music} {home} {shows} {emby} {audiobooks} {status} />
 	<!-- The right-click item menu (the row-menu command): the viewport-anchored
 		card at the pointer position, painted only while the Music frame carries
 		the item's own entries. A press runs the entry the core built, resolved by

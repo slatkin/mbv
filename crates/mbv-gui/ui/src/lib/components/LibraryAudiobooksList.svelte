@@ -1,0 +1,252 @@
+<script lang="ts">
+	// The Audiobooks book list (add-gui-library-panel design D12, row 9.1):
+	// the catalog's book rows in the TUI's sort — author sort key, then title —
+	// under their letter headings, with the A–Z letter rail beside them. No
+	// second mode rides on the destination and no pill row: the rail replaces
+	// the TUI's surname buckets. The rows paint at the fixed heights of
+	// `$lib/library/audiobooks-list` over native scroll, and only the rows in
+	// view paint, so a long catalog stays fast.
+	//
+	// The cursor, the scroll offset, and the viewport are the window content's
+	// own in `$lib/library/audiobooks` (design D1); this component paints that
+	// state and reports the two facts only the DOM holds. A press selects the
+	// book the Hero shows, and a double-click plays it from its saved position —
+	// the same play command the keys' Enter sends. A book has no play-next: `n`
+	// is consumed and does nothing. Audiobooks paints no filter field in Phase
+	// 2, so `/` stays the core's key, as on Home and Shows.
+	//
+	// The Hero's chapter cursor belongs to the selected book (the
+	// `audiobooks-workspace` contract): a selection change starts it over,
+	// because the chapters it rested on belong to the previous book.
+	import { onMount } from 'svelte';
+	import type { GuiAudiobooksFrame } from '$lib/bridge/types';
+	import {
+		buildAudiobooksRows,
+		audiobooksLetterRail,
+		audiobooksListWindow,
+		audiobooksRowLetter,
+		audiobooksRowsHeight,
+	} from '$lib/library/audiobooks-list';
+	import type { AudiobooksListRow } from '$lib/library/audiobooks-list';
+	import {
+		audiobooksUi,
+		jumpAudiobooksToLetter,
+		measureAudiobooksList,
+		playAudiobooksRow,
+		pressAudiobooksRow,
+		scrollAudiobooksList,
+	} from '$lib/library/audiobooks';
+	import { resetAbsChapterCursor } from '$lib/library/audiobooks-workspace';
+	import LibraryLetterRail from './LibraryLetterRail.svelte';
+
+	interface Props {
+		/** The carried Audiobooks content (row 9.1): the catalog's book rows. */
+		audiobooks: GuiAudiobooksFrame;
+	}
+	const { audiobooks }: Props = $props();
+
+	let listEl: HTMLElement | undefined = $state();
+
+	/** The painted rows (row 9.1): the book rows with their letter headings. */
+	const rows = $derived(buildAudiobooksRows(audiobooks.rows));
+
+	/** The rows in view: only these paint. */
+	const view = $derived(
+		audiobooksListWindow(rows, $audiobooksUi.scrollTop, $audiobooksUi.viewportHeight),
+	);
+	const painted = $derived(rows.slice(view.start, view.end));
+
+	/** The list's whole painted height, and the spacers that hold its scroll
+	 * range while only the rows in view paint. */
+	const total = $derived(audiobooksRowsHeight(rows));
+	const above = $derived(painted.length > 0 ? painted[0].top : 0);
+	const below = $derived(total - (painted.length > 0 ? lastBottom() : above));
+
+	/** The rail's A–Z letters over the painted rows (row 9.1). */
+	const rail = $derived(audiobooksLetterRail(rows));
+
+	/** The row the cursor rests on, or `null` while none carries it. */
+	const cursorRow = $derived(rows.find((row) => row.id === $audiobooksUi.cursor) ?? null);
+
+	/** The letter the rail marks: the one the cursor row belongs to. */
+	const marked = $derived(cursorRow === null ? null : audiobooksRowLetter(cursorRow));
+
+	/** The bottom edge of the last painted row: the below-spacer's pair. */
+	function lastBottom(): number {
+		const last = painted[painted.length - 1];
+		return last === undefined ? 0 : last.top + last.height;
+	}
+
+	/** The `var(--canvas-<name>)` value a part paints in: the Library's canvas
+	 * hexes, which name no theme slot. */
+	function canvasVar(name: string): string {
+		return `var(--canvas-${name})`;
+	}
+
+	/** The row's painted fill (row 9.1): the cursor row's focus fill, and the
+	 * core's selected book the raised fill while the cursor sits elsewhere —
+	 * the selection is what the Hero shows, so its row stays marked. */
+	function rowBackground(row: AudiobooksListRow): string | undefined {
+		if (row.kind === 'heading') {
+			return undefined;
+		}
+		if (row.id === $audiobooksUi.cursor) {
+			return canvasVar('selected');
+		}
+		return row.id === audiobooks.selected ? canvasVar('library-raise') : undefined;
+	}
+
+	/** Report the list's measured height (row 9.1): the rows in view follow
+	 * it. */
+	function measure(): void {
+		measureAudiobooksList(listEl?.clientHeight ?? 0);
+	}
+
+	/** Report the list's native scroll offset, so the windowed paint follows a
+	 * user scroll. */
+	function onScroll(event: Event): void {
+		scrollAudiobooksList((event.currentTarget as HTMLElement).scrollTop);
+	}
+
+	// The scroller mirrors the state (row 9.1): a key that moved the cursor set
+	// the offset, and the element follows it. A user scroll already wrote the
+	// offset back, so this assignment is a no-op for it.
+	$effect(() => {
+		const el = listEl;
+		const top = $audiobooksUi.scrollTop;
+		if (el !== undefined && el.scrollTop !== top) {
+			el.scrollTop = top;
+		}
+	});
+
+	// The Hero's chapter cursor belongs to the selected book (row 9.1): a
+	// selection change starts it over, because the chapters it rested on belong
+	// to the previous book.
+	let lastSelected: string | null = null;
+	$effect(() => {
+		const selected = audiobooks.selected;
+		if (selected === lastSelected) {
+			return;
+		}
+		lastSelected = selected;
+		resetAbsChapterCursor();
+	});
+
+	onMount(() => {
+		measure();
+		const observer =
+			typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(measure);
+		if (listEl !== undefined) {
+			observer?.observe(listEl);
+		}
+		return () => observer?.disconnect();
+	});
+</script>
+
+<div class="flex min-h-0 min-w-0 flex-1 flex-col" data-library-abs-list-column="">
+	{#if audiobooks.loading}
+		<!-- The book catalog has not landed yet (row 9.1): one placeholder line
+			holds the list's place. -->
+		<div
+			class="flex flex-none items-center"
+			style:height="36px"
+			style:padding="0 16px"
+			style:font-size="13px"
+			style:color="var(--canvas-muted)"
+			data-library-abs-loading=""
+		>
+			Loading…
+		</div>
+	{/if}
+	{#if audiobooks.failed}
+		<!-- The catalog fetch failed (row 9.1): the failure line naming what
+			failed, and no row until the destination opens again. -->
+		<div
+			class="flex flex-none items-center"
+			style:height="36px"
+			style:padding="0 16px"
+			style:font-size="13px"
+			style:color="var(--canvas-muted)"
+			data-library-abs-failed=""
+		>
+			Couldn’t load this catalog.
+		</div>
+	{/if}
+	<div class="flex min-h-0 flex-1" style:overflow="hidden">
+		<ol
+			bind:this={listEl}
+			class="min-h-0 flex-1"
+			style:overflow-y="auto"
+			style:list-style="none"
+			style:margin="0"
+			style:padding="8px 0 8px 8px"
+			data-library-abs-list=""
+			onscroll={onScroll}
+		>
+			<li style:height="{above}px" aria-hidden="true"></li>
+			{#each painted as row (row.id)}
+				<li>
+					{#if row.kind === 'heading'}
+						<div
+							class="flex items-end font-mono"
+							style:height="{row.height}px"
+							style:padding="0 8px 2px"
+							style:font-size="11px"
+							style:color="var(--canvas-source)"
+							data-library-abs-letter={row.letter}
+						>
+							{row.letter}
+						</div>
+					{:else}
+						<button
+							type="button"
+							class="flex w-full items-center overflow-hidden"
+							style:height="{row.height}px"
+							style:padding="0 12px"
+							style:gap="10px"
+							style:border="0"
+							style:border-radius="4px"
+							style:text-align="left"
+							style:font-size="13px"
+							style:background={rowBackground(row)}
+							style:cursor="pointer"
+							data-library-abs-row="book"
+							data-library-abs-row-id={row.id}
+							data-library-abs-cursor={row.id === $audiobooksUi.cursor ? '' : undefined}
+							data-library-abs-selected={row.id === audiobooks.selected ? '' : undefined}
+							onclick={() => pressAudiobooksRow(row)}
+							ondblclick={() => playAudiobooksRow(row.row.id)}
+						>
+							<span class="flex min-w-0 flex-1 flex-col" style:gap="2px">
+								<span
+									class="truncate"
+									style:color={canvasVar('text')}
+									style:font-weight={row.id === audiobooks.selected ? 600 : 400}
+									data-library-abs-title="">{row.row.title}</span
+								>
+								{#if row.row.subtitle !== null}
+									<span
+										class="truncate"
+										style:font-size="11px"
+										style:color="var(--canvas-muted)"
+										data-library-abs-subtitle="">{row.row.subtitle}</span
+									>
+								{/if}
+							</span>
+							{#if row.row.duration !== ''}
+								<span
+									class="flex-none tabular-nums"
+									style:font-size="11px"
+									style:color="var(--canvas-muted)"
+									data-library-abs-duration="">{row.row.duration}</span
+								>
+							{/if}
+						</button>
+					{/if}
+				</li>
+			{/each}
+			<li style:height="{below}px" aria-hidden="true"></li>
+		</ol>
+		<LibraryLetterRail letters={rail} {marked} jump={jumpAudiobooksToLetter} />
+	</div>
+</div>

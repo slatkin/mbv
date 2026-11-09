@@ -11,6 +11,7 @@ import { fireEvent, render } from '@testing-library/svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
 import { DEFAULT_DRAGGED_WIDTHS, LIBRARY_LIST_DEFAULT_WIDTH_PX, draggedWidths } from '$lib/bridge/resize';
 import type {
+	GuiAudiobooksFrame,
 	GuiEmbyFrame,
 	GuiMusicFrame,
 	GuiMusicHero,
@@ -361,6 +362,125 @@ test('the feed-group Emby content mounts its pill row and no rail', () => {
 	expect(container.querySelector('[data-library-emby-list]')).toBeTruthy();
 	expect(container.querySelector('[data-library-region="rail"]')).toBeNull();
 });
+
+// add-gui-library-panel row 9.1: while the Audiobooks content is present
+// (design D12, the destinations are exclusive), the panel mounts the book list
+// with its rail and the book Hero in place of the Music, Home, Shows, and Emby
+// painters, and no pill row rides on the destination.
+test('the Audiobooks content mounts the book list, rail, and Hero and none of the other destinations', () => {
+	const { container } = render(LibraryPanel, {
+		tabs: [{ position: 4, label: 'Audiobooks' }],
+		currentTab: 4,
+		music: null,
+		home: null,
+		shows: null,
+		emby: null,
+		audiobooks: audiobooks({
+			title: 'Aftermath',
+			metaRows: ['Bill Wyman', '4:32'],
+			durationRow: 0,
+			progressRow: null,
+			artShape: 'portrait',
+			art: null,
+			workspace: null,
+		}),
+		status: idle,
+		arrangement: 'wide',
+		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
+		libraryColumn: 1200,
+	});
+
+	expect(container.querySelector('[data-library-abs-list]')).toBeTruthy();
+	expect(container.querySelector('[data-library-region="rail"]')).toBeTruthy();
+	expect(
+		container.querySelector('[data-library-region="hero"] [data-library-abs-hero]'),
+	).toBeTruthy();
+	expect(container.querySelector('[data-library-region="pills"]')).toBeNull();
+	expect(container.querySelector('[data-library-list]')).toBeNull();
+	expect(container.querySelector('[data-library-home-list]')).toBeNull();
+	expect(container.querySelector('[data-library-shows-list]')).toBeNull();
+	expect(container.querySelector('[data-library-emby-list]')).toBeNull();
+});
+
+// A frame without a Hero paints no Hero (row 9.1), and the Narrow overlay
+// stays closed while the selection carries none.
+test('the Hero-less Audiobooks content paints its list and no Hero', () => {
+	const { container } = render(LibraryPanel, {
+		tabs: [{ position: 4, label: 'Audiobooks' }],
+		currentTab: 4,
+		music: null,
+		home: null,
+		shows: null,
+		emby: null,
+		audiobooks: audiobooks(null),
+		status: idle,
+		arrangement: 'narrow',
+		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
+		libraryColumn: 800,
+	});
+
+	expect(container.querySelector('[data-library-abs-list]')).toBeTruthy();
+	expect(container.querySelector('[data-library-abs-hero]')).toBeNull();
+	expect(container.querySelector('[data-library-region="heroOverlay"]')).toBeNull();
+});
+
+// The Narrow overlay works for the Audiobooks Hero through the same painters
+// the Wide pane uses (design D4), and — copied from the row-7.1 lesson — a
+// stale Hero paints through an overlay the frame's own selection carries.
+test('the Narrow overlay paints the Audiobooks Hero and closes on a press on its backdrop', async () => {
+	const { container } = render(LibraryPanel, {
+		tabs: [{ position: 4, label: 'Audiobooks' }],
+		currentTab: 4,
+		music: null,
+		home: null,
+		shows: null,
+		emby: null,
+		audiobooks: audiobooks({
+			title: 'Aftermath',
+			metaRows: ['Bill Wyman', '4:32'],
+			durationRow: 0,
+			progressRow: null,
+			artShape: 'portrait',
+			art: null,
+			workspace: { rows: [{ chapter: 1, title: 'Act one', duration: '2:16', current: false }] },
+		}),
+		status: idle,
+		arrangement: 'narrow',
+		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
+		libraryColumn: 800,
+	});
+	const overlay = container.querySelector('[data-library-region="heroOverlay"]');
+
+	expect(overlay?.querySelector('[data-library-abs-hero]')).toBeTruthy();
+
+	await fireEvent.click(
+		container.querySelector('[data-library-hero-backdrop]') as HTMLElement,
+	);
+
+	expect(container.querySelector('[data-library-region="heroOverlay"]')).toBeNull();
+});
+
+/** The carried Audiobooks content: the catalog's book list, with `hero` the
+ * selected book's Hero the frame paints (row 9.1). */
+function audiobooks(hero: GuiAudiobooksFrame['hero']): GuiAudiobooksFrame {
+	return {
+		libIdx: 4,
+		loading: false,
+		failed: false,
+		workspaceLoading: false,
+		rows: [
+			{
+				id: 'b1',
+				title: 'Aftermath',
+				subtitle: 'Bill Wyman',
+				duration: '4:32',
+				sortLetter: 'A',
+			},
+		],
+		selected: 'b1',
+		hero,
+	};
+}
 
 /** The carried plain Emby-library content: the plain mode's list, or the
  * feed-group mode's pills and date-ordered rows, with a Hero. */
