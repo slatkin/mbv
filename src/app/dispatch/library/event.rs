@@ -15,36 +15,39 @@ mod browse_loads;
 /// Each variant keeps its own documented no-op arm so a future
 /// `ModelContentEvent` variant that must reach the shell drain cannot
 /// silently fall through here.
-fn handle_model_content_event(ev: ModelContentEvent) {
-    match ev {
-        // The shell drain applies the fetched snapshot: the Latest variant
-        // into the shell-owned latest snapshot, the TV Upcoming variant into
-        // the per-session Upcoming store.
-        ModelContentEvent::EmbyLatestSnapshotFetched { library_id, items } => {
-            drop((library_id, items));
-        }
-        ModelContentEvent::TvUpcomingSnapshotFetched { library_id, items } => {
-            drop((library_id, items));
-        }
-        // The shell drain clears the per-session request mark and unsets a
-        // waiting Upcoming root level's loading flag.
-        ModelContentEvent::TvUpcomingSnapshotFailed { library_id } => {
-            drop(library_id);
-        }
-        // The shell drain stores the fetched items under their source.
-        ModelContentEvent::HomeRecentlyAddedFetched {
-            source,
-            generation,
-            items,
-        } => drop((source, generation, items)),
-        // The shell drain applies the refreshed content.
-        ModelContentEvent::HomeContentRefreshed(content) => drop(content),
-        // Clearing the stored content is handled by the shell drain.
-        ModelContentEvent::HomeContentCleared => {}
-    }
-}
-
 impl App {
+    pub(in crate::app) fn handle_model_content_event(&mut self, ev: ModelContentEvent) {
+        match ev {
+            // The shell drain applies the fetched snapshot: the Latest variant
+            // into the shell-owned latest snapshot, the TV Upcoming variant into
+            // the per-session Upcoming store.
+            ModelContentEvent::EmbyLatestSnapshotFetched { library_id, items } => {
+                drop((library_id, items));
+            }
+            ModelContentEvent::TvUpcomingSnapshotFetched { library_id, items } => {
+                drop((library_id, items));
+            }
+            // The shell drain clears the per-session request mark and unsets a
+            // waiting Upcoming root level's loading flag.
+            ModelContentEvent::TvUpcomingSnapshotFailed { library_id } => {
+                drop(library_id);
+            }
+            // The App stores the fetched rows under their source (row 6.2):
+            // the same acceptance the presenting Client's shell drain runs,
+            // so a Client that keeps no shell state (the GUI) stores the
+            // rows too through this drain arm.
+            ModelContentEvent::HomeRecentlyAddedFetched {
+                source,
+                generation,
+                items,
+            } => self.accept_home_recently_added(source, generation, items),
+            // The shell drain applies the refreshed content.
+            ModelContentEvent::HomeContentRefreshed(content) => drop(content),
+            // Clearing the stored content is handled by the shell drain.
+            ModelContentEvent::HomeContentCleared => {}
+        }
+    }
+
     pub(in crate::app) fn handle_lib_event(&mut self, ev: LibEvent) {
         match ev {
             LibEvent::Browse(event) => self.handle_browse_event(event),
@@ -55,8 +58,11 @@ impl App {
             // The GUI Library's collection store owns this event (add-gui-
             // library-panel design D5); the TUI never starts one.
             LibEvent::GuiGroupAlbums(event) => self.handle_gui_group_albums(event),
-            // The shell drain applies the refreshed content.
-            LibEvent::ModelContent(event) => handle_model_content_event(event),
+            // A `ModelContent` event's App-side half is
+            // `handle_model_content_event`: the GUI's drain runs it, and the
+            // shell drain joins only its projection work around the same
+            // semantics.
+            LibEvent::ModelContent(event) => self.handle_model_content_event(event),
             LibEvent::Error(error) => self.handle_error(&error),
         }
     }

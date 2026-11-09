@@ -31,7 +31,7 @@ impl ClientTickHost for Model {
         // fetched Home rows whose podcast library is gone (review P2 of
         // Unit C). Only an actual eviction re-projects Home; once the
         // rebuild lands, the Home fetch refills the sources.
-        if self.evict_gone_home_recently_added() {
+        if self.app.evict_gone_home_recently_added() {
             self.push_home_content();
         }
     }

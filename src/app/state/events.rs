@@ -334,9 +334,10 @@ pub enum ModelContentEvent {
     /// `home-latest-sections`, "Recently added loads at launch independent of
     /// destinations"): Emby through its Latest rules,
     /// Audiobookshelf through the podcast `Newest Episodes` shelf, Feeds
-    /// derived at push time (never fetched). The shell accepts the event
-    /// only under the source's live Service generation and stores the items
-    /// against the source.
+    /// derived at merge time (never fetched). The App accepts the event only
+    /// under the source's live Service generation and stores the items
+    /// against the source; the Client that presents Home joins its
+    /// projection (row 6.2).
     HomeRecentlyAddedFetched {
         source: DestinationLatestSource,
         generation: SetupGeneration,

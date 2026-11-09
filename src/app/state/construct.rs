@@ -292,6 +292,7 @@ impl App {
             player_endpoint: None,
             idle_feed: init.idle_feed,
             home_content: HomeContent::default(),
+            home_recently_added: std::collections::HashMap::new(),
             feed_seek_pending_slot: None,
             feed_tab: mbv_ui_model::feed_tab::FeedTabState::default(),
             feed_entry_state: mbv_feed::FeedEntryStore::load(),

@@ -172,14 +172,6 @@ pub struct Model {
     /// (mirrors `App.audiobookshelf_shelf_requested`; spec
     /// `destination-latest-modes`, "Destination Latest lists load lazily").
     pub(in crate::app) emby_destination_latest_requested: std::collections::HashSet<String>,
-    /// Home's per-source Recently added rows (spec
-    /// `home-latest-sections`, "Recently added combines every Latest-bearing
-    /// destination"): each Service's fetch items already
-    /// filtered to the 14-day cutoff at store time. Feeds has no entry; its
-    /// rows are derived at push time. Nothing re-uses destination Latest
-    /// data, and a destination fetch never fills Home.
-    pub(in crate::app) home_recently_added:
-        std::collections::HashMap<DestinationLatestSource, Vec<mbv_queue::QueueItem>>,
     pub(in crate::app) home_context_item: Option<mbv_emby_model::EmbyItem>,
     /// The last terminal size the sync pass applied resize side effects for
     /// (task 1.2). Initialized from the App's size so fixtures that pre-set a
@@ -320,7 +312,6 @@ impl Model {
             acknowledged_home_latest_sources: std::collections::HashSet::new(),
             tv_latest_snapshots: std::collections::HashMap::new(),
             emby_destination_latest_requested: std::collections::HashSet::new(),
-            home_recently_added: std::collections::HashMap::new(),
             home_context_item: None,
             handled_terminal_size: initial_terminal_size,
             pending_terminal_resize: false,

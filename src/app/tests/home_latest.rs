@@ -79,7 +79,7 @@ fn an_unvisited_emby_library_marks_from_the_home_fetch_alone() {
     let current = model.app.home_latest_launch_window.current;
     let source = crate::app::DestinationLatestSource::Emby("movies-lib".into());
 
-    model.accept_home_recently_added(
+    model.app.accept_home_recently_added(
         source.clone(),
         model.app.emby_runtime.generation(),
         vec![movie_dated("movie", i64::try_from(current - 60).unwrap())],
@@ -102,7 +102,7 @@ fn acknowledging_the_source_clears_its_marker() {
     open_launch_window(&mut model, 2 * 60 * 60);
     let current = model.app.home_latest_launch_window.current;
     let source = crate::app::DestinationLatestSource::Emby("movies-lib".into());
-    model.accept_home_recently_added(
+    model.app.accept_home_recently_added(
         source.clone(),
         model.app.emby_runtime.generation(),
         vec![movie_dated("movie", i64::try_from(current - 60).unwrap())],
@@ -125,7 +125,7 @@ fn an_item_older_than_the_14_day_cutoff_does_not_mark() {
     let current = model.app.home_latest_launch_window.current;
     let source = crate::app::DestinationLatestSource::Emby("movies-lib".into());
 
-    model.accept_home_recently_added(
+    model.app.accept_home_recently_added(
         source.clone(),
         model.app.emby_runtime.generation(),
         vec![movie_dated(
@@ -148,7 +148,7 @@ fn an_item_dated_after_the_launch_instant_does_not_mark() {
     let current = model.app.home_latest_launch_window.current;
     let source = crate::app::DestinationLatestSource::Emby("movies-lib".into());
 
-    model.accept_home_recently_added(
+    model.app.accept_home_recently_added(
         source.clone(),
         model.app.emby_runtime.generation(),
         vec![movie_dated(
@@ -186,7 +186,7 @@ fn a_podcast_library_marks_from_its_home_recently_added_rows() {
         cover_path: None,
     };
 
-    model.accept_home_recently_added(
+    model.app.accept_home_recently_added(
         source.clone(),
         model.app.audiobookshelf_runtime.generation(),
         vec![QueueItem::Audiobookshelf(

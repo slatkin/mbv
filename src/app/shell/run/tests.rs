@@ -641,7 +641,7 @@ fn home_recently_added_event_with_a_stale_service_generation_is_dropped() {
 
     model.drain_lib_events();
 
-    assert!(model.home_recently_added.is_empty());
+    assert!(model.app.home_recently_added.is_empty());
 }
 
 /// Design D2: the shell filters each source's items to the 14-day cutoff
@@ -672,6 +672,7 @@ fn home_recently_added_store_keeps_only_items_inside_the_14_day_cutoff() {
     model.drain_lib_events();
 
     let rows = model
+        .app
         .home_recently_added
         .get(&crate::app::DestinationLatestSource::Emby("lib".into()))
         .expect("live generation stores under its source");

@@ -89,14 +89,13 @@ pub struct StartupWorkerDrain {
 /// The startup-drain contract: the App stores its own copy so the
 /// presenting Client's assignment is the same facts; a Client that keeps no
 /// shell state (the GUI) reads the stored one. A prior completion's snapshot
-/// is replaced only when a rebuild ran (row 6.1)
-fn store_drained_home(
-    app: &mut HomeContent,
-    drain: &mut StartupWorkerDrain,
-    home: Option<HomeContent>,
-) {
+/// is replaced only when a rebuild ran (row 6.1). Both paths evict the
+/// Recently added sources a rebuilt library set dropped (row 6.2): the
+/// eviction is App-neutral, the shell's own assignment just re-runs it.
+fn store_drained_home(app: &mut App, drain: &mut StartupWorkerDrain, home: Option<HomeContent>) {
     if let Some(content) = home {
-        *app = content.clone();
+        app.home_content = content.clone();
+        let _ = app.evict_gone_home_recently_added();
         drain.home = Some(content);
     }
 }
@@ -117,7 +116,7 @@ impl App {
                     drain.events = true;
                     let home = self.apply_emby_completion(completion);
                     drain.emby_started |= home.is_some();
-                    store_drained_home(&mut self.home_content, &mut drain, home);
+                    store_drained_home(self, &mut drain, home);
                 }
                 Err(TryRecvError::Empty) => self.setup.emby_startup_rx = Some(worker),
                 Err(TryRecvError::Disconnected) => {
@@ -134,7 +133,7 @@ impl App {
                     drain.events = true;
                     let home = self.apply_emby_setup_completion(completion);
                     drain.emby_started |= home.is_some();
-                    store_drained_home(&mut self.home_content, &mut drain, home);
+                    store_drained_home(self, &mut drain, home);
                 }
                 Err(TryRecvError::Empty) => self.setup.emby_setup_rx = Some(rx),
                 Err(TryRecvError::Disconnected) => {

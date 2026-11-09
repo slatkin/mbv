@@ -122,7 +122,11 @@ impl Model {
                     generation,
                     items,
                 }) => {
-                    self.accept_home_recently_added(source, generation, items);
+                    // The fetched rows land on the App's store (row 6.2); this
+                    // Client's half is the projection below, so the merged
+                    // rows reach the Home owner.
+                    self.app
+                        .accept_home_recently_added(source, generation, items);
                     fetched_recently_added = true;
                 }
                 LibEvent::Browse(BrowseEvent::Loaded {

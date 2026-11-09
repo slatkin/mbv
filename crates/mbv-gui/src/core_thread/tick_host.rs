@@ -84,8 +84,11 @@ impl ClientTickHost for CoreThread {
     }
 
     fn drain_lib_events(&mut self) -> bool {
-        // The App-owned half applies; the GUI keeps no library content state,
-        // so no surface re-projection joins the drain.
+        // The App-owned half applies, including the fetched `Recently added`
+        // rows the arm accepts into the App's store (row 6.2), so the GUI's
+        // next tick reads them from the App like the TUI shell does. The GUI
+        // keeps no library content state, so no surface re-projection joins
+        // the drain.
         let mut had_events = false;
         while self.app.drain_lib_event() {
             had_events = true;

@@ -4,7 +4,7 @@ use crate::app::gui_client_state::GuiOverlay;
 use crate::app::queue_summary_projection::QueueRightColumn;
 use crate::app::state::events::{PendingSeriesHandoff, PendingSeriesLanding};
 use crate::app::state::playback::{
-    HomeContent, PlaylistMutationState, SuspendedLocalSession, UndoEntry,
+    DestinationLatestSource, HomeContent, PlaylistMutationState, SuspendedLocalSession, UndoEntry,
 };
 use crate::app::state::queue_owner::QueueEpoch;
 use crate::app::state::queue_view::QueueView;
@@ -31,6 +31,7 @@ use std::sync::mpsc;
 use std::time::Instant;
 
 mod fill_state;
+mod home_recently_added;
 mod launch_restore;
 
 pub(in crate::app) use self::fill_state::{
@@ -138,6 +139,17 @@ pub struct App {
     /// lands here. The shell reads it for its Home paint; the GUI Library's
     /// later Home projection reads it from row 6.2.
     pub(in crate::app) home_content: HomeContent,
+    /// Home's per-source Recently added rows (add-gui-library-panel row 6.2;
+    /// spec `home-latest-sections`, "Recently added combines every
+    /// Latest-bearing destination"): each Service's fetch items, already
+    /// filtered to the 14-day cutoff at store time and keyed by source. The
+    /// accepted fetch event fills it (`App::handle_lib_event`'s arm), a
+    /// rebuilt or cleared setup evicts its sources, and the Home projections
+    /// — the shell's pushes and the GUI Library's later one — merge it with
+    /// the Feeds entries (`App::home_recent_rows`). Feeds has no entry; its
+    /// rows derive at merge time.
+    pub(in crate::app) home_recently_added:
+        std::collections::HashMap<DestinationLatestSource, Vec<mbv_queue::QueueItem>>,
     /// `Config.library_routes` at startup (#256). Values are resolved
     /// `tcp://host:port` endpoints, read directly with no live-session
     /// lookup -- see `mbv_remote_player::resolve_library_route`.
