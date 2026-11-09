@@ -16,15 +16,16 @@
 	// band paints no interactive region: a point on it resolves to no target,
 	// as the canvas's bar carries none.
 	import { toastColor } from '$lib/bridge/status';
-	import type {
+import type {
 		GuiAudiobooksFrame,
 		GuiEmbyFrame,
 		GuiHomeFrame,
 		GuiLibraryTab,
 		GuiMusicFrame,
+		GuiPodcastsFrame,
 		GuiShowsFrame,
 		GuiStatusBar,
-	} from '$lib/bridge/types';
+} from '$lib/bridge/types';
 	import { libraryLocation } from '$lib/library/status';
 
 	interface Props {
@@ -49,6 +50,10 @@
 		/** The carried Audiobooks content (design D12, row 9.1): the location
 		 * reads the destination and the selected book on it. */
 		audiobooks?: GuiAudiobooksFrame | null;
+		/** The carried Podcasts content (design D12, row 10.1): the location
+		 * reads the destination, the selected pill, and the selected episode
+		 * on it. */
+		podcasts?: GuiPodcastsFrame | null;
 		/** The armed prefix and the live toast (design D10): they replace the
 		 * hints while active. */
 		status: GuiStatusBar;
@@ -61,6 +66,7 @@
 		shows = null,
 		emby = null,
 		audiobooks = null,
+		podcasts = null,
 		status,
 	}: Props = $props();
 
@@ -80,9 +86,10 @@
 	 * (design D12); on Shows the tab's label, the view mode, and the selected
 	 * row (row 7.1); on a plain Emby library the tab's label, the selected
 	 * feed pill, and the selected row (row 8.1); on an Audiobooks library the
-	 * tab's label and the selected book (row 9.1). */
+	 * tab's label and the selected book (row 9.1); on a Podcasts library the
+	 * tab's label, the selected pill, and the selected episode (row 10.1). */
 	const location = $derived(
-		libraryLocation(tabs, currentTab, music, home, shows, emby, audiobooks),
+		libraryLocation(tabs, currentTab, music, home, shows, emby, audiobooks, podcasts),
 	);
 </script>
 

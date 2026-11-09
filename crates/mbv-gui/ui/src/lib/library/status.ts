@@ -9,6 +9,7 @@ import type {
 	GuiHomeFrame,
 	GuiLibraryTab,
 	GuiMusicFrame,
+	GuiPodcastsFrame,
 	GuiShowsFrame,
 } from '$lib/bridge/types';
 
@@ -79,13 +80,34 @@ function audiobooksSelectedTitle(audiobooks: GuiAudiobooksFrame | null): string 
 	return audiobooks.rows.find((row) => row.id === audiobooks.selected)?.title ?? null;
 }
 
+/** The Podcasts location's middle segment (design D10, D12, row 10.1): the
+ * selected pill in the pill row — the merged `Latest` shelf's pill, or the
+ * one show pill the list is scoped to. A frame with no selected pill leaves
+ * the segment out. */
+function podcastsSelectedPill(podcasts: GuiPodcastsFrame): string | null {
+	return podcasts.pills.find((entry) => entry.selected)?.name ?? null;
+}
+
+/** The Podcasts location's last segment (design D10, D12, row 10.1): the
+ * title of the episode the core selected, which is the episode the Hero
+ * shows. A frame whose selection names no carried row leaves the segment
+ * out. */
+function podcastsSelectedTitle(podcasts: GuiPodcastsFrame | null): string | null {
+	if (podcasts === null || podcasts.selected === null) {
+		return null;
+	}
+	return podcasts.rows.find((row) => row.id === podcasts.selected)?.title ?? null;
+}
+
 /** The location line's segments in canvas order. On Home the line reads
  * `Home`, then the selected row's Hero title (design D10, D12). On Shows it
  * reads the destination tab's label, the active view mode's name, and the
  * selected row's title (row 7.1). On a plain Emby library it reads the
  * destination tab's label, the selected feed pill in feed-group mode, and the
  * selected row's title (row 8.1). On an Audiobooks library it reads the
- * destination tab's label and the selected book's title (row 9.1). A segment
+ * destination tab's label and the selected book's title (row 9.1). On a
+ * Podcasts library it reads the destination tab's label, the selected pill,
+ * and the selected episode's title (row 10.1). A segment
  * the content does not fill drops, so an unpicked Hero leaves the destination
  * and the collections, and a destination outside the tabs leaves the rest. */
 export function libraryLocationSegments(
@@ -96,6 +118,7 @@ export function libraryLocationSegments(
 	shows: GuiShowsFrame | null = null,
 	emby: GuiEmbyFrame | null = null,
 	audiobooks: GuiAudiobooksFrame | null = null,
+	podcasts: GuiPodcastsFrame | null = null,
 ): string[] {
 	if (home !== null) {
 		return ['Home', home.hero?.title ?? null].filter(
@@ -120,6 +143,13 @@ export function libraryLocationSegments(
 			audiobooksSelectedTitle(audiobooks),
 		].filter((segment): segment is string => segment !== null && segment.trim() !== '');
 	}
+	if (podcasts !== null) {
+		return [
+			destinationLabel(tabs, currentTab),
+			podcastsSelectedPill(podcasts),
+			podcastsSelectedTitle(podcasts),
+		].filter((segment): segment is string => segment !== null && segment.trim() !== '');
+	}
 	return [
 		destinationLabel(tabs, currentTab),
 		...selectedCollections(music),
@@ -137,6 +167,7 @@ export function libraryLocation(
 	shows: GuiShowsFrame | null = null,
 	emby: GuiEmbyFrame | null = null,
 	audiobooks: GuiAudiobooksFrame | null = null,
+	podcasts: GuiPodcastsFrame | null = null,
 ): string {
 	return libraryLocationSegments(
 		tabs,
@@ -146,5 +177,6 @@ export function libraryLocation(
 		shows,
 		emby,
 		audiobooks,
+		podcasts,
 	).join(' › ');
 }

@@ -10,6 +10,7 @@ import type {
 	GuiLibraryTab,
 	GuiMusicFrame,
 	GuiMusicHero,
+	GuiPodcastsFrame,
 	GuiStatusBar,
 } from '$lib/bridge/types';
 import LibraryStatusBar from './LibraryStatusBar.svelte';
@@ -155,5 +156,42 @@ test('the bar paints the Audiobooks location for the carried content', () => {
 	expect(
 		container.querySelector('[data-library-status-location]')?.textContent?.trim(),
 	).toBe('Audiobooks › Dune');
+	expect(container.querySelectorAll('[data-library-hint]')).toHaveLength(6);
+});
+
+// add-gui-library-panel row 10.1: the bar's carried Podcasts content becomes
+// the location while that destination is active (design D10, D12).
+test('the bar paints the Podcasts location for the carried content', () => {
+	const podcasts: GuiPodcastsFrame = {
+		libIdx: 1,
+		loading: false,
+		failed: false,
+		pills: [
+			{ pill: { kind: 'latest' }, name: 'Latest', selected: false, collection: false },
+			{ pill: { kind: 'show', id: 'show1' }, name: 'Bits and Bites', selected: true, collection: false },
+		],
+		rows: [
+			{
+				id: 'show1:ep12',
+				title: 'Episode 12: The Long Road',
+				subtitle: 'Bits and Bites',
+				date: '08 Oct',
+				state: 'ordinary',
+			},
+		],
+		selected: 'show1:ep12',
+		hero: null,
+	};
+	const { container } = render(LibraryStatusBar, {
+		tabs: [{ position: 2, label: 'Podcasts' }],
+		currentTab: 2,
+		music: null,
+		podcasts,
+		status: IDLE,
+	});
+
+	expect(
+		container.querySelector('[data-library-status-location]')?.textContent?.trim(),
+	).toBe('Podcasts › Bits and Bites › Episode 12: The Long Road');
 	expect(container.querySelectorAll('[data-library-hint]')).toHaveLength(6);
 });
