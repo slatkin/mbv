@@ -49,7 +49,7 @@ Each unit starts by reading its destination's data path in the `App` and recordi
 
 ## 7. Shows
 
-- [ ] 7.1 Project and paint Shows: the series list with the letter rail, landscape or portrait art, the season pills and episodes as the Hero's Workspace, and no Hero for Upcoming. Verify: projection tests for the series, flat Latest, and Upcoming modes; vitest for the Workspace and each art shape.
+- [x] 7.1 Project and paint Shows: the series list with the letter rail, landscape or portrait art, the season pills and episodes as the Hero's Workspace, and no Hero for Upcoming. Verify: projection tests for the series, flat Latest, and Upcoming modes; vitest for the Workspace and each art shape.
 
 ## 8. Movies and other Emby libraries
 
