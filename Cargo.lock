@@ -3378,7 +3378,7 @@ dependencies = [
 name = "mbv-gui"
 version = "0.26.7"
 dependencies = [
- "base64 0.22.1",
+ "base64 0.23.1",
  "image",
  "mbv",
  "mbv-config",

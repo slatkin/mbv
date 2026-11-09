@@ -32,7 +32,7 @@ mbv-ui-model = { path = "../mbv-ui-model" }
 mbv-ui-msg = { path = "../mbv-ui-msg" }
 # The frame's artwork payloads ride as `data:` URLs (design D10): the
 # image bytes the core encodes base64 into the URL string.
-base64 = "0.22.1"
+base64 = "0.23.1"
 mimalloc.workspace = true
 serde = { workspace = true, features = ["derive"] }
 tauri = "=2.12.5"
