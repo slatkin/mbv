@@ -8,8 +8,8 @@
 	//
 	// The rows paint the canvas's states from the frame's per-row
 	// `GuiSemanticState`: a watched (`played`) row strikes its text
-	// through, the now-playing row fills with the canvas's green in its
-	// dark ink, and a partial-progress row (and the playing row) draws a
+	// through, the now-playing row shows a play glyph beside its title (the
+	// highlight is for focus only, so the row keeps its own fill), and a partial-progress row (and the playing row) draws a
 	// thin progress track on the title's line. Every row leads with its
 	// padded queue ordinal and carries one title line and the
 	// right-column value — no second line and no date gutter, as the
@@ -52,7 +52,7 @@
 	// focus-reactive like the TUI's `queue_row_background(focused)` — and the
 	// zebra stripe paints the `queueColumn` pair.
 	import { onMount } from 'svelte';
-	import { Ellipsis, GripVertical } from '@lucide/svelte';
+	import { Ellipsis, GripVertical, Play } from '@lucide/svelte';
 	import { reportLayout, retractLayout } from '$lib/bridge/layout';
 	import { roleVar } from '$lib/bridge/theme';
 	import type {
@@ -207,13 +207,10 @@
 		return `var(--canvas-${name})`;
 	}
 
-	/** The row's painted background, in the canvas's precedence: the filled
-	 * active row wins, then the hovered or picked row's fill, then the zebra
-	 * stripe. */
+	/** The row's painted background: the hovered or picked row's fill, then the
+	 * zebra stripe. The playing row keeps its own fill, because a highlight marks
+	 * focus only. */
 	function rowBackground(row: ItemRow): string | undefined {
-		if (row.state.state === 'nowPlaying') {
-			return canvasVar('accent');
-		}
 		if (queue.hover === row.slot || bars(row.slot)) {
 			return canvasVar('selected');
 		}
@@ -241,13 +238,13 @@
 	function tone(row: ItemRow): RowTone {
 		if (row.state.state === 'nowPlaying') {
 			return {
-				title: canvasVar('ink'),
+				title: canvasVar('heading'),
 				weight: 600,
 				strike: canvasVar('strike'),
-				ordinal: canvasVar('ink'),
-				right: canvasVar('ink'),
+				ordinal: canvasVar('accent'),
+				right: canvasVar('text'),
 				track: canvasVar('track-current'),
-				fill: canvasVar('ink'),
+				fill: canvasVar('accent'),
 			};
 		}
 		const watched = row.state.state === 'played';
@@ -387,15 +384,20 @@
 		<span class="shrink-0" style:width="14px" aria-hidden="true"></span>
 	{/if}
 	<span class="flex min-w-0 flex-1 flex-col justify-center" style:gap="3px">
-		<span
-			class="truncate"
-			style:font-size="13.5px"
-			style:font-weight={cellTone.weight}
-			style:text-decoration-color={cellTone.strike}
-			class:line-through={row.state.state === 'played'}
-			style:color={chrome === 'ghost' ? canvasVar('heading') : cellTone.title}
-			>{row.primary}</span
-		>
+		<span class="flex min-w-0 items-center" style:gap="6px">
+			{#if row.state.state === 'nowPlaying' && chrome === 'row'}
+				<Play size={12} fill={canvasVar('accent')} color={canvasVar('accent')} />
+			{/if}
+			<span
+				class="min-w-0 truncate"
+				style:font-size="13.5px"
+				style:font-weight={cellTone.weight}
+				style:text-decoration-color={cellTone.strike}
+				class:line-through={row.state.state === 'played'}
+				style:color={chrome === 'ghost' ? canvasVar('heading') : cellTone.title}
+				>{row.primary}</span
+			>
+		</span>
 		{#if progress !== null && chrome !== 'ghost'}
 			<span
 				class="block shrink-0"

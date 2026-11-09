@@ -266,9 +266,9 @@ window fetches no font at runtime and the CSP's `default-src 'self'` covers
 
 The GUI paints no emoji and no Nerd Font glyph. Icons come from
 `@lucide/svelte` only: the transport controls and the playback-target
-indicator are Lucide icons. The item rows paint no playing marker: the
-active row's canvas green fill with dark ink marks it (the `GuiQueue`
-frame still names `active`). The transport glyphs paint
+indicator are Lucide icons. The now-playing row shows the canvas's play glyph
+beside its title, in the accent colour (the `GuiQueue` frame still names
+`active`). The row keeps its own fill, because a highlight marks focus only. The transport glyphs paint
 as solid shapes — `fill` and `stroke` both the role colour, as the TUI's
 solid transport glyphs paint — with the availability the colour already
 carried gating them. The header's playback-target indicator maps both of
@@ -523,8 +523,8 @@ set-collections command names), `pills` (`group_id`, `name`, `selected`, and
 groups whose album list failed), `artists` (`artist_key`, `name`,
 `sort_letter`, and `albums`), `hero`, `art`, and `playing_track_id` (the
 playhead's Emby track id, from the Queue panel's own authority, which the
-tracklist's and the list's playing rows paint — the canvas's green fill with
-dark ink, as the Queue's active row paints). An album carries `album_id`,
+tracklist's and the list's playing rows paint with a play glyph beside the
+title, as the Queue's now-playing row does). An album carries `album_id`,
 `name`, `year`, and its `tracks` and `total` when the cache holds them; a
 track carries `track_id`, `name`, `number`, and `duration`. `GuiMusicHeroFrame`
 carries `artist`, `collections`, `album_count`, `artist_tracks`, the picked

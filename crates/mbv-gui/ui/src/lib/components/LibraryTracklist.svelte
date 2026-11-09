@@ -58,18 +58,15 @@
 		return track.trackId === playingTrackId;
 	}
 
-	/** A row's painted fill: the playing track's green wins, then the cursor
-	 * row's fill — the Queue canvas's `picked && !cur` rule. */
+	/** A row's painted fill: the cursor row's focus fill only. A highlight marks
+	 * focus, so the playing track keeps its own fill. */
 	function rowBackground(track: GuiMusicTrack): string | undefined {
-		if (isPlaying(track)) {
-			return 'var(--canvas-accent)';
-		}
 		return track.trackId === cursor ? 'var(--canvas-selected)' : undefined;
 	}
 
-	/** A row's title and number colour: the dark ink on the playing row. */
+	/** A row's title colour: the playing track's heading tone. */
 	function rowColor(track: GuiMusicTrack): string {
-		return isPlaying(track) ? 'var(--canvas-ink)' : 'var(--canvas-text)';
+		return isPlaying(track) ? 'var(--canvas-heading)' : 'var(--canvas-text)';
 	}
 
 	/** Open the track's right-click item menu (the row-menu command): the
@@ -116,18 +113,24 @@
 			<span
 				class="flex-none font-mono tabular-nums"
 				style:font-size="12px"
-				style:color={isPlaying(track) ? 'var(--canvas-ink)' : 'var(--canvas-ordinal)'}
+				style:color="var(--canvas-ordinal)"
 			>
 				<span class="group-hover:hidden">{track.number}</span>
 				<span class="hidden group-hover:flex">
 					<Play size={12} fill="var(--canvas-accent)" color="var(--canvas-accent)" />
 				</span>
 			</span>
-			<span
-				class="min-w-0 truncate"
-				style:font-size="14px"
-				style:color={rowColor(track)}>{track.name}</span
-			>
+			<span class="flex min-w-0 items-center" style:gap="6px">
+				{#if isPlaying(track)}
+					<!-- The playing track's play glyph sits beside its title: a highlight marks focus only. -->
+					<Play size={12} fill="var(--canvas-accent)" color="var(--canvas-accent)" />
+				{/if}
+				<span
+					class="min-w-0 truncate"
+					style:font-size="14px"
+					style:color={rowColor(track)}>{track.name}</span
+				>
+			</span>
 				<span class="flex justify-end" style:gap="2px">
 					<span class="hidden justify-end group-hover:flex" style:gap="2px">
 						<button

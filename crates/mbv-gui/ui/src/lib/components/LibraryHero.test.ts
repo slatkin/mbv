@@ -213,13 +213,15 @@ test('a double-click on a tracklist row sends that track add to queue', async ()
 });
 
 // The Library's playing row (add-gui-library-panel): the frame carries the
-// playhead's track id, and that row paints the playing state over the
-// cursor's fill.
-test('the tracklist paints the playing state on the frame playing track id', () => {
+// playhead's track id, and that row shows a play glyph beside its title. A
+// highlight marks focus only, so the playing row keeps its own fill.
+test('the tracklist marks the frame playing track with a play glyph, not a fill', () => {
 	const container = mountHeroWithPlaying('t1');
 
-	const playing = container.querySelector('[data-library-track="t1"]');
-	expect(playing?.hasAttribute('data-library-track-playing')).toBe(true);
+	const playing = container.querySelector('[data-library-track="t1"]') as HTMLElement;
+	expect(playing.hasAttribute('data-library-track-playing')).toBe(true);
+	expect(playing.querySelector('svg')).toBeTruthy();
+	expect(playing.style.background).not.toBe('var(--canvas-accent)');
 	expect(
 		container.querySelector('[data-library-track="t2"]')?.hasAttribute('data-library-track-playing'),
 	).toBe(false);

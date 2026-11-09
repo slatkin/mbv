@@ -21,7 +21,7 @@
 	// focus. It takes the keyboard while the filter is open and closes the
 	// filter when it loses focus, keeping its text as Enter does.
 	import { onMount } from 'svelte';
-	import { ChevronRight } from '@lucide/svelte';
+	import { ChevronRight, Play } from '@lucide/svelte';
 	import type { GuiMusicFrame } from '$lib/bridge/types';
 	import {
 		LETTER_ROW_HEIGHT,
@@ -116,8 +116,8 @@
 	const picked = $derived(music.hero?.album.albumId ?? null);
 
 	/** The track playing at the playhead: the Queue panel's own authority,
-	 * carried on the frame. Its row paints the playing fill — the canvas's
-	 * green with dark ink, as the Queue's active row paints (design D8). */
+	 * carried on the frame. Its row shows a play glyph beside its name (design
+	 * D8); a highlight marks focus only. */
 	const playingTrackId = $derived(music.playingTrackId);
 
 	/** The bottom edge of the last painted row: the below-spacer's pair. */
@@ -169,21 +169,19 @@
 		return row.kind === 'track' && row.trackId === playingTrackId;
 	}
 
-	/** A row's painted fill: the playing track's green wins, then the picked
-	 * album's green, then the cursor row's fill (design D7, D8). */
+	/** A row's painted fill: the cursor row's focus fill only. A highlight marks
+	 * focus, so the playing track and the picked album keep their own fill
+	 * (design D7, D8). */
 	function rowBackground(row: LibraryRow): string | undefined {
-		if (isPlaying(row) || isPicked(row)) {
-			return canvasVar('accent');
-		}
 		return row.id === $libraryUi.cursor ? canvasVar('selected') : undefined;
 	}
 
-	/** A row's name colour: the dark ink on the playing row and the picked
-	 * row, and otherwise the canvas's tone by depth — the artist heading, the
-	 * album text, the muted track. */
+	/** A row's name colour: the playing track's heading tone, and otherwise the
+	 * canvas's tone by depth — the artist heading, the album text, the muted
+	 * track. */
 	function rowColor(row: LibraryRow): string {
-		if (isPlaying(row) || isPicked(row)) {
-			return canvasVar('ink');
+		if (isPlaying(row)) {
+			return canvasVar('heading');
 		}
 		return row.kind === 'artist'
 			? canvasVar('heading')
@@ -192,10 +190,9 @@
 				: canvasVar('muted');
 	}
 
-	/** The meta colour beside a row's name: the dark ink on the playing row
-	 * and the picked row. */
-	function metaColor(row: LibraryRow): string {
-		return isPlaying(row) || isPicked(row) ? canvasVar('ink') : canvasVar('muted');
+	/** The meta colour beside a row's name: the muted tone on every row. */
+	function metaColor(): string {
+		return canvasVar('muted');
 	}
 
 	/** A row's name weight: an artist row is bold, an album and a track regular,
@@ -354,18 +351,16 @@
 											class="flex flex-none items-center justify-end font-mono tabular-nums"
 											style:width="18px"
 											style:font-size="11px"
-											style:color={isPlaying(row) || isPicked(row)
-												? 'var(--canvas-ink)'
-												: 'var(--canvas-ordinal)'}>{row.number}</span
+											style:color="var(--canvas-ordinal)">{row.number}</span
 										>
 							<span
-								class="min-w-0 flex-1 truncate"
-								style:color={rowColor(row)}>{row.name}</span
-							>
+								class="flex min-w-0 flex-1 items-center"
+								style:gap="6px"
+								style:color={rowColor(row)}>{#if isPlaying(row)}<Play size={12} fill="var(--canvas-accent)" color="var(--canvas-accent)" />{/if}<span class="min-w-0 truncate">{row.name}</span></span>
 							<span
 								class="flex-none font-mono tabular-nums"
 								style:font-size="11px"
-								style:color={metaColor(row)}>{row.duration}</span
+								style:color={metaColor()}>{row.duration}</span
 							>
 						</button>
 					{:else}
@@ -410,7 +405,7 @@
 								<span
 									class="flex-none font-mono tabular-nums"
 									style:font-size="11px"
-									style:color={metaColor(row)}>{row.year}</span
+									style:color={metaColor()}>{row.year}</span
 								>
 							{/if}
 						</button>
