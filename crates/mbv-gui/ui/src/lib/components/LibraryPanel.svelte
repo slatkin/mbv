@@ -32,6 +32,7 @@
 import type {
 GuiAudiobooksFrame,
 GuiEmbyFrame,
+GuiFeedsFrame,
 GuiHomeFrame,
 GuiLibraryTab,
 GuiMusicFrame,
@@ -44,6 +45,9 @@ import LibraryAudiobooksList from './LibraryAudiobooksList.svelte';
 import LibraryEmbyHero from '$lib/components/LibraryEmbyHero.svelte';
 	import LibraryEmbyList from '$lib/components/LibraryEmbyList.svelte';
 	import LibraryEmbyPills from '$lib/components/LibraryEmbyPills.svelte';
+	import LibraryFeedsHero from '$lib/components/LibraryFeedsHero.svelte';
+	import LibraryFeedsList from '$lib/components/LibraryFeedsList.svelte';
+	import LibraryFeedsPills from '$lib/components/LibraryFeedsPills.svelte';
 	import LibraryHero from '$lib/components/LibraryHero.svelte';
 	import LibraryHomeHero from '$lib/components/LibraryHomeHero.svelte';
 	import LibraryHomeList from '$lib/components/LibraryHomeList.svelte';
@@ -95,6 +99,10 @@ import LibraryPodcastsPills from '$lib/components/LibraryPodcastsPills.svelte';
 		 * pills, the active view's date-gutter list, and the selected episode's
 		 * Hero with no Workspace; `null` while another destination is active. */
 		podcasts?: GuiPodcastsFrame | null;
+		/** The carried Feeds content (design D12, row 11.1): the view pills,
+		 * the active pill's date-gutter list, and the selected entry's Hero
+		 * with no Workspace; `null` while another destination is active. */
+		feeds?: GuiFeedsFrame | null;
 		/** The frame's Status bar facts (design D10): the armed prefix and the
 		 * live toast, which the Status bar replaces the hints with. */
 		status: GuiStatusBar;
@@ -115,6 +123,7 @@ import LibraryPodcastsPills from '$lib/components/LibraryPodcastsPills.svelte';
 		emby = null,
 		audiobooks = null,
 		podcasts = null,
+		feeds = null,
 		status,
 		arrangement,
 		listWidth,
@@ -135,6 +144,7 @@ type OverlayHero =
 		| { kind: 'emby'; emby: GuiEmbyFrame }
 		| { kind: 'audiobooks'; audiobooks: GuiAudiobooksFrame }
 		| { kind: 'podcasts'; podcasts: GuiPodcastsFrame }
+		| { kind: 'feeds'; feeds: GuiFeedsFrame }
 		| null;
 	const overlayHero: OverlayHero = $derived(
 		music !== null && music.hero !== null
@@ -149,7 +159,9 @@ type OverlayHero =
 							? { kind: 'audiobooks', audiobooks }
 							: podcasts !== null && podcasts.hero !== null
 								? { kind: 'podcasts', podcasts }
-								: null,
+								: feeds !== null && feeds.hero !== null
+									? { kind: 'feeds', feeds }
+									: null,
 	);
 
 	let panelEl: HTMLElement | undefined = $state();
@@ -226,6 +238,10 @@ type OverlayHero =
 		<!-- The Podcasts destination's episode pills (design D12, row 10.1):
 			single select over Latest and each show. -->
 		<LibraryPodcastsPills {podcasts} />
+	{:else if feeds !== null}
+		<!-- The Feeds destination's view pills (design D12, row 11.1):
+			single select over Latest and each subscription. -->
+		<LibraryFeedsPills {feeds} />
 	{/if}
 	<div class="relative flex min-h-0 flex-1">
 		{#if wide}
@@ -269,6 +285,12 @@ type OverlayHero =
 					{#if podcasts.hero !== null}
 						<LibraryPodcastsHero {podcasts} />
 					{/if}
+				{:else if feeds !== null}
+					<!-- The entry Hero with no Workspace (design D12, row 11.1):
+						a frame without one leaves the pane empty. -->
+					{#if feeds.hero !== null}
+						<LibraryFeedsHero {feeds} />
+					{/if}
 				{/if}
 			</div>
 		{/if}
@@ -305,6 +327,8 @@ type OverlayHero =
 				<LibraryAudiobooksList {audiobooks} />
 			{:else if podcasts !== null}
 				<LibraryPodcastsList {podcasts} />
+			{:else if feeds !== null}
+				<LibraryFeedsList {feeds} />
 			{/if}
 		</div>
 		{#if arrangement === 'narrow' && overlayHero !== null && !$libraryUi.heroDismissed}
@@ -345,6 +369,8 @@ type OverlayHero =
 						<LibraryAudiobooksHero audiobooks={overlayHero.audiobooks} />
 					{:else if overlayHero.kind === 'podcasts'}
 						<LibraryPodcastsHero podcasts={overlayHero.podcasts} />
+					{:else if overlayHero.kind === 'feeds'}
+						<LibraryFeedsHero feeds={overlayHero.feeds} />
 					{:else}
 						<LibraryEmbyHero emby={overlayHero.emby} />
 					{/if}
@@ -364,6 +390,7 @@ type OverlayHero =
 		{emby}
 		{audiobooks}
 		{podcasts}
+		{feeds}
 		{status}
 	/>
 	<!-- The right-click item menu (the row-menu command): the viewport-anchored

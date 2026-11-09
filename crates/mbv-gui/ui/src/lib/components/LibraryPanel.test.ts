@@ -13,6 +13,7 @@ import { DEFAULT_DRAGGED_WIDTHS, LIBRARY_LIST_DEFAULT_WIDTH_PX, draggedWidths } 
 import type {
 	GuiAudiobooksFrame,
 	GuiEmbyFrame,
+	GuiFeedsFrame,
 	GuiMusicFrame,
 	GuiMusicHero,
 	GuiShowsFrame,
@@ -478,6 +479,98 @@ function audiobooks(hero: GuiAudiobooksFrame['hero']): GuiAudiobooksFrame {
 			},
 		],
 		selected: 'b1',
+		hero,
+	};
+}
+
+// add-gui-library-panel row 11.1: while the Feeds content is present (design
+// D12, the destinations are exclusive), the panel mounts the view pills, the
+// date-gutter list, and the entry Hero, and none of the other destinations'
+// painters.
+test('the Feeds content mounts the Feeds pills, list, and Hero and none of the other destinations', () => {
+	const { container } = render(LibraryPanel, {
+		tabs: [{ position: 5, label: 'Feeds' }],
+		currentTab: 5,
+		music: null,
+		home: null,
+		shows: null,
+		emby: null,
+		audiobooks: null,
+		podcasts: null,
+		feeds: feeds({
+			title: 'Entry A',
+			metaRows: ['Sub One', '12:30'],
+			durationRow: 1,
+			progressRow: null,
+			artShape: 'square',
+		}),
+		status: idle,
+		arrangement: 'wide',
+		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
+		libraryColumn: 1200,
+	});
+
+	expect(container.querySelector('[data-library-region="pills"]')).toBeTruthy();
+	expect(container.querySelector('[data-library-feeds-list]')).toBeTruthy();
+	expect(
+		container.querySelector('[data-library-region="hero"] [data-library-feeds-hero]'),
+	).toBeTruthy();
+	expect(container.querySelector('[data-library-list]')).toBeNull();
+	expect(container.querySelector('[data-library-podcasts-list]')).toBeNull();
+	expect(container.querySelector('[data-library-home-list]')).toBeNull();
+	expect(container.querySelector('[data-library-emby-list]')).toBeNull();
+});
+
+// A frame without a Hero paints no Hero (row 11.1), and the Narrow overlay
+// stays closed while the selection carries none.
+test('the Hero-less Feeds content paints its list and no Hero', () => {
+	const { container } = render(LibraryPanel, {
+		tabs: [{ position: 5, label: 'Feeds' }],
+		currentTab: 5,
+		music: null,
+		home: null,
+		shows: null,
+		emby: null,
+		audiobooks: null,
+		podcasts: null,
+		feeds: feeds(null),
+		status: idle,
+		arrangement: 'narrow',
+		listWidth: LIBRARY_LIST_DEFAULT_WIDTH_PX,
+		libraryColumn: 800,
+	});
+
+	expect(container.querySelector('[data-library-feeds-list]')).toBeTruthy();
+	expect(container.querySelector('[data-library-feeds-hero]')).toBeNull();
+	expect(container.querySelector('[data-library-region="heroOverlay"]')).toBeNull();
+});
+
+/** The carried Feeds content: the Latest and one subscription pill, one
+ * merged entry row, with `hero` the selected entry's Hero the frame paints
+ * (row 11.1). */
+function feeds(hero: GuiFeedsFrame['hero']): GuiFeedsFrame {
+	return {
+		pills: [
+			{ pill: { kind: 'latest' }, name: 'Latest', selected: true, collection: false },
+			{
+				pill: { kind: 'subscription', id: 'https://sub.one' },
+				name: 'Sub One',
+				selected: false,
+				collection: false,
+			},
+		],
+		loading: false,
+		failed: false,
+		rows: [
+			{
+				id: 's1::e1',
+				title: 'Entry A',
+				subtitle: 'Sub One',
+				date: '12 May',
+				state: 'ordinary',
+			},
+		],
+		selected: 's1::e1',
 		hero,
 	};
 }

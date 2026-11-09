@@ -448,6 +448,74 @@ test('the Podcasts content mounts the Library panel with the Podcasts painters',
 	expect(panel?.querySelector('[data-library-audiobooks-list]')).toBeNull();
 });
 
+// add-gui-library-panel row 11.1: while the Feeds destination is the active
+// destination (design D12), the window mounts the Library panel with the
+// Feeds painters — its pills, its date-gutter list, and its Hero — and none
+// of the other destinations' painters.
+test('the Feeds content mounts the Library panel with the Feeds painters', async () => {
+	const slice = frame('library', null);
+	slice.library = { revision: 1, content: feedsContent() };
+	const { container } = await mount({ width: 1600, height: 900 }, slice);
+
+	const panel = container.querySelector('[data-library-panel]');
+
+	expect(panel).toBeTruthy();
+	expect(panel?.querySelector('[data-library-feeds-list]')).toBeTruthy();
+	expect(
+		panel?.querySelector('[data-library-region="hero"] [data-library-feeds-hero]'),
+	).toBeTruthy();
+	expect(panel?.querySelector('[data-library-feeds-pill="latest"]')).toBeTruthy();
+	expect(panel?.querySelector('[data-library-list]')).toBeNull();
+	expect(panel?.querySelector('[data-library-podcasts-list]')).toBeNull();
+	expect(panel?.querySelector('[data-library-emby-list]')).toBeNull();
+});
+
+/** The carried content while the Feeds destination is active: the Latest
+ * and one subscription pill, one merged entry row, and the selected entry's
+ * Hero (design D12, row 11.1). */
+function feedsContent(): GuiLibraryContent {
+	return {
+		tabs: [{ position: 5, label: 'Feeds' }],
+		currentTab: 5,
+		music: null,
+		home: null,
+		shows: null,
+		emby: null,
+		audiobooks: null,
+		podcasts: null,
+		feeds: {
+			pills: [
+				{ pill: { kind: 'latest' }, name: 'Latest', selected: true, collection: false },
+				{
+					pill: { kind: 'subscription', id: 'https://sub.one' },
+					name: 'Sub One',
+					selected: false,
+					collection: false,
+				},
+			],
+			loading: false,
+			failed: false,
+			rows: [
+				{
+					id: 's1::e1',
+					title: 'Entry A',
+					subtitle: 'Sub One',
+					date: '12 May',
+					state: 'ordinary',
+				},
+			],
+			selected: 's1::e1',
+			hero: {
+				title: 'Entry A',
+				metaRows: ['Sub One', '12:30'],
+				durationRow: 1,
+				progressRow: null,
+				artShape: 'square',
+			},
+		},
+	};
+}
+
 /** The carried content while a Podcasts library is active: the Latest pill
  * and a show pill, one merged episode row, and the selected episode's Hero
  * (design D12, row 10.1). */

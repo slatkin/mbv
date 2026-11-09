@@ -107,6 +107,7 @@
     {@const emby = content?.emby ?? null}
     {@const audiobooks = content?.audiobooks ?? null}
     {@const podcasts = content?.podcasts ?? null}
+    {@const feeds = content?.feeds ?? null}
     {@const queueFocused = frame.focus.panel === 'queue'}
     <!-- The Library panel's one presence fact (design D2, D10, D12): the
       frame carries the Library section and the window holds the active
@@ -146,7 +147,7 @@
           onReset={resetQueueWidth}
         />
       {/if}
-      {#if libraryVisible && (music || home || shows || emby || audiobooks || podcasts)}
+      {#if libraryVisible && (music || home || shows || emby || audiobooks || podcasts || feeds)}
         <LibraryPanel
           {music}
           {home}
@@ -154,6 +155,7 @@
           {emby}
           {audiobooks}
           {podcasts}
+          {feeds}
           tabs={content?.tabs ?? []}
           currentTab={content?.currentTab ?? null}
           status={frame.status}

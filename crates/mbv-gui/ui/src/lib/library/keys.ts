@@ -50,6 +50,8 @@ import { routeShowsPanelKey } from './shows-keys';
 import { routeEmbyPanelKey } from './emby-keys';
 import { routeAudiobooksPanelKey } from './audiobooks-keys';
 import { routePodcastsPanelKey } from './podcasts-keys';
+import { routeFeedsPanelKey } from './feeds-keys';
+import { libraryFeeds } from './feeds';
 
 /** The frame facts the routing reads. A slice `GuiFrame` satisfies it whole, so
  * the installer passes the frame it holds; a test builds only these fields. */
@@ -258,6 +260,9 @@ function routePanelKey(event: KeyboardEvent, ui: LibraryUiState): KeyOutcome {
 	}
 	if (libraryPodcasts() !== null) {
 		return routePodcastsPanelKey(event, ui);
+	}
+	if (libraryFeeds() !== null) {
+		return routeFeedsPanelKey(event, ui);
 	}
 	if (event.key === '/' && bare(event)) {
 		openLibraryFilter();

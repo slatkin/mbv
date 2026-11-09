@@ -132,6 +132,12 @@ export const EMBY_FEED_PANES_NO_HERO: readonly LibraryPane[] = ['pills', 'list']
 export const PODCASTS_PANES: readonly LibraryPane[] = ['pills', 'list', 'hero'];
 export const PODCASTS_PANES_NO_HERO: readonly LibraryPane[] = ['pills', 'list'];
 
+/** The Library panel's panes on the Feeds destination (design D12, row
+ * 11.1): the view pills, the date-gutter list, and the Hero. A frame
+ * without a Hero leaves the walk on the pills and the list. */
+export const FEEDS_PANES: readonly LibraryPane[] = ['pills', 'list', 'hero'];
+export const FEEDS_PANES_NO_HERO: readonly LibraryPane[] = ['pills', 'list'];
+
 /** The panes the active destination paints (design D12): the one walk on
  * Home skips the panes it does not paint, on Shows it skips the Hero the
  * Upcoming mode does not paint, and on an Emby library it skips the pill row a
@@ -155,6 +161,10 @@ export function activeLibraryPanes(): readonly LibraryPane[] {
 	const podcasts = libraryPodcasts();
 	if (podcasts !== null) {
 		return podcasts.hero === null ? PODCASTS_PANES_NO_HERO : PODCASTS_PANES;
+	}
+	const feeds = get(libraryContent)?.feeds ?? null;
+	if (feeds !== null) {
+		return feeds.hero === null ? FEEDS_PANES_NO_HERO : FEEDS_PANES;
 	}
 	return PANES;
 }
@@ -221,7 +231,8 @@ export function libraryShown(
 			content.shows !== null ||
 			content.emby !== null ||
 			content.audiobooks !== null ||
-			content.podcasts !== null)
+			content.podcasts !== null ||
+			content.feeds !== null)
 	);
 }
 
@@ -707,7 +718,8 @@ export function heroOverlayOpen(ui: LibraryUiState): boolean {
 			(libraryShows()?.hero ?? null) !== null ||
 			(libraryEmby()?.hero ?? null) !== null ||
 			(libraryAudiobooks()?.hero ?? null) !== null ||
-			(libraryPodcasts()?.hero ?? null) !== null)
+			(libraryPodcasts()?.hero ?? null) !== null ||
+			(get(libraryContent)?.feeds?.hero ?? null) !== null)
 	);
 }
 
