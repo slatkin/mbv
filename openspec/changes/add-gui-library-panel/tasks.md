@@ -45,7 +45,7 @@ Each unit starts by reading its destination's data path in the `App` and recordi
 ## 6. Home
 
 - [x] 6.1 Move Home's content from `Model::home_content` into the `App` (the TUI's Home paint and tests do not change), store the content of `App::load_home_at_startup` and of the startup drain's `home` for the GUI, and move `init_idle_feed` into `App::start_client_services`. Verify: the TUI Home and startup tests pass unedited; a `crates/mbv-gui/tests/` nextest runs a mocked asynchronous Emby bootstrap with Continue Watching items and finds them in the next Home frame.
-- [ ] 6.2 Project and paint Home's sections and Hero, and add the Home icon to the top bar. Verify: a projection test; vitest for the sections.
+- [x] 6.2 Project and paint Home's sections and Hero, and add the Home icon to the top bar. Verify: a projection test; vitest for the sections.
 
 ## 7. Shows
 
